@@ -9,8 +9,10 @@ clientNodeCount=0
 validatorNodeCount=10
 publicNetwork=false
 snapChannel=edge
+releaseChannel=edge
 delete=false
 enableGpu=false
+useReleaseChannel=false
 
 usage() {
   exitcode=0
@@ -29,6 +31,8 @@ Deploys a CD testnet
   options:
    -s edge|beta|stable  - Deploy the specified Snap release channel
                           (default: $snapChannel)
+   -t edge|beta|stable  - Deploy the specified prebuilt tar from channel
+                          (default: $releaseChannel)
    -n [number]          - Number of validator nodes (default: $validatorNodeCount)
    -c [number]          - Number of client nodes (default: $clientNodeCount)
    -P                   - Use public network IP addresses (default: $publicNetwork)
@@ -49,7 +53,7 @@ zone=$2
 [[ -n $zone ]] || usage "Zone not specified"
 shift 2
 
-while getopts "h?p:Pn:c:s:gG:a:d" opt; do
+while getopts "h?p:Pn:c:s:t:gG:a:d" opt; do
   case $opt in
   h | \?)
     usage
@@ -70,6 +74,17 @@ while getopts "h?p:Pn:c:s:gG:a:d" opt; do
       ;;
     *)
       usage "Invalid snap channel: $OPTARG"
+      ;;
+    esac
+    ;;
+  t)
+    case $OPTARG in
+    edge|beta|stable)
+      releaseChannel=$OPTARG
+      useReleaseChannel=true
+      ;;
+    *)
+      usage "Invalid release channel: $OPTARG"
       ;;
     esac
     ;;
@@ -131,6 +146,9 @@ if ! $publicNetwork; then
   maybeRejectExtraNodes="-o rejectExtraNodes"
 fi
 # shellcheck disable=SC2086 # Don't want to double quote maybeRejectExtraNodes
-time net/net.sh start -s "$snapChannel" $maybeRejectExtraNodes
-
+if ! $useReleaseChannel; then
+  time net/net.sh start -s "$snapChannel" $maybeRejectExtraNodes
+else
+  time net/net.sh start -t "$releaseChannel" $maybeRejectExtraNodes
+fi
 exit 0

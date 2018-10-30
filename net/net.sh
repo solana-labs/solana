@@ -25,6 +25,7 @@ Operate a configured testnet
  start-specific options:
    -S [snapFilename]    - Deploy the specified Snap file
    -s edge|beta|stable  - Deploy the latest Snap on the specified Snap release channel
+   -t edge|beta|stable  - Deploy the latest tarball release for the specified channel
    -f [cargoFeatures]   - List of |cargo --feaures=| to activate
                           (ignored if -s or -S is specified)
 
@@ -44,6 +45,7 @@ EOF
 }
 
 snapChannel=
+releaseChannel=
 snapFilename=
 deployMethod=local
 sanityExtraArgs=
@@ -53,7 +55,7 @@ command=$1
 [[ -n $command ]] || usage
 shift
 
-while getopts "h?S:s:o:f:" opt; do
+while getopts "h?S:s:t:o:f:" opt; do
   case $opt in
   h | \?)
     usage
@@ -71,6 +73,17 @@ while getopts "h?S:s:o:f:" opt; do
       ;;
     *)
       usage "Invalid snap channel: $OPTARG"
+      ;;
+    esac
+    ;;
+  t)
+    case $OPTARG in
+    edge|beta|stable)
+      releaseChannel=$OPTARG
+      deployMethod=tar
+      ;;
+    *)
+      usage "Invalid release channel: $OPTARG"
       ;;
     esac
     ;;
@@ -138,6 +151,9 @@ startLeader() {
     case $deployMethod in
     snap)
       rsync -vPrc -e "ssh ${sshOptions[*]}" "$snapFilename" "$ipAddress:~/solana/solana.snap"
+      ;;
+    tar)
+      rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/solana-release/bin/* "$ipAddress:~/.cargo/bin/"
       ;;
     local)
       rsync -vPrc -e "ssh ${sshOptions[*]}" "$SOLANA_ROOT"/farf/bin/* "$ipAddress:~/.cargo/bin/"
@@ -234,6 +250,22 @@ start() {
         echo "Error: Snap not readable: $snapFilename"
         exit 1
       }
+    fi
+    ;;
+  tar)
+    if [[ -n $releaseChannel ]]; then
+      rm -f "$SOLANA_ROOT"/solana-release.tar.bz2
+      cd "$SOLANA_ROOT"
+
+      set -x
+      if [[ ! -r s3cmd-2.0.1/s3cmd ]]; then
+        rm -rf s3cmd-2.0.1.tar.gz s3cmd-2.0.1
+        wget https://github.com/s3tools/s3cmd/releases/download/v2.0.1/s3cmd-2.0.1.tar.gz
+        tar zxf s3cmd-2.0.1.tar.gz
+      fi
+
+      python ./s3cmd-2.0.1/s3cmd --acl-public get s3://solana-release/"$releaseChannel"/solana-release.tar.bz2 .
+      tar jxvf solana-release.tar.bz2
     fi
     ;;
   local)
