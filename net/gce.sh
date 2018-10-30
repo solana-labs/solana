@@ -376,6 +376,7 @@ $(
     install-earlyoom.sh \
     install-libssl-compatability.sh \
     install-rsync.sh \
+    network-config.sh \
 )
 
 cat > /etc/motd <<EOM
