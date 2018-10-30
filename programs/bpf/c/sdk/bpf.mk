@@ -6,16 +6,16 @@ ifneq ($(V),1)
 _@ :=@
 endif
 
-INC_DIRS :=
-SYSTEM_INC_DIRS := -isystem $(dir $(lastword $(MAKEFILE_LIST)))inc
-SRC_DIR := ./src
-OUT_DIR := ./out
+SYSTEM_INC_DIRS ?= -isystem $(dir $(lastword $(MAKEFILE_LIST)))inc
+INC_DIRS ?=
+SRC_DIR ?= ./src
+OUT_DIR ?= ./out
 
 OS=$(uname)
 ifeq ($(OS),Darwin)
-LLVM_DIR := $(brew --prefix llvm)
+LLVM_DIR ?= $(brew --prefix llvm)
 else
-LLVM_DIR := /usr/local/opt/llvm
+LLVM_DIR ?= /usr/local/opt/llvm
 endif
 
 CC := $(LLVM_DIR)/bin/clang
