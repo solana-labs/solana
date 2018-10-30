@@ -3,7 +3,7 @@
 cd "$(dirname "$0")/.."
 
 DRYRUN=
-if [[ -z $BUILDKITE_BRANCH ]] || ./ci/is-pr.sh; then
+if [[ -z $BUILDKITE_BRANCH ]]; then
   DRYRUN="echo"
 fi
 
