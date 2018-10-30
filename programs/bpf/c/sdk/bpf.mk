@@ -26,8 +26,8 @@ CC_FLAGS := \
   -emit-llvm \
   -fno-builtin \
 
-LD := $(LLVM_DIR)/bin/llc
-LD_FLAGS := \
+LLC := $(LLVM_DIR)/bin/llc
+LLC_FLAGS := \
   -march=bpf \
   -filetype=obj \
   -function-sections \
@@ -85,8 +85,8 @@ $(OUT_DIR)/%.bc: $(SRC_DIR)/%.c
 
 .PRECIOUS: $(OUT_DIR)/%.o
 $(OUT_DIR)/%.o: $(OUT_DIR)/%.bc
-	@echo "[ld] $@ ($<)"
-	$(_@)$(LD) $(LD_FLAGS) -o $@ $<
+	@echo "[llc] $@ ($<)"
+	$(_@)$(LLC) $(LLC_FLAGS) -o $@ $<
 
 -include $(wildcard $(OUT_DIR)/*.d)
 
