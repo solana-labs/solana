@@ -8,11 +8,12 @@ The following link describes how to install llvm:
 
 ### macOS
 
-Ensure the latest llvm is installed:
+The following depends on Homebrew, instructions on how to install Homebrew are at https://brew.sh
+
+Once Homebrew is installed, ensure the latest llvm is installed:
 ```
 $ brew update        # <- ensure your brew is up to date
-$ brew list llvm     # <- should see "llvm: stable 7.0.0 (bottled), HEAD [keg-only]"
-$ brew install llvm
-$ brew --prefix llvm # <- should output "/usr/local/opt/llvm"
+$ brew install llvm  # <- should output “Warning: llvm 7.0.0 is already installed and up-to-date”
+$ brew --prefix llvm # <- should output “/usr/local/opt/llvm”
 ```
 
