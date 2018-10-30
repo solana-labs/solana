@@ -43,8 +43,13 @@ typedef enum { false = 0, true } bool;
  * Prints the hexadecimal representation of each parameter
  */
 #define BPF_TRACE_PRINTK_IDX 6
-static int (*sol_print)(uint64_t, uint64_t, uint64_t, uint64_t,
-                        uint64_t) = (void *)BPF_TRACE_PRINTK_IDX;
+static int (*sol_print)(
+  uint64_t,
+  uint64_t,
+  uint64_t,
+  uint64_t,
+  uint64_t
+) = (void *)BPF_TRACE_PRINTK_IDX;
 
 /**@}*/
 
@@ -142,9 +147,13 @@ SOL_FN_PREFIX void _sol_panic(uint64_t line) {
  * @param data_len On return, the length in bytes of the instruction data
  * @return Boolan True if successful
  */
-SOL_FN_PREFIX bool sol_deserialize(const uint8_t *input, uint64_t num_ka,
-                                   SolKeyedAccounts *ka, uint8_t **data,
-                                   uint64_t *data_len) {
+SOL_FN_PREFIX bool sol_deserialize(
+  const uint8_t *input,
+  uint64_t num_ka,
+  SolKeyedAccounts *ka,
+  uint8_t **data,
+  uint64_t *data_len
+) {
   if (num_ka != *(uint64_t *)input) {
     return false;
   }
@@ -212,8 +221,12 @@ SOL_FN_PREFIX void sol_print_array(const uint8_t *array, int len) {
  * @param data A pointer to the instruction data to print
  * @param data_len The length in bytes of the instruction data
  */
-SOL_FN_PREFIX void sol_print_params(uint64_t num_ka, const SolKeyedAccounts *ka,
-                                    const uint8_t *data, uint64_t data_len) {
+SOL_FN_PREFIX void sol_print_params(
+  uint64_t num_ka,
+  const SolKeyedAccounts *ka,
+  const uint8_t *data,
+  uint64_t data_len
+) {
   sol_print(0, 0, 0, 0, num_ka);
   for (int i = 0; i < num_ka; i++) {
     sol_print_key(ka[i].key);
