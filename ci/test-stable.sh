@@ -23,6 +23,16 @@ for test in tests/*.rs; do
   _ cargo test --verbose --jobs=1 --test="$test"
 done
 
+# Run native program's tests
+for program in programs/native/*; do
+  echo --- "$program"
+  ( 
+    set -x
+    cd "$program"
+    cargo test --verbose
+  )
+done
+
 echo --- ci/localnet-sanity.sh
 (
   set -x
