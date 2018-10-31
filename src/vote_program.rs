@@ -7,12 +7,8 @@ use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use std;
 use std::collections::VecDeque;
+use std::mem;
 use transaction::Transaction;
-
-// Upper limit on the size of the Vote State. Equal to the nearest power
-// of two greater than sizeof(VoteProgram), which is currently
-// equal to MAX_VOTE_HISTORY * sizeof(Vote) + sizeof(Pubkey)
-pub const MAX_STATE_SIZE: usize = 512;
 
 // Maximum number of votes to keep around
 const MAX_VOTE_HISTORY: usize = 32;
@@ -31,7 +27,7 @@ impl std::fmt::Display for Error {
 }
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Vote {
     // TODO: add signature of the state here as well
     /// A vote for height tick_height
@@ -49,7 +45,7 @@ pub enum VoteInstruction {
     NewVote(Vote),
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VoteProgram {
     pub votes: VecDeque<Vote>,
     pub node_id: Pubkey,
@@ -150,5 +146,30 @@ impl VoteProgram {
                 Err(Error::UserdataDeserializeFailure)
             }
         }
+    }
+
+    pub fn get_max_size() -> usize {
+        // Upper limit on the size of the Vote State. Equal to
+        // sizeof(VoteProgram) + MAX_VOTE_HISTORY * sizeof(Vote) +
+        // 32 (the size of the Pubkey) + 2 (2 bytes for the size)
+        mem::size_of::<VoteProgram>()
+            + MAX_VOTE_HISTORY * mem::size_of::<Vote>()
+            + mem::size_of::<Pubkey>()
+            + mem::size_of::<u16>()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_serde() -> Result<()> {
+        let mut buffer: Vec<u8> = vec![0; VoteProgram::get_max_size()];
+        let mut vote_program = VoteProgram::default();
+        vote_program.votes = (0..MAX_VOTE_HISTORY).map(|_| Vote::default()).collect();
+        vote_program.serialize(&mut buffer).unwrap();
+        assert_eq!(VoteProgram::deserialize(&buffer).unwrap(), vote_program);
+        Ok(())
     }
 }
