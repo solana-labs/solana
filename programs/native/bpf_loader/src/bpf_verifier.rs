@@ -1,4 +1,4 @@
-use rbpf::ebpf;
+use solana_rbpf::ebpf;
 use std::io::{Error, ErrorKind};
 
 fn reject<S: AsRef<str>>(msg: S) -> Result<(), Error> {

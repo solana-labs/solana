@@ -5,11 +5,12 @@ extern crate byteorder;
 extern crate env_logger;
 #[macro_use]
 extern crate log;
-extern crate rbpf;
+extern crate solana_rbpf;
 extern crate solana_sdk;
 
 use bincode::deserialize;
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
+use solana_rbpf::{helpers, EbpfVmRaw};
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
@@ -52,11 +53,12 @@ pub fn helper_printf(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) -> u
         + size_arg(arg5)
 }
 
-fn create_vm(prog: &[u8]) -> Result<rbpf::EbpfVmRaw, Error> {
-    let mut vm = rbpf::EbpfVmRaw::new(None)?;
+fn create_vm(prog: &[u8]) -> Result<EbpfVmRaw, Error> {
+    let mut vm = EbpfVmRaw::new(None)?;
     vm.set_verifier(bpf_verifier::check)?;
+    vm.set_max_instruction_count(36000)?;
     vm.set_program(&prog)?;
-    vm.register_helper(rbpf::helpers::BPF_TRACE_PRINTK_IDX, helper_printf)?;
+    vm.register_helper(helpers::BPF_TRACE_PRINTK_IDX, helper_printf)?;
     Ok(vm)
 }
 
@@ -109,7 +111,7 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
         let prog = keyed_accounts[0].account.userdata.clone();
         trace!("Call BPF, {} Instructions", prog.len() / 8);
         //dump_program(keyed_accounts[0].key, &prog);
-        let vm = match create_vm(&prog) {
+        let mut vm = match create_vm(&prog) {
             Ok(vm) => vm,
             Err(e) => {
                 warn!("create_vm failed: {}", e);
@@ -152,4 +154,24 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
         warn!("Invalid program transaction: {:?}", tx_data);
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    #[should_panic(expected = "Error: Execution exceeded maximum number of instructions")]
+    fn test_non_terminating_program() {
+        let prog = &[
+            0xb7, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb7, 0x01, 0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0xb7, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb7, 0x03, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00, 0xb7, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xbf, 0x65,
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x85, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00,
+            0x07, 0x06, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x05, 0x00, 0xf8, 0xff, 0x00, 0x00,
+            0x00, 0x00, 0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+        let input = &mut [0x00];
+        let mut vm = create_vm(prog).unwrap();
+        vm.execute_program(input).unwrap();
+    }
 }
