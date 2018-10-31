@@ -98,6 +98,7 @@ fn main() {
     let pubkey = keypair.pubkey();
 
     let mut leader_scheduler = LeaderScheduler::default();
+    
     // Remove this line to enable leader rotation
     leader_scheduler.use_only_bootstrap_leader = true;
 

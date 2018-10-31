@@ -809,7 +809,6 @@ fn test_leader_to_validator_transition() {
     // Start the leader node
     let bootstrap_height = leader_rotation_interval;
     let leader_scheduler_config = LeaderSchedulerConfig::new(
-        leader_info.id,
         Some(bootstrap_height),
         Some(leader_rotation_interval),
         Some(leader_rotation_interval * 2),
@@ -948,7 +947,6 @@ fn test_leader_validator_basic() {
     let num_bootstrap_slots = 2;
     let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
     let leader_scheduler_config = LeaderSchedulerConfig::new(
-        leader_info.id,
         Some(bootstrap_height),
         Some(leader_rotation_interval),
         Some(leader_rotation_interval * 2),
@@ -1135,7 +1133,6 @@ fn test_dropped_handoff_recovery() {
     let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
     let bootstrap_height = initial_tick_height + 1;
     let leader_scheduler_config = LeaderSchedulerConfig::new(
-        bootstrap_leader_info.id,
         Some(bootstrap_height),
         Some(leader_rotation_interval),
         Some(seed_rotation_interval),
@@ -1298,7 +1295,6 @@ fn test_full_leader_validator_network() {
     let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
     let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
     let leader_scheduler_config = LeaderSchedulerConfig::new(
-        bootstrap_leader_info.id,
         Some(bootstrap_height),
         Some(leader_rotation_interval),
         Some(seed_rotation_interval),
