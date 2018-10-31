@@ -383,7 +383,7 @@ impl Bank {
             if ((nth - tick_height) as usize) < MAX_ENTRY_IDS {
                 total += stake;
                 if total > supermajority_stake {
-                    return Self::tick_height_to_timestamp(&*last_ids, *tick_height);
+                    return Self::tick_height_to_timestamp(&last_ids, *tick_height);
                 }
             }
         }

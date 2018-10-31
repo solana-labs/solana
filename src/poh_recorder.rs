@@ -34,7 +34,7 @@ impl PohRecorder {
         // TODO: amortize the cost of this lock by doing the loop in here for
         // some min amount of hashes
         let mut poh = self.poh.lock().unwrap();
-        if self.is_max_tick_height_reached(&*poh) {
+        if self.is_max_tick_height_reached(&poh) {
             Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
         } else {
             poh.hash();
@@ -47,7 +47,7 @@ impl PohRecorder {
         // hasn't been reached.
         // This guarantees PoH order and Entry production and banks LastId queue is the same
         let mut poh = self.poh.lock().unwrap();
-        if self.is_max_tick_height_reached(&*poh) {
+        if self.is_max_tick_height_reached(&poh) {
             Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
         } else if self.is_virtual {
             self.generate_and_store_tick(&mut *poh);
@@ -67,7 +67,7 @@ impl PohRecorder {
         // Register and send the entry out while holding the lock.
         // This guarantees PoH order and Entry production and banks LastId queue is the same.
         let mut poh = self.poh.lock().unwrap();
-        if self.is_max_tick_height_reached(&*poh) {
+        if self.is_max_tick_height_reached(&poh) {
             Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
         } else {
             self.record_and_send_txs(&mut *poh, mixin, txs)?;

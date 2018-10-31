@@ -290,7 +290,7 @@ impl LeaderScheduler {
         let lower_bound = height.saturating_sub(self.active_window_length);
 
         {
-            let bank_accounts = &*bank.accounts.read().unwrap();
+            let bank_accounts = &bank.accounts.read().unwrap();
 
             bank_accounts
                 .values()
