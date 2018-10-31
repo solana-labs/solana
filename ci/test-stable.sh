@@ -11,6 +11,18 @@ _() {
   "$@"
 }
 
+maybe_install() {
+  for cmd in "$@"; do
+    set +e
+    "$cmd" --help > /dev/null 2>&1
+    declare exitcode=$?
+    set -e
+    if [[ $exitcode -eq 101 ]]; then
+      _ cargo install "$cmd"
+    fi
+  done
+}
+
 _ cargo fmt -- --check
 _ cargo build --verbose
 _ cargo test --verbose --lib
@@ -32,6 +44,13 @@ for program in programs/native/*; do
     cargo test --verbose
   )
 done
+
+# Build the HTML
+maybe_install mdbook
+_ cd doc
+_ mdbook test
+_ mdbook build
+_ cd -
 
 echo --- ci/localnet-sanity.sh
 (
