@@ -30,6 +30,13 @@ for test in tests/*.rs; do
   _ cargo test --verbose --jobs=1 --features="$FEATURES" --test="$test"
 done
 
+echo --- "( cd programs/native/bpf_loader ; cargo test --verbose )"
+( cd programs/native/bpf_loader ; cargo test --verbose )
+echo --- "( cd programs/native/lua_loader ; cargo test --verbose )"
+( cd programs/native/lua_loader ; cargo test --verbose )
+echo --- "( cd programs/native/noop ; cargo test --verbose )"
+( cd programs/native/noop ; cargo test --verbose )
+
 echo --- ci/localnet-sanity.sh
 (
   set -x
