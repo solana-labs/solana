@@ -1,3 +1,5 @@
+# Introduction
+
 This document defines the architecture of Solana, a blockchain built from the ground up for scale. The goal of
 the architecture is to demonstrate there exists a set of software algorithms that in combination, removes
 software as a performance bottleneck, allowing transaction throughput to scale proportionally with network
