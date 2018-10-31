@@ -30,12 +30,6 @@ for test in tests/*.rs; do
   _ cargo test --verbose --jobs=1 --features="$FEATURES" --test="$test"
 done
 
-# Run native program's tests
-for member in programs/native/*; do
-  echo --- "( cd $member ; cargo test --verbose )"
-  ( cd $member ; cargo test --verbose )
-done
-
 echo --- ci/localnet-sanity.sh
 (
   set -x
