@@ -145,10 +145,18 @@ maybeRejectExtraNodes=
 if ! $publicNetwork; then
   maybeRejectExtraNodes="-o rejectExtraNodes"
 fi
+maybeNoValidatorSanity=
+if [[ -n $NO_VALIDATOR_SANITY ]]; then
+  maybeNoValidatorSanity="-o noValidatorSanity"
+fi
+maybeNoLedgerVerify=
+if [[ -n $NO_LEDGER_VERIFY ]]; then
+  maybeNoLedgerVerify="-o noLedgerVerify"
+fi
 # shellcheck disable=SC2086 # Don't want to double quote maybeRejectExtraNodes
 if ! $useReleaseChannel; then
-  time net/net.sh start -s "$snapChannel" $maybeRejectExtraNodes
+  time net/net.sh start -s "$snapChannel" $maybeRejectExtraNodes $maybeNoValidatorSanity $maybeNoLedgerVerify
 else
-  time net/net.sh start -t "$releaseChannel" $maybeRejectExtraNodes
+  time net/net.sh start -t "$releaseChannel" $maybeRejectExtraNodes $maybeNoValidatorSanity $maybeNoLedgerVerify
 fi
 exit 0
