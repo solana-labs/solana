@@ -99,8 +99,8 @@ typedef struct {
   SolPubkey *key;        /** Public Key of the account owner */
   int64_t *tokens;       /** Numer of tokens owned by this account */
   uint64_t userdata_len; /** Length of userdata in bytes */
-  const uint8_t *userdata;     /** On-chain data owned by this account */
-  const SolPubkey *program_id; /** Program that owns this account */
+  uint8_t *userdata;     /** On-chain data owned by this account */
+  SolPubkey *program_id; /** Program that owns this account */
 } SolKeyedAccounts;
 
 /**
@@ -174,7 +174,7 @@ SOL_FN_PREFIX bool sol_deserialize(
     // account userdata
     ka[i].userdata_len = *(uint64_t *)input;
     input += sizeof(uint64_t);
-    ka[i].userdata = input;
+    ka[i].userdata = (uint8_t*)input;
     input += ka[i].userdata_len;
 
     // program_id
