@@ -129,7 +129,10 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
             }
         }
         deserialize_parameters(&mut keyed_accounts[1..], &v);
-        trace!("BPF program executed {} instructions", vm.get_last_instruction_count());
+        trace!(
+            "BPF program executed {} instructions",
+            vm.get_last_instruction_count()
+        );
     } else if let Ok(instruction) = deserialize(tx_data) {
         match instruction {
             LoaderInstruction::Write { offset, bytes } => {
