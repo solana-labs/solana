@@ -129,31 +129,31 @@ build_rpc_trait! {
         type Metadata;
 
         #[rpc(meta, name = "confirmTransaction")]
-        fn confirm_transaction(&self, Self::Metadata, String) -> Result<bool>;
+        fn confirm_transaction(&self, meta: Self::Metadata, id: String) -> Result<bool>;
 
         #[rpc(meta, name = "getAccountInfo")]
-        fn get_account_info(&self, Self::Metadata, String) -> Result<Account>;
+        fn get_account_info(&self, meta: Self::Metadata, id: String) -> Result<Account>;
 
         #[rpc(meta, name = "getBalance")]
-        fn get_balance(&self, Self::Metadata, String) -> Result<i64>;
+        fn get_balance(&self, meta: Self::Metadata, id: String) -> Result<i64>;
 
         #[rpc(meta, name = "getFinality")]
-        fn get_finality(&self, Self::Metadata) -> Result<usize>;
+        fn get_finality(&self, meta: Self::Metadata) -> Result<usize>;
 
         #[rpc(meta, name = "getLastId")]
-        fn get_last_id(&self, Self::Metadata) -> Result<String>;
+        fn get_last_id(&self, meta: Self::Metadata) -> Result<String>;
 
         #[rpc(meta, name = "getSignatureStatus")]
-        fn get_signature_status(&self, Self::Metadata, String) -> Result<RpcSignatureStatus>;
+        fn get_signature_status(&self, meta: Self::Metadata, id: String) -> Result<RpcSignatureStatus>;
 
         #[rpc(meta, name = "getTransactionCount")]
-        fn get_transaction_count(&self, Self::Metadata) -> Result<u64>;
+        fn get_transaction_count(&self, meta: Self::Metadata) -> Result<u64>;
 
         #[rpc(meta, name= "requestAirdrop")]
-        fn request_airdrop(&self, Self::Metadata, String, u64) -> Result<String>;
+        fn request_airdrop(&self, meta: Self::Metadata, id: String, tokens: u64) -> Result<String>;
 
         #[rpc(meta, name = "sendTransaction")]
-        fn send_transaction(&self, Self::Metadata, Vec<u8>) -> Result<String>;
+        fn send_transaction(&self, meta: Self::Metadata, data: Vec<u8>) -> Result<String>;
     }
 }
 
