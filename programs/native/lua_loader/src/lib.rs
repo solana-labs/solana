@@ -147,13 +147,12 @@ mod tests {
 
     #[test]
     fn test_move_funds_with_lua_via_process() {
-        let bytes = r#"
+        let userdata = r#"
             local tokens, _ = string.unpack("I", data)
             accounts[1].tokens = accounts[1].tokens - tokens
             accounts[2].tokens = accounts[2].tokens + tokens
         "#.as_bytes()
         .to_vec();
-        let userdata = serialize(&LuaLoader::Bytes { bytes }).unwrap();
 
         let alice_pubkey = Pubkey::default();
         let bob_pubkey = Pubkey::default();
@@ -194,15 +193,12 @@ mod tests {
 
     #[test]
     fn test_load_lua_library() {
-        let bytes = r#"
+        let userdata = r#"
             local serialize = load(accounts[2].userdata)().serialize
             accounts[3].userdata = serialize({a=1, b=2, c=3}, nil, "s")
         "#.as_bytes()
         .to_vec();
-        let userdata = serialize(&LuaLoader::Bytes { bytes }).unwrap();
-
         let program_id = Pubkey::default();
-
         let program_account = Account {
             tokens: 1,
             userdata,
@@ -210,9 +206,7 @@ mod tests {
             executable: true,
             loader_program_id: Pubkey::default(),
         };
-
         let alice_account = Account::new(100, 0, program_id);
-
         let serialize_account = Account {
             tokens: 100,
             userdata: read_test_file("serialize.lua"),
@@ -220,7 +214,6 @@ mod tests {
             executable: false,
             loader_program_id: Pubkey::default(),
         };
-
         let mut accounts = [
             (Pubkey::default(), program_account),
             (Pubkey::default(), alice_account),
@@ -228,9 +221,7 @@ mod tests {
             (Pubkey::default(), Account::new(1, 0, program_id)),
         ];
         let mut keyed_accounts = create_keyed_accounts(&mut accounts);
-
         process(&mut keyed_accounts, &[]);
-
         // Verify deterministic ordering of a serialized Lua table.
         assert_eq!(
             str::from_utf8(&keyed_accounts[3].account.userdata).unwrap(),
@@ -250,12 +241,9 @@ mod tests {
         let dan_pubkey = Pubkey::new(&[5; 32]);
         let erin_pubkey = Pubkey::new(&[6; 32]);
 
-        let userdata = serialize(&LuaLoader::Bytes {
-            bytes: read_test_file("multisig.lua"),
-        }).unwrap();
         let program_account = Account {
             tokens: 1,
-            userdata,
+            userdata: read_test_file("multisig.lua"),
             program_id,
             executable: true,
             loader_program_id: Pubkey::default(),
