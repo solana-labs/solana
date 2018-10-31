@@ -2,7 +2,6 @@
 
 use entry::Entry;
 use hash::{hash, Hash};
-use ledger::next_entries;
 use ring::rand::SystemRandom;
 use signature::{Keypair, KeypairUtil};
 use solana_sdk::pubkey::Pubkey;

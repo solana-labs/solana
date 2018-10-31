@@ -98,7 +98,7 @@ pub struct LeaderScheduler {
 // The LeaderScheduler implements a schedule for leaders as follows:
 //
 // 1) During the bootstrapping period of bootstrap_height PoH counts, the
-// leader is hard-coded to the input bootstrap_leader.
+// leader is hard-coded to the bootstrap_leader that is read from the genesis block.
 //
 // 2) After the first seed is generated, this signals the beginning of actual leader rotation.
 // From this point on, every seed_rotation_interval PoH counts we generate the seed based
@@ -440,7 +440,7 @@ impl LeaderScheduler {
 impl Default for LeaderScheduler {
     // Create a dummy leader scheduler
     fn default() -> Self {
-        let id = Keypair::new().pubkey();
+        let id = Pubkey::default();
         Self::from_bootstrap_leader(id)
     }
 }
@@ -1000,7 +1000,7 @@ mod tests {
             ((((num_validators + 1) / 2) * (num_validators + 1))
                 + (num_vote_account_tokens * num_validators)) as i64,
             bootstrap_leader_id,
-            500,
+            0,
         );
         let bank = Bank::new(&mint);
         let mut validators = vec![];

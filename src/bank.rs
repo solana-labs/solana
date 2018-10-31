@@ -570,7 +570,6 @@ impl Bank {
         instruction_index: usize,
         program_accounts: &mut [&mut Account],
     ) -> Result<()> {
-        println!("Executing transaction");
         let tx_program_id = tx.program_id(instruction_index);
         // TODO: the runtime should be checking read/write access to memory
         // we are trusting the hard coded contracts not to clobber or allocate
@@ -1069,29 +1068,35 @@ impl Bank {
             assert!(leader_payment > 0);
 
             {
-                // First deposit into the mint
+                // 1) Deposit into the mint
                 let mut accounts = self.accounts.write().unwrap();
                 {
                     let account = accounts
                         .entry(tx.account_keys[0])
                         .or_insert_with(Account::default);
                     account.tokens += mint_deposit - leader_payment;
-                    println!(
+                    trace!(
                         "applied genesis payment to mint {:?} => {:?}",
                         mint_deposit - leader_payment,
                         account
                     );
                 }
 
-                // Second, transfer tokens to the first leader
+                // 2) Transfer tokens to the first leader. The first two
+                // account keys will both be the mint (because the mint is the source
+                // for this trnsaction and the first move instruction is to the the
+                // mint itself), so we look at the third account key to find the first
+                // leader id.
+                let first_leader_id = tx.account_keys[2];
                 let account = accounts
-                    .entry(tx.account_keys[2])
+                    .entry(first_leader_id)
                     .or_insert_with(Account::default);
                 account.tokens += leader_payment;
-                println!("KEYS: {:?}", tx.account_keys);
-                println!(
+                self.leader_scheduler.write().unwrap().bootstrap_leader = first_leader_id;
+                trace!(
                     "applied genesis payment to first leader {:?} => {:?}",
-                    leader_payment, account
+                    leader_payment,
+                    account
                 );
             }
         }
@@ -1663,6 +1668,10 @@ mod tests {
         bank.process_ledger(genesis).unwrap();
         assert_eq!(bank.get_balance(&mint.pubkey()), 4);
         assert_eq!(bank.get_balance(&dummy_leader_id), 1);
+        assert_eq!(
+            bank.leader_scheduler.read().unwrap().bootstrap_leader,
+            dummy_leader_id
+        );
     }
 
     fn create_sample_block_with_next_entries_using_keypairs(
