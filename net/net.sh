@@ -258,13 +258,7 @@ start() {
       cd "$SOLANA_ROOT"
 
       set -x
-      if [[ ! -r s3cmd-2.0.1/s3cmd ]]; then
-        rm -rf s3cmd-2.0.1.tar.gz s3cmd-2.0.1
-        wget https://github.com/s3tools/s3cmd/releases/download/v2.0.1/s3cmd-2.0.1.tar.gz
-        tar zxf s3cmd-2.0.1.tar.gz
-      fi
-
-      python ./s3cmd-2.0.1/s3cmd --acl-public get s3://solana-release/"$releaseChannel"/solana-release.tar.bz2 .
+      curl -o solana-release.tar.bz2 http://solana-release.s3.amazonaws.com/"$releaseChannel"/solana-release.tar.bz2
       tar jxvf solana-release.tar.bz2
     fi
     ;;
