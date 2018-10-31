@@ -90,10 +90,10 @@ $(OUT_DIR)/%.bc: $(SRC_DIR)/%.c
 $(OUT_DIR)/%.o: $(OUT_DIR)/%.bc
 	@echo "[llc] $@ ($<)"
 	$(_@)$(LLC) $(LLC_FLAGS) -o $@ $<
+	
+-include $(wildcard $(OUT_DIR)/*.d)
 
--include $(wildcard $(OUT_DIR)/%.d)
-
-PROGRAM_NAMES := $(notdir $(basename $(wildcard src/*.c)))
+PROGRAM_NAMES := $(notdir $(basename $(wildcard $(SRC_DIR)/*.c)))
 
 define \n
 
