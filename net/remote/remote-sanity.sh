@@ -65,7 +65,7 @@ snap)
   client_id=~/snap/solana/current/config/client-id.json
 
   ;;
-local)
+local|tar)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
   entrypointRsyncUrl="$entrypointIp:~/solana"

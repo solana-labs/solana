@@ -35,7 +35,7 @@ snap)
   solana_bench_tps=/snap/bin/solana.bench-tps
   solana_keygen=/snap/bin/solana.keygen
   ;;
-local)
+local|tar)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
   export SOLANA_DEFAULT_METRICS_RATE=1
