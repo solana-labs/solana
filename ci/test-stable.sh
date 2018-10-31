@@ -23,12 +23,11 @@ for test in tests/*.rs; do
   _ cargo test --verbose --jobs=1 --test="$test"
 done
 
-echo --- "( cd programs/native/bpf_loader ; cargo test --verbose )"
-( cd programs/native/bpf_loader ; cargo test --verbose )
-echo --- "( cd programs/native/lua_loader ; cargo test --verbose )"
-( cd programs/native/lua_loader ; cargo test --verbose )
-echo --- "( cd programs/native/noop ; cargo test --verbose )"
-( cd programs/native/noop ; cargo test --verbose )
+# Run native program's tests
+for member in programs/native/*; do
+  echo --- "( cd $member ; cargo test --verbose )"
+  ( cd $member ; cargo test --verbose )
+done
 
 echo --- ci/localnet-sanity.sh
 (
