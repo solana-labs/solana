@@ -162,25 +162,31 @@ impl RpcSol for RpcSolImpl {
     type Metadata = Meta;
 
     fn confirm_transaction(&self, meta: Self::Metadata, id: String) -> Result<bool> {
+        info!("confirm_transaction rpc request received: {:?}", id);
         self.get_signature_status(meta, id)
             .map(|status| status == RpcSignatureStatus::Confirmed)
     }
 
     fn get_account_info(&self, meta: Self::Metadata, id: String) -> Result<Account> {
+        info!("get_account_info rpc request received: {:?}", id);
         let pubkey = verify_pubkey(id)?;
         meta.request_processor.get_account_info(pubkey)
     }
     fn get_balance(&self, meta: Self::Metadata, id: String) -> Result<i64> {
+        info!("get_balance rpc request received: {:?}", id);
         let pubkey = verify_pubkey(id)?;
         meta.request_processor.get_balance(pubkey)
     }
     fn get_finality(&self, meta: Self::Metadata) -> Result<usize> {
+        info!("get_finality rpc request received");
         meta.request_processor.get_finality()
     }
     fn get_last_id(&self, meta: Self::Metadata) -> Result<String> {
+        info!("get_last_id rpc request received");
         meta.request_processor.get_last_id()
     }
     fn get_signature_status(&self, meta: Self::Metadata, id: String) -> Result<RpcSignatureStatus> {
+        info!("get_signature_status rpc request received: {:?}", id);
         let signature = verify_signature(&id)?;
         Ok(
             match meta.request_processor.get_signature_status(signature) {
@@ -196,6 +202,7 @@ impl RpcSol for RpcSolImpl {
         )
     }
     fn get_transaction_count(&self, meta: Self::Metadata) -> Result<u64> {
+        info!("get_transaction_count rpc request received");
         meta.request_processor.get_transaction_count()
     }
     fn request_airdrop(&self, meta: Self::Metadata, id: String, tokens: u64) -> Result<String> {
