@@ -13,7 +13,7 @@
 
 extern bool entrypoint(const uint8_t *input) {
   SolKeyedAccounts ka[NUM_KA];
-  uint8_t *data;
+  const uint8_t *data;
   uint64_t data_len;
 
   if (!sol_deserialize(input, NUM_KA, ka, &data, &data_len)) {
