@@ -6,7 +6,7 @@ ifneq ($(V),1)
 _@ :=@
 endif
 
-SYSTEM_INC_DIRS ?= -Isystem -I$(dir $(lastword $(MAKEFILE_LIST)))inc
+SYSTEM_INC_DIRS ?= -isystem $(dir $(lastword $(MAKEFILE_LIST)))inc
 INC_DIRS ?=
 SRC_DIR ?= ./src
 OUT_DIR ?= ./out
@@ -56,7 +56,7 @@ help:
 	@echo '    - List of include dirs:'
 	@echo '      INC_DIRS=$(INC_DIRS)'
 	@echo '    - List of systme include dirs:'
-	@echo '      INC_DIRS=$(SYSTEM_INC_DIRS)'
+	@echo '      SYSTEM_INC_DIRS=$(SYSTEM_INC_DIRS)'
 	@echo '    - Location of source files:'
 	@echo '      SRC_DIR=$(SRC_DIR)'
 	@echo '    - Location to place output files:'
