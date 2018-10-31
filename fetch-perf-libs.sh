@@ -15,7 +15,7 @@ mkdir -p target/perf-libs
   cd target/perf-libs
   (
     set -x
-    curl https://solana-perf.s3.amazonaws.com/v0.10.3/x86_64-unknown-linux-gnu/solana-perf.tgz | tar zxvf -
+    curl https://solana-perf.s3.amazonaws.com/v0.10.4/x86_64-unknown-linux-gnu/solana-perf.tgz | tar zxvf -
   )
 
   if [[ -r /usr/local/cuda/version.txt && -r cuda-version.txt ]]; then

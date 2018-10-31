@@ -35,7 +35,6 @@ else
   setupArgs="-l"
 fi
 
-
 case $deployMethod in
 snap)
   SECONDS=0
@@ -78,7 +77,7 @@ snap)
 
   echo "Succeeded in ${SECONDS} seconds"
   ;;
-local)
+local|tar)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
   export RUST_LOG

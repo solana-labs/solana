@@ -19,6 +19,6 @@ serde_derive = "1.0.27"
 solana-sdk = { path = "../../../sdk", version = "0.11.0" }
 
 [lib]
-name = "bpf_loader"
+name = "solana_bpf_loader"
 crate-type = ["cdylib"]
 

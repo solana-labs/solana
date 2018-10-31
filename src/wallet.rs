@@ -1092,13 +1092,14 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
+        let last_id = bank.last_id();
+
         let server = Fullnode::new_with_bank(
             leader_keypair,
             vote_account_keypair,
             bank,
             0,
-            0,
-            &[],
+            &last_id,
             leader,
             None,
             &ledger_path,
@@ -1167,21 +1168,19 @@ mod tests {
 
         let rpc_port = 11111; // Needs to be distinct known number to not conflict with other tests
 
-        let genesis_entries = &alice.create_entries();
-        let entry_height = genesis_entries.len() as u64;
-
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
+        let last_id = bank.last_id();
+        let entry_height = alice.create_entries().len() as u64;
         let server = Fullnode::new_with_bank(
             leader_keypair,
             vote_account_keypair,
             bank,
-            0,
             entry_height,
-            &genesis_entries,
+            &last_id,
             leader,
             None,
             &ledger_path,
@@ -1258,13 +1257,13 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
+        let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
             vote_account_keypair,
             bank,
             0,
-            0,
-            &[],
+            &last_id,
             leader,
             None,
             &ledger_path,
@@ -1377,19 +1376,18 @@ mod tests {
         let mut config_payer = WalletConfig::default();
         let mut config_witness = WalletConfig::default();
         let rpc_port = 11223; // Needs to be distinct known number to not conflict with other tests
-
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
+        let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
             vote_account_keypair,
             bank,
             0,
-            0,
-            &[],
+            &last_id,
             leader,
             None,
             &ledger_path,
@@ -1506,13 +1504,13 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
+        let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
             vote_account_keypair,
             bank,
             0,
-            0,
-            &[],
+            &last_id,
             leader,
             None,
             &ledger_path,

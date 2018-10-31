@@ -27,7 +27,6 @@ use std::path::Path;
 use transaction::Transaction;
 use vote_program::Vote;
 use vote_transaction::VoteTransaction;
-use window::WINDOW_SIZE;
 
 //
 // A persistent ledger is 2 files:
@@ -78,6 +77,10 @@ pub struct LedgerWindow {
 pub const LEDGER_DATA_FILE: &str = "data";
 const LEDGER_INDEX_FILE: &str = "index";
 
+const LEDGER_BUF_COUNT: usize = 32 * 1024;
+const LEDGER_DATA_BUF_SIZE: usize = LEDGER_BUF_COUNT * BLOB_DATA_SIZE;
+const LEDGER_INDEX_BUF_SIZE: usize = LEDGER_BUF_COUNT * SIZEOF_U64 as usize;
+
 // use a CONST because there's a cast, and we don't want "sizeof::<u64> as u64"...
 const SIZEOF_U64: u64 = size_of::<u64>() as u64;
 
@@ -113,9 +116,9 @@ impl LedgerWindow {
         let ledger_path = Path::new(&ledger_path);
 
         let index = File::open(ledger_path.join(LEDGER_INDEX_FILE))?;
-        let index = BufReader::with_capacity((WINDOW_SIZE * SIZEOF_U64) as usize, index);
+        let index = BufReader::with_capacity(LEDGER_INDEX_BUF_SIZE, index);
         let data = File::open(ledger_path.join(LEDGER_DATA_FILE))?;
-        let data = BufReader::with_capacity(WINDOW_SIZE as usize * BLOB_DATA_SIZE, data);
+        let data = BufReader::with_capacity(LEDGER_DATA_BUF_SIZE, data);
 
         Ok(LedgerWindow { index, data })
     }
@@ -185,10 +188,10 @@ pub fn verify_ledger(ledger_path: &str) -> io::Result<()> {
             format!("index is not a multiple of {} bytes long", SIZEOF_U64),
         ))?;
     }
-    let mut index = BufReader::with_capacity((WINDOW_SIZE * SIZEOF_U64) as usize, index);
+    let mut index = BufReader::with_capacity(LEDGER_INDEX_BUF_SIZE, index);
 
     let data = File::open(ledger_path.join(LEDGER_DATA_FILE))?;
-    let mut data = BufReader::with_capacity(WINDOW_SIZE as usize * BLOB_DATA_SIZE, data);
+    let mut data = BufReader::with_capacity(LEDGER_DATA_BUF_SIZE, data);
 
     let mut last_data_offset = 0;
     let mut index_offset = 0;
@@ -503,6 +506,7 @@ impl Block for [Entry] {
     }
 }
 
+// TODO: move this to the right file, entry.rs?
 pub fn reconstruct_entries_from_blobs(blobs: Vec<SharedBlob>) -> Result<Vec<Entry>> {
     let mut entries: Vec<Entry> = Vec::with_capacity(blobs.len());
 

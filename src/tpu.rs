@@ -61,7 +61,6 @@ impl Tpu {
         transactions_sockets: Vec<UdpSocket>,
         ledger_path: &str,
         sigverify_disabled: bool,
-        tick_height: u64,
         max_tick_height: Option<u64>,
         last_entry_id: &Hash,
     ) -> (Self, Receiver<Vec<Entry>>, Arc<AtomicBool>) {
@@ -77,7 +76,6 @@ impl Tpu {
             verified_receiver,
             tick_duration,
             last_entry_id,
-            tick_height,
             max_tick_height,
         );
 

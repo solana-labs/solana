@@ -276,6 +276,7 @@ mod test {
         last_id = active_set_entries.last().unwrap().id;
         let initial_tick_height = genesis_entries
             .iter()
+            .skip(2)
             .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
         let active_set_entries_len = active_set_entries.len() as u64;
         let initial_non_tick_height = genesis_entries.len() as u64 - initial_tick_height;
@@ -300,7 +301,7 @@ mod test {
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
 
         // Set up the bank
-        let (bank, _, _, _) = Fullnode::new_bank_from_ledger(&my_ledger_path, leader_scheduler);
+        let (bank, _, _) = Fullnode::new_bank_from_ledger(&my_ledger_path, leader_scheduler);
 
         // Set up the replicate stage
         let (entry_sender, entry_receiver) = channel();

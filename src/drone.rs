@@ -329,13 +329,13 @@ mod tests {
         let ledger_path = get_tmp_ledger_path("send_airdrop");
 
         let vote_account_keypair = Arc::new(Keypair::new());
+        let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
             vote_account_keypair,
             bank,
             0,
-            0,
-            &[],
+            &last_id,
             leader,
             None,
             &ledger_path,

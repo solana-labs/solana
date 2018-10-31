@@ -24,11 +24,11 @@ fn main() {
             + &env::var("PROFILE").unwrap()
             + &"/bpf".to_string();
 
+        println!("cargo:rerun-if-changed=programs/bpf/c/sdk/bpf.mk");
+        println!("cargo:rerun-if-changed=programs/bpf/c/sdk/inc/sol_bpf.h");
         println!("cargo:rerun-if-changed=programs/bpf/c/makefile");
         println!("cargo:rerun-if-changed=programs/bpf/c/src/move_funds.c");
         println!("cargo:rerun-if-changed=programs/bpf/c/src/noop.c");
-        println!("cargo:rerun-if-changed=programs/bpf/c/src/tictactoe.c");
-        println!("cargo:rerun-if-changed=programs/bpf/c/src/tictactoe_dashboard.c");
         println!("cargo:warning=(not a warning) Compiling C-based BPF programs");
         let status = Command::new("make")
             .current_dir("programs/bpf/c")
