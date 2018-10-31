@@ -6,7 +6,6 @@ ifneq ($(V),1)
 _@ :=@
 endif
 
-SYSTEM_INC_DIRS ?= -isystem $(dir $(lastword $(MAKEFILE_LIST)))inc
 INC_DIRS ?=
 SRC_DIR ?= ./src
 OUT_DIR ?= ./out
@@ -17,6 +16,8 @@ LLVM_DIR ?= $(brew --prefix llvm)
 else
 LLVM_DIR ?= /usr/local/opt/llvm
 endif
+
+SYSTEM_INC_DIRS := -isystem $(dir $(lastword $(MAKEFILE_LIST)))inc
 
 CC := $(LLVM_DIR)/bin/clang
 CC_FLAGS := \
