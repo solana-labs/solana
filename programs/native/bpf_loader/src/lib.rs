@@ -109,7 +109,7 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
 
     if keyed_accounts[0].account.executable {
         let prog = keyed_accounts[0].account.userdata.clone();
-        trace!("Call BPF, {} Instructions", prog.len() / 8);
+        trace!("Call BPF, {} instructions", prog.len() / 8);
         //dump_program(keyed_accounts[0].key, &prog);
         let mut vm = match create_vm(&prog) {
             Ok(vm) => vm,
@@ -129,6 +129,7 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
             }
         }
         deserialize_parameters(&mut keyed_accounts[1..], &v);
+        trace!("BPF program executed {} instructions", vm.get_last_instruction_count());
     } else if let Ok(instruction) = deserialize(tx_data) {
         match instruction {
             LoaderInstruction::Write { offset, bytes } => {
