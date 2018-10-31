@@ -6,7 +6,7 @@ ifneq ($(V),1)
 _@ :=@
 endif
 
-SYSTEM_INC_DIRS ?= -isystem $(dir $(lastword $(MAKEFILE_LIST)))inc
+SYSTEM_INC_DIRS ?= -Isystem -I$(dir $(lastword $(MAKEFILE_LIST)))inc
 INC_DIRS ?=
 SRC_DIR ?= ./src
 OUT_DIR ?= ./out
@@ -50,11 +50,13 @@ help:
 	@echo '  - Output files will be placed in the directory: $(OUT_DIR)'
 	@echo ''
 	@echo 'User settings'
-	@echo '  - The following setting are overridable on the command line, default values shown'
+	@echo '  - The following setting are overridable on the command line, default values shown:'
 	@echo '    - Show commands:'
 	@echo '      V=1'
 	@echo '    - List of include dirs:'
 	@echo '      INC_DIRS=$(INC_DIRS)'
+	@echo '    - List of systme include dirs:'
+	@echo '      INC_DIRS=$(SYSTEM_INC_DIRS)'
 	@echo '    - Location of source files:'
 	@echo '      SRC_DIR=$(SRC_DIR)'
 	@echo '    - Location to place output files:'
@@ -88,7 +90,7 @@ $(OUT_DIR)/%.o: $(OUT_DIR)/%.bc
 	@echo "[llc] $@ ($<)"
 	$(_@)$(LLC) $(LLC_FLAGS) -o $@ $<
 
--include $(wildcard $(OUT_DIR)/*.d)
+-include $(wildcard $(OUT_DIR)/%.d)
 
 PROGRAM_NAMES := $(notdir $(basename $(wildcard src/*.c)))
 
