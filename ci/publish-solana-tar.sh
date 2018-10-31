@@ -33,6 +33,7 @@ if [[ -z $DRYRUN ]]; then
     git rev-parse HEAD
   ) > solana-release/version.txt
 
+  ./fetch-perf-libs.sh
   cargo install --features=cuda --root solana-release
   ./scripts/install-native-programs.sh solana-release
 
