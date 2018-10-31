@@ -5,11 +5,12 @@ extern crate byteorder;
 extern crate env_logger;
 #[macro_use]
 extern crate log;
-extern crate rbpf;
+extern crate solana_rbpf;
 extern crate solana_sdk;
 
 use bincode::deserialize;
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
+use solana_rbpf::{helpers, EbpfVmRaw};
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
@@ -52,11 +53,12 @@ pub fn helper_printf(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) -> u
         + size_arg(arg5)
 }
 
-fn create_vm(prog: &[u8]) -> Result<rbpf::EbpfVmRaw, Error> {
-    let mut vm = rbpf::EbpfVmRaw::new(None)?;
+fn create_vm(prog: &[u8]) -> Result<EbpfVmRaw, Error> {
+    let mut vm = EbpfVmRaw::new(None)?;
     vm.set_verifier(bpf_verifier::check)?;
+    vm.set_max_instruction_count(36000)?; // 36000 is a wag, need to tune
     vm.set_program(&prog)?;
-    vm.register_helper(rbpf::helpers::BPF_TRACE_PRINTK_IDX, helper_printf)?;
+    vm.register_helper(helpers::BPF_TRACE_PRINTK_IDX, helper_printf)?;
     Ok(vm)
 }
 
@@ -107,9 +109,9 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
 
     if keyed_accounts[0].account.executable {
         let prog = keyed_accounts[0].account.userdata.clone();
-        trace!("Call BPF, {} Instructions", prog.len() / 8);
+        trace!("Call BPF, {} instructions", prog.len() / 8);
         //dump_program(keyed_accounts[0].key, &prog);
-        let vm = match create_vm(&prog) {
+        let mut vm = match create_vm(&prog) {
             Ok(vm) => vm,
             Err(e) => {
                 warn!("create_vm failed: {}", e);
@@ -127,6 +129,10 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
             }
         }
         deserialize_parameters(&mut keyed_accounts[1..], &v);
+        trace!(
+            "BPF program executed {} instructions",
+            vm.get_last_instruction_count()
+        );
     } else if let Ok(instruction) = deserialize(tx_data) {
         match instruction {
             LoaderInstruction::Write { offset, bytes } => {
@@ -152,4 +158,29 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
         warn!("Invalid program transaction: {:?}", tx_data);
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    #[should_panic(expected = "Error: Execution exceeded maximum number of instructions")]
+    fn test_non_terminating_program() {
+        #[rustfmt::skip]
+        let prog = &[
+            0xb7, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // r6 = 0
+            0xb7, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // r1 = 0
+            0xb7, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // r2 = 0
+            0xb7, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // r3 = 0
+            0xb7, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // r4 = 0
+            0xbf, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // r5 = r6
+            0x85, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, // call 6
+            0x07, 0x06, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, // r6 + 1
+            0x05, 0x00, 0xf8, 0xff, 0x00, 0x00, 0x00, 0x00, // goto -8
+            0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // exit
+        ];
+        let input = &mut [0x00];
+        let mut vm = create_vm(prog).unwrap();
+        vm.execute_program(input).unwrap();
+    }
 }
