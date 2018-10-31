@@ -80,7 +80,7 @@ env_logger = "0.5.12"
 generic-array = { version = "0.12.0", default-features = false, features = ["serde"] }
 getopts = "0.2"
 hex-literal = "0.1.1"
-influx_db_client = "0.3.4"
+influx_db_client = "0.3.6"
 solana-jsonrpc-core = "0.3.0"
 solana-jsonrpc-http-server = "0.3.0"
 solana-jsonrpc-macros = "0.3.0"

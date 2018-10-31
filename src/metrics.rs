@@ -48,9 +48,7 @@ impl InfluxDbMetricsWriter {
         client.set_read_timeout(1 /*second*/);
         client.set_write_timeout(1 /*second*/);
 
-        // TODO: Restore the next line once https://github.com/driftluo/InfluxDBClient-rs/pull/31
-        //       is merged and published in the influxdb crate
-        //debug!("InfluxDB version: {:?}", client.get_version());
+        debug!("InfluxDB version: {:?}", client.get_version());
         Some(client)
     }
 }
