@@ -120,9 +120,11 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
         };
         let mut v = serialize_parameters(&mut keyed_accounts[1..], &tx_data);
         match vm.execute_program(v.as_mut_slice()) {
-            Ok(status) => if 0 == status {
-                return false;
-            },
+            Ok(status) => {
+                if 0 == status {
+                    return false;
+                }
+            }
             Err(e) => {
                 warn!("execute_program failed: {}", e);
                 return false;

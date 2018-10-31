@@ -261,6 +261,8 @@ mod test {
             "test_replicate_stage_leader_rotation_exit",
             10_000,
             num_ending_ticks,
+            my_keypair.pubkey(),
+            500,
         );
         let mut last_id = genesis_entries
             .last()

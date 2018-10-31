@@ -14,7 +14,7 @@ use solana::entry::Entry;
 use solana::hash::hash;
 use solana::mint::Mint;
 use solana::packet::to_packets_chunked;
-use solana::signature::{KeypairUtil, Signature};
+use solana::signature::{Keypair, KeypairUtil, Signature};
 use solana::system_transaction::SystemTransaction;
 use solana::transaction::Transaction;
 use solana_sdk::pubkey::Pubkey;
@@ -46,7 +46,7 @@ fn check_txs(receiver: &Receiver<Vec<Entry>>, ref_tx_count: usize) {
 fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let txes = 1000 * NUM_THREADS;
     let mint_total = 1_000_000_000_000;
-    let mint = Mint::new(mint_total);
+    let mint = Mint::new(mint_total, Keypair::new().pubkey(), 0);
 
     let (verified_sender, verified_receiver) = channel();
     let bank = Arc::new(Bank::new(&mint));
@@ -78,7 +78,9 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             mint.last_id(),
             0,
         );
-        assert!(bank.process_transaction(&fund).is_ok());
+        let x = bank.process_transaction(&fund);
+        println!("ERROR: {:?}", x);
+        assert!(x.is_ok());
     });
     //sanity check, make sure all the transactions can execute sequentially
     transactions.iter().for_each(|tx| {
@@ -130,7 +132,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     let progs = 5;
     let txes = 1000 * NUM_THREADS;
     let mint_total = 1_000_000_000_000;
-    let mint = Mint::new(mint_total);
+    let mint = Mint::new(mint_total, Keypair::new().pubkey(), 0);
 
     let (verified_sender, verified_receiver) = channel();
     let bank = Arc::new(Bank::new(&mint));

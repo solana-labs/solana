@@ -107,13 +107,13 @@ pub struct Fullnode {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "PascalCase")]
 /// Fullnode configuration to be stored in file
 pub struct Config {
     pub node_info: NodeInfo,
     pkcs8: Vec<u8>,
 }
 
-/// Structure to be replicated by the network
 impl Config {
     pub fn new(bind_addr: &SocketAddr, pkcs8: Vec<u8>) -> Self {
         let keypair =
@@ -679,7 +679,8 @@ mod tests {
     fn validator_exit() {
         let keypair = Keypair::new();
         let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
-        let (mint, validator_ledger_path) = create_tmp_genesis("validator_exit", 10_000);
+        let (mint, validator_ledger_path) =
+            create_tmp_genesis("validator_exit", 10_000, keypair.pubkey(), 1000);
         let mut bank = Bank::new(&mint);
         let entry = tn.info.clone();
         let genesis_entries = &mint.create_entries();
@@ -714,8 +715,12 @@ mod tests {
             .map(|i| {
                 let keypair = Keypair::new();
                 let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
-                let (mint, validator_ledger_path) =
-                    create_tmp_genesis(&format!("validator_parallel_exit_{}", i), 10_000);
+                let (mint, validator_ledger_path) = create_tmp_genesis(
+                    &format!("validator_parallel_exit_{}", i),
+                    10_000,
+                    keypair.pubkey(),
+                    1000,
+                );
                 ledger_paths.push(validator_ledger_path.clone());
                 let mut bank = Bank::new(&mint);
                 let entry = tn.info.clone();
@@ -764,8 +769,13 @@ mod tests {
 
         // Make a mint and a genesis entries for leader ledger
         let num_ending_ticks = 1;
-        let (_, bootstrap_leader_ledger_path, genesis_entries) =
-            create_tmp_sample_ledger("test_leader_to_leader_transition", 10_000, num_ending_ticks);
+        let (_, bootstrap_leader_ledger_path, genesis_entries) = create_tmp_sample_ledger(
+            "test_leader_to_leader_transition",
+            10_000,
+            num_ending_ticks,
+            bootstrap_leader_keypair.pubkey(),
+            500,
+        );
 
         let initial_tick_height = genesis_entries
             .iter()
@@ -834,8 +844,13 @@ mod tests {
 
         // Make a common mint and a genesis entry for both leader + validator's ledgers
         let num_ending_ticks = 1;
-        let (mint, bootstrap_leader_ledger_path, genesis_entries) =
-            create_tmp_sample_ledger("test_wrong_role_transition", 10_000, num_ending_ticks);
+        let (mint, bootstrap_leader_ledger_path, genesis_entries) = create_tmp_sample_ledger(
+            "test_wrong_role_transition",
+            10_000,
+            num_ending_ticks,
+            bootstrap_leader_keypair.pubkey(),
+            500,
+        );
 
         let last_id = genesis_entries
             .last()
@@ -930,6 +945,8 @@ mod tests {
             "test_validator_to_leader_transition",
             10_000,
             num_ending_ticks,
+            leader_id,
+            500,
         );
 
         let validator_keypair = Keypair::new();

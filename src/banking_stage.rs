@@ -183,11 +183,13 @@ impl BankingStage {
                 .zip(vers)
                 .filter_map(|(tx, ver)| match tx {
                     None => None,
-                    Some((tx, _addr)) => if tx.verify_refs() && ver != 0 {
-                        Some(tx)
-                    } else {
-                        None
-                    },
+                    Some((tx, _addr)) => {
+                        if tx.verify_refs() && ver != 0 {
+                            Some(tx)
+                        } else {
+                            None
+                        }
+                    }
                 }).collect();
             debug!("verified transactions {}", transactions.len());
             Self::process_transactions(bank, &transactions, poh)?;
@@ -258,7 +260,13 @@ mod tests {
 
     #[test]
     fn test_banking_stage_shutdown1() {
-        let bank = Arc::new(Bank::new(&Mint::new(2)));
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let bank = Arc::new(Bank::new(&Mint::new(
+            2,
+            dummy_leader_id,
+            dummy_leader_tokens,
+        )));
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, _entry_receiver) = BankingStage::new(
             &bank,
@@ -276,7 +284,13 @@ mod tests {
 
     #[test]
     fn test_banking_stage_shutdown2() {
-        let bank = Arc::new(Bank::new(&Mint::new(2)));
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let bank = Arc::new(Bank::new(&Mint::new(
+            2,
+            dummy_leader_id,
+            dummy_leader_tokens,
+        )));
         let (_verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
@@ -294,7 +308,13 @@ mod tests {
 
     #[test]
     fn test_banking_stage_tick() {
-        let bank = Arc::new(Bank::new(&Mint::new(2)));
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let bank = Arc::new(Bank::new(&Mint::new(
+            2,
+            dummy_leader_id,
+            dummy_leader_tokens,
+        )));
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
@@ -319,7 +339,9 @@ mod tests {
 
     #[test]
     fn test_banking_stage_entries_only() {
-        let mint = Mint::new(2);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(2, dummy_leader_id, dummy_leader_tokens);
         let bank = Arc::new(Bank::new(&mint));
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
@@ -374,7 +396,9 @@ mod tests {
         // In this attack we'll demonstrate that a verifier can interpret the ledger
         // differently if either the server doesn't signal the ledger to add an
         // Entry OR if the verifier tries to parallelize across multiple Entries.
-        let mint = Mint::new(2);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(2, dummy_leader_id, dummy_leader_tokens);
         let bank = Arc::new(Bank::new(&mint));
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
@@ -427,7 +451,13 @@ mod tests {
     // with reason BankingStageReturnType::LeaderRotation
     #[test]
     fn test_max_tick_height_shutdown() {
-        let bank = Arc::new(Bank::new(&Mint::new(2)));
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let bank = Arc::new(Bank::new(&Mint::new(
+            2,
+            dummy_leader_id,
+            dummy_leader_tokens,
+        )));
         let (_verified_sender_, verified_receiver) = channel();
         let max_tick_height = 10;
         let (banking_stage, _entry_receiver) = BankingStage::new(

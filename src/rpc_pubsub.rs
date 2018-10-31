@@ -258,7 +258,9 @@ mod tests {
 
     #[test]
     fn test_pubsub_new() {
-        let alice = Mint::new(10_000);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let alice = Mint::new(10_000, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&alice);
         let pubsub_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let pubsub_service = PubSubService::new(&Arc::new(bank), pubsub_addr);
@@ -268,7 +270,9 @@ mod tests {
 
     #[test]
     fn test_signature_subscribe() {
-        let alice = Mint::new(10_000);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let alice = Mint::new(10_000, dummy_leader_id, dummy_leader_tokens);
         let bob = Keypair::new();
         let bob_pubkey = bob.pubkey();
         let bank = Bank::new(&alice);
@@ -345,7 +349,9 @@ mod tests {
 
     #[test]
     fn test_signature_unsubscribe() {
-        let alice = Mint::new(10_000);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let alice = Mint::new(10_000, dummy_leader_id, dummy_leader_tokens);
         let bob_pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&alice);
         let arc_bank = Arc::new(bank);
@@ -395,7 +401,9 @@ mod tests {
 
     #[test]
     fn test_account_subscribe() {
-        let alice = Mint::new(10_000);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let alice = Mint::new(10_000, dummy_leader_id, dummy_leader_tokens);
         let bob_pubkey = Keypair::new().pubkey();
         let witness = Keypair::new();
         let contract_funds = Keypair::new();
@@ -583,7 +591,9 @@ mod tests {
 
     #[test]
     fn test_account_unsubscribe() {
-        let alice = Mint::new(10_000);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 1;
+        let alice = Mint::new(10_000, dummy_leader_id, dummy_leader_tokens);
         let bob_pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&alice);
         let arc_bank = Arc::new(bank);

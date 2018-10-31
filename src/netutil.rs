@@ -125,9 +125,11 @@ pub fn bind_in_range(range: (u16, u16)) -> io::Result<(u16, UdpSocket)> {
                 let sock = sock.into_udp_socket();
                 break Result::Ok((sock.local_addr().unwrap().port(), sock));
             }
-            Err(err) => if err.kind() != io::ErrorKind::AddrInUse || tries_left == 0 {
-                return Err(err);
-            },
+            Err(err) => {
+                if err.kind() != io::ErrorKind::AddrInUse || tries_left == 0 {
+                    return Err(err);
+                }
+            }
         }
         tries_left -= 1;
     }
@@ -171,9 +173,11 @@ pub fn find_available_port_in_range(range: (u16, u16)) -> io::Result<u16> {
             Ok(_) => {
                 break Ok(rand_port);
             }
-            Err(err) => if err.kind() != io::ErrorKind::AddrInUse || tries_left == 0 {
-                return Err(err);
-            },
+            Err(err) => {
+                if err.kind() != io::ErrorKind::AddrInUse || tries_left == 0 {
+                    return Err(err);
+                }
+            }
         }
         tries_left -= 1;
     }

@@ -519,7 +519,7 @@ mod tests {
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
 
-        let alice = Mint::new(10_000);
+        let alice = Mint::new(10_000, leader_keypair.pubkey(), 1);
         let mut bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let ledger_path = create_tmp_ledger_with_mint("thin_client", &alice);
@@ -571,7 +571,7 @@ mod tests {
         logger::setup();
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let alice = Mint::new(10_000);
+        let alice = Mint::new(10_000, leader_keypair.pubkey(), 1);
         let mut bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
@@ -637,7 +637,7 @@ mod tests {
         logger::setup();
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let alice = Mint::new(10_000);
+        let alice = Mint::new(10_000, leader_keypair.pubkey(), 1);
         let mut bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
@@ -802,7 +802,7 @@ mod tests {
         logger::setup();
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let alice = Mint::new(10_000);
+        let alice = Mint::new(10_000, leader_keypair.pubkey(), 1);
         let mut bank = Bank::new(&alice);
         let bob_keypair = Keypair::new();
         let leader_data = leader.info.clone();

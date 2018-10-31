@@ -202,9 +202,9 @@ impl Bank {
     }
 
     /// Create an Bank using a deposit.
-    pub fn new_from_deposit(deposit: &Payment) -> Self {
+    pub fn new_from_deposits(deposits: &[Payment]) -> Self {
         let bank = Self::default();
-        {
+        for deposit in deposits {
             let mut accounts = bank.accounts.write().unwrap();
             let account = accounts.entry(deposit.to).or_insert_with(Account::default);
             Self::apply_payment(deposit, account);
@@ -215,11 +215,17 @@ impl Bank {
 
     /// Create an Bank with only a Mint. Typically used by unit tests.
     pub fn new(mint: &Mint) -> Self {
-        let deposit = Payment {
+        let mint_deposit = Payment {
             to: mint.pubkey(),
-            tokens: mint.tokens,
+            tokens: mint.tokens - mint.first_leader_tokens,
         };
-        let bank = Self::new_from_deposit(&deposit);
+        let leader_deposit = Payment {
+            to: mint.first_leader_id,
+            tokens: mint.first_leader_tokens,
+        };
+
+        let deposits = vec![mint_deposit, leader_deposit];
+        let bank = Self::new_from_deposits(&deposits);
         bank.register_entry_id(&mint.last_id());
         bank
     }
@@ -416,9 +422,11 @@ impl Bank {
     fn unlock_account(tx: &Transaction, result: &Result<()>, account_locks: &mut HashSet<Pubkey>) {
         match result {
             Err(BankError::AccountInUse) => (),
-            _ => for k in &tx.account_keys {
-                account_locks.remove(k);
-            },
+            _ => {
+                for k in &tx.account_keys {
+                    account_locks.remove(k);
+                }
+            }
         }
     }
 
@@ -562,6 +570,7 @@ impl Bank {
         instruction_index: usize,
         program_accounts: &mut [&mut Account],
     ) -> Result<()> {
+        println!("Executing transaction");
         let tx_program_id = tx.program_id(instruction_index);
         // TODO: the runtime should be checking read/write access to memory
         // we are trusting the hard coded contracts not to clobber or allocate
@@ -1026,28 +1035,64 @@ impl Bank {
         // which implies its id can be used as the ledger's seed.
         let entry0 = entries.next().expect("invalid ledger: empty");
 
-        // The second item in the ledger is a special transaction where the to and from
+        // The second item in the ledger consists of a transaction with
+        // two special instructions:
+        // 1) The first is a special move instruction where the to and from
         // fields are the same. That entry should be treated as a deposit, not a
         // transfer to oneself.
+        // 2) The second is a move instruction that acts as a payment to the first
+        // leader from the mint. This first leader will stay in power during the
+        // bootstrapping period of the network
         let entry1 = entries
             .next()
             .expect("invalid ledger: need at least 2 entries");
         {
+            // Process the first transaction
             let tx = &entry1.transactions[0];
             assert!(SystemProgram::check_id(tx.program_id(0)), "Invalid ledger");
-            let instruction: SystemProgram = deserialize(tx.userdata(0)).unwrap();
-            let deposit = if let SystemProgram::Move { tokens } = instruction {
+            assert!(SystemProgram::check_id(tx.program_id(1)), "Invalid ledger");
+            let mut instruction: SystemProgram = deserialize(tx.userdata(0)).unwrap();
+            let mint_deposit = if let SystemProgram::Move { tokens } = instruction {
                 Some(tokens)
             } else {
                 None
             }.expect("invalid ledger, needs to start with a contract");
+
+            instruction = deserialize(tx.userdata(1)).unwrap();
+            let leader_payment = if let SystemProgram::Move { tokens } = instruction {
+                Some(tokens)
+            } else {
+                None
+            }.expect("invalid ledger, needs to start with a contract");
+
+            assert!(leader_payment <= mint_deposit);
+            assert!(leader_payment > 0);
+
             {
+                // First deposit into the mint
                 let mut accounts = self.accounts.write().unwrap();
+                {
+                    let account = accounts
+                        .entry(tx.account_keys[0])
+                        .or_insert_with(Account::default);
+                    account.tokens += mint_deposit - leader_payment;
+                    println!(
+                        "applied genesis payment to mint {:?} => {:?}",
+                        mint_deposit - leader_payment,
+                        account
+                    );
+                }
+
+                // Second, transfer tokens to the first leader
                 let account = accounts
-                    .entry(tx.account_keys[0])
+                    .entry(tx.account_keys[2])
                     .or_insert_with(Account::default);
-                account.tokens += deposit;
-                trace!("applied genesis payment {:?} => {:?}", deposit, account);
+                account.tokens += leader_payment;
+                println!("KEYS: {:?}", tx.account_keys);
+                println!(
+                    "applied genesis payment to first leader {:?} => {:?}",
+                    leader_payment, account
+                );
             }
         }
         self.register_entry_id(&entry0.id);
@@ -1256,14 +1301,19 @@ mod tests {
 
     #[test]
     fn test_bank_new() {
-        let mint = Mint::new(10_000);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 1;
+        let mint = Mint::new(10_000, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&mint);
-        assert_eq!(bank.get_balance(&mint.pubkey()), 10_000);
+        assert_eq!(bank.get_balance(&mint.pubkey()), 9999);
+        assert_eq!(bank.get_balance(&dummy_leader_id), 1);
     }
 
     #[test]
     fn test_two_payments_to_one_party() {
-        let mint = Mint::new(10_000);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(10_000, dummy_leader_id, dummy_leader_tokens);
         let pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&mint);
         assert_eq!(bank.last_id(), mint.last_id());
@@ -1280,7 +1330,9 @@ mod tests {
 
     #[test]
     fn test_one_source_two_tx_one_batch() {
-        let mint = Mint::new(1);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(1, dummy_leader_id, dummy_leader_tokens);
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&mint);
@@ -1305,7 +1357,9 @@ mod tests {
 
     #[test]
     fn test_one_tx_two_out_atomic_fail() {
-        let mint = Mint::new(1);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(1, dummy_leader_id, dummy_leader_tokens);
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&mint);
@@ -1345,7 +1399,9 @@ mod tests {
 
     #[test]
     fn test_one_tx_two_out_atomic_pass() {
-        let mint = Mint::new(2);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(2, dummy_leader_id, dummy_leader_tokens);
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&mint);
@@ -1367,7 +1423,9 @@ mod tests {
     #[test]
     fn test_negative_tokens() {
         logger::setup();
-        let mint = Mint::new(1);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(1, dummy_leader_id, dummy_leader_tokens);
         let pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&mint);
         let res = bank.transfer(-1, &mint.keypair(), pubkey, mint.last_id());
@@ -1380,7 +1438,9 @@ mod tests {
     // See github issue 1157 (https://github.com/solana-labs/solana/issues/1157)
     #[test]
     fn test_detect_failed_duplicate_transactions_issue_1157() {
-        let mint = Mint::new(1);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(1, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&mint);
         let dest = Keypair::new();
 
@@ -1415,7 +1475,9 @@ mod tests {
 
     #[test]
     fn test_account_not_found() {
-        let mint = Mint::new(1);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(1, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&mint);
         let keypair = Keypair::new();
         assert_eq!(
@@ -1427,7 +1489,9 @@ mod tests {
 
     #[test]
     fn test_insufficient_funds() {
-        let mint = Mint::new(11_000);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(11_000, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&mint);
         let pubkey = Keypair::new().pubkey();
         bank.transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
@@ -1447,7 +1511,9 @@ mod tests {
 
     #[test]
     fn test_transfer_to_newb() {
-        let mint = Mint::new(10_000);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(10000, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&mint);
         let pubkey = Keypair::new().pubkey();
         bank.transfer(500, &mint.keypair(), pubkey, mint.last_id())
@@ -1457,7 +1523,9 @@ mod tests {
 
     #[test]
     fn test_duplicate_transaction_signature() {
-        let mint = Mint::new(1);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(1, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&mint);
         let signature = Signature::default();
         assert_eq!(
@@ -1472,7 +1540,9 @@ mod tests {
 
     #[test]
     fn test_clear_signatures() {
-        let mint = Mint::new(1);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(1, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&mint);
         let signature = Signature::default();
         bank.reserve_signature_with_last_id_test(&signature, &mint.last_id())
@@ -1486,7 +1556,9 @@ mod tests {
 
     #[test]
     fn test_get_signature_status() {
-        let mint = Mint::new(1);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(1, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&mint);
         let signature = Signature::default();
         bank.reserve_signature_with_last_id_test(&signature, &mint.last_id())
@@ -1496,7 +1568,9 @@ mod tests {
 
     #[test]
     fn test_has_signature() {
-        let mint = Mint::new(1);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(1, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&mint);
         let signature = Signature::default();
         bank.reserve_signature_with_last_id_test(&signature, &mint.last_id())
@@ -1506,7 +1580,9 @@ mod tests {
 
     #[test]
     fn test_reject_old_last_id() {
-        let mint = Mint::new(1);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(1, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&mint);
         let signature = Signature::default();
         for i in 0..MAX_ENTRY_IDS {
@@ -1522,7 +1598,9 @@ mod tests {
 
     #[test]
     fn test_count_valid_ids() {
-        let mint = Mint::new(1);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(1, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&mint);
         let ids: Vec<_> = (0..MAX_ENTRY_IDS)
             .map(|i| {
@@ -1539,7 +1617,9 @@ mod tests {
 
     #[test]
     fn test_debits_before_credits() {
-        let mint = Mint::new(2);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(2, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&mint);
         let keypair = Keypair::new();
         let tx0 = Transaction::system_new(&mint.keypair(), keypair.pubkey(), 2, mint.last_id());
@@ -1554,7 +1634,9 @@ mod tests {
 
     #[test]
     fn test_process_empty_entry_is_registered() {
-        let mint = Mint::new(1);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(1, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&mint);
         let keypair = Keypair::new();
         let entry = next_entry(&mint.last_id(), 1, vec![]);
@@ -1573,11 +1655,14 @@ mod tests {
 
     #[test]
     fn test_process_genesis() {
-        let mint = Mint::new(1);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 1;
+        let mint = Mint::new(5, dummy_leader_id, dummy_leader_tokens);
         let genesis = mint.create_entries();
         let bank = Bank::default();
         bank.process_ledger(genesis).unwrap();
-        assert_eq!(bank.get_balance(&mint.pubkey()), 1);
+        assert_eq!(bank.get_balance(&mint.pubkey()), 4);
+        assert_eq!(bank.get_balance(&dummy_leader_id), 1);
     }
 
     fn create_sample_block_with_next_entries_using_keypairs(
@@ -1633,7 +1718,13 @@ mod tests {
     }
 
     fn create_sample_ledger(length: usize) -> (impl Iterator<Item = Entry>, Pubkey) {
-        let mint = Mint::new(length as i64 + 1);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 1;
+        let mint = Mint::new(
+            length as i64 + 1 + dummy_leader_tokens,
+            dummy_leader_id,
+            dummy_leader_tokens,
+        );
         let genesis = mint.create_entries();
         let block = create_sample_block_with_ticks(&mint, length, length);
         (genesis.into_iter().chain(block), mint.pubkey())
@@ -1681,18 +1772,22 @@ mod tests {
 
     #[test]
     fn test_process_ledger_from_files() {
-        let mint = Mint::new(2);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 1;
+        let mint = Mint::new(2, dummy_leader_id, dummy_leader_tokens);
         let genesis = to_file_iter(mint.create_entries().into_iter());
         let block = to_file_iter(create_sample_block_with_ticks(&mint, 1, 1));
 
         let bank = Bank::default();
         bank.process_ledger(genesis.chain(block)).unwrap();
-        assert_eq!(bank.get_balance(&mint.pubkey()), 1);
+        assert_eq!(bank.get_balance(&mint.pubkey()), 0);
     }
 
     #[test]
     fn test_hash_internal_state() {
-        let mint = Mint::new(2_000);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 1;
+        let mint = Mint::new(2_000, dummy_leader_id, dummy_leader_tokens);
         let seed = [0u8; 32];
         let mut rnd = GenKeys::new(seed);
         let keypairs = rnd.gen_n_keypairs(5);
@@ -1727,7 +1822,9 @@ mod tests {
     }
     #[test]
     fn test_interleaving_locks() {
-        let mint = Mint::new(3);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(3, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&mint);
         let alice = Keypair::new();
         let bob = Keypair::new();
@@ -1761,7 +1858,9 @@ mod tests {
     }
     #[test]
     fn test_bank_account_subscribe() {
-        let mint = Mint::new(100);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(100, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&mint);
         let alice = Keypair::new();
         let bank_sub_id = Keypair::new().pubkey();
@@ -1810,7 +1909,9 @@ mod tests {
     }
     #[test]
     fn test_bank_signature_subscribe() {
-        let mint = Mint::new(100);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(100, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&mint);
         let alice = Keypair::new();
         let bank_sub_id = Keypair::new().pubkey();
@@ -1883,7 +1984,9 @@ mod tests {
     }
     #[test]
     fn test_par_process_entries_tick() {
-        let mint = Mint::new(1000);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(1000, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&mint);
 
         // ensure bank can process a tick
@@ -1893,7 +1996,9 @@ mod tests {
     }
     #[test]
     fn test_par_process_entries_2_entries_collision() {
-        let mint = Mint::new(1000);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(1000, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&mint);
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
@@ -1912,7 +2017,9 @@ mod tests {
     }
     #[test]
     fn test_par_process_entries_2_entries_par() {
-        let mint = Mint::new(1000);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(1000, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&mint);
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
@@ -1938,7 +2045,9 @@ mod tests {
     }
     #[test]
     fn test_par_process_entries_2_entries_tick() {
-        let mint = Mint::new(1000);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 0;
+        let mint = Mint::new(1000, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&mint);
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();

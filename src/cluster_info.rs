@@ -1825,16 +1825,24 @@ mod tests {
         let obj = Arc::new(RwLock::new(cluster_info));
 
         let request = Protocol::RequestUpdates(1, node.clone());
-        assert!(
-            ClusterInfo::handle_protocol(&obj, &node.contact_info.ncp, request, &window, &mut None,)
-                .is_none()
-        );
+        assert!(ClusterInfo::handle_protocol(
+            &obj,
+            &node.contact_info.ncp,
+            request,
+            &window,
+            &mut None,
+        )
+        .is_none());
 
         let request = Protocol::RequestUpdates(1, node_with_same_addr.clone());
-        assert!(
-            ClusterInfo::handle_protocol(&obj, &node.contact_info.ncp, request, &window, &mut None,)
-                .is_none()
-        );
+        assert!(ClusterInfo::handle_protocol(
+            &obj,
+            &node.contact_info.ncp,
+            request,
+            &window,
+            &mut None,
+        )
+        .is_none());
 
         let request = Protocol::RequestUpdates(1, node_with_diff_addr.clone());
         ClusterInfo::handle_protocol(&obj, &node.contact_info.ncp, request, &window, &mut None);

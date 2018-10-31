@@ -582,6 +582,8 @@ mod tests {
         let mint = Mint::new(
             (((num_validators + 1) / 2) * (num_validators + 1)
                 + num_vote_account_tokens * num_validators) as i64,
+            bootstrap_leader_id,
+            0,
         );
         let bank = Bank::new(&mint);
         let mut validators = vec![];
@@ -689,7 +691,7 @@ mod tests {
     fn test_active_set() {
         let leader_id = Keypair::new().pubkey();
         let active_window_length = 1000;
-        let mint = Mint::new(10000);
+        let mint = Mint::new(10000, leader_id, 500);
         let bank = Bank::new(&mint);
 
         let leader_scheduler_config = LeaderSchedulerConfig::new(
@@ -779,7 +781,11 @@ mod tests {
     fn test_rank_active_set() {
         let num_validators: usize = 101;
         // Give mint sum(1..num_validators) tokens
-        let mint = Mint::new((((num_validators + 1) / 2) * (num_validators + 1)) as i64);
+        let mint = Mint::new(
+            (((num_validators + 1) / 2) * (num_validators + 1)) as i64,
+            Keypair::new().pubkey(),
+            0,
+        );
         let bank = Bank::new(&mint);
         let mut validators = vec![];
         let last_id = mint
@@ -839,7 +845,7 @@ mod tests {
         }
 
         // Break ties between validators with the same balances using public key
-        let mint = Mint::new(num_validators as i64);
+        let mint = Mint::new(num_validators as i64, Keypair::new().pubkey(), 0);
         let bank = Bank::new(&mint);
         let mut tied_validators_pk = vec![];
         let last_id = mint
@@ -993,6 +999,8 @@ mod tests {
         let mint = Mint::new(
             ((((num_validators + 1) / 2) * (num_validators + 1))
                 + (num_vote_account_tokens * num_validators)) as i64,
+            bootstrap_leader_id,
+            500,
         );
         let bank = Bank::new(&mint);
         let mut validators = vec![];
@@ -1051,7 +1059,7 @@ mod tests {
         let leader_keypair = Keypair::new();
         let leader_id = leader_keypair.pubkey();
         let active_window_length = 1000;
-        let mint = Mint::new(10000);
+        let mint = Mint::new(10000, leader_id, 500);
         let bank = Bank::new(&mint);
 
         let leader_scheduler_config = LeaderSchedulerConfig::new(
@@ -1063,10 +1071,6 @@ mod tests {
         );
 
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
-
-        // Give the node some tokens
-        bank.transfer(5, &mint.keypair(), leader_id, bank.last_id())
-            .unwrap();
 
         // Check that a node that votes twice in a row will get included in the active
         // window
@@ -1203,7 +1207,7 @@ mod tests {
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
 
         // Create mint and bank
-        let mint = Mint::new(10000);
+        let mint = Mint::new(10000, bootstrap_leader_id, 0);
         let bank = Bank::new(&mint);
         let last_id = mint
             .create_entries()
@@ -1311,7 +1315,7 @@ mod tests {
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
 
         // Create mint and bank
-        let mint = Mint::new(10000);
+        let mint = Mint::new(10000, bootstrap_leader_id, 500);
         let bank = Bank::new(&mint);
         let last_id = mint
             .create_entries()

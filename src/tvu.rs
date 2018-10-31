@@ -272,7 +272,7 @@ pub mod tests {
         );
 
         let starting_balance = 10_000;
-        let mint = Mint::new(starting_balance);
+        let mint = Mint::new(starting_balance, leader_id, 0);
         let replicate_addr = target1.info.contact_info.tvu;
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_id,

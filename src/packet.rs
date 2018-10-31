@@ -378,9 +378,11 @@ impl Blob {
                     }
                     return Err(Error::IO(e));
                 }
-                Ok(()) => if i == 0 {
-                    socket.set_nonblocking(true)?;
-                },
+                Ok(()) => {
+                    if i == 0 {
+                        socket.set_nonblocking(true)?;
+                    }
+                }
             }
             v.push(r);
         }

@@ -1074,15 +1074,15 @@ mod tests {
     #[test]
     #[ignore]
     fn test_wallet_process_command() {
-        let (alice, ledger_path) = create_tmp_genesis("wallet_process_command", 10_000_000);
-        let mut bank = Bank::new(&alice);
-
         let bob_pubkey = Keypair::new().pubkey();
 
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
+        let (alice, ledger_path) =
+            create_tmp_genesis("wallet_process_command", 10_000_000, leader_data.id, 1000);
+        let mut bank = Bank::new(&alice);
 
         let mut config = WalletConfig::default();
         let rpc_port = 12345; // Needs to be distinct known number to not conflict with other tests
@@ -1158,13 +1158,14 @@ mod tests {
     }
     #[test]
     fn test_wallet_request_airdrop() {
-        let (alice, ledger_path) = create_tmp_genesis("wallet_request_airdrop", 10_000_000);
-        let mut bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
 
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
+        let (alice, ledger_path) =
+            create_tmp_genesis("wallet_request_airdrop", 10_000_000, leader_data.id, 1000);
+        let mut bank = Bank::new(&alice);
 
         let rpc_port = 11111; // Needs to be distinct known number to not conflict with other tests
 
@@ -1237,9 +1238,6 @@ mod tests {
     #[test]
     #[ignore]
     fn test_wallet_timestamp_tx() {
-        let (alice, ledger_path) = create_tmp_genesis("wallet_timestamp_tx", 10_000_000);
-        let mut bank = Bank::new(&alice);
-
         let bob_pubkey = Keypair::new().pubkey();
 
         let leader_keypair = Arc::new(Keypair::new());
@@ -1247,6 +1245,9 @@ mod tests {
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
         let leader_data2 = leader.info.clone();
+        let (alice, ledger_path) =
+            create_tmp_genesis("wallet_timestamp_tx", 10_000_000, leader_data.id, 1000);
+        let mut bank = Bank::new(&alice);
 
         let mut config_payer = WalletConfig::default();
         let mut config_witness = WalletConfig::default();
@@ -1364,14 +1365,15 @@ mod tests {
     #[test]
     #[ignore]
     fn test_wallet_witness_tx() {
-        let (alice, ledger_path) = create_tmp_genesis("wallet_witness_tx", 10_000_000);
-        let mut bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
         let leader_data2 = leader.info.clone();
+        let (alice, ledger_path) =
+            create_tmp_genesis("wallet_witness_tx", 10_000_000, leader_data.id, 1000);
+        let mut bank = Bank::new(&alice);
 
         let mut config_payer = WalletConfig::default();
         let mut config_witness = WalletConfig::default();
@@ -1486,14 +1488,16 @@ mod tests {
     #[test]
     #[ignore]
     fn test_wallet_cancel_tx() {
-        let (alice, ledger_path) = create_tmp_genesis("wallet_cancel_tx", 10_000_000);
-        let mut bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
         let leader_data1 = leader.info.clone();
         let leader_data2 = leader.info.clone();
+
+        let (alice, ledger_path) =
+            create_tmp_genesis("wallet_cancel_tx", 10_000_000, leader_data.id, 1000);
+        let mut bank = Bank::new(&alice);
 
         let mut config_payer = WalletConfig::default();
         let mut config_witness = WalletConfig::default();

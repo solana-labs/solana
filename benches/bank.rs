@@ -14,7 +14,7 @@ use test::Bencher;
 
 #[bench]
 fn bench_process_transaction(bencher: &mut Bencher) {
-    let mint = Mint::new(100_000_000);
+    let mint = Mint::new(100_000_000, Keypair::new().pubkey(), 1);
     let bank = Bank::new(&mint);
 
     // Create transactions between unrelated parties.

@@ -78,6 +78,7 @@ pub fn read_entries<R: BufRead>(reader: R) -> impl Iterator<Item = io::Result<En
 mod tests {
     use super::*;
     use mint::Mint;
+    use signature::{Keypair, KeypairUtil};
     use std::io::Cursor;
 
     /// Same as read_entries() but parsing a buffer and returning a vector.
@@ -93,7 +94,9 @@ mod tests {
 
     #[test]
     fn test_read_entries_from_buf() {
-        let mint = Mint::new(1);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 1;
+        let mint = Mint::new(1, dummy_leader_id, dummy_leader_tokens);
         let mut buf = vec![];
         EntryWriter::write_entries(&mut buf, mint.create_entries()).unwrap();
         let entries = read_entries_from_buf(&buf).unwrap();
