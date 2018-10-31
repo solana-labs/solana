@@ -2,7 +2,7 @@
 // for storage mining. Replicators submit storage proofs, validator then bundles them
 // to submit its proof for mining to be rewarded.
 
-#[cfg(feature = "cuda")]
+#[cfg(all(feature = "chacha", feature = "cuda"))]
 use chacha_cuda::chacha_cbc_encrypt_file_many_keys;
 use entry::EntryReceiver;
 use hash::Hash;
@@ -166,7 +166,7 @@ impl StorageStage {
         // TODO: cuda required to generate the reference values
         // but if it is missing, then we need to take care not to
         // process storage mining results.
-        #[cfg(feature = "cuda")]
+        #[cfg(all(feature = "chacha", feature = "cuda"))]
         {
             let mut storage_results = _storage_results.write().unwrap();
 
@@ -348,10 +348,10 @@ mod tests {
         exit.store(true, Ordering::Relaxed);
         storage_stage.join().unwrap();
 
-        #[cfg(not(feature = "cuda"))]
+        #[cfg(not(all(feature = "cuda", feature = "chacha")))]
         assert_eq!(result, Hash::default());
 
-        #[cfg(feature = "cuda")]
+        #[cfg(all(feature = "cuda", feature = "chacha"))]
         assert_ne!(result, Hash::default());
 
         remove_dir_all(ledger_path).unwrap();
