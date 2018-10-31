@@ -25,10 +25,10 @@ done
 
 # Run native program's tests
 for program in programs/native/*; do
-  echo --- $program
+  echo --- "$program"
   ( 
     set -x
-    cd $program
+    cd "$program"
     cargo test --verbose
   )
 done
