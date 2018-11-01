@@ -98,7 +98,7 @@ pub struct LeaderScheduler {
 // 2) After the first seed is generated, this signals the beginning of actual leader rotation.
 // From this point on, every seed_rotation_interval PoH counts we generate the seed based
 // on the PoH height, and use it to do a weighted sample from the set
-// of validators based on current stake weight. This gets you the first leader A for
+// of validators based on current stake weight. This gets you the bootstrap leader A for
 // the next leader_rotation_interval PoH counts. On the same PoH count we generate the seed,
 // we also order the validators based on their current stake weight, and starting
 // from leader A, we then pick the next leader sequentially every leader_rotation_interval
@@ -661,7 +661,7 @@ mod tests {
 
             // Note: The "validators" vector is already sorted by stake, so the expected order
             // for the leader schedule can be derived by just iterating through the vector
-            // in order. The only excpetion is for the first leader in the schedule, we need to
+            // in order. The only excpetion is for the bootstrap leader in the schedule, we need to
             // find the index into the "validators" vector where the schedule begins.
             if None == start_leader_index {
                 start_leader_index = Some(

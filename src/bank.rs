@@ -217,11 +217,11 @@ impl Bank {
     pub fn new(mint: &Mint) -> Self {
         let mint_deposit = Payment {
             to: mint.pubkey(),
-            tokens: mint.tokens - mint.first_leader_tokens,
+            tokens: mint.tokens - mint.bootstrap_leader_tokens,
         };
         let leader_deposit = Payment {
-            to: mint.first_leader_id,
-            tokens: mint.first_leader_tokens,
+            to: mint.bootstrap_leader_id,
+            tokens: mint.bootstrap_leader_tokens,
         };
 
         let deposits = vec![mint_deposit, leader_deposit];
@@ -1040,7 +1040,7 @@ impl Bank {
         // fields are the same. That entry should be treated as a deposit, not a
         // transfer to oneself.
         // 2) The second is a move instruction that acts as a payment to the first
-        // leader from the mint. This first leader will stay in power during the
+        // leader from the mint. This bootstrap leader will stay in power during the
         // bootstrapping period of the network
         let entry1 = entries
             .next()
@@ -1082,19 +1082,19 @@ impl Bank {
                     );
                 }
 
-                // 2) Transfer tokens to the first leader. The first two
+                // 2) Transfer tokens to the bootstrap leader. The first two
                 // account keys will both be the mint (because the mint is the source
                 // for this trnsaction and the first move instruction is to the the
                 // mint itself), so we look at the third account key to find the first
                 // leader id.
-                let first_leader_id = tx.account_keys[2];
+                let bootstrap_leader_id = tx.account_keys[2];
                 let account = accounts
-                    .entry(first_leader_id)
+                    .entry(bootstrap_leader_id)
                     .or_insert_with(Account::default);
                 account.tokens += leader_payment;
-                self.leader_scheduler.write().unwrap().bootstrap_leader = first_leader_id;
+                self.leader_scheduler.write().unwrap().bootstrap_leader = bootstrap_leader_id;
                 trace!(
-                    "applied genesis payment to first leader {:?} => {:?}",
+                    "applied genesis payment to bootstrap leader {:?} => {:?}",
                     leader_payment,
                     account
                 );

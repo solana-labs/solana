@@ -14,16 +14,16 @@ pub struct Mint {
     pub pkcs8: Vec<u8>,
     pubkey: Pubkey,
     pub tokens: i64,
-    pub first_leader_id: Pubkey,
-    pub first_leader_tokens: i64,
+    pub bootstrap_leader_id: Pubkey,
+    pub bootstrap_leader_tokens: i64,
 }
 
 impl Mint {
     pub fn new_with_pkcs8(
         tokens: i64,
         pkcs8: Vec<u8>,
-        first_leader_id: Pubkey,
-        first_leader_tokens: i64,
+        bootstrap_leader_id: Pubkey,
+        bootstrap_leader_tokens: i64,
     ) -> Self {
         let keypair =
             Keypair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in mint pub fn new");
@@ -32,17 +32,17 @@ impl Mint {
             pkcs8,
             pubkey,
             tokens,
-            first_leader_id,
-            first_leader_tokens,
+            bootstrap_leader_id,
+            bootstrap_leader_tokens,
         }
     }
 
-    pub fn new(tokens: i64, first_leader: Pubkey, first_leader_tokens: i64) -> Self {
+    pub fn new(tokens: i64, bootstrap_leader: Pubkey, bootstrap_leader_tokens: i64) -> Self {
         let rnd = SystemRandom::new();
         let pkcs8 = Keypair::generate_pkcs8(&rnd)
             .expect("generate_pkcs8 in mint pub fn new")
             .to_vec();
-        Self::new_with_pkcs8(tokens, pkcs8, first_leader, first_leader_tokens)
+        Self::new_with_pkcs8(tokens, pkcs8, bootstrap_leader, bootstrap_leader_tokens)
     }
 
     pub fn seed(&self) -> Hash {
@@ -64,10 +64,10 @@ impl Mint {
     pub fn create_transaction(&self) -> Vec<Transaction> {
         let keypair = self.keypair();
         // Create moves from mint to itself (deposit), and then a move from the mint
-        // to the first leader
+        // to the bootstrap leader
         let moves = vec![
             (self.pubkey(), self.tokens),
-            (self.first_leader_id, self.first_leader_tokens),
+            (self.bootstrap_leader_id, self.bootstrap_leader_tokens),
         ];
         vec![Transaction::system_move_many(
             &keypair,

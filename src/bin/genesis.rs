@@ -36,21 +36,13 @@ fn main() -> Result<(), Box<error::Error>> {
                 .required(true)
                 .help("Path to file containing keys of the mint"),
         ).arg(
-            Arg::with_name("first_leader_payment")
-                .short("p")
-                .long("first_leader_payment")
-                .value_name("FIRST LEADER TOKENS")
+            Arg::with_name("bootstrap_leader")
+                .short("b")
+                .long("bootstrap_leader")
+                .value_name("BOOTSTRAP LEADER")
                 .takes_value(true)
                 .required(true)
-                .help("Number of tokens to give the first leader"),
-        ).arg(
-            Arg::with_name("first_leader")
-                .short("f")
-                .long("first_leader")
-                .value_name("FIRST LEADER")
-                .takes_value(true)
-                .required(true)
-                .help("Path to file containing keys of the first leader"),
+                .help("Path to file containing keys of the bootstrap leader"),
         ).arg(
             Arg::with_name("ledger")
                 .short("l")
@@ -62,8 +54,7 @@ fn main() -> Result<(), Box<error::Error>> {
         ).get_matches();
 
     // Parse the input leader configuration
-    let leader_tokens = value_t_or_exit!(matches, "first_leader_payment", i64);
-    let file = File::open(Path::new(&matches.value_of("first_leader").unwrap())).unwrap();
+    let file = File::open(Path::new(&matches.value_of("bootstrap_leader").unwrap())).unwrap();
     let leader_config: Config = serde_json::from_reader(file).unwrap();
     let leader_keypair = leader_config.keypair();
 
@@ -71,7 +62,7 @@ fn main() -> Result<(), Box<error::Error>> {
     let num_tokens = value_t_or_exit!(matches, "num_tokens", i64);
     let file = File::open(Path::new(&matches.value_of("mint").unwrap())).unwrap();
     let pkcs8: Vec<u8> = serde_json::from_reader(&file)?;
-    let mint = Mint::new_with_pkcs8(num_tokens, pkcs8, leader_keypair.pubkey(), leader_tokens);
+    let mint = Mint::new_with_pkcs8(num_tokens, pkcs8, leader_keypair.pubkey(), 1);
 
     // Write the ledger entries
     let ledger_path = matches.value_of("ledger").unwrap();

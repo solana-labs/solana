@@ -14,12 +14,11 @@ usage () {
     echo "Error: $*"
   fi
   cat <<EOF
-usage: $0 [-n num_tokens] [-f first_leader_payment] [-l] [-p] [-t node_type]
+usage: $0 [-n num_tokens] [-l] [-p] [-t node_type]
 
 Creates a fullnode configuration
 
  -n num_tokens           - Number of tokens to create
- -f first_leader_payment - Number of tokens to give the first leader
  -l                      - Detect network address from local machine configuration, which
                            may be a private IP address unaccessible on the Intenet (default)
  -p                      - Detect public address using public Internet servers
@@ -33,11 +32,10 @@ EOF
 
 ip_address_arg=-l
 num_tokens=1000000000
-first_leader_payment=1000
 node_type_leader=true
 node_type_validator=true
 node_type_client=true
-while getopts "h?n:lpt:f:" opt; do
+while getopts "h?n:lpt:" opt; do
   case $opt in
   h|\?)
     usage
@@ -51,9 +49,6 @@ while getopts "h?n:lpt:f:" opt; do
     ;;
   n)
     num_tokens="$OPTARG"
-    ;;
-  f)
-    first_leader_payment="$OPTARG"
     ;;
   t)
     node_type="$OPTARG"
@@ -113,7 +108,7 @@ if $node_type_leader; then
   $solana_fullnode_config --keypair="$leader_id_path" "${leader_address_args[@]}" > "$SOLANA_CONFIG_DIR"/leader.json
   
   echo "Creating $SOLANA_CONFIG_DIR/ledger"
-  $solana_genesis --num_tokens "$num_tokens" --mint "$mint_path" --first_leader "$SOLANA_CONFIG_DIR"/leader.json --first_leader_payment "$first_leader_payment" --ledger "$SOLANA_CONFIG_DIR"/ledger
+  $solana_genesis --num_tokens "$num_tokens" --mint "$mint_path" --bootstrap_leader "$SOLANA_CONFIG_DIR"/leader.json --ledger "$SOLANA_CONFIG_DIR"/ledger
 
   ls -lhR "$SOLANA_CONFIG_DIR"/
   ls -lhR "$SOLANA_CONFIG_PRIVATE_DIR"/
