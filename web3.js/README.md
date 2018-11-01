@@ -48,6 +48,10 @@ $ npm install --save @solana/web3.js
 <script src="https://github.com/solana-labs/solana-web3.js/releases/download/v0.0.6/solanaWeb3.min.js"></script>
 ```
 
+### BPF program development
+clang-7.0 must be installed to build BPF programs, such as
+`examples/bpf-c-noop/`.  See `bpf-sdk/README.md` for installation details
+
 ## Usage
 
 ### Javascript
