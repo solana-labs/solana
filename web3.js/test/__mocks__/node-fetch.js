@@ -18,9 +18,9 @@ type RpcResponse = {
 
 export const mockRpc: Array<[string, RpcRequest, RpcResponse]> = [];
 
-// Define DOITLIVE in the environment to test against the real full node
+// Define TEST_LIVE in the environment to test against the real full node
 // identified by `url` instead of using the mock
-export const mockRpcEnabled = !process.env.DOITLIVE;
+export const mockRpcEnabled = !process.env.TEST_LIVE;
 
 let mockNotice = true;
 

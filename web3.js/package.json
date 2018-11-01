@@ -40,7 +40,7 @@
     "doc": "esdoc; node -p '\"\\nDocumentation coverage: \" + require(\"./doc/coverage.json\").coverage'",
     "doc:watch": "watch 'npm run doc' . --wait=1 --ignoreDirectoryPattern=/doc/",
     "test": "cross-env NODE_ENV=test jest --useStderr",
-    "test:live": "cross-env NODE_ENV=test DOITLIVE=1 jest --useStderr",
+    "test:live": "cross-env NODE_ENV=test TEST_LIVE=1 jest --useStderr",
     "test:watch": "cross-env NODE_ENV=test jest --watch --useStderr",
     "test:cover": "cross-env NODE_ENV=test jest --coverage --useStderr",
     "codecov": "npm run test:cover && cat ./coverage/lcov.info | codecov",

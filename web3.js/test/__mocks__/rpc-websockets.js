@@ -1,8 +1,8 @@
 import {Client as RpcWebSocketClient} from 'rpc-websockets';
 
-// Define DOITLIVE in the environment to test against the real full node
+// Define TEST_LIVE in the environment to test against the real full node
 // identified by `url` instead of using the mock
-export const mockRpcEnabled = !process.env.DOITLIVE;
+export const mockRpcEnabled = !process.env.TEST_LIVE;
 
 let mockNotice = true;
 
