@@ -20,5 +20,14 @@ extern bool entrypoint(const uint8_t *input) {
     return false;
   }
   sol_print_params(NUM_KA, ka, data, data_len);
+
+  sol_assert(sizeof(int8_t) == 1);
+  sol_assert(sizeof(uint8_t) == 1);
+  sol_assert(sizeof(int16_t) == 2);
+  sol_assert(sizeof(uint16_t) == 2);
+  sol_assert(sizeof(int32_t) == 4);
+  sol_assert(sizeof(uint32_t) == 4);
+  sol_assert(sizeof(int64_t) == 8);
+  sol_assert(sizeof(uint64_t) == 8);
   return true;
 }
