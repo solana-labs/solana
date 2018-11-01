@@ -2,7 +2,7 @@
  * @brief TicTacToe C-based BPF program
  */
 
-#include <sol_bpf.h>
+#include <solana_sdk.h>
 #include "tictactoe.h"
 
 #define MAX_GAMES_TRACKED 5
