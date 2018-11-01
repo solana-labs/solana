@@ -68,7 +68,7 @@ snap)
 local|tar)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
-  entrypointRsyncUrl="$entrypointIp:~/solana"
+  entrypointRsyncUrl="$entrypointIp:~solana/solana"
 
   solana_bench_tps=solana-bench-tps
   solana_ledger_tool=solana-ledger-tool
