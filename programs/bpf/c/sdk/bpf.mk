@@ -12,7 +12,7 @@ OUT_DIR ?= ./out
 
 OS=$(shell uname)
 ifeq ($(OS),Darwin)
-LLVM_DIR ?= $(brew --prefix llvm)
+LLVM_DIR ?= $(shell brew --prefix llvm)
 endif
 
 ifdef LLVM_DIR
