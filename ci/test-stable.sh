@@ -17,7 +17,7 @@ maybe_install() {
     "$cmd" --help > /dev/null 2>&1
     declare exitcode=$?
     set -e
-    if [[ $exitcode -eq 101 ]]; then
+    if [[ $exitcode -ne 0 ]]; then
       _ cargo install "$cmd"
     fi
   done
@@ -47,6 +47,7 @@ done
 
 # Build the HTML
 maybe_install mdbook
+export PATH=$HOME/.cargo/bin:$PATH
 _ cd doc
 _ mdbook test
 _ mdbook build
