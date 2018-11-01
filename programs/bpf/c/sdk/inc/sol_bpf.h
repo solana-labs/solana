@@ -24,6 +24,11 @@ typedef signed long int int64_t;
 typedef unsigned long int uint64_t;
 
 /**
+ * NULL
+ */
+#define NULL 0
+
+/**
  * Boolean type
  */
 typedef enum { false = 0, true } bool;
@@ -88,7 +93,7 @@ typedef struct {
  * @return true if the same
  */
 SOL_FN_PREFIX bool SolPubkey_same(const SolPubkey *one, const SolPubkey *two) {
-  for (int i = 0; i < SIZE_PUBKEY; i++) {
+  for (int i = 0; i < sizeof(*one); i++) {
     if (one->x[i] != two->x[i]) {
       return false;
     }
@@ -115,6 +120,24 @@ SOL_FN_PREFIX void sol_memcpy(void *dst, const void *src, int len) {
     *((uint8_t *)dst + i) = *((const uint8_t *)src + i);
   }
 }
+
+/**
+ * Compares memory
+ */
+SOL_FN_PREFIX int sol_memcmp(const void *s1, const void *s2, int n) {
+  for (int i = 0; i < n; i++) {
+    uint8_t diff = *((uint8_t *)s1 + i) - *((const uint8_t *)s2 + i);
+    if (diff) {
+      return diff;
+    }
+  }
+  return 0;
+}
+
+/**
+ * Computes the number of elements in an array
+ */
+#define SOL_ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
 
 /**
  * Panics
@@ -148,45 +171,60 @@ SOL_FN_PREFIX void _sol_panic(uint64_t line) {
  * at program end.
  *
  * @param input Source buffer containing serialized input parameters
- * @param num_ka Numer of SolKeyedAccounts to fill
  * @param ka Pointer to an array of SolKeyedAccounts to deserialize into
+ * @param ka_len Number of SolKeyedAccounts entries in `ka`
+ * @param ka_len_out If NULL, fill exactly `ka_len` accounts or fail.
+ *                   If not NULL, fill up to `ka_len` accounts and return the
+ *                   number of filled accounts in `ka_len_out`.
  * @param data On return, a pointer to the instruction data
  * @param data_len On return, the length in bytes of the instruction data
  * @return Boolean true if successful
  */
 SOL_FN_PREFIX bool sol_deserialize(
   const uint8_t *input,
-  uint64_t num_ka,
   SolKeyedAccounts *ka,
+  uint64_t ka_len,
+  uint64_t *ka_len_out,
   const uint8_t **data,
   uint64_t *data_len
 ) {
-  if (num_ka != *(uint64_t *)input) {
-    return false;
-  }
-  input += sizeof(uint64_t);
 
-  for (int i = 0; i < num_ka; i++) {
+
+  if (ka_len_out == NULL) {
+    if (ka_len != *(uint64_t *) input) {
+      return false;
+    }
+    ka_len = *(uint64_t *) input;
+  } else {
+    if (ka_len > *(uint64_t *) input) {
+      ka_len = *(uint64_t *) input;
+    }
+    *ka_len_out = ka_len;
+  }
+
+  input += sizeof(uint64_t);
+  for (int i = 0; i < ka_len; i++) {
     // key
-    ka[i].key = (SolPubkey *)input;
-    input += SIZE_PUBKEY;
+    ka[i].key = (SolPubkey *) input;
+    input += sizeof(SolPubkey);
 
     // tokens
-    ka[i].tokens = (int64_t *)input;
+    ka[i].tokens = (int64_t *) input;
     input += sizeof(int64_t);
 
     // account userdata
-    ka[i].userdata_len = *(uint64_t *)input;
+    ka[i].userdata_len = *(uint64_t *) input;
     input += sizeof(uint64_t);
-    ka[i].userdata = (uint8_t*)input;
+    ka[i].userdata = input;
     input += ka[i].userdata_len;
 
     // program_id
-    ka[i].program_id = (SolPubkey *)input;
-    input += SIZE_PUBKEY;
+    ka[i].program_id = (SolPubkey *) input;
+    input += sizeof(SolPubkey);
   }
-  // instruction data
-  *data_len = *(uint64_t *)input;
+
+  // input data
+  *data_len = *(uint64_t *) input;
   input += sizeof(uint64_t);
   *data = input;
 
@@ -204,7 +242,7 @@ SOL_FN_PREFIX bool sol_deserialize(
  * @param key The public key to print
  */
 SOL_FN_PREFIX void sol_print_key(const SolPubkey *key) {
-  for (int j = 0; j < SIZE_PUBKEY; j++) {
+  for (int j = 0; j < sizeof(*key); j++) {
     sol_print(0, 0, 0, j, key->x[j]);
   }
 }
@@ -253,14 +291,12 @@ SOL_FN_PREFIX void sol_print_params(
  * The following is an example of a simple program that prints the input
  * parameters it received:
  *
- * #define NUM_KA 1
- *
  * bool entrypoint(const uint8_t *input) {
- *   SolKeyedAccounts ka[NUM_KA];
+ *   SolKeyedAccounts ka[1];
  *   uint8_t *data;
  *   uint64_t data_len;
  *
- *   if (1 != sol_deserialize(buf, NUM_KA, ka, &data, &data_len)) {
+ *   if (!sol_deserialize(buf, ka, SOL_ARRAY_SIZE(ka), NULL, &data, &data_len)) {
  *     return false;
  *   }
  *   print_params(1, ka, data, data_len);
