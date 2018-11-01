@@ -19,9 +19,7 @@ behavior as-needed to improve execution times.
 
 <img alt="SDK tools" src="img/sdk-tools.svg" class="center"/>
 
-                [Figure 1. Smart Contracts Stack]
-
-In Figure 1 an untrusted client, creates a program in the front-end language of her choice, (like C/C++/Rust/Lua), and compiles it with LLVM to a position independent shared object ELF, targeting BPF bytecode. Solana will safely load and execute the ELF.
+As shown in the diagram above an untrusted client, creates a program in the front-end language of her choice, (like C/C++/Rust/Lua), and compiles it with LLVM to a position independent shared object ELF, targeting BPF bytecode. Solana will safely load and execute the ELF.
 
 ## Runtime
 
@@ -82,22 +80,13 @@ pub struct Account {
 
 # Transaction Engine
 
-At it's core, the engine looks up all the Pubkeys maps them to accounts and routs them to the `program_id` entry point.
+At its core, the engine looks up all the Pubkeys maps them to accounts and routs them to the `program_id` entry point.
 
 ## Execution
 
 Transactions are batched and processed in a pipeline
 
-```rust
-+-----------+    +-------------+    +--------------+    +--------------------+    
-| sigverify |--->| lock memory |--->| validate fee |--->| allocate accounts  |--->
-+-----------+    +-------------+    +--------------+    +--------------------+    
-                                
-    +------------+    +---------+    +-=------------+   +--------------+
---->| load data  |--->| execute |--->| commit data  |-->|unlock memory |
-    +------------+    +---------+    +--------------+   +--------------+
-
-```
+<img alt="LAMPORT pipeline" src="img/lamport.svg" class="center"/>
 
 At the `execute` stage, the loaded pages have no data dependencies, so all the programs can be executed in parallel. 
 
