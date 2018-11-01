@@ -4,7 +4,7 @@ A Verifiable Delay Function is conceptually a water clock where its water marks
 can be recorded and later verified that the water most certainly passed
 through.  Anatoly describes the water clock analogy in detail here:
 
-https://medium.com/solana-labs/proof-of-history-explained-by-a-water-clock-e682183417b8
+[water clock analogy](https://medium.com/solana-labs/proof-of-history-explained-by-a-water-clock-e682183417b8)
 
 The same technique has been used in Bitcoin since day one. The Bitcoin feature
 is called nLocktime and it can be used to postdate transactions using block

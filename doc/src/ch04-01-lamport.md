@@ -161,5 +161,5 @@ The interface is best described by the `Instruction::userdata` that the user enc
 
 # Future Work
 
-* Continuations and Signals for long running Transactions. https://github.com/solana-labs/solana/issues/1485
+* [Continuations and Signals for long running Transactions](https://github.com/solana-labs/solana/issues/1485)
 

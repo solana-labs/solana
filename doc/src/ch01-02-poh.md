@@ -1,9 +1,6 @@
 # Proof of History
 
-Solana's original whitepaper is still the best resource to learn about the
-technique to cryptographically prove that some duration of time passed:
-
-https://solana.com/solana-whitepaper.pdf
+[Proof of History overview](https://medium.com/solana-labs/proof-of-history-a-clock-for-blockchain-cf47a61a9274)
 
 ## Relationship to consensus mechanisms
 
