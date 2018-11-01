@@ -13,13 +13,20 @@ OUT_DIR ?= ./out
 OS=$(uname)
 ifeq ($(OS),Darwin)
 LLVM_DIR ?= $(brew --prefix llvm)
+endif
+
+ifdef LLVM_DIR
+CC := $(LLVM_DIR)/bin/clang
+LLC := $(LLVM_DIR)/bin/llc
+OBJ_DUMP := $(LLVM_DIR)/bin/llvm-objdump
 else
-LLVM_DIR ?= /usr/local/opt/llvm
+CC := clang-7
+LLC := llc-7
+OBJ_DUMP := llvm-objdump-7
 endif
 
 SYSTEM_INC_DIRS := -isystem $(dir $(lastword $(MAKEFILE_LIST)))inc
 
-CC := $(LLVM_DIR)/bin/clang
 CC_FLAGS := \
   -Werror \
   -target bpf \
@@ -27,13 +34,11 @@ CC_FLAGS := \
   -emit-llvm \
   -fno-builtin \
 
-LLC := $(LLVM_DIR)/bin/llc
 LLC_FLAGS := \
   -march=bpf \
   -filetype=obj \
   -function-sections \
 
-OBJ_DUMP := $(LLVM_DIR)/bin/llvm-objdump
 OBJ_DUMP_FLAGS := \
   -color \
   -source \
@@ -52,11 +57,11 @@ help:
 	@echo ''
 	@echo 'User settings'
 	@echo '  - The following setting are overridable on the command line, default values shown:'
-	@echo '    - Show commands:'
+	@echo '    - Show commands while building:'
 	@echo '      V=1'
-	@echo '    - List of include dirs:'
+	@echo '    - List of include directories:'
 	@echo '      INC_DIRS=$(INC_DIRS)'
-	@echo '    - List of systme include dirs:'
+	@echo '    - List of system include directories:'
 	@echo '      SYSTEM_INC_DIRS=$(SYSTEM_INC_DIRS)'
 	@echo '    - Location of source files:'
 	@echo '      SRC_DIR=$(SRC_DIR)'
@@ -90,7 +95,7 @@ $(OUT_DIR)/%.bc: $(SRC_DIR)/%.c
 $(OUT_DIR)/%.o: $(OUT_DIR)/%.bc
 	@echo "[llc] $@ ($<)"
 	$(_@)$(LLC) $(LLC_FLAGS) -o $@ $<
-	
+
 -include $(wildcard $(OUT_DIR)/*.d)
 
 PROGRAM_NAMES := $(notdir $(basename $(wildcard $(SRC_DIR)/*.c)))
