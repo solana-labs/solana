@@ -25,6 +25,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
+use sys_info;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BankingStageReturnType {
@@ -33,7 +34,7 @@ pub enum BankingStageReturnType {
 }
 
 // number of threads is 1 until mt bank is ready
-pub const NUM_THREADS: usize = 10;
+pub const NUM_THREADS: u32 = 10;
 
 /// Stores the stage's thread handle and output receiver.
 pub struct BankingStage {
@@ -72,7 +73,8 @@ impl BankingStage {
         );
 
         // Many banks that process transactions in parallel.
-        let bank_thread_hdls: Vec<JoinHandle<Option<BankingStageReturnType>>> = (0..NUM_THREADS)
+        let bank_thread_hdls: Vec<JoinHandle<Option<BankingStageReturnType>>> = (0
+            ..Self::num_threads())
             .map(|_| {
                 let thread_bank = bank.clone();
                 let thread_verified_receiver = shared_verified_receiver.clone();
@@ -124,6 +126,10 @@ impl BankingStage {
             },
             entry_receiver,
         )
+    }
+
+    pub fn num_threads() -> u32 {
+        sys_info::cpu_num().unwrap_or(NUM_THREADS)
     }
 
     /// Convert the transactions from a blob of binary data to a vector of transactions and
