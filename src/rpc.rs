@@ -582,7 +582,7 @@ mod tests {
     }
 
     #[test]
-    fn test_rpc_request_airdrop() {
+    fn test_rpc_fail_request_airdrop() {
         let bob_pubkey = Keypair::new().pubkey();
         let (io, meta, _last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
 
