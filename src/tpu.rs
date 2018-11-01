@@ -1,29 +1,5 @@
 //! The `tpu` module implements the Transaction Processing Unit, a
 //! 5-stage transaction processing pipeline in software.
-//!
-//! ```text
-//!             .----------------------------------------------------.
-//!             |  TPU                      .-------------.          |
-//!             |                           | PoH Service |          |
-//!             |                           `-------+-----`          |
-//!             |                              ^    |                |
-//!             |                              |    v                |
-//!             |  .-------.  .-----------.  .-+-------.   .-------. |
-//! .---------. |  | Fetch |  | SigVerify |  | Banking |   | Write | |  .------------.
-//! | Clients |--->| Stage |->|   Stage   |->|  Stage  |-->| Stage +--->| Validators |
-//! `---------` |  |       |  |           |  |         |   |       | |  `------------`
-//!             |  `-------`  `-----------`  `----+----`   `---+---` |
-//!             |                                 |            |     |
-//!             |                                 |            |     |
-//!             |                                 |            |     |
-//!             |                                 |            |     |
-//!             `---------------------------------|------------|-----`
-//!                                               |            |
-//!                                               v            v
-//!                                            .------.    .--------.
-//!                                            | Bank |    | Ledger |
-//!                                            `------`    `--------`
-//! ```
 
 use bank::Bank;
 use banking_stage::{BankingStage, BankingStageReturnType};

@@ -1,32 +1,6 @@
 //! The `tvu` module implements the Transaction Validation Unit, a
 //! 3-stage transaction validation pipeline in software.
 //!
-//! ```text
-//!      .------------------------------------------------.
-//!      |                                                |
-//!      |           .------------------------------------+------------.
-//!      |           |  TVU                               |            |
-//!      |           |                                    |            |
-//!      |           |                                    |            |  .------------.
-//!      |           |                   .----------------+-------------->| Validators |
-//!      v           |  .-------.        |                |            |  `------------`
-//! .----+---.       |  |       |   .----+-------.   .----+---------.  |
-//! | Leader |--------->| Blob  |   | Retransmit |   | Replicate    |  |
-//! `--------`       |  | Fetch |-->|   Stage    |-->| Stage /      |  |
-//! .------------.   |  | Stage |   |            |   | Vote Stage   |  |
-//! | Validators |----->|       |   `------------`   `----+---------`  |
-//! `------------`   |  `-------`                         |            |
-//!                  |                                    |            |
-//!                  |                                    |            |
-//!                  |                                    |            |
-//!                  `------------------------------------|------------`
-//!                                                       |
-//!                                                       v
-//!                                                    .------.
-//!                                                    | Bank |
-//!                                                    `------`
-//! ```
-//!
 //! 1. Fetch Stage
 //! - Incoming blobs are picked up from the replicate socket and repair socket.
 //! 2. SharedWindow Stage

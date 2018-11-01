@@ -6,9 +6,9 @@
 
 - [Synchronization](ch01-00-synchronization.md)
   - [Introduction to VDFs](ch01-01-vdf.md)
-  - [Proof of History](ch01-02-vdf.md)
+  - [Proof of History](ch01-02-poh.md)
 
-- [Pipelining](ch02-00-pipelining.md)
+- [Fullnode](ch02-00-fullnode.md)
   - [Pipeline Stages](ch02-01-stages.md)
   - [The TPU](ch02-02-tpu.md)
   - [The TVU](ch02-03-tvu.md)
