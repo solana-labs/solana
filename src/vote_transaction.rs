@@ -6,7 +6,7 @@ use signature::Keypair;
 use solana_sdk::pubkey::Pubkey;
 use system_transaction::SystemTransaction;
 use transaction::Transaction;
-use vote_program::{Vote, VoteInstruction, VoteProgram, MAX_STATE_SIZE};
+use vote_program::{Vote, VoteInstruction, VoteProgram};
 
 pub trait VoteTransaction {
     fn vote_new(vote_account: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self;
@@ -43,7 +43,7 @@ impl VoteTransaction for Transaction {
             new_vote_account_id,
             last_id,
             num_tokens,
-            MAX_STATE_SIZE as u64,
+            VoteProgram::get_max_size() as u64,
             VoteProgram::id(),
             0,
         )

@@ -21,7 +21,7 @@ use solana::result;
 use solana::service::Service;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::system_transaction::SystemTransaction;
-use solana::thin_client::ThinClient;
+use solana::thin_client::{retry_get_balance, ThinClient};
 use solana::timing::{duration_as_ms, duration_as_s};
 use solana::transaction::Transaction;
 use solana::window::default_window;
@@ -1468,27 +1468,6 @@ fn mk_client(leader: &NodeInfo) -> ThinClient {
         leader.contact_info.tpu,
         transactions_socket,
     )
-}
-
-fn retry_get_balance(
-    client: &mut ThinClient,
-    bob_pubkey: &Pubkey,
-    expected: Option<i64>,
-) -> Option<i64> {
-    const LAST: usize = 30;
-    for run in 0..(LAST + 1) {
-        let out = client.poll_get_balance(bob_pubkey);
-        if expected.is_none() || run == LAST {
-            return out.ok().clone();
-        }
-        trace!("retry_get_balance[{}] {:?} {:?}", run, out, expected);
-        if let (Some(e), Ok(o)) = (expected, out) {
-            if o == e {
-                return Some(o);
-            }
-        }
-    }
-    None
 }
 
 fn send_tx_and_retry_get_balance(
