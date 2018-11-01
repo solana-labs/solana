@@ -11,7 +11,6 @@ use log::Level;
 use packet::Packets;
 use poh_recorder::{PohRecorder, PohRecorderError};
 use poh_service::{Config, PohService};
-use rayon::prelude::*;
 use result::{Error, Result};
 use service::Service;
 use sigverify_stage::VerifiedPackets;
@@ -122,7 +121,7 @@ impl BankingStage {
     /// an unused `SocketAddr` that could be used to send a response.
     fn deserialize_transactions(p: &Packets) -> Vec<Option<(Transaction, SocketAddr)>> {
         p.packets
-            .par_iter()
+            .iter()
             .map(|x| {
                 deserialize(&x.data[0..x.meta.size])
                     .map(|req| (req, x.meta.addr()))
