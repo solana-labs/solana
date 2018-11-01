@@ -328,12 +328,12 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                     .as_i64()
                     .unwrap_or(previous_balance);
 
-                if previous_balance != current_balance {
+                if previous_balance < current_balance {
                     break;
                 }
                 println!(".");
             }
-            if current_balance - previous_balance != tokens {
+            if current_balance - previous_balance < tokens {
                 Err("Airdrop failed!")?;
             }
             Ok(format!("Your balance is: {:?}", current_balance))
