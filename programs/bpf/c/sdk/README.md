@@ -1,10 +1,24 @@
 
 ## Prerequisites
 
-### Linux Ubuntu
+## LLVM / clang 7.0.0
+http://releases.llvm.org/download.html
 
-The following link describes how to install llvm:
-  https://blog.kowalczyk.info/article/k/how-to-install-latest-clang-6.0-on-ubuntu-16.04-xenial-wsl.html
+### Linux Ubuntu 16.04 (xenial)
+```
+$ wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+$ sudo apt-add-repository "deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial-7 main"
+$ sudo apt-get update
+$ sudo apt-get install -y clang-7
+```
+
+### Linux Ubuntu 14.04 (trusty)
+```
+$ wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+$ sudo apt-add-repository "deb http://apt.llvm.org/trusty/ llvm-toolchain-trusty-7 main"
+$ sudo apt-get update
+$ sudo apt-get install -y clang-7
+```
 
 ### macOS
 
