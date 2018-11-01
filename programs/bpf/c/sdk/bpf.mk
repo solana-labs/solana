@@ -10,7 +10,7 @@ INC_DIRS ?=
 SRC_DIR ?= ./src
 OUT_DIR ?= ./out
 
-OS=$(uname)
+OS=$(shell uname)
 ifeq ($(OS),Darwin)
 LLVM_DIR ?= $(brew --prefix llvm)
 endif
