@@ -20,11 +20,20 @@ garbage_address=vS3ngn1TfQmpsW1Z4NkLuqNAQFF3dYQw8UZ6TCx9bmq
 check_balance_output() {
   declare expected_output="$1"
   exec 42>&1
-  output=$($solana_wallet "${entrypoint[@]}" balance | tee >(cat - >&42))
-  if [[ ! "$output" =~ $expected_output ]]; then
-    echo "Balance is incorrect.  Expected: $expected_output"
-    exit 1
-  fi
+  attempts=3
+  while [[ $attempts -gt 0 ]]; do
+    output=$($solana_wallet "${entrypoint[@]}" balance | tee >(cat - >&42))
+    if [[ "$output" =~ $expected_output ]]; then
+      break
+    else
+      sleep 1
+      (( attempts=attempts-1 ))
+      if [[ $attempts -eq 0 ]]; then
+        echo "Balance is incorrect.  Expected: $expected_output"
+        exit 1
+      fi
+    fi
+  done
 }
 
 pay_and_confirm() {
