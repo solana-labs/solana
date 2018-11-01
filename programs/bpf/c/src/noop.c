@@ -3,7 +3,7 @@
  * passed to it
  */
 
-#include <sol_bpf.h>
+#include <solana_sdk.h>
 
 /**
  * Number of SolKeyedAccounts expected. The program should bail if an
