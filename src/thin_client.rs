@@ -691,7 +691,7 @@ mod tests {
         logger::setup();
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let mint = Mint::new(10_000);
+        let mint = Mint::new(10_000, leader_keypair.pubkey(), 1);
         let mut bank = Bank::new(&mint);
         let leader_data = leader.info.clone();
         let ledger_path = create_tmp_ledger_with_mint("client_check_signature", &mint);
