@@ -108,8 +108,6 @@ pub struct NodeInfo {
     pub contact_info: ContactInfo,
     /// current leader identity
     pub leader_id: Pubkey,
-    /// information about the state of the ledger
-    pub ledger_state: LedgerState,
 }
 
 impl NodeInfo {
@@ -133,9 +131,6 @@ impl NodeInfo {
                 version: 0,
             },
             leader_id: Pubkey::default(),
-            ledger_state: LedgerState {
-                last_id: Hash::default(),
-            },
         }
     }
 
@@ -705,17 +700,6 @@ impl ClusterInfo {
 
         trace!("get updates since response {} {}", v, updated_data.len());
         (id, max_updated_node, updated_data)
-    }
-
-    pub fn valid_last_ids(&self) -> Vec<Hash> {
-        self.table
-            .values()
-            .filter(|r| {
-                r.id != Pubkey::default()
-                    && (Self::is_valid_address(&r.contact_info.tpu)
-                        || Self::is_valid_address(&r.contact_info.tvu))
-            }).map(|x| x.ledger_state.last_id)
-            .collect()
     }
 
     pub fn window_index_request(&self, ix: u64) -> Result<(SocketAddr, Vec<u8>)> {
@@ -1774,36 +1758,6 @@ mod tests {
             };
             assert_eq!(blob.get_id().unwrap(), id);
         }
-    }
-
-    #[test]
-    fn test_valid_last_ids() {
-        logger::setup();
-        let mut leader0 = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.2:1234"));
-        leader0.ledger_state.last_id = hash(b"0");
-        let mut leader1 = NodeInfo::new_multicast();
-        leader1.ledger_state.last_id = hash(b"1");
-        let mut leader2 =
-            NodeInfo::new_with_pubkey_socketaddr(Pubkey::default(), &socketaddr!("127.0.0.2:1234"));
-        leader2.ledger_state.last_id = hash(b"2");
-        // test that only valid tvu or tpu are retured as nodes
-        let mut leader3 = NodeInfo::new(
-            Keypair::new().pubkey(),
-            socketaddr!("127.0.0.1:1234"),
-            socketaddr_any!(),
-            socketaddr!("127.0.0.1:1236"),
-            socketaddr_any!(),
-            socketaddr_any!(),
-        );
-        leader3.ledger_state.last_id = hash(b"3");
-        let mut cluster_info = ClusterInfo::new(leader0.clone()).expect("ClusterInfo::new");
-        cluster_info.insert(&leader1);
-        cluster_info.insert(&leader2);
-        cluster_info.insert(&leader3);
-        assert_eq!(
-            cluster_info.valid_last_ids(),
-            vec![leader0.ledger_state.last_id]
-        );
     }
 
     /// Validates the node that sent Protocol::ReceiveUpdates gets its

@@ -90,6 +90,7 @@ impl Tpu {
             ledger_write_stage,
             exit: exit.clone(),
         };
+
         (tpu, entry_forwarder, exit)
     }
 

@@ -26,6 +26,7 @@ pub mod client;
 #[macro_use]
 pub mod cluster_info;
 pub mod budget_program;
+pub mod compute_leader_finality_service;
 pub mod drone;
 pub mod entry;
 pub mod entry_writer;

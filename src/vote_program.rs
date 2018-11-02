@@ -104,7 +104,7 @@ impl VoteProgram {
         match deserialize(tx.userdata(instruction_index)) {
             Ok(VoteInstruction::RegisterAccount) => {
                 // TODO: a single validator could register multiple "vote accounts"
-                // which would clutter the "accounts" structure.
+                // which would clutter the "accounts" structure. See github issue 1654.
                 accounts[1].program_id = Self::id();
 
                 let mut vote_state = VoteProgram {
