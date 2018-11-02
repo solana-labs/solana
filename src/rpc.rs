@@ -360,9 +360,7 @@ mod tests {
     use transaction::Transaction;
 
     fn start_rpc_handler_with_tx(pubkey: Pubkey) -> (MetaIoHandler<Meta>, Meta, Hash, Keypair) {
-        let dummy_leader_id = Keypair::new().pubkey();
-        let dummy_leader_tokens = 0;
-        let alice = Mint::new(10_000, dummy_leader_id, dummy_leader_tokens);
+        let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
 
         let last_id = bank.last_id();
@@ -393,9 +391,7 @@ mod tests {
 
     #[test]
     fn test_rpc_new() {
-        let dummy_leader_id = Keypair::new().pubkey();
-        let dummy_leader_tokens = 0;
-        let alice = Mint::new(10_000, dummy_leader_id, dummy_leader_tokens);
+        let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let cluster_info = Arc::new(RwLock::new(
             ClusterInfo::new(NodeInfo::new_unspecified()).unwrap(),
@@ -426,9 +422,7 @@ mod tests {
 
     #[test]
     fn test_rpc_request_processor_new() {
-        let dummy_leader_id = Keypair::new().pubkey();
-        let dummy_leader_tokens = 0;
-        let alice = Mint::new(10_000, dummy_leader_id, dummy_leader_tokens);
+        let alice = Mint::new(10_000);
         let bob_pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&alice);
         let arc_bank = Arc::new(bank);
@@ -612,9 +606,7 @@ mod tests {
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
-        let dummy_leader_id = Keypair::new().pubkey();
-        let dummy_leader_tokens = 0;
-        let alice = Mint::new(10_000_000, dummy_leader_id, dummy_leader_tokens);
+        let alice = Mint::new(10_000_000);
         let mut bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
@@ -690,9 +682,7 @@ mod tests {
 
     #[test]
     fn test_rpc_send_bad_tx() {
-        let dummy_leader_id = Keypair::new().pubkey();
-        let dummy_leader_tokens = 1;
-        let alice = Mint::new(10_000, dummy_leader_id, dummy_leader_tokens);
+        let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
 
         let mut io = MetaIoHandler::default();

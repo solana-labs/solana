@@ -317,7 +317,7 @@ mod tests {
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
-        let alice = Mint::new(10_000_000, leader_keypair.pubkey(), 1);
+        let alice = Mint::new(10_000_000);
         let mut bank = Bank::new(&alice);
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader.info.id,

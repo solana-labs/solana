@@ -37,12 +37,24 @@ impl Mint {
         }
     }
 
-    pub fn new(tokens: i64, bootstrap_leader: Pubkey, bootstrap_leader_tokens: i64) -> Self {
+    pub fn new_with_leader(
+        tokens: i64,
+        bootstrap_leader: Pubkey,
+        bootstrap_leader_tokens: i64,
+    ) -> Self {
         let rnd = SystemRandom::new();
         let pkcs8 = Keypair::generate_pkcs8(&rnd)
             .expect("generate_pkcs8 in mint pub fn new")
             .to_vec();
         Self::new_with_pkcs8(tokens, pkcs8, bootstrap_leader, bootstrap_leader_tokens)
+    }
+
+    pub fn new(tokens: i64) -> Self {
+        let rnd = SystemRandom::new();
+        let pkcs8 = Keypair::generate_pkcs8(&rnd)
+            .expect("generate_pkcs8 in mint pub fn new")
+            .to_vec();
+        Self::new_with_pkcs8(tokens, pkcs8, Pubkey::default(), 0)
     }
 
     pub fn seed(&self) -> Hash {
@@ -63,18 +75,24 @@ impl Mint {
 
     pub fn create_transaction(&self) -> Vec<Transaction> {
         let keypair = self.keypair();
-        // Create moves from mint to itself (deposit), and then a move from the mint
-        // to the bootstrap leader
-        let moves = vec![
-            (self.pubkey(), self.tokens),
-            (self.bootstrap_leader_id, self.bootstrap_leader_tokens),
-        ];
-        vec![Transaction::system_move_many(
-            &keypair,
-            &moves,
-            self.seed(),
-            0,
-        )]
+        // Check if creating the leader genesis entries is necessary
+        if self.bootstrap_leader_id == Pubkey::default() {
+            let tx = Transaction::system_move(&keypair, self.pubkey(), self.tokens, self.seed(), 0);
+            vec![tx]
+        } else {
+            // Create moves from mint to itself (deposit), and then a move from the mint
+            // to the bootstrap leader
+            let moves = vec![
+                (self.pubkey(), self.tokens),
+                (self.bootstrap_leader_id, self.bootstrap_leader_tokens),
+            ];
+            vec![Transaction::system_move_many(
+                &keypair,
+                &moves,
+                self.seed(),
+                0,
+            )]
+        }
     }
 
     pub fn create_entries(&self) -> Vec<Entry> {
@@ -96,9 +114,22 @@ mod tests {
 
     #[test]
     fn test_create_transactions() {
+        let mut transactions = Mint::new(100).create_transaction().into_iter();
+        let tx = transactions.next().unwrap();
+        assert_eq!(tx.instructions.len(), 1);
+        assert!(SystemProgram::check_id(tx.program_id(0)));
+        let instruction: SystemProgram = deserialize(tx.userdata(0)).unwrap();
+        if let SystemProgram::Move { tokens } = instruction {
+            assert_eq!(tokens, 100);
+        }
+        assert_eq!(transactions.next(), None);
+    }
+
+    #[test]
+    fn test_create_leader_transactions() {
         let dummy_leader_id = Keypair::new().pubkey();
         let dummy_leader_tokens = 1;
-        let mut transactions = Mint::new(100, dummy_leader_id, dummy_leader_tokens)
+        let mut transactions = Mint::new_with_leader(100, dummy_leader_id, dummy_leader_tokens)
             .create_transaction()
             .into_iter();
         let tx = transactions.next().unwrap();
@@ -118,9 +149,16 @@ mod tests {
 
     #[test]
     fn test_verify_entries() {
+        let entries = Mint::new(100).create_entries();
+        assert!(entries[..].verify(&entries[0].id));
+    }
+
+    #[test]
+    fn test_verify_leader_entries() {
         let dummy_leader_id = Keypair::new().pubkey();
         let dummy_leader_tokens = 1;
-        let entries = Mint::new(100, dummy_leader_id, dummy_leader_tokens).create_entries();
+        let entries =
+            Mint::new_with_leader(100, dummy_leader_id, dummy_leader_tokens).create_entries();
         assert!(entries[..].verify(&entries[0].id));
     }
 }

@@ -145,16 +145,13 @@ mod tests {
     use super::*;
     use hash::hash;
     use mint::Mint;
-    use signature::{Keypair, KeypairUtil};
     use std::sync::mpsc::channel;
     use std::sync::Arc;
     use system_transaction::test_tx;
 
     #[test]
     fn test_poh() {
-        let dummy_leader_id = Keypair::new().pubkey();
-        let dummy_leader_tokens = 1;
-        let mint = Mint::new(1, dummy_leader_id, dummy_leader_tokens);
+        let mint = Mint::new(1);
         let bank = Arc::new(Bank::new(&mint));
         let last_id = bank.last_id();
         let (entry_sender, entry_receiver) = channel();

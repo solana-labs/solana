@@ -54,7 +54,7 @@ struct Loader {
 
 impl Loader {
     pub fn new_dynamic(loader_name: &str) -> Self {
-        let mint = Mint::new(50, Keypair::new().pubkey(), 0);
+        let mint = Mint::new(50);
         let bank = Bank::new(&mint);
         let loader = Keypair::new();
 
@@ -96,7 +96,7 @@ impl Loader {
     }
 
     pub fn new_native() -> Self {
-        let mint = Mint::new(50, Keypair::new().pubkey(), 0);
+        let mint = Mint::new(50);
         let bank = Bank::new(&mint);
         let loader = native_loader::id();
 
@@ -105,7 +105,7 @@ impl Loader {
 
     #[cfg(feature = "bpf_c")]
     pub fn new_bpf() -> Self {
-        let mint = Mint::new(50, Keypair::new().pubkey(), 0);
+        let mint = Mint::new(50);
         let bank = Bank::new(&mint);
         let loader = bpf_loader::id();
 

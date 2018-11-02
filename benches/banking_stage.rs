@@ -46,7 +46,7 @@ fn check_txs(receiver: &Receiver<Vec<Entry>>, ref_tx_count: usize) {
 fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let txes = 1000 * NUM_THREADS;
     let mint_total = 1_000_000_000_000;
-    let mint = Mint::new(mint_total, Keypair::new().pubkey(), 0);
+    let mint = Mint::new(mint_total);
 
     let (verified_sender, verified_receiver) = channel();
     let bank = Arc::new(Bank::new(&mint));
@@ -79,7 +79,6 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             0,
         );
         let x = bank.process_transaction(&fund);
-        println!("ERROR: {:?}", x);
         assert!(x.is_ok());
     });
     //sanity check, make sure all the transactions can execute sequentially
@@ -132,7 +131,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     let progs = 5;
     let txes = 1000 * NUM_THREADS;
     let mint_total = 1_000_000_000_000;
-    let mint = Mint::new(mint_total, Keypair::new().pubkey(), 0);
+    let mint = Mint::new(mint_total);
 
     let (verified_sender, verified_receiver) = channel();
     let bank = Arc::new(Bank::new(&mint));
