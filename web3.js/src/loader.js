@@ -51,7 +51,7 @@ export class Loader {
     const chunkSize = 256;
     let offset = 0;
     let array = data;
-    const transactions = [];
+    let transactions = [];
     while (array.length > 0) {
       const bytes = array.slice(0, chunkSize);
       const userdata = Buffer.alloc(chunkSize + 16);
@@ -70,6 +70,15 @@ export class Loader {
         userdata,
       });
       transactions.push(sendAndConfirmTransaction(this.connection, program, transaction));
+
+      // Run up to 8 Loads in parallel to prevent too many parallel transactions from
+      // getting rejected with AccountInUse.
+      //
+      // TODO: 8 was selected empirically and should probably be revisited
+      if (transactions.length === 8) {
+        await Promise.all(transactions);
+        transactions = [];
+      }
 
       offset += chunkSize;
       array = array.slice(chunkSize);
