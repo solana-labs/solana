@@ -10,7 +10,6 @@ use rand_chacha::ChaChaRng;
 use result::{Error, Result};
 use service::Service;
 use solana_sdk::hash::Hash;
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signature::Signature;
 use solana_sdk::vote_program;
@@ -30,6 +29,7 @@ type StorageKeys = Vec<u8>;
 pub struct StorageState {
     storage_results: Arc<RwLock<StorageResults>>,
     storage_keys: Arc<RwLock<StorageKeys>>,
+    last_id: Hash,
 }
 
 pub struct StorageStage {
@@ -49,7 +49,7 @@ const NUM_SAMPLES: usize = 4;
 pub const ENTRIES_PER_SLICE: u64 = 16;
 const KEY_SIZE: usize = 64;
 
-fn get_identity_index_from_pubkey(key: &Pubkey) -> usize {
+fn get_identity_index_from_signature(key: &Signature) -> usize {
     let rkey = key.as_ref();
     let mut res: usize = (rkey[0] as usize)
         | ((rkey[1] as usize) << 8)
@@ -67,17 +67,22 @@ impl StorageState {
         StorageState {
             storage_keys,
             storage_results,
+            last_id: Hash::default(),
         }
     }
 
-    pub fn get_mining_key(&self, key: &Pubkey) -> Vec<u8> {
-        let idx = get_identity_index_from_pubkey(key);
+    pub fn get_mining_key(&self, key: &Signature) -> Vec<u8> {
+        let idx = get_identity_index_from_signature(key);
         self.storage_keys.read().unwrap()[idx..idx + KEY_SIZE].to_vec()
     }
 
-    pub fn get_mining_result(&self, key: &Pubkey) -> Hash {
-        let idx = get_identity_index_from_pubkey(key);
+    pub fn get_mining_result(&self, key: &Signature) -> Hash {
+        let idx = get_identity_index_from_signature(key);
         self.storage_results.read().unwrap()[idx]
+    }
+
+    pub fn get_last_id(&self) -> Hash {
+        self.last_id
     }
 }
 
@@ -267,7 +272,8 @@ mod tests {
     use rayon::prelude::*;
     use service::Service;
     use solana_sdk::hash::Hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::hash::Hasher;
+    use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
     use solana_sdk::transaction::Transaction;
     use solana_sdk::vote_program::Vote;
     use solana_sdk::vote_transaction::VoteTransaction;
@@ -280,7 +286,7 @@ mod tests {
     use std::time::Duration;
     use storage_stage::StorageState;
     use storage_stage::NUM_IDENTITIES;
-    use storage_stage::{get_identity_index_from_pubkey, StorageStage};
+    use storage_stage::{get_identity_index_from_signature, StorageStage};
 
     #[test]
     fn test_storage_stage_none_ledger() {
@@ -335,14 +341,16 @@ mod tests {
         storage_entry_sender.send(entries.clone()).unwrap();
 
         let keypair = Keypair::new();
-        let mut result = storage_state.get_mining_result(&keypair.pubkey());
+        let hash = Hash::default();
+        let signature = Signature::new(keypair.sign(&hash.as_ref()).as_ref());
+        let mut result = storage_state.get_mining_result(&signature);
         assert_eq!(result, Hash::default());
 
         for _ in 0..9 {
             storage_entry_sender.send(entries.clone()).unwrap();
         }
         for _ in 0..5 {
-            result = storage_state.get_mining_result(&keypair.pubkey());
+            result = storage_state.get_mining_result(&signature);
             if result != Hash::default() {
                 info!("found result = {:?} sleeping..", result);
                 break;
@@ -437,19 +445,22 @@ mod tests {
     }
 
     #[test]
-    fn test_pubkey_distribution() {
-        // See that pub keys have an even-ish distribution..
+    fn test_signature_distribution() {
+        // See that signatures have an even-ish distribution..
         let mut hist = Arc::new(vec![]);
         for _ in 0..NUM_IDENTITIES {
             Arc::get_mut(&mut hist).unwrap().push(AtomicUsize::new(0));
         }
+        let hasher = Hasher::default();
         {
             let hist = hist.clone();
             (0..(32 * NUM_IDENTITIES))
                 .into_par_iter()
                 .for_each(move |_| {
                     let keypair = Keypair::new();
-                    let ix = get_identity_index_from_pubkey(&keypair.pubkey());
+                    let hash = hasher.clone().result();
+                    let signature = Signature::new(keypair.sign(&hash.as_ref()).as_ref());
+                    let ix = get_identity_index_from_signature(&signature);
                     hist[ix].fetch_add(1, Ordering::Relaxed);
                 });
         }

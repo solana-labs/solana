@@ -153,6 +153,9 @@ build_rpc_trait! {
 
         #[rpc(meta, name = "sendTransaction")]
         fn send_transaction(&self, Self::Metadata, Vec<u8>) -> Result<String>;
+
+        #[rpc(meta, name = "getStorageMiningLastId")]
+        fn get_storage_mining_last_id(&self, Self::Metadata) -> Result<String>;
     }
 }
 
@@ -279,6 +282,9 @@ impl RpcSol for RpcSolImpl {
         );
         Ok(signature)
     }
+    fn get_storage_mining_last_id(&self, meta: Self::Metadata) -> Result<String> {
+        meta.request_processor.get_storage_mining_last_id()
+    }
 }
 #[derive(Clone)]
 pub struct JsonRpcRequestProcessor {
@@ -312,6 +318,10 @@ impl JsonRpcRequestProcessor {
     }
     fn get_transaction_count(&self) -> Result<u64> {
         Ok(self.bank.transaction_count() as u64)
+    }
+    fn get_storage_mining_last_id(&self) -> Result<String> {
+        let id = self.bank.storage_state.get_last_id();
+        Ok(bs58::encode(id).into_string())
     }
 }
 
@@ -391,6 +401,7 @@ mod tests {
         let request_processor = JsonRpcRequestProcessor::new(Arc::new(bank));
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default())));
         let leader = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
+
         cluster_info.write().unwrap().insert_info(leader.clone());
         cluster_info.write().unwrap().set_leader(leader.id);
         let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);

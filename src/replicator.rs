@@ -1,10 +1,22 @@
 use blob_fetch_stage::BlobFetchStage;
+#[cfg(feature = "chacha")]
+use chacha::{chacha_cbc_encrypt_file, CHACHA_BLOCK_SIZE};
+use client::mk_client;
 use cluster_info::{ClusterInfo, Node, NodeInfo};
 use db_ledger::DbLedger;
 use gossip_service::GossipService;
 use leader_scheduler::LeaderScheduler;
+use ledger::LEDGER_DATA_FILE;
+use rand::thread_rng;
+use rand::Rng;
+use result::Result;
+use rpc_request::{RpcClient, RpcRequest};
 use service::Service;
+use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
 use solana_sdk::hash::{Hash, Hasher};
+use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::storage_program::StorageTransaction;
+use solana_sdk::transaction::Transaction;
 use std::fs::File;
 use std::io;
 use std::io::BufReader;
@@ -13,17 +25,16 @@ use std::io::Seek;
 use std::io::SeekFrom;
 use std::io::{Error, ErrorKind};
 use std::mem::size_of;
-use std::net::SocketAddr;
 use std::net::UdpSocket;
 use std::path::Path;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
+use std::thread::sleep;
 use std::thread::JoinHandle;
 use std::time::Duration;
 use store_ledger_stage::StoreLedgerStage;
 use streamer::BlobReceiver;
-use thin_client::poll_gossip_for_leader;
 use window;
 use window_service::window_service;
 
@@ -33,6 +44,7 @@ pub struct Replicator {
     store_ledger_stage: StoreLedgerStage,
     t_window: JoinHandle<()>,
     pub retransmit_receiver: BlobReceiver,
+    exit: Arc<AtomicBool>,
 }
 
 pub fn sample_file(in_path: &Path, sample_offsets: &[u64]) -> io::Result<Hash> {
@@ -72,39 +84,34 @@ pub fn sample_file(in_path: &Path, sample_offsets: &[u64]) -> io::Result<Hash> {
 
 impl Replicator {
     pub fn new(
-        entry_height: u64,
-        max_entry_height: u64,
-        exit: &Arc<AtomicBool>,
         ledger_path: Option<&str>,
         node: Node,
-        network_addr: Option<SocketAddr>,
-        done: Arc<AtomicBool>,
-    ) -> (Replicator, NodeInfo) {
+        leader_info: &NodeInfo,
+        keypair: &Keypair,
+    ) -> Result<Self> {
+        let exit = Arc::new(AtomicBool::new(false));
+        let done = Arc::new(AtomicBool::new(false));
+
+        let entry_height = 0;
+        let max_entry_height = 1;
+
         const REPLICATOR_WINDOW_SIZE: usize = 32 * 1024;
         let window = window::new_window(REPLICATOR_WINDOW_SIZE);
         let shared_window = Arc::new(RwLock::new(window));
 
+        info!("Replicator: id: {}", keypair.pubkey());
+        info!("Creating cluster info....");
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(node.info)));
 
-        let leader_info = network_addr.map(|i| NodeInfo::new_entry_point(&i));
-        let leader_pubkey;
-        if let Some(leader_info) = leader_info {
-            leader_pubkey = leader_info.id;
-            cluster_info.write().unwrap().insert_info(leader_info);
-        } else {
-            panic!("No leader info!");
+        let leader_pubkey = leader_info.id;
+        {
+            let mut cluster_info_w = cluster_info.write().unwrap();
+            cluster_info_w.insert_info(leader_info.clone());
+            cluster_info_w.set_leader(leader_info.id);
         }
 
-        let repair_socket = Arc::new(node.sockets.repair);
-        let mut blob_sockets: Vec<Arc<UdpSocket>> =
-            node.sockets.replicate.into_iter().map(Arc::new).collect();
-        blob_sockets.push(repair_socket.clone());
-        let (fetch_stage, blob_fetch_receiver) =
-            BlobFetchStage::new_multi_socket(blob_sockets, exit.clone());
-
         let (entry_window_sender, entry_window_receiver) = channel();
-        // todo: pull blobs off the retransmit_receiver and recycle them?
-        let (retransmit_sender, retransmit_receiver) = channel();
+        let store_ledger_stage = StoreLedgerStage::new(entry_window_receiver, ledger_path);
 
         // Create the RocksDb ledger, eventually will simply repurpose the input
         // ledger path as the RocksDb ledger path once we replace the ledger with
@@ -115,6 +122,53 @@ impl Replicator {
             DbLedger::open(&ledger_path.unwrap())
                 .expect("Expected to be able to open database ledger"),
         ));
+
+        let gossip_service = GossipService::new(
+            &cluster_info,
+            shared_window.clone(),
+            ledger_path,
+            node.sockets.gossip,
+            exit.clone(),
+        );
+
+        info!("polling for leader");
+        let leader;
+        loop {
+            if let Some(l) = cluster_info.read().unwrap().get_gossip_top_leader() {
+                leader = l.clone();
+                break;
+            }
+
+            sleep(Duration::from_millis(900));
+            info!("{}", cluster_info.read().unwrap().node_info_trace());
+        }
+
+        info!("Got leader: {:?}", leader);
+
+        let rpc_client = {
+            let cluster_info = cluster_info.read().unwrap();
+            let rpc_peers = cluster_info.rpc_peers();
+            info!("rpc peers: {:?}", rpc_peers);
+            let node_idx = thread_rng().gen_range(0, rpc_peers.len());
+            RpcClient::new_from_socket(rpc_peers[node_idx].rpc)
+        };
+
+        let storage_last_id = RpcRequest::GetStorageMiningLastId
+            .make_rpc_request(&rpc_client, 2, None)
+            .expect("rpc request")
+            .to_string();
+        let _signature = keypair.sign(storage_last_id.as_ref());
+        // TODO: use this signature to pick the key and block
+
+        let repair_socket = Arc::new(node.sockets.repair);
+        let mut blob_sockets: Vec<Arc<UdpSocket>> =
+            node.sockets.replicate.into_iter().map(Arc::new).collect();
+        blob_sockets.push(repair_socket.clone());
+        let (fetch_stage, blob_fetch_receiver) =
+            BlobFetchStage::new_multi_socket(blob_sockets, exit.clone());
+
+        // todo: pull blobs off the retransmit_receiver and recycle them?
+        let (retransmit_sender, retransmit_receiver) = channel();
 
         let t_window = window_service(
             db_ledger,
@@ -129,32 +183,82 @@ impl Replicator {
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_pubkey,
             ))),
-            done,
+            done.clone(),
         );
 
-        let store_ledger_stage = StoreLedgerStage::new(entry_window_receiver, ledger_path);
+        info!("window created, waiting for ledger download done");
+        while !done.load(Ordering::Relaxed) {
+            sleep(Duration::from_millis(100));
+        }
 
-        let gossip_service = GossipService::new(
-            &cluster_info,
-            shared_window.clone(),
-            ledger_path,
-            node.sockets.gossip,
-            exit.clone(),
-        );
+        let mut client = mk_client(&leader);
 
-        let leader =
-            poll_gossip_for_leader(network_addr.unwrap(), Some(10)).expect("couldn't reach leader");
+        if client.get_balance(&keypair.pubkey()).is_err() {
+            let mut drone_addr = leader_info.tpu;
+            drone_addr.set_port(DRONE_PORT);
 
-        (
-            Replicator {
-                gossip_service,
-                fetch_stage,
-                store_ledger_stage,
-                t_window,
-                retransmit_receiver,
-            },
-            leader,
-        )
+            let airdrop_amount = 1;
+
+            let last_id = client.get_last_id();
+            match request_airdrop_transaction(
+                &drone_addr,
+                &keypair.pubkey(),
+                airdrop_amount,
+                last_id,
+            ) {
+                Ok(transaction) => {
+                    let signature = client.transfer_signed(&transaction).unwrap();
+                    client.poll_for_signature(&signature).unwrap();
+                }
+                Err(err) => {
+                    panic!(
+                        "Error requesting airdrop: {:?} to addr: {:?} amount: {}",
+                        err, drone_addr, airdrop_amount
+                    );
+                }
+            };
+        }
+
+        info!("Done downloading ledger at {}", ledger_path.unwrap());
+
+        let ledger_path = Path::new(ledger_path.unwrap());
+        let ledger_data_file_encrypted = ledger_path.join(format!("{}.enc", LEDGER_DATA_FILE));
+        #[cfg(feature = "chacha")]
+        {
+            let ledger_data_file = ledger_path.join(LEDGER_DATA_FILE);
+            let mut ivec = [0u8; CHACHA_BLOCK_SIZE];
+            ivec[0..4].copy_from_slice(&[2, 3, 4, 5]);
+
+            chacha_cbc_encrypt_file(&ledger_data_file, &ledger_data_file_encrypted, &mut ivec)?;
+        }
+
+        info!("Done encrypting the ledger");
+
+        let sampling_offsets = [0, 1, 2, 3];
+
+        match sample_file(&ledger_data_file_encrypted, &sampling_offsets) {
+            Ok(hash) => {
+                let last_id = client.get_last_id();
+                info!("sampled hash: {}", hash);
+                let tx = Transaction::storage_new_mining_proof(&keypair, hash, last_id);
+                client.transfer_signed(&tx).expect("transfer didn't work!");
+            }
+            Err(e) => info!("Error occurred while sampling: {:?}", e),
+        }
+
+        Ok(Replicator {
+            gossip_service,
+            fetch_stage,
+            store_ledger_stage,
+            t_window,
+            retransmit_receiver,
+            exit,
+        })
+    }
+
+    pub fn close(self) {
+        self.exit.store(true, Ordering::Relaxed);
+        self.join()
     }
 
     pub fn join(self) {
