@@ -225,6 +225,9 @@ export class Connection {
     url.protocol = 'ws';
     url.host = '';
     url.port = String(Number(url.port) + 1);
+    if (url.port === '1') {
+      url.port = '8900';
+    }
     this._rpcWebSocket = new RpcWebSocketClient(
       urlFormat(url),
       {
