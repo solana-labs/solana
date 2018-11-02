@@ -391,6 +391,7 @@ export class Connection {
 
       // Fetch a new last id
       let attempts = 0;
+      const startTime = Date.now();
       for (;;) {
         const lastId = await this.getLastId();
 
@@ -403,7 +404,7 @@ export class Connection {
           break;
         }
         if (attempts === 8) {
-          throw new Error('Unable to obtain new last id');
+          throw new Error(`Unable to obtain a new last id after ${Date.now() - startTime}ms`);
         }
         await sleep(250);
         ++attempts;
