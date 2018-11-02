@@ -23,9 +23,6 @@ pub const DEFAULT_SEED_ROTATION_INTERVAL: u64 = 1000;
 pub const DEFAULT_ACTIVE_WINDOW_LENGTH: u64 = 1000;
 
 pub struct LeaderSchedulerConfig {
-    // The first leader who will bootstrap the network
-    pub bootstrap_leader: Pubkey,
-
     // The interval at which to rotate the leader, should be much less than
     // seed_rotation_interval
     pub leader_rotation_interval_option: Option<u64>,
@@ -45,14 +42,12 @@ pub struct LeaderSchedulerConfig {
 // need leader rotation don't break
 impl LeaderSchedulerConfig {
     pub fn new(
-        bootstrap_leader: Pubkey,
         bootstrap_height_option: Option<u64>,
         leader_rotation_interval_option: Option<u64>,
         seed_rotation_interval_option: Option<u64>,
         active_window_length_option: Option<u64>,
     ) -> Self {
         LeaderSchedulerConfig {
-            bootstrap_leader,
             bootstrap_height_option,
             leader_rotation_interval_option,
             seed_rotation_interval_option,
@@ -98,12 +93,12 @@ pub struct LeaderScheduler {
 // The LeaderScheduler implements a schedule for leaders as follows:
 //
 // 1) During the bootstrapping period of bootstrap_height PoH counts, the
-// leader is hard-coded to the input bootstrap_leader.
+// leader is hard-coded to the bootstrap_leader that is read from the genesis block.
 //
 // 2) After the first seed is generated, this signals the beginning of actual leader rotation.
 // From this point on, every seed_rotation_interval PoH counts we generate the seed based
 // on the PoH height, and use it to do a weighted sample from the set
-// of validators based on current stake weight. This gets you the first leader A for
+// of validators based on current stake weight. This gets you the bootstrap leader A for
 // the next leader_rotation_interval PoH counts. On the same PoH count we generate the seed,
 // we also order the validators based on their current stake weight, and starting
 // from leader A, we then pick the next leader sequentially every leader_rotation_interval
@@ -114,9 +109,10 @@ pub struct LeaderScheduler {
 // calculate the leader schedule for the upcoming seed_rotation_interval PoH counts.
 impl LeaderScheduler {
     pub fn from_bootstrap_leader(bootstrap_leader: Pubkey) -> Self {
-        let config = LeaderSchedulerConfig::new(bootstrap_leader, None, None, None, None);
+        let config = LeaderSchedulerConfig::new(None, None, None, None);
         let mut leader_scheduler = LeaderScheduler::new(&config);
         leader_scheduler.use_only_bootstrap_leader = true;
+        leader_scheduler.bootstrap_leader = bootstrap_leader;
         leader_scheduler
     }
 
@@ -152,7 +148,7 @@ impl LeaderScheduler {
             seed_rotation_interval,
             leader_schedule: Vec::new(),
             last_seed_height: None,
-            bootstrap_leader: config.bootstrap_leader,
+            bootstrap_leader: Pubkey::default(),
             bootstrap_height,
             active_window_length,
             seed: 0,
@@ -440,7 +436,7 @@ impl LeaderScheduler {
 impl Default for LeaderScheduler {
     // Create a dummy leader scheduler
     fn default() -> Self {
-        let id = Keypair::new().pubkey();
+        let id = Pubkey::default();
         Self::from_bootstrap_leader(id)
     }
 }
@@ -568,7 +564,6 @@ mod tests {
         // Set up the LeaderScheduler struct
         let bootstrap_leader_id = Keypair::new().pubkey();
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            bootstrap_leader_id,
             Some(bootstrap_height),
             Some(leader_rotation_interval),
             Some(seed_rotation_interval),
@@ -576,6 +571,7 @@ mod tests {
         );
 
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
+        leader_scheduler.bootstrap_leader = bootstrap_leader_id;
 
         // Create the bank and validators, which are inserted in order of account balance
         let num_vote_account_tokens = 1;
@@ -663,7 +659,7 @@ mod tests {
 
             // Note: The "validators" vector is already sorted by stake, so the expected order
             // for the leader schedule can be derived by just iterating through the vector
-            // in order. The only excpetion is for the first leader in the schedule, we need to
+            // in order. The only excpetion is for the bootstrap leader in the schedule, we need to
             // find the index into the "validators" vector where the schedule begins.
             if None == start_leader_index {
                 start_leader_index = Some(
@@ -689,18 +685,14 @@ mod tests {
     fn test_active_set() {
         let leader_id = Keypair::new().pubkey();
         let active_window_length = 1000;
-        let mint = Mint::new(10000);
+        let mint = Mint::new_with_leader(10000, leader_id, 500);
         let bank = Bank::new(&mint);
 
-        let leader_scheduler_config = LeaderSchedulerConfig::new(
-            leader_id,
-            Some(100),
-            Some(100),
-            Some(100),
-            Some(active_window_length),
-        );
+        let leader_scheduler_config =
+            LeaderSchedulerConfig::new(Some(100), Some(100), Some(100), Some(active_window_length));
 
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
+        leader_scheduler.bootstrap_leader = leader_id;
 
         // Insert a bunch of votes at height "start_height"
         let start_height = 3;
@@ -980,7 +972,6 @@ mod tests {
         let active_window_length = seed_rotation_interval;
 
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            bootstrap_leader_id,
             Some(bootstrap_height),
             Some(leader_rotation_interval),
             Some(seed_rotation_interval),
@@ -988,6 +979,7 @@ mod tests {
         );
 
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
+        leader_scheduler.bootstrap_leader = bootstrap_leader_id;
 
         // Create the bank and validators
         let mint = Mint::new(
@@ -1051,22 +1043,14 @@ mod tests {
         let leader_keypair = Keypair::new();
         let leader_id = leader_keypair.pubkey();
         let active_window_length = 1000;
-        let mint = Mint::new(10000);
+        let mint = Mint::new_with_leader(10000, leader_id, 500);
         let bank = Bank::new(&mint);
 
-        let leader_scheduler_config = LeaderSchedulerConfig::new(
-            leader_id,
-            Some(100),
-            Some(100),
-            Some(100),
-            Some(active_window_length),
-        );
+        let leader_scheduler_config =
+            LeaderSchedulerConfig::new(Some(100), Some(100), Some(100), Some(active_window_length));
 
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
-
-        // Give the node some tokens
-        bank.transfer(5, &mint.keypair(), leader_id, bank.last_id())
-            .unwrap();
+        leader_scheduler.bootstrap_leader = leader_id;
 
         // Check that a node that votes twice in a row will get included in the active
         // window
@@ -1110,7 +1094,6 @@ mod tests {
         let active_window_length = 1;
 
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            bootstrap_leader_id,
             Some(bootstrap_height),
             Some(leader_rotation_interval),
             Some(seed_rotation_interval),
@@ -1118,6 +1101,7 @@ mod tests {
         );
 
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
+        leader_scheduler.bootstrap_leader = bootstrap_leader_id;
 
         // Check that the generate_schedule() function is being called by the
         // update_height() function at the correct entry heights.
@@ -1140,10 +1124,11 @@ mod tests {
         let bootstrap_leader_id = Keypair::new().pubkey();
 
         // Check defaults for LeaderScheduler
-        let leader_scheduler_config =
-            LeaderSchedulerConfig::new(bootstrap_leader_id, None, None, None, None);
+        let leader_scheduler_config = LeaderSchedulerConfig::new(None, None, None, None);
 
         let leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
+
+        assert_eq!(leader_scheduler.bootstrap_leader, Pubkey::default());
 
         assert_eq!(leader_scheduler.bootstrap_height, DEFAULT_BOOTSTRAP_HEIGHT);
 
@@ -1163,14 +1148,14 @@ mod tests {
         let active_window_length = 1;
 
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            bootstrap_leader_id,
             Some(bootstrap_height),
             Some(leader_rotation_interval),
             Some(seed_rotation_interval),
             Some(active_window_length),
         );
 
-        let leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
+        let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
+        leader_scheduler.bootstrap_leader = bootstrap_leader_id;
 
         assert_eq!(leader_scheduler.bootstrap_height, bootstrap_height);
 
@@ -1193,7 +1178,6 @@ mod tests {
         let active_window_length = bootstrap_height + seed_rotation_interval;
 
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            bootstrap_leader_id,
             Some(bootstrap_height),
             Some(leader_rotation_interval),
             Some(seed_rotation_interval),
@@ -1201,9 +1185,10 @@ mod tests {
         );
 
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
+        leader_scheduler.bootstrap_leader = bootstrap_leader_id;
 
         // Create mint and bank
-        let mint = Mint::new(10000);
+        let mint = Mint::new_with_leader(10000, bootstrap_leader_id, 0);
         let bank = Bank::new(&mint);
         let last_id = mint
             .create_entries()
@@ -1301,7 +1286,6 @@ mod tests {
         let active_window_length = bootstrap_height + seed_rotation_interval;
 
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            bootstrap_leader_id,
             Some(bootstrap_height),
             Some(leader_rotation_interval),
             Some(seed_rotation_interval),
@@ -1309,9 +1293,10 @@ mod tests {
         );
 
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
+        leader_scheduler.bootstrap_leader = bootstrap_leader_id;
 
         // Create mint and bank
-        let mint = Mint::new(10000);
+        let mint = Mint::new_with_leader(10000, bootstrap_leader_id, 500);
         let bank = Bank::new(&mint);
         let last_id = mint
             .create_entries()

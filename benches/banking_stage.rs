@@ -14,7 +14,7 @@ use solana::entry::Entry;
 use solana::hash::hash;
 use solana::mint::Mint;
 use solana::packet::to_packets_chunked;
-use solana::signature::{KeypairUtil, Signature};
+use solana::signature::{Keypair, KeypairUtil, Signature};
 use solana::system_transaction::SystemTransaction;
 use solana::transaction::Transaction;
 use solana_sdk::pubkey::Pubkey;
@@ -78,7 +78,8 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             mint.last_id(),
             0,
         );
-        assert!(bank.process_transaction(&fund).is_ok());
+        let x = bank.process_transaction(&fund);
+        assert!(x.is_ok());
     });
     //sanity check, make sure all the transactions can execute sequentially
     transactions.iter().for_each(|tx| {

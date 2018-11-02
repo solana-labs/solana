@@ -104,11 +104,11 @@ if $node_type_leader; then
   echo "Creating $mint_path with $num_tokens tokens"
   $solana_keygen -o "$mint_path"
 
-  echo "Creating $SOLANA_CONFIG_DIR/ledger"
-  $solana_genesis --tokens="$num_tokens" --ledger "$SOLANA_CONFIG_DIR"/ledger < "$mint_path"
-
   echo "Creating $SOLANA_CONFIG_DIR/leader.json"
   $solana_fullnode_config --keypair="$leader_id_path" "${leader_address_args[@]}" > "$SOLANA_CONFIG_DIR"/leader.json
+  
+  echo "Creating $SOLANA_CONFIG_DIR/ledger"
+  $solana_genesis --num_tokens "$num_tokens" --mint "$mint_path" --bootstrap_leader "$SOLANA_CONFIG_DIR"/leader.json --ledger "$SOLANA_CONFIG_DIR"/ledger
 
   ls -lhR "$SOLANA_CONFIG_DIR"/
   ls -lhR "$SOLANA_CONFIG_PRIVATE_DIR"/

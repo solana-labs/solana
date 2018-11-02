@@ -305,8 +305,13 @@ mod tests {
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
-        let (_mint, ledger_path, _genesis) =
-            create_tmp_sample_ledger("storage_stage_process_entries", 1000, 1);
+        let (_mint, ledger_path, _genesis) = create_tmp_sample_ledger(
+            "storage_stage_process_entries",
+            1000,
+            1,
+            Keypair::new().pubkey(),
+            1,
+        );
 
         let entries = make_tiny_test_entries(128);
         {
@@ -363,8 +368,13 @@ mod tests {
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
-        let (_mint, ledger_path, _genesis) =
-            create_tmp_sample_ledger("storage_stage_process_entries", 1000, 1);
+        let (_mint, ledger_path, _genesis) = create_tmp_sample_ledger(
+            "storage_stage_process_entries",
+            1000,
+            1,
+            Keypair::new().pubkey(),
+            1,
+        );
 
         let entries = make_tiny_test_entries(128);
         {

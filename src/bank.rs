@@ -202,9 +202,9 @@ impl Bank {
     }
 
     /// Create an Bank using a deposit.
-    pub fn new_from_deposit(deposit: &Payment) -> Self {
+    pub fn new_from_deposits(deposits: &[Payment]) -> Self {
         let bank = Self::default();
-        {
+        for deposit in deposits {
             let mut accounts = bank.accounts.write().unwrap();
             let account = accounts.entry(deposit.to).or_insert_with(Account::default);
             Self::apply_payment(deposit, account);
@@ -215,11 +215,28 @@ impl Bank {
 
     /// Create an Bank with only a Mint. Typically used by unit tests.
     pub fn new(mint: &Mint) -> Self {
-        let deposit = Payment {
-            to: mint.pubkey(),
-            tokens: mint.tokens,
+        let mint_tokens = if mint.bootstrap_leader_id != Pubkey::default() {
+            mint.tokens - mint.bootstrap_leader_tokens
+        } else {
+            mint.tokens
         };
-        let bank = Self::new_from_deposit(&deposit);
+
+        let mint_deposit = Payment {
+            to: mint.pubkey(),
+            tokens: mint_tokens,
+        };
+
+        let deposits = if mint.bootstrap_leader_id != Pubkey::default() {
+            let leader_deposit = Payment {
+                to: mint.bootstrap_leader_id,
+                tokens: mint.bootstrap_leader_tokens,
+            };
+            vec![mint_deposit, leader_deposit]
+        } else {
+            vec![mint_deposit]
+        };
+
+        let bank = Self::new_from_deposits(&deposits);
         bank.register_entry_id(&mint.last_id());
         bank
     }
@@ -416,9 +433,11 @@ impl Bank {
     fn unlock_account(tx: &Transaction, result: &Result<()>, account_locks: &mut HashSet<Pubkey>) {
         match result {
             Err(BankError::AccountInUse) => (),
-            _ => for k in &tx.account_keys {
-                account_locks.remove(k);
-            },
+            _ => {
+                for k in &tx.account_keys {
+                    account_locks.remove(k);
+                }
+            }
         }
     }
 
@@ -1026,28 +1045,70 @@ impl Bank {
         // which implies its id can be used as the ledger's seed.
         let entry0 = entries.next().expect("invalid ledger: empty");
 
-        // The second item in the ledger is a special transaction where the to and from
+        // The second item in the ledger consists of a transaction with
+        // two special instructions:
+        // 1) The first is a special move instruction where the to and from
         // fields are the same. That entry should be treated as a deposit, not a
         // transfer to oneself.
+        // 2) The second is a move instruction that acts as a payment to the first
+        // leader from the mint. This bootstrap leader will stay in power during the
+        // bootstrapping period of the network
         let entry1 = entries
             .next()
             .expect("invalid ledger: need at least 2 entries");
         {
+            // Process the first transaction
             let tx = &entry1.transactions[0];
             assert!(SystemProgram::check_id(tx.program_id(0)), "Invalid ledger");
-            let instruction: SystemProgram = deserialize(tx.userdata(0)).unwrap();
-            let deposit = if let SystemProgram::Move { tokens } = instruction {
+            assert!(SystemProgram::check_id(tx.program_id(1)), "Invalid ledger");
+            let mut instruction: SystemProgram = deserialize(tx.userdata(0)).unwrap();
+            let mint_deposit = if let SystemProgram::Move { tokens } = instruction {
                 Some(tokens)
             } else {
                 None
-            }.expect("invalid ledger, needs to start with a contract");
+            }.expect("invalid ledger, needs to start with mint deposit");
+
+            instruction = deserialize(tx.userdata(1)).unwrap();
+            let leader_payment = if let SystemProgram::Move { tokens } = instruction {
+                Some(tokens)
+            } else {
+                None
+            }.expect("invalid ledger, bootstrap leader payment expected");
+
+            assert!(leader_payment <= mint_deposit);
+            assert!(leader_payment > 0);
+
             {
+                // 1) Deposit into the mint
                 let mut accounts = self.accounts.write().unwrap();
+                {
+                    let account = accounts
+                        .entry(tx.account_keys[0])
+                        .or_insert_with(Account::default);
+                    account.tokens += mint_deposit - leader_payment;
+                    trace!(
+                        "applied genesis payment to mint {:?} => {:?}",
+                        mint_deposit - leader_payment,
+                        account
+                    );
+                }
+
+                // 2) Transfer tokens to the bootstrap leader. The first two
+                // account keys will both be the mint (because the mint is the source
+                // for this trnsaction and the first move instruction is to the the
+                // mint itself), so we look at the third account key to find the first
+                // leader id.
+                let bootstrap_leader_id = tx.account_keys[2];
                 let account = accounts
-                    .entry(tx.account_keys[0])
+                    .entry(bootstrap_leader_id)
                     .or_insert_with(Account::default);
-                account.tokens += deposit;
-                trace!("applied genesis payment {:?} => {:?}", deposit, account);
+                account.tokens += leader_payment;
+                self.leader_scheduler.write().unwrap().bootstrap_leader = bootstrap_leader_id;
+                trace!(
+                    "applied genesis payment to bootstrap leader {:?} => {:?}",
+                    leader_payment,
+                    account
+                );
             }
         }
         self.register_entry_id(&entry0.id);
@@ -1259,6 +1320,16 @@ mod tests {
         let mint = Mint::new(10_000);
         let bank = Bank::new(&mint);
         assert_eq!(bank.get_balance(&mint.pubkey()), 10_000);
+    }
+
+    #[test]
+    fn test_bank_new_with_leader() {
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 1;
+        let mint = Mint::new_with_leader(10_000, dummy_leader_id, dummy_leader_tokens);
+        let bank = Bank::new(&mint);
+        assert_eq!(bank.get_balance(&mint.pubkey()), 9999);
+        assert_eq!(bank.get_balance(&dummy_leader_id), 1);
     }
 
     #[test]
@@ -1573,11 +1644,18 @@ mod tests {
 
     #[test]
     fn test_process_genesis() {
-        let mint = Mint::new(1);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 1;
+        let mint = Mint::new_with_leader(5, dummy_leader_id, dummy_leader_tokens);
         let genesis = mint.create_entries();
         let bank = Bank::default();
         bank.process_ledger(genesis).unwrap();
-        assert_eq!(bank.get_balance(&mint.pubkey()), 1);
+        assert_eq!(bank.get_balance(&mint.pubkey()), 4);
+        assert_eq!(bank.get_balance(&dummy_leader_id), 1);
+        assert_eq!(
+            bank.leader_scheduler.read().unwrap().bootstrap_leader,
+            dummy_leader_id
+        );
     }
 
     fn create_sample_block_with_next_entries_using_keypairs(
@@ -1633,7 +1711,13 @@ mod tests {
     }
 
     fn create_sample_ledger(length: usize) -> (impl Iterator<Item = Entry>, Pubkey) {
-        let mint = Mint::new(length as i64 + 1);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 1;
+        let mint = Mint::new_with_leader(
+            length as i64 + 1 + dummy_leader_tokens,
+            dummy_leader_id,
+            dummy_leader_tokens,
+        );
         let genesis = mint.create_entries();
         let block = create_sample_block_with_ticks(&mint, length, length);
         (genesis.into_iter().chain(block), mint.pubkey())
@@ -1681,18 +1765,24 @@ mod tests {
 
     #[test]
     fn test_process_ledger_from_files() {
-        let mint = Mint::new(2);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 1;
+        let mint = Mint::new_with_leader(2, dummy_leader_id, dummy_leader_tokens);
+
         let genesis = to_file_iter(mint.create_entries().into_iter());
         let block = to_file_iter(create_sample_block_with_ticks(&mint, 1, 1));
 
         let bank = Bank::default();
         bank.process_ledger(genesis.chain(block)).unwrap();
-        assert_eq!(bank.get_balance(&mint.pubkey()), 1);
+        assert_eq!(bank.get_balance(&mint.pubkey()), 0);
     }
 
     #[test]
     fn test_hash_internal_state() {
-        let mint = Mint::new(2_000);
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 1;
+        let mint = Mint::new_with_leader(2_000, dummy_leader_id, dummy_leader_tokens);
+
         let seed = [0u8; 32];
         let mut rnd = GenKeys::new(seed);
         let keypairs = rnd.gen_n_keypairs(5);

@@ -255,12 +255,17 @@ mod test {
         let my_node = Node::new_localhost_with_pubkey(my_id);
         let cluster_info_me = ClusterInfo::new(my_node.info.clone()).expect("ClusterInfo::new");
 
+        // Create keypair for the old leader
+        let old_leader_id = Keypair::new().pubkey();
+
         // Create a ledger
         let num_ending_ticks = 1;
         let (mint, my_ledger_path, genesis_entries) = create_tmp_sample_ledger(
             "test_replicate_stage_leader_rotation_exit",
             10_000,
             num_ending_ticks,
+            old_leader_id,
+            500,
         );
         let mut last_id = genesis_entries
             .last()
@@ -285,12 +290,10 @@ mod test {
 
         // Set up the LeaderScheduler so that this this node becomes the leader at
         // bootstrap_height = num_bootstrap_slots * leader_rotation_interval
-        let old_leader_id = Keypair::new().pubkey();
         let leader_rotation_interval = 10;
         let num_bootstrap_slots = 2;
         let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            old_leader_id,
             Some(bootstrap_height),
             Some(leader_rotation_interval),
             Some(leader_rotation_interval * 2),

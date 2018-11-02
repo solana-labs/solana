@@ -182,11 +182,13 @@ impl BankingStage {
                 .zip(vers)
                 .filter_map(|(tx, ver)| match tx {
                     None => None,
-                    Some((tx, _addr)) => if tx.verify_refs() && ver != 0 {
-                        Some(tx)
-                    } else {
-                        None
-                    },
+                    Some((tx, _addr)) => {
+                        if tx.verify_refs() && ver != 0 {
+                            Some(tx)
+                        } else {
+                            None
+                        }
+                    }
                 }).collect();
             debug!("verified transactions {}", transactions.len());
             Self::process_transactions(bank, &transactions, poh)?;

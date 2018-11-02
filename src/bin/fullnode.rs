@@ -97,6 +97,11 @@ fn main() {
     let keypair = Arc::new(keypair);
     let pubkey = keypair.pubkey();
 
+    let mut leader_scheduler = LeaderScheduler::default();
+
+    // Remove this line to enable leader rotation
+    leader_scheduler.use_only_bootstrap_leader = true;
+
     let mut fullnode = Fullnode::new(
         node,
         ledger_path,
@@ -104,7 +109,7 @@ fn main() {
         vote_account_keypair,
         network,
         false,
-        LeaderScheduler::from_bootstrap_leader(leader.id),
+        leader_scheduler,
     );
     let mut client = mk_client(&leader);
 

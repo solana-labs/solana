@@ -116,7 +116,8 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (alice, leader_ledger_path) = create_tmp_genesis("multi_node_ledger_window", 10_000);
+    let (alice, leader_ledger_path) =
+        create_tmp_genesis("multi_node_ledger_window", 10_000, leader_data.id, 500);
     ledger_paths.push(leader_ledger_path.clone());
 
     // make a copy at zero
@@ -142,11 +143,6 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         LeaderScheduler::from_bootstrap_leader(leader_pubkey),
     );
 
-    // Send leader some tokens to vote
-    let leader_balance =
-        send_tx_and_retry_get_balance(&leader_data, &alice, &leader_pubkey, 500, None).unwrap();
-    info!("leader balance {}", leader_balance);
-
     // start up another validator from zero, converge and then check
     // balances
     let keypair = Arc::new(Keypair::new());
@@ -166,7 +162,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     // Send validator some tokens to vote
     let validator_balance =
         send_tx_and_retry_get_balance(&leader_data, &alice, &validator_pubkey, 500, None).unwrap();
-    info!("leader balance {}", validator_balance);
+    info!("validator balance {}", validator_balance);
 
     // contains the leader and new node
     info!("converging....");
@@ -215,8 +211,12 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (alice, leader_ledger_path) =
-        create_tmp_genesis("multi_node_validator_catchup_from_zero", 10_000);
+    let (alice, leader_ledger_path) = create_tmp_genesis(
+        "multi_node_validator_catchup_from_zero",
+        10_000,
+        leader_data.id,
+        500,
+    );
     ledger_paths.push(leader_ledger_path.clone());
 
     let zero_ledger_path = tmp_copy_ledger(
@@ -234,11 +234,6 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
         false,
         LeaderScheduler::from_bootstrap_leader(leader_pubkey),
     );
-
-    // Send leader some tokens to vote
-    let leader_balance =
-        send_tx_and_retry_get_balance(&leader_data, &alice, &leader_pubkey, 500, None).unwrap();
-    info!("leader balance {}", leader_balance);
 
     let mut nodes = vec![server];
     for _ in 0..N {
@@ -359,7 +354,8 @@ fn test_multi_node_basic() {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (alice, leader_ledger_path) = create_tmp_genesis("multi_node_basic", 10_000);
+    let (alice, leader_ledger_path) =
+        create_tmp_genesis("multi_node_basic", 10_000, leader_data.id, 500);
     ledger_paths.push(leader_ledger_path.clone());
     let server = Fullnode::new(
         leader,
@@ -370,11 +366,6 @@ fn test_multi_node_basic() {
         false,
         LeaderScheduler::from_bootstrap_leader(leader_pubkey),
     );
-
-    // Send leader some tokens to vote
-    let leader_balance =
-        send_tx_and_retry_get_balance(&leader_data, &alice, &leader_pubkey, 500, None).unwrap();
-    info!("leader balance {}", leader_balance);
 
     let mut nodes = vec![server];
     for _ in 0..N {
@@ -437,7 +428,8 @@ fn test_boot_validator_from_file() -> result::Result<()> {
     let leader_pubkey = leader_keypair.pubkey();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let bob_pubkey = Keypair::new().pubkey();
-    let (alice, leader_ledger_path) = create_tmp_genesis("boot_validator_from_file", 100_000);
+    let (alice, leader_ledger_path) =
+        create_tmp_genesis("boot_validator_from_file", 100_000, leader_pubkey, 1000);
     let mut ledger_paths = Vec::new();
     ledger_paths.push(leader_ledger_path.clone());
 
@@ -485,8 +477,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
     Ok(())
 }
 
-fn create_leader(ledger_path: &str) -> (NodeInfo, Fullnode) {
-    let leader_keypair = Arc::new(Keypair::new());
+fn create_leader(ledger_path: &str, leader_keypair: Arc<Keypair>) -> (NodeInfo, Fullnode) {
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_data = leader.info.clone();
     let leader_fullnode = Fullnode::new(
@@ -509,13 +500,17 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
     //    ledger (currently up to WINDOW_SIZE entries)
     logger::setup();
 
+    let leader_keypair = Arc::new(Keypair::new());
+    let initial_leader_balance = 500;
     let (alice, ledger_path) = create_tmp_genesis(
         "leader_restart_validator_start_from_old_ledger",
         100_000 + 500 * solana::window_service::MAX_REPAIR_BACKOFF as i64,
+        leader_keypair.pubkey(),
+        initial_leader_balance,
     );
     let bob_pubkey = Keypair::new().pubkey();
 
-    let (leader_data, leader_fullnode) = create_leader(&ledger_path);
+    let (leader_data, leader_fullnode) = create_leader(&ledger_path, leader_keypair.clone());
 
     // lengthen the ledger
     let leader_balance =
@@ -530,7 +525,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
 
     // restart the leader
     leader_fullnode.close()?;
-    let (leader_data, leader_fullnode) = create_leader(&ledger_path);
+    let (leader_data, leader_fullnode) = create_leader(&ledger_path, leader_keypair.clone());
 
     // lengthen the ledger
     let leader_balance =
@@ -539,7 +534,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
 
     // restart the leader
     leader_fullnode.close()?;
-    let (leader_data, leader_fullnode) = create_leader(&ledger_path);
+    let (leader_data, leader_fullnode) = create_leader(&ledger_path, leader_keypair);
 
     // start validator from old ledger
     let keypair = Arc::new(Keypair::new());
@@ -603,7 +598,8 @@ fn test_multi_node_dynamic_network() {
     let leader_pubkey = leader_keypair.pubkey().clone();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let bob_pubkey = Keypair::new().pubkey();
-    let (alice, leader_ledger_path) = create_tmp_genesis("multi_node_dynamic_network", 10_000_000);
+    let (alice, leader_ledger_path) =
+        create_tmp_genesis("multi_node_dynamic_network", 10_000_000, leader_pubkey, 500);
 
     let mut ledger_paths = Vec::new();
     ledger_paths.push(leader_ledger_path.clone());
@@ -620,16 +616,6 @@ fn test_multi_node_dynamic_network() {
         true,
         LeaderScheduler::from_bootstrap_leader(leader_pubkey),
     );
-
-    // Send leader some tokens to vote
-    let leader_balance = send_tx_and_retry_get_balance(
-        &leader_data,
-        &alice_arc.read().unwrap(),
-        &leader_pubkey,
-        500,
-        None,
-    ).unwrap();
-    info!("leader balance {}", leader_balance);
 
     info!("{} LEADER", leader_data.id);
     let leader_balance = retry_send_tx_and_retry_get_balance(
@@ -804,6 +790,8 @@ fn test_leader_to_validator_transition() {
         "test_leader_to_validator_transition",
         10_000,
         num_ending_ticks,
+        leader_info.id,
+        500,
     );
 
     let last_id = genesis_entries
@@ -821,7 +809,6 @@ fn test_leader_to_validator_transition() {
     // Start the leader node
     let bootstrap_height = leader_rotation_interval;
     let leader_scheduler_config = LeaderSchedulerConfig::new(
-        leader_info.id,
         Some(bootstrap_height),
         Some(leader_rotation_interval),
         Some(leader_rotation_interval * 2),
@@ -929,8 +916,13 @@ fn test_leader_validator_basic() {
 
     // Make a common mint and a genesis entry for both leader + validator ledgers
     let num_ending_ticks = 1;
-    let (mint, leader_ledger_path, genesis_entries) =
-        create_tmp_sample_ledger("test_leader_validator_basic", 10_000, num_ending_ticks);
+    let (mint, leader_ledger_path, genesis_entries) = create_tmp_sample_ledger(
+        "test_leader_validator_basic",
+        10_000,
+        num_ending_ticks,
+        leader_info.id,
+        500,
+    );
 
     let validator_ledger_path = tmp_copy_ledger(&leader_ledger_path, "test_leader_validator_basic");
 
@@ -955,7 +947,6 @@ fn test_leader_validator_basic() {
     let num_bootstrap_slots = 2;
     let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
     let leader_scheduler_config = LeaderSchedulerConfig::new(
-        leader_info.id,
         Some(bootstrap_height),
         Some(leader_rotation_interval),
         Some(leader_rotation_interval * 2),
@@ -1095,8 +1086,13 @@ fn test_dropped_handoff_recovery() {
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
     let num_ending_ticks = 1;
-    let (mint, bootstrap_leader_ledger_path, genesis_entries) =
-        create_tmp_sample_ledger("test_dropped_handoff_recovery", 10_000, num_ending_ticks);
+    let (mint, bootstrap_leader_ledger_path, genesis_entries) = create_tmp_sample_ledger(
+        "test_dropped_handoff_recovery",
+        10_000,
+        num_ending_ticks,
+        bootstrap_leader_info.id,
+        500,
+    );
 
     let last_id = genesis_entries
         .last()
@@ -1137,7 +1133,6 @@ fn test_dropped_handoff_recovery() {
     let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
     let bootstrap_height = initial_tick_height + 1;
     let leader_scheduler_config = LeaderSchedulerConfig::new(
-        bootstrap_leader_info.id,
         Some(bootstrap_height),
         Some(leader_rotation_interval),
         Some(seed_rotation_interval),
@@ -1248,6 +1243,8 @@ fn test_full_leader_validator_network() {
         "test_full_leader_validator_network",
         10_000,
         num_ending_ticks,
+        bootstrap_leader_info.id,
+        500,
     );
 
     let last_tick_id = genesis_entries
@@ -1298,7 +1295,6 @@ fn test_full_leader_validator_network() {
     let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
     let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
     let leader_scheduler_config = LeaderSchedulerConfig::new(
-        bootstrap_leader_info.id,
         Some(bootstrap_height),
         Some(leader_rotation_interval),
         Some(seed_rotation_interval),
