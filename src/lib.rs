@@ -26,6 +26,7 @@ pub mod client;
 #[macro_use]
 pub mod cluster_info;
 pub mod budget_program;
+pub mod compute_leader_finality_service;
 pub mod drone;
 pub mod entry;
 pub mod entry_writer;
@@ -34,7 +35,6 @@ pub mod erasure;
 pub mod fetch_stage;
 pub mod fullnode;
 pub mod hash;
-pub mod leader_finality_stage;
 pub mod leader_scheduler;
 pub mod ledger;
 pub mod ledger_write_stage;

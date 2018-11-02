@@ -1,5 +1,6 @@
-//! The `leader_finality_stage` module implements the stage which regularly
-//! calculates the last finality times observed by the leader
+//! The `compute_leader_finality_service` module implements the tools necessary
+//! to generate a thread which regularly calculates the last finality times
+//! observed by the leader
 
 use bank::Bank;
 use influx_db_client as influxdb;
@@ -21,11 +22,11 @@ pub enum FinalityError {
 
 pub const COMPUTE_FINALITY_MS: u64 = 1000;
 
-pub struct LeaderFinalityStage {
+pub struct ComputeLeaderFinalityService {
     compute_finality_thread: JoinHandle<()>,
 }
 
-impl LeaderFinalityStage {
+impl ComputeLeaderFinalityService {
     fn get_last_supermajority_timestamp(
         bank: &Arc<Bank>,
         now: u64,
@@ -96,7 +97,7 @@ impl LeaderFinalityStage {
         }
     }
 
-    /// Create a new LeaderFinalityStage for computing finality.
+    /// Create a new ComputeLeaderFinalityService for computing finality.
     pub fn new(bank: Arc<Bank>, exit: Arc<AtomicBool>) -> Self {
         let compute_finality_thread = Builder::new()
             .name("solana-leader-finality-stage".to_string())
@@ -111,13 +112,13 @@ impl LeaderFinalityStage {
                 }
             }).unwrap();
 
-        (LeaderFinalityStage {
+        (ComputeLeaderFinalityService {
             compute_finality_thread,
         })
     }
 }
 
-impl Service for LeaderFinalityStage {
+impl Service for ComputeLeaderFinalityService {
     type JoinReturnType = ();
 
     fn join(self) -> thread::Result<()> {
@@ -129,8 +130,8 @@ impl Service for LeaderFinalityStage {
 pub mod tests {
     use bank::Bank;
     use bincode::serialize;
+    use compute_leader_finality_service::ComputeLeaderFinalityService;
     use hash::hash;
-    use leader_finality_stage::LeaderFinalityStage;
     use logger;
     use mint::Mint;
     use signature::{Keypair, KeypairUtil};
@@ -183,7 +184,7 @@ pub mod tests {
 
         // There isn't 2/3 consensus, so the bank's finality value should be the default
         let mut last_finality_time = 0;
-        LeaderFinalityStage::compute_finality(&bank, &mut last_finality_time);
+        ComputeLeaderFinalityService::compute_finality(&bank, &mut last_finality_time);
         assert_eq!(bank.finality(), std::usize::MAX);
 
         // Get another validator to vote, so we now have 2/3 consensus
@@ -192,7 +193,7 @@ pub mod tests {
         let vote_tx = Transaction::vote_new(&vote_account, vote, ids[6], 0);
         bank.process_transaction(&vote_tx).unwrap();
 
-        LeaderFinalityStage::compute_finality(&bank, &mut last_finality_time);
+        ComputeLeaderFinalityService::compute_finality(&bank, &mut last_finality_time);
         assert!(bank.finality() != std::usize::MAX);
         assert!(last_finality_time > 0);
     }

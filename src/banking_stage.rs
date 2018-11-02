@@ -4,6 +4,7 @@
 
 use bank::Bank;
 use bincode::deserialize;
+use compute_leader_finality_service::ComputeLeaderFinalityService;
 use counter::Counter;
 use entry::Entry;
 use hash::Hash;
@@ -39,6 +40,7 @@ pub struct BankingStage {
     /// Handle to the stage's thread.
     bank_thread_hdls: Vec<JoinHandle<Option<BankingStageReturnType>>>,
     poh_service: PohService,
+    compute_finality_service: ComputeLeaderFinalityService,
 }
 
 impl BankingStage {
@@ -65,6 +67,10 @@ impl BankingStage {
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
         // Once an entry has been recorded, its last_id is registered with the bank.
         let poh_service = PohService::new(poh_recorder.clone(), config);
+
+        // Single thread to compute finality
+        let compute_finality_service =
+            ComputeLeaderFinalityService::new(bank.clone(), poh_service.poh_exit.clone());
 
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<Option<BankingStageReturnType>>> = (0..NUM_THREADS)
@@ -113,6 +119,7 @@ impl BankingStage {
             BankingStage {
                 bank_thread_hdls,
                 poh_service,
+                compute_finality_service,
             },
             entry_receiver,
         )
@@ -226,6 +233,8 @@ impl Service for BankingStage {
                 return_value = thread_return_value;
             }
         }
+
+        self.compute_finality_service.join()?;
 
         let poh_return_value = self.poh_service.join()?;
         match poh_return_value {
