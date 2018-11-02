@@ -123,22 +123,22 @@ pub struct LastIds {
     /// values are so old that the `last_id` has been pulled out of the queue.
 
     /// updated whenever an id is registered
-    nth: u64,
+    tick_height: u64,
 
     /// last id to be registered
     last: Option<Hash>,
 
-    /// Mapping of hashes to signature sets along with timestamp and what nth
+    /// Mapping of hashes to signature sets along with timestamp and what tick_height
     /// was when the id was added. The bank uses this data to
     /// reject transactions with signatures it's seen before and to reject
-    /// transactions that are too old (nth is too small)
+    /// transactions that are too old (tick_height is too small)
     sigs: HashMap<Hash, (SignatureStatusMap, u64, u64)>,
 }
 
 impl Default for LastIds {
     fn default() -> Self {
         LastIds {
-            nth: 0,
+            tick_height: 0,
             last: None,
             sigs: HashMap::new(),
         }
@@ -172,9 +172,6 @@ pub struct Bank {
     /// Tracks and updates the leader schedule based on the votes and account stakes
     /// processed by the bank
     pub leader_scheduler: Arc<RwLock<LeaderScheduler>>,
-
-    // The number of ticks that have elapsed since genesis
-    tick_height: Mutex<u64>,
 }
 
 impl Default for Bank {
@@ -188,7 +185,6 @@ impl Default for Bank {
             account_subscriptions: RwLock::new(HashMap::new()),
             signature_subscriptions: RwLock::new(HashMap::new()),
             leader_scheduler: Arc::new(RwLock::new(LeaderScheduler::default())),
-            tick_height: Mutex::new(0),
         }
     }
 }
@@ -270,7 +266,7 @@ impl Bank {
         let entry = last_ids.sigs.get(&entry_id);
 
         match entry {
-            Some(entry) => ((last_ids.nth - entry.2) as usize) < max_age,
+            Some(entry) => ((last_ids.tick_height - entry.2) as usize) < max_age,
             _ => false,
         }
     }
@@ -281,7 +277,7 @@ impl Bank {
         sig: &Signature,
     ) -> Result<()> {
         if let Some(entry) = last_ids.sigs.get_mut(last_id) {
-            if ((last_ids.nth - entry.2) as usize) < MAX_ENTRY_IDS {
+            if ((last_ids.tick_height - entry.2) as usize) < MAX_ENTRY_IDS {
                 return Self::reserve_signature(&mut entry.0, sig);
             }
         }
@@ -359,7 +355,7 @@ impl Bank {
         let mut ret = Vec::new();
         for (i, id) in ids.iter().enumerate() {
             if let Some(entry) = last_ids.sigs.get(id) {
-                if ((last_ids.nth - entry.2) as usize) < MAX_ENTRY_IDS {
+                if ((last_ids.tick_height - entry.2) as usize) < MAX_ENTRY_IDS {
                     ret.push((i, entry.1));
                 }
             }
@@ -377,10 +373,10 @@ impl Bank {
         // Sort by tick height
         ticks_and_stakes.sort_by(|a, b| a.0.cmp(&b.0));
         let last_ids = self.last_ids.read().unwrap();
-        let nth = last_ids.nth;
+        let current_tick_height = last_ids.tick_height;
         let mut total = 0;
         for (tick_height, stake) in ticks_and_stakes.iter() {
-            if ((nth - tick_height) as usize) < MAX_ENTRY_IDS {
+            if ((current_tick_height - tick_height) as usize) < MAX_ENTRY_IDS {
                 total += stake;
                 if total > supermajority_stake {
                     return Self::tick_height_to_timestamp(&last_ids, *tick_height);
@@ -390,6 +386,19 @@ impl Bank {
         None
     }
 
+    /// Tell the bank about the genesis Entry IDs.
+    pub fn register_genesis_entry(&self, last_id: &Hash) {
+        let mut last_ids = self.last_ids.write().unwrap();
+
+        last_ids
+            .sigs
+            .insert(*last_id, (HashMap::new(), timestamp(), 0));
+
+        last_ids.last = Some(*last_id);
+
+        inc_new_counter_info!("bank-register_genesis_entry_id-registered", 1);
+    }
+
     /// Tell the bank which Entry IDs exist on the ledger. This function
     /// assumes subsequent calls correspond to later entries, and will boot
     /// the oldest ones once its internal cache is full. Once boot, the
@@ -397,22 +406,21 @@ impl Bank {
     pub fn register_entry_id(&self, last_id: &Hash) {
         let mut last_ids = self.last_ids.write().unwrap();
 
-        // Increment "nth" so that the index of this tick in the LastIds structure
-        // matches the "tick height" when the validator votes for this tick
-        last_ids.nth += 1;
-        let last_ids_nth = last_ids.nth;
+        last_ids.tick_height += 1;
+        let last_ids_tick_height = last_ids.tick_height;
 
         // this clean up can be deferred until sigs gets larger
-        //  because we verify entry.nth every place we check for validity
+        // because we verify entry.tick_height every place we check for validity
         if last_ids.sigs.len() >= MAX_ENTRY_IDS {
-            last_ids
-                .sigs
-                .retain(|_, (_, _, nth)| ((last_ids_nth - *nth) as usize) < MAX_ENTRY_IDS);
+            last_ids.sigs.retain(|_, (_, _, tick_height)| {
+                ((last_ids_tick_height - *tick_height) as usize) < MAX_ENTRY_IDS
+            });
         }
 
-        last_ids
-            .sigs
-            .insert(*last_id, (HashMap::new(), timestamp(), last_ids_nth));
+        last_ids.sigs.insert(
+            *last_id,
+            (HashMap::new(), timestamp(), last_ids_tick_height),
+        );
 
         last_ids.last = Some(*last_id);
 
@@ -925,17 +933,12 @@ impl Bank {
                 result?;
             }
         } else {
-            let tick_height = {
-                let mut tick_height_lock = self.tick_height.lock().unwrap();
-                *tick_height_lock += 1;
-                *tick_height_lock
-            };
-
+            self.register_entry_id(&entry.id);
+            let tick_height = self.last_ids.read().unwrap().tick_height;
             self.leader_scheduler
                 .write()
                 .unwrap()
                 .update_height(tick_height, self);
-            self.register_entry_id(&entry.id);
         }
 
         Ok(())
@@ -980,7 +983,6 @@ impl Bank {
                 // if its a tick, execute the group and register the tick
                 self.par_execute_entries(&mt_group)?;
                 self.register_entry_id(&entry.id);
-                *self.tick_height.lock().unwrap() += 1;
                 mt_group = vec![];
                 continue;
             }
@@ -1086,8 +1088,8 @@ impl Bank {
                 trace!("applied genesis payment {:?} => {:?}", deposit, account);
             }
         }
-        self.register_entry_id(&entry0.id);
-        self.register_entry_id(&entry1.id);
+        self.register_genesis_entry(&entry0.id);
+        self.register_genesis_entry(&entry1.id);
 
         Ok(self.process_ledger_blocks(entry1.id, 2, entries)?)
     }
@@ -1214,12 +1216,12 @@ impl Bank {
 
     pub fn get_current_leader(&self) -> Option<Pubkey> {
         let ls_lock = self.leader_scheduler.read().unwrap();
-        let tick_height = self.tick_height.lock().unwrap();
-        ls_lock.get_scheduled_leader(*tick_height)
+        let tick_height = self.last_ids.read().unwrap().tick_height;
+        ls_lock.get_scheduled_leader(tick_height)
     }
 
     pub fn get_tick_height(&self) -> u64 {
-        *self.tick_height.lock().unwrap()
+        self.last_ids.read().unwrap().tick_height
     }
 
     fn check_account_subscriptions(&self, pubkey: &Pubkey, account: &Account) {
