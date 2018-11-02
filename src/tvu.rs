@@ -24,7 +24,7 @@ use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread;
-use storage_stage::{StorageStage, StorageState};
+use storage_stage::StorageStage;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TvuReturnType {
@@ -105,9 +105,8 @@ impl Tvu {
         let (ledger_write_stage, storage_entry_receiver) =
             LedgerWriteStage::new(ledger_path, ledger_entry_receiver);
 
-        let storage_state = StorageState::new();
         let storage_stage = StorageStage::new(
-            &storage_state,
+            &bank.storage_state,
             storage_entry_receiver,
             ledger_path,
             keypair,

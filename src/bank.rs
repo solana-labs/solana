@@ -42,6 +42,7 @@ use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
+use storage_stage::StorageState;
 use tokio::prelude::Future;
 
 /// The number of most recent `last_id` values that the bank will track the signatures
@@ -301,6 +302,8 @@ pub struct Bank {
     /// Tracks and updates the leader schedule based on the votes and account stakes
     /// processed by the bank
     pub leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+
+    pub storage_state: StorageState,
 }
 
 impl Default for Bank {
@@ -313,6 +316,7 @@ impl Default for Bank {
             account_subscriptions: RwLock::new(HashMap::new()),
             signature_subscriptions: RwLock::new(HashMap::new()),
             leader_scheduler: Arc::new(RwLock::new(LeaderScheduler::default())),
+            storage_state: StorageState::new(),
         }
     }
 }

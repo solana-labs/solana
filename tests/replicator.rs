@@ -4,7 +4,7 @@ extern crate solana;
 extern crate solana_sdk;
 
 use solana::client::mk_client;
-use solana::cluster_info::Node;
+use solana::cluster_info::{Node, NodeInfo};
 use solana::db_ledger::DbLedger;
 use solana::fullnode::Fullnode;
 use solana::leader_scheduler::LeaderScheduler;
@@ -13,7 +13,6 @@ use solana::logger;
 use solana::replicator::Replicator;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::fs::remove_dir_all;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
@@ -22,16 +21,11 @@ use std::time::Duration;
 fn test_replicator_startup() {
     logger::setup();
     info!("starting replicator test");
-    let entry_height = 0;
     let replicator_ledger_path = &get_tmp_ledger_path("replicator_test_replicator_ledger");
-
-    let exit = Arc::new(AtomicBool::new(false));
-    let done = Arc::new(AtomicBool::new(false));
 
     info!("starting leader node");
     let leader_keypair = Arc::new(Keypair::new());
     let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-    let network_addr = leader_node.sockets.gossip.local_addr().unwrap();
     let leader_info = leader_node.info.clone();
     let vote_account_keypair = Arc::new(Keypair::new());
 
@@ -61,17 +55,21 @@ fn test_replicator_startup() {
 
         let replicator_keypair = Keypair::new();
 
+        leader_client
+            .transfer(1, &mint.keypair(), replicator_keypair.pubkey(), &last_id)
+            .unwrap();
+
         info!("starting replicator node");
         let replicator_node = Node::new_localhost_with_pubkey(replicator_keypair.pubkey());
-        let (replicator, _leader_info) = Replicator::new(
-            entry_height,
-            1,
-            &exit,
+
+        let leader_info = NodeInfo::new_entry_point(&leader_info.gossip);
+
+        let replicator = Replicator::new(
             Some(replicator_ledger_path),
             replicator_node,
-            Some(network_addr),
-            done.clone(),
-        );
+            &leader_info,
+            &replicator_keypair,
+        ).unwrap();
 
         let mut num_entries = 0;
         for _ in 0..60 {
@@ -95,10 +93,8 @@ fn test_replicator_startup() {
                 .transfer(1, &mint.keypair(), bob.pubkey(), &last_id)
                 .unwrap();
         }
-        assert_eq!(done.load(Ordering::Relaxed), true);
         assert!(num_entries > 0);
-        exit.store(true, Ordering::Relaxed);
-        replicator.join();
+        replicator.close();
         leader.exit();
     }
 
