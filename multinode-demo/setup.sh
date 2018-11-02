@@ -18,13 +18,13 @@ usage: $0 [-n num_tokens] [-l] [-p] [-t node_type]
 
 Creates a fullnode configuration
 
- -n num_tokens           - Number of tokens to create
- -l                      - Detect network address from local machine configuration, which
-                           may be a private IP address unaccessible on the Intenet (default)
- -p                      - Detect public address using public Internet servers
- -t node_type            - Create configuration files only for this kind of node.  Valid
-                           options are validator or leader.  Creates configuration files
-                           for both by default
+ -n num_tokens  - Number of tokens to create
+ -l             - Detect network address from local machine configuration, which
+                  may be a private IP address unaccessible on the Intenet (default)
+ -p             - Detect public address using public Internet servers
+ -t node_type   - Create configuration files only for this kind of node.  Valid
+                  options are validator or leader.  Creates configuration files
+                  for both by default
 
 EOF
   exit $exitcode

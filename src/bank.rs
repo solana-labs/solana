@@ -1055,14 +1055,14 @@ impl Bank {
                 Some(tokens)
             } else {
                 None
-            }.expect("invalid ledger, needs to start with a contract");
+            }.expect("invalid ledger, needs to start with mint deposit");
 
             instruction = deserialize(tx.userdata(1)).unwrap();
             let leader_payment = if let SystemProgram::Move { tokens } = instruction {
                 Some(tokens)
             } else {
                 None
-            }.expect("invalid ledger, needs to start with a contract");
+            }.expect("invalid ledger, bootstrap leader payment expected");
 
             assert!(leader_payment <= mint_deposit);
             assert!(leader_payment > 0);
