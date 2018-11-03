@@ -442,8 +442,22 @@ test('account change notification', async () => {
 
   await connection.removeAccountChangeListener(subscriptionId);
 
+
   // mockCallback should be called twice
-  expect(mockCallback.mock.calls).toHaveLength(2);
+  //
+  // retry a couple times if needed
+  let i = 0;
+  for (;;) {
+    if (mockCallback.mock.calls.length === 2) {
+      break;
+    }
+
+    if (++i === 5) {
+      console.log(JSON.stringify(mockCallback.mock.calls));
+      throw new Error('mockCallback should be called twice');
+    }
+    await sleep(500);
+  }
 
   // First mockCallback call is due to SystemProgram.createAccount()
   expect(mockCallback.mock.calls[0][0].tokens).toBe(42);
