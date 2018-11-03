@@ -99,10 +99,12 @@ impl BudgetExpr {
     /// Return true if the budget spends exactly `spendable_tokens`.
     pub fn verify(&self, spendable_tokens: i64) -> bool {
         match self {
-            BudgetExpr::Pay(payment) | BudgetExpr::After(_, payment) | BudgetExpr::And(_, _, payment) => {
-                payment.tokens == spendable_tokens
+            BudgetExpr::Pay(payment)
+            | BudgetExpr::After(_, payment)
+            | BudgetExpr::And(_, _, payment) => payment.tokens == spendable_tokens,
+            BudgetExpr::Or(a, b) => {
+                a.1.tokens == spendable_tokens && b.1.tokens == spendable_tokens
             }
-            BudgetExpr::Or(a, b) => a.1.tokens == spendable_tokens && b.1.tokens == spendable_tokens,
         }
     }
 
