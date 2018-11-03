@@ -36,7 +36,7 @@ use storage_program::StorageProgram;
 use system_program::SystemProgram;
 use system_transaction::SystemTransaction;
 use timing::{duration_as_us, timestamp};
-use token_program::TokenProgram;
+use token_program;
 use tokio::prelude::Future;
 use transaction::Transaction;
 use vote_program::VoteProgram;
@@ -242,12 +242,23 @@ impl Bank {
     }
 
     fn add_builtin_programs(&self) {
-        // Preload Bpf Loader account
-        let mut accounts = self.accounts.write().unwrap();
-        let mut account = accounts
-            .entry(bpf_loader::id())
-            .or_insert_with(Account::default);
-        bpf_loader::populate_account(&mut account);
+        // Preload Bpf Loader program
+        {
+            let mut accounts = self.accounts.write().unwrap();
+            let mut account = accounts
+                .entry(bpf_loader::id())
+                .or_insert_with(Account::default);
+            bpf_loader::populate_account(&mut account);
+        }
+
+        // Preload Erc20 token program
+        {
+            let mut accounts = self.accounts.write().unwrap();
+            let mut account = accounts
+                .entry(token_program::id())
+                .or_insert_with(Account::default);
+            token_program::populate_account(&mut account);
+        }
     }
 
     /// Commit funds to the given account
@@ -615,11 +626,6 @@ impl Bank {
         } else if StorageProgram::check_id(&tx_program_id) {
             if StorageProgram::process_transaction(&tx, instruction_index, program_accounts)
                 .is_err()
-            {
-                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
-            }
-        } else if TokenProgram::check_id(&tx_program_id) {
-            if TokenProgram::process_transaction(&tx, instruction_index, program_accounts).is_err()
             {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }
@@ -2099,7 +2105,7 @@ mod tests {
         assert_eq!(bpf_loader::id(), bpf);
         assert_eq!(BudgetState::id(), budget);
         assert_eq!(StorageProgram::id(), storage);
-        assert_eq!(TokenProgram::id(), token);
+        assert_eq!(token_program::id(), token);
         assert_eq!(VoteProgram::id(), vote);
     }
 
@@ -2112,7 +2118,7 @@ mod tests {
             bpf_loader::id(),
             BudgetState::id(),
             StorageProgram::id(),
-            TokenProgram::id(),
+            token_program::id(),
             VoteProgram::id(),
         ];
         assert!(ids.into_iter().all(move |id| unique.insert(id)));
