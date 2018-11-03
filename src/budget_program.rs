@@ -1,6 +1,6 @@
 //! budget program
 use bincode::{self, deserialize, serialize_into, serialized_size};
-use budget::Budget;
+use budget_expr::BudgetExpr;
 use budget_instruction::Instruction;
 use chrono::prelude::{DateTime, Utc};
 use payment_plan::Witness;
@@ -27,7 +27,7 @@ pub enum BudgetError {
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct BudgetState {
     pub initialized: bool,
-    pub pending_budget: Option<Budget>,
+    pub pending_budget: Option<BudgetExpr>,
 }
 
 const BUDGET_PROGRAM_ID: [u8; 32] = [
@@ -55,13 +55,13 @@ impl BudgetState {
         accounts: &mut [&mut Account],
     ) -> Result<(), BudgetError> {
         let mut final_payment = None;
-        if let Some(ref mut budget) = self.pending_budget {
+        if let Some(ref mut expr) = self.pending_budget {
             let key = match tx.signed_key(instruction_index, 0) {
                 None => return Err(BudgetError::UnsignedKey),
                 Some(key) => key,
             };
-            budget.apply_witness(&Witness::Signature, key);
-            final_payment = budget.final_payment();
+            expr.apply_witness(&Witness::Signature, key);
+            final_payment = expr.final_payment();
         }
 
         if let Some(payment) = final_payment {
@@ -88,13 +88,13 @@ impl BudgetState {
         // Check to see if any timelocked transactions can be completed.
         let mut final_payment = None;
 
-        if let Some(ref mut budget) = self.pending_budget {
+        if let Some(ref mut expr) = self.pending_budget {
             let key = match tx.signed_key(instruction_index, 0) {
                 None => return Err(BudgetError::UnsignedKey),
                 Some(key) => key,
             };
-            budget.apply_witness(&Witness::Timestamp(dt), key);
-            final_payment = budget.final_payment();
+            expr.apply_witness(&Witness::Timestamp(dt), key);
+            final_payment = expr.final_payment();
         }
 
         if let Some(payment) = final_payment {
@@ -120,9 +120,9 @@ impl BudgetState {
             return Err(BudgetError::SourceIsPendingContract);
         }
         match instruction {
-            Instruction::NewBudget(budget) => {
-                let budget = budget.clone();
-                if let Some(payment) = budget.final_payment() {
+            Instruction::NewBudget(expr) => {
+                let expr = expr.clone();
+                if let Some(payment) = expr.final_payment() {
                     accounts[1].tokens += payment.tokens;
                     Ok(())
                 } else {
@@ -132,7 +132,7 @@ impl BudgetState {
                         Err(BudgetError::ContractAlreadyExists)
                     } else {
                         let mut state = BudgetState::default();
-                        state.pending_budget = Some(budget);
+                        state.pending_budget = Some(expr);
                         accounts[1].tokens += accounts[0].tokens;
                         accounts[0].tokens = 0;
                         state.initialized = true;

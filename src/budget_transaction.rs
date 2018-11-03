@@ -1,7 +1,7 @@
 //! The `budget_transaction` module provides functionality for creating Budget transactions.
 
 use bincode::{deserialize, serialize};
-use budget::{Budget, Condition};
+use budget_expr::{BudgetExpr, Condition};
 use budget_instruction::Instruction;
 use budget_program::BudgetState;
 use chrono::prelude::*;
@@ -84,7 +84,7 @@ impl BudgetTransaction for Transaction {
             tokens: tokens - fee,
             to,
         };
-        let budget_instruction = Instruction::NewBudget(Budget::Pay(payment));
+        let budget_instruction = Instruction::NewBudget(BudgetExpr::Pay(payment));
         let pay_userdata = serialize(&budget_instruction).unwrap();
 
         let program_ids = vec![SystemProgram::id(), BudgetState::id()];
@@ -160,15 +160,15 @@ impl BudgetTransaction for Transaction {
         tokens: i64,
         last_id: Hash,
     ) -> Self {
-        let budget = if let Some(from) = cancelable {
-            Budget::Or(
+        let expr = if let Some(from) = cancelable {
+            BudgetExpr::Or(
                 (Condition::Timestamp(dt, dt_pubkey), Payment { tokens, to }),
                 (Condition::Signature(from), Payment { tokens, to: from }),
             )
         } else {
-            Budget::After(Condition::Timestamp(dt, dt_pubkey), Payment { tokens, to })
+            BudgetExpr::After(Condition::Timestamp(dt, dt_pubkey), Payment { tokens, to })
         };
-        let instruction = Instruction::NewBudget(budget);
+        let instruction = Instruction::NewBudget(expr);
         let userdata = serialize(&instruction).expect("serialize instruction");
         Self::new(
             from_keypair,
@@ -189,15 +189,15 @@ impl BudgetTransaction for Transaction {
         tokens: i64,
         last_id: Hash,
     ) -> Self {
-        let budget = if let Some(from) = cancelable {
-            Budget::Or(
+        let expr = if let Some(from) = cancelable {
+            BudgetExpr::Or(
                 (Condition::Signature(witness), Payment { tokens, to }),
                 (Condition::Signature(from), Payment { tokens, to: from }),
             )
         } else {
-            Budget::After(Condition::Signature(witness), Payment { tokens, to })
+            BudgetExpr::After(Condition::Signature(witness), Payment { tokens, to })
         };
-        let instruction = Instruction::NewBudget(budget);
+        let instruction = Instruction::NewBudget(expr);
         let userdata = serialize(&instruction).expect("serialize instruction");
         Self::new(
             from_keypair,
@@ -220,8 +220,8 @@ impl BudgetTransaction for Transaction {
     /// Verify only the payment plan.
     fn verify_plan(&self) -> bool {
         if let Some(SystemProgram::Move { tokens }) = self.system_instruction(0) {
-            if let Some(Instruction::NewBudget(budget)) = self.instruction(1) {
-                if !(self.fee >= 0 && self.fee <= tokens && budget.verify(tokens - self.fee)) {
+            if let Some(Instruction::NewBudget(expr)) = self.instruction(1) {
+                if !(self.fee >= 0 && self.fee <= tokens && expr.verify(tokens - self.fee)) {
                     return false;
                 }
             }
@@ -267,11 +267,11 @@ mod tests {
 
     #[test]
     fn test_serialize_claim() {
-        let budget = Budget::Pay(Payment {
+        let expr = BudgetExpr::Pay(Payment {
             tokens: 0,
             to: Default::default(),
         });
-        let instruction = Instruction::NewBudget(budget);
+        let instruction = Instruction::NewBudget(expr);
         let userdata = serialize(&instruction).unwrap();
         let instructions = vec![transaction::Instruction {
             program_ids_index: 0,
@@ -301,8 +301,8 @@ mod tests {
         if let SystemProgram::Move { ref mut tokens } = system_instruction {
             *tokens = 1_000_000; // <-- attack, part 1!
             let mut instruction = tx.instruction(1).unwrap();
-            if let Instruction::NewBudget(ref mut budget) = instruction {
-                if let Budget::Pay(ref mut payment) = budget {
+            if let Instruction::NewBudget(ref mut expr) = instruction {
+                if let BudgetExpr::Pay(ref mut payment) = expr {
                     payment.tokens = *tokens; // <-- attack, part 2!
                 }
             }
@@ -322,8 +322,8 @@ mod tests {
         let zero = Hash::default();
         let mut tx = Transaction::budget_new(&keypair0, pubkey1, 42, zero);
         let mut instruction = tx.instruction(1);
-        if let Some(Instruction::NewBudget(ref mut budget)) = instruction {
-            if let Budget::Pay(ref mut payment) = budget {
+        if let Some(Instruction::NewBudget(ref mut expr)) = instruction {
+            if let BudgetExpr::Pay(ref mut payment) = expr {
                 payment.to = thief_keypair.pubkey(); // <-- attack!
             }
         }
@@ -339,8 +339,8 @@ mod tests {
         let zero = Hash::default();
         let mut tx = Transaction::budget_new(&keypair0, keypair1.pubkey(), 1, zero);
         let mut instruction = tx.instruction(1).unwrap();
-        if let Instruction::NewBudget(ref mut budget) = instruction {
-            if let Budget::Pay(ref mut payment) = budget {
+        if let Instruction::NewBudget(ref mut expr) = instruction {
+            if let BudgetExpr::Pay(ref mut payment) = expr {
                 payment.tokens = 2; // <-- attack!
             }
         }
@@ -349,8 +349,8 @@ mod tests {
 
         // Also, ensure all branchs of the plan spend all tokens
         let mut instruction = tx.instruction(1).unwrap();
-        if let Instruction::NewBudget(ref mut budget) = instruction {
-            if let Budget::Pay(ref mut payment) = budget {
+        if let Instruction::NewBudget(ref mut expr) = instruction {
+            if let BudgetExpr::Pay(ref mut payment) = expr {
                 payment.tokens = 0; // <-- whoops!
             }
         }

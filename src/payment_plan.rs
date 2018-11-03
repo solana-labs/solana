@@ -1,4 +1,4 @@
-//! The `plan` module provides a domain-specific language for payment plans. Users create Budget objects that
+//! The `plan` module provides a domain-specific language for payment plans. Users create BudgetExpr objects that
 //! are given to an interpreter. The interpreter listens for `Witness` transactions,
 //! which it uses to reduce the payment plan. When the plan is reduced to a
 //! `Payment`, the payment is executed.
