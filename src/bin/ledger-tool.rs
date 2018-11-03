@@ -100,8 +100,12 @@ fn main() {
             stdout().write_all(b"\n]}\n").expect("close array");
         }
         ("verify", _) => {
-            if head < 2 {
-                eprintln!("verify requires at least 2 entries to run");
+            const NUM_GENESIS_ENTRIES: usize = 3;
+            if head < NUM_GENESIS_ENTRIES {
+                eprintln!(
+                    "verify requires at least {} entries to run",
+                    NUM_GENESIS_ENTRIES
+                );
                 exit(1);
             }
             let bank = Bank::default();
@@ -114,7 +118,7 @@ fn main() {
                     }
                 };
 
-                let genesis = genesis.take(2).map(|e| e.unwrap());
+                let genesis = genesis.take(NUM_GENESIS_ENTRIES).map(|e| e.unwrap());
                 if let Err(e) = bank.process_ledger(genesis) {
                     eprintln!("verify failed at genesis err: {:?}", e);
                     if !matches.is_present("continue") {
@@ -124,11 +128,11 @@ fn main() {
             }
             let entries = entries.map(|e| e.unwrap());
 
-            let head = head - 2;
+            let head = head - NUM_GENESIS_ENTRIES;
 
             let mut last_id = bank.last_id();
 
-            for (i, entry) in entries.skip(2).enumerate() {
+            for (i, entry) in entries.skip(NUM_GENESIS_ENTRIES).enumerate() {
                 if i >= head {
                     break;
                 }
