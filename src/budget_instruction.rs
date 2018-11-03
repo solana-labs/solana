@@ -1,19 +1,19 @@
-use budget::Budget;
+use budget_expr::BudgetExpr;
 use chrono::prelude::{DateTime, Utc};
 
 /// A smart contract.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Contract {
-    /// The number of tokens allocated to the `Budget` and any transaction fees.
+    /// The number of tokens allocated to the `BudgetExpr` and any transaction fees.
     pub tokens: i64,
-    pub budget: Budget,
+    pub budget_expr: BudgetExpr,
 }
 
 /// An instruction to progress the smart contract.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Instruction {
-    /// Declare and instantiate `Budget`.
-    NewBudget(Budget),
+    /// Declare and instantiate `BudgetExpr`.
+    NewBudget(BudgetExpr),
 
     /// Tell a payment plan acknowledge the given `DateTime` has past.
     ApplyTimestamp(DateTime<Utc>),

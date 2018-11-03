@@ -14,7 +14,7 @@ pub mod banking_stage;
 pub mod blob_fetch_stage;
 pub mod bpf_loader;
 pub mod broadcast_stage;
-pub mod budget;
+pub mod budget_expr;
 pub mod budget_instruction;
 pub mod budget_transaction;
 #[cfg(feature = "chacha")]
