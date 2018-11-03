@@ -3,6 +3,7 @@ use pubkey::Pubkey;
 /// An Account with userdata that is stored on chain
 #[repr(C)]
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[serde(rename_all = "camelCase")]
 pub struct Account {
     /// tokens in the account
     pub tokens: i64,
