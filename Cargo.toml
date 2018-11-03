@@ -109,9 +109,10 @@ sys-info = "0.5.6"
 tokio = "0.1"
 tokio-codec = "0.1"
 untrusted = "0.6.2"
-solana-noop = { path = "programs/native/noop", version = "0.11.0" }
 solana-bpfloader = { path = "programs/native/bpf_loader", version = "0.11.0" }
+solana-erc20 = { path = "programs/native/erc20", version = "0.11.0" }
 solana-lualoader = { path = "programs/native/lua_loader", version = "0.11.0" }
+solana-noop = { path = "programs/native/noop", version = "0.11.0" }
 
 [[bench]]
 name = "bank"
@@ -136,8 +137,9 @@ name = "chacha"
 members = [
     ".",
     "sdk",
-    "programs/native/noop",
-    "programs/native/bpf_loader",
-    "programs/native/lua_loader",
     "programs/bpf/rust/noop",
+    "programs/native/bpf_loader",
+    "programs/native/erc20",
+    "programs/native/lua_loader",
+    "programs/native/noop",
 ]
