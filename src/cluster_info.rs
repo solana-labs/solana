@@ -1324,7 +1324,6 @@ mod tests {
     use packet::SharedBlob;
     use result::Error;
     use signature::{Keypair, KeypairUtil};
-    use solana_sdk::pubkey::Pubkey;
     use std::fs::remove_dir_all;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::atomic::{AtomicBool, Ordering};
