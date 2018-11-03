@@ -236,13 +236,17 @@ start() {
             set -ex;
             apt-get -qq update;
             apt-get -qq -y install snapd;
-            snap download --channel=$snapChannel solana;
+            until snap download --channel=$snapChannel solana; do
+              sleep 1;
+            done
           "
         )
       else
         (
           cd "$SOLANA_ROOT"
-          snap download --channel="$snapChannel" solana
+          until snap download --channel="$snapChannel" solana; do
+            sleep 1
+          done
         )
       fi
       snapFilename="$(echo "$SOLANA_ROOT"/solana_*.snap)"
