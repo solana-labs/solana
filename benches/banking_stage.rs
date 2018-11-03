@@ -14,7 +14,7 @@ use solana::entry::Entry;
 use solana::hash::hash;
 use solana::mint::Mint;
 use solana::packet::to_packets_chunked;
-use solana::signature::{Keypair, KeypairUtil, Signature};
+use solana::signature::{KeypairUtil, Signature};
 use solana::system_transaction::SystemTransaction;
 use solana::transaction::Transaction;
 use solana_sdk::pubkey::Pubkey;
@@ -110,13 +110,13 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let mut id = mint.last_id();
     for _ in 0..MAX_ENTRY_IDS {
         id = hash(&id.as_ref());
-        bank.register_entry_id(&id);
+        bank.register_tick(&id);
     }
 
     bencher.iter(move || {
         // make sure the tx last id is still registered
         if bank.count_valid_ids(&[mint.last_id()]).len() == 0 {
-            bank.register_entry_id(&mint.last_id());
+            bank.register_tick(&mint.last_id());
         }
         for v in verified.chunks(verified.len() / NUM_THREADS) {
             verified_sender.send(v.to_vec()).unwrap();
@@ -210,13 +210,13 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     let mut id = mint.last_id();
     for _ in 0..MAX_ENTRY_IDS {
         id = hash(&id.as_ref());
-        bank.register_entry_id(&id);
+        bank.register_tick(&id);
     }
 
     bencher.iter(move || {
         // make sure the transactions are still valid
         if bank.count_valid_ids(&[mint.last_id()]).len() == 0 {
-            bank.register_entry_id(&mint.last_id());
+            bank.register_tick(&mint.last_id());
         }
         for v in verified.chunks(verified.len() / NUM_THREADS) {
             verified_sender.send(v.to_vec()).unwrap();

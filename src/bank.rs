@@ -199,7 +199,9 @@ impl Checkpoint for LastIds {
 
 #[derive(Default)]
 pub struct Accounts {
-    // TODO: implement values() take this back to private from the voting code
+    // TODO: implement values() or something? take this back to private
+    //  from the voting/leader/finality code
+    //  issue #1701
     pub accounts: HashMap<Pubkey, Account>,
 
     /// The number of transactions the bank has processed without error since the
@@ -1153,11 +1155,6 @@ impl Bank {
     /// as we go.
     fn process_block(&self, entries: &[Entry]) -> Result<()> {
         for entry in entries {
-            // TODO: We prepare for implementing voting contract by making the associated
-            // process_entries functions aware of the vote-tracking structure inside
-            // the leader scheduler. Next we will extract the vote tracking structure
-            // out of the leader scheduler, and into the bank, and remove the leader
-            // scheduler from these banking functions.
             self.process_entry(entry)?;
         }
 
