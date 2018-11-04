@@ -92,8 +92,9 @@ declare module '@solana/web3.js' {
 
   declare export class TransactionInstruction {
     fee: number;
-
-    constructor(opts?: TransactionInstructionCtorFields): TransactionInstruction;
+    keys: Array<PublicKey>;
+    programId: PublicKey;
+    userdata: Buffer;
   }
 
   declare type TransactionCtorFields = {|
@@ -103,6 +104,7 @@ declare module '@solana/web3.js' {
   declare export class Transaction {
     signature: ?Buffer;
     fee: number;
+    instructions: Array<TransactionInstruction>;
 
     constructor(opts?: TransactionCtorFields): Transaction;
     add(item: TransactionInstruction | TransactionInstructionCtorFields): Transaction;
