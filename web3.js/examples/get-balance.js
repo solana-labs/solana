@@ -13,7 +13,6 @@ url = 'http://localhost:8899';
 //url = 'http://testnet.solana.com:8899';
 const connection = new solanaWeb3.Connection(url);
 
-connection.getBalance(account.publicKey)
-.then((balance) => {
+connection.getBalance(account.publicKey).then(balance => {
   console.log(`${account.publicKey} has a balance of ${balance}`);
 });

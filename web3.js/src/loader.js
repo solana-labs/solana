@@ -45,7 +45,9 @@ export class Loader {
       BufferLayout.u32('bytesLengthPadding'),
       BufferLayout.seq(
         BufferLayout.u8('byte'),
-        BufferLayout.offset(BufferLayout.u32(), -8), 'bytes'),
+        BufferLayout.offset(BufferLayout.u32(), -8),
+        'bytes',
+      ),
     ]);
 
     const chunkSize = 256;
@@ -69,7 +71,9 @@ export class Loader {
         programId: this.programId,
         userdata,
       });
-      transactions.push(sendAndConfirmTransaction(this.connection, program, transaction));
+      transactions.push(
+        sendAndConfirmTransaction(this.connection, program, transaction),
+      );
 
       // Run up to 8 Loads in parallel to prevent too many parallel transactions from
       // getting rejected with AccountInUse.

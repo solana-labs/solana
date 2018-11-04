@@ -74,4 +74,3 @@ test('apply', () => {
   expect(transaction.keys).toHaveLength(3);
   // TODO: Validate transaction contents more
 });
-

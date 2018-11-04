@@ -1,11 +1,6 @@
 // @flow
 
-import {
-  Connection,
-  PublicKey,
-  Token,
-  TokenAmount,
-} from '../src';
+import {Connection, PublicKey, Token, TokenAmount} from '../src';
 import {SYSTEM_TOKEN_PROGRAM_ID} from '../src/token-program';
 import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
 import {url} from './url';
@@ -37,11 +32,11 @@ function mockSendTransaction() {
     },
     {
       error: null,
-      result: '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-    }
+      result:
+        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+    },
   ]);
 }
-
 
 // A token created by the first test and used by all subsequent tests
 let testToken: Token;
@@ -86,7 +81,7 @@ test('create new token', async () => {
     new TokenAmount(10000),
     'Test token',
     'TEST',
-    2
+    2,
   );
 
   {
@@ -104,18 +99,83 @@ test('create new token', async () => {
           tokens: 1,
           userdata: [
             1,
-            16, 39, 0, 0, 0, 0, 0, 0,
+            16,
+            39,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
             2,
-            10, 0, 0, 0, 0, 0, 0, 0, 84, 101, 115, 116, 32, 116, 111, 107, 101, 110,
-            4, 0, 0, 0, 0, 0, 0, 0, 84, 69, 83, 84
+            10,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            84,
+            101,
+            115,
+            116,
+            32,
+            116,
+            111,
+            107,
+            101,
+            110,
+            4,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            84,
+            69,
+            83,
+            84,
           ],
           executable: false,
           loader_program_id: [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
           ],
-        }
-      }
+        },
+      },
     ]);
   }
 
@@ -125,7 +185,6 @@ test('create new token', async () => {
   expect(tokenInfo.decimals).toBe(2);
   expect(tokenInfo.name).toBe('Test token');
   expect(tokenInfo.symbol).toBe('TEST');
-
 
   {
     // mock Token.accountInfo()'s getAccountInfo
@@ -144,16 +203,84 @@ test('create new token', async () => {
             2,
             ...testToken.token.toBuffer(),
             ...initialOwner.publicKey.toBuffer(),
-            16, 39, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            16,
+            39,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
           ],
           executable: false,
           loader_program_id: [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
           ],
-        }
-      }
+        },
+      },
     ]);
   }
 
@@ -165,7 +292,6 @@ test('create new token', async () => {
   expect(accountInfo.source).toBe(null);
   expect(accountInfo.originalAmount.toNumber()).toBe(0);
 });
-
 
 test('create new token account', async () => {
   const connection = new Connection(url);
@@ -202,16 +328,53 @@ test('create new token account', async () => {
             2,
             ...testToken.token.toBuffer(),
             ...destOwner.publicKey.toBuffer(),
-            0, 0, 0, 0, 0, 0, 0, 0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
             0,
           ],
           executable: false,
           loader_program_id: [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
           ],
-        }
-      }
+        },
+      },
     ]);
   }
 
@@ -222,7 +385,6 @@ test('create new token account', async () => {
   expect(accountInfo.amount.toNumber()).toBe(0);
   expect(accountInfo.source).toBe(null);
 });
-
 
 test('transfer', async () => {
   const connection = new Connection(url);
@@ -260,16 +422,53 @@ test('transfer', async () => {
             2,
             ...testToken.token.toBuffer(),
             ...initialOwner.publicKey.toBuffer(),
-            123, 0, 0, 0, 0, 0, 0, 0,
+            123,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
             0,
           ],
           executable: false,
           loader_program_id: [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
           ],
-        }
-      }
+        },
+      },
     ]);
 
     // mock Token.transfer() transaction
@@ -278,12 +477,7 @@ test('transfer', async () => {
     mockGetSignatureStatus();
   }
 
-  await testToken.transfer(
-    initialOwner,
-    initialOwnerTokenAccount,
-    dest,
-    123
-  );
+  await testToken.transfer(initialOwner, initialOwnerTokenAccount, dest, 123);
 
   {
     // mock Token.accountInfo()'s getAccountInfo
@@ -302,23 +496,59 @@ test('transfer', async () => {
             2,
             ...testToken.token.toBuffer(),
             ...dest.toBuffer(),
-            123, 0, 0, 0, 0, 0, 0, 0,
+            123,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
             0,
           ],
           executable: false,
           loader_program_id: [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
           ],
-        }
-      }
+        },
+      },
     ]);
   }
 
   const destAccountInfo = await testToken.accountInfo(dest);
   expect(destAccountInfo.amount.toNumber()).toBe(123);
 });
-
 
 test('approve/revoke', async () => {
   const connection = new Connection(url);
@@ -336,7 +566,10 @@ test('approve/revoke', async () => {
     mockSendTransaction();
     mockGetSignatureStatus();
   }
-  const delegate = await testToken.newAccount(delegateOwner, initialOwnerTokenAccount);
+  const delegate = await testToken.newAccount(
+    delegateOwner,
+    initialOwnerTokenAccount,
+  );
 
   {
     // mock Token.approve() transaction
@@ -349,7 +582,7 @@ test('approve/revoke', async () => {
     initialOwner,
     initialOwnerTokenAccount,
     delegate,
-    456
+    456,
   );
 
   {
@@ -369,18 +602,62 @@ test('approve/revoke', async () => {
             2,
             ...testToken.token.toBuffer(),
             ...delegate.toBuffer(),
-            200, 1, 0, 0, 0, 0, 0, 0,
+            200,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
             1,
             ...initialOwnerTokenAccount.toBuffer(),
-            200, 1, 0, 0, 0, 0, 0, 0,
+            200,
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
           ],
           executable: false,
           loader_program_id: [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
           ],
-        }
-      }
+        },
+      },
     ]);
   }
 
@@ -391,7 +668,9 @@ test('approve/revoke', async () => {
   if (delegateAccountInfo.source === null) {
     throw new Error('source should not be null');
   } else {
-    expect(delegateAccountInfo.source.equals(initialOwnerTokenAccount)).toBe(true);
+    expect(delegateAccountInfo.source.equals(initialOwnerTokenAccount)).toBe(
+      true,
+    );
   }
 
   {
@@ -401,11 +680,7 @@ test('approve/revoke', async () => {
     mockGetSignatureStatus();
   }
 
-  await testToken.revoke(
-    initialOwner,
-    initialOwnerTokenAccount,
-    delegate,
-  );
+  await testToken.revoke(initialOwner, initialOwnerTokenAccount, delegate);
 
   {
     // mock Token.accountInfo()'s getAccountInfo
@@ -424,18 +699,62 @@ test('approve/revoke', async () => {
             2,
             ...testToken.token.toBuffer(),
             ...delegate.toBuffer(),
-            0, 0, 0, 0, 0, 0, 0, 0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
             1,
             ...initialOwnerTokenAccount.toBuffer(),
-            0, 0, 0, 0, 0, 0, 0, 0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
           ],
           executable: false,
           loader_program_id: [
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
           ],
-        }
-      }
+        },
+      },
     ]);
   }
 
@@ -445,10 +764,11 @@ test('approve/revoke', async () => {
   if (delegateAccountInfo.source === null) {
     throw new Error('source should not be null');
   } else {
-    expect(delegateAccountInfo.source.equals(initialOwnerTokenAccount)).toBe(true);
+    expect(delegateAccountInfo.source.equals(initialOwnerTokenAccount)).toBe(
+      true,
+    );
   }
 });
-
 
 test('invalid approve', async () => {
   if (mockRpcEnabled) {
@@ -466,25 +786,14 @@ test('invalid approve', async () => {
 
   // account2 is not a delegate account of account1
   await expect(
-    testToken.approve(
-      owner,
-      account1,
-      account2,
-      123
-    )
+    testToken.approve(owner, account1, account2, 123),
   ).rejects.toThrow();
 
   // account1Delegate is not a delegate account of account2
   await expect(
-    testToken.approve(
-      owner,
-      account2,
-      account1Delegate,
-      123
-    )
+    testToken.approve(owner, account2, account1Delegate, 123),
   ).rejects.toThrow();
 });
-
 
 test('fail on approve overspend', async () => {
   if (mockRpcEnabled) {
@@ -507,49 +816,28 @@ test('fail on approve overspend', async () => {
     10,
   );
 
-  await testToken.approve(
-    owner,
-    account1,
-    account1Delegate,
-    2
-  );
+  await testToken.approve(owner, account1, account1Delegate, 2);
 
   let delegateAccountInfo = await testToken.accountInfo(account1Delegate);
   expect(delegateAccountInfo.amount.toNumber()).toBe(2);
   expect(delegateAccountInfo.originalAmount.toNumber()).toBe(2);
 
-  await testToken.transfer(
-    owner,
-    account1Delegate,
-    account2,
-    1,
-  );
+  await testToken.transfer(owner, account1Delegate, account2, 1);
 
   delegateAccountInfo = await testToken.accountInfo(account1Delegate);
   expect(delegateAccountInfo.amount.toNumber()).toBe(1);
   expect(delegateAccountInfo.originalAmount.toNumber()).toBe(2);
 
-  await testToken.transfer(
-    owner,
-    account1Delegate,
-    account2,
-    1,
-  );
+  await testToken.transfer(owner, account1Delegate, account2, 1);
 
   delegateAccountInfo = await testToken.accountInfo(account1Delegate);
   expect(delegateAccountInfo.amount.toNumber()).toBe(0);
   expect(delegateAccountInfo.originalAmount.toNumber()).toBe(2);
 
   await expect(
-    testToken.transfer(
-      owner,
-      account1Delegate,
-      account2,
-      1,
-    )
+    testToken.transfer(owner, account1Delegate, account2, 1),
   ).rejects.toThrow();
 });
-
 
 test('set owner', async () => {
   if (mockRpcEnabled) {
@@ -566,12 +854,11 @@ test('set owner', async () => {
 
   await testToken.setOwner(owner, account, newOwner.publicKey);
   await expect(
-    testToken.setOwner(owner, account, newOwner.publicKey)
+    testToken.setOwner(owner, account, newOwner.publicKey),
   ).rejects.toThrow();
 
   await testToken.setOwner(newOwner, account, owner.publicKey);
   await expect(
-    testToken.setOwner(newOwner, account, owner.publicKey)
+    testToken.setOwner(newOwner, account, owner.publicKey),
   ).rejects.toThrow();
-
 });

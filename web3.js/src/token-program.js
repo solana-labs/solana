@@ -40,12 +40,14 @@ export class TokenAmount extends BN {
   static fromBuffer(buffer: Buffer): TokenAmount {
     assert(buffer.length === 8, `Invalid buffer length: ${buffer.length}`);
     return new BN(
-      [...buffer].reverse().map(i => `00${i.toString(16)}`.slice(-2)).join(''),
-      16
+      [...buffer]
+        .reverse()
+        .map(i => `00${i.toString(16)}`.slice(-2))
+        .join(''),
+      16,
     );
   }
 }
-
 
 /**
  * Information about a token
@@ -129,20 +131,19 @@ const TokenAccountInfoLayout = BufferLayout.struct([
   Layout.uint64('originalAmount'),
 ]);
 
-
 type TokenAndPublicKey = [Token, PublicKey]; // This type exists to workaround an esdoc parse error
-
 
 /**
  * The built-in token program
  */
-export const SYSTEM_TOKEN_PROGRAM_ID = new PublicKey('0x8300000000000000000000000000000000000000000000000000000000000000');
+export const SYSTEM_TOKEN_PROGRAM_ID = new PublicKey(
+  '0x8300000000000000000000000000000000000000000000000000000000000000',
+);
 
 /**
  * An ERC20-like Token
  */
 export class Token {
-
   /**
    * @private
    */
@@ -165,7 +166,11 @@ export class Token {
    * @param token Public key of the token
    * @param programId Optional token programId, uses the system programId by default
    */
-  constructor(connection: Connection, token: PublicKey, programId: PublicKey = SYSTEM_TOKEN_PROGRAM_ID) {
+  constructor(
+    connection: Connection,
+    token: PublicKey,
+    programId: PublicKey = SYSTEM_TOKEN_PROGRAM_ID,
+  ) {
     Object.assign(this, {connection, token, programId});
   }
 
@@ -249,7 +254,10 @@ export class Token {
    *               may transfer tokens from this `source` account
    * @return Public key of the new empty token account
    */
-  async newAccount(owner: Account, source: null | PublicKey = null): Promise<PublicKey> {
+  async newAccount(
+    owner: Account,
+    source: null | PublicKey = null,
+  ): Promise<PublicKey> {
     const tokenAccount = new Account();
     let transaction;
 
@@ -297,7 +305,9 @@ export class Token {
   async tokenInfo(): Promise<TokenInfo> {
     const accountInfo = await this.connection.getAccountInfo(this.token);
     if (!accountInfo.programId.equals(this.programId)) {
-      throw new Error(`Invalid token programId: ${JSON.stringify(accountInfo.programId)}`);
+      throw new Error(
+        `Invalid token programId: ${JSON.stringify(accountInfo.programId)}`,
+      );
     }
 
     const userdata = Buffer.from(accountInfo.userdata);
@@ -309,7 +319,6 @@ export class Token {
     tokenInfo.supply = TokenAmount.fromBuffer(tokenInfo.supply);
     return tokenInfo;
   }
-
 
   /**
    * Retrieve account information
@@ -336,12 +345,16 @@ export class Token {
       tokenAccountInfo.originalAmount = new TokenAmount();
     } else {
       tokenAccountInfo.source = new PublicKey(tokenAccountInfo.source);
-      tokenAccountInfo.originalAmount = TokenAmount.fromBuffer(tokenAccountInfo.originalAmount);
+      tokenAccountInfo.originalAmount = TokenAmount.fromBuffer(
+        tokenAccountInfo.originalAmount,
+      );
     }
 
     if (!tokenAccountInfo.token.equals(this.token)) {
       throw new Error(
-        `Invalid token account token: ${JSON.stringify(tokenAccountInfo.token)} !== ${JSON.stringify(this.token)}`
+        `Invalid token account token: ${JSON.stringify(
+          tokenAccountInfo.token,
+        )} !== ${JSON.stringify(this.token)}`,
       );
     }
     return tokenAccountInfo;
@@ -370,7 +383,7 @@ export class Token {
           source,
           destination,
           amount,
-        )
+        ),
       ),
     );
   }
@@ -387,18 +400,13 @@ export class Token {
     owner: Account,
     account: PublicKey,
     delegate: PublicKey,
-    amount: number | TokenAmount
+    amount: number | TokenAmount,
   ): Promise<void> {
     await sendAndConfirmTransaction(
       this.connection,
       owner,
       new Transaction().add(
-        this.approveInstruction(
-          owner.publicKey,
-          account,
-          delegate,
-          amount,
-        )
+        this.approveInstruction(owner.publicKey, account, delegate, amount),
       ),
     );
   }
@@ -413,7 +421,7 @@ export class Token {
   revoke(
     owner: Account,
     account: PublicKey,
-    delegate: PublicKey
+    delegate: PublicKey,
   ): Promise<void> {
     return this.approve(owner, account, delegate, 0);
   }
@@ -434,11 +442,7 @@ export class Token {
       this.connection,
       owner,
       new Transaction().add(
-        this.setOwnerInstruction(
-          owner.publicKey,
-          account,
-          newOwner
-        )
+        this.setOwnerInstruction(owner.publicKey, account, newOwner),
       ),
     );
   }
@@ -471,7 +475,7 @@ export class Token {
     userdataLayout.encode(
       {
         instruction: 2, // Transfer instruction
-        amount: (new TokenAmount(amount)).toBuffer(),
+        amount: new TokenAmount(amount).toBuffer(),
       },
       userdata,
     );
@@ -499,7 +503,7 @@ export class Token {
     owner: PublicKey,
     account: PublicKey,
     delegate: PublicKey,
-    amount: number | TokenAmount
+    amount: number | TokenAmount,
   ): TransactionInstruction {
     const userdataLayout = BufferLayout.struct([
       BufferLayout.u32('instruction'),
@@ -510,7 +514,7 @@ export class Token {
     userdataLayout.encode(
       {
         instruction: 3, // Approve instruction
-        amount: (new TokenAmount(amount)).toBuffer(),
+        amount: new TokenAmount(amount).toBuffer(),
       },
       userdata,
     );
@@ -568,5 +572,3 @@ export class Token {
     });
   }
 }
-
-

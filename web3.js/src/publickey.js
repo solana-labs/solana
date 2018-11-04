@@ -72,4 +72,3 @@ export class PublicKey {
     return this.toBase58();
   }
 }
-

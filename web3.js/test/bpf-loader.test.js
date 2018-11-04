@@ -33,4 +33,3 @@ test('load BPF program', async () => {
   });
   await sendAndConfirmTransaction(connection, from, transaction);
 });
-

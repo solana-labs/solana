@@ -40,4 +40,3 @@ export class Account {
     return this._keypair.secretKey;
   }
 }
-
