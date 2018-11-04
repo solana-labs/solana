@@ -55,7 +55,7 @@
     "localnet:down": "bin/localnet.sh down",
     "localnet:update": "bin/localnet.sh update",
     "localnet:logs": "bin/localnet.sh logs -f",
-    "ok": "npm run pretty && npm run lint && npm run flow && npm run test && npm run doc",
+    "ok": "npm run lint && npm run flow && npm run test && npm run doc",
     "pretty": "prettier --write '{,{examples,src,test}/**/}*.js'",
     "prepare": "npm run clean && npm run ok &&  npm run fetch-bpf-sdk && npm run build",
     "examples": "set -ex; for example in examples/*.js; do node $example; done",
