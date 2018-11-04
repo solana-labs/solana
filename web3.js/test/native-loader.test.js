@@ -31,4 +31,3 @@ test('load native program', async () => {
 
   await sendAndConfirmTransaction(connection, from, transaction);
 });
-

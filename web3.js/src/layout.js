@@ -2,7 +2,6 @@
 
 import * as BufferLayout from 'buffer-layout';
 
-
 /**
  * Layout for a public key
  */
@@ -17,7 +16,6 @@ export const uint64 = (property: string = 'uint64'): Object => {
   return BufferLayout.blob(8, property);
 };
 
-
 /**
  * Layout for a Rust String type
  */
@@ -26,10 +24,7 @@ export const rustString = (property: string = 'string') => {
     [
       BufferLayout.u32('length'),
       BufferLayout.u32('lengthPadding'),
-      BufferLayout.blob(
-        BufferLayout.offset(BufferLayout.u32(), -8),
-        'chars',
-      ),
+      BufferLayout.blob(BufferLayout.offset(BufferLayout.u32(), -8), 'chars'),
     ],
     property,
   );

@@ -17,7 +17,9 @@ export class BpfLoader {
    * Public key that identifies the BpfLoader
    */
   static get programId(): PublicKey {
-    return new PublicKey('0x8000000000000000000000000000000000000000000000000000000000000000');
+    return new PublicKey(
+      '0x8000000000000000000000000000000000000000000000000000000000000000',
+    );
   }
 
   /**
@@ -35,7 +37,9 @@ export class BpfLoader {
     const programAccount = new Account();
 
     const elf = elfy.parse(elfBytes);
-    const section = elf.body.sections.find(section => section.name === '.text.entrypoint');
+    const section = elf.body.sections.find(
+      section => section.name === '.text.entrypoint',
+    );
 
     const transaction = SystemProgram.createAccount(
       owner.publicKey,

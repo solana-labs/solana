@@ -14,7 +14,9 @@ export class SystemProgram {
    * Public key that identifies the System program
    */
   static get programId(): PublicKey {
-    return new PublicKey('0x000000000000000000000000000000000000000000000000000000000000000');
+    return new PublicKey(
+      '0x000000000000000000000000000000000000000000000000000000000000000',
+    );
   }
 
   /**
@@ -25,9 +27,8 @@ export class SystemProgram {
     newAccount: PublicKey,
     tokens: number,
     space: number,
-    programId: PublicKey
+    programId: PublicKey,
   ): Transaction {
-
     const userdataLayout = BufferLayout.struct([
       BufferLayout.u32('instruction'),
       BufferLayout.ns64('tokens'),

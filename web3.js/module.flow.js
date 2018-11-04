@@ -34,16 +34,17 @@ declare module '@solana/web3.js' {
 
   // === src/connection.js ===
   declare export type AccountInfo = {
-    executable: boolean;
+    executable: boolean,
     loaderProgramId: PublicKey,
     programId: PublicKey,
     tokens: number,
     userdata: Buffer,
-  }
+  };
 
   declare type AccountChangeCallback = (accountInfo: AccountInfo) => void;
 
-  declare export type SignatureStatus = 'Confirmed'
+  declare export type SignatureStatus =
+    | 'Confirmed'
     | 'AccountInUse'
     | 'SignatureNotFound'
     | 'ProgramRuntimeError'
@@ -54,13 +55,24 @@ declare module '@solana/web3.js' {
     getBalance(publicKey: PublicKey): Promise<number>;
     getAccountInfo(publicKey: PublicKey): Promise<AccountInfo>;
     confirmTransaction(signature: TransactionSignature): Promise<boolean>;
-    getSignatureStatus(signature: TransactionSignature): Promise<SignatureStatus>;
+    getSignatureStatus(
+      signature: TransactionSignature,
+    ): Promise<SignatureStatus>;
     getTransactionCount(): Promise<number>;
     getLastId(): Promise<TransactionId>;
     getFinality(): Promise<number>;
-    requestAirdrop(to: PublicKey, amount: number): Promise<TransactionSignature>;
-    sendTransaction(from: Account, transaction: Transaction): Promise<TransactionSignature>;
-    onAccountChange(publickey: PublicKey, callback: AccountChangeCallback): number;
+    requestAirdrop(
+      to: PublicKey,
+      amount: number,
+    ): Promise<TransactionSignature>;
+    sendTransaction(
+      from: Account,
+      transaction: Transaction,
+    ): Promise<TransactionSignature>;
+    onAccountChange(
+      publickey: PublicKey,
+      callback: AccountChangeCallback,
+    ): number;
     removeAccountChangeListener(id: number): Promise<void>;
   }
 
@@ -73,7 +85,7 @@ declare module '@solana/web3.js' {
       newAccount: PublicKey,
       tokens: number,
       space: number,
-      programId: PublicKey
+      programId: PublicKey,
     ): Transaction;
     static move(from: PublicKey, to: PublicKey, amount: number): Transaction;
     static assign(from: PublicKey, programId: PublicKey): Transaction;
@@ -85,9 +97,9 @@ declare module '@solana/web3.js' {
   declare export type TransactionId = string;
 
   declare type TransactionInstructionCtorFields = {|
-    keys?: Array<PublicKey>;
-    programId?: PublicKey;
-    userdata?: Buffer;
+    keys?: Array<PublicKey>,
+    programId?: PublicKey,
+    userdata?: Buffer,
   |};
 
   declare export class TransactionInstruction {
@@ -98,7 +110,7 @@ declare module '@solana/web3.js' {
   }
 
   declare type TransactionCtorFields = {|
-    fee?: number;
+    fee?: number,
   |};
 
   declare export class Transaction {
@@ -107,7 +119,9 @@ declare module '@solana/web3.js' {
     instructions: Array<TransactionInstruction>;
 
     constructor(opts?: TransactionCtorFields): Transaction;
-    add(item: TransactionInstruction | TransactionInstructionCtorFields): Transaction;
+    add(
+      item: TransactionInstruction | TransactionInstructionCtorFields,
+    ): Transaction;
     sign(from: Account): void;
     serialize(): Buffer;
   }
@@ -125,12 +139,12 @@ declare module '@solana/web3.js' {
     symbol: string,
   |};
   declare export type TokenAccountInfo = {|
-    token: PublicKey;
-    owner: PublicKey;
-    amount: TokenAmount;
-    source: null | PublicKey;
-    originalAmount: TokenAmount;
-  |}
+    token: PublicKey,
+    owner: PublicKey,
+    amount: TokenAmount,
+    source: null | PublicKey,
+    originalAmount: TokenAmount,
+  |};
   declare type TokenAndPublicKey = [Token, PublicKey];
 
   declare export class Token {
@@ -147,7 +161,7 @@ declare module '@solana/web3.js' {
       programId?: PublicKey,
     ): Promise<TokenAndPublicKey>;
 
-    constructor(connection: Connection, token: PublicKey) : Token;
+    constructor(connection: Connection, token: PublicKey): Token;
     newAccount(owner: Account, source?: PublicKey): Promise<PublicKey>;
     tokenInfo(): Promise<TokenInfo>;
     accountInfo(account: PublicKey): Promise<TokenAccountInfo>;
@@ -161,17 +175,17 @@ declare module '@solana/web3.js' {
       owner: Account,
       account: PublicKey,
       delegate: PublicKey,
-      amount: number | TokenAmount
+      amount: number | TokenAmount,
     ): Promise<void>;
     revoke(
       owner: Account,
       account: PublicKey,
-      delegate: PublicKey
+      delegate: PublicKey,
     ): Promise<void>;
     setOwner(
       owner: Account,
       account: PublicKey,
-      newOwner: PublicKey
+      newOwner: PublicKey,
     ): Promise<void>;
 
     transferInstruction(
@@ -184,7 +198,7 @@ declare module '@solana/web3.js' {
       owner: PublicKey,
       account: PublicKey,
       delegate: PublicKey,
-      amount: number | TokenAmount
+      amount: number | TokenAmount,
     ): TransactionInstruction;
     revokeInstruction(
       owner: PublicKey,
@@ -200,7 +214,7 @@ declare module '@solana/web3.js' {
 
   // === src/loader.js ===
   declare export class Loader {
-    constructor(connection: Connection, programId: PublicKey) : Loader;
+    constructor(connection: Connection, programId: PublicKey): Loader;
     load(program: Account, offset: number, bytes: Array<number>): Promise<void>;
     finalize(program: Account): Promise<void>;
   }
@@ -214,7 +228,6 @@ declare module '@solana/web3.js' {
       elfBytes: Array<number>,
     ): Promise<PublicKey>;
   }
-
 
   // === src/native-loader.js ===
   declare export class NativeLoader {

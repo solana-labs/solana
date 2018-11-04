@@ -13,7 +13,10 @@ export class Client {
     //console.log('MockClient', url, options);
     if (!mockRpcEnabled) {
       if (mockNotice) {
-        console.log('Note: rpc-websockets mock is disabled, testing live against', url);
+        console.log(
+          'Note: rpc-websockets mock is disabled, testing live against',
+          url,
+        );
         mockNotice = false;
       }
       this.client = new RpcWebSocketClient(url, options);

@@ -28,11 +28,10 @@ export type TransactionId = string;
  * @property {?Buffer} userdata
  */
 type TransactionInstructionCtorFields = {|
-  keys?: Array<PublicKey>;
-  programId?: PublicKey;
-  userdata?: Buffer;
+  keys?: Array<PublicKey>,
+  programId?: PublicKey,
+  userdata?: Buffer,
 |};
-
 
 /**
  * Transaction Instruction class
@@ -58,7 +57,6 @@ export class TransactionInstruction {
   }
 }
 
-
 /**
  * List of Transaction object fields that may be initialized at construction
  *
@@ -70,20 +68,18 @@ export class TransactionInstruction {
  * @property {?Buffer} userdata
  */
 type TransactionCtorFields = {|
-  fee?: number;
+  fee?: number,
 |};
 
 /**
  * Transaction class
  */
 export class Transaction {
-
   /**
    * Current signature of the transaction.  Typically created by invoking the
    * `sign()` method
    */
   signature: ?Buffer;
-
 
   /**
    * The instructions to atomically execute
@@ -140,9 +136,7 @@ export class Transaction {
         programIds.push(programId);
       }
 
-      instruction.keys
-      .map(key => key.toString())
-      .forEach(key => {
+      instruction.keys.map(key => key.toString()).forEach(key => {
         if (!keys.includes(key)) {
           keys.push(key);
         }
@@ -171,14 +165,14 @@ export class Transaction {
       BufferLayout.seq(
         BufferLayout.u8('keyIndex'),
         BufferLayout.offset(BufferLayout.u32(), -8),
-        'keyIndices'
+        'keyIndices',
       ),
       BufferLayout.u32('userdataLength'),
       BufferLayout.u32('userdataLengthPadding'),
       BufferLayout.seq(
         BufferLayout.u8('userdatum'),
         BufferLayout.offset(BufferLayout.u32(), -8),
-        'userdata'
+        'userdata',
       ),
     ]);
 
@@ -188,7 +182,7 @@ export class Transaction {
       BufferLayout.seq(
         Layout.publicKey('key'),
         BufferLayout.offset(BufferLayout.u32(), -8),
-        'keys'
+        'keys',
       ),
       Layout.publicKey('lastId'),
       BufferLayout.ns64('fee'),
@@ -198,7 +192,7 @@ export class Transaction {
       BufferLayout.seq(
         Layout.publicKey('programId'),
         BufferLayout.offset(BufferLayout.u32(), -8),
-        'programIds'
+        'programIds',
       ),
 
       BufferLayout.u32('instructionsLength'),
@@ -206,15 +200,17 @@ export class Transaction {
       BufferLayout.seq(
         instructionLayout,
         BufferLayout.offset(BufferLayout.u32(), -8),
-        'instructions'
+        'instructions',
       ),
     ]);
 
     const transaction = {
-      keys: keys.map((key) => (new PublicKey(key)).toBuffer()),
+      keys: keys.map(key => new PublicKey(key).toBuffer()),
       lastId: Buffer.from(bs58.decode(lastId)),
       fee: this.fee,
-      programIds: programIds.map(programId => (new PublicKey(programId)).toBuffer()),
+      programIds: programIds.map(programId =>
+        new PublicKey(programId).toBuffer(),
+      ),
       instructions,
     };
 
@@ -248,9 +244,7 @@ export class Transaction {
     }
 
     const signData = this._getSignData();
-    const wireTransaction = Buffer.alloc(
-      signature.length + signData.length
-    );
+    const wireTransaction = Buffer.alloc(signature.length + signData.length);
 
     Buffer.from(signature).copy(wireTransaction, 0);
     signData.copy(wireTransaction, signature.length);
@@ -283,6 +277,4 @@ export class Transaction {
     assert(this.instructions.length === 1);
     return this.instructions[0].userdata;
   }
-
 }
-

@@ -13,9 +13,8 @@ export async function sendAndConfirmTransaction(
   connection: Connection,
   from: Account,
   transaction: Transaction,
-  runtimeErrorOk: boolean = false
+  runtimeErrorOk: boolean = false,
 ): Promise<?TransactionSignature> {
-
   let sendRetries = 10;
   let signature;
   for (;;) {
@@ -34,12 +33,18 @@ export async function sendAndConfirmTransaction(
       await sleep(500);
       if (--statusRetries <= 0) {
         const duration = (Date.now() - start) / 1000;
-        throw new Error(`Transaction '${signature}' was not confirmed in ${duration.toFixed(2)} seconds (${status})`);
+        throw new Error(
+          `Transaction '${signature}' was not confirmed in ${duration.toFixed(
+            2,
+          )} seconds (${status})`,
+        );
       }
     }
 
-    if ( (status === 'Confirmed') ||
-         (status === 'ProgramRuntimeError' && runtimeErrorOk) ) {
+    if (
+      status === 'Confirmed' ||
+      (status === 'ProgramRuntimeError' && runtimeErrorOk)
+    ) {
       break;
     }
 
@@ -53,4 +58,3 @@ export async function sendAndConfirmTransaction(
 
   return signature;
 }
-

@@ -1,10 +1,7 @@
 // @flow
 
 import assert from 'assert';
-import {
-  parse as urlParse,
-  format as urlFormat,
-} from 'url';
+import {parse as urlParse, format as urlFormat} from 'url';
 import fetch from 'node-fetch';
 import jayson from 'jayson/lib/client/browser';
 import {struct} from 'superstruct';
@@ -16,29 +13,26 @@ import {sleep} from './util/sleep';
 import type {Account} from './account';
 import type {TransactionSignature, TransactionId} from './transaction';
 
-
 type RpcRequest = (methodName: string, args: Array<any>) => any;
 
 function createRpcRequest(url): RpcRequest {
-  const server = jayson(
-    async (request, callback) => {
-      const options = {
-        method: 'POST',
-        body: request,
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      };
+  const server = jayson(async (request, callback) => {
+    const options = {
+      method: 'POST',
+      body: request,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    };
 
-      try {
-        const res = await fetch(url, options);
-        const text = await res.text();
-        callback(null, text);
-      } catch (err) {
-        callback(err);
-      }
+    try {
+      const res = await fetch(url, options);
+      const text = await res.text();
+      callback(null, text);
+    } catch (err) {
+      callback(err);
     }
-  );
+  });
 
   return (method, args) => {
     return new Promise((resolve, reject) => {
@@ -53,7 +47,6 @@ function createRpcRequest(url): RpcRequest {
   };
 }
 
-
 /**
  * Expected JSON RPC response for the "getBalance" message
  */
@@ -64,7 +57,6 @@ const GetBalanceRpcResult = struct({
   result: 'number?',
 });
 
-
 /**
  * @private
  */
@@ -74,7 +66,7 @@ function jsonRpcResult(resultDescription: any) {
     struct({
       jsonrpc: jsonRpcVersion,
       id: 'string',
-      error: 'any'
+      error: 'any',
     }),
     struct({
       jsonrpc: jsonRpcVersion,
@@ -117,13 +109,15 @@ const ConfirmTransactionRpcResult = jsonRpcResult('boolean');
 /**
  * Expected JSON RPC response for the "getSignatureStatus" message
  */
-const GetSignatureStatusRpcResult = jsonRpcResult(struct.enum([
-  'AccountInUse',
-  'Confirmed',
-  'GenericFailure',
-  'ProgramRuntimeError',
-  'SignatureNotFound',
-]));
+const GetSignatureStatusRpcResult = jsonRpcResult(
+  struct.enum([
+    'AccountInUse',
+    'Confirmed',
+    'GenericFailure',
+    'ProgramRuntimeError',
+    'SignatureNotFound',
+  ]),
+);
 
 /**
  * Expected JSON RPC response for the "getTransactionCount" message
@@ -159,11 +153,11 @@ const SendTokensRpcResult = jsonRpcResult('string');
  * @property {?Buffer} userdata Optional userdata assigned to the account
  */
 type AccountInfo = {
-  executable: boolean;
+  executable: boolean,
   programId: PublicKey,
   tokens: number,
   userdata: Buffer,
-}
+};
 
 /**
  * Callback function for account change notifications
@@ -174,17 +168,18 @@ export type AccountChangeCallback = (accountInfo: AccountInfo) => void;
  * @private
  */
 type AccountSubscriptionInfo = {
-  publicKey: string; // PublicKey of the account as a base 58 string
+  publicKey: string, // PublicKey of the account as a base 58 string
   callback: AccountChangeCallback,
-  subscriptionId: null | number; // null when there's no current server subscription id
-}
+  subscriptionId: null | number, // null when there's no current server subscription id
+};
 
 /**
  * Possible signature status values
  *
  * @typedef {string} SignatureStatus
  */
-export type SignatureStatus = 'Confirmed'
+export type SignatureStatus =
+  | 'Confirmed'
   | 'AccountInUse'
   | 'SignatureNotFound'
   | 'ProgramRuntimeError'
@@ -203,7 +198,7 @@ export class Connection {
     seconds: number,
     transactionSignatures: Array<string>,
   };
-  _disableLastIdCaching: boolean = false
+  _disableLastIdCaching: boolean = false;
   _accountChangeSubscriptions: {[number]: AccountSubscriptionInfo} = {};
   _accountChangeSubscriptionCounter: number = 0;
 
@@ -228,27 +223,26 @@ export class Connection {
     if (url.port === '1') {
       url.port = url.protocol === 'wss:' ? '8901' : '8900';
     }
-    this._rpcWebSocket = new RpcWebSocketClient(
-      urlFormat(url),
-      {
-        autoconnect: false,
-        max_reconnects: Infinity,
-      }
-    );
+    this._rpcWebSocket = new RpcWebSocketClient(urlFormat(url), {
+      autoconnect: false,
+      max_reconnects: Infinity,
+    });
     this._rpcWebSocket.on('open', this._wsOnOpen.bind(this));
     this._rpcWebSocket.on('error', this._wsOnError.bind(this));
     this._rpcWebSocket.on('close', this._wsOnClose.bind(this));
-    this._rpcWebSocket.on('accountNotification', this._wsOnAccountNotification.bind(this));
+    this._rpcWebSocket.on(
+      'accountNotification',
+      this._wsOnAccountNotification.bind(this),
+    );
   }
 
   /**
    * Fetch the balance for the specified public key
    */
   async getBalance(publicKey: PublicKey): Promise<number> {
-    const unsafeRes = await this._rpcRequest(
-      'getBalance',
-      [publicKey.toBase58()]
-    );
+    const unsafeRes = await this._rpcRequest('getBalance', [
+      publicKey.toBase58(),
+    ]);
     const res = GetBalanceRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
@@ -261,10 +255,9 @@ export class Connection {
    * Fetch all the account info for the specified public key
    */
   async getAccountInfo(publicKey: PublicKey): Promise<AccountInfo> {
-    const unsafeRes = await this._rpcRequest(
-      'getAccountInfo',
-      [publicKey.toBase58()]
-    );
+    const unsafeRes = await this._rpcRequest('getAccountInfo', [
+      publicKey.toBase58(),
+    ]);
     const res = GetAccountInfoRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
@@ -286,10 +279,7 @@ export class Connection {
    * Confirm the transaction identified by the specified signature
    */
   async confirmTransaction(signature: TransactionSignature): Promise<boolean> {
-    const unsafeRes = await this._rpcRequest(
-      'confirmTransaction',
-      [signature]
-    );
+    const unsafeRes = await this._rpcRequest('confirmTransaction', [signature]);
     const res = ConfirmTransactionRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
@@ -301,7 +291,9 @@ export class Connection {
   /**
    * Fetch the current transaction count of the network
    */
-  async getSignatureStatus(signature: TransactionSignature): Promise<SignatureStatus> {
+  async getSignatureStatus(
+    signature: TransactionSignature,
+  ): Promise<SignatureStatus> {
     const unsafeRes = await this._rpcRequest('getSignatureStatus', [signature]);
     const res = GetSignatureStatusRpcResult(unsafeRes);
     if (res.error) {
@@ -310,7 +302,6 @@ export class Connection {
     assert(typeof res.result !== 'undefined');
     return res.result;
   }
-
 
   /**
    * Fetch the current transaction count of the network
@@ -354,8 +345,14 @@ export class Connection {
   /**
    * Request an allocation of tokens to the specified account
    */
-  async requestAirdrop(to: PublicKey, amount: number): Promise<TransactionSignature> {
-    const unsafeRes = await this._rpcRequest('requestAirdrop', [to.toBase58(), amount]);
+  async requestAirdrop(
+    to: PublicKey,
+    amount: number,
+  ): Promise<TransactionSignature> {
+    const unsafeRes = await this._rpcRequest('requestAirdrop', [
+      to.toBase58(),
+      amount,
+    ]);
     const res = RequestAirdropRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
@@ -367,13 +364,17 @@ export class Connection {
   /**
    * Sign and send a transaction
    */
-  async sendTransaction(from: Account, transaction: Transaction): Promise<TransactionSignature> {
+  async sendTransaction(
+    from: Account,
+    transaction: Transaction,
+  ): Promise<TransactionSignature> {
     for (;;) {
       // Attempt to use the previous last id for up to 1 second
-      const seconds = (new Date()).getSeconds();
-      if ( (this._lastIdInfo.lastId != null) &&
-           (this._lastIdInfo.seconds === seconds) ) {
-
+      const seconds = new Date().getSeconds();
+      if (
+        this._lastIdInfo.lastId != null &&
+        this._lastIdInfo.seconds === seconds
+      ) {
         transaction.lastId = this._lastIdInfo.lastId;
         transaction.sign(from);
         if (!transaction.signature) {
@@ -401,13 +402,15 @@ export class Connection {
         if (this._lastIdInfo.lastId != lastId) {
           this._lastIdInfo = {
             lastId,
-            seconds: (new Date()).getSeconds(),
+            seconds: new Date().getSeconds(),
             transactionSignatures: [],
           };
           break;
         }
         if (attempts === 8) {
-          throw new Error(`Unable to obtain a new last id after ${Date.now() - startTime}ms`);
+          throw new Error(
+            `Unable to obtain a new last id after ${Date.now() - startTime}ms`,
+          );
         }
         await sleep(250);
         ++attempts;
@@ -415,7 +418,9 @@ export class Connection {
     }
 
     const wireTransaction = transaction.serialize();
-    const unsafeRes = await this._rpcRequest('sendTransaction', [[...wireTransaction]]);
+    const unsafeRes = await this._rpcRequest('sendTransaction', [
+      [...wireTransaction],
+    ]);
     const res = SendTokensRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
@@ -501,13 +506,15 @@ export class Connection {
       const {subscriptionId, publicKey} = this._accountChangeSubscriptions[id];
       if (subscriptionId === null) {
         try {
-          this._accountChangeSubscriptions[id].subscriptionId =
-            await this._rpcWebSocket.call(
-              'accountSubscribe',
-              [publicKey]
-            );
+          this._accountChangeSubscriptions[
+            id
+          ].subscriptionId = await this._rpcWebSocket.call('accountSubscribe', [
+            publicKey,
+          ]);
         } catch (err) {
-          console.log(`accountSubscribe error for ${publicKey}: ${err.message}`);
+          console.log(
+            `accountSubscribe error for ${publicKey}: ${err.message}`,
+          );
         }
       }
     }
@@ -520,12 +527,15 @@ export class Connection {
    * @param callback Function to invoke whenever the account is changed
    * @return subscription id
    */
-  onAccountChange(publicKey: PublicKey, callback: AccountChangeCallback): number {
+  onAccountChange(
+    publicKey: PublicKey,
+    callback: AccountChangeCallback,
+  ): number {
     const id = ++this._accountChangeSubscriptionCounter;
     this._accountChangeSubscriptions[id] = {
       publicKey: publicKey.toBase58(),
       callback,
-      subscriptionId: null
+      subscriptionId: null,
     };
     this._updateSubscriptions();
     return id;
@@ -552,5 +562,4 @@ export class Connection {
       throw new Error(`Unknown account change id: ${id}`);
     }
   }
-
 }

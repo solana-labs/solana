@@ -17,7 +17,6 @@ if (!mockRpcEnabled) {
   jest.setTimeout(15000);
 }
 
-
 const errorMessage = 'Invalid request';
 const errorResponse = {
   error: {
@@ -25,7 +24,6 @@ const errorResponse = {
   },
   result: undefined,
 };
-
 
 test('get account info - error', () => {
   const account = new Account();
@@ -40,10 +38,10 @@ test('get account info - error', () => {
     errorResponse,
   ]);
 
-  expect(connection.getAccountInfo(account.publicKey))
-  .rejects.toThrow(errorMessage);
+  expect(connection.getAccountInfo(account.publicKey)).rejects.toThrow(
+    errorMessage,
+  );
 });
-
 
 test('get balance', async () => {
   const account = new Account();
@@ -58,7 +56,7 @@ test('get balance', async () => {
     {
       error: null,
       result: 0,
-    }
+    },
   ]);
 
   const balance = await connection.getBalance(account.publicKey);
@@ -77,11 +75,11 @@ test('confirm transaction - error', () => {
       params: [badTransactionSignature],
     },
     errorResponse,
-  ]
-  );
+  ]);
 
-  expect(connection.confirmTransaction(badTransactionSignature))
-  .rejects.toThrow(errorMessage);
+  expect(
+    connection.confirmTransaction(badTransactionSignature),
+  ).rejects.toThrow(errorMessage);
 
   mockRpc.push([
     url,
@@ -90,13 +88,12 @@ test('confirm transaction - error', () => {
       params: [badTransactionSignature],
     },
     errorResponse,
-  ]
-  );
+  ]);
 
-  expect(connection.getSignatureStatus(badTransactionSignature))
-  .rejects.toThrow(errorMessage);
+  expect(
+    connection.getSignatureStatus(badTransactionSignature),
+  ).rejects.toThrow(errorMessage);
 });
-
 
 test('get transaction count', async () => {
   const connection = new Connection(url);
@@ -110,9 +107,8 @@ test('get transaction count', async () => {
     {
       error: null,
       result: 1000000,
-    }
-  ]
-  );
+    },
+  ]);
 
   const count = await connection.getTransactionCount();
   expect(count).toBeGreaterThanOrEqual(0);
@@ -139,9 +135,8 @@ test('get finality', async () => {
     {
       error: null,
       result: 123,
-    }
-  ]
-  );
+    },
+  ]);
 
   const finality = await connection.getFinality();
   expect(finality).toBeGreaterThanOrEqual(0);
@@ -159,8 +154,9 @@ test('request airdrop', async () => {
     },
     {
       error: null,
-      result: '1WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-    }
+      result:
+        '1WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+    },
   ]);
   mockRpc.push([
     url,
@@ -170,8 +166,9 @@ test('request airdrop', async () => {
     },
     {
       error: null,
-      result: '2WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-    }
+      result:
+        '2WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+    },
   ]);
   mockRpc.push([
     url,
@@ -182,7 +179,7 @@ test('request airdrop', async () => {
     {
       error: null,
       result: 42,
-    }
+    },
   ]);
 
   await connection.requestAirdrop(account.publicKey, 40);
@@ -201,18 +198,78 @@ test('request airdrop', async () => {
       error: null,
       result: {
         program_id: [
-          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
         ],
         tokens: 42,
         userdata: [],
         executable: false,
         loader_program_id: [
-          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
         ],
-      }
-    }
+      },
+    },
   ]);
 
   const accountInfo = await connection.getAccountInfo(account.publicKey);
@@ -234,8 +291,9 @@ test('transaction', async () => {
     },
     {
       error: null,
-      result: '0WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-    }
+      result:
+        '0WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+    },
   ]);
   mockRpc.push([
     url,
@@ -246,7 +304,7 @@ test('transaction', async () => {
     {
       error: null,
       result: 12,
-    }
+    },
   ]);
   await connection.requestAirdrop(accountFrom.publicKey, 12);
   expect(await connection.getBalance(accountFrom.publicKey)).toBe(12);
@@ -259,8 +317,9 @@ test('transaction', async () => {
     },
     {
       error: null,
-      result: '8WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-    }
+      result:
+        '8WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+    },
   ]);
   mockRpc.push([
     url,
@@ -271,7 +330,7 @@ test('transaction', async () => {
     {
       error: null,
       result: 21,
-    }
+    },
   ]);
   await connection.requestAirdrop(accountTo.publicKey, 21);
   expect(await connection.getBalance(accountTo.publicKey)).toBe(21);
@@ -284,15 +343,15 @@ test('transaction', async () => {
     },
     {
       error: null,
-      result: '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
-    }
-  ]
-  );
+      result:
+        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
+    },
+  ]);
 
   const transaction = SystemProgram.move(
     accountFrom.publicKey,
     accountTo.publicKey,
-    10
+    10,
   );
   const signature = await connection.sendTransaction(accountFrom, transaction);
 
@@ -301,15 +360,14 @@ test('transaction', async () => {
     {
       method: 'confirmTransaction',
       params: [
-        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk'
+        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
       ],
     },
     {
       error: null,
       result: true,
-    }
-  ]
-  );
+    },
+  ]);
 
   let i = 0;
   for (;;) {
@@ -327,16 +385,17 @@ test('transaction', async () => {
     {
       method: 'getSignatureStatus',
       params: [
-        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk'
+        '3WE5w4B7v59x6qjyC4FbG2FEKYKQfvsJwqSxNVmtMjT8TQ31hsZieDHcSgqzxiAoTL56n2w5TncjqEKjLhtF4Vk',
       ],
     },
     {
       error: null,
       result: 'Confirmed',
-    }
-  ]
+    },
+  ]);
+  await expect(connection.getSignatureStatus(signature)).resolves.toBe(
+    'Confirmed',
   );
-  await expect(connection.getSignatureStatus(signature)).resolves.toBe('Confirmed');
 
   mockRpc.push([
     url,
@@ -347,7 +406,7 @@ test('transaction', async () => {
     {
       error: null,
       result: 2,
-    }
+    },
   ]);
   expect(await connection.getBalance(accountFrom.publicKey)).toBe(2);
 
@@ -360,11 +419,10 @@ test('transaction', async () => {
     {
       error: null,
       result: 31,
-    }
+    },
   ]);
   expect(await connection.getBalance(accountTo.publicKey)).toBe(31);
 });
-
 
 test('multi-instruction transaction', async () => {
   if (mockRpcEnabled) {
@@ -387,13 +445,8 @@ test('multi-instruction transaction', async () => {
   const transaction = SystemProgram.move(
     accountFrom.publicKey,
     accountTo.publicKey,
-    10
-  )
-  .add(SystemProgram.move(
-    accountTo.publicKey,
-    accountFrom.publicKey,
-    10
-  ));
+    10,
+  ).add(SystemProgram.move(accountTo.publicKey, accountFrom.publicKey, 10));
 
   const signature = await connection.sendTransaction(accountFrom, transaction);
   let i = 0;
@@ -406,12 +459,13 @@ test('multi-instruction transaction', async () => {
     expect(++i).toBeLessThan(10);
     await sleep(500);
   }
-  await expect(connection.getSignatureStatus(signature)).resolves.toBe('Confirmed');
+  await expect(connection.getSignatureStatus(signature)).resolves.toBe(
+    'Confirmed',
+  );
 
   expect(await connection.getBalance(accountFrom.publicKey)).toBe(12);
   expect(await connection.getBalance(accountTo.publicKey)).toBe(21);
 });
-
 
 test('account change notification', async () => {
   if (mockRpcEnabled) {
@@ -425,7 +479,10 @@ test('account change notification', async () => {
 
   const mockCallback = jest.fn();
 
-  const subscriptionId = connection.onAccountChange(programAccount.publicKey, mockCallback);
+  const subscriptionId = connection.onAccountChange(
+    programAccount.publicKey,
+    mockCallback,
+  );
 
   await connection.requestAirdrop(owner.publicKey, 42);
   const transaction = SystemProgram.createAccount(
@@ -441,7 +498,6 @@ test('account change notification', async () => {
   await loader.load(programAccount, [1, 2, 3]);
 
   await connection.removeAccountChangeListener(subscriptionId);
-
 
   // mockCallback should be called twice
   //
@@ -462,10 +518,13 @@ test('account change notification', async () => {
   // First mockCallback call is due to SystemProgram.createAccount()
   expect(mockCallback.mock.calls[0][0].tokens).toBe(42);
   expect(mockCallback.mock.calls[0][0].executable).toBe(false);
-  expect(mockCallback.mock.calls[0][0].userdata).toEqual(Buffer.from([0, 0, 0]));
+  expect(mockCallback.mock.calls[0][0].userdata).toEqual(
+    Buffer.from([0, 0, 0]),
+  );
   expect(mockCallback.mock.calls[0][0].programId).toEqual(BpfLoader.programId);
 
   // Second mockCallback call is due to loader.load()
-  expect(mockCallback.mock.calls[1][0].userdata).toEqual(Buffer.from([1, 2, 3]));
+  expect(mockCallback.mock.calls[1][0].userdata).toEqual(
+    Buffer.from([1, 2, 3]),
+  );
 });
-
