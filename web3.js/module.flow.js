@@ -232,5 +232,5 @@ declare module '@solana/web3.js' {
     from: Account,
     transaction: Transaction,
     runtimeErrorOk?: boolean,
-  ): Promise<void>;
+  ): Promise<TransactionSignature>;
 }
