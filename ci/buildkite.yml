@@ -39,7 +39,7 @@ steps:
   - command: "ci/publish-crate.sh"
     timeout_in_minutes: 20
     name: "publish crate [public]"
-  - trigger: "solana-snap"
+  - trigger: "solana-secondary"
     branches: "!pull/*"
     async: true
     build:
