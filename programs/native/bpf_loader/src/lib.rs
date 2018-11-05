@@ -70,7 +70,7 @@ fn serialize_parameters(keyed_accounts: &mut [KeyedAccount], data: &[u8]) -> Vec
         .unwrap();
     for info in keyed_accounts.iter_mut() {
         v.write_all(info.key.as_ref()).unwrap();
-        v.write_i64::<LittleEndian>(info.account.tokens).unwrap();
+        v.write_u64::<LittleEndian>(info.account.tokens).unwrap();
         v.write_u64::<LittleEndian>(info.account.userdata.len() as u64)
             .unwrap();
         v.write_all(&info.account.userdata).unwrap();
@@ -87,7 +87,7 @@ fn deserialize_parameters(keyed_accounts: &mut [KeyedAccount], buffer: &[u8]) {
     let mut start = mem::size_of::<u64>();
     for info in keyed_accounts.iter_mut() {
         start += mem::size_of::<Pubkey>(); // skip pubkey
-        info.account.tokens = LittleEndian::read_i64(&buffer[start..]);
+        info.account.tokens = LittleEndian::read_u64(&buffer[start..]);
 
         start += mem::size_of::<u64>() // skip tokens
                   + mem::size_of::<u64>(); // skip length tag

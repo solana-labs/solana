@@ -16,12 +16,12 @@ pub trait BudgetTransaction {
     fn budget_new_taxed(
         from_keypair: &Keypair,
         to: Pubkey,
-        tokens: i64,
-        fee: i64,
+        tokens: u64,
+        fee: u64,
         last_id: Hash,
     ) -> Self;
 
-    fn budget_new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self;
+    fn budget_new(from_keypair: &Keypair, to: Pubkey, tokens: u64, last_id: Hash) -> Self;
 
     fn budget_new_timestamp(
         from_keypair: &Keypair,
@@ -45,7 +45,7 @@ pub trait BudgetTransaction {
         dt: DateTime<Utc>,
         dt_pubkey: Pubkey,
         cancelable: Option<Pubkey>,
-        tokens: i64,
+        tokens: u64,
         last_id: Hash,
     ) -> Self;
 
@@ -55,7 +55,7 @@ pub trait BudgetTransaction {
         contract: Pubkey,
         witness: Pubkey,
         cancelable: Option<Pubkey>,
-        tokens: i64,
+        tokens: u64,
         last_id: Hash,
     ) -> Self;
 
@@ -70,8 +70,8 @@ impl BudgetTransaction for Transaction {
     fn budget_new_taxed(
         from_keypair: &Keypair,
         to: Pubkey,
-        tokens: i64,
-        fee: i64,
+        tokens: u64,
+        fee: u64,
         last_id: Hash,
     ) -> Self {
         let contract = Keypair::new().pubkey();
@@ -106,7 +106,7 @@ impl BudgetTransaction for Transaction {
     }
 
     /// Create and sign a new Transaction. Used for unit-testing.
-    fn budget_new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self {
+    fn budget_new(from_keypair: &Keypair, to: Pubkey, tokens: u64, last_id: Hash) -> Self {
         Self::budget_new_taxed(from_keypair, to, tokens, 0, last_id)
     }
 
@@ -157,7 +157,7 @@ impl BudgetTransaction for Transaction {
         dt: DateTime<Utc>,
         dt_pubkey: Pubkey,
         cancelable: Option<Pubkey>,
-        tokens: i64,
+        tokens: u64,
         last_id: Hash,
     ) -> Self {
         let expr = if let Some(from) = cancelable {
@@ -186,7 +186,7 @@ impl BudgetTransaction for Transaction {
         contract: Pubkey,
         witness: Pubkey,
         cancelable: Option<Pubkey>,
-        tokens: i64,
+        tokens: u64,
         last_id: Hash,
     ) -> Self {
         let expr = if let Some(from) = cancelable {
@@ -221,7 +221,7 @@ impl BudgetTransaction for Transaction {
     fn verify_plan(&self) -> bool {
         if let Some(SystemProgram::Move { tokens }) = self.system_instruction(0) {
             if let Some(Instruction::NewBudget(expr)) = self.instruction(1) {
-                if !(self.fee >= 0 && self.fee <= tokens && expr.verify(tokens - self.fee)) {
+                if !(self.fee <= tokens && expr.verify(tokens - self.fee)) {
                     return false;
                 }
             }
@@ -261,8 +261,6 @@ mod tests {
         let keypair0 = Keypair::new();
         let pubkey1 = Keypair::new().pubkey();
         assert!(Transaction::budget_new_taxed(&keypair0, pubkey1, 1, 1, zero).verify_plan());
-        assert!(!Transaction::budget_new_taxed(&keypair0, pubkey1, 1, 2, zero).verify_plan());
-        assert!(!Transaction::budget_new_taxed(&keypair0, pubkey1, 1, -1, zero).verify_plan());
     }
 
     #[test]

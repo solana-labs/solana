@@ -31,7 +31,7 @@ impl StorageProgram {
         Pubkey::new(&STORAGE_PROGRAM_ID)
     }
 
-    pub fn get_balance(account: &Account) -> i64 {
+    pub fn get_balance(account: &Account) -> u64 {
         account.tokens
     }
 

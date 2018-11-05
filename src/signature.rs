@@ -84,11 +84,11 @@ impl GenKeys {
         seed
     }
 
-    fn gen_n_seeds(&mut self, n: i64) -> Vec<[u8; 32]> {
+    fn gen_n_seeds(&mut self, n: u64) -> Vec<[u8; 32]> {
         (0..n).map(|_| self.gen_seed()).collect()
     }
 
-    pub fn gen_n_keypairs(&mut self, n: i64) -> Vec<Keypair> {
+    pub fn gen_n_keypairs(&mut self, n: u64) -> Vec<Keypair> {
         self.gen_n_seeds(n)
             .into_par_iter()
             .map(|seed| Keypair::from_seed_unchecked(Input::from(&seed)).unwrap())
@@ -124,7 +124,7 @@ mod tests {
         }
     }
 
-    fn gen_n_pubkeys(seed: [u8; 32], n: i64) -> HashSet<Pubkey> {
+    fn gen_n_pubkeys(seed: [u8; 32], n: u64) -> HashSet<Pubkey> {
         GenKeys::new(seed)
             .gen_n_keypairs(n)
             .into_iter()

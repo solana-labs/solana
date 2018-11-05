@@ -549,7 +549,7 @@ mod tests {
         let num_vote_account_tokens = 1;
         let mint = Mint::new(
             (((num_validators + 1) / 2) * (num_validators + 1)
-                + num_vote_account_tokens * num_validators) as i64,
+                + num_vote_account_tokens * num_validators) as u64,
         );
         let bank = Bank::new(&mint);
         let mut validators = vec![];
@@ -564,7 +564,7 @@ mod tests {
             validators.push(new_pubkey);
             // Give the validator some tokens
             bank.transfer(
-                (i + 1 + num_vote_account_tokens) as i64,
+                (i + 1 + num_vote_account_tokens) as u64,
                 &mint.keypair(),
                 new_pubkey,
                 last_id,
@@ -574,7 +574,7 @@ mod tests {
             let new_vote_account = create_vote_account(
                 &new_validator,
                 &bank,
-                num_vote_account_tokens as i64,
+                num_vote_account_tokens as u64,
                 mint.last_id(),
             ).unwrap();
             // Vote to make the validator part of the active set for the entire test
@@ -743,7 +743,7 @@ mod tests {
     fn test_rank_active_set() {
         let num_validators: usize = 101;
         // Give mint sum(1..num_validators) tokens
-        let mint = Mint::new((((num_validators + 1) / 2) * (num_validators + 1)) as i64);
+        let mint = Mint::new((((num_validators + 1) / 2) * (num_validators + 1)) as u64);
         let bank = Bank::new(&mint);
         let mut validators = vec![];
         let last_id = mint
@@ -756,7 +756,7 @@ mod tests {
             let new_pubkey = new_validator.pubkey();
             validators.push(new_validator);
             bank.transfer(
-                (num_validators - i) as i64,
+                (num_validators - i) as u64,
                 &mint.keypair(),
                 new_pubkey,
                 last_id,
@@ -782,7 +782,7 @@ mod tests {
             let new_pubkey = new_validator.pubkey();
             new_validators.push(new_validator);
             bank.transfer(
-                (num_validators - i) as i64,
+                (num_validators - i) as u64,
                 &validators[i],
                 new_pubkey,
                 last_id,
@@ -803,7 +803,7 @@ mod tests {
         }
 
         // Break ties between validators with the same balances using public key
-        let mint = Mint::new(num_validators as i64);
+        let mint = Mint::new(num_validators as u64);
         let bank = Bank::new(&mint);
         let mut tied_validators_pk = vec![];
         let last_id = mint
@@ -956,7 +956,7 @@ mod tests {
         // Create the bank and validators
         let mint = Mint::new(
             ((((num_validators + 1) / 2) * (num_validators + 1))
-                + (num_vote_account_tokens * num_validators)) as i64,
+                + (num_vote_account_tokens * num_validators)) as u64,
         );
         let bank = Bank::new(&mint);
         let mut validators = vec![];
@@ -971,7 +971,7 @@ mod tests {
             validators.push(new_pubkey);
             // Give the validator some tokens
             bank.transfer(
-                (i + 1 + num_vote_account_tokens) as i64,
+                (i + 1 + num_vote_account_tokens) as u64,
                 &mint.keypair(),
                 new_pubkey,
                 last_id,
@@ -981,7 +981,7 @@ mod tests {
             let new_vote_account = create_vote_account(
                 &new_validator,
                 &bank,
-                num_vote_account_tokens as i64,
+                num_vote_account_tokens as u64,
                 mint.last_id(),
             ).unwrap();
 

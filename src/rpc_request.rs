@@ -175,7 +175,7 @@ mod tests {
             Some(json!("deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx")),
         );
         assert!(balance.is_ok());
-        assert_eq!(balance.unwrap().as_i64().unwrap(), 50);
+        assert_eq!(balance.unwrap().as_u64().unwrap(), 50);
 
         let last_id = RpcRequest::GetLastId.make_rpc_request(&rpc_addr, 2, None);
         assert!(last_id.is_ok());

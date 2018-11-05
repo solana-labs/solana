@@ -74,7 +74,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         let fund = Transaction::system_move(
             &mint.keypair(),
             tx.account_keys[0],
-            mint_total / txes as i64,
+            mint_total / txes as u64,
             mint.last_id(),
             0,
         );
@@ -175,7 +175,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         let fund = Transaction::system_move(
             &mint.keypair(),
             tx.account_keys[0],
-            mint_total / txes as i64,
+            mint_total / txes as u64,
             mint.last_id(),
             0,
         );

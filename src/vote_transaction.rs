@@ -15,24 +15,24 @@ use transaction::Transaction;
 use vote_program::{Vote, VoteInstruction, VoteProgram};
 
 pub trait VoteTransaction {
-    fn vote_new(vote_account: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self;
+    fn vote_new(vote_account: &Keypair, vote: Vote, last_id: Hash, fee: u64) -> Self;
     fn vote_account_new(
         validator_id: &Keypair,
         new_vote_account_id: Pubkey,
         last_id: Hash,
-        num_tokens: i64,
+        num_tokens: u64,
     ) -> Self;
     fn vote_account_register(
         validator_id: &Keypair,
         vote_account_id: Pubkey,
         last_id: Hash,
-        fee: i64,
+        fee: u64,
     ) -> Self;
     fn get_votes(&self) -> Vec<(Pubkey, Vote, Hash)>;
 }
 
 impl VoteTransaction for Transaction {
-    fn vote_new(vote_account: &Keypair, vote: Vote, last_id: Hash, fee: i64) -> Self {
+    fn vote_new(vote_account: &Keypair, vote: Vote, last_id: Hash, fee: u64) -> Self {
         let instruction = VoteInstruction::NewVote(vote);
         let userdata = serialize(&instruction).expect("serialize instruction");
         Transaction::new(vote_account, &[], VoteProgram::id(), userdata, last_id, fee)
@@ -42,7 +42,7 @@ impl VoteTransaction for Transaction {
         validator_id: &Keypair,
         new_vote_account_id: Pubkey,
         last_id: Hash,
-        num_tokens: i64,
+        num_tokens: u64,
     ) -> Self {
         Transaction::system_create(
             validator_id,
@@ -59,7 +59,7 @@ impl VoteTransaction for Transaction {
         validator_id: &Keypair,
         vote_account_id: Pubkey,
         last_id: Hash,
-        fee: i64,
+        fee: u64,
     ) -> Self {
         let register_tx = VoteInstruction::RegisterAccount;
         let userdata = serialize(&register_tx).unwrap();
@@ -91,7 +91,7 @@ impl VoteTransaction for Transaction {
 pub fn create_vote_account(
     node_keypair: &Keypair,
     bank: &Bank,
-    num_tokens: i64,
+    num_tokens: u64,
     last_id: Hash,
 ) -> Result<Keypair> {
     let new_vote_account = Keypair::new();

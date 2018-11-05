@@ -235,7 +235,7 @@ impl BudgetState {
     }
 
     //TODO the contract needs to provide a "get_balance" introspection call of the userdata
-    pub fn get_balance(account: &Account) -> i64 {
+    pub fn get_balance(account: &Account) -> u64 {
         if let Ok(state) = deserialize(&account.userdata) {
             let state: BudgetState = state;
             if state.is_pending() {

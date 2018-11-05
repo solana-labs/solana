@@ -154,7 +154,7 @@ impl ThinClient {
         node_keypair: &Keypair,
         vote_account_id: Pubkey,
         last_id: &Hash,
-        num_tokens: i64,
+        num_tokens: u64,
     ) -> io::Result<Signature> {
         let tx =
             Transaction::vote_account_new(&node_keypair, vote_account_id, *last_id, num_tokens);
@@ -175,7 +175,7 @@ impl ThinClient {
     /// Creates, signs, and processes a Transaction. Useful for writing unit-tests.
     pub fn transfer(
         &self,
-        n: i64,
+        n: u64,
         keypair: &Keypair,
         to: Pubkey,
         last_id: &Hash,
@@ -215,7 +215,7 @@ impl ThinClient {
     /// Request the balance of the user holding `pubkey`. This method blocks
     /// until the server sends a response. If the response packet is dropped
     /// by the network, this method will hang indefinitely.
-    pub fn get_balance(&mut self, pubkey: &Pubkey) -> io::Result<i64> {
+    pub fn get_balance(&mut self, pubkey: &Pubkey) -> io::Result<u64> {
         trace!("get_balance sending request to {}", self.requests_addr);
         let req = Request::GetAccount { key: *pubkey };
         let data = serialize(&req).expect("serialize GetAccount in pub fn get_balance");
@@ -337,7 +337,7 @@ impl ThinClient {
         pubkey: &Pubkey,
         polling_frequency: &Duration,
         timeout: &Duration,
-    ) -> io::Result<i64> {
+    ) -> io::Result<u64> {
         let now = Instant::now();
         loop {
             match self.get_balance(&pubkey) {
@@ -356,7 +356,7 @@ impl ThinClient {
         }
     }
 
-    pub fn poll_get_balance(&mut self, pubkey: &Pubkey) -> io::Result<i64> {
+    pub fn poll_get_balance(&mut self, pubkey: &Pubkey) -> io::Result<u64> {
         self.poll_balance_with_timeout(pubkey, &Duration::from_millis(100), &Duration::from_secs(1))
     }
 
@@ -473,8 +473,8 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
 pub fn retry_get_balance(
     client: &mut ThinClient,
     bob_pubkey: &Pubkey,
-    expected_balance: Option<i64>,
-) -> Option<i64> {
+    expected_balance: Option<u64>,
+) -> Option<u64> {
     const LAST: usize = 30;
     for run in 0..LAST {
         let balance_result = client.poll_get_balance(bob_pubkey);

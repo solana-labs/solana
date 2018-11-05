@@ -40,7 +40,7 @@ pub struct Transaction {
     pub last_id: Hash,
 
     /// The number of tokens paid for processing and storage of this transaction.
-    pub fee: i64,
+    pub fee: u64,
 
     /// Keys identifying programs in the instructions vector.
     pub program_ids: Vec<Pubkey>,
@@ -56,7 +56,7 @@ impl Transaction {
         program_id: Pubkey,
         userdata: Vec<u8>,
         last_id: Hash,
-        fee: i64,
+        fee: u64,
     ) -> Self {
         let program_ids = vec![program_id];
         let instructions = vec![Instruction {
@@ -85,7 +85,7 @@ impl Transaction {
         from_keypair: &Keypair,
         keys: &[Pubkey],
         last_id: Hash,
-        fee: i64,
+        fee: u64,
         program_ids: Vec<Pubkey>,
         instructions: Vec<Instruction>,
     ) -> Self {

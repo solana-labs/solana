@@ -5,7 +5,7 @@ use chrono::prelude::{DateTime, Utc};
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Contract {
     /// The number of tokens allocated to the `BudgetExpr` and any transaction fees.
-    pub tokens: i64,
+    pub tokens: u64,
     pub budget_expr: BudgetExpr,
 }
 

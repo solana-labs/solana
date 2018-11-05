@@ -623,9 +623,9 @@ pub fn create_tmp_ledger_with_mint(name: &str, mint: &Mint) -> String {
 
 pub fn create_tmp_genesis(
     name: &str,
-    num: i64,
+    num: u64,
     bootstrap_leader_id: Pubkey,
-    bootstrap_leader_tokens: i64,
+    bootstrap_leader_tokens: u64,
 ) -> (Mint, String) {
     let mint = Mint::new_with_leader(num, bootstrap_leader_id, bootstrap_leader_tokens);
     let path = create_tmp_ledger_with_mint(name, &mint);
@@ -646,10 +646,10 @@ pub fn create_ticks(num_ticks: usize, mut hash: Hash) -> Vec<Entry> {
 
 pub fn create_tmp_sample_ledger(
     name: &str,
-    num_tokens: i64,
+    num_tokens: u64,
     num_ending_ticks: usize,
     bootstrap_leader_id: Pubkey,
-    bootstrap_leader_tokens: i64,
+    bootstrap_leader_tokens: u64,
 ) -> (Mint, String, Vec<Entry>) {
     let mint = Mint::new_with_leader(num_tokens, bootstrap_leader_id, bootstrap_leader_tokens);
     let path = get_tmp_ledger_path(name);

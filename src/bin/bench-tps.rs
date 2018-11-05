@@ -46,7 +46,7 @@ pub struct NodeStats {
     pub tx: u64,  // Total transactions reported by this node
 }
 
-fn metrics_submit_token_balance(token_balance: i64) {
+fn metrics_submit_token_balance(token_balance: u64) {
     println!("Token balance: {}", token_balance);
     metrics::submit(
         influxdb::Point::new("bench-tps")
@@ -313,14 +313,14 @@ fn verify_transfer(client: &mut ThinClient, tx: &Transaction) -> bool {
 /// fund the dests keys by spending all of the source keys into MAX_SPENDS_PER_TX
 /// on every iteration.  This allows us to replay the transfers because the source is either empty,
 /// or full
-fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], tokens: i64) {
-    let total = tokens * dests.len() as i64;
-    let mut funded: Vec<(&Keypair, i64)> = vec![(source, total)];
+fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], tokens: u64) {
+    let total = tokens * dests.len() as u64;
+    let mut funded: Vec<(&Keypair, u64)> = vec![(source, total)];
     let mut notfunded: Vec<&Keypair> = dests.iter().collect();
 
     println!("funding keys {}", dests.len());
     while !notfunded.is_empty() {
-        let mut new_funded: Vec<(&Keypair, i64)> = vec![];
+        let mut new_funded: Vec<(&Keypair, u64)> = vec![];
         let mut to_fund = vec![];
         println!("creating from... {}", funded.len());
         for f in &mut funded {
@@ -329,7 +329,7 @@ fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], token
                 break;
             }
             let start = notfunded.len() - max_units;
-            let per_unit = f.1 / (max_units as i64);
+            let per_unit = f.1 / (max_units as u64);
             let moves: Vec<_> = notfunded[start..]
                 .iter()
                 .map(|k| (k.pubkey(), per_unit))
@@ -376,7 +376,7 @@ fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], token
     }
 }
 
-fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_count: i64) {
+fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_count: u64) {
     let mut drone_addr = leader.contact_info.tpu;
     drone_addr.set_port(DRONE_PORT);
 
@@ -494,7 +494,7 @@ fn compute_and_report_stats(
 // First transfer 3/4 of the tokens to the dest accounts
 // then ping-pong 1/4 of the tokens back to the other account
 // this leaves 1/4 token buffer in each account
-fn should_switch_directions(num_tokens_per_account: i64, i: i64) -> bool {
+fn should_switch_directions(num_tokens_per_account: u64, i: u64) -> bool {
     i % (num_tokens_per_account / 4) == 0 && (i >= (3 * num_tokens_per_account) / 4)
 }
 
@@ -653,7 +653,7 @@ fn main() {
         total_keys += target;
         target /= MAX_SPENDS_PER_TX;
     }
-    let gen_keypairs = rnd.gen_n_keypairs(total_keys as i64);
+    let gen_keypairs = rnd.gen_n_keypairs(total_keys as u64);
     let barrier_id = rnd.gen_n_keypairs(1).pop().unwrap();
 
     println!("Get tokens...");
@@ -667,7 +667,7 @@ fn main() {
 
     if num_tokens_per_account > keypair0_balance {
         let extra = num_tokens_per_account - keypair0_balance;
-        let total = extra * (gen_keypairs.len() as i64);
+        let total = extra * (gen_keypairs.len() as u64);
         airdrop_tokens(&mut client, &leader, &id, total);
         println!("adding more tokens {}", extra);
         fund_keys(&mut client, &id, &gen_keypairs, extra);
@@ -730,7 +730,7 @@ fn main() {
     let mut reclaim_tokens_back_to_source_account = false;
     let mut i = keypair0_balance;
     while start.elapsed() < duration {
-        let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(-1);
+        let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(0);
         metrics_submit_token_balance(balance);
 
         // ping-pong between source and destination accounts for each loop iteration
@@ -782,7 +782,7 @@ fn main() {
         }
     }
 
-    let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(-1);
+    let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(0);
     metrics_submit_token_balance(balance);
 
     compute_and_report_stats(
