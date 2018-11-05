@@ -2,8 +2,10 @@
 
 cd "$(dirname "$0")/.."
 
-echo --- downloading snap from build artifacts
-buildkite-agent artifact download "solana_*.snap" .
+if [[ -z $USE_PREBUILT_CHANNEL_TARBALL ]]; then
+  echo --- downloading snap from build artifacts
+  buildkite-agent artifact download "solana_*.snap" .
+fi
 
 # shellcheck disable=SC1091
 source ci/upload_ci_artifact.sh
@@ -15,6 +17,7 @@ source ci/upload_ci_artifact.sh
 [[ -n $CLIENT_COUNT ]] || CLIENT_COUNT=2
 [[ -n $TESTNET_TAG ]] || TESTNET_TAG=testnet-automation
 [[ -n $TESTNET_ZONE ]] || TESTNET_ZONE=us-west1-b
+[[ -n $CHANNEL ]] || CHANNEL=beta
 
 launchTestnet() {
   declare nodeCount=$1
@@ -28,7 +31,11 @@ launchTestnet() {
   net/init-metrics.sh -e
 
   echo --- start "$nodeCount" node test
-  net/net.sh start -o noValidatorSanity -S solana_*.snap
+  if [[ -n $USE_PREBUILT_CHANNEL_TARBALL ]]; then
+    net/net.sh start -o noValidatorSanity -t "$CHANNEL"
+  else
+    net/net.sh start -o noValidatorSanity -S solana_*.snap
+  fi
 
   echo --- wait "$ITERATION_WAIT" seconds to complete test
   sleep "$ITERATION_WAIT"
