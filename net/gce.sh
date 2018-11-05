@@ -36,7 +36,7 @@ ec2)
   cpuLeaderMachineType=m4.4xlarge
   gpuLeaderMachineType=p2.xlarge
   leaderMachineType=$cpuLeaderMachineType
-  validatorMachineType=m4.xlarge
+  validatorMachineType=m4.4xlarge
   clientMachineType=m4.4xlarge
   ;;
 *)

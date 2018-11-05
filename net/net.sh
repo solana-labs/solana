@@ -215,10 +215,11 @@ sanity() {
   echo "--- Sanity"
   $metricsWriteDatapoint "testnet-deploy net-sanity-begin=1"
 
+  declare host=$leaderIp # TODO: maybe use ${validatorIpList[0]} ?
   (
     set -x
     # shellcheck disable=SC2029 # remote-client.sh args are expanded on client side intentionally
-    ssh "${sshOptions[@]}" "$leaderIp" \
+    ssh "${sshOptions[@]}" "$host" \
       "./solana/net/remote/remote-sanity.sh $sanityExtraArgs"
   ) || ok=false
 
