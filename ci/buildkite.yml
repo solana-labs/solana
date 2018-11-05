@@ -36,7 +36,7 @@ steps:
     timeout_in_minutes: 20
     name: "snap [public]"
   - wait
-  - trigger: "solana-snap"
+  - trigger: "solana-secondary"
     branches: "!pull/*"
     async: true
     build:
