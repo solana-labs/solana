@@ -15,11 +15,13 @@ extern bool entrypoint(const uint8_t *input) {
   SolKeyedAccounts ka[NUM_KA];
   const uint8_t *data;
   uint64_t data_len;
+  
+  sol_log("noop");
 
   if (!sol_deserialize(input, ka, NUM_KA, NULL, &data, &data_len)) {
     return false;
   }
-  sol_print_params(NUM_KA, ka, data, data_len);
+  sol_log_params(NUM_KA, ka, data, data_len);
 
   sol_assert(sizeof(int8_t) == 1);
   sol_assert(sizeof(uint8_t) == 1);

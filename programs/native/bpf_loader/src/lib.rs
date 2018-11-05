@@ -5,20 +5,24 @@ extern crate byteorder;
 extern crate env_logger;
 #[macro_use]
 extern crate log;
+extern crate libc;
 extern crate solana_rbpf;
 extern crate solana_sdk;
 
 use bincode::deserialize;
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
-use solana_rbpf::{helpers, EbpfVmRaw};
+use libc::c_char;
+use solana_rbpf::EbpfVmRaw;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
+use std::ffi::CStr;
 use std::io::prelude::*;
-use std::io::Error;
+use std::io::{Error, ErrorKind};
 use std::mem;
 use std::sync::{Once, ONCE_INIT};
 
+// TODO use rbpf's disassemble
 #[allow(dead_code)]
 fn dump_program(key: &Pubkey, prog: &[u8]) {
     let mut eight_bytes: Vec<u8> = Vec::new();
@@ -33,32 +37,64 @@ fn dump_program(key: &Pubkey, prog: &[u8]) {
     }
 }
 
-pub fn helper_printf(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) -> u64 {
+#[allow(unused_variables)]
+pub fn helper_sol_log_verify(
+    addr: u64,
+    unused2: u64,
+    unused3: u64,
+    unused4: u64,
+    unused5: u64,
+    ro_regions: &[&[u8]],
+    unused7: &[&[u8]],
+) -> Result<(()), Error> {
+    for region in ro_regions.iter() {
+        if region.as_ptr() as u64 <= addr
+            && addr as u64 <= region.as_ptr() as u64 + region.len() as u64
+        {
+            let c_buf: *const c_char = addr as *const c_char;
+            let max_size = (region.as_ptr() as u64 + region.len() as u64) - addr;
+            unsafe {
+                for i in 0..max_size {
+                    if std::ptr::read(c_buf.offset(i as isize)) == 0 {
+                        return Ok(());
+                    }
+                }
+            }
+            return Err(Error::new(ErrorKind::Other, "Error, Unterminated string"));
+        }
+    }
+    Err(Error::new(
+        ErrorKind::Other,
+        "Error: Load segfault, bad string pointer",
+    ))
+}
+
+#[allow(unused_variables)]
+pub fn helper_sol_log(addr: u64, unused2: u64, unused3: u64, unused4: u64, unused5: u64) -> u64 {
+    let c_buf: *const c_char = addr as *const c_char;
+    let c_str: &CStr = unsafe { CStr::from_ptr(c_buf) };
+    match c_str.to_str() {
+        Ok(slice) => info!("sol_log: {:?}", slice),
+        Err(e) => warn!("Error: Cannot print invalid string"),
+    };
+    0
+}
+
+pub fn helper_sol_log_u64(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) -> u64 {
     info!(
-        "bpf_trace_printf: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
+        "sol_log_u64: {:#x}, {:#x}, {:#x}, {:#x}, {:#x}",
         arg1, arg2, arg3, arg4, arg5
     );
-    let size_arg = |x| {
-        if x == 0 {
-            1
-        } else {
-            (x as f64).log(16.0).floor() as u64 + 1
-        }
-    };
-    "bpf_trace_printf: 0x, 0x, 0x, 0x, 0x\n".len() as u64
-        + size_arg(arg1)
-        + size_arg(arg2)
-        + size_arg(arg3)
-        + size_arg(arg4)
-        + size_arg(arg5)
+    0
 }
 
 fn create_vm(prog: &[u8]) -> Result<EbpfVmRaw, Error> {
     let mut vm = EbpfVmRaw::new(None)?;
     vm.set_verifier(bpf_verifier::check)?;
     vm.set_max_instruction_count(36000)?; // 36000 is a wag, need to tune
-    vm.set_program(&prog)?;
-    vm.register_helper(helpers::BPF_TRACE_PRINTK_IDX, helper_printf)?;
+    vm.set_elf(&prog)?;
+    vm.register_helper_ex("sol_log", Some(helper_sol_log_verify), helper_sol_log)?;
+    vm.register_helper_ex("sol_log_64", None, helper_sol_log_u64)?;
     Ok(vm)
 }
 

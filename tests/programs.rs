@@ -1,5 +1,4 @@
 extern crate bincode;
-extern crate elf;
 extern crate serde_derive;
 extern crate solana;
 extern crate solana_sdk;
@@ -18,6 +17,8 @@ use solana::transaction::Transaction;
 use solana_sdk::pubkey::Pubkey;
 #[cfg(feature = "bpf_c")]
 use std::env;
+use std::fs::File;
+use std::io::Read;
 #[cfg(feature = "bpf_c")]
 use std::path::PathBuf;
 
@@ -118,7 +119,7 @@ struct Program {
 }
 
 impl Program {
-    pub fn new(loader: &Loader, userdata: Vec<u8>) -> Self {
+    pub fn new(loader: &Loader, userdata: &Vec<u8>) -> Self {
         let program = Keypair::new();
 
         // allocate, populate, finalize and spawn program
@@ -182,7 +183,7 @@ fn test_program_native_noop() {
     let loader = Loader::new_native();
     let name = String::from("noop");
     let userdata = name.as_bytes().to_vec();
-    let program = Program::new(&loader, userdata);
+    let program = Program::new(&loader, &userdata);
 
     // Call user program
     let tx = Transaction::new(
@@ -212,7 +213,7 @@ fn test_program_lua_move_funds() {
             accounts[2].tokens = accounts[2].tokens + tokens
         "#.as_bytes()
     .to_vec();
-    let program = Program::new(&loader, userdata);
+    let program = Program::new(&loader, &userdata);
     let from = Keypair::new();
     let to = Keypair::new().pubkey();
 
@@ -271,16 +272,12 @@ fn test_program_lua_move_funds() {
 fn test_program_builtin_bpf_noop() {
     logger::setup();
 
+    let mut file = File::open(create_bpf_path("noop")).expect("file open failed");
+    let mut elf = Vec::new();
+    file.read_to_end(&mut elf).unwrap();
+
     let loader = Loader::new_bpf();
-    let program = Program::new(
-        &loader,
-        elf::File::open_path(&create_bpf_path("noop"))
-            .unwrap()
-            .get_section(PLATFORM_SECTION_C)
-            .unwrap()
-            .data
-            .clone(),
-    );
+    let program = Program::new(&loader, &elf);
 
     // Call user program
     let tx = Transaction::new(
@@ -303,16 +300,12 @@ fn test_program_builtin_bpf_noop() {
 fn test_program_bpf_noop_c() {
     logger::setup();
 
+    let mut file = File::open(create_bpf_path("noop")).expect("file open failed");
+    let mut elf = Vec::new();
+    file.read_to_end(&mut elf).unwrap();
+
     let loader = Loader::new_dynamic("solana_bpf_loader");
-    let program = Program::new(
-        &loader,
-        elf::File::open_path(&create_bpf_path("noop"))
-            .unwrap()
-            .get_section(PLATFORM_SECTION_C)
-            .unwrap()
-            .data
-            .clone(),
-    );
+    let program = Program::new(&loader, &elf);
 
     // Call user program
     let tx = Transaction::new(
