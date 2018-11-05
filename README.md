@@ -62,7 +62,7 @@ your odds of success if you check out the
 before proceeding:
 
 ```bash
-$ git checkout v0.8.0
+$ git checkout v0.10.0
 ```
 
 Configuration Setup
