@@ -12,8 +12,6 @@ Cargo.lock
 /config-client/
 /multinode-demo/test/config-client/
 
-# test temp files, ledgers, etc.
-/farf/
-
 # log files
 *.log
+log-*.txt
