@@ -20,7 +20,7 @@ pub enum Witness {
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Payment {
     /// Amount to be paid.
-    pub tokens: i64,
+    pub tokens: u64,
 
     /// The `Pubkey` that `tokens` should be paid to.
     pub to: Pubkey,

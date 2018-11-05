@@ -59,7 +59,7 @@ fn main() -> Result<(), Box<error::Error>> {
     let leader_keypair = leader_config.keypair();
 
     // Parse the input mint configuration
-    let num_tokens = value_t_or_exit!(matches, "num_tokens", i64);
+    let num_tokens = value_t_or_exit!(matches, "num_tokens", u64);
     let file = File::open(Path::new(&matches.value_of("mint").unwrap())).unwrap();
     let pkcs8: Vec<u8> = serde_json::from_reader(&file)?;
     let mint = Mint::new_with_pkcs8(num_tokens, pkcs8, leader_keypair.pubkey(), 1);

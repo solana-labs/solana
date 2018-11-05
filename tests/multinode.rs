@@ -504,7 +504,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
     let initial_leader_balance = 500;
     let (alice, ledger_path) = create_tmp_genesis(
         "leader_restart_validator_start_from_old_ledger",
-        100_000 + 500 * solana::window_service::MAX_REPAIR_BACKOFF as i64,
+        100_000 + 500 * solana::window_service::MAX_REPAIR_BACKOFF as u64,
         leader_keypair.pubkey(),
         initial_leader_balance,
     );
@@ -737,7 +737,7 @@ fn test_multi_node_dynamic_network() {
             info!("Took {} s to converge", duration_as_s(&start.elapsed()),);
             info!("Verifying signature of the last transaction in the validators");
 
-            let mut num_nodes_behind = 0i64;
+            let mut num_nodes_behind = 0u64;
             validators.retain(|server| {
                 let mut client = mk_client(&server.0);
                 trace!("{} checking signature", server.0.id);
@@ -855,11 +855,11 @@ fn test_leader_to_validator_transition() {
         // to ensure that each transaction is packaged as a single entry,
         // so that we can be sure leader rotation is triggered
         let result =
-            send_tx_and_retry_get_balance(&leader_info, &mint, &bob_pubkey, 1, Some(i as i64));
+            send_tx_and_retry_get_balance(&leader_info, &mint, &bob_pubkey, 1, Some(i as u64));
 
         // If the transaction wasn't reflected in the node, then we assume
         // the node has transitioned already
-        if result != Some(i as i64) {
+        if result != Some(i as u64) {
             break;
         }
 
@@ -989,7 +989,7 @@ fn test_leader_validator_basic() {
 
         // If the transaction wasn't reflected in the node, then we assume
         // the node has transitioned already
-        if result != Some(i as i64) {
+        if result != Some(i as u64) {
             break;
         }
 
@@ -1470,9 +1470,9 @@ fn send_tx_and_retry_get_balance(
     leader: &NodeInfo,
     alice: &Mint,
     bob_pubkey: &Pubkey,
-    transfer_amount: i64,
-    expected: Option<i64>,
-) -> Option<i64> {
+    transfer_amount: u64,
+    expected: Option<u64>,
+) -> Option<u64> {
     let mut client = mk_client(leader);
     trace!("getting leader last_id");
     let last_id = client.get_last_id();
@@ -1486,8 +1486,8 @@ fn retry_send_tx_and_retry_get_balance(
     leader: &NodeInfo,
     alice: &Mint,
     bob_pubkey: &Pubkey,
-    expected: Option<i64>,
-) -> Option<i64> {
+    expected: Option<u64>,
+) -> Option<u64> {
     let mut client = mk_client(leader);
     trace!("getting leader last_id");
     let last_id = client.get_last_id();

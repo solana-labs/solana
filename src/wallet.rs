@@ -37,7 +37,7 @@ const USERDATA_CHUNK_SIZE: usize = 256;
 #[derive(Debug, PartialEq)]
 pub enum WalletCommand {
     Address,
-    AirDrop(i64),
+    AirDrop(u64),
     Balance,
     Cancel(Pubkey),
     Confirm(Signature),
@@ -45,7 +45,7 @@ pub enum WalletCommand {
     GetTransactionCount,
     // Pay(tokens, to, timestamp, timestamp_pubkey, witness(es), cancelable)
     Pay(
-        i64,
+        u64,
         Pubkey,
         Option<DateTime<Utc>>,
         Option<Pubkey>,
@@ -308,7 +308,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             let params = json!(format!("{}", config.id.pubkey()));
             let previous_balance = match RpcRequest::GetBalance
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
-                .as_i64()
+                .as_u64()
             {
                 Some(tokens) => tokens,
                 None => Err(WalletError::RpcRequestError(
@@ -325,7 +325,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 let params = json!(format!("{}", config.id.pubkey()));
                 current_balance = RpcRequest::GetBalance
                     .make_rpc_request(&config.rpc_addr, 1, Some(params))?
-                    .as_i64()
+                    .as_u64()
                     .unwrap_or(previous_balance);
 
                 if previous_balance < current_balance {
@@ -344,7 +344,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             let params = json!(format!("{}", config.id.pubkey()));
             let balance = RpcRequest::GetBalance
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
-                .as_i64();
+                .as_u64();
             match balance {
                 Some(0) => Ok("No account found! Request an airdrop to get started.".to_string()),
                 Some(tokens) => Ok(format!("Your balance is: {:?}", tokens)),
@@ -385,7 +385,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             let params = json!(format!("{}", config.id.pubkey()));
             let balance = RpcRequest::GetBalance
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
-                .as_i64();
+                .as_u64();
             if let Some(tokens) = balance {
                 if tokens < 1 {
                     Err(WalletError::DynamicProgramError(
@@ -589,7 +589,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             let params = json!(format!("{}", config.id.pubkey()));
             let balance = RpcRequest::GetBalance
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
-                .as_i64();
+                .as_u64();
             if let Some(0) = balance {
                 request_airdrop(&config.drone_addr, &config.id.pubkey(), 1)?;
             }
@@ -608,7 +608,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             let params = json!(format!("{}", config.id.pubkey()));
             let balance = RpcRequest::GetBalance
                 .make_rpc_request(&config.rpc_addr, 1, Some(params))?
-                .as_i64();
+                .as_u64();
             if let Some(0) = balance {
                 request_airdrop(&config.drone_addr, &config.id.pubkey(), 1)?;
             }
@@ -1314,21 +1314,21 @@ mod tests {
         let config_payer_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
-            .as_i64()
+            .as_u64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
         let params = json!(format!("{}", process_id));
         let contract_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
-            .as_i64()
+            .as_u64()
             .unwrap();
         assert_eq!(contract_balance, 11);
         let params = json!(format!("{}", bob_pubkey));
         let recipient_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
-            .as_i64()
+            .as_u64()
             .unwrap();
         assert_eq!(recipient_balance, 0);
 
@@ -1341,21 +1341,21 @@ mod tests {
         let config_payer_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
-            .as_i64()
+            .as_u64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
         let params = json!(format!("{}", process_id));
         let contract_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
-            .as_i64()
+            .as_u64()
             .unwrap();
         assert_eq!(contract_balance, 1);
         let params = json!(format!("{}", bob_pubkey));
         let recipient_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
-            .as_i64()
+            .as_u64()
             .unwrap();
         assert_eq!(recipient_balance, 10);
 
@@ -1437,21 +1437,21 @@ mod tests {
         let config_payer_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
-            .as_i64()
+            .as_u64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
         let params = json!(format!("{}", process_id));
         let contract_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
-            .as_i64()
+            .as_u64()
             .unwrap();
         assert_eq!(contract_balance, 11);
         let params = json!(format!("{}", bob_pubkey));
         let recipient_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
-            .as_i64()
+            .as_u64()
             .unwrap();
         assert_eq!(recipient_balance, 0);
 
@@ -1464,21 +1464,21 @@ mod tests {
         let config_payer_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
-            .as_i64()
+            .as_u64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
         let params = json!(format!("{}", process_id));
         let contract_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
-            .as_i64()
+            .as_u64()
             .unwrap();
         assert_eq!(contract_balance, 1);
         let params = json!(format!("{}", bob_pubkey));
         let recipient_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
-            .as_i64()
+            .as_u64()
             .unwrap();
         assert_eq!(recipient_balance, 10);
 
@@ -1562,21 +1562,21 @@ mod tests {
         let config_payer_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
-            .as_i64()
+            .as_u64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
         let params = json!(format!("{}", process_id));
         let contract_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
-            .as_i64()
+            .as_u64()
             .unwrap();
         assert_eq!(contract_balance, 11);
         let params = json!(format!("{}", bob_pubkey));
         let recipient_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
-            .as_i64()
+            .as_u64()
             .unwrap();
         assert_eq!(recipient_balance, 0);
 
@@ -1589,21 +1589,21 @@ mod tests {
         let config_payer_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
-            .as_i64()
+            .as_u64()
             .unwrap();
         assert_eq!(config_payer_balance, 49);
         let params = json!(format!("{}", process_id));
         let contract_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
-            .as_i64()
+            .as_u64()
             .unwrap();
         assert_eq!(contract_balance, 1);
         let params = json!(format!("{}", bob_pubkey));
         let recipient_balance = RpcRequest::GetBalance
             .make_rpc_request(&config_payer.rpc_addr, 1, Some(params))
             .unwrap()
-            .as_i64()
+            .as_u64()
             .unwrap();
         assert_eq!(recipient_balance, 0);
 

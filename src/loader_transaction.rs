@@ -14,10 +14,10 @@ pub trait LoaderTransaction {
         offset: u32,
         bytes: Vec<u8>,
         last_id: Hash,
-        fee: i64,
+        fee: u64,
     ) -> Self;
 
-    fn finalize(from_keypair: &Keypair, loader: Pubkey, last_id: Hash, fee: i64) -> Self;
+    fn finalize(from_keypair: &Keypair, loader: Pubkey, last_id: Hash, fee: u64) -> Self;
 }
 
 impl LoaderTransaction for Transaction {
@@ -27,7 +27,7 @@ impl LoaderTransaction for Transaction {
         offset: u32,
         bytes: Vec<u8>,
         last_id: Hash,
-        fee: i64,
+        fee: u64,
     ) -> Self {
         trace!(
             "LoaderTransaction::Write() program {:?} offset {} length {}",
@@ -40,7 +40,7 @@ impl LoaderTransaction for Transaction {
         Transaction::new(from_keypair, &[], loader, userdata, last_id, fee)
     }
 
-    fn finalize(from_keypair: &Keypair, loader: Pubkey, last_id: Hash, fee: i64) -> Self {
+    fn finalize(from_keypair: &Keypair, loader: Pubkey, last_id: Hash, fee: u64) -> Self {
         trace!(
             "LoaderTransaction::Finalize() program {:?}",
             from_keypair.pubkey(),

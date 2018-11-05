@@ -12,32 +12,32 @@ pub trait SystemTransaction {
         from_keypair: &Keypair,
         to: Pubkey,
         last_id: Hash,
-        tokens: i64,
+        tokens: u64,
         space: u64,
         program_id: Pubkey,
-        fee: i64,
+        fee: u64,
     ) -> Self;
 
-    fn system_assign(from_keypair: &Keypair, last_id: Hash, program_id: Pubkey, fee: i64) -> Self;
+    fn system_assign(from_keypair: &Keypair, last_id: Hash, program_id: Pubkey, fee: u64) -> Self;
 
-    fn system_new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self;
+    fn system_new(from_keypair: &Keypair, to: Pubkey, tokens: u64, last_id: Hash) -> Self;
 
     fn system_move(
         from_keypair: &Keypair,
         to: Pubkey,
-        tokens: i64,
+        tokens: u64,
         last_id: Hash,
-        fee: i64,
+        fee: u64,
     ) -> Self;
 
     fn system_move_many(
         from_keypair: &Keypair,
-        moves: &[(Pubkey, i64)],
+        moves: &[(Pubkey, u64)],
         last_id: Hash,
-        fee: i64,
+        fee: u64,
     ) -> Self;
 
-    fn system_spawn(from_keypair: &Keypair, last_id: Hash, fee: i64) -> Self;
+    fn system_spawn(from_keypair: &Keypair, last_id: Hash, fee: u64) -> Self;
 }
 
 impl SystemTransaction for Transaction {
@@ -46,10 +46,10 @@ impl SystemTransaction for Transaction {
         from_keypair: &Keypair,
         to: Pubkey,
         last_id: Hash,
-        tokens: i64,
+        tokens: u64,
         space: u64,
         program_id: Pubkey,
-        fee: i64,
+        fee: u64,
     ) -> Self {
         let create = SystemProgram::CreateAccount {
             tokens, //TODO, the tokens to allocate might need to be higher then 0 in the future
@@ -67,7 +67,7 @@ impl SystemTransaction for Transaction {
         )
     }
     /// Create and sign new SystemProgram::Assign transaction
-    fn system_assign(from_keypair: &Keypair, last_id: Hash, program_id: Pubkey, fee: i64) -> Self {
+    fn system_assign(from_keypair: &Keypair, last_id: Hash, program_id: Pubkey, fee: u64) -> Self {
         let assign = SystemProgram::Assign { program_id };
         let userdata = serialize(&assign).unwrap();
         Transaction::new(
@@ -80,16 +80,16 @@ impl SystemTransaction for Transaction {
         )
     }
     /// Create and sign new SystemProgram::CreateAccount transaction with some defaults
-    fn system_new(from_keypair: &Keypair, to: Pubkey, tokens: i64, last_id: Hash) -> Self {
+    fn system_new(from_keypair: &Keypair, to: Pubkey, tokens: u64, last_id: Hash) -> Self {
         Transaction::system_create(from_keypair, to, last_id, tokens, 0, Pubkey::default(), 0)
     }
     /// Create and sign new SystemProgram::Move transaction
     fn system_move(
         from_keypair: &Keypair,
         to: Pubkey,
-        tokens: i64,
+        tokens: u64,
         last_id: Hash,
-        fee: i64,
+        fee: u64,
     ) -> Self {
         let move_tokens = SystemProgram::Move { tokens };
         let userdata = serialize(&move_tokens).unwrap();
@@ -103,7 +103,7 @@ impl SystemTransaction for Transaction {
         )
     }
     /// Create and sign new SystemProgram::Move transaction to many destinations
-    fn system_move_many(from: &Keypair, moves: &[(Pubkey, i64)], last_id: Hash, fee: i64) -> Self {
+    fn system_move_many(from: &Keypair, moves: &[(Pubkey, u64)], last_id: Hash, fee: u64) -> Self {
         let instructions: Vec<_> = moves
             .iter()
             .enumerate()
@@ -127,7 +127,7 @@ impl SystemTransaction for Transaction {
         )
     }
     /// Create and sign new SystemProgram::Spawn transaction
-    fn system_spawn(from_keypair: &Keypair, last_id: Hash, fee: i64) -> Self {
+    fn system_spawn(from_keypair: &Keypair, last_id: Hash, fee: u64) -> Self {
         let spawn = SystemProgram::Spawn;
         let userdata = serialize(&spawn).unwrap();
         Transaction::new(

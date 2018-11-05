@@ -131,7 +131,7 @@ impl Drone {
                 Transaction::system_new(
                     &self.mint_keypair,
                     client_pubkey,
-                    airdrop_request_amount as i64,
+                    airdrop_request_amount as u64,
                     last_id,
                 )
             }
@@ -310,8 +310,8 @@ mod tests {
     #[test]
     #[ignore]
     fn test_send_airdrop() {
-        const SMALL_BATCH: i64 = 50;
-        const TPS_BATCH: i64 = 5_000_000;
+        const SMALL_BATCH: u64 = 50;
+        const TPS_BATCH: u64 = 5_000_000;
 
         logger::setup();
         let leader_keypair = Arc::new(Keypair::new());

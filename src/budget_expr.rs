@@ -51,17 +51,17 @@ pub enum BudgetExpr {
 
 impl BudgetExpr {
     /// Create the simplest budget - one that pays `tokens` to Pubkey.
-    pub fn new_payment(tokens: i64, to: Pubkey) -> Self {
+    pub fn new_payment(tokens: u64, to: Pubkey) -> Self {
         BudgetExpr::Pay(Payment { tokens, to })
     }
 
     /// Create a budget that pays `tokens` to `to` after being witnessed by `from`.
-    pub fn new_authorized_payment(from: Pubkey, tokens: i64, to: Pubkey) -> Self {
+    pub fn new_authorized_payment(from: Pubkey, tokens: u64, to: Pubkey) -> Self {
         BudgetExpr::After(Condition::Signature(from), Payment { tokens, to })
     }
 
     /// Create a budget that pays tokens` to `to` after being witnessed by 2x `from`s
-    pub fn new_2_2_multisig_payment(from0: Pubkey, from1: Pubkey, tokens: i64, to: Pubkey) -> Self {
+    pub fn new_2_2_multisig_payment(from0: Pubkey, from1: Pubkey, tokens: u64, to: Pubkey) -> Self {
         BudgetExpr::And(
             Condition::Signature(from0),
             Condition::Signature(from1),
@@ -70,7 +70,7 @@ impl BudgetExpr {
     }
 
     /// Create a budget that pays `tokens` to `to` after the given DateTime.
-    pub fn new_future_payment(dt: DateTime<Utc>, from: Pubkey, tokens: i64, to: Pubkey) -> Self {
+    pub fn new_future_payment(dt: DateTime<Utc>, from: Pubkey, tokens: u64, to: Pubkey) -> Self {
         BudgetExpr::After(Condition::Timestamp(dt, from), Payment { tokens, to })
     }
 
@@ -79,7 +79,7 @@ impl BudgetExpr {
     pub fn new_cancelable_future_payment(
         dt: DateTime<Utc>,
         from: Pubkey,
-        tokens: i64,
+        tokens: u64,
         to: Pubkey,
     ) -> Self {
         BudgetExpr::Or(
@@ -97,7 +97,7 @@ impl BudgetExpr {
     }
 
     /// Return true if the budget spends exactly `spendable_tokens`.
-    pub fn verify(&self, spendable_tokens: i64) -> bool {
+    pub fn verify(&self, spendable_tokens: u64) -> bool {
         match self {
             BudgetExpr::Pay(payment)
             | BudgetExpr::After(_, payment)

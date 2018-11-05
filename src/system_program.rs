@@ -11,6 +11,7 @@ pub enum Error {
     InvalidArgument,
     AssignOfUnownedAccount,
     AccountNotFinalized,
+    ResultWithNegativeTokens(u8),
 }
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -30,7 +31,7 @@ pub enum SystemProgram {
     /// * space - memory to allocate if greater then zero
     /// * program_id - the program id of the new account
     CreateAccount {
-        tokens: i64,
+        tokens: u64,
         space: u64,
         program_id: Pubkey,
     },
@@ -40,7 +41,7 @@ pub enum SystemProgram {
     /// Move tokens
     /// * Transaction::keys[0] - source
     /// * Transaction::keys[1] - destination
-    Move { tokens: i64 },
+    Move { tokens: u64 },
 
     /// Spawn a new program from an account
     Spawn,
@@ -56,7 +57,7 @@ impl SystemProgram {
     pub fn id() -> Pubkey {
         Pubkey::new(&SYSTEM_PROGRAM_ID)
     }
-    pub fn get_balance(account: &Account) -> i64 {
+    pub fn get_balance(account: &Account) -> u64 {
         account.tokens
     }
     pub fn process_transaction(
@@ -84,6 +85,10 @@ impl SystemProgram {
                         info!("Invalid account[1]");
                         Err(Error::InvalidArgument)?;
                     }
+                    if tokens > accounts[0].tokens {
+                        info!("Insufficient tokens in account[0]");
+                        Err(Error::ResultWithNegativeTokens(pix as u8))?;
+                    }
                     accounts[0].tokens -= tokens;
                     accounts[1].tokens += tokens;
                     accounts[1].program_id = program_id;
@@ -99,6 +104,10 @@ impl SystemProgram {
                 }
                 SystemProgram::Move { tokens } => {
                     //bank should be verifying correctness
+                    if tokens > accounts[0].tokens {
+                        info!("Insufficient tokens in account[0]");
+                        Err(Error::ResultWithNegativeTokens(pix as u8))?;
+                    }
                     accounts[0].tokens -= tokens;
                     accounts[1].tokens += tokens;
                 }

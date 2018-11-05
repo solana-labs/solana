@@ -135,7 +135,7 @@ build_rpc_trait! {
         fn get_account_info(&self, Self::Metadata, String) -> Result<Account>;
 
         #[rpc(meta, name = "getBalance")]
-        fn get_balance(&self, Self::Metadata, String) -> Result<i64>;
+        fn get_balance(&self, Self::Metadata, String) -> Result<u64>;
 
         #[rpc(meta, name = "getFinality")]
         fn get_finality(&self, Self::Metadata) -> Result<usize>;
@@ -172,7 +172,7 @@ impl RpcSol for RpcSolImpl {
         let pubkey = verify_pubkey(id)?;
         meta.request_processor.get_account_info(pubkey)
     }
-    fn get_balance(&self, meta: Self::Metadata, id: String) -> Result<i64> {
+    fn get_balance(&self, meta: Self::Metadata, id: String) -> Result<u64> {
         info!("get_balance rpc request received: {:?}", id);
         let pubkey = verify_pubkey(id)?;
         meta.request_processor.get_balance(pubkey)
@@ -276,7 +276,7 @@ impl JsonRpcRequestProcessor {
             .get_account(&pubkey)
             .ok_or_else(Error::invalid_request)
     }
-    fn get_balance(&self, pubkey: Pubkey) -> Result<i64> {
+    fn get_balance(&self, pubkey: Pubkey) -> Result<u64> {
         let val = self.bank.get_balance(&pubkey);
         Ok(val)
     }

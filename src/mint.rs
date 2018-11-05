@@ -13,17 +13,17 @@ use untrusted::Input;
 pub struct Mint {
     pub pkcs8: Vec<u8>,
     pubkey: Pubkey,
-    pub tokens: i64,
+    pub tokens: u64,
     pub bootstrap_leader_id: Pubkey,
-    pub bootstrap_leader_tokens: i64,
+    pub bootstrap_leader_tokens: u64,
 }
 
 impl Mint {
     pub fn new_with_pkcs8(
-        tokens: i64,
+        tokens: u64,
         pkcs8: Vec<u8>,
         bootstrap_leader_id: Pubkey,
-        bootstrap_leader_tokens: i64,
+        bootstrap_leader_tokens: u64,
     ) -> Self {
         let keypair =
             Keypair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in mint pub fn new");
@@ -38,9 +38,9 @@ impl Mint {
     }
 
     pub fn new_with_leader(
-        tokens: i64,
+        tokens: u64,
         bootstrap_leader: Pubkey,
-        bootstrap_leader_tokens: i64,
+        bootstrap_leader_tokens: u64,
     ) -> Self {
         let rnd = SystemRandom::new();
         let pkcs8 = Keypair::generate_pkcs8(&rnd)
@@ -49,7 +49,7 @@ impl Mint {
         Self::new_with_pkcs8(tokens, pkcs8, bootstrap_leader, bootstrap_leader_tokens)
     }
 
-    pub fn new(tokens: i64) -> Self {
+    pub fn new(tokens: u64) -> Self {
         let rnd = SystemRandom::new();
         let pkcs8 = Keypair::generate_pkcs8(&rnd)
             .expect("generate_pkcs8 in mint pub fn new")

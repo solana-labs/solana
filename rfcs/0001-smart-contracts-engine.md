@@ -68,7 +68,7 @@ pub struct Transaction {
     pub last_id: Hash,
 
     /// The number of tokens paid for processing and storage of this transaction.
-    pub fee: i64,
+    pub fee: u64,
 
     /// Keys identifying programs in the instructions vector.
     pub program_ids: Vec<Pubkey>,
@@ -86,7 +86,7 @@ Accounts maintain token state as well as program specific memory.
 /// An Account with userdata that is stored on chain
 pub struct Account {
     /// tokens in the account
-    pub tokens: i64,
+    pub tokens: u64,
     /// user data
     /// A transaction can write to its userdata
     pub userdata: Vec<u8>,
@@ -145,7 +145,7 @@ pub enum SystemProgram {
     /// * space - memory to allocate if greater then zero
     /// * program_id - the program id of the new account
     CreateAccount {
-        tokens: i64,
+        tokens: u64,
         space: u64,
         program_id: Pubkey,
     },
@@ -155,7 +155,7 @@ pub enum SystemProgram {
     /// Move tokens
     /// * Transaction::keys[0] - source
     /// * Transaction::keys[1] - destination
-    Move { tokens: i64 },
+    Move { tokens: u64 },
 }
 ```
 The interface is best described by the `Instruction::userdata` that the user encodes. 

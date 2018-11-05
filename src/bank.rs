@@ -33,7 +33,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 use storage_program::StorageProgram;
-use system_program::SystemProgram;
+use system_program::{Error, SystemProgram};
 use system_transaction::SystemTransaction;
 use timing::{duration_as_us, timestamp};
 use token_program;
@@ -80,6 +80,7 @@ pub enum BankError {
     LedgerVerificationFailed,
     /// Contract's transaction token balance does not equal the balance after the transaction
     UnbalancedTransaction(u8),
+
     /// Contract's transactions resulted in an account with a negative balance
     /// The difference from InsufficientFundsForFee is that the transaction was executed by the
     /// contract
@@ -395,8 +396,8 @@ impl Bank {
     /// tick that has achieved finality
     pub fn get_finality_timestamp(
         &self,
-        ticks_and_stakes: &mut [(u64, i64)],
-        supermajority_stake: i64,
+        ticks_and_stakes: &mut [(u64, u64)],
+        supermajority_stake: u64,
     ) -> Option<u64> {
         // Sort by tick height
         ticks_and_stakes.sort_by(|a, b| a.0.cmp(&b.0));
@@ -588,7 +589,7 @@ impl Bank {
         instruction_index: usize,
         tx_program_id: &Pubkey,
         pre_program_id: &Pubkey,
-        pre_tokens: i64,
+        pre_tokens: u64,
         account: &Account,
     ) -> Result<()> {
         // Verify the transaction
@@ -602,9 +603,6 @@ impl Bank {
             return Err(BankError::ExternalAccountTokenSpend(
                 instruction_index as u8,
             ));
-        }
-        if account.tokens < 0 {
-            return Err(BankError::ResultWithNegativeTokens(instruction_index as u8));
         }
         Ok(())
     }
@@ -639,7 +637,7 @@ impl Bank {
         let tx_program_id = tx.program_id(instruction_index);
         // TODO: the runtime should be checking read/write access to memory
         // we are trusting the hard coded contracts not to clobber or allocate
-        let pre_total: i64 = program_accounts.iter().map(|a| a.tokens).sum();
+        let pre_total: u64 = program_accounts.iter().map(|a| a.tokens).sum();
         let pre_data: Vec<_> = program_accounts
             .iter_mut()
             .map(|a| (a.program_id, a.tokens))
@@ -659,9 +657,14 @@ impl Bank {
         // Call the contract method
         // It's up to the contract to implement its own rules on moving funds
         if SystemProgram::check_id(&tx_program_id) {
-            if SystemProgram::process_transaction(&tx, instruction_index, program_accounts).is_err()
+            if let Err(err) =
+                SystemProgram::process_transaction(&tx, instruction_index, program_accounts)
             {
-                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
+                let err = match err {
+                    Error::ResultWithNegativeTokens(i) => BankError::ResultWithNegativeTokens(i),
+                    _ => BankError::ProgramRuntimeError(instruction_index as u8),
+                };
+                return Err(err);
             }
         } else if BudgetState::check_id(&tx_program_id) {
             if BudgetState::process_transaction(&tx, instruction_index, program_accounts).is_err() {
@@ -749,7 +752,7 @@ impl Bank {
             }
         }
         // The total sum of all the tokens in all the pages cannot change.
-        let post_total: i64 = program_accounts.iter().map(|a| a.tokens).sum();
+        let post_total: u64 = program_accounts.iter().map(|a| a.tokens).sum();
         if pre_total != post_total {
             Err(BankError::UnbalancedTransaction(instruction_index as u8))
         } else {
@@ -1165,7 +1168,7 @@ impl Bank {
     /// `n` tokens where `last_id` is the last Entry ID observed by the client.
     pub fn transfer(
         &self,
-        n: i64,
+        n: u64,
         keypair: &Keypair,
         to: Pubkey,
         last_id: Hash,
@@ -1175,7 +1178,7 @@ impl Bank {
         self.process_transaction(&tx).map(|_| signature)
     }
 
-    pub fn read_balance(account: &Account) -> i64 {
+    pub fn read_balance(account: &Account) -> u64 {
         if SystemProgram::check_id(&account.program_id) {
             SystemProgram::get_balance(account)
         } else if BudgetState::check_id(&account.program_id) {
@@ -1186,7 +1189,7 @@ impl Bank {
     }
     /// Each contract would need to be able to introspect its own state
     /// this is hard coded to the budget contract language
-    pub fn get_balance(&self, pubkey: &Pubkey) -> i64 {
+    pub fn get_balance(&self, pubkey: &Pubkey) -> u64 {
         self.get_account(pubkey)
             .map(|x| Self::read_balance(&x))
             .unwrap_or(0)
@@ -1194,7 +1197,7 @@ impl Bank {
 
     /// TODO: Need to implement a real staking contract to hold node stake.
     /// Right now this just gets the account balances. See github issue #1655.
-    pub fn get_stake(&self, pubkey: &Pubkey) -> i64 {
+    pub fn get_stake(&self, pubkey: &Pubkey) -> u64 {
         self.get_balance(pubkey)
     }
 
@@ -1356,7 +1359,6 @@ mod tests {
     use hash::hash;
     use jsonrpc_macros::pubsub::{Subscriber, SubscriptionId};
     use ledger;
-    use logger;
     use signature::Keypair;
     use signature::{GenKeys, KeypairUtil};
     use std;
@@ -1483,18 +1485,6 @@ mod tests {
         assert_eq!(bank.get_balance(&key1), 1);
         assert_eq!(bank.get_balance(&key2), 1);
         assert_eq!(bank.get_signature(&t1.last_id, &t1.signature), Some(Ok(())));
-    }
-
-    #[test]
-    fn test_negative_tokens() {
-        logger::setup();
-        let mint = Mint::new(1);
-        let pubkey = Keypair::new().pubkey();
-        let bank = Bank::new(&mint);
-        let res = bank.transfer(-1, &mint.keypair(), pubkey, mint.last_id());
-        println!("{:?}", bank.get_account(&pubkey));
-        assert_matches!(res, Err(BankError::ResultWithNegativeTokens(0)));
-        assert_eq!(bank.transaction_count(), 0);
     }
 
     // TODO: This test demonstrates that fees are not paid when a program fails.
@@ -1764,7 +1754,7 @@ mod tests {
         let dummy_leader_id = Keypair::new().pubkey();
         let dummy_leader_tokens = 1;
         let mint = Mint::new_with_leader(
-            length as i64 + 1 + dummy_leader_tokens,
+            length as u64 + 1 + dummy_leader_tokens,
             dummy_leader_id,
             dummy_leader_tokens,
         );

@@ -5,7 +5,7 @@ use pubkey::Pubkey;
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Account {
     /// tokens in the account
-    pub tokens: i64,
+    pub tokens: u64,
     /// user data
     /// A transaction can write to its userdata
     pub userdata: Vec<u8>,
@@ -21,7 +21,7 @@ pub struct Account {
 
 impl Account {
     // TODO do we want to add executable and leader_program_id even though they should always be false/default?
-    pub fn new(tokens: i64, space: usize, program_id: Pubkey) -> Account {
+    pub fn new(tokens: u64, space: usize, program_id: Pubkey) -> Account {
         Account {
             tokens,
             userdata: vec![0u8; space],
