@@ -134,6 +134,7 @@ while getopts "h?p:Pn:c:z:gG:a:d:" opt; do
   G)
     enableGpu=true
     leaderMachineType="$OPTARG"
+    imageName=$gpuImageName
     ;;
   a)
     leaderAddress=$OPTARG
