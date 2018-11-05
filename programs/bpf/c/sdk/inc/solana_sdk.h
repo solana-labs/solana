@@ -34,36 +34,15 @@ typedef unsigned long int uint64_t;
 typedef enum { false = 0, true } bool;
 
 /**
- * Built-in helper functions
- * @{
- * The BPF VM makes a limited number of helper functions available to BPF
- * programs.  They are resolved at run-time and identified by a function index.
- * Calling any of these functions results in `Call` instruction out of the
- * user's BPF program.
- *
- * The helper functions all follow the same signature:
- *
- * int helper(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t)
- *
- * The meaning of each argument and return value is dependent on the particular
- * helper function being called.
+ * Helper function that prints a string to stdout
  */
+extern void sol_log(const char*);
 
 /**
- * Helper function that prints to stdout
- *
- * Prints the hexadecimal representation of each parameter
+ * Helper function that prints a 64 bit values represented in hexadecimal
+ * to stdout
  */
-#define BPF_TRACE_PRINTK_IDX 6
-static int (*sol_print)(
-  uint64_t,
-  uint64_t,
-  uint64_t,
-  uint64_t,
-  uint64_t
-) = (void *)BPF_TRACE_PRINTK_IDX;
-
-/**@}*/
+extern void sol_log_64(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
 
 /**
  * Prefix for all BPF functions
@@ -147,7 +126,7 @@ SOL_FN_PREFIX int sol_memcmp(const void *s1, const void *s2, int n) {
  */
 #define sol_panic() _sol_panic(__LINE__)
 SOL_FN_PREFIX void _sol_panic(uint64_t line) {
-  sol_print(0xFF, 0xFF, 0xFF, 0xFF, line);
+  sol_log_64(0xFF, 0xFF, 0xFF, 0xFF, line);
   uint8_t *pv = (uint8_t *)1;
   *pv = 1;
 }
@@ -241,9 +220,9 @@ SOL_FN_PREFIX bool sol_deserialize(
  *
  * @param key The public key to print
  */
-SOL_FN_PREFIX void sol_print_key(const SolPubkey *key) {
+SOL_FN_PREFIX void sol_log_key(const SolPubkey *key) {
   for (int j = 0; j < sizeof(*key); j++) {
-    sol_print(0, 0, 0, j, key->x[j]);
+    sol_log_64(0, 0, 0, j, key->x[j]);
   }
 }
 
@@ -252,9 +231,9 @@ SOL_FN_PREFIX void sol_print_key(const SolPubkey *key) {
  *
  * @param array The array to print
  */
-SOL_FN_PREFIX void sol_print_array(const uint8_t *array, int len) {
+SOL_FN_PREFIX void sol_log_array(const uint8_t *array, int len) {
   for (int j = 0; j < len; j++) {
-    sol_print(0, 0, 0, j, array[j]);
+    sol_log_64(0, 0, 0, j, array[j]);
   }
 }
 
@@ -266,20 +245,20 @@ SOL_FN_PREFIX void sol_print_array(const uint8_t *array, int len) {
  * @param data A pointer to the instruction data to print
  * @param data_len The length in bytes of the instruction data
  */
-SOL_FN_PREFIX void sol_print_params(
+SOL_FN_PREFIX void sol_log_params(
   uint64_t num_ka,
   const SolKeyedAccounts *ka,
   const uint8_t *data,
   uint64_t data_len
 ) {
-  sol_print(0, 0, 0, 0, num_ka);
+  sol_log_64(0, 0, 0, 0, num_ka);
   for (int i = 0; i < num_ka; i++) {
-    sol_print_key(ka[i].key);
-    sol_print(0, 0, 0, 0, *ka[i].tokens);
-    sol_print_array(ka[i].userdata, ka[i].userdata_len);
-    sol_print_key(ka[i].program_id);
+    sol_log_key(ka[i].key);
+    sol_log_64(0, 0, 0, 0, *ka[i].tokens);
+    sol_log_array(ka[i].userdata, ka[i].userdata_len);
+    sol_log_key(ka[i].program_id);
   }
-  sol_print_array(data, data_len);
+  sol_log_array(data, data_len);
 }
 
 /**@}*/
@@ -299,7 +278,7 @@ SOL_FN_PREFIX void sol_print_params(
  *   if (!sol_deserialize(buf, ka, SOL_ARRAY_SIZE(ka), NULL, &data, &data_len)) {
  *     return false;
  *   }
- *   print_params(1, ka, data, data_len);
+ *   log_params(1, ka, data, data_len);
  *   return true;
  * }
  */
