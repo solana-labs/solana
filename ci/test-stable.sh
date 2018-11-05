@@ -46,7 +46,7 @@ for program in programs/native/*; do
 done
 
 # Build the HTML
-export PATH=$HOME/.cargo/bin:$PATH
+export PATH=$CARGO_HOME/bin:$PATH
 maybe_install mdbook
 _ cd doc
 _ mdbook test
