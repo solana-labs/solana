@@ -52,7 +52,13 @@ fn main() {
                 .value_name("DIR")
                 .takes_value(true)
                 .required(true)
-                .help("use DIR as persistent ledger location"),
+                .help("Use DIR as persistent ledger location"),
+        ).arg(
+            Arg::with_name("rpc")
+                .long("rpc")
+                .value_name("PORT")
+                .takes_value(true)
+                .help("Custom RPC port for this node"),
         ).get_matches();
 
     let (keypair, ncp) = if let Some(i) = matches.value_of("identity") {
@@ -102,6 +108,17 @@ fn main() {
     // Remove this line to enable leader rotation
     leader_scheduler.use_only_bootstrap_leader = true;
 
+    let rpc_port = if let Some(port) = matches.value_of("rpc") {
+        let port_number = port.to_string().parse().expect("integer");
+        if port_number == 0 {
+            eprintln!("Invalid RPC port requested: {:?}", port);
+            exit(1);
+        }
+        Some(port_number)
+    } else {
+        None
+    };
+
     let mut fullnode = Fullnode::new(
         node,
         ledger_path,
@@ -110,6 +127,7 @@ fn main() {
         network,
         false,
         leader_scheduler,
+        rpc_port,
     );
     let mut client = mk_client(&leader);
 

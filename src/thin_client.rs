@@ -4,13 +4,15 @@
 //! unstable and may change in future releases.
 
 use bank::Bank;
-use bincode::{deserialize, serialize};
+use bincode::serialize;
+use bs58;
 use cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
 use hash::Hash;
 use log::Level;
 use ncp::Ncp;
-use request::{Request, Response};
 use result::{Error, Result};
+use rpc_request::RpcRequest;
+use serde_json;
 use signature::{Keypair, Signature};
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
@@ -33,8 +35,7 @@ use metrics;
 
 /// An object for querying and sending transactions to the network.
 pub struct ThinClient {
-    requests_addr: SocketAddr,
-    requests_socket: UdpSocket,
+    rpc_addr: SocketAddr,
     transactions_addr: SocketAddr,
     transactions_socket: UdpSocket,
     last_id: Option<Hash>,
@@ -45,18 +46,15 @@ pub struct ThinClient {
 }
 
 impl ThinClient {
-    /// Create a new ThinClient that will interface with Rpu
-    /// over `requests_socket` and `transactions_socket`. To receive responses, the caller must bind `socket`
-    /// to a public address before invoking ThinClient methods.
+    /// Create a new ThinClient that will interface with the Rpc at `rpc_addr` using TCP
+    /// and the Tpu at `transactions_addr` over `transactions_socket` using UDP.
     pub fn new(
-        requests_addr: SocketAddr,
-        requests_socket: UdpSocket,
+        rpc_addr: SocketAddr,
         transactions_addr: SocketAddr,
         transactions_socket: UdpSocket,
     ) -> Self {
         ThinClient {
-            requests_addr,
-            requests_socket,
+            rpc_addr,
             transactions_addr,
             transactions_socket,
             last_id: None,
@@ -64,58 +62,6 @@ impl ThinClient {
             balances: HashMap::new(),
             signature_status: false,
             finality: None,
-        }
-    }
-
-    pub fn recv_response(&self) -> io::Result<Response> {
-        let mut buf = vec![0u8; 1024];
-        trace!("start recv_from");
-        match self.requests_socket.recv_from(&mut buf) {
-            Ok((len, from)) => {
-                trace!("end recv_from got {} {}", len, from);
-                deserialize(&buf)
-                    .or_else(|_| Err(io::Error::new(io::ErrorKind::Other, "deserialize")))
-            }
-            Err(e) => {
-                trace!("end recv_from got {:?}", e);
-                Err(e)
-            }
-        }
-    }
-
-    pub fn process_response(&mut self, resp: &Response) {
-        match *resp {
-            Response::Account {
-                key,
-                account: Some(ref account),
-            } => {
-                trace!("Response account {:?} {:?}", key, account);
-                self.balances.insert(key, account.clone());
-            }
-            Response::Account { key, account: None } => {
-                debug!("Response account {}: None ", key);
-                self.balances.remove(&key);
-            }
-            Response::LastId { id } => {
-                trace!("Response last_id {:?}", id);
-                self.last_id = Some(id);
-            }
-            Response::TransactionCount { transaction_count } => {
-                trace!("Response transaction count {:?}", transaction_count);
-                self.transaction_count = transaction_count;
-            }
-            Response::SignatureStatus { signature_status } => {
-                self.signature_status = signature_status;
-                if signature_status {
-                    trace!("Response found signature");
-                } else {
-                    trace!("Response signature not found");
-                }
-            }
-            Response::Finality { time } => {
-                trace!("Response finality {:?}", time);
-                self.finality = Some(time);
-            }
         }
     }
 
@@ -195,41 +141,36 @@ impl ThinClient {
     }
 
     pub fn get_account_userdata(&mut self, pubkey: &Pubkey) -> io::Result<Option<Vec<u8>>> {
-        let req = Request::GetAccount { key: *pubkey };
-        let data = serialize(&req).expect("serialize GetAccount in pub fn get_account_userdata");
-        self.requests_socket
-            .send_to(&data, &self.requests_addr)
-            .expect("buffer error in pub fn get_account_userdata");
-
-        loop {
-            let resp = self.recv_response()?;
-            trace!("recv_response {:?}", resp);
-            if let Response::Account { key, account } = resp {
-                if key == *pubkey {
-                    return Ok(account.map(|account| account.userdata));
-                }
-            }
+        let params = json!(format!("{}", pubkey));
+        let rpc_string = format!("http://{}", self.rpc_addr.to_string());
+        let resp = RpcRequest::GetAccountInfo.make_rpc_request(&rpc_string, 1, Some(params));
+        if let Ok(account_json) = resp {
+            let account: Account =
+                serde_json::from_value(account_json).expect("deserialize account");
+            return Ok(Some(account.userdata));
         }
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            "get_account_userdata failed",
+        ))
     }
 
     /// Request the balance of the user holding `pubkey`. This method blocks
     /// until the server sends a response. If the response packet is dropped
     /// by the network, this method will hang indefinitely.
     pub fn get_balance(&mut self, pubkey: &Pubkey) -> io::Result<u64> {
-        trace!("get_balance sending request to {}", self.requests_addr);
-        let req = Request::GetAccount { key: *pubkey };
-        let data = serialize(&req).expect("serialize GetAccount in pub fn get_balance");
-        self.requests_socket
-            .send_to(&data, &self.requests_addr)
-            .expect("buffer error in pub fn get_balance");
-        let mut done = false;
-        while !done {
-            let resp = self.recv_response()?;
-            trace!("recv_response {:?}", resp);
-            if let Response::Account { key, .. } = &resp {
-                done = key == pubkey;
-            }
-            self.process_response(&resp);
+        trace!("get_balance sending request to {}", self.rpc_addr);
+        let params = json!(format!("{}", pubkey));
+        let rpc_string = format!("http://{}", self.rpc_addr.to_string());
+        let resp = RpcRequest::GetAccountInfo.make_rpc_request(&rpc_string, 1, Some(params));
+        if let Ok(account_json) = resp {
+            let account: Account =
+                serde_json::from_value(account_json).expect("deserialize account");
+            trace!("Response account {:?} {:?}", pubkey, account);
+            self.balances.insert(*pubkey, account.clone());
+        } else {
+            debug!("Response account {}: None ", pubkey);
+            self.balances.remove(&pubkey);
         }
         trace!("get_balance {:?}", self.balances.get(pubkey));
         // TODO: This is a hard coded call to introspect the balance of a budget_dsl contract
@@ -243,25 +184,18 @@ impl ThinClient {
     /// Request the finality from the leader node
     pub fn get_finality(&mut self) -> usize {
         trace!("get_finality");
-        let req = Request::GetFinality;
-        let data = serialize(&req).expect("serialize GetFinality in pub fn get_finality");
         let mut done = false;
+        let rpc_string = format!("http://{}", self.rpc_addr.to_string());
         while !done {
-            debug!("get_finality send_to {}", &self.requests_addr);
-            self.requests_socket
-                .send_to(&data, &self.requests_addr)
-                .expect("buffer error in pub fn get_finality");
+            debug!("get_finality send_to {}", &self.rpc_addr);
+            let resp = RpcRequest::GetFinality.make_rpc_request(&rpc_string, 1, None);
 
-            match self.recv_response() {
-                Ok(resp) => {
-                    if let Response::Finality { .. } = resp {
-                        done = true;
-                    }
-                    self.process_response(&resp);
-                }
-                Err(e) => {
-                    debug!("thin_client get_finality error: {}", e);
-                }
+            if let Ok(value) = resp {
+                done = true;
+                let finality = value.as_u64().unwrap() as usize;
+                self.finality = Some(finality);
+            } else {
+                debug!("thin_client get_finality error: {:?}", resp);
             }
         }
         self.finality.expect("some finality")
@@ -271,21 +205,16 @@ impl ThinClient {
     /// this method will try again 5 times.
     pub fn transaction_count(&mut self) -> u64 {
         debug!("transaction_count");
-        let req = Request::GetTransactionCount;
-        let data =
-            serialize(&req).expect("serialize GetTransactionCount in pub fn transaction_count");
         let mut tries_left = 5;
+        let rpc_string = format!("http://{}", self.rpc_addr.to_string());
         while tries_left > 0 {
-            self.requests_socket
-                .send_to(&data, &self.requests_addr)
-                .expect("buffer error in pub fn transaction_count");
+            let resp = RpcRequest::GetTransactionCount.make_rpc_request(&rpc_string, 1, None);
 
-            if let Ok(resp) = self.recv_response() {
-                debug!("transaction_count recv_response: {:?}", resp);
-                if let Response::TransactionCount { .. } = resp {
-                    tries_left = 0;
-                }
-                self.process_response(&resp);
+            if let Ok(value) = resp {
+                debug!("transaction_count recv_response: {:?}", value);
+                tries_left = 0;
+                let transaction_count = value.as_u64().unwrap();
+                self.transaction_count = transaction_count;
             } else {
                 tries_left -= 1;
             }
@@ -297,25 +226,20 @@ impl ThinClient {
     /// until the server sends a response.
     pub fn get_last_id(&mut self) -> Hash {
         trace!("get_last_id");
-        let req = Request::GetLastId;
-        let data = serialize(&req).expect("serialize GetLastId in pub fn get_last_id");
         let mut done = false;
+        let rpc_string = format!("http://{}", self.rpc_addr.to_string());
         while !done {
-            debug!("get_last_id send_to {}", &self.requests_addr);
-            self.requests_socket
-                .send_to(&data, &self.requests_addr)
-                .expect("buffer error in pub fn get_last_id");
+            debug!("get_last_id send_to {}", &self.rpc_addr);
+            let resp = RpcRequest::GetLastId.make_rpc_request(&rpc_string, 1, None);
 
-            match self.recv_response() {
-                Ok(resp) => {
-                    if let Response::LastId { .. } = resp {
-                        done = true;
-                    }
-                    self.process_response(&resp);
-                }
-                Err(e) => {
-                    debug!("thin_client get_last_id error: {}", e);
-                }
+            if let Ok(value) = resp {
+                done = true;
+                let last_id_str = value.as_str().unwrap();
+                let last_id_vec = bs58::decode(last_id_str).into_vec().unwrap();
+                let last_id = Hash::new(&last_id_vec);
+                self.last_id = Some(last_id);
+            } else {
+                debug!("thin_client get_last_id error: {:?}", resp);
             }
         }
         self.last_id.expect("some last_id")
@@ -377,22 +301,25 @@ impl ThinClient {
     /// until the server sends a response.
     pub fn check_signature(&mut self, signature: &Signature) -> bool {
         trace!("check_signature");
-        let req = Request::GetSignature {
-            signature: *signature,
-        };
-        let data = serialize(&req).expect("serialize GetSignature in pub fn check_signature");
+        let params = json!(format!("{}", signature));
         let now = Instant::now();
+        let rpc_string = format!("http://{}", self.rpc_addr.to_string());
         let mut done = false;
         while !done {
-            self.requests_socket
-                .send_to(&data, &self.requests_addr)
-                .expect("buffer error in pub fn get_last_id");
+            let resp = RpcRequest::ConfirmTransaction.make_rpc_request(
+                &rpc_string,
+                1,
+                Some(params.clone()),
+            );
 
-            if let Ok(resp) = self.recv_response() {
-                if let Response::SignatureStatus { .. } = resp {
-                    done = true;
+            if let Ok(confirmation) = resp {
+                done = true;
+                self.signature_status = confirmation.as_bool().unwrap();
+                if self.signature_status {
+                    trace!("Response found signature");
+                } else {
+                    trace!("Response signature not found");
                 }
-                self.process_response(&resp);
             }
         }
         metrics::submit(
@@ -500,6 +427,7 @@ pub fn retry_get_balance(
 mod tests {
     use super::*;
     use bank::Bank;
+    use bincode::deserialize;
     use cluster_info::Node;
     use fullnode::Fullnode;
     use leader_scheduler::LeaderScheduler;
@@ -512,7 +440,6 @@ mod tests {
     use vote_program::VoteProgram;
 
     #[test]
-    #[ignore]
     fn test_thin_client() {
         logger::setup();
         let leader_keypair = Arc::new(Keypair::new());
@@ -540,19 +467,21 @@ mod tests {
             None,
             &ledger_path,
             false,
-            Some(0),
+            None,
         );
         sleep(Duration::from_millis(900));
 
-        let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
         let mut client = ThinClient::new(
-            leader_data.contact_info.rpu,
-            requests_socket,
+            leader_data.contact_info.rpc,
             leader_data.contact_info.tpu,
             transactions_socket,
         );
+        let transaction_count = client.transaction_count();
+        assert_eq!(transaction_count, 0);
+        let finality = client.get_finality();
+        assert_eq!(finality, 18446744073709551615);
         let last_id = client.get_last_id();
         let signature = client
             .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
@@ -560,6 +489,8 @@ mod tests {
         client.poll_for_signature(&signature).unwrap();
         let balance = client.get_balance(&bob_pubkey);
         assert_eq!(balance.unwrap(), 500);
+        let transaction_count = client.transaction_count();
+        assert_eq!(transaction_count, 1);
         server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
     }
@@ -593,19 +524,14 @@ mod tests {
             None,
             &ledger_path,
             false,
-            Some(0),
+            None,
         );
         //TODO: remove this sleep, or add a retry so CI is stable
         sleep(Duration::from_millis(300));
 
-        let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        requests_socket
-            .set_read_timeout(Some(Duration::new(5, 0)))
-            .unwrap();
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut client = ThinClient::new(
-            leader_data.contact_info.rpu,
-            requests_socket,
+            leader_data.contact_info.rpc,
             leader_data.contact_info.tpu,
             transactions_socket,
         );
@@ -660,18 +586,13 @@ mod tests {
             None,
             &ledger_path,
             false,
-            Some(0),
+            None,
         );
         sleep(Duration::from_millis(300));
 
-        let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        requests_socket
-            .set_read_timeout(Some(Duration::new(5, 0)))
-            .unwrap();
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut client = ThinClient::new(
-            leader_data.contact_info.rpu,
-            requests_socket,
+            leader_data.contact_info.rpc,
             leader_data.contact_info.tpu,
             transactions_socket,
         );
@@ -714,18 +635,13 @@ mod tests {
             None,
             &ledger_path,
             false,
-            Some(0),
+            None,
         );
         sleep(Duration::from_millis(300));
 
-        let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        requests_socket
-            .set_read_timeout(Some(Duration::new(5, 0)))
-            .unwrap();
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut client = ThinClient::new(
-            leader_data.contact_info.rpu,
-            requests_socket,
+            leader_data.contact_info.rpc,
             leader_data.contact_info.tpu,
             transactions_socket,
         );
@@ -788,12 +704,8 @@ mod tests {
         // set a bogus address, see that we don't hang
         logger::setup();
         let addr = "0.0.0.0:1234".parse().unwrap();
-        let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        requests_socket
-            .set_read_timeout(Some(Duration::from_millis(250)))
-            .unwrap();
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let mut client = ThinClient::new(addr, requests_socket, addr, transactions_socket);
+        let mut client = ThinClient::new(addr, addr, transactions_socket);
         assert_eq!(client.transaction_count(), 0);
     }
 
@@ -825,18 +737,13 @@ mod tests {
             None,
             &ledger_path,
             false,
-            Some(0),
+            None,
         );
         sleep(Duration::from_millis(900));
 
-        let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        requests_socket
-            .set_read_timeout(Some(Duration::new(5, 0)))
-            .unwrap();
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut client = ThinClient::new(
-            leader_data.contact_info.rpu,
-            requests_socket,
+            leader_data.contact_info.rpc,
             leader_data.contact_info.tpu,
             transactions_socket,
         );

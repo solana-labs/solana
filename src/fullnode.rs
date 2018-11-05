@@ -7,13 +7,12 @@ use hash::Hash;
 use leader_scheduler::LeaderScheduler;
 use ledger::read_ledger;
 use ncp::Ncp;
-use rpc::{JsonRpcService, RPC_PORT};
+use rpc::JsonRpcService;
 use rpc_pubsub::PubSubService;
-use rpu::Rpu;
 use service::Service;
 use signature::{Keypair, KeypairUtil};
+use std::net::SocketAddr;
 use std::net::UdpSocket;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::Result;
@@ -87,7 +86,6 @@ pub struct Fullnode {
     keypair: Arc<Keypair>,
     vote_account_keypair: Arc<Keypair>,
     exit: Arc<AtomicBool>,
-    rpu: Option<Rpu>,
     rpc_service: Option<JsonRpcService>,
     rpc_pubsub_service: Option<PubSubService>,
     ncp: Ncp,
@@ -101,9 +99,8 @@ pub struct Fullnode {
     retransmit_socket: UdpSocket,
     transaction_sockets: Vec<UdpSocket>,
     broadcast_socket: UdpSocket,
-    requests_socket: UdpSocket,
-    respond_socket: UdpSocket,
-    rpc_port: Option<u16>,
+    rpc_addr: SocketAddr,
+    rpc_pubsub_addr: SocketAddr,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -137,6 +134,7 @@ impl Fullnode {
         leader_addr: Option<SocketAddr>,
         sigverify_disabled: bool,
         leader_scheduler: LeaderScheduler,
+        rpc_port: Option<u16>,
     ) -> Self {
         let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
 
@@ -152,9 +150,11 @@ impl Fullnode {
             "starting... local gossip address: {} (advertising {})",
             local_gossip_addr, node.info.contact_info.ncp
         );
+        let mut rpc_addr = node.info.contact_info.rpc;
+        if let Some(port) = rpc_port {
+            rpc_addr.set_port(port);
+        }
 
-        let local_requests_addr = node.sockets.requests.local_addr().unwrap();
-        let requests_addr = node.info.contact_info.rpu;
         let leader_info = leader_addr.map(|i| NodeInfo::new_entry_point(&i));
         let server = Self::new_with_bank(
             keypair,
@@ -166,21 +166,18 @@ impl Fullnode {
             leader_info.as_ref(),
             ledger_path,
             sigverify_disabled,
-            None,
+            rpc_port,
         );
 
         match leader_addr {
             Some(leader_addr) => {
                 info!(
-                    "validator ready... local request address: {} (advertising {}) connected to: {}",
-                    local_requests_addr, requests_addr, leader_addr
+                    "validator ready... rpc address: {}, connected to: {}",
+                    rpc_addr, leader_addr
                 );
             }
             None => {
-                info!(
-                    "leader ready... local request address: {} (advertising {})",
-                    local_requests_addr, requests_addr
-                );
+                info!("leader ready... rpc address: {}", rpc_addr);
             }
         }
 
@@ -244,26 +241,26 @@ impl Fullnode {
         bank: Bank,
         entry_height: u64,
         last_id: &Hash,
-        node: Node,
+        mut node: Node,
         bootstrap_leader_info_option: Option<&NodeInfo>,
         ledger_path: &str,
         sigverify_disabled: bool,
         rpc_port: Option<u16>,
     ) -> Self {
+        let mut rpc_addr = node.info.contact_info.rpc;
+        let mut rpc_pubsub_addr = node.info.contact_info.rpc_pubsub;
+        // Use custom RPC port, if provided (`Some(port)`)
+        // RPC port may be any valid open port on the node
+        // If rpc_port == `None`, node will listen on the ports set in NodeInfo
+        if let Some(port) = rpc_port {
+            rpc_addr.set_port(port);
+            node.info.contact_info.rpc = rpc_addr;
+            rpc_pubsub_addr.set_port(port + 1);
+            node.info.contact_info.rpc_pubsub = rpc_pubsub_addr;
+        }
+
         let exit = Arc::new(AtomicBool::new(false));
         let bank = Arc::new(bank);
-
-        let rpu = Some(Rpu::new(
-            &bank,
-            node.sockets
-                .requests
-                .try_clone()
-                .expect("Failed to clone requests socket"),
-            node.sockets
-                .respond
-                .try_clone()
-                .expect("Failed to clone respond socket"),
-        ));
 
         let window = new_window(32 * 1024);
         let shared_window = Arc::new(RwLock::new(window));
@@ -272,7 +269,7 @@ impl Fullnode {
         ));
 
         let (rpc_service, rpc_pubsub_service) =
-            Self::startup_rpc_services(rpc_port, &bank, &cluster_info);
+            Self::startup_rpc_services(rpc_addr, rpc_pubsub_addr, &bank, &cluster_info);
 
         let ncp = Ncp::new(
             &cluster_info,
@@ -364,7 +361,6 @@ impl Fullnode {
             shared_window,
             bank,
             sigverify_disabled,
-            rpu,
             ncp,
             rpc_service: Some(rpc_service),
             rpc_pubsub_service: Some(rpc_pubsub_service),
@@ -376,19 +372,13 @@ impl Fullnode {
             retransmit_socket: node.sockets.retransmit,
             transaction_sockets: node.sockets.transaction,
             broadcast_socket: node.sockets.broadcast,
-            requests_socket: node.sockets.requests,
-            respond_socket: node.sockets.respond,
-            rpc_port,
+            rpc_addr,
+            rpc_pubsub_addr,
         }
     }
 
     fn leader_to_validator(&mut self) -> Result<()> {
         // Close down any services that could have a reference to the bank
-        if self.rpu.is_some() {
-            let old_rpu = self.rpu.take().unwrap();
-            old_rpu.close()?;
-        }
-
         if self.rpc_service.is_some() {
             let old_rpc_service = self.rpc_service.take().unwrap();
             old_rpc_service.close()?;
@@ -429,18 +419,12 @@ impl Fullnode {
 
         // Spin up new versions of all the services that relied on the bank, passing in the
         // new bank
-        self.rpu = Some(Rpu::new(
+        let (rpc_service, rpc_pubsub_service) = Self::startup_rpc_services(
+            self.rpc_addr,
+            self.rpc_pubsub_addr,
             &new_bank,
-            self.requests_socket
-                .try_clone()
-                .expect("Failed to clone requests socket"),
-            self.respond_socket
-                .try_clone()
-                .expect("Failed to clone respond socket"),
-        ));
-
-        let (rpc_service, rpc_pubsub_service) =
-            Self::startup_rpc_services(self.rpc_port, &new_bank, &self.cluster_info);
+            &self.cluster_info,
+        );
         self.rpc_service = Some(rpc_service);
         self.rpc_pubsub_service = Some(rpc_pubsub_service);
         self.bank = new_bank;
@@ -555,9 +539,6 @@ impl Fullnode {
     //used for notifying many nodes in parallel to exit
     pub fn exit(&self) {
         self.exit.store(true, Ordering::Relaxed);
-        if let Some(ref rpu) = self.rpu {
-            rpu.exit();
-        }
         if let Some(ref rpc_service) = self.rpc_service {
             rpc_service.exit();
         }
@@ -599,22 +580,11 @@ impl Fullnode {
     }
 
     fn startup_rpc_services(
-        rpc_port: Option<u16>,
+        rpc_addr: SocketAddr,
+        rpc_pubsub_addr: SocketAddr,
         bank: &Arc<Bank>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) -> (JsonRpcService, PubSubService) {
-        // Use custom RPC port, if provided (`Some(port)`)
-        // RPC port may be any open port on the node
-        // If rpc_port == `None`, node will listen on the default RPC_PORT from Rpc module
-        // If rpc_port == `Some(0)`, node will dynamically choose any open port for both
-        //  Rpc and RpcPubsub serivces. Useful for tests.
-
-        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::from(0)), rpc_port.unwrap_or(RPC_PORT));
-        let rpc_pubsub_addr = SocketAddr::new(
-            IpAddr::V4(Ipv4Addr::from(0)),
-            rpc_port.map_or(RPC_PORT + 1, |port| if port == 0 { port } else { port + 1 }),
-        );
-
         // TODO: The RPC service assumes that there is a drone running on the leader
         // Drone location/id will need to be handled a different way as soon as leader rotation begins
         (
@@ -628,9 +598,6 @@ impl Service for Fullnode {
     type JoinReturnType = Option<FullnodeReturnType>;
 
     fn join(self) -> Result<Option<FullnodeReturnType>> {
-        if let Some(rpu) = self.rpu {
-            rpu.join()?;
-        }
         if let Some(rpc_service) = self.rpc_service {
             rpc_service.join()?;
         }
@@ -702,7 +669,7 @@ mod tests {
             Some(&entry),
             &validator_ledger_path,
             false,
-            Some(0),
+            None,
         );
         v.close().unwrap();
         remove_dir_all(validator_ledger_path).unwrap();
@@ -742,7 +709,7 @@ mod tests {
                     Some(&entry),
                     &validator_ledger_path,
                     false,
-                    Some(0),
+                    None,
                 )
             }).collect();
 
@@ -810,6 +777,7 @@ mod tests {
             Some(bootstrap_leader_info.contact_info.ncp),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
+            None,
         );
 
         // Wait for the leader to transition, ticks should cause the leader to
@@ -900,6 +868,7 @@ mod tests {
             Some(bootstrap_leader_info.contact_info.ncp),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
+            None,
         );
 
         match bootstrap_leader.node_role {
@@ -918,6 +887,7 @@ mod tests {
             Some(bootstrap_leader_info.contact_info.ncp),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
+            None,
         );
 
         match validator.node_role {
@@ -997,6 +967,7 @@ mod tests {
             Some(leader_ncp),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
+            None,
         );
 
         // Send blobs to the validator from our mock leader

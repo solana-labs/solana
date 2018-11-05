@@ -42,7 +42,6 @@ fn make_spy_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<ClusterInfo>>, Pubkey) {
     let me = spy.info.id.clone();
     let daddr = "0.0.0.0:0".parse().unwrap();
     spy.info.contact_info.tvu = daddr;
-    spy.info.contact_info.rpu = spy.sockets.transaction[0].local_addr().unwrap();
     let mut spy_cluster_info = ClusterInfo::new(spy.info).expect("ClusterInfo::new");
     spy_cluster_info.insert(&leader);
     spy_cluster_info.set_leader(leader.id);
@@ -141,6 +140,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         None,
         false,
         LeaderScheduler::from_bootstrap_leader(leader_pubkey),
+        None,
     );
 
     // start up another validator from zero, converge and then check
@@ -157,6 +157,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         Some(leader_data.contact_info.ncp),
         false,
         LeaderScheduler::from_bootstrap_leader(leader_pubkey),
+        None,
     );
 
     // Send validator some tokens to vote
@@ -233,6 +234,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
         None,
         false,
         LeaderScheduler::from_bootstrap_leader(leader_pubkey),
+        None,
     );
 
     let mut nodes = vec![server];
@@ -260,6 +262,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
             Some(leader_data.contact_info.ncp),
             false,
             LeaderScheduler::from_bootstrap_leader(leader_pubkey),
+            None,
         );
         nodes.push(val);
     }
@@ -297,6 +300,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
         Some(leader_data.contact_info.ncp),
         false,
         LeaderScheduler::from_bootstrap_leader(leader_pubkey),
+        None,
     );
     nodes.push(val);
     //contains the leader and new node
@@ -365,6 +369,7 @@ fn test_multi_node_basic() {
         None,
         false,
         LeaderScheduler::from_bootstrap_leader(leader_pubkey),
+        None,
     );
 
     let mut nodes = vec![server];
@@ -389,6 +394,7 @@ fn test_multi_node_basic() {
             Some(leader_data.contact_info.ncp),
             false,
             LeaderScheduler::from_bootstrap_leader(leader_pubkey),
+            None,
         );
         nodes.push(val);
     }
@@ -442,6 +448,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
         None,
         false,
         LeaderScheduler::from_bootstrap_leader(leader_pubkey),
+        None,
     );
     let leader_balance =
         send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, 500, Some(500)).unwrap();
@@ -463,6 +470,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
         Some(leader_data.contact_info.ncp),
         false,
         LeaderScheduler::from_bootstrap_leader(leader_pubkey),
+        None,
     );
     let mut client = mk_client(&validator_data);
     let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
@@ -488,6 +496,7 @@ fn create_leader(ledger_path: &str, leader_keypair: Arc<Keypair>) -> (NodeInfo, 
         None,
         false,
         LeaderScheduler::from_bootstrap_leader(leader_data.id),
+        None,
     );
     (leader_data, leader_fullnode)
 }
@@ -549,6 +558,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
         Some(leader_data.contact_info.ncp),
         false,
         LeaderScheduler::from_bootstrap_leader(leader_data.id),
+        None,
     );
 
     // trigger broadcast, validator should catch up from leader, whose window contains
@@ -615,6 +625,7 @@ fn test_multi_node_dynamic_network() {
         None,
         true,
         LeaderScheduler::from_bootstrap_leader(leader_pubkey),
+        None,
     );
 
     info!("{} LEADER", leader_data.id);
@@ -678,6 +689,7 @@ fn test_multi_node_dynamic_network() {
                         Some(leader_data.contact_info.ncp),
                         true,
                         LeaderScheduler::from_bootstrap_leader(leader_pubkey),
+                        None,
                     );
                     (rd, val)
                 }).unwrap()
@@ -823,6 +835,7 @@ fn test_leader_to_validator_transition() {
         Some(leader_info.contact_info.ncp),
         false,
         LeaderScheduler::new(&leader_scheduler_config),
+        None,
     );
 
     // Make an extra node for our leader to broadcast to,
@@ -962,6 +975,7 @@ fn test_leader_validator_basic() {
         Some(leader_info.contact_info.ncp),
         false,
         LeaderScheduler::new(&leader_scheduler_config),
+        None,
     );
 
     // Start the leader fullnode
@@ -973,6 +987,7 @@ fn test_leader_validator_basic() {
         Some(leader_info.contact_info.ncp),
         false,
         LeaderScheduler::new(&leader_scheduler_config),
+        None,
     );
 
     // Wait for convergence
@@ -1148,6 +1163,7 @@ fn test_dropped_handoff_recovery() {
         Some(bootstrap_leader_info.contact_info.ncp),
         false,
         LeaderScheduler::new(&leader_scheduler_config),
+        None,
     );
 
     let mut nodes = vec![bootstrap_leader];
@@ -1170,6 +1186,7 @@ fn test_dropped_handoff_recovery() {
             Some(bootstrap_leader_info.contact_info.ncp),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
+            None,
         );
 
         nodes.push(validator);
@@ -1195,6 +1212,7 @@ fn test_dropped_handoff_recovery() {
         Some(bootstrap_leader_info.contact_info.ncp),
         false,
         LeaderScheduler::new(&leader_scheduler_config),
+        None,
     );
 
     // Wait for catchup
@@ -1311,6 +1329,7 @@ fn test_full_leader_validator_network() {
         Some(bootstrap_leader_info.contact_info.ncp),
         false,
         LeaderScheduler::new(&leader_scheduler_config),
+        None,
     )));
 
     let mut nodes: Vec<Arc<RwLock<Fullnode>>> = vec![bootstrap_leader.clone()];
@@ -1337,6 +1356,7 @@ fn test_full_leader_validator_network() {
             Some(bootstrap_leader_info.contact_info.ncp),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
+            None,
         )));
 
         nodes.push(validator.clone());
@@ -1451,16 +1471,10 @@ fn test_full_leader_validator_network() {
 }
 
 fn mk_client(leader: &NodeInfo) -> ThinClient {
-    let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    requests_socket
-        .set_read_timeout(Some(Duration::new(1, 0)))
-        .unwrap();
     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    assert!(ClusterInfo::is_valid_address(&leader.contact_info.rpu));
     assert!(ClusterInfo::is_valid_address(&leader.contact_info.tpu));
     ThinClient::new(
-        leader.contact_info.rpu,
-        requests_socket,
+        leader.contact_info.rpc,
         leader.contact_info.tpu,
         transactions_socket,
     )

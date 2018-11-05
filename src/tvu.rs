@@ -267,7 +267,7 @@ pub mod tests {
         let (s_responder, r_responder) = channel();
         let t_responder = streamer::responder(
             "test_replicate",
-            Arc::new(leader.sockets.requests),
+            Arc::new(leader.sockets.retransmit),
             r_responder,
         );
 

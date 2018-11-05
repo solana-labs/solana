@@ -19,11 +19,12 @@ use hash::Hash;
 use leader_scheduler::LeaderScheduler;
 use ledger::LedgerWindow;
 use log::Level;
-use netutil::{bind_in_range, bind_to, multi_bind_in_range};
+use netutil::{bind_in_range, bind_to, find_available_port_in_range, multi_bind_in_range};
 use packet::{to_blob, Blob, SharedBlob, BLOB_SIZE};
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use result::{Error, Result};
+use rpc::RPC_PORT;
 use signature::{Keypair, KeypairUtil};
 use solana_sdk::pubkey::Pubkey;
 use std;
@@ -79,12 +80,14 @@ pub struct ContactInfo {
     pub ncp: SocketAddr,
     /// address to connect to for replication
     pub tvu: SocketAddr,
-    /// address to connect to when this node is leader
-    pub rpu: SocketAddr,
     /// transactions address
     pub tpu: SocketAddr,
     /// storage data address
     pub storage_addr: SocketAddr,
+    /// address to which to send JSON-RPC requests
+    pub rpc: SocketAddr,
+    /// websocket for JSON-RPC push notifications
+    pub rpc_pubsub: SocketAddr,
     /// if this struture changes update this value as well
     /// Always update `NodeInfo` version too
     /// This separate version for addresses allows us to use the `Vote`
@@ -115,9 +118,10 @@ impl NodeInfo {
         id: Pubkey,
         ncp: SocketAddr,
         tvu: SocketAddr,
-        rpu: SocketAddr,
         tpu: SocketAddr,
         storage_addr: SocketAddr,
+        rpc: SocketAddr,
+        rpc_pubsub: SocketAddr,
     ) -> Self {
         NodeInfo {
             id,
@@ -125,9 +129,10 @@ impl NodeInfo {
             contact_info: ContactInfo {
                 ncp,
                 tvu,
-                rpu,
                 tpu,
                 storage_addr,
+                rpc,
+                rpc_pubsub,
                 version: 0,
             },
             leader_id: Pubkey::default(),
@@ -142,6 +147,7 @@ impl NodeInfo {
             socketaddr!("127.0.0.1:1236"),
             socketaddr!("127.0.0.1:1237"),
             socketaddr!("127.0.0.1:1238"),
+            socketaddr!("127.0.0.1:1239"),
         )
     }
 
@@ -150,14 +156,14 @@ impl NodeInfo {
     pub fn new_unspecified() -> Self {
         let addr = socketaddr!(0, 0);
         assert!(addr.ip().is_unspecified());
-        Self::new(Keypair::new().pubkey(), addr, addr, addr, addr, addr)
+        Self::new(Keypair::new().pubkey(), addr, addr, addr, addr, addr, addr)
     }
     #[cfg(test)]
     /// NodeInfo with multicast addresses for adversarial testing.
     pub fn new_multicast() -> Self {
         let addr = socketaddr!("224.0.1.255:1000");
         assert!(addr.ip().is_multicast());
-        Self::new(Keypair::new().pubkey(), addr, addr, addr, addr, addr)
+        Self::new(Keypair::new().pubkey(), addr, addr, addr, addr, addr, addr)
     }
     fn next_port(addr: &SocketAddr, nxt: u16) -> SocketAddr {
         let mut nxt_addr = *addr;
@@ -168,14 +174,16 @@ impl NodeInfo {
         let transactions_addr = *bind_addr;
         let gossip_addr = Self::next_port(&bind_addr, 1);
         let replicate_addr = Self::next_port(&bind_addr, 2);
-        let requests_addr = Self::next_port(&bind_addr, 3);
+        let rpc_addr = SocketAddr::new(bind_addr.ip(), RPC_PORT);
+        let rpc_pubsub_addr = SocketAddr::new(bind_addr.ip(), RPC_PORT + 1);
         NodeInfo::new(
             pubkey,
             gossip_addr,
             replicate_addr,
-            requests_addr,
             transactions_addr,
             "0.0.0.0:0".parse().unwrap(),
+            rpc_addr,
+            rpc_pubsub_addr,
         )
     }
     pub fn new_with_socketaddr(bind_addr: &SocketAddr) -> Self {
@@ -185,7 +193,15 @@ impl NodeInfo {
     //
     pub fn new_entry_point(gossip_addr: &SocketAddr) -> Self {
         let daddr: SocketAddr = socketaddr!("0.0.0.0:0");
-        NodeInfo::new(Pubkey::default(), *gossip_addr, daddr, daddr, daddr, daddr)
+        NodeInfo::new(
+            Pubkey::default(),
+            *gossip_addr,
+            daddr,
+            daddr,
+            daddr,
+            daddr,
+            daddr,
+        )
     }
 }
 
@@ -281,13 +297,13 @@ impl ClusterInfo {
         let nodes: Vec<_> = self
             .table
             .values()
-            .filter(|n| Self::is_valid_address(&n.contact_info.rpu))
+            .filter(|n| Self::is_valid_address(&n.contact_info.rpc))
             .cloned()
             .map(|node| {
                 format!(
                     " ncp: {:20} | {}{}\n \
-                     rpu: {:20} |\n \
-                     tpu: {:20} |\n",
+                     tpu: {:20} |\n \
+                     rpc: {:20} |\n",
                     node.contact_info.ncp.to_string(),
                     node.id,
                     if node.id == leader_id {
@@ -295,8 +311,8 @@ impl ClusterInfo {
                     } else {
                         ""
                     },
-                    node.contact_info.rpu.to_string(),
-                    node.contact_info.tpu.to_string()
+                    node.contact_info.tpu.to_string(),
+                    node.contact_info.rpc.to_string()
                 )
             }).collect();
 
@@ -323,7 +339,7 @@ impl ClusterInfo {
         self.table
             .values()
             .filter(|x| x.id != me)
-            .filter(|x| ClusterInfo::is_valid_address(&x.contact_info.rpu))
+            .filter(|x| ClusterInfo::is_valid_address(&x.contact_info.rpc))
             .cloned()
             .collect()
     }
@@ -1187,7 +1203,7 @@ impl ClusterInfo {
         let pubkey = Keypair::new().pubkey();
         let daddr = socketaddr_any!();
 
-        let node = NodeInfo::new(pubkey, daddr, daddr, daddr, daddr, daddr);
+        let node = NodeInfo::new(pubkey, daddr, daddr, daddr, daddr, daddr, daddr);
         (node, gossip_socket)
     }
 }
@@ -1195,10 +1211,8 @@ impl ClusterInfo {
 #[derive(Debug)]
 pub struct Sockets {
     pub gossip: UdpSocket,
-    pub requests: UdpSocket,
     pub replicate: Vec<UdpSocket>,
     pub transaction: Vec<UdpSocket>,
-    pub respond: UdpSocket,
     pub broadcast: UdpSocket,
     pub repair: UdpSocket,
     pub retransmit: UdpSocket,
@@ -1219,10 +1233,13 @@ impl Node {
         let transaction = UdpSocket::bind("127.0.0.1:0").unwrap();
         let gossip = UdpSocket::bind("127.0.0.1:0").unwrap();
         let replicate = UdpSocket::bind("127.0.0.1:0").unwrap();
-        let requests = UdpSocket::bind("127.0.0.1:0").unwrap();
         let repair = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let rpc_port = find_available_port_in_range((1024, 65535)).unwrap();
+        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_port);
+        let rpc_pubsub_port = find_available_port_in_range((1024, 65535)).unwrap();
+        let rpc_pubsub_addr =
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), rpc_pubsub_port);
 
-        let respond = UdpSocket::bind("0.0.0.0:0").unwrap();
         let broadcast = UdpSocket::bind("0.0.0.0:0").unwrap();
         let retransmit = UdpSocket::bind("0.0.0.0:0").unwrap();
         let storage = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -1230,18 +1247,17 @@ impl Node {
             pubkey,
             gossip.local_addr().unwrap(),
             replicate.local_addr().unwrap(),
-            requests.local_addr().unwrap(),
             transaction.local_addr().unwrap(),
             storage.local_addr().unwrap(),
+            rpc_addr,
+            rpc_pubsub_addr,
         );
         Node {
             info,
             sockets: Sockets {
                 gossip,
-                requests,
                 replicate: vec![replicate],
                 transaction: vec![transaction],
-                respond,
                 broadcast,
                 repair,
                 retransmit,
@@ -1262,8 +1278,6 @@ impl Node {
         let (replicate_port, replicate_sockets) =
             multi_bind_in_range(FULLNODE_PORT_RANGE, 8).expect("tvu multi_bind");
 
-        let (requests_port, requests) = bind();
-
         let (transaction_port, transaction_sockets) =
             multi_bind_in_range(FULLNODE_PORT_RANGE, 32).expect("tpu multi_bind");
 
@@ -1272,18 +1286,14 @@ impl Node {
         let (_, retransmit) = bind();
         let (storage_port, _) = bind();
 
-        // Responses are sent from the same Udp port as requests are received
-        // from, in hopes that a NAT sitting in the middle will route the
-        // response Udp packet correctly back to the requester.
-        let respond = requests.try_clone().unwrap();
-
         let info = NodeInfo::new(
             pubkey,
             SocketAddr::new(ncp.ip(), gossip_port),
             SocketAddr::new(ncp.ip(), replicate_port),
-            SocketAddr::new(ncp.ip(), requests_port),
             SocketAddr::new(ncp.ip(), transaction_port),
             SocketAddr::new(ncp.ip(), storage_port),
+            SocketAddr::new(ncp.ip(), RPC_PORT),
+            SocketAddr::new(ncp.ip(), RPC_PORT + 1),
         );
         trace!("new NodeInfo: {:?}", info);
 
@@ -1291,10 +1301,8 @@ impl Node {
             info,
             sockets: Sockets {
                 gossip,
-                requests,
                 replicate: replicate_sockets,
                 transaction: transaction_sockets,
-                respond,
                 broadcast,
                 repair,
                 retransmit,
@@ -1374,8 +1382,9 @@ mod tests {
         assert_eq!(d1.id, keypair.pubkey());
         assert_eq!(d1.contact_info.ncp, socketaddr!("127.0.0.1:1235"));
         assert_eq!(d1.contact_info.tvu, socketaddr!("127.0.0.1:1236"));
-        assert_eq!(d1.contact_info.rpu, socketaddr!("127.0.0.1:1237"));
         assert_eq!(d1.contact_info.tpu, socketaddr!("127.0.0.1:1234"));
+        assert_eq!(d1.contact_info.rpc, socketaddr!("127.0.0.1:8899"));
+        assert_eq!(d1.contact_info.rpc_pubsub, socketaddr!("127.0.0.1:8900"));
     }
     #[test]
     fn max_updates() {
@@ -1480,6 +1489,7 @@ mod tests {
             socketaddr!([127, 0, 0, 1], 1236),
             socketaddr!([127, 0, 0, 1], 1237),
             socketaddr!([127, 0, 0, 1], 1238),
+            socketaddr!([127, 0, 0, 1], 1239),
         );
         cluster_info.insert(&nxt);
         let rv = cluster_info.window_index_request(0).unwrap();
@@ -1494,6 +1504,7 @@ mod tests {
             socketaddr!([127, 0, 0, 1], 1236),
             socketaddr!([127, 0, 0, 1], 1237),
             socketaddr!([127, 0, 0, 1], 1238),
+            socketaddr!([127, 0, 0, 1], 1239),
         );
         cluster_info.insert(&nxt);
         let mut one = false;
@@ -1515,6 +1526,7 @@ mod tests {
     fn gossip_request_bad_addr() {
         let me = NodeInfo::new(
             Keypair::new().pubkey(),
+            socketaddr!("127.0.0.1:127"),
             socketaddr!("127.0.0.1:127"),
             socketaddr!("127.0.0.1:127"),
             socketaddr!("127.0.0.1:127"),
@@ -1665,6 +1677,7 @@ mod tests {
             socketaddr!("127.0.0.1:1236"),
             socketaddr!("127.0.0.1:1237"),
             socketaddr!("127.0.0.1:1238"),
+            socketaddr!("127.0.0.1:1239"),
         );
         let rv =
             ClusterInfo::run_window_request(&me, &socketaddr_any!(), &window, &mut None, &me, 0);
@@ -1843,7 +1856,6 @@ mod tests {
         for tx_socket in node.sockets.replicate.iter() {
             assert_eq!(tx_socket.local_addr().unwrap().ip(), ip);
         }
-        assert_eq!(node.sockets.requests.local_addr().unwrap().ip(), ip);
         assert!(node.sockets.transaction.len() > 1);
         for tx_socket in node.sockets.transaction.iter() {
             assert_eq!(tx_socket.local_addr().unwrap().ip(), ip);
@@ -1858,8 +1870,6 @@ mod tests {
         for tx_socket in node.sockets.replicate.iter() {
             assert_eq!(tx_socket.local_addr().unwrap().port(), tx_port);
         }
-        assert!(node.sockets.requests.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
-        assert!(node.sockets.requests.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
         let tx_port = node.sockets.transaction[0].local_addr().unwrap().port();
         assert!(tx_port >= FULLNODE_PORT_RANGE.0);
         assert!(tx_port < FULLNODE_PORT_RANGE.1);
@@ -1879,7 +1889,6 @@ mod tests {
         for tx_socket in node.sockets.replicate.iter() {
             assert_eq!(tx_socket.local_addr().unwrap().ip(), ip);
         }
-        assert_eq!(node.sockets.requests.local_addr().unwrap().ip(), ip);
         assert!(node.sockets.transaction.len() > 1);
         for tx_socket in node.sockets.transaction.iter() {
             assert_eq!(tx_socket.local_addr().unwrap().ip(), ip);
@@ -1893,8 +1902,6 @@ mod tests {
         for tx_socket in node.sockets.replicate.iter() {
             assert_eq!(tx_socket.local_addr().unwrap().port(), tx_port);
         }
-        assert!(node.sockets.requests.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
-        assert!(node.sockets.requests.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
         let tx_port = node.sockets.transaction[0].local_addr().unwrap().port();
         assert!(tx_port >= FULLNODE_PORT_RANGE.0);
         assert!(tx_port < FULLNODE_PORT_RANGE.1);

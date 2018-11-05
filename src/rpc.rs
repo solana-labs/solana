@@ -615,7 +615,6 @@ mod tests {
         let last_id = bank.last_id();
         let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 20, last_id, 0);
         let serial_tx = serialize(&tx).unwrap();
-        let rpc_port = 22222; // Needs to be distinct known number to not conflict with other tests
 
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
@@ -634,7 +633,7 @@ mod tests {
             None,
             &ledger_path,
             false,
-            Some(rpc_port),
+            None,
         );
         sleep(Duration::from_millis(900));
 
@@ -645,8 +644,7 @@ mod tests {
            "method": "sendTransaction",
            "params": json!(vec![serial_tx])
         });
-        let mut rpc_addr = leader_data.contact_info.ncp;
-        rpc_addr.set_port(22222);
+        let rpc_addr = leader_data.contact_info.rpc;
         let rpc_string = format!("http://{}", rpc_addr.to_string());
         let mut response = client
             .post(&rpc_string)

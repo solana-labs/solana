@@ -638,7 +638,7 @@ fn main() {
 
     let leader = leader.unwrap();
 
-    println!("leader is at {} {}", leader.contact_info.rpu, leader.id);
+    println!("leader RPC is at {} {}", leader.contact_info.rpc, leader.id);
     let mut client = mk_client(&leader);
     let mut barrier_client = mk_client(&leader);
 
@@ -821,7 +821,7 @@ fn converge(
                 v = spy_ref
                     .table
                     .values()
-                    .filter(|x| ClusterInfo::is_valid_address(&x.contact_info.rpu))
+                    .filter(|x| ClusterInfo::is_valid_address(&x.contact_info.rpc))
                     .cloned()
                     .collect();
 
