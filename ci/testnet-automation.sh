@@ -29,7 +29,7 @@ launchTestnet() {
   net/init-metrics.sh -e
 
   echo --- start "$nodeCount" node test
-  if [[ -n $PREBUILT ]]; then
+  if [[ -n $USE_PREBUILT_CHANNEL_TARBALL ]]; then
     net/net.sh start -o noValidatorSanity -t "$CHANNEL"
   else
     net/net.sh start -o noValidatorSanity -S solana_*.snap
