@@ -13,10 +13,12 @@ pub fn id() -> Pubkey {
     Pubkey::new(&ERC20_PROGRAM_ID)
 }
 
-pub fn populate_account(account: &mut Account) {
-    account.tokens = 0;
-    account.program_id = id();
-    account.userdata = ERC20_NAME.as_bytes().to_vec();
-    account.executable = true;
-    account.loader_program_id = native_loader::id();
+pub fn account() -> Account {
+    Account {
+        tokens: 0,
+        program_id: id(),
+        userdata: ERC20_NAME.as_bytes().to_vec(),
+        executable: true,
+        loader_program_id: native_loader::id(),
+    }
 }

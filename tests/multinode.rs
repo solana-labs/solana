@@ -889,7 +889,7 @@ fn test_leader_to_validator_transition() {
         Arc::new(RwLock::new(LeaderScheduler::default())),
     );
 
-    assert_eq!(bank.get_tick_height(), bootstrap_height);
+    assert_eq!(bank.tick_height(), bootstrap_height);
 
     // Shut down
     ncp.close().unwrap();

@@ -170,7 +170,7 @@ impl ReplicateStage {
 
                     if leader_id == keypair.pubkey() {
                         return Some(ReplicateStageReturnType::LeaderRotation(
-                            bank.get_tick_height(),
+                            bank.tick_height(),
                             entry_height_,
                             // We should never start the TPU / this stage on an exact entry that causes leader
                             // rotation (Fullnode should automatically transition on startup if it detects

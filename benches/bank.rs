@@ -44,7 +44,7 @@ fn bench_process_transaction(bencher: &mut Bencher) {
     let mut id = bank.last_id();
 
     for _ in 0..(MAX_ENTRY_IDS - 1) {
-        bank.register_entry_id(&id);
+        bank.register_tick(&id);
         id = hash(&id.as_ref())
     }
 

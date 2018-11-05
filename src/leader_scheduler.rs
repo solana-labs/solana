@@ -204,7 +204,7 @@ impl LeaderScheduler {
                 // Both above cases are calculated by the function:
                 // count_until_next_leader_rotation() + height
                 self.count_until_next_leader_rotation(height).expect(
-                    "Should return some value when not using default implementation 
+                    "Should return some value when not using default implementation
                      of LeaderScheduler",
                 ) + height
             } else {
@@ -286,9 +286,11 @@ impl LeaderScheduler {
         let lower_bound = height.saturating_sub(self.active_window_length);
 
         {
-            let bank_accounts = &bank.accounts.read().unwrap();
+            let accounts = bank.accounts.read().unwrap();
 
-            bank_accounts
+            // TODO: iterate through checkpoints, too
+            accounts
+                .accounts
                 .values()
                 .filter_map(|account| {
                     if VoteProgram::check_id(&account.program_id) {
