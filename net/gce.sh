@@ -11,7 +11,13 @@ gce)
   # shellcheck source=net/scripts/gce-provider.sh
   source "$here"/scripts/gce-provider.sh
 
-  imageName="ubuntu-16-04-cuda-9-2-new"
+  cpuImageName="ubuntu-1804-bionic-v20181029 --image-project ubuntu-os-cloud"
+
+  # TODO: GPU image is still 16.04-based pending resolution of
+  #       https://github.com/solana-labs/solana/issues/1702
+  gpuImageName="ubuntu-16-04-cuda-9-2-new"
+  imageName=$cpuImageName
+
   cpuLeaderMachineType=n1-standard-16
   gpuLeaderMachineType="$cpuLeaderMachineType --accelerator count=4,type=nvidia-tesla-k80"
   leaderMachineType=$cpuLeaderMachineType
@@ -22,7 +28,11 @@ ec2)
   # shellcheck source=net/scripts/ec2-provider.sh
   source "$here"/scripts/ec2-provider.sh
 
-  imageName="ami-0466e26ccc0e752c1"
+  # Deep Learning AMI (Ubuntu 16.04-based)
+  cpuImageName="ami-0466e26ccc0e752c1"
+  gpuImageName="$cpuImageName"
+  imageName=$cpuImageName
+
   cpuLeaderMachineType=m4.4xlarge
   gpuLeaderMachineType=p2.xlarge
   leaderMachineType=$cpuLeaderMachineType
@@ -118,7 +128,8 @@ while getopts "h?p:Pn:c:z:gG:a:d:" opt; do
     ;;
   g)
     enableGpu=true
-    leaderMachineType="$gpuLeaderMachineType"
+    leaderMachineType=$gpuLeaderMachineType
+    imageName=$gpuImageName
     ;;
   G)
     enableGpu=true
