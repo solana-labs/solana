@@ -2,8 +2,10 @@
 
 cd "$(dirname "$0")/.."
 
-echo --- downloading snap from build artifacts
-buildkite-agent artifact download "solana_*.snap" .
+if [[ -z $USE_PREBUILT_CHANNEL_TARBALL ]]; then
+  echo --- downloading snap from build artifacts
+  buildkite-agent artifact download "solana_*.snap" .
+fi
 
 # shellcheck disable=SC1091
 source ci/upload_ci_artifact.sh
