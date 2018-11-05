@@ -1167,8 +1167,6 @@ mod tests {
             create_tmp_genesis("wallet_request_airdrop", 10_000_000, leader_data.id, 1000);
         let mut bank = Bank::new(&alice);
 
-        let rpc_port = 11111; // Needs to be distinct known number to not conflict with other tests
-
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
         )));
@@ -1186,7 +1184,7 @@ mod tests {
             None,
             &ledger_path,
             false,
-            Some(rpc_port),
+            None,
         );
         sleep(Duration::from_millis(900));
 
@@ -1194,9 +1192,7 @@ mod tests {
         run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
         let drone_addr = receiver.recv().unwrap();
 
-        let mut addr = leader_data.contact_info.ncp;
-        addr.set_port(rpc_port);
-        let rpc_addr = format!("http://{}", addr.to_string());
+        let rpc_addr = format!("http://{}", leader_data.contact_info.rpc.to_string());
 
         let signature = request_airdrop(&drone_addr, &bob_pubkey, 50);
         assert!(signature.is_ok());
@@ -1377,7 +1373,6 @@ mod tests {
 
         let mut config_payer = WalletConfig::default();
         let mut config_witness = WalletConfig::default();
-        let rpc_port = 11223; // Needs to be distinct known number to not conflict with other tests
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
         )));
@@ -1394,7 +1389,7 @@ mod tests {
             None,
             &ledger_path,
             false,
-            Some(rpc_port),
+            None,
         );
         sleep(Duration::from_millis(900));
 
@@ -1405,8 +1400,7 @@ mod tests {
         config_payer.leader = leader_data1;
         config_witness.leader = leader_data2;
 
-        let mut rpc_addr = leader_data.contact_info.ncp;
-        rpc_addr.set_port(rpc_port);
+        let rpc_addr = leader_data.contact_info.rpc;
         config_payer.rpc_addr = format!("http://{}", rpc_addr.to_string());
         config_witness.rpc_addr = config_payer.rpc_addr.clone();
 

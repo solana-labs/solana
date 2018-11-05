@@ -429,14 +429,17 @@ pub fn make_consecutive_blobs(
 
 #[cfg(test)]
 mod tests {
+    use hash::Hash;
     use packet::{
         to_packets, Blob, Meta, Packet, Packets, SharedBlob, SharedPackets, NUM_PACKETS,
         PACKET_DATA_SIZE,
     };
-    use request::Request;
+    use signature::{Keypair, KeypairUtil};
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;
+    use system_transaction::SystemTransaction;
+    use transaction::Transaction;
 
     #[test]
     pub fn packet_send_recv() {
@@ -460,7 +463,9 @@ mod tests {
 
     #[test]
     fn test_to_packets() {
-        let tx = Request::GetTransactionCount;
+        let keypair = Keypair::new();
+        let hash = Hash::new(&[1; 32]);
+        let tx = Transaction::system_new(&keypair, keypair.pubkey(), 1, hash);
         let rv = to_packets(&vec![tx.clone(); 1]);
         assert_eq!(rv.len(), 1);
         assert_eq!(rv[0].read().unwrap().packets.len(), 1);

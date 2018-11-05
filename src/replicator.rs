@@ -214,6 +214,7 @@ mod tests {
             None,
             false,
             LeaderScheduler::from_bootstrap_leader(leader_info.id),
+            None,
         );
 
         let mut leader_client = mk_client(&leader_info);

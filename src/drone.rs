@@ -104,15 +104,13 @@ impl Drone {
 
     pub fn send_airdrop(&mut self, req: DroneRequest) -> Result<Signature, io::Error> {
         let request_amount: u64;
-        let requests_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
         let leader = poll_gossip_for_leader(self.network_addr, Some(10))
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
 
         let mut client = ThinClient::new(
-            leader.contact_info.rpu,
-            requests_socket,
+            leader.contact_info.rpc,
             leader.contact_info.tpu,
             transactions_socket,
         );
@@ -340,7 +338,7 @@ mod tests {
             None,
             &ledger_path,
             false,
-            Some(0),
+            None,
         );
 
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().expect("bind to drone socket");
@@ -353,13 +351,11 @@ mod tests {
             Some(150_000),
         );
 
-        let requests_socket = UdpSocket::bind("0.0.0.0:0").expect("drone bind to requests socket");
         let transactions_socket =
             UdpSocket::bind("0.0.0.0:0").expect("drone bind to transactions socket");
 
         let mut client = ThinClient::new(
-            leader_data.contact_info.rpu,
-            requests_socket,
+            leader_data.contact_info.rpc,
             leader_data.contact_info.tpu,
             transactions_socket,
         );
@@ -385,15 +381,14 @@ mod tests {
             None,
             false,
             LeaderScheduler::from_bootstrap_leader(leader_data.id),
+            None,
         );
 
-        let requests_socket = UdpSocket::bind("0.0.0.0:0").expect("drone bind to requests socket");
         let transactions_socket =
             UdpSocket::bind("0.0.0.0:0").expect("drone bind to transactions socket");
 
         let mut client = ThinClient::new(
-            leader_data.contact_info.rpu,
-            requests_socket,
+            leader_data.contact_info.rpc,
             leader_data.contact_info.tpu,
             transactions_socket,
         );
