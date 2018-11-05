@@ -128,6 +128,9 @@ cloud_CreateInstances() {
     --no-restart-on-failure
   )
 
+  # shellcheck disable=SC2206 # Do not want to quote $imageName as it may contain extra args
+  args+=(--image $imageName)
+
   # shellcheck disable=SC2206 # Do not want to quote $machineType as it may contain extra args
   args+=(--machine-type $machineType)
   if [[ -n $optionalBootDiskSize ]]; then
