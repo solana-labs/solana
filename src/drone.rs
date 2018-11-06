@@ -116,7 +116,7 @@ impl Drone {
         );
         let last_id = client.get_last_id();
 
-        let tx = match req {
+        let mut tx = match req {
             DroneRequest::GetAirdrop {
                 airdrop_request_amount,
                 client_pubkey,
@@ -147,7 +147,7 @@ impl Drone {
                         influxdb::Value::Integer(self.request_current as i64),
                     ).to_owned(),
             );
-            client.retry_transfer_signed(&tx, 10)
+            client.retry_transfer(&self.mint_keypair, &mut tx, 10)
         } else {
             Err(Error::new(ErrorKind::Other, "token limit reached"))
         }

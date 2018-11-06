@@ -75,13 +75,15 @@ impl ThinClient {
     }
 
     /// Retry a sending a signed Transaction to the server for processing.
-    pub fn retry_transfer_signed(
+    pub fn retry_transfer(
         &mut self,
-        tx: &Transaction,
+        keypair: &Keypair,
+        tx: &mut Transaction,
         tries: usize,
     ) -> io::Result<Signature> {
-        let data = serialize(&tx).expect("serialize Transaction in pub fn transfer_signed");
         for x in 0..tries {
+            tx.sign(&keypair, self.get_last_id());
+            let data = serialize(&tx).expect("serialize Transaction in pub fn transfer_signed");
             self.transactions_socket
                 .send_to(&data, &self.transactions_addr)?;
             if self.poll_for_signature(&tx.signature).is_ok() {
@@ -91,7 +93,7 @@ impl ThinClient {
         }
         Err(io::Error::new(
             io::ErrorKind::Other,
-            "retry_transfer_signed failed",
+            "retry_transfer failed",
         ))
     }
 
