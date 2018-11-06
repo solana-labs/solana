@@ -278,7 +278,7 @@ SOL_FN_PREFIX void sol_log_params(
  *   if (!sol_deserialize(buf, ka, SOL_ARRAY_SIZE(ka), NULL, &data, &data_len)) {
  *     return false;
  *   }
- *   log_params(1, ka, data, data_len);
+ *   sol_log_params(1, ka, data, data_len);
  *   return true;
  * }
  */
