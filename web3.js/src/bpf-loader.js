@@ -1,7 +1,5 @@
 // @flow
 
-import elfy from 'elfy';
-
 import {Account} from './account';
 import {PublicKey} from './publickey';
 import {Loader} from './loader';
@@ -27,31 +25,26 @@ export class BpfLoader {
    *
    * @param connection The connection to use
    * @param owner User account to load the program into
-   * @param elfBytes the entire ELF containing the BPF program in its .text.entrypoint section
+   * @param elfBytes The entire ELF containing the BPF program
    */
   static async load(
     connection: Connection,
     owner: Account,
-    elfBytes: Array<number>,
+    elf: Array<number>,
   ): Promise<PublicKey> {
     const programAccount = new Account();
-
-    const elf = elfy.parse(elfBytes);
-    const section = elf.body.sections.find(
-      section => section.name === '.text.entrypoint',
-    );
 
     const transaction = SystemProgram.createAccount(
       owner.publicKey,
       programAccount.publicKey,
       1,
-      section.data.length,
+      elf.length,
       BpfLoader.programId,
     );
     await sendAndConfirmTransaction(connection, owner, transaction);
 
     const loader = new Loader(connection, BpfLoader.programId);
-    await loader.load(programAccount, section.data);
+    await loader.load(programAccount, elf);
     await loader.finalize(programAccount);
 
     return programAccount.publicKey;
