@@ -12,6 +12,7 @@ RUN set -x && \
     apt update && \
     apt install -y \
       buildkite-agent \
+      clang-7 \
       cmake \
       lcov \
       libclang-common-7-dev \
