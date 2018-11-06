@@ -2,6 +2,7 @@
 
 use bincode::serialize;
 use hash::{Hash, Hasher};
+use serde::Serialize;
 use signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::pubkey::Pubkey;
 use std::mem::size_of;
@@ -21,6 +22,17 @@ pub struct Instruction {
     pub accounts: Vec<u8>,
     /// Userdata to be stored in the account
     pub userdata: Vec<u8>,
+}
+
+impl Instruction {
+    pub fn new<T: Serialize>(program_ids_index: u8, userdata: &T, accounts: Vec<u8>) -> Self {
+        let userdata = serialize(userdata).unwrap();
+        Instruction {
+            program_ids_index,
+            userdata,
+            accounts,
+        }
+    }
 }
 
 /// An atomic transaction
@@ -50,20 +62,17 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    pub fn new(
+    pub fn new<T: Serialize>(
         from_keypair: &Keypair,
         transaction_keys: &[Pubkey],
         program_id: Pubkey,
-        userdata: Vec<u8>,
+        userdata: &T,
         last_id: Hash,
         fee: u64,
     ) -> Self {
         let program_ids = vec![program_id];
-        let instructions = vec![Instruction {
-            program_ids_index: 0,
-            userdata,
-            accounts: (0..=transaction_keys.len() as u8).collect(),
-        }];
+        let accounts = (0..=transaction_keys.len() as u8).collect();
+        let instructions = vec![Instruction::new(0, userdata, accounts)];
         Self::new_with_instructions(
             from_keypair,
             transaction_keys,
@@ -201,16 +210,8 @@ mod tests {
         let prog1 = Keypair::new().pubkey();
         let prog2 = Keypair::new().pubkey();
         let instructions = vec![
-            Instruction {
-                program_ids_index: 0,
-                userdata: vec![],
-                accounts: vec![0, 1],
-            },
-            Instruction {
-                program_ids_index: 1,
-                userdata: vec![],
-                accounts: vec![0, 2],
-            },
+            Instruction::new(0, &(), vec![0, 1]),
+            Instruction::new(1, &(), vec![0, 2]),
         ];
         let tx = Transaction::new_with_instructions(
             &key,
@@ -246,11 +247,7 @@ mod tests {
     #[test]
     fn test_refs_invalid_program_id() {
         let key = Keypair::new();
-        let instructions = vec![Instruction {
-            program_ids_index: 1,
-            userdata: vec![],
-            accounts: vec![],
-        }];
+        let instructions = vec![Instruction::new(1, &(), vec![])];
         let tx = Transaction::new_with_instructions(
             &key,
             &[],
@@ -264,11 +261,7 @@ mod tests {
     #[test]
     fn test_refs_invalid_account() {
         let key = Keypair::new();
-        let instructions = vec![Instruction {
-            program_ids_index: 0,
-            userdata: vec![],
-            accounts: vec![1],
-        }];
+        let instructions = vec![Instruction::new(0, &(), vec![1])];
         let tx = Transaction::new_with_instructions(
             &key,
             &[],
@@ -300,7 +293,7 @@ mod tests {
             keypair,
             &[keypair.pubkey(), to],
             program_id,
-            vec![1, 2, 3],
+            &(1u8, 2u8, 3u8),
             Hash::default(),
             99,
         );

@@ -1,6 +1,5 @@
 //! The `system_transaction` module provides functionality for creating system transactions.
 
-use bincode::serialize;
 use hash::Hash;
 use signature::{Keypair, KeypairUtil};
 use solana_sdk::pubkey::Pubkey;
@@ -56,12 +55,11 @@ impl SystemTransaction for Transaction {
             space,
             program_id,
         };
-        let userdata = serialize(&create).unwrap();
         Transaction::new(
             from_keypair,
             &[to],
             SystemProgram::id(),
-            userdata,
+            &create,
             last_id,
             fee,
         )
@@ -69,12 +67,11 @@ impl SystemTransaction for Transaction {
     /// Create and sign new SystemProgram::Assign transaction
     fn system_assign(from_keypair: &Keypair, last_id: Hash, program_id: Pubkey, fee: u64) -> Self {
         let assign = SystemProgram::Assign { program_id };
-        let userdata = serialize(&assign).unwrap();
         Transaction::new(
             from_keypair,
             &[],
             SystemProgram::id(),
-            userdata,
+            &assign,
             last_id,
             fee,
         )
@@ -92,12 +89,11 @@ impl SystemTransaction for Transaction {
         fee: u64,
     ) -> Self {
         let move_tokens = SystemProgram::Move { tokens };
-        let userdata = serialize(&move_tokens).unwrap();
         Transaction::new(
             from_keypair,
             &[to],
             SystemProgram::id(),
-            userdata,
+            &move_tokens,
             last_id,
             fee,
         )
@@ -109,11 +105,7 @@ impl SystemTransaction for Transaction {
             .enumerate()
             .map(|(i, (_, amount))| {
                 let spend = SystemProgram::Move { tokens: *amount };
-                Instruction {
-                    program_ids_index: 0,
-                    userdata: serialize(&spend).unwrap(),
-                    accounts: vec![0, i as u8 + 1],
-                }
+                Instruction::new(0, &spend, vec![0, i as u8 + 1])
             }).collect();
         let to_keys: Vec<_> = moves.iter().map(|(to_key, _)| *to_key).collect();
 
@@ -129,15 +121,7 @@ impl SystemTransaction for Transaction {
     /// Create and sign new SystemProgram::Spawn transaction
     fn system_spawn(from_keypair: &Keypair, last_id: Hash, fee: u64) -> Self {
         let spawn = SystemProgram::Spawn;
-        let userdata = serialize(&spawn).unwrap();
-        Transaction::new(
-            from_keypair,
-            &[],
-            SystemProgram::id(),
-            userdata,
-            last_id,
-            fee,
-        )
+        Transaction::new(from_keypair, &[], SystemProgram::id(), &spawn, last_id, fee)
     }
 }
 

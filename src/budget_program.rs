@@ -292,12 +292,12 @@ mod test {
         ];
         let from = Keypair::new();
         let contract = Keypair::new();
-        let userdata = vec![1, 2, 3];
+        let userdata = (1u8, 2u8, 3u8);
         let tx = Transaction::new(
             &from,
             &[contract.pubkey()],
             BudgetState::id(),
-            userdata,
+            &userdata,
             Hash::default(),
             0,
         );

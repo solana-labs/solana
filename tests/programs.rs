@@ -4,7 +4,6 @@ extern crate serde_derive;
 extern crate solana;
 extern crate solana_sdk;
 
-use bincode::serialize;
 use solana::bank::Bank;
 #[cfg(feature = "bpf_c")]
 use solana::bpf_loader;
@@ -189,7 +188,7 @@ fn test_program_native_noop() {
         &loader.mint.keypair(),
         &[],
         program.program.pubkey(),
-        vec![1u8],
+        &1u8,
         loader.mint.last_id(),
         0,
     );
@@ -248,12 +247,11 @@ fn test_program_lua_move_funds() {
         loader.bank.process_transactions(&vec![tx.clone()]),
     );
 
-    let data = serialize(&10).unwrap();
     let tx = Transaction::new(
         &from,
         &[to],
         program.program.pubkey(),
-        data,
+        &10,
         loader.mint.last_id(),
         0,
     );

@@ -1,6 +1,5 @@
 //! The `dynamic_transaction` module provides functionality for loading and calling a program
 
-use bincode::serialize;
 use hash::Hash;
 use signature::{Keypair, KeypairUtil};
 use solana_sdk::loader_instruction::LoaderInstruction;
@@ -36,8 +35,7 @@ impl LoaderTransaction for Transaction {
             bytes.len()
         );
         let instruction = LoaderInstruction::Write { offset, bytes };
-        let userdata = serialize(&instruction).unwrap();
-        Transaction::new(from_keypair, &[], loader, userdata, last_id, fee)
+        Transaction::new(from_keypair, &[], loader, &instruction, last_id, fee)
     }
 
     fn finalize(from_keypair: &Keypair, loader: Pubkey, last_id: Hash, fee: u64) -> Self {
@@ -46,7 +44,6 @@ impl LoaderTransaction for Transaction {
             from_keypair.pubkey(),
         );
         let instruction = LoaderInstruction::Finalize;
-        let userdata = serialize(&instruction).unwrap();
-        Transaction::new(from_keypair, &[], loader, userdata, last_id, fee)
+        Transaction::new(from_keypair, &[], loader, &instruction, last_id, fee)
     }
 }

@@ -1,6 +1,6 @@
 //! The `budget_transaction` module provides functionality for creating Budget transactions.
 
-use bincode::{deserialize, serialize};
+use bincode::deserialize;
 use budget_expr::{BudgetExpr, Condition};
 use budget_instruction::Instruction;
 use budget_program::BudgetState;
@@ -78,28 +78,18 @@ impl BudgetTransaction for Transaction {
         let keys = vec![from_keypair.pubkey(), contract];
 
         let system_instruction = SystemProgram::Move { tokens };
-        let move_userdata = serialize(&system_instruction).unwrap();
 
         let payment = Payment {
             tokens: tokens - fee,
             to,
         };
         let budget_instruction = Instruction::NewBudget(BudgetExpr::Pay(payment));
-        let pay_userdata = serialize(&budget_instruction).unwrap();
 
         let program_ids = vec![SystemProgram::id(), BudgetState::id()];
 
         let instructions = vec![
-            transaction::Instruction {
-                program_ids_index: 0,
-                userdata: move_userdata,
-                accounts: vec![0, 1],
-            },
-            transaction::Instruction {
-                program_ids_index: 1,
-                userdata: pay_userdata,
-                accounts: vec![1],
-            },
+            transaction::Instruction::new(0, &system_instruction, vec![0, 1]),
+            transaction::Instruction::new(1, &budget_instruction, vec![1]),
         ];
 
         Self::new_with_instructions(from_keypair, &keys, last_id, fee, program_ids, instructions)
@@ -119,12 +109,11 @@ impl BudgetTransaction for Transaction {
         last_id: Hash,
     ) -> Self {
         let instruction = Instruction::ApplyTimestamp(dt);
-        let userdata = serialize(&instruction).unwrap();
         Self::new(
             from_keypair,
             &[contract, to],
             BudgetState::id(),
-            userdata,
+            &instruction,
             last_id,
             0,
         )
@@ -138,12 +127,11 @@ impl BudgetTransaction for Transaction {
         last_id: Hash,
     ) -> Self {
         let instruction = Instruction::ApplySignature;
-        let userdata = serialize(&instruction).unwrap();
         Self::new(
             from_keypair,
             &[contract, to],
             BudgetState::id(),
-            userdata,
+            &instruction,
             last_id,
             0,
         )
@@ -169,12 +157,11 @@ impl BudgetTransaction for Transaction {
             BudgetExpr::After(Condition::Timestamp(dt, dt_pubkey), Payment { tokens, to })
         };
         let instruction = Instruction::NewBudget(expr);
-        let userdata = serialize(&instruction).expect("serialize instruction");
         Self::new(
             from_keypair,
             &[contract],
             BudgetState::id(),
-            userdata,
+            &instruction,
             last_id,
             0,
         )
@@ -198,12 +185,11 @@ impl BudgetTransaction for Transaction {
             BudgetExpr::After(Condition::Signature(witness), Payment { tokens, to })
         };
         let instruction = Instruction::NewBudget(expr);
-        let userdata = serialize(&instruction).expect("serialize instruction");
         Self::new(
             from_keypair,
             &[contract],
             BudgetState::id(),
-            userdata,
+            &instruction,
             last_id,
             0,
         )
@@ -270,12 +256,7 @@ mod tests {
             to: Default::default(),
         });
         let instruction = Instruction::NewBudget(expr);
-        let userdata = serialize(&instruction).unwrap();
-        let instructions = vec![transaction::Instruction {
-            program_ids_index: 0,
-            userdata,
-            accounts: vec![],
-        }];
+        let instructions = vec![transaction::Instruction::new(0, &instruction, vec![])];
         let claim0 = Transaction {
             account_keys: vec![],
             last_id: Default::default(),

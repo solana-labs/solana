@@ -66,7 +66,7 @@ mod test {
             &keypair,
             &[],
             StorageProgram::id(),
-            vec![],
+            &(),
             Default::default(),
             0,
         );
