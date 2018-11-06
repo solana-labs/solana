@@ -37,7 +37,6 @@ CC_FLAGS := \
 LLC_FLAGS := \
   -march=bpf \
   -filetype=obj \
-  -function-sections \
 
 OBJ_DUMP_FLAGS := \
   -color \

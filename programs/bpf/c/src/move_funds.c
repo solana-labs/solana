@@ -24,9 +24,9 @@ extern bool entrypoint(const uint8_t *input) {
   if (*ka[0].tokens >= tokens) {
     *ka[0].tokens -= tokens;
     *ka[2].tokens += tokens;
-    // sol_print(0, 0, *ka[0].tokens, *ka[2].tokens, tokens);
+    // sol_log_64(0, 0, *ka[0].tokens, *ka[2].tokens, tokens);
   } else {
-    // sol_print(0, 0, 0xFF, *ka[0].tokens, tokens);
+    // sol_log_64(0, 0, 0xFF, *ka[0].tokens, tokens);
   }
   return true;
 }
