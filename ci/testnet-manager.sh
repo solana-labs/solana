@@ -7,7 +7,7 @@ if [[ -z $BUILDKITE ]]; then
   exit 1
 fi
 
-if [[ -z $SOLANA_METRICS_CONFIG ]]; then
+if [[ -z $SOLANA_METRICS_PARTIAL_CONFIG ]]; then
   echo SOLANA_METRICS_CONFIG not defined
   exit 1
 fi
@@ -57,9 +57,11 @@ EOF
   exit 0
 fi
 
+export SOLANA_METRICS_CONFIG="db=$TESTNET,$SOLANA_METRICS_PARTIAL_CONFIG"
+echo "SOLANA_METRICS_CONFIG: $SOLANA_METRICS_CONFIG"
+
 ci/channel-info.sh
 eval "$(ci/channel-info.sh)"
-set # <-- remove
 
 case $TESTNET in
 testnet-master|testnet-master-perf)
