@@ -65,11 +65,15 @@ eval "$(ci/channel-info.sh)"
 
 case $TESTNET in
 testnet-master|testnet-master-perf)
-  CHANNEL=edge
+  CHANNEL_OR_TAG=edge
   CHANNEL_BRANCH=$EDGE_CHANNEL
   ;;
 testnet|testnet-perf)
-  CHANNEL=beta
+  if [[ -n $BETA_CHANNEL_LATEST_TAG ]]; then
+    CHANNEL_OR_TAG=$BETA_CHANNEL_LATEST_TAG
+  else
+    CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
+  fi
   CHANNEL_BRANCH=$BETA_CHANNEL
   ;;
 *)
@@ -158,7 +162,7 @@ start() {
       set -ex
       ci/testnet-deploy.sh master-perf-testnet-solana-com us-west1-b \
         -G "n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" \
-        -t $CHANNEL -c 2 \
+        -t "$CHANNEL_OR_TAG" -c 2 \
         ${maybeDelete:+-d}
     )
     ;;
@@ -170,7 +174,7 @@ start() {
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
       ci/testnet-deploy.sh master-testnet-solana-com us-west1-b \
-        -s $CHANNEL -n 3 -c 0 -P -a master-testnet-solana-com \
+        -s "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a master-testnet-solana-com \
         ${maybeDelete:+-d}
     )
     ;;
@@ -182,7 +186,7 @@ start() {
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
       ci/testnet-deploy.sh testnet-solana-com us-east1-c \
-        -s $CHANNEL -n 3 -g -c 0 -P -a testnet-solana-com  \
+        -s "$CHANNEL_OR_TAG" -n 3 -g -c 0 -P -a testnet-solana-com  \
         ${maybeDelete:+-d}
     )
     ;;
@@ -195,7 +199,7 @@ start() {
       export NO_VALIDATOR_SANITY=1
       ci/testnet-deploy.sh perf-testnet-solana-com us-west1-b \
         -G "n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" \
-        -t $CHANNEL -c 2 \
+        -t "$CHANNEL_OR_TAG" -c 2 \
         ${maybeDelete:+-d}
     )
     ;;
