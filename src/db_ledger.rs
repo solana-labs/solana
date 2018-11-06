@@ -4,9 +4,7 @@
 
 use bincode::{deserialize, serialize};
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
-#[cfg(test)]
-use entry::Entry;
-#[cfg(test)]
+use packet::Blob;
 use result::{Error, Result};
 use rocksdb::{ColumnFamily, Options, WriteBatch, DB};
 use serde::de::DeserializeOwned;
@@ -117,7 +115,7 @@ impl DataCf {
 }
 
 impl LedgerColumnFamily for DataCf {
-    type ValueType = Entry;
+    type ValueType = Vec<u8>;
 
     fn handle(&self) -> ColumnFamily {
         self.handle
@@ -153,6 +151,7 @@ pub struct DbLedger {
     db: DB,
     meta_cf: MetaCf,
     data_cf: DataCf,
+    #[allow(dead_code)]
     erasure_cf: ErasureCf,
 }
 
@@ -201,18 +200,19 @@ impl DbLedger {
         })
     }
 
-    pub fn write_entries<'a, I>(&mut self, start_index: u64, entries: I) -> Result<()>
+    pub fn write_blobs<'a, I>(&mut self, start_index: u64, blobs: &'a I) -> Result<()>
     where
-        I: IntoIterator<Item = &'a Entry>,
+        &'a I: IntoIterator<Item = &'a &'a Blob>,
     {
-        for (entry, index) in entries.into_iter().zip(start_index..) {
+        for (blob, index) in blobs.into_iter().zip(start_index..) {
             let key = DataCf::key(DEFAULT_SLOT_HEIGHT, index);
-            self.data_cf.put(&self.db, &key, entry)?;
+            let size = blob.size()?;
+            self.data_cf.put_bytes(&self.db, &key, &blob.data[..size])?;
         }
         Ok(())
     }
 
-    pub fn process_new_entry(&self, key: &[u8], new_entry: Entry) -> Result<Vec<Entry>> {
+    pub fn process_new_blob(&self, key: &[u8], new_blob: &Blob) -> Result<Vec<Vec<u8>>> {
         let slot_height = DataCf::slot_height_from_key(key)?;
         let meta_key = MetaCf::key(slot_height);
 
@@ -234,20 +234,20 @@ impl DbLedger {
         }
 
         let mut consumed_queue = vec![];
-        let serialized_new_entry = serialize(&new_entry)?;
+        let serialized_blob_data = new_blob.data;
 
         if meta.consumed == index {
             should_write_meta = true;
             meta.consumed += 1;
-            consumed_queue.push(new_entry);
-            // Find the next consecutive block of entries.
+            consumed_queue.push(new_blob.data.to_vec());
+            // Find the next consecutive block of blobs.
             // TODO: account for consecutive blocks that
             // span multiple slots
             loop {
                 index += 1;
                 let key = DataCf::key(slot_height, index);
-                if let Some(entry) = self.data_cf.get(&self.db, &key)? {
-                    consumed_queue.push(entry);
+                if let Some(blob_data) = self.data_cf.get(&self.db, &key)? {
+                    consumed_queue.push(blob_data);
                     meta.consumed += 1;
                 } else {
                     break;
@@ -261,33 +261,33 @@ impl DbLedger {
             batch.put_cf(self.meta_cf.handle(), &meta_key, &serialize(&meta)?)?;
         }
 
-        batch.put_cf(self.data_cf.handle(), key, &serialized_new_entry)?;
+        batch.put_cf(self.data_cf.handle(), key, &serialized_blob_data)?;
         self.db.write(batch)?;
 
         Ok(consumed_queue)
     }
 
-    // Fill 'buf' with num_entries or most number of consecutive
-    // whole entries that fit into buf.len()
+    // Fill 'buf' with num_blobs or most number of consecutive
+    // whole blobs that fit into buf.len()
     //
-    // Return tuple of (number of entries read, total size of entries read)
-    pub fn get_entries_bytes(
+    // Return tuple of (number of blob read, total size of blobs read)
+    pub fn get_blob_bytes(
         &mut self,
         start_index: u64,
-        num_entries: u64,
+        num_blobs: u64,
         buf: &mut [u8],
     ) -> Result<(u64, u64)> {
         let start_key = DataCf::key(DEFAULT_SLOT_HEIGHT, start_index);
         let mut db_iterator = self.db.raw_iterator_cf(self.data_cf.handle())?;
         db_iterator.seek(&start_key);
-        let mut total_entries = 0;
+        let mut total_blobs = 0;
         let mut total_current_size = 0;
-        for expected_index in start_index..start_index + num_entries {
+        for expected_index in start_index..start_index + num_blobs {
             if !db_iterator.valid() {
                 if expected_index == start_index {
                     return Err(Error::IO(io::Error::new(
                         io::ErrorKind::NotFound,
-                        "Entry at start_index not found",
+                        "Blob at start_index not found",
                     )));
                 } else {
                     break;
@@ -295,7 +295,7 @@ impl DbLedger {
             }
 
             // Check key is the next sequential key based on
-            // entry index
+            // blob index
             let key = &db_iterator.key();
 
             if key.is_none() {
@@ -310,7 +310,7 @@ impl DbLedger {
                 break;
             }
 
-            // Deserialize the entry
+            // Get the blob data
             let value = &db_iterator.value();
 
             if value.is_none() {
@@ -318,15 +318,15 @@ impl DbLedger {
             }
 
             let value = value.as_ref().unwrap();
-            let entry_size = value.len();
+            let blob_data_len = value.len();
 
-            if total_current_size + entry_size > buf.len() {
+            if total_current_size + blob_data_len > buf.len() {
                 break;
             }
 
             buf[total_current_size..total_current_size + value.len()].copy_from_slice(value);
-            total_current_size += entry_size;
-            total_entries += 1;
+            total_current_size += blob_data_len;
+            total_blobs += 1;
 
             // TODO: Change this logic to support looking for data
             // that spans multiple leader slots, once we support
@@ -334,20 +334,19 @@ impl DbLedger {
             db_iterator.next();
         }
 
-        Ok((total_entries, total_current_size as u64))
+        Ok((total_blobs, total_current_size as u64))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use entry::Entry;
-    use ledger::{get_tmp_ledger_path, make_tiny_test_entries};
+    use ledger::{get_tmp_ledger_path, make_tiny_test_entries, Block};
     use rocksdb::{Options, DB};
 
     #[test]
     fn test_put_get_simple() {
-        let ledger_path = get_tmp_ledger_path("test_get_entries_bytes");
+        let ledger_path = get_tmp_ledger_path("test_put_get_simple");
         let ledger = DbLedger::open(&ledger_path).unwrap();
 
         // Test meta column family
@@ -378,62 +377,80 @@ mod tests {
 
         assert_eq!(result, erasure);
 
+        // Test data column family
+        let data = vec![2u8; 16];
+        let data_key = DataCf::key(DEFAULT_SLOT_HEIGHT, 0);
+        ledger.data_cf.put(&ledger.db, &data_key, &data).unwrap();
+
+        let result = ledger
+            .data_cf
+            .get(&ledger.db, &data_key)
+            .unwrap()
+            .expect("Expected data object to exist");
+
+        assert_eq!(result, data);
+
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
         let _ignored = DB::destroy(&Options::default(), &ledger_path);
     }
 
     #[test]
-    fn test_get_entries_bytes() {
-        let entries = make_tiny_test_entries(10);
-        let ledger_path = get_tmp_ledger_path("test_get_entries_bytes");
+    fn test_get_blobs_bytes() {
+        let shared_blobs = make_tiny_test_entries(10).to_blobs();
+        let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
+        let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
+
+        let ledger_path = get_tmp_ledger_path("test_get_blobs_bytes");
         let mut ledger = DbLedger::open(&ledger_path).unwrap();
-        ledger.write_entries(0, &entries).unwrap();
+        ledger.write_blobs(0, &blobs).unwrap();
 
         let mut buf = [0; 1024];
-        let (num_entries, bytes) = ledger.get_entries_bytes(0, 1, &mut buf).unwrap();
+        let (num_blobs, bytes) = ledger.get_blob_bytes(0, 1, &mut buf).unwrap();
         let bytes = bytes as usize;
-        assert_eq!(num_entries, 1);
-        let entry: Entry = deserialize(&buf[..bytes]).unwrap();
-        assert_eq!(entry, entries[0]);
-
-        let (num_entries, bytes2) = ledger.get_entries_bytes(0, 2, &mut buf).unwrap();
-        let bytes2 = bytes2 as usize;
-        assert_eq!(num_entries, 2);
-        assert!(bytes2 > bytes);
-        for (i, ref entry) in entries.iter().enumerate() {
-            info!("entry[{}] = {:?}", i, entry.id);
+        assert_eq!(num_blobs, 1);
+        {
+            let blob_data = &buf[..bytes];
+            assert_eq!(blob_data, &blobs[0].data[..bytes]);
         }
 
-        let entry: Entry = deserialize(&buf[..bytes]).unwrap();
-        assert_eq!(entry, entries[0]);
+        let (num_blobs, bytes2) = ledger.get_blob_bytes(0, 2, &mut buf).unwrap();
+        let bytes2 = bytes2 as usize;
+        assert_eq!(num_blobs, 2);
+        assert!(bytes2 > bytes);
+        {
+            let blob_data_1 = &buf[..bytes];
+            assert_eq!(blob_data_1, &blobs[0].data[..bytes]);
 
-        let entry: Entry = deserialize(&buf[bytes..bytes2]).unwrap();
-        assert_eq!(entry, entries[1]);
+            let blob_data_2 = &buf[bytes..bytes2];
+            assert_eq!(blob_data_2, &blobs[1].data[..bytes2 - bytes]);
+        }
 
-        // buf size part-way into entry[1], should just return entry[0]
+        // buf size part-way into blob[1], should just return blob[0]
         let mut buf = vec![0; bytes + 1];
-        let (num_entries, bytes3) = ledger.get_entries_bytes(0, 2, &mut buf).unwrap();
-        assert_eq!(num_entries, 1);
+        let (num_blobs, bytes3) = ledger.get_blob_bytes(0, 2, &mut buf).unwrap();
+        assert_eq!(num_blobs, 1);
         let bytes3 = bytes3 as usize;
         assert_eq!(bytes3, bytes);
 
         let mut buf = vec![0; bytes2 - 1];
-        let (num_entries, bytes4) = ledger.get_entries_bytes(0, 2, &mut buf).unwrap();
-        assert_eq!(num_entries, 1);
+        let (num_blobs, bytes4) = ledger.get_blob_bytes(0, 2, &mut buf).unwrap();
+        assert_eq!(num_blobs, 1);
         let bytes4 = bytes4 as usize;
         assert_eq!(bytes4, bytes);
 
         let mut buf = vec![0; bytes * 2];
-        let (num_entries, bytes6) = ledger.get_entries_bytes(9, 1, &mut buf).unwrap();
-        assert_eq!(num_entries, 1);
+        let (num_blobs, bytes6) = ledger.get_blob_bytes(9, 1, &mut buf).unwrap();
+        assert_eq!(num_blobs, 1);
         let bytes6 = bytes6 as usize;
 
-        let entry: Entry = deserialize(&buf[..bytes6]).unwrap();
-        assert_eq!(entry, entries[9]);
+        {
+            let blob_data = &buf[..bytes6];
+            assert_eq!(blob_data, &blobs[9].data[..bytes6]);
+        }
 
         // Read out of range
-        assert!(ledger.get_entries_bytes(20, 2, &mut buf).is_err());
+        assert!(ledger.get_blob_bytes(20, 2, &mut buf).is_err());
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
@@ -441,14 +458,17 @@ mod tests {
     }
 
     #[test]
-    fn test_process_new_entries_basic() {
-        let entries = make_tiny_test_entries(2);
-        let ledger_path = get_tmp_ledger_path("test_process_new_entryy");
+    fn test_process_new_blobs_basic() {
+        let shared_blobs = make_tiny_test_entries(2).to_blobs();
+        let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
+        let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
+
+        let ledger_path = get_tmp_ledger_path("test_process_new_blobs_basic");
         let ledger = DbLedger::open(&ledger_path).unwrap();
 
-        // Insert second entry
+        // Insert second blob, we're misisng the first blob, so should return nothing
         let result = ledger
-            .process_new_entry(&DataCf::key(DEFAULT_SLOT_HEIGHT, 1), entries[1].clone())
+            .process_new_blob(&DataCf::key(DEFAULT_SLOT_HEIGHT, 1), blobs[1])
             .unwrap();
 
         assert!(result.len() == 0);
@@ -459,9 +479,9 @@ mod tests {
             .expect("Expected new metadata object to be created");
         assert!(meta.consumed == 0 && meta.received == 1);
 
-        // Insert first entry, check for consecutive returned entries
+        // Insert first blob, check for consecutive returned blobs
         let result = ledger
-            .process_new_entry(&DataCf::key(DEFAULT_SLOT_HEIGHT, 0), entries[0].clone())
+            .process_new_blob(&DataCf::key(DEFAULT_SLOT_HEIGHT, 0), blobs[0])
             .unwrap();
 
         assert!(result.len() == 2);
@@ -478,28 +498,34 @@ mod tests {
     }
 
     #[test]
-    fn test_process_new_entries_multiple() {
-        let num_entries = 10;
-        let entries = make_tiny_test_entries(num_entries);
-        let ledger_path = get_tmp_ledger_path("test_process_new_entryy");
+    fn test_process_new_blobs_multiple() {
+        let num_blobs = 10;
+        let shared_blobs = make_tiny_test_entries(num_blobs).to_blobs();
+        let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
+        let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
+
+        let ledger_path = get_tmp_ledger_path("test_process_new_blobs_multiple");
         let ledger = DbLedger::open(&ledger_path).unwrap();
 
-        // Insert first entry, check for consecutive returned entries
-        for i in (0..num_entries).rev() {
-            ledger
-                .process_new_entry(
-                    &DataCf::key(DEFAULT_SLOT_HEIGHT, i as u64),
-                    entries[0].clone(),
-                ).unwrap();
-        }
+        // Insert first blob, check for consecutive returned blobs
+        for i in (0..num_blobs).rev() {
+            let result = ledger
+                .process_new_blob(&DataCf::key(DEFAULT_SLOT_HEIGHT, i as u64), blobs[0])
+                .unwrap();
 
-        assert!(result.len() == 2);
-        let meta = ledger
-            .meta_cf
-            .get(&ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))
-            .unwrap()
-            .expect("Expected new metadata object to exist");
-        assert!(meta.consumed == 2 && meta.received == 1);
+            let meta = ledger
+                .meta_cf
+                .get(&ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))
+                .unwrap()
+                .expect("Expected metadata object to exist");
+            if i != 0 {
+                assert_eq!(result.len(), 0);
+                assert!(meta.consumed == 0 && meta.received == num_blobs as u64 - 1);
+            } else {
+                assert_eq!(result.len(), num_blobs);
+                assert!(meta.consumed == num_blobs as u64 && meta.received == num_blobs as u64 - 1);
+            }
+        }
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
