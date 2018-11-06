@@ -192,7 +192,6 @@ start() {
       set -ex
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
-      ./ci/testnet-sanity.sh perf-testnet-solana-com us-west1-b
       ci/testnet-deploy.sh perf-testnet-solana-com us-west1-b \
         -G "n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" \
         -t $CHANNEL -c 2 \
