@@ -11,8 +11,8 @@ use rpc::JsonRpcService;
 use rpc_pubsub::PubSubService;
 use service::Service;
 use signature::{Keypair, KeypairUtil};
-use std::net::SocketAddr;
 use std::net::UdpSocket;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::Result;
@@ -581,11 +581,20 @@ impl Fullnode {
         bank: &Arc<Bank>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) -> (JsonRpcService, PubSubService) {
+        let rpc_port = rpc_addr.port();
+        let rpc_pubsub_port = rpc_pubsub_addr.port();
         // TODO: The RPC service assumes that there is a drone running on the leader
         // Drone location/id will need to be handled a different way as soon as leader rotation begins
         (
-            JsonRpcService::new(bank, cluster_info, rpc_addr),
-            PubSubService::new(bank, rpc_pubsub_addr),
+            JsonRpcService::new(
+                bank,
+                cluster_info,
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_port),
+            ),
+            PubSubService::new(
+                bank,
+                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_pubsub_port),
+            ),
         )
     }
 }
