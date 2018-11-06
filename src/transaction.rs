@@ -95,12 +95,12 @@ impl Transaction {
         let mut tx = Transaction {
             signature: Signature::default(),
             account_keys,
-            last_id,
+            last_id: Hash::default(),
             fee,
             program_ids,
             instructions,
         };
-        tx.sign(from_keypair);
+        tx.sign(from_keypair, last_id);
         tx
     }
     pub fn userdata(&self, instruction_index: usize) -> &[u8] {
@@ -146,7 +146,8 @@ impl Transaction {
     }
 
     /// Sign this transaction.
-    pub fn sign(&mut self, keypair: &Keypair) {
+    pub fn sign(&mut self, keypair: &Keypair, last_id: Hash) {
+        self.last_id = last_id;
         let sign_data = self.get_sign_data();
         self.signature = Signature::new(keypair.sign(&sign_data).as_ref());
     }

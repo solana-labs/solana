@@ -1490,9 +1490,9 @@ fn send_tx_and_retry_get_balance(
     let mut client = mk_client(leader);
     trace!("getting leader last_id");
     let last_id = client.get_last_id();
-    let tx = Transaction::system_new(&alice.keypair(), *bob_pubkey, transfer_amount, last_id);
+    let mut tx = Transaction::system_new(&alice.keypair(), *bob_pubkey, transfer_amount, last_id);
     info!("executing leader transfer");
-    let _res = client.retry_transfer_signed(&tx, 30);
+    let _res = client.retry_transfer(&alice.keypair(), &mut tx, 30);
     retry_get_balance(&mut client, bob_pubkey, expected)
 }
 
