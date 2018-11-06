@@ -54,7 +54,6 @@ pub struct Tpu {
 }
 
 impl Tpu {
-    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn new(
         bank: &Arc<Bank>,
         tick_duration: Config,

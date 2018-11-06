@@ -6,7 +6,6 @@ use entry::Entry;
 #[cfg(feature = "erasure")]
 use erasure;
 use influx_db_client as influxdb;
-use leader_scheduler::LeaderScheduler;
 use ledger::Block;
 use log::Level;
 use metrics;
@@ -29,10 +28,7 @@ pub enum BroadcastStageReturnType {
     ChannelDisconnected,
 }
 
-#[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
 fn broadcast(
-    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-    mut tick_height: u64,
     node_info: &NodeInfo,
     broadcast_table: &[NodeInfo],
     window: &SharedWindow,
@@ -50,9 +46,6 @@ fn broadcast(
     ventries.push(entries);
     while let Ok(entries) = receiver.try_recv() {
         num_entries += entries.len();
-        tick_height += entries
-            .iter()
-            .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
         ventries.push(entries);
     }
     inc_new_counter_info!("broadcast_stage-entries_received", num_entries);
@@ -137,8 +130,6 @@ fn broadcast(
 
         // Send blobs out from the window
         ClusterInfo::broadcast(
-            &leader_scheduler,
-            tick_height,
             &node_info,
             &broadcast_table,
             &window,
@@ -198,8 +189,6 @@ impl BroadcastStage {
         window: &SharedWindow,
         entry_height: u64,
         receiver: &Receiver<Vec<Entry>>,
-        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-        tick_height: u64,
     ) -> BroadcastStageReturnType {
         let mut transmit_index = WindowIndex {
             data: entry_height,
@@ -210,8 +199,6 @@ impl BroadcastStage {
         loop {
             let broadcast_table = cluster_info.read().unwrap().compute_broadcast_table();
             if let Err(e) = broadcast(
-                leader_scheduler,
-                tick_height,
                 &me,
                 &broadcast_table,
                 &window,
@@ -256,23 +243,13 @@ impl BroadcastStage {
         window: SharedWindow,
         entry_height: u64,
         receiver: Receiver<Vec<Entry>>,
-        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
-        tick_height: u64,
         exit_sender: Arc<AtomicBool>,
     ) -> Self {
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit_sender);
-                Self::run(
-                    &sock,
-                    &cluster_info,
-                    &window,
-                    entry_height,
-                    &receiver,
-                    &leader_scheduler,
-                    tick_height,
-                )
+                Self::run(&sock, &cluster_info, &window, entry_height, &receiver)
             }).unwrap();
 
         BroadcastStage { thread_hdl }

@@ -346,8 +346,6 @@ impl Fullnode {
                 shared_window.clone(),
                 entry_height,
                 entry_receiver,
-                bank.leader_scheduler.clone(),
-                bank.tick_height(),
                 tpu_exit,
             );
             let leader_state = LeaderServices::new(tpu, broadcast_stage);
@@ -498,8 +496,6 @@ impl Fullnode {
             self.shared_window.clone(),
             entry_height,
             blob_receiver,
-            self.bank.leader_scheduler.clone(),
-            tick_height,
             tpu_exit,
         );
         let leader_state = LeaderServices::new(tpu, broadcast_stage);
