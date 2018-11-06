@@ -6,8 +6,7 @@ echo "$(date) | $0 $*" > client.log
 
 deployMethod="$1"
 entrypointIp="$2"
-numNodes="$3"
-RUST_LOG="$4"
+RUST_LOG="$3"
 export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
 
 missing() {
@@ -17,7 +16,6 @@ missing() {
 
 [[ -n $deployMethod ]] || missing deployMethod
 [[ -n $entrypointIp ]] || missing entrypointIp
-[[ -n $numNodes ]]     || missing numNodes
 
 source net/common.sh
 loadConfigFile
@@ -58,7 +56,6 @@ clientCommand="\
   $solana_bench_tps \
     --network $entrypointIp:8001 \
     --identity client.json \
-    --num-nodes $numNodes \
     --duration 7500 \
     --sustained \
     --threads $threadCount \
