@@ -52,7 +52,6 @@ pub trait WindowUtil {
 
     fn window_size(&self) -> u64;
 
-    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     fn repair(
         &mut self,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -67,7 +66,6 @@ pub trait WindowUtil {
 
     fn print(&self, id: &Pubkey, consumed: u64) -> String;
 
-    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     fn process_blob(
         &mut self,
         id: &Pubkey,

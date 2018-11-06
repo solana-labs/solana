@@ -16,7 +16,6 @@ use bincode::{deserialize, serialize, serialized_size};
 use choose_gossip_peer_strategy::{ChooseGossipPeerStrategy, ChooseWeightedPeerStrategy};
 use counter::Counter;
 use hash::Hash;
-use leader_scheduler::LeaderScheduler;
 use ledger::LedgerWindow;
 use log::Level;
 use netutil::{bind_in_range, bind_to, find_available_port_in_range, multi_bind_in_range};
@@ -461,10 +460,7 @@ impl ClusterInfo {
     /// broadcast messages from the leader to layer 1 nodes
     /// # Remarks
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
-    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
     pub fn broadcast(
-        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-        tick_height: u64,
         me: &NodeInfo,
         broadcast_table: &[NodeInfo],
         window: &SharedWindow,
@@ -505,35 +501,6 @@ impl ClusterInfo {
                 w_idx,
                 br_idx
             );
-
-            // Make sure the next leader in line knows about the entries before his slot in the leader
-            // rotation so they can initiate repairs if necessary
-            {
-                let ls_lock = leader_scheduler.read().unwrap();
-                let next_leader_height = ls_lock.max_height_for_leader(tick_height);
-                let next_leader_id =
-                    next_leader_height.map(|nlh| ls_lock.get_scheduled_leader(nlh));
-                // In the case the next scheduled leader is None, then the write_stage moved
-                // the schedule too far ahead and we no longer are in the known window
-                // (will happen during calculation of the next set of slots every epoch or
-                // seed_rotation_interval heights when we move the window forward in the
-                // LeaderScheduler). For correctness, this is fine write_stage will never send
-                // blobs past the point of when this node should stop being leader, so we just
-                // continue broadcasting until we catch up to write_stage. The downside is we
-                // can't guarantee the current leader will broadcast the last entry to the next
-                // scheduled leader, so the next leader will have to rely on avalanche/repairs
-                // to get this last blob, which could cause slowdowns during leader handoffs.
-                // See corresponding issue for repairs in repair() function in window.rs.
-                if let Some(Some(next_leader_id)) = next_leader_id {
-                    if next_leader_id == me.id {
-                        break;
-                    }
-                    let info_result = broadcast_table.iter().position(|n| n.id == next_leader_id);
-                    if let Some(index) = info_result {
-                        orders.push((window_l[w_idx].data.clone(), &broadcast_table[index]));
-                    }
-                }
-            }
 
             orders.push((window_l[w_idx].data.clone(), &broadcast_table[br_idx]));
             br_idx += 1;
