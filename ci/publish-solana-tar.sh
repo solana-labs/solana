@@ -22,6 +22,14 @@ if [[ -z $CHANNEL ]]; then
   exit 0
 fi
 
+if [[ -n "$BUILDKITE_TAG" ]]; then
+  CHANNEL_OR_TAG=$BUILDKITE_TAG
+elif [[ -n "$TRIGGERED_BUILDKITE_TAG" ]]; then
+  CHANNEL_OR_TAG=$TRIGGERED_BUILDKITE_TAG
+else
+  CHANNEL_OR_TAG=$CHANNEL
+fi
+
 echo --- Creating tarball
 if [[ -z $DRYRUN ]]; then
 (
@@ -52,7 +60,7 @@ if [[ ! -r s3cmd-2.0.1/s3cmd ]]; then
 fi
 
 $DRYRUN python ./s3cmd-2.0.1/s3cmd --acl-public put solana-release.tar.bz2 \
-  s3://solana-release/"$CHANNEL"/solana-release.tar.bz2
+  s3://solana-release/"$CHANNEL_OR_TAG"/solana-release.tar.bz2
 
 exit 0
 
