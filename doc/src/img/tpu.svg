@@ -138,14 +138,14 @@
 <path d="M 336 24 A 4 4 0 0 0 332 28" fill="none"/>
 </g>
 <g>
-<line x1="336" x2="440" y1="24" y2="24"/>
-<path d="M 444 28 A 4 4 0 0 0 440 24" fill="none"/>
+<line x1="336" x2="432" y1="24" y2="24"/>
+<path d="M 436 28 A 4 4 0 0 0 432 24" fill="none"/>
 </g>
 <g>
 <line x1="336" x2="396" y1="56" y2="56"/>
 <line marker-end="url(#triangle)" x1="396" x2="396" y1="56" y2="92"/>
-<line x1="396" x2="440" y1="56" y2="56"/>
-<path d="M 440 56 A 4 4 0 0 0 444 52" fill="none"/>
+<line x1="396" x2="432" y1="56" y2="56"/>
+<path d="M 432 56 A 4 4 0 0 0 436 52" fill="none"/>
 </g>
 <g>
 <line x1="340" x2="340" y1="108" y2="164"/>
@@ -190,7 +190,7 @@
 <line marker-end="url(#triangle)" x1="420" x2="444" y1="136" y2="136"/>
 </g>
 <g>
-<line x1="444" x2="444" y1="28" y2="52"/>
+<line x1="436" x2="436" y1="28" y2="52"/>
 </g>
 <g>
 <line x1="452" x2="452" y1="108" y2="164"/>
@@ -257,7 +257,7 @@ Clients
 </g>
 <g>
 <text x="129" y="28">
-TPU
+Tpu
 </text>
 </g>
 <g>
@@ -282,7 +282,7 @@ Stage
 </g>
 <g>
 <text x="345" y="44">
-PoH
+PohService
 </text>
 </g>
 <g>
@@ -298,11 +298,6 @@ Stage
 <g>
 <text x="369" y="316">
 Bank
-</text>
-</g>
-<g>
-<text x="377" y="44">
-Service
 </text>
 </g>
 <g>

@@ -1,4 +1,4 @@
-Solana JSON RPC API
+JSON RPC API
 ===
 
 Solana nodes accept HTTP requests using the [JSON-RPC 2.0](https://www.jsonrpc.org/specification) specification.
