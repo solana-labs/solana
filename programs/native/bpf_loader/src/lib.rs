@@ -199,6 +199,8 @@ pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -
 #[cfg(test)]
 mod tests {
     use super::*;
+    use solana_rbpf::helpers;
+
     #[test]
     #[should_panic(expected = "Error: Execution exceeded maximum number of instructions")]
     fn test_non_terminating_program() {
@@ -216,7 +218,13 @@ mod tests {
             0x95, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // exit
         ];
         let input = &mut [0x00];
-        let mut vm = create_vm(prog).unwrap();
+
+        let mut vm = EbpfVmRaw::new(None).unwrap();
+        vm.set_verifier(bpf_verifier::check).unwrap();
+        vm.set_max_instruction_count(36000).unwrap(); // 36000 is a wag, need to tune
+        vm.set_program(prog).unwrap();
+        vm.register_helper(helpers::BPF_TRACE_PRINTK_IDX, helpers::bpf_trace_printf)
+            .unwrap();
         vm.execute_program(input).unwrap();
     }
 }
