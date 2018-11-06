@@ -198,7 +198,7 @@ startClient() {
     set -x
     startCommon "$ipAddress"
     ssh "${sshOptions[@]}" -f "$ipAddress" \
-      "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp $expectedNodeCount \"$RUST_LOG\""
+      "./solana/net/remote/remote-client.sh $deployMethod $entrypointIp \"$RUST_LOG\""
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
     echo "^^^ +++"
