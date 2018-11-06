@@ -422,7 +422,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
 
             let mut offset = 0;
             for chunk in program_userdata.chunks(USERDATA_CHUNK_SIZE) {
-                let tx = Transaction::write(
+                let tx = Transaction::loader_write(
                     &program,
                     bpf_loader::id(),
                     offset,
@@ -440,7 +440,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             }
 
             let last_id = get_last_id(&config)?;
-            let tx = Transaction::finalize(&program, bpf_loader::id(), last_id, 0);
+            let tx = Transaction::loader_finalize(&program, bpf_loader::id(), last_id, 0);
             send_and_confirm_tx(&config, &tx).map_err(|_| {
                 WalletError::DynamicProgramError("Program finalize transaction failed".to_string())
             })?;

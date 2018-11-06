@@ -71,7 +71,7 @@ impl Loader {
         check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
         let name = String::from(loader_name);
-        let tx = Transaction::write(
+        let tx = Transaction::loader_write(
             &loader,
             native_loader::id(),
             0,
@@ -81,7 +81,7 @@ impl Loader {
         );
         check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
-        let tx = Transaction::finalize(&loader, native_loader::id(), mint.last_id(), 0);
+        let tx = Transaction::loader_finalize(&loader, native_loader::id(), mint.last_id(), 0);
         check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
         let tx = Transaction::system_spawn(&loader, mint.last_id(), 0);
@@ -140,7 +140,7 @@ impl Program {
         let chunk_size = 256; // Size of chunk just needs to fit into tx
         let mut offset = 0;
         for chunk in userdata.chunks(chunk_size) {
-            let tx = Transaction::write(
+            let tx = Transaction::loader_write(
                 &program,
                 loader.loader,
                 offset,
@@ -156,7 +156,7 @@ impl Program {
             offset += chunk_size as u32;
         }
 
-        let tx = Transaction::finalize(&program, loader.loader, loader.mint.last_id(), 0);
+        let tx = Transaction::loader_finalize(&program, loader.loader, loader.mint.last_id(), 0);
         check_tx_results(
             &loader.bank,
             &tx,
