@@ -7,7 +7,7 @@ use solana_sdk::pubkey::Pubkey;
 use transaction::Transaction;
 
 pub trait LoaderTransaction {
-    fn write(
+    fn loader_write(
         from_keypair: &Keypair,
         loader: Pubkey,
         offset: u32,
@@ -16,11 +16,11 @@ pub trait LoaderTransaction {
         fee: u64,
     ) -> Self;
 
-    fn finalize(from_keypair: &Keypair, loader: Pubkey, last_id: Hash, fee: u64) -> Self;
+    fn loader_finalize(from_keypair: &Keypair, loader: Pubkey, last_id: Hash, fee: u64) -> Self;
 }
 
 impl LoaderTransaction for Transaction {
-    fn write(
+    fn loader_write(
         from_keypair: &Keypair,
         loader: Pubkey,
         offset: u32,
@@ -38,7 +38,7 @@ impl LoaderTransaction for Transaction {
         Transaction::new(from_keypair, &[], loader, &instruction, last_id, fee)
     }
 
-    fn finalize(from_keypair: &Keypair, loader: Pubkey, last_id: Hash, fee: u64) -> Self {
+    fn loader_finalize(from_keypair: &Keypair, loader: Pubkey, last_id: Hash, fee: u64) -> Self {
         trace!(
             "LoaderTransaction::Finalize() program {:?}",
             from_keypair.pubkey(),
