@@ -259,19 +259,20 @@ impl Checkpoint for Accounts {
     }
 
     fn purge(&mut self, depth: usize) {
+        fn merge(into: &mut HashMap<Pubkey, Account>, purge: &mut HashMap<Pubkey, Account>) {
+            purge.retain(|pubkey, _| !into.contains_key(pubkey));
+            into.extend(purge.drain());
+            into.retain(|_, account| account.tokens != 0);
+        }
+
         while self.depth() > depth {
             let (mut purge, _) = self.checkpoints.pop_back().unwrap();
 
-            if let Some((last, _)) = self.checkpoints.back_mut() {
-                purge.retain(|pubkey, account| !last.contains_key(pubkey) && account.tokens != 0);
-                last.extend(purge.drain());
+            if let Some((into, _)) = self.checkpoints.back_mut() {
+                merge(into, &mut purge);
                 continue;
             }
-
-            purge.retain(|pubkey, account| {
-                !self.accounts.contains_key(pubkey) && account.tokens != 0
-            });
-            self.accounts.extend(purge.drain());
+            merge(&mut self.accounts, &mut purge);
         }
     }
     fn depth(&self) -> usize {
@@ -345,6 +346,11 @@ impl Bank {
         self.accounts.write().unwrap().checkpoint();
         self.last_ids.write().unwrap().checkpoint();
     }
+    pub fn purge(&self, depth: usize) {
+        self.accounts.write().unwrap().purge(depth);
+        self.last_ids.write().unwrap().purge(depth);
+    }
+
     pub fn rollback(&self) {
         let rolled_back_pubkeys: Vec<Pubkey> = self
             .accounts
@@ -2285,35 +2291,96 @@ mod tests {
     }
 
     #[test]
-    fn test_checkpoint_rollback() {
+    fn test_bank_purge() {
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let bob = Keypair::new();
+        let charlie = Keypair::new();
 
         // bob should have 500
         bank.transfer(500, &alice.keypair(), bob.pubkey(), alice.last_id())
             .unwrap();
         assert_eq!(bank.get_balance(&bob.pubkey()), 500);
 
+        bank.transfer(500, &alice.keypair(), charlie.pubkey(), alice.last_id())
+            .unwrap();
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+
+        bank.checkpoint();
+        bank.checkpoint();
+        assert_eq!(bank.checkpoint_depth(), 2);
+        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
+        assert_eq!(bank.get_balance(&alice.pubkey()), 9_000);
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+        assert_eq!(bank.transaction_count(), 2);
+
+        // transfer money back, so bob has zero
+        bank.transfer(500, &bob, alice.keypair().pubkey(), alice.last_id())
+            .unwrap();
+        // this has to be stored as zero in the top accounts hashmap ;)
+        assert!(bank.accounts.read().unwrap().load(&bob.pubkey()).is_some());
+        assert_eq!(bank.get_balance(&bob.pubkey()), 0);
+        // double-checks
+        assert_eq!(bank.get_balance(&alice.pubkey()), 9_500);
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+        assert_eq!(bank.transaction_count(), 3);
+        bank.purge(1);
+
+        assert_eq!(bank.get_balance(&bob.pubkey()), 0);
+        // double-checks
+        assert_eq!(bank.get_balance(&alice.pubkey()), 9_500);
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+        assert_eq!(bank.transaction_count(), 3);
+        assert_eq!(bank.checkpoint_depth(), 1);
+
+        bank.purge(0);
+
+        // bob should still have 0, alice should have 10_000
+        assert_eq!(bank.get_balance(&bob.pubkey()), 0);
+        assert!(bank.accounts.read().unwrap().load(&bob.pubkey()).is_none());
+        // double-checks
+        assert_eq!(bank.get_balance(&alice.pubkey()), 9_500);
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+        assert_eq!(bank.transaction_count(), 3);
+        assert_eq!(bank.checkpoint_depth(), 0);
+    }
+
+    #[test]
+    fn test_bank_checkpoint_rollback() {
+        let alice = Mint::new(10_000);
+        let bank = Bank::new(&alice);
+        let bob = Keypair::new();
+        let charlie = Keypair::new();
+
+        // bob should have 500
+        bank.transfer(500, &alice.keypair(), bob.pubkey(), alice.last_id())
+            .unwrap();
+        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
+        bank.transfer(500, &alice.keypair(), charlie.pubkey(), alice.last_id())
+            .unwrap();
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
         assert_eq!(bank.checkpoint_depth(), 0);
 
         bank.checkpoint();
         bank.checkpoint();
         assert_eq!(bank.checkpoint_depth(), 2);
         assert_eq!(bank.get_balance(&bob.pubkey()), 500);
-        assert_eq!(bank.transaction_count(), 1);
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+        assert_eq!(bank.transaction_count(), 2);
 
         // transfer money back, so bob has zero
         bank.transfer(500, &bob, alice.keypair().pubkey(), alice.last_id())
             .unwrap();
         // this has to be stored as zero in the top accounts hashmap ;)
         assert_eq!(bank.get_balance(&bob.pubkey()), 0);
-        assert_eq!(bank.transaction_count(), 2);
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+        assert_eq!(bank.transaction_count(), 3);
         bank.rollback();
 
         // bob should have 500 again
         assert_eq!(bank.get_balance(&bob.pubkey()), 500);
-        assert_eq!(bank.transaction_count(), 1);
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+        assert_eq!(bank.transaction_count(), 2);
         assert_eq!(bank.checkpoint_depth(), 1);
 
         let signature = Signature::default();
@@ -2338,9 +2405,10 @@ mod tests {
             Err(BankError::DuplicateSignature)
         );
     }
+
     #[test]
     #[should_panic]
-    fn test_rollback_panic() {
+    fn test_bank_rollback_panic() {
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         bank.rollback();
