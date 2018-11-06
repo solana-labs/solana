@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 use bank::Bank;
-use bincode::{deserialize, serialize};
+use bincode::deserialize;
 use hash::Hash;
 #[cfg(test)]
 use result::Result;
@@ -34,8 +34,14 @@ pub trait VoteTransaction {
 impl VoteTransaction for Transaction {
     fn vote_new(vote_account: &Keypair, vote: Vote, last_id: Hash, fee: u64) -> Self {
         let instruction = VoteInstruction::NewVote(vote);
-        let userdata = serialize(&instruction).expect("serialize instruction");
-        Transaction::new(vote_account, &[], VoteProgram::id(), userdata, last_id, fee)
+        Transaction::new(
+            vote_account,
+            &[],
+            VoteProgram::id(),
+            &instruction,
+            last_id,
+            fee,
+        )
     }
 
     fn vote_account_new(
@@ -62,12 +68,11 @@ impl VoteTransaction for Transaction {
         fee: u64,
     ) -> Self {
         let register_tx = VoteInstruction::RegisterAccount;
-        let userdata = serialize(&register_tx).unwrap();
         Transaction::new(
             validator_id,
             &[vote_account_id],
             VoteProgram::id(),
-            userdata,
+            &register_tx,
             last_id,
             fee,
         )
