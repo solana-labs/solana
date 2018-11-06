@@ -43,7 +43,7 @@ steps:
         options:
           - label: "Sanity check.  Restart network on failure"
             value: "sanity-or-restart"
-          - label: "Start the network"
+          - label: "Start (or restart) the network"
             value: "start"
           - label: "Stop the network"
             value: "stop"
