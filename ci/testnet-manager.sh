@@ -135,7 +135,6 @@ sanity() {
       export NO_VALIDATOR_SANITY=1
       ci/testnet-sanity.sh perf-testnet-solana-com us-west1-b
     )
-    echo tp
     ;;
   *)
     echo "Error: Invalid TESTNET=$TESTNET"
