@@ -4,14 +4,18 @@ Currently we have three testnets:
 * `testnet` - public beta channel testnet accessible via testnet.solana.com. Runs 24/7
 * `testnet-perf` - private beta channel testnet with clients trying to flood the network
 with transactions until failure.  Runs 24/7
-* `testnet-master` - private edge channel testnet with clients trying to flood the network
+* `testnet-msater` - public edge channel testnet accessible via master.testnet.solana.com. Runs 24/7
+* `testnet-master-perf` - private edge channel testnet with clients trying to flood the network
 with transactions until failure.  Runs on weekday mornings for a couple hours
 
 ## Deploy process
 
-They are deployed with the `ci/testnet-deploy.sh` script. There is a scheduled buildkite job which runs to do the deploy,
-look at `testnet-deploy` to see the agent which ran it and the logs. There is also a manual job to do the deploy manually..
-Validators are selected based on their machine name and everyone gets the binaries installed from snap.
+They are deployed with the `ci/testnet-manager.sh` script through a list of [scheduled
+buildkite jobs](https://buildkite.com/solana-labs/testnet-management/settings/schedules).
+Each testnet can be manually manipulated from buildkite as well.  The `-perf`
+testnets use a release tarball while the non`-perf` builds use the snap build
+(we've observed that the snap build runs slower than a tarball but this has yet
+to be root caused).
 
 ## Where are the testnet logs?
 
@@ -29,7 +33,8 @@ $ net/ssh.sh
 for log location details
 
 ## How do I reset the testnet?
-Manually trigger the [testnet-deploy](https://buildkite.com/solana-labs/testnet-deploy/) pipeline
+Manually trigger the [testnet-management](https://buildkite.com/solana-labs/testnet-management) pipeline
+and when prompted select the desired testnet
 
 ## How can I scale the tx generation rate?
 
@@ -43,5 +48,5 @@ Currently, a merged PR is the only way to test a change on the testnet.  But you
 can run your own testnet using the scripts in the `net/` directory.
 
 ## Adjusting the number of clients or validators on the testnet
-Through the [testnet-deploy](https://buildkite.com/solana-labs/testnet-deploy/) settings.
+Edit `ci/testnet-manager.sh`
 
