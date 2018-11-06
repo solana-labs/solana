@@ -23,11 +23,13 @@ Operate a configured testnet
  restart  - Shortcut for stop then start
 
  start-specific options:
-   -S [snapFilename]    - Deploy the specified Snap file
-   -s edge|beta|stable  - Deploy the latest Snap on the specified Snap release channel
-   -t edge|beta|stable  - Deploy the latest tarball release for the specified channel
-   -f [cargoFeatures]   - List of |cargo --feaures=| to activate
-                          (ignored if -s or -S is specified)
+   -S [snapFilename]           - Deploy the specified Snap file
+   -s edge|beta|stable         - Deploy the latest Snap on the specified Snap release channel
+   -t edge|beta|stable|vX.Y.Z  - Deploy the latest tarball release for the
+                                 specified release channel (edge|beta|stable) or release tag
+                                 (vX.Y.Z)
+   -f [cargoFeatures]          - List of |cargo --feaures=| to activate
+                                 (ignored if -s or -S is specified)
 
    Note: if RUST_LOG is set in the environment it will be propogated into the
          network nodes.
@@ -78,7 +80,7 @@ while getopts "h?S:s:t:o:f:" opt; do
     ;;
   t)
     case $OPTARG in
-    edge|beta|stable)
+    edge|beta|stable|v*)
       releaseChannel=$OPTARG
       deployMethod=tar
       ;;
