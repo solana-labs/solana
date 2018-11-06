@@ -219,7 +219,7 @@ EOF
     echo "Waiting for $name to finish booting..."
     (
       for i in $(seq 1 30); do
-        if (set -x; ssh "${sshOptions[@]}" "$publicIp" "test -f /.instance-startup-complete"); then
+        if (set -x; timeout 20s ssh "${sshOptions[@]}" "$publicIp" "test -f /.instance-startup-complete"); then
           break
         fi
         sleep 2
