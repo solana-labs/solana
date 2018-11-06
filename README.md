@@ -343,8 +343,8 @@ Testnet Debugging
 
 We maintain several testnets:
 
-* `testnet` - public stable channel testnet accessible via testnet.solana.com. Runs 24/7
-* `testnet-perf` - permissioned stable channel testnet running a 24/7 soak test.
+* `testnet` - public beta channel testnet accessible via testnet.solana.com. Runs 24/7
+* `testnet-perf` - permissioned beta channel testnet running a 24/7 soak test.
 * `testnet-master` - public edge channel testnet accessible via master.testnet.solana.com. Runs 24/7
 * `testnet-master-perf` - permissioned edge channel testnet running a multi-hour soak test weekday mornings.
 
