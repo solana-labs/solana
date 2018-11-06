@@ -1487,14 +1487,12 @@ mod tests {
     use budget_program::BudgetState;
     use entry::next_entry;
     use entry::Entry;
-    use entry_writer::{self, EntryWriter};
     use hash::hash;
     use jsonrpc_macros::pubsub::{Subscriber, SubscriptionId};
     use ledger;
     use signature::Keypair;
     use signature::{GenKeys, KeypairUtil};
     use std;
-    use std::io::{BufReader, Cursor, Seek, SeekFrom};
     use system_transaction::SystemTransaction;
     use tokio::prelude::{Async, Stream};
     use transaction::Instruction;
@@ -1913,40 +1911,6 @@ mod tests {
         assert_eq!(ledger_height, 5);
         assert_eq!(bank.tick_height(), 2);
         assert_eq!(bank.last_id(), last_id);
-    }
-
-    // Write the given entries to a file and then return a file iterator to them.
-    fn to_file_iter(entries: impl Iterator<Item = Entry>) -> impl Iterator<Item = Entry> {
-        let mut file = Cursor::new(vec![]);
-        EntryWriter::write_entries(&mut file, entries).unwrap();
-        file.seek(SeekFrom::Start(0)).unwrap();
-
-        let reader = BufReader::new(file);
-        entry_writer::read_entries(reader).map(|x| x.unwrap())
-    }
-
-    #[test]
-    fn test_process_ledger_from_file() {
-        let (ledger, pubkey) = create_sample_ledger(1);
-        let ledger = to_file_iter(ledger);
-
-        let bank = Bank::default();
-        bank.process_ledger(ledger).unwrap();
-        assert_eq!(bank.get_balance(&pubkey), 1);
-    }
-
-    #[test]
-    fn test_process_ledger_from_files() {
-        let dummy_leader_id = Keypair::new().pubkey();
-        let dummy_leader_tokens = 1;
-        let mint = Mint::new_with_leader(2, dummy_leader_id, dummy_leader_tokens);
-
-        let genesis = to_file_iter(mint.create_entries().into_iter());
-        let block = to_file_iter(create_sample_block_with_ticks(&mint, 1, 1));
-
-        let bank = Bank::default();
-        bank.process_ledger(genesis.chain(block)).unwrap();
-        assert_eq!(bank.get_balance(&mint.pubkey()), 0);
     }
 
     #[test]
