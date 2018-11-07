@@ -92,12 +92,21 @@ local|tar)
 
   case $nodeType in
   leader)
+    if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-fullnode-cuda ]]; then
+      echo Selecting solana-fullnode-cuda
+      export SOLANA_CUDA=1
+    fi
     ./multinode-demo/setup.sh -t leader $setupArgs
     ./multinode-demo/drone.sh > drone.log 2>&1 &
     ./multinode-demo/leader.sh > leader.log 2>&1 &
     ;;
   validator)
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp:~/.cargo/bin/solana*" ~/.cargo/bin/
+
+    if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-fullnode-cuda ]]; then
+      echo Selecting solana-fullnode-cuda
+      export SOLANA_CUDA=1
+    fi
 
     ./multinode-demo/setup.sh -t validator $setupArgs
     ./multinode-demo/validator.sh "$entrypointIp":~/solana "$entrypointIp:8001" >validator.log 2>&1 &

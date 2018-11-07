@@ -49,8 +49,6 @@ elif [[ -n $USE_INSTALL ]]; then # Assume |cargo install| was run
     declare program="$1"
     printf "solana-%s" "$program"
   }
-  # CUDA was/wasn't selected at build time, can't affect CUDA state here
-  unset SOLANA_CUDA
 else
   solana_program() {
     declare program="$1"
