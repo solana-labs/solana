@@ -7,7 +7,6 @@
   - [Proof of History](ch01-02-poh.md)
 
 - [Fullnode](ch02-00-fullnode.md)
-  - [Pipeline Stages](ch02-01-stages.md)
   - [Tpu](ch02-02-tpu.md)
   - [Tvu](ch02-03-tvu.md)
   - [Ncp](ch02-04-ncp.md)
