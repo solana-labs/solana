@@ -8,7 +8,7 @@ use log::Level;
 use result::{Error, Result};
 use service::Service;
 use std::sync::atomic::AtomicUsize;
-use std::sync::mpsc::RecvTimeoutError;
+use std::sync::mpsc::{channel, RecvTimeoutError};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 use timing::duration_as_ms;
@@ -21,7 +21,7 @@ impl LedgerWriteStage {
     pub fn write(
         ledger_writer: Option<&mut LedgerWriter>,
         entry_receiver: &EntryReceiver,
-        forwarder: &Option<EntrySender>,
+        entry_sender: &EntrySender,
     ) -> Result<()> {
         let mut ventries = Vec::new();
         let mut received_entries = entry_receiver.recv_timeout(Duration::new(1, 0))?;
@@ -44,10 +44,8 @@ impl LedgerWriteStage {
         }
 
         inc_new_counter_info!("ledger_writer_stage-entries_received", num_new_entries);
-        if let Some(forwarder) = forwarder {
-            for entries in ventries {
-                forwarder.send(entries)?;
-            }
+        for entries in ventries {
+            entry_sender.send(entries)?;
         }
         inc_new_counter_info!(
             "ledger_writer_stage-time_ms",
@@ -56,17 +54,15 @@ impl LedgerWriteStage {
         Ok(())
     }
 
-    pub fn new(
-        ledger_path: Option<&str>,
-        entry_receiver: EntryReceiver,
-        forwarder: Option<EntrySender>,
-    ) -> Self {
+    pub fn new(ledger_path: Option<&str>, entry_receiver: EntryReceiver) -> (Self, EntryReceiver) {
         let mut ledger_writer = ledger_path.map(|p| LedgerWriter::open(p, false).unwrap());
 
+        let (entry_sender, entry_forwarder) = channel();
         let write_thread = Builder::new()
             .name("solana-ledger-writer".to_string())
             .spawn(move || loop {
-                if let Err(e) = Self::write(ledger_writer.as_mut(), &entry_receiver, &forwarder) {
+                if let Err(e) = Self::write(ledger_writer.as_mut(), &entry_receiver, &entry_sender)
+                {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => {
                             break;
@@ -83,7 +79,7 @@ impl LedgerWriteStage {
                 };
             }).unwrap();
 
-        LedgerWriteStage { write_thread }
+        (LedgerWriteStage { write_thread }, entry_forwarder)
     }
 }
 

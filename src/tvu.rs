@@ -21,7 +21,6 @@ use service::Service;
 use signature::Keypair;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use storage_stage::{StorageStage, StorageState};
@@ -90,19 +89,8 @@ impl Tvu {
             bank.leader_scheduler.clone(),
         );
 
-        let (storage_entry_sender, storage_entry_receiver) = channel();
-        let storage_state = StorageState::new();
-        let storage_stage = StorageStage::new(
-            &storage_state,
-            storage_entry_receiver,
-            ledger_path,
-            keypair.clone(),
-            exit.clone(),
-            entry_height,
-        );
-
         let (replicate_stage, ledger_entry_receiver) = ReplicateStage::new(
-            keypair,
+            keypair.clone(),
             vote_account_keypair,
             bank.clone(),
             cluster_info,
@@ -111,10 +99,18 @@ impl Tvu {
             entry_height,
         );
 
-        let ledger_write_stage = LedgerWriteStage::new(
+        //let (storage_entry_sender, storage_entry_receiver) = channel();
+        let (ledger_write_stage, storage_entry_receiver) =
+            LedgerWriteStage::new(ledger_path, ledger_entry_receiver);
+
+        let storage_state = StorageState::new();
+        let storage_stage = StorageStage::new(
+            &storage_state,
+            storage_entry_receiver,
             ledger_path,
-            ledger_entry_receiver,
-            Some(storage_entry_sender),
+            keypair,
+            exit.clone(),
+            entry_height,
         );
 
         Tvu {
