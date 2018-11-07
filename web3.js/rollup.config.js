@@ -90,7 +90,6 @@ function generateConfig(configType) {
         'bn.js',
         'bs58',
         'buffer-layout',
-        'elfy',
         'jayson/lib/client/browser',
         'node-fetch',
         'rpc-websockets',
