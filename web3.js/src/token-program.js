@@ -11,6 +11,7 @@ import {Account} from './account';
 import {PublicKey} from './publickey';
 import {SystemProgram} from './system-program';
 import {Transaction, TransactionInstruction} from './transaction';
+import type {TransactionSignature} from './transaction';
 import {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
 import type {Connection} from './connection';
 
@@ -373,8 +374,8 @@ export class Token {
     source: PublicKey,
     destination: PublicKey,
     amount: number | TokenAmount,
-  ): Promise<void> {
-    await sendAndConfirmTransaction(
+  ): Promise<?TransactionSignature> {
+    return await sendAndConfirmTransaction(
       this.connection,
       owner,
       new Transaction().add(
