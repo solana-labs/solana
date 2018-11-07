@@ -32,8 +32,10 @@ Deploys a CD testnet
   options:
    -s edge|beta|stable  - Deploy the specified Snap release channel
                           (default: $snapChannel)
-   -t edge|beta|stable  - Deploy the specified prebuilt tar from channel
-                          (default: $releaseChannel)
+   -t edge|beta|stable|vX.Y.Z  - Deploy the latest tarball release for the
+                                 specified release channel (edge|beta|stable) or release tag
+                                 (vX.Y.Z)
+                                 (default: $releaseChannel)
    -n [number]          - Number of validator nodes (default: $validatorNodeCount)
    -c [number]          - Number of client nodes (default: $clientNodeCount)
    -P                   - Use public network IP addresses (default: $publicNetwork)
@@ -82,7 +84,7 @@ while getopts "h?p:Pn:c:s:t:gG:a:d" opt; do
     ;;
   t)
     case $OPTARG in
-    edge|beta|stable)
+    edge|beta|stable|v*)
       releaseChannel=$OPTARG
       useReleaseChannel=true
       ;;
