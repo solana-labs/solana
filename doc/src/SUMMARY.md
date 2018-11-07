@@ -12,12 +12,12 @@
   - [Ncp](ch02-04-ncp.md)
   - [JsonRpcService](ch02-05-jsonrpc-service.md)
 
-- [Avalanche replication](ch03-01-avalanche.md)
-  - [Proof of replication](ch05-01-porep.md)
+- [Avalanche replication](ch03-00-avalanche.md)
+  - [Proof of replication](ch03-01-porep.md)
 
 - [On-chain programs](ch04-00-scaling-programs.md)
   - [The Runtime](ch04-01-runtime.md)
-  - [Ledger format](ch04-06-ledger.md)
+  - [Ledger format](ch04-02-ledger.md)
 
 ## Appendix
 
