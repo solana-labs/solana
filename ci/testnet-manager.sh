@@ -81,7 +81,11 @@ testnet-beta|testnet-beta-perf)
   CHANNEL_BRANCH=$BETA_CHANNEL
   ;;
 testnet|testnet-perf)
-  CHANNEL_OR_TAG=beta
+  if [[ -n $BETA_CHANNEL_LATEST_TAG ]]; then
+    CHANNEL_OR_TAG=$BETA_CHANNEL_LATEST_TAG
+  else
+    CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
+  fi
   CHANNEL_BRANCH=$BETA_CHANNEL
   ;;
 *)
@@ -293,7 +297,7 @@ start() {
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
       ci/testnet-deploy.sh testnet-solana-com gce us-east1-c \
-        -s "$CHANNEL_OR_TAG" -n 3 -g -c 0 -P -a testnet-solana-com  \
+        -t "$CHANNEL_OR_TAG" -n 3 -g -c 0 -P -a testnet-solana-com  \
         ${maybeDelete:+-d}
     )
     ;;
