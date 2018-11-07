@@ -9,10 +9,10 @@ clientNodeCount=0
 validatorNodeCount=10
 publicNetwork=false
 snapChannel=edge
-releaseChannel=edge
+tarChannelOrTag=edge
 delete=false
 enableGpu=false
-useReleaseChannel=false
+useTarReleaseChannel=false
 
 usage() {
   exitcode=0
@@ -35,7 +35,7 @@ Deploys a CD testnet
    -t edge|beta|stable|vX.Y.Z  - Deploy the latest tarball release for the
                                  specified release channel (edge|beta|stable) or release tag
                                  (vX.Y.Z)
-                                 (default: $releaseChannel)
+                                 (default: $tarChannelOrTag)
    -n [number]          - Number of validator nodes (default: $validatorNodeCount)
    -c [number]          - Number of client nodes (default: $clientNodeCount)
    -P                   - Use public network IP addresses (default: $publicNetwork)
@@ -85,8 +85,8 @@ while getopts "h?p:Pn:c:s:t:gG:a:d" opt; do
   t)
     case $OPTARG in
     edge|beta|stable|v*)
-      releaseChannel=$OPTARG
-      useReleaseChannel=true
+      tarChannelOrTag=$OPTARG
+      useTarReleaseChannel=true
       ;;
     *)
       usage "Invalid release channel: $OPTARG"
@@ -159,9 +159,9 @@ if [[ -n $NO_LEDGER_VERIFY ]]; then
   maybeNoLedgerVerify="-o noLedgerVerify"
 fi
 # shellcheck disable=SC2086 # Don't want to double quote maybeRejectExtraNodes
-if ! $useReleaseChannel; then
-  time net/net.sh start -s "$snapChannel" $maybeRejectExtraNodes $maybeNoValidatorSanity $maybeNoLedgerVerify
+if $useTarReleaseChannel; then
+  time net/net.sh start -t "$tarChannelOrTag" $maybeRejectExtraNodes $maybeNoValidatorSanity $maybeNoLedgerVerify
 else
-  time net/net.sh start -t "$releaseChannel" $maybeRejectExtraNodes $maybeNoValidatorSanity $maybeNoLedgerVerify
+  time net/net.sh start -s "$snapChannel" $maybeRejectExtraNodes $maybeNoValidatorSanity $maybeNoLedgerVerify
 fi
 exit 0

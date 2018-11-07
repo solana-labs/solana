@@ -25,6 +25,7 @@ Operate a configured testnet
  start-specific options:
    -S [snapFilename]           - Deploy the specified Snap file
    -s edge|beta|stable         - Deploy the latest Snap on the specified Snap release channel
+   -T [tarFilename]            - Deploy the specified release tarball
    -t edge|beta|stable|vX.Y.Z  - Deploy the latest tarball release for the
                                  specified release channel (edge|beta|stable) or release tag
                                  (vX.Y.Z)
@@ -57,7 +58,7 @@ command=$1
 [[ -n $command ]] || usage
 shift
 
-while getopts "h?S:s:t:o:f:" opt; do
+while getopts "h?S:s:T:t:o:f:" opt; do
   case $opt in
   h | \?)
     usage
@@ -77,6 +78,11 @@ while getopts "h?S:s:t:o:f:" opt; do
       usage "Invalid snap channel: $OPTARG"
       ;;
     esac
+    ;;
+  T)
+    tarballFilename=$OPTARG
+    [[ -f $tarballFilename ]] || usage "Snap not readable: $tarballFilename"
+    deployMethod=tar
     ;;
   t)
     case $OPTARG in
@@ -266,8 +272,9 @@ start() {
 
       set -x
       curl -o solana-release.tar.bz2 http://solana-release.s3.amazonaws.com/"$releaseChannel"/solana-release.tar.bz2
-      tar jxvf solana-release.tar.bz2
+      tarballFilename=solana-release.tar.bz2
     fi
+    tar jxvf $tarballFilename
     ;;
   local)
     build
