@@ -36,8 +36,8 @@ ec2)
   cpuLeaderMachineType=m4.4xlarge
   gpuLeaderMachineType=p2.xlarge
   leaderMachineType=$cpuLeaderMachineType
-  validatorMachineType=m4.4xlarge
-  clientMachineType=m4.4xlarge
+  validatorMachineType=m4.2xlarge
+  clientMachineType=m4.2xlarge
   ;;
 *)
   echo "Error: Unknown cloud provider: $cloudProvider"
@@ -218,13 +218,16 @@ EOF
 
     echo "Waiting for $name to finish booting..."
     (
-      for i in $(seq 1 30); do
-        if (set -x; timeout 20s ssh "${sshOptions[@]}" "$publicIp" "test -f /.instance-startup-complete"); then
-          break
+      set -x
+      for i in $(seq 1 45); do
+        if timeout 20s ssh "${sshOptions[@]}" "$publicIp" "test -f /.instance-startup-complete"; then
+          exit 0
         fi
         sleep 2
         echo "Retry $i..."
       done
+      echo "$name failed to boot."
+      exit 1
     )
     echo "$name has booted."
   }
@@ -389,6 +392,7 @@ $(
     install-libssl-compatability.sh \
     install-rsync.sh \
     network-config.sh \
+
 )
 
 cat > /etc/motd <<EOM

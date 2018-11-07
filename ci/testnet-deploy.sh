@@ -21,12 +21,13 @@ usage() {
     echo "Error: $*"
   fi
   cat <<EOF
-usage: $0 [name] [zone] [options...]
+usage: $0 [name] [cloud] [zone] [options...]
 
 Deploys a CD testnet
 
   name  - name of the network
-  zone  - zone to deploy the network into
+  cloud - cloud provider to use (gce, ec2)
+  zone  - cloud provider zone to deploy the network into
 
   options:
    -s edge|beta|stable  - Deploy the specified Snap release channel
@@ -48,10 +49,12 @@ EOF
 }
 
 netName=$1
-zone=$2
+cloudProvider=$2
+zone=$3
 [[ -n $netName ]] || usage
+[[ -n $cloudProvider ]] || usage "Cloud provider not specified"
 [[ -n $zone ]] || usage "Zone not specified"
-shift 2
+shift 3
 
 while getopts "h?p:Pn:c:s:t:gG:a:d" opt; do
   case $opt in
@@ -108,7 +111,7 @@ while getopts "h?p:Pn:c:s:t:gG:a:d" opt; do
 done
 
 
-gce_create_args=(
+create_args=(
   -a "$leaderAddress"
   -c "$clientNodeCount"
   -n "$validatorNodeCount"
@@ -118,26 +121,26 @@ gce_create_args=(
 
 if $enableGpu; then
   if [[ -z $leaderMachineType ]]; then
-    gce_create_args+=(-g)
+    create_args+=(-g)
   else
-    gce_create_args+=(-G "$leaderMachineType")
+    create_args+=(-G "$leaderMachineType")
   fi
 fi
 
 if $publicNetwork; then
-  gce_create_args+=(-P)
+  create_args+=(-P)
 fi
 
 set -x
 
-echo --- gce.sh delete
-time net/gce.sh delete -z "$zone" -p "$netName"
+echo "--- $cloudProvider.sh delete"
+time net/"$cloudProvider".sh delete -z "$zone" -p "$netName"
 if $delete; then
   exit 0
 fi
 
-echo --- gce.sh create
-time net/gce.sh create "${gce_create_args[@]}"
+echo "--- $cloudProvider.sh create"
+time net/"$cloudProvider".sh create "${create_args[@]}"
 net/init-metrics.sh -e
 
 echo --- net.sh start
