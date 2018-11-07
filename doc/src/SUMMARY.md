@@ -1,27 +1,27 @@
 # Solana Architecture
 
-- [Introduction](ch00-00-introduction.md)
+- [Introduction](introduction.md)
 
-- [Synchronization](ch01-00-synchronization.md)
-  - [Introduction to VDFs](ch01-01-vdf.md)
-  - [Proof of History](ch01-02-poh.md)
+- [Synchronization](synchronization.md)
+  - [Introduction to VDFs](vdf.md)
+  - [Proof of History](poh.md)
 
-- [Fullnode](ch02-00-fullnode.md)
-  - [Tpu](ch02-02-tpu.md)
-  - [Tvu](ch02-03-tvu.md)
-  - [Ncp](ch02-04-ncp.md)
-  - [JsonRpcService](ch02-05-jsonrpc-service.md)
+- [Fullnode](fullnode.md)
+  - [Tpu](tpu.md)
+  - [Tvu](tvu.md)
+  - [Ncp](ncp.md)
+  - [JsonRpcService](jsonrpc-service.md)
 
-- [Avalanche replication](ch03-00-avalanche.md)
-  - [Proof of replication](ch03-01-porep.md)
+- [Avalanche replication](avalanche.md)
+  - [Proof of replication](porep.md)
 
-- [On-chain programs](ch04-00-scaling-programs.md)
-  - [The Runtime](ch04-01-runtime.md)
-  - [Ledger format](ch04-02-ledger.md)
+- [On-chain programs](programs.md)
+  - [The Runtime](runtime.md)
+  - [Ledger format](ledger.md)
 
 ## Appendix
 
-- [Appendix](appendix-00.md)
-  - [Terminology](appendix-01-terminology.md)
-  - [JSON RPC API](appendix-02-jsonrpc-api.md)
+- [Appendix](appendix.md)
+  - [Terminology](terminology.md)
+  - [JSON RPC API](jsonrpc-api.md)
 
