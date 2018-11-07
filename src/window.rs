@@ -153,7 +153,7 @@ impl WindowUtil for Window {
                     ls_lock.max_height_for_leader(tick_height)
                 {
                     match ls_lock.get_scheduled_leader(next_leader_rotation_height) {
-                        Some(leader_id) if leader_id == *id => is_next_leader = true,
+                        Some((leader_id, _)) if leader_id == *id => is_next_leader = true,
                         // In the case that we are not in the current scope of the leader schedule
                         // window then either:
                         //

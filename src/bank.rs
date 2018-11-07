@@ -1417,9 +1417,11 @@ impl Bank {
         subscriptions.remove(pubkey).is_some()
     }
 
-    pub fn get_current_leader(&self) -> Option<Pubkey> {
-        let ls_lock = self.leader_scheduler.read().unwrap();
-        ls_lock.get_scheduled_leader(self.tick_height())
+    pub fn get_current_leader(&self) -> Option<(Pubkey, u64)> {
+        self.leader_scheduler
+            .read()
+            .unwrap()
+            .get_scheduled_leader(self.tick_height())
     }
 
     pub fn tick_height(&self) -> u64 {
