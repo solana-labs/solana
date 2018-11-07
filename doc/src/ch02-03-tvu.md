@@ -1,3 +1,5 @@
-# The TVU
+# Tvu
 
-<img alt="TVU block diagram" src="img/tvu.svg" class="center"/>
+<img alt="Tvu block diagram" src="img/tvu.svg" class="center"/>
+
+The Transaction Validation Unit

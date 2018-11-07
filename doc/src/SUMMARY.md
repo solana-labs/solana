@@ -8,8 +8,9 @@
 
 - [Fullnode](ch02-00-fullnode.md)
   - [Pipeline Stages](ch02-01-stages.md)
-  - [The TPU](ch02-02-tpu.md)
-  - [The TVU](ch02-03-tvu.md)
+  - [Tpu](ch02-02-tpu.md)
+  - [Tvu](ch02-03-tvu.md)
+  - [Ncp](ch02-04-ncp.md)
   - [JsonRpcService](ch02-04-json-rpc.md)
 
 - [Avalanche replication](ch03-01-avalanche.md)

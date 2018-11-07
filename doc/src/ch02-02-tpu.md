@@ -1,4 +1,5 @@
-# The TPU
+# The Tpu
 
-<img alt="TPU block diagram" src="img/tpu.svg" class="center"/>
+<img alt="Tpu block diagram" src="img/tpu.svg" class="center"/>
 
+The Transaction Processing Unit
