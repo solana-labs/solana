@@ -248,7 +248,7 @@ start() {
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
       ci/testnet-deploy.sh beta-testnet-solana-com ec2 us-west-1a \
-        -s "$CHANNEL_OR_TAG" -n 3 -c 0 -P \
+        -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P \
         ${maybeDelete:+-d}
     )
     ;;
@@ -297,7 +297,7 @@ start() {
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
       ci/testnet-deploy.sh testnet-solana-com gce us-east1-c \
-        -s "$CHANNEL_OR_TAG" -n 3 -g -c 0 -P -a testnet-solana-com  \
+        -t "$CHANNEL_OR_TAG" -n 3 -g -c 0 -P -a testnet-solana-com  \
         ${maybeDelete:+-d}
     )
     ;;
