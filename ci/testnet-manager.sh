@@ -299,7 +299,7 @@ start() {
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
       ci/testnet-deploy.sh testnet-solana-com gce us-east1-c \
-        -t "$CHANNEL_OR_TAG" -n 3 -g -c 0 -P -a testnet-solana-com  \
+        -s "$CHANNEL_OR_TAG" -n 3 -g -c 0 -P -a testnet-solana-com  \
         ${maybeDelete:+-d}
       #ci/testnet-deploy.sh testnet-solana-com ec2 us-west-1a \
       #  -t "$CHANNEL_OR_TAG" -n 3 -g -c 0 -P -a eipalloc-0fa502bf95f6f18b2 \
