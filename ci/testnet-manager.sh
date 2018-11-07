@@ -118,7 +118,7 @@ sanity() {
       set -ex
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
-      ci/testnet-sanity.sh edge-testnet-solana-com ec2 us-east-1b
+      ci/testnet-sanity.sh edge-testnet-solana-com ec2 us-west-1a
     )
     ;;
   testnet-edge-perf)
@@ -129,7 +129,7 @@ sanity() {
       export REJECT_EXTRA_NODES=1
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
-      ci/testnet-sanity.sh edge-perf-testnet-solana-com ec2 us-east-1a
+      ci/testnet-sanity.sh edge-perf-testnet-solana-com ec2 us-west-2b
     )
     ;;
   testnet-beta)
@@ -139,7 +139,7 @@ sanity() {
       set -ex
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
-      ci/testnet-sanity.sh beta-testnet-solana-com ec2 us-west-1a
+      ci/testnet-sanity.sh beta-testnet-solana-com ec2 us-west-1b
     )
     ;;
   testnet-beta-perf)
@@ -161,6 +161,7 @@ sanity() {
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
       ci/testnet-sanity.sh testnet-solana-com gce us-east1-c
+      #ci/testnet-sanity.sh testnet-solana-com ec2 us-west-1a
     )
     ;;
   testnet-perf)
@@ -171,6 +172,7 @@ sanity() {
       export REJECT_EXTRA_NODES=1
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
+      #ci/testnet-sanity.sh perf-testnet-solana-com ec2 us-east-1a
       ci/testnet-sanity.sh perf-testnet-solana-com gce us-west1-b
     )
     ;;
@@ -198,7 +200,7 @@ start() {
       set -ex
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
-      ci/testnet-deploy.sh edge-testnet-solana-com ec2 us-east-1b \
+      ci/testnet-deploy.sh edge-testnet-solana-com ec2 us-west-1a \
         -s "$CHANNEL_OR_TAG" -n 3 -c 0 -P \
         ${maybeDelete:+-d}
     )
@@ -210,7 +212,7 @@ start() {
       set -ex
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
-      ci/testnet-deploy.sh edge-perf-testnet-solana-com ec2 us-east-1a \
+      ci/testnet-deploy.sh edge-perf-testnet-solana-com ec2 us-west-2b \
         -g -t "$CHANNEL_OR_TAG" -c 2 \
         ${maybeDelete:+-d}
     )
@@ -222,7 +224,7 @@ start() {
       set -ex
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
-      ci/testnet-deploy.sh beta-testnet-solana-com ec2 us-west-1a \
+      ci/testnet-deploy.sh beta-testnet-solana-com ec2 us-west-1b \
         -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P \
         ${maybeDelete:+-d}
     )
@@ -247,8 +249,11 @@ start() {
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
       ci/testnet-deploy.sh testnet-solana-com gce us-east1-c \
-        -t "$CHANNEL_OR_TAG" -n 3 -g -c 0 -P -a testnet-solana-com  \
+        -s "$CHANNEL_OR_TAG" -n 3 -g -c 0 -P -a testnet-solana-com  \
         ${maybeDelete:+-d}
+      #ci/testnet-deploy.sh testnet-solana-com ec2 us-west-1a \
+      #  -t "$CHANNEL_OR_TAG" -n 3 -g -c 0 -P -a eipalloc-0fa502bf95f6f18b2 \
+      #  ${maybeDelete:+-d}
     )
     ;;
   testnet-perf)
@@ -262,6 +267,10 @@ start() {
         -G "n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" \
         -t "$CHANNEL_OR_TAG" -c 2 \
         ${maybeDelete:+-d}
+      #ci/testnet-deploy.sh perf-testnet-solana-com ec2 us-east-1a \
+      #  -g \
+      #  -t "$CHANNEL_OR_TAG" -c 2 \
+      #  ${maybeDelete:+-d}
     )
     ;;
   *)
