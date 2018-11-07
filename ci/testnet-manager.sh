@@ -247,7 +247,7 @@ start() {
       set -ex
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
-      ci/testnet-deploy.sh edge-testnet-solana-com ec2 us-west-1a \
+      ci/testnet-deploy.sh beta-testnet-solana-com ec2 us-west-1a \
         -s "$CHANNEL_OR_TAG" -n 3 -c 0 -P \
         ${maybeDelete:+-d}
     )
