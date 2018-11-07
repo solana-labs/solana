@@ -48,10 +48,8 @@ done
 # Build the HTML
 export PATH=$CARGO_HOME/bin:$PATH
 maybe_install mdbook
-_ cd doc
 _ mdbook test
 _ mdbook build
-_ cd -
 
 echo --- ci/localnet-sanity.sh
 (

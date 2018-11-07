@@ -295,6 +295,34 @@ $ git clone https://github.com/solana-labs/solana.git
 $ cd solana
 ```
 
+Building the Solana book
+---
+
+Install mdbook:
+
+```bash
+cargo install mdbook
+```
+
+Run any Rust tests in the markdown:
+
+```bash
+mdbook test
+```
+
+Render markdown as HTML:
+
+```bash
+mdbook build
+```
+
+Render and view the book:
+
+```bash
+mdbook build --open
+```
+
+
 Testing
 ---
 
@@ -442,4 +470,5 @@ problem is solved by this code?" On the other hand, if a test does fail and you 
 better way to solve the same problem, a Pull Request with your solution would most certainly be
 welcome! Likewise, if rewriting a test can better communicate what code it's protecting, please
 send us that patch!
+
 
