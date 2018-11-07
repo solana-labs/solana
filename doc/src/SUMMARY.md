@@ -24,4 +24,5 @@
 
 - [Appendix](appendix-00.md)
   - [Terminology](appendix-01-terminology.md)
+  - [JSON RPC API](appendix-02-json-rpc-api.md)
 
