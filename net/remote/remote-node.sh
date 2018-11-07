@@ -85,6 +85,7 @@ local|tar)
 
   ./fetch-perf-libs.sh
   export LD_LIBRARY_PATH="$PWD/target/perf-libs:$LD_LIBRARY_PATH"
+  echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
 
   scripts/oom-monitor.sh  > oom-monitor.log 2>&1 &
   scripts/net-stats.sh  > net-stats.log 2>&1 &

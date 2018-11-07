@@ -9,12 +9,13 @@ usage() {
     echo "Error: $*"
   fi
   cat <<EOF
-usage: $0 [name] [zone]
+usage: $0 [name] [cloud] [zone]
 
 Sanity check a CD testnet
 
   name  - name of the network
-  zone  - zone of the network
+  cloud - cloud provider to use (gce, ec2)
+  zone  - cloud provider zone of the network
 
   Note: the SOLANA_METRICS_CONFIG environment variable is used to configure
         metrics
@@ -23,13 +24,15 @@ EOF
 }
 
 netName=$1
-zone=$2
+cloudProvider=$2
+zone=$3
 [[ -n $netName ]] || usage ""
+[[ -n $cloudProvider ]] || usage "Cloud provider not specified"
 [[ -n $zone ]] || usage "Zone not specified"
 
 set -x
-echo --- gce.sh config
-net/gce.sh config -p "$netName" -z "$zone"
+echo "--- $cloudProvider.sh config"
+net/"$cloudProvider".sh config -p "$netName" -z "$zone"
 net/init-metrics.sh -e
 echo --- net.sh sanity
 net/net.sh sanity \
