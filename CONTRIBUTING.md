@@ -55,19 +55,19 @@ Some terms we currently use regularly in the codebase:
 Proposing architectural changes
 ---
 
-Solana's architecture is described by markdown files in the `doc/` directory, currently maintained
-by @garious. To change the architecture, you'll need to at least propose a change with an RFC document,
-and create an issue to track its implementation. Here's the full process:
+Solana's architecture is described by a book generated from markdown files in the `src/` directory,
+currently maintained by @garious. To change the architecture, you'll need to at least propose a change
+with an RFC document, and create an issue to track its implementation. Here's the full process:
 
 1. Propose to a change to the architecture by creating a PR that adds a markdown document called an RFC
-   (standing for "request for comments") to the directory `rfcs/`. Add at least the maintainer of `doc/`
-   as a reviewer.
+   (standing for "request for comments") to the directory `rfcs/`. Add at least the maintainer of the
+   markdown book as a reviewer.
 2. The PR being merged indicates your proposed change was accepted and that the Solana maintainers
    support your plan of attack. Next, create an issue to track its implementation and create a PR
    that updates the RFC with a link to the issue. This link allows anyone to quickly check the
    implementation status of any RFC.
 3. Submit PRs that implement the RFC. Be sure to reference the issue created above in your PR description.
    Feel free to update the RFC as the implementation reveals the need for tweaks to the architecture,
-   but if you do, be sure to add the maintainer of `doc/` as a reviewer to your PR.
+   but if you do, be sure to add the maintainer of the markdown book as a reviewer to your PR.
 4. Once the implementation is complete, close the issue. Depending on the scope of the RFC, the maintainer
-   of `doc/` may then create a separate ticket to integrate the RFC into `doc/`.
+   of markdown book may then create a separate ticket to integrate the RFC into the book.

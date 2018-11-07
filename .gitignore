@@ -1,6 +1,6 @@
 Cargo.lock
 /target/
-/doc/book/
+/book/
 
 **/*.rs.bk
 .cargo
