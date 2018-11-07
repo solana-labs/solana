@@ -41,7 +41,7 @@ while getopts "hde" opt; do
     useEnv=true
     ;;
   *)
-    usage "Error: unhandled option: $opt"
+    usage "unhandled option: $opt"
     ;;
   esac
 done
@@ -49,7 +49,7 @@ shift $((OPTIND - 1))
 
 if $useEnv; then
   [[ -n $SOLANA_METRICS_CONFIG ]] ||
-    usage "Error: SOLANA_METRICS_CONFIG is not defined in the environment"
+    usage "SOLANA_METRICS_CONFIG is not defined in the environment"
 else
   username=$1
   [[ -n "$username" ]] || usage "username not specified"
