@@ -7,7 +7,7 @@ http://releases.llvm.org/download.html
 ### Linux Ubuntu 18.04 (bionic)
 ```
 $ wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-$ sudo apt-add-repository "deb http://apt.llvm.org/bionic/ llvm-toolchain-stretch-7 main"
+$ sudo apt-add-repository "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-7 main"
 $ sudo apt-get update
 $ sudo apt-get install -y clang-7
 ```
