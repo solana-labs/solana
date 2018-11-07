@@ -1,6 +1,6 @@
 # Signing using Secure Enclave
 
-The goal of this RFC is to define the security mechanism of signing keys used by the network nodes. Every node contains an asymmetric key that's used for signing and verifying the transactions (e.g. votes). The node signs the transcations using its private key. Other entities can verify the signature using the node's public key.
+The goal of this RFC is to define the security mechanism of signing keys used by the network nodes. Every node contains an asymmetric key that's used for signing and verifying the transactions (e.g. votes). The node signs the transactions using its private key. Other entities can verify the signature using the node's public key.
 
 The node's stake or its resources could be compromised if its private key is used to sign incorrect data (e.g. voting on multiple forks of the ledger). So, it's important to safeguard the private key.
 
