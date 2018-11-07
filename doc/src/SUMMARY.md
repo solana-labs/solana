@@ -11,19 +11,18 @@
   - [Tpu](ch02-02-tpu.md)
   - [Tvu](ch02-03-tvu.md)
   - [Ncp](ch02-04-ncp.md)
-  - [JsonRpcService](ch02-04-json-rpc.md)
+  - [JsonRpcService](ch02-05-jsonrpc-service.md)
 
 - [Avalanche replication](ch03-01-avalanche.md)
   - [Proof of replication](ch05-01-porep.md)
 
 - [On-chain programs](ch04-00-scaling-programs.md)
-  - [The LAMPORT execution environment](ch04-01-lamport.md)
-  - [JSON RPC API](ch04-05-jsonrpc.md)
+  - [The Runtime](ch04-01-runtime.md)
   - [Ledger format](ch04-06-ledger.md)
 
 ## Appendix
 
 - [Appendix](appendix-00.md)
   - [Terminology](appendix-01-terminology.md)
-  - [JSON RPC API](appendix-02-json-rpc-api.md)
+  - [JSON RPC API](appendix-02-jsonrpc-api.md)
 
