@@ -17,11 +17,6 @@ elif [[ $BUILDKITE_BRANCH = "$BETA_CHANNEL" ]]; then
   CHANNEL=beta
 fi
 
-if [[ -z $CHANNEL ]]; then
-  echo Unable to determine channel to publish into, exiting.
-  exit 0
-fi
-
 if [[ -n "$BUILDKITE_TAG" ]]; then
   CHANNEL_OR_TAG=$BUILDKITE_TAG
 elif [[ -n "$TRIGGERED_BUILDKITE_TAG" ]]; then
@@ -30,6 +25,12 @@ else
   CHANNEL_OR_TAG=$CHANNEL
 fi
 
+if [[ -z $CHANNEL_OR_TAG ]]; then
+  echo Unable to determine channel to publish into, exiting.
+  exit 0
+fi
+
+
 echo --- Creating tarball
 if [[ -z $DRYRUN ]]; then
 (
@@ -37,7 +38,7 @@ if [[ -z $DRYRUN ]]; then
   rm -rf solana-release/
   mkdir solana-release/
   (
-    echo "$CHANNEL"
+    echo "$CHANNEL_OR_TAG "
     git rev-parse HEAD
   ) > solana-release/version.txt
 
