@@ -539,7 +539,7 @@ impl ClusterInfo {
                 trace!(
                     "{}: BROADCAST idx: {} sz: {} to {},{} coding: {}",
                     me.id,
-                    blob.get_index().unwrap(),
+                    blob.index().unwrap(),
                     blob.meta.size,
                     v.id,
                     v.contact_info.tvu,
@@ -587,7 +587,7 @@ impl ClusterInfo {
         };
         blob.write()
             .unwrap()
-            .set_id(me.id)
+            .set_id(&me.id)
             .expect("set_id in pub fn retransmit");
         let rblob = blob.read().unwrap();
         let orders: Vec<_> = table
@@ -617,7 +617,7 @@ impl ClusterInfo {
                 debug!(
                     "{}: retransmit blob {} to {} {}",
                     me.id,
-                    rblob.get_index().unwrap(),
+                    rblob.index().unwrap(),
                     v.id,
                     v.contact_info.tvu,
                 );
@@ -869,7 +869,7 @@ impl ClusterInfo {
         let pos = (ix as usize) % window.read().unwrap().len();
         if let Some(ref mut blob) = &mut window.write().unwrap()[pos].data {
             let mut wblob = blob.write().unwrap();
-            let blob_ix = wblob.get_index().expect("run_window_request get_index");
+            let blob_ix = wblob.index().expect("run_window_request index");
             if blob_ix == ix {
                 let num_retransmits = wblob.meta.num_retransmits;
                 wblob.meta.num_retransmits += 1;
@@ -896,7 +896,7 @@ impl ClusterInfo {
                     outblob.meta.size = sz;
                     outblob.data[..sz].copy_from_slice(&wblob.data[..sz]);
                     outblob.meta.set_addr(from_addr);
-                    outblob.set_id(sender_id).expect("blob set_id");
+                    outblob.set_id(&sender_id).expect("blob set_id");
                 }
                 inc_new_counter_info!("cluster_info-window-request-pass", 1);
 
@@ -1735,7 +1735,7 @@ mod tests {
             } else {
                 mock_peer.id
             };
-            assert_eq!(blob.get_id().unwrap(), id);
+            assert_eq!(blob.id().unwrap(), id);
         }
     }
 

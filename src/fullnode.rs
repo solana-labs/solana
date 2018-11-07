@@ -296,6 +296,7 @@ impl Fullnode {
                 cluster_info.clone(),
                 shared_window.clone(),
                 entry_height,
+                0, // TODO: get real leader_slot from leader_scheduler
                 entry_receiver,
                 tpu_exit,
             );
@@ -446,6 +447,7 @@ impl Fullnode {
             self.cluster_info.clone(),
             self.shared_window.clone(),
             entry_height,
+            0, // TODO: get real leader slot from leader_scheduler
             blob_receiver,
             tpu_exit,
         );

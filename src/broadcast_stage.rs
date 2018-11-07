@@ -9,7 +9,7 @@ use influx_db_client as influxdb;
 use ledger::Block;
 use log::Level;
 use metrics;
-use packet::SharedBlobs;
+use packet::{index_blobs, SharedBlobs};
 use rayon::prelude::*;
 use result::{Error, Result};
 use service::Service;
@@ -20,7 +20,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 use timing::duration_as_ms;
-use window::{self, SharedWindow, WindowIndex, WindowUtil};
+use window::{SharedWindow, WindowIndex, WindowUtil};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BroadcastStageReturnType {
@@ -36,6 +36,7 @@ fn broadcast(
     sock: &UdpSocket,
     transmit_index: &mut WindowIndex,
     receive_index: &mut u64,
+    leader_slot: u64,
 ) -> Result<()> {
     let id = node_info.id;
     let timer = Duration::new(1, 0);
@@ -73,10 +74,7 @@ fn broadcast(
         let blobs_len = blobs.len();
         trace!("{}: broadcast blobs.len: {}", id, blobs_len);
 
-        // TODO: move all this into window.rs
-        // Index the blobs
-        window::index_blobs(node_info, &blobs, receive_index)
-            .expect("index blobs for initial window");
+        index_blobs(&blobs, &node_info.id, *receive_index, leader_slot);
 
         // keep the cache of blobs that are broadcast
         inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
@@ -84,13 +82,13 @@ fn broadcast(
             let mut win = window.write().unwrap();
             assert!(blobs.len() <= win.len());
             for b in &blobs {
-                let ix = b.read().unwrap().get_index().expect("blob index");
+                let ix = b.read().unwrap().index().expect("blob index");
                 let pos = (ix % window_size) as usize;
                 if let Some(x) = win[pos].data.take() {
                     trace!(
                         "{} popped {} at {}",
                         id,
-                        x.read().unwrap().get_index().unwrap(),
+                        x.read().unwrap().index().unwrap(),
                         pos
                     );
                 }
@@ -98,7 +96,7 @@ fn broadcast(
                     trace!(
                         "{} popped {} at {}",
                         id,
-                        x.read().unwrap().get_index().unwrap(),
+                        x.read().unwrap().index().unwrap(),
                         pos
                     );
                 }
@@ -106,7 +104,7 @@ fn broadcast(
                 trace!("{} null {}", id, pos);
             }
             for b in &blobs {
-                let ix = b.read().unwrap().get_index().expect("blob index");
+                let ix = b.read().unwrap().index().expect("blob index");
                 let pos = (ix % window_size) as usize;
                 trace!("{} caching {} at {}", id, ix, pos);
                 assert!(win[pos].data.is_none());
@@ -188,6 +186,7 @@ impl BroadcastStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window: &SharedWindow,
         entry_height: u64,
+        leader_slot: u64,
         receiver: &Receiver<Vec<Entry>>,
     ) -> BroadcastStageReturnType {
         let mut transmit_index = WindowIndex {
@@ -206,6 +205,7 @@ impl BroadcastStage {
                 &sock,
                 &mut transmit_index,
                 &mut receive_index,
+                leader_slot,
             ) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => {
@@ -242,6 +242,7 @@ impl BroadcastStage {
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window: SharedWindow,
         entry_height: u64,
+        leader_slot: u64,
         receiver: Receiver<Vec<Entry>>,
         exit_sender: Arc<AtomicBool>,
     ) -> Self {
@@ -249,7 +250,14 @@ impl BroadcastStage {
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit_sender);
-                Self::run(&sock, &cluster_info, &window, entry_height, &receiver)
+                Self::run(
+                    &sock,
+                    &cluster_info,
+                    &window,
+                    entry_height,
+                    leader_slot,
+                    &receiver,
+                )
             }).unwrap();
 
         BroadcastStage { thread_hdl }

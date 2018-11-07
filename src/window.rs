@@ -1,6 +1,6 @@
 //! The `window` module defines data structure for storing the tail of the ledger.
 //!
-use cluster_info::{ClusterInfo, NodeInfo};
+use cluster_info::ClusterInfo;
 use counter::Counter;
 use entry::Entry;
 #[cfg(feature = "erasure")]
@@ -9,7 +9,6 @@ use leader_scheduler::LeaderScheduler;
 use ledger::reconstruct_entries_from_blobs;
 use log::Level;
 use packet::SharedBlob;
-use result::Result;
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
 use std::mem;
@@ -27,7 +26,7 @@ pub struct WindowSlot {
 impl WindowSlot {
     fn blob_index(&self) -> Option<u64> {
         match self.data {
-            Some(ref blob) => blob.read().unwrap().get_index().ok(),
+            Some(ref blob) => blob.read().unwrap().index().ok(),
             None => None,
         }
     }
@@ -296,7 +295,7 @@ impl WindowUtil for Window {
             c_or_d: &str,
         ) -> bool {
             if let Some(old) = mem::replace(window_slot, Some(blob)) {
-                let is_dup = old.read().unwrap().get_index().unwrap() == pix;
+                let is_dup = old.read().unwrap().index().unwrap() == pix;
                 trace!(
                     "{}: occupied {} window slot {:}, is_dup: {}",
                     id,
@@ -341,7 +340,7 @@ impl WindowUtil for Window {
             let k_data_blob;
             let k_data_slot = &mut self[k].data;
             if let Some(blob) = k_data_slot {
-                if blob.read().unwrap().get_index().unwrap() < *consumed {
+                if blob.read().unwrap().index().unwrap() < *consumed {
                     // window wrap-around, end of received
                     break;
                 }
@@ -405,26 +404,6 @@ pub fn new_window(window_size: usize) -> Window {
 
 pub fn default_window() -> Window {
     (0..2048).map(|_| WindowSlot::default()).collect()
-}
-
-pub fn index_blobs(
-    node_info: &NodeInfo,
-    blobs: &[SharedBlob],
-    receive_index: &mut u64,
-) -> Result<()> {
-    // enumerate all the blobs, those are the indices
-    trace!("{}: INDEX_BLOBS {}", node_info.id, blobs.len());
-    for (i, b) in blobs.iter().enumerate() {
-        // only leader should be broadcasting
-        let mut blob = b.write().unwrap();
-        blob.set_id(node_info.id)
-            .expect("set_id in pub fn broadcast");
-        blob.set_index(*receive_index + i as u64)
-            .expect("set_index in pub fn broadcast");
-        blob.set_flags(0).unwrap();
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]

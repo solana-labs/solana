@@ -108,7 +108,7 @@ impl Entry {
                 blob_w.set_index(idx).expect("set_index()");
             }
             if let Some(id) = id {
-                blob_w.set_id(id).expect("set_id()");
+                blob_w.set_id(&id).expect("set_id()");
             }
             if let Some(addr) = addr {
                 blob_w.meta.set_addr(addr);
