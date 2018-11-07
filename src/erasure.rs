@@ -295,8 +295,8 @@ pub fn generate_coding(
             if let Some(data) = &window[n].data {
                 let data_rl = data.read().unwrap();
 
-                let index = data_rl.get_index().unwrap();
-                let id = data_rl.get_id().unwrap();
+                let index = data_rl.index().unwrap();
+                let id = data_rl.id().unwrap();
 
                 trace!(
                     "{} copying index {} id {:?} from data to coding",
@@ -305,7 +305,7 @@ pub fn generate_coding(
                     id
                 );
                 coding_wl.set_index(index).unwrap();
-                coding_wl.set_id(id).unwrap();
+                coding_wl.set_id(&id).unwrap();
             }
             coding_wl.set_size(max_data_size);
             if coding_wl.set_coding().is_err() {
@@ -351,7 +351,7 @@ pub fn generate_coding(
 //  false if slot has a blob with the right index
 fn is_missing(id: &Pubkey, idx: u64, window_slot: &mut Option<SharedBlob>, c_or_d: &str) -> bool {
     if let Some(blob) = window_slot.take() {
-        let blob_idx = blob.read().unwrap().get_index().unwrap();
+        let blob_idx = blob.read().unwrap().index().unwrap();
         if blob_idx == idx {
             trace!("recover {}: idx: {} good {}", id, idx, c_or_d);
             // put it back
@@ -553,7 +553,7 @@ pub fn recover(id: &Pubkey, window: &mut [WindowSlot], start_idx: u64, start: us
 
         let mut data_size;
         if n < NUM_DATA {
-            data_size = locks[n].get_data_size().unwrap() as usize;
+            data_size = locks[n].data_size().unwrap() as usize;
             data_size -= BLOB_HEADER_SIZE;
             if data_size > BLOB_DATA_SIZE {
                 error!("{} corrupt data blob[{}] data_size: {}", id, idx, data_size);
@@ -591,15 +591,14 @@ pub fn recover(id: &Pubkey, window: &mut [WindowSlot], start_idx: u64, start: us
 
 #[cfg(test)]
 mod test {
-    use cluster_info;
     use erasure;
     use logger;
-    use packet::{SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE, BLOB_SIZE};
+    use packet::{index_blobs, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE, BLOB_SIZE};
     use rand::{thread_rng, Rng};
     use signature::{Keypair, KeypairUtil};
     use solana_sdk::pubkey::Pubkey;
     //    use std::sync::{Arc, RwLock};
-    use window::{index_blobs, WindowSlot};
+    use window::WindowSlot;
 
     #[test]
     pub fn test_coding() {
@@ -660,7 +659,7 @@ mod test {
                 let window_l2 = window_l1.read().unwrap();
                 print!(
                     "data index: {:?} meta.size: {} data: ",
-                    window_l2.get_index(),
+                    window_l2.index(),
                     window_l2.meta.size
                 );
                 for i in 0..64 {
@@ -676,7 +675,7 @@ mod test {
                 let window_l2 = window_l1.read().unwrap();
                 print!(
                     "coding index: {:?} meta.size: {} data: ",
-                    window_l2.get_index(),
+                    window_l2.index(),
                     window_l2.meta.size
                 );
                 for i in 0..8 {
@@ -726,10 +725,9 @@ mod test {
             blobs.push(b_);
         }
 
-        let d = cluster_info::NodeInfo::new_localhost(Keypair::new().pubkey());
-        assert!(index_blobs(&d, &blobs, &mut (offset as u64)).is_ok());
+        index_blobs(&blobs, &Keypair::new().pubkey(), offset as u64, 0);
         for b in blobs {
-            let idx = b.read().unwrap().get_index().unwrap() as usize % WINDOW_SIZE;
+            let idx = b.read().unwrap().index().unwrap() as usize % WINDOW_SIZE;
 
             window[idx].data = Some(b);
         }
@@ -815,7 +813,7 @@ mod test {
             assert_eq!(window_l2.meta.port, ref_l2.meta.port);
             assert_eq!(window_l2.meta.v6, ref_l2.meta.v6);
             assert_eq!(
-                window_l2.get_index().unwrap(),
+                window_l2.index().unwrap(),
                 (erase_offset + WINDOW_SIZE) as u64
             );
         }
@@ -850,7 +848,7 @@ mod test {
             assert_eq!(window_l2.meta.port, ref_l2.meta.port);
             assert_eq!(window_l2.meta.v6, ref_l2.meta.v6);
             assert_eq!(
-                window_l2.get_index().unwrap(),
+                window_l2.index().unwrap(),
                 (erase_offset + WINDOW_SIZE) as u64
             );
         }
@@ -896,7 +894,7 @@ mod test {
             assert_eq!(window_l2.meta.port, ref_l2.meta.port);
             assert_eq!(window_l2.meta.v6, ref_l2.meta.v6);
             assert_eq!(
-                window_l2.get_index().unwrap(),
+                window_l2.index().unwrap(),
                 (erase_offset + WINDOW_SIZE) as u64
             );
         }

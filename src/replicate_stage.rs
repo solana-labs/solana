@@ -78,13 +78,13 @@ impl ReplicateStage {
         let mut res = Ok(());
         let last_entry_id = {
             let mut num_entries_to_write = entries.len();
-            let current_leader = bank
+            let (current_leader, _) = bank
                 .get_current_leader()
                 .expect("Scheduled leader id should never be unknown while processing entries");
             for (i, entry) in entries.iter().enumerate() {
                 res = bank.process_entry(&entry);
                 let my_id = keypair.pubkey();
-                let scheduled_leader = bank
+                let (scheduled_leader, _) = bank
                     .get_current_leader()
                     .expect("Scheduled leader id should never be unknown while processing entries");
 
@@ -164,7 +164,7 @@ impl ReplicateStage {
                 let mut entry_height_ = entry_height;
                 let mut last_entry_id = None;
                 loop {
-                    let leader_id = bank
+                    let (leader_id, _) = bank
                         .get_current_leader()
                         .expect("Scheduled leader id should never be unknown at this point");
 

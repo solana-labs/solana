@@ -52,12 +52,9 @@ pub fn create_new_signed_vote_blob(
 }
 
 fn get_leader_tpu(bank: &Bank, cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<SocketAddr> {
-    let leader_id = {
-        if let Some(leader_id) = bank.get_current_leader() {
-            leader_id
-        } else {
-            return Err(Error::VoteError(VoteError::NoLeader));
-        }
+    let leader_id = match bank.get_current_leader() {
+        Some((leader_id, _)) => leader_id,
+        None => return Err(Error::VoteError(VoteError::NoLeader)),
     };
 
     let rcluster_info = cluster_info.read().unwrap();

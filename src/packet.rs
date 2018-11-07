@@ -250,7 +250,8 @@ pub fn to_blobs<T: Serialize>(rsps: Vec<(T, SocketAddr)>) -> Result<SharedBlobs>
     Ok(blobs)
 }
 
-const BLOB_INDEX_END: usize = size_of::<u64>();
+const BLOB_SLOT_END: usize = size_of::<u64>();
+const BLOB_INDEX_END: usize = BLOB_SLOT_END + size_of::<u64>();
 const BLOB_ID_END: usize = BLOB_INDEX_END + size_of::<Pubkey>();
 const BLOB_FLAGS_END: usize = BLOB_ID_END + size_of::<u32>();
 const BLOB_SIZE_END: usize = BLOB_FLAGS_END + size_of::<u64>();
@@ -265,31 +266,42 @@ pub const BLOB_FLAG_IS_CODING: u32 = 0x1;
 pub const BLOB_HEADER_SIZE: usize = align!(BLOB_SIZE_END, 64);
 
 impl Blob {
-    pub fn get_index(&self) -> Result<u64> {
-        let mut rdr = io::Cursor::new(&self.data[0..BLOB_INDEX_END]);
+    pub fn slot(&self) -> Result<u64> {
+        let mut rdr = io::Cursor::new(&self.data[0..BLOB_SLOT_END]);
+        let r = rdr.read_u64::<LittleEndian>()?;
+        Ok(r)
+    }
+    pub fn set_slot(&mut self, ix: u64) -> Result<()> {
+        let mut wtr = vec![];
+        wtr.write_u64::<LittleEndian>(ix)?;
+        self.data[..BLOB_SLOT_END].clone_from_slice(&wtr);
+        Ok(())
+    }
+    pub fn index(&self) -> Result<u64> {
+        let mut rdr = io::Cursor::new(&self.data[BLOB_SLOT_END..BLOB_INDEX_END]);
         let r = rdr.read_u64::<LittleEndian>()?;
         Ok(r)
     }
     pub fn set_index(&mut self, ix: u64) -> Result<()> {
         let mut wtr = vec![];
         wtr.write_u64::<LittleEndian>(ix)?;
-        self.data[..BLOB_INDEX_END].clone_from_slice(&wtr);
+        self.data[BLOB_SLOT_END..BLOB_INDEX_END].clone_from_slice(&wtr);
         Ok(())
     }
     /// sender id, we use this for identifying if its a blob from the leader that we should
     /// retransmit.  eventually blobs should have a signature that we can use ffor spam filtering
-    pub fn get_id(&self) -> Result<Pubkey> {
+    pub fn id(&self) -> Result<Pubkey> {
         let e = deserialize(&self.data[BLOB_INDEX_END..BLOB_ID_END])?;
         Ok(e)
     }
 
-    pub fn set_id(&mut self, id: Pubkey) -> Result<()> {
-        let wtr = serialize(&id)?;
+    pub fn set_id(&mut self, id: &Pubkey) -> Result<()> {
+        let wtr = serialize(id)?;
         self.data[BLOB_INDEX_END..BLOB_ID_END].clone_from_slice(&wtr);
         Ok(())
     }
 
-    pub fn get_flags(&self) -> Result<u32> {
+    pub fn flags(&self) -> Result<u32> {
         let mut rdr = io::Cursor::new(&self.data[BLOB_ID_END..BLOB_FLAGS_END]);
         let r = rdr.read_u32::<LittleEndian>()?;
         Ok(r)
@@ -303,15 +315,15 @@ impl Blob {
     }
 
     pub fn is_coding(&self) -> bool {
-        (self.get_flags().unwrap() & BLOB_FLAG_IS_CODING) != 0
+        (self.flags().unwrap() & BLOB_FLAG_IS_CODING) != 0
     }
 
     pub fn set_coding(&mut self) -> Result<()> {
-        let flags = self.get_flags().unwrap();
+        let flags = self.flags().unwrap();
         self.set_flags(flags | BLOB_FLAG_IS_CODING)
     }
 
-    pub fn get_data_size(&self) -> Result<u64> {
+    pub fn data_size(&self) -> Result<u64> {
         let mut rdr = io::Cursor::new(&self.data[BLOB_FLAGS_END..BLOB_SIZE_END]);
         let r = rdr.read_u64::<LittleEndian>()?;
         Ok(r)
@@ -330,8 +342,8 @@ impl Blob {
     pub fn data_mut(&mut self) -> &mut [u8] {
         &mut self.data[BLOB_HEADER_SIZE..]
     }
-    pub fn get_size(&self) -> Result<usize> {
-        let size = self.get_data_size()? as usize;
+    pub fn size(&self) -> Result<usize> {
+        let size = self.data_size()? as usize;
         if self.meta.size == size {
             Ok(size - BLOB_HEADER_SIZE)
         } else {
@@ -403,6 +415,20 @@ impl Blob {
             }
         }
         Ok(())
+    }
+}
+
+pub fn index_blobs(blobs: &[SharedBlob], id: &Pubkey, mut index: u64, slot: u64) {
+    // enumerate all the blobs, those are the indices
+    for b in blobs {
+        let mut blob = b.write().unwrap();
+
+        blob.set_index(index).expect("set_index");
+        blob.set_slot(slot).expect("set_slot");
+        blob.set_id(id).expect("set_id");
+        blob.set_flags(0).unwrap();
+
+        index += 1;
     }
 }
 
@@ -525,10 +551,10 @@ mod tests {
     pub fn blob_test() {
         let mut b = Blob::default();
         b.set_index(<u64>::max_value()).unwrap();
-        assert_eq!(b.get_index().unwrap(), <u64>::max_value());
+        assert_eq!(b.index().unwrap(), <u64>::max_value());
         b.data_mut()[0] = 1;
         assert_eq!(b.data()[0], 1);
-        assert_eq!(b.get_index().unwrap(), <u64>::max_value());
+        assert_eq!(b.index().unwrap(), <u64>::max_value());
         assert_eq!(b.meta, Meta::default());
     }
 

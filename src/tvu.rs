@@ -279,7 +279,7 @@ pub mod tests {
         let mut alice_ref_balance = starting_balance;
         let mut msgs = Vec::new();
         let mut cur_hash = Hash::default();
-        let mut blob_id = 0;
+        let mut blob_idx = 0;
         let num_transfers = 10;
         let transfer_amount = 501;
         let bob_keypair = Keypair::new();
@@ -306,9 +306,9 @@ pub mod tests {
                 let mut b = SharedBlob::default();
                 {
                     let mut w = b.write().unwrap();
-                    w.set_index(blob_id).unwrap();
-                    blob_id += 1;
-                    w.set_id(leader_id).unwrap();
+                    w.set_index(blob_idx).unwrap();
+                    blob_idx += 1;
+                    w.set_id(&leader_id).unwrap();
 
                     let serialized_entry = serialize(&entry).unwrap();
 

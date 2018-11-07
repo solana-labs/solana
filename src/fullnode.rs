@@ -237,7 +237,7 @@ impl Fullnode {
         }
 
         // Get the scheduled leader
-        let scheduled_leader = bank
+        let (scheduled_leader, leader_slot) = bank
             .get_current_leader()
             .expect("Leader not known after processing bank");
 
@@ -296,6 +296,7 @@ impl Fullnode {
                 cluster_info.clone(),
                 shared_window.clone(),
                 entry_height,
+                leader_slot,
                 entry_receiver,
                 tpu_exit,
             );
@@ -354,7 +355,7 @@ impl Fullnode {
             );
 
             let new_bank = Arc::new(new_bank);
-            let scheduled_leader = new_bank
+            let (scheduled_leader, _) = new_bank
                 .get_current_leader()
                 .expect("Scheduled leader should exist after rebuilding bank");
 
@@ -446,6 +447,7 @@ impl Fullnode {
             self.cluster_info.clone(),
             self.shared_window.clone(),
             entry_height,
+            0, // TODO: get real leader slot from leader_scheduler
             blob_receiver,
             tpu_exit,
         );

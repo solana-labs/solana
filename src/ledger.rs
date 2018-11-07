@@ -508,9 +508,9 @@ pub fn reconstruct_entries_from_blobs(blobs: Vec<SharedBlob>) -> Result<Vec<Entr
 
     for blob in blobs {
         let entry = {
-            let msg = blob.read().unwrap();
-            let msg_size = msg.get_size()?;
-            deserialize(&msg.data()[..msg_size])
+            let blob = blob.read().unwrap();
+            let blob_size = blob.size()?;
+            deserialize(&blob.data()[..blob_size])
         };
 
         match entry {

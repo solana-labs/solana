@@ -59,17 +59,14 @@ fn add_block_to_retransmit_queue(
     //we need to maintain a sequence window
     trace!(
         "idx: {} addr: {:?} id: {:?} leader: {:?}",
-        p.get_index()
+        p.index()
             .expect("get_index in fn add_block_to_retransmit_queue"),
-        p.get_id()
+        p.id()
             .expect("get_id in trace! fn add_block_to_retransmit_queue"),
         p.meta.addr(),
         leader_id
     );
-    if p.get_id()
-        .expect("get_id in fn add_block_to_retransmit_queue")
-        == leader_id
-    {
+    if p.id().expect("get_id in fn add_block_to_retransmit_queue") == leader_id {
         //TODO
         //need to copy the retransmitted blob
         //otherwise we get into races with which thread
@@ -202,7 +199,7 @@ fn recv_window(
     for b in dq {
         let (pix, meta_size) = {
             let p = b.read().unwrap();
-            (p.get_index()?, p.meta.size)
+            (p.index()?, p.meta.size)
         };
         pixs.push(pix);
 
@@ -495,8 +492,8 @@ mod test {
                 {
                     let mut w = b.write().unwrap();
                     w.set_index(i).unwrap();
-                    w.set_id(me_id).unwrap();
-                    assert_eq!(i, w.get_index().unwrap());
+                    w.set_id(&me_id).unwrap();
+                    assert_eq!(i, w.index().unwrap());
                     w.meta.size = PACKET_DATA_SIZE;
                     w.meta.set_addr(&tn.info.contact_info.ncp);
                 }
@@ -559,8 +556,8 @@ mod test {
                 {
                     let mut w = b.write().unwrap();
                     w.set_index(i).unwrap();
-                    w.set_id(me_id).unwrap();
-                    assert_eq!(i, w.get_index().unwrap());
+                    w.set_id(&me_id).unwrap();
+                    assert_eq!(i, w.index().unwrap());
                     w.meta.size = PACKET_DATA_SIZE;
                     w.meta.set_addr(&tn.info.contact_info.ncp);
                 }
@@ -579,8 +576,8 @@ mod test {
                 {
                     let mut w = b.write().unwrap();
                     w.set_index(i).unwrap();
-                    w.set_id(me_id).unwrap();
-                    assert_eq!(i, w.get_index().unwrap());
+                    w.set_id(&me_id).unwrap();
+                    assert_eq!(i, w.index().unwrap());
                     w.meta.size = PACKET_DATA_SIZE;
                     w.meta.set_addr(&tn.info.contact_info.ncp);
                 }
