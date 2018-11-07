@@ -9,8 +9,8 @@ const solanaWeb3 = require('..');
 const account = new solanaWeb3.Account();
 
 let url;
-url = 'http://localhost:8899';
-//url = 'http://testnet.solana.com:8899';
+url = 'https://api.testnet.solana.com';
+//url = 'http://localhost:8899';
 const connection = new solanaWeb3.Connection(url);
 
 connection.getBalance(account.publicKey).then(balance => {

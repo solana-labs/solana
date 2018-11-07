@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Create a new account</title>
+  <title>Get account balance</title>
 </head>
 <body>
   <b>Account</b>
@@ -11,7 +11,7 @@
 
   <script src="../lib/index.iife.js"></script>
   <!--
-    <script src="https://github.com/solana-labs/solana-web3.js/releases/download/v0.0.6/solanaWeb3.min.js"></script>
+    <script src="https://github.com/solana-labs/solana-web3.js/releases/download/v0.11.10/solanaWeb3.min.js"></script>
   -->
 
   <script>
@@ -23,9 +23,8 @@
     accountPublicKey.innerHTML = account.publicKey;
 
     // Fetch account balance
-    let url;
-    url = 'http://localhost:8899';
-    //url = 'http://testnet.solana.com:8899';
+    let url = 'http://localhost:8899';
+    //url = 'https://api.testnet.solana.com';
     const connection = new solanaWeb3.Connection(url);
 
     connection.getBalance(account.publicKey)
@@ -34,7 +33,6 @@
       accountBalance.innerHTML = balance;
       console.log(`${account.publicKey} has a balance of ${balance}`);
     });
-
   </script>
 </body>
 </html>
