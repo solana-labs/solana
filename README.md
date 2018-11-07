@@ -344,14 +344,22 @@ Fullnode Debugging
 There are some useful debug messages in the code, you can enable them on a per-module and per-level
 basis.  Before running a leader or validator set the normal RUST\_LOG environment variable.
 
-For example, to enable info everywhere and debug only in the solana::banking_stage module:
+For example
 
-```bash
-$ export RUST_LOG=info,solana::banking_stage=debug
-```
+* To enable `info` everywhere and `debug` only in the solana::banking_stage module:
 
-Generally we are using debug for infrequent debug messages, trace for potentially frequent
-messages and info for performance-related logging.
+  ```bash
+  $ export RUST_LOG=info,solana::banking_stage=debug
+  ```
+
+* To enable BPF program logging:
+
+  ```bash
+  $ export RUST_LOG=solana_bpf_loader
+  ```
+
+Generally we are using `debug` for infrequent debug messages, `trace` for potentially frequent
+messages and `info` for performance-related logging.
 
 You can also attach to a running process with GDB.  The leader's process is named
 _solana-fullnode_:
