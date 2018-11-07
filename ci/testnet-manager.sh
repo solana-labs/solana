@@ -33,10 +33,6 @@ steps:
             value: "testnet"
           - label: "testnet-perf"
             value: "testnet-perf"
-          - label: "testnet-master"
-            value: "testnet-master"
-          - label: "testnet-master-perf"
-            value: "testnet-master-perf"
           - label: "testnet-edge"
             value: "testnet-edge"
           - label: "testnet-edge-perf"
@@ -72,7 +68,7 @@ ci/channel-info.sh
 eval "$(ci/channel-info.sh)"
 
 case $TESTNET in
-testnet-edge|testnet-edge-perf|testnet-master|testnet-master-perf)
+testnet-edge|testnet-edge-perf)
   CHANNEL_OR_TAG=edge
   CHANNEL_BRANCH=$EDGE_CHANNEL
   ;;
@@ -155,27 +151,6 @@ sanity() {
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
       ci/testnet-sanity.sh beta-perf-testnet-solana-com ec2 us-west-2b
-    )
-    ;;
-  testnet-master)
-    # shellcheck disable=2030
-    # shellcheck disable=2031
-    (
-      set -ex
-      export NO_LEDGER_VERIFY=1
-      export NO_VALIDATOR_SANITY=1
-      ci/testnet-sanity.sh master-testnet-solana-com gce us-west1-b
-    )
-    ;;
-  testnet-master-perf)
-    # shellcheck disable=2030
-    # shellcheck disable=2031
-    (
-      set -ex
-      export REJECT_EXTRA_NODES=1
-      export NO_LEDGER_VERIFY=1
-      export NO_VALIDATOR_SANITY=1
-      ci/testnet-sanity.sh master-perf-testnet-solana-com gce us-west1-b
     )
     ;;
   testnet)
@@ -261,31 +236,6 @@ start() {
       export NO_VALIDATOR_SANITY=1
       ci/testnet-deploy.sh beta-perf-testnet-solana-com ec2 us-west-2b \
         -g -t "$CHANNEL_OR_TAG" -c 2 \
-        ${maybeDelete:+-d}
-    )
-    ;;
-  testnet-master)
-    # shellcheck disable=2030
-    # shellcheck disable=2031
-    (
-      set -ex
-      export NO_LEDGER_VERIFY=1
-      export NO_VALIDATOR_SANITY=1
-      ci/testnet-deploy.sh master-testnet-solana-com gce us-west1-b \
-        -s "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a master-testnet-solana-com \
-        ${maybeDelete:+-d}
-    )
-    ;;
-  testnet-master-perf)
-    # shellcheck disable=2030
-    # shellcheck disable=2031
-    (
-      set -ex
-      export NO_LEDGER_VERIFY=1
-      export NO_VALIDATOR_SANITY=1
-      ci/testnet-deploy.sh master-perf-testnet-solana-com gce us-west1-b \
-        -G "n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" \
-        -t "$CHANNEL_OR_TAG" -c 2 \
         ${maybeDelete:+-d}
     )
     ;;
