@@ -477,7 +477,12 @@ test('transfer', async () => {
     mockGetSignatureStatus();
   }
 
-  await testToken.transfer(initialOwner, initialOwnerTokenAccount, dest, 123);
+  await testToken.transfer(
+    initialOwner,
+    initialOwnerTokenAccount,
+    dest,
+    123,
+  );
 
   {
     // mock Token.accountInfo()'s getAccountInfo

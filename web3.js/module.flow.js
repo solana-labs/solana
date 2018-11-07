@@ -170,7 +170,7 @@ declare module '@solana/web3.js' {
       source: PublicKey,
       destination: PublicKey,
       amount: number | TokenAmount,
-    ): Promise<void>;
+    ): Promise<TransactionSignature>;
     approve(
       owner: Account,
       account: PublicKey,
