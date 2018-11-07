@@ -11,13 +11,6 @@ gce)
   # shellcheck source=net/scripts/gce-provider.sh
   source "$here"/scripts/gce-provider.sh
 
-  cpuImageName="ubuntu-1804-bionic-v20181029 --image-project ubuntu-os-cloud"
-
-  # TODO: GPU image is still 16.04-based pending resolution of
-  #       https://github.com/solana-labs/solana/issues/1702
-  gpuImageName="ubuntu-16-04-cuda-9-2-new"
-  imageName=$cpuImageName
-
   cpuLeaderMachineType=n1-standard-16
   gpuLeaderMachineType="$cpuLeaderMachineType --accelerator count=4,type=nvidia-tesla-k80"
   leaderMachineType=$cpuLeaderMachineType
@@ -27,11 +20,6 @@ gce)
 ec2)
   # shellcheck source=net/scripts/ec2-provider.sh
   source "$here"/scripts/ec2-provider.sh
-
-  # Deep Learning AMI (Ubuntu 16.04-based)
-  cpuImageName="ami-0466e26ccc0e752c1"
-  gpuImageName="$cpuImageName"
-  imageName=$cpuImageName
 
   cpuLeaderMachineType=m4.4xlarge
   gpuLeaderMachineType=p2.xlarge
@@ -129,12 +117,10 @@ while getopts "h?p:Pn:c:z:gG:a:d:" opt; do
   g)
     enableGpu=true
     leaderMachineType=$gpuLeaderMachineType
-    imageName=$gpuImageName
     ;;
   G)
     enableGpu=true
     leaderMachineType="$OPTARG"
-    imageName=$gpuImageName
     ;;
   a)
     leaderAddress=$OPTARG
@@ -143,7 +129,7 @@ while getopts "h?p:Pn:c:z:gG:a:d:" opt; do
     bootDiskType=$OPTARG
     ;;
   *)
-    usage "Error: unhandled option: $opt"
+    usage "unhandled option: $opt"
     ;;
   esac
 done
@@ -151,6 +137,38 @@ shift $((OPTIND - 1))
 
 [[ -z $1 ]] || usage "Unexpected argument: $1"
 sshPrivateKey="$netConfigDir/id_$prefix"
+
+case $cloudProvider in
+gce)
+  if $enableGpu; then
+    imageName="ubuntu-1804-bionic-v20181029 --image-project ubuntu-os-cloud"
+  else
+    # TODO: GPU image is still 16.04-based pending resolution of
+    #       https://github.com/solana-labs/solana/issues/1702
+    imageName="ubuntu-16-04-cuda-9-2-new"
+  fi
+  ;;
+ec2)
+  # Deep Learning AMI (Ubuntu 16.04-based)
+  case $region in # (region global variable is set by cloud_SetZone)
+  us-east-1)
+    imageName="ami-047daf3f2b162fc35"
+    ;;
+  us-west-1)
+    imageName="ami-08c8c7c4a57a6106d"
+    ;;
+  us-west-2)
+    imageName="ami-0b63040ee445728bf"
+    ;;
+  *)
+    usage "Unsupported region: $region"
+    ;;
+  esac
+  ;;
+*)
+  echo "Error: Unknown cloud provider: $cloudProvider"
+  ;;
+esac
 
 
 # cloud_ForEachInstance [cmd] [extra args to cmd]
@@ -245,7 +263,7 @@ EOF
     IFS=: read -r leaderName leaderIp _ < <(echo "${instances[0]}")
 
     # Try to ping the machine first.
-    timeout 60s bash -c "set -o pipefail; until ping -c 3 $leaderIp | tr - _; do echo .; done"
+    timeout 90s bash -c "set -o pipefail; until ping -c 3 $leaderIp | tr - _; do echo .; done"
 
     if [[ ! -r $sshPrivateKey ]]; then
       echo "Fetching $sshPrivateKey from $leaderName"
