@@ -1,1 +1,0 @@
-# Proof of replication

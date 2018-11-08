@@ -15,7 +15,7 @@
   - [JsonRpcService](jsonrpc-service.md)
 
 - [Avalanche replication](avalanche.md)
-  - [Proof of replication](porep.md)
+  - [Storage](storage.md)
 
 - [On-chain programs](programs.md)
   - [The Runtime](runtime.md)
