@@ -5,7 +5,7 @@ cd "$(dirname "$0")"/..
 cargo build
 export PATH=$PWD/target/debug:$PATH
 
-echo "\`\`\`"
+echo "\`\`\`manpage"
 solana-wallet --help
 echo "\`\`\`"
 echo ""
@@ -13,7 +13,7 @@ echo ""
 commands=(address airdrop balance cancel confirm deploy get-transaction-count pay send-signature send-timestamp)
 
 for x in "${commands[@]}"; do
-    echo "\`\`\`"
+    echo "\`\`\`manpage"
     solana-wallet "${x}" --help
     echo "\`\`\`"
     echo ""

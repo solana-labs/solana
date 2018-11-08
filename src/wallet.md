@@ -167,7 +167,7 @@ $ solana-wallet send-timestamp <PUBKEY> <PROCESS_ID> --date 2018-12-24T23:59:00
 
 ### Usage
 
-```
+```manpage
 solana-wallet 0.11.0
 
 USAGE:
@@ -198,7 +198,7 @@ SUBCOMMANDS:
     send-timestamp           Send a timestamp to unlock a transfer
 ```
 
-```
+```manpage
 solana-wallet-address 
 Get your public key
 
@@ -210,7 +210,7 @@ FLAGS:
     -V, --version    Prints version information
 ```
 
-```
+```manpage
 solana-wallet-airdrop 
 Request a batch of tokens
 
@@ -225,7 +225,7 @@ ARGS:
     <NUM>    The number of tokens to request
 ```
 
-```
+```manpage
 solana-wallet-balance 
 Get your balance
 
@@ -237,7 +237,7 @@ FLAGS:
     -V, --version    Prints version information
 ```
 
-```
+```manpage
 solana-wallet-cancel 
 Cancel a transfer
 
@@ -252,7 +252,7 @@ ARGS:
     <PROCESS_ID>    The process id of the transfer to cancel
 ```
 
-```
+```manpage
 solana-wallet-confirm 
 Confirm transaction by signature
 
@@ -267,7 +267,7 @@ ARGS:
     <SIGNATURE>    The transaction signature to confirm
 ```
 
-```
+```manpage
 solana-wallet-deploy 
 Deploy a program
 
@@ -282,7 +282,7 @@ ARGS:
     <PATH>    /path/to/program.o
 ```
 
-```
+```manpage
 solana-wallet-get-transaction-count 
 Get current transaction count
 
@@ -294,7 +294,7 @@ FLAGS:
     -V, --version    Prints version information
 ```
 
-```
+```manpage
 solana-wallet-pay 
 Send a payment
 
@@ -316,7 +316,7 @@ ARGS:
     <NUM>       The number of tokens to send
 ```
 
-```
+```manpage
 solana-wallet-send-signature 
 Send a signature to authorize a transfer
 
@@ -332,7 +332,7 @@ ARGS:
     <PROCESS_ID>    The process id of the transfer to authorize
 ```
 
-```
+```manpage
 solana-wallet-send-timestamp 
 Send a timestamp to unlock a transfer
 
