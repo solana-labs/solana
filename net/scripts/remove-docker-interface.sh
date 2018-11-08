@@ -8,4 +8,4 @@
 [[ $(uname) = Linux ]] || exit 1
 [[ $USER = root ]] || exit 1
 
-ip link delete docker0
+ip link delete docker0 || true
