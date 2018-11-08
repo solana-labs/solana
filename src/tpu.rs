@@ -12,7 +12,6 @@ use service::Service;
 use sigverify_stage::SigVerifyStage;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
 use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::thread;
@@ -54,9 +53,8 @@ impl Tpu {
             max_tick_height,
         );
 
-        let (ledger_entry_sender, entry_forwarder) = channel();
-        let ledger_write_stage =
-            LedgerWriteStage::new(Some(ledger_path), entry_receiver, Some(ledger_entry_sender));
+        let (ledger_write_stage, entry_forwarder) =
+            LedgerWriteStage::new(Some(ledger_path), entry_receiver);
 
         let tpu = Tpu {
             fetch_stage,
