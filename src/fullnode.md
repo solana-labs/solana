@@ -24,6 +24,6 @@ consistently complete a load at the rate of the slowest stage in the pipeline.
 The fullnode contains two pipelined processes, one used in leader mode called
 the Tpu and one used in validator mode called the Tvu. In both cases, the
 hardware being pipelined is the same, the network input, the GPU cards, the CPU
-cores, and the network output.  What it does with that hardware is different.
-The Tpu exists to create ledger entries whereas the Tvu exists to validate
-them.
+cores, writes to disk, and the network output.  What it does with that hardware
+is different.  The Tpu exists to create ledger entries whereas the Tvu exists
+to validate them.
