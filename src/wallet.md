@@ -25,7 +25,13 @@ $ solana-wallet address
 ```sh
 // Command
 $ solana-wallet airdrop 123
+#### Get Balance
+```sh
+// Command
+$ solana-wallet balance
 
+// Return
+"Your balance is: 123"
 // Return
 "Your balance is: 123"
 // Return
