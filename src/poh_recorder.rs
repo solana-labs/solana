@@ -18,15 +18,10 @@ pub enum PohRecorderError {
 
 #[derive(Clone)]
 pub struct PohRecorder {
-    is_virtual: bool,
-    virtual_tick_entries: Arc<Mutex<Vec<Entry>>>,
     poh: Arc<Mutex<Poh>>,
     bank: Arc<Bank>,
     sender: Sender<Vec<Entry>>,
-    // TODO: whe extracting PoH generator into a separate standalone service,
-    // use this field for checking timeouts when running as a validator, and as
-    // a transmission guard when running as the leader.
-    pub max_tick_height: Option<u64>,
+    max_tick_height: Option<u64>,
 }
 
 impl PohRecorder {
@@ -49,9 +44,6 @@ impl PohRecorder {
         let mut poh = self.poh.lock().unwrap();
         if self.is_max_tick_height_reached(&poh) {
             Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
-        } else if self.is_virtual {
-            self.generate_and_store_tick(&mut *poh);
-            Ok(())
         } else {
             self.register_and_send_tick(&mut *poh)?;
             Ok(())
@@ -59,11 +51,6 @@ impl PohRecorder {
     }
 
     pub fn record(&self, mixin: Hash, txs: Vec<Transaction>) -> Result<()> {
-        if self.is_virtual {
-            return Err(Error::PohRecorderError(
-                PohRecorderError::InvalidCallingObject,
-            ));
-        }
         // Register and send the entry out while holding the lock.
         // This guarantees PoH order and Entry production and banks LastId queue is the same.
         let mut poh = self.poh.lock().unwrap();
@@ -83,18 +70,13 @@ impl PohRecorder {
         sender: Sender<Vec<Entry>>,
         last_entry_id: Hash,
         max_tick_height: Option<u64>,
-        is_virtual: bool,
-        virtual_tick_entries: Vec<Entry>,
     ) -> Self {
         let poh = Arc::new(Mutex::new(Poh::new(last_entry_id, bank.tick_height())));
-        let virtual_tick_entries = Arc::new(Mutex::new(virtual_tick_entries));
         PohRecorder {
             poh,
             bank,
             sender,
             max_tick_height,
-            is_virtual,
-            virtual_tick_entries,
         }
     }
 
@@ -127,11 +109,6 @@ impl PohRecorder {
         Ok(())
     }
 
-    fn generate_and_store_tick(&self, poh: &mut Poh) {
-        let tick_entry = self.generate_tick_entry(poh);
-        self.virtual_tick_entries.lock().unwrap().push(tick_entry);
-    }
-
     fn register_and_send_tick(&self, poh: &mut Poh) -> Result<()> {
         let tick_entry = self.generate_tick_entry(poh);
         self.bank.register_tick(&tick_entry.id);
@@ -155,7 +132,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&mint));
         let last_id = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
-        let mut poh_recorder = PohRecorder::new(bank, entry_sender, last_id, None, false, vec![]);
+        let mut poh_recorder = PohRecorder::new(bank, entry_sender, last_id, None);
 
         //send some data
         let h1 = hash(b"hello world!");
