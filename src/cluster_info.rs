@@ -16,6 +16,7 @@ use bincode::{deserialize, serialize, serialized_size};
 use choose_gossip_peer_strategy::{ChooseGossipPeerStrategy, ChooseWeightedPeerStrategy};
 use counter::Counter;
 use hash::Hash;
+use leader_scheduler::LeaderScheduler;
 use ledger::LedgerWindow;
 use log::Level;
 use netutil::{bind_in_range, bind_to, find_available_port_in_range, multi_bind_in_range};
@@ -461,6 +462,7 @@ impl ClusterInfo {
     /// # Remarks
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
     pub fn broadcast(
+        contains_last_tick: bool,
         me: &NodeInfo,
         broadcast_table: &[NodeInfo],
         window: &SharedWindow,
@@ -502,7 +504,19 @@ impl ClusterInfo {
                 br_idx
             );
 
-            orders.push((window_l[w_idx].data.clone(), &broadcast_table[br_idx]));
+            // Broadcast the last tick to everyone on the network so it doesn't get dropped
+            // (Need to maximize probability the next leader in line sees this handoff tick
+            // despite packet drops)
+            if idx == received_index - 1 && contains_last_tick {
+                // If we see a tick at max_tick_height, then we know it must be the last
+                // Blob in the window, at index == received_index. There cannot be an entry
+                // that got sent after the last tick, guaranteed by the PohService).
+                let all: Vec<&NodeInfo> = broadcast_table.iter().collect();
+                assert!(window_l[w_idx].data.is_some());
+                orders.push((window_l[w_idx].data.clone(), all));
+            } else {
+                orders.push((window_l[w_idx].data.clone(), vec![&broadcast_table[br_idx]]));
+            }
             br_idx += 1;
             br_idx %= broadcast_table.len();
         }
@@ -522,7 +536,10 @@ impl ClusterInfo {
                 br_idx,
             );
 
-            orders.push((window_l[w_idx].coding.clone(), &broadcast_table[br_idx]));
+            orders.push((
+                window_l[w_idx].coding.clone(),
+                vec![&broadcast_table[br_idx]],
+            ));
             br_idx += 1;
             br_idx %= broadcast_table.len();
         }
@@ -530,34 +547,49 @@ impl ClusterInfo {
         trace!("broadcast orders table {}", orders.len());
         let errs: Vec<_> = orders
             .into_iter()
-            .map(|(b, v)| {
+            .flat_map(|(b, vs)| {
                 // only leader should be broadcasting
-                assert!(me.leader_id != v.id);
+                assert!(vs.iter().find(|info| info.id == me.leader_id).is_none());
                 let bl = b.unwrap();
                 let blob = bl.read().unwrap();
                 //TODO profile this, may need multiple sockets for par_iter
-                trace!(
-                    "{}: BROADCAST idx: {} sz: {} to {},{} coding: {}",
-                    me.id,
-                    blob.index().unwrap(),
-                    blob.meta.size,
-                    v.id,
-                    v.contact_info.tvu,
-                    blob.is_coding()
-                );
+                let ids_and_tvus = if log_enabled!(Level::Trace) {
+                    let v_ids = vs.iter().map(|v| v.id);
+                    let tvus = vs.iter().map(|v| v.contact_info.tvu);
+                    let ids_and_tvus = v_ids.zip(tvus).collect();
+
+                    trace!(
+                        "{}: BROADCAST idx: {} sz: {} to {:?} coding: {}",
+                        me.id,
+                        blob.index().unwrap(),
+                        blob.meta.size,
+                        ids_and_tvus,
+                        blob.is_coding()
+                    );
+
+                    ids_and_tvus
+                } else {
+                    vec![]
+                };
+
                 assert!(blob.meta.size <= BLOB_SIZE);
-                let e = s.send_to(&blob.data[..blob.meta.size], &v.contact_info.tvu);
-                trace!(
-                    "{}: done broadcast {} to {} {}",
-                    me.id,
-                    blob.meta.size,
-                    v.id,
-                    v.contact_info.tvu
-                );
-                e
+                let send_errs_for_blob: Vec<_> = vs
+                    .iter()
+                    .map(move |v| {
+                        let e = s.send_to(&blob.data[..blob.meta.size], &v.contact_info.tvu);
+                        if log_enabled!(Level::Trace) {
+                            trace!(
+                                "{}: done broadcast {} to {:?}",
+                                me.id,
+                                blob.meta.size,
+                                ids_and_tvus
+                            );
+                        }
+                        e
+                    }).collect();
+                send_errs_for_blob
             }).collect();
 
-        trace!("broadcast results {}", errs.len());
         for e in errs {
             if let Err(e) = &e {
                 trace!("broadcast result {:?}", e);

@@ -29,6 +29,8 @@ pub enum BroadcastStageReturnType {
 }
 
 fn broadcast(
+    max_tick_height: Option<u64>,
+    tick_height: &mut u64,
     node_info: &NodeInfo,
     broadcast_table: &[NodeInfo],
     window: &SharedWindow,
@@ -47,6 +49,9 @@ fn broadcast(
     ventries.push(entries);
     while let Ok(entries) = receiver.try_recv() {
         num_entries += entries.len();
+        *tick_height += entries
+            .iter()
+            .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
         ventries.push(entries);
     }
     inc_new_counter_info!("broadcast_stage-entries_received", num_entries);
@@ -128,6 +133,7 @@ fn broadcast(
 
         // Send blobs out from the window
         ClusterInfo::broadcast(
+            Some(*tick_height) == max_tick_height,
             &node_info,
             &broadcast_table,
             &window,
@@ -188,6 +194,8 @@ impl BroadcastStage {
         entry_height: u64,
         leader_slot: u64,
         receiver: &Receiver<Vec<Entry>>,
+        max_tick_height: Option<u64>,
+        tick_height: u64,
     ) -> BroadcastStageReturnType {
         let mut transmit_index = WindowIndex {
             data: entry_height,
@@ -195,9 +203,12 @@ impl BroadcastStage {
         };
         let mut receive_index = entry_height;
         let me = cluster_info.read().unwrap().my_data().clone();
+        let mut tick_height_ = tick_height;
         loop {
             let broadcast_table = cluster_info.read().unwrap().compute_broadcast_table();
             if let Err(e) = broadcast(
+                max_tick_height,
+                &mut tick_height_,
                 &me,
                 &broadcast_table,
                 &window,
@@ -244,6 +255,8 @@ impl BroadcastStage {
         entry_height: u64,
         leader_slot: u64,
         receiver: Receiver<Vec<Entry>>,
+        max_tick_height: Option<u64>,
+        tick_height: u64,
         exit_sender: Arc<AtomicBool>,
     ) -> Self {
         let thread_hdl = Builder::new()
@@ -257,6 +270,8 @@ impl BroadcastStage {
                     entry_height,
                     leader_slot,
                     &receiver,
+                    max_tick_height,
+                    tick_height,
                 )
             }).unwrap();
 
