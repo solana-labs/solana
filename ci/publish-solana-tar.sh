@@ -43,7 +43,7 @@ echo --- Creating tarball
   ) > solana-release/version.txt
 
   cargo install --root solana-release
-  ./scripts/install-native-programs.sh solana-release
+  ./scripts/install-native-programs.sh solana-release/bin
   ./fetch-perf-libs.sh
   cargo install --features=cuda --root solana-release-cuda
   cp solana-release-cuda/bin/solana-fullnode solana-release/bin/solana-fullnode-cuda
