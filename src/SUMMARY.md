@@ -24,4 +24,5 @@
 - [Appendix](appendix.md)
   - [Terminology](terminology.md)
   - [JSON RPC API](jsonrpc-api.md)
+  - [solana-wallet CLI](wallet.md)
 
