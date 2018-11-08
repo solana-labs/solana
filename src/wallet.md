@@ -29,7 +29,13 @@ $ solana-wallet airdrop 123
 ```sh
 // Command
 $ solana-wallet balance
+#### Confirm Transaction
+```sh
+// Command
+$ solana-wallet confirm <TX_SIGNATURE>
 
+// Return
+"Confirmed" / "Not found"
 // Return
 "Your balance is: 123"
 // Return
