@@ -1,6 +1,6 @@
 # Signing using Secure Enclave
 
-The goal of this RFC is to define the security mechanism of signing keys used by the network nodes. Every node contains an asymmetric key that's used for signing and verifying the transactions (e.g. votes). The node signs the transcations using its private key. Other entities can verify the signature using the node's public key.
+The goal of this RFC is to define the security mechanism of signing keys used by the network nodes. Every node contains an asymmetric key that's used for signing and verifying the transactions (e.g. votes). The node signs the transactions using its private key. Other entities can verify the signature using the node's public key.
 
 The node's stake or its resources could be compromised if its private key is used to sign incorrect data (e.g. voting on multiple forks of the ledger). So, it's important to safeguard the private key.
 
@@ -18,6 +18,18 @@ Secure Enclaves (such as SGX) provide a layer of memory and computation protecti
 4. The node's untrusted, non-enclave software calls trusted enclave software using its interface to sign transactions and other data.
     * In case of vote signing, the node needs to verify the PoH. The PoH verification is an integral part of signing. The enclave would be presented with some verifiable data that it'll check before signing the vote.
     * The process of generating the verifiable data in untrusted space is TBD
+
+## PoH Verification
+
+1. When the node votes on an en entry `X`, there's a lockout period `N`, for which it cannot vote on a branch that does not contain `X` in its history.
+2. Every time the node votes on the derivative of `X`, say `X+y`, the lockout period for `X` increases by a factor `F` (i.e. the duration node cannot vote on a branch that does not contain `X` increases).
+    * The lockout period for `X+y` is still `N` until the node votes again.
+3. The lockout period increment is capped (e.g. factor `F` applies maximum 32 times).
+4. The signing enclave must not sign a vote that violates this policy. This means
+    * Enclave is initialized with `N`, `F` and `Factor cap`
+    * Enclave stores `Factor cap` number of entry IDs on which the node had previously voted
+    * The sign request contains the entry ID for the new vote
+    * Enclave verifies that new vote's entry ID is on the correct branch (following the rules #1 and #2 above)
 
 ## Challenges
 
