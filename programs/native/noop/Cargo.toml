@@ -1,13 +1,13 @@
 [package]
 name = "solana-noop"
-version = "0.10.1"
+version = "0.10.2"
 description = "Solana noop program"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 
 [dependencies]
-solana-sdk = { path = "../../../sdk", version = "0.10.1" }
+solana-sdk = { path = "../../../sdk", version = "0.10.2" }
 
 [lib]
 name = "noop"
