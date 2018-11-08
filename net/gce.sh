@@ -411,8 +411,9 @@ $(
     install-earlyoom.sh \
     install-libssl-compatability.sh \
     install-rsync.sh \
-    update-default-cuda.sh \
     network-config.sh \
+    remove-docker-interface.sh \
+    update-default-cuda.sh \
 
 )
 
