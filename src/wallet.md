@@ -21,7 +21,13 @@ $ solana-wallet [common-options] [command] [command-specific options]
 ```sh
 // Command
 $ solana-wallet address
+#### Airdrop Tokens
+```sh
+// Command
+$ solana-wallet airdrop 123
 
+// Return
+"Your balance is: 123"
 // Return
 <PUBKEY>
 #### Unconditional Immediate Transfer
