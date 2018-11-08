@@ -17,36 +17,52 @@ $ solana-wallet [common-options] [command] [command-specific options]
 * `cancel`
 * `send-signature`
 * `send-timestamp`
+
 #### Get Pubkey
 ```sh
 // Command
 $ solana-wallet address
+
+// Return
+<PUBKEY>
+```
+
 #### Airdrop Tokens
 ```sh
 // Command
 $ solana-wallet airdrop 123
+
+// Return
+"Your balance is: 123"
+```
+
 #### Get Balance
 ```sh
 // Command
 $ solana-wallet balance
+
+// Return
+"Your balance is: 123"
+```
+
 #### Confirm Transaction
 ```sh
 // Command
 $ solana-wallet confirm <TX_SIGNATURE>
+
+// Return
+"Confirmed" / "Not found"
+```
+
 #### Deploy program
 ```sh
 // Command
 $ solana-wallet deploy <PATH>
+
 // Return
 <PROGRAM_ID>
-// Return
-"Confirmed" / "Not found"
-// Return
-"Your balance is: 123"
-// Return
-"Your balance is: 123"
-// Return
-<PUBKEY>
+```
+
 #### Unconditional Immediate Transfer
 ```sh
 // Command
