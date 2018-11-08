@@ -773,17 +773,6 @@ impl Bank {
             .map(|a| (a.program_id, a.tokens))
             .collect();
 
-        // Check account subscriptions before storing data for notifications
-        let subscriptions = self.account_subscriptions.read().unwrap();
-        let pre_userdata: Vec<_> = tx
-            .account_keys
-            .iter()
-            .enumerate()
-            .zip(program_accounts.iter_mut())
-            .filter(|((_, pubkey), _)| subscriptions.get(&pubkey).is_some())
-            .map(|((i, pubkey), a)| ((i, pubkey), a.userdata.clone()))
-            .collect();
-
         // Call the contract method
         // It's up to the contract to implement its own rules on moving funds
         if SystemProgram::check_id(&tx_program_id) {
@@ -873,13 +862,6 @@ impl Bank {
                 *pre_tokens,
                 post_account,
             )?;
-        }
-        // Send notifications
-        for ((i, pubkey), userdata) in &pre_userdata {
-            let account = &program_accounts[*i];
-            if userdata != &account.userdata {
-                self.check_account_subscriptions(&pubkey, &account);
-            }
         }
         // The total sum of all the tokens in all the pages cannot change.
         let post_total: u64 = program_accounts.iter().map(|a| a.tokens).sum();
@@ -998,7 +980,33 @@ impl Bank {
         let mut error_counters = ErrorCounters::default();
         let now = Instant::now();
         let mut loaded_accounts =
-            self.load_accounts(txs, locked_accounts, max_age, &mut error_counters);
+            self.load_accounts(txs, locked_accounts.clone(), max_age, &mut error_counters);
+
+        // Check account subscriptions, then store data for notifications
+        let pre_userdata: Vec<_>;
+        {
+            let subscriptions = self.account_subscriptions.read().unwrap();
+            let accounts = self.accounts.read().unwrap();
+            pre_userdata = txs
+                .iter()
+                .zip(locked_accounts.into_iter())
+                .map(|(tx, result)| match result {
+                    Ok(()) => {
+                        let key_map: Vec<(&Pubkey, Account)> = tx
+                            .account_keys
+                            .iter()
+                            .map(|key| (key, accounts.load(key).cloned().unwrap_or_default()))
+                            .collect();
+                        Ok(key_map)
+                    }
+                    Err(e) => Err(e),
+                }).filter(|result| result.is_ok())
+                .flat_map(|result| result.unwrap())
+                .filter(|(pubkey, _)| subscriptions.get(&pubkey).is_some())
+                .map(|(pubkey, a)| (pubkey, a.userdata.clone()))
+                .collect();
+        }
+
         let load_elapsed = now.elapsed();
         let now = Instant::now();
         let executed: Vec<Result<()>> = loaded_accounts
@@ -1011,6 +1019,18 @@ impl Bank {
         let execution_elapsed = now.elapsed();
         let now = Instant::now();
         self.store_accounts(txs, &executed, &loaded_accounts);
+
+        // Send notifications
+        {
+            let accounts = self.accounts.read().unwrap();
+            for (pubkey, userdata) in &pre_userdata {
+                let account = accounts.load(pubkey).cloned().unwrap_or_default();
+                if userdata != &account.userdata {
+                    self.check_account_subscriptions(&pubkey, &account);
+                }
+            }
+        }
+
         // once committed there is no way to unroll
         let write_elapsed = now.elapsed();
         debug!(
