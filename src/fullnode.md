@@ -27,21 +27,3 @@ hardware being pipelined is the same, the network input, the GPU cards, the CPU
 cores, and the network output.  What it does with that hardware is different.
 The Tpu exists to create ledger entries whereas the Tvu exists to validate
 them.
-
-## Pipeline stages in Rust
-
-To approach to creating a pipeline stage in Rust may be unique to Solana. We
-haven't seen the same technique used in other Rust projects and there may be
-better ways to do it. The Solana approach defines a stage as an object that
-communicates to its previous stage and the next stage using channels. By
-convention, each stage accepts a *receiver* for input and creates a second
-output channel. The second channel is used to pass data to the next stage, and
-so its sender is moved into the stage's thread and the receiver is returned
-from its constructor.
-
-A well-written stage should create a thread and call a short `run()` method.
-The method should read input from its input channel, call a function from
-another module that processes it, and then send the output to the output
-channel. The functionality in the second module will likely not use threads or
-channels.
-
