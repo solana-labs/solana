@@ -160,8 +160,8 @@ sanity() {
       set -ex
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
-      ci/testnet-sanity.sh testnet-solana-com gce us-east1-c
-      #ci/testnet-sanity.sh testnet-solana-com ec2 us-west-1a
+      #ci/testnet-sanity.sh testnet-solana-com gce us-east1-c
+      ci/testnet-sanity.sh testnet-solana-com ec2 us-west-1a
     )
     ;;
   testnet-perf)
@@ -248,12 +248,12 @@ start() {
       set -ex
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
-      ci/testnet-deploy.sh testnet-solana-com gce us-east1-c \
-        -s "$CHANNEL_OR_TAG" -n 3 -g -c 0 -P -a testnet-solana-com  \
-        ${maybeDelete:+-d}
-      #ci/testnet-deploy.sh testnet-solana-com ec2 us-west-1a \
-      #  -t "$CHANNEL_OR_TAG" -n 3 -g -c 0 -P -a eipalloc-0fa502bf95f6f18b2 \
+      #ci/testnet-deploy.sh testnet-solana-com gce us-east1-c \
+      #  -s "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a testnet-solana-com  \
       #  ${maybeDelete:+-d}
+      ci/testnet-deploy.sh testnet-solana-com ec2 us-west-1a \
+        -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a eipalloc-0fa502bf95f6f18b2 \
+        ${maybeDelete:+-d}
     )
     ;;
   testnet-perf)
