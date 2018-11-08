@@ -396,6 +396,7 @@ testnets use a release tarball while the non`-perf` builds use the snap build
 to be root caused).
 
 ## Where are the testnet logs?
+**TODO: This section is out of date and needs updating**
 
 Attach to the testnet first by running one of:
 ```bash
