@@ -33,7 +33,12 @@ $ solana-wallet balance
 ```sh
 // Command
 $ solana-wallet confirm <TX_SIGNATURE>
-
+#### Deploy program
+```sh
+// Command
+$ solana-wallet deploy <PATH>
+// Return
+<PROGRAM_ID>
 // Return
 "Confirmed" / "Not found"
 // Return
