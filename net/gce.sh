@@ -136,7 +136,14 @@ done
 shift $((OPTIND - 1))
 
 [[ -z $1 ]] || usage "Unexpected argument: $1"
-sshPrivateKey="$netConfigDir/id_$prefix"
+if [[ $cloudProvider = ec2 ]]; then
+  # EC2 keys can't be retrieved from running instances like GCE keys can so save
+  # EC2 keys in the user's home directory so |./ec2.sh config| can at least be
+  # used on the same host that ran |./ec2.sh create| .
+  sshPrivateKey="$HOME/.ssh/solana-net-id_$prefix"
+else
+  sshPrivateKey="$netConfigDir/id_$prefix"
+fi
 
 case $cloudProvider in
 gce)
