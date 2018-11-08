@@ -16,3 +16,7 @@ Cargo.lock
 # log files
 *.log
 log-*.txt
+
+# intellij files
+/.idea/
+/solana.iml
