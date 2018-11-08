@@ -117,6 +117,14 @@ $ solana-wallet send-timestamp <PUBKEY> <PROCESS_ID> --date 2018-12-24T23:59:00
 <TX_SIGNATURE>
 ```
 
+### Deploy program
+```
+// Command
+$ solana-wallet deploy <PATH>
+
+// Return
+<PROGRAM_ID>
+```
 
 ## Javascript solana-web3.js Interface
 

@@ -7,7 +7,6 @@ use chrono::prelude::*;
 use clap::ArgMatches;
 use cluster_info::NodeInfo;
 use drone::DroneRequest;
-use elf;
 use fullnode::Config;
 use hash::Hash;
 use loader_transaction::LoaderTransaction;
@@ -31,7 +30,6 @@ use std::{error, fmt, mem};
 use system_transaction::SystemTransaction;
 use transaction::Transaction;
 
-const PLATFORM_SECTION_C: &str = ".text.entrypoint";
 const USERDATA_CHUNK_SIZE: usize = 256;
 
 #[derive(Debug, PartialEq)]
@@ -396,16 +394,14 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
 
             let last_id = get_last_id(&config)?;
             let program = Keypair::new();
-            let program_userdata = elf::File::open_path(program_location)
+            let mut program_userdata = Vec::new();
+            File::open(program_location)
                 .map_err(|_| {
                     WalletError::DynamicProgramError("Could not parse program file".to_string())
-                })?.get_section(PLATFORM_SECTION_C)
-                .ok_or_else(|| {
-                    WalletError::DynamicProgramError(
-                        "Could not find entrypoint in program file".to_string(),
-                    )
-                })?.data
-                .clone();
+                })?.read_to_end(&mut program_userdata)
+                .map_err(|_| {
+                    WalletError::DynamicProgramError("Could not read program file".to_string())
+                })?;
 
             let tx = Transaction::system_create(
                 &config.id,
