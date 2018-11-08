@@ -17,7 +17,13 @@ $ solana-wallet [common-options] [command] [command-specific options]
 * `cancel`
 * `send-signature`
 * `send-timestamp`
+#### Get Pubkey
+```sh
+// Command
+$ solana-wallet address
 
+// Return
+<PUBKEY>
 #### Unconditional Immediate Transfer
 ```sh
 // Command
