@@ -143,7 +143,7 @@ sanity() {
       set -ex
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
-      ci/testnet-sanity.sh beta-testnet-solana-com ec2 us-west-1b
+      ci/testnet-sanity.sh beta-testnet-solana-com ec2 us-west-1a
     )
     ;;
   testnet-beta-perf)
@@ -249,7 +249,7 @@ start() {
       set -ex
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
-      ci/testnet-deploy.sh beta-testnet-solana-com ec2 us-west-1b \
+      ci/testnet-deploy.sh beta-testnet-solana-com ec2 us-west-1a \
         -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P \
         ${maybeDelete:+-d}
     )
