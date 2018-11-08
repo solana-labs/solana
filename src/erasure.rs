@@ -296,6 +296,7 @@ pub fn generate_coding(
                 let data_rl = data.read().unwrap();
 
                 let index = data_rl.index().unwrap();
+                let slot = data_rl.slot().unwrap();
                 let id = data_rl.id().unwrap();
 
                 trace!(
@@ -305,6 +306,7 @@ pub fn generate_coding(
                     id
                 );
                 coding_wl.set_index(index).unwrap();
+                coding_wl.set_slot(slot).unwrap();
                 coding_wl.set_id(&id).unwrap();
             }
             coding_wl.set_size(max_data_size);
@@ -545,6 +547,7 @@ pub fn recover(id: &Pubkey, window: &mut [WindowSlot], start_idx: u64, start: us
         )?;
     }
 
+    let meta = meta.unwrap();
     let mut corrupt = false;
     // repopulate header data size from recovered blob contents
     for i in &erasures[..erasures.len() - 1] {
@@ -573,7 +576,7 @@ pub fn recover(id: &Pubkey, window: &mut [WindowSlot], start_idx: u64, start: us
             }
         }
 
-        locks[n].meta = meta.clone().unwrap();
+        locks[n].meta = meta.clone();
         locks[n].set_size(data_size);
         trace!(
             "{} erasures[{}] ({}) size: {} data[0]: {}",
@@ -725,7 +728,7 @@ mod test {
             blobs.push(b_);
         }
 
-        index_blobs(&blobs, &Keypair::new().pubkey(), offset as u64, 0);
+        index_blobs(&blobs, &Keypair::new().pubkey(), offset as u64, 13);
         for b in blobs {
             let idx = b.read().unwrap().index().unwrap() as usize % WINDOW_SIZE;
 
@@ -819,7 +822,7 @@ mod test {
         }
 
         println!("** whack coding block and data block");
-        // tests erasing a coding block
+        // tests erasing a coding block and a data block
         let erase_offset = offset + erasure::NUM_DATA - erasure::NUM_CODING;
         // Create a hole in the window
         let refwindow = window[erase_offset].data.clone();
@@ -890,6 +893,8 @@ mod test {
                 window_l2.data[..window_l2.meta.size],
                 ref_l2.data[..window_l2.meta.size]
             );
+            assert_eq!(window_l2.index().unwrap(), ref_l2.index().unwrap());
+            assert_eq!(window_l2.slot().unwrap(), ref_l2.slot().unwrap());
             assert_eq!(window_l2.meta.addr, ref_l2.meta.addr);
             assert_eq!(window_l2.meta.port, ref_l2.meta.port);
             assert_eq!(window_l2.meta.v6, ref_l2.meta.v6);
