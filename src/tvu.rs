@@ -99,7 +99,6 @@ impl Tvu {
             entry_height,
         );
 
-        //let (storage_entry_sender, storage_entry_receiver) = channel();
         let (ledger_write_stage, storage_entry_receiver) =
             LedgerWriteStage::new(ledger_path, ledger_entry_receiver);
 
