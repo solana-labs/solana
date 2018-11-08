@@ -279,6 +279,21 @@ impl LeaderScheduler {
         Some((self.leader_schedule[validator_index], leader_slot))
     }
 
+    pub fn get_leader_for_slot(&self, slot_height: u64) -> Option<Pubkey> {
+        let tick_height = self.slot_height_to_first_tick_height(slot_height);
+        self.get_scheduled_leader(tick_height).map(|(id, _)| id)
+    }
+
+    // Maps the nth slot (where n == slot_height) to the tick height of
+    // the first tick for that slot
+    fn slot_height_to_first_tick_height(&self, slot_height: u64) -> u64 {
+        if slot_height == 0 {
+            0
+        } else {
+            (slot_height - 1) * self.leader_rotation_interval + self.bootstrap_height
+        }
+    }
+
     // TODO: We use a HashSet for now because a single validator could potentially register
     // multiple vote account. Once that is no longer possible (see the TODO in vote_program.rs,
     // process_transaction(), case VoteInstruction::RegisterAccount), we can use a vector.
