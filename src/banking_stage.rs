@@ -53,14 +53,8 @@ impl BankingStage {
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (entry_sender, entry_receiver) = channel();
         let shared_verified_receiver = Arc::new(Mutex::new(verified_receiver));
-        let poh_recorder = PohRecorder::new(
-            bank.clone(),
-            entry_sender,
-            *last_entry_id,
-            max_tick_height,
-            false,
-            vec![],
-        );
+        let poh_recorder =
+            PohRecorder::new(bank.clone(), entry_sender, *last_entry_id, max_tick_height);
 
         // Single thread to generate entries from many banks.
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
