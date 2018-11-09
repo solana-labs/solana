@@ -5,14 +5,13 @@ extern crate dirs;
 extern crate solana;
 
 use clap::{App, Arg, ArgMatches, SubCommand};
-use solana::drone::DRONE_PORT;
 use solana::logger;
 use solana::rpc::RPC_PORT;
 use solana::signature::{read_keypair, KeypairUtil};
 use solana::thin_client::poll_gossip_for_leader;
 use solana::wallet::{gen_keypair_file, parse_command, process_command, WalletConfig, WalletError};
 use std::error;
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr};
 
 pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error>> {
     let network = if let Some(addr) = matches.value_of("network") {
@@ -28,6 +27,14 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
         Some(secs.to_string().parse().expect("integer"))
     } else {
         None
+    };
+
+    let proxy = matches.value_of("proxy").map(|proxy| proxy.to_string());
+
+    let rpc_port = if let Some(port) = matches.value_of("rpc-port") {
+        port.to_string().parse().expect("integer")
+    } else {
+        RPC_PORT
     };
 
     let mut path = dirs::home_dir().expect("home directory");
@@ -49,32 +56,18 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
         )))
     })?;
 
-    let leader = poll_gossip_for_leader(network, timeout)?;
-
-    let mut drone_addr = leader.contact_info.tpu;
-    drone_addr.set_port(DRONE_PORT);
-
-    let rpc_addr = if let Some(proxy) = matches.value_of("proxy") {
-        proxy.to_string()
-    } else {
-        let rpc_port = if let Some(port) = matches.value_of("rpc-port") {
-            port.to_string().parse().expect("integer")
-        } else {
-            RPC_PORT
-        };
-        let mut rpc_addr = leader.contact_info.tpu;
-        rpc_addr.set_port(rpc_port);
-        format!("http://{}", rpc_addr.to_string())
-    };
-
     let command = parse_command(id.pubkey(), &matches)?;
 
+    let default_addr = socketaddr!(0, 8000);
     Ok(WalletConfig {
-        leader,
         id,
-        drone_addr, // TODO: Add an option for this.
-        rpc_addr,
+        drone_addr: default_addr,
+        rpc_addr: default_addr.to_string(),
         command,
+        network,
+        timeout,
+        proxy,
+        rpc_port,
     })
 }
 
@@ -252,7 +245,10 @@ fn main() -> Result<(), Box<error::Error>> {
                 )
         ).get_matches();
 
-    let config = parse_args(&matches)?;
+    let mut config = parse_args(&matches)?;
+    let leader = poll_gossip_for_leader(config.network, config.timeout)?;
+    config.update_leader_addrs(leader.contact_info.tpu);
+
     let result = process_command(&config)?;
     println!("{}", result);
     Ok(())
