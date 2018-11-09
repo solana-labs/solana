@@ -8,10 +8,9 @@ use clap::{App, Arg, ArgMatches, SubCommand};
 use solana::logger;
 use solana::rpc::RPC_PORT;
 use solana::signature::{read_keypair, KeypairUtil};
-use solana::thin_client::poll_gossip_for_leader;
 use solana::wallet::{gen_keypair_file, parse_command, process_command, WalletConfig, WalletError};
 use std::error;
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 
 pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error>> {
     let network = if let Some(addr) = matches.value_of("network") {
@@ -58,11 +57,8 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
 
     let command = parse_command(id.pubkey(), &matches)?;
 
-    let default_addr = socketaddr!(0, 8000);
     Ok(WalletConfig {
         id,
-        drone_addr: default_addr,
-        rpc_addr: default_addr.to_string(),
         command,
         network,
         timeout,
@@ -245,10 +241,7 @@ fn main() -> Result<(), Box<error::Error>> {
                 )
         ).get_matches();
 
-    let mut config = parse_args(&matches)?;
-    let leader = poll_gossip_for_leader(config.network, config.timeout)?;
-    config.update_leader_addrs(leader.contact_info.tpu);
-
+    let config = parse_args(&matches)?;
     let result = process_command(&config)?;
     println!("{}", result);
     Ok(())
