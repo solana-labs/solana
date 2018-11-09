@@ -265,6 +265,13 @@ the previous **Leader daemon** section.
 Developing
 ===
 
+Architecture
+---
+
+Before you jump into the code, review the [Solana Architecture](https://solana-labs.github.io/solana/).
+At the time of this writing the document is quite incomplete, but links to various blogs articles and
+YouTube videos that may offer valuable context as you navigate the codebase.
+
 Building
 ---
 
