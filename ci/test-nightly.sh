@@ -36,6 +36,9 @@ _ cargo cov report
 # Generate a coverage report with grcov via lcov.
 if [[ ! -f ./grcov ]]; then
   uname=$(uname | tr '[:upper:]' '[:lower:]')
+  if [[ ${uname} = "darwin" ]]; then
+    uname="osx"
+  fi
   uname_m=$(uname -m | tr '[:upper:]' '[:lower:]')
   name=grcov-${uname}-${uname_m}.tar.bz2
   _ wget "https://github.com/mozilla/grcov/releases/download/v0.2.3/${name}"
@@ -50,6 +53,13 @@ _ upload_ci_artifact "target/cov/cov-report.tar.bz2"
 
 _ cd target/cov && tar -cjf lcov-report.tar.bz2 report-lcov/* && cd -
 _ upload_ci_artifact "target/cov/lcov-report.tar.bz2"
+
+# Upload coverage files to buildkite for grcov debugging
+_ cd target/cov/build && tar -cjf cov-gcda.tar.bz2 gcda/* && cd -
+_ upload_ci_artifact "target/cov/build/cov-gcda.tar.bz2"
+
+_ cd target/cov/build && tar -cjf cov-gcno.tar.bz2 gcno/* && cd -
+_ upload_ci_artifact "target/cov/build/cov-gcno.tar.bz2"
 
 if [[ -z "$CODECOV_TOKEN" ]]; then
   echo CODECOV_TOKEN undefined
