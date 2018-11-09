@@ -8,7 +8,7 @@ fn main() {
     // Ensure target/perf-libs/ exists.  It's been observed that
     // a cargo:rerun-if-changed= directive with a non-existent
     // directory triggers a rebuild on every |cargo build| invocation
-    fs::create_dir("target/perf-libs").unwrap_or_else(|err| {
+    fs::create_dir_all("target/perf-libs").unwrap_or_else(|err| {
         if err.kind() != std::io::ErrorKind::AlreadyExists {
             panic!("Unable to create target/perf-libs: {:?}", err);
         }
