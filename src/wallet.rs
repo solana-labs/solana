@@ -313,10 +313,9 @@ pub fn parse_command(
 }
 
 pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error>> {
-    match config.command {
+    if let WalletCommand::Address = config.command {
         // Get address of this client
-        WalletCommand::Address => return Ok(format!("{}", config.id.pubkey())),
-        _ => (),
+        return Ok(format!("{}", config.id.pubkey()));
     }
 
     let leader = poll_gossip_for_leader(config.network, config.timeout)?;
@@ -708,7 +707,7 @@ pub fn gen_keypair_file(outfile: String) -> Result<String, Box<error::Error>> {
     Ok(serialized)
 }
 
-fn get_last_id(rpc_addr: &String) -> Result<Hash, Box<error::Error>> {
+fn get_last_id(rpc_addr: &str) -> Result<Hash, Box<error::Error>> {
     let result = RpcRequest::GetLastId.make_rpc_request(&rpc_addr, 1, None)?;
     if result.as_str().is_none() {
         Err(WalletError::RpcRequestError(
@@ -722,7 +721,7 @@ fn get_last_id(rpc_addr: &String) -> Result<Hash, Box<error::Error>> {
     Ok(Hash::new(&last_id_vec))
 }
 
-fn send_tx(rpc_addr: &String, tx: &Transaction) -> Result<String, Box<error::Error>> {
+fn send_tx(rpc_addr: &str, tx: &Transaction) -> Result<String, Box<error::Error>> {
     let serialized = serialize(tx).unwrap();
     let params = json!(serialized);
     let signature = RpcRequest::SendTransaction.make_rpc_request(&rpc_addr, 2, Some(params))?;
@@ -734,7 +733,7 @@ fn send_tx(rpc_addr: &String, tx: &Transaction) -> Result<String, Box<error::Err
     Ok(signature.as_str().unwrap().to_string())
 }
 
-fn confirm_tx(rpc_addr: &String, signature: &str) -> Result<RpcSignatureStatus, Box<error::Error>> {
+fn confirm_tx(rpc_addr: &str, signature: &str) -> Result<RpcSignatureStatus, Box<error::Error>> {
     let params = json!(signature.to_string());
     let signature_status =
         RpcRequest::GetSignatureStatus.make_rpc_request(&rpc_addr, 1, Some(params))?;
@@ -750,7 +749,7 @@ fn confirm_tx(rpc_addr: &String, signature: &str) -> Result<RpcSignatureStatus, 
     }
 }
 
-fn send_and_confirm_tx(rpc_addr: &String, tx: &Transaction) -> Result<(), Box<error::Error>> {
+fn send_and_confirm_tx(rpc_addr: &str, tx: &Transaction) -> Result<(), Box<error::Error>> {
     let mut send_retries = 3;
     while send_retries > 0 {
         let mut status_retries = 4;
