@@ -9,7 +9,7 @@ use transaction::Transaction;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Mint {
-    pub pkcs8: Vec<u8>,
+    pub keypair_bytes: Vec<u8>,
     pubkey: Pubkey,
     pub tokens: u64,
     pub bootstrap_leader_id: Pubkey,
@@ -17,16 +17,16 @@ pub struct Mint {
 }
 
 impl Mint {
-    pub fn new_with_pkcs8(
+    pub fn new_with_keypair_bytes(
         tokens: u64,
-        pkcs8: Vec<u8>,
+        keypair_bytes: Vec<u8>,
         bootstrap_leader_id: Pubkey,
         bootstrap_leader_tokens: u64,
     ) -> Self {
-        let keypair = Keypair::from_bytes(&pkcs8).expect("from_pkcs8 in mint pub fn new");
+        let keypair = Keypair::from_bytes(&keypair_bytes).expect("from_bytes in mint pub fn new");
         let pubkey = keypair.pubkey();
         Mint {
-            pkcs8,
+            keypair_bytes,
             pubkey,
             tokens,
             bootstrap_leader_id,
@@ -39,8 +39,8 @@ impl Mint {
         bootstrap_leader: Pubkey,
         bootstrap_leader_tokens: u64,
     ) -> Self {
-        let pkcs8 = Keypair::new().to_bytes().to_vec();
-        Self::new_with_pkcs8(tokens, pkcs8, bootstrap_leader, bootstrap_leader_tokens)
+        let bytes = Keypair::new().to_bytes().to_vec();
+        Self::new_with_keypair_bytes(tokens, bytes, bootstrap_leader, bootstrap_leader_tokens)
     }
 
     pub fn new(tokens: u64) -> Self {
@@ -48,7 +48,7 @@ impl Mint {
     }
 
     pub fn seed(&self) -> Hash {
-        hash(&self.pkcs8)
+        hash(&self.keypair_bytes)
     }
 
     pub fn last_id(&self) -> Hash {
@@ -56,7 +56,7 @@ impl Mint {
     }
 
     pub fn keypair(&self) -> Keypair {
-        Keypair::from_bytes(&self.pkcs8).expect("from_pkcs8 in mint pub fn keypair")
+        Keypair::from_bytes(&self.keypair_bytes).expect("from_bytes in mint pub fn keypair")
     }
 
     pub fn pubkey(&self) -> Pubkey {

@@ -93,15 +93,10 @@ impl GenKeys {
     }
 }
 
-pub fn read_pkcs8(path: &str) -> Result<Vec<u8>, Box<error::Error>> {
-    let file = File::open(path.to_string())?;
-    let pkcs8: Vec<u8> = serde_json::from_reader(file)?;
-    Ok(pkcs8)
-}
-
 pub fn read_keypair(path: &str) -> Result<Keypair, Box<error::Error>> {
-    let pkcs8 = read_pkcs8(path)?;
-    let keypair = Keypair::from_bytes(&pkcs8).unwrap();
+    let file = File::open(path.to_string())?;
+    let bytes: Vec<u8> = serde_json::from_reader(file)?;
+    let keypair = Keypair::from_bytes(&bytes).unwrap();
     Ok(keypair)
 }
 
