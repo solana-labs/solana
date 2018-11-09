@@ -327,15 +327,28 @@ start() {
   clientDeployTime=$SECONDS
   $metricsWriteDatapoint "testnet-deploy net-start-complete=1"
 
-  if [[ $deployMethod = "snap" ]]; then
-    declare networkVersion=unknown
+  declare networkVersion=unknown
+  case $deployMethod in
+  snap)
     IFS=\  read -r _ networkVersion _ < <(
       ssh "${sshOptions[@]}" "$leaderIp" \
         "snap info solana | grep \"^installed:\""
     )
     networkVersion=${networkVersion/0+git./}
-    $metricsWriteDatapoint "testnet-deploy version=\"$networkVersion\""
-  fi
+    ;;
+  tar)
+    networkVersion="$(
+      tail -n1 "$SOLANA_ROOT"/solana-release/version.txt || echo "tar-unknown"
+    )"
+    ;;
+  local)
+    networkVersion="$(git rev-parse HEAD || echo local-unknown)"
+    ;;
+  *)
+    usage "Internal error: invalid deployMethod: $deployMethod"
+    ;;
+  esac
+  $metricsWriteDatapoint "testnet-deploy version=\"${networkVersion:0:9}\""
 
   echo
   echo "+++ Deployment Successful"
