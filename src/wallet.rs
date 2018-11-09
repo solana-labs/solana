@@ -691,8 +691,8 @@ pub fn request_airdrop(
 }
 
 pub fn gen_keypair_file(outfile: String) -> Result<String, Box<error::Error>> {
-    let pkcs8_bytes = Keypair::new().to_bytes();
-    let serialized = serde_json::to_string(&pkcs8_bytes.to_vec())?;
+    let keypair_bytes = Keypair::new().to_bytes();
+    let serialized = serde_json::to_string(&keypair_bytes.to_vec())?;
 
     if outfile != "-" {
         if let Some(outdir) = Path::new(&outfile).parent() {
@@ -794,7 +794,7 @@ mod tests {
     use leader_scheduler::LeaderScheduler;
     use ledger::create_tmp_genesis;
     use serde_json::Value;
-    use signature::{read_keypair, read_pkcs8, Keypair, KeypairUtil};
+    use signature::{read_keypair, Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
@@ -1229,8 +1229,10 @@ mod tests {
         let serialized_keypair = gen_keypair_file(outfile.to_string()).unwrap();
         let keypair_vec: Vec<u8> = serde_json::from_str(&serialized_keypair).unwrap();
         assert!(Path::new(&outfile).exists());
-        assert_eq!(keypair_vec, read_pkcs8(&outfile).unwrap());
-        assert!(read_keypair(&outfile).is_ok());
+        assert_eq!(
+            read_keypair(&outfile).unwrap().to_bytes().to_vec(),
+            keypair_vec
+        );
         assert_eq!(
             read_keypair(&outfile).unwrap().pubkey().as_ref().len(),
             mem::size_of::<Pubkey>()
