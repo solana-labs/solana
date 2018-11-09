@@ -28,6 +28,7 @@ pub enum BroadcastStageReturnType {
     ChannelDisconnected,
 }
 
+#[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
 fn broadcast(
     max_tick_height: Option<u64>,
     tick_height: &mut u64,
@@ -49,14 +50,19 @@ fn broadcast(
     ventries.push(entries);
     while let Ok(entries) = receiver.try_recv() {
         num_entries += entries.len();
-        *tick_height += entries
-            .iter()
-            .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
         ventries.push(entries);
     }
     inc_new_counter_info!("broadcast_stage-entries_received", num_entries);
 
     let to_blobs_start = Instant::now();
+    let num_ticks: u64 = ventries
+        .iter()
+        .flatten()
+        .map(|entry| (entry.is_tick()) as u64)
+        .sum();
+
+    *tick_height += num_ticks;
+
     let dq: SharedBlobs = ventries
         .into_par_iter()
         .flat_map(|p| p.to_blobs())

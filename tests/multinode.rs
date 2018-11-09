@@ -1520,12 +1520,10 @@ fn test_broadcast_last_tick() {
         500,
     );
 
-    let mut num_ending_ticks = genesis_entries
+    let num_ending_ticks = genesis_entries
         .iter()
+        .skip(2)
         .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
-
-    // First entry doesn't count as a tick
-    num_ending_ticks -= 1;
 
     let genesis_ledger_len = genesis_entries.len() as u64 - num_ending_ticks;
     let blob_receiver_exit = Arc::new(AtomicBool::new(false));
@@ -1581,7 +1579,6 @@ fn test_broadcast_last_tick() {
     bootstrap_leader.close().unwrap();
 
     let last_tick_entry_height = genesis_ledger_len as u64 + bootstrap_height;
-    println!("{}", last_tick_entry_height);
     let mut ledger_window = LedgerWindow::open(&bootstrap_leader_ledger_path)
         .expect("Expected to be able to open ledger");
 
@@ -1595,10 +1592,7 @@ fn test_broadcast_last_tick() {
         let mut last_tick_blob: SharedBlob = SharedBlob::default();
         while let Ok(mut new_blobs) = receiver.try_recv() {
             let last_blob = new_blobs.into_iter().find(|b| {
-                b.read()
-                    .unwrap()
-                    .index()
-                    .expect("Expected index in blob")
+                b.read().unwrap().index().expect("Expected index in blob")
                     == last_tick_entry_height - 1
             });
             if let Some(last_blob) = last_blob {

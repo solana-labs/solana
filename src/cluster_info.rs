@@ -16,7 +16,6 @@ use bincode::{deserialize, serialize, serialized_size};
 use choose_gossip_peer_strategy::{ChooseGossipPeerStrategy, ChooseWeightedPeerStrategy};
 use counter::Counter;
 use hash::Hash;
-use leader_scheduler::LeaderScheduler;
 use ledger::LedgerWindow;
 use log::Level;
 use netutil::{bind_in_range, bind_to, find_available_port_in_range, multi_bind_in_range};
@@ -507,16 +506,20 @@ impl ClusterInfo {
             // Broadcast the last tick to everyone on the network so it doesn't get dropped
             // (Need to maximize probability the next leader in line sees this handoff tick
             // despite packet drops)
-            if idx == received_index - 1 && contains_last_tick {
+            let target = if idx == received_index - 1 && contains_last_tick {
                 // If we see a tick at max_tick_height, then we know it must be the last
                 // Blob in the window, at index == received_index. There cannot be an entry
                 // that got sent after the last tick, guaranteed by the PohService).
-                let all: Vec<&NodeInfo> = broadcast_table.iter().collect();
                 assert!(window_l[w_idx].data.is_some());
-                orders.push((window_l[w_idx].data.clone(), all));
+                (
+                    window_l[w_idx].data.clone(),
+                    broadcast_table.iter().collect(),
+                )
             } else {
-                orders.push((window_l[w_idx].data.clone(), vec![&broadcast_table[br_idx]]));
-            }
+                (window_l[w_idx].data.clone(), vec![&broadcast_table[br_idx]])
+            };
+
+            orders.push(target);
             br_idx += 1;
             br_idx %= broadcast_table.len();
         }
@@ -577,14 +580,12 @@ impl ClusterInfo {
                     .iter()
                     .map(move |v| {
                         let e = s.send_to(&blob.data[..blob.meta.size], &v.contact_info.tvu);
-                        if log_enabled!(Level::Trace) {
-                            trace!(
-                                "{}: done broadcast {} to {:?}",
-                                me.id,
-                                blob.meta.size,
-                                ids_and_tvus
-                            );
-                        }
+                        trace!(
+                            "{}: done broadcast {} to {:?}",
+                            me.id,
+                            blob.meta.size,
+                            ids_and_tvus
+                        );
                         e
                     }).collect();
                 send_errs_for_blob
