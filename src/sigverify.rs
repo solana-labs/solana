@@ -80,7 +80,8 @@ fn verify_packet(packet: &Packet) -> u8 {
         untrusted::Input::from(&packet.data[pubkey_start..pubkey_end]),
         untrusted::Input::from(&packet.data[msg_start..msg_end]),
         untrusted::Input::from(&packet.data[sig_start..sig_end]),
-    ).is_ok() as u8
+    )
+    .is_ok() as u8
 }
 
 fn verify_packet_disabled(_packet: &Packet) -> u8 {
@@ -113,7 +114,8 @@ pub fn ed25519_verify_cpu(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
                 .par_iter()
                 .map(verify_packet)
                 .collect()
-        }).collect();
+        })
+        .collect();
     inc_new_counter_info!("ed25519_verify_cpu", count);
     rv
 }
@@ -131,7 +133,8 @@ pub fn ed25519_verify_disabled(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
                 .par_iter()
                 .map(verify_packet_disabled)
                 .collect()
-        }).collect();
+        })
+        .collect();
     inc_new_counter_info!("ed25519_verify_disabled", count);
     rv
 }
@@ -267,7 +270,8 @@ mod tests {
                 }
                 assert_eq!(packets.read().unwrap().packets.len(), n);
                 packets
-            }).collect();
+            })
+            .collect();
         assert_eq!(batches.len(), 2);
 
         // verify packets

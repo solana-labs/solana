@@ -302,12 +302,14 @@ impl LeaderScheduler {
                                 .filter(|vote| {
                                     vote.tick_height > lower_bound
                                         && vote.tick_height <= upper_bound
-                                }).map(|_| vote_state.node_id);
+                                })
+                                .map(|_| vote_state.node_id);
                         }
                     }
 
                     None
-                }).collect()
+                })
+                .collect()
         }
     }
 
@@ -389,7 +391,8 @@ impl LeaderScheduler {
                 } else {
                     None
                 }
-            }).collect();
+            })
+            .collect();
 
         active_accounts.sort_by(
             |(pk1, t1), (pk2, t2)| {
@@ -569,7 +572,8 @@ mod tests {
                 &mint.keypair(),
                 new_pubkey,
                 last_id,
-            ).unwrap();
+            )
+            .unwrap();
 
             // Create a vote account
             let new_vote_account = create_vote_account(
@@ -577,7 +581,8 @@ mod tests {
                 &bank,
                 num_vote_account_tokens as u64,
                 mint.last_id(),
-            ).unwrap();
+            )
+            .unwrap();
             // Vote to make the validator part of the active set for the entire test
             // (we made the active_window_length large enough at the beginning of the test)
             push_vote(&new_vote_account, &bank, 1, mint.last_id());
@@ -762,7 +767,8 @@ mod tests {
                 &mint.keypair(),
                 new_pubkey,
                 last_id,
-            ).unwrap();
+            )
+            .unwrap();
         }
 
         let validators_pk: Vec<Pubkey> = validators.iter().map(Keypair::pubkey).collect();
@@ -788,7 +794,8 @@ mod tests {
                 &validators[i],
                 new_pubkey,
                 last_id,
-            ).unwrap();
+            )
+            .unwrap();
         }
 
         let all_validators: Vec<Pubkey> = validators
@@ -977,7 +984,8 @@ mod tests {
                 &mint.keypair(),
                 new_pubkey,
                 last_id,
-            ).unwrap();
+            )
+            .unwrap();
 
             // Create a vote account
             let new_vote_account = create_vote_account(
@@ -985,7 +993,8 @@ mod tests {
                 &bank,
                 num_vote_account_tokens as u64,
                 mint.last_id(),
-            ).unwrap();
+            )
+            .unwrap();
 
             // Vote at height i * active_window_length for validator i
             push_vote(
@@ -1208,7 +1217,8 @@ mod tests {
             &mint.keypair(),
             bootstrap_leader_id,
             last_id,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Create a vote account
         let new_vote_account = create_vote_account(
@@ -1216,7 +1226,8 @@ mod tests {
             &bank,
             vote_account_tokens,
             mint.last_id(),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Add leader to the active set
         push_vote(

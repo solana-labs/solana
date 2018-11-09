@@ -106,7 +106,8 @@ impl SystemTransaction for Transaction {
             .map(|(i, (_, amount))| {
                 let spend = SystemProgram::Move { tokens: *amount };
                 Instruction::new(0, &spend, vec![0, i as u8 + 1])
-            }).collect();
+            })
+            .collect();
         let to_keys: Vec<_> = moves.iter().map(|(to_key, _)| *to_key).collect();
 
         Transaction::new_with_instructions(

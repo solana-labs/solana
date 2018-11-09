@@ -169,7 +169,8 @@ pub fn cluster_info_retransmit() -> result::Result<()> {
             s.set_read_timeout(Some(Duration::new(1, 0))).unwrap();
             let res = s.recv_from(&mut b.data);
             res.is_err() //true if failed to receive the retransmit packet
-        }).collect();
+        })
+        .collect();
     //true if failed receive the retransmit packet, r2, and r3 should succeed
     //r1 was the sender, so it should fail to receive the packet
     assert_eq!(res, [true, false, false]);

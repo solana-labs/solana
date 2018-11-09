@@ -152,7 +152,8 @@ fn broadcast(
             .add_field(
                 "transmit-index",
                 influxdb::Value::Integer(transmit_index.data as i64),
-            ).to_owned(),
+            )
+            .to_owned(),
     );
 
     Ok(())
@@ -258,7 +259,8 @@ impl BroadcastStage {
                     leader_slot,
                     &receiver,
                 )
-            }).unwrap();
+            })
+            .unwrap();
 
         BroadcastStage { thread_hdl }
     }

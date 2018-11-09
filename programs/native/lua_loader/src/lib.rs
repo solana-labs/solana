@@ -151,7 +151,8 @@ mod tests {
             local tokens, _ = string.unpack("I", data)
             accounts[1].tokens = accounts[1].tokens - tokens
             accounts[2].tokens = accounts[2].tokens + tokens
-        "#.as_bytes()
+        "#
+        .as_bytes()
         .to_vec();
 
         let alice_pubkey = Pubkey::default();
@@ -196,7 +197,8 @@ mod tests {
         let userdata = r#"
             local serialize = load(accounts[2].userdata)().serialize
             accounts[3].userdata = serialize({a=1, b=2, c=3}, nil, "s")
-        "#.as_bytes()
+        "#
+        .as_bytes()
         .to_vec();
         let program_id = Pubkey::default();
         let program_account = Account {
@@ -277,7 +279,8 @@ mod tests {
         let data = format!(
             r#"{{m=2, n={{"{}","{}","{}"}}, tokens=100}}"#,
             carol_pubkey, dan_pubkey, erin_pubkey
-        ).as_bytes()
+        )
+        .as_bytes()
         .to_vec();
 
         process(&mut keyed_accounts, &data);

@@ -399,12 +399,14 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             let program_userdata = elf::File::open_path(program_location)
                 .map_err(|_| {
                     WalletError::DynamicProgramError("Could not parse program file".to_string())
-                })?.get_section(PLATFORM_SECTION_C)
+                })?
+                .get_section(PLATFORM_SECTION_C)
                 .ok_or_else(|| {
                     WalletError::DynamicProgramError(
                         "Could not find entrypoint in program file".to_string(),
                     )
-                })?.data
+                })?
+                .data
                 .clone();
 
             let tx = Transaction::system_create(
@@ -452,7 +454,8 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
 
             Ok(json!({
                 "programId": format!("{}", program.pubkey()),
-            }).to_string())
+            })
+            .to_string())
         }
         WalletCommand::GetTransactionCount => {
             let transaction_count = RpcRequest::GetTransactionCount
@@ -524,7 +527,8 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 Ok(json!({
                     "signature": signature_str,
                     "processId": format!("{}", contract_state.pubkey()),
-                }).to_string())
+                })
+                .to_string())
             } else if timestamp == None {
                 let last_id = get_last_id(&config)?;
 
@@ -579,7 +583,8 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 Ok(json!({
                     "signature": signature_str,
                     "processId": format!("{}", contract_state.pubkey()),
-                }).to_string())
+                })
+                .to_string())
             } else {
                 Ok("Combo transactions not yet handled".to_string())
             }
@@ -797,7 +802,8 @@ mod tests {
                             .required(true)
                             .help("The number of tokens to request"),
                     ),
-            ).subcommand(SubCommand::with_name("balance").about("Get your balance"))
+            )
+            .subcommand(SubCommand::with_name("balance").about("Get your balance"))
             .subcommand(
                 SubCommand::with_name("cancel")
                     .about("Cancel a transfer")
@@ -809,7 +815,8 @@ mod tests {
                             .required(true)
                             .help("The process id of the transfer to cancel"),
                     ),
-            ).subcommand(
+            )
+            .subcommand(
                 SubCommand::with_name("confirm")
                     .about("Confirm transaction by signature")
                     .arg(
@@ -820,7 +827,8 @@ mod tests {
                             .required(true)
                             .help("The transaction signature to confirm"),
                     ),
-            ).subcommand(
+            )
+            .subcommand(
                 SubCommand::with_name("pay")
                     .about("Send a payment")
                     .arg(
@@ -830,27 +838,31 @@ mod tests {
                             .takes_value(true)
                             .required(true)
                             .help("The pubkey of recipient"),
-                    ).arg(
+                    )
+                    .arg(
                         Arg::with_name("tokens")
                             .index(2)
                             .value_name("NUM")
                             .takes_value(true)
                             .required(true)
                             .help("The number of tokens to send"),
-                    ).arg(
+                    )
+                    .arg(
                         Arg::with_name("timestamp")
                             .long("after")
                             .value_name("DATETIME")
                             .takes_value(true)
                             .help("A timestamp after which transaction will execute"),
-                    ).arg(
+                    )
+                    .arg(
                         Arg::with_name("timestamp-pubkey")
                             .long("require-timestamp-from")
                             .value_name("PUBKEY")
                             .takes_value(true)
                             .requires("timestamp")
                             .help("Require timestamp from this third party"),
-                    ).arg(
+                    )
+                    .arg(
                         Arg::with_name("witness")
                             .long("require-signature-from")
                             .value_name("PUBKEY")
@@ -858,12 +870,14 @@ mod tests {
                             .multiple(true)
                             .use_delimiter(true)
                             .help("Any third party signatures required to unlock the tokens"),
-                    ).arg(
+                    )
+                    .arg(
                         Arg::with_name("cancelable")
                             .long("cancelable")
                             .takes_value(false),
                     ),
-            ).subcommand(
+            )
+            .subcommand(
                 SubCommand::with_name("send-signature")
                     .about("Send a signature to authorize a transfer")
                     .arg(
@@ -873,7 +887,8 @@ mod tests {
                             .takes_value(true)
                             .required(true)
                             .help("The pubkey of recipient"),
-                    ).arg(
+                    )
+                    .arg(
                         Arg::with_name("process-id")
                             .index(2)
                             .value_name("PROCESS_ID")
@@ -881,7 +896,8 @@ mod tests {
                             .required(true)
                             .help("The process id of the transfer to authorize"),
                     ),
-            ).subcommand(
+            )
+            .subcommand(
                 SubCommand::with_name("send-timestamp")
                     .about("Send a timestamp to unlock a transfer")
                     .arg(
@@ -891,14 +907,16 @@ mod tests {
                             .takes_value(true)
                             .required(true)
                             .help("The pubkey of recipient"),
-                    ).arg(
+                    )
+                    .arg(
                         Arg::with_name("process-id")
                             .index(2)
                             .value_name("PROCESS_ID")
                             .takes_value(true)
                             .required(true)
                             .help("The process id of the transfer to unlock"),
-                    ).arg(
+                    )
+                    .arg(
                         Arg::with_name("datetime")
                             .long("date")
                             .value_name("DATETIME")

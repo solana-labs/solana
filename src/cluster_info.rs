@@ -313,7 +313,8 @@ impl ClusterInfo {
                     node.contact_info.tpu.to_string(),
                     node.contact_info.rpc.to_string()
                 )
-            }).collect();
+            })
+            .collect();
 
         format!(
             " NodeInfo.contact_info     | Node identifier\n\
@@ -406,7 +407,8 @@ impl ClusterInfo {
                     trace!("{} purge skipped {} {} {}", self.id, k, now - v, limit);
                     None
                 }
-            }).collect();
+            })
+            .collect();
 
         inc_new_counter_info!("cluster_info-purge-count", dead_ids.len());
 
@@ -452,7 +454,8 @@ impl ClusterInfo {
                     trace!("{}:broadcast node {} {}", me.id, v.id, v.contact_info.tvu);
                     true
                 }
-            }).cloned()
+            })
+            .cloned()
             .collect();
         cloned_table
     }
@@ -555,7 +558,8 @@ impl ClusterInfo {
                     v.contact_info.tvu
                 );
                 e
-            }).collect();
+            })
+            .collect();
 
         trace!("broadcast results {}", errs.len());
         for e in errs {
@@ -609,7 +613,8 @@ impl ClusterInfo {
                 } else {
                     true
                 }
-            }).collect();
+            })
+            .collect();
         trace!("retransmit orders {}", orders.len());
         let errs: Vec<_> = orders
             .par_iter()
@@ -624,7 +629,8 @@ impl ClusterInfo {
                 //TODO profile this, may need multiple sockets for par_iter
                 assert!(rblob.meta.size <= BLOB_SIZE);
                 s.send_to(&rblob.data[..rblob.meta.size], &v.contact_info.tvu)
-            }).collect();
+            })
+            .collect();
         for e in errs {
             if let Err(e) = &e {
                 inc_new_counter_info!("cluster_info-retransmit-send_to_error", 1, 1);
@@ -716,7 +722,8 @@ impl ClusterInfo {
                 v.id != self.id
                     && !v.contact_info.ncp.ip().is_unspecified()
                     && !v.contact_info.ncp.ip().is_multicast()
-            }).collect();
+            })
+            .collect();
 
         let choose_peer_strategy = ChooseWeightedPeerStrategy::new(
             &self.remote,
@@ -856,7 +863,8 @@ impl ClusterInfo {
                     let time_left = GOSSIP_SLEEP_MILLIS - elapsed;
                     sleep(Duration::from_millis(time_left));
                 }
-            }).unwrap()
+            })
+            .unwrap()
     }
     fn run_window_request(
         from: &NodeInfo,
@@ -1150,7 +1158,8 @@ impl ClusterInfo {
                         me.table.len()
                     );
                 }
-            }).unwrap()
+            })
+            .unwrap()
     }
 
     fn is_valid_ip(addr: IpAddr) -> bool {
@@ -1725,7 +1734,8 @@ mod tests {
                 &mut None,
                 &me,
                 0,
-            ).unwrap();
+            )
+            .unwrap();
             let blob = shared_blob.read().unwrap();
             // Test we copied the blob
             assert_eq!(blob.meta.size, blob_size);

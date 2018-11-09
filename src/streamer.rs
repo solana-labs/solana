@@ -60,7 +60,8 @@ pub fn receiver(
         .spawn(move || {
             let _ = recv_loop(&sock, &exit, &packet_sender, sender_tag);
             ()
-        }).unwrap()
+        })
+        .unwrap()
 }
 
 fn recv_send(sock: &UdpSocket, r: &BlobReceiver) -> Result<()> {
@@ -101,7 +102,8 @@ pub fn responder(name: &'static str, sock: Arc<UdpSocket>, r: BlobReceiver) -> J
                     _ => warn!("{} responder error: {:?}", name, e),
                 }
             }
-        }).unwrap()
+        })
+        .unwrap()
 }
 
 //TODO, we would need to stick block authentication before we create the
@@ -128,7 +130,8 @@ pub fn blob_receiver(sock: Arc<UdpSocket>, exit: Arc<AtomicBool>, s: BlobSender)
                 break;
             }
             let _ = recv_blobs(&sock, &s);
-        }).unwrap()
+        })
+        .unwrap()
 }
 
 #[cfg(test)]

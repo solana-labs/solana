@@ -77,7 +77,8 @@ impl LedgerWriteStage {
                         }
                     }
                 };
-            }).unwrap();
+            })
+            .unwrap();
 
         (LedgerWriteStage { write_thread }, entry_forwarder)
     }

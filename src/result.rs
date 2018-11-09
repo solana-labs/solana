@@ -168,6 +168,7 @@ mod tests {
             io::sink(),
             "{:?}",
             Error::from(io::Error::new(io::ErrorKind::NotFound, "hi"))
-        ).unwrap();
+        )
+        .unwrap();
     }
 }

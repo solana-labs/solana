@@ -38,14 +38,16 @@ fn main() {
                 .value_name("PATH")
                 .takes_value(true)
                 .help("Run with the identity found in FILE"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("network")
                 .short("n")
                 .long("network")
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .help("Rendezvous with the network at this gossip entry point"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("ledger")
                 .short("l")
                 .long("ledger")
@@ -53,13 +55,15 @@ fn main() {
                 .takes_value(true)
                 .required(true)
                 .help("Use DIR as persistent ledger location"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("rpc")
                 .long("rpc")
                 .value_name("PORT")
                 .takes_value(true)
                 .help("Custom RPC port for this node"),
-        ).get_matches();
+        )
+        .get_matches();
 
     let (keypair, ncp) = if let Some(i) = matches.value_of("identity") {
         let path = i.to_string();

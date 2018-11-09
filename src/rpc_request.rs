@@ -160,7 +160,8 @@ mod tests {
                 .threads(1)
                 .cors(DomainsValidation::AllowOnly(vec![
                     AccessControlAllowOrigin::Any,
-                ])).start_http(&rpc_addr)
+                ]))
+                .start_http(&rpc_addr)
                 .expect("Unable to start RPC server");
             sender.send(*server.address()).unwrap();
             server.wait();

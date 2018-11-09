@@ -435,7 +435,8 @@ impl TokenProgram {
                         TokenProgram::Invalid
                     }
                 }
-            }).collect();
+            })
+            .collect();
 
         for program_account in &input_program_accounts {
             info!("input_program_account: userdata={:?}", program_account);

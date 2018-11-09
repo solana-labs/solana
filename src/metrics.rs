@@ -231,16 +231,19 @@ pub fn set_panic_hook(program: &'static str) {
                             // TODO: use ono.message() when it becomes stable
                             ono.to_string(),
                         ),
-                    ).add_field(
+                    )
+                    .add_field(
                         "location",
                         influxdb::Value::String(match ono.location() {
                             Some(location) => location.to_string(),
                             None => "?".to_string(),
                         }),
-                    ).add_field(
+                    )
+                    .add_field(
                         "host",
                         influxdb::Value::String(hostname().unwrap_or_else(|_| "?".to_string())),
-                    ).to_owned(),
+                    )
+                    .to_owned(),
             );
             // Flush metrics immediately in case the process exits immediately
             // upon return
@@ -356,10 +359,12 @@ mod test {
             .add_field(
                 "random_bool",
                 influxdb::Value::Boolean(random::<u8>() < 128),
-            ).add_field(
+            )
+            .add_field(
                 "random_int",
                 influxdb::Value::Integer(random::<u8>() as i64),
-            ).to_owned();
+            )
+            .to_owned();
         agent.submit(point);
     }
 

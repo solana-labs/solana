@@ -140,7 +140,8 @@ fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash,
                     .add_tag(
                         "op",
                         influxdb::Value::String("send_barrier_transaction".to_string()),
-                    ).add_field("poll_count", influxdb::Value::Integer(poll_count))
+                    )
+                    .add_field("poll_count", influxdb::Value::Integer(poll_count))
                     .add_field("duration", influxdb::Value::Integer(duration_ms as i64))
                     .to_owned(),
             );
@@ -151,7 +152,8 @@ fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash,
                     &id.pubkey(),
                     &Duration::from_millis(100),
                     &Duration::from_secs(10),
-                ).expect("Failed to get balance");
+                )
+                .expect("Failed to get balance");
             if balance != 1 {
                 panic!("Expected an account balance of 1 (balance: {}", balance);
             }
@@ -206,7 +208,8 @@ fn generate_txs(
                 Transaction::system_new(id, keypair.pubkey(), 1, last_id),
                 timestamp(),
             )
-        }).collect();
+        })
+        .collect();
 
     let duration = signing_start.elapsed();
     let ns = duration.as_secs() * 1_000_000_000 + u64::from(duration.subsec_nanos());
@@ -225,7 +228,8 @@ fn generate_txs(
             .add_field(
                 "duration",
                 influxdb::Value::Integer(duration_as_ms(&duration) as i64),
-            ).to_owned(),
+            )
+            .to_owned(),
     );
 
     let sz = transactions.len() / threads;
@@ -281,7 +285,8 @@ fn do_tx_transfers(
                     .add_field(
                         "duration",
                         influxdb::Value::Integer(duration_as_ms(&transfer_start.elapsed()) as i64),
-                    ).add_field("count", influxdb::Value::Integer(tx_len as i64))
+                    )
+                    .add_field("count", influxdb::Value::Integer(tx_len as i64))
                     .to_owned(),
             );
         }
@@ -697,8 +702,10 @@ fn main() {
                 .name("solana-client-sample".to_string())
                 .spawn(move || {
                     sample_tx_count(&exit_signal, &maxes, first_tx_count, &v, sample_period);
-                }).unwrap()
-        }).collect();
+                })
+                .unwrap()
+        })
+        .collect();
 
     let shared_txs: SharedTransactions = Arc::new(RwLock::new(VecDeque::new()));
 
@@ -722,8 +729,10 @@ fn main() {
                         &shared_tx_active_thread_count,
                         &total_tx_sent_count,
                     );
-                }).unwrap()
-        }).collect();
+                })
+                .unwrap()
+        })
+        .collect();
 
     // generate and send transactions for the specified duration
     let start = Instant::now();

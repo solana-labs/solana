@@ -669,7 +669,8 @@ mod tests {
                     false,
                     None,
                 )
-            }).collect();
+            })
+            .collect();
 
         //each validator can exit in parallel to speed many sequential calls to `join`
         vals.iter().for_each(|v| v.exit());
@@ -955,7 +956,8 @@ mod tests {
                 ledger_initial_len,
                 last_id,
                 &tvu_address,
-            ).into_iter()
+            )
+            .into_iter()
             .rev()
             .collect();
             s_responder.send(msgs).expect("send");

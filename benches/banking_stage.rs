@@ -68,7 +68,8 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             new.account_keys[1] = Pubkey::new(&to[0..32]);
             new.signature = Signature::new(&sig[0..64]);
             new
-        }).collect();
+        })
+        .collect();
     // fund all the accounts
     transactions.iter().for_each(|tx| {
         let fund = Transaction::system_move(
@@ -98,7 +99,8 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         .map(|x| {
             let len = x.read().unwrap().packets.len();
             (x, iter::repeat(1).take(len).collect())
-        }).collect();
+        })
+        .collect();
     let (_stage, signal_receiver) = BankingStage::new(
         &bank,
         verified_receiver,
@@ -170,7 +172,8 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
             assert_eq!(new.instructions.len(), progs);
             new.signature = Signature::new(&sig[0..64]);
             new
-        }).collect();
+        })
+        .collect();
     transactions.iter().for_each(|tx| {
         let fund = Transaction::system_move(
             &mint.keypair(),
@@ -198,7 +201,8 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         .map(|x| {
             let len = x.read().unwrap().packets.len();
             (x, iter::repeat(1).take(len).collect())
-        }).collect();
+        })
+        .collect();
     let (_stage, signal_receiver) = BankingStage::new(
         &bank,
         verified_receiver,

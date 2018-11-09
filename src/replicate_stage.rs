@@ -208,7 +208,8 @@ impl ReplicateStage {
                 }
 
                 None
-            }).unwrap();
+            })
+            .unwrap();
 
         (
             ReplicateStage {

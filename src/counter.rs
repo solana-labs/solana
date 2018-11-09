@@ -91,7 +91,8 @@ impl Counter {
                         .add_field(
                             "count",
                             influxdb::Value::Integer(counts as i64 - lastlog as i64),
-                        ).to_owned(),
+                        )
+                        .to_owned(),
                 );
             }
         }

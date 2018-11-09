@@ -92,7 +92,8 @@ impl WindowUtil for Window {
                 }
                 self[i].clear_data();
                 Some(pix)
-            }).collect()
+            })
+            .collect()
     }
 
     fn blob_idx_in_window(&self, id: &Pubkey, pix: u64, consumed: u64, received: &mut u64) -> bool {
@@ -229,7 +230,8 @@ impl WindowUtil for Window {
                 } else {
                     " "
                 }
-            }).collect();
+            })
+            .collect();
 
         let buf: Vec<_> = self
             .iter()
@@ -245,7 +247,8 @@ impl WindowUtil for Window {
                     // data.is_none()
                     "c"
                 }
-            }).collect();
+            })
+            .collect();
         format!(
             "\n{}: WINDOW ({}): {}\n{}: WINDOW ({}): {}",
             id,

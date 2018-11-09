@@ -325,7 +325,8 @@ pub fn generate_coding(
             .map(|(i, l)| {
                 trace!("{} i: {} data: {}", id, i, l.data[0]);
                 &l.data[..max_data_size]
-            }).collect();
+            })
+            .collect();
 
         let mut coding_locks: Vec<_> = coding_blobs.iter().map(|b| b.write().unwrap()).collect();
 
@@ -335,7 +336,8 @@ pub fn generate_coding(
             .map(|(i, l)| {
                 trace!("{} i: {} coding: {}", id, i, l.data[0],);
                 &mut l.data_mut()[..max_data_size]
-            }).collect();
+            })
+            .collect();
 
         generate_coding_blocks(coding_ptrs.as_mut_slice(), &data_ptrs)?;
         debug!(
@@ -617,12 +619,11 @@ mod test {
                 coding_blocks.iter_mut().map(|x| x.as_mut_slice()).collect();
             let v_slices: Vec<_> = vs.iter().map(|x| x.as_slice()).collect();
 
-            assert!(
-                erasure::generate_coding_blocks(
-                    coding_blocks_slices.as_mut_slice(),
-                    v_slices.as_slice(),
-                ).is_ok()
-            );
+            assert!(erasure::generate_coding_blocks(
+                coding_blocks_slices.as_mut_slice(),
+                v_slices.as_slice(),
+            )
+            .is_ok());
         }
         trace!("coding blocks:");
         for b in &coding_blocks {
@@ -638,13 +639,12 @@ mod test {
                 coding_blocks.iter_mut().map(|x| x.as_mut_slice()).collect();
             let mut v_slices: Vec<_> = vs.iter_mut().map(|x| x.as_mut_slice()).collect();
 
-            assert!(
-                erasure::decode_blocks(
-                    v_slices.as_mut_slice(),
-                    coding_blocks_slices.as_mut_slice(),
-                    erasures.as_slice(),
-                ).is_ok()
-            );
+            assert!(erasure::decode_blocks(
+                v_slices.as_mut_slice(),
+                coding_blocks_slices.as_mut_slice(),
+                erasures.as_slice(),
+            )
+            .is_ok());
         }
 
         trace!("vs:");

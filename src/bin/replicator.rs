@@ -39,14 +39,16 @@ fn main() {
                 .value_name("PATH")
                 .takes_value(true)
                 .help("Run with the identity found in FILE"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("network")
                 .short("n")
                 .long("network")
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .help("Rendezvous with the network at this gossip entry point"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("ledger")
                 .short("l")
                 .long("ledger")
@@ -54,7 +56,8 @@ fn main() {
                 .takes_value(true)
                 .required(true)
                 .help("use DIR as persistent ledger location"),
-        ).get_matches();
+        )
+        .get_matches();
 
     let ledger_path = matches.value_of("ledger");
 

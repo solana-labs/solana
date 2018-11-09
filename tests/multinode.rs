@@ -634,14 +634,16 @@ fn test_multi_node_dynamic_network() {
         &alice_arc.read().unwrap(),
         &bob_pubkey,
         Some(500),
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(leader_balance, 500);
     let leader_balance = retry_send_tx_and_retry_get_balance(
         &leader_data,
         &alice_arc.read().unwrap(),
         &bob_pubkey,
         Some(1000),
-    ).unwrap();
+    )
+    .unwrap();
     assert_eq!(leader_balance, 1000);
 
     let t1: Vec<_> = (0..num_nodes)
@@ -652,8 +654,10 @@ fn test_multi_node_dynamic_network() {
                 .spawn(move || {
                     info!("Spawned thread {}", n);
                     Keypair::new()
-                }).unwrap()
-        }).collect();
+                })
+                .unwrap()
+        })
+        .collect();
 
     info!("Waiting for keypairs to be created");
     let keypairs: Vec<_> = t1.into_iter().map(|t| t.join().unwrap()).collect();
@@ -692,8 +696,10 @@ fn test_multi_node_dynamic_network() {
                         None,
                     );
                     (rd, val)
-                }).unwrap()
-        }).collect();
+                })
+                .unwrap()
+        })
+        .collect();
 
     let mut validators: Vec<_> = t2.into_iter().map(|t| t.join().unwrap()).collect();
 
@@ -713,7 +719,8 @@ fn test_multi_node_dynamic_network() {
                 &alice_arc.read().unwrap().keypair(),
                 bob_pubkey,
                 &last_id,
-            ).unwrap();
+            )
+            .unwrap();
 
         expected_balance += 500;
 
@@ -1082,7 +1089,8 @@ fn run_node(
                 };
             }
             sleep(Duration::new(1, 0));
-        }).unwrap()
+        })
+        .unwrap()
 }
 
 #[test]
@@ -1455,7 +1463,8 @@ fn test_full_leader_validator_network() {
             .filter_map(|(i, x)| match empty_iterators.get(&i) {
                 None => Some(x),
                 _ => None,
-            }).collect();
+            })
+            .collect();
 
         if node_entries.len() == 0 {
             break;
