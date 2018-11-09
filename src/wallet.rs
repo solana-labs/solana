@@ -313,6 +313,12 @@ pub fn parse_command(
 }
 
 pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error>> {
+    match config.command {
+        // Get address of this client
+        WalletCommand::Address => return Ok(format!("{}", config.id.pubkey())),
+        _ => (),
+    }
+
     let leader = poll_gossip_for_leader(config.network, config.timeout)?;
     let tpu_addr = leader.contact_info.tpu;
     let drone_addr = config.drone_addr(tpu_addr);
@@ -320,7 +326,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
 
     match config.command {
         // Get address of this client
-        WalletCommand::Address => Ok(format!("{}", config.id.pubkey())),
+        WalletCommand::Address => unreachable!(),
         // Request an airdrop from Solana Drone;
         WalletCommand::AirDrop(tokens) => {
             println!(
