@@ -1,6 +1,6 @@
 # Note: when the rust version is changed also modify
 # ci/buildkite.yml to pick up the new image tag
-FROM rust:1.30.0
+FROM rust:1.30.1
 
 RUN set -x && \
     apt update && \
