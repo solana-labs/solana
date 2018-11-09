@@ -5,8 +5,7 @@ use budget_program::BudgetState;
 use budget_transaction::BudgetTransaction;
 use chrono::prelude::*;
 use clap::ArgMatches;
-use cluster_info::NodeInfo;
-use drone::DroneRequest;
+use drone::{DroneRequest, DRONE_PORT};
 use elf;
 use fullnode::Config;
 use hash::Hash;
@@ -84,23 +83,42 @@ impl error::Error for WalletError {
 }
 
 pub struct WalletConfig {
-    pub leader: NodeInfo,
     pub id: Keypair,
     pub drone_addr: SocketAddr,
     pub rpc_addr: String,
     pub command: WalletCommand,
+    pub network: SocketAddr,
+    pub timeout: Option<u64>,
+    pub proxy: Option<String>,
+    pub rpc_port: u16,
 }
 
 impl Default for WalletConfig {
     fn default() -> WalletConfig {
         let default_addr = socketaddr!(0, 8000);
         WalletConfig {
-            leader: NodeInfo::new_with_socketaddr(&default_addr),
             id: Keypair::new(),
             drone_addr: default_addr,
             rpc_addr: default_addr.to_string(),
             command: WalletCommand::Balance,
+            network: default_addr,
+            timeout: None,
+            proxy: None,
+            rpc_port: 0,
         }
+    }
+}
+
+impl WalletConfig {
+    pub fn update_leader_addrs(&mut self, tpu_addr: SocketAddr) {
+        let mut drone_addr = tpu_addr;
+        drone_addr.set_port(DRONE_PORT);
+        self.drone_addr = drone_addr;
+
+        let mut rpc_addr = tpu_addr;
+        rpc_addr.set_port(self.rpc_port);
+        let rpc_addr_str = format!("http://{}", rpc_addr.to_string());
+        self.rpc_addr = self.proxy.clone().unwrap_or(rpc_addr_str);
     }
 }
 
@@ -1079,7 +1097,6 @@ mod tests {
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
-        let leader_data1 = leader.info.clone();
         let (alice, ledger_path) =
             create_tmp_genesis("wallet_process_command", 10_000_000, leader_data.id, 1000);
         let mut bank = Bank::new(&alice);
@@ -1111,7 +1128,6 @@ mod tests {
         let (sender, receiver) = channel();
         run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
         config.drone_addr = receiver.recv().unwrap();
-        config.leader = leader_data1;
 
         let mut rpc_addr = leader_data.contact_info.ncp;
         rpc_addr.set_port(rpc_port);
@@ -1239,8 +1255,6 @@ mod tests {
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
-        let leader_data1 = leader.info.clone();
-        let leader_data2 = leader.info.clone();
         let (alice, ledger_path) =
             create_tmp_genesis("wallet_timestamp_tx", 10_000_000, leader_data.id, 1000);
         let mut bank = Bank::new(&alice);
@@ -1273,8 +1287,6 @@ mod tests {
         run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
         config_payer.drone_addr = receiver.recv().unwrap();
         config_witness.drone_addr = config_payer.drone_addr.clone();
-        config_payer.leader = leader_data1;
-        config_witness.leader = leader_data2;
 
         let mut rpc_addr = leader_data.contact_info.ncp;
         rpc_addr.set_port(rpc_port);
@@ -1365,8 +1377,6 @@ mod tests {
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
-        let leader_data1 = leader.info.clone();
-        let leader_data2 = leader.info.clone();
         let (alice, ledger_path) =
             create_tmp_genesis("wallet_witness_tx", 10_000_000, leader_data.id, 1000);
         let mut bank = Bank::new(&alice);
@@ -1397,8 +1407,6 @@ mod tests {
         run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
         config_payer.drone_addr = receiver.recv().unwrap();
         config_witness.drone_addr = config_payer.drone_addr.clone();
-        config_payer.leader = leader_data1;
-        config_witness.leader = leader_data2;
 
         let rpc_addr = leader_data.contact_info.rpc;
         config_payer.rpc_addr = format!("http://{}", rpc_addr.to_string());
@@ -1486,8 +1494,6 @@ mod tests {
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
-        let leader_data1 = leader.info.clone();
-        let leader_data2 = leader.info.clone();
 
         let (alice, ledger_path) =
             create_tmp_genesis("wallet_cancel_tx", 10_000_000, leader_data.id, 1000);
@@ -1521,8 +1527,6 @@ mod tests {
         run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
         config_payer.drone_addr = receiver.recv().unwrap();
         config_witness.drone_addr = config_payer.drone_addr.clone();
-        config_payer.leader = leader_data1;
-        config_witness.leader = leader_data2;
 
         let mut rpc_addr = leader_data.contact_info.ncp;
         rpc_addr.set_port(rpc_port);
