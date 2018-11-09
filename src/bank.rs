@@ -982,31 +982,6 @@ impl Bank {
         let mut loaded_accounts =
             self.load_accounts(txs, locked_accounts.clone(), max_age, &mut error_counters);
 
-        // Check account subscriptions, then store data for notifications
-        let pre_userdata: Vec<_>;
-        {
-            let subscriptions = self.account_subscriptions.read().unwrap();
-            let accounts = self.accounts.read().unwrap();
-            pre_userdata = txs
-                .iter()
-                .zip(locked_accounts.into_iter())
-                .map(|(tx, result)| match result {
-                    Ok(()) => {
-                        let key_map: Vec<(&Pubkey, Account)> = tx
-                            .account_keys
-                            .iter()
-                            .map(|key| (key, accounts.load(key).cloned().unwrap_or_default()))
-                            .collect();
-                        Ok(key_map)
-                    }
-                    Err(e) => Err(e),
-                }).filter(|result| result.is_ok())
-                .flat_map(|result| result.unwrap())
-                .filter(|(pubkey, _)| subscriptions.get(&pubkey).is_some())
-                .map(|(pubkey, a)| (pubkey, a.userdata.clone()))
-                .collect();
-        }
-
         let load_elapsed = now.elapsed();
         let now = Instant::now();
         let executed: Vec<Result<()>> = loaded_accounts
@@ -1020,16 +995,8 @@ impl Bank {
         let now = Instant::now();
         self.store_accounts(txs, &executed, &loaded_accounts);
 
-        // Send notifications
-        {
-            let accounts = self.accounts.read().unwrap();
-            for (pubkey, userdata) in &pre_userdata {
-                let account = accounts.load(pubkey).cloned().unwrap_or_default();
-                if userdata != &account.userdata {
-                    self.check_account_subscriptions(&pubkey, &account);
-                }
-            }
-        }
+        // Check account subscriptions and send notifications
+        self.send_account_notifications(txs, locked_accounts);
 
         // once committed there is no way to unroll
         let write_elapsed = now.elapsed();
@@ -1407,6 +1374,17 @@ impl Bank {
         self.finality_time.store(finality, Ordering::Relaxed);
     }
 
+    fn send_account_notifications(&self, txs: &[Transaction], locked_accounts: Vec<Result<()>>) {
+        let accounts = self.accounts.read().unwrap();
+        txs.iter()
+            .zip(locked_accounts.into_iter())
+            .filter(|(_, result)| result.is_ok())
+            .flat_map(|(tx, _)| &tx.account_keys)
+            .for_each(|pubkey| {
+                let account = accounts.load(pubkey).cloned().unwrap_or_default();
+                self.check_account_subscriptions(&pubkey, &account);
+            });
+    }
     pub fn add_account_subscription(
         &self,
         bank_sub_id: Pubkey,
