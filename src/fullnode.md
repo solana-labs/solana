@@ -5,7 +5,7 @@
 ## Pipelining
 
 The fullnodes make extensive use of an optimization common in CPU design,
-called *pipeling*.  Pipelining is the right tool for the job when there's a
+called *pipelining*.  Pipelining is the right tool for the job when there's a
 stream of input data that needs to be processed by a sequence of steps, and
 there's different hardware responsible for each. The quintessential example is
 using a washer and dryer to wash/dry/fold several loads of laundry. Washing
