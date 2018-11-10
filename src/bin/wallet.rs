@@ -6,6 +6,7 @@ extern crate solana;
 
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana::logger;
+use solana::rpc::RPC_PORT;
 use solana::signature::{read_keypair, KeypairUtil};
 use solana::wallet::{gen_keypair_file, parse_command, process_command, WalletConfig, WalletError};
 use std::error;
@@ -28,6 +29,12 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
     };
 
     let proxy = matches.value_of("proxy").map(|proxy| proxy.to_string());
+
+    let rpc_port = if let Some(port) = matches.value_of("rpc-port") {
+        port.to_string().parse().expect("integer")
+    } else {
+        RPC_PORT
+    };
 
     let mut path = dirs::home_dir().expect("home directory");
     let id_path = if matches.is_present("keypair") {
@@ -56,6 +63,7 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
         network,
         timeout,
         proxy,
+        rpc_port,
     })
 }
 
@@ -83,6 +91,12 @@ fn main() -> Result<(), Box<error::Error>> {
                 .value_name("SECS")
                 .takes_value(true)
                 .help("Max seconds to wait to get necessary gossip from the network"),
+        ).arg(
+            Arg::with_name("rpc-port")
+                .long("port")
+                .takes_value(true)
+                .value_name("NUM")
+                .help("Optional rpc-port configuration to connect to non-default nodes")
         ).arg(
             Arg::with_name("proxy")
                 .long("proxy")
