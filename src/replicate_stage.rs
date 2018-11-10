@@ -61,7 +61,8 @@ impl ReplicateStage {
         vote_blob_sender: Option<&BlobSender>,
         ledger_entry_sender: &EntrySender,
         entry_height: &mut u64,
-    ) -> Result<Hash> {
+        last_entry_id: &mut Option<Hash>,
+    ) -> Result<()> {
         let timer = Duration::new(1, 0);
         //coalesce all the available entries into a single vote
         let mut entries = window_receiver.recv_timeout(timer)?;
@@ -76,49 +77,45 @@ impl ReplicateStage {
         );
 
         let mut res = Ok(());
-        let last_entry_id = {
-            let mut num_entries_to_write = entries.len();
-            let (current_leader, _) = bank
+        let mut num_entries_to_write = entries.len();
+        let (current_leader, _) = bank
+            .get_current_leader()
+            .expect("Scheduled leader id should never be unknown while processing entries");
+        for (i, entry) in entries.iter().enumerate() {
+            res = bank.process_entry(&entry);
+            let my_id = keypair.pubkey();
+            let (scheduled_leader, _) = bank
                 .get_current_leader()
                 .expect("Scheduled leader id should never be unknown while processing entries");
-            for (i, entry) in entries.iter().enumerate() {
-                res = bank.process_entry(&entry);
-                let my_id = keypair.pubkey();
-                let (scheduled_leader, _) = bank
-                    .get_current_leader()
-                    .expect("Scheduled leader id should never be unknown while processing entries");
 
-                // TODO: Remove this soon once we boot the leader from ClusterInfo
-                if scheduled_leader != current_leader {
-                    cluster_info.write().unwrap().set_leader(scheduled_leader);
-                }
-                if my_id == scheduled_leader {
-                    num_entries_to_write = i + 1;
-                    break;
-                }
-
-                if res.is_err() {
-                    // TODO: This will return early from the first entry that has an erroneous
-                    // transaction, instad of processing the rest of the entries in the vector
-                    // of received entries. This is in line with previous behavior when
-                    // bank.process_entries() was used to process the entries, but doesn't solve the
-                    // issue that the bank state was still changed, leading to inconsistencies with the
-                    // leader as the leader currently should not be publishing erroneous transactions
-                    break;
-                }
+            // TODO: Remove this soon once we boot the leader from ClusterInfo
+            if scheduled_leader != current_leader {
+                cluster_info.write().unwrap().set_leader(scheduled_leader);
+            }
+            if my_id == scheduled_leader {
+                num_entries_to_write = i + 1;
+                break;
             }
 
-            // If leader rotation happened, only write the entries up to leader rotation.
-            entries.truncate(num_entries_to_write);
+            if res.is_err() {
+                // TODO: This will return early from the first entry that has an erroneous
+                // transaction, instad of processing the rest of the entries in the vector
+                // of received entries. This is in line with previous behavior when
+                // bank.process_entries() was used to process the entries, but doesn't solve the
+                // issue that the bank state was still changed, leading to inconsistencies with the
+                // leader as the leader currently should not be publishing erroneous transactions
+                break;
+            }
+        }
+
+        // If leader rotation happened, only write the entries up to leader rotation.
+        entries.truncate(num_entries_to_write);
+        *last_entry_id = Some(
             entries
                 .last()
                 .expect("Entries cannot be empty at this point")
-                .id
-        };
-
-        if let Some(sender) = vote_blob_sender {
-            send_validator_vote(bank, vote_account_keypair, &cluster_info, sender)?;
-        }
+                .id,
+        );
 
         inc_new_counter_info!(
             "replicate-transactions",
@@ -136,7 +133,11 @@ impl ReplicateStage {
 
         *entry_height += entries_len;
         res?;
-        Ok(last_entry_id)
+        if let Some(sender) = vote_blob_sender {
+            send_validator_vote(bank, vote_account_keypair, &cluster_info, sender)?;
+        }
+
+        Ok(())
     }
 
     pub fn new(
@@ -197,13 +198,12 @@ impl ReplicateStage {
                         vote_sender,
                         &ledger_entry_sender,
                         &mut entry_height_,
+                        &mut last_entry_id,
                     ) {
                         Err(Error::RecvTimeoutError(RecvTimeoutError::Disconnected)) => break,
                         Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
                         Err(e) => error!("{:?}", e),
-                        Ok(last_entry_id_) => {
-                            last_entry_id = Some(last_entry_id_);
-                        }
+                        Ok(()) => (),
                     }
                 }
 
