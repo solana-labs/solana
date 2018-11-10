@@ -13,14 +13,14 @@ the client might request them from a special client called a *drone*.
 
 1. Once the client has tokens to instantiate the program, the client may choose
    to simply keep them.
-2. Loading a program requires two transaction fees - one for the airdrop and
-   one to load the program.
+2. Instantiating a program requires two transaction fees - one for the airdrop
+   and one to instantiate the program.
 
 ## Stamps
 
 Instead of a drone sending a payment transaction to the cluster, it could send
-a signed *load* transaction back to the client. This signed transaction would be
-called a stamp. Like how a food stamp may only be used to purchase food, a
+a signed *load* transaction back to the client. This signed transaction would
+be called a stamp. Like how a food stamp may only be used to purchase food, a
 drone's load stamp may only be used to load a program. It doesn't matter to the
 cluster whether it receives a stamp from the client or the drone, only that the
 signature is valid.
