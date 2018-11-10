@@ -27,7 +27,6 @@ pub mod client;
 pub mod cluster_info;
 pub mod budget_program;
 pub mod compute_leader_finality_service;
-pub mod db_ledger;
 pub mod drone;
 pub mod entry;
 #[cfg(feature = "erasure")]
@@ -105,7 +104,6 @@ extern crate pnet_datalink;
 extern crate rayon;
 extern crate reqwest;
 extern crate ring;
-extern crate rocksdb;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
