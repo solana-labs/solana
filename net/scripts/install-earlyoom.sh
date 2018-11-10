@@ -13,8 +13,8 @@ sysctl -w kernel.sysrq=$(( $(cat /proc/sys/kernel/sysrq) | 64 ))
 if command -v earlyoom; then
   systemctl status earlyoom
 else
-  wget  -r -l1 -np http://ftp.us.debian.org/debian/pool/main/e/earlyoom/ -A 'earlyoom_1.1-*_amd64.deb' -e robots=off -nd
-  apt install --quiet --yes ./earlyoom_1.1-*_amd64.deb
+  wget  -r -l1 -np http://ftp.us.debian.org/debian/pool/main/e/earlyoom/ -A 'earlyoom_1.2-*_amd64.deb' -e robots=off -nd
+  apt install --quiet --yes ./earlyoom_1.2-*_amd64.deb
 
   cat > earlyoom <<OOM
   # use the kernel OOM killer, trigger at 20% available RAM,
