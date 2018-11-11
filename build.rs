@@ -46,9 +46,14 @@ fn main() {
         println!("cargo:rerun-if-changed=target/perf-libs/libcpu-crypt.a");
     }
     if cuda {
+        let cuda_home = match env::var("CUDA_HOME") {
+            Ok(cuda_home) => cuda_home,
+            Err(_) => String::from("/usr/local/cuda"),
+        };
+
         println!("cargo:rerun-if-changed=target/perf-libs/libcuda-crypt.a");
         println!("cargo:rustc-link-lib=static=cuda-crypt");
-        println!("cargo:rustc-link-search=native=/usr/local/cuda/lib64");
+        println!("cargo:rustc-link-search=native={}/lib64", cuda_home);
         println!("cargo:rustc-link-lib=dylib=cudart");
         println!("cargo:rustc-link-lib=dylib=cuda");
         println!("cargo:rustc-link-lib=dylib=cudadevrt");

@@ -18,13 +18,15 @@ mkdir -p target/perf-libs
     curl https://solana-perf.s3.amazonaws.com/v0.10.5/x86_64-unknown-linux-gnu/solana-perf.tgz | tar zxvf -
   )
 
-  if [[ -r /usr/local/cuda/version.txt && -r cuda-version.txt ]]; then
-    if ! diff /usr/local/cuda/version.txt cuda-version.txt > /dev/null; then
+  : "${CUDA_HOME:=/usr/local/cuda}"
+
+  if [[ -r "$CUDA_HOME"/version.txt && -r cuda-version.txt ]]; then
+    if ! diff "$CUDA_HOME"/version.txt cuda-version.txt > /dev/null; then
         echo ==============================================
-        echo Warning: possible CUDA version mismatch
+        echo "Warning: possible CUDA version mismatch with $CUDA_HOME"
         echo
         echo "Expected version: $(cat cuda-version.txt)"
-        echo "Detected version: $(cat /usr/local/cuda/version.txt)"
+        echo "Detected version: $(cat "$CUDA_HOME"/version.txt)"
         echo ==============================================
     fi
   else
