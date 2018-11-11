@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/usr/bin/env bash -ex
 #
 # Rsync setup for Snap builds
 #

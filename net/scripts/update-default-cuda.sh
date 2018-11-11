@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/usr/bin/env bash -ex
 #
 # Updates the default cuda symlink to the supported version
 #

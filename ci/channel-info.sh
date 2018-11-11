@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Computes the current branch names of the edge, beta and stable
 # channels, as well as the latest tagged release for beta and stable.

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Snap daemons have no access to the environment so |snap set solana ...| is
 # used to set runtime configuration.
