@@ -24,7 +24,7 @@ use rayon::prelude::*;
 use rpc::RpcSignatureStatus;
 use signature::Keypair;
 use signature::Signature;
-use solana_sdk::account::{Account, KeyedAccount};
+use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
 use solana_sdk::pubkey::Pubkey;
 use std;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
@@ -755,6 +755,37 @@ impl Bank {
             }).collect();
         func(&mut subset)
     }
+
+    fn load_executable_accounts(&self, mut program_id: Pubkey) -> Result<Vec<(Pubkey, Account)>> {
+        let mut accounts = Vec::new();
+        let mut depth = 0;
+        loop {
+            if native_loader::check_id(&program_id) {
+                // at the root of the chain, ready to dispatch
+                break;
+            }
+
+            if depth >= 5 {
+                return Err(BankError::CallChainTooDeep);
+            }
+            depth += 1;
+
+            let program = match self.get_account(&program_id) {
+                Some(program) => program,
+                None => return Err(BankError::AccountNotFound),
+            };
+            if !program.executable || program.loader == Pubkey::default() {
+                return Err(BankError::AccountNotFound);
+            }
+
+            // add loader to chain
+            accounts.insert(0, (program_id, program.clone()));
+
+            program_id = program.loader;
+        }
+        Ok(accounts)
+    }
+
     /// Execute an instruction
     /// This method calls the instruction's program entry pont method and verifies that the result of
     /// the call does not violate the bank's accounting rules.
@@ -801,49 +832,15 @@ impl Bank {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }
         } else {
-            let mut depth = 0;
-            let mut keys = Vec::new();
-            let mut accounts = Vec::new();
-
-            let mut program_id = tx.program_ids[instruction_index];
-            loop {
-                if native_loader::check_id(&program_id) {
-                    // at the root of the chain, ready to dispatch
-                    break;
-                }
-
-                if depth >= 5 {
-                    return Err(BankError::CallChainTooDeep);
-                }
-                depth += 1;
-
-                let program = match self.get_account(&program_id) {
-                    Some(program) => program,
-                    None => return Err(BankError::AccountNotFound),
-                };
-                if !program.executable || program.loader == Pubkey::default() {
-                    return Err(BankError::AccountNotFound);
-                }
-
-                // add loader to chain
-                keys.insert(0, program_id);
-                accounts.insert(0, program.clone());
-
-                program_id = program.loader;
-            }
-
-            let mut keyed_accounts: Vec<_> = (&keys)
-                .into_iter()
-                .zip(accounts.iter_mut())
+            let mut accounts = self.load_executable_accounts(tx.program_ids[instruction_index])?;
+            let mut keyed_accounts = create_keyed_accounts(&mut accounts);
+            let mut keyed_accounts2: Vec<_> = tx.instructions[instruction_index]
+                .accounts
+                .iter()
+                .map(|&index| &tx.account_keys[index as usize])
+                .zip(program_accounts.iter_mut())
                 .map(|(key, account)| KeyedAccount { key, account })
                 .collect();
-            let mut keyed_accounts2: Vec<_> = (&tx.instructions[instruction_index].accounts)
-                .into_iter()
-                .zip(program_accounts.iter_mut())
-                .map(|(index, account)| KeyedAccount {
-                    key: &tx.account_keys[*index as usize],
-                    account,
-                }).collect();
             keyed_accounts.append(&mut keyed_accounts2);
 
             if !native_loader::process_instruction(
