@@ -1,4 +1,5 @@
-#!/usr/bin/env bash -ex
+#!/usr/bin/env bash
+set -ex
 #
 # Rsync setup for Snap builds
 #

@@ -1,4 +1,5 @@
-#!/usr/bin/env bash -e
+#!/usr/bin/env bash
+set -e
 #
 # Installs native programs as |cargo install| doesn't know about them
 #

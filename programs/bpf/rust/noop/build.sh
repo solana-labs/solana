@@ -1,4 +1,5 @@
-#!/usr/bin/env bash -ex
+#!/usr/bin/env bash
+set -ex
 
 # TODO building release flavor with rust produces a bunch of output .bc files
 INTERDIR=../../../target/release
