@@ -111,11 +111,13 @@ cloud_CreateInstances() {
   declare optionalAddress="$8"
   declare optionalBootDiskType="$9"
 
-  declare nodes
+  declare -a nodes
   if [[ $numNodes = 1 ]]; then
     nodes=("$namePrefix")
   else
-    read -ra nodes <<<$(seq -f "${namePrefix}%0${#numNodes}g" 1 "$numNodes")
+    for node in $(seq -f "${namePrefix}%0${#numNodes}g" 1 "$numNodes"); do
+      nodes+=("$node")
+    done
   fi
 
   declare -a args
