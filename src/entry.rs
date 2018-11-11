@@ -33,6 +33,9 @@ pub type EntryReceiver = Receiver<Vec<Entry>>;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Entry {
+    /// The SHA-256 hash we started from, i.e. the previous Entry ID.
+    pub start_hash: Hash,
+
     /// The number of hashes since the previous Entry ID.
     pub num_hashes: u64,
 

@@ -72,6 +72,10 @@ pub enum BankError {
     /// the `last_id` has been discarded.
     LastIdNotFound,
 
+    /// The BankState for the given entry id matched no last_entry_id, indicating an unknown
+    ///  fork of the ledger
+    LastEntryIdNotFound,
+
     /// The bank has not seen a transaction with the given `Signature` or the transaction is
     /// too old and has been discarded.
     SignatureNotFound,
@@ -118,24 +122,8 @@ struct ErrorCounters {
     duplicate_signature: usize,
 }
 
-pub trait Checkpoint {
-    /// add a checkpoint to this data at current state
-    fn checkpoint(&mut self);
-
-    /// rollback to previous state, panics if no prior checkpoint
-    fn rollback(&mut self);
-
-    /// cull checkpoints to depth, that is depth of zero means
-    ///  no checkpoints, only current state
-    fn purge(&mut self, depth: usize);
-
-    /// returns the number of checkpoints
-    fn depth(&self) -> usize;
-}
-
 /// a record of a tick, from register_tick
-#[derive(Clone)]
-pub struct LastIdEntry {
+pub struct LastTickEntry {
     /// when the id was registered, according to network time
     tick_height: u64,
 
@@ -146,279 +134,100 @@ pub struct LastIdEntry {
     signature_status: SignatureStatusMap,
 }
 
-pub struct LastIds {
-    /// A FIFO queue of `last_id` items, where each item is a set of signatures
-    /// that have been processed using that `last_id`. Rejected `last_id`
-    /// values are so old that the `last_id` has been pulled out of the queue.
+#[derive(Default)]
+/// BankState includes lastids, which is
+///
+/// 1. actual bank state, account balances and transaction counter
+///
+/// 2. a virtual FIFO queue of `last_id` items, where each item is a set of signatures
+///    that have been processed using that `last_id`. Rejected `last_id`
+///    values are so old that the `last_id` has been pulled out of the queue.
+///
+/// 3. information about checkpoints of the state
+///
+pub struct BankState {
+    // TRANSACTION AND ACCOUNT STUFF
+    /// the "real" state, a mapping of owners to token balances, account
+    /// state, programs, etc.
+    pub accounts: HashMap<Pubkey, Account>,
+    // TODO: implement values() or something? take accounts back to private
+    //  from the voting/leader/finality code
+    //  issue #1701
+    /// The number of transactions the bank has processed without error since the
+    /// start of the ledger.
+    transaction_count: u64,
 
+    // LASTIDS STUFF
     /// updated whenever an id is registered, at each tick ;)
     tick_height: u64,
 
     /// last tick to be registered
-    last_id: Option<Hash>,
+    last_tick_id: Option<Hash>,
 
     /// Mapping of hashes to signature sets along with timestamp and what tick_height
     /// was when the id was added. The bank uses this data to
     /// reject transactions with signatures it's seen before and to reject
     /// transactions that are too old (nth is too small)
-    entries: HashMap<Hash, LastIdEntry>,
+    last_tick_entries: HashMap<Hash, LastTickEntry>,
 
-    checkpoints: VecDeque<(u64, Option<Hash>, HashMap<Hash, LastIdEntry>)>,
+    // FORKING/CHECKPOINTING STUFF
+    /// PoH id of the last entry I've digested (or in the case of a TPU,
+    /// emitted), used for chaining forks, keying in checkpoints
+    last_entry_id: Option<Hash>,
+
+    /// number of children of this instance of state, useful for rollback, identifying
+    ///  so-called "heads"
+    num_children: usize,
+
+    /// the last_entry_id of my parent, if I have one, used for key into BankCheckpoints
+    parent: Option<Hash>,
+
+    checkpoints: Arc<RwLock<HashMap<Hash, BankState>>>,
 }
 
-impl Default for LastIds {
-    fn default() -> Self {
-        LastIds {
-            tick_height: 0,
-            last_id: None,
-            entries: HashMap::new(),
-            checkpoints: VecDeque::new(),
-        }
-    }
-}
+impl BankState {
+    /// Check if the age of the entry_id is within the max_age
+    /// return false for any entries with an age equal to or above max_age
+    fn check_tick_age(&self, tick_id: Hash, max_age: usize) -> bool {
+        let entry = self.last_tick_entries.get(&tick_id);
 
-impl Checkpoint for LastIds {
-    fn checkpoint(&mut self) {
-        self.checkpoints
-            .push_front((self.tick_height, self.last_id, self.entries.clone()));
-    }
-    fn rollback(&mut self) {
-        let (tick_height, last_id, entries) = self.checkpoints.pop_front().unwrap();
-        self.tick_height = tick_height;
-        self.last_id = last_id;
-        self.entries = entries;
-    }
-    fn purge(&mut self, depth: usize) {
-        while self.depth() > depth {
-            self.checkpoints.pop_back().unwrap();
-        }
-    }
-    fn depth(&self) -> usize {
-        self.checkpoints.len()
-    }
-}
-
-#[derive(Default)]
-pub struct Accounts {
-    // TODO: implement values() or something? take this back to private
-    //  from the voting/leader/finality code
-    //  issue #1701
-    pub accounts: HashMap<Pubkey, Account>,
-
-    /// The number of transactions the bank has processed without error since the
-    /// start of the ledger.
-    transaction_count: u64,
-
-    /// list of prior states
-    checkpoints: VecDeque<(HashMap<Pubkey, Account>, u64)>,
-}
-
-impl Accounts {
-    fn load(&self, pubkey: &Pubkey) -> Option<&Account> {
-        if let Some(account) = self.accounts.get(pubkey) {
-            return Some(account);
-        }
-
-        for (accounts, _) in &self.checkpoints {
-            if let Some(account) = accounts.get(pubkey) {
-                return Some(account);
-            }
-        }
-        None
-    }
-
-    fn store(&mut self, pubkey: &Pubkey, account: &Account) {
-        // purge if balance is 0 and no checkpoints
-        if account.tokens == 0 && self.checkpoints.is_empty() {
-            self.accounts.remove(pubkey);
-        } else {
-            self.accounts.insert(pubkey.clone(), account.clone());
+        match entry {
+            Some(entry) => self.tick_height - entry.tick_height < max_age as u64,
+            _ => false,
         }
     }
 
-    fn increment_transaction_count(&mut self, tx_count: usize) {
-        self.transaction_count += tx_count as u64;
-    }
-    fn transaction_count(&self) -> u64 {
-        self.transaction_count
-    }
-}
-
-impl Checkpoint for Accounts {
-    fn checkpoint(&mut self) {
-        let mut accounts = HashMap::new();
-        std::mem::swap(&mut self.accounts, &mut accounts);
-
-        self.checkpoints
-            .push_front((accounts, self.transaction_count));
-    }
-    fn rollback(&mut self) {
-        let (accounts, transaction_count) = self.checkpoints.pop_front().unwrap();
-        self.accounts = accounts;
-        self.transaction_count = transaction_count;
+    fn register_entry(&mut self, last_entry_id: &Hash) {
+        self.last_entry_id = Some(*last_entry_id);
     }
 
-    fn purge(&mut self, depth: usize) {
-        fn merge(into: &mut HashMap<Pubkey, Account>, purge: &mut HashMap<Pubkey, Account>) {
-            purge.retain(|pubkey, _| !into.contains_key(pubkey));
-            into.extend(purge.drain());
-            into.retain(|_, account| account.tokens != 0);
+    fn register_tick(&mut self, last_tick_id: &Hash) {
+        self.tick_height += 1;
+        let tick_height = self.tick_height;
+
+        // this clean up can be deferred until sigs gets larger
+        //  because we verify entry.nth every place we check for validity
+        if self.last_tick_entries.len() >= MAX_ENTRY_IDS as usize {
+            self.last_tick_entries
+                .retain(|_, entry| tick_height - entry.tick_height <= MAX_ENTRY_IDS as u64);
         }
 
-        while self.depth() > depth {
-            let (mut purge, _) = self.checkpoints.pop_back().unwrap();
+        self.last_tick_entries.insert(
+            *last_tick_id,
+            LastTickEntry {
+                tick_height,
+                timestamp: timestamp(),
+                signature_status: HashMap::new(),
+            },
+        );
 
-            if let Some((into, _)) = self.checkpoints.back_mut() {
-                merge(into, &mut purge);
-                continue;
-            }
-            merge(&mut self.accounts, &mut purge);
-        }
-    }
-    fn depth(&self) -> usize {
-        self.checkpoints.len()
-    }
-}
+        // remember tick for TPU
+        self.last_tick_id = Some(*last_tick_id);
 
-/// Manager for the state of all accounts and contracts after processing its entries.
-pub struct Bank {
-    /// A map of account public keys to the balance in that account.
-    pub accounts: RwLock<Accounts>,
+        // ticks count in PoH chaining...
+        self.last_entry_id = Some(*last_tick_id);
 
-    /// FIFO queue of `last_id` items
-    last_ids: RwLock<LastIds>,
-
-    /// set of accounts which are currently in the pipeline
-    account_locks: Mutex<HashSet<Pubkey>>,
-
-    // The latest finality time for the network
-    finality_time: AtomicUsize,
-
-    // Mapping of account ids to Subscriber ids and sinks to notify on userdata update
-    account_subscriptions: RwLock<HashMap<Pubkey, HashMap<Pubkey, Sink<Account>>>>,
-
-    // Mapping of signatures to Subscriber ids and sinks to notify on confirmation
-    signature_subscriptions: RwLock<HashMap<Signature, HashMap<Pubkey, Sink<RpcSignatureStatus>>>>,
-
-    /// Tracks and updates the leader schedule based on the votes and account stakes
-    /// processed by the bank
-    pub leader_scheduler: Arc<RwLock<LeaderScheduler>>,
-}
-
-impl Default for Bank {
-    fn default() -> Self {
-        Bank {
-            accounts: RwLock::new(Accounts::default()),
-            last_ids: RwLock::new(LastIds::default()),
-            account_locks: Mutex::new(HashSet::new()),
-            finality_time: AtomicUsize::new(std::usize::MAX),
-            account_subscriptions: RwLock::new(HashMap::new()),
-            signature_subscriptions: RwLock::new(HashMap::new()),
-            leader_scheduler: Arc::new(RwLock::new(LeaderScheduler::default())),
-        }
-    }
-}
-
-impl Bank {
-    /// Create an Bank with built-in programs.
-    pub fn new_with_builtin_programs() -> Self {
-        let bank = Self::default();
-        bank.add_builtin_programs();
-        bank
-    }
-
-    /// Create an Bank using a deposit.
-    pub fn new_from_deposits(deposits: &[Payment]) -> Self {
-        let bank = Self::default();
-        for deposit in deposits {
-            let mut accounts = bank.accounts.write().unwrap();
-
-            let mut account = Account::default();
-            account.tokens += deposit.tokens;
-
-            accounts.store(&deposit.to, &account);
-        }
-        bank.add_builtin_programs();
-        bank
-    }
-
-    pub fn checkpoint(&self) {
-        self.accounts.write().unwrap().checkpoint();
-        self.last_ids.write().unwrap().checkpoint();
-    }
-    pub fn purge(&self, depth: usize) {
-        self.accounts.write().unwrap().purge(depth);
-        self.last_ids.write().unwrap().purge(depth);
-    }
-
-    pub fn rollback(&self) {
-        let rolled_back_pubkeys: Vec<Pubkey> = self
-            .accounts
-            .read()
-            .unwrap()
-            .accounts
-            .keys()
-            .cloned()
-            .collect();
-
-        self.accounts.write().unwrap().rollback();
-
-        rolled_back_pubkeys.iter().for_each(|pubkey| {
-            if let Some(account) = self.accounts.read().unwrap().load(&pubkey) {
-                self.check_account_subscriptions(&pubkey, account)
-            }
-        });
-
-        self.last_ids.write().unwrap().rollback();
-    }
-    pub fn checkpoint_depth(&self) -> usize {
-        self.accounts.read().unwrap().depth()
-    }
-
-    /// Create an Bank with only a Mint. Typically used by unit tests.
-    pub fn new(mint: &Mint) -> Self {
-        let mint_tokens = if mint.bootstrap_leader_id != Pubkey::default() {
-            mint.tokens - mint.bootstrap_leader_tokens
-        } else {
-            mint.tokens
-        };
-
-        let mint_deposit = Payment {
-            to: mint.pubkey(),
-            tokens: mint_tokens,
-        };
-
-        let deposits = if mint.bootstrap_leader_id != Pubkey::default() {
-            let leader_deposit = Payment {
-                to: mint.bootstrap_leader_id,
-                tokens: mint.bootstrap_leader_tokens,
-            };
-            vec![mint_deposit, leader_deposit]
-        } else {
-            vec![mint_deposit]
-        };
-        let bank = Self::new_from_deposits(&deposits);
-        bank.register_tick(&mint.last_id());
-        bank
-    }
-
-    fn add_builtin_programs(&self) {
-        let mut accounts = self.accounts.write().unwrap();
-
-        // Preload Bpf Loader account
-        accounts.store(&bpf_loader::id(), &bpf_loader::account());
-
-        // Preload Erc20 token program
-        accounts.store(&token_program::id(), &token_program::account());
-    }
-
-    /// Return the last entry ID registered.
-    pub fn last_id(&self) -> Hash {
-        self.last_ids
-            .read()
-            .unwrap()
-            .last_id
-            .expect("no last_id has been set")
+        inc_new_counter_info!("bank-register_tick-registered", 1);
     }
 
     /// Store the given signature. The bank will reject any transaction with the same signature.
@@ -430,227 +239,65 @@ impl Bank {
         Ok(())
     }
 
-    /// Forget all signatures. Useful for benchmarking.
-    pub fn clear_signatures(&self) {
-        for entry in &mut self.last_ids.write().unwrap().entries.values_mut() {
-            entry.signature_status.clear();
-        }
-    }
-
-    /// Check if the age of the entry_id is within the max_age
-    /// return false for any entries with an age equal to or above max_age
-    fn check_entry_id_age(last_ids: &LastIds, entry_id: Hash, max_age: usize) -> bool {
-        let entry = last_ids.entries.get(&entry_id);
-
-        match entry {
-            Some(entry) => last_ids.tick_height - entry.tick_height < max_age as u64,
-            _ => false,
-        }
-    }
-
-    fn reserve_signature_with_last_id(
-        last_ids: &mut LastIds,
-        last_id: &Hash,
-        sig: &Signature,
-    ) -> Result<()> {
-        if let Some(entry) = last_ids.entries.get_mut(last_id) {
-            if last_ids.tick_height - entry.tick_height < MAX_ENTRY_IDS as u64 {
+    fn reserve_signature_with_last_id(&mut self, last_id: &Hash, sig: &Signature) -> Result<()> {
+        if let Some(entry) = self.last_tick_entries.get_mut(last_id) {
+            if self.tick_height - self.tick_height < MAX_ENTRY_IDS as u64 {
                 return Self::reserve_signature(&mut entry.signature_status, sig);
             }
         }
         Err(BankError::LastIdNotFound)
     }
 
-    #[cfg(test)]
-    fn reserve_signature_with_last_id_test(&self, sig: &Signature, last_id: &Hash) -> Result<()> {
-        let mut last_ids = self.last_ids.write().unwrap();
-        Self::reserve_signature_with_last_id(&mut last_ids, last_id, sig)
-    }
-
-    fn update_signature_status_with_last_id(
-        last_ids_sigs: &mut HashMap<Hash, LastIdEntry>,
-        signature: &Signature,
-        result: &Result<()>,
-        last_id: &Hash,
-    ) {
-        if let Some(entry) = last_ids_sigs.get_mut(last_id) {
-            entry.signature_status.insert(*signature, result.clone());
+    fn read_balance(account: &Account) -> u64 {
+        if SystemProgram::check_id(&account.program_id) {
+            SystemProgram::get_balance(account)
+        } else if BudgetState::check_id(&account.program_id) {
+            BudgetState::get_balance(account)
+        } else {
+            account.tokens
         }
     }
 
-    fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
-        let mut last_ids = self.last_ids.write().unwrap();
-        for (i, tx) in txs.iter().enumerate() {
-            Self::update_signature_status_with_last_id(
-                &mut last_ids.entries,
-                &tx.signature,
-                &res[i],
-                &tx.last_id,
-            );
-            if res[i] != Err(BankError::SignatureNotFound) {
-                let status = match res[i] {
-                    Ok(_) => RpcSignatureStatus::Confirmed,
-                    Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
-                    Err(BankError::ProgramRuntimeError(_)) => {
-                        RpcSignatureStatus::ProgramRuntimeError
-                    }
-                    Err(_) => RpcSignatureStatus::GenericFailure,
-                };
-                if status != RpcSignatureStatus::SignatureNotFound {
-                    self.check_signature_subscriptions(&tx.signature, status);
-                }
-            }
-        }
+    /// Each contract would need to be able to introspect its own state
+    /// this is hard coded to the budget contract language
+    fn get_balance(&self, pubkey: &Pubkey) -> u64 {
+        self.get_account(pubkey)
+            .map(|x| Self::read_balance(&x))
+            .unwrap_or(0)
     }
 
-    /// Maps a tick height to a timestamp
-    fn tick_height_to_timestamp(last_ids: &LastIds, tick_height: u64) -> Option<u64> {
-        for entry in last_ids.entries.values() {
-            if entry.tick_height == tick_height {
-                return Some(entry.timestamp);
-            }
-        }
-        None
+    /// TODO: Need to implement a real staking contract to hold node stake.
+    /// Right now this just gets the account balances. See github issue #1655.
+    fn get_stake(&self, pubkey: &Pubkey) -> u64 {
+        self.get_balance(pubkey)
     }
 
-    /// Look through the last_ids and find all the valid ids
-    /// This is batched to avoid holding the lock for a significant amount of time
-    ///
-    /// Return a vec of tuple of (valid index, timestamp)
-    /// index is into the passed ids slice to avoid copying hashes
-    pub fn count_valid_ids(&self, ids: &[Hash]) -> Vec<(usize, u64)> {
-        let last_ids = self.last_ids.read().unwrap();
-        let mut ret = Vec::new();
-        for (i, id) in ids.iter().enumerate() {
-            if let Some(entry) = last_ids.entries.get(id) {
-                if last_ids.tick_height - entry.tick_height < MAX_ENTRY_IDS as u64 {
-                    ret.push((i, entry.timestamp));
-                }
-            }
-        }
-        ret
-    }
-
-    /// Looks through a list of tick heights and stakes, and finds the latest
-    /// tick that has achieved finality
-    pub fn get_finality_timestamp(
-        &self,
-        ticks_and_stakes: &mut [(u64, u64)],
-        supermajority_stake: u64,
-    ) -> Option<u64> {
-        // Sort by tick height
-        ticks_and_stakes.sort_by(|a, b| a.0.cmp(&b.0));
-        let last_ids = self.last_ids.read().unwrap();
-        let current_tick_height = last_ids.tick_height;
-        let mut total = 0;
-        for (tick_height, stake) in ticks_and_stakes.iter() {
-            if ((current_tick_height - tick_height) as usize) < MAX_ENTRY_IDS {
-                total += stake;
-                if total > supermajority_stake {
-                    return Self::tick_height_to_timestamp(&last_ids, *tick_height);
-                }
-            }
-        }
-        None
-    }
-
-    /// Tell the bank which Entry IDs exist on the ledger. This function
-    /// assumes subsequent calls correspond to later entries, and will boot
-    /// the oldest ones once its internal cache is full. Once boot, the
-    /// bank will reject transactions using that `last_id`.
-    pub fn register_tick(&self, last_id: &Hash) {
-        let mut last_ids = self.last_ids.write().unwrap();
-
-        last_ids.tick_height += 1;
-        let tick_height = last_ids.tick_height;
-
-        // this clean up can be deferred until sigs gets larger
-        //  because we verify entry.nth every place we check for validity
-        if last_ids.entries.len() >= MAX_ENTRY_IDS as usize {
-            last_ids
-                .entries
-                .retain(|_, entry| tick_height - entry.tick_height <= MAX_ENTRY_IDS as u64);
-        }
-
-        last_ids.entries.insert(
-            *last_id,
-            LastIdEntry {
-                tick_height,
-                timestamp: timestamp(),
-                signature_status: HashMap::new(),
-            },
-        );
-
-        last_ids.last_id = Some(*last_id);
-
-        inc_new_counter_info!("bank-register_tick-registered", 1);
-    }
-
-    /// Process a Transaction. This is used for unit tests and simply calls the vector Bank::process_transactions method.
-    pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
-        let txs = vec![tx.clone()];
-        match self.process_transactions(&txs)[0] {
-            Err(ref e) => {
-                info!("process_transaction error: {:?}", e);
-                Err((*e).clone())
-            }
-            Ok(_) => Ok(()),
-        }
-    }
-
-    fn lock_account(
-        account_locks: &mut HashSet<Pubkey>,
-        keys: &[Pubkey],
-        error_counters: &mut ErrorCounters,
-    ) -> Result<()> {
-        // Copy all the accounts
-        for k in keys {
-            if account_locks.contains(k) {
-                error_counters.account_in_use += 1;
-                return Err(BankError::AccountInUse);
-            }
-        }
-        for k in keys {
-            account_locks.insert(*k);
-        }
-        Ok(())
-    }
-
-    fn unlock_account(tx: &Transaction, result: &Result<()>, account_locks: &mut HashSet<Pubkey>) {
-        match result {
-            Err(BankError::AccountInUse) => (),
-            _ => {
-                for k in &tx.account_keys {
-                    account_locks.remove(k);
-                }
-            }
-        }
+    fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
+        self.load(pubkey).cloned()
     }
 
     fn load_account(
         &self,
         tx: &Transaction,
-        accounts: &Accounts,
-        last_ids: &mut LastIds,
         max_age: usize,
         error_counters: &mut ErrorCounters,
     ) -> Result<Vec<Account>> {
         // Copy all the accounts
-        if accounts.load(&tx.account_keys[0]).is_none() {
+        if self.load(&tx.account_keys[0]).is_none() {
             error_counters.account_not_found += 1;
             Err(BankError::AccountNotFound)
-        } else if accounts.load(&tx.account_keys[0]).unwrap().tokens < tx.fee {
+        } else if self.load(&tx.account_keys[0]).unwrap().tokens < tx.fee {
             error_counters.insufficient_funds += 1;
             Err(BankError::InsufficientFundsForFee)
         } else {
-            if !Self::check_entry_id_age(&last_ids, tx.last_id, max_age) {
+            if !self.check_tick_age(tx.last_id, max_age) {
                 error_counters.last_id_not_found += 1;
                 return Err(BankError::LastIdNotFound);
             }
 
             // There is no way to predict what contract will execute without an error
             // If a fee can pay for execution then the contract will be scheduled
-            let err = Self::reserve_signature_with_last_id(last_ids, &tx.last_id, &tx.signature);
+            let err = self.reserve_signature_with_last_id(&tx.last_id, &tx.signature);
             if let Err(BankError::LastIdNotFound) = err {
                 error_counters.reserve_last_id += 1;
             } else if let Err(BankError::DuplicateSignature) = err {
@@ -661,39 +308,11 @@ impl Bank {
             let mut called_accounts: Vec<Account> = tx
                 .account_keys
                 .iter()
-                .map(|key| accounts.load(key).cloned().unwrap_or_default())
+                .map(|key| self.load(key).cloned().unwrap_or_default())
                 .collect();
             called_accounts[0].tokens -= tx.fee;
             Ok(called_accounts)
         }
-    }
-
-    /// This function will prevent multiple threads from modifying the same account state at the
-    /// same time
-    #[must_use]
-    fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<()>> {
-        let mut account_locks = self.account_locks.lock().unwrap();
-        let mut error_counters = ErrorCounters::default();
-        let rv = txs
-            .iter()
-            .map(|tx| Self::lock_account(&mut account_locks, &tx.account_keys, &mut error_counters))
-            .collect();
-        if error_counters.account_in_use != 0 {
-            inc_new_counter_info!(
-                "bank-process_transactions-account_in_use",
-                error_counters.account_in_use
-            );
-        }
-        rv
-    }
-
-    /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
-    fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
-        debug!("bank unlock accounts");
-        let mut account_locks = self.account_locks.lock().unwrap();
-        txs.iter()
-            .zip(results.iter())
-            .for_each(|(tx, result)| Self::unlock_account(tx, result, &mut account_locks));
     }
 
     fn load_accounts(
@@ -703,57 +322,14 @@ impl Bank {
         max_age: usize,
         error_counters: &mut ErrorCounters,
     ) -> Vec<(Result<Vec<Account>>)> {
-        let accounts = self.accounts.read().unwrap();
-        let mut last_ids = self.last_ids.write().unwrap();
         txs.iter()
             .zip(results.into_iter())
             .map(|etx| match etx {
-                (tx, Ok(())) => {
-                    self.load_account(tx, &accounts, &mut last_ids, max_age, error_counters)
-                }
+                (tx, Ok(())) => self.load_account(tx, max_age, error_counters),
                 (_, Err(e)) => Err(e),
             }).collect()
     }
 
-    pub fn verify_transaction(
-        instruction_index: usize,
-        tx_program_id: &Pubkey,
-        pre_program_id: &Pubkey,
-        pre_tokens: u64,
-        account: &Account,
-    ) -> Result<()> {
-        // Verify the transaction
-
-        // Make sure that program_id is still the same or this was just assigned by the system call contract
-        if *pre_program_id != account.program_id && !SystemProgram::check_id(&tx_program_id) {
-            return Err(BankError::ModifiedContractId(instruction_index as u8));
-        }
-        // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
-        if *tx_program_id != account.program_id && pre_tokens > account.tokens {
-            return Err(BankError::ExternalAccountTokenSpend(
-                instruction_index as u8,
-            ));
-        }
-        Ok(())
-    }
-
-    /// Execute a function with a subset of accounts as writable references.
-    /// Since the subset can point to the same references, in any order there is no way
-    /// for the borrow checker to track them with regards to the original set.
-    fn with_subset<F, A>(accounts: &mut [Account], ixes: &[u8], func: F) -> A
-    where
-        F: Fn(&mut [&mut Account]) -> A,
-    {
-        let mut subset: Vec<&mut Account> = ixes
-            .iter()
-            .map(|ix| {
-                let ptr = &mut accounts[*ix as usize] as *mut Account;
-                // lifetime of this unsafe is only within the scope of the closure
-                // there is no way to reorder them without breaking borrow checker rules
-                unsafe { &mut *ptr }
-            }).collect();
-        func(&mut subset)
-    }
     /// Execute an instruction
     /// This method calls the instruction's program entry pont method and verifies that the result of
     /// the call does not violate the bank's accounting rules.
@@ -771,17 +347,6 @@ impl Bank {
         let pre_data: Vec<_> = program_accounts
             .iter_mut()
             .map(|a| (a.program_id, a.tokens))
-            .collect();
-
-        // Check account subscriptions before storing data for notifications
-        let subscriptions = self.account_subscriptions.read().unwrap();
-        let pre_userdata: Vec<_> = tx
-            .account_keys
-            .iter()
-            .enumerate()
-            .zip(program_accounts.iter_mut())
-            .filter(|((_, pubkey), _)| subscriptions.get(&pubkey).is_some())
-            .map(|((i, pubkey), a)| ((i, pubkey), a.userdata.clone()))
             .collect();
 
         // Call the contract method
@@ -874,13 +439,7 @@ impl Bank {
                 post_account,
             )?;
         }
-        // Send notifications
-        for ((i, pubkey), userdata) in &pre_userdata {
-            let account = &program_accounts[*i];
-            if userdata != &account.userdata {
-                self.check_account_subscriptions(&pubkey, &account);
-            }
-        }
+
         // The total sum of all the tokens in all the pages cannot change.
         let post_total: u64 = program_accounts.iter().map(|a| a.tokens).sum();
         if pre_total != post_total {
@@ -889,14 +448,561 @@ impl Bank {
             Ok(())
         }
     }
+
     /// Execute a transaction.
     /// This method calls each instruction in the transaction over the set of loaded Accounts
     /// The accounts are committed back to the bank only if every instruction succeeds
     fn execute_transaction(&self, tx: &Transaction, tx_accounts: &mut [Account]) -> Result<()> {
+        /// Execute a function with a subset of accounts as writable references.
+        /// Since the subset can point to the same references, in any order there is no way
+        /// for the borrow checker to track them with regards to the original set.
+        fn with_subset<F, A>(accounts: &mut [Account], ixes: &[u8], func: F) -> A
+        where
+            F: Fn(&mut [&mut Account]) -> A,
+        {
+            let mut subset: Vec<&mut Account> = ixes
+                .iter()
+                .map(|ix| {
+                    let ptr = &mut accounts[*ix as usize] as *mut Account;
+                    // lifetime of this unsafe is only within the scope of the closure
+                    // there is no way to reorder them without breaking borrow checker rules
+                    unsafe { &mut *ptr }
+                }).collect();
+            func(&mut subset)
+        }
+
         for (instruction_index, instruction) in tx.instructions.iter().enumerate() {
-            Self::with_subset(tx_accounts, &instruction.accounts, |program_accounts| {
+            with_subset(tx_accounts, &instruction.accounts, |program_accounts| {
                 self.execute_instruction(tx, instruction_index, program_accounts)
             })?;
+        }
+        Ok(())
+    }
+
+    fn execute_and_commit_transactions(
+        &self,
+        txs: &[Transaction],
+        locked_accounts: Vec<Result<()>>,
+        max_age: usize,
+    ) -> Vec<Result<()>> {
+        debug!("processing transactions: {}", txs.len());
+        let mut error_counters = ErrorCounters::default();
+        let now = Instant::now();
+        let mut loaded_accounts =
+            self.load_accounts(txs, locked_accounts, max_age, &mut error_counters);
+        let load_elapsed = now.elapsed();
+        let now = Instant::now();
+        let executed: Vec<Result<()>> = loaded_accounts
+            .iter_mut()
+            .zip(txs.iter())
+            .map(|(acc, tx)| match acc {
+                Err(e) => Err(e.clone()),
+                Ok(ref mut accounts) => self.execute_transaction(tx, accounts),
+            }).collect();
+        let execution_elapsed = now.elapsed();
+        let now = Instant::now();
+        self.store_accounts(txs, &executed, &loaded_accounts);
+        // once committed there is no way to unroll
+        let write_elapsed = now.elapsed();
+        debug!(
+            "load: {}us execute: {}us store: {}us txs_len={}",
+            duration_as_us(&load_elapsed),
+            duration_as_us(&execution_elapsed),
+            duration_as_us(&write_elapsed),
+            txs.len(),
+        );
+        self.update_transaction_statuses(txs, &executed);
+        let mut tx_count = 0;
+        let mut err_count = 0;
+        for (r, tx) in executed.iter().zip(txs.iter()) {
+            if r.is_ok() {
+                tx_count += 1;
+            } else {
+                if err_count == 0 {
+                    info!("tx error: {:?} {:?}", r, tx);
+                }
+                err_count += 1;
+            }
+        }
+        if err_count > 0 {
+            info!("{} errors of {} txs", err_count, err_count + tx_count);
+            inc_new_counter_info!(
+                "bank-process_transactions-account_not_found",
+                error_counters.account_not_found
+            );
+            inc_new_counter_info!("bank-process_transactions-error_count", err_count);
+        }
+
+        self.accounts
+            .write()
+            .unwrap()
+            .increment_transaction_count(tx_count);
+
+        inc_new_counter_info!("bank-process_transactions-txs", tx_count);
+        if 0 != error_counters.last_id_not_found {
+            inc_new_counter_info!(
+                "bank-process_transactions-error-last_id_not_found",
+                error_counters.last_id_not_found
+            );
+        }
+        if 0 != error_counters.reserve_last_id {
+            inc_new_counter_info!(
+                "bank-process_transactions-error-reserve_last_id",
+                error_counters.reserve_last_id
+            );
+        }
+        if 0 != error_counters.duplicate_signature {
+            inc_new_counter_info!(
+                "bank-process_transactions-error-duplicate_signature",
+                error_counters.duplicate_signature
+            );
+        }
+        if 0 != error_counters.insufficient_funds {
+            inc_new_counter_info!(
+                "bank-process_transactions-error-insufficient_funds",
+                error_counters.insufficient_funds
+            );
+        }
+        executed
+    }
+
+    fn load(&self, pubkey: &Pubkey) -> Option<&Account> {
+        if let Some(account) = self.accounts.get(pubkey) {
+            return Some(account);
+        }
+
+        if let Some(parent) = self.parent {
+            return self
+                .checkpoints
+                .read()
+                .unwrap()
+                .get(&parent)
+                .unwrap()
+                .load(pubkey);
+        }
+        None
+    }
+
+    fn store(&mut self, pubkey: &Pubkey, account: &Account) {
+        assert!(self.num_children == 0);
+
+        // purge if balance is 0 and no checkpoints
+        if account.tokens == 0 && self.parent.is_none() {
+            self.accounts.remove(pubkey);
+        } else {
+            self.accounts.insert(pubkey.clone(), account.clone());
+        }
+    }
+
+    fn increment_transaction_count(&mut self, tx_count: usize) {
+        assert!(self.num_children == 0);
+        self.transaction_count += tx_count as u64;
+    }
+
+    fn transaction_count(&self) -> u64 {
+        self.transaction_count
+    }
+
+    fn new(checkpoints: &Arc<RwLock<HashMap<Hash, BankState>>>) {
+        BankState {
+            checkpoints,
+            ..Bank::default()
+        }
+    }
+
+    fn fork(&mut self) -> BankState {
+        let new = BankState::default();
+
+        self.num_children += 1;
+
+        BankState {
+            accounts: HashMap::new(),
+            num_children: 0,
+            parent: self.last_entry_id,
+            last_tick_id_entries: self.last_tick_id_entries.clone(),
+            ..self // transaction_count, tick_height, last_tick_id
+        }
+    }
+
+    //    fn rollback(&mut self) {
+    //        let (accounts, transaction_count) = self.checkpoints.pop_front().unwrap();
+    //        self.accounts = accounts;
+    //        self.transaction_count = transaction_count;
+    //    }
+    //
+    //    fn purge(&mut self, depth: usize) {
+    //        // accounts merge
+    //        fn merge(into: &mut HashMap<Pubkey, Account>, purge: &mut HashMap<Pubkey, Account>) {
+    //            purge.retain(|pubkey, _| !into.contains_key(pubkey));
+    //            into.extend(purge.drain());
+    //            into.retain(|_, account| account.tokens != 0);
+    //        }
+    //
+    //        while self.depth() > depth {
+    //            let (mut purge, _) = self.checkpoints.pop_back().unwrap();
+    //
+    //            if let Some((into, _)) = self.checkpoints.back_mut() {
+    //                merge(into, &mut purge);
+    //                continue;
+    //            }
+    //            merge(&mut self.accounts, &mut purge);
+    //        }
+    //    }
+    //
+    //    fn depth(&self, checkpoints: &HashMap<Hash, BankCheckpoint>) -> usize {
+    //        if let Some(parent) = self.parent {
+    //            checkpoints.get(parent).depth() + 1
+    //        } else {
+    //            0
+    //        }
+    //    }
+}
+
+/// Manager for the state of all accounts and contracts after processing its entries.
+pub struct Bank {
+    /// current bank state and all checkpoints
+    pub heads: RwLock<VecDeque<RwLock<BankState>>>,
+
+    checkpoints: RwLock<HashMap<Hash, BankState>>,
+
+    /// set of accounts which are currently in the pipeline
+    account_locks: Mutex<HashSet<Pubkey>>,
+
+    // The latest finality time for the network
+    finality_time: AtomicUsize,
+
+    // Mapping of account ids to Subscriber ids and sinks to notify on userdata update
+    account_subscriptions: RwLock<HashMap<Pubkey, HashMap<Pubkey, Sink<Account>>>>,
+
+    // Mapping of signatures to Subscriber ids and sinks to notify on confirmation
+    signature_subscriptions: RwLock<HashMap<Signature, HashMap<Pubkey, Sink<RpcSignatureStatus>>>>,
+
+    /// Tracks and updates the leader schedule based on the votes and account stakes
+    /// processed by the bank
+    pub leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+}
+
+impl Default for Bank {
+    fn default() -> Self {
+        let checkpoints = Arc::new(RwLock::new(HashMap::new()));
+
+        Bank {
+            heads: RwLock::new(VecDeque::from(vec![BankState::new(checkpoints)])),
+            checkpoints,
+            account_locks: Mutex::new(HashSet::new()),
+            finality_time: AtomicUsize::new(std::usize::MAX),
+            account_subscriptions: RwLock::new(HashMap::new()),
+            signature_subscriptions: RwLock::new(HashMap::new()),
+            leader_scheduler: Arc::new(RwLock::new(LeaderScheduler::default())),
+        }
+    }
+}
+
+impl Bank {
+    /// Create an Bank with built-in programs.
+    pub fn new_with_builtin_programs() -> Self {
+        let bank = Self::default();
+        bank.add_builtin_programs();
+        bank
+    }
+
+    /// Create an Bank using a deposit.
+    pub fn new_from_deposits(deposits: &[Payment]) -> Self {
+        let bank = Self::default();
+        for deposit in deposits {
+            let mut accounts = bank.accounts.write().unwrap();
+
+            let mut account = Account::default();
+            account.tokens += deposit.tokens;
+
+            accounts.store(&deposit.to, &account);
+        }
+        bank.add_builtin_programs();
+        bank
+    }
+
+    //    pub fn checkpoint(&self) {
+    //        self.accounts.write().unwrap().checkpoint();
+    //        self.last_ids.write().unwrap().checkpoint();
+    //    }
+    //    pub fn purge(&self, depth: usize) {
+    //        self.accounts.write().unwrap().purge(depth);
+    //        self.last_ids.write().unwrap().purge(depth);
+    //    }
+    //
+    //    pub fn rollback(&self) {
+    //        let state = self.state.write().unwrap();
+    //
+    //        let rollback = self.checkpoints.write.unwrap().get(state.parent.unwrap());
+    //
+    //        let rolled_back_pubkeys: Vec<Pubkey> = state.accounts.keys().cloned().collect();
+    //
+    //        self.accounts.write().unwrap().rollback();
+    //
+    //        rolled_back_pubkeys.iter().for_each(|pubkey| {
+    //            if let Some(account) = state.accounts.read().unwrap().load(&pubkey) {
+    //                self.check_account_subscriptions(&pubkey, account)
+    //            }
+    //        });
+    //
+    //        state.tick_height = tick_height;
+    //        state.last_id = last_id;
+    //        state.entries = entries;
+    //    }
+    //
+    //    pub fn checkpoint_depth(&self) -> usize {
+    //        self.accounts.read().unwrap().depth()
+    //    }
+
+    /// Create an Bank with only a Mint. Typically used by unit tests.
+    pub fn new(mint: &Mint) -> Self {
+        let mint_tokens = if mint.bootstrap_leader_id != Pubkey::default() {
+            mint.tokens - mint.bootstrap_leader_tokens
+        } else {
+            mint.tokens
+        };
+
+        let mint_deposit = Payment {
+            to: mint.pubkey(),
+            tokens: mint_tokens,
+        };
+
+        let deposits = if mint.bootstrap_leader_id != Pubkey::default() {
+            let leader_deposit = Payment {
+                to: mint.bootstrap_leader_id,
+                tokens: mint.bootstrap_leader_tokens,
+            };
+            vec![mint_deposit, leader_deposit]
+        } else {
+            vec![mint_deposit]
+        };
+        let bank = Self::new_from_deposits(&deposits);
+        bank.register_tick(&mint.last_id());
+        bank
+    }
+
+    fn add_builtin_programs(&self) {
+        let mut accounts = self.accounts.write().unwrap();
+
+        // Preload Bpf Loader account
+        accounts.store(&bpf_loader::id(), &bpf_loader::account());
+
+        // Preload Erc20 token program
+        accounts.store(&token_program::id(), &token_program::account());
+    }
+
+    /// Return the last entry ID registered.
+    pub fn last_id(&self) -> Hash {
+        self.last_ids
+            .read()
+            .unwrap()
+            .last_id
+            .expect("no last_id has been set")
+    }
+
+    /// Forget all signatures. Useful for benchmarking.
+    pub fn clear_signatures(&self) {
+        for entry in &mut self.state.write().unwrap().0.last_tick_entries.values_mut() {
+            entry.signature_status.clear();
+        }
+    }
+
+    #[cfg(test)]
+    fn reserve_signature_with_last_id_test(&self, sig: &Signature, last_id: &Hash) -> Result<()> {
+        let mut state = self.state.write().unwrap().0;
+        Self::reserve_signature_with_last_id(&mut state, last_id, sig)
+    }
+
+    fn update_signature_status_with_last_id(
+        last_ids_sigs: &mut HashMap<Hash, LastTickEntry>,
+        signature: &Signature,
+        result: &Result<()>,
+        last_id: &Hash,
+    ) {
+        if let Some(entry) = last_ids_sigs.get_mut(last_id) {
+            entry.signature_status.insert(*signature, result.clone());
+        }
+    }
+
+    fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
+        let mut last_ids = self.last_ids.write().unwrap();
+        for (i, tx) in txs.iter().enumerate() {
+            Self::update_signature_status_with_last_id(
+                &mut last_ids.entries,
+                &tx.signature,
+                &res[i],
+                &tx.last_id,
+            );
+            if res[i] != Err(BankError::SignatureNotFound) {
+                let status = match res[i] {
+                    Ok(_) => RpcSignatureStatus::Confirmed,
+                    Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
+                    Err(BankError::ProgramRuntimeError(_)) => {
+                        RpcSignatureStatus::ProgramRuntimeError
+                    }
+                    Err(_) => RpcSignatureStatus::GenericFailure,
+                };
+                if status != RpcSignatureStatus::SignatureNotFound {
+                    self.check_signature_subscriptions(&tx.signature, status);
+                }
+            }
+        }
+    }
+
+    /// Maps a tick height to a timestamp
+    fn tick_height_to_timestamp(state: &BankState, tick_height: u64) -> Option<u64> {
+        for entry in state.last_id_entries.values() {
+            if entry.tick_height == tick_height {
+                return Some(entry.timestamp);
+            }
+        }
+        None
+    }
+
+    /// Look through the last_ids and find all the valid ids
+    /// This is batched to avoid holding the lock for a significant amount of time
+    ///
+    /// Return a vec of tuple of (valid index, timestamp)
+    /// index is into the passed ids slice to avoid copying hashes
+    pub fn count_valid_ids(&self, ids: &[Hash]) -> Vec<(usize, u64)> {
+        let last_ids = self.last_ids.read().unwrap();
+        let mut ret = Vec::new();
+        for (i, id) in ids.iter().enumerate() {
+            if let Some(entry) = last_ids.entries.get(id) {
+                if last_ids.tick_height - entry.tick_height < MAX_ENTRY_IDS as u64 {
+                    ret.push((i, entry.timestamp));
+                }
+            }
+        }
+        ret
+    }
+
+    /// Looks through a list of tick heights and stakes, and finds the latest
+    /// tick that has achieved finality
+    pub fn get_finality_timestamp(
+        &self,
+        ticks_and_stakes: &mut [(u64, u64)],
+        supermajority_stake: u64,
+    ) -> Option<u64> {
+        // Sort by tick height
+        ticks_and_stakes.sort_by(|a, b| a.0.cmp(&b.0));
+        let last_ids = self.last_ids.read().unwrap();
+        let current_tick_height = last_ids.tick_height;
+        let mut total = 0;
+        for (tick_height, stake) in ticks_and_stakes.iter() {
+            if ((current_tick_height - tick_height) as usize) < MAX_ENTRY_IDS {
+                total += stake;
+                if total > supermajority_stake {
+                    return Self::tick_height_to_timestamp(&last_ids, *tick_height);
+                }
+            }
+        }
+        None
+    }
+
+    /// Tell the bank which Entry IDs exist on the ledger. This function
+    /// assumes subsequent calls correspond to later entries, and will boot
+    /// the oldest ones once its internal cache is full. Once boot, the
+    /// bank will reject transactions using that `last_id`.
+    pub fn register_tick(&self, last_id: &Hash) {
+        let (state, _) = self.state.write().unwrap();
+
+        state.register_tick(last_id)
+    }
+
+    pub fn register_entry(&self, last_entry_id: &Hash) {
+        let (state, _) = self.state.write().unwrap();
+
+        state.register_entry(last_entry_id)
+    }
+
+    /// Process a Transaction. This is used for unit tests and simply calls the vector Bank::process_transactions method.
+    pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
+        let txs = vec![tx.clone()];
+        match self.process_transactions(&txs)[0] {
+            Err(ref e) => {
+                info!("process_transaction error: {:?}", e);
+                Err((*e).clone())
+            }
+            Ok(_) => Ok(()),
+        }
+    }
+
+    fn lock_account(
+        account_locks: &mut HashSet<Pubkey>,
+        keys: &[Pubkey],
+        error_counters: &mut ErrorCounters,
+    ) -> Result<()> {
+        // Copy all the accounts
+        for k in keys {
+            if account_locks.contains(k) {
+                error_counters.account_in_use += 1;
+                return Err(BankError::AccountInUse);
+            }
+        }
+        for k in keys {
+            account_locks.insert(*k);
+        }
+        Ok(())
+    }
+
+    fn unlock_account(tx: &Transaction, result: &Result<()>, account_locks: &mut HashSet<Pubkey>) {
+        match result {
+            Err(BankError::AccountInUse) => (),
+            _ => {
+                for k in &tx.account_keys {
+                    account_locks.remove(k);
+                }
+            }
+        }
+    }
+
+    /// This function will prevent multiple threads from modifying the same account state at the
+    /// same time
+    #[must_use]
+    fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<()>> {
+        let mut account_locks = self.account_locks.lock().unwrap();
+        let mut error_counters = ErrorCounters::default();
+        let rv = txs
+            .iter()
+            .map(|tx| Self::lock_account(&mut account_locks, &tx.account_keys, &mut error_counters))
+            .collect();
+        if error_counters.account_in_use != 0 {
+            inc_new_counter_info!(
+                "bank-process_transactions-account_in_use",
+                error_counters.account_in_use
+            );
+        }
+        rv
+    }
+
+    /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
+    fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
+        debug!("bank unlock accounts");
+        let mut account_locks = self.account_locks.lock().unwrap();
+        txs.iter()
+            .zip(results.iter())
+            .for_each(|(tx, result)| Self::unlock_account(tx, result, &mut account_locks));
+    }
+
+    pub fn verify_transaction(
+        instruction_index: usize,
+        tx_program_id: &Pubkey,
+        pre_program_id: &Pubkey,
+        pre_tokens: u64,
+        account: &Account,
+    ) -> Result<()> {
+        // Verify the transaction
+
+        // Make sure that program_id is still the same or this was just assigned by the system call contract
+        if *pre_program_id != account.program_id && !SystemProgram::check_id(&tx_program_id) {
+            return Err(BankError::ModifiedContractId(instruction_index as u8));
+        }
+        // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
+        if *tx_program_id != account.program_id && pre_tokens > account.tokens {
+            return Err(BankError::ExternalAccountTokenSpend(
+                instruction_index as u8,
+            ));
         }
         Ok(())
     }
@@ -986,95 +1092,6 @@ impl Bank {
         Ok(())
     }
 
-    /// Process a batch of transactions.
-    #[must_use]
-    pub fn execute_and_commit_transactions(
-        &self,
-        txs: &[Transaction],
-        locked_accounts: Vec<Result<()>>,
-        max_age: usize,
-    ) -> Vec<Result<()>> {
-        debug!("processing transactions: {}", txs.len());
-        let mut error_counters = ErrorCounters::default();
-        let now = Instant::now();
-        let mut loaded_accounts =
-            self.load_accounts(txs, locked_accounts, max_age, &mut error_counters);
-        let load_elapsed = now.elapsed();
-        let now = Instant::now();
-        let executed: Vec<Result<()>> = loaded_accounts
-            .iter_mut()
-            .zip(txs.iter())
-            .map(|(acc, tx)| match acc {
-                Err(e) => Err(e.clone()),
-                Ok(ref mut accounts) => self.execute_transaction(tx, accounts),
-            }).collect();
-        let execution_elapsed = now.elapsed();
-        let now = Instant::now();
-        self.store_accounts(txs, &executed, &loaded_accounts);
-        // once committed there is no way to unroll
-        let write_elapsed = now.elapsed();
-        debug!(
-            "load: {}us execute: {}us store: {}us txs_len={}",
-            duration_as_us(&load_elapsed),
-            duration_as_us(&execution_elapsed),
-            duration_as_us(&write_elapsed),
-            txs.len(),
-        );
-        self.update_transaction_statuses(txs, &executed);
-        let mut tx_count = 0;
-        let mut err_count = 0;
-        for (r, tx) in executed.iter().zip(txs.iter()) {
-            if r.is_ok() {
-                tx_count += 1;
-            } else {
-                if err_count == 0 {
-                    info!("tx error: {:?} {:?}", r, tx);
-                }
-                err_count += 1;
-            }
-        }
-        if err_count > 0 {
-            info!("{} errors of {} txs", err_count, err_count + tx_count);
-            inc_new_counter_info!(
-                "bank-process_transactions-account_not_found",
-                error_counters.account_not_found
-            );
-            inc_new_counter_info!("bank-process_transactions-error_count", err_count);
-        }
-
-        self.accounts
-            .write()
-            .unwrap()
-            .increment_transaction_count(tx_count);
-
-        inc_new_counter_info!("bank-process_transactions-txs", tx_count);
-        if 0 != error_counters.last_id_not_found {
-            inc_new_counter_info!(
-                "bank-process_transactions-error-last_id_not_found",
-                error_counters.last_id_not_found
-            );
-        }
-        if 0 != error_counters.reserve_last_id {
-            inc_new_counter_info!(
-                "bank-process_transactions-error-reserve_last_id",
-                error_counters.reserve_last_id
-            );
-        }
-        if 0 != error_counters.duplicate_signature {
-            inc_new_counter_info!(
-                "bank-process_transactions-error-duplicate_signature",
-                error_counters.duplicate_signature
-            );
-        }
-        if 0 != error_counters.insufficient_funds {
-            inc_new_counter_info!(
-                "bank-process_transactions-error-insufficient_funds",
-                error_counters.insufficient_funds
-            );
-        }
-        executed
-    }
-
     #[must_use]
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let locked_accounts = self.lock_accounts(txs);
@@ -1083,9 +1100,38 @@ impl Bank {
         results
     }
 
+    fn process_transactions_with(
+        &self,
+        txs: &[Transaction],
+        state: &mut BankState,
+    ) -> Vec<Result<()>> {
+        let locked_accounts = self.lock_accounts(txs);
+        let results = self.execute_and_commit_transactions(txs, locked_accounts, MAX_ENTRY_IDS);
+        self.unlock_accounts(txs, &results);
+        results
+    }
+
+    pub fn process_entry_with(&self, entry: &Entry, state: &mut BankState) -> Result<()> {
+        if !entry.is_tick() {
+            for result in
+                self.process_transactions_with(&entry.start_hash, &entry.transactions, state)
+            {
+                result?;
+            }
+        } else {
+            self.register_tick(&entry.id);
+            self.leader_scheduler
+                .write()
+                .unwrap()
+                .update_height(self.tick_height(), self);
+        }
+
+        Ok(())
+    }
+
     pub fn process_entry(&self, entry: &Entry) -> Result<()> {
         if !entry.is_tick() {
-            for result in self.process_transactions(&entry.transactions) {
+            for result in self.process_transactions(&entry.start_hash, &entry.transactions) {
                 result?;
             }
         } else {
@@ -1110,12 +1156,37 @@ impl Bank {
         }
         Ok(())
     }
+
+    fn find_state(&self, id: &Hash) -> Result<(RwLock<BankState>, usize)> {
+        for (i, state) in self.heads.read().unwrap().iter().enumerate() {
+            if let Some(last_entry_id) = state.last_entry_id {
+                if last_entry_id == id {
+                    return Ok((state, i));
+                }
+            }
+        }
+        Err(BankError::LastEntryIdNotFound)
+    }
+    fn get_state(&self, id: &Hash) -> Result<RwLock<BankState>> {
+        let (state, i) = self.find_state(id)?;
+
+        self.heads.write().unwrap().swap(i, 0);
+
+        Ok(state)
+    }
+
     pub fn par_execute_entries(&self, entries: &[(&Entry, Vec<Result<()>>)]) -> Result<()> {
         inc_new_counter_info!("bank-par_execute_entries-count", entries.len());
+        if entries.is_empty() {
+            return Ok(());
+        }
+        // find the head of PoH chain this slice of entries belongs to...
+        let state = self.get_state(entries[0].0.id).write().unwrap();
+
         let results: Vec<Result<()>> = entries
             .into_par_iter()
             .map(|(e, locks)| {
-                let results = self.execute_and_commit_transactions(
+                let results = state.execute_and_commit_transactions(
                     &e.transactions,
                     locks.to_vec(),
                     MAX_ENTRY_IDS,
@@ -1130,7 +1201,7 @@ impl Bank {
     /// 1. In order lock accounts for each entry while the lock succeeds, up to a Tick entry
     /// 2. Process the locked group in parallel
     /// 3. Register the `Tick` if it's available, goto 1
-    pub fn par_process_entries(&self, entries: &[Entry]) -> Result<()> {
+    fn par_process_entries(&self, entries: &[Entry]) -> Result<()> {
         // accumulator for entries that can be processed in parallel
         let mut mt_group = vec![];
         for entry in entries {
@@ -1160,16 +1231,6 @@ impl Bank {
         Ok(())
     }
 
-    /// Process an ordered list of entries, populating a circular buffer "tail"
-    /// as we go.
-    fn process_block(&self, entries: &[Entry]) -> Result<()> {
-        for entry in entries {
-            self.process_entry(entry)?;
-        }
-
-        Ok(())
-    }
-
     /// Append entry blocks to the ledger, verifying them along the way.
     fn process_ledger_blocks<I>(
         &self,
@@ -1195,7 +1256,7 @@ impl Bank {
                 return Err(BankError::LedgerVerificationFailed);
             }
 
-            self.process_block(&block)?;
+            self.process_entries(&block)?;
 
             last_id = block.last().unwrap().id;
             entry_height += block.len() as u64;
@@ -2256,128 +2317,128 @@ mod tests {
         assert!(ids.into_iter().all(move |id| unique.insert(id)));
     }
 
-    #[test]
-    fn test_bank_purge() {
-        let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
-        let bob = Keypair::new();
-        let charlie = Keypair::new();
-
-        // bob should have 500
-        bank.transfer(500, &alice.keypair(), bob.pubkey(), alice.last_id())
-            .unwrap();
-        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
-
-        bank.transfer(500, &alice.keypair(), charlie.pubkey(), alice.last_id())
-            .unwrap();
-        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
-
-        bank.checkpoint();
-        bank.checkpoint();
-        assert_eq!(bank.checkpoint_depth(), 2);
-        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
-        assert_eq!(bank.get_balance(&alice.pubkey()), 9_000);
-        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
-        assert_eq!(bank.transaction_count(), 2);
-
-        // transfer money back, so bob has zero
-        bank.transfer(500, &bob, alice.keypair().pubkey(), alice.last_id())
-            .unwrap();
-        // this has to be stored as zero in the top accounts hashmap ;)
-        assert!(bank.accounts.read().unwrap().load(&bob.pubkey()).is_some());
-        assert_eq!(bank.get_balance(&bob.pubkey()), 0);
-        // double-checks
-        assert_eq!(bank.get_balance(&alice.pubkey()), 9_500);
-        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
-        assert_eq!(bank.transaction_count(), 3);
-        bank.purge(1);
-
-        assert_eq!(bank.get_balance(&bob.pubkey()), 0);
-        // double-checks
-        assert_eq!(bank.get_balance(&alice.pubkey()), 9_500);
-        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
-        assert_eq!(bank.transaction_count(), 3);
-        assert_eq!(bank.checkpoint_depth(), 1);
-
-        bank.purge(0);
-
-        // bob should still have 0, alice should have 10_000
-        assert_eq!(bank.get_balance(&bob.pubkey()), 0);
-        assert!(bank.accounts.read().unwrap().load(&bob.pubkey()).is_none());
-        // double-checks
-        assert_eq!(bank.get_balance(&alice.pubkey()), 9_500);
-        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
-        assert_eq!(bank.transaction_count(), 3);
-        assert_eq!(bank.checkpoint_depth(), 0);
-    }
-
-    #[test]
-    fn test_bank_checkpoint_rollback() {
-        let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
-        let bob = Keypair::new();
-        let charlie = Keypair::new();
-
-        // bob should have 500
-        bank.transfer(500, &alice.keypair(), bob.pubkey(), alice.last_id())
-            .unwrap();
-        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
-        bank.transfer(500, &alice.keypair(), charlie.pubkey(), alice.last_id())
-            .unwrap();
-        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
-        assert_eq!(bank.checkpoint_depth(), 0);
-
-        bank.checkpoint();
-        bank.checkpoint();
-        assert_eq!(bank.checkpoint_depth(), 2);
-        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
-        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
-        assert_eq!(bank.transaction_count(), 2);
-
-        // transfer money back, so bob has zero
-        bank.transfer(500, &bob, alice.keypair().pubkey(), alice.last_id())
-            .unwrap();
-        // this has to be stored as zero in the top accounts hashmap ;)
-        assert_eq!(bank.get_balance(&bob.pubkey()), 0);
-        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
-        assert_eq!(bank.transaction_count(), 3);
-        bank.rollback();
-
-        // bob should have 500 again
-        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
-        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
-        assert_eq!(bank.transaction_count(), 2);
-        assert_eq!(bank.checkpoint_depth(), 1);
-
-        let signature = Signature::default();
-        for i in 0..MAX_ENTRY_IDS + 1 {
-            let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-            bank.register_tick(&last_id);
-        }
-        assert_eq!(bank.tick_height(), MAX_ENTRY_IDS as u64 + 2);
-        assert_eq!(
-            bank.reserve_signature_with_last_id_test(&signature, &alice.last_id()),
-            Err(BankError::LastIdNotFound)
-        );
-        bank.rollback();
-        assert_eq!(bank.tick_height(), 1);
-        assert_eq!(
-            bank.reserve_signature_with_last_id_test(&signature, &alice.last_id()),
-            Ok(())
-        );
-        bank.checkpoint();
-        assert_eq!(
-            bank.reserve_signature_with_last_id_test(&signature, &alice.last_id()),
-            Err(BankError::DuplicateSignature)
-        );
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_bank_rollback_panic() {
-        let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
-        bank.rollback();
-    }
+    //    #[test]
+    //    fn test_bank_purge() {
+    //        let alice = Mint::new(10_000);
+    //        let bank = Bank::new(&alice);
+    //        let bob = Keypair::new();
+    //        let charlie = Keypair::new();
+    //
+    //        // bob should have 500
+    //        bank.transfer(500, &alice.keypair(), bob.pubkey(), alice.last_id())
+    //            .unwrap();
+    //        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
+    //
+    //        bank.transfer(500, &alice.keypair(), charlie.pubkey(), alice.last_id())
+    //            .unwrap();
+    //        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+    //
+    //        bank.checkpoint();
+    //        bank.checkpoint();
+    //        assert_eq!(bank.checkpoint_depth(), 2);
+    //        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
+    //        assert_eq!(bank.get_balance(&alice.pubkey()), 9_000);
+    //        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+    //        assert_eq!(bank.transaction_count(), 2);
+    //
+    //        // transfer money back, so bob has zero
+    //        bank.transfer(500, &bob, alice.keypair().pubkey(), alice.last_id())
+    //            .unwrap();
+    //        // this has to be stored as zero in the top accounts hashmap ;)
+    //        assert!(bank.accounts.read().unwrap().load(&bob.pubkey()).is_some());
+    //        assert_eq!(bank.get_balance(&bob.pubkey()), 0);
+    //        // double-checks
+    //        assert_eq!(bank.get_balance(&alice.pubkey()), 9_500);
+    //        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+    //        assert_eq!(bank.transaction_count(), 3);
+    //        bank.purge(1);
+    //
+    //        assert_eq!(bank.get_balance(&bob.pubkey()), 0);
+    //        // double-checks
+    //        assert_eq!(bank.get_balance(&alice.pubkey()), 9_500);
+    //        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+    //        assert_eq!(bank.transaction_count(), 3);
+    //        assert_eq!(bank.checkpoint_depth(), 1);
+    //
+    //        bank.purge(0);
+    //
+    //        // bob should still have 0, alice should have 10_000
+    //        assert_eq!(bank.get_balance(&bob.pubkey()), 0);
+    //        assert!(bank.accounts.read().unwrap().load(&bob.pubkey()).is_none());
+    //        // double-checks
+    //        assert_eq!(bank.get_balance(&alice.pubkey()), 9_500);
+    //        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+    //        assert_eq!(bank.transaction_count(), 3);
+    //        assert_eq!(bank.checkpoint_depth(), 0);
+    //    }
+    //
+    //    #[test]
+    //    fn test_bank_checkpoint_rollback() {
+    //        let alice = Mint::new(10_000);
+    //        let bank = Bank::new(&alice);
+    //        let bob = Keypair::new();
+    //        let charlie = Keypair::new();
+    //
+    //        // bob should have 500
+    //        bank.transfer(500, &alice.keypair(), bob.pubkey(), alice.last_id())
+    //            .unwrap();
+    //        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
+    //        bank.transfer(500, &alice.keypair(), charlie.pubkey(), alice.last_id())
+    //            .unwrap();
+    //        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+    //        assert_eq!(bank.checkpoint_depth(), 0);
+    //
+    //        bank.checkpoint();
+    //        bank.checkpoint();
+    //        assert_eq!(bank.checkpoint_depth(), 2);
+    //        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
+    //        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+    //        assert_eq!(bank.transaction_count(), 2);
+    //
+    //        // transfer money back, so bob has zero
+    //        bank.transfer(500, &bob, alice.keypair().pubkey(), alice.last_id())
+    //            .unwrap();
+    //        // this has to be stored as zero in the top accounts hashmap ;)
+    //        assert_eq!(bank.get_balance(&bob.pubkey()), 0);
+    //        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+    //        assert_eq!(bank.transaction_count(), 3);
+    //        bank.rollback();
+    //
+    //        // bob should have 500 again
+    //        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
+    //        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+    //        assert_eq!(bank.transaction_count(), 2);
+    //        assert_eq!(bank.checkpoint_depth(), 1);
+    //
+    //        let signature = Signature::default();
+    //        for i in 0..MAX_ENTRY_IDS + 1 {
+    //            let last_id = hash(&serialize(&i).unwrap()); // Unique hash
+    //            bank.register_tick(&last_id);
+    //        }
+    //        assert_eq!(bank.tick_height(), MAX_ENTRY_IDS as u64 + 2);
+    //        assert_eq!(
+    //            bank.reserve_signature_with_last_id_test(&signature, &alice.last_id()),
+    //            Err(BankError::LastIdNotFound)
+    //        );
+    //        bank.rollback();
+    //        assert_eq!(bank.tick_height(), 1);
+    //        assert_eq!(
+    //            bank.reserve_signature_with_last_id_test(&signature, &alice.last_id()),
+    //            Ok(())
+    //        );
+    //        bank.checkpoint();
+    //        assert_eq!(
+    //            bank.reserve_signature_with_last_id_test(&signature, &alice.last_id()),
+    //            Err(BankError::DuplicateSignature)
+    //        );
+    //    }
+    //
+    //    #[test]
+    //    #[should_panic]
+    //    fn test_bank_rollback_panic() {
+    //        let alice = Mint::new(10_000);
+    //        let bank = Bank::new(&alice);
+    //        bank.rollback();
+    //    }
 
 }
