@@ -1,4 +1,5 @@
-#!/usr/bin/env bash -e
+#!/usr/bin/env bash
+set -e
 
 cd "$(dirname "$0")/.."
 source ci/upload_ci_artifact.sh

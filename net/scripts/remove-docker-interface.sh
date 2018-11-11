@@ -1,4 +1,5 @@
-#!/usr/bin/env bash -ex
+#!/usr/bin/env bash
+set -ex
 #
 # Some instances have docker running and docker0 network interface confuses
 # gossip and airdrops fail.  As a workaround for now simply remove the docker0
