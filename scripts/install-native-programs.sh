@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-set -e
 #
 # Installs native programs as |cargo install| doesn't know about them
 #
+set -e
 
 here=$(dirname "$0")
 SOLANA_ROOT="$(cd "$here"/..; pwd)"

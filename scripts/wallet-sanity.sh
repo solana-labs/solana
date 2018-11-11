@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-set -e
 #
 # Wallet sanity test
 #
+set -e
 
 cd "$(dirname "$0")"/..
 
