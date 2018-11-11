@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/usr/bin/env bash -e
 
 usage() {
   echo "Usage: $0 [--nopull] [docker image name] [command]"

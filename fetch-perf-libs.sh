@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/usr/bin/env bash -e
 
 if [[ $(uname) != Linux ]]; then
   echo Performance libraries are only available for Linux

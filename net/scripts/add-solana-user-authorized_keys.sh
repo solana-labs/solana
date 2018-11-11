@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/usr/bin/env bash -ex
 
 [[ $(uname) = Linux ]] || exit 1
 [[ $USER = root ]] || exit 1

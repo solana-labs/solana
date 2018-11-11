@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/usr/bin/env bash -e
 #
 # Perform a quick sanity test on a leader, drone, validator and client running
 # locally on the same machine

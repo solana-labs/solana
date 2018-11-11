@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/usr/bin/env bash -e
 #
 # Reference: https://github.com/koalaman/shellcheck/wiki/Directive
 

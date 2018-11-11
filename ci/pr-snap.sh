@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/usr/bin/env bash -e
 #
 # Only run snap.sh for pull requests that modify files under /snap
 #
