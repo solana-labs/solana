@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-set -ex
 #
 # Updates the default cuda symlink to the supported version
 #
+set -ex
 
 [[ $(uname) = Linux ]] || exit 1
 [[ $USER = root ]] || exit 1

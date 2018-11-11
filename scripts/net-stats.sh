@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-set -e
 #
 # Reports network statistics
 #
+set -e
 
 [[ $(uname) == Linux ]] || exit 0
 

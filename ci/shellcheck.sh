@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-set -e
 #
 # Reference: https://github.com/koalaman/shellcheck/wiki/Directive
+set -e
 
 cd "$(dirname "$0")/.."
 

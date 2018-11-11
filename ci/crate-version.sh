@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-set -e
 #
 # Outputs the current crate version
 #
+set -e
 
 cd "$(dirname "$0")"/..
 
