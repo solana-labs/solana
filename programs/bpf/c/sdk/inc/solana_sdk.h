@@ -8,6 +8,16 @@ extern "C" {
 #endif
 
 /**
+ * Pick up static_assert if C11 or greater
+ *
+ * Inlined here until <assert.h> is available
+ */
+#if (defined _ISOC11_SOURCE || (defined __STDC_VERSION__ && __STDC_VERSION__ >= 201112L)) && !defined (__cplusplus)
+#undef static_assert
+#define static_assert _Static_assert
+#endif
+
+/**
  * Numeric types
  */
 #ifndef __LP64__
@@ -23,15 +33,28 @@ typedef unsigned int uint32_t;
 typedef signed long int int64_t;
 typedef unsigned long int uint64_t;
 
+#if defined (__cplusplus) || defined(static_assert)
+static_assert(sizeof(int8_t) == 1);
+static_assert(sizeof(uint8_t) == 1);
+static_assert(sizeof(int16_t) == 2);
+static_assert(sizeof(uint16_t) == 2);
+static_assert(sizeof(int32_t) == 4);
+static_assert(sizeof(uint32_t) == 4);
+static_assert(sizeof(int64_t) == 8);
+static_assert(sizeof(uint64_t) == 8);
+#endif
+
 /**
  * NULL
  */
 #define NULL 0
 
+#ifndef __cplusplus
 /**
  * Boolean type
  */
 typedef enum { false = 0, true } bool;
+#endif
 
 /**
  * Helper function that prints a string to stdout
@@ -194,7 +217,7 @@ SOL_FN_PREFIX bool sol_deserialize(
     // account userdata
     ka[i].userdata_len = *(uint64_t *) input;
     input += sizeof(uint64_t);
-    ka[i].userdata = input;
+    ka[i].userdata = (uint8_t *) input;
     input += ka[i].userdata_len;
 
     // program_id
@@ -240,19 +263,19 @@ SOL_FN_PREFIX void sol_log_array(const uint8_t *array, int len) {
 /**
  * Prints the hexadecimal representation of the program's input parameters
  *
- * @param num_ka Numer of SolKeyedAccounts to print
  * @param ka A pointer to an array of SolKeyedAccounts to print
+ * @param ka_len Number of SolKeyedAccounts to print
  * @param data A pointer to the instruction data to print
  * @param data_len The length in bytes of the instruction data
  */
 SOL_FN_PREFIX void sol_log_params(
-  uint64_t num_ka,
   const SolKeyedAccounts *ka,
+  uint64_t ka_len,
   const uint8_t *data,
   uint64_t data_len
 ) {
-  sol_log_64(0, 0, 0, 0, num_ka);
-  for (int i = 0; i < num_ka; i++) {
+  sol_log_64(0, 0, 0, 0, ka_len);
+  for (int i = 0; i < ka_len; i++) {
     sol_log_key(ka[i].key);
     sol_log_64(0, 0, 0, 0, *ka[i].tokens);
     sol_log_array(ka[i].userdata, ka[i].userdata_len);
