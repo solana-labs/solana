@@ -65,5 +65,8 @@ else
     printNode client "$ipAddress"
   done
 fi
+echo
+echo "Use |scp.sh| to transfer files to and from nodes"
+echo
 
 exit 0
