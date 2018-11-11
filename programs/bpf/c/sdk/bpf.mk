@@ -17,10 +17,12 @@ endif
 
 ifdef LLVM_DIR
 CC := $(LLVM_DIR)/bin/clang
+CXX := $(LLVM_DIR)/bin/clang++
 LLC := $(LLVM_DIR)/bin/llc
 OBJ_DUMP := $(LLVM_DIR)/bin/llvm-objdump
 else
 CC := clang-7
+CXX := clang++-7
 LLC := llc-7
 OBJ_DUMP := llvm-objdump-7
 endif
@@ -33,6 +35,11 @@ CC_FLAGS := \
   -O2 \
   -emit-llvm \
   -fno-builtin \
+  -std=c17 \
+
+CXX_FLAGS := \
+  $(CC_FLAGS) \
+  -std=c++17 \
 
 LLC_FLAGS := \
   -march=bpf \
@@ -46,12 +53,12 @@ OBJ_DUMP_FLAGS := \
 help:
 	@echo 'BPF Program makefile'
 	@echo ''
-	@echo 'This makefile will build BPF Programs from C source files into ELFs'
+	@echo 'This makefile will build BPF Programs from C or C++ source files into ELFs'
 	@echo ''
 	@echo 'Assumptions:'
-	@echo '  - Programs are a single .c source file (may include headers)'
+	@echo '  - Programs are a single .c or .cc source file (may include headers)'
 	@echo '  - Programs are located in the source directory: $(SRC_DIR)'
-	@echo '  - Programs are named by their basename (eg. file name:foo.c -> program name:foo)'
+	@echo '  - Programs are named by their basename (eg. file name:foo.c/foo.cc -> program name:foo)'
 	@echo '  - Output files will be placed in the directory: $(OUT_DIR)'
 	@echo ''
 	@echo 'User settings'
@@ -90,6 +97,11 @@ $(OUT_DIR)/%.bc: $(SRC_DIR)/%.c
 	$(_@)mkdir -p $(OUT_DIR)
 	$(_@)$(CC) $(CC_FLAGS) $(SYSTEM_INC_DIRS) $(INC_DIRS) -o $@ -c $< -MD -MF $(@:.bc=.d)
 
+$(OUT_DIR)/%.bc: $(SRC_DIR)/%.cc
+	@echo "[cc] $@ ($<)"
+	$(_@)mkdir -p $(OUT_DIR)
+	$(_@)$(CXX) $(CXX_FLAGS) $(SYSTEM_INC_DIRS) $(INC_DIRS) -o $@ -c $< -MD -MF $(@:.bc=.d)
+
 .PRECIOUS: $(OUT_DIR)/%.o
 $(OUT_DIR)/%.o: $(OUT_DIR)/%.bc
 	@echo "[llc] $@ ($<)"
@@ -97,7 +109,7 @@ $(OUT_DIR)/%.o: $(OUT_DIR)/%.bc
 
 -include $(wildcard $(OUT_DIR)/*.d)
 
-PROGRAM_NAMES := $(notdir $(basename $(wildcard $(SRC_DIR)/*.c)))
+PROGRAM_NAMES := $(notdir $(basename $(wildcard $(SRC_DIR)/*.c $(SRC_DIR)/*.cc)))
 
 define \n
 

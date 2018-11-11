@@ -1,5 +1,5 @@
 /**
- * @brief Example C-based BPF program that prints out the parameters
+ * @brief Example C++-based BPF program that prints out the parameters
  * passed to it
  */
 #include <solana_sdk.h>
@@ -10,7 +10,7 @@ extern bool entrypoint(const uint8_t *input) {
   const uint8_t *data;
   uint64_t data_len;
 
-  sol_log(__FILE__);
+  sol_log("noop++");
 
   if (!sol_deserialize(input, ka, SOL_ARRAY_SIZE(ka), &ka_len, &data, &data_len)) {
     return false;
