@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Regular maintenance performed on a buildkite agent to control disk usage
 #

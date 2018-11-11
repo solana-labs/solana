@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/usr/bin/env bash -e
 #
 # Run the entire buildkite CI pipeline locally for pre-testing before sending a
 # Github pull request

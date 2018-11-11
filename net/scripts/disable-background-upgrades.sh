@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/usr/bin/env bash -ex
 #
 # Prevent background upgrades that block |apt-get|
 #

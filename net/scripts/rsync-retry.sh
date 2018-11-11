@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # rsync wrapper that retries a few times on failure
 #

@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/usr/bin/env bash -e
 
 here=$(dirname "$0")
 SOLANA_ROOT="$(cd "$here"/..; pwd)"
