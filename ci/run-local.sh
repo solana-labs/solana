@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-set -e
 #
 # Run the entire buildkite CI pipeline locally for pre-testing before sending a
 # Github pull request
 #
+set -e
 
 cd "$(dirname "$0")/.."
 BKRUN=ci/node_modules/.bin/bkrun

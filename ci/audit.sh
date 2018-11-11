@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-set -e
 #
 # Audits project dependencies for security vulnerabilities
 #
+set -e
 
 cd "$(dirname "$0")/.."
 

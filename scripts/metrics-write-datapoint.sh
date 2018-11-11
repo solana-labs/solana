@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-set -e
 #
 # Send a metrics datapoint
 #
+set -e
 
 point=$1
 if [[ -z $point ]]; then

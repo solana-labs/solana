@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-set -e
 #
 # Reports Linux OOM Killer activity
 #
+set -e
 
 cd "$(dirname "$0")"
 
