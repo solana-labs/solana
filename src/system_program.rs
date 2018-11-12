@@ -94,7 +94,7 @@ impl SystemProgram {
                     accounts[1].program_id = program_id;
                     accounts[1].userdata = vec![0; space as usize];
                     accounts[1].executable = false;
-                    accounts[1].loader_program_id = Pubkey::default();
+                    accounts[1].loader = Pubkey::default();
                 }
                 SystemProgram::Assign { program_id } => {
                     if !Self::check_id(&accounts[0].program_id) {
@@ -112,11 +112,11 @@ impl SystemProgram {
                     accounts[1].tokens += tokens;
                 }
                 SystemProgram::Spawn => {
-                    if !accounts[0].executable || accounts[0].loader_program_id != Pubkey::default()
+                    if !accounts[0].executable || accounts[0].loader != Pubkey::default()
                     {
                         Err(Error::AccountNotFinalized)?;
                     }
-                    accounts[0].loader_program_id = accounts[0].program_id;
+                    accounts[0].loader = accounts[0].program_id;
                     accounts[0].program_id = tx.account_keys[0];
                 }
             }

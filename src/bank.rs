@@ -821,7 +821,7 @@ impl Bank {
                     Some(program) => program,
                     None => return Err(BankError::AccountNotFound),
                 };
-                if !program.executable || program.loader_program_id == Pubkey::default() {
+                if !program.executable || program.loader == Pubkey::default() {
                     return Err(BankError::AccountNotFound);
                 }
 
@@ -829,7 +829,7 @@ impl Bank {
                 keys.insert(0, program_id);
                 accounts.insert(0, program.clone());
 
-                program_id = program.loader_program_id;
+                program_id = program.loader;
             }
 
             let mut keyed_accounts: Vec<_> = (&keys)
@@ -2025,7 +2025,7 @@ mod tests {
         let string = transport_receiver.poll();
         assert!(string.is_ok());
         if let Async::Ready(Some(response)) = string.unwrap() {
-            let expected = format!(r#"{{"jsonrpc":"2.0","method":"accountNotification","params":{{"result":{{"executable":false,"loader_program_id":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"program_id":[129,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}},"subscription":0}}}}"#);
+            let expected = format!(r#"{{"jsonrpc":"2.0","method":"accountNotification","params":{{"result":{{"executable":false,"loader":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"program_id":[129,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}},"subscription":0}}}}"#);
             assert_eq!(expected, response);
         }
 
