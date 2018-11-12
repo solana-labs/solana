@@ -10,6 +10,11 @@ use std::thread;
 use std::time::{Duration, Instant};
 use sys_info::hostname;
 use timing;
+use sys_info;
+
+lazy_static! {
+    static ref NODEINFO: String = sys_info::hostname().unwrap_or_else(|_| "".to_string());
+}
 
 #[derive(Debug)]
 enum MetricsCommand {
@@ -131,6 +136,7 @@ impl MetricsAgent {
     }
 
     pub fn submit(&self, mut point: influxdb::Point) {
+        point.add_field("host", influxdb::Value::String(NODEINFO.to_string()));
         if point.timestamp.is_none() {
             point.timestamp = Some(timing::timestamp() as i64);
         }
