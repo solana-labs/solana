@@ -78,8 +78,9 @@ pub enum BankError {
 
     /// Proof of History verification failed.
     LedgerVerificationFailed,
-    /// Contract's transaction token balance does not equal the balance after the transaction
-    UnbalancedTransaction(u8),
+
+    /// Contract's instruction token balance does not equal the balance after the instruction
+    UnbalancedInstruction(u8),
 
     /// Contract's transactions resulted in an account with a negative balance
     /// The difference from InsufficientFundsForFee is that the transaction was executed by the
@@ -715,9 +716,9 @@ impl Bank {
             }).collect()
     }
 
-    pub fn verify_transaction(
+    pub fn verify_instruction(
         instruction_index: usize,
-        tx_program_id: &Pubkey,
+        program_id: &Pubkey,
         pre_program_id: &Pubkey,
         pre_tokens: u64,
         account: &Account,
@@ -725,11 +726,11 @@ impl Bank {
         // Verify the transaction
 
         // Make sure that program_id is still the same or this was just assigned by the system call contract
-        if *pre_program_id != account.program_id && !SystemProgram::check_id(&tx_program_id) {
+        if *pre_program_id != account.program_id && !SystemProgram::check_id(&program_id) {
             return Err(BankError::ModifiedContractId(instruction_index as u8));
         }
         // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
-        if *tx_program_id != account.program_id && pre_tokens > account.tokens {
+        if *program_id != account.program_id && pre_tokens > account.tokens {
             return Err(BankError::ExternalAccountTokenSpend(
                 instruction_index as u8,
             ));
@@ -764,7 +765,7 @@ impl Bank {
         instruction_index: usize,
         program_accounts: &mut [&mut Account],
     ) -> Result<()> {
-        let tx_program_id = tx.program_id(instruction_index);
+        let program_id = tx.program_id(instruction_index);
         // TODO: the runtime should be checking read/write access to memory
         // we are trusting the hard coded contracts not to clobber or allocate
         let pre_total: u64 = program_accounts.iter().map(|a| a.tokens).sum();
@@ -775,7 +776,7 @@ impl Bank {
 
         // Call the contract method
         // It's up to the contract to implement its own rules on moving funds
-        if SystemProgram::check_id(&tx_program_id) {
+        if SystemProgram::check_id(&program_id) {
             if let Err(err) =
                 SystemProgram::process_transaction(&tx, instruction_index, program_accounts)
             {
@@ -785,17 +786,17 @@ impl Bank {
                 };
                 return Err(err);
             }
-        } else if BudgetState::check_id(&tx_program_id) {
+        } else if BudgetState::check_id(&program_id) {
             if BudgetState::process_transaction(&tx, instruction_index, program_accounts).is_err() {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }
-        } else if StorageProgram::check_id(&tx_program_id) {
+        } else if StorageProgram::check_id(&program_id) {
             if StorageProgram::process_transaction(&tx, instruction_index, program_accounts)
                 .is_err()
             {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }
-        } else if VoteProgram::check_id(&tx_program_id) {
+        } else if VoteProgram::check_id(&program_id) {
             VoteProgram::process_transaction(&tx, instruction_index, program_accounts).is_err();
         } else {
             let mut depth = 0;
@@ -843,7 +844,7 @@ impl Bank {
                 }).collect();
             keyed_accounts.append(&mut keyed_accounts2);
 
-            if !native_loader::process_transaction(
+            if !native_loader::process_instruction(
                 &mut keyed_accounts,
                 &tx.instructions[instruction_index].userdata,
             ) {
@@ -851,26 +852,27 @@ impl Bank {
             }
         }
 
-        // Verify the transaction
+        // Verify the instruction
         for ((pre_program_id, pre_tokens), post_account) in
             pre_data.iter().zip(program_accounts.iter())
         {
-            Self::verify_transaction(
+            Self::verify_instruction(
                 instruction_index,
-                &tx_program_id,
+                &program_id,
                 pre_program_id,
                 *pre_tokens,
                 post_account,
             )?;
         }
-        // The total sum of all the tokens in all the pages cannot change.
+        // The total sum of all the tokens in all the accounts cannot change.
         let post_total: u64 = program_accounts.iter().map(|a| a.tokens).sum();
         if pre_total != post_total {
-            Err(BankError::UnbalancedTransaction(instruction_index as u8))
+            Err(BankError::UnbalancedInstruction(instruction_index as u8))
         } else {
             Ok(())
         }
     }
+
     /// Execute a transaction.
     /// This method calls each instruction in the transaction over the set of loaded Accounts
     /// The accounts are committed back to the bank only if every instruction succeeds

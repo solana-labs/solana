@@ -56,7 +56,7 @@ pub fn id() -> Pubkey {
     Pubkey::new(&NATIVE_LOADER_PROGRAM_ID)
 }
 
-pub fn process_transaction(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -> bool {
+pub fn process_instruction(keyed_accounts: &mut [KeyedAccount], ix_userdata: &[u8]) -> bool {
     if keyed_accounts[0].account.executable {
         // dispatch it
         let name = keyed_accounts[0].account.userdata.clone();
@@ -79,14 +79,14 @@ pub fn process_transaction(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) 
                         return false;
                     }
                 };
-                return entrypoint(&mut keyed_accounts[1..], tx_data);
+                return entrypoint(&mut keyed_accounts[1..], ix_userdata);
             },
             Err(e) => {
                 warn!("Unable to load: {:?}", e);
                 return false;
             }
         }
-    } else if let Ok(instruction) = deserialize(tx_data) {
+    } else if let Ok(instruction) = deserialize(ix_userdata) {
         match instruction {
             LoaderInstruction::Write { offset, bytes } => {
                 trace!("NativeLoader::Write offset {} bytes {:?}", offset, bytes);
@@ -109,7 +109,7 @@ pub fn process_transaction(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) 
             }
         }
     } else {
-        warn!("Invalid program transaction: {:?}", tx_data);
+        warn!("Invalid userdata in instruction: {:?}", ix_userdata);
     }
     true
 }
