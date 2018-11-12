@@ -46,7 +46,7 @@ impl ComputeLeaderFinalityService {
                 .filter_map(|account| {
                     // Filter out any accounts that don't belong to the VoteProgram
                     // by returning None
-                    if VoteProgram::check_id(&account.program_id) {
+                    if VoteProgram::check_id(&account.owner) {
                         if let Ok(vote_state) = VoteProgram::deserialize(&account.userdata) {
                             let validator_stake = bank.get_stake(&vote_state.node_id);
                             total_stake += validator_stake;

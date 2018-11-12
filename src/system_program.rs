@@ -73,14 +73,13 @@ impl SystemProgram {
                     space,
                     program_id,
                 } => {
-                    if !Self::check_id(&accounts[0].program_id) {
-                        info!("Invalid account[0] program_id");
+                    if !Self::check_id(&accounts[0].owner) {
+                        info!("Invalid account[0] owner");
                         Err(Error::InvalidArgument)?;
                     }
 
                     if space > 0
-                        && (!accounts[1].userdata.is_empty()
-                            || !Self::check_id(&accounts[1].program_id))
+                        && (!accounts[1].userdata.is_empty() || !Self::check_id(&accounts[1].owner))
                     {
                         info!("Invalid account[1]");
                         Err(Error::InvalidArgument)?;
@@ -91,16 +90,16 @@ impl SystemProgram {
                     }
                     accounts[0].tokens -= tokens;
                     accounts[1].tokens += tokens;
-                    accounts[1].program_id = program_id;
+                    accounts[1].owner = program_id;
                     accounts[1].userdata = vec![0; space as usize];
                     accounts[1].executable = false;
                     accounts[1].loader = Pubkey::default();
                 }
                 SystemProgram::Assign { program_id } => {
-                    if !Self::check_id(&accounts[0].program_id) {
+                    if !Self::check_id(&accounts[0].owner) {
                         Err(Error::AssignOfUnownedAccount)?;
                     }
-                    accounts[0].program_id = program_id;
+                    accounts[0].owner = program_id;
                 }
                 SystemProgram::Move { tokens } => {
                     //bank should be verifying correctness
@@ -112,12 +111,11 @@ impl SystemProgram {
                     accounts[1].tokens += tokens;
                 }
                 SystemProgram::Spawn => {
-                    if !accounts[0].executable || accounts[0].loader != Pubkey::default()
-                    {
+                    if !accounts[0].executable || accounts[0].loader != Pubkey::default() {
                         Err(Error::AccountNotFinalized)?;
                     }
-                    accounts[0].loader = accounts[0].program_id;
-                    accounts[0].program_id = tx.account_keys[0];
+                    accounts[0].loader = accounts[0].owner;
+                    accounts[0].owner = tx.account_keys[0];
                 }
             }
             Ok(())
@@ -171,7 +169,7 @@ mod test {
         let to = Keypair::new();
         let mut accounts = vec![Account::default(), Account::default()];
         accounts[0].tokens = 1;
-        accounts[0].program_id = from.pubkey();
+        accounts[0].owner = from.pubkey();
         let tx = Transaction::system_new(&from, to.pubkey(), 1, Hash::default());
         if let Ok(()) = process_transaction(&tx, &mut accounts) {
             panic!("Account not owned by SystemProgram");
@@ -189,14 +187,14 @@ mod test {
         process_transaction(&tx, &mut accounts).unwrap();
         assert!(accounts[0].userdata.is_empty());
         assert_eq!(accounts[1].userdata.len(), 1);
-        assert_eq!(accounts[1].program_id, to.pubkey());
+        assert_eq!(accounts[1].owner, to.pubkey());
     }
     #[test]
     fn test_create_allocate_wrong_dest_program() {
         let from = Keypair::new();
         let to = Keypair::new();
         let mut accounts = vec![Account::default(), Account::default()];
-        accounts[1].program_id = to.pubkey();
+        accounts[1].owner = to.pubkey();
         let tx = Transaction::system_create(
             &from,
             to.pubkey(),
@@ -214,7 +212,7 @@ mod test {
         let from = Keypair::new();
         let to = Keypair::new();
         let mut accounts = vec![Account::default(), Account::default()];
-        accounts[0].program_id = to.pubkey();
+        accounts[0].owner = to.pubkey();
         let tx = Transaction::system_create(
             &from,
             to.pubkey(),
@@ -252,7 +250,7 @@ mod test {
         let mut accounts = vec![Account::default()];
         let tx = Transaction::system_assign(&from, Hash::default(), program.pubkey(), 0);
         process_transaction(&tx, &mut accounts).unwrap();
-        assert_eq!(accounts[0].program_id, program.pubkey());
+        assert_eq!(accounts[0].owner, program.pubkey());
     }
     #[test]
     fn test_move() {

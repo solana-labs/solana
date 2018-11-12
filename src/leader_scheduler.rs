@@ -294,7 +294,7 @@ impl LeaderScheduler {
                 .accounts
                 .values()
                 .filter_map(|account| {
-                    if VoteProgram::check_id(&account.program_id) {
+                    if VoteProgram::check_id(&account.owner) {
                         if let Ok(vote_state) = VoteProgram::deserialize(&account.userdata) {
                             return vote_state
                                 .votes

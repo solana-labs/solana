@@ -105,7 +105,7 @@ impl VoteProgram {
             Ok(VoteInstruction::RegisterAccount) => {
                 // TODO: a single validator could register multiple "vote accounts"
                 // which would clutter the "accounts" structure. See github issue 1654.
-                accounts[1].program_id = Self::id();
+                accounts[1].owner = Self::id();
 
                 let mut vote_state = VoteProgram {
                     votes: VecDeque::new(),
@@ -117,7 +117,7 @@ impl VoteProgram {
                 Ok(())
             }
             Ok(VoteInstruction::NewVote(vote)) => {
-                if !Self::check_id(&accounts[0].program_id) {
+                if !Self::check_id(&accounts[0].owner) {
                     error!("accounts[0] is not assigned to the VOTE_PROGRAM");
                     Err(Error::InvalidArguments)?;
                 }

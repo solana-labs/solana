@@ -16,7 +16,7 @@ pub fn id() -> Pubkey {
 pub fn account() -> Account {
     Account {
         tokens: 0,
-        program_id: id(),
+        owner: id(),
         userdata: BPF_LOADER_NAME.as_bytes().to_vec(),
         executable: true,
         loader: native_loader::id(),
