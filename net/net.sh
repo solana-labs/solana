@@ -140,7 +140,7 @@ build() {
 startCommon() {
   declare ipAddress=$1
   test -d "$SOLANA_ROOT"
-  ssh "${sshOptions[@]}" "$ipAddress" "mkdir -p ~/solana ~/.cargo/bin"
+  ssh "${sshOptions[@]}" "$ipAddress" "mkdir -p ~/solana ~/.cargo/bin; rm -rf ~/solana/"
   rsync -vPrc -e "ssh ${sshOptions[*]}" \
     "$SOLANA_ROOT"/{fetch-perf-libs.sh,scripts,net,multinode-demo} \
     "$ipAddress":~/solana/
