@@ -10,7 +10,7 @@ pub struct Account {
     /// A transaction can write to its userdata
     pub userdata: Vec<u8>,
     /// contract id this contract belongs to
-    pub program_id: Pubkey,
+    pub owner: Pubkey,
 
     /// this account contains a program (and is strictly read-only)
     pub executable: bool,
@@ -20,12 +20,12 @@ pub struct Account {
 }
 
 impl Account {
-    // TODO do we want to add executable and leader_program_id even though they should always be false/default?
-    pub fn new(tokens: u64, space: usize, program_id: Pubkey) -> Account {
+    // TODO do we want to add executable and leader_owner even though they should always be false/default?
+    pub fn new(tokens: u64, space: usize, owner: Pubkey) -> Account {
         Account {
             tokens,
             userdata: vec![0u8; space],
-            program_id,
+            owner,
             executable: false,
             loader: Pubkey::default(),
         }

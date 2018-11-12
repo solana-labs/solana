@@ -110,7 +110,7 @@ fn serialize_parameters(keyed_accounts: &mut [KeyedAccount], data: &[u8]) -> Vec
         v.write_u64::<LittleEndian>(info.account.userdata.len() as u64)
             .unwrap();
         v.write_all(&info.account.userdata).unwrap();
-        v.write_all(info.account.program_id.as_ref()).unwrap();
+        v.write_all(info.account.owner.as_ref()).unwrap();
     }
     v.write_u64::<LittleEndian>(data.len() as u64).unwrap();
     v.write_all(data).unwrap();
@@ -131,7 +131,7 @@ fn deserialize_parameters(keyed_accounts: &mut [KeyedAccount], buffer: &[u8]) {
         info.account.userdata.clone_from_slice(&buffer[start..end]);
 
         start += info.account.userdata.len() // skip userdata
-                  + mem::size_of::<Pubkey>(); // skip program_id
+                  + mem::size_of::<Pubkey>(); // skip owner
     }
 }
 

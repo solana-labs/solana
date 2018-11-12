@@ -156,7 +156,7 @@ mod tests {
 
         let alice_pubkey = Pubkey::default();
         let bob_pubkey = Pubkey::default();
-        let program_id = Pubkey::default();
+        let owner = Pubkey::default();
 
         let mut accounts = [
             (
@@ -164,13 +164,13 @@ mod tests {
                 Account {
                     tokens: 1,
                     userdata,
-                    program_id,
+                    owner,
                     executable: true,
                     loader: Pubkey::default(),
                 },
             ),
-            (alice_pubkey, Account::new(100, 0, program_id)),
-            (bob_pubkey, Account::new(1, 0, program_id)),
+            (alice_pubkey, Account::new(100, 0, owner)),
+            (bob_pubkey, Account::new(1, 0, owner)),
         ];
         let data = serialize(&10u64).unwrap();
         process(&mut create_keyed_accounts(&mut accounts), &data);
@@ -198,19 +198,19 @@ mod tests {
             accounts[3].userdata = serialize({a=1, b=2, c=3}, nil, "s")
         "#.as_bytes()
         .to_vec();
-        let program_id = Pubkey::default();
+        let owner = Pubkey::default();
         let program_account = Account {
             tokens: 1,
             userdata,
-            program_id,
+            owner,
             executable: true,
             loader: Pubkey::default(),
         };
-        let alice_account = Account::new(100, 0, program_id);
+        let alice_account = Account::new(100, 0, owner);
         let serialize_account = Account {
             tokens: 100,
             userdata: read_test_file("serialize.lua"),
-            program_id,
+            owner,
             executable: false,
             loader: Pubkey::default(),
         };
@@ -218,7 +218,7 @@ mod tests {
             (Pubkey::default(), program_account),
             (Pubkey::default(), alice_account),
             (Pubkey::default(), serialize_account),
-            (Pubkey::default(), Account::new(1, 0, program_id)),
+            (Pubkey::default(), Account::new(1, 0, owner)),
         ];
         let mut keyed_accounts = create_keyed_accounts(&mut accounts);
         process(&mut keyed_accounts, &[]);
@@ -231,7 +231,7 @@ mod tests {
 
     #[test]
     fn test_lua_multisig() {
-        let program_id = Pubkey::default();
+        let owner = Pubkey::default();
 
         let alice_pubkey = Pubkey::new(&[0; 32]);
         let serialize_pubkey = Pubkey::new(&[1; 32]);
@@ -244,7 +244,7 @@ mod tests {
         let program_account = Account {
             tokens: 1,
             userdata: read_test_file("multisig.lua"),
-            program_id,
+            owner,
             executable: true,
             loader: Pubkey::default(),
         };
@@ -252,7 +252,7 @@ mod tests {
         let alice_account = Account {
             tokens: 100,
             userdata: Vec::new(),
-            program_id,
+            owner,
             executable: true,
             loader: Pubkey::default(),
         };
@@ -260,7 +260,7 @@ mod tests {
         let serialize_account = Account {
             tokens: 100,
             userdata: read_test_file("serialize.lua"),
-            program_id,
+            owner,
             executable: true,
             loader: Pubkey::default(),
         };
@@ -269,8 +269,8 @@ mod tests {
             (Pubkey::default(), program_account), // Account holding the program
             (alice_pubkey, alice_account),        // The payer
             (serialize_pubkey, serialize_account), // Where the serialize library is stored.
-            (state_pubkey, Account::new(1, 0, program_id)), // Where program state is stored.
-            (bob_pubkey, Account::new(1, 0, program_id)), // The payee once M signatures are collected.
+            (state_pubkey, Account::new(1, 0, owner)), // Where program state is stored.
+            (bob_pubkey, Account::new(1, 0, owner)), // The payee once M signatures are collected.
         ];
         let mut keyed_accounts = create_keyed_accounts(&mut accounts);
 

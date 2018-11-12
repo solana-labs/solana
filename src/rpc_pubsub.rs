@@ -485,7 +485,7 @@ mod tests {
            "method": "accountNotification",
            "params": {
                "result": {
-                   "program_id": budget_program_id,
+                   "owner": budget_program_id,
                    "tokens": 1,
                    "userdata": expected_userdata,
                    "executable": executable,
@@ -526,7 +526,7 @@ mod tests {
            "method": "accountNotification",
            "params": {
                "result": {
-                   "program_id": budget_program_id,
+                   "owner": budget_program_id,
                    "tokens": 51,
                    "userdata": expected_userdata,
                     "executable": executable,
@@ -565,7 +565,7 @@ mod tests {
            "method": "accountNotification",
            "params": {
                "result": {
-                   "program_id": budget_program_id,
+                   "owner": budget_program_id,
                    "tokens": 1,
                    "userdata": expected_userdata,
                     "executable": executable,

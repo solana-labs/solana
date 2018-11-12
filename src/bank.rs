@@ -726,11 +726,11 @@ impl Bank {
         // Verify the transaction
 
         // Make sure that program_id is still the same or this was just assigned by the system call contract
-        if *pre_program_id != account.program_id && !SystemProgram::check_id(&program_id) {
+        if *pre_program_id != account.owner && !SystemProgram::check_id(&program_id) {
             return Err(BankError::ModifiedContractId(instruction_index as u8));
         }
         // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
-        if *program_id != account.program_id && pre_tokens > account.tokens {
+        if *program_id != account.owner && pre_tokens > account.tokens {
             return Err(BankError::ExternalAccountTokenSpend(
                 instruction_index as u8,
             ));
@@ -771,7 +771,7 @@ impl Bank {
         let pre_total: u64 = program_accounts.iter().map(|a| a.tokens).sum();
         let pre_data: Vec<_> = program_accounts
             .iter_mut()
-            .map(|a| (a.program_id, a.tokens))
+            .map(|a| (a.owner, a.tokens))
             .collect();
 
         // Call the contract method
@@ -1299,9 +1299,9 @@ impl Bank {
     }
 
     pub fn read_balance(account: &Account) -> u64 {
-        if SystemProgram::check_id(&account.program_id) {
+        if SystemProgram::check_id(&account.owner) {
             SystemProgram::get_balance(account)
-        } else if BudgetState::check_id(&account.program_id) {
+        } else if BudgetState::check_id(&account.owner) {
             BudgetState::get_balance(account)
         } else {
             account.tokens
@@ -2025,7 +2025,7 @@ mod tests {
         let string = transport_receiver.poll();
         assert!(string.is_ok());
         if let Async::Ready(Some(response)) = string.unwrap() {
-            let expected = format!(r#"{{"jsonrpc":"2.0","method":"accountNotification","params":{{"result":{{"executable":false,"loader":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"program_id":[129,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}},"subscription":0}}}}"#);
+            let expected = format!(r#"{{"jsonrpc":"2.0","method":"accountNotification","params":{{"result":{{"executable":false,"loader":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"owner":[129,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}},"subscription":0}}}}"#);
             assert_eq!(expected, response);
         }
 
