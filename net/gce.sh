@@ -149,9 +149,7 @@ fi
 case $cloudProvider in
 gce)
   if $enableGpu; then
-    # TODO: GPU image is still 16.04-based pending resolution of
-    #       https://github.com/solana-labs/solana/issues/1702
-    imageName="ubuntu-16-04-cuda-9-2-new"
+    imageName="ubuntu-1804-bionic-v20181029-with-cuda-10-and-cuda-9-2"
   else
     imageName="ubuntu-1804-bionic-v20181029 --image-project ubuntu-os-cloud"
   fi
