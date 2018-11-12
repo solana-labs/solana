@@ -122,6 +122,8 @@ extern crate solana_sdk;
 extern crate sys_info;
 extern crate tokio;
 extern crate tokio_codec;
+#[macro_use]
+extern crate lazy_static;
 
 #[cfg(test)]
 #[macro_use]
