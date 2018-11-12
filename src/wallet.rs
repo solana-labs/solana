@@ -87,6 +87,7 @@ pub struct WalletConfig {
     pub network: SocketAddr,
     pub timeout: Option<u64>,
     pub proxy: Option<String>,
+    pub drone_port: Option<u16>,
 }
 
 impl Default for WalletConfig {
@@ -98,6 +99,7 @@ impl Default for WalletConfig {
             network: default_addr,
             timeout: None,
             proxy: None,
+            drone_port: None,
         }
     }
 }
@@ -105,7 +107,7 @@ impl Default for WalletConfig {
 impl WalletConfig {
     pub fn drone_addr(&self, tpu_addr: SocketAddr) -> SocketAddr {
         let mut drone_addr = tpu_addr;
-        drone_addr.set_port(DRONE_PORT);
+        drone_addr.set_port(self.drone_port.unwrap_or(DRONE_PORT));
         drone_addr
     }
 
@@ -834,6 +836,20 @@ mod tests {
                             .help("The transaction signature to confirm"),
                     ),
             ).subcommand(
+                SubCommand::with_name("deploy")
+                    .about("Deploy a program")
+                    .arg(
+                        Arg::with_name("program-location")
+                            .index(1)
+                            .value_name("PATH")
+                            .takes_value(true)
+                            .required(true)
+                            .help("/path/to/program.o"),
+                    ), // TODO: Add "loader" argument; current default is bpf_loader
+            ).subcommand(
+                SubCommand::with_name("get-transaction-count")
+                    .about("Get current transaction count"),
+            ).subcommand(
                 SubCommand::with_name("pay")
                     .about("Send a payment")
                     .arg(
@@ -966,6 +982,16 @@ mod tests {
             .get_matches_from(vec!["test", "confirm", "deadbeef"]);
         assert!(parse_command(pubkey, &test_bad_signature).is_err());
 
+        // Test Deploy Subcommand
+        let test_deploy =
+            test_commands
+                .clone()
+                .get_matches_from(vec!["test", "deploy", "/Users/test/program.o"]);
+        assert_eq!(
+            parse_command(pubkey, &test_deploy).unwrap(),
+            WalletCommand::Deploy("/Users/test/program.o".to_string())
+        );
+
         // Test Simple Pay Subcommand
         let test_pay =
             test_commands
@@ -1096,9 +1122,6 @@ mod tests {
             create_tmp_genesis("wallet_process_command", 10_000_000, leader_data.id, 1000);
         let mut bank = Bank::new(&alice);
 
-        let mut config = WalletConfig::default();
-        let rpc_port = 12345; // Needs to be distinct known number to not conflict with other tests
-
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
         )));
@@ -1116,9 +1139,17 @@ mod tests {
             None,
             &ledger_path,
             false,
-            Some(rpc_port),
+            None,
         );
         sleep(Duration::from_millis(900));
+
+        let (sender, receiver) = channel();
+        run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
+        let drone_addr = receiver.recv().unwrap();
+
+        let mut config = WalletConfig::default();
+        config.network = leader_data.contact_info.ncp;
+        config.drone_port = Some(drone_addr.port());
 
         let tokens = 50;
         config.command = WalletCommand::AirDrop(tokens);
@@ -1131,12 +1162,6 @@ mod tests {
         assert_eq!(
             process_command(&config).unwrap(),
             format!("Your balance is: {:?}", tokens)
-        );
-
-        config.command = WalletCommand::Address;
-        assert_eq!(
-            process_command(&config).unwrap(),
-            format!("{}", config.id.pubkey())
         );
 
         config.command = WalletCommand::Pay(10, bob_pubkey, None, None, None, None);
@@ -1248,10 +1273,6 @@ mod tests {
             create_tmp_genesis("wallet_timestamp_tx", 10_000_000, leader_data.id, 1000);
         let mut bank = Bank::new(&alice);
 
-        let mut config_payer = WalletConfig::default();
-        let mut config_witness = WalletConfig::default();
-        let rpc_port = 13579; // Needs to be distinct known number to not conflict with other tests
-
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
         )));
@@ -1268,7 +1289,7 @@ mod tests {
             None,
             &ledger_path,
             false,
-            Some(rpc_port),
+            None,
         );
         sleep(Duration::from_millis(900));
 
@@ -1276,9 +1297,15 @@ mod tests {
         run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
         let drone_addr = receiver.recv().unwrap();
 
-        let mut rpc_addr = leader_data.contact_info.ncp;
-        rpc_addr.set_port(rpc_port);
-        let rpc_addr = format!("http://{}", rpc_addr.to_string());
+        let rpc_addr = format!("http://{}", leader_data.contact_info.rpc.to_string());
+
+        let mut config_payer = WalletConfig::default();
+        config_payer.network = leader_data.contact_info.ncp;
+        config_payer.drone_port = Some(drone_addr.port());
+
+        let mut config_witness = WalletConfig::default();
+        config_witness.network = leader_data.contact_info.ncp;
+        config_witness.drone_port = Some(drone_addr.port());
 
         assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
@@ -1394,8 +1421,7 @@ mod tests {
         run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
         let drone_addr = receiver.recv().unwrap();
 
-        let rpc_addr = leader_data.contact_info.rpc;
-        let rpc_addr = format!("http://{}", rpc_addr.to_string());
+        let rpc_addr = format!("http://{}", leader_data.contact_info.rpc.to_string());
 
         assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
@@ -1484,10 +1510,6 @@ mod tests {
             create_tmp_genesis("wallet_cancel_tx", 10_000_000, leader_data.id, 1000);
         let mut bank = Bank::new(&alice);
 
-        let mut config_payer = WalletConfig::default();
-        let config_witness = WalletConfig::default();
-        let rpc_port = 13456; // Needs to be distinct known number to not conflict with other tests
-
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
         )));
@@ -1504,7 +1526,7 @@ mod tests {
             None,
             &ledger_path,
             false,
-            Some(rpc_port),
+            None,
         );
         sleep(Duration::from_millis(900));
 
@@ -1512,9 +1534,15 @@ mod tests {
         run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
         let drone_addr = receiver.recv().unwrap();
 
-        let mut rpc_addr = leader_data.contact_info.ncp;
-        rpc_addr.set_port(rpc_port);
-        let rpc_addr = format!("http://{}", rpc_addr.to_string());
+        let rpc_addr = format!("http://{}", leader_data.contact_info.rpc.to_string());
+
+        let mut config_payer = WalletConfig::default();
+        config_payer.network = leader_data.contact_info.ncp;
+        config_payer.drone_port = Some(drone_addr.port());
+
+        let mut config_witness = WalletConfig::default();
+        config_witness.network = leader_data.contact_info.ncp;
+        config_witness.drone_port = Some(drone_addr.port());
 
         assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
