@@ -28,6 +28,7 @@ use signature::{Keypair, KeypairUtil};
 use solana_sdk::pubkey::Pubkey;
 use std;
 use std::collections::HashMap;
+use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -484,112 +485,17 @@ impl ClusterInfo {
 
         let old_transmit_index = transmit_index.data;
 
-        // enumerate all the blobs in the window, those are the indices
-        // transmit them to nodes, starting from a different node. Add one
-        // to the capacity in case we want to send an extra blob notifying the
-        // next leader about the blob right before leader rotation
-        let mut orders = Vec::with_capacity((received_index - transmit_index.data + 1) as usize);
-        let window_l = window.read().unwrap();
-
-        let mut br_idx = transmit_index.data as usize % broadcast_table.len();
-
-        for idx in transmit_index.data..received_index {
-            let w_idx = idx as usize % window_l.len();
-
-            trace!(
-                "{} broadcast order data w_idx {} br_idx {}",
-                me.id,
-                w_idx,
-                br_idx
-            );
-
-            // Broadcast the last tick to everyone on the network so it doesn't get dropped
-            // (Need to maximize probability the next leader in line sees this handoff tick
-            // despite packet drops)
-            let target = if idx == received_index - 1 && contains_last_tick {
-                // If we see a tick at max_tick_height, then we know it must be the last
-                // Blob in the window, at index == received_index. There cannot be an entry
-                // that got sent after the last tick, guaranteed by the PohService).
-                assert!(window_l[w_idx].data.is_some());
-                (
-                    window_l[w_idx].data.clone(),
-                    broadcast_table.iter().collect(),
-                )
-            } else {
-                (window_l[w_idx].data.clone(), vec![&broadcast_table[br_idx]])
-            };
-
-            orders.push(target);
-            br_idx += 1;
-            br_idx %= broadcast_table.len();
-        }
-
-        for idx in transmit_index.coding..received_index {
-            let w_idx = idx as usize % window_l.len();
-
-            // skip over empty slots
-            if window_l[w_idx].coding.is_none() {
-                continue;
-            }
-
-            trace!(
-                "{} broadcast order coding w_idx: {} br_idx  :{}",
-                me.id,
-                w_idx,
-                br_idx,
-            );
-
-            orders.push((
-                window_l[w_idx].coding.clone(),
-                vec![&broadcast_table[br_idx]],
-            ));
-            br_idx += 1;
-            br_idx %= broadcast_table.len();
-        }
-
+        let orders = Self::create_broadcast_orders(
+            contains_last_tick,
+            window,
+            broadcast_table,
+            transmit_index,
+            received_index,
+            me,
+        );
         trace!("broadcast orders table {}", orders.len());
-        let errs: Vec<_> = orders
-            .into_iter()
-            .flat_map(|(b, vs)| {
-                // only leader should be broadcasting
-                assert!(vs.iter().find(|info| info.id == me.leader_id).is_none());
-                let bl = b.unwrap();
-                let blob = bl.read().unwrap();
-                //TODO profile this, may need multiple sockets for par_iter
-                let ids_and_tvus = if log_enabled!(Level::Trace) {
-                    let v_ids = vs.iter().map(|v| v.id);
-                    let tvus = vs.iter().map(|v| v.contact_info.tvu);
-                    let ids_and_tvus = v_ids.zip(tvus).collect();
 
-                    trace!(
-                        "{}: BROADCAST idx: {} sz: {} to {:?} coding: {}",
-                        me.id,
-                        blob.index().unwrap(),
-                        blob.meta.size,
-                        ids_and_tvus,
-                        blob.is_coding()
-                    );
-
-                    ids_and_tvus
-                } else {
-                    vec![]
-                };
-
-                assert!(blob.meta.size <= BLOB_SIZE);
-                let send_errs_for_blob: Vec<_> = vs
-                    .iter()
-                    .map(move |v| {
-                        let e = s.send_to(&blob.data[..blob.meta.size], &v.contact_info.tvu);
-                        trace!(
-                            "{}: done broadcast {} to {:?}",
-                            me.id,
-                            blob.meta.size,
-                            ids_and_tvus
-                        );
-                        e
-                    }).collect();
-                send_errs_for_blob
-            }).collect();
+        let errs = Self::send_orders(s, orders, me);
 
         for e in errs {
             if let Err(e) = &e {
@@ -672,6 +578,126 @@ impl ClusterInfo {
     pub fn convergence(&self) -> u64 {
         let max = self.remote.values().len() as u64 + 1;
         self.remote.values().fold(max, |a, b| std::cmp::min(a, *b))
+    }
+
+    fn send_orders(
+        s: &UdpSocket,
+        orders: Vec<(Option<SharedBlob>, Vec<&NodeInfo>)>,
+        me: &NodeInfo,
+    ) -> Vec<io::Result<usize>> {
+        orders
+            .into_iter()
+            .flat_map(|(b, vs)| {
+                // only leader should be broadcasting
+                assert!(vs.iter().find(|info| info.id == me.leader_id).is_none());
+                let bl = b.unwrap();
+                let blob = bl.read().unwrap();
+                //TODO profile this, may need multiple sockets for par_iter
+                let ids_and_tvus = if log_enabled!(Level::Trace) {
+                    let v_ids = vs.iter().map(|v| v.id);
+                    let tvus = vs.iter().map(|v| v.contact_info.tvu);
+                    let ids_and_tvus = v_ids.zip(tvus).collect();
+
+                    trace!(
+                        "{}: BROADCAST idx: {} sz: {} to {:?} coding: {}",
+                        me.id,
+                        blob.index().unwrap(),
+                        blob.meta.size,
+                        ids_and_tvus,
+                        blob.is_coding()
+                    );
+
+                    ids_and_tvus
+                } else {
+                    vec![]
+                };
+
+                assert!(blob.meta.size <= BLOB_SIZE);
+                let send_errs_for_blob: Vec<_> = vs
+                    .iter()
+                    .map(move |v| {
+                        let e = s.send_to(&blob.data[..blob.meta.size], &v.contact_info.tvu);
+                        trace!(
+                            "{}: done broadcast {} to {:?}",
+                            me.id,
+                            blob.meta.size,
+                            ids_and_tvus
+                        );
+                        e
+                    }).collect();
+                send_errs_for_blob
+            }).collect()
+    }
+
+    fn create_broadcast_orders<'a>(
+        contains_last_tick: bool,
+        window: &SharedWindow,
+        broadcast_table: &'a [NodeInfo],
+        transmit_index: &mut WindowIndex,
+        received_index: u64,
+        me: &NodeInfo,
+    ) -> Vec<(Option<SharedBlob>, Vec<&'a NodeInfo>)> {
+        // enumerate all the blobs in the window, those are the indices
+        // transmit them to nodes, starting from a different node.
+        let mut orders = Vec::with_capacity((received_index - transmit_index.data) as usize);
+        let window_l = window.read().unwrap();
+        let mut br_idx = transmit_index.data as usize % broadcast_table.len();
+
+        for idx in transmit_index.data..received_index {
+            let w_idx = idx as usize % window_l.len();
+
+            trace!(
+                "{} broadcast order data w_idx {} br_idx {}",
+                me.id,
+                w_idx,
+                br_idx
+            );
+
+            // Broadcast the last tick to everyone on the network so it doesn't get dropped
+            // (Need to maximize probability the next leader in line sees this handoff tick
+            // despite packet drops)
+            let target = if idx == received_index - 1 && contains_last_tick {
+                // If we see a tick at max_tick_height, then we know it must be the last
+                // Blob in the window, at index == received_index. There cannot be an entry
+                // that got sent after the last tick, guaranteed by the PohService).
+                assert!(window_l[w_idx].data.is_some());
+                (
+                    window_l[w_idx].data.clone(),
+                    broadcast_table.iter().collect(),
+                )
+            } else {
+                (window_l[w_idx].data.clone(), vec![&broadcast_table[br_idx]])
+            };
+
+            orders.push(target);
+            br_idx += 1;
+            br_idx %= broadcast_table.len();
+        }
+
+        for idx in transmit_index.coding..received_index {
+            let w_idx = idx as usize % window_l.len();
+
+            // skip over empty slots
+            if window_l[w_idx].coding.is_none() {
+                continue;
+            }
+
+            trace!(
+                "{} broadcast order coding w_idx: {} br_idx  :{}",
+                me.id,
+                w_idx,
+                br_idx,
+            );
+
+            orders.push((
+                window_l[w_idx].coding.clone(),
+                vec![&broadcast_table[br_idx]],
+            ));
+            br_idx += 1;
+            br_idx %= broadcast_table.len();
+        }
+
+        orders
     }
 
     // TODO: fill in with real implmentation once staking is implemented
