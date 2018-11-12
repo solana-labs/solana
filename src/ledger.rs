@@ -2,7 +2,7 @@
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
 
-use bincode::{self, deserialize, deserialize_from, serialize_into, serialized_size};
+use bincode::{self, deserialize_from, serialize_into, serialized_size};
 #[cfg(test)]
 use budget_transaction::BudgetTransaction;
 #[cfg(test)]
@@ -15,7 +15,6 @@ use log::Level::Trace;
 use mint::Mint;
 use packet::{SharedBlob, BLOB_DATA_SIZE};
 use rayon::prelude::*;
-use result::{Error, Result};
 use signature::{Keypair, KeypairUtil};
 use solana_sdk::pubkey::Pubkey;
 use std::fs::{create_dir_all, remove_dir_all, File, OpenOptions};
@@ -502,28 +501,6 @@ impl Block for [Entry] {
     }
 }
 
-// TODO: move this to the right file, entry.rs?
-pub fn reconstruct_entries_from_blobs(blobs: Vec<SharedBlob>) -> Result<Vec<Entry>> {
-    let mut entries: Vec<Entry> = Vec::with_capacity(blobs.len());
-
-    for blob in blobs {
-        let entry = {
-            let blob = blob.read().unwrap();
-            let blob_size = blob.size()?;
-            deserialize(&blob.data()[..blob_size])
-        };
-
-        match entry {
-            Ok(entry) => entries.push(entry),
-            Err(err) => {
-                trace!("reconstruct_entry_from_blobs: {:?}", err);
-                return Err(Error::Serialize(err));
-            }
-        }
-    }
-    Ok(entries)
-}
-
 /// Creates the next entries for given transactions, outputs
 /// updates start_hash to id of last Entry, sets num_hashes to 0
 pub fn next_entries_mut(
@@ -692,9 +669,9 @@ pub fn make_tiny_test_entries(num: usize) -> Vec<Entry> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bincode::serialized_size;
+    use bincode::{deserialize, serialized_size};
     use budget_transaction::BudgetTransaction;
-    use entry::{next_entry, Entry};
+    use entry::{next_entry, reconstruct_entries_from_blobs, Entry};
     use hash::hash;
     use packet::{to_blobs, BLOB_DATA_SIZE, PACKET_DATA_SIZE};
     use signature::{Keypair, KeypairUtil};
@@ -755,7 +732,7 @@ mod tests {
 
         let blob_q = entries.to_blobs();
 
-        assert_eq!(reconstruct_entries_from_blobs(blob_q).unwrap(), entries);
+        assert_eq!(reconstruct_entries_from_blobs(blob_q).unwrap().0, entries);
     }
 
     #[test]

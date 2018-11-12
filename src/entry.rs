@@ -2,10 +2,11 @@
 //! unique ID that is the hash of the Entry before it, plus the hash of the
 //! transactions within it. Entries cannot be reordered, and its field `num_hashes`
 //! represents an approximate amount of time since the last Entry was created.
-use bincode::{serialize_into, serialized_size};
+use bincode::{deserialize, serialize_into, serialized_size};
 use hash::Hash;
 use packet::{SharedBlob, BLOB_DATA_SIZE};
 use poh::Poh;
+use result::Result;
 use solana_sdk::pubkey::Pubkey;
 use std::io::Cursor;
 use std::mem::size_of;
@@ -247,6 +248,25 @@ pub fn next_entry(prev_id: &Hash, num_hashes: u64, transactions: Vec<Transaction
         id: next_hash(prev_id, num_hashes, &transactions),
         transactions,
     }
+}
+
+pub fn reconstruct_entries_from_blobs(blobs: Vec<SharedBlob>) -> Result<(Vec<Entry>, u64)> {
+    let mut entries: Vec<Entry> = Vec::with_capacity(blobs.len());
+    let mut num_ticks = 0;
+
+    for blob in blobs {
+        let entry: Entry = {
+            let msg = blob.read().unwrap();
+            let msg_size = msg.size()?;
+            deserialize(&msg.data()[..msg_size]).expect("Error reconstructing entry")
+        };
+
+        if entry.is_tick() {
+            num_ticks += 1
+        }
+        entries.push(entry)
+    }
+    Ok((entries, num_ticks))
 }
 
 #[cfg(test)]

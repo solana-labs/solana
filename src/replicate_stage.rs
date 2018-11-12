@@ -6,8 +6,10 @@ use counter::Counter;
 use entry::{EntryReceiver, EntrySender};
 use hash::Hash;
 use influx_db_client as influxdb;
+use ledger::Block;
 use log::Level;
 use metrics;
+use packet::BlobError;
 use result::{Error, Result};
 use service::Service;
 use signature::{Keypair, KeypairUtil};
@@ -20,6 +22,7 @@ use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
 use streamer::{responder, BlobSender};
+use timing::duration_as_ms;
 use vote_stage::send_validator_vote;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -61,7 +64,7 @@ impl ReplicateStage {
         vote_blob_sender: Option<&BlobSender>,
         ledger_entry_sender: &EntrySender,
         entry_height: &mut u64,
-        last_entry_id: &mut Option<Hash>,
+        last_entry_id: &mut Hash,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         //coalesce all the available entries into a single vote
@@ -78,6 +81,15 @@ impl ReplicateStage {
 
         let mut res = Ok(());
         let mut num_entries_to_write = entries.len();
+        let now = Instant::now();
+        if !entries.as_slice().verify(last_entry_id) {
+            inc_new_counter_info!("replicate_stage-verify-fail", entries.len());
+            return Err(Error::BlobError(BlobError::VerificationFailed));
+        }
+        inc_new_counter_info!(
+            "replicate_stage-verify-duration",
+            duration_as_ms(&now.elapsed()) as usize
+        );
         let (current_leader, _) = bank
             .get_current_leader()
             .expect("Scheduled leader id should never be unknown while processing entries");
@@ -110,12 +122,10 @@ impl ReplicateStage {
 
         // If leader rotation happened, only write the entries up to leader rotation.
         entries.truncate(num_entries_to_write);
-        *last_entry_id = Some(
-            entries
-                .last()
-                .expect("Entries cannot be empty at this point")
-                .id,
-        );
+        *last_entry_id = entries
+            .last()
+            .expect("Entries cannot be empty at this point")
+            .id;
 
         inc_new_counter_info!(
             "replicate-transactions",
@@ -148,6 +158,7 @@ impl ReplicateStage {
         window_receiver: EntryReceiver,
         exit: Arc<AtomicBool>,
         entry_height: u64,
+        last_entry_id: Hash,
     ) -> (Self, EntryReceiver) {
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let (ledger_entry_sender, ledger_entry_receiver) = channel();
@@ -163,7 +174,7 @@ impl ReplicateStage {
                 let now = Instant::now();
                 let mut next_vote_secs = 1;
                 let mut entry_height_ = entry_height;
-                let mut last_entry_id = None;
+                let mut last_entry_id = last_entry_id;
                 loop {
                     let (leader_id, _) = bank
                         .get_current_leader()
@@ -177,7 +188,7 @@ impl ReplicateStage {
                             // rotation (Fullnode should automatically transition on startup if it detects
                             // are no longer a validator. Hence we can assume that some entry must have
                             // triggered leader rotation
-                            last_entry_id.expect("Must exist an entry that triggered rotation"),
+                            last_entry_id,
                         ));
                     }
 
@@ -307,7 +318,8 @@ mod test {
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
 
         // Set up the bank
-        let (bank, _, _) = Fullnode::new_bank_from_ledger(&my_ledger_path, leader_scheduler);
+        let (bank, _, last_entry_id) =
+            Fullnode::new_bank_from_ledger(&my_ledger_path, leader_scheduler);
 
         // Set up the replicate stage
         let (entry_sender, entry_receiver) = channel();
@@ -320,6 +332,7 @@ mod test {
             entry_receiver,
             exit.clone(),
             initial_entry_len,
+            last_entry_id,
         );
 
         // Send enough ticks to trigger leader rotation
@@ -392,7 +405,8 @@ mod test {
         let initial_entry_len = genesis_entries.len();
 
         // Set up the bank
-        let (bank, _, _) = Fullnode::new_bank_from_ledger(&my_ledger_path, leader_scheduler);
+        let (bank, _, last_entry_id) =
+            Fullnode::new_bank_from_ledger(&my_ledger_path, leader_scheduler);
 
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(
@@ -412,6 +426,7 @@ mod test {
             entry_receiver,
             exit.clone(),
             initial_entry_len as u64,
+            last_entry_id,
         );
 
         // Vote sender should error because no leader contact info is found in the
@@ -504,7 +519,8 @@ mod test {
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
 
         // Set up the bank
-        let (bank, _, _) = Fullnode::new_bank_from_ledger(&my_ledger_path, leader_scheduler);
+        let (bank, _, last_entry_id) =
+            Fullnode::new_bank_from_ledger(&my_ledger_path, leader_scheduler);
 
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(
@@ -524,6 +540,7 @@ mod test {
             entry_receiver,
             exit.clone(),
             initial_entry_len as u64,
+            last_entry_id,
         );
 
         // Vote sender should error because no leader contact info is found in the

@@ -2,11 +2,11 @@
 //!
 use cluster_info::ClusterInfo;
 use counter::Counter;
+use entry::reconstruct_entries_from_blobs;
 use entry::Entry;
 #[cfg(feature = "erasure")]
 use erasure;
 use leader_scheduler::LeaderScheduler;
-use ledger::reconstruct_entries_from_blobs;
 use log::Level;
 use packet::SharedBlob;
 use solana_sdk::pubkey::Pubkey;
@@ -352,11 +352,9 @@ impl WindowUtil for Window {
 
             // Check that we can get the entries from this blob
             match reconstruct_entries_from_blobs(vec![k_data_blob]) {
-                Ok(entries) => {
-                    for entry in &entries {
-                        *tick_height += entry.is_tick() as u64;
-                    }
+                Ok((entries, num_ticks)) => {
                     consume_queue.extend(entries);
+                    *tick_height += num_ticks;
                 }
                 Err(_) => {
                     // If the blob can't be deserialized, then remove it from the

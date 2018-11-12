@@ -152,6 +152,8 @@ impl Default for Blob {
 pub enum BlobError {
     /// the Blob's meta and data are not self-consistent
     BadState,
+    /// Blob verification failed
+    VerificationFailed,
 }
 
 impl Packets {

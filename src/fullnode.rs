@@ -140,7 +140,7 @@ impl Fullnode {
 
         info!("creating bank...");
 
-        let (bank, entry_height, last_id) =
+        let (bank, entry_height, last_entry_id) =
             Self::new_bank_from_ledger(ledger_path, leader_scheduler);
 
         info!("creating networking stack...");
@@ -161,7 +161,7 @@ impl Fullnode {
             vote_account_keypair,
             bank,
             entry_height,
-            &last_id,
+            &last_entry_id,
             node,
             leader_info.as_ref(),
             ledger_path,
@@ -191,7 +191,7 @@ impl Fullnode {
         vote_account_keypair: Arc<Keypair>,
         bank: Bank,
         entry_height: u64,
-        last_id: &Hash,
+        last_entry_id: &Hash,
         mut node: Node,
         bootstrap_leader_info_option: Option<&NodeInfo>,
         ledger_path: &str,
@@ -249,6 +249,7 @@ impl Fullnode {
                 vote_account_keypair.clone(),
                 &bank,
                 entry_height,
+                *last_entry_id,
                 cluster_info.clone(),
                 shared_window.clone(),
                 node.sockets
@@ -285,7 +286,7 @@ impl Fullnode {
                 ledger_path,
                 sigverify_disabled,
                 max_tick_height,
-                last_id,
+                last_entry_id,
             );
 
             let broadcast_stage = BroadcastStage::new(
@@ -395,6 +396,7 @@ impl Fullnode {
                 self.vote_account_keypair.clone(),
                 &self.bank,
                 entry_height,
+                last_entry_id,
                 self.cluster_info.clone(),
                 self.shared_window.clone(),
                 self.replicate_socket
@@ -521,11 +523,11 @@ impl Fullnode {
             .map(|e| e.unwrap_or_else(|err| panic!("failed to parse entry. error: {}", err)));
         info!("processing ledger...");
 
-        let (entry_height, last_id) = bank.process_ledger(entries).expect("process_ledger");
+        let (entry_height, last_entry_id) = bank.process_ledger(entries).expect("process_ledger");
         // entry_height is the network-wide agreed height of the ledger.
         //  initialize it from the input ledger
         info!("processed {} ledger...", entry_height);
-        (bank, entry_height, last_id)
+        (bank, entry_height, last_entry_id)
     }
 
     pub fn get_leader_scheduler(&self) -> &Arc<RwLock<LeaderScheduler>> {
