@@ -6,16 +6,14 @@ use pubkey::Pubkey;
 pub struct Account {
     /// tokens in the account
     pub tokens: u64,
-    /// user data
-    /// A transaction can write to its userdata
+    /// data held in this account
     pub userdata: Vec<u8>,
-    /// contract id this contract belongs to
+    /// the program that owns this account
     pub owner: Pubkey,
-
-    /// this account contains a program (and is strictly read-only)
+    /// this account's userdata contains a loaded program (and is now read-only)
     pub executable: bool,
-
-    /// the loader for this program (Pubkey::default() for no loader)
+    /// the loader for this account
+    /// (Pubkey::default() if the account is not executable and thus was never 'loaded')
     pub loader: Pubkey,
 }
 
