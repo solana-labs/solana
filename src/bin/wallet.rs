@@ -56,6 +56,7 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
         network,
         timeout,
         proxy,
+        drone_port: None,
     })
 }
 
