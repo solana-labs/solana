@@ -2,8 +2,9 @@
 extern crate solana;
 extern crate test;
 
+use solana::entry::reconstruct_entries_from_blobs;
 use solana::hash::{hash, Hash};
-use solana::ledger::{next_entries, reconstruct_entries_from_blobs, Block};
+use solana::ledger::{next_entries, Block};
 use solana::signature::{Keypair, KeypairUtil};
 use solana::system_transaction::SystemTransaction;
 use solana::transaction::Transaction;
@@ -20,6 +21,6 @@ fn bench_block_to_blobs_to_block(bencher: &mut Bencher) {
 
     bencher.iter(|| {
         let blobs = entries.to_blobs();
-        assert_eq!(reconstruct_entries_from_blobs(blobs).unwrap(), entries);
+        assert_eq!(reconstruct_entries_from_blobs(blobs).unwrap().0, entries);
     });
 }

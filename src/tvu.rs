@@ -60,6 +60,7 @@ impl Tvu {
         vote_account_keypair: Arc<Keypair>,
         bank: &Arc<Bank>,
         entry_height: u64,
+        last_entry_id: Hash,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window: SharedWindow,
         replicate_sockets: Vec<UdpSocket>,
@@ -97,6 +98,7 @@ impl Tvu {
             blob_window_receiver,
             exit.clone(),
             entry_height,
+            last_entry_id,
         );
 
         let (ledger_write_stage, storage_entry_receiver) =
@@ -165,7 +167,7 @@ pub mod tests {
     use bincode::serialize;
     use cluster_info::{ClusterInfo, Node};
     use entry::Entry;
-    use hash::{hash, Hash};
+    use hash::Hash;
     use leader_scheduler::LeaderScheduler;
     use logger;
     use mint::Mint;
@@ -258,11 +260,13 @@ pub mod tests {
         let dr_1 = new_ncp(cref1.clone(), target1.sockets.gossip, exit.clone());
 
         let vote_account_keypair = Arc::new(Keypair::new());
+        let mut cur_hash = Hash::default();
         let tvu = Tvu::new(
             Arc::new(target1_keypair),
             vote_account_keypair,
             &bank,
             0,
+            cur_hash,
             cref1,
             dr_1.1,
             target1.sockets.replicate,
@@ -273,15 +277,16 @@ pub mod tests {
 
         let mut alice_ref_balance = starting_balance;
         let mut msgs = Vec::new();
-        let mut cur_hash = Hash::default();
         let mut blob_idx = 0;
         let num_transfers = 10;
         let transfer_amount = 501;
         let bob_keypair = Keypair::new();
         for i in 0..num_transfers {
             let entry0 = Entry::new(&cur_hash, i, vec![]);
+            cur_hash = entry0.id;
             bank.register_tick(&cur_hash);
-            cur_hash = hash(&cur_hash.as_ref());
+            let entry_tick0 = Entry::new(&cur_hash, i + 1, vec![]);
+            cur_hash = entry_tick0.id;
 
             let tx0 = Transaction::system_new(
                 &mint.keypair(),
@@ -290,14 +295,16 @@ pub mod tests {
                 cur_hash,
             );
             bank.register_tick(&cur_hash);
-            cur_hash = hash(&cur_hash.as_ref());
+            let entry_tick1 = Entry::new(&cur_hash, i + 1, vec![]);
+            cur_hash = entry_tick1.id;
             let entry1 = Entry::new(&cur_hash, i + num_transfers, vec![tx0]);
-            bank.register_tick(&cur_hash);
-            cur_hash = hash(&cur_hash.as_ref());
+            bank.register_tick(&entry1.id);
+            let entry_tick2 = Entry::new(&entry1.id, i + 1, vec![]);
+            cur_hash = entry_tick2.id;
 
             alice_ref_balance -= transfer_amount;
 
-            for entry in vec![entry0, entry1] {
+            for entry in vec![entry0, entry_tick0, entry_tick1, entry1, entry_tick2] {
                 let mut b = SharedBlob::default();
                 {
                     let mut w = b.write().unwrap();
