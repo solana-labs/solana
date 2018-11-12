@@ -19,6 +19,6 @@ pub fn account() -> Account {
         program_id: id(),
         userdata: BPF_LOADER_NAME.as_bytes().to_vec(),
         executable: true,
-        loader_program_id: native_loader::id(),
+        loader: native_loader::id(),
     }
 }

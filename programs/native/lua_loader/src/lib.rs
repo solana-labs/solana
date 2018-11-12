@@ -166,7 +166,7 @@ mod tests {
                     userdata,
                     program_id,
                     executable: true,
-                    loader_program_id: Pubkey::default(),
+                    loader: Pubkey::default(),
                 },
             ),
             (alice_pubkey, Account::new(100, 0, program_id)),
@@ -204,7 +204,7 @@ mod tests {
             userdata,
             program_id,
             executable: true,
-            loader_program_id: Pubkey::default(),
+            loader: Pubkey::default(),
         };
         let alice_account = Account::new(100, 0, program_id);
         let serialize_account = Account {
@@ -212,7 +212,7 @@ mod tests {
             userdata: read_test_file("serialize.lua"),
             program_id,
             executable: false,
-            loader_program_id: Pubkey::default(),
+            loader: Pubkey::default(),
         };
         let mut accounts = [
             (Pubkey::default(), program_account),
@@ -246,7 +246,7 @@ mod tests {
             userdata: read_test_file("multisig.lua"),
             program_id,
             executable: true,
-            loader_program_id: Pubkey::default(),
+            loader: Pubkey::default(),
         };
 
         let alice_account = Account {
@@ -254,7 +254,7 @@ mod tests {
             userdata: Vec::new(),
             program_id,
             executable: true,
-            loader_program_id: Pubkey::default(),
+            loader: Pubkey::default(),
         };
 
         let serialize_account = Account {
@@ -262,7 +262,7 @@ mod tests {
             userdata: read_test_file("serialize.lua"),
             program_id,
             executable: true,
-            loader_program_id: Pubkey::default(),
+            loader: Pubkey::default(),
         };
 
         let mut accounts = [

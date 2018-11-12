@@ -401,7 +401,7 @@ mod tests {
         let contract_funds = Keypair::new();
         let contract_state = Keypair::new();
         let budget_program_id = BudgetState::id();
-        let loader_program_id = Pubkey::default(); // TODO
+        let loader = Pubkey::default(); // TODO
         let executable = false; // TODO
         let bank = Bank::new(&alice);
         let arc_bank = Arc::new(bank);
@@ -489,7 +489,7 @@ mod tests {
                    "tokens": 1,
                    "userdata": expected_userdata,
                    "executable": executable,
-                   "loader_program_id": loader_program_id,
+                   "loader": loader,
 
                },
                "subscription": 0,
@@ -530,7 +530,7 @@ mod tests {
                    "tokens": 51,
                    "userdata": expected_userdata,
                     "executable": executable,
-                   "loader_program_id": loader_program_id,
+                   "loader": loader,
                },
                "subscription": 0,
            }
@@ -569,7 +569,7 @@ mod tests {
                    "tokens": 1,
                    "userdata": expected_userdata,
                     "executable": executable,
-                   "loader_program_id": loader_program_id,
+                   "loader": loader,
                },
                "subscription": 0,
            }

@@ -16,7 +16,7 @@ pub struct Account {
     pub executable: bool,
 
     /// the loader for this program (Pubkey::default() for no loader)
-    pub loader_program_id: Pubkey,
+    pub loader: Pubkey,
 }
 
 impl Account {
@@ -27,7 +27,7 @@ impl Account {
             userdata: vec![0u8; space],
             program_id,
             executable: false,
-            loader_program_id: Pubkey::default(),
+            loader: Pubkey::default(),
         }
     }
 }
