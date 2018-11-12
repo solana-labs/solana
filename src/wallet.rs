@@ -87,7 +87,6 @@ pub struct WalletConfig {
     pub network: SocketAddr,
     pub timeout: Option<u64>,
     pub proxy: Option<String>,
-    pub rpc_port: u16,
 }
 
 impl Default for WalletConfig {
@@ -99,7 +98,6 @@ impl Default for WalletConfig {
             network: default_addr,
             timeout: None,
             proxy: None,
-            rpc_port: 0,
         }
     }
 }
@@ -111,9 +109,7 @@ impl WalletConfig {
         drone_addr
     }
 
-    pub fn rpc_addr(&self, tpu_addr: SocketAddr) -> String {
-        let mut rpc_addr = tpu_addr;
-        rpc_addr.set_port(self.rpc_port);
+    pub fn rpc_addr(&self, rpc_addr: SocketAddr) -> String {
         let rpc_addr_str = format!("http://{}", rpc_addr.to_string());
         self.proxy.clone().unwrap_or(rpc_addr_str)
     }
@@ -319,7 +315,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
     let leader = poll_gossip_for_leader(config.network, config.timeout)?;
     let tpu_addr = leader.contact_info.tpu;
     let drone_addr = config.drone_addr(tpu_addr);
-    let rpc_addr = config.rpc_addr(tpu_addr);
+    let rpc_addr = config.rpc_addr(leader.contact_info.rpc);
 
     match config.command {
         // Get address of this client
