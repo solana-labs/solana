@@ -149,22 +149,26 @@ fi
 case $cloudProvider in
 gce)
   if $enableGpu; then
+    # Custom Ubuntu 18.04 LTS image with CUDA 9.2 and CUDA 10.0 installed
     imageName="ubuntu-1804-bionic-v20181029-with-cuda-10-and-cuda-9-2"
   else
+    # Upstream Ubuntu 18.04 LTS image
     imageName="ubuntu-1804-bionic-v20181029 --image-project ubuntu-os-cloud"
   fi
   ;;
 ec2)
-  # Deep Learning AMI (Ubuntu 16.04-based)
+  #
+  # Custom Ubuntu 18.04 LTS image with CUDA 9.2 and CUDA 10.0 installed
+  #
   case $region in # (region global variable is set by cloud_SetZone)
   us-east-1)
-    imageName="ami-047daf3f2b162fc35"
+    imageName="ami-0a8bd6fb204473f78"
     ;;
   us-west-1)
-    imageName="ami-08c8c7c4a57a6106d"
+    imageName="ami-07011f0795513c59d"
     ;;
   us-west-2)
-    imageName="ami-0b63040ee445728bf"
+    imageName="ami-0a11ef42b62b82b68"
     ;;
   *)
     usage "Unsupported region: $region"
