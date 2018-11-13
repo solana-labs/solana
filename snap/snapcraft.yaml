@@ -89,7 +89,6 @@ parts:
       - bin
       - multinode-demo
       - scripts
-      - usr/lib
     override-build: |
       # Build/install all programs
       cargo install --root $SNAPCRAFT_PART_INSTALL --bins
