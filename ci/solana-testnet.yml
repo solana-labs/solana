@@ -1,9 +1,4 @@
 steps:
-  - command: "test -n $USE_PREBUILT_CHANNEL_TARBALL || ci/snap.sh"
-    label: "create snap"
-
-  - wait
-
   - command: "ci/testnet-automation.sh"
     label: "run testnet"
     agents:
