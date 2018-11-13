@@ -3,6 +3,7 @@
 use bank;
 use bincode;
 use cluster_info;
+use db_ledger;
 #[cfg(feature = "erasure")]
 use erasure;
 use packet;
@@ -31,6 +32,7 @@ pub enum Error {
     PohRecorderError(poh_recorder::PohRecorderError),
     VoteError(vote_stage::VoteError),
     RocksDb(rocksdb::Error),
+    DbLedgerError(db_ledger::DbLedgerError),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -112,6 +114,11 @@ impl std::convert::From<vote_stage::VoteError> for Error {
 impl std::convert::From<rocksdb::Error> for Error {
     fn from(e: rocksdb::Error) -> Error {
         Error::RocksDb(e)
+    }
+}
+impl std::convert::From<db_ledger::DbLedgerError> for Error {
+    fn from(e: db_ledger::DbLedgerError) -> Error {
+        Error::DbLedgerError(e)
     }
 }
 
