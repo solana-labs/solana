@@ -16,7 +16,7 @@ mkdir -p target/perf-libs
   cd target/perf-libs
   (
     set -x
-    curl https://solana-perf.s3.amazonaws.com/v0.10.5/x86_64-unknown-linux-gnu/solana-perf.tgz | tar zxvf -
+    curl https://solana-perf.s3.amazonaws.com/v0.10.6/x86_64-unknown-linux-gnu/solana-perf.tgz | tar zxvf -
   )
 
   if [[ -z "$CUDA_HOME" ]]; then
