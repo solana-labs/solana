@@ -2,14 +2,16 @@
 
 use entry::Entry;
 use hash::{hash, Hash};
+use ring::rand::SystemRandom;
 use signature::{Keypair, KeypairUtil};
 use solana_sdk::pubkey::Pubkey;
 use system_transaction::SystemTransaction;
 use transaction::Transaction;
+use untrusted::Input;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Mint {
-    pub keypair_bytes: Vec<u8>,
+    pub pkcs8: Vec<u8>,
     pubkey: Pubkey,
     pub tokens: u64,
     pub bootstrap_leader_id: Pubkey,
@@ -17,16 +19,17 @@ pub struct Mint {
 }
 
 impl Mint {
-    pub fn new_with_keypair_bytes(
+    pub fn new_with_pkcs8(
         tokens: u64,
-        keypair_bytes: Vec<u8>,
+        pkcs8: Vec<u8>,
         bootstrap_leader_id: Pubkey,
         bootstrap_leader_tokens: u64,
     ) -> Self {
-        let keypair = Keypair::from_bytes(&keypair_bytes).expect("from_bytes in mint pub fn new");
+        let keypair =
+            Keypair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in mint pub fn new");
         let pubkey = keypair.pubkey();
         Mint {
-            keypair_bytes,
+            pkcs8,
             pubkey,
             tokens,
             bootstrap_leader_id,
@@ -39,16 +42,23 @@ impl Mint {
         bootstrap_leader: Pubkey,
         bootstrap_leader_tokens: u64,
     ) -> Self {
-        let bytes = Keypair::new().to_bytes().to_vec();
-        Self::new_with_keypair_bytes(tokens, bytes, bootstrap_leader, bootstrap_leader_tokens)
+        let rnd = SystemRandom::new();
+        let pkcs8 = Keypair::generate_pkcs8(&rnd)
+            .expect("generate_pkcs8 in mint pub fn new")
+            .to_vec();
+        Self::new_with_pkcs8(tokens, pkcs8, bootstrap_leader, bootstrap_leader_tokens)
     }
 
     pub fn new(tokens: u64) -> Self {
-        Self::new_with_leader(tokens, Pubkey::default(), 0)
+        let rnd = SystemRandom::new();
+        let pkcs8 = Keypair::generate_pkcs8(&rnd)
+            .expect("generate_pkcs8 in mint pub fn new")
+            .to_vec();
+        Self::new_with_pkcs8(tokens, pkcs8, Pubkey::default(), 0)
     }
 
     pub fn seed(&self) -> Hash {
-        hash(&self.keypair_bytes)
+        hash(&self.pkcs8)
     }
 
     pub fn last_id(&self) -> Hash {
@@ -56,7 +66,7 @@ impl Mint {
     }
 
     pub fn keypair(&self) -> Keypair {
-        Keypair::from_bytes(&self.keypair_bytes).expect("from_bytes in mint pub fn keypair")
+        Keypair::from_pkcs8(Input::from(&self.pkcs8)).expect("from_pkcs8 in mint pub fn keypair")
     }
 
     pub fn pubkey(&self) -> Pubkey {

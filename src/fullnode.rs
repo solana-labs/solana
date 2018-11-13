@@ -18,6 +18,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::Result;
 use tpu::{Tpu, TpuReturnType};
 use tvu::{Tvu, TvuReturnType};
+use untrusted::Input;
 use window::{new_window, SharedWindow};
 
 pub enum NodeRole {
@@ -107,22 +108,20 @@ pub struct Fullnode {
 /// Fullnode configuration to be stored in file
 pub struct Config {
     pub node_info: NodeInfo,
-    keypair_bytes: Vec<u8>,
+    pkcs8: Vec<u8>,
 }
 
 impl Config {
-    pub fn new(bind_addr: &SocketAddr, keypair_bytes: Vec<u8>) -> Self {
+    pub fn new(bind_addr: &SocketAddr, pkcs8: Vec<u8>) -> Self {
         let keypair =
-            Keypair::from_bytes(&keypair_bytes).expect("from_bytes in fullnode::Config new");
+            Keypair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in fullnode::Config new");
         let pubkey = keypair.pubkey();
         let node_info = NodeInfo::new_with_pubkey_socketaddr(pubkey, bind_addr);
-        Config {
-            node_info,
-            keypair_bytes,
-        }
+        Config { node_info, pkcs8 }
     }
     pub fn keypair(&self) -> Keypair {
-        Keypair::from_bytes(&self.keypair_bytes).expect("from_bytes in fullnode::Config keypair")
+        Keypair::from_pkcs8(Input::from(&self.pkcs8))
+            .expect("from_pkcs8 in fullnode::Config keypair")
     }
 }
 
