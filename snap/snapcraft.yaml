@@ -26,12 +26,6 @@ apps:
       - network
       - network-bind
       - home
-  fullnode-cuda:
-    command: solana-fullnode-cuda
-    plugs:
-      - network
-      - network-bind
-      - home
   fullnode-config:
     command: solana-fullnode-config
     plugs:
@@ -97,24 +91,7 @@ parts:
       - scripts
       - usr/lib
     override-build: |
-      # Install CUDA 9.2 runtime
-      mkdir -p $SNAPCRAFT_PART_INSTALL/usr/lib/nvidia-396/
-      mkdir -p $SNAPCRAFT_PART_INSTALL/usr/lib/x86_64-linux-gnu/
-      cp -rav /usr/local/cuda-9.2/targets/x86_64-linux/lib/libcudart.so* $SNAPCRAFT_PART_INSTALL/usr/lib
-      cp -rav /usr/lib/x86_64-linux-gnu/libcuda.so* $SNAPCRAFT_PART_INSTALL/usr/lib/x86_64-linux-gnu/
-      cp -v /usr/lib/nvidia-396/libnvidia-fatbinaryloader.so* $SNAPCRAFT_PART_INSTALL/usr/lib/nvidia-396/
-
-      # Build/install solana-fullnode-cuda
-      ./fetch-perf-libs.sh
-      cargo install --features=cuda --root $SNAPCRAFT_PART_INSTALL --bin solana-fullnode
-      mv $SNAPCRAFT_PART_INSTALL/bin/solana-fullnode $SNAPCRAFT_PART_INSTALL
-      rm -rf $SNAPCRAFT_PART_INSTALL/bin/*
-      mv $SNAPCRAFT_PART_INSTALL/solana-fullnode $SNAPCRAFT_PART_INSTALL/bin/solana-fullnode-cuda
-      mkdir -p $SNAPCRAFT_PART_INSTALL/usr/lib/
-      cp -f target/perf-libs/libJerasure.so $SNAPCRAFT_PART_INSTALL/usr/lib/libJerasure.so.2
-      cp -f target/perf-libs/libgf_complete.so $SNAPCRAFT_PART_INSTALL/usr/lib/libgf_complete.so.1
-
-      # Build/install all other programs
+      # Build/install all programs
       cargo install --root $SNAPCRAFT_PART_INSTALL --bins
 
       # Install native programs
