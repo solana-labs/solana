@@ -32,6 +32,8 @@ typedef signed int int32_t;
 typedef unsigned int uint32_t;
 typedef signed long int int64_t;
 typedef unsigned long int uint64_t;
+typedef int64_t ssize_t;
+typedef uint64_t size_t;
 
 #if defined (__cplusplus) || defined(static_assert)
 static_assert(sizeof(int8_t) == 1);
@@ -134,6 +136,30 @@ SOL_FN_PREFIX int sol_memcmp(const void *s1, const void *s2, int n) {
     }
   }
   return 0;
+}
+
+/**
+ * Fill a byte string with a byte value
+ */
+SOL_FN_PREFIX void *sol_memset(void *b, int c, size_t len) {
+  uint8_t *a = (uint8_t *) b;
+  while (len > 0) {
+    *a = c;
+    a++;
+    len--;
+  }
+}
+
+/**
+ * Find length of string
+ */
+SOL_FN_PREFIX size_t sol_strlen(const char *s) {
+  size_t len = 0;
+  while (*s) {
+    len++;
+    s++;
+  }
+  return len;
 }
 
 /**
