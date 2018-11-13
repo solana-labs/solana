@@ -19,7 +19,13 @@ mkdir -p target/perf-libs
     curl https://solana-perf.s3.amazonaws.com/v0.10.5/x86_64-unknown-linux-gnu/solana-perf.tgz | tar zxvf -
   )
 
-  : "${CUDA_HOME:=/usr/local/cuda}"
+  if [[ -z "$CUDA_HOME" ]]; then
+    if [[ -r "$CUDA_HOME"/solana-perf-CUDA_HOME.txt ]]; then
+      CUDA_HOME=$(cat "$CUDA_HOME"/solana-perf-CUDA_HOME.txt)
+    else
+      CUDA_HOME=/usr/local/cuda
+    fi
+  fi
 
   if [[ -r "$CUDA_HOME"/version.txt && -r cuda-version.txt ]]; then
     if ! diff "$CUDA_HOME"/version.txt cuda-version.txt > /dev/null; then
@@ -36,7 +42,17 @@ mkdir -p target/perf-libs
     echo ==============================================
   fi
 
+  cat > env.sh <<EOF
+export CUDA_HOME=$CUDA_HOME
+export LD_LIBRARY_PATH="$PWD:$CUDA_HOME/lib64:$LD_LIBRARY_PATH"
+export PATH="$PATH:$CUDA_HOME/bin"
+echo CUDA_HOME="$CUDA_HOME"
+echo LD_LIBRARY_PATH="$LD_LIBRARY_PATH"
+EOF
+
   echo "Downloaded solana-perf version: $(cat solana-perf-HEAD.txt)"
+  echo
+  echo "source ./target/perf-libs/env.sh to setup compatible build environment"
 )
 
 exit 0
