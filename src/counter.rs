@@ -29,8 +29,8 @@ macro_rules! create_counter {
 }
 
 macro_rules! inc_counter {
-    ($name:expr, $count:expr) => {
-        unsafe { $name.inc($count) };
+    ($name:expr, $level:expr, $count:expr) => {
+        unsafe { $name.inc($level, $count) };
     };
 }
 
@@ -45,10 +45,8 @@ macro_rules! inc_new_counter_info {
 
 macro_rules! inc_new_counter {
     ($name:expr, $count:expr, $level:expr, $lograte:expr) => {{
-        if log_enabled!($level) {
-            static mut INC_NEW_COUNTER: Counter = create_counter!($name, $lograte);
-            inc_counter!(INC_NEW_COUNTER, $count);
-        }
+        static mut INC_NEW_COUNTER: Counter = create_counter!($name, $lograte);
+        inc_counter!(INC_NEW_COUNTER, $level, $count);
     }};
 }
 
@@ -63,7 +61,7 @@ impl Counter {
             v
         }
     }
-    pub fn inc(&mut self, events: usize) {
+    pub fn inc(&mut self, level: log::Level, events: usize) {
         let counts = self.counts.fetch_add(events, Ordering::Relaxed);
         let times = self.times.fetch_add(1, Ordering::Relaxed);
         let mut lograte = self.lograte.load(Ordering::Relaxed);
@@ -72,14 +70,16 @@ impl Counter {
             self.lograte.store(lograte, Ordering::Relaxed);
         }
         if times % lograte == 0 && times > 0 {
-            info!(
-                "COUNTER:{{\"name\": \"{}\", \"counts\": {}, \"samples\": {},  \"now\": {}, \"events\": {}}}",
-                self.name,
-                counts + events,
-                times,
-                timing::timestamp(),
-                events,
-            );
+            if log_enabled!(level) {
+                info!(
+                    "COUNTER:{{\"name\": \"{}\", \"counts\": {}, \"samples\": {},  \"now\": {}, \"events\": {}}}",
+                    self.name,
+                    counts + events,
+                    times,
+                    timing::timestamp(),
+                    events,
+                );
+            }
 
             let lastlog = self.lastlog.load(Ordering::Relaxed);
             let prev = self
@@ -122,7 +122,7 @@ mod tests {
         let _readlock = get_env_lock().read();
         static mut COUNTER: Counter = create_counter!("test", 100);
         let count = 1;
-        inc_counter!(COUNTER, count);
+        inc_counter!(COUNTER, Level::Info, count);
         unsafe {
             assert_eq!(COUNTER.counts.load(Ordering::Relaxed), 1);
             assert_eq!(COUNTER.times.load(Ordering::Relaxed), 1);
@@ -131,12 +131,12 @@ mod tests {
             assert_eq!(COUNTER.name, "test");
         }
         for _ in 0..199 {
-            inc_counter!(COUNTER, 2);
+            inc_counter!(COUNTER, Level::Info, 2);
         }
         unsafe {
             assert_eq!(COUNTER.lastlog.load(Ordering::Relaxed), 199);
         }
-        inc_counter!(COUNTER, 2);
+        inc_counter!(COUNTER, Level::Info, 2);
         unsafe {
             assert_eq!(COUNTER.lastlog.load(Ordering::Relaxed), 399);
         }
@@ -160,7 +160,7 @@ mod tests {
             DEFAULT_METRICS_RATE,
         );
         static mut COUNTER: Counter = create_counter!("test_lograte", 0);
-        inc_counter!(COUNTER, 2);
+        inc_counter!(COUNTER, Level::Info, 2);
         unsafe {
             assert_eq!(
                 COUNTER.lograte.load(Ordering::Relaxed),
@@ -175,14 +175,14 @@ mod tests {
         let _writelock = get_env_lock().write();
         static mut COUNTER: Counter = create_counter!("test_lograte_env", 0);
         env::set_var("SOLANA_DEFAULT_METRICS_RATE", "50");
-        inc_counter!(COUNTER, 2);
+        inc_counter!(COUNTER, Level::Info, 2);
         unsafe {
             assert_eq!(COUNTER.lograte.load(Ordering::Relaxed), 50);
         }
 
         static mut COUNTER2: Counter = create_counter!("test_lograte_env", 0);
         env::set_var("SOLANA_DEFAULT_METRICS_RATE", "0");
-        inc_counter!(COUNTER2, 2);
+        inc_counter!(COUNTER2, Level::Info, 2);
         unsafe {
             assert_eq!(
                 COUNTER2.lograte.load(Ordering::Relaxed),
