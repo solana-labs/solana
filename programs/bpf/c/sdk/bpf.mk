@@ -95,12 +95,12 @@ help:
 $(OUT_DIR)/%.bc: $(SRC_DIR)/%.c
 	@echo "[cc] $@ ($<)"
 	$(_@)mkdir -p $(OUT_DIR)
-	$(_@)$(CC) $(CC_FLAGS) $(SYSTEM_INC_DIRS) $(INC_DIRS) -o $@ -c $< -MD -MF $(@:.bc=.d)
+	$(_@)$(CC) $(CC_FLAGS) $(SYSTEM_INC_DIRS) $(addprefix -I,$(INC_DIRS)) -o $@ -c $< -MD -MF $(@:.bc=.d)
 
 $(OUT_DIR)/%.bc: $(SRC_DIR)/%.cc
 	@echo "[cc] $@ ($<)"
 	$(_@)mkdir -p $(OUT_DIR)
-	$(_@)$(CXX) $(CXX_FLAGS) $(SYSTEM_INC_DIRS) $(INC_DIRS) -o $@ -c $< -MD -MF $(@:.bc=.d)
+	$(_@)$(CXX) $(CXX_FLAGS) $(SYSTEM_INC_DIRS) $(addprefix -I,$(INC_DIRS)) -o $@ -c $< -MD -MF $(@:.bc=.d)
 
 .PRECIOUS: $(OUT_DIR)/%.o
 $(OUT_DIR)/%.o: $(OUT_DIR)/%.bc
