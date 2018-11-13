@@ -1,5 +1,6 @@
 use blob_fetch_stage::BlobFetchStage;
 use cluster_info::{ClusterInfo, Node, NodeInfo};
+use db_ledger::DbLedger;
 use leader_scheduler::LeaderScheduler;
 use ncp::Ncp;
 use service::Service;
@@ -166,12 +167,14 @@ impl Replicator {
 mod tests {
     use client::mk_client;
     use cluster_info::Node;
+    use db_ledger::DbLedger;
     use fullnode::Fullnode;
     use leader_scheduler::LeaderScheduler;
     use ledger::{create_tmp_genesis, get_tmp_ledger_path, read_ledger};
     use logger;
     use replicator::sample_file;
     use replicator::Replicator;
+    use rocksdb::{Options, DB};
     use signature::{Keypair, KeypairUtil};
     use solana_sdk::hash::Hash;
     use std::fs::File;
@@ -180,7 +183,7 @@ mod tests {
     use std::mem::size_of;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::Arc;
+    use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
 
@@ -229,7 +232,12 @@ mod tests {
 
         info!("starting replicator node");
         let replicator_node = Node::new_localhost_with_pubkey(replicator_keypair.pubkey());
+        let db_ledger_path = get_tmp_ledger_path("test_replicator_startup");
+        let db_ledger = Arc::new(RwLock::new(
+            DbLedger::open(&db_ledger_path).expect("Expected to be able to open database ledger"),
+        ));
         let (replicator, _leader_info) = Replicator::new(
+            db_ledger,
             entry_height,
             1,
             &exit,
@@ -266,6 +274,10 @@ mod tests {
         exit.store(true, Ordering::Relaxed);
         replicator.join();
         leader.exit();
+
+        DB::destroy(&Options::default(), &db_ledger_path)
+            .expect("Expected successful database destuction");
+        let _ignored = remove_dir_all(&db_ledger_path);
         let _ignored = remove_dir_all(&leader_ledger_path);
         let _ignored = remove_dir_all(&replicator_ledger_path);
     }

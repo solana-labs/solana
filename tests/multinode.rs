@@ -2,13 +2,16 @@
 extern crate log;
 extern crate bincode;
 extern crate chrono;
+extern crate rocksdb;
 extern crate serde_json;
 extern crate solana;
 extern crate solana_sdk;
 
+use rocksdb::{Options, DB};
 use solana::blob_fetch_stage::BlobFetchStage;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
 use solana::contact_info::ContactInfo;
+use solana::db_ledger::{write_entries_to_ledger, DB_LEDGER_DIRECTORY};
 use solana::entry::{reconstruct_entries_from_blobs, Entry};
 use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
@@ -959,7 +962,7 @@ fn test_leader_validator_basic() {
 
     // Make a common mint and a genesis entry for both leader + validator ledgers
     let num_ending_ticks = 1;
-    let (mint, leader_ledger_path, genesis_entries) = create_tmp_sample_ledger(
+    let (mint, leader_ledger_path, mut genesis_entries) = create_tmp_sample_ledger(
         "test_leader_validator_basic",
         10_000,
         num_ending_ticks,
@@ -985,6 +988,20 @@ fn test_leader_validator_basic() {
     let (active_set_entries, vote_account_keypair) =
         make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id, 0);
     ledger_writer.write_entries(&active_set_entries).unwrap();
+
+    // Create RocksDb ledgers, write genesis entries to them
+    let db_leader_ledger_path = format!("{}/{}", leader_ledger_path, DB_LEDGER_DIRECTORY);
+    let db_validator_ledger_path = format!("{}/{}", validator_ledger_path, DB_LEDGER_DIRECTORY);
+
+    // Write the validator entries to the validator database, they
+    // will have repair the missing leader "active_set_entries"
+    write_entries_to_ledger(&vec![db_validator_ledger_path.clone()], &genesis_entries);
+
+    // Next write the leader entries to the leader
+    genesis_entries.extend(active_set_entries);
+    write_entries_to_ledger(&vec![db_leader_ledger_path.clone()], &genesis_entries);
+
+    let db_ledger_paths = vec![db_leader_ledger_path, db_validator_ledger_path];
 
     // Create the leader scheduler config
     let num_bootstrap_slots = 2;
@@ -1085,6 +1102,10 @@ fn test_leader_validator_basic() {
     }
 
     assert!(min_len >= bootstrap_height);
+
+    for path in db_ledger_paths {
+        DB::destroy(&Options::default(), &path).expect("Expected successful database destruction");
+    }
 
     for path in ledger_paths {
         remove_dir_all(path).unwrap();
@@ -1287,7 +1308,7 @@ fn test_full_leader_validator_network() {
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
     let num_ending_ticks = 1;
-    let (mint, bootstrap_leader_ledger_path, genesis_entries) = create_tmp_sample_ledger(
+    let (mint, bootstrap_leader_ledger_path, mut genesis_entries) = create_tmp_sample_ledger(
         "test_full_leader_validator_network",
         10_000,
         num_ending_ticks,
@@ -1334,7 +1355,20 @@ fn test_full_leader_validator_network() {
             .expect("expected at least one genesis entry")
             .id;
         ledger_writer.write_entries(&bootstrap_entries).unwrap();
+        genesis_entries.extend(bootstrap_entries);
     }
+
+    // Create RocksDb ledger for bootstrap leader, write genesis entries to them
+    let db_bootstrap_leader_ledger_path =
+        format!("{}/{}", bootstrap_leader_ledger_path, DB_LEDGER_DIRECTORY);
+
+    // Write the validator entries to the validator databases.
+    write_entries_to_ledger(
+        &vec![db_bootstrap_leader_ledger_path.clone()],
+        &genesis_entries,
+    );
+
+    let mut db_ledger_paths = vec![db_bootstrap_leader_ledger_path];
 
     // Create the common leader scheduling configuration
     let num_slots_per_epoch = (N + 1) as u64;
@@ -1346,28 +1380,20 @@ fn test_full_leader_validator_network() {
         Some(bootstrap_height),
         Some(leader_rotation_interval),
         Some(seed_rotation_interval),
-        Some(leader_rotation_interval),
+        Some(100),
     );
 
     let exit = Arc::new(AtomicBool::new(false));
-    // Start the bootstrap leader fullnode
-    let bootstrap_leader = Arc::new(RwLock::new(Fullnode::new(
-        bootstrap_leader_node,
-        &bootstrap_leader_ledger_path,
-        Arc::new(node_keypairs.pop_front().unwrap()),
-        Arc::new(vote_account_keypairs.pop_front().unwrap()),
-        Some(bootstrap_leader_info.ncp),
-        false,
-        LeaderScheduler::new(&leader_scheduler_config),
-        None,
-    )));
 
-    let mut nodes: Vec<Arc<RwLock<Fullnode>>> = vec![bootstrap_leader.clone()];
-    let mut t_nodes = vec![run_node(
-        bootstrap_leader_info.id,
-        bootstrap_leader,
-        exit.clone(),
-    )];
+    // Postpone starting the leader until after the validators are up and running
+    // to avoid
+    // 1) Scenario where leader rotates before validators can start up
+    // 2) Modifying the leader ledger which validators are going to be copying
+    // during startup
+    let leader_keypair = node_keypairs.pop_front().unwrap();
+    let leader_vote_keypair = vote_account_keypairs.pop_front().unwrap();
+    let mut nodes: Vec<Arc<RwLock<Fullnode>>> = vec![];
+    let mut t_nodes = vec![];
 
     // Start up the validators
     for kp in node_keypairs.into_iter() {
@@ -1376,6 +1402,15 @@ fn test_full_leader_validator_network() {
             "test_full_leader_validator_network",
         );
         ledger_paths.push(validator_ledger_path.clone());
+
+        // Create RocksDb ledgers, write genesis entries to them
+        let db_validator_ledger_path = format!("{}/{}", validator_ledger_path, DB_LEDGER_DIRECTORY);
+        db_ledger_paths.push(db_validator_ledger_path.clone());
+
+        // Write the validator entries to the validator database, they
+        // will have repair the missing leader "active_set_entries"
+        write_entries_to_ledger(&vec![db_validator_ledger_path.clone()], &genesis_entries);
+
         let validator_id = kp.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(validator_id);
         let validator = Arc::new(RwLock::new(Fullnode::new(
@@ -1392,6 +1427,25 @@ fn test_full_leader_validator_network() {
         nodes.push(validator.clone());
         t_nodes.push(run_node(validator_id, validator, exit.clone()));
     }
+
+    // Start up the bootstrap leader
+    let bootstrap_leader = Arc::new(RwLock::new(Fullnode::new(
+        bootstrap_leader_node,
+        &bootstrap_leader_ledger_path,
+        Arc::new(leader_keypair),
+        Arc::new(leader_vote_keypair),
+        Some(bootstrap_leader_info.ncp),
+        false,
+        LeaderScheduler::new(&leader_scheduler_config),
+        None,
+    )));
+
+    nodes.push(bootstrap_leader.clone());
+    t_nodes.push(run_node(
+        bootstrap_leader_info.id,
+        bootstrap_leader,
+        exit.clone(),
+    ));
 
     // Wait for convergence
     let num_converged = converge(&bootstrap_leader_info, N + 1).len();
@@ -1495,6 +1549,11 @@ fn test_full_leader_validator_network() {
     }
 
     assert!(shortest.unwrap() >= target_height);
+
+    for path in db_ledger_paths {
+        DB::destroy(&Options::default(), &path).expect("Expected successful database destruction");
+    }
+
     for path in ledger_paths {
         remove_dir_all(path).unwrap();
     }

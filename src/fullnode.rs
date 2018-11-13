@@ -3,6 +3,7 @@
 use bank::Bank;
 use broadcast_stage::BroadcastStage;
 use cluster_info::{ClusterInfo, Node, NodeInfo};
+use db_ledger::DB_LEDGER_DIRECTORY;
 use leader_scheduler::LeaderScheduler;
 use ledger::read_ledger;
 use ncp::Ncp;
@@ -281,8 +282,7 @@ impl Fullnode {
                     .try_clone()
                     .expect("Failed to clone retransmit socket"),
                 Some(ledger_path),
-                //TODO: pass db path as argument
-                format!("{}/db_ledger", ledger_path),
+                format!("{}/{}", ledger_path, DB_LEDGER_DIRECTORY),
             );
             let tpu_forwarder = TpuForwarder::new(
                 node.sockets
@@ -435,7 +435,7 @@ impl Fullnode {
                     .try_clone()
                     .expect("Failed to clone retransmit socket"),
                 Some(&self.ledger_path),
-                format!("{}/db_ledger", self.ledger_path),
+                format!("{}/{}", self.ledger_path, DB_LEDGER_DIRECTORY),
             );
             let tpu_forwarder = TpuForwarder::new(
                 self.transaction_sockets
@@ -627,10 +627,12 @@ impl Service for Fullnode {
 mod tests {
     use bank::Bank;
     use cluster_info::Node;
+    use db_ledger::*;
     use fullnode::{Fullnode, FullnodeReturnType, NodeRole, TvuReturnType};
     use leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
     use ledger::{create_tmp_genesis, create_tmp_sample_ledger, LedgerWriter};
     use packet::make_consecutive_blobs;
+    use rocksdb::{Options, DB};
     use service::Service;
     use signature::{Keypair, KeypairUtil};
     use std::cmp;
@@ -907,7 +909,7 @@ mod tests {
 
         // Create validator identity
         let num_ending_ticks = 1;
-        let (mint, validator_ledger_path, genesis_entries) = create_tmp_sample_ledger(
+        let (mint, validator_ledger_path, mut genesis_entries) = create_tmp_sample_ledger(
             "test_validator_to_leader_transition",
             10_000,
             num_ending_ticks,
@@ -943,6 +945,11 @@ mod tests {
         last_id = active_set_entries.last().unwrap().id;
         ledger_writer.write_entries(&active_set_entries).unwrap();
         let ledger_initial_len = genesis_entries.len() as u64 + active_set_entries_len;
+
+        // Create RocksDb ledger, write genesis entries to it
+        let db_ledger_path = format!("{}/{}", validator_ledger_path, DB_LEDGER_DIRECTORY);
+        genesis_entries.extend(active_set_entries);
+        write_entries_to_ledger(&vec![db_ledger_path.clone()], &genesis_entries);
 
         // Set the leader scheduler for the validator
         let leader_rotation_interval = 10;
@@ -1036,6 +1043,8 @@ mod tests {
         // Shut down
         t_responder.join().expect("responder thread join");
         validator.close().unwrap();
-        remove_dir_all(&validator_ledger_path).unwrap();
+        DB::destroy(&Options::default(), &db_ledger_path)
+            .expect("Expected successful database destruction");
+        let _ignored = remove_dir_all(&validator_ledger_path).unwrap();
     }
 }

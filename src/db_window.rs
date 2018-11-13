@@ -218,9 +218,10 @@ pub fn retransmit_all_leader_blocks(
     for b in dq {
         // Check if the blob is from the scheduled leader for its slot. If so,
         // add to the retransmit_queue
-        let slot = b.read().unwrap().slot()?;
-        if let Some(leader_id) = leader_scheduler.get_leader_for_slot(slot) {
-            add_blob_to_retransmit_queue(b, leader_id, &mut retransmit_queue);
+        if let Ok(slot) = b.read().unwrap().slot() {
+            if let Some(leader_id) = leader_scheduler.get_leader_for_slot(slot) {
+                add_blob_to_retransmit_queue(b, leader_id, &mut retransmit_queue);
+            }
         }
     }
 

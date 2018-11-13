@@ -14,7 +14,6 @@ use bank::Bank;
 use blob_fetch_stage::BlobFetchStage;
 use cluster_info::ClusterInfo;
 use db_ledger::DbLedger;
-use hash::Hash;
 use ledger_write_stage::LedgerWriteStage;
 use replicate_stage::{ReplicateStage, ReplicateStageReturnType};
 use retransmit_stage::RetransmitStage;
@@ -26,7 +25,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread;
 use storage_stage::{StorageStage, StorageState};
-use window::SharedWindow;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TvuReturnType {
@@ -73,7 +71,7 @@ impl Tvu {
         // Eventually will be passed into LedgerWriteStage as well, so wrap the object
         // in a Arc<RwLock>
         let db_ledger = Arc::new(RwLock::new(
-            DbLedger::open(&db_ledger_path).expect("Expected to be able to open RocksDb ledger"),
+            DbLedger::open(&db_ledger_path).expect("Expected to be able to open database ledger"),
         ));
 
         let exit = Arc::new(AtomicBool::new(false));
@@ -177,13 +175,16 @@ pub mod tests {
     use cluster_info::{ClusterInfo, Node};
     use entry::Entry;
     use leader_scheduler::LeaderScheduler;
+    use ledger::get_tmp_ledger_path;
     use logger;
     use mint::Mint;
     use ncp::Ncp;
     use packet::SharedBlob;
+    use rocksdb::{Options, DB};
     use service::Service;
     use signature::{Keypair, KeypairUtil};
     use solana_sdk::hash::Hash;
+    use std::fs::remove_dir_all;
     use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
@@ -271,6 +272,7 @@ pub mod tests {
 
         let vote_account_keypair = Arc::new(Keypair::new());
         let mut cur_hash = Hash::default();
+        let db_ledger_path = get_tmp_ledger_path("test_replicate");
         let tvu = Tvu::new(
             Arc::new(target1_keypair),
             vote_account_keypair,
@@ -278,11 +280,11 @@ pub mod tests {
             0,
             cur_hash,
             cref1,
-            dr_1.1,
             target1.sockets.replicate,
             target1.sockets.repair,
             target1.sockets.retransmit,
             None,
+            db_ledger_path.clone(),
         );
 
         let mut alice_ref_balance = starting_balance;
@@ -355,5 +357,8 @@ pub mod tests {
         dr_1.0.join().expect("join");
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
+        DB::destroy(&Options::default(), &db_ledger_path)
+            .expect("Expected successful database destuction");
+        let _ignored = remove_dir_all(&db_ledger_path);
     }
 }
