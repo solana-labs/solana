@@ -1,0 +1,103 @@
+# Drone 1.0: A Signing Service
+
+The goal of this RFC is to define a microservice called a *drone*, which acts
+as custodian of a user's private key. In its simplest form, it can be used to
+create *airdrop* transactions, a token transfer from the drone's account to a
+client's account.
+
+## Background
+
+At the time of this writing, Solana contains an undocumented microservice
+called a drone. A client sends that drone a request for tokens and it then
+interacts with the Solana cluster directly to put the airdrop transaction on
+the ledger.  Once confirmed, the drone returns its signature so that a client
+may also confirm the transaction.
+
+The intent of the current design was that it be used by clients wanting to
+test-drive the Solana testnet. We did not intend for it to be used in mainnet,
+but recently we found variations of it are generally useful and so offer an
+updated design. Specifically, we have found that program owners may want to
+publish a drone such that potential program users may instantiate their
+programs without first owning any tokens. The program owner can use the
+existing drone to enable these users, but the approach is unsatisfying for a
+number of reasons:
+
+1. Once the client has tokens to instantiate the program, the client may choose
+   to simply keep them.
+2. Instantiating a program requires two transaction fees - one for the airdrop
+   and one to instantiate the program.
+3. The drone uses its own resources to interact with the Solana cluster
+   directly.  This artificially limits the number of users it can serve and
+   opens the drone to DoS attacks.
+
+
+## Signing Service
+
+To solve the problems described above, the drone shall be reduced to a simple
+signing service. It shall listen for requests to sign *transaction data*.  Once
+received, the drone should validate the request however it see fit. To
+implement the existing drone, for example, it may only accept transaction data
+with a `SystemProgram::Move` instruction transferring only up to a certain
+amount of tokens. If the drone accepts the transaction, it shall return an
+`Ok(Signature)` where `Signature` is a signature of the transaction data using
+the drone's private key. If it rejects the transaction data, it should return a
+`DroneError` describing why.
+
+
+## Examples
+
+### Granting access to an on-chain game
+
+Creator of on-chain game tic-tac-toe hosts a drone that responds to airdrop
+requests containing an `InitGame` instruction. The drone signs the transaction
+data in the request and returns it, thereby authorizing its account to pay the
+transaction fee and as well as seeding the game's account with enough tokens to
+play it. The user then creates a transaction for its transaction data and the
+drones signature and submits it to the Solana cluster. Each time the user
+interacts with the game, the game pays the user enough tokens to pay the next
+transaction fee to advance the game. At that point, the user may choose to keep
+the tokens instead of advancing the game. If the creator wants to defend
+against that case, they could require the user to return to the drone to sign
+each instruction.
+
+### Worldwide airdrop of a new token
+
+Creator of a new on-chain token (ERC-20 interface), may wish to do a worldwide
+airdrop to distribute its tokens to millions of users over just a few seconds.
+That drone cannot spend resources interacting with the Solana cluster. Instead,
+the drone should only verify the client is unique and human, and then return
+the signature. It may also want to listen to the Solana cluster for recent
+entry IDs to support client retries and to ensure the airdrop is targeting
+the desired cluster.
+
+
+## Attack vectors
+
+### Invalid last_id
+
+The drone may prefer its airdrops only target a particular Solana cluster.
+To do that, it listen to the cluster for new entry IDs and ensure any requests
+reference a recent one.
+
+### Double spends
+
+A client may request multiple airdrops before the first has been submitted to
+the ledger. The client may do this maliciously or simply because it thinks the
+first request was dropped. The drone should not simply query the cluster to
+ensure the client has not already received an airdrop. Instead, it should use
+`last_id` to ensure the previous request is expired before signing another.
+Note that the Solana cluster will reject any transaction with a `last_id`
+beyond a certain *age*.
+
+### Denial of Service
+
+If the transaction data size is smaller than the size of the returned signature
+(or descriptive error), a single client can flood the network.  Considering
+that a simple `Move` operation requires two public keys (each 32 bytes) and a
+`fee` field, and that the returned signature is 64 bytes (and a byte to
+indicate `Ok`), consideration for this attack may not be required.
+
+In the current design, the drone accepts TCP connections. This allows clients
+to DoS the service by simply opening lots of idle connections. Switching to UDP
+may be preferred. The transaction data will be smaller than a UDP packet since
+the transaction sent to the Solana cluster is already pinned to using UDP.
