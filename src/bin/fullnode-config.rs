@@ -9,7 +9,7 @@ use solana::cluster_info::FULLNODE_PORT_RANGE;
 use solana::fullnode::Config;
 use solana::logger;
 use solana::netutil::{get_ip_addr, get_public_ip_addr, parse_port_or_addr};
-use solana::signature::read_keypair;
+use solana::signature::read_pkcs8;
 use std::io;
 use std::net::SocketAddr;
 
@@ -65,11 +65,11 @@ fn main() {
         path.extend(&[".config", "solana", "id.json"]);
         path.to_str().unwrap()
     };
-    let keypair = read_keypair(id_path).expect("client keypair");
+    let pkcs8 = read_pkcs8(id_path).expect("client keypair");
 
     // we need all the receiving sockets to be bound within the expected
     // port range that we open on aws
-    let config = Config::new(&bind_addr, keypair.to_bytes().to_vec());
+    let config = Config::new(&bind_addr, pkcs8);
     let stdout = io::stdout();
     serde_json::to_writer(stdout, &config).expect("serialize");
 }

@@ -9,7 +9,6 @@ use hash::Hash;
 use rand::{ChaChaRng, Rng, SeedableRng};
 use result::{Error, Result};
 use service::Service;
-use sha2::Sha512;
 use signature::Keypair;
 use signature::Signature;
 use solana_sdk::pubkey::Pubkey;
@@ -139,9 +138,9 @@ impl StorageStage {
         entry_height: u64,
     ) -> Result<()> {
         let mut seed = [0u8; 32];
-        let signature = keypair.sign::<Sha512>(&entry_id.as_ref());
+        let signature = keypair.sign(&entry_id.as_ref());
 
-        seed.copy_from_slice(&signature.to_bytes()[..32]);
+        seed.copy_from_slice(&signature.as_ref()[..32]);
 
         let mut rng = ChaChaRng::from_seed(seed);
 
@@ -152,7 +151,7 @@ impl StorageStage {
             return Ok(());
         }
         // TODO: what if the validator does not have this slice
-        let slice = signature.to_bytes()[0] as usize % num_slices;
+        let slice = signature.as_ref()[0] as usize % num_slices;
 
         debug!(
             "storage verifying: slice: {} identities: {}",

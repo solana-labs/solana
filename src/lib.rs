@@ -87,7 +87,6 @@ extern crate bytes;
 extern crate chrono;
 extern crate clap;
 extern crate dirs;
-extern crate ed25519_dalek;
 extern crate elf;
 extern crate generic_array;
 #[cfg(test)]
@@ -104,6 +103,7 @@ extern crate nix;
 extern crate pnet_datalink;
 extern crate rayon;
 extern crate reqwest;
+extern crate ring;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
@@ -122,6 +122,7 @@ extern crate solana_sdk;
 extern crate sys_info;
 extern crate tokio;
 extern crate tokio_codec;
+extern crate untrusted;
 
 #[cfg(test)]
 #[macro_use]

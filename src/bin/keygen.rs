@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate clap;
 extern crate dirs;
+extern crate ring;
 extern crate serde_json;
 extern crate solana;
 
