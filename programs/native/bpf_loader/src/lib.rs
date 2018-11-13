@@ -88,7 +88,7 @@ pub fn helper_sol_log_u64(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64)
     0
 }
 
-fn create_vm(prog: &[u8]) -> Result<EbpfVmRaw, Error> {
+pub fn create_vm(prog: &[u8]) -> Result<EbpfVmRaw, Error> {
     let mut vm = EbpfVmRaw::new(None)?;
     vm.set_verifier(bpf_verifier::check)?;
     vm.set_max_instruction_count(36000)?; // 36000 is a wag, need to tune
