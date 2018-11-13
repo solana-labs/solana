@@ -53,7 +53,12 @@ snap)
   "
 
   if [[ -e /dev/nvidia0 ]]; then
-    commonNodeConfig="$commonNodeConfig enable-cuda=1"
+    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+    echo
+    echo "WARNING: GPU detected by snap builds to not support CUDA."
+    echo "         Consider using instances with a GPU to reduce cost."
+    echo
+    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
   fi
 
   if [[ $nodeType = leader ]]; then
