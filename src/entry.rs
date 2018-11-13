@@ -33,6 +33,9 @@ pub type EntryReceiver = Receiver<Vec<Entry>>;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Entry {
+    /// The the previous Entry ID.
+    pub prev_id: Hash,
+
     /// The number of hashes since the previous Entry ID.
     pub num_hashes: u64,
 
@@ -47,19 +50,21 @@ pub struct Entry {
 
 impl Entry {
     /// Creates the next Entry `num_hashes` after `start_hash`.
-    pub fn new(start_hash: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Self {
+    pub fn new(prev_id: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Self {
         let entry = {
             if num_hashes == 0 && transactions.is_empty() {
                 Entry {
+                    prev_id: *prev_id,
                     num_hashes: 0,
-                    id: *start_hash,
+                    id: *prev_id,
                     transactions,
                 }
             } else if num_hashes == 0 {
                 // If you passed in transactions, but passed in num_hashes == 0, then
                 // next_hash will generate the next hash and set num_hashes == 1
-                let id = next_hash(start_hash, 1, &transactions);
+                let id = next_hash(prev_id, 1, &transactions);
                 Entry {
+                    prev_id: *prev_id,
                     num_hashes: 1,
                     id,
                     transactions,
@@ -68,8 +73,9 @@ impl Entry {
                 // Otherwise, the next Entry `num_hashes` after `start_hash`.
                 // If you wanted a tick for instance, then pass in num_hashes = 1
                 // and transactions = empty
-                let id = next_hash(start_hash, num_hashes, &transactions);
+                let id = next_hash(prev_id, num_hashes, &transactions);
                 Entry {
+                    prev_id: *prev_id,
                     num_hashes,
                     id,
                     transactions,
@@ -121,7 +127,10 @@ impl Entry {
     /// Estimate serialized_size of Entry without creating an Entry.
     pub fn serialized_size(transactions: &[Transaction]) -> u64 {
         let txs_size = serialized_size(transactions).unwrap();
-        size_of::<u64>() as u64 + size_of::<Hash>() as u64 + txs_size
+
+        // num_hashes    +      id + prev_id                + txs
+
+        (size_of::<u64>() + 2 * size_of::<Hash>()) as u64 + txs_size
     }
 
     pub fn num_will_fit(transactions: &[Transaction]) -> usize {
@@ -175,12 +184,17 @@ impl Entry {
 
     /// Creates a Entry from the number of hashes `num_hashes` since the previous transaction
     /// and that resulting `id`.
-    pub fn new_tick(num_hashes: u64, id: &Hash) -> Self {
+    pub fn new_tick(prev_id: &Hash, num_hashes: u64, id: &Hash) -> Self {
         Entry {
+            prev_id: *prev_id,
             num_hashes,
             id: *id,
             transactions: vec![],
         }
+    }
+
+    pub fn verify_self(&self) -> bool {
+        self.id == next_hash(&self.prev_id, self.num_hashes, &self.transactions)
     }
 
     /// Verifies self.id is the result of hashing a `start_hash` `self.num_hashes` times.
@@ -225,11 +239,12 @@ fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction]) -
 }
 
 /// Creates the next Tick or Transaction Entry `num_hashes` after `start_hash`.
-pub fn next_entry(start_hash: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Entry {
+pub fn next_entry(prev_id: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Entry {
     assert!(num_hashes > 0 || transactions.is_empty());
     Entry {
+        prev_id: *prev_id,
         num_hashes,
-        id: next_hash(start_hash, num_hashes, &transactions),
+        id: next_hash(prev_id, num_hashes, &transactions),
         transactions,
     }
 }
@@ -249,9 +264,10 @@ mod tests {
     fn test_entry_verify() {
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
-        assert!(Entry::new_tick(0, &zero).verify(&zero)); // base case
-        assert!(!Entry::new_tick(0, &zero).verify(&one)); // base case, bad
+        assert!(Entry::new_tick(&zero, 0, &zero).verify(&zero)); // base case, never used
+        assert!(!Entry::new_tick(&zero, 0, &zero).verify(&one)); // base case, bad
         assert!(next_entry(&zero, 1, vec![]).verify(&zero)); // inductive step
+        assert!(next_entry(&zero, 1, vec![]).verify_self()); // also inductive step
         assert!(!next_entry(&zero, 1, vec![]).verify(&one)); // inductive step, bad
     }
 

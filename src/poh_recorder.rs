@@ -80,15 +80,6 @@ impl PohRecorder {
         }
     }
 
-    fn generate_tick_entry(&self, poh: &mut Poh) -> Entry {
-        let tick = poh.tick();
-        Entry {
-            num_hashes: tick.num_hashes,
-            id: tick.id,
-            transactions: vec![],
-        }
-    }
-
     fn is_max_tick_height_reached(&self, poh: &Poh) -> bool {
         if let Some(max_tick_height) = self.max_tick_height {
             poh.tick_height >= max_tick_height
@@ -98,11 +89,12 @@ impl PohRecorder {
     }
 
     fn record_and_send_txs(&self, poh: &mut Poh, mixin: Hash, txs: Vec<Transaction>) -> Result<()> {
-        let tick = poh.record(mixin);
+        let entry = poh.record(mixin);
         assert!(!txs.is_empty(), "Entries without transactions are used to track real-time passing in the ledger and can only be generated with PohRecorder::tick function");
         let entry = Entry {
-            num_hashes: tick.num_hashes,
-            id: tick.id,
+            prev_id: entry.prev_id,
+            num_hashes: entry.num_hashes,
+            id: entry.id,
             transactions: txs,
         };
         self.sender.send(vec![entry])?;
@@ -110,9 +102,15 @@ impl PohRecorder {
     }
 
     fn register_and_send_tick(&self, poh: &mut Poh) -> Result<()> {
-        let tick_entry = self.generate_tick_entry(poh);
-        self.bank.register_tick(&tick_entry.id);
-        self.sender.send(vec![tick_entry])?;
+        let tick = poh.tick();
+        let tick = Entry {
+            prev_id: tick.prev_id,
+            num_hashes: tick.num_hashes,
+            id: tick.id,
+            transactions: vec![],
+        };
+        self.bank.register_tick(&tick.id);
+        self.sender.send(vec![tick])?;
         Ok(())
     }
 }
@@ -130,9 +128,9 @@ mod tests {
     fn test_poh() {
         let mint = Mint::new(1);
         let bank = Arc::new(Bank::new(&mint));
-        let last_id = bank.last_id();
+        let prev_id = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
-        let mut poh_recorder = PohRecorder::new(bank, entry_sender, last_id, None);
+        let mut poh_recorder = PohRecorder::new(bank, entry_sender, prev_id, None);
 
         //send some data
         let h1 = hash(b"hello world!");
