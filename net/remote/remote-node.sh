@@ -84,11 +84,9 @@ local|tar)
   export RUST_LOG
   export SOLANA_DEFAULT_METRICS_RATE=1
 
-  : "${CUDA_HOME:=/usr/local/cuda}"
-
   ./fetch-perf-libs.sh
-  export LD_LIBRARY_PATH="$PWD/target/perf-libs:$CUDA_HOME/lib64:$LD_LIBRARY_PATH"
-  echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH"
+  # shellcheck source=/dev/null
+  source ./target/perf-libs/env.sh
 
   scripts/oom-monitor.sh  > oom-monitor.log 2>&1 &
   scripts/net-stats.sh  > net-stats.log 2>&1 &

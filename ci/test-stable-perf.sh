@@ -14,11 +14,10 @@ if ! ci/version-check.sh stable; then
 fi
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
-export CUDA_HOME=/usr/local/cuda
 
 ./fetch-perf-libs.sh
-export LD_LIBRARY_PATH=$PWD/target/perf-libs:$CUDA_HOME/lib64:$LD_LIBRARY_PATH
-export PATH=$PATH:$CUDA_HOME/bin
+# shellcheck source=/dev/null
+source ./target/perf-libs/env.sh
 
 _() {
   echo "--- $*"
