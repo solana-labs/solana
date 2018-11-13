@@ -11,8 +11,13 @@ if ! ci/version-check.sh stable; then
 fi
 
 DRYRUN=
-if [[ -z $BUILDKITE_BRANCH ]] || ./ci/is-pr.sh; then
+if [[ -z $BUILDKITE_BRANCH ]]; then
   DRYRUN="echo"
+fi
+
+if ./ci/is-pr.sh; then
+  DRYRUN="echo"
+  CHANNEL="none (pullrequest)"
 fi
 
 eval "$(ci/channel-info.sh)"
