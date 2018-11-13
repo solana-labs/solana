@@ -2,6 +2,8 @@
 //!
 use cluster_info::{ClusterInfo, NodeInfo};
 use counter::Counter;
+use db_ledger::{DbLedger, LedgerColumnFamily, MetaCf, DEFAULT_SLOT_HEIGHT};
+use db_window::*;
 use entry::EntrySender;
 
 use leader_scheduler::LeaderScheduler;
@@ -12,6 +14,7 @@ use result::{Error, Result};
 use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
+use std::borrow::{Borrow, BorrowMut};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::RecvTimeoutError;
@@ -19,7 +22,6 @@ use std::sync::{Arc, RwLock};
 use std::thread::{Builder, JoinHandle};
 use std::time::{Duration, Instant};
 use streamer::{BlobReceiver, BlobSender};
-use window::{SharedWindow, WindowUtil};
 
 pub const MAX_REPAIR_BACKOFF: usize = 128;
 
@@ -49,103 +51,12 @@ fn repair_backoff(last: &mut u64, times: &mut usize, consumed: u64) -> bool {
     thread_rng().gen_range(0, *times as u64) == 0
 }
 
-fn add_block_to_retransmit_queue(
-    b: &SharedBlob,
-    leader_id: Pubkey,
-    retransmit_queue: &mut Vec<SharedBlob>,
-) {
-    let p = b.read().unwrap();
-    //TODO this check isn't safe against adverserial packets
-    //we need to maintain a sequence window
-    trace!(
-        "idx: {} addr: {:?} id: {:?} leader: {:?}",
-        p.index()
-            .expect("get_index in fn add_block_to_retransmit_queue"),
-        p.id()
-            .expect("get_id in trace! fn add_block_to_retransmit_queue"),
-        p.meta.addr(),
-        leader_id
-    );
-    if p.id().expect("get_id in fn add_block_to_retransmit_queue") == leader_id {
-        //TODO
-        //need to copy the retransmitted blob
-        //otherwise we get into races with which thread
-        //should do the recycling
-        //
-        let nv = SharedBlob::default();
-        {
-            let mut mnv = nv.write().unwrap();
-            let sz = p.meta.size;
-            mnv.meta.size = sz;
-            mnv.data[..sz].copy_from_slice(&p.data[..sz]);
-        }
-        retransmit_queue.push(nv);
-    }
-}
-
-fn retransmit_all_leader_blocks(
-    window: &SharedWindow,
-    maybe_leader: Option<NodeInfo>,
-    dq: &[SharedBlob],
-    id: &Pubkey,
-    consumed: u64,
-    received: u64,
-    retransmit: &BlobSender,
-    pending_retransmits: &mut bool,
-) -> Result<()> {
-    let mut retransmit_queue: Vec<SharedBlob> = Vec::new();
-    if let Some(leader) = maybe_leader {
-        let leader_id = leader.id;
-        for b in dq {
-            add_block_to_retransmit_queue(b, leader_id, &mut retransmit_queue);
-        }
-
-        if *pending_retransmits {
-            for w in window
-                .write()
-                .expect("Window write failed in retransmit_all_leader_blocks")
-                .iter_mut()
-            {
-                *pending_retransmits = false;
-                if w.leader_unknown {
-                    if let Some(ref b) = w.data {
-                        add_block_to_retransmit_queue(b, leader_id, &mut retransmit_queue);
-                        w.leader_unknown = false;
-                    }
-                }
-            }
-        }
-        submit(
-            influxdb::Point::new("retransmit-queue")
-                .add_field(
-                    "count",
-                    influxdb::Value::Integer(retransmit_queue.len() as i64),
-                ).to_owned(),
-        );
-    } else {
-        warn!("{}: no leader to retransmit from", id);
-    }
-    if !retransmit_queue.is_empty() {
-        trace!(
-            "{}: RECV_WINDOW {} {}: retransmit {}",
-            id,
-            consumed,
-            received,
-            retransmit_queue.len(),
-        );
-        inc_new_counter_info!("streamer-recv_window-retransmit", retransmit_queue.len());
-        retransmit.send(retransmit_queue)?;
-    }
-    Ok(())
-}
-
 #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
 fn recv_window(
-    window: &SharedWindow,
+    db_ledger: &mut DbLedger,
     id: &Pubkey,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
-    consumed: &mut u64,
-    received: &mut u64,
+    leader_scheduler: &LeaderScheduler,
     tick_height: &mut u64,
     max_ix: u64,
     r: &BlobReceiver,
@@ -174,28 +85,14 @@ fn recv_window(
             .to_owned(),
     );
 
-    trace!(
-        "{}: RECV_WINDOW {} {}: got packets {}",
-        id,
-        *consumed,
-        *received,
-        dq.len(),
-    );
-
-    retransmit_all_leader_blocks(
-        window,
-        maybe_leader,
-        &dq,
-        id,
-        *consumed,
-        *received,
-        retransmit,
-        pending_retransmits,
-    )?;
+    retransmit_all_leader_blocks(&dq, leader_scheduler, retransmit)?;
 
     let mut pixs = Vec::new();
     //send a contiguous set of blocks
     let mut consume_queue = Vec::new();
+
+    trace!("{} num blobs received: {}", id, dq.len());
+
     for b in dq {
         let (pix, meta_size) = {
             let p = b.read().unwrap();
@@ -203,51 +100,21 @@ fn recv_window(
         };
         pixs.push(pix);
 
-        if !window
-            .read()
-            .unwrap()
-            .blob_idx_in_window(&id, pix, *consumed, received)
-        {
-            continue;
-        }
-
-        // For downloading storage blobs,
-        // we only want up to a certain index
-        // then stop
-        if max_ix != 0 && pix > max_ix {
-            continue;
-        }
-
         trace!("{} window pix: {} size: {}", id, pix, meta_size);
 
-        window.write().unwrap().process_blob(
+        process_blob(
+            leader_scheduler,
+            db_ledger,
             id,
             b,
+            max_ix,
             pix,
             &mut consume_queue,
-            consumed,
             tick_height,
-            leader_unknown,
-            pending_retransmits,
+            done,
         );
+    }
 
-        // Send a signal when we hit the max entry_height
-        if max_ix != 0 && *consumed == (max_ix + 1) {
-            done.store(true, Ordering::Relaxed);
-        }
-    }
-    if log_enabled!(Level::Trace) {
-        trace!("{}", window.read().unwrap().print(id, *consumed));
-        trace!(
-            "{}: consumed: {} received: {} sending consume.len: {} pixs: {:?} took {} ms",
-            id,
-            *consumed,
-            *received,
-            consume_queue.len(),
-            pixs,
-            duration_as_ms(&now.elapsed())
-        );
-    }
     if !consume_queue.is_empty() {
         inc_new_counter_info!("streamer-recv_window-consume", consume_queue.len());
         s.send(consume_queue)?;
@@ -257,8 +124,8 @@ fn recv_window(
 
 #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
 pub fn window_service(
+    db_ledger: Arc<RwLock<DbLedger>>,
     cluster_info: Arc<RwLock<ClusterInfo>>,
-    window: SharedWindow,
     tick_height: u64,
     entry_height: u64,
     max_entry_height: u64,
@@ -273,21 +140,17 @@ pub fn window_service(
         .name("solana-window".to_string())
         .spawn(move || {
             let mut tick_height_ = tick_height;
-            let mut consumed = entry_height;
-            let mut received = entry_height;
             let mut last = entry_height;
             let mut times = 0;
             let id = cluster_info.read().unwrap().my_data().id;
             let mut pending_retransmits = false;
             trace!("{}: RECV_WINDOW started", id);
             loop {
-                // Check if leader rotation was configured
                 if let Err(e) = recv_window(
-                    &window,
+                    db_ledger.write().unwrap().borrow_mut(),
                     &id,
                     &cluster_info,
-                    &mut consumed,
-                    &mut received,
+                    leader_scheduler.read().unwrap().borrow(),
                     &mut tick_height_,
                     max_entry_height,
                     &r,
@@ -306,45 +169,62 @@ pub fn window_service(
                     }
                 }
 
-                submit(
-                    influxdb::Point::new("window-stage")
-                        .add_field("consumed", influxdb::Value::Integer(consumed as i64))
-                        .to_owned(),
-                );
+                let meta = {
+                    let rlock = db_ledger.read().unwrap();
 
-                if received <= consumed {
-                    trace!(
-                        "{} we have everything received:{} consumed:{}",
-                        id,
-                        received,
-                        consumed
+                    rlock
+                        .meta_cf
+                        .get(&rlock.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))
+                };
+
+                if let Ok(Some(meta)) = meta {
+                    let received = meta.received;
+                    let consumed = meta.consumed;
+
+                    submit(
+                        influxdb::Point::new("window-stage")
+                            .add_field("consumed", influxdb::Value::Integer(consumed as i64))
+                            .to_owned(),
                     );
-                    continue;
-                }
 
-                //exponential backoff
-                if !repair_backoff(&mut last, &mut times, consumed) {
-                    trace!("{} !repair_backoff() times = {}", id, times);
-                    continue;
-                }
-                trace!("{} let's repair! times = {}", id, times);
+                    // Consumed should never be bigger than received
+                    assert!(consumed <= received);
+                    if received == consumed {
+                        trace!(
+                            "{} we have everything received: {} consumed: {}",
+                            id,
+                            received,
+                            consumed
+                        );
+                        continue;
+                    }
 
-                let mut window = window.write().unwrap();
-                let reqs = window.repair(
-                    &cluster_info,
-                    &id,
-                    times,
-                    consumed,
-                    received,
-                    tick_height_,
-                    max_entry_height,
-                    &leader_scheduler,
-                );
-                for (to, req) in reqs {
-                    repair_socket.send_to(&req, to).unwrap_or_else(|e| {
-                        info!("{} repair req send_to({}) error {:?}", id, to, e);
-                        0
-                    });
+                    //exponential backoff
+                    if !repair_backoff(&mut last, &mut times, consumed) {
+                        trace!("{} !repair_backoff() times = {}", id, times);
+                        continue;
+                    }
+                    trace!("{} let's repair! times = {}", id, times);
+
+                    let reqs = repair(
+                        DEFAULT_SLOT_HEIGHT,
+                        db_ledger.read().unwrap().borrow(),
+                        &cluster_info,
+                        &id,
+                        times,
+                        tick_height_,
+                        max_entry_height,
+                        &leader_scheduler,
+                    );
+
+                    if let Ok(reqs) = reqs {
+                        for (to, req) in reqs {
+                            repair_socket.send_to(&req, to).unwrap_or_else(|e| {
+                                info!("{} repair req send_to({}) error {:?}", id, to, e);
+                                0
+                            });
+                        }
+                    }
                 }
             }
         }).unwrap()

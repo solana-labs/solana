@@ -71,6 +71,7 @@ pub fn sample_file(in_path: &Path, sample_offsets: &[u64]) -> io::Result<Hash> {
 
 impl Replicator {
     pub fn new(
+        db_ledger: Arc<RwLock<DbLedger>>,
         entry_height: u64,
         max_entry_height: u64,
         exit: &Arc<AtomicBool>,
@@ -105,8 +106,8 @@ impl Replicator {
         // todo: pull blobs off the retransmit_receiver and recycle them?
         let (retransmit_sender, retransmit_receiver) = channel();
         let t_window = window_service(
+            db_ledger,
             cluster_info.clone(),
-            shared_window.clone(),
             0,
             entry_height,
             max_entry_height,

@@ -2,6 +2,7 @@
 
 use cluster_info::ClusterInfo;
 use counter::Counter;
+use db_ledger::DbLedger;
 use entry::Entry;
 
 use leader_scheduler::LeaderScheduler;
@@ -17,7 +18,6 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use streamer::BlobReceiver;
-use window::SharedWindow;
 use window_service::window_service;
 
 fn retransmit(
@@ -81,8 +81,8 @@ pub struct RetransmitStage {
 
 impl RetransmitStage {
     pub fn new(
+        db_ledger: Arc<RwLock<DbLedger>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        window: SharedWindow,
         tick_height: u64,
         entry_height: u64,
         retransmit_socket: Arc<UdpSocket>,
@@ -97,8 +97,8 @@ impl RetransmitStage {
         let (entry_sender, entry_receiver) = channel();
         let done = Arc::new(AtomicBool::new(false));
         let t_window = window_service(
+            db_ledger,
             cluster_info.clone(),
-            window,
             tick_height,
             entry_height,
             0,

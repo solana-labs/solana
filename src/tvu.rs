@@ -13,6 +13,8 @@
 use bank::Bank;
 use blob_fetch_stage::BlobFetchStage;
 use cluster_info::ClusterInfo;
+use db_ledger::DbLedger;
+use hash::Hash;
 use ledger_write_stage::LedgerWriteStage;
 use replicate_stage::{ReplicateStage, ReplicateStageReturnType};
 use retransmit_stage::RetransmitStage;
@@ -62,12 +64,18 @@ impl Tvu {
         entry_height: u64,
         last_entry_id: Hash,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        window: SharedWindow,
         replicate_sockets: Vec<UdpSocket>,
         repair_socket: UdpSocket,
         retransmit_socket: UdpSocket,
         ledger_path: Option<&str>,
+        db_ledger_path: String,
     ) -> Self {
+        // Eventually will be passed into LedgerWriteStage as well, so wrap the object
+        // in a Arc<RwLock>
+        let db_ledger = Arc::new(RwLock::new(
+            DbLedger::open(&db_ledger_path).expect("Expected to be able to open RocksDb ledger"),
+        ));
+
         let exit = Arc::new(AtomicBool::new(false));
 
         let repair_socket = Arc::new(repair_socket);
@@ -76,12 +84,13 @@ impl Tvu {
         blob_sockets.push(repair_socket.clone());
         let (fetch_stage, blob_fetch_receiver) =
             BlobFetchStage::new_multi_socket(blob_sockets, exit.clone());
+
         //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
         //then sent to the window, which does the erasure coding reconstruction
         let (retransmit_stage, blob_window_receiver) = RetransmitStage::new(
+            db_ledger,
             &cluster_info,
-            window,
             bank.tick_height(),
             entry_height,
             Arc::new(retransmit_socket),
