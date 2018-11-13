@@ -8,13 +8,13 @@ extern crate solana_sdk;
 
 use solana::blob_fetch_stage::BlobFetchStage;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
-use solana::entry::Entry;
+use solana::entry::{reconstruct_entries_from_blobs, Entry};
 use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::hash::Hash;
 use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
 use solana::ledger::{
-    create_tmp_genesis, create_tmp_sample_ledger, get_tmp_ledger_path, read_ledger,
-    reconstruct_entries_from_blobs, LedgerWindow, LedgerWriter,
+    create_tmp_genesis, create_tmp_sample_ledger, get_tmp_ledger_path, read_ledger, LedgerWindow,
+    LedgerWriter,
 };
 use solana::logger;
 use solana::mint::Mint;
@@ -1601,7 +1601,8 @@ fn test_broadcast_last_tick() {
             }
         }
         let actual_last_tick = &reconstruct_entries_from_blobs(vec![last_tick_blob])
-            .expect("Expected to be able to reconstruct entries from blob")[0];
+            .expect("Expected to be able to reconstruct entries from blob")
+            .0[0];
         assert_eq!(actual_last_tick, &expected_last_tick);
     }
 
