@@ -6,17 +6,21 @@ extern crate serde_json;
 extern crate solana;
 extern crate solana_sdk;
 
+use solana::blob_fetch_stage::BlobFetchStage;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
 use solana::entry::Entry;
 use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::hash::Hash;
 use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
 use solana::ledger::{
-    create_tmp_genesis, create_tmp_sample_ledger, get_tmp_ledger_path, read_ledger, LedgerWriter,
+    create_tmp_genesis, create_tmp_sample_ledger, get_tmp_ledger_path, read_ledger,
+    reconstruct_entries_from_blobs, LedgerWindow, LedgerWriter,
 };
 use solana::logger;
 use solana::mint::Mint;
 use solana::ncp::Ncp;
+use solana::packet::SharedBlob;
+use solana::poh_service::NUM_TICKS_PER_SECOND;
 use solana::result;
 use solana::service::Service;
 use solana::signature::{Keypair, KeypairUtil};
@@ -56,6 +60,31 @@ fn make_spy_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<ClusterInfo>>, Pubkey) {
     );
 
     (ncp, spy_cluster_info_ref, me)
+}
+
+fn make_listening_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<ClusterInfo>>, Node, Pubkey) {
+    let exit = Arc::new(AtomicBool::new(false));
+    let new_node = Node::new_localhost();
+    let new_node_info = new_node.info.clone();
+    let me = new_node.info.id.clone();
+    let mut new_node_cluster_info = ClusterInfo::new(new_node_info).expect("ClusterInfo::new");
+    new_node_cluster_info.insert(&leader);
+    new_node_cluster_info.set_leader(leader.id);
+    let new_node_cluster_info_ref = Arc::new(RwLock::new(new_node_cluster_info));
+    let new_node_window = Arc::new(RwLock::new(default_window()));
+    let ncp = Ncp::new(
+        &new_node_cluster_info_ref,
+        new_node_window,
+        None,
+        new_node
+            .sockets
+            .gossip
+            .try_clone()
+            .expect("Failed to clone gossip"),
+        exit.clone(),
+    );
+
+    (ncp, new_node_cluster_info_ref, new_node, me)
 }
 
 fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
@@ -1468,6 +1497,125 @@ fn test_full_leader_validator_network() {
     for path in ledger_paths {
         remove_dir_all(path).unwrap();
     }
+}
+
+#[test]
+fn test_broadcast_last_tick() {
+    logger::setup();
+    // The number of validators
+    const N: usize = 5;
+    logger::setup();
+
+    // Create the bootstrap leader node information
+    let bootstrap_leader_keypair = Keypair::new();
+    let bootstrap_leader_node = Node::new_localhost_with_pubkey(bootstrap_leader_keypair.pubkey());
+    let bootstrap_leader_info = bootstrap_leader_node.info.clone();
+
+    // Create leader ledger
+    let (_, bootstrap_leader_ledger_path, genesis_entries) = create_tmp_sample_ledger(
+        "test_broadcast_last_tick",
+        10_000,
+        0,
+        bootstrap_leader_info.id,
+        500,
+    );
+
+    let num_ending_ticks = genesis_entries
+        .iter()
+        .skip(2)
+        .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
+
+    let genesis_ledger_len = genesis_entries.len() as u64 - num_ending_ticks;
+    let blob_receiver_exit = Arc::new(AtomicBool::new(false));
+
+    // Create the listeners
+    let mut listening_nodes: Vec<_> = (0..N)
+        .map(|_| make_listening_node(&bootstrap_leader_info))
+        .collect();
+
+    let blob_fetch_stages: Vec<_> = listening_nodes
+        .iter_mut()
+        .map(|(_, _, node, _)| {
+            BlobFetchStage::new(
+                Arc::new(node.sockets.replicate.pop().unwrap()),
+                blob_receiver_exit.clone(),
+            )
+        }).collect();
+
+    // Create fullnode, should take 20 seconds to reach end of bootstrap period
+    let bootstrap_height = (NUM_TICKS_PER_SECOND * 20) as u64;
+    let leader_rotation_interval = 100;
+    let seed_rotation_interval = 200;
+    let leader_scheduler_config = LeaderSchedulerConfig::new(
+        Some(bootstrap_height),
+        Some(leader_rotation_interval),
+        Some(seed_rotation_interval),
+        Some(leader_rotation_interval),
+    );
+
+    // Start up the bootstrap leader fullnode
+    let mut bootstrap_leader = Fullnode::new(
+        bootstrap_leader_node,
+        &bootstrap_leader_ledger_path,
+        Arc::new(bootstrap_leader_keypair),
+        Arc::new(Keypair::new()),
+        Some(bootstrap_leader_info.contact_info.ncp),
+        false,
+        LeaderScheduler::new(&leader_scheduler_config),
+        None,
+    );
+
+    // Wait for convergence
+    let servers = converge(&bootstrap_leader_info, N + 1);
+    assert_eq!(servers.len(), N + 1);
+
+    // Wait for leader rotation
+    match bootstrap_leader.handle_role_transition().unwrap() {
+        Some(FullnodeReturnType::LeaderToValidatorRotation) => (),
+        _ => panic!("Expected reason for exit to be leader rotation"),
+    }
+
+    // Shut down the leader
+    bootstrap_leader.close().unwrap();
+
+    let last_tick_entry_height = genesis_ledger_len as u64 + bootstrap_height;
+    let mut ledger_window = LedgerWindow::open(&bootstrap_leader_ledger_path)
+        .expect("Expected to be able to open ledger");
+
+    // get_entry() expects the index of the entry, so we have to subtract one from the actual entry height
+    let expected_last_tick = ledger_window
+        .get_entry(last_tick_entry_height - 1)
+        .expect("Expected last tick entry to exist");
+
+    // Check that the nodes got the last broadcasted blob
+    for (_, receiver) in blob_fetch_stages.iter() {
+        let mut last_tick_blob: SharedBlob = SharedBlob::default();
+        while let Ok(mut new_blobs) = receiver.try_recv() {
+            let last_blob = new_blobs.into_iter().find(|b| {
+                b.read().unwrap().index().expect("Expected index in blob")
+                    == last_tick_entry_height - 1
+            });
+            if let Some(last_blob) = last_blob {
+                last_tick_blob = last_blob;
+                break;
+            }
+        }
+        let actual_last_tick = &reconstruct_entries_from_blobs(vec![last_tick_blob])
+            .expect("Expected to be able to reconstruct entries from blob")[0];
+        assert_eq!(actual_last_tick, &expected_last_tick);
+    }
+
+    // Shut down blob fetch stages
+    blob_receiver_exit.store(true, Ordering::Relaxed);
+    for (bf, _) in blob_fetch_stages {
+        bf.join().unwrap();
+    }
+
+    // Shut down the listeners
+    for node in listening_nodes {
+        node.0.close().unwrap();
+    }
+    remove_dir_all(bootstrap_leader_ledger_path).unwrap();
 }
 
 fn mk_client(leader: &NodeInfo) -> ThinClient {

@@ -298,6 +298,8 @@ impl Fullnode {
                 entry_height,
                 leader_slot,
                 entry_receiver,
+                max_tick_height,
+                bank.tick_height(),
                 tpu_exit,
             );
             let leader_state = LeaderServices::new(tpu, broadcast_stage);
@@ -449,6 +451,8 @@ impl Fullnode {
             entry_height,
             0, // TODO: get real leader slot from leader_scheduler
             blob_receiver,
+            max_tick_height,
+            tick_height,
             tpu_exit,
         );
         let leader_state = LeaderServices::new(tpu, broadcast_stage);
