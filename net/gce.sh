@@ -424,7 +424,6 @@ $(
     install-rsync.sh \
     network-config.sh \
     remove-docker-interface.sh \
-    update-default-cuda.sh \
 
 )
 
