@@ -45,7 +45,10 @@ echo --- Creating tarball
 
   cargo install --root solana-release
   ./scripts/install-native-programs.sh solana-release/bin
+
   ./fetch-perf-libs.sh
+  # shellcheck source=/dev/null
+  source ./target/perf-libs/env.sh
   cargo install --features=cuda --root solana-release-cuda
   cp solana-release-cuda/bin/solana-fullnode solana-release/bin/solana-fullnode-cuda
 
