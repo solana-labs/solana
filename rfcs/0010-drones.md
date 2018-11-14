@@ -75,8 +75,8 @@ the desired cluster.
 
 ### Invalid last_id
 
-The drone may prefer its airdrops only target a particular Solana cluster.
-To do that, it listen to the cluster for new entry IDs and ensure any requests
+The drone may prefer its airdrops only target a particular Solana cluster.  To
+do that, it listens to the cluster for new entry IDs and ensure any requests
 reference a recent one.
 
 ### Double spends
