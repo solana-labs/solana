@@ -35,8 +35,8 @@ declare module '@solana/web3.js' {
   // === src/connection.js ===
   declare export type AccountInfo = {
     executable: boolean,
-    loaderProgramId: PublicKey,
-    programId: PublicKey,
+    loader: PublicKey,
+    owner: PublicKey,
     tokens: number,
     userdata: Buffer,
   };

@@ -197,7 +197,7 @@ test('request airdrop', async () => {
     {
       error: null,
       result: {
-        program_id: [
+        owner: [
           0,
           0,
           0,
@@ -234,7 +234,7 @@ test('request airdrop', async () => {
         tokens: 42,
         userdata: [],
         executable: false,
-        loader_program_id: [
+        loader: [
           0,
           0,
           0,
@@ -275,7 +275,7 @@ test('request airdrop', async () => {
   const accountInfo = await connection.getAccountInfo(account.publicKey);
   expect(accountInfo.tokens).toBe(42);
   expect(accountInfo.userdata).toHaveLength(0);
-  expect(accountInfo.programId).toEqual(SystemProgram.programId);
+  expect(accountInfo.owner).toEqual(SystemProgram.programId);
 });
 
 test('transaction', async () => {
@@ -521,7 +521,7 @@ test('account change notification', async () => {
   expect(mockCallback.mock.calls[0][0].userdata).toEqual(
     Buffer.from([0, 0, 0]),
   );
-  expect(mockCallback.mock.calls[0][0].programId).toEqual(BpfLoader.programId);
+  expect(mockCallback.mock.calls[0][0].owner).toEqual(BpfLoader.programId);
 
   // Second mockCallback call is due to loader.load()
   expect(mockCallback.mock.calls[1][0].userdata).toEqual(

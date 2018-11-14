@@ -82,8 +82,8 @@ function jsonRpcResult(resultDescription: any) {
  */
 const AccountInfoResult = struct({
   executable: 'boolean',
-  loader_program_id: 'array',
-  program_id: 'array',
+  loader: 'array',
+  owner: 'array',
   tokens: 'number',
   userdata: 'array',
 });
@@ -149,12 +149,15 @@ const SendTokensRpcResult = jsonRpcResult('string');
  *
  * @typedef {Object} AccountInfo
  * @property {number} tokens Number of tokens assigned to the account
- * @property {PublicKey} programId Identifier of the program assigned to the account
+ * @property {PublicKey} owner Identifier of the program that owns the account
  * @property {?Buffer} userdata Optional userdata assigned to the account
+ * @property {PublicKey} loader Identifier of the loader for this account
+ * @property {boolean} executable `true` if this account's userdata contains a loaded program
  */
 type AccountInfo = {
   executable: boolean,
-  programId: PublicKey,
+  loader: PublicKey,
+  owner: PublicKey,
   tokens: number,
   userdata: Buffer,
 };
@@ -268,9 +271,9 @@ export class Connection {
 
     return {
       executable: result.executable,
+      loader: new PublicKey(result.loader),
+      owner: new PublicKey(result.owner),
       tokens: result.tokens,
-      programId: new PublicKey(result.program_id),
-      loaderProgramId: new PublicKey(result.loader_program_id),
       userdata: Buffer.from(result.userdata),
     };
   }
@@ -474,9 +477,9 @@ export class Connection {
 
         sub.callback({
           executable: result.executable,
+          loader: new PublicKey(result.loader),
+          owner: new PublicKey(result.owner),
           tokens: result.tokens,
-          programId: new PublicKey(result.program_id),
-          loaderProgramId: new PublicKey(result.loader_program_id),
           userdata: Buffer.from(result.userdata),
         });
         return true;
