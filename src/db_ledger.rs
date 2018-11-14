@@ -5,12 +5,15 @@
 use bincode::{deserialize, serialize, Result as BincodeResult};
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use entry::Entry;
+use ledger::Block;
 use packet::{Blob, BLOB_HEADER_SIZE};
 use result::{Error, Result};
 use rocksdb::{ColumnFamily, Options, WriteBatch, DB};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use std::io;
+
+pub const DB_LEDGER_DIRECTORY: &str = "db_ledger";
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum DbLedgerError {
@@ -94,10 +97,13 @@ impl SlotMeta {
     }
 }
 
-#[derive(Default)]
 pub struct MetaCf {}
 
 impl MetaCf {
+    pub fn new() -> Self {
+        MetaCf {}
+    }
+
     pub fn key(slot_height: u64) -> Vec<u8> {
         let mut key = vec![0u8; 8];
         LittleEndian::write_u64(&mut key[0..8], slot_height);
@@ -114,10 +120,13 @@ impl LedgerColumnFamily for MetaCf {
 }
 
 // The data column family
-#[derive(Default)]
 pub struct DataCf {}
 
 impl DataCf {
+    pub fn new() -> Self {
+        DataCf {}
+    }
+
     pub fn key(slot_height: u64, index: u64) -> Vec<u8> {
         let mut key = vec![0u8; 16];
         LittleEndian::write_u64(&mut key[0..8], slot_height);
@@ -145,10 +154,13 @@ impl LedgerColumnFamilyRaw for DataCf {
 }
 
 // The erasure column family
-#[derive(Default)]
 pub struct ErasureCf {}
 
 impl ErasureCf {
+    pub fn new() -> Self {
+        ErasureCf {}
+    }
+
     pub fn key(slot_height: u64, index: u64) -> Vec<u8> {
         DataCf::key(slot_height, index)
     }
@@ -195,13 +207,13 @@ impl DbLedger {
         let db = DB::open_cf(&options, ledger_path, &cfs)?;
 
         // Create the metadata column family
-        let meta_cf = MetaCf::default();
+        let meta_cf = MetaCf::new();
 
         // Create the data column family
-        let data_cf = DataCf::default();
+        let data_cf = DataCf::new();
 
         // Create the erasure column family
-        let erasure_cf = ErasureCf::default();
+        let erasure_cf = ErasureCf::new();
 
         Ok(DbLedger {
             db,
@@ -211,15 +223,23 @@ impl DbLedger {
         })
     }
 
-    pub fn write_blobs<'a, I>(&mut self, start_index: u64, blobs: &'a I) -> Result<()>
+    pub fn write_blobs<'a, I>(&mut self, slot: u64, blobs: &'a I) -> Result<()>
     where
         &'a I: IntoIterator<Item = &'a &'a Blob>,
     {
-        for (blob, index) in blobs.into_iter().zip(start_index..) {
-            let key = DataCf::key(DEFAULT_SLOT_HEIGHT, index);
-            let size = blob.data_size()? as usize;
-            self.data_cf.put(&self.db, &key, &blob.data[..size])?;
+        for blob in blobs.into_iter() {
+            let index = blob.index()?;
+            let key = DataCf::key(slot, index);
+            self.insert_data_blob(&key, blob)?;
         }
+        Ok(())
+    }
+
+    pub fn write_entries(&mut self, slot: u64, entries: &[Entry]) -> Result<()> {
+        let shared_blobs = entries.to_blobs();
+        let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
+        let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
+        self.write_blobs(slot, &blobs)?;
         Ok(())
     }
 
@@ -437,7 +457,7 @@ mod tests {
 
         let ledger_path = get_tmp_ledger_path("test_get_blobs_bytes");
         let mut ledger = DbLedger::open(&ledger_path).unwrap();
-        ledger.write_blobs(0, &blobs).unwrap();
+        ledger.write_blobs(DEFAULT_SLOT_HEIGHT, &blobs).unwrap();
 
         let mut buf = [0; 1024];
         let (num_blobs, bytes) = ledger.get_blob_bytes(0, 1, &mut buf).unwrap();
