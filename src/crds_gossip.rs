@@ -7,7 +7,7 @@ use bloom::Bloom;
 use crds::Crds;
 use crds_gossip_error::CrdsGossipError;
 use crds_gossip_pull::CrdsGossipPull;
-use crds_gossip_push::CrdsGossipPush;
+use crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE};
 use crds_value::CrdsValue;
 use hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -70,12 +70,12 @@ impl CrdsGossip {
 
     /// refresh the push active set
     /// * ratio - number of actives to rotate
-    pub fn refresh_push_active_set(&mut self, ratio: usize) {
+    pub fn refresh_push_active_set(&mut self) {
         self.push.refresh_push_active_set(
             &self.crds,
             self.id,
             self.pull.pull_request_time.len(),
-            ratio,
+            CRDS_GOSSIP_NUM_ACTIVE,
         )
     }
 
@@ -139,7 +139,7 @@ mod test {
     use super::*;
     use bincode::serialized_size;
     use contact_info::ContactInfo;
-    use crds_gossip_push::{CRDS_GOSSIP_NUM_ACTIVE, CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS};
+    use crds_gossip_push::CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS;
     use crds_value::CrdsValueLabel;
     use rayon::prelude::*;
     use signature::{Keypair, KeypairUtil};
@@ -240,7 +240,7 @@ mod test {
         // make sure there is someone in the active set
         let network_values: Vec<Node> = network.values().cloned().collect();
         network_values.par_iter().for_each(|node| {
-            node.lock().unwrap().refresh_push_active_set(10);
+            node.lock().unwrap().refresh_push_active_set();
         });
         let mut total_bytes = bytes_tx;
         for second in 1..num {
@@ -331,9 +331,7 @@ mod test {
             }
             if now % CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS == 0 && now > 0 {
                 network_values.par_iter().for_each(|node| {
-                    node.lock()
-                        .unwrap()
-                        .refresh_push_active_set(CRDS_GOSSIP_NUM_ACTIVE);
+                    node.lock().unwrap().refresh_push_active_set();
                 });
             }
             total = network_values

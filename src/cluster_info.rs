@@ -93,7 +93,7 @@ impl ClusterInfo {
         let now = timestamp();
         my_data.wallclock = now;
         let entry = CrdsValue::ContactInfo(my_data);
-        self.gossip.refresh_push_active_set(10);
+        self.gossip.refresh_push_active_set();
         self.gossip.process_push_message(&[entry], now);
     }
     pub fn insert_info(&mut self, node_info: NodeInfo) {
