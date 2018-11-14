@@ -79,6 +79,16 @@ The drone may prefer its airdrops only target a particular Solana cluster.  To
 do that, it listens to the cluster for new entry IDs and ensure any requests
 reference a recent one.
 
+Note: to listen for new entry IDs assumes the drone is either a fullnode or a
+*light* client. At the time of this writing, light clients have not been
+implemented and no Solana RFC describes them. This document assumes one of the
+following approaches be taken:
+
+1. Define and implement a light client
+2. Embed a fullnode
+3. Query the jsonrpc API for the latest last id at a rate slightly faster than
+   ticks are produced.
+
 ### Double spends
 
 A client may request multiple airdrops before the first has been submitted to
