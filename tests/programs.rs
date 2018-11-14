@@ -27,9 +27,6 @@ use std::path::PathBuf;
 /// BPF program file extension
 #[cfg(feature = "bpf_c")]
 const PLATFORM_FILE_EXTENSION_BPF: &str = "o";
-/// BPF program ELF section name where the program code is located
-pub const PLATFORM_SECTION_RS: &str = ".text,entrypoint";
-pub const PLATFORM_SECTION_C: &str = ".text.entrypoint";
 /// Create a BPF program file name
 #[cfg(feature = "bpf_c")]
 fn create_bpf_path(name: &str) -> PathBuf {
@@ -285,7 +282,7 @@ fn test_program_builtin_bpf_noop() {
         &loader.mint.keypair(),
         &[],
         program.program.pubkey(),
-        vec![1u8],
+        &vec![1u8],
         loader.mint.last_id(),
         0,
     );
@@ -313,7 +310,7 @@ fn test_program_bpf_noop_c() {
         &loader.mint.keypair(),
         &[],
         program.program.pubkey(),
-        vec![1u8],
+        &vec![1u8],
         loader.mint.last_id(),
         0,
     );
