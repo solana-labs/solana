@@ -327,30 +327,10 @@ SOL_FN_PREFIX void sol_log_params(
 /**@}*/
 
 /**
- * Program entrypoint
- * @{
+ * Program instruction entrypoint
  *
- * The following is an example of a simple program that prints the input
- * parameters it received:
- *
- * bool entrypoint(const uint8_t *input) {
- *   SolKeyedAccounts ka[1];
- *   uint8_t *data;
- *   uint64_t data_len;
- *
- *   if (!sol_deserialize(buf, ka, SOL_ARRAY_SIZE(ka), NULL, &data, &data_len)) {
- *     return false;
- *   }
- *   sol_log_params(1, ka, data, data_len);
- *   return true;
- * }
- */
-
-/**
- * Program entrypoint signature
- *
- * @param input An array containing serialized input parameters
- * @return true if successful
+ * @param input Buffer of serialized input parameters.  Use sol_deserialize() to decode
+ * @return true if the instruction executed successfully
  */
 extern bool entrypoint(const uint8_t *input);
 
