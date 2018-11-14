@@ -7,6 +7,7 @@ extern crate env_logger;
 extern crate log;
 extern crate libc;
 extern crate solana_rbpf;
+#[macro_use]
 extern crate solana_sdk;
 
 use bincode::deserialize;
@@ -135,8 +136,8 @@ fn deserialize_parameters(keyed_accounts: &mut [KeyedAccount], buffer: &[u8]) {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -> bool {
+solana_entrypoint!(entrypoint);
+fn entrypoint(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -> bool {
     static INIT: Once = ONCE_INIT;
     INIT.call_once(|| {
         // env_logger can only be initialized once

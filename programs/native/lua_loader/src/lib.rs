@@ -3,6 +3,7 @@ extern crate env_logger;
 #[macro_use]
 extern crate log;
 extern crate rlua;
+#[macro_use]
 extern crate solana_sdk;
 
 use bincode::deserialize;
@@ -51,8 +52,8 @@ fn run_lua(keyed_accounts: &mut [KeyedAccount], code: &str, data: &[u8]) -> Resu
     update_accounts(&lua, "accounts", keyed_accounts)
 }
 
-#[no_mangle]
-pub extern "C" fn process(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -> bool {
+solana_entrypoint!(entrypoint);
+fn entrypoint(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -> bool {
     static INIT: Once = ONCE_INIT;
     INIT.call_once(|| {
         // env_logger can only be initialized once
