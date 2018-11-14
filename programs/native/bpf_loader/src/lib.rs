@@ -137,7 +137,7 @@ fn deserialize_parameters(keyed_accounts: &mut [KeyedAccount], buffer: &[u8]) {
 }
 
 solana_entrypoint!(entrypoint);
-fn entrypoint(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -> bool {
+fn entrypoint(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8], _tick_height: u64) -> bool {
     static INIT: Once = ONCE_INIT;
     INIT.call_once(|| {
         // env_logger can only be initialized once

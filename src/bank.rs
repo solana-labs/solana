@@ -846,6 +846,7 @@ impl Bank {
             if !native_loader::process_instruction(
                 &mut keyed_accounts,
                 &tx.instructions[instruction_index].userdata,
+                self.tick_height(),
             ) {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }

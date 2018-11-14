@@ -85,7 +85,7 @@ pub fn process_instruction(
                             return false;
                         }
                     };
-                return entrypoint(&mut keyed_accounts[1..], ix_userdata);
+                return entrypoint(&mut keyed_accounts[1..], ix_userdata, tick_height);
             },
             Err(e) => {
                 warn!("Unable to load: {:?}", e);
