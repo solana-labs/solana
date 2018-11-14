@@ -22,7 +22,7 @@ pub trait LedgerColumnFamily {
     type ValueType: DeserializeOwned + Serialize;
 
     fn get(&self, db: &DB, key: &[u8]) -> Result<Option<Self::ValueType>> {
-        let data_bytes = db.get_cf(self.handle(), key)?;
+        let data_bytes = db.get_cf(self.handle(db), key)?;
 
         if let Some(raw) = data_bytes {
             let result: Self::ValueType = deserialize(&raw)?;
@@ -33,52 +33,55 @@ pub trait LedgerColumnFamily {
     }
 
     fn get_bytes(&self, db: &DB, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let data_bytes = db.get_cf(self.handle(), key)?;
+        let data_bytes = db.get_cf(self.handle(db), key)?;
         Ok(data_bytes.map(|x| x.to_vec()))
     }
 
     fn put_bytes(&self, db: &DB, key: &[u8], serialized_value: &[u8]) -> Result<()> {
-        db.put_cf(self.handle(), &key, &serialized_value)?;
+        db.put_cf(self.handle(db), &key, &serialized_value)?;
         Ok(())
     }
 
     fn put(&self, db: &DB, key: &[u8], value: &Self::ValueType) -> Result<()> {
         let serialized = serialize(value)?;
-        db.put_cf(self.handle(), &key, &serialized)?;
+        db.put_cf(self.handle(db), &key, &serialized)?;
         Ok(())
     }
 
     fn delete(&self, db: &DB, key: &[u8]) -> Result<()> {
-        db.delete_cf(self.handle(), &key)?;
+        db.delete_cf(self.handle(db), &key)?;
         Ok(())
     }
 
-    fn handle(&self) -> ColumnFamily;
+    fn handle(&self, db: &DB) -> ColumnFamily;
 }
 
 pub trait LedgerColumnFamilyRaw {
     fn get(&self, db: &DB, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let data_bytes = db.get_cf(self.handle(), key)?;
+        let data_bytes = db.get_cf(self.handle(db), key)?;
         Ok(data_bytes.map(|x| x.to_vec()))
     }
 
     fn put(&self, db: &DB, key: &[u8], serialized_value: &[u8]) -> Result<()> {
-        db.put_cf(self.handle(), &key, &serialized_value)?;
+        db.put_cf(self.handle(db), &key, &serialized_value)?;
         Ok(())
     }
 
     fn delete(&self, db: &DB, key: &[u8]) -> Result<()> {
-        db.delete_cf(self.handle(), &key)?;
+        db.delete_cf(self.handle(db), &key)?;
         Ok(())
     }
 
-    fn handle(&self) -> ColumnFamily;
+    fn handle(&self, db: &DB) -> ColumnFamily;
 }
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 // The Meta column family
 pub struct SlotMeta {
+    // The total number of consecutive blob starting from index 0
+    // we have received for this slot.
     pub consumed: u64,
+    // The entry height of the highest blob received for this slot.
     pub received: u64,
 }
 
@@ -91,15 +94,10 @@ impl SlotMeta {
     }
 }
 
-pub struct MetaCf {
-    handle: ColumnFamily,
-}
+#[derive(Default)]
+pub struct MetaCf {}
 
 impl MetaCf {
-    pub fn new(handle: ColumnFamily) -> Self {
-        MetaCf { handle }
-    }
-
     pub fn key(slot_height: u64) -> Vec<u8> {
         let mut key = vec![0u8; 8];
         LittleEndian::write_u64(&mut key[0..8], slot_height);
@@ -110,21 +108,16 @@ impl MetaCf {
 impl LedgerColumnFamily for MetaCf {
     type ValueType = SlotMeta;
 
-    fn handle(&self) -> ColumnFamily {
-        self.handle
+    fn handle(&self, db: &DB) -> ColumnFamily {
+        db.cf_handle(META_CF).unwrap()
     }
 }
 
 // The data column family
-pub struct DataCf {
-    handle: ColumnFamily,
-}
+#[derive(Default)]
+pub struct DataCf {}
 
 impl DataCf {
-    pub fn new(handle: ColumnFamily) -> Self {
-        DataCf { handle }
-    }
-
     pub fn key(slot_height: u64, index: u64) -> Vec<u8> {
         let mut key = vec![0u8; 16];
         LittleEndian::write_u64(&mut key[0..8], slot_height);
@@ -146,29 +139,24 @@ impl DataCf {
 }
 
 impl LedgerColumnFamilyRaw for DataCf {
-    fn handle(&self) -> ColumnFamily {
-        self.handle
+    fn handle(&self, db: &DB) -> ColumnFamily {
+        db.cf_handle(DATA_CF).unwrap()
     }
 }
 
 // The erasure column family
-pub struct ErasureCf {
-    handle: ColumnFamily,
-}
+#[derive(Default)]
+pub struct ErasureCf {}
 
 impl ErasureCf {
-    pub fn new(handle: ColumnFamily) -> Self {
-        ErasureCf { handle }
-    }
-
     pub fn key(slot_height: u64, index: u64) -> Vec<u8> {
         DataCf::key(slot_height, index)
     }
 }
 
 impl LedgerColumnFamilyRaw for ErasureCf {
-    fn handle(&self) -> ColumnFamily {
-        self.handle
+    fn handle(&self, db: &DB) -> ColumnFamily {
+        db.cf_handle(ERASURE_CF).unwrap()
     }
 }
 
@@ -207,16 +195,13 @@ impl DbLedger {
         let db = DB::open_cf(&options, ledger_path, &cfs)?;
 
         // Create the metadata column family
-        let meta_cf_handle = db.cf_handle(META_CF).unwrap();
-        let meta_cf = MetaCf::new(meta_cf_handle);
+        let meta_cf = MetaCf::default();
 
         // Create the data column family
-        let data_cf_handle = db.cf_handle(DATA_CF).unwrap();
-        let data_cf = DataCf::new(data_cf_handle);
+        let data_cf = DataCf::default();
 
         // Create the erasure column family
-        let erasure_cf_handle = db.cf_handle(ERASURE_CF).unwrap();
-        let erasure_cf = ErasureCf::new(erasure_cf_handle);
+        let erasure_cf = ErasureCf::default();
 
         Ok(DbLedger {
             db,
@@ -249,7 +234,7 @@ impl DbLedger {
         let mut should_write_meta = false;
 
         let mut meta = {
-            if let Some(meta) = self.db.get_cf(self.meta_cf.handle(), &meta_key)? {
+            if let Some(meta) = self.db.get_cf(self.meta_cf.handle(&self.db), &meta_key)? {
                 deserialize(&meta)?
             } else {
                 should_write_meta = true;
@@ -265,8 +250,10 @@ impl DbLedger {
             return Err(Error::DbLedgerError(DbLedgerError::BlobForIndexExists));
         }
 
-        if index > meta.received {
-            meta.received = index;
+        // Index is zero-indexed, while the "received" height starts from 1,
+        // so received = index + 1 for the same blob.
+        if index >= meta.received {
+            meta.received = index + 1;
             should_write_meta = true;
         }
 
@@ -301,10 +288,10 @@ impl DbLedger {
         // Commit Step: Atomic write both the metadata and the data
         let mut batch = WriteBatch::default();
         if should_write_meta {
-            batch.put_cf(self.meta_cf.handle(), &meta_key, &serialize(&meta)?)?;
+            batch.put_cf(self.meta_cf.handle(&self.db), &meta_key, &serialize(&meta)?)?;
         }
 
-        batch.put_cf(self.data_cf.handle(), key, serialized_blob_data)?;
+        batch.put_cf(self.data_cf.handle(&self.db), key, serialized_blob_data)?;
         self.db.write(batch)?;
         Ok(consumed_queue)
     }
@@ -320,7 +307,7 @@ impl DbLedger {
         buf: &mut [u8],
     ) -> Result<(u64, u64)> {
         let start_key = DataCf::key(DEFAULT_SLOT_HEIGHT, start_index);
-        let mut db_iterator = self.db.raw_iterator_cf(self.data_cf.handle())?;
+        let mut db_iterator = self.db.raw_iterator_cf(self.data_cf.handle(&self.db))?;
         db_iterator.seek(&start_key);
         let mut total_blobs = 0;
         let mut total_current_size = 0;
@@ -524,7 +511,7 @@ mod tests {
             .get(&ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))
             .unwrap()
             .expect("Expected new metadata object to be created");
-        assert!(meta.consumed == 0 && meta.received == 1);
+        assert!(meta.consumed == 0 && meta.received == 2);
 
         // Insert first blob, check for consecutive returned entries
         let result = ledger
@@ -538,7 +525,7 @@ mod tests {
             .get(&ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))
             .unwrap()
             .expect("Expected new metadata object to exist");
-        assert!(meta.consumed == 2 && meta.received == 1);
+        assert!(meta.consumed == 2 && meta.received == 2);
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
@@ -601,10 +588,10 @@ mod tests {
                 .expect("Expected metadata object to exist");
             if i != 0 {
                 assert_eq!(result.len(), 0);
-                assert!(meta.consumed == 0 && meta.received == num_blobs as u64 - 1);
+                assert!(meta.consumed == 0 && meta.received == num_blobs as u64);
             } else {
                 assert_eq!(result.len(), num_blobs);
-                assert!(meta.consumed == num_blobs as u64 && meta.received == num_blobs as u64 - 1);
+                assert!(meta.consumed == num_blobs as u64 && meta.received == num_blobs as u64);
             }
         }
 
