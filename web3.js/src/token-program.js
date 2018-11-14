@@ -305,9 +305,9 @@ export class Token {
    */
   async tokenInfo(): Promise<TokenInfo> {
     const accountInfo = await this.connection.getAccountInfo(this.token);
-    if (!accountInfo.programId.equals(this.programId)) {
+    if (!accountInfo.owner.equals(this.programId)) {
       throw new Error(
-        `Invalid token programId: ${JSON.stringify(accountInfo.programId)}`,
+        `Invalid token owner: ${JSON.stringify(accountInfo.owner)}`,
       );
     }
 
@@ -328,8 +328,8 @@ export class Token {
    */
   async accountInfo(account: PublicKey): Promise<TokenAccountInfo> {
     const accountInfo = await this.connection.getAccountInfo(account);
-    if (!accountInfo.programId.equals(this.programId)) {
-      throw new Error(`Invalid token account programId`);
+    if (!accountInfo.owner.equals(this.programId)) {
+      throw new Error(`Invalid token account owner`);
     }
 
     const userdata = Buffer.from(accountInfo.userdata);
