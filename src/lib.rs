@@ -123,6 +123,8 @@ extern crate sys_info;
 extern crate tokio;
 extern crate tokio_codec;
 extern crate untrusted;
+#[macro_use]
+extern crate lazy_static;
 
 #[cfg(test)]
 #[macro_use]
