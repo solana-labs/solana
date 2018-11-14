@@ -16,7 +16,7 @@ use std::sync::{Once, ONCE_INIT};
 mod token_program;
 
 solana_entrypoint!(entrypoint);
-fn entrypoint(info: &mut [KeyedAccount], input: &[u8]) -> bool {
+fn entrypoint(info: &mut [KeyedAccount], input: &[u8], _tick_height: u64) -> bool {
     // env_logger can only be initialized once
     static INIT: Once = ONCE_INIT;
     INIT.call_once(env_logger::init);

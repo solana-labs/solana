@@ -53,7 +53,7 @@ fn run_lua(keyed_accounts: &mut [KeyedAccount], code: &str, data: &[u8]) -> Resu
 }
 
 solana_entrypoint!(entrypoint);
-fn entrypoint(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8]) -> bool {
+fn entrypoint(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8], _tick_height: u64) -> bool {
     static INIT: Once = ONCE_INIT;
     INIT.call_once(|| {
         // env_logger can only be initialized once
@@ -174,11 +174,11 @@ mod tests {
             (bob_pubkey, Account::new(1, 0, owner)),
         ];
         let data = serialize(&10u64).unwrap();
-        process(&mut create_keyed_accounts(&mut accounts), &data);
+        process(&mut create_keyed_accounts(&mut accounts), &data, 0);
         assert_eq!(accounts[1].1.tokens, 90);
         assert_eq!(accounts[2].1.tokens, 11);
 
-        process(&mut create_keyed_accounts(&mut accounts), &data);
+        process(&mut create_keyed_accounts(&mut accounts), &data, 0);
         assert_eq!(accounts[1].1.tokens, 80);
         assert_eq!(accounts[2].1.tokens, 21);
     }
@@ -222,7 +222,7 @@ mod tests {
             (Pubkey::default(), Account::new(1, 0, owner)),
         ];
         let mut keyed_accounts = create_keyed_accounts(&mut accounts);
-        process(&mut keyed_accounts, &[]);
+        process(&mut keyed_accounts, &[], 0);
         // Verify deterministic ordering of a serialized Lua table.
         assert_eq!(
             str::from_utf8(&keyed_accounts[3].account.userdata).unwrap(),
@@ -281,19 +281,19 @@ mod tests {
         ).as_bytes()
         .to_vec();
 
-        process(&mut keyed_accounts, &data);
+        process(&mut keyed_accounts, &data, 0);
         assert_eq!(keyed_accounts[4].account.tokens, 1);
 
         let data = format!(r#""{}""#, carol_pubkey).into_bytes();
-        process(&mut keyed_accounts, &data);
+        process(&mut keyed_accounts, &data, 0);
         assert_eq!(keyed_accounts[4].account.tokens, 1);
 
         let data = format!(r#""{}""#, dan_pubkey).into_bytes();
-        process(&mut keyed_accounts, &data);
+        process(&mut keyed_accounts, &data, 0);
         assert_eq!(keyed_accounts[4].account.tokens, 101); // Pay day!
 
         let data = format!(r#""{}""#, erin_pubkey).into_bytes();
-        process(&mut keyed_accounts, &data);
+        process(&mut keyed_accounts, &data, 0);
         assert_eq!(keyed_accounts[4].account.tokens, 101); // No change!
     }
 }
