@@ -1,5 +1,6 @@
 pub mod account;
 pub mod loader_instruction;
+pub mod native_program;
 pub mod pubkey;
 
 extern crate bincode;

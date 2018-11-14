@@ -7,6 +7,7 @@ use libloading::os::unix::*;
 use libloading::os::windows::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::loader_instruction::LoaderInstruction;
+use solana_sdk::native_program;
 use solana_sdk::pubkey::Pubkey;
 use std::env;
 use std::path::PathBuf;
@@ -44,10 +45,6 @@ const NATIVE_LOADER_PROGRAM_ID: [u8; 32] = [
     1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 ];
 
-// All native programs export a symbol named process()
-const ENTRYPOINT: &str = "process";
-type Entrypoint = unsafe extern "C" fn(keyed_accounts: &mut [KeyedAccount], data: &[u8]) -> bool;
-
 pub fn check_id(program_id: &Pubkey) -> bool {
     program_id.as_ref() == NATIVE_LOADER_PROGRAM_ID
 }
@@ -56,7 +53,11 @@ pub fn id() -> Pubkey {
     Pubkey::new(&NATIVE_LOADER_PROGRAM_ID)
 }
 
-pub fn process_instruction(keyed_accounts: &mut [KeyedAccount], ix_userdata: &[u8]) -> bool {
+pub fn process_instruction(
+    keyed_accounts: &mut [KeyedAccount],
+    ix_userdata: &[u8],
+    tick_height: u64,
+) -> bool {
     if keyed_accounts[0].account.executable {
         // dispatch it
         let name = keyed_accounts[0].account.userdata.clone();
@@ -72,13 +73,18 @@ pub fn process_instruction(keyed_accounts: &mut [KeyedAccount], ix_userdata: &[u
         // TODO linux tls bug can cause crash on dlclose(), workaround by never unloading
         match Library::open(Some(&path), libc::RTLD_NODELETE | libc::RTLD_NOW) {
             Ok(library) => unsafe {
-                let entrypoint: Symbol<Entrypoint> = match library.get(ENTRYPOINT.as_bytes()) {
-                    Ok(s) => s,
-                    Err(e) => {
-                        warn!("{:?}: Unable to find {:?} in program", e, ENTRYPOINT);
-                        return false;
-                    }
-                };
+                let entrypoint: Symbol<native_program::Entrypoint> =
+                    match library.get(native_program::ENTRYPOINT.as_bytes()) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            warn!(
+                                "{:?}: Unable to find {:?} in program",
+                                e,
+                                native_program::ENTRYPOINT
+                            );
+                            return false;
+                        }
+                    };
                 return entrypoint(&mut keyed_accounts[1..], ix_userdata);
             },
             Err(e) => {
