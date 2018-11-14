@@ -198,6 +198,7 @@ pub mod tests {
 
     /// Test that message sent from leader to target1 and replicated to target2
     #[test]
+    #[ignore]
     fn test_replicate() {
         logger::setup();
         let leader = Node::new_localhost();
