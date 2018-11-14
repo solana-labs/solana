@@ -189,6 +189,14 @@ SOL_FN_PREFIX void _sol_panic(uint64_t line) {
   }
 
 /**
+ * Information about the state of the cluster immediately before the program
+ * started executing the current instruction
+ */
+typedef struct {
+  uint64_t tick_height; /** Current ledger tick */
+} SolClusterInfo;
+
+/**
  * De-serializes the input parameters into usable types
  *
  * Use this function to deserialize the buffer passed to the program entrypoint
@@ -206,6 +214,7 @@ SOL_FN_PREFIX void _sol_panic(uint64_t line) {
  *                   number of filled accounts in `ka_len_out`.
  * @param data On return, a pointer to the instruction data
  * @param data_len On return, the length in bytes of the instruction data
+ * @param cluster_info If not NULL, fill cluster_info
  * @return Boolean true if successful
  */
 SOL_FN_PREFIX bool sol_deserialize(
@@ -214,7 +223,8 @@ SOL_FN_PREFIX bool sol_deserialize(
   uint64_t ka_len,
   uint64_t *ka_len_out,
   const uint8_t **data,
-  uint64_t *data_len
+  uint64_t *data_len,
+  SolClusterInfo *cluster_info
 ) {
 
 
@@ -255,7 +265,11 @@ SOL_FN_PREFIX bool sol_deserialize(
   *data_len = *(uint64_t *) input;
   input += sizeof(uint64_t);
   *data = input;
+  input += sizeof(*data_len);
 
+  if (cluster_info != NULL) {
+    cluster_info->tick_height = *(uint64_t *) input;
+  }
   return true;
 }
 
