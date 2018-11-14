@@ -273,7 +273,7 @@ impl ClusterInfo {
         );
         trace!("broadcast orders table {}", orders.len());
 
-        let errs = Self::send_orders(s, orders, me);
+        let errs = Self::send_orders(s, orders, me, leader_id);
 
         for e in errs {
             if let Err(e) = &e {
@@ -336,18 +336,19 @@ impl ClusterInfo {
         s: &UdpSocket,
         orders: Vec<(Option<SharedBlob>, Vec<&NodeInfo>)>,
         me: &NodeInfo,
+        leader_id: Pubkey,
     ) -> Vec<io::Result<usize>> {
         orders
             .into_iter()
             .flat_map(|(b, vs)| {
                 // only leader should be broadcasting
-                assert!(vs.iter().find(|info| info.id == me.leader_id).is_none());
+                assert!(vs.iter().find(|info| info.id == leader_id).is_none());
                 let bl = b.unwrap();
                 let blob = bl.read().unwrap();
                 //TODO profile this, may need multiple sockets for par_iter
                 let ids_and_tvus = if log_enabled!(Level::Trace) {
                     let v_ids = vs.iter().map(|v| v.id);
-                    let tvus = vs.iter().map(|v| v.contact_info.tvu);
+                    let tvus = vs.iter().map(|v| v.tvu);
                     let ids_and_tvus = v_ids.zip(tvus).collect();
 
                     trace!(
@@ -368,7 +369,7 @@ impl ClusterInfo {
                 let send_errs_for_blob: Vec<_> = vs
                     .iter()
                     .map(move |v| {
-                        let e = s.send_to(&blob.data[..blob.meta.size], &v.contact_info.tvu);
+                        let e = s.send_to(&blob.data[..blob.meta.size], &v.tvu);
                         trace!(
                             "{}: done broadcast {} to {:?}",
                             me.id,

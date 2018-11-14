@@ -68,7 +68,7 @@ fn make_listening_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<ClusterInfo>>, Nod
     let new_node_info = new_node.info.clone();
     let me = new_node.info.id.clone();
     let mut new_node_cluster_info = ClusterInfo::new(new_node_info).expect("ClusterInfo::new");
-    new_node_cluster_info.insert(&leader);
+    new_node_cluster_info.insert_info(leader.clone());
     new_node_cluster_info.set_leader(leader.id);
     let new_node_cluster_info_ref = Arc::new(RwLock::new(new_node_cluster_info));
     let new_node_window = Arc::new(RwLock::new(default_window()));
@@ -1559,7 +1559,7 @@ fn test_broadcast_last_tick() {
         &bootstrap_leader_ledger_path,
         Arc::new(bootstrap_leader_keypair),
         Arc::new(Keypair::new()),
-        Some(bootstrap_leader_info.contact_info.ncp),
+        Some(bootstrap_leader_info.ncp),
         false,
         LeaderScheduler::new(&leader_scheduler_config),
         None,
