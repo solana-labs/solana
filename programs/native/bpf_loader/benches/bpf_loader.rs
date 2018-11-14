@@ -11,9 +11,7 @@ use std::env;
 use std::fs::File;
 use std::io::Error;
 use std::io::Read;
-use std::mem;
 use std::path::PathBuf;
-use std::sync::{Once, ONCE_INIT};
 use test::Bencher;
 
 /// BPF program file extension
@@ -30,12 +28,12 @@ fn create_bpf_path(name: &str) -> PathBuf {
     pathbuf
 }
 
-fn empty_check(prog: &[u8]) -> Result<(), Error> {
+fn empty_check(_prog: &[u8]) -> Result<(), Error> {
     Ok(())
 }
 
-const MAX_TRY: u64 = 500;
-const COUNT: u64 = 5;
+const ARMSTRONG_LIMIT: u64 = 500;
+const ARMSTRONG_EXPECTED: u64 = 5;
 
 #[bench]
 fn bench_program_load_elf(bencher: &mut Bencher) {
@@ -72,7 +70,9 @@ fn bench_program_alu(bencher: &mut Bencher) {
     let ns_per_s = 1000000000;
     let one_million = 1000000;
     let mut inner_iter = vec![];
-    inner_iter.write_u64::<LittleEndian>(MAX_TRY).unwrap();
+    inner_iter
+        .write_u64::<LittleEndian>(ARMSTRONG_LIMIT)
+        .unwrap();
 
     let mut file = File::open(create_bpf_path("bench_alu")).expect("file open failed");
     let mut elf = Vec::new();
@@ -80,12 +80,15 @@ fn bench_program_alu(bencher: &mut Bencher) {
     let mut vm = solana_bpf_loader::create_vm(&elf).unwrap();
 
     println!("Interpreted:");
-    assert_eq!(COUNT, vm.execute_program(&mut inner_iter).unwrap());
+    assert_eq!(
+        ARMSTRONG_EXPECTED,
+        vm.execute_program(&mut inner_iter).unwrap()
+    );
     bencher.iter(|| {
         vm.execute_program(&mut inner_iter).unwrap();
     });
     let instructions = vm.get_last_instruction_count();
-    let summary = bencher.bench(|bencher| {}).unwrap();
+    let summary = bencher.bench(|_bencher| {}).unwrap();
     println!("  {:?} instructions", instructions);
     println!("  {:?} ns/iter median", summary.median as u64);
     assert!(0f64 != summary.median);
@@ -95,12 +98,15 @@ fn bench_program_alu(bencher: &mut Bencher) {
     println!("JIT to native:");
     vm.jit_compile().unwrap();
     unsafe {
-        assert_eq!(COUNT, vm.execute_program_jit(&mut inner_iter).unwrap());
+        assert_eq!(
+            ARMSTRONG_EXPECTED,
+            vm.execute_program_jit(&mut inner_iter).unwrap()
+        );
     }
     bencher.iter(|| unsafe {
         vm.execute_program_jit(&mut inner_iter).unwrap();
     });
-    let summary = bencher.bench(|bencher| {}).unwrap();
+    let summary = bencher.bench(|_bencher| {}).unwrap();
     println!("  {:?} instructions", instructions);
     println!("  {:?} ns/iter median", summary.median as u64);
     assert!(0f64 != summary.median);

@@ -58,7 +58,7 @@ path = "src/bin/wallet.rs"
 codecov = { repository = "solana-labs/solana", branch = "master", service = "github" }
 
 [features]
-bpf_c = []
+bpf_c = ["solana-bpfloader/bpf_c"]
 chacha = []
 cuda = []
 erasure = []
@@ -115,9 +115,6 @@ solana-erc20 = { path = "programs/native/erc20", version = "0.11.0" }
 solana-lualoader = { path = "programs/native/lua_loader", version = "0.11.0" }
 solana-noop = { path = "programs/native/noop", version = "0.11.0" }
 
-[dev-dependencies]
-solana_rbpf = { path="../rbpf" }
-
 [[bench]]
 name = "bank"
 
@@ -126,9 +123,6 @@ name = "banking_stage"
 
 [[bench]]
 name = "ledger"
-
-[[bench]]
-name = "programs"
 
 [[bench]]
 name = "signature"

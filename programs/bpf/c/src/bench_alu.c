@@ -6,15 +6,6 @@
 
 #include <solana_sdk.h>
 
-#define BPF_TRACE_PRINTK_IDX 6
-static int (*sol_print)(
-  uint64_t,
-  uint64_t,
-  uint64_t,
-  uint64_t,
-  uint64_t
-) = (void *)BPF_TRACE_PRINTK_IDX;
-
 extern bool entrypoint(const uint8_t *input) {
   uint64_t x = *(uint64_t *)input;
   uint64_t count = 0;
