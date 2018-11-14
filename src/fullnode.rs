@@ -16,6 +16,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::Result;
+use timing::timestamp;
 use tpu::{Tpu, TpuReturnType};
 use tvu::{Tvu, TvuReturnType};
 use untrusted::Input;
@@ -215,6 +216,7 @@ impl Fullnode {
 
         let window = new_window(32 * 1024);
         let shared_window = Arc::new(RwLock::new(window));
+        node.info.wallclock = timestamp();
         let cluster_info = Arc::new(RwLock::new(
             ClusterInfo::new(node.info).expect("ClusterInfo::new"),
         ));
