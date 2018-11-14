@@ -24,6 +24,7 @@
   "bin": {
     "solana-localnet": "bin/localnet.sh"
   },
+  "solana-channel": "edge",
   "files": [
     "/bin",
     "/doc",
@@ -44,16 +45,16 @@
     "test:watch": "cross-env NODE_ENV=test jest --watch --useStderr",
     "test:cover": "cross-env NODE_ENV=test jest --coverage --useStderr",
     "codecov": "npm run test:cover && cat ./coverage/lcov.info | codecov",
-    "fetch-bpf-sdk": "test -d bpf-sdk || curl http://solana-sdk.s3.amazonaws.com/0.10.1/bpf-sdk.tar.bz2 | tar jxv",
+    "fetch-bpf-sdk": "test -d bpf-sdk || curl http://solana-sdk.s3.amazonaws.com/$npm_package_solana_channel/bpf-sdk.tar.bz2 | tar jxv",
     "flow": "flow stop; flow-typed install jest@22 && flow",
     "flow:watch": "flow stop; watch 'flow' . --wait=1 --ignoreDirectoryPattern=/doc/",
     "flow:stop": "flow stop",
     "lint": "npm run pretty && eslint .",
     "lint:fix": "npm run lint -- --fix",
     "lint:watch": "watch 'npm run lint:fix' . --wait=1 --ignoreDirectoryPattern=/doc/",
-    "localnet:up": "bin/localnet.sh up",
+    "localnet:up": "bin/localnet.sh up $npm_package_solana_channel",
     "localnet:down": "bin/localnet.sh down",
-    "localnet:update": "bin/localnet.sh update",
+    "localnet:update": "bin/localnet.sh update $npm_package_solana_channel",
     "localnet:logs": "bin/localnet.sh logs -f",
     "ok": "npm run lint && npm run flow && npm run test && npm run doc",
     "pretty": "prettier --write '{,{examples,src,test}/**/}*.js'",
