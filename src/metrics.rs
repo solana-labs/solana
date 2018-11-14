@@ -3,13 +3,17 @@
 extern crate reqwest;
 
 use influx_db_client as influxdb;
+use rand;
 use std::env;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Barrier, Mutex, Once, ONCE_INIT};
 use std::thread;
 use std::time::{Duration, Instant};
-use sys_info::hostname;
 use timing;
+
+lazy_static! {
+    static ref HOST_ID: i64 = rand::random::<i64>();
+}
 
 #[derive(Debug)]
 enum MetricsCommand {
@@ -131,6 +135,7 @@ impl MetricsAgent {
     }
 
     pub fn submit(&self, mut point: influxdb::Point) {
+        point.add_field("host_id", influxdb::Value::Integer(*HOST_ID));
         if point.timestamp.is_none() {
             point.timestamp = Some(timing::timestamp() as i64);
         }
@@ -237,10 +242,8 @@ pub fn set_panic_hook(program: &'static str) {
                             Some(location) => location.to_string(),
                             None => "?".to_string(),
                         }),
-                    ).add_field(
-                        "host",
-                        influxdb::Value::String(hostname().unwrap_or_else(|_| "?".to_string())),
-                    ).to_owned(),
+                    ).add_field("host_id", influxdb::Value::Integer(*HOST_ID))
+                    .to_owned(),
             );
             // Flush metrics immediately in case the process exits immediately
             // upon return
