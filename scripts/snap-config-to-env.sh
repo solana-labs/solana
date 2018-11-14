@@ -9,11 +9,9 @@
 
 if [[ -d $SNAP ]]; then # Running inside a Linux Snap?
   RUST_LOG="$(snapctl get rust-log)"
-  SOLANA_DEFAULT_METRICS_RATE="$(snapctl get default-metrics-rate)"
   SOLANA_METRICS_CONFIG="$(snapctl get metrics-config)"
 
   export RUST_LOG
-  export SOLANA_DEFAULT_METRICS_RATE
   export SOLANA_METRICS_CONFIG
 fi
 

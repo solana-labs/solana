@@ -4,7 +4,7 @@ use std::env;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use timing;
 
-const DEFAULT_METRICS_RATE: usize = 100;
+const DEFAULT_LOG_RATE: usize = 1000;
 
 pub struct Counter {
     pub name: &'static str,
@@ -52,11 +52,11 @@ macro_rules! inc_new_counter {
 
 impl Counter {
     fn default_log_rate() -> usize {
-        let v = env::var("SOLANA_DEFAULT_METRICS_RATE")
-            .map(|x| x.parse().unwrap_or(DEFAULT_METRICS_RATE))
-            .unwrap_or(DEFAULT_METRICS_RATE);
+        let v = env::var("SOLANA_DEFAULT_LOG_RATE")
+            .map(|x| x.parse().unwrap_or(DEFAULT_LOG_RATE))
+            .unwrap_or(DEFAULT_LOG_RATE);
         if v == 0 {
-            DEFAULT_METRICS_RATE
+            DEFAULT_LOG_RATE
         } else {
             v
         }
@@ -69,37 +69,34 @@ impl Counter {
             lograte = Counter::default_log_rate();
             self.lograte.store(lograte, Ordering::Relaxed);
         }
-        if times % lograte == 0 && times > 0 {
-            if log_enabled!(level) {
-                info!(
-                    "COUNTER:{{\"name\": \"{}\", \"counts\": {}, \"samples\": {},  \"now\": {}, \"events\": {}}}",
-                    self.name,
-                    counts + events,
-                    times,
-                    timing::timestamp(),
-                    events,
-                );
-            }
-
-            let lastlog = self.lastlog.load(Ordering::Relaxed);
-            let prev = self
-                .lastlog
-                .compare_and_swap(lastlog, counts, Ordering::Relaxed);
-            if prev == lastlog {
-                metrics::submit(
-                    influxdb::Point::new(&format!("counter-{}", self.name))
-                        .add_field(
-                            "count",
-                            influxdb::Value::Integer(counts as i64 - lastlog as i64),
-                        ).to_owned(),
-                );
-            }
+        if times % lograte == 0 && times > 0 && log_enabled!(level) {
+            info!(
+                "COUNTER:{{\"name\": \"{}\", \"counts\": {}, \"samples\": {},  \"now\": {}, \"events\": {}}}",
+                self.name,
+                counts + events,
+                times,
+                timing::timestamp(),
+                events,
+            );
+        }
+        let lastlog = self.lastlog.load(Ordering::Relaxed);
+        let prev = self
+            .lastlog
+            .compare_and_swap(lastlog, counts, Ordering::Relaxed);
+        if prev == lastlog {
+            metrics::submit(
+                influxdb::Point::new(&format!("counter-{}", self.name))
+                    .add_field(
+                        "count",
+                        influxdb::Value::Integer(counts as i64 - lastlog as i64),
+                    ).to_owned(),
+            );
         }
     }
 }
 #[cfg(test)]
 mod tests {
-    use counter::{Counter, DEFAULT_METRICS_RATE};
+    use counter::{Counter, DEFAULT_LOG_RATE};
     use log::Level;
     use std::env;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -120,13 +117,13 @@ mod tests {
     #[test]
     fn test_counter() {
         let _readlock = get_env_lock().read();
-        static mut COUNTER: Counter = create_counter!("test", 100);
+        static mut COUNTER: Counter = create_counter!("test", 1000);
         let count = 1;
         inc_counter!(COUNTER, Level::Info, count);
         unsafe {
             assert_eq!(COUNTER.counts.load(Ordering::Relaxed), 1);
             assert_eq!(COUNTER.times.load(Ordering::Relaxed), 1);
-            assert_eq!(COUNTER.lograte.load(Ordering::Relaxed), 100);
+            assert_eq!(COUNTER.lograte.load(Ordering::Relaxed), 1000);
             assert_eq!(COUNTER.lastlog.load(Ordering::Relaxed), 0);
             assert_eq!(COUNTER.name, "test");
         }
@@ -134,7 +131,7 @@ mod tests {
             inc_counter!(COUNTER, Level::Info, 2);
         }
         unsafe {
-            assert_eq!(COUNTER.lastlog.load(Ordering::Relaxed), 199);
+            assert_eq!(COUNTER.lastlog.load(Ordering::Relaxed), 397);
         }
         inc_counter!(COUNTER, Level::Info, 2);
         unsafe {
@@ -154,40 +151,34 @@ mod tests {
         let _readlock = get_env_lock().read();
         assert_eq!(
             Counter::default_log_rate(),
-            DEFAULT_METRICS_RATE,
-            "default_log_rate() is {}, expected {}, SOLANA_DEFAULT_METRICS_RATE environment variable set?",
+            DEFAULT_LOG_RATE,
+            "default_log_rate() is {}, expected {}, SOLANA_DEFAULT_LOG_RATE environment variable set?",
             Counter::default_log_rate(),
-            DEFAULT_METRICS_RATE,
+            DEFAULT_LOG_RATE,
         );
         static mut COUNTER: Counter = create_counter!("test_lograte", 0);
         inc_counter!(COUNTER, Level::Info, 2);
         unsafe {
-            assert_eq!(
-                COUNTER.lograte.load(Ordering::Relaxed),
-                DEFAULT_METRICS_RATE
-            );
+            assert_eq!(COUNTER.lograte.load(Ordering::Relaxed), DEFAULT_LOG_RATE);
         }
     }
 
     #[test]
     fn test_lograte_env() {
-        assert_ne!(DEFAULT_METRICS_RATE, 0);
+        assert_ne!(DEFAULT_LOG_RATE, 0);
         let _writelock = get_env_lock().write();
         static mut COUNTER: Counter = create_counter!("test_lograte_env", 0);
-        env::set_var("SOLANA_DEFAULT_METRICS_RATE", "50");
+        env::set_var("SOLANA_DEFAULT_LOG_RATE", "50");
         inc_counter!(COUNTER, Level::Info, 2);
         unsafe {
             assert_eq!(COUNTER.lograte.load(Ordering::Relaxed), 50);
         }
 
         static mut COUNTER2: Counter = create_counter!("test_lograte_env", 0);
-        env::set_var("SOLANA_DEFAULT_METRICS_RATE", "0");
+        env::set_var("SOLANA_DEFAULT_LOG_RATE", "0");
         inc_counter!(COUNTER2, Level::Info, 2);
         unsafe {
-            assert_eq!(
-                COUNTER2.lograte.load(Ordering::Relaxed),
-                DEFAULT_METRICS_RATE
-            );
+            assert_eq!(COUNTER2.lograte.load(Ordering::Relaxed), DEFAULT_LOG_RATE);
         }
     }
 }
