@@ -70,13 +70,12 @@ pub fn helper_sol_log_verify(
     ))
 }
 
-#[allow(unused_variables)]
-pub fn helper_sol_log(addr: u64, unused2: u64, unused3: u64, unused4: u64, unused5: u64) -> u64 {
+pub fn helper_sol_log(addr: u64, _arg2: u64, _arg3: u64, _arg4: u64, _arg5: u64) -> u64 {
     let c_buf: *const c_char = addr as *const c_char;
     let c_str: &CStr = unsafe { CStr::from_ptr(c_buf) };
     match c_str.to_str() {
         Ok(slice) => info!("sol_log: {:?}", slice),
-        Err(e) => warn!("Error: Cannot print invalid string"),
+        Err(e) => warn!("Error: Cannot print invalid string: {}", e),
     };
     0
 }
@@ -99,7 +98,11 @@ fn create_vm(prog: &[u8]) -> Result<EbpfVmRaw, Error> {
     Ok(vm)
 }
 
-fn serialize_parameters(keyed_accounts: &mut [KeyedAccount], data: &[u8]) -> Vec<u8> {
+fn serialize_parameters(
+    keyed_accounts: &mut [KeyedAccount],
+    data: &[u8],
+    tick_height: u64,
+) -> Vec<u8> {
     assert_eq!(32, mem::size_of::<Pubkey>());
 
     let mut v: Vec<u8> = Vec::new();
@@ -115,6 +118,7 @@ fn serialize_parameters(keyed_accounts: &mut [KeyedAccount], data: &[u8]) -> Vec
     }
     v.write_u64::<LittleEndian>(data.len() as u64).unwrap();
     v.write_all(data).unwrap();
+    v.write_u64::<LittleEndian>(tick_height).unwrap();
     v
 }
 
@@ -137,7 +141,7 @@ fn deserialize_parameters(keyed_accounts: &mut [KeyedAccount], buffer: &[u8]) {
 }
 
 solana_entrypoint!(entrypoint);
-fn entrypoint(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8], _tick_height: u64) -> bool {
+fn entrypoint(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8], tick_height: u64) -> bool {
     static INIT: Once = ONCE_INIT;
     INIT.call_once(|| {
         // env_logger can only be initialized once
@@ -155,7 +159,7 @@ fn entrypoint(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8], _tick_height:
                 return false;
             }
         };
-        let mut v = serialize_parameters(&mut keyed_accounts[1..], &tx_data);
+        let mut v = serialize_parameters(&mut keyed_accounts[1..], &tx_data, tick_height);
         match vm.execute_program(v.as_mut_slice()) {
             Ok(status) => {
                 if 0 == status {
