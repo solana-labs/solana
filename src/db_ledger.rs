@@ -279,12 +279,13 @@ impl DbLedger {
 
         let mut consumed_queue = vec![];
 
-        let serialized_blob_data =
-            &new_blob.data[BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + new_blob.size()?];
-
         if meta.consumed == index {
+            // Add the new blob to the consumed queue
+            let serialized_entry_data =
+                &new_blob.data[BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + new_blob.size()?];
             // Verify entries can actually be reconstructed
-            let entry: Entry = deserialize(serialized_blob_data)?;
+            let entry: Entry = deserialize(serialized_entry_data)
+                .expect("Blob made it past validation, so must be deserializable at this point");
             should_write_meta = true;
             meta.consumed += 1;
             consumed_queue.push(entry);
@@ -295,7 +296,8 @@ impl DbLedger {
                 index += 1;
                 let key = DataCf::key(slot_height, index);
                 if let Some(blob_data) = self.data_cf.get(&self.db, &key)? {
-                    let entry: Entry = deserialize(&blob_data)
+                    let serialized_entry_data = &blob_data[BLOB_HEADER_SIZE..];
+                    let entry: Entry = deserialize(serialized_entry_data)
                         .expect("Ledger should only contain well formed data");
                     consumed_queue.push(entry);
                     meta.consumed += 1;
@@ -311,6 +313,7 @@ impl DbLedger {
             batch.put_cf(self.meta_cf.handle(&self.db), &meta_key, &serialize(&meta)?)?;
         }
 
+        let serialized_blob_data = &new_blob.data[..BLOB_HEADER_SIZE + new_blob.size()?];
         batch.put_cf(self.data_cf.handle(&self.db), key, serialized_blob_data)?;
         self.db.write(batch)?;
         Ok(consumed_queue)
@@ -347,7 +350,6 @@ impl DbLedger {
             // blob index
             let key = &db_iterator.key().expect("Expected valid key");
             let index = DataCf::index_from_key(key)?;
-
             if index != expected_index {
                 break;
             }
@@ -513,7 +515,8 @@ mod tests {
 
     #[test]
     fn test_insert_data_blobs_basic() {
-        let shared_blobs = make_tiny_test_entries(2).to_blobs();
+        let entries = make_tiny_test_entries(2);
+        let shared_blobs = entries.to_blobs();
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
 
@@ -538,7 +541,7 @@ mod tests {
             .insert_data_blob(&DataCf::key(DEFAULT_SLOT_HEIGHT, 0), blobs[0])
             .unwrap();
 
-        assert_eq!(result.len(), 2);
+        assert_eq!(result, entries);
 
         let meta = ledger
             .meta_cf
@@ -588,7 +591,8 @@ mod tests {
     #[test]
     fn test_insert_data_blobs_multiple() {
         let num_blobs = 10;
-        let shared_blobs = make_tiny_test_entries(num_blobs).to_blobs();
+        let entries = make_tiny_test_entries(num_blobs);
+        let shared_blobs = entries.to_blobs();
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
 
@@ -598,7 +602,7 @@ mod tests {
         // Insert first blob, check for consecutive returned blobs
         for i in (0..num_blobs).rev() {
             let result = ledger
-                .insert_data_blob(&DataCf::key(DEFAULT_SLOT_HEIGHT, i as u64), blobs[0])
+                .insert_data_blob(&DataCf::key(DEFAULT_SLOT_HEIGHT, i as u64), blobs[i])
                 .unwrap();
 
             let meta = ledger
@@ -610,7 +614,7 @@ mod tests {
                 assert_eq!(result.len(), 0);
                 assert!(meta.consumed == 0 && meta.received == num_blobs as u64);
             } else {
-                assert_eq!(result.len(), num_blobs);
+                assert_eq!(result, entries);
                 assert!(meta.consumed == num_blobs as u64 && meta.received == num_blobs as u64);
             }
         }
