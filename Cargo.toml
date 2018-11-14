@@ -58,7 +58,7 @@ path = "src/bin/wallet.rs"
 codecov = { repository = "solana-labs/solana", branch = "master", service = "github" }
 
 [features]
-bpf_c = []
+bpf_c = ["solana-bpfloader/bpf_c"]
 chacha = []
 cuda = []
 erasure = []
