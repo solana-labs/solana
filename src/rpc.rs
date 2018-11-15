@@ -1,10 +1,10 @@
 //! The `rpc` module implements the Solana RPC interface.
 
 use bank::{Bank, BankError};
-use bincode::deserialize;
+use bincode::{deserialize, serialize};
 use bs58;
 use cluster_info::ClusterInfo;
-use drone::DRONE_PORT;
+use drone::{request_airdrop_transaction, DRONE_PORT};
 use jsonrpc_core::*;
 use jsonrpc_http_server::*;
 use packet::PACKET_DATA_SIZE;
@@ -22,7 +22,6 @@ use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
 use transaction::Transaction;
-use wallet::request_airdrop;
 
 pub const RPC_PORT: u16 = 8899;
 
@@ -211,17 +210,35 @@ impl RpcSol for RpcSolImpl {
 
         let mut drone_addr = get_leader_addr(&meta.cluster_info)?;
         drone_addr.set_port(DRONE_PORT);
-        let signature = request_airdrop(&drone_addr, &pubkey, tokens).map_err(|err| {
-            info!("request_airdrop failed: {:?}", err);
-            Error::internal_error()
-        })?;;
+        let last_id = meta.request_processor.bank.last_id();
+        let transaction = request_airdrop_transaction(&drone_addr, &pubkey, tokens, last_id)
+            .map_err(|err| {
+                info!("request_airdrop_transaction failed: {:?}", err);
+                Error::internal_error()
+            })?;;
 
+        let data = serialize(&transaction).map_err(|err| {
+            info!("request_airdrop: serialize error: {:?}", err);
+            Error::internal_error()
+        })?;
+
+        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let transactions_addr = get_leader_addr(&meta.cluster_info)?;
+        transactions_socket
+            .send_to(&data, transactions_addr)
+            .map_err(|err| {
+                info!("request_airdrop: send_to error: {:?}", err);
+                Error::internal_error()
+            })?;
+
+        let signature = transaction.signatures[0];
         let now = Instant::now();
         let mut signature_status;
         loop {
             signature_status = meta.request_processor.get_signature_status(signature);
 
             if signature_status.is_ok() {
+                info!("airdrop signature ok");
                 return Ok(bs58::encode(signature).into_string());
             } else if now.elapsed().as_secs() > 5 {
                 info!("airdrop signature timeout");
@@ -404,7 +421,7 @@ mod tests {
            "jsonrpc": "2.0",
            "id": 1,
            "method": "getBalance",
-           "params": vec![alice.pubkey().to_string()],
+           "params": [alice.pubkey().to_string()],
         });
         let mut response = client
             .post(&rpc_string)
@@ -639,7 +656,7 @@ mod tests {
            "jsonrpc": "2.0",
            "id": 1,
            "method": "sendTransaction",
-           "params": json!(vec![serial_tx])
+           "params": json!([serial_tx])
         });
         let rpc_addr = leader_data.rpc;
         let rpc_string = format!("http://{}", rpc_addr.to_string());
@@ -659,7 +676,7 @@ mod tests {
            "jsonrpc": "2.0",
            "id": 1,
            "method": "confirmTransaction",
-           "params": vec![signature],
+           "params": [signature],
         });
         let mut response = client
             .post(&rpc_string)
@@ -667,7 +684,8 @@ mod tests {
             .body(request.to_string())
             .send()
             .unwrap();
-        let json: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
+        let response_json_text = response.text().unwrap();
+        let json: Value = serde_json::from_str(&response_json_text).unwrap();
 
         assert_eq!(true, json["result"]);
 

@@ -143,7 +143,7 @@ impl ThinClient {
     }
 
     pub fn get_account_userdata(&mut self, pubkey: &Pubkey) -> io::Result<Option<Vec<u8>>> {
-        let params = json!(format!("{}", pubkey));
+        let params = json!([format!("{}", pubkey)]);
         let rpc_string = format!("http://{}", self.rpc_addr.to_string());
         let resp = RpcRequest::GetAccountInfo.make_rpc_request(&rpc_string, 1, Some(params));
         if let Ok(account_json) = resp {
@@ -162,7 +162,7 @@ impl ThinClient {
     /// by the network, this method will hang indefinitely.
     pub fn get_balance(&mut self, pubkey: &Pubkey) -> io::Result<u64> {
         trace!("get_balance sending request to {}", self.rpc_addr);
-        let params = json!(format!("{}", pubkey));
+        let params = json!([format!("{}", pubkey)]);
         let rpc_string = format!("http://{}", self.rpc_addr.to_string());
         let resp = RpcRequest::GetAccountInfo.make_rpc_request(&rpc_string, 1, Some(params));
         if let Ok(account_json) = resp {
@@ -303,7 +303,7 @@ impl ThinClient {
     /// until the server sends a response.
     pub fn check_signature(&mut self, signature: &Signature) -> bool {
         trace!("check_signature");
-        let params = json!(format!("{}", signature));
+        let params = json!([format!("{}", signature)]);
         let now = Instant::now();
         let rpc_string = format!("http://{}", self.rpc_addr.to_string());
         let mut done = false;

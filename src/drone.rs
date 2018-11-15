@@ -5,20 +5,22 @@
 //! and (to come) an IP rate limit.
 
 use bincode::{deserialize, serialize};
+use byteorder::{ByteOrder, LittleEndian};
 use bytes::Bytes;
+use hash::Hash;
 use influx_db_client as influxdb;
 use metrics;
-use signature::{Keypair, Signature};
+use packet::PACKET_DATA_SIZE;
+use signature::Keypair;
 use solana_sdk::pubkey::Pubkey;
 use std::io;
 use std::io::{Error, ErrorKind};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use system_transaction::SystemTransaction;
-use thin_client::{poll_gossip_for_leader, ThinClient};
 use tokio;
 use tokio::net::TcpListener;
 use tokio::prelude::*;
@@ -32,16 +34,15 @@ pub const DRONE_PORT: u16 = 9900;
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub enum DroneRequest {
     GetAirdrop {
-        airdrop_request_amount: u64,
-        client_pubkey: Pubkey,
+        tokens: u64,
+        to: Pubkey,
+        last_id: Hash,
     },
 }
 
 pub struct Drone {
     mint_keypair: Keypair,
     ip_cache: Vec<IpAddr>,
-    _airdrop_addr: SocketAddr,
-    network_addr: SocketAddr,
     pub time_slice: Duration,
     request_cap: u64,
     pub request_current: u64,
@@ -50,8 +51,6 @@ pub struct Drone {
 impl Drone {
     pub fn new(
         mint_keypair: Keypair,
-        _airdrop_addr: SocketAddr,
-        network_addr: SocketAddr,
         time_input: Option<u64>,
         request_cap_input: Option<u64>,
     ) -> Drone {
@@ -66,8 +65,6 @@ impl Drone {
         Drone {
             mint_keypair,
             ip_cache: Vec::new(),
-            _airdrop_addr,
-            network_addr,
             time_slice,
             request_cap,
             request_current: 0,
@@ -102,50 +99,37 @@ impl Drone {
         }
     }
 
-    pub fn send_airdrop(&mut self, req: DroneRequest) -> Result<Signature, io::Error> {
-        let request_amount: u64;
-        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-
-        let leader = poll_gossip_for_leader(self.network_addr, Some(10))
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
-
-        let mut client = ThinClient::new(leader.rpc, leader.tpu, transactions_socket);
-        let last_id = client.get_last_id();
-
-        let mut tx = match req {
+    pub fn build_airdrop_transaction(
+        &mut self,
+        req: DroneRequest,
+    ) -> Result<Transaction, io::Error> {
+        trace!("build_airdrop_transaction: {:?}", req);
+        match req {
             DroneRequest::GetAirdrop {
-                airdrop_request_amount,
-                client_pubkey,
+                tokens,
+                to,
+                last_id,
             } => {
-                info!(
-                    "Requesting airdrop of {} to {:?}",
-                    airdrop_request_amount, client_pubkey
-                );
-                request_amount = airdrop_request_amount;
-                Transaction::system_new(
-                    &self.mint_keypair,
-                    client_pubkey,
-                    airdrop_request_amount as u64,
-                    last_id,
-                )
+                if self.check_request_limit(tokens) {
+                    self.request_current += tokens;
+                    metrics::submit(
+                        influxdb::Point::new("drone")
+                            .add_tag("op", influxdb::Value::String("airdrop".to_string()))
+                            .add_field("request_amount", influxdb::Value::Integer(tokens as i64))
+                            .add_field(
+                                "request_current",
+                                influxdb::Value::Integer(self.request_current as i64),
+                            ).to_owned(),
+                    );
+
+                    info!("Requesting airdrop of {} to {:?}", tokens, to);
+                    let mut tx = Transaction::system_new(&self.mint_keypair, to, tokens, last_id);
+                    tx.sign(&[&self.mint_keypair], last_id);
+                    Ok(tx)
+                } else {
+                    Err(Error::new(ErrorKind::Other, "token limit reached"))
+                }
             }
-        };
-        if self.check_request_limit(request_amount) {
-            self.request_current += request_amount;
-            metrics::submit(
-                influxdb::Point::new("drone")
-                    .add_tag("op", influxdb::Value::String("airdrop".to_string()))
-                    .add_field(
-                        "request_amount",
-                        influxdb::Value::Integer(request_amount as i64),
-                    ).add_field(
-                        "request_current",
-                        influxdb::Value::Integer(self.request_current as i64),
-                    ).to_owned(),
-            );
-            client.retry_transfer(&self.mint_keypair, &mut tx, 10)
-        } else {
-            Err(Error::new(ErrorKind::Other, "token limit reached"))
         }
     }
 }
@@ -156,16 +140,67 @@ impl Drop for Drone {
     }
 }
 
-pub fn run_local_drone(mint_keypair: Keypair, network: SocketAddr, sender: Sender<SocketAddr>) {
+pub fn request_airdrop_transaction(
+    drone_addr: &SocketAddr,
+    id: &Pubkey,
+    tokens: u64,
+    last_id: Hash,
+) -> Result<Transaction, Error> {
+    // TODO: make this async tokio client
+    let mut stream = TcpStream::connect_timeout(drone_addr, Duration::new(3, 0))?;
+    stream.set_read_timeout(Some(Duration::new(10, 0)))?;
+    let req = DroneRequest::GetAirdrop {
+        tokens,
+        last_id,
+        to: *id,
+    };
+    let req = serialize(&req).expect("serialize drone request");
+    stream.write_all(&req)?;
+
+    // Read length of transaction
+    let mut buffer = [0; 2];
+    stream.read_exact(&mut buffer).or_else(|err| {
+        info!(
+            "request_airdrop_transaction: buffer length read_exact error: {:?}",
+            err
+        );
+        Err(Error::new(ErrorKind::Other, "Airdrop failed"))
+    })?;
+    let transaction_length = LittleEndian::read_u16(&buffer) as usize;
+    if transaction_length >= PACKET_DATA_SIZE {
+        Err(Error::new(
+            ErrorKind::Other,
+            format!(
+                "request_airdrop_transaction: invalid transaction_length from drone: {}",
+                transaction_length
+            ),
+        ))?;
+    }
+
+    // Read the transaction
+    let mut buffer = Vec::new();
+    buffer.resize(transaction_length, 0);
+    stream.read_exact(&mut buffer).or_else(|err| {
+        info!(
+            "request_airdrop_transaction: buffer read_exact error: {:?}",
+            err
+        );
+        Err(Error::new(ErrorKind::Other, "Airdrop failed"))
+    })?;
+
+    let transaction: Transaction = deserialize(&buffer).or_else(|err| {
+        Err(Error::new(
+            ErrorKind::Other,
+            format!("request_airdrop_transaction deserialize failure: {:?}", err),
+        ))
+    })?;
+    Ok(transaction)
+}
+
+pub fn run_local_drone(mint_keypair: Keypair, sender: Sender<SocketAddr>) {
     thread::spawn(move || {
         let drone_addr = socketaddr!(0, 0);
-        let drone = Arc::new(Mutex::new(Drone::new(
-            mint_keypair,
-            drone_addr,
-            network,
-            None,
-            None,
-        )));
+        let drone = Arc::new(Mutex::new(Drone::new(mint_keypair, None, None)));
         let socket = TcpListener::bind(&drone_addr).unwrap();
         sender.send(socket.local_addr().unwrap()).unwrap();
         info!("Drone started. Listening on: {}", drone_addr);
@@ -186,12 +221,13 @@ pub fn run_local_drone(mint_keypair: Keypair, network: SocketAddr, sender: Sende
                     })?;
 
                     info!("Airdrop requested...");
-                    let res1 = drone2.lock().unwrap().send_airdrop(req);
-                    match res1 {
+                    let res = drone2.lock().unwrap().build_airdrop_transaction(req);
+                    match res {
                         Ok(_) => info!("Airdrop sent!"),
                         Err(_) => info!("Request limit reached for this time slice"),
                     }
-                    let response = res1?;
+                    let response = res?;
+
                     info!("Airdrop tx signature: {:?}", response);
                     let response_vec = serialize(&response).or_else(|err| {
                         Err(io::Error::new(
@@ -199,7 +235,20 @@ pub fn run_local_drone(mint_keypair: Keypair, network: SocketAddr, sender: Sende
                             format!("serialize signature in drone: {:?}", err),
                         ))
                     })?;
-                    let response_bytes = Bytes::from(response_vec.clone());
+
+                    let mut response_vec_with_length = vec![0; 2];
+                    LittleEndian::write_u16(
+                        &mut response_vec_with_length,
+                        response_vec.len() as u16,
+                    );
+                    info!(
+                        "Airdrop response_vec_with_length: {:?}",
+                        response_vec_with_length
+                    );
+                    response_vec_with_length.extend_from_slice(&response_vec);
+
+                    let response_bytes = Bytes::from(response_vec_with_length.clone());
+                    info!("Airdrop response_bytes: {:?}", response_bytes);
                     Ok(response_bytes)
                 });
                 let server = writer
@@ -238,8 +287,7 @@ mod tests {
         let keypair = Keypair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
-        let network_addr = "0.0.0.0:0".parse().unwrap();
-        let mut drone = Drone::new(keypair, addr, network_addr, None, Some(3));
+        let mut drone = Drone::new(keypair, None, Some(3));
         assert!(drone.check_request_limit(1));
         drone.request_current = 3;
         assert!(!drone.check_request_limit(1));
@@ -250,8 +298,7 @@ mod tests {
         let keypair = Keypair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
-        let network_addr = "0.0.0.0:0".parse().unwrap();
-        let mut drone = Drone::new(keypair, addr, network_addr, None, None);
+        let mut drone = Drone::new(keypair, None, None);
         drone.request_current = drone.request_current + 256;
         assert_eq!(drone.request_current, 256);
         drone.clear_request_count();
@@ -263,8 +310,7 @@ mod tests {
         let keypair = Keypair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
-        let network_addr = "0.0.0.0:0".parse().unwrap();
-        let mut drone = Drone::new(keypair, addr, network_addr, None, None);
+        let mut drone = Drone::new(keypair, None, None);
         let ip = "127.0.0.1".parse().expect("create IpAddr from string");
         assert_eq!(drone.ip_cache.len(), 0);
         drone.add_ip_to_cache(ip);
@@ -277,8 +323,7 @@ mod tests {
         let keypair = Keypair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
-        let network_addr = "0.0.0.0:0".parse().unwrap();
-        let mut drone = Drone::new(keypair, addr, network_addr, None, None);
+        let mut drone = Drone::new(keypair, None, None);
         let ip = "127.0.0.1".parse().expect("create IpAddr from string");
         assert_eq!(drone.ip_cache.len(), 0);
         drone.add_ip_to_cache(ip);
@@ -293,10 +338,9 @@ mod tests {
         let keypair = Keypair::new();
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
         addr.set_ip(get_ip_addr().unwrap());
-        let network_addr = "0.0.0.0:0".parse().unwrap();
         let time_slice: Option<u64> = None;
         let request_cap: Option<u64> = None;
-        let drone = Drone::new(keypair, addr, network_addr, time_slice, request_cap);
+        let drone = Drone::new(keypair, time_slice, request_cap);
         assert_eq!(drone.time_slice, Duration::new(TIME_SLICE, 0));
         assert_eq!(drone.request_cap, REQUEST_CAP);
     }
@@ -339,7 +383,7 @@ mod tests {
 
         let mut addr: SocketAddr = "0.0.0.0:9900".parse().expect("bind to drone socket");
         addr.set_ip(get_ip_addr().expect("drone get_ip_addr"));
-        let mut drone = Drone::new(alice.keypair(), addr, leader_data.ncp, None, Some(150_000));
+        let mut drone = Drone::new(alice.keypair(), None, Some(150_000));
 
         let transactions_socket =
             UdpSocket::bind("0.0.0.0:0").expect("drone bind to transactions socket");
@@ -347,10 +391,12 @@ mod tests {
         let mut client = ThinClient::new(leader_data.rpc, leader_data.tpu, transactions_socket);
 
         let bob_req = DroneRequest::GetAirdrop {
-            airdrop_request_amount: 50,
-            client_pubkey: bob_pubkey,
+            tokens: 50,
+            to: bob_pubkey,
+            last_id,
         };
-        let bob_sig = drone.send_airdrop(bob_req).unwrap();
+        let bob_tx = drone.build_airdrop_transaction(bob_req).unwrap();
+        let bob_sig = client.transfer_signed(&bob_tx).unwrap();
         assert!(client.poll_for_signature(&bob_sig).is_ok());
 
         // restart the leader, drone should find the new one at the same gossip port
@@ -376,12 +422,14 @@ mod tests {
         let mut client = ThinClient::new(leader_data.rpc, leader_data.tpu, transactions_socket);
 
         let carlos_req = DroneRequest::GetAirdrop {
-            airdrop_request_amount: 5_000_000,
-            client_pubkey: carlos_pubkey,
+            tokens: 5_000_000,
+            to: carlos_pubkey,
+            last_id,
         };
 
         // using existing drone, new thin client
-        let carlos_sig = drone.send_airdrop(carlos_req).unwrap();
+        let carlos_tx = drone.build_airdrop_transaction(carlos_req).unwrap();
+        let carlos_sig = client.transfer_signed(&carlos_tx).unwrap();
         assert!(client.poll_for_signature(&carlos_sig).is_ok());
 
         let bob_balance = client.get_balance(&bob_pubkey);

@@ -1,4 +1,5 @@
 extern crate bincode;
+extern crate byteorder;
 extern crate bytes;
 #[macro_use]
 extern crate clap;
@@ -9,6 +10,7 @@ extern crate tokio;
 extern crate tokio_codec;
 
 use bincode::{deserialize, serialize};
+use byteorder::{ByteOrder, LittleEndian};
 use bytes::Bytes;
 use clap::{App, Arg};
 use solana::drone::{Drone, DroneRequest, DRONE_PORT};
@@ -18,7 +20,6 @@ use solana::signature::read_keypair;
 use std::error;
 use std::io;
 use std::net::{Ipv4Addr, SocketAddr};
-use std::process::exit;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::net::TcpListener;
@@ -41,14 +42,6 @@ fn main() -> Result<(), Box<error::Error>> {
     let matches = App::new("drone")
         .version(crate_version!())
         .arg(
-            Arg::with_name("network")
-                .short("n")
-                .long("network")
-                .value_name("HOST:PORT")
-                .takes_value(true)
-                .required(true)
-                .help("Rendezvous with the network at this gossip entry point"),
-        ).arg(
             Arg::with_name("keypair")
                 .short("k")
                 .long("keypair")
@@ -70,15 +63,6 @@ fn main() -> Result<(), Box<error::Error>> {
                 .help("Request limit for time slice"),
         ).get_matches();
 
-    let network = matches
-        .value_of("network")
-        .unwrap()
-        .parse()
-        .unwrap_or_else(|e| {
-            eprintln!("failed to parse network: {}", e);
-            exit(1)
-        });
-
     let mint_keypair =
         read_keypair(matches.value_of("keypair").unwrap()).expect("failed to read client keypair");
 
@@ -99,8 +83,6 @@ fn main() -> Result<(), Box<error::Error>> {
 
     let drone = Arc::new(Mutex::new(Drone::new(
         mint_keypair,
-        drone_addr,
-        network,
         time_slice,
         request_cap,
     )));
@@ -131,23 +113,34 @@ fn main() -> Result<(), Box<error::Error>> {
                     ))
                 })?;
 
-                println!("Airdrop requested...");
+                println!("Airdrop transaction requested...{:?}", req);
                 // let res = drone2.lock().unwrap().check_rate_limit(client_ip);
-                let res1 = drone2.lock().unwrap().send_airdrop(req);
-                match res1 {
-                    Ok(_) => println!("Airdrop sent!"),
-                    Err(_) => println!("Request limit reached for this time slice"),
+                let res = drone2.lock().unwrap().build_airdrop_transaction(req);
+                match res {
+                    Ok(tx) => {
+                        let response_vec = serialize(&tx).or_else(|err| {
+                            Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                format!("deserialize packet in drone: {:?}", err),
+                            ))
+                        })?;
+
+                        let mut response_vec_with_length = vec![0; 2];
+                        LittleEndian::write_u16(
+                            &mut response_vec_with_length,
+                            response_vec.len() as u16,
+                        );
+                        response_vec_with_length.extend_from_slice(&response_vec);
+
+                        let response_bytes = Bytes::from(response_vec_with_length);
+                        println!("Airdrop transaction granted");
+                        Ok(response_bytes)
+                    }
+                    Err(err) => {
+                        println!("Airdrop transaction failed: {:?}", err);
+                        Err(err)
+                    }
                 }
-                let response = res1?;
-                println!("Airdrop tx signature: {:?}", response);
-                let response_vec = serialize(&response).or_else(|err| {
-                    Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("serialize signature in drone: {:?}", err),
-                    ))
-                })?;
-                let response_bytes = Bytes::from(response_vec.clone());
-                Ok(response_bytes)
             });
             let server = writer
                 .send_all(processor.or_else(|err| {
