@@ -18,7 +18,6 @@ libc = "0.2.43"
 log = "0.4.2"
 solana_rbpf = "=0.1.4"
 serde = "1.0.27"
-serde_derive = "1.0.27"
 solana-sdk = { path = "../../../sdk", version = "0.11.0" }
 
 [lib]
