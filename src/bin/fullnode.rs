@@ -123,11 +123,8 @@ fn main() {
         None => {
             //self = leader
             if rpc_port.is_some() {
-                node_info.contact_info.rpc.set_port(rpc_port.unwrap());
-                node_info
-                    .contact_info
-                    .rpc_pubsub
-                    .set_port(rpc_port.unwrap() + 1);
+                node_info.rpc.set_port(rpc_port.unwrap());
+                node_info.rpc_pubsub.set_port(rpc_port.unwrap() + 1);
             }
             node_info
         }
