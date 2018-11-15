@@ -2,7 +2,7 @@
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
 
-use bincode::{deserialize, serialize, Result as BincodeResult};
+use bincode::{deserialize, serialize};
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use entry::Entry;
 use ledger::Block;
@@ -235,10 +235,6 @@ impl DbLedger {
     }
 
     pub fn insert_data_blob(&self, key: &[u8], new_blob: &Blob) -> Result<Vec<Entry>> {
-        if !Self::is_blob_data_valid(new_blob) {
-            return Err(Error::DbLedgerError(DbLedgerError::InvalidBlobData));
-        }
-
         let slot_height = DataCf::slot_height_from_key(key)?;
         let meta_key = MetaCf::key(slot_height);
 
@@ -371,25 +367,13 @@ impl DbLedger {
 
         Ok((total_blobs, total_current_size as u64))
     }
-
-    fn is_blob_data_valid(blob: &Blob) -> bool {
-        if let Ok(blob_size) = blob.size() {
-            let blob_data = &blob.data[BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + blob_size];
-            let entry: BincodeResult<Entry> = deserialize(blob_data);
-            entry.is_ok()
-        } else {
-            false
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use ledger::{get_tmp_ledger_path, make_tiny_test_entries, Block};
-    use packet::BLOB_SIZE;
     use rocksdb::{Options, DB};
-    use std::mem;
 
     #[test]
     fn test_put_get_simple() {
@@ -542,40 +526,6 @@ mod tests {
             .unwrap()
             .expect("Expected new metadata object to exist");
         assert!(meta.consumed == 2 && meta.received == 2);
-
-        // Destroying database without closing it first is undefined behavior
-        drop(ledger);
-        DB::destroy(&Options::default(), &ledger_path)
-            .expect("Expected successful database destruction");
-    }
-
-    #[test]
-    fn test_insert_data_blobs_malformed() {
-        let shared_blobs = make_tiny_test_entries(1).to_blobs();
-        let mut blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.write().unwrap()).collect();
-        let mut blobs: Vec<&mut Blob> = blob_locks.iter_mut().map(|b| &mut **b).collect();
-
-        let ledger_path = get_tmp_ledger_path("test_insert_data_blobs_malformed");
-        let ledger = DbLedger::open(&ledger_path).unwrap();
-
-        // Insert malformed blob
-        mem::replace(&mut blobs[0].data, [0u8; BLOB_SIZE]);
-
-        if let Err(Error::DbLedgerError(e)) =
-            ledger.insert_data_blob(&DataCf::key(DEFAULT_SLOT_HEIGHT, 0), blobs[0])
-        {
-            assert_eq!(e, DbLedgerError::InvalidBlobData);
-        } else {
-            panic!("Expected error in blob insertion");
-        }
-
-        assert!(
-            ledger
-                .meta_cf
-                .get(&ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))
-                .unwrap()
-                .is_none()
-        );
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
