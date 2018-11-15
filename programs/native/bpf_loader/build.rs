@@ -14,7 +14,7 @@ fn main() {
         println!("cargo:rerun-if-changed=../../bpf/c/sdk/bpf.mk");
         println!("cargo:rerun-if-changed=../../bpf/c/sdk/inc/solana_sdk.h");
         println!("cargo:rerun-if-changed=../../bpf/c/makefile");
-        println!("cargo:rerun-if-changed=../../bpf/c/src/bernch_alu.c");
+        println!("cargo:rerun-if-changed=../../bpf/c/src/bench_alu.c");
         println!("cargo:rerun-if-changed=../../bpf/c/src/move_funds.c");
         println!("cargo:rerun-if-changed=../../bpf/c/src/noop.c");
         println!("cargo:warning=(not a warning) Compiling C-based BPF programs");
