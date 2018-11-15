@@ -3,7 +3,7 @@
 //!
 //! The basic strategy is as follows:
 //! 1. Construct a bloom filter of the local data set
-//! 2. Randomly ask a node on the network for data that is is not contained in the bloom filter.
+//! 2. Randomly ask a node on the network for data that is not contained in the bloom filter.
 //!
 //! Bloom filters have a false positive rate.  Each requests uses a different bloom filter
 //! with random hash functions.  So each subsequent request will have a different distribution
