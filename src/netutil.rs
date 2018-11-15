@@ -116,8 +116,8 @@ pub fn bind_in_range(range: (u16, u16)) -> io::Result<(u16, UdpSocket)> {
 
     let (start, end) = range;
     let mut tries_left = end - start;
+    let mut rand_port = thread_rng().gen_range(start, end);
     loop {
-        let rand_port = thread_rng().gen_range(start, end);
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rand_port);
 
         match sock.bind(&SockAddr::from(addr)) {
@@ -130,6 +130,10 @@ pub fn bind_in_range(range: (u16, u16)) -> io::Result<(u16, UdpSocket)> {
                     return Err(err);
                 }
             }
+        }
+        rand_port += 1;
+        if rand_port == end {
+            rand_port = start;
         }
         tries_left -= 1;
     }
@@ -164,8 +168,8 @@ pub fn bind_to(port: u16, reuseaddr: bool) -> io::Result<UdpSocket> {
 pub fn find_available_port_in_range(range: (u16, u16)) -> io::Result<u16> {
     let (start, end) = range;
     let mut tries_left = end - start;
+    let mut rand_port = thread_rng().gen_range(start, end);
     loop {
-        let rand_port = thread_rng().gen_range(start, end);
         match TcpListener::bind(SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             rand_port,
@@ -178,6 +182,10 @@ pub fn find_available_port_in_range(range: (u16, u16)) -> io::Result<u16> {
                     return Err(err);
                 }
             }
+        }
+        rand_port += 1;
+        if rand_port == end {
+            rand_port = start;
         }
         tries_left -= 1;
     }
