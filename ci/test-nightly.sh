@@ -32,7 +32,7 @@ maybe_cargo_install() {
   set -x
   cd "programs/native/bpf_loader"
   echo --- program/native/bpf_loader bench --features=bpf_c
-  cargo +nightly bench --verbose --features="bpf_c" -- --nocapture
+  cargo bench --verbose --features="bpf_c" -- --nocapture
 )
 
 maybe_cargo_install cov
