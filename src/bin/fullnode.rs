@@ -9,7 +9,7 @@ extern crate solana;
 
 use clap::{App, Arg};
 use solana::client::mk_client;
-use solana::cluster_info::Node;
+use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use solana::drone::DRONE_PORT;
 use solana::fullnode::{Config, Fullnode, FullnodeReturnType};
 use solana::leader_scheduler::LeaderScheduler;
@@ -110,7 +110,7 @@ fn main() {
         }
         Some(port_number)
     } else {
-        match find_available_port_in_range((8899, 8999)) {
+        match find_available_port_in_range(FULLNODE_PORT_RANGE) {
             Ok(port) => Some(port),
             Err(_) => None,
         }
