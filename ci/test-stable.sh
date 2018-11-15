@@ -33,26 +33,18 @@ _ cargo clippy -- --deny=warnings
 for test in tests/*.rs; do
   test=${test##*/} # basename x
   test=${test%.rs} # basename x .rs
-  _ cargo test --verbose --jobs=1 --test="$test" --features="bpf_c"
+  _ cargo test --verbose --jobs=1 --test="$test"
 done
 
 # Run native program's tests
 for program in programs/native/*; do
   echo --- "$program"
-  ( 
+  (
     set -x
     cd "$program"
     cargo test --verbose
   )
 done
-
-# Run program/native/bpf_loader's test with bpf_c feature
-(
-  set -x
-  cd "programs/native/bpf_loader"
-  echo --- program/native/bpf_loader test --features=bpf_c
-  cargo test --verbose --features="bpf_c"
-)
 
 # Build the HTML
 export PATH=$CARGO_HOME/bin:$PATH

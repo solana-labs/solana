@@ -1,5 +1,4 @@
 #![feature(test)]
-#![cfg(feature = "bpf_c")]
 extern crate byteorder;
 extern crate solana_bpf_loader;
 extern crate solana_rbpf;

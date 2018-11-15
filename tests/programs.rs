@@ -5,7 +5,6 @@ extern crate solana;
 extern crate solana_sdk;
 
 use solana::bank::Bank;
-#[cfg(feature = "bpf_c")]
 use solana::bpf_loader;
 use solana::loader_transaction::LoaderTransaction;
 use solana::logger;
@@ -15,20 +14,14 @@ use solana::signature::{Keypair, KeypairUtil};
 use solana::system_transaction::SystemTransaction;
 use solana::transaction::Transaction;
 use solana_sdk::pubkey::Pubkey;
-#[cfg(feature = "bpf_c")]
 use std::env;
-#[cfg(feature = "bpf_c")]
 use std::fs::File;
-#[cfg(feature = "bpf_c")]
 use std::io::Read;
-#[cfg(feature = "bpf_c")]
 use std::path::PathBuf;
 
 /// BPF program file extension
-#[cfg(feature = "bpf_c")]
 const PLATFORM_FILE_EXTENSION_BPF: &str = "o";
 /// Create a BPF program file name
-#[cfg(feature = "bpf_c")]
 fn create_bpf_path(name: &str) -> PathBuf {
     let mut pathbuf = {
         let current_exe = env::current_exe().unwrap();
@@ -103,7 +96,6 @@ impl Loader {
         Loader { mint, bank, loader }
     }
 
-    #[cfg(feature = "bpf_c")]
     pub fn new_bpf() -> Self {
         let mint = Mint::new(50);
         let bank = Bank::new(&mint);
@@ -265,7 +257,6 @@ fn test_program_lua_move_funds() {
     assert_eq!(loader.bank.get_balance(&to), 11);
 }
 
-#[cfg(feature = "bpf_c")]
 #[test]
 fn test_program_builtin_bpf_noop() {
     logger::setup();
@@ -293,7 +284,6 @@ fn test_program_builtin_bpf_noop() {
     );
 }
 
-#[cfg(feature = "bpf_c")]
 #[test]
 fn test_program_bpf_noop_c() {
     logger::setup();
