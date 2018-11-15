@@ -214,9 +214,9 @@ impl DbLedger {
         })
     }
 
-    pub fn write_blobs<'a, I>(&mut self, slot: u64, blobs: &'a I) -> Result<()>
+    pub fn write_blobs<'a, I>(&mut self, slot: u64, blobs: I) -> Result<()>
     where
-        &'a I: IntoIterator<Item = &'a &'a Blob>,
+        I: IntoIterator<Item = &'a &'a Blob>,
     {
         for blob in blobs.into_iter() {
             let index = blob.index()?;
