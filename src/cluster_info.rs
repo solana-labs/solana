@@ -1061,7 +1061,7 @@ mod tests {
     fn test_cluster_info_new() {
         let d = NodeInfo::new_localhost(Keypair::new().pubkey(), timestamp());
         let cluster_info = ClusterInfo::new(d.clone()).expect("ClusterInfo::new");
-        assert_eq!(d, cluster_info.my_data());
+        assert_eq!(d.id, cluster_info.my_data().id);
     }
 
     #[test]
