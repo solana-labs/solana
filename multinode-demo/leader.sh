@@ -35,6 +35,7 @@ trap 'kill "$pid" && wait "$pid"' INT TERM
 $program \
   --identity "$SOLANA_CONFIG_DIR"/leader.json \
   --ledger "$SOLANA_CONFIG_DIR"/ledger \
+  --rpc 8899 \
   > >($leader_logger) 2>&1 &
 pid=$!
 oom_score_adj "$pid" 1000

@@ -12,7 +12,7 @@ solana-genesis --num_tokens 1000000000 --mint /config/drone-keypair.json --boots
 
 solana-drone --keypair /config/drone-keypair.json --network 127.0.0.1:8001 &
 drone=$!
-solana-fullnode --identity /config/leader-config.json --ledger /ledger/ &
+solana-fullnode --identity /config/leader-config.json --ledger /ledger/ --rpc 8899 &
 fullnode=$!
 
 abort() {
