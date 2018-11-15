@@ -36,11 +36,9 @@ impl Instruction {
 /// An atomic transaction
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
-    /// A set of digital signature of `account_keys`, `program_ids`, `last_id`, `fee` and `instructions`, signed by `signed_keys`.
+    /// A set of digital signature of `account_keys`, `program_ids`, `last_id`, `fee` and `instructions`, signed by the first
+    /// signatures.len() keys of account_keys
     pub signatures: Vec<Signature>,
-
-    /// The `Pubkeys` that correspond to signature in `signatures`
-    pub signed_keys: Vec<Pubkey>,
 
     /// The `Pubkeys` that are executing this transaction userdata.  The meaning of each key is
     /// program-specific.
@@ -99,17 +97,13 @@ impl Transaction {
         program_ids: Vec<Pubkey>,
         instructions: Vec<Instruction>,
     ) -> Self {
-        let from = from_keypairs[0].pubkey();
-        let mut account_keys = Vec::with_capacity(keys.len() + 1);
-        account_keys.push(from);
-        account_keys.extend_from_slice(keys);
-        let signed_keys = from_keypairs
+        let mut account_keys: Vec<_> = from_keypairs
             .iter()
             .map(|keypair| keypair.pubkey())
             .collect();
+        account_keys.extend_from_slice(keys);
         let mut tx = Transaction {
             signatures: vec![],
-            signed_keys,
             account_keys,
             last_id: Hash::default(),
             fee,
@@ -145,10 +139,7 @@ impl Transaction {
     }
     /// Get the transaction data to sign.
     pub fn get_sign_data(&self) -> Vec<u8> {
-        let mut data = serialize(&self.signed_keys).expect("serialize signed keys");
-
-        let account_keys_data = serialize(&self.account_keys).expect("serialize account_keys");
-        data.extend_from_slice(&account_keys_data);
+        let mut data = serialize(&self.account_keys).expect("serialize account_keys");
 
         let last_id_data = serialize(&self.last_id).expect("serialize last_id");
         data.extend_from_slice(&last_id_data);

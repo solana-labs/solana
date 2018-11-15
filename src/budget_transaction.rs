@@ -265,7 +265,6 @@ mod tests {
         let instruction = Instruction::NewBudget(expr);
         let instructions = vec![transaction::Instruction::new(0, &instruction, vec![])];
         let claim0 = Transaction {
-            signed_keys: vec![],
             account_keys: vec![],
             last_id: Default::default(),
             signatures: vec![],
