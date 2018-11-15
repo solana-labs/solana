@@ -104,6 +104,9 @@ pub enum BankError {
 
     /// Loader call chain too deep
     CallChainTooDeep,
+
+    /// Transaction has a fee but has no signature present
+    MissingSignatureForFee,
 }
 
 pub type Result<T> = result::Result<T, BankError>;
@@ -637,7 +640,9 @@ impl Bank {
         error_counters: &mut ErrorCounters,
     ) -> Result<Vec<Account>> {
         // Copy all the accounts
-        if accounts.load(&tx.account_keys[0]).is_none() {
+        if tx.signatures.is_empty() && tx.fee != 0 {
+            Err(BankError::MissingSignatureForFee)
+        } else if accounts.load(&tx.account_keys[0]).is_none() {
             error_counters.account_not_found += 1;
             Err(BankError::AccountNotFound)
         } else if accounts.load(&tx.account_keys[0]).unwrap().tokens < tx.fee {
