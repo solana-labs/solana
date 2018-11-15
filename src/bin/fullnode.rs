@@ -9,12 +9,13 @@ extern crate solana;
 
 use clap::{App, Arg};
 use solana::client::mk_client;
-use solana::cluster_info::Node;
+use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use solana::drone::DRONE_PORT;
 use solana::fullnode::{Config, Fullnode, FullnodeReturnType};
 use solana::leader_scheduler::LeaderScheduler;
 use solana::logger;
 use solana::metrics::set_panic_hook;
+use solana::netutil::find_available_port_in_range;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::thin_client::poll_gossip_for_leader;
 use solana::vote_program::VoteProgram;
@@ -89,14 +90,7 @@ fn main() {
     let node = Node::new_with_external_ip(keypair.pubkey(), &ncp);
 
     // save off some stuff for airdrop
-    let node_info = node.info.clone();
-
-    let leader = match network {
-        Some(network) => {
-            poll_gossip_for_leader(network, None).expect("can't find leader on network")
-        }
-        None => node_info,
-    };
+    let mut node_info = node.info.clone();
 
     let vote_account_keypair = Arc::new(Keypair::new());
     let vote_account_id = vote_account_keypair.pubkey();
@@ -116,7 +110,27 @@ fn main() {
         }
         Some(port_number)
     } else {
-        None
+        match find_available_port_in_range(FULLNODE_PORT_RANGE) {
+            Ok(port) => Some(port),
+            Err(_) => None,
+        }
+    };
+
+    let leader = match network {
+        Some(network) => {
+            poll_gossip_for_leader(network, None).expect("can't find leader on network")
+        }
+        None => {
+            //self = leader
+            if rpc_port.is_some() {
+                node_info.contact_info.rpc.set_port(rpc_port.unwrap());
+                node_info
+                    .contact_info
+                    .rpc_pubsub
+                    .set_port(rpc_port.unwrap() + 1);
+            }
+            node_info
+        }
     };
 
     let mut fullnode = Fullnode::new(
