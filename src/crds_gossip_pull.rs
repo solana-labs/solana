@@ -1,13 +1,13 @@
 //! Crds Gossip Pull overlay
-//! This module implements the anti-entropy protocol for the newwork.
+//! This module implements the anti-entropy protocol for the network.
 //!
 //! The basic strategy is as follows:
 //! 1. Construct a bloom filter of the local data set
 //! 2. Randomly ask a node on the network for data that is is not contained in the bloom filter.
 //!
-//! Bloom filters have a false positive rate.  Each requests uses a differnet bloom filter
+//! Bloom filters have a false positive rate.  Each requests uses a different bloom filter
 //! with random hash functions.  So each subsequent request will have a different distribution
-//! of false positivies.
+//! of false positives.
 
 use bincode::serialized_size;
 use bloom::Bloom;
@@ -79,9 +79,9 @@ impl CrdsGossipPull {
     }
 
     /// time when a request to `from` was initiated
-    /// This is used for weighted random selection durring `new_pull_request`
+    /// This is used for weighted random selection during `new_pull_request`
     /// It's important to use the local nodes request creation time as the weight
-    /// instaad of the response received time otherwise failed nodes will increase their weight.
+    /// instead of the response received time otherwise failed nodes will increase their weight.
     pub fn mark_pull_request_creation_time(&mut self, from: Pubkey, now: u64) {
         self.pull_request_time.insert(from, now);
     }
@@ -307,7 +307,7 @@ mod test {
         );
         let mut done = false;
         for _ in 0..30 {
-            // there is a chance of a false posititve with bloom filters
+            // there is a chance of a false positive with bloom filters
             let req = node.new_pull_request(&node_crds, node_id, 0);
             let (_, filter, caller) = req.unwrap();
             let rsp = dest.process_pull_request(&mut dest_crds, caller, filter, 0);
@@ -352,21 +352,21 @@ mod test {
         node_crds.insert(old.clone(), 0).unwrap();
         let value_hash = node_crds.lookup_versioned(&old.label()).unwrap().value_hash;
 
-        //verfiy self is valid
+        //verify self is valid
         assert_eq!(node_crds.lookup(&node_label).unwrap().label(), node_label);
 
         // purge
         node.purge_active(&mut node_crds, node_id, 1);
 
-        //verfiy self is still valid after purge
+        //verify self is still valid after purge
         assert_eq!(node_crds.lookup(&node_label).unwrap().label(), node_label);
 
         assert_eq!(node_crds.lookup_versioned(&old.label()), None);
         assert_eq!(node.purged_values.len(), 1);
         for _ in 0..30 {
-            // there is a chance of a false posititve with bloom filters
+            // there is a chance of a false positive with bloom filters
             // assert that purged value is still in the set
-            // chance of 30 consequtive false positives is 0.1^30
+            // chance of 30 consecutive false positives is 0.1^30
             let mut filter = node.build_crds_filter(&node_crds);
             assert!(filter.contains(&value_hash));
         }
