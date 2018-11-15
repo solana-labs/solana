@@ -39,6 +39,10 @@ local|tar)
   export USE_INSTALL=1
   export SOLANA_DEFAULT_METRICS_RATE=1
 
+  ./fetch-perf-libs.sh
+  # shellcheck source=/dev/null
+  source ./target/perf-libs/env.sh
+
   net/scripts/rsync-retry.sh -vPrc "$entrypointIp:~/.cargo/bin/solana*" ~/.cargo/bin/
   solana_bench_tps=solana-bench-tps
   solana_keygen=solana-keygen

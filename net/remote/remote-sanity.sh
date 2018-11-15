@@ -69,6 +69,11 @@ snap)
 local|tar)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
+  if [[ -r target/perf-libs/env.sh ]]; then
+    # shellcheck source=/dev/null
+    source target/perf-libs/env.sh
+  fi
+
   entrypointRsyncUrl="$entrypointIp:~/solana"
 
   solana_bench_tps=solana-bench-tps

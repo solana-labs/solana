@@ -131,6 +131,11 @@ build() {
 
     set -x
     rm -rf farf
+
+    if [[ -r target/perf-libs/env.sh ]]; then
+      # shellcheck source=/dev/null
+      source target/perf-libs/env.sh
+    fi
     $MAYBE_DOCKER cargo install --features="$cargoFeatures" --root farf
     ./scripts/install-native-programs.sh farf/
   )
