@@ -97,13 +97,10 @@ impl SlotMeta {
     }
 }
 
+#[derive(Default)]
 pub struct MetaCf {}
 
 impl MetaCf {
-    pub fn new() -> Self {
-        MetaCf {}
-    }
-
     pub fn key(slot_height: u64) -> Vec<u8> {
         let mut key = vec![0u8; 8];
         LittleEndian::write_u64(&mut key[0..8], slot_height);
@@ -120,13 +117,10 @@ impl LedgerColumnFamily for MetaCf {
 }
 
 // The data column family
+#[derive(Default)]
 pub struct DataCf {}
 
 impl DataCf {
-    pub fn new() -> Self {
-        DataCf {}
-    }
-
     pub fn key(slot_height: u64, index: u64) -> Vec<u8> {
         let mut key = vec![0u8; 16];
         LittleEndian::write_u64(&mut key[0..8], slot_height);
@@ -154,13 +148,10 @@ impl LedgerColumnFamilyRaw for DataCf {
 }
 
 // The erasure column family
+#[derive(Default)]
 pub struct ErasureCf {}
 
 impl ErasureCf {
-    pub fn new() -> Self {
-        ErasureCf {}
-    }
-
     pub fn key(slot_height: u64, index: u64) -> Vec<u8> {
         DataCf::key(slot_height, index)
     }
@@ -207,13 +198,13 @@ impl DbLedger {
         let db = DB::open_cf(&options, ledger_path, &cfs)?;
 
         // Create the metadata column family
-        let meta_cf = MetaCf::new();
+        let meta_cf = MetaCf::default();
 
         // Create the data column family
-        let data_cf = DataCf::new();
+        let data_cf = DataCf::default();
 
         // Create the erasure column family
-        let erasure_cf = ErasureCf::new();
+        let erasure_cf = ErasureCf::default();
 
         Ok(DbLedger {
             db,
