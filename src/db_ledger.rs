@@ -439,7 +439,8 @@ mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        let _ignored = DB::destroy(&Options::default(), &ledger_path);
+        DB::destroy(&Options::default(), &ledger_path)
+            .expect("Expected successful database destruction");
     }
 
     #[test]
@@ -501,7 +502,8 @@ mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        let _ignored = DB::destroy(&Options::default(), &ledger_path);
+        DB::destroy(&Options::default(), &ledger_path)
+            .expect("Expected successful database destruction");
     }
 
     #[test]
@@ -543,7 +545,8 @@ mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        let _ignored = DB::destroy(&Options::default(), &ledger_path);
+        DB::destroy(&Options::default(), &ledger_path)
+            .expect("Expected successful database destruction");
     }
 
     #[test]
@@ -576,7 +579,8 @@ mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        let _ignored = DB::destroy(&Options::default(), &ledger_path);
+        DB::destroy(&Options::default(), &ledger_path)
+            .expect("Expected successful database destruction");
     }
 
     #[test]
@@ -612,6 +616,7 @@ mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        let _ignored = DB::destroy(&Options::default(), &ledger_path);
+        DB::destroy(&Options::default(), &ledger_path)
+            .expect("Expected successful database destruction");
     }
 }
