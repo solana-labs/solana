@@ -69,7 +69,7 @@ fn sample_tx_count(
     let mut max_tps = 0.0;
     let mut total;
 
-    let log_prefix = format!("{:21}:", v.contact_info.tpu.to_string());
+    let log_prefix = format!("{:21}:", v.tpu.to_string());
 
     loop {
         let tx_count = client.transaction_count();
@@ -106,7 +106,7 @@ fn sample_tx_count(
                 tps: max_tps,
                 tx: total,
             };
-            maxes.write().unwrap().push((v.contact_info.tpu, stats));
+            maxes.write().unwrap().push((v.tpu, stats));
             break;
         }
     }
@@ -257,7 +257,7 @@ fn do_tx_transfers(
             println!(
                 "Transferring 1 unit {} times... to {}",
                 txs0.len(),
-                leader.contact_info.tpu
+                leader.tpu
             );
             let tx_len = txs0.len();
             let transfer_start = Instant::now();
@@ -377,7 +377,7 @@ fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], token
 }
 
 fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_count: u64) {
-    let mut drone_addr = leader.contact_info.tpu;
+    let mut drone_addr = leader.tpu;
     drone_addr.set_port(DRONE_PORT);
 
     let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap_or(0);
@@ -638,7 +638,7 @@ fn main() {
 
     let leader = leader.unwrap();
 
-    println!("leader RPC is at {} {}", leader.contact_info.rpc, leader.id);
+    println!("leader RPC is at {} {}", leader.rpc, leader.id);
     let mut client = mk_client(&leader);
     let mut barrier_client = mk_client(&leader);
 
@@ -804,7 +804,7 @@ fn converge(
     //lets spy on the network
     let (node, gossip_socket) = ClusterInfo::spy_node();
     let mut spy_cluster_info = ClusterInfo::new(node).expect("ClusterInfo::new");
-    spy_cluster_info.insert(&leader);
+    spy_cluster_info.insert_info(leader.clone());
     spy_cluster_info.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_cluster_info));
     let window = Arc::new(RwLock::new(default_window()));
@@ -818,13 +818,7 @@ fn converge(
             println!("{}", spy_ref.node_info_trace());
 
             if spy_ref.leader_data().is_some() {
-                v = spy_ref
-                    .table
-                    .values()
-                    .filter(|x| ClusterInfo::is_valid_address(&x.contact_info.rpc))
-                    .cloned()
-                    .collect();
-
+                v = spy_ref.rpc_peers();
                 if v.len() >= num_nodes {
                     println!("CONVERGED!");
                     break;

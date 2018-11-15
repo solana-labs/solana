@@ -177,8 +177,7 @@ impl WindowUtil for Window {
             }
         }
 
-        let num_peers = rcluster_info.table.len() as u64;
-
+        let num_peers = rcluster_info.tvu_peers().len() as u64;
         let max_repair = if max_entry_height == 0 {
             calculate_max_repair(
                 num_peers,

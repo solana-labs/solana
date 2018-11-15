@@ -70,6 +70,7 @@ unstable = []
 atty = "0.2"
 bincode = "1.0.0"
 bs58 = "0.2.0"
+bv = { version = "0.10.0", features = ["serde"] }
 byteorder = "1.2.1"
 bytes = "0.4"
 chrono = { version = "0.4.0", features = ["serde"] }
@@ -88,6 +89,7 @@ solana-jsonrpc-pubsub = "0.3.0"
 solana-jsonrpc-ws-server = "0.3.0"
 ipnetwork = "0.12.7"
 itertools = "0.7.8"
+indexmap = "1.0"
 libc = "0.2.43"
 libloading = "0.5.0"
 log = "0.4.2"

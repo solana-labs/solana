@@ -359,7 +359,10 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
     );
 
     let leader_entry_point = NodeInfo::new_entry_point(&leader_ncp);
-    cluster_info.write().unwrap().insert(&leader_entry_point);
+    cluster_info
+        .write()
+        .unwrap()
+        .insert_info(leader_entry_point);
 
     sleep(Duration::from_millis(100));
 
@@ -475,11 +478,7 @@ mod tests {
 
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
 
-        let mut client = ThinClient::new(
-            leader_data.contact_info.rpc,
-            leader_data.contact_info.tpu,
-            transactions_socket,
-        );
+        let mut client = ThinClient::new(leader_data.rpc, leader_data.tpu, transactions_socket);
         let transaction_count = client.transaction_count();
         assert_eq!(transaction_count, 0);
         let finality = client.get_finality();
@@ -532,11 +531,7 @@ mod tests {
         sleep(Duration::from_millis(300));
 
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let mut client = ThinClient::new(
-            leader_data.contact_info.rpc,
-            leader_data.contact_info.tpu,
-            transactions_socket,
-        );
+        let mut client = ThinClient::new(leader_data.rpc, leader_data.tpu, transactions_socket);
         let last_id = client.get_last_id();
 
         let tx = Transaction::system_new(&alice.keypair(), bob_pubkey, 500, last_id);
@@ -593,11 +588,7 @@ mod tests {
         sleep(Duration::from_millis(300));
 
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let mut client = ThinClient::new(
-            leader_data.contact_info.rpc,
-            leader_data.contact_info.tpu,
-            transactions_socket,
-        );
+        let mut client = ThinClient::new(leader_data.rpc, leader_data.tpu, transactions_socket);
         let last_id = client.get_last_id();
         let signature = client
             .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
@@ -642,11 +633,7 @@ mod tests {
         sleep(Duration::from_millis(300));
 
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let mut client = ThinClient::new(
-            leader_data.contact_info.rpc,
-            leader_data.contact_info.tpu,
-            transactions_socket,
-        );
+        let mut client = ThinClient::new(leader_data.rpc, leader_data.tpu, transactions_socket);
 
         // Create the validator account, transfer some tokens to that account
         let validator_keypair = Keypair::new();
@@ -744,11 +731,7 @@ mod tests {
         sleep(Duration::from_millis(900));
 
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let mut client = ThinClient::new(
-            leader_data.contact_info.rpc,
-            leader_data.contact_info.tpu,
-            transactions_socket,
-        );
+        let mut client = ThinClient::new(leader_data.rpc, leader_data.tpu, transactions_socket);
         let last_id = client.get_last_id();
 
         // give bob 500 tokens

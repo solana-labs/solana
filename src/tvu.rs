@@ -216,7 +216,7 @@ pub mod tests {
 
         //start cluster_info2
         let mut cluster_info2 = ClusterInfo::new(target2.info.clone()).expect("ClusterInfo::new");
-        cluster_info2.insert(&leader.info);
+        cluster_info2.insert_info(leader.info.clone());
         cluster_info2.set_leader(leader.info.id);
         let leader_id = leader.info.id;
         let cref2 = Arc::new(RwLock::new(cluster_info2));
@@ -245,7 +245,7 @@ pub mod tests {
 
         let starting_balance = 10_000;
         let mint = Mint::new(starting_balance);
-        let replicate_addr = target1.info.contact_info.tvu;
+        let replicate_addr = target1.info.tvu;
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_id,
         )));
@@ -255,7 +255,7 @@ pub mod tests {
 
         //start cluster_info1
         let mut cluster_info1 = ClusterInfo::new(target1.info.clone()).expect("ClusterInfo::new");
-        cluster_info1.insert(&leader.info);
+        cluster_info1.insert_info(leader.info.clone());
         cluster_info1.set_leader(leader.info.id);
         let cref1 = Arc::new(RwLock::new(cluster_info1));
         let dr_1 = new_ncp(cref1.clone(), target1.sockets.gossip, exit.clone());

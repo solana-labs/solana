@@ -317,9 +317,9 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
     }
 
     let leader = poll_gossip_for_leader(config.network, config.timeout)?;
-    let tpu_addr = leader.contact_info.tpu;
+    let tpu_addr = leader.tpu;
     let drone_addr = config.drone_addr(tpu_addr);
-    let rpc_addr = config.rpc_addr(leader.contact_info.rpc);
+    let rpc_addr = config.rpc_addr(leader.rpc);
 
     match config.command {
         // Get address of this client
@@ -1147,11 +1147,11 @@ mod tests {
         sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
-        run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
+        run_local_drone(alice.keypair(), leader_data.ncp, sender);
         let drone_addr = receiver.recv().unwrap();
 
         let mut config = WalletConfig::default();
-        config.network = leader_data.contact_info.ncp;
+        config.network = leader_data.ncp;
         config.drone_port = Some(drone_addr.port());
 
         let tokens = 50;
@@ -1220,10 +1220,10 @@ mod tests {
         sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
-        run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
+        run_local_drone(alice.keypair(), leader_data.ncp, sender);
         let drone_addr = receiver.recv().unwrap();
 
-        let rpc_addr = format!("http://{}", leader_data.contact_info.rpc.to_string());
+        let rpc_addr = format!("http://{}", leader_data.rpc.to_string());
 
         let signature = request_airdrop(&drone_addr, &bob_pubkey, 50);
         assert!(signature.is_ok());
@@ -1295,17 +1295,17 @@ mod tests {
         sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
-        run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
+        run_local_drone(alice.keypair(), leader_data.ncp, sender);
         let drone_addr = receiver.recv().unwrap();
 
-        let rpc_addr = format!("http://{}", leader_data.contact_info.rpc.to_string());
+        let rpc_addr = format!("http://{}", leader_data.rpc.to_string());
 
         let mut config_payer = WalletConfig::default();
-        config_payer.network = leader_data.contact_info.ncp;
+        config_payer.network = leader_data.ncp;
         config_payer.drone_port = Some(drone_addr.port());
 
         let mut config_witness = WalletConfig::default();
-        config_witness.network = leader_data.contact_info.ncp;
+        config_witness.network = leader_data.ncp;
         config_witness.drone_port = Some(drone_addr.port());
 
         assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
@@ -1419,10 +1419,10 @@ mod tests {
         sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
-        run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
+        run_local_drone(alice.keypair(), leader_data.ncp, sender);
         let drone_addr = receiver.recv().unwrap();
 
-        let rpc_addr = format!("http://{}", leader_data.contact_info.rpc.to_string());
+        let rpc_addr = format!("http://{}", leader_data.rpc.to_string());
 
         assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
@@ -1532,17 +1532,17 @@ mod tests {
         sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
-        run_local_drone(alice.keypair(), leader_data.contact_info.ncp, sender);
+        run_local_drone(alice.keypair(), leader_data.ncp, sender);
         let drone_addr = receiver.recv().unwrap();
 
-        let rpc_addr = format!("http://{}", leader_data.contact_info.rpc.to_string());
+        let rpc_addr = format!("http://{}", leader_data.rpc.to_string());
 
         let mut config_payer = WalletConfig::default();
-        config_payer.network = leader_data.contact_info.ncp;
+        config_payer.network = leader_data.ncp;
         config_payer.drone_port = Some(drone_addr.port());
 
         let mut config_witness = WalletConfig::default();
-        config_witness.network = leader_data.contact_info.ncp;
+        config_witness.network = leader_data.ncp;
         config_witness.drone_port = Some(drone_addr.port());
 
         assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());

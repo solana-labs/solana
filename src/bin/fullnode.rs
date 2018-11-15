@@ -67,7 +67,7 @@ fn main() {
         if let Ok(file) = File::open(path.clone()) {
             let parse: serde_json::Result<Config> = serde_json::from_reader(file);
             if let Ok(data) = parse {
-                (data.keypair(), data.node_info.contact_info.ncp)
+                (data.keypair(), data.node_info.ncp)
             } else {
                 eprintln!("failed to parse {}", path);
                 exit(1);

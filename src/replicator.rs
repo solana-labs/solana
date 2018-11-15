@@ -89,9 +89,9 @@ impl Replicator {
 
         let leader_info = network_addr.map(|i| NodeInfo::new_entry_point(&i));
         let leader_pubkey;
-        if let Some(leader_info) = leader_info.as_ref() {
+        if let Some(leader_info) = leader_info {
             leader_pubkey = leader_info.id;
-            cluster_info.write().unwrap().insert(leader_info);
+            cluster_info.write().unwrap().insert_info(leader_info);
         } else {
             panic!("No leader info!");
         }

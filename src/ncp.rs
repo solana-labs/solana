@@ -26,8 +26,8 @@ impl Ncp {
         let (request_sender, request_receiver) = channel();
         let gossip_socket = Arc::new(gossip_socket);
         trace!(
-            "Ncp: id: {:?}, listening on: {:?}",
-            &cluster_info.read().unwrap().id.as_ref()[..4],
+            "Ncp: id: {}, listening on: {:?}",
+            &cluster_info.read().unwrap().my_data().id,
             gossip_socket.local_addr().unwrap()
         );
         let t_receiver =
