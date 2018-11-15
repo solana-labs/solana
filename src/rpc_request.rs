@@ -56,7 +56,7 @@ impl RpcRequest {
            "method": method,
         });
         if let Some(param_string) = params {
-            request["params"] = json!(vec![param_string]);
+            request["params"] = param_string;
         }
         request
     }
@@ -99,18 +99,18 @@ mod tests {
         let test_request = RpcRequest::GetAccountInfo;
         let request = test_request.build_request_json(
             1,
-            Some(json!("deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx")),
+            Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])),
         );
         assert_eq!(request["method"], "getAccountInfo");
         assert_eq!(
             request["params"],
-            json!(vec!["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])
+            json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])
         );
 
         let test_request = RpcRequest::GetBalance;
         let request = test_request.build_request_json(
             1,
-            Some(json!("deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx")),
+            Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])),
         );
         assert_eq!(request["method"], "getBalance");
 
@@ -172,7 +172,7 @@ mod tests {
         let balance = RpcRequest::GetBalance.make_rpc_request(
             &rpc_addr,
             1,
-            Some(json!("deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx")),
+            Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])),
         );
         assert!(balance.is_ok());
         assert_eq!(balance.unwrap().as_u64().unwrap(), 50);

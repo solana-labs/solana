@@ -10,7 +10,7 @@ extern crate solana;
 use clap::{App, Arg};
 use solana::client::mk_client;
 use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
-use solana::drone::DRONE_PORT;
+use solana::drone::{request_airdrop_transaction, DRONE_PORT};
 use solana::fullnode::{Config, Fullnode, FullnodeReturnType};
 use solana::leader_scheduler::LeaderScheduler;
 use solana::logger;
@@ -19,7 +19,6 @@ use solana::netutil::find_available_port_in_range;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::thin_client::poll_gossip_for_leader;
 use solana::vote_program::VoteProgram;
-use solana::wallet::request_airdrop;
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::process::exit;
@@ -159,8 +158,13 @@ fn main() {
 
         info!("requesting airdrop from {}", drone_addr);
         loop {
-            if request_airdrop(&drone_addr, &pubkey, 50).is_ok() {
-                break;
+            let last_id = client.get_last_id();
+            if let Ok(transaction) = request_airdrop_transaction(&drone_addr, &pubkey, 50, last_id)
+            {
+                let signature = client.transfer_signed(&transaction).unwrap();
+                if client.poll_for_signature(&signature).is_ok() {
+                    break;
+                }
             }
             info!(
                 "airdrop request, is the drone address correct {:?}, drone running?",

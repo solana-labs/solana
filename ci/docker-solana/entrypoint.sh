@@ -10,7 +10,7 @@ solana-keygen -o /config/drone-keypair.json
 solana-fullnode-config --keypair=/config/leader-keypair.json -l > /config/leader-config.json
 solana-genesis --num_tokens 1000000000 --mint /config/drone-keypair.json --bootstrap_leader /config/leader-config.json --ledger /ledger
 
-solana-drone --keypair /config/drone-keypair.json --network 127.0.0.1:8001 &
+solana-drone --keypair /config/drone-keypair.json &
 drone=$!
 solana-fullnode --identity /config/leader-config.json --ledger /ledger/ --rpc 8899 &
 fullnode=$!

@@ -16,7 +16,7 @@ use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana::client::mk_client;
 use solana::cluster_info::{ClusterInfo, NodeInfo};
-use solana::drone::DRONE_PORT;
+use solana::drone::{request_airdrop_transaction, DRONE_PORT};
 use solana::hash::Hash;
 use solana::logger;
 use solana::metrics;
@@ -28,7 +28,6 @@ use solana::thin_client::{poll_gossip_for_leader, ThinClient};
 use solana::timing::timestamp;
 use solana::timing::{duration_as_ms, duration_as_s};
 use solana::transaction::Transaction;
-use solana::wallet::request_airdrop;
 use solana::window::default_window;
 use std::cmp;
 use std::collections::VecDeque;
@@ -393,27 +392,26 @@ fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_c
             id.pubkey(),
         );
 
-        if let Err(e) = request_airdrop(&drone_addr, &id.pubkey(), airdrop_amount as u64) {
-            panic!(
-                "Error requesting airdrop: {:?} to addr: {:?} amount: {}",
-                e, drone_addr, airdrop_amount
-            );
-        }
-
-        // TODO: return airdrop Result from Drone instead of polling the
-        //       network
-        let mut current_balance = starting_balance;
-        for _ in 0..20 {
-            sleep(Duration::from_millis(500));
-            current_balance = client.poll_get_balance(&id.pubkey()).unwrap_or_else(|e| {
-                println!("airdrop error {}", e);
-                starting_balance
-            });
-            if starting_balance != current_balance {
-                break;
+        let last_id = client.get_last_id();
+        match request_airdrop_transaction(&drone_addr, &id.pubkey(), airdrop_amount, last_id) {
+            Ok(transaction) => {
+                let signature = client.transfer_signed(&transaction).unwrap();
+                client.poll_for_signature(&signature).unwrap();
             }
-            println!("current balance {}...", current_balance);
-        }
+            Err(err) => {
+                panic!(
+                    "Error requesting airdrop: {:?} to addr: {:?} amount: {}",
+                    err, drone_addr, airdrop_amount
+                );
+            }
+        };
+
+        let current_balance = client.poll_get_balance(&id.pubkey()).unwrap_or_else(|e| {
+            println!("airdrop error {}", e);
+            starting_balance
+        });
+        println!("current balance {}...", current_balance);
+
         metrics_submit_token_balance(current_balance);
         if current_balance - starting_balance != airdrop_amount {
             println!(

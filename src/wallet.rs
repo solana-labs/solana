@@ -1,11 +1,11 @@
-use bincode::{deserialize, serialize};
+use bincode::serialize;
 use bpf_loader;
 use bs58;
 use budget_program::BudgetState;
 use budget_transaction::BudgetTransaction;
 use chrono::prelude::*;
 use clap::ArgMatches;
-use drone::{DroneRequest, DRONE_PORT};
+use drone::{request_airdrop_transaction, DRONE_PORT};
 use elf;
 use fullnode::Config;
 use hash::Hash;
@@ -18,14 +18,10 @@ use serde_json;
 use signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::pubkey::Pubkey;
 use std::fs::{self, File};
-use std::io::prelude::*;
-use std::io::{Error, ErrorKind, Write};
-use std::mem::size_of;
-use std::net::{Ipv4Addr, SocketAddr, TcpStream};
+use std::io::Write;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::path::Path;
 use std::str::FromStr;
-use std::thread::sleep;
-use std::time::Duration;
 use std::{error, fmt, mem};
 use system_transaction::SystemTransaction;
 use thin_client::poll_gossip_for_leader;
@@ -330,7 +326,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 "Requesting airdrop of {:?} tokens from {}",
                 tokens, drone_addr
             );
-            let params = json!(format!("{}", config.id.pubkey()));
+            let params = json!([format!("{}", config.id.pubkey())]);
             let previous_balance = match RpcRequest::GetBalance
                 .make_rpc_request(&rpc_addr, 1, Some(params))?
                 .as_u64()
@@ -340,24 +336,18 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                     "Received result of an unexpected type".to_string(),
                 ))?,
             };
-            request_airdrop(&drone_addr, &config.id.pubkey(), tokens as u64)?;
 
-            // TODO: return airdrop Result from Drone instead of polling the
-            //       network
-            let mut current_balance = previous_balance;
-            for _ in 0..20 {
-                sleep(Duration::from_millis(500));
-                let params = json!(format!("{}", config.id.pubkey()));
-                current_balance = RpcRequest::GetBalance
-                    .make_rpc_request(&rpc_addr, 1, Some(params))?
-                    .as_u64()
-                    .unwrap_or(previous_balance);
+            let last_id = get_last_id(&rpc_addr)?;
+            let transaction =
+                request_airdrop_transaction(&drone_addr, &config.id.pubkey(), tokens, last_id)?;
+            send_and_confirm_tx(&rpc_addr, &transaction)?;
 
-                if previous_balance < current_balance {
-                    break;
-                }
-                println!(".");
-            }
+            let params = json!([format!("{}", config.id.pubkey())]);
+            let current_balance = RpcRequest::GetBalance
+                .make_rpc_request(&rpc_addr, 1, Some(params))?
+                .as_u64()
+                .unwrap_or(previous_balance);
+
             if current_balance - previous_balance < tokens {
                 Err("Airdrop failed!")?;
             }
@@ -366,7 +356,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         // Check client balance
         WalletCommand::Balance => {
             println!("Balance requested...");
-            let params = json!(format!("{}", config.id.pubkey()));
+            let params = json!([format!("{}", config.id.pubkey())]);
             let balance = RpcRequest::GetBalance
                 .make_rpc_request(&rpc_addr, 1, Some(params))?
                 .as_u64();
@@ -388,7 +378,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         }
         // Confirm the last client transaction by signature
         WalletCommand::Confirm(signature) => {
-            let params = json!(format!("{}", signature));
+            let params = json!([format!("{}", signature)]);
             let confirmation = RpcRequest::ConfirmTransaction
                 .make_rpc_request(&rpc_addr, 1, Some(params))?
                 .as_bool();
@@ -407,7 +397,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         }
         // Deploy a custom program to the chain
         WalletCommand::Deploy(ref program_location) => {
-            let params = json!(format!("{}", config.id.pubkey()));
+            let params = json!([format!("{}", config.id.pubkey())]);
             let balance = RpcRequest::GetBalance
                 .make_rpc_request(&rpc_addr, 1, Some(params))?
                 .as_u64();
@@ -615,8 +605,12 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             let balance = RpcRequest::GetBalance
                 .make_rpc_request(&rpc_addr, 1, Some(params))?
                 .as_u64();
+
             if let Some(0) = balance {
-                request_airdrop(&drone_addr, &config.id.pubkey(), 1)?;
+                let params = json!([format!("{}", config.id.pubkey()), 1]);
+                RpcRequest::RequestAirdrop
+                    .make_rpc_request(&rpc_addr, 1, Some(params))
+                    .unwrap();
             }
 
             let last_id = get_last_id(&rpc_addr)?;
@@ -628,16 +622,19 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         }
         // Apply witness signature to contract
         WalletCommand::Witness(to, pubkey) => {
-            let last_id = get_last_id(&rpc_addr)?;
-
-            let params = json!(format!("{}", config.id.pubkey()));
+            let params = json!([format!("{}", config.id.pubkey())]);
             let balance = RpcRequest::GetBalance
                 .make_rpc_request(&rpc_addr, 1, Some(params))?
                 .as_u64();
+
             if let Some(0) = balance {
-                request_airdrop(&drone_addr, &config.id.pubkey(), 1)?;
+                let params = json!([format!("{}", config.id.pubkey()), 1]);
+                RpcRequest::RequestAirdrop
+                    .make_rpc_request(&rpc_addr, 1, Some(params))
+                    .unwrap();
             }
 
+            let last_id = get_last_id(&rpc_addr)?;
             let tx = Transaction::budget_new_signature(&config.id, pubkey, to, last_id);
             let signature_str = send_tx(&rpc_addr, &tx)?;
 
@@ -660,34 +657,6 @@ pub fn read_leader(path: &str) -> Result<Config, WalletError> {
             err, path
         )))
     })
-}
-
-pub fn request_airdrop(
-    drone_addr: &SocketAddr,
-    id: &Pubkey,
-    tokens: u64,
-) -> Result<Signature, Error> {
-    // TODO: make this async tokio client
-    let mut stream = TcpStream::connect_timeout(drone_addr, Duration::new(3, 0))?;
-    stream.set_read_timeout(Some(Duration::new(10, 0)))?;
-    let req = DroneRequest::GetAirdrop {
-        airdrop_request_amount: tokens,
-        client_pubkey: *id,
-    };
-    let tx = serialize(&req).expect("serialize drone request");
-    stream.write_all(&tx)?;
-    let mut buffer = [0; size_of::<Signature>()];
-    stream.read_exact(&mut buffer).or_else(|err| {
-        info!("request_airdrop: read_exact error: {:?}", err);
-        Err(Error::new(ErrorKind::Other, "Airdrop failed"))
-    })?;
-    let signature: Signature = deserialize(&buffer).or_else(|err| {
-        Err(Error::new(
-            ErrorKind::Other,
-            format!("deserialize signature in request_airdrop: {:?}", err),
-        ))
-    })?;
-    Ok(signature)
 }
 
 pub fn gen_keypair_file(outfile: String) -> Result<String, Box<error::Error>> {
@@ -721,7 +690,7 @@ fn get_last_id(rpc_addr: &str) -> Result<Hash, Box<error::Error>> {
 
 fn send_tx(rpc_addr: &str, tx: &Transaction) -> Result<String, Box<error::Error>> {
     let serialized = serialize(tx).unwrap();
-    let params = json!(serialized);
+    let params = json!([serialized]);
     let signature = RpcRequest::SendTransaction.make_rpc_request(&rpc_addr, 2, Some(params))?;
     if signature.as_str().is_none() {
         Err(WalletError::RpcRequestError(
@@ -732,7 +701,7 @@ fn send_tx(rpc_addr: &str, tx: &Transaction) -> Result<String, Box<error::Error>
 }
 
 fn confirm_tx(rpc_addr: &str, signature: &str) -> Result<RpcSignatureStatus, Box<error::Error>> {
-    let params = json!(signature.to_string());
+    let params = json!([signature.to_string()]);
     let signature_status =
         RpcRequest::GetSignatureStatus.make_rpc_request(&rpc_addr, 1, Some(params))?;
     if let Some(status) = signature_status.as_str() {
@@ -799,6 +768,8 @@ mod tests {
     use std::fs::remove_dir_all;
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
+    use std::thread::sleep;
+    use std::time::Duration;
 
     #[test]
     fn test_wallet_parse_command() {
@@ -1114,7 +1085,6 @@ mod tests {
         assert!(parse_command(pubkey, &test_bad_timestamp).is_err());
     }
     #[test]
-    #[ignore]
     fn test_wallet_process_command() {
         let bob_pubkey = Keypair::new().pubkey();
 
@@ -1147,7 +1117,7 @@ mod tests {
         sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
-        run_local_drone(alice.keypair(), leader_data.ncp, sender);
+        run_local_drone(alice.keypair(), sender);
         let drone_addr = receiver.recv().unwrap();
 
         let mut config = WalletConfig::default();
@@ -1189,8 +1159,6 @@ mod tests {
     }
     #[test]
     fn test_wallet_request_airdrop() {
-        let bob_pubkey = Keypair::new().pubkey();
-
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
@@ -1220,20 +1188,25 @@ mod tests {
         sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
-        run_local_drone(alice.keypair(), leader_data.ncp, sender);
+        run_local_drone(alice.keypair(), sender);
         let drone_addr = receiver.recv().unwrap();
 
-        let rpc_addr = format!("http://{}", leader_data.rpc.to_string());
+        let mut bob_config = WalletConfig::default();
+        bob_config.network = leader_data.ncp;
+        bob_config.drone_port = Some(drone_addr.port());
+        bob_config.command = WalletCommand::AirDrop(50);
 
-        let signature = request_airdrop(&drone_addr, &bob_pubkey, 50);
-        assert!(signature.is_ok());
-        let params = json!(format!("{}", signature.unwrap()));
-        let confirmation = RpcRequest::ConfirmTransaction
+        let sig_response = process_command(&bob_config);
+        assert!(sig_response.is_ok());
+
+        let rpc_addr = format!("http://{}", leader_data.rpc.to_string());
+        let params = json!([format!("{}", bob_config.id.pubkey())]);
+        let balance = RpcRequest::GetBalance
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
-            .as_bool()
+            .as_u64()
             .unwrap();
-        assert!(confirmation);
+        assert_eq!(balance, 50);
 
         server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
@@ -1295,7 +1268,7 @@ mod tests {
         sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
-        run_local_drone(alice.keypair(), leader_data.ncp, sender);
+        run_local_drone(alice.keypair(), sender);
         let drone_addr = receiver.recv().unwrap();
 
         let rpc_addr = format!("http://{}", leader_data.rpc.to_string());
@@ -1310,7 +1283,11 @@ mod tests {
 
         assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
-        let _signature = request_airdrop(&drone_addr, &config_payer.id.pubkey(), 50);
+        let last_id = get_last_id(&rpc_addr).unwrap();
+        let transaction =
+            request_airdrop_transaction(&drone_addr, &config_payer.id.pubkey(), 50, last_id)
+                .unwrap();
+        send_and_confirm_tx(&rpc_addr, &transaction).unwrap();
 
         // Make transaction (from config_payer to bob_pubkey) requiring timestamp from config_witness
         let date_string = "\"2018-09-19T17:30:59Z\"";
@@ -1333,21 +1310,21 @@ mod tests {
             .expect("base58-encoded public key");
         let process_id = Pubkey::new(&process_id_vec);
 
-        let params = json!(format!("{}", config_payer.id.pubkey()));
+        let params = json!([format!("{}", config_payer.id.pubkey())]);
         let config_payer_balance = RpcRequest::GetBalance
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
-        let params = json!(format!("{}", process_id));
+        let params = json!([format!("{}", process_id)]);
         let contract_balance = RpcRequest::GetBalance
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(contract_balance, 11);
-        let params = json!(format!("{}", bob_pubkey));
+        let params = json!([format!("{}", bob_pubkey)]);
         let recipient_balance = RpcRequest::GetBalance
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
@@ -1360,21 +1337,21 @@ mod tests {
         let sig_response = process_command(&config_witness);
         assert!(sig_response.is_ok());
 
-        let params = json!(format!("{}", config_payer.id.pubkey()));
+        let params = json!([format!("{}", config_payer.id.pubkey())]);
         let config_payer_balance = RpcRequest::GetBalance
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
-        let params = json!(format!("{}", process_id));
+        let params = json!([format!("{}", process_id)]);
         let contract_balance = RpcRequest::GetBalance
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(contract_balance, 1);
-        let params = json!(format!("{}", bob_pubkey));
+        let params = json!([format!("{}", bob_pubkey)]);
         let recipient_balance = RpcRequest::GetBalance
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
@@ -1419,14 +1396,18 @@ mod tests {
         sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
-        run_local_drone(alice.keypair(), leader_data.ncp, sender);
+        run_local_drone(alice.keypair(), sender);
         let drone_addr = receiver.recv().unwrap();
 
         let rpc_addr = format!("http://{}", leader_data.rpc.to_string());
 
         assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
-        let _signature = request_airdrop(&drone_addr, &config_payer.id.pubkey(), 50);
+        let last_id = get_last_id(&rpc_addr).unwrap();
+        let transaction =
+            request_airdrop_transaction(&drone_addr, &config_payer.id.pubkey(), 50, last_id)
+                .unwrap();
+        send_and_confirm_tx(&rpc_addr, &transaction).unwrap();
 
         // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
         config_payer.command = WalletCommand::Pay(
@@ -1447,21 +1428,21 @@ mod tests {
             .expect("base58-encoded public key");
         let process_id = Pubkey::new(&process_id_vec);
 
-        let params = json!(format!("{}", config_payer.id.pubkey()));
+        let params = json!([format!("{}", config_payer.id.pubkey())]);
         let config_payer_balance = RpcRequest::GetBalance
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
-        let params = json!(format!("{}", process_id));
+        let params = json!([format!("{}", process_id)]);
         let contract_balance = RpcRequest::GetBalance
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(contract_balance, 11);
-        let params = json!(format!("{}", bob_pubkey));
+        let params = json!([format!("{}", bob_pubkey)]);
         let recipient_balance = RpcRequest::GetBalance
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
@@ -1474,21 +1455,21 @@ mod tests {
         let sig_response = process_command(&config_witness);
         assert!(sig_response.is_ok());
 
-        let params = json!(format!("{}", config_payer.id.pubkey()));
+        let params = json!([format!("{}", config_payer.id.pubkey())]);
         let config_payer_balance = RpcRequest::GetBalance
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
-        let params = json!(format!("{}", process_id));
+        let params = json!([format!("{}", process_id)]);
         let contract_balance = RpcRequest::GetBalance
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(contract_balance, 1);
-        let params = json!(format!("{}", bob_pubkey));
+        let params = json!([format!("{}", bob_pubkey)]);
         let recipient_balance = RpcRequest::GetBalance
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
@@ -1532,7 +1513,7 @@ mod tests {
         sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
-        run_local_drone(alice.keypair(), leader_data.ncp, sender);
+        run_local_drone(alice.keypair(), sender);
         let drone_addr = receiver.recv().unwrap();
 
         let rpc_addr = format!("http://{}", leader_data.rpc.to_string());
@@ -1547,7 +1528,11 @@ mod tests {
 
         assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
-        let _signature = request_airdrop(&drone_addr, &config_payer.id.pubkey(), 50);
+        let last_id = get_last_id(&rpc_addr).unwrap();
+        let transaction =
+            request_airdrop_transaction(&drone_addr, &config_payer.id.pubkey(), 50, last_id)
+                .unwrap();
+        send_and_confirm_tx(&rpc_addr, &transaction).unwrap();
 
         // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
         config_payer.command = WalletCommand::Pay(
@@ -1568,21 +1553,21 @@ mod tests {
             .expect("base58-encoded public key");
         let process_id = Pubkey::new(&process_id_vec);
 
-        let params = json!(format!("{}", config_payer.id.pubkey()));
+        let params = json!([format!("{}", config_payer.id.pubkey())]);
         let config_payer_balance = RpcRequest::GetBalance
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
-        let params = json!(format!("{}", process_id));
+        let params = json!([format!("{}", process_id)]);
         let contract_balance = RpcRequest::GetBalance
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(contract_balance, 11);
-        let params = json!(format!("{}", bob_pubkey));
+        let params = json!([format!("{}", bob_pubkey)]);
         let recipient_balance = RpcRequest::GetBalance
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
@@ -1595,21 +1580,21 @@ mod tests {
         let sig_response = process_command(&config_payer);
         assert!(sig_response.is_ok());
 
-        let params = json!(format!("{}", config_payer.id.pubkey()));
+        let params = json!([format!("{}", config_payer.id.pubkey())]);
         let config_payer_balance = RpcRequest::GetBalance
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(config_payer_balance, 49);
-        let params = json!(format!("{}", process_id));
+        let params = json!([format!("{}", process_id)]);
         let contract_balance = RpcRequest::GetBalance
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(contract_balance, 1);
-        let params = json!(format!("{}", bob_pubkey));
+        let params = json!([format!("{}", bob_pubkey)]);
         let recipient_balance = RpcRequest::GetBalance
             .make_rpc_request(&rpc_addr, 1, Some(params))
             .unwrap()

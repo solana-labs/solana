@@ -12,15 +12,12 @@ usage() {
     echo "$*"
     echo
   fi
-  echo "usage: $0 [network entry point]"
+  echo "usage: $0]"
   echo
-  echo " Run an airdrop drone for the specified network"
+  echo " Run an airdrop drone"
   echo
   exit 1
 }
-
-read -r _ leader_address shift < <(find_leader "${@:1:1}")
-shift "$shift"
 
 [[ -f "$SOLANA_CONFIG_PRIVATE_DIR"/mint.json ]] || {
   echo "$SOLANA_CONFIG_PRIVATE_DIR/mint.json not found, create it by running:"
@@ -34,7 +31,6 @@ set -ex
 trap 'kill "$pid" && wait "$pid"' INT TERM
 $solana_drone \
   --keypair "$SOLANA_CONFIG_PRIVATE_DIR"/mint.json \
-  --network "$leader_address" \
   > >($drone_logger) 2>&1 &
 pid=$!
 wait "$pid"
