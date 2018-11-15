@@ -46,14 +46,12 @@ for program in programs/native/*; do
   )
 done
 
-# Run program/native/bpf_loader's test and bench with bpf_c feature
+# Run program/native/bpf_loader's test with bpf_c feature
 (
   set -x
   cd "programs/native/bpf_loader"
   echo --- program/native/bpf_loader test --features=bpf_c
   cargo test --verbose --features="bpf_c"
-  echo --- program/native/bpf_loader bench --features=bpf_c
-  cargo +nightly bench --verbose --features="bpf_c" -- --nocapture
 )
 
 # Build the HTML

@@ -20,7 +20,6 @@ RUN set -x && \
       rsync \
       sudo \
       && \
-    rustup toolchain install nightly && \
     rustup component add rustfmt-preview && \
     rustup component add clippy-preview && \
     rm -rf /var/lib/apt/lists/* && \
