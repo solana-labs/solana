@@ -15,8 +15,11 @@ use result::{Error, Result};
 use rpc_request::RpcRequest;
 use serde_json;
 use signature::{Keypair, Signature};
+use solana_metrics;
+use solana_metrics::influxdb;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::timing;
 use std;
 use std::collections::HashMap;
 use std::io;
@@ -27,11 +30,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::time::Instant;
 use system_transaction::SystemTransaction;
-use timing;
 use transaction::Transaction;
-
-use influx_db_client as influxdb;
-use metrics;
 
 /// An object for querying and sending transactions to the network.
 pub struct ThinClient {
@@ -109,7 +108,7 @@ impl ThinClient {
         let now = Instant::now();
         let tx = Transaction::system_new(keypair, to, n, *last_id);
         let result = self.transfer_signed(&tx);
-        metrics::submit(
+        solana_metrics::submit(
             influxdb::Point::new("thinclient")
                 .add_tag("op", influxdb::Value::String("transfer".to_string()))
                 .add_field(
@@ -226,7 +225,7 @@ impl ThinClient {
     }
 
     pub fn submit_poll_balance_metrics(elapsed: &Duration) {
-        metrics::submit(
+        solana_metrics::submit(
             influxdb::Point::new("thinclient")
                 .add_tag("op", influxdb::Value::String("get_balance".to_string()))
                 .add_field(
@@ -302,7 +301,7 @@ impl ThinClient {
                 }
             }
         }
-        metrics::submit(
+        solana_metrics::submit(
             influxdb::Point::new("thinclient")
                 .add_tag("op", influxdb::Value::String("check_signature".to_string()))
                 .add_field(
@@ -316,7 +315,7 @@ impl ThinClient {
 
 impl Drop for ThinClient {
     fn drop(&mut self) {
-        metrics::flush();
+        solana_metrics::flush();
     }
 }
 

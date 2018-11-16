@@ -19,7 +19,7 @@ if [[ -n $CI ]]; then
 fi
 
 # shellcheck disable=2044 # Disable 'For loops over find output are fragile...'
-for Cargo_toml in {sdk,programs/native/{bpf_loader,lua_loader,noop},.}/Cargo.toml; do
+for Cargo_toml in {sdk,metrics,programs/native/{bpf_loader,lua_loader,noop},.}/Cargo.toml; do
   # TODO: Ensure the published version matches the contents of BUILDKITE_TAG
   (
     set -x

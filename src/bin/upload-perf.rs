@@ -1,9 +1,9 @@
-extern crate influx_db_client;
 extern crate serde_json;
 extern crate solana;
-use influx_db_client as influxdb;
+extern crate solana_metrics;
+
 use serde_json::Value;
-use solana::metrics;
+use solana_metrics::influxdb;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
@@ -16,7 +16,7 @@ fn get_last_metrics(metric: &str, db: &str, name: &str, branch: &str) -> Result<
         metric, db, name, branch
     );
 
-    let response = metrics::query(&query)?;
+    let response = solana_metrics::query(&query)?;
 
     match serde_json::from_str(&response) {
         Result::Ok(v) => {
@@ -69,7 +69,7 @@ fn main() {
                 let median = v["median"].to_string().parse().unwrap();
                 let deviation = v["deviation"].to_string().parse().unwrap();
                 if upload_metrics {
-                    metrics::submit(
+                    solana_metrics::submit(
                         influxdb::Point::new(&v["name"].as_str().unwrap().trim_matches('\"'))
                             .add_tag("test", influxdb::Value::String("bench".to_string()))
                             .add_tag("branch", influxdb::Value::String(branch.to_string()))
@@ -112,5 +112,5 @@ fn main() {
             println!("{}, {}, {}", entry, values.0, values.1);
         }
     }
-    metrics::flush();
+    solana_metrics::flush();
 }

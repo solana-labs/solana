@@ -1,8 +1,8 @@
 use rpc::RPC_PORT;
 use signature::{Keypair, KeypairUtil};
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::timing::timestamp;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use timing::timestamp;
 
 /// Structure representing a node on the network
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

@@ -7,11 +7,11 @@ use ledger::LedgerWriter;
 use log::Level;
 use result::{Error, Result};
 use service::Service;
+use solana_sdk::timing::duration_as_ms;
 use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{channel, RecvTimeoutError};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::{Duration, Instant};
-use timing::duration_as_ms;
 
 pub struct LedgerWriteStage {
     write_thread: JoinHandle<()>,

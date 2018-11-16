@@ -6,6 +6,7 @@ extern crate log;
 extern crate serde_json;
 #[macro_use]
 extern crate solana;
+extern crate solana_metrics;
 
 use clap::{App, Arg};
 use solana::client::mk_client;
@@ -13,7 +14,6 @@ use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use solana::fullnode::{Config, Fullnode, FullnodeReturnType};
 use solana::leader_scheduler::LeaderScheduler;
 use solana::logger;
-use solana::metrics::set_panic_hook;
 use solana::netutil::find_available_port_in_range;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::thin_client::poll_gossip_for_leader;
@@ -28,7 +28,7 @@ use std::time::Duration;
 
 fn main() {
     logger::setup();
-    set_panic_hook("fullnode");
+    solana_metrics::set_panic_hook("fullnode");
     let matches = App::new("fullnode")
         .version(crate_version!())
         .arg(

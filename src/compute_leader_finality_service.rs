@@ -3,16 +3,16 @@
 //! observed by the leader
 
 use bank::Bank;
-use influx_db_client as influxdb;
-use metrics;
+
 use service::Service;
+use solana_metrics::{influxdb, submit};
+use solana_sdk::timing;
 use std::result;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
-use timing;
 use vote_program::VoteProgram;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -72,7 +72,7 @@ impl ComputeLeaderFinalityService {
         }
 
         if last_valid_validator_timestamp != 0 {
-            metrics::submit(
+            submit(
                 influxdb::Point::new(&"leader-finality")
                     .add_field(
                         "duration_ms",
@@ -94,7 +94,7 @@ impl ComputeLeaderFinalityService {
             *last_valid_validator_timestamp = super_majority_timestamp;
             bank.set_finality((now - *last_valid_validator_timestamp) as usize);
 
-            metrics::submit(
+            submit(
                 influxdb::Point::new(&"leader-finality")
                     .add_field("duration_ms", influxdb::Value::Integer(finality_ms as i64))
                     .to_owned(),

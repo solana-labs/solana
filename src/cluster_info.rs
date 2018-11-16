@@ -30,6 +30,7 @@ use result::Result;
 use rpc::RPC_PORT;
 use signature::{Keypair, KeypairUtil};
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::timing::{duration_as_ms, timestamp};
 use std::collections::HashMap;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
@@ -38,7 +39,6 @@ use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 use streamer::{BlobReceiver, BlobSender};
-use timing::{duration_as_ms, timestamp};
 use window::{SharedWindow, WindowIndex};
 
 pub type NodeInfo = ContactInfo;

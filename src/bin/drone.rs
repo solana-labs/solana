@@ -6,6 +6,7 @@ extern crate clap;
 extern crate log;
 extern crate serde_json;
 extern crate solana;
+extern crate solana_metrics;
 extern crate tokio;
 extern crate tokio_codec;
 
@@ -15,7 +16,6 @@ use bytes::Bytes;
 use clap::{App, Arg};
 use solana::drone::{Drone, DroneRequest, DRONE_PORT};
 use solana::logger;
-use solana::metrics::set_panic_hook;
 use solana::signature::read_keypair;
 use std::error;
 use std::io;
@@ -38,7 +38,7 @@ macro_rules! socketaddr {
 
 fn main() -> Result<(), Box<error::Error>> {
     logger::setup();
-    set_panic_hook("drone");
+    solana_metrics::set_panic_hook("drone");
     let matches = App::new("drone")
         .version(crate_version!())
         .arg(

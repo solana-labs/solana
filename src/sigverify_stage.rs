@@ -6,21 +6,21 @@
 //! if the `cuda` feature is enabled with `--features=cuda`.
 
 use counter::Counter;
-use influx_db_client as influxdb;
+
 use log::Level;
-use metrics;
 use packet::SharedPackets;
 use rand::{thread_rng, Rng};
 use result::{Error, Result};
 use service::Service;
 use sigverify;
+use solana_metrics::{influxdb, submit};
+use solana_sdk::timing;
 use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, spawn, JoinHandle};
 use std::time::Instant;
 use streamer::{self, PacketReceiver};
-use timing;
 
 pub type VerifiedPackets = Vec<(SharedPackets, Vec<u8>)>;
 
@@ -99,7 +99,7 @@ impl SigVerifyStage {
             (len as f32 / total_time_s)
         );
 
-        metrics::submit(
+        submit(
             influxdb::Point::new("sigverify_stage-total_verify_time")
                 .add_field("batch_len", influxdb::Value::Integer(batch_len as i64))
                 .add_field("len", influxdb::Value::Integer(len as i64))

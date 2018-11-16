@@ -1,8 +1,7 @@
-use influx_db_client as influxdb;
-use metrics;
+use solana_metrics::{influxdb, submit};
+use solana_sdk::timing;
 use std::env;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use timing;
 
 const DEFAULT_LOG_RATE: usize = 1000;
 
@@ -84,7 +83,7 @@ impl Counter {
             .lastlog
             .compare_and_swap(lastlog, counts, Ordering::Relaxed);
         if prev == lastlog {
-            metrics::submit(
+            submit(
                 influxdb::Point::new(&format!("counter-{}", self.name))
                     .add_field(
                         "count",

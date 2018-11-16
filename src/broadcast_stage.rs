@@ -5,22 +5,22 @@ use counter::Counter;
 use entry::Entry;
 #[cfg(feature = "erasure")]
 use erasure;
-use influx_db_client as influxdb;
+
 use ledger::Block;
 use log::Level;
-use metrics;
 use packet::{index_blobs, SharedBlobs};
 use rayon::prelude::*;
 use result::{Error, Result};
 use service::Service;
+use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::{Duration, Instant};
-use timing::duration_as_ms;
 use window::{SharedWindow, WindowIndex, WindowUtil};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -162,7 +162,7 @@ fn broadcast(
         num_entries, to_blobs_elapsed, chunking_elapsed, broadcast_elapsed
     );
 
-    metrics::submit(
+    submit(
         influxdb::Point::new("broadcast-stage")
             .add_field(
                 "transmit-index",

@@ -48,7 +48,6 @@ pub mod ledger;
 pub mod ledger_write_stage;
 pub mod loader_transaction;
 pub mod logger;
-pub mod metrics;
 pub mod mint;
 pub mod native_loader;
 pub mod ncp;
@@ -78,7 +77,6 @@ pub mod streamer;
 pub mod system_program;
 pub mod system_transaction;
 pub mod thin_client;
-pub mod timing;
 pub mod token_program;
 pub mod tpu;
 pub mod transaction;
@@ -130,17 +128,15 @@ extern crate solana_jsonrpc_http_server as jsonrpc_http_server;
 extern crate solana_jsonrpc_macros as jsonrpc_macros;
 extern crate solana_jsonrpc_pubsub as jsonrpc_pubsub;
 extern crate solana_jsonrpc_ws_server as jsonrpc_ws_server;
+extern crate solana_metrics;
 extern crate solana_sdk;
 extern crate sys_info;
 extern crate tokio;
 extern crate tokio_codec;
 extern crate untrusted;
-#[macro_use]
-extern crate lazy_static;
 
 #[cfg(test)]
 #[macro_use]
 extern crate matches;
 
-extern crate influx_db_client;
 extern crate rand;
