@@ -1207,7 +1207,7 @@ mod tests {
         );
         assert!(!rv.is_empty());
 
-        remove_dir_all(ledger_path).unwrap();
+        let _ignored = remove_dir_all(ledger_path);
     }
 
     /// test window requests respond with the right blob, and do not overrun

@@ -1007,6 +1007,6 @@ mod tests {
         // Shut down
         t_responder.join().expect("responder thread join");
         validator.close().unwrap();
-        remove_dir_all(&validator_ledger_path).unwrap();
+        let _ignored = remove_dir_all(&validator_ledger_path);
     }
 }

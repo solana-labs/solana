@@ -827,7 +827,7 @@ mod tests {
         assert!(LedgerWindow::open(&ledger_path).is_err());
         assert!(read_ledger(&ledger_path, false).is_err());
 
-        std::fs::remove_dir_all(ledger_path).unwrap();
+        let _ignored = std::fs::remove_dir_all(ledger_path);
     }
 
     fn truncated_last_entry(ledger_path: &str, entries: Vec<Entry>) {
