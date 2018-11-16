@@ -10,7 +10,6 @@ use solana::blob_fetch_stage::BlobFetchStage;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
 use solana::entry::{reconstruct_entries_from_blobs, Entry};
 use solana::fullnode::{Fullnode, FullnodeReturnType};
-use solana::hash::Hash;
 use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
 use solana::ledger::{
     create_tmp_genesis, create_tmp_sample_ledger, get_tmp_ledger_path, read_ledger, LedgerWindow,
@@ -28,6 +27,7 @@ use solana::system_transaction::SystemTransaction;
 use solana::thin_client::{retry_get_balance, ThinClient};
 use solana::transaction::Transaction;
 use solana::window::default_window;
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{duration_as_ms, duration_as_s};
 use std::collections::{HashSet, VecDeque};

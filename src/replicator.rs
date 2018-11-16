@@ -1,9 +1,9 @@
 use blob_fetch_stage::BlobFetchStage;
 use cluster_info::{ClusterInfo, Node, NodeInfo};
-use hash::{Hash, Hasher};
 use leader_scheduler::LeaderScheduler;
 use ncp::Ncp;
 use service::Service;
+use solana_sdk::hash::{Hash, Hasher};
 use std::fs::File;
 use std::io;
 use std::io::BufReader;
@@ -168,13 +168,13 @@ mod tests {
     use client::mk_client;
     use cluster_info::Node;
     use fullnode::Fullnode;
-    use hash::Hash;
     use leader_scheduler::LeaderScheduler;
     use ledger::{create_tmp_genesis, get_tmp_ledger_path, read_ledger};
     use logger;
     use replicator::sample_file;
     use replicator::Replicator;
     use signature::{Keypair, KeypairUtil};
+    use solana_sdk::hash::Hash;
     use std::fs::File;
     use std::fs::{create_dir_all, remove_dir_all, remove_file};
     use std::io::Write;

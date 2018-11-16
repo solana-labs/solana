@@ -324,10 +324,11 @@ pub fn make_packet_from_transaction(tx: Transaction) -> Packet {
 mod tests {
     use bincode::serialize;
     use budget_program::BudgetState;
-    use hash::Hash;
     use packet::{Packet, SharedPackets};
     use signature::{Keypair, KeypairUtil};
     use sigverify;
+    use solana_sdk::hash::Hash;
+    use solana_sdk::system_instruction::SystemInstruction;
     use system_program::SystemProgram;
     use system_transaction::{memfind, test_tx};
     use transaction;
@@ -426,7 +427,7 @@ mod tests {
 
         let keys = vec![keypair0.pubkey(), keypair1.pubkey()];
 
-        let system_instruction = SystemProgram::Move { tokens };
+        let system_instruction = SystemInstruction::Move { tokens };
 
         let program_ids = vec![SystemProgram::id(), BudgetState::id()];
 

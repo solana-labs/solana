@@ -1,5 +1,5 @@
 use bloom::BloomHashIndex;
-use hash::Hash;
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 
 fn slice_hash(slice: &[u8], hash_index: u64) -> u64 {

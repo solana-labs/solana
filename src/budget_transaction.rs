@@ -5,11 +5,11 @@ use budget_expr::{BudgetExpr, Condition};
 use budget_instruction::Instruction;
 use budget_program::BudgetState;
 use chrono::prelude::*;
-use hash::Hash;
 use payment_plan::Payment;
 use signature::{Keypair, KeypairUtil};
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use system_program::SystemProgram;
+use solana_sdk::system_instruction::{SystemInstruction, SYSTEM_PROGRAM_ID};
 use transaction::{self, Transaction};
 
 pub trait BudgetTransaction {
@@ -60,7 +60,7 @@ pub trait BudgetTransaction {
     ) -> Self;
 
     fn instruction(&self, program_index: usize) -> Option<Instruction>;
-    fn system_instruction(&self, program_index: usize) -> Option<SystemProgram>;
+    fn system_instruction(&self, program_index: usize) -> Option<SystemInstruction>;
 
     fn verify_plan(&self) -> bool;
 }
@@ -77,7 +77,7 @@ impl BudgetTransaction for Transaction {
         let contract = Keypair::new().pubkey();
         let keys = vec![from_keypair.pubkey(), contract];
 
-        let system_instruction = SystemProgram::Move { tokens };
+        let system_instruction = SystemInstruction::Move { tokens };
 
         let payment = Payment {
             tokens: tokens - fee,
@@ -85,7 +85,7 @@ impl BudgetTransaction for Transaction {
         };
         let budget_instruction = Instruction::NewBudget(BudgetExpr::Pay(payment));
 
-        let program_ids = vec![SystemProgram::id(), BudgetState::id()];
+        let program_ids = vec![Pubkey::new(&SYSTEM_PROGRAM_ID), BudgetState::id()];
 
         let instructions = vec![
             transaction::Instruction::new(0, &system_instruction, vec![0, 1]),
@@ -206,13 +206,13 @@ impl BudgetTransaction for Transaction {
         deserialize(&self.userdata(instruction_index)).ok()
     }
 
-    fn system_instruction(&self, instruction_index: usize) -> Option<SystemProgram> {
+    fn system_instruction(&self, instruction_index: usize) -> Option<SystemInstruction> {
         deserialize(&self.userdata(instruction_index)).ok()
     }
 
     /// Verify only the payment plan.
     fn verify_plan(&self) -> bool {
-        if let Some(SystemProgram::Move { tokens }) = self.system_instruction(0) {
+        if let Some(SystemInstruction::Move { tokens }) = self.system_instruction(0) {
             if let Some(Instruction::NewBudget(expr)) = self.instruction(1) {
                 if !(self.fee <= tokens && expr.verify(tokens - self.fee)) {
                     return false;
@@ -284,7 +284,7 @@ mod tests {
         let pubkey = keypair.pubkey();
         let mut tx = Transaction::budget_new(&keypair, pubkey, 42, zero);
         let mut system_instruction = tx.system_instruction(0).unwrap();
-        if let SystemProgram::Move { ref mut tokens } = system_instruction {
+        if let SystemInstruction::Move { ref mut tokens } = system_instruction {
             *tokens = 1_000_000; // <-- attack, part 1!
             let mut instruction = tx.instruction(1).unwrap();
             if let Instruction::NewBudget(ref mut expr) = instruction {

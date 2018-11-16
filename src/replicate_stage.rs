@@ -4,7 +4,7 @@ use bank::Bank;
 use cluster_info::ClusterInfo;
 use counter::Counter;
 use entry::{EntryReceiver, EntrySender};
-use hash::Hash;
+use solana_sdk::hash::Hash;
 
 use ledger::Block;
 use log::Level;
@@ -246,7 +246,6 @@ mod test {
     use cluster_info::{ClusterInfo, Node};
     use entry::Entry;
     use fullnode::Fullnode;
-    use hash::Hash;
     use leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
     use ledger::{create_ticks, create_tmp_sample_ledger, LedgerWriter};
     use logger;
@@ -255,6 +254,7 @@ mod test {
     use result::Error;
     use service::Service;
     use signature::{Keypair, KeypairUtil};
+    use solana_sdk::hash::Hash;
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;

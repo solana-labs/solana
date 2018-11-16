@@ -3,6 +3,7 @@
 use bincode::deserialize;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::system_instruction::SystemInstruction;
 use std;
 use transaction::Transaction;
 
@@ -22,30 +23,7 @@ impl std::error::Error for Error {}
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum SystemProgram {
-    /// Create a new account
-    /// * Transaction::keys[0] - source
-    /// * Transaction::keys[1] - new account key
-    /// * tokens - number of tokens to transfer to the new account
-    /// * space - memory to allocate if greater then zero
-    /// * program_id - the program id of the new account
-    CreateAccount {
-        tokens: u64,
-        space: u64,
-        program_id: Pubkey,
-    },
-    /// Assign account to a program
-    /// * Transaction::keys[0] - account to assign
-    Assign { program_id: Pubkey },
-    /// Move tokens
-    /// * Transaction::keys[0] - source
-    /// * Transaction::keys[1] - destination
-    Move { tokens: u64 },
-
-    /// Spawn a new program from an account
-    Spawn,
-}
+pub struct SystemProgram {}
 
 pub const SYSTEM_PROGRAM_ID: [u8; 32] = [0u8; 32];
 
@@ -68,7 +46,7 @@ impl SystemProgram {
         if let Ok(syscall) = deserialize(tx.userdata(pix)) {
             trace!("process_transaction: {:?}", syscall);
             match syscall {
-                SystemProgram::CreateAccount {
+                SystemInstruction::CreateAccount {
                     tokens,
                     space,
                     program_id,
@@ -95,13 +73,13 @@ impl SystemProgram {
                     accounts[1].executable = false;
                     accounts[1].loader = Pubkey::default();
                 }
-                SystemProgram::Assign { program_id } => {
+                SystemInstruction::Assign { program_id } => {
                     if !Self::check_id(&accounts[0].owner) {
                         Err(Error::AssignOfUnownedAccount)?;
                     }
                     accounts[0].owner = program_id;
                 }
-                SystemProgram::Move { tokens } => {
+                SystemInstruction::Move { tokens } => {
                     //bank should be verifying correctness
                     if tokens > accounts[0].tokens {
                         info!("Insufficient tokens in account[0]");
@@ -110,7 +88,7 @@ impl SystemProgram {
                     accounts[0].tokens -= tokens;
                     accounts[1].tokens += tokens;
                 }
-                SystemProgram::Spawn => {
+                SystemInstruction::Spawn => {
                     if !accounts[0].executable || accounts[0].loader != Pubkey::default() {
                         Err(Error::AccountNotFinalized)?;
                     }
@@ -128,9 +106,9 @@ impl SystemProgram {
 #[cfg(test)]
 mod test {
     use super::*;
-    use hash::Hash;
     use signature::{Keypair, KeypairUtil};
     use solana_sdk::account::Account;
+    use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
     use system_program::SystemProgram;
     use system_transaction::SystemTransaction;

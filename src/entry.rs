@@ -3,10 +3,10 @@
 //! transactions within it. Entries cannot be reordered, and its field `num_hashes`
 //! represents an approximate amount of time since the last Entry was created.
 use bincode::{deserialize, serialize_into, serialized_size};
-use hash::Hash;
 use packet::{SharedBlob, BLOB_DATA_SIZE};
 use poh::Poh;
 use result::Result;
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::io::Cursor;
 use std::mem::size_of;
@@ -275,8 +275,8 @@ mod tests {
     use budget_transaction::BudgetTransaction;
     use chrono::prelude::*;
     use entry::Entry;
-    use hash::hash;
     use signature::{Keypair, KeypairUtil};
+    use solana_sdk::hash::hash;
     use system_transaction::SystemTransaction;
     use transaction::Transaction;
 

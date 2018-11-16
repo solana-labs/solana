@@ -254,9 +254,9 @@ mod test {
     use budget_program::{BudgetError, BudgetState};
     use budget_transaction::BudgetTransaction;
     use chrono::prelude::{DateTime, NaiveDate, Utc};
-    use hash::Hash;
     use signature::{GenKeys, Keypair, KeypairUtil};
     use solana_sdk::account::Account;
+    use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
     use transaction::Transaction;
 

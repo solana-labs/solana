@@ -36,13 +36,11 @@ pub mod budget_program;
 pub mod cluster_info;
 pub mod compute_leader_finality_service;
 pub mod db_ledger;
-pub mod drone;
 pub mod entry;
 #[cfg(feature = "erasure")]
 pub mod erasure;
 pub mod fetch_stage;
 pub mod fullnode;
-pub mod hash;
 pub mod leader_scheduler;
 pub mod ledger;
 pub mod ledger_write_stage;
@@ -122,6 +120,7 @@ extern crate serde_json;
 extern crate serde_cbor;
 extern crate sha2;
 extern crate socket2;
+extern crate solana_drone;
 extern crate solana_jsonrpc_core as jsonrpc_core;
 extern crate solana_jsonrpc_http_server as jsonrpc_http_server;
 #[macro_use]

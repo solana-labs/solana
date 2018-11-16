@@ -5,13 +5,14 @@ use counter::Counter;
 #[cfg(test)]
 use entry::Entry;
 #[cfg(test)]
-use hash::Hash;
-#[cfg(test)]
 use ledger::Block;
 use log::Level;
 use recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
 use result::{Error, Result};
 use serde::Serialize;
+#[cfg(test)]
+use solana_sdk::hash::Hash;
+pub use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
 use std::fmt;
 use std::io;
@@ -27,7 +28,6 @@ pub type SharedBlobs = Vec<SharedBlob>;
 pub const NUM_PACKETS: usize = 1024 * 8;
 pub const BLOB_SIZE: usize = (64 * 1024 - 128); // wikipedia says there should be 20b for ipv4 headers
 pub const BLOB_DATA_SIZE: usize = BLOB_SIZE - (BLOB_HEADER_SIZE * 2);
-pub const PACKET_DATA_SIZE: usize = 512;
 pub const NUM_BLOBS: usize = (NUM_PACKETS * PACKET_DATA_SIZE) / BLOB_SIZE;
 
 #[derive(Clone, Default, Debug, PartialEq)]
@@ -457,12 +457,12 @@ pub fn make_consecutive_blobs(
 
 #[cfg(test)]
 mod tests {
-    use hash::Hash;
     use packet::{
         to_packets, Blob, Meta, Packet, Packets, SharedBlob, SharedPackets, NUM_PACKETS,
         PACKET_DATA_SIZE,
     };
     use signature::{Keypair, KeypairUtil};
+    use solana_sdk::hash::Hash;
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;

@@ -354,10 +354,10 @@ pub fn window_service(
 mod test {
     use cluster_info::{ClusterInfo, Node};
     use entry::Entry;
-    use hash::Hash;
     use leader_scheduler::LeaderScheduler;
     use logger;
     use packet::{make_consecutive_blobs, SharedBlob, PACKET_DATA_SIZE};
+    use solana_sdk::hash::Hash;
     use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::{channel, Receiver};

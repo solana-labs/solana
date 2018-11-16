@@ -7,7 +7,6 @@ use bank::Bank;
 use bincode::serialize;
 use bs58;
 use cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
-use hash::Hash;
 use log::Level;
 use ncp::Ncp;
 use packet::PACKET_DATA_SIZE;
@@ -18,6 +17,7 @@ use signature::{Keypair, Signature};
 use solana_metrics;
 use solana_metrics::influxdb;
 use solana_sdk::account::Account;
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
 use std;
@@ -417,8 +417,8 @@ mod tests {
     use logger;
     use mint::Mint;
     use signature::{Keypair, KeypairUtil};
+    use solana_sdk::system_instruction::SystemInstruction;
     use std::fs::remove_dir_all;
-    use system_program::SystemProgram;
     use vote_program::VoteProgram;
     use vote_transaction::VoteTransaction;
 
@@ -520,7 +520,7 @@ mod tests {
 
         let mut tr2 = Transaction::system_new(&alice.keypair(), bob_pubkey, 501, last_id);
         let mut instruction2 = deserialize(tr2.userdata(0)).unwrap();
-        if let SystemProgram::Move { ref mut tokens } = instruction2 {
+        if let SystemInstruction::Move { ref mut tokens } = instruction2 {
             *tokens = 502;
         }
         tr2.instructions[0].userdata = serialize(&instruction2).unwrap();

@@ -8,6 +8,7 @@ extern crate log;
 extern crate serde_json;
 #[macro_use]
 extern crate solana;
+extern crate solana_drone;
 extern crate solana_metrics;
 extern crate solana_sdk;
 
@@ -17,8 +18,6 @@ use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana::client::mk_client;
 use solana::cluster_info::{ClusterInfo, NodeInfo};
-use solana::drone::{request_airdrop_transaction, DRONE_PORT};
-use solana::hash::Hash;
 use solana::logger;
 use solana::ncp::Ncp;
 use solana::service::Service;
@@ -27,7 +26,9 @@ use solana::system_transaction::SystemTransaction;
 use solana::thin_client::{poll_gossip_for_leader, ThinClient};
 use solana::transaction::Transaction;
 use solana::window::default_window;
+use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
 use solana_metrics::influxdb;
+use solana_sdk::hash::Hash;
 use solana_sdk::timing::timestamp;
 use solana_sdk::timing::{duration_as_ms, duration_as_s};
 use std::cmp;

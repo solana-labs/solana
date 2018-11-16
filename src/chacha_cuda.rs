@@ -1,7 +1,7 @@
 use chacha::{CHACHA_BLOCK_SIZE, CHACHA_KEY_SIZE};
-use hash::Hash;
 use ledger::LedgerWindow;
 use sigverify::{chacha_cbc_encrypt_many_sample, chacha_end_sha_state, chacha_init_sha_state};
+use solana_sdk::hash::Hash;
 use std::io;
 use std::mem::size_of;
 
@@ -102,10 +102,10 @@ pub fn chacha_cbc_encrypt_file_many_keys(
 mod tests {
     use chacha::chacha_cbc_encrypt_file;
     use chacha_cuda::chacha_cbc_encrypt_file_many_keys;
-    use hash::Hash;
     use ledger::LedgerWriter;
     use ledger::{get_tmp_ledger_path, make_tiny_test_entries, LEDGER_DATA_FILE};
     use replicator::sample_file;
+    use solana_sdk::hash::Hash;
     use std::fs::{remove_dir_all, remove_file};
     use std::path::Path;
 

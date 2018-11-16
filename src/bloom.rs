@@ -59,7 +59,7 @@ impl<T: BloomHashIndex> Bloom<T> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use hash::{hash, Hash};
+    use solana_sdk::hash::{hash, Hash};
 
     #[test]
     fn test_bloom_filter() {

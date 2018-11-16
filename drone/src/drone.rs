@@ -7,13 +7,14 @@
 use bincode::{deserialize, serialize};
 use byteorder::{ByteOrder, LittleEndian};
 use bytes::Bytes;
-use hash::Hash;
-
-use packet::PACKET_DATA_SIZE;
-use signature::Keypair;
 use solana_metrics;
 use solana_metrics::influxdb;
+use solana_sdk::hash::Hash;
+use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::Keypair;
+use solana_sdk::system_instruction::{SystemInstruction, SYSTEM_PROGRAM_ID};
+use solana_sdk::transaction::Transaction;
 use std::io;
 use std::io::{Error, ErrorKind};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
@@ -21,12 +22,21 @@ use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use system_transaction::SystemTransaction;
 use tokio;
 use tokio::net::TcpListener;
 use tokio::prelude::*;
 use tokio_codec::{BytesCodec, Decoder};
-use transaction::Transaction;
+
+#[macro_export]
+macro_rules! socketaddr {
+    ($ip:expr, $port:expr) => {
+        SocketAddr::from((Ipv4Addr::from($ip), $port))
+    };
+    ($str:expr) => {{
+        let a: SocketAddr = $str.parse().unwrap();
+        a
+    }};
+}
 
 pub const TIME_SLICE: u64 = 60;
 pub const REQUEST_CAP: u64 = 500_000_000;
@@ -124,9 +134,23 @@ impl Drone {
                     );
 
                     info!("Requesting airdrop of {} to {:?}", tokens, to);
-                    let mut tx = Transaction::system_new(&self.mint_keypair, to, tokens, last_id);
-                    tx.sign(&[&self.mint_keypair], last_id);
-                    Ok(tx)
+
+                    let create_instruction = SystemInstruction::CreateAccount {
+                        tokens,
+                        space: 0,
+                        program_id: Pubkey::default(),
+                    };
+                    let mut transaction = Transaction::new(
+                        &self.mint_keypair,
+                        &[to],
+                        Pubkey::new(&SYSTEM_PROGRAM_ID),
+                        &create_instruction,
+                        last_id,
+                        0, /*fee*/
+                    );
+
+                    transaction.sign(&[&self.mint_keypair], last_id);
+                    Ok(transaction)
                 } else {
                     Err(Error::new(ErrorKind::Other, "token limit reached"))
                 }
@@ -276,7 +300,7 @@ mod tests {
     use logger;
     use mint::Mint;
     use netutil::get_ip_addr;
-    use signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
     use std::net::{SocketAddr, UdpSocket};
     use std::sync::{Arc, RwLock};

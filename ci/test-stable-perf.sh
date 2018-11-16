@@ -25,6 +25,7 @@ _() {
 }
 
 FEATURES=cuda,erasure,chacha
+_ cargo build --all --verbose --features="$FEATURES"
 _ cargo test --verbose --features="$FEATURES" --lib
 
 # Run integration tests serially

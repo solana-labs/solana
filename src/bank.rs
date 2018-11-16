@@ -9,7 +9,6 @@ use bpf_loader;
 use budget_program::BudgetState;
 use counter::Counter;
 use entry::Entry;
-use hash::{hash, Hash};
 use itertools::Itertools;
 use jsonrpc_macros::pubsub::Sink;
 use leader_scheduler::LeaderScheduler;
@@ -25,7 +24,9 @@ use rpc::RpcSignatureStatus;
 use signature::Keypair;
 use signature::Signature;
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
+use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::timing::{duration_as_us, timestamp};
 use std;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
@@ -1229,15 +1230,15 @@ impl Bank {
             let tx = &entry1.transactions[0];
             assert!(SystemProgram::check_id(tx.program_id(0)), "Invalid ledger");
             assert!(SystemProgram::check_id(tx.program_id(1)), "Invalid ledger");
-            let mut instruction: SystemProgram = deserialize(tx.userdata(0)).unwrap();
-            let mint_deposit = if let SystemProgram::Move { tokens } = instruction {
+            let mut instruction: SystemInstruction = deserialize(tx.userdata(0)).unwrap();
+            let mint_deposit = if let SystemInstruction::Move { tokens } = instruction {
                 Some(tokens)
             } else {
                 None
             }.expect("invalid ledger, needs to start with mint deposit");
 
             instruction = deserialize(tx.userdata(1)).unwrap();
-            let leader_payment = if let SystemProgram::Move { tokens } = instruction {
+            let leader_payment = if let SystemInstruction::Move { tokens } = instruction {
                 Some(tokens)
             } else {
                 None
@@ -1495,11 +1496,11 @@ mod tests {
     use budget_program::BudgetState;
     use entry::next_entry;
     use entry::Entry;
-    use hash::hash;
     use jsonrpc_macros::pubsub::{Subscriber, SubscriptionId};
     use ledger;
     use signature::Keypair;
     use signature::{GenKeys, KeypairUtil};
+    use solana_sdk::hash::hash;
     use std;
     use system_transaction::SystemTransaction;
     use tokio::prelude::{Async, Stream};
@@ -1573,7 +1574,7 @@ mod tests {
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&mint);
-        let spend = SystemProgram::Move { tokens: 1 };
+        let spend = SystemInstruction::Move { tokens: 1 };
         let instructions = vec![
             Instruction {
                 program_ids_index: 0,

@@ -25,7 +25,7 @@ maybe_install() {
 }
 
 _ cargo fmt -- --check
-_ cargo build --verbose
+_ cargo build --all --verbose
 _ cargo test --verbose --lib
 _ cargo clippy -- --deny=warnings || true
 
