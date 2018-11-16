@@ -170,8 +170,6 @@ pub fn find_available_port_in_range(range: (u16, u16)) -> io::Result<u16> {
     let mut tries_left = end - start;
     let mut rand_port = thread_rng().gen_range(start, end);
     loop {
-        eprintln!("trying port {}", rand_port);
-
         match TcpListener::bind(SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             rand_port,
