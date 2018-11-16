@@ -1,16 +1,16 @@
 //! The `streamer` module defines a set of services for efficiently pulling data from UDP sockets.
 //!
-use influx_db_client as influxdb;
-use metrics;
+
 use packet::{Blob, SharedBlobs, SharedPackets};
 use result::{Error, Result};
+use solana_metrics::{influxdb, submit};
+use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::Arc;
 use std::thread::{Builder, JoinHandle};
 use std::time::{Duration, Instant};
-use timing::duration_as_ms;
 
 pub type PacketReceiver = Receiver<SharedPackets>;
 pub type PacketSender = Sender<SharedPackets>;
@@ -33,7 +33,7 @@ fn recv_loop(
             }
             if msgs.write().unwrap().recv_from(sock).is_ok() {
                 let len = msgs.read().unwrap().packets.len();
-                metrics::submit(
+                submit(
                     influxdb::Point::new(channel_tag)
                         .add_field("count", influxdb::Value::Integer(len as i64))
                         .to_owned(),

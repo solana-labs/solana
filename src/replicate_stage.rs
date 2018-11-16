@@ -5,14 +5,15 @@ use cluster_info::ClusterInfo;
 use counter::Counter;
 use entry::{EntryReceiver, EntrySender};
 use hash::Hash;
-use influx_db_client as influxdb;
+
 use ledger::Block;
 use log::Level;
-use metrics;
 use packet::BlobError;
 use result::{Error, Result};
 use service::Service;
 use signature::{Keypair, KeypairUtil};
+use solana_metrics::{influxdb, submit};
+use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
@@ -22,7 +23,6 @@ use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
 use streamer::{responder, BlobSender};
-use timing::duration_as_ms;
 use vote_stage::send_validator_vote;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -73,7 +73,7 @@ impl ReplicateStage {
             entries.append(&mut more);
         }
 
-        metrics::submit(
+        submit(
             influxdb::Point::new("replicate-stage")
                 .add_field("count", influxdb::Value::Integer(entries.len() as i64))
                 .to_owned(),

@@ -15,6 +15,7 @@ use poh_service::{Config, PohService};
 use result::{Error, Result};
 use service::Service;
 use sigverify_stage::VerifiedPackets;
+use solana_sdk::timing;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
@@ -22,7 +23,6 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
-use timing;
 use transaction::Transaction;
 
 #[derive(Debug, PartialEq, Eq, Clone)]

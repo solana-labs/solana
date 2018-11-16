@@ -4,12 +4,12 @@ extern crate reqwest;
 
 use influx_db_client as influxdb;
 use rand;
+use solana_sdk::timing;
 use std::env;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Barrier, Mutex, Once, ONCE_INIT};
 use std::thread;
 use std::time::{Duration, Instant};
-use timing;
 
 lazy_static! {
     static ref HOST_ID: i64 = rand::random::<i64>();

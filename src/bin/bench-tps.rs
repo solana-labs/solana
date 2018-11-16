@@ -1,7 +1,6 @@
 extern crate bincode;
 #[macro_use]
 extern crate clap;
-extern crate influx_db_client;
 extern crate rand;
 extern crate rayon;
 #[macro_use]
@@ -9,9 +8,11 @@ extern crate log;
 extern crate serde_json;
 #[macro_use]
 extern crate solana;
+extern crate solana_metrics;
+extern crate solana_sdk;
 
 use clap::{App, Arg};
-use influx_db_client as influxdb;
+
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana::client::mk_client;
@@ -19,16 +20,16 @@ use solana::cluster_info::{ClusterInfo, NodeInfo};
 use solana::drone::{request_airdrop_transaction, DRONE_PORT};
 use solana::hash::Hash;
 use solana::logger;
-use solana::metrics;
 use solana::ncp::Ncp;
 use solana::service::Service;
 use solana::signature::{read_keypair, GenKeys, Keypair, KeypairUtil};
 use solana::system_transaction::SystemTransaction;
 use solana::thin_client::{poll_gossip_for_leader, ThinClient};
-use solana::timing::timestamp;
-use solana::timing::{duration_as_ms, duration_as_s};
 use solana::transaction::Transaction;
 use solana::window::default_window;
+use solana_metrics::influxdb;
+use solana_sdk::timing::timestamp;
+use solana_sdk::timing::{duration_as_ms, duration_as_s};
 use std::cmp;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
@@ -47,7 +48,7 @@ pub struct NodeStats {
 
 fn metrics_submit_token_balance(token_balance: u64) {
     println!("Token balance: {}", token_balance);
-    metrics::submit(
+    solana_metrics::submit(
         influxdb::Point::new("bench-tps")
             .add_tag("op", influxdb::Value::String("token_balance".to_string()))
             .add_field("balance", influxdb::Value::Integer(token_balance as i64))
@@ -134,7 +135,7 @@ fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash,
         if confirmatiom.is_ok() {
             println!("barrier transaction confirmed in {}ms", duration_ms);
 
-            metrics::submit(
+            solana_metrics::submit(
                 influxdb::Point::new("bench-tps")
                     .add_tag(
                         "op",
@@ -218,7 +219,7 @@ fn generate_txs(
         duration_as_ms(&duration),
         last_id,
     );
-    metrics::submit(
+    solana_metrics::submit(
         influxdb::Point::new("bench-tps")
             .add_tag("op", influxdb::Value::String("generate_txs".to_string()))
             .add_field(
@@ -274,7 +275,7 @@ fn do_tx_transfers(
                 duration_as_ms(&transfer_start.elapsed()),
                 tx_len as f32 / duration_as_s(&transfer_start.elapsed()),
             );
-            metrics::submit(
+            solana_metrics::submit(
                 influxdb::Point::new("bench-tps")
                     .add_tag("op", influxdb::Value::String("do_tx_transfers".to_string()))
                     .add_field(
@@ -498,7 +499,7 @@ fn should_switch_directions(num_tokens_per_account: u64, i: u64) -> bool {
 
 fn main() {
     logger::setup();
-    metrics::set_panic_hook("bench-tps");
+    solana_metrics::set_panic_hook("bench-tps");
 
     let matches = App::new("solana-bench-tps")
         .version(crate_version!())

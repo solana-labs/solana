@@ -81,7 +81,6 @@ env_logger = "0.5.12"
 generic-array = { version = "0.12.0", default-features = false, features = ["serde"] }
 getopts = "0.2"
 hex-literal = "0.1.1"
-influx_db_client = "0.3.6"
 solana-jsonrpc-core = "0.3.0"
 solana-jsonrpc-http-server = "0.3.0"
 solana-jsonrpc-macros = "0.3.0"
@@ -94,6 +93,7 @@ libc = "0.2.43"
 libloading = "0.5.0"
 log = "0.4.2"
 matches = "0.1.6"
+solana-metrics = { path = "metrics", version = "0.11.0" }
 nix = "0.11.0"
 pnet_datalink = "0.21.0"
 rand = "0.5.1"
@@ -112,7 +112,6 @@ sys-info = "0.5.6"
 tokio = "0.1"
 tokio-codec = "0.1"
 untrusted = "0.6.2"
-lazy_static = "1.2.0"
 solana-bpfloader = { path = "programs/native/bpf_loader", version = "0.11.0" }
 solana-erc20 = { path = "programs/native/erc20", version = "0.11.0" }
 solana-lualoader = { path = "programs/native/lua_loader", version = "0.11.0" }
@@ -140,6 +139,7 @@ name = "chacha"
 [workspace]
 members = [
     ".",
+    "metrics",
     "sdk",
     "programs/bpf/rust/noop",
     "programs/native/bpf_loader",

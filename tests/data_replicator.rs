@@ -2,6 +2,7 @@
 extern crate log;
 extern crate rayon;
 extern crate solana;
+extern crate solana_sdk;
 
 use rayon::iter::*;
 use solana::cluster_info::{ClusterInfo, Node};
@@ -10,7 +11,7 @@ use solana::ncp::Ncp;
 use solana::packet::{Blob, SharedBlob};
 use solana::result;
 use solana::service::Service;
-use solana::timing::timestamp;
+use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};

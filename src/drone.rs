@@ -8,10 +8,11 @@ use bincode::{deserialize, serialize};
 use byteorder::{ByteOrder, LittleEndian};
 use bytes::Bytes;
 use hash::Hash;
-use influx_db_client as influxdb;
-use metrics;
+
 use packet::PACKET_DATA_SIZE;
 use signature::Keypair;
+use solana_metrics;
+use solana_metrics::influxdb;
 use solana_sdk::pubkey::Pubkey;
 use std::io;
 use std::io::{Error, ErrorKind};
@@ -112,7 +113,7 @@ impl Drone {
             } => {
                 if self.check_request_limit(tokens) {
                     self.request_current += tokens;
-                    metrics::submit(
+                    solana_metrics::submit(
                         influxdb::Point::new("drone")
                             .add_tag("op", influxdb::Value::String("airdrop".to_string()))
                             .add_field("request_amount", influxdb::Value::Integer(tokens as i64))
@@ -136,7 +137,7 @@ impl Drone {
 
 impl Drop for Drone {
     fn drop(&mut self) {
-        metrics::flush();
+        solana_metrics::flush();
     }
 }
 

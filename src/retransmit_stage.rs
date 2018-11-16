@@ -3,12 +3,12 @@
 use cluster_info::ClusterInfo;
 use counter::Counter;
 use entry::Entry;
-use influx_db_client as influxdb;
+
 use leader_scheduler::LeaderScheduler;
 use log::Level;
-use metrics;
 use result::{Error, Result};
 use service::Service;
+use solana_metrics::{influxdb, submit};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::mpsc::RecvTimeoutError;
@@ -31,7 +31,7 @@ fn retransmit(
         dq.append(&mut nq);
     }
 
-    metrics::submit(
+    submit(
         influxdb::Point::new("retransmit-stage")
             .add_field("count", influxdb::Value::Integer(dq.len() as i64))
             .to_owned(),

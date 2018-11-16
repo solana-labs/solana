@@ -3,14 +3,15 @@
 use cluster_info::{ClusterInfo, NodeInfo};
 use counter::Counter;
 use entry::EntrySender;
-use influx_db_client as influxdb;
+
 use leader_scheduler::LeaderScheduler;
 use log::Level;
-use metrics;
 use packet::SharedBlob;
 use rand::{thread_rng, Rng};
 use result::{Error, Result};
+use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::RecvTimeoutError;
@@ -18,7 +19,6 @@ use std::sync::{Arc, RwLock};
 use std::thread::{Builder, JoinHandle};
 use std::time::{Duration, Instant};
 use streamer::{BlobReceiver, BlobSender};
-use timing::duration_as_ms;
 use window::{SharedWindow, WindowUtil};
 
 pub const MAX_REPAIR_BACKOFF: usize = 128;
@@ -115,7 +115,7 @@ fn retransmit_all_leader_blocks(
                 }
             }
         }
-        metrics::submit(
+        submit(
             influxdb::Point::new("retransmit-queue")
                 .add_field(
                     "count",
@@ -168,7 +168,7 @@ fn recv_window(
     let now = Instant::now();
     inc_new_counter_info!("streamer-recv_window-recv", dq.len(), 100);
 
-    metrics::submit(
+    submit(
         influxdb::Point::new("recv-window")
             .add_field("count", influxdb::Value::Integer(dq.len() as i64))
             .to_owned(),
@@ -306,7 +306,7 @@ pub fn window_service(
                     }
                 }
 
-                metrics::submit(
+                submit(
                     influxdb::Point::new("window-stage")
                         .add_field("consumed", influxdb::Value::Integer(consumed as i64))
                         .to_owned(),
