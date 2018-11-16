@@ -611,7 +611,7 @@ mod test {
             ClusterInfo::new(my_node.info.clone()).expect("ClusterInfo::new"),
         ));
         let (entry_sender, entry_receiver) = channel();
-        let (ledger_entry_sender, ledger_entry_receiver) = channel();
+        let (ledger_entry_sender, _ledger_entry_receiver) = channel();
         let mut last_entry_id = Hash::default();
         // Create keypair for the old leader
         let old_leader_id = Keypair::new().pubkey();
@@ -627,7 +627,7 @@ mod test {
         let mut entry_height = 0;
         let mut last_id = Hash::default();
         let mut entries = Vec::new();
-        for i in 0..5 {
+        for _ in 0..5 {
             let entry = Entry::new(&mut last_id, 1, vec![]); //just ticks
             last_id = entry.id;
             entries.push(entry);
@@ -654,7 +654,7 @@ mod test {
         }
 
         entries.clear();
-        for i in 0..5 {
+        for _ in 0..5 {
             let entry = Entry::new(&mut Hash::default(), 0, vec![]); //just broken entries
             entries.push(entry);
         }
