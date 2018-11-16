@@ -10,7 +10,6 @@ extern crate solana;
 use clap::{App, Arg};
 use solana::client::mk_client;
 use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
-use solana::drone::{request_airdrop_transaction, DRONE_PORT};
 use solana::fullnode::{Config, Fullnode, FullnodeReturnType};
 use solana::leader_scheduler::LeaderScheduler;
 use solana::logger;
@@ -19,6 +18,7 @@ use solana::netutil::find_available_port_in_range;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::thin_client::poll_gossip_for_leader;
 use solana::vote_program::VoteProgram;
+use solana::vote_transaction::VoteTransaction;
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::process::exit;
@@ -61,12 +61,16 @@ fn main() {
                 .help("Custom RPC port for this node"),
         ).get_matches();
 
-    let (keypair, ncp) = if let Some(i) = matches.value_of("identity") {
+    let (keypair, vote_account_keypair, ncp) = if let Some(i) = matches.value_of("identity") {
         let path = i.to_string();
         if let Ok(file) = File::open(path.clone()) {
             let parse: serde_json::Result<Config> = serde_json::from_reader(file);
             if let Ok(data) = parse {
-                (data.keypair(), data.node_info.ncp)
+                (
+                    data.keypair(),
+                    data.vote_account_keypair(),
+                    data.node_info.ncp,
+                )
             } else {
                 eprintln!("failed to parse {}", path);
                 exit(1);
@@ -76,7 +80,7 @@ fn main() {
             exit(1);
         }
     } else {
-        (Keypair::new(), socketaddr!(0, 8000))
+        (Keypair::new(), Keypair::new(), socketaddr!(0, 8000))
     };
 
     let ledger_path = matches.value_of("ledger").unwrap();
@@ -91,7 +95,7 @@ fn main() {
     // save off some stuff for airdrop
     let mut node_info = node.info.clone();
 
-    let vote_account_keypair = Arc::new(Keypair::new());
+    let vote_account_keypair = Arc::new(vote_account_keypair);
     let vote_account_id = vote_account_keypair.pubkey();
     let keypair = Arc::new(keypair);
     let pubkey = keypair.pubkey();
@@ -133,7 +137,7 @@ fn main() {
         node,
         ledger_path,
         keypair.clone(),
-        vote_account_keypair,
+        vote_account_keypair.clone(),
         network,
         false,
         leader_scheduler,
@@ -141,66 +145,43 @@ fn main() {
     );
     let mut client = mk_client(&leader);
 
-    // TODO: maybe have the drone put itself in gossip somewhere instead of hardcoding?
-    let drone_addr = match network {
-        Some(network) => SocketAddr::new(network.ip(), DRONE_PORT),
-        None => SocketAddr::new(ncp.ip(), DRONE_PORT),
-    };
-
-    loop {
-        let balance = client.poll_get_balance(&pubkey).unwrap_or(0);
-        info!("balance is {}", balance);
-
-        if balance >= 50 {
-            info!("good to go!");
-            break;
-        }
-
-        info!("requesting airdrop from {}", drone_addr);
-        loop {
-            let last_id = client.get_last_id();
-            if let Ok(transaction) = request_airdrop_transaction(&drone_addr, &pubkey, 50, last_id)
-            {
-                let signature = client.transfer_signed(&transaction).unwrap();
-                if client.poll_for_signature(&signature).is_ok() {
-                    break;
-                }
-            }
-            info!(
-                "airdrop request, is the drone address correct {:?}, drone running?",
-                drone_addr
-            );
-            sleep(Duration::from_secs(2));
-        }
+    let balance = client.poll_get_balance(&pubkey).unwrap_or(0);
+    info!("balance is {}", balance);
+    if balance < 1 {
+        error!("insufficient tokens");
+        exit(1);
     }
 
-    // Create the vote account
-    loop {
-        let last_id = client.get_last_id();
-        if client
-            .create_vote_account(&keypair, vote_account_id, &last_id, 1)
-            .is_err()
-        {
+    // Create the vote account if necessary
+    if client.poll_get_balance(&vote_account_id).unwrap_or(0) == 0 {
+        // Need at least two tokens as one token will be spent on a vote_account_new() transaction
+        if balance < 2 {
+            error!("insufficient tokens");
+            exit(1);
+        }
+        loop {
+            let last_id = client.get_last_id();
+            let transaction =
+                VoteTransaction::vote_account_new(&keypair, vote_account_id, last_id, 1);
+            if client.transfer_signed(&transaction).is_err() {
+                sleep(Duration::from_secs(2));
+                continue;
+            }
+
+            let balance = client.poll_get_balance(&vote_account_id).unwrap_or(0);
+            if balance > 0 {
+                break;
+            }
             sleep(Duration::from_secs(2));
-            continue;
         }
-
-        let balance = client.poll_get_balance(&vote_account_id).unwrap_or(0);
-
-        if balance > 0 {
-            break;
-        }
-
-        sleep(Duration::from_secs(2));
     }
 
     // Register the vote account to this node
     loop {
         let last_id = client.get_last_id();
-        if client
-            .register_vote_account(&keypair, vote_account_id, &last_id)
-            .is_err()
-        {
+        let transaction =
+            VoteTransaction::vote_account_register(&keypair, vote_account_id, last_id, 0);
+        if client.transfer_signed(&transaction).is_err() {
             sleep(Duration::from_secs(2));
             continue;
         }

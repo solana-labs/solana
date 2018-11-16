@@ -110,19 +110,28 @@ pub struct Fullnode {
 pub struct Config {
     pub node_info: NodeInfo,
     pkcs8: Vec<u8>,
+    vote_account_pkcs8: Vec<u8>,
 }
 
 impl Config {
-    pub fn new(bind_addr: &SocketAddr, pkcs8: Vec<u8>) -> Self {
+    pub fn new(bind_addr: &SocketAddr, pkcs8: Vec<u8>, vote_account_pkcs8: Vec<u8>) -> Self {
         let keypair =
             Keypair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in fullnode::Config new");
         let pubkey = keypair.pubkey();
         let node_info = NodeInfo::new_with_pubkey_socketaddr(pubkey, bind_addr);
-        Config { node_info, pkcs8 }
+        Config {
+            node_info,
+            pkcs8,
+            vote_account_pkcs8,
+        }
     }
     pub fn keypair(&self) -> Keypair {
         Keypair::from_pkcs8(Input::from(&self.pkcs8))
             .expect("from_pkcs8 in fullnode::Config keypair")
+    }
+    pub fn vote_account_keypair(&self) -> Keypair {
+        Keypair::from_pkcs8(Input::from(&self.vote_account_pkcs8))
+            .expect("from_pkcs8 in fullnode::Config vote_account_keypair")
     }
 }
 

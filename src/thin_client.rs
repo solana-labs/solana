@@ -29,7 +29,6 @@ use std::time::Instant;
 use system_transaction::SystemTransaction;
 use timing;
 use transaction::Transaction;
-use vote_transaction::VoteTransaction;
 
 use influx_db_client as influxdb;
 use metrics;
@@ -97,29 +96,6 @@ impl ThinClient {
             io::ErrorKind::Other,
             "retry_transfer failed",
         ))
-    }
-
-    pub fn create_vote_account(
-        &self,
-        node_keypair: &Keypair,
-        vote_account_id: Pubkey,
-        last_id: &Hash,
-        num_tokens: u64,
-    ) -> io::Result<Signature> {
-        let tx =
-            Transaction::vote_account_new(&node_keypair, vote_account_id, *last_id, num_tokens);
-        self.transfer_signed(&tx)
-    }
-
-    /// Creates, signs, and processes a vote Transaction. Useful for writing unit-tests.
-    pub fn register_vote_account(
-        &self,
-        node_keypair: &Keypair,
-        vote_account_id: Pubkey,
-        last_id: &Hash,
-    ) -> io::Result<Signature> {
-        let tx = Transaction::vote_account_register(node_keypair, vote_account_id, *last_id, 0);
-        self.transfer_signed(&tx)
     }
 
     /// Creates, signs, and processes a Transaction. Useful for writing unit-tests.
@@ -445,6 +421,7 @@ mod tests {
     use std::fs::remove_dir_all;
     use system_program::SystemProgram;
     use vote_program::VoteProgram;
+    use vote_transaction::VoteTransaction;
 
     #[test]
     fn test_thin_client() {
@@ -650,20 +627,21 @@ mod tests {
         let validator_vote_account_keypair = Keypair::new();
         let vote_account_id = validator_vote_account_keypair.pubkey();
         let last_id = client.get_last_id();
-        let signature = client
-            .create_vote_account(&validator_keypair, vote_account_id, &last_id, 1)
-            .unwrap();
 
+        let transaction =
+            VoteTransaction::vote_account_new(&validator_keypair, vote_account_id, last_id, 1);
+        let signature = client.transfer_signed(&transaction).unwrap();
         assert!(client.poll_for_signature(&signature).is_ok());
+
         let balance = retry_get_balance(&mut client, &vote_account_id, Some(1))
             .expect("Expected balance for new account to exist");
         assert_eq!(balance, 1);
 
         // Register the vote account to the validator
         let last_id = client.get_last_id();
-        let signature = client
-            .register_vote_account(&validator_keypair, vote_account_id, &last_id)
-            .unwrap();
+        let transaction =
+            VoteTransaction::vote_account_register(&validator_keypair, vote_account_id, last_id, 0);
+        let signature = client.transfer_signed(&transaction).unwrap();
         assert!(client.poll_for_signature(&signature).is_ok());
 
         const LAST: usize = 30;
