@@ -7,6 +7,7 @@
 - [Synchronization](synchronization.md)
   - [Introduction to VDFs](vdf.md)
   - [Proof of History](poh.md)
+  - [Leader Rotation](leader-scheduler.md)
 
 - [Fullnode](fullnode.md)
   - [Tpu](tpu.md)
