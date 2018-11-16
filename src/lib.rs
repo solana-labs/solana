@@ -34,7 +34,6 @@ pub mod compute_leader_finality_service;
 pub mod db_ledger;
 pub mod db_window;
 pub mod entry;
-#[cfg(feature = "erasure")]
 pub mod erasure;
 pub mod fetch_stage;
 pub mod fullnode;

@@ -1,8 +1,9 @@
 // Support erasure coding
-use packet::{SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE};
+use db_ledger::DbLedger;
+use db_window::{find_missing_coding_indexes, find_missing_data_indexes};
+use packet::{Blob, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE};
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
-use std::mem;
 use std::result;
 use window::WindowSlot;
 
@@ -25,6 +26,7 @@ pub enum ErasureError {
     DecodeError,
     EncodeError,
     InvalidBlockSize,
+    InvalidBlobData,
 }
 
 pub type Result<T> = result::Result<T, ErasureError>;
@@ -347,101 +349,46 @@ pub fn generate_coding(
     Ok(())
 }
 
-// examine the window slot at idx returns
-//  true if slot is empty
-//  true if slot is stale (i.e. has the wrong index), old blob is flushed
-//  false if slot has a blob with the right index
-fn is_missing(id: &Pubkey, idx: u64, window_slot: &mut Option<SharedBlob>, c_or_d: &str) -> bool {
-    if let Some(blob) = window_slot.take() {
-        let blob_idx = blob.read().unwrap().index().unwrap();
-        if blob_idx == idx {
-            trace!("recover {}: idx: {} good {}", id, idx, c_or_d);
-            // put it back
-            mem::replace(window_slot, Some(blob));
-            false
-        } else {
-            trace!(
-                "recover {}: idx: {} old {} {}, recycling",
-                id,
-                idx,
-                c_or_d,
-                blob_idx,
-            );
-            true
-        }
-    } else {
-        trace!("recover {}: idx: {} None {}", id, idx, c_or_d);
-        // nothing there
-        true
-    }
-}
-
-// examine the window beginning at block_start for missing or
-//  stale (based on block_start_idx) blobs
-// if a blob is stale, remove it from the window slot
-//  side effect: block will be cleaned of old blobs
-fn find_missing(
-    id: &Pubkey,
-    block_start_idx: u64,
-    block_start: usize,
-    window: &mut [WindowSlot],
-) -> (usize, usize) {
-    let mut data_missing = 0;
-    let mut coding_missing = 0;
-    let block_end = block_start + NUM_DATA;
-    let coding_start = block_start + NUM_DATA - NUM_CODING;
-
-    // count missing blobs in the block
-    for i in block_start..block_end {
-        let idx = (i - block_start) as u64 + block_start_idx;
-        let n = i % window.len();
-
-        if is_missing(id, idx, &mut window[n].data, "data") {
-            data_missing += 1;
-        }
-
-        if i >= coding_start && is_missing(id, idx, &mut window[n].coding, "coding") {
-            coding_missing += 1;
-        }
-    }
-    (data_missing, coding_missing)
-}
-
 // Recover a missing block into window
 //   missing blocks should be None or old...
 //   If not enough coding or data blocks are present to restore
-//    any of the blocks, the block is skipped.
+//   any of the blocks, the block is skipped.
 //   Side effect: old blobs in a block are None'd
-pub fn recover(id: &Pubkey, window: &mut [WindowSlot], start_idx: u64, start: usize) -> Result<()> {
-    let block_start = start - (start % NUM_DATA);
+pub fn recover(
+    id: &Pubkey,
+    db_ledger: &mut DbLedger,
+    slot: u64,
+    start_idx: u64,
+) -> Result<(Vec<Blob>, Vec<Blob>)> {
     let block_start_idx = start_idx - (start_idx % NUM_DATA as u64);
 
-    debug!("start: {} block_start: {}", start, block_start);
+    debug!("block_start_idx: {}", block_start_idx);
 
-    let coding_start = block_start + NUM_DATA - NUM_CODING;
-    let block_end = block_start + NUM_DATA;
+    let coding_start_idx = block_start_idx + NUM_DATA as u64 - NUM_CODING as u64;
+    let block_end_idx = block_start_idx + NUM_DATA as u64;
     trace!(
-        "recover {}: block_start_idx: {} block_start: {} coding_start: {} block_end: {}",
+        "recover {}: coding_start_idx: {} block_end_idx: {}",
         id,
-        block_start_idx,
-        block_start,
-        coding_start,
-        block_end
+        coding_start_idx,
+        block_end_idx
     );
 
-    let (data_missing, coding_missing) = find_missing(id, block_start_idx, block_start, window);
+    let data_missing =
+        find_missing_data_indexes(slot, db_ledger, block_start_idx, block_end_idx).len();
+    let coding_missing =
+        find_missing_coding_indexes(slot, db_ledger, block_start_idx, block_end_idx).len();
 
-    // if we're not missing data, or if we have too much missin but have enough coding
+    // if we're not missing data, or if we have too much missing but have enough coding
     if data_missing == 0 {
         // nothing to do...
-        return Ok(());
+        return Ok((vec![], vec![]));
     }
 
     if (data_missing + coding_missing) > NUM_CODING {
         trace!(
             "recover {}: start: {} skipping recovery data: {} coding: {}",
             id,
-            block_start,
+            block_start_idx,
             data_missing,
             coding_missing
         );
@@ -455,91 +402,103 @@ pub fn recover(id: &Pubkey, window: &mut [WindowSlot], start_idx: u64, start: us
         data_missing,
         coding_missing
     );
-    let mut blobs: Vec<SharedBlob> = Vec::with_capacity(NUM_DATA + NUM_CODING);
-    let mut locks = Vec::with_capacity(NUM_DATA + NUM_CODING);
+    let mut data: Vec<Option<Vec<u8>>> = Vec::with_capacity(NUM_DATA - data_missing);
+    let mut coding: Vec<Option<Vec<u8>>> = Vec::with_capacity(NUM_CODING - coding_missing);
+    let mut missing_data: Vec<Blob> = Vec::with_capacity(data_missing);
+    let mut missing_coding: Vec<Blob> = Vec::with_capacity(coding_missing);
+
     let mut erasures: Vec<i32> = Vec::with_capacity(NUM_CODING);
-    let mut meta = None;
     let mut size = None;
 
-    // add the data blobs we have into recovery blob vector
-    for i in block_start..block_end {
-        let j = i % window.len();
-
-        if let Some(b) = window[j].data.clone() {
-            if meta.is_none() {
-                meta = Some(b.read().unwrap().meta.clone());
-                trace!("recover {} meta at {} {:?}", id, j, meta);
-            }
-            blobs.push(b);
-        } else {
-            let n = SharedBlob::default();
-            window[j].data = Some(n.clone());
-            // mark the missing memory
-            blobs.push(n);
-            erasures.push((i - block_start) as i32);
-        }
-    }
-    for i in coding_start..block_end {
-        let j = i % window.len();
-        if let Some(b) = window[j].coding.clone() {
-            if size.is_none() {
-                size = Some(b.read().unwrap().meta.size - BLOB_HEADER_SIZE);
-                trace!(
-                    "{} recover size {} from {}",
-                    id,
-                    size.unwrap(),
-                    i as u64 + block_start_idx
+    // Add the data blobs we have into the recovery vector, mark the missing ones
+    for i in block_start_idx..block_end_idx {
+        match db_ledger.data_cf.get_by_slot_index(&db_ledger.db, slot, i) {
+            Err(err) => {
+                error!(
+                    "error getting data blob at slot: {}, index: {}, error: {:?}",
+                    slot, i, err
                 );
+                continue;
             }
-            blobs.push(b);
-        } else {
-            let n = SharedBlob::default();
-            window[j].coding = Some(n.clone());
-            //mark the missing memory
-            blobs.push(n);
-            erasures.push(((i - coding_start) + NUM_DATA) as i32);
+            Ok(Some(b)) => {
+                if b.len() <= BLOB_HEADER_SIZE {
+                    return Err(ErasureError::InvalidBlobData);
+                }
+                data.push(Some(b));
+                /*
+                let len = existing_data.len();
+                existing_data[len] = b;
+                &mut existing_data[len][BLOB_HEADER_SIZE..]*/
+            }
+            Ok(None) => {
+                // Mark the missing memory
+                missing_data.push(Blob::default());
+                erasures.push((i - block_start_idx) as i32);
+                data.push(None);
+                //&mut missing_data.last_mut().unwrap().data[..]
+            }
         }
     }
 
-    // now that we have size (from coding), zero out data blob tails
+    // Add the coding blobs we have into the recovery vector, mark the missing ones
+    for i in coding_start_idx..block_end_idx {
+        match db_ledger
+            .erasure_cf
+            .get_by_slot_index(&db_ledger.db, slot, i)
+        {
+            Err(err) => {
+                error!(
+                    "error getting coding blob at slot: {}, index: {}, error: {:?}",
+                    slot, i, err
+                );
+                continue;
+            }
+            Ok(Some(b)) => {
+                if b.len() <= BLOB_HEADER_SIZE {
+                    return Err(ErasureError::InvalidBlobData);
+                }
+                if size.is_none() {
+                    size = Some(b.len() - BLOB_HEADER_SIZE);
+                    trace!(
+                        "{} recover size {} from {}",
+                        id,
+                        size.unwrap(),
+                        i as u64 + block_start_idx
+                    );
+                }
+                coding.push(Some(b));
+                //&mut coding.last_mut().unwrap()[BLOB_HEADER_SIZE..]
+            }
+            Ok(None) => {
+                // Mark the missing memory
+                missing_coding.push(Blob::default());
+                erasures.push(((i - coding_start_idx) + NUM_DATA as u64) as i32);
+                coding.push(None);
+                //&mut missing_coding.last_mut().unwrap().data[..]
+            }
+        }
+    }
+
+    // Due to check (data_missing + coding_missing) > NUM_CODING from earlier in this function,
+    // we know at least one coding block must exist, so "size" will not remain None after the
+    // below processing.
     let size = size.unwrap();
-    for i in block_start..block_end {
-        let j = i % window.len();
-
-        if let Some(b) = &window[j].data {
-            let mut b_wl = b.write().unwrap();
-            for i in b_wl.meta.size..size {
-                b_wl.data[i] = 0;
-            }
-        }
-    }
 
     // marks end of erasures
     erasures.push(-1);
     trace!("erasures[]: {} {:?} data_size: {}", id, erasures, size,);
-    //lock everything for write
-    for b in &blobs {
-        locks.push(b.write().unwrap());
-    }
 
     {
-        let mut coding_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_CODING);
-        let mut data_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_DATA);
-        for (i, l) in locks.iter_mut().enumerate() {
-            if i < NUM_DATA {
-                trace!("{} pushing data: {}", id, i);
-                data_ptrs.push(&mut l.data[..size]);
-            } else {
-                trace!("{} pushing coding: {}", id, i);
-                coding_ptrs.push(&mut l.data_mut()[..size]);
-            }
-        }
-        trace!(
-            "{} coding_ptrs.len: {} data_ptrs.len {}",
-            id,
-            coding_ptrs.len(),
-            data_ptrs.len()
-        );
+        // Resize the erasure pointers based on the expected erasure "size"
+        let (mut data_ptrs, mut coding_ptrs) = make_erasure_ptrs(
+            size,
+            &mut data,
+            &mut missing_data,
+            &mut coding,
+            &mut missing_coding,
+        )?;
+
+        // Decode the blocks
         decode_blocks(
             data_ptrs.as_mut_slice(),
             coding_ptrs.as_mut_slice(),
@@ -547,50 +506,142 @@ pub fn recover(id: &Pubkey, window: &mut [WindowSlot], start_idx: u64, start: us
         )?;
     }
 
-    let meta = meta.unwrap();
+    // Create the missing blobs from the reconstructed data
     let mut corrupt = false;
     // repopulate header data size from recovered blob contents
-    for i in &erasures[..erasures.len() - 1] {
-        let n = *i as usize;
-        let mut idx = n as u64 + block_start_idx;
-
-        let mut data_size;
-        if n < NUM_DATA {
-            data_size = locks[n].data_size().unwrap() as usize;
-            data_size -= BLOB_HEADER_SIZE;
-            if data_size > BLOB_DATA_SIZE {
-                error!("{} corrupt data blob[{}] data_size: {}", id, idx, data_size);
-                corrupt = true;
-            }
-        } else {
-            data_size = size;
-            idx -= NUM_CODING as u64;
-            locks[n].set_index(idx).unwrap();
-
-            if data_size - BLOB_HEADER_SIZE > BLOB_DATA_SIZE {
-                error!(
-                    "{} corrupt coding blob[{}] data_size: {}",
-                    id, idx, data_size
-                );
-                corrupt = true;
-            }
+    for (b, i) in missing_data.iter_mut().zip(erasures.iter()) {
+        let data_index = block_start_idx + *i as u64;
+        let data_size = b.data_size().unwrap() as usize;
+        if data_size - BLOB_HEADER_SIZE > BLOB_DATA_SIZE {
+            error!(
+                "{} corrupt data blob[{}] data_size: {}",
+                id, data_index, data_size
+            );
+            corrupt = true;
         }
-
-        locks[n].meta = meta.clone();
-        locks[n].set_size(data_size);
+        b.set_size(data_size);
         trace!(
             "{} erasures[{}] ({}) size: {} data[0]: {}",
             id,
             *i,
-            idx,
+            data_index,
             data_size,
-            locks[n].data()[0]
+            b.data()[0]
         );
     }
+
+    for (b, i) in missing_coding
+        .iter_mut()
+        .zip((&erasures[missing_data.len()..]).iter())
+    {
+        // Calculate the index of this coding blob
+        let coding_index = block_start_idx + *i as u64 - NUM_CODING as u64;
+        let data_size = size;
+        b.set_index(coding_index).unwrap();
+
+        if data_size - BLOB_HEADER_SIZE > BLOB_DATA_SIZE {
+            error!(
+                "{} corrupt coding blob[{}] data_size: {}",
+                id, coding_index, data_size
+            );
+            corrupt = true;
+        }
+
+        b.set_size(data_size);
+        trace!(
+            "{} erasures[{}] ({}) size: {} data[0]: {}",
+            id,
+            *i,
+            coding_index,
+            data_size,
+            b.data()[0]
+        );
+    }
+
     assert!(!corrupt, " {} ", id);
+    Ok((missing_data, missing_coding))
+}
+
+// Creates the pointers to data blobs taht are fed to the decoder to reconstruct
+// missing blobs
+fn make_erasure_ptrs<'a>(
+    size: usize,
+    data: &'a mut [Option<Vec<u8>>],
+    missing_data: &'a mut [Blob],
+    coding: &'a mut [Option<Vec<u8>>],
+    missing_coding: &'a mut [Blob],
+) -> Result<(Vec<&'a mut [u8]>, Vec<&'a mut [u8]>)> {
+    let mut coding_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_CODING);
+    let mut data_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_DATA);
+
+    let mut missing_data_iter = missing_data.iter_mut();
+    for d in data {
+        if let Some(d) = d {
+            if d.len() < BLOB_HEADER_SIZE + size {
+                return Err(ErasureError::InvalidBlobData);
+            }
+            data_ptrs.push(&mut d[BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + size]);
+        } else {
+            let mut missing_data_blob = missing_data_iter
+                .next()
+                .expect("Expected missing data blob to exist here");
+            data_ptrs.push(&mut missing_data_blob.data_mut()[..size]);
+        }
+    }
+
+    let mut missing_coding_iter = missing_coding.iter_mut();
+    for c in coding {
+        if let Some(c) = c {
+            if c.len() < BLOB_HEADER_SIZE + size {
+                return Err(ErasureError::InvalidBlobData);
+            }
+            coding_ptrs.push(&mut c[BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + size]);
+        } else {
+            let mut missing_coding_blob = missing_coding_iter
+                .next()
+                .expect("Expected missing coding blob to exist here");
+            coding_ptrs.push(&mut missing_coding_blob.data_mut()[..size]);
+        }
+    }
+
+    Ok((data_ptrs, coding_ptrs))
+}
+/*fn make_erasure_ptrs(
+    size: usize,
+    existing_data: &[Vec<u8>],
+    missing_data: &[Blob],
+    existing_coding: &[Vec<u8>],
+    missing_coding: &[Blob],
+    erasures: Vec<i32>,
+) -> Result<(Vec<&mut [u8]>, Vec<&mut [u8]>)> {
+    // Fed to the decoder to reconstruct the missing blobs
+    let mut coding_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_CODING);
+    let mut data_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_DATA);
+    let mut current_index = 0;
+    for i in 0..erasures.len() {
+        let missing_index = erasures[i];
+        // Insert sequential blobs
+        for j in current_index..missing_index {
+            if j < NUM_DATA as i32 {
+                let data = 
+                if ptr.len() < size {
+                    return Err(ErasureError::InvalidBlobData);
+                }
+                data_ptrs.push(&mut existing_data[BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + size])
+            }
+        }
+        data_ptrs.push(missing_index)
+
+    }
+    for ptr in data_ptrs.iter_mut().chain(coding_ptrs.iter_mut()) {
+        if ptr.len() < size {
+            return Err(ErasureError::InvalidBlobData);
+        }
+        ptr.take(size as u64);
+    }
 
     Ok(())
-}
+}*/
 
 #[cfg(test)]
 mod test {
