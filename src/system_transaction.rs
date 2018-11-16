@@ -1,9 +1,11 @@
 //! The `system_transaction` module provides functionality for creating system transactions.
 
-use hash::Hash;
 use signature::{Keypair, KeypairUtil};
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::system_instruction::SystemInstruction;
 use system_program::SystemProgram;
+
 use transaction::{Instruction, Transaction};
 
 pub trait SystemTransaction {
@@ -40,7 +42,7 @@ pub trait SystemTransaction {
 }
 
 impl SystemTransaction for Transaction {
-    /// Create and sign new SystemProgram::CreateAccount transaction
+    /// Create and sign new SystemInstruction::CreateAccount transaction
     fn system_create(
         from_keypair: &Keypair,
         to: Pubkey,
@@ -50,7 +52,7 @@ impl SystemTransaction for Transaction {
         program_id: Pubkey,
         fee: u64,
     ) -> Self {
-        let create = SystemProgram::CreateAccount {
+        let create = SystemInstruction::CreateAccount {
             tokens, //TODO, the tokens to allocate might need to be higher then 0 in the future
             space,
             program_id,
@@ -64,9 +66,9 @@ impl SystemTransaction for Transaction {
             fee,
         )
     }
-    /// Create and sign new SystemProgram::Assign transaction
+    /// Create and sign new SystemInstruction::Assign transaction
     fn system_assign(from_keypair: &Keypair, last_id: Hash, program_id: Pubkey, fee: u64) -> Self {
-        let assign = SystemProgram::Assign { program_id };
+        let assign = SystemInstruction::Assign { program_id };
         Transaction::new(
             from_keypair,
             &[],
@@ -76,11 +78,11 @@ impl SystemTransaction for Transaction {
             fee,
         )
     }
-    /// Create and sign new SystemProgram::CreateAccount transaction with some defaults
+    /// Create and sign new SystemInstruction::CreateAccount transaction with some defaults
     fn system_new(from_keypair: &Keypair, to: Pubkey, tokens: u64, last_id: Hash) -> Self {
         Transaction::system_create(from_keypair, to, last_id, tokens, 0, Pubkey::default(), 0)
     }
-    /// Create and sign new SystemProgram::Move transaction
+    /// Create and sign new SystemInstruction::Move transaction
     fn system_move(
         from_keypair: &Keypair,
         to: Pubkey,
@@ -88,7 +90,7 @@ impl SystemTransaction for Transaction {
         last_id: Hash,
         fee: u64,
     ) -> Self {
-        let move_tokens = SystemProgram::Move { tokens };
+        let move_tokens = SystemInstruction::Move { tokens };
         Transaction::new(
             from_keypair,
             &[to],
@@ -98,13 +100,13 @@ impl SystemTransaction for Transaction {
             fee,
         )
     }
-    /// Create and sign new SystemProgram::Move transaction to many destinations
+    /// Create and sign new SystemInstruction::Move transaction to many destinations
     fn system_move_many(from: &Keypair, moves: &[(Pubkey, u64)], last_id: Hash, fee: u64) -> Self {
         let instructions: Vec<_> = moves
             .iter()
             .enumerate()
             .map(|(i, (_, amount))| {
-                let spend = SystemProgram::Move { tokens: *amount };
+                let spend = SystemInstruction::Move { tokens: *amount };
                 Instruction::new(0, &spend, vec![0, i as u8 + 1])
             }).collect();
         let to_keys: Vec<_> = moves.iter().map(|(to_key, _)| *to_key).collect();
@@ -118,9 +120,9 @@ impl SystemTransaction for Transaction {
             instructions,
         )
     }
-    /// Create and sign new SystemProgram::Spawn transaction
+    /// Create and sign new SystemInstruction::Spawn transaction
     fn system_spawn(from_keypair: &Keypair, last_id: Hash, fee: u64) -> Self {
-        let spawn = SystemProgram::Spawn;
+        let spawn = SystemInstruction::Spawn;
         Transaction::new(from_keypair, &[], SystemProgram::id(), &spawn, last_id, fee)
     }
 }

@@ -3,7 +3,6 @@
 use bank::Bank;
 use broadcast_stage::BroadcastStage;
 use cluster_info::{ClusterInfo, Node, NodeInfo};
-use hash::Hash;
 use leader_scheduler::LeaderScheduler;
 use ledger::read_ledger;
 use ncp::Ncp;
@@ -11,6 +10,7 @@ use rpc::JsonRpcService;
 use rpc_pubsub::PubSubService;
 use service::Service;
 use signature::{Keypair, KeypairUtil};
+use solana_sdk::hash::Hash;
 use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};

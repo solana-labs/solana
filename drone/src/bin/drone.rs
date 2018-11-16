@@ -4,9 +4,10 @@ extern crate bytes;
 #[macro_use]
 extern crate clap;
 extern crate log;
-extern crate serde_json;
-extern crate solana;
+#[macro_use]
+extern crate solana_drone;
 extern crate solana_metrics;
+extern crate solana_sdk;
 extern crate tokio;
 extern crate tokio_codec;
 
@@ -14,9 +15,9 @@ use bincode::{deserialize, serialize};
 use byteorder::{ByteOrder, LittleEndian};
 use bytes::Bytes;
 use clap::{App, Arg};
-use solana::drone::{Drone, DroneRequest, DRONE_PORT};
-use solana::logger;
-use solana::signature::read_keypair;
+use solana_drone::drone::{Drone, DroneRequest, DRONE_PORT};
+//use solana::logger;
+use solana_sdk::signature::read_keypair;
 use std::error;
 use std::io;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -26,18 +27,8 @@ use tokio::net::TcpListener;
 use tokio::prelude::*;
 use tokio_codec::{BytesCodec, Decoder};
 
-macro_rules! socketaddr {
-    ($ip:expr, $port:expr) => {
-        SocketAddr::from((Ipv4Addr::from($ip), $port))
-    };
-    ($str:expr) => {{
-        let a: SocketAddr = $str.parse().unwrap();
-        a
-    }};
-}
-
 fn main() -> Result<(), Box<error::Error>> {
-    logger::setup();
+    //logger::setup();
     solana_metrics::set_panic_hook("drone");
     let matches = App::new("drone")
         .version(crate_version!())

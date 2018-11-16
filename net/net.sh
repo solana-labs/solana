@@ -136,7 +136,11 @@ build() {
       # shellcheck source=/dev/null
       source target/perf-libs/env.sh
     fi
-    $MAYBE_DOCKER cargo install --features="$cargoFeatures" --root farf
+    $MAYBE_DOCKER bash -c "
+      set -ex
+      cargo install --path drone --features=$cargoFeatures --root farf
+      cargo install --path . --features=$cargoFeatures --root farf
+    "
     ./scripts/install-native-programs.sh farf/
   )
   echo "Build took $SECONDS seconds"

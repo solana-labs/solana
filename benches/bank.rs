@@ -2,14 +2,15 @@
 extern crate bincode;
 extern crate rayon;
 extern crate solana;
+extern crate solana_sdk;
 extern crate test;
 
 use solana::bank::*;
-use solana::hash::hash;
 use solana::mint::Mint;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::system_transaction::SystemTransaction;
 use solana::transaction::Transaction;
+use solana_sdk::hash::hash;
 use test::Bencher;
 
 #[bench]

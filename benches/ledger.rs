@@ -1,13 +1,14 @@
 #![feature(test)]
 extern crate solana;
+extern crate solana_sdk;
 extern crate test;
 
 use solana::entry::reconstruct_entries_from_blobs;
-use solana::hash::{hash, Hash};
 use solana::ledger::{next_entries, Block};
 use solana::signature::{Keypair, KeypairUtil};
 use solana::system_transaction::SystemTransaction;
 use solana::transaction::Transaction;
+use solana_sdk::hash::{hash, Hash};
 use test::Bencher;
 
 #[bench]

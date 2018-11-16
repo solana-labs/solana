@@ -57,10 +57,13 @@ else
       program=${BASH_REMATCH[1]}
       features="--features=cuda"
     fi
+    if [[ "$program" = drone ]]; then
+      maybe_package="--package solana-drone"
+    fi
     if [[ -z $DEBUG ]]; then
       maybe_release=--release
     fi
-    printf "cargo run $maybe_release --bin solana-%s %s -- " "$program" "$features"
+    printf "cargo run $maybe_release $maybe_package --bin solana-%s %s -- " "$program" "$features"
   }
   if [[ -n $SOLANA_CUDA ]]; then
     # shellcheck disable=2154 # 'here' is referenced but not assigned

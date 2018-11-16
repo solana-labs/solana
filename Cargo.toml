@@ -22,10 +22,6 @@ name = "solana-bench-tps"
 path = "src/bin/bench-tps.rs"
 
 [[bin]]
-name = "solana-drone"
-path = "src/bin/drone.rs"
-
-[[bin]]
 required-features = ["chacha"]
 name = "solana-replicator"
 path = "src/bin/replicator.rs"
@@ -113,6 +109,7 @@ tokio = "0.1"
 tokio-codec = "0.1"
 untrusted = "0.6.2"
 solana-bpfloader = { path = "programs/native/bpf_loader", version = "0.11.0" }
+solana-drone = { path = "drone", version = "0.11.0" }
 solana-erc20 = { path = "programs/native/erc20", version = "0.11.0" }
 solana-lualoader = { path = "programs/native/lua_loader", version = "0.11.0" }
 solana-noop = { path = "programs/native/noop", version = "0.11.0" }
@@ -139,6 +136,7 @@ name = "chacha"
 [workspace]
 members = [
     ".",
+    "drone",
     "metrics",
     "sdk",
     "programs/bpf/rust/noop",

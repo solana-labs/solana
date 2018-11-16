@@ -136,10 +136,10 @@ pub mod tests {
     use bank::Bank;
     use bincode::serialize;
     use compute_leader_finality_service::ComputeLeaderFinalityService;
-    use hash::hash;
     use logger;
     use mint::Mint;
     use signature::{Keypair, KeypairUtil};
+    use solana_sdk::hash::hash;
     use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;

@@ -1,9 +1,9 @@
 //! The `mint` module is a library for generating the chain's genesis block.
 
 use entry::Entry;
-use hash::{hash, Hash};
 use ring::rand::SystemRandom;
 use signature::{Keypair, KeypairUtil};
+use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use system_transaction::SystemTransaction;
 use transaction::Transaction;
@@ -108,6 +108,7 @@ mod tests {
     use super::*;
     use bincode::deserialize;
     use ledger::Block;
+    use solana_sdk::system_instruction::SystemInstruction;
     use system_program::SystemProgram;
 
     #[test]
@@ -116,8 +117,8 @@ mod tests {
         let tx = transactions.next().unwrap();
         assert_eq!(tx.instructions.len(), 1);
         assert!(SystemProgram::check_id(tx.program_id(0)));
-        let instruction: SystemProgram = deserialize(tx.userdata(0)).unwrap();
-        if let SystemProgram::Move { tokens } = instruction {
+        let instruction: SystemInstruction = deserialize(tx.userdata(0)).unwrap();
+        if let SystemInstruction::Move { tokens } = instruction {
             assert_eq!(tokens, 100);
         }
         assert_eq!(transactions.next(), None);
@@ -134,12 +135,12 @@ mod tests {
         assert_eq!(tx.instructions.len(), 2);
         assert!(SystemProgram::check_id(tx.program_id(0)));
         assert!(SystemProgram::check_id(tx.program_id(1)));
-        let instruction: SystemProgram = deserialize(tx.userdata(0)).unwrap();
-        if let SystemProgram::Move { tokens } = instruction {
+        let instruction: SystemInstruction = deserialize(tx.userdata(0)).unwrap();
+        if let SystemInstruction::Move { tokens } = instruction {
             assert_eq!(tokens, 100);
         }
-        let instruction: SystemProgram = deserialize(tx.userdata(1)).unwrap();
-        if let SystemProgram::Move { tokens } = instruction {
+        let instruction: SystemInstruction = deserialize(tx.userdata(1)).unwrap();
+        if let SystemInstruction::Move { tokens } = instruction {
             assert_eq!(tokens, 1);
         }
         assert_eq!(transactions.next(), None);

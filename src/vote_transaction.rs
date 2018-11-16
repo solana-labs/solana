@@ -3,12 +3,12 @@
 #[cfg(test)]
 use bank::Bank;
 use bincode::deserialize;
-use hash::Hash;
 #[cfg(test)]
 use result::Result;
 use signature::Keypair;
 #[cfg(test)]
 use signature::KeypairUtil;
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use system_transaction::SystemTransaction;
 use transaction::Transaction;

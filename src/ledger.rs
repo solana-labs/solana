@@ -8,14 +8,14 @@ use budget_transaction::BudgetTransaction;
 #[cfg(test)]
 use chrono::prelude::Utc;
 use entry::Entry;
-#[cfg(test)]
-use hash::hash;
-use hash::Hash;
 use log::Level::Trace;
 use mint::Mint;
 use packet::{SharedBlob, BLOB_DATA_SIZE};
 use rayon::prelude::*;
 use signature::{Keypair, KeypairUtil};
+#[cfg(test)]
+use solana_sdk::hash::hash;
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::fs::{create_dir_all, remove_dir_all, File, OpenOptions};
 use std::io::prelude::*;
@@ -672,9 +672,9 @@ mod tests {
     use bincode::{deserialize, serialized_size};
     use budget_transaction::BudgetTransaction;
     use entry::{next_entry, reconstruct_entries_from_blobs, Entry};
-    use hash::hash;
     use packet::{to_blobs, BLOB_DATA_SIZE, PACKET_DATA_SIZE};
     use signature::{Keypair, KeypairUtil};
+    use solana_sdk::hash::hash;
     use std;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use transaction::Transaction;

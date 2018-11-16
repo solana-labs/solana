@@ -1,6 +1,6 @@
 //! The `Poh` module provides an object for generating a Proof of History.
 //! It records Hashes items on behalf of its users.
-use hash::{hash, hashv, Hash};
+use solana_sdk::hash::{hash, hashv, Hash};
 
 pub struct Poh {
     prev_id: Hash,
@@ -96,8 +96,8 @@ pub fn verify(initial: Hash, entries: &[PohEntry]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use hash::Hash;
     use poh::{self, PohEntry};
+    use solana_sdk::hash::Hash;
 
     #[test]
     #[should_panic]

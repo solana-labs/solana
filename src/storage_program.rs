@@ -3,8 +3,8 @@
 //!  and give reward for good proofs.
 
 use bincode::deserialize;
-use hash::Hash;
 use solana_sdk::account::Account;
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use transaction::Transaction;
 

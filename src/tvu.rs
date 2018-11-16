@@ -13,12 +13,12 @@
 use bank::Bank;
 use blob_fetch_stage::BlobFetchStage;
 use cluster_info::ClusterInfo;
-use hash::Hash;
 use ledger_write_stage::LedgerWriteStage;
 use replicate_stage::{ReplicateStage, ReplicateStageReturnType};
 use retransmit_stage::RetransmitStage;
 use service::Service;
 use signature::Keypair;
+use solana_sdk::hash::Hash;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -167,7 +167,6 @@ pub mod tests {
     use bincode::serialize;
     use cluster_info::{ClusterInfo, Node};
     use entry::Entry;
-    use hash::Hash;
     use leader_scheduler::LeaderScheduler;
     use logger;
     use mint::Mint;
@@ -175,6 +174,7 @@ pub mod tests {
     use packet::SharedBlob;
     use service::Service;
     use signature::{Keypair, KeypairUtil};
+    use solana_sdk::hash::Hash;
     use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;

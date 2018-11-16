@@ -1,7 +1,7 @@
 //! The `dynamic_transaction` module provides functionality for loading and calling a program
 
-use hash::Hash;
 use signature::{Keypair, KeypairUtil};
+use solana_sdk::hash::Hash;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::pubkey::Pubkey;
 use transaction::Transaction;

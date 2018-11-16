@@ -6,9 +6,9 @@ use bank::Bank;
 use bincode::serialize;
 use byteorder::{LittleEndian, ReadBytesExt};
 use entry::Entry;
-use hash::{hash, Hash};
 use ledger::create_ticks;
 use signature::{Keypair, KeypairUtil};
+use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use std::collections::HashSet;
 use std::io::Cursor;
@@ -493,13 +493,13 @@ pub fn make_active_set_entries(
 #[cfg(test)]
 mod tests {
     use bank::Bank;
-    use hash::Hash;
     use leader_scheduler::{
         LeaderScheduler, LeaderSchedulerConfig, DEFAULT_BOOTSTRAP_HEIGHT,
         DEFAULT_LEADER_ROTATION_INTERVAL, DEFAULT_SEED_ROTATION_INTERVAL,
     };
     use mint::Mint;
     use signature::{Keypair, KeypairUtil};
+    use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
     use std::collections::HashSet;
     use std::hash::Hash as StdHash;

@@ -5,12 +5,12 @@
 #[cfg(all(feature = "chacha", feature = "cuda"))]
 use chacha_cuda::chacha_cbc_encrypt_file_many_keys;
 use entry::EntryReceiver;
-use hash::Hash;
 use rand::{ChaChaRng, Rng, SeedableRng};
 use result::{Error, Result};
 use service::Service;
 use signature::Keypair;
 use signature::Signature;
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::mem::size_of;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -260,12 +260,12 @@ impl Service for StorageStage {
 #[cfg(test)]
 mod tests {
     use entry::Entry;
-    use hash::Hash;
     use ledger::make_tiny_test_entries;
     use ledger::{create_tmp_sample_ledger, LedgerWriter};
     use logger;
     use service::Service;
     use signature::{Keypair, KeypairUtil};
+    use solana_sdk::hash::Hash;
     use std::cmp::{max, min};
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, Ordering};

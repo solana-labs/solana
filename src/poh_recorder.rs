@@ -3,9 +3,9 @@
 //!
 use bank::Bank;
 use entry::Entry;
-use hash::Hash;
 use poh::Poh;
 use result::{Error, Result};
+use solana_sdk::hash::Hash;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use transaction::Transaction;
@@ -118,8 +118,8 @@ impl PohRecorder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hash::hash;
     use mint::Mint;
+    use solana_sdk::hash::hash;
     use std::sync::mpsc::channel;
     use std::sync::Arc;
     use system_transaction::test_tx;

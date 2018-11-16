@@ -26,8 +26,8 @@
 
 use bincode::serialize;
 use crds_value::{CrdsValue, CrdsValueLabel};
-use hash::{hash, Hash};
 use indexmap::map::IndexMap;
+use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
 
