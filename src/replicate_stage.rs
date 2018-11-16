@@ -111,7 +111,7 @@ impl ReplicateStage {
 
             if res.is_err() {
                 // TODO: This will return early from the first entry that has an erroneous
-                // transaction, instad of processing the rest of the entries in the vector
+                // transaction, instead of processing the rest of the entries in the vector
                 // of received entries. This is in line with previous behavior when
                 // bank.process_entries() was used to process the entries, but doesn't solve the
                 // issue that the bank state was still changed, leading to inconsistencies with the
@@ -242,6 +242,7 @@ impl Service for ReplicateStage {
 
 #[cfg(test)]
 mod test {
+    use bank::Bank;
     use cluster_info::{ClusterInfo, Node};
     use entry::Entry;
     use fullnode::Fullnode;
@@ -249,6 +250,7 @@ mod test {
     use leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
     use ledger::{create_ticks, create_tmp_sample_ledger, LedgerWriter};
     use logger;
+    use packet::BlobError;
     use replicate_stage::{ReplicateStage, ReplicateStageReturnType};
     use result::Error;
     use service::Service;
@@ -594,6 +596,94 @@ mod test {
         );
 
         assert_eq!(exit.load(Ordering::Relaxed), true);
+        let _ignored = remove_dir_all(&my_ledger_path);
+    }
+
+    #[test]
+    fn test_replicate_stage_poh_error_entry_receiver() {
+        // Set up dummy node to host a ReplicateStage
+        let my_keypair = Keypair::new();
+        let my_id = my_keypair.pubkey();
+        let vote_keypair = Keypair::new();
+        let my_node = Node::new_localhost_with_pubkey(my_id);
+        // Set up the cluster info
+        let cluster_info_me = Arc::new(RwLock::new(
+            ClusterInfo::new(my_node.info.clone()).expect("ClusterInfo::new"),
+        ));
+        let (entry_sender, entry_receiver) = channel();
+        let (ledger_entry_sender, ledger_entry_receiver) = channel();
+        let mut last_entry_id = Hash::default();
+        // Create keypair for the old leader
+        let old_leader_id = Keypair::new().pubkey();
+
+        let (_, my_ledger_path, _) = create_tmp_sample_ledger(
+            "test_replicate_stage_leader_rotation_exit",
+            10_000,
+            0,
+            old_leader_id,
+            500,
+        );
+
+        let mut entry_height = 0;
+        let mut last_id = Hash::default();
+        let mut entries = Vec::new();
+        for i in 0..5 {
+            let entry = Entry::new(&mut last_id, 1, vec![]); //just ticks
+            last_id = entry.id;
+            entries.push(entry);
+        }
+        entry_sender
+            .send(entries.clone())
+            .expect("Expected to err out");
+
+        let res = ReplicateStage::replicate_requests(
+            &Arc::new(Bank::default()),
+            &cluster_info_me,
+            &entry_receiver,
+            &Arc::new(my_keypair),
+            &Arc::new(vote_keypair),
+            None,
+            &ledger_entry_sender,
+            &mut entry_height,
+            &mut last_entry_id,
+        );
+
+        match res {
+            Ok(_) => (),
+            Err(e) => assert!(false, "Entries were not sent correctly {:?}", e),
+        }
+
+        entries.clear();
+        for i in 0..5 {
+            let entry = Entry::new(&mut Hash::default(), 0, vec![]); //just broken entries
+            entries.push(entry);
+        }
+        entry_sender
+            .send(entries.clone())
+            .expect("Expected to err out");
+
+        let res = ReplicateStage::replicate_requests(
+            &Arc::new(Bank::default()),
+            &cluster_info_me,
+            &entry_receiver,
+            &Arc::new(Keypair::new()),
+            &Arc::new(Keypair::new()),
+            None,
+            &ledger_entry_sender,
+            &mut entry_height,
+            &mut last_entry_id,
+        );
+
+        match res {
+            Ok(_) => assert!(false, "Should have failed because entries are broken"),
+            Err(Error::BlobError(BlobError::VerificationFailed)) => (),
+            Err(e) => assert!(
+                false,
+                "Should have failed because with blob error, instead, got {:?}",
+                e
+            ),
+        }
+
         let _ignored = remove_dir_all(&my_ledger_path);
     }
 }
