@@ -9,6 +9,7 @@ publicNetwork="$3"
 entrypointIp="$4"
 numNodes="$5"
 RUST_LOG="$6"
+export RUST_LOG=${RUST_LOG:-solana=warn} # if RUST_LOG is unset, default to warn
 
 missing() {
   echo "Error: $1 not specified"
@@ -46,7 +47,6 @@ snap)
   # shellcheck disable=SC2089
   commonNodeConfig="\
     leader-ip=\"$entrypointIp\" \
-    default-metrics-rate=1 \
     metrics-config=\"$SOLANA_METRICS_CONFIG\" \
     rust-log=\"$RUST_LOG\" \
     setup-args=\"$setupArgs\" \
@@ -87,7 +87,6 @@ local|tar)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
   export RUST_LOG
-  export SOLANA_DEFAULT_METRICS_RATE=1
 
   ./fetch-perf-libs.sh
   # shellcheck source=/dev/null

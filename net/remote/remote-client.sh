@@ -37,7 +37,6 @@ snap)
 local|tar)
   PATH="$HOME"/.cargo/bin:"$PATH"
   export USE_INSTALL=1
-  export SOLANA_DEFAULT_METRICS_RATE=1
 
   ./fetch-perf-libs.sh
   # shellcheck source=/dev/null
