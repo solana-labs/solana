@@ -1,0 +1,13 @@
+                                                                validator action
+               +----+                                           ----------------
+         |     | L1 |                  E1
+         |     +----+            /             \                vote(E1)
+         |     | L2 |          E2                x
+         |     +----+        /    \           /     \           vote(E2)
+  time   |     | L3 |     E3        x        E3'      x
+         |     +----+    /  \     /   \     /  \     /  \       slash(E3)
+         |     | L4 |  x     x  E4     x   x    x   x    x
+         |     +----+  |     |  |      |   |    |   |    |      vote(E4)
+         v     | L5 |  xx   xx  xx    E5  xx   xx  xx   xx
+               +----+                                           hang on to E4 and E5 for more...
+
