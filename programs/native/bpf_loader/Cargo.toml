@@ -8,18 +8,61 @@ license = "Apache-2.0"
 
 [features]
 bpf_c = []
+chacha = []
+cuda = []
+erasure = []
+ipv6 = []
+test = []
+unstable = []
 
 [dependencies]
+atty = "0.2"
 bincode = "1.0.0"
+bs58 = "0.2.0"
 byteorder = "1.2.1"
+bytes = "0.4"
+chrono = { version = "0.4.0", features = ["serde"] }
+clap = "2.31"
+dirs = "1.0.2"
 elf = "0.0.10"
 env_logger = "0.5.12"
+generic-array = { version = "0.12.0", default-features = false, features = ["serde"] }
+getopts = "0.2"
+hex-literal = "0.1.1"
+influx_db_client = "0.3.6"
+solana-jsonrpc-core = "0.3.0"
+solana-jsonrpc-http-server = "0.3.0"
+solana-jsonrpc-macros = "0.3.0"
+solana-jsonrpc-pubsub = "0.3.0"
+solana-jsonrpc-ws-server = "0.3.0"
+ipnetwork = "0.12.7"
+itertools = "0.7.8"
 libc = "0.2.43"
+libloading = "0.5.0"
 log = "0.4.2"
-solana_rbpf = "=0.1.4"
+matches = "0.1.6"
+nix = "0.11.0"
+pnet_datalink = "0.21.0"
+rand = "0.5.1"
+rayon = "1.0.0"
+reqwest = "0.9.0"
+ring = "0.13.2"
+sha2 = "0.8.0"
 serde = "1.0.27"
+serde_cbor = "0.9.0"
 serde_derive = "1.0.27"
+serde_json = "1.0.10"
+socket2 = "0.3.8"
 solana-sdk = { path = "../../../sdk", version = "0.11.0" }
+sys-info = "0.5.6"
+tokio = "0.1"
+tokio-codec = "0.1"
+untrusted = "0.6.2"
+lazy_static = "1.2.0"
+solana-erc20 = { path = "../../../programs/native/erc20", version = "0.11.0" }
+solana-lualoader = { path = "../../../programs/native/lua_loader", version = "0.11.0" }
+solana-noop = { path = "../../../programs/native/noop", version = "0.11.0" }
+solana_rbpf = "=0.1.4"
 
 [lib]
 name = "solana_bpf_loader"

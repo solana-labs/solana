@@ -114,6 +114,7 @@ solana-bpfloader = { path = "programs/native/bpf_loader", version = "0.11.0" }
 solana-erc20 = { path = "programs/native/erc20", version = "0.11.0" }
 solana-lualoader = { path = "programs/native/lua_loader", version = "0.11.0" }
 solana-noop = { path = "programs/native/noop", version = "0.11.0" }
+solana_rbpf = "=0.1.4"
 
 [[bench]]
 name = "bank"
