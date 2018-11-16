@@ -16,6 +16,13 @@ use std::error;
 use std::fs::File;
 use std::path::Path;
 
+/**
+ * Bootstrap leader gets two tokens:
+ * - one token to create an instance of the vote_program with
+ * - one second token to keep the node identity public key valid
+ */
+pub const BOOTSTRAP_LEADER_TOKENS: u64 = 2;
+
 fn main() -> Result<(), Box<error::Error>> {
     let matches = App::new("solana-genesis")
         .version(crate_version!())
@@ -62,7 +69,12 @@ fn main() -> Result<(), Box<error::Error>> {
     let num_tokens = value_t_or_exit!(matches, "num_tokens", u64);
     let file = File::open(Path::new(&matches.value_of("mint").unwrap())).unwrap();
     let pkcs8: Vec<u8> = serde_json::from_reader(&file)?;
-    let mint = Mint::new_with_pkcs8(num_tokens, pkcs8, leader_keypair.pubkey(), 1);
+    let mint = Mint::new_with_pkcs8(
+        num_tokens,
+        pkcs8,
+        leader_keypair.pubkey(),
+        BOOTSTRAP_LEADER_TOKENS,
+    );
 
     // Write the ledger entries
     let ledger_path = matches.value_of("ledger").unwrap();

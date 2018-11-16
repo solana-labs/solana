@@ -60,6 +60,7 @@ if ((!self_setup)); then
     echo "  ${here}/setup.sh"
     exit 1
   }
+  validator_id_path=$SOLANA_CONFIG_PRIVATE_DIR/validator-id.json
   validator_json_path=$SOLANA_CONFIG_VALIDATOR_DIR/validator.json
   SOLANA_LEADER_CONFIG_DIR=$SOLANA_CONFIG_VALIDATOR_DIR/leader-config
 else
@@ -77,6 +78,22 @@ else
 
   SOLANA_LEADER_CONFIG_DIR=$SOLANA_CONFIG_VALIDATOR_DIR/leader-config-x$$
 fi
+
+[[ -r $validator_id_path ]] || {
+  echo "$validator_id_path does not exist"
+  exit 1
+}
+
+# A fullnode requires 2 tokens to function:
+# - one token to create an instance of the vote_program with
+# - one second token to keep the node identity public key valid.
+(
+  set -x
+  $solana_wallet \
+    --keypair "$validator_id_path" \
+    --network "$leader_address" \
+    airdrop 2
+)
 
 rsync_leader_url=$(rsync_url "$leader")
 
