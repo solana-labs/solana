@@ -32,10 +32,10 @@ zone=$3
 
 set -x
 echo "--- $cloudProvider.sh config"
-net/"$cloudProvider".sh config -p "$netName" -z "$zone"
+timeout 5m net/"$cloudProvider".sh config -p "$netName" -z "$zone"
 net/init-metrics.sh -e
 echo --- net.sh sanity
-net/net.sh sanity \
+timeout 5m net/net.sh sanity \
   ${NO_LEDGER_VERIFY:+-o noLedgerVerify} \
   ${NO_VALIDATOR_SANITY:+-o noValidatorSanity} \
   ${REJECT_EXTRA_NODES:+-o rejectExtraNodes} \
