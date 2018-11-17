@@ -244,10 +244,13 @@ export class Transaction {
     }
 
     const signData = this._getSignData();
-    const wireTransaction = Buffer.alloc(signature.length + signData.length);
+    const wireTransaction = Buffer.alloc(
+      8 + signature.length + signData.length,
+    );
 
-    Buffer.from(signature).copy(wireTransaction, 0);
-    signData.copy(wireTransaction, signature.length);
+    wireTransaction.writeUInt8(1, 0); // TODO: Support multiple transaction signatures
+    Buffer.from(signature).copy(wireTransaction, 8);
+    signData.copy(wireTransaction, 8 + signature.length);
     return wireTransaction;
   }
 
