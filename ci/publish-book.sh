@@ -32,9 +32,8 @@ echo --- create book repo
   git init .
   git config user.email "maintainers@solana.com"
   git config user.name "$(basename "$0")"
-  git commit -m "Initial commit" --allow-empty
   git add ./* ./.nojekyll
-  git commit -m "$BUILDKITE_COMMIT"
+  git commit -m "${BUILDKITE_COMMIT:-local}"
 )
 
 echo --- publish
