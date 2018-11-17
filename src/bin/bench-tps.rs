@@ -588,7 +588,7 @@ fn main() {
             exit(1)
         })
     } else {
-        let mut addr = network.clone();
+        let mut addr = network;
         addr.set_port(DRONE_PORT);
         addr
     };
