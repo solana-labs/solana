@@ -580,7 +580,7 @@ fn main() {
         socketaddr!("127.0.0.1:8001")
     };
 
-    let mut drone_addr = if let Some(addr) = matches.value_of("drone") {
+    let drone_addr = if let Some(addr) = matches.value_of("drone") {
         addr.parse().unwrap_or_else(|e| {
             eprintln!("failed to parse drone address: {}", e);
             exit(1)
@@ -588,6 +588,7 @@ fn main() {
     } else {
         let mut addr = network.clone();
         addr.set_port(DRONE_PORT);
+        addr
     };
 
     let id =
