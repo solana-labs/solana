@@ -12,7 +12,7 @@ steps:
     timeout_in_minutes: 5
     name: "publish bpf sdk"
   - command: "ci/publish-solana-tar.sh"
-    timeout_in_minutes: 15
+    timeout_in_minutes: 25
     name: "publish release tarball"
   - command: "ci/publish-book.sh"
     timeout_in_minutes: 15
