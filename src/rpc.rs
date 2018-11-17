@@ -192,6 +192,9 @@ impl RpcSol for RpcSolImpl {
                 Ok(_) => RpcSignatureStatus::Confirmed,
                 Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
                 Err(BankError::ProgramRuntimeError(_)) => RpcSignatureStatus::ProgramRuntimeError,
+                // Report SignatureReserved as SignatureNotFound as SignatureReserved is
+                // transitory while the bank processes the associated transaction.
+                Err(BankError::SignatureReserved) => RpcSignatureStatus::SignatureNotFound,
                 Err(BankError::SignatureNotFound) => RpcSignatureStatus::SignatureNotFound,
                 Err(err) => {
                     trace!("mapping {:?} to GenericFailure", err);

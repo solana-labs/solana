@@ -77,6 +77,9 @@ pub enum BankError {
     /// too old and has been discarded.
     SignatureNotFound,
 
+    /// A transaction with this signature has been received but not yet executed
+    SignatureReserved,
+
     /// Proof of History verification failed.
     LedgerVerificationFailed,
 
@@ -431,7 +434,7 @@ impl Bank {
         if let Some(_result) = signatures.get(signature) {
             return Err(BankError::DuplicateSignature);
         }
-        signatures.insert(*signature, Ok(()));
+        signatures.insert(*signature, Err(BankError::SignatureReserved));
         Ok(())
     }
 
@@ -1747,7 +1750,10 @@ mod tests {
         let signature = Signature::default();
         bank.reserve_signature_with_last_id_test(&signature, &mint.last_id())
             .expect("reserve signature");
-        assert_eq!(bank.get_signature_status(&signature), Ok(()));
+        assert_eq!(
+            bank.get_signature_status(&signature),
+            Err(BankError::SignatureReserved)
+        );
     }
 
     #[test]
