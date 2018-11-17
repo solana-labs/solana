@@ -91,7 +91,8 @@ parts:
       - scripts
     override-build: |
       # Build/install all programs
-      cargo install --root $SNAPCRAFT_PART_INSTALL --bins
+      cargo install --path drone --root $SNAPCRAFT_PART_INSTALL --bins
+      cargo install --path . --root $SNAPCRAFT_PART_INSTALL --bins
 
       # Install native programs
       ./scripts/install-native-programs.sh $SNAPCRAFT_PART_INSTALL/bin/
