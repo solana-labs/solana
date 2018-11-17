@@ -121,7 +121,7 @@ impl LedgerColumnFamily for MetaCf {
 pub struct DataCf {}
 
 impl DataCf {
-    pub fn get_on_slot_index(
+    pub fn get_by_slot_index(
         &self,
         db: &DB,
         slot_height: u64,
@@ -131,7 +131,7 @@ impl DataCf {
         self.get(db, &key)
     }
 
-    pub fn put_on_slot_index(
+    pub fn put_by_slot_index(
         &self,
         db: &DB,
         slot_height: u64,
@@ -173,7 +173,7 @@ impl LedgerColumnFamilyRaw for DataCf {
 pub struct ErasureCf {}
 
 impl ErasureCf {
-    pub fn get_on_slot_index(
+    pub fn get_by_slot_index(
         &self,
         db: &DB,
         slot_height: u64,
@@ -183,7 +183,7 @@ impl ErasureCf {
         self.get(db, &key)
     }
 
-    pub fn put_on_slot_index(
+    pub fn put_by_slot_index(
         &self,
         db: &DB,
         slot_height: u64,

@@ -1,11 +1,8 @@
-//! The `window` module defines data structure for storing the tail of the ledger.
-//!
+//! Set of functions for emulating windowing functions from a database ledger implementation
 use cluster_info::ClusterInfo;
 use counter::Counter;
 use db_ledger::*;
 use entry::Entry;
-#[cfg(feature = "erasure")]
-use erasure;
 use leader_scheduler::LeaderScheduler;
 use log::Level;
 use packet::{SharedBlob, BLOB_HEADER_SIZE};
@@ -301,7 +298,7 @@ pub fn process_blob(
         let consumed = meta.consumed;
 
         // Check if we ran over the last wanted entry
-        if consumed >= max_ix + 1 {
+        if consumed > max_ix {
             let extra_unwanted_entries_len = consumed - (max_ix + 1);
             let consumed_entries_len = consumed_entries.len();
             consumed_entries.truncate(consumed_entries_len - extra_unwanted_entries_len as usize);
@@ -324,15 +321,13 @@ pub fn calculate_max_repair_entry_height(
     // via avalanche. The avalanche splits data stream into nodes and each node retransmits
     // the data to their peer nodes. So there's a possibility that a blob (with index lower
     // than current received index) is being retransmitted by a peer node.
-    let max_repair = if times >= 8 || is_next_leader {
+    if times >= 8 || is_next_leader {
         // if repair backoff is getting high, or if we are the next leader,
         // don't wait for avalanche. received - 1 is the index of the highest blob.
         received
     } else {
         cmp::max(consumed, received.saturating_sub(num_peers))
-    };
-
-    max_repair
+    }
 }
 
 #[cfg(test)]
