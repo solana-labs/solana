@@ -282,7 +282,7 @@ mod tests {
         assert!(!tx.verify_refs());
     }
 
-    /// Detect binary changes in the serialized contract userdata, which could have a downstream
+    /// Detect binary changes in the serialized transaction userdata, which could have a downstream
     /// affect on SDKs and DApps
     #[test]
     fn test_sdk_serialize() {
