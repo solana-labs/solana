@@ -18,6 +18,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::Result;
 use tpu::{Tpu, TpuReturnType};
+use tpu_forwarder::TpuForwarder;
 use tvu::{Tvu, TvuReturnType};
 use untrusted::Input;
 use window::{new_window, SharedWindow};
@@ -56,15 +57,18 @@ impl LeaderServices {
 
 pub struct ValidatorServices {
     tvu: Tvu,
+    tpu_forwarder: TpuForwarder,
 }
 
 impl ValidatorServices {
-    fn new(tvu: Tvu) -> Self {
-        ValidatorServices { tvu }
+    fn new(tvu: Tvu, tpu_forwarder: TpuForwarder) -> Self {
+        ValidatorServices { tvu, tpu_forwarder }
     }
 
     pub fn join(self) -> Result<Option<TvuReturnType>> {
-        self.tvu.join()
+        let ret = self.tvu.join(); // TVU calls the shots, we wait for it to shut down
+        self.tpu_forwarder.join()?;
+        ret
     }
 
     pub fn is_exited(&self) -> bool {
@@ -279,7 +283,16 @@ impl Fullnode {
                     .expect("Failed to clone retransmit socket"),
                 Some(ledger_path),
             );
-            let validator_state = ValidatorServices::new(tvu);
+            let tpu_forwarder = TpuForwarder::new(
+                node.sockets
+                    .transaction
+                    .iter()
+                    .map(|s| s.try_clone().expect("Failed to clone transaction sockets"))
+                    .collect(),
+                cluster_info.clone(),
+            );
+
+            let validator_state = ValidatorServices::new(tvu, tpu_forwarder);
             Some(NodeRole::Validator(validator_state))
         } else {
             let max_tick_height = {
@@ -423,7 +436,15 @@ impl Fullnode {
                     .expect("Failed to clone retransmit socket"),
                 Some(&self.ledger_path),
             );
-            let validator_state = ValidatorServices::new(tvu);
+            let tpu_forwarder = TpuForwarder::new(
+                self.transaction_sockets
+                    .iter()
+                    .map(|s| s.try_clone().expect("Failed to clone transaction sockets"))
+                    .collect(),
+                self.cluster_info.clone(),
+            );
+
+            let validator_state = ValidatorServices::new(tvu, tpu_forwarder);
             self.node_role = Some(NodeRole::Validator(validator_state));
             Ok(())
         }
