@@ -25,9 +25,10 @@ maybe_install() {
 }
 
 _ cargo fmt -- --check
+_ cargo clippy -- --version
+_ cargo clippy -- --deny=warnings
 _ cargo build --all --verbose
 _ cargo test --verbose --lib
-_ cargo clippy -- --deny=warnings || true
 
 # Run integration tests serially
 for test in tests/*.rs; do
