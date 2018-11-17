@@ -20,7 +20,7 @@ usage() {
 }
 
 if [[ -z $1 ]]; then # default behavior
-  $solana_bench_tps --identity config-private/client-id.json --network 127.0.0.1:8001 --duration 90
+  $solana_bench_tps --identity config-private/client-id.json --network 127.0.0.1:8001 --drone 127.0.0.1:9900 --duration 90
 else
   $solana_bench_tps "$@"
 fi

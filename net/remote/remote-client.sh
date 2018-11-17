@@ -59,6 +59,7 @@ scripts/net-stats.sh  > net-stats.log 2>&1 &
 clientCommand="\
   $solana_bench_tps \
     --network $entrypointIp:8001 \
+    --drone $entrypointIp:9900 \
     --identity client.json \
     --duration 7500 \
     --sustained \

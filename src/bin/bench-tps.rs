@@ -133,7 +133,7 @@ fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash,
         let confirmatiom = barrier_client.poll_for_signature(&signature);
         let duration_ms = duration_as_ms(&transfer_start.elapsed());
         if confirmatiom.is_ok() {
-            println!("barrier transaction confirmed in {}ms", duration_ms);
+            println!("barrier transaction confirmed in {} ms", duration_ms);
 
             solana_metrics::submit(
                 influxdb::Point::new("bench-tps")
@@ -376,10 +376,7 @@ fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], token
     }
 }
 
-fn airdrop_tokens(client: &mut ThinClient, leader: &NodeInfo, id: &Keypair, tx_count: u64) {
-    let mut drone_addr = leader.tpu;
-    drone_addr.set_port(DRONE_PORT);
-
+fn airdrop_tokens(client: &mut ThinClient, drone_addr: &SocketAddr, id: &Keypair, tx_count: u64) {
     let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap_or(0);
     metrics_submit_token_balance(starting_balance);
     println!("starting balance {}", starting_balance);
@@ -512,6 +509,14 @@ fn main() {
                 .help("Rendezvous with the network at this gossip entry point; defaults to 127.0.0.1:8001"),
         )
         .arg(
+            Arg::with_name("drone")
+                .short("d")
+                .long("drone")
+                .value_name("HOST:PORT")
+                .takes_value(true)
+                .help("Location of the drone; defaults to network:DRONE_PORT"),
+        )
+        .arg(
             Arg::with_name("identity")
                 .short("i")
                 .long("identity")
@@ -574,6 +579,17 @@ fn main() {
         })
     } else {
         socketaddr!("127.0.0.1:8001")
+    };
+
+    let drone_addr = if let Some(addr) = matches.value_of("drone") {
+        addr.parse().unwrap_or_else(|e| {
+            eprintln!("failed to parse drone address: {}", e);
+            exit(1)
+        })
+    } else {
+        let mut addr = network.clone();
+        addr.set_port(DRONE_PORT);
+        addr
     };
 
     let id =
@@ -667,13 +683,13 @@ fn main() {
     if num_tokens_per_account > keypair0_balance {
         let extra = num_tokens_per_account - keypair0_balance;
         let total = extra * (gen_keypairs.len() as u64);
-        airdrop_tokens(&mut client, &leader, &id, total);
+        airdrop_tokens(&mut client, &drone_addr, &id, total);
         println!("adding more tokens {}", extra);
         fund_keys(&mut client, &id, &gen_keypairs, extra);
     }
     let start = gen_keypairs.len() - (tx_count * 2) as usize;
     let keypairs = &gen_keypairs[start..];
-    airdrop_tokens(&mut barrier_client, &leader, &barrier_id, 1);
+    airdrop_tokens(&mut barrier_client, &drone_addr, &barrier_id, 1);
 
     println!("Get last ID...");
     let mut last_id = client.get_last_id();

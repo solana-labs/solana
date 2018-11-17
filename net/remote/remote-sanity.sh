@@ -107,6 +107,7 @@ echo "+++ $entrypointIp: node count ($numNodes expected)"
 
   $solana_bench_tps \
     --network "$entrypointIp:8001" \
+    --drone "$entrypointIp:9900" \
     --identity "$client_id" \
     --num-nodes "$numNodes" \
     $maybeRejectExtraNodes \
