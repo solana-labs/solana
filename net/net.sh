@@ -138,6 +138,7 @@ build() {
     fi
     $MAYBE_DOCKER bash -c "
       set -ex
+      export NDEBUG=1
       cargo install --path drone --features=$cargoFeatures --root farf
       cargo install --path . --features=$cargoFeatures --root farf
     "

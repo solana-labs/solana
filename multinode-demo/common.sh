@@ -60,7 +60,7 @@ else
     if [[ "$program" = drone ]]; then
       maybe_package="--package solana-drone"
     fi
-    if [[ -z $DEBUG ]]; then
+    if [[ -n $NDEBUG ]]; then
       maybe_release=--release
     fi
     printf "cargo run $maybe_release $maybe_package --bin solana-%s %s -- " "$program" "$features"
