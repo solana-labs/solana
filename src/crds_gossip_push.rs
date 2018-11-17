@@ -10,6 +10,7 @@
 
 use bincode::serialized_size;
 use bloom::Bloom;
+use cluster_info::ClusterInfo;
 use crds::{Crds, VersionedCrdsValue};
 use crds_gossip_error::CrdsGossipError;
 use crds_value::{CrdsValue, CrdsValueLabel};
@@ -176,6 +177,11 @@ impl CrdsGossipPush {
             }
             if new_items.get(&val.0.pubkey()).is_some() {
                 continue;
+            }
+            if let Some(contact) = val.1.value.contact_info() {
+                if !ClusterInfo::is_valid_address(&contact.ncp) {
+                    continue;
+                }
             }
             let bloom = Bloom::random(network_size, 0.1, 1024 * 8 * 4);
             new_items.insert(val.0.pubkey(), bloom);
