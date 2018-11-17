@@ -265,7 +265,7 @@ SOL_FN_PREFIX bool sol_deserialize(
   *data_len = *(uint64_t *) input;
   input += sizeof(uint64_t);
   *data = input;
-  input += sizeof(*data_len);
+  input += *data_len;
 
   if (cluster_info != NULL) {
     cluster_info->tick_height = *(uint64_t *) input;
