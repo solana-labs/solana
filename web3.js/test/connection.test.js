@@ -497,8 +497,6 @@ test('account change notification', async () => {
   const loader = new Loader(connection, BpfLoader.programId);
   await loader.load(programAccount, [1, 2, 3]);
 
-  await connection.removeAccountChangeListener(subscriptionId);
-
   // mockCallback should be called twice
   //
   // retry a couple times if needed
@@ -514,6 +512,8 @@ test('account change notification', async () => {
     }
     await sleep(500);
   }
+
+  await connection.removeAccountChangeListener(subscriptionId);
 
   // First mockCallback call is due to SystemProgram.createAccount()
   expect(mockCallback.mock.calls[0][0].tokens).toBe(42);

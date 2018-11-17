@@ -6,6 +6,7 @@ import {mockRpc, mockRpcEnabled} from './__mocks__/node-fetch';
 import {url} from './url';
 import {newAccountWithTokens} from './new-account-with-tokens';
 import {mockGetLastId} from './mockrpc/getlastid';
+import {sleep} from '../src/util/sleep';
 
 if (!mockRpcEnabled) {
   // The default of 5 seconds is too slow for live testing sometimes
@@ -545,6 +546,8 @@ test('transfer', async () => {
       },
     ]);
   }
+
+  await sleep(500);
 
   const destAccountInfo = await testToken.accountInfo(dest);
   expect(destAccountInfo.amount.toNumber()).toBe(123);
