@@ -14,7 +14,7 @@ _() {
 _ cargo fmt -- --check
 _ cargo build --verbose
 _ cargo test --verbose --lib
-_ cargo clippy -- --deny=warnings
+_ cargo clippy -- --deny=warnings || true
 
 # Run integration tests serially
 for test in tests/*.rs; do
@@ -26,7 +26,7 @@ done
 # Run native program's tests
 for program in programs/native/*; do
   echo --- "$program"
-  ( 
+  (
     set -x
     cd "$program"
     cargo test --verbose
