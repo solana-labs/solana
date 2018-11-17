@@ -13,7 +13,7 @@ bpf_c = []
 bincode = "1.0.0"
 byteorder = "1.2.1"
 elf = "0.0.10"
-env_logger = "0.5.12"
+env_logger = "0.6.0"
 libc = "0.2.43"
 log = "0.4.2"
 solana_rbpf = "=0.1.4"

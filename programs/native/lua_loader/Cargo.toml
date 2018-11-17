@@ -8,7 +8,7 @@ license = "Apache-2.0"
 
 [dependencies]
 bincode = "1.0.0"
-env_logger = "0.5.12"
+env_logger = "0.6.0"
 log = "0.4.2"
 rlua = "0.15.2"
 serde = "1.0.27"
