@@ -73,7 +73,7 @@ chrono = { version = "0.4.0", features = ["serde"] }
 clap = "2.31"
 dirs = "1.0.2"
 elf = "0.0.10"
-env_logger = "0.5.12"
+env_logger = "0.6.0"
 generic-array = { version = "0.12.0", default-features = false, features = ["serde"] }
 getopts = "0.2"
 hex-literal = "0.1.1"
