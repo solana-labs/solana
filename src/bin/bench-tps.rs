@@ -508,6 +508,14 @@ fn main() {
                 .help("Rendezvous with the network at this gossip entry point; defaults to 127.0.0.1:8001"),
         )
         .arg(
+            Arg::with_name("drone")
+                .short("d")
+                .long("drone")
+                .value_name("HOST:PORT")
+                .takes_value(true)
+                .help("Location of the drone; defaults to network:DRONE_PORT"),
+        )
+        .arg(
             Arg::with_name("identity")
                 .short("i")
                 .long("identity")
@@ -572,7 +580,15 @@ fn main() {
         socketaddr!("127.0.0.1:8001")
     };
 
-    let mut drone_addr = network.clone();
+    let mut drone_addr = if let Some(addr) = matches.value_of("drone") {
+        addr.parse().unwrap_or_else(|e| {
+            eprintln!("failed to parse drone address: {}", e);
+            exit(1)
+        })
+    } else {
+        network.clone()
+    };
+
     drone_addr.set_port(DRONE_PORT);
 
     let id =
