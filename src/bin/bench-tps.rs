@@ -586,10 +586,9 @@ fn main() {
             exit(1)
         })
     } else {
-        network.clone()
+        let mut addr = network.clone();
+        addr.set_port(DRONE_PORT);
     };
-
-    drone_addr.set_port(DRONE_PORT);
 
     let id =
         read_keypair(matches.value_of("identity").unwrap()).expect("can't read client identity");
