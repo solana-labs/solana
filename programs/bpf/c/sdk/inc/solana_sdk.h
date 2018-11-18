@@ -194,6 +194,7 @@ SOL_FN_PREFIX void _sol_panic(uint64_t line) {
  */
 typedef struct {
   uint64_t tick_height; /** Current ledger tick */
+  const SolPubkey *program_id; /** program_id of the currently executing program */
 } SolClusterInfo;
 
 /**
@@ -269,6 +270,9 @@ SOL_FN_PREFIX bool sol_deserialize(
 
   if (cluster_info != NULL) {
     cluster_info->tick_height = *(uint64_t *) input;
+    input += sizeof(uint64_t);
+    cluster_info->program_id = (SolPubkey *) input;
+    input += sizeof(SolPubkey);
   }
   return true;
 }

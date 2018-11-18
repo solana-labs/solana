@@ -851,6 +851,7 @@ impl Bank {
             keyed_accounts.append(&mut keyed_accounts2);
 
             if !native_loader::process_instruction(
+                &program_id,
                 &mut keyed_accounts,
                 &tx.instructions[instruction_index].userdata,
                 self.tick_height(),
