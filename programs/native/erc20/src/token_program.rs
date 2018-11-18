@@ -402,7 +402,7 @@ impl TokenProgram {
         Ok(())
     }
 
-    pub fn process(info: &mut [KeyedAccount], input: &[u8]) -> Result<()> {
+    pub fn process(program_id: &Pubkey, info: &mut [KeyedAccount], input: &[u8]) -> Result<()> {
         let command = bincode::deserialize::<Command>(input).map_err(Self::map_to_invalid_args)?;
         info!("process_transaction: command={:?}", command);
 
@@ -410,13 +410,7 @@ impl TokenProgram {
             .iter()
             .map(|keyed_account| {
                 let account = &keyed_account.account;
-
-                //
-                // TODO: Restore the following commented out block to valid program ids
-                //       once https://github.com/solana-labs/solana/issues/1544 is fixed.
-
-                /*
-                if account.program_id == info[0].account.program_id {
+                if account.owner == *program_id {
                     match Self::deserialize(&account.userdata) {
                         Ok(token_program) => token_program,
                         Err(err) => {
@@ -426,14 +420,6 @@ impl TokenProgram {
                     }
                 } else {
                     TokenProgram::Invalid
-                }
-                */
-                match Self::deserialize(&account.userdata) {
-                    Ok(token_program) => token_program,
-                    Err(err) => {
-                        error!("deserialize failed: {:?}", err);
-                        TokenProgram::Invalid
-                    }
                 }
             }).collect();
 

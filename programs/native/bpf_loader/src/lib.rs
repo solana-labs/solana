@@ -99,6 +99,7 @@ pub fn create_vm(prog: &[u8]) -> Result<EbpfVmRaw, Error> {
 }
 
 fn serialize_parameters(
+    program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
     tick_height: u64,
@@ -119,6 +120,7 @@ fn serialize_parameters(
     v.write_u64::<LittleEndian>(data.len() as u64).unwrap();
     v.write_all(data).unwrap();
     v.write_u64::<LittleEndian>(tick_height).unwrap();
+    v.write_all(program_id.as_ref()).unwrap();
     v
 }
 
@@ -141,7 +143,12 @@ fn deserialize_parameters(keyed_accounts: &mut [KeyedAccount], buffer: &[u8]) {
 }
 
 solana_entrypoint!(entrypoint);
-fn entrypoint(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8], tick_height: u64) -> bool {
+fn entrypoint(
+    program_id: &Pubkey,
+    keyed_accounts: &mut [KeyedAccount],
+    tx_data: &[u8],
+    tick_height: u64,
+) -> bool {
     static INIT: Once = ONCE_INIT;
     INIT.call_once(|| {
         // env_logger can only be initialized once
@@ -159,7 +166,8 @@ fn entrypoint(keyed_accounts: &mut [KeyedAccount], tx_data: &[u8], tick_height: 
                 return false;
             }
         };
-        let mut v = serialize_parameters(&mut keyed_accounts[1..], &tx_data, tick_height);
+        let mut v =
+            serialize_parameters(program_id, &mut keyed_accounts[1..], &tx_data, tick_height);
         match vm.execute_program(v.as_mut_slice()) {
             Ok(status) => {
                 if 0 == status {

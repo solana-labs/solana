@@ -54,6 +54,7 @@ pub fn id() -> Pubkey {
 }
 
 pub fn process_instruction(
+    program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     ix_userdata: &[u8],
     tick_height: u64,
@@ -85,7 +86,12 @@ pub fn process_instruction(
                             return false;
                         }
                     };
-                return entrypoint(&mut keyed_accounts[1..], ix_userdata, tick_height);
+                return entrypoint(
+                    program_id,
+                    &mut keyed_accounts[1..],
+                    ix_userdata,
+                    tick_height,
+                );
             },
             Err(e) => {
                 warn!("Unable to load: {:?}", e);
