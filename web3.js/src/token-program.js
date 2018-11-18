@@ -233,14 +233,14 @@ export class Token {
       1 + userdata.length,
       programId,
     );
-    await sendAndConfirmTransaction(connection, owner, transaction);
+    await sendAndConfirmTransaction(connection, transaction, owner);
 
     transaction = new Transaction().add({
       keys: [tokenAccount.publicKey, initialAccountPublicKey],
       programId,
       userdata,
     });
-    await sendAndConfirmTransaction(connection, tokenAccount, transaction);
+    await sendAndConfirmTransaction(connection, transaction, tokenAccount);
 
     return [token, initialAccountPublicKey];
   }
@@ -282,7 +282,7 @@ export class Token {
       1 + TokenAccountInfoLayout.span,
       this.programId,
     );
-    await sendAndConfirmTransaction(this.connection, owner, transaction);
+    await sendAndConfirmTransaction(this.connection, transaction, owner);
 
     // Initialize the token account
     const keys = [tokenAccount.publicKey, owner.publicKey, this.token];
@@ -295,7 +295,7 @@ export class Token {
       userdata,
     });
 
-    await sendAndConfirmTransaction(this.connection, tokenAccount, transaction);
+    await sendAndConfirmTransaction(this.connection, transaction, tokenAccount);
 
     return tokenAccount.publicKey;
   }
@@ -377,7 +377,6 @@ export class Token {
   ): Promise<?TransactionSignature> {
     return await sendAndConfirmTransaction(
       this.connection,
-      owner,
       new Transaction().add(
         await this.transferInstruction(
           owner.publicKey,
@@ -386,6 +385,7 @@ export class Token {
           amount,
         ),
       ),
+      owner,
     );
   }
 
@@ -405,10 +405,10 @@ export class Token {
   ): Promise<void> {
     await sendAndConfirmTransaction(
       this.connection,
-      owner,
       new Transaction().add(
         this.approveInstruction(owner.publicKey, account, delegate, amount),
       ),
+      owner,
     );
   }
 
@@ -441,10 +441,10 @@ export class Token {
   ): Promise<void> {
     await sendAndConfirmTransaction(
       this.connection,
-      owner,
       new Transaction().add(
         this.setOwnerInstruction(owner.publicKey, account, newOwner),
       ),
+      owner,
     );
   }
 

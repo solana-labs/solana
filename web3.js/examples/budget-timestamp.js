@@ -76,7 +76,7 @@ showBalance()
       0,
       solanaWeb3.BudgetProgram.programId,
     );
-    return connection.sendTransaction(account1, transaction);
+    return connection.sendTransaction(transaction, account1);
   })
   .then(confirmTransaction)
   .then(showBalance)
@@ -89,7 +89,7 @@ showBalance()
       solanaWeb3.BudgetProgram.space,
       solanaWeb3.BudgetProgram.programId,
     );
-    return connection.sendTransaction(account1, transaction);
+    return connection.sendTransaction(transaction, account1);
   })
   .then(confirmTransaction)
   .then(showBalance)
@@ -105,7 +105,7 @@ showBalance()
         new Date('2050'),
       ),
     );
-    return connection.sendTransaction(contractFunds, transaction);
+    return connection.sendTransaction(transaction, contractFunds);
   })
   .then(confirmTransaction)
   .then(showBalance)
@@ -117,7 +117,7 @@ showBalance()
       account2.publicKey,
       new Date('2050'),
     );
-    return connection.sendTransaction(account1, transaction);
+    return connection.sendTransaction(transaction, account1);
   })
   .then(confirmTransaction)
   .then(showBalance)

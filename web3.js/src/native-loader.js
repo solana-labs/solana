@@ -44,7 +44,7 @@ export class NativeLoader {
       bytes.length + 1,
       NativeLoader.programId,
     );
-    await sendAndConfirmTransaction(connection, owner, transaction);
+    await sendAndConfirmTransaction(connection, transaction, owner);
 
     const loader = new Loader(connection, NativeLoader.programId);
     await loader.load(programAccount, bytes);

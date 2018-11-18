@@ -353,7 +353,7 @@ test('transaction', async () => {
     accountTo.publicKey,
     10,
   );
-  const signature = await connection.sendTransaction(accountFrom, transaction);
+  const signature = await connection.sendTransaction(transaction, accountFrom);
 
   mockRpc.push([
     url,
@@ -448,7 +448,7 @@ test('multi-instruction transaction', async () => {
     10,
   ).add(SystemProgram.move(accountTo.publicKey, accountFrom.publicKey, 10));
 
-  const signature = await connection.sendTransaction(accountFrom, transaction);
+  const signature = await connection.sendTransaction(transaction, accountFrom, accountTo);
   let i = 0;
   for (;;) {
     if (await connection.confirmTransaction(signature)) {
@@ -492,7 +492,7 @@ test('account change notification', async () => {
     3,
     BpfLoader.programId,
   );
-  await sendAndConfirmTransaction(connection, owner, transaction);
+  await sendAndConfirmTransaction(connection, transaction, owner);
 
   const loader = new Loader(connection, BpfLoader.programId);
   await loader.load(programAccount, [1, 2, 3]);

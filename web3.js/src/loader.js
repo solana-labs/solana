@@ -72,7 +72,7 @@ export class Loader {
         userdata,
       });
       transactions.push(
-        sendAndConfirmTransaction(this.connection, program, transaction),
+        sendAndConfirmTransaction(this.connection, transaction, program),
       );
 
       // Run up to 8 Loads in parallel to prevent too many parallel transactions from
@@ -116,6 +116,6 @@ export class Loader {
       userdata,
     });
     transaction.add(SystemProgram.spawn(program.publicKey));
-    await sendAndConfirmTransaction(this.connection, program, transaction);
+    await sendAndConfirmTransaction(this.connection, transaction, program);
   }
 }

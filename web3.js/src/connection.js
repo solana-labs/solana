@@ -368,8 +368,8 @@ export class Connection {
    * Sign and send a transaction
    */
   async sendTransaction(
-    from: Account,
     transaction: Transaction,
+    ...signers: Array<Account>
   ): Promise<TransactionSignature> {
     for (;;) {
       // Attempt to use the previous last id for up to 1 second
@@ -379,7 +379,7 @@ export class Connection {
         this._lastIdInfo.seconds === seconds
       ) {
         transaction.lastId = this._lastIdInfo.lastId;
-        transaction.sign(from);
+        transaction.sign(...signers);
         if (!transaction.signature) {
           throw new Error('!signature'); // should never happen
         }

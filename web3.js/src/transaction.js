@@ -1,6 +1,6 @@
 // @flow
 
-import assert from 'assert';
+import invariant from 'assert';
 import * as BufferLayout from 'buffer-layout';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
@@ -61,14 +61,18 @@ export class TransactionInstruction {
  * List of Transaction object fields that may be initialized at construction
  *
  * @typedef {Object} TransactionCtorFields
- * @property {?Buffer} signature
- * @property {?Array<PublicKey>} keys
- * @property {?PublicKey} programId
  * @property {?number} fee
- * @property {?Buffer} userdata
  */
 type TransactionCtorFields = {|
   fee?: number,
+|};
+
+/**
+ * @private
+ */
+type SignaturePubkeyPair = {|
+  signature: Buffer | null,
+  publicKey: PublicKey,
 |};
 
 /**
@@ -76,10 +80,20 @@ type TransactionCtorFields = {|
  */
 export class Transaction {
   /**
-   * Current signature of the transaction.  Typically created by invoking the
-   * `sign()` method
+   * Signatures for the transaction.  Typically created by invoking the
+   * `sign()` method one or more times.
    */
-  signature: ?Buffer;
+  signatures: Array<SignaturePubkeyPair> = [];
+
+  /**
+   * The first (primary) Transaction signature
+   */
+  get signature(): Buffer | null {
+    if (this.signatures.length > 0) {
+      return this.signatures[0].signature;
+    }
+    return null;
+  }
 
   /**
    * The instructions to atomically execute
@@ -128,7 +142,7 @@ export class Transaction {
       throw new Error('No instructions provided');
     }
 
-    const keys = [];
+    const keys = this.signatures.map(({publicKey}) => publicKey.toString());
     const programIds = [];
     this.instructions.forEach(instruction => {
       const programId = instruction.programId.toString();
@@ -153,8 +167,8 @@ export class Transaction {
     });
 
     instructions.forEach(instruction => {
-      assert(instruction.programIdIndex >= 0);
-      instruction.keyIndices.forEach(keyIndex => assert(keyIndex >= 0));
+      invariant(instruction.programIdIndex >= 0);
+      instruction.keyIndices.forEach(keyIndex => invariant(keyIndex >= 0));
     });
 
     const instructionLayout = BufferLayout.struct([
@@ -222,14 +236,34 @@ export class Transaction {
   }
 
   /**
-   * Sign the Transaction with the specified account
+   * Sign the Transaction with the specified accounts.  Multiple signatures may
+   * be applied to a Transaction. The first signature is considered "primary"
+   * and is used when testing for Transaction confirmation.
+   *
+   * Transaction fields should not be modified after the first call to `sign`,
+   * as doing so may invalidate the signature and cause the Transaction to be
+   * rejected.
    *
    * The Transaction must be assigned a valid `lastId` before invoking this method
    */
-  sign(from: Account) {
+  sign(...signers: Array<Account>) {
+    if (signers.length === 0) {
+      throw new Error('No signers');
+    }
+    const signatures: Array<SignaturePubkeyPair> = signers.map(account => {
+      return {
+        signature: null,
+        publicKey: account.publicKey,
+      };
+    });
+    this.signatures = signatures;
     const signData = this._getSignData();
-    this.signature = nacl.sign.detached(signData, from.secretKey);
-    assert(this.signature.length === 64);
+
+    signers.forEach((account, index) => {
+      const signature = nacl.sign.detached(signData, account.secretKey);
+      invariant(signature.length === 64);
+      signatures[index].signature = signature;
+    });
   }
 
   /**
@@ -238,19 +272,27 @@ export class Transaction {
    * The Transaction must have a valid `signature` before invoking this method
    */
   serialize(): Buffer {
-    const {signature} = this;
-    if (!signature) {
+    const {signatures} = this;
+    if (!signatures) {
       throw new Error('Transaction has not been signed');
     }
 
     const signData = this._getSignData();
     const wireTransaction = Buffer.alloc(
-      8 + signature.length + signData.length,
+      8 + signatures.length * 64 + signData.length,
     );
-
-    wireTransaction.writeUInt8(1, 0); // TODO: Support multiple transaction signatures
-    Buffer.from(signature).copy(wireTransaction, 8);
-    signData.copy(wireTransaction, 8 + signature.length);
+    invariant(signatures.length < 256);
+    wireTransaction.writeUInt8(signatures.length, 0);
+    signatures.forEach(({signature}, index) => {
+      invariant(signature !== null, `null signature`);
+      invariant(signature.length === 64, `signature has invalid length`);
+      Buffer.from(signature).copy(wireTransaction, 8 + index * 64);
+    });
+    signData.copy(wireTransaction, 8 + signatures.length * 64);
+    invariant(
+      wireTransaction.length < 512,
+      `${wireTransaction.length}, ${signatures.length}`,
+    );
     return wireTransaction;
   }
 
@@ -259,7 +301,7 @@ export class Transaction {
    * @private
    */
   get keys(): Array<PublicKey> {
-    assert(this.instructions.length === 1);
+    invariant(this.instructions.length === 1);
     return this.instructions[0].keys;
   }
 
@@ -268,7 +310,7 @@ export class Transaction {
    * @private
    */
   get programId(): PublicKey {
-    assert(this.instructions.length === 1);
+    invariant(this.instructions.length === 1);
     return this.instructions[0].programId;
   }
 
@@ -277,7 +319,7 @@ export class Transaction {
    * @private
    */
   get userdata(): Buffer {
-    assert(this.instructions.length === 1);
+    invariant(this.instructions.length === 1);
     return this.instructions[0].userdata;
   }
 }
