@@ -1,26 +1,34 @@
-# The LAMPORT execution environment
+# The Solana SDK
 
 ## Introduction
 
-With LAMPORT (Language-Agnostic, Memory-oriented, Parallel-friendly, Optimized
-Run-Time), we can execute smart contracts concurrently, and written in the
-client’s choice of programming language. Furthermore, we demonstrate Solana’s
-built-in smart contract language Budget can target LAMPORT without any loss in
-performance. The two features that allow LAMPORT to work:
+With the Solana runtime, we can execute on-chain programs concurrently, and
+written in the client’s choice of programming language.
 
-Client-owned memory identified by public keys. By declaring ownership upfront
-and separating the program’s state from the program, the runtime knows which
-contracts can safely be executed concurrently.  Solana’s blockchain-encoded VDF
-tells validator nodes at precisely what times they need to end up in the same
-state. Between those times, they are free to introduce non-deterministic
-behavior as-needed to improve execution times.
-
-## Toolchain Stack
+## Client interactions with Solana
 
 <img alt="SDK tools" src="img/sdk-tools.svg" class="center"/>
 
 As shown in the diagram above an untrusted client, creates a program in the
-front-end language of her choice, (like C/C++/Rust/Lua), and compiles it with
-LLVM to a position independent shared object ELF, targeting BPF bytecode.
-Solana will safely load and execute the ELF.
+language of their choice, (i.e. C/C++/Rust/Lua), and compiles it with LLVM to a
+position independent shared object ELF, targeting BPF bytecode, and sends it to
+the Solana cluster. Next, the client sends messages to the Solana cluster,
+which target that program. The Solana runtime loads the previously submitted
+ELF and passes it the client's message for interpretation.
 
+## Persistent Storage
+
+Solana supports several kinds of persistent storage, called *accounts*:
+
+1. Executable
+2. Writable by a client
+3. Writable by a program
+4. Read-only
+
+All accounts are identified by public keys and may hold arbirary data.
+When the client sends messages to programs, it requests access to storage
+using those keys. The runtime loads the account data and passes it to the
+program. The runtime also ensures accounts aren't written to if not owned
+by the client or program. Any writes to read-only accounts are discarded
+unless the write was to credit tokens. Any user may credit other accounts
+tokens, regardless of account permission.

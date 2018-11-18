@@ -39,7 +39,7 @@ routs them to the `program_id` entry point.
 
 Transactions are batched and processed in a pipeline
 
-<img alt="LAMPORT pipeline" src="img/lamport.svg" class="center"/>
+<img alt="Runtime pipeline" src="img/runtime.svg" class="center"/>
 
 At the `execute` stage, the loaded pages have no data dependencies, so all the
 programs can be executed in parallel. 
