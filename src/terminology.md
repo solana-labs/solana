@@ -1,4 +1,4 @@
-## Appendix A: Terminology
+## Terminology
 
 ### Teminology Currently in Use
 
@@ -12,7 +12,6 @@ The following list contains words commonly used throughout the Solana architectu
 * entry - an entry on the ledger - either a tick or a transactions entry
 * instruction - the smallest unit of a program that a client can include in a transaction
 * keypair - a public and secret key
-* mips - millions of instructions per second
 * node count - the number of fullnodes participating in a cluster
 * program - the code that interprets instructions
 * pubkey - the public key of a keypair
@@ -28,6 +27,8 @@ The following list contains words commonly used throughout the Solana architectu
 The following keywords do not have any functionality but are reserved by Solana
 for potential future use.
 
+* epoch - the time in which a leader schedule is valid
 * mips - millions of instructions per second
 * public key - We currently use `pubkey`
+* slot - the time in which a single leader may produce entries
 * secret key - Users currently only use `keypair`

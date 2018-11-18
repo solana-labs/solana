@@ -2,6 +2,8 @@
 
 - [Introduction](introduction.md)
 
+- [Terminology](terminology.md)
+
 - [Synchronization](synchronization.md)
   - [Introduction to VDFs](vdf.md)
   - [Proof of History](poh.md)
@@ -22,7 +24,6 @@
 ## Appendix
 
 - [Appendix](appendix.md)
-  - [Terminology](terminology.md)
   - [JSON RPC API](jsonrpc-api.md)
   - [solana-wallet CLI](wallet.md)
 
