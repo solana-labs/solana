@@ -10,7 +10,7 @@
 
 use bincode::serialized_size;
 use bloom::Bloom;
-use cluster_info::ClusterInfo;
+use contact_info::ContactInfo;
 use crds::{Crds, VersionedCrdsValue};
 use crds_gossip_error::CrdsGossipError;
 use crds_value::{CrdsValue, CrdsValueLabel};
@@ -179,7 +179,7 @@ impl CrdsGossipPush {
                 continue;
             }
             if let Some(contact) = val.1.value.contact_info() {
-                if !ClusterInfo::is_valid_address(&contact.ncp) {
+                if !ContactInfo::is_valid_address(&contact.ncp) {
                     continue;
                 }
             }
