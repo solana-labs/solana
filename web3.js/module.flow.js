@@ -66,8 +66,8 @@ declare module '@solana/web3.js' {
       amount: number,
     ): Promise<TransactionSignature>;
     sendTransaction(
-      from: Account,
       transaction: Transaction,
+      ...signers: Array<Account>
     ): Promise<TransactionSignature>;
     onAccountChange(
       publickey: PublicKey,
@@ -242,8 +242,7 @@ declare module '@solana/web3.js' {
   // === src/util/send-and-confirm-transaction.js ===
   declare export function sendAndConfirmTransaction(
     connection: Connection,
-    from: Account,
     transaction: Transaction,
-    runtimeErrorOk?: boolean,
+    ...signers: Array<Account>
   ): Promise<TransactionSignature>;
 }

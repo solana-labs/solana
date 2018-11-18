@@ -29,5 +29,5 @@ test('load native program', async () => {
     programId,
   });
 
-  await sendAndConfirmTransaction(connection, from, transaction);
+  await sendAndConfirmTransaction(connection, transaction, from);
 });

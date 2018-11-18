@@ -74,7 +74,7 @@ showBalance()
       approver1.publicKey,
       1,
     );
-    return connection.sendTransaction(account1, transaction);
+    return connection.sendTransaction(transaction, account1);
   })
   .then(confirmTransaction)
   .then(() => {
@@ -84,7 +84,7 @@ showBalance()
       approver2.publicKey,
       1,
     );
-    return connection.sendTransaction(account1, transaction);
+    return connection.sendTransaction(transaction, account1);
   })
   .then(confirmTransaction)
   .then(showBalance)
@@ -97,7 +97,7 @@ showBalance()
       0,
       solanaWeb3.BudgetProgram.programId,
     );
-    return connection.sendTransaction(account1, transaction);
+    return connection.sendTransaction(transaction, account1);
   })
   .then(confirmTransaction)
   .then(showBalance)
@@ -110,7 +110,7 @@ showBalance()
       solanaWeb3.BudgetProgram.space,
       solanaWeb3.BudgetProgram.programId,
     );
-    return connection.sendTransaction(account1, transaction);
+    return connection.sendTransaction(transaction, account1);
   })
   .then(confirmTransaction)
   .then(showBalance)
@@ -124,7 +124,7 @@ showBalance()
       solanaWeb3.BudgetProgram.signatureCondition(approver1.publicKey),
       solanaWeb3.BudgetProgram.signatureCondition(approver2.publicKey),
     );
-    return connection.sendTransaction(contractFunds, transaction);
+    return connection.sendTransaction(transaction, contractFunds);
   })
   .then(confirmTransaction)
   .then(showBalance)
@@ -135,7 +135,7 @@ showBalance()
       contractState.publicKey,
       account2.publicKey,
     );
-    return connection.sendTransaction(approver1, transaction);
+    return connection.sendTransaction(transaction, approver1);
   })
   .then(confirmTransaction)
   .then(showBalance)
@@ -146,7 +146,7 @@ showBalance()
       contractState.publicKey,
       account2.publicKey,
     );
-    return connection.sendTransaction(approver2, transaction);
+    return connection.sendTransaction(transaction, approver2);
   })
   .then(confirmTransaction)
   .then(showBalance)

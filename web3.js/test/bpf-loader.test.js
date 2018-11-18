@@ -31,5 +31,5 @@ test('load BPF program', async () => {
     keys: [from.publicKey],
     programId,
   });
-  await sendAndConfirmTransaction(connection, from, transaction);
+  await sendAndConfirmTransaction(connection, transaction, from);
 });

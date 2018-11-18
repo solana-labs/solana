@@ -11,15 +11,14 @@ import type {TransactionSignature} from '../transaction';
  */
 export async function sendAndConfirmTransaction(
   connection: Connection,
-  from: Account,
   transaction: Transaction,
-  runtimeErrorOk: boolean = false,
+  ...signers: Array<Account>
 ): Promise<?TransactionSignature> {
   let sendRetries = 10;
   let signature;
   for (;;) {
     const start = Date.now();
-    signature = await connection.sendTransaction(from, transaction);
+    signature = await connection.sendTransaction(transaction, ...signers);
 
     // Wait up to a couple seconds for a confirmation
     let status = 'SignatureNotFound';
@@ -41,10 +40,7 @@ export async function sendAndConfirmTransaction(
       }
     }
 
-    if (
-      status === 'Confirmed' ||
-      (status === 'ProgramRuntimeError' && runtimeErrorOk)
-    ) {
+    if (status === 'Confirmed') {
       break;
     }
 

@@ -41,7 +41,7 @@ export class BpfLoader {
       elf.length,
       BpfLoader.programId,
     );
-    await sendAndConfirmTransaction(connection, owner, transaction);
+    await sendAndConfirmTransaction(connection, transaction, owner);
 
     const loader = new Loader(connection, BpfLoader.programId);
     await loader.load(programAccount, elf);
