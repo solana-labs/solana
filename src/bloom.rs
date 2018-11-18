@@ -81,6 +81,8 @@ mod test {
     #[test]
     fn test_add_contains() {
         let mut bloom: Bloom<Hash> = Bloom::random(100, 0.1, 100);
+        //known keys to avoid false positives in the test
+        bloom.keys = vec![0, 1, 2, 3];
 
         let key = hash(b"hello");
         assert!(!bloom.contains(&key));
