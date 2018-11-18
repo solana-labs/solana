@@ -8,6 +8,7 @@ extern crate solana_sdk;
 
 use solana::blob_fetch_stage::BlobFetchStage;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
+use solana::contact_info::ContactInfo;
 use solana::entry::{reconstruct_entries_from_blobs, Entry};
 use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
@@ -1621,7 +1622,7 @@ fn test_broadcast_last_tick() {
 
 fn mk_client(leader: &NodeInfo) -> ThinClient {
     let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    assert!(ClusterInfo::is_valid_address(&leader.tpu));
+    assert!(ContactInfo::is_valid_address(&leader.tpu));
     ThinClient::new(leader.rpc, leader.tpu, transactions_socket)
 }
 

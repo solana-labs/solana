@@ -189,7 +189,7 @@ impl ClusterInfo {
             .values()
             .filter_map(|x| x.value.contact_info())
             .filter(|x| x.id != me)
-            .filter(|x| ClusterInfo::is_valid_address(&x.rpc))
+            .filter(|x| ContactInfo::is_valid_address(&x.rpc))
             .cloned()
             .collect()
     }
@@ -202,7 +202,7 @@ impl ClusterInfo {
             .values()
             .filter_map(|x| x.value.contact_info())
             .filter(|x| x.id != me)
-            .filter(|x| ClusterInfo::is_valid_address(&x.ncp))
+            .filter(|x| ContactInfo::is_valid_address(&x.ncp))
             .cloned()
             .collect()
     }
@@ -216,7 +216,7 @@ impl ClusterInfo {
             .values()
             .filter_map(|x| x.value.contact_info())
             .filter(|x| x.id != me)
-            .filter(|x| ClusterInfo::is_valid_address(&x.tvu))
+            .filter(|x| ContactInfo::is_valid_address(&x.tvu))
             .cloned()
             .collect()
     }
@@ -230,7 +230,7 @@ impl ClusterInfo {
             .values()
             .filter_map(|x| x.value.contact_info())
             .filter(|x| x.id != me)
-            .filter(|x| ClusterInfo::is_valid_address(&x.tpu))
+            .filter(|x| ContactInfo::is_valid_address(&x.tpu))
             .cloned()
             .collect()
     }
@@ -898,18 +898,6 @@ impl ClusterInfo {
             }).unwrap()
     }
 
-    fn is_valid_ip(addr: IpAddr) -> bool {
-        !(addr.is_unspecified() || addr.is_multicast())
-        // || (addr.is_loopback() && !cfg_test))
-        // TODO: boot loopback in production networks
-    }
-    /// port must not be 0
-    /// ip must be specified and not mulitcast
-    /// loopback ip is only allowed in tests
-    pub fn is_valid_address(addr: &SocketAddr) -> bool {
-        (addr.port() != 0) && Self::is_valid_ip(addr.ip())
-    }
-
     pub fn spy_node() -> (NodeInfo, UdpSocket) {
         let (_, gossip_socket) = bind_in_range(FULLNODE_PORT_RANGE).unwrap();
         let pubkey = Keypair::new().pubkey();
@@ -1056,6 +1044,29 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::{Arc, RwLock};
     use window::default_window;
+
+    #[test]
+    fn test_cluster_spy_gossip() {
+        //check that gossip doesn't try to push to invalid addresses
+        let node = Node::new_localhost();
+        let (spy, _) = ClusterInfo::spy_node();
+        let cluster_info = Arc::new(RwLock::new(
+            ClusterInfo::new(node.info).expect("ClusterInfo::new"),
+        ));
+        cluster_info.write().unwrap().insert_info(spy);
+        cluster_info
+            .write()
+            .unwrap()
+            .gossip
+            .refresh_push_active_set();
+        let reqs = cluster_info.write().unwrap().gossip_request();
+        //assert none of the addrs are invalid.
+        reqs.iter().all(|(addr, _)| {
+            let res = ContactInfo::is_valid_address(addr);
+            assert!(res);
+            res
+        });
+    }
 
     #[test]
     fn test_cluster_info_new() {
