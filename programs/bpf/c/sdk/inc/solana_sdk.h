@@ -109,11 +109,11 @@ SOL_FN_PREFIX bool SolPubkey_same(const SolPubkey *one, const SolPubkey *two) {
  * Keyed Accounts
  */
 typedef struct {
-  SolPubkey *key;        /** Public Key of the account owner */
+  SolPubkey *key;        /** Public Key of the account */
   int64_t *tokens;       /** Numer of tokens owned by this account */
   uint64_t userdata_len; /** Length of userdata in bytes */
   uint8_t *userdata;     /** On-chain data owned by this account */
-  SolPubkey *program_id; /** Program that owns this account */
+  SolPubkey *owner; /** Program that owns this account */
 } SolKeyedAccounts;
 
 /**
@@ -257,8 +257,8 @@ SOL_FN_PREFIX bool sol_deserialize(
     ka[i].userdata = (uint8_t *) input;
     input += ka[i].userdata_len;
 
-    // program_id
-    ka[i].program_id = (SolPubkey *) input;
+    // owner
+    ka[i].owner = (SolPubkey *) input;
     input += sizeof(SolPubkey);
   }
 
@@ -323,7 +323,7 @@ SOL_FN_PREFIX void sol_log_params(
     sol_log_key(ka[i].key);
     sol_log_64(0, 0, 0, 0, *ka[i].tokens);
     sol_log_array(ka[i].userdata, ka[i].userdata_len);
-    sol_log_key(ka[i].program_id);
+    sol_log_key(ka[i].owner);
   }
   sol_log_array(data, data_len);
 }
