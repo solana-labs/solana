@@ -83,9 +83,7 @@ impl Replicator {
         let window = window::new_window(REPLICATOR_WINDOW_SIZE);
         let shared_window = Arc::new(RwLock::new(window));
 
-        let cluster_info = Arc::new(RwLock::new(
-            ClusterInfo::new(node.info).expect("ClusterInfo::new"),
-        ));
+        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(node.info)));
 
         let leader_info = network_addr.map(|i| NodeInfo::new_entry_point(&i));
         let leader_pubkey;

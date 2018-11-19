@@ -47,7 +47,7 @@ fn make_spy_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<ClusterInfo>>, Pubkey) {
     let me = spy.info.id.clone();
     let daddr = "0.0.0.0:0".parse().unwrap();
     spy.info.tvu = daddr;
-    let mut spy_cluster_info = ClusterInfo::new(spy.info).expect("ClusterInfo::new");
+    let mut spy_cluster_info = ClusterInfo::new(spy.info);
     spy_cluster_info.insert_info(leader.clone());
     spy_cluster_info.set_leader(leader.id);
     let spy_cluster_info_ref = Arc::new(RwLock::new(spy_cluster_info));
@@ -68,7 +68,7 @@ fn make_listening_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<ClusterInfo>>, Nod
     let new_node = Node::new_localhost();
     let new_node_info = new_node.info.clone();
     let me = new_node.info.id.clone();
-    let mut new_node_cluster_info = ClusterInfo::new(new_node_info).expect("ClusterInfo::new");
+    let mut new_node_cluster_info = ClusterInfo::new(new_node_info);
     new_node_cluster_info.insert_info(leader.clone());
     new_node_cluster_info.set_leader(leader.id);
     let new_node_cluster_info_ref = Arc::new(RwLock::new(new_node_cluster_info));

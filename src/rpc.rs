@@ -388,7 +388,7 @@ mod tests {
         bank.process_transaction(&tx).expect("process transaction");
 
         let request_processor = JsonRpcRequestProcessor::new(Arc::new(bank));
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default()).unwrap()));
+        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default())));
         let leader = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
         cluster_info.write().unwrap().insert_info(leader.clone());
         cluster_info.write().unwrap().set_leader(leader.id);
@@ -412,7 +412,7 @@ mod tests {
     fn test_rpc_new() {
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default()).unwrap()));
+        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default())));
         let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 24680);
         let rpc_service = JsonRpcService::new(&Arc::new(bank), &cluster_info, rpc_addr);
         let thread = rpc_service.thread_hdl.thread();
@@ -706,7 +706,7 @@ mod tests {
         io.extend_with(rpc.to_delegate());
         let meta = Meta {
             request_processor: JsonRpcRequestProcessor::new(Arc::new(bank)),
-            cluster_info: Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default()).unwrap())),
+            cluster_info: Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default()))),
             rpc_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             exit: Arc::new(AtomicBool::new(false)),
         };
@@ -725,7 +725,7 @@ mod tests {
 
     #[test]
     fn test_rpc_get_leader_addr() {
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default()).unwrap()));
+        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default())));
         assert_eq!(
             get_leader_addr(&cluster_info),
             Err(Error {

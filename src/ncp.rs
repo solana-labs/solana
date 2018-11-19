@@ -77,7 +77,7 @@ mod tests {
     fn test_exit() {
         let exit = Arc::new(AtomicBool::new(false));
         let tn = Node::new_localhost();
-        let cluster_info = ClusterInfo::new(tn.info.clone()).expect("ClusterInfo::new");
+        let cluster_info = ClusterInfo::new(tn.info.clone());
         let c = Arc::new(RwLock::new(cluster_info));
         let w = Arc::new(RwLock::new(vec![]));
         let d = Ncp::new(&c, w, None, tn.sockets.gossip, exit.clone());

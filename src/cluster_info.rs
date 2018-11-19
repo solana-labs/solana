@@ -78,7 +78,7 @@ enum Protocol {
 }
 
 impl ClusterInfo {
-    pub fn new(node_info: NodeInfo) -> Result<ClusterInfo> {
+    pub fn new(node_info: NodeInfo) -> Self {
         let mut me = ClusterInfo {
             gossip: CrdsGossip::default(),
         };
@@ -86,7 +86,7 @@ impl ClusterInfo {
         me.gossip.set_self(id);
         me.insert_info(node_info);
         me.push_self();
-        Ok(me)
+        me
     }
     pub fn push_self(&mut self) {
         let mut my_data = self.my_data();
@@ -1050,9 +1050,7 @@ mod tests {
         //check that gossip doesn't try to push to invalid addresses
         let node = Node::new_localhost();
         let (spy, _) = ClusterInfo::spy_node();
-        let cluster_info = Arc::new(RwLock::new(
-            ClusterInfo::new(node.info).expect("ClusterInfo::new"),
-        ));
+        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(node.info)));
         cluster_info.write().unwrap().insert_info(spy);
         cluster_info
             .write()
@@ -1071,14 +1069,14 @@ mod tests {
     #[test]
     fn test_cluster_info_new() {
         let d = NodeInfo::new_localhost(Keypair::new().pubkey(), timestamp());
-        let cluster_info = ClusterInfo::new(d.clone()).expect("ClusterInfo::new");
+        let cluster_info = ClusterInfo::new(d.clone());
         assert_eq!(d.id, cluster_info.my_data().id);
     }
 
     #[test]
     fn insert_info_test() {
         let d = NodeInfo::new_localhost(Keypair::new().pubkey(), timestamp());
-        let mut cluster_info = ClusterInfo::new(d).expect("ClusterInfo::new");
+        let mut cluster_info = ClusterInfo::new(d);
         let d = NodeInfo::new_localhost(Keypair::new().pubkey(), timestamp());
         let label = CrdsValueLabel::ContactInfo(d.id);
         cluster_info.insert_info(d);
@@ -1087,7 +1085,7 @@ mod tests {
     #[test]
     fn window_index_request() {
         let me = NodeInfo::new_localhost(Keypair::new().pubkey(), timestamp());
-        let mut cluster_info = ClusterInfo::new(me).expect("ClusterInfo::new");
+        let mut cluster_info = ClusterInfo::new(me);
         let rv = cluster_info.window_index_request(0);
         assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
 
@@ -1275,7 +1273,7 @@ mod tests {
     fn test_default_leader() {
         logger::setup();
         let node_info = NodeInfo::new_localhost(Keypair::new().pubkey(), 0);
-        let mut cluster_info = ClusterInfo::new(node_info).unwrap();
+        let mut cluster_info = ClusterInfo::new(node_info);
         let network_entry_point = NodeInfo::new_entry_point(&socketaddr!("127.0.0.1:1239"));
         cluster_info.insert_info(network_entry_point);
         assert!(cluster_info.leader_data().is_none());

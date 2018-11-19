@@ -208,14 +208,14 @@ pub mod tests {
         let exit = Arc::new(AtomicBool::new(false));
 
         //start cluster_info_l
-        let mut cluster_info_l = ClusterInfo::new(leader.info.clone()).expect("ClusterInfo::new");
+        let mut cluster_info_l = ClusterInfo::new(leader.info.clone());
         cluster_info_l.set_leader(leader.info.id);
 
         let cref_l = Arc::new(RwLock::new(cluster_info_l));
         let dr_l = new_ncp(cref_l, leader.sockets.gossip, exit.clone());
 
         //start cluster_info2
-        let mut cluster_info2 = ClusterInfo::new(target2.info.clone()).expect("ClusterInfo::new");
+        let mut cluster_info2 = ClusterInfo::new(target2.info.clone());
         cluster_info2.insert_info(leader.info.clone());
         cluster_info2.set_leader(leader.info.id);
         let leader_id = leader.info.id;
@@ -254,7 +254,7 @@ pub mod tests {
         let bank = Arc::new(bank);
 
         //start cluster_info1
-        let mut cluster_info1 = ClusterInfo::new(target1.info.clone()).expect("ClusterInfo::new");
+        let mut cluster_info1 = ClusterInfo::new(target1.info.clone());
         cluster_info1.insert_info(leader.info.clone());
         cluster_info1.set_leader(leader.info.id);
         let cref1 = Arc::new(RwLock::new(cluster_info1));
