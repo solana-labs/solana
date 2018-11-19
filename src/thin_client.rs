@@ -323,9 +323,7 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
     let exit = Arc::new(AtomicBool::new(false));
     let (node, gossip_socket) = ClusterInfo::spy_node();
     let my_addr = gossip_socket.local_addr().unwrap();
-    let cluster_info = Arc::new(RwLock::new(
-        ClusterInfo::new(node).expect("ClusterInfo::new"),
-    ));
+    let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(node)));
     let window = Arc::new(RwLock::new(vec![]));
     let ncp = Ncp::new(
         &cluster_info.clone(),

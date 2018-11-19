@@ -819,7 +819,7 @@ fn converge(
 ) -> (Vec<NodeInfo>, Option<NodeInfo>, Ncp) {
     //lets spy on the network
     let (node, gossip_socket) = ClusterInfo::spy_node();
-    let mut spy_cluster_info = ClusterInfo::new(node).expect("ClusterInfo::new");
+    let mut spy_cluster_info = ClusterInfo::new(node);
     spy_cluster_info.insert_info(leader.clone());
     spy_cluster_info.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_cluster_info));

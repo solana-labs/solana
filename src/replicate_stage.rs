@@ -269,7 +269,7 @@ mod test {
         let my_keypair = Keypair::new();
         let my_id = my_keypair.pubkey();
         let my_node = Node::new_localhost_with_pubkey(my_id);
-        let cluster_info_me = ClusterInfo::new(my_node.info.clone()).expect("ClusterInfo::new");
+        let cluster_info_me = ClusterInfo::new(my_node.info.clone());
 
         // Create keypair for the old leader
         let old_leader_id = Keypair::new().pubkey();
@@ -411,9 +411,7 @@ mod test {
             Fullnode::new_bank_from_ledger(&my_ledger_path, leader_scheduler);
 
         // Set up the cluster info
-        let cluster_info_me = Arc::new(RwLock::new(
-            ClusterInfo::new(my_node.info.clone()).expect("ClusterInfo::new"),
-        ));
+        let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
 
         // Set up the replicate stage
         let vote_account_keypair = Arc::new(Keypair::new());
@@ -525,9 +523,7 @@ mod test {
             Fullnode::new_bank_from_ledger(&my_ledger_path, leader_scheduler);
 
         // Set up the cluster info
-        let cluster_info_me = Arc::new(RwLock::new(
-            ClusterInfo::new(my_node.info.clone()).expect("ClusterInfo::new"),
-        ));
+        let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
 
         // Set up the replicate stage
         let vote_account_keypair = Arc::new(vote_account_keypair);
@@ -607,9 +603,7 @@ mod test {
         let vote_keypair = Keypair::new();
         let my_node = Node::new_localhost_with_pubkey(my_id);
         // Set up the cluster info
-        let cluster_info_me = Arc::new(RwLock::new(
-            ClusterInfo::new(my_node.info.clone()).expect("ClusterInfo::new"),
-        ));
+        let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
         let (entry_sender, entry_receiver) = channel();
         let (ledger_entry_sender, _ledger_entry_receiver) = channel();
         let mut last_entry_id = Hash::default();

@@ -387,7 +387,7 @@ mod test {
         logger::setup();
         let tn = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
-        let mut cluster_info_me = ClusterInfo::new(tn.info.clone()).expect("ClusterInfo::new");
+        let mut cluster_info_me = ClusterInfo::new(tn.info.clone());
         let me_id = cluster_info_me.my_data().id;
         cluster_info_me.set_leader(me_id);
         let subs = Arc::new(RwLock::new(cluster_info_me));
@@ -451,7 +451,7 @@ mod test {
         logger::setup();
         let tn = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
-        let cluster_info_me = ClusterInfo::new(tn.info.clone()).expect("ClusterInfo::new");
+        let cluster_info_me = ClusterInfo::new(tn.info.clone());
         let me_id = cluster_info_me.my_data().id;
         let subs = Arc::new(RwLock::new(cluster_info_me));
 
@@ -515,7 +515,7 @@ mod test {
         logger::setup();
         let tn = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
-        let cluster_info_me = ClusterInfo::new(tn.info.clone()).expect("ClusterInfo::new");
+        let cluster_info_me = ClusterInfo::new(tn.info.clone());
         let me_id = cluster_info_me.my_data().id;
         let subs = Arc::new(RwLock::new(cluster_info_me));
 

@@ -226,9 +226,7 @@ impl Fullnode {
         let window = new_window(32 * 1024);
         let shared_window = Arc::new(RwLock::new(window));
         node.info.wallclock = timestamp();
-        let cluster_info = Arc::new(RwLock::new(
-            ClusterInfo::new(node.info).expect("ClusterInfo::new"),
-        ));
+        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(node.info)));
 
         let (rpc_service, rpc_pubsub_service) =
             Self::startup_rpc_services(rpc_addr, rpc_pubsub_addr, &bank, &cluster_info);
