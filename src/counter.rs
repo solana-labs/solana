@@ -13,6 +13,7 @@ pub struct Counter {
     /// last accumulated value logged
     pub lastlog: AtomicUsize,
     pub lograte: AtomicUsize,
+    pub point: Option<influxdb::Point>,
 }
 
 macro_rules! create_counter {
@@ -23,6 +24,7 @@ macro_rules! create_counter {
             times: AtomicUsize::new(0),
             lastlog: AtomicUsize::new(0),
             lograte: AtomicUsize::new($lograte),
+            point: None,
         }
     };
 }
@@ -45,6 +47,12 @@ macro_rules! inc_new_counter_info {
 macro_rules! inc_new_counter {
     ($name:expr, $count:expr, $level:expr, $lograte:expr) => {{
         static mut INC_NEW_COUNTER: Counter = create_counter!($name, $lograte);
+        static INIT_HOOK: std::sync::Once = std::sync::ONCE_INIT;
+        unsafe {
+            INIT_HOOK.call_once(|| {
+                INC_NEW_COUNTER.init();
+            });
+        }
         inc_counter!(INC_NEW_COUNTER, $level, $count);
     }};
 }
@@ -59,6 +67,13 @@ impl Counter {
         } else {
             v
         }
+    }
+    pub fn init(&mut self) {
+        self.point = Some(
+            influxdb::Point::new(&format!("counter-{}", self.name))
+                .add_field("count", influxdb::Value::Integer(0))
+                .to_owned(),
+        );
     }
     pub fn inc(&mut self, level: log::Level, events: usize) {
         let counts = self.counts.fetch_add(events, Ordering::Relaxed);
@@ -83,14 +98,16 @@ impl Counter {
             .lastlog
             .compare_and_swap(lastlog, counts, Ordering::Relaxed);
         if prev == lastlog {
-            submit(
-                influxdb::Point::new(&format!("counter-{}", self.name))
-                    .add_field(
-                        "count",
-                        influxdb::Value::Integer(counts as i64 - lastlog as i64),
-                    )
-                    .to_owned(),
-            );
+            if let Some(ref mut point) = self.point {
+                point
+                    .fields
+                    .entry("count".to_string())
+                    .and_modify(|v| *v = influxdb::Value::Integer(counts as i64 - lastlog as i64))
+                    .or_insert(influxdb::Value::Integer(0));
+            }
+            if let Some(ref mut point) = self.point {
+                submit(point.to_owned());
+            }
         }
     }
 }
