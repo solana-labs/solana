@@ -62,7 +62,8 @@ your odds of success if you check out the
 before proceeding:
 
 ```bash
-$ git checkout v0.10.0
+$ TAG=$(git describe --tags $(git rev-list --tags --max-count=1))
+$ git checkout $TAG
 ```
 
 Configuration Setup
