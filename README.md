@@ -117,7 +117,7 @@ $ ./multinode-demo/validator.sh
 ```
 
 To run a performance-enhanced leader or validator (on Linux),
-[CUDA 9.2](https://developer.nvidia.com/cuda-downloads) must be installed on
+[CUDA 10.0](https://developer.nvidia.com/cuda-downloads) must be installed on
 your system:
 
 ```bash
