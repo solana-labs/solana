@@ -127,6 +127,12 @@ pub struct Blob {
     pub meta: Meta,
 }
 
+impl PartialEq for Blob {
+    fn eq(&self, other: &Blob) -> bool {
+        self.data.iter().zip(other.data.iter()).all(|(a, b)| a == b) && self.meta == other.meta
+    }
+}
+
 impl fmt::Debug for Blob {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(

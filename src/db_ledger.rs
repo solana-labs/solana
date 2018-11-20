@@ -6,7 +6,7 @@ use bincode::{deserialize, serialize};
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use entry::Entry;
 use ledger::Block;
-use packet::{Blob, BLOB_HEADER_SIZE};
+use packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
 use result::{Error, Result};
 use rocksdb::{ColumnFamily, Options, WriteBatch, DB};
 use serde::de::DeserializeOwned;
@@ -121,6 +121,27 @@ impl LedgerColumnFamily for MetaCf {
 pub struct DataCf {}
 
 impl DataCf {
+    pub fn get_by_slot_index(
+        &self,
+        db: &DB,
+        slot_height: u64,
+        index: u64,
+    ) -> Result<Option<Vec<u8>>> {
+        let key = Self::key(slot_height, index);
+        self.get(db, &key)
+    }
+
+    pub fn put_by_slot_index(
+        &self,
+        db: &DB,
+        slot_height: u64,
+        index: u64,
+        serialized_value: &[u8],
+    ) -> Result<()> {
+        let key = Self::key(slot_height, index);
+        self.put(db, &key, serialized_value)
+    }
+
     pub fn key(slot_height: u64, index: u64) -> Vec<u8> {
         let mut key = vec![0u8; 16];
         LittleEndian::write_u64(&mut key[0..8], slot_height);
@@ -152,8 +173,33 @@ impl LedgerColumnFamilyRaw for DataCf {
 pub struct ErasureCf {}
 
 impl ErasureCf {
+    pub fn get_by_slot_index(
+        &self,
+        db: &DB,
+        slot_height: u64,
+        index: u64,
+    ) -> Result<Option<Vec<u8>>> {
+        let key = Self::key(slot_height, index);
+        self.get(db, &key)
+    }
+
+    pub fn put_by_slot_index(
+        &self,
+        db: &DB,
+        slot_height: u64,
+        index: u64,
+        serialized_value: &[u8],
+    ) -> Result<()> {
+        let key = Self::key(slot_height, index);
+        self.put(db, &key, serialized_value)
+    }
+
     pub fn key(slot_height: u64, index: u64) -> Vec<u8> {
         DataCf::key(slot_height, index)
+    }
+
+    pub fn index_from_key(key: &[u8]) -> Result<u64> {
+        DataCf::index_from_key(key)
     }
 }
 
@@ -212,6 +258,12 @@ impl DbLedger {
             data_cf,
             erasure_cf,
         })
+    }
+
+    pub fn write_shared_blobs(&mut self, slot: u64, shared_blobs: &[SharedBlob]) -> Result<()> {
+        let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
+        let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
+        self.write_blobs(slot, &blobs)
     }
 
     pub fn write_blobs<'a, I>(&mut self, slot: u64, blobs: I) -> Result<()>
@@ -366,6 +418,16 @@ impl DbLedger {
         }
 
         Ok((total_blobs, total_current_size as u64))
+    }
+}
+
+pub fn write_entries_to_ledger(ledger_paths: &[String], entries: &[Entry]) {
+    for ledger_path in ledger_paths {
+        let mut db_ledger =
+            DbLedger::open(ledger_path).expect("Expected to be able to open database ledger");
+        db_ledger
+            .write_entries(DEFAULT_SLOT_HEIGHT, &entries)
+            .expect("Expected successful write of genesis entries");
     }
 }
 

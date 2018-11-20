@@ -36,6 +36,7 @@ pub mod budget_program;
 pub mod cluster_info;
 pub mod compute_leader_finality_service;
 pub mod db_ledger;
+pub mod db_window;
 pub mod entry;
 #[cfg(feature = "erasure")]
 pub mod erasure;
