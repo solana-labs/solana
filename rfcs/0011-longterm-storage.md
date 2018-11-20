@@ -119,7 +119,7 @@ problems:
 
 ### Cannot restore owner
 
-It's possible the proposed solution only work for accounts owned by the
+It's possible the proposed solution would only work for accounts owned by the
 system program. If so, each program would need to implement an `Import`
 instruction to validate the bits and take ownership.
 
