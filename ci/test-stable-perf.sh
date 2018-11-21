@@ -24,7 +24,7 @@ _() {
   "$@"
 }
 
-FEATURES=cuda,erasure,chacha
+FEATURES=bpf_c,cuda,erasure,chacha
 _ cargo build --all --verbose --features="$FEATURES"
 _ cargo test --verbose --features="$FEATURES" --lib
 
@@ -32,8 +32,16 @@ _ cargo test --verbose --features="$FEATURES" --lib
 for test in tests/*.rs; do
   test=${test##*/} # basename x
   test=${test%.rs} # basename x .rs
-  _ cargo test --verbose --jobs=1 --features="$FEATURES" --test="$test"
+  _ cargo test --verbose --features="$FEATURES" --test="$test" -- --test-threads=1
 done
+
+# Run bpf_loader test with bpf_c features enabled
+(
+  set -x
+  cd "programs/native/bpf_loader"
+  echo --- program/native/bpf_loader test --features=bpf_c
+  cargo test --verbose --features="bpf_c"
+)
 
 echo --- ci/localnet-sanity.sh
 (

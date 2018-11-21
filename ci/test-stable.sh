@@ -34,10 +34,10 @@ _ cargo test --verbose --lib
 for test in tests/*.rs; do
   test=${test##*/} # basename x
   test=${test%.rs} # basename x .rs
-  _ cargo test --verbose --jobs=1 --test="$test" --features="bpf_c"
+  _ cargo test --verbose --test="$test" -- --test-threads=1
 done
 
-# Run native program's tests
+# Run native program tests
 for program in programs/native/*; do
   echo --- "$program"
   (
@@ -46,14 +46,6 @@ for program in programs/native/*; do
     cargo test --verbose
   )
 done
-
-# Run program/native/bpf_loader's test with bpf_c feature
-(
-  set -x
-  cd "programs/native/bpf_loader"
-  echo --- program/native/bpf_loader test --features=bpf_c
-  cargo test --verbose --features="bpf_c"
-)
 
 # Build the HTML
 export PATH=$CARGO_HOME/bin:$PATH
