@@ -27,14 +27,14 @@ maybe_install() {
 _ cargo fmt -- --check
 _ cargo clippy -- --version
 _ cargo clippy -- --deny=warnings
-_ cargo build --all --verbose
-_ cargo test --verbose --lib
+_ cargo build --all
+_ cargo test --lib
 
 # Run integration tests serially
 for test in tests/*.rs; do
   test=${test##*/} # basename x
   test=${test%.rs} # basename x .rs
-  _ cargo test --verbose --test="$test" -- --test-threads=1
+  _ cargo test --test="$test" -- --test-threads=1
 done
 
 # Run native program tests
@@ -43,7 +43,7 @@ for program in programs/native/*; do
   (
     set -x
     cd "$program"
-    cargo test --verbose
+    cargo test
   )
 done
 
