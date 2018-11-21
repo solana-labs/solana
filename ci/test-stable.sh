@@ -24,9 +24,6 @@ maybe_install() {
   done
 }
 
-_ cargo fmt -- --check
-_ cargo clippy -- --version
-_ cargo clippy -- --deny=warnings
 _ cargo build --all --verbose
 _ cargo test --verbose --lib
 
@@ -60,5 +57,3 @@ echo --- ci/localnet-sanity.sh
   export PATH=$PWD/target/debug:$PATH
   USE_INSTALL=1 ci/localnet-sanity.sh
 )
-
-_ ci/audit.sh

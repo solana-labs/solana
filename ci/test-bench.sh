@@ -8,13 +8,6 @@ source ci/upload_ci_artifact.sh
 
 eval "$(ci/channel-info.sh)"
 
-_() {
-  echo "--- $*"
-  "$@"
-}
-
-set -o pipefail
-
 ci/version-check.sh nightly
 if ! ci/version-check.sh nightly; then
   # This job doesn't run within a container, try once to upgrade tooling on a
@@ -23,6 +16,13 @@ if ! ci/version-check.sh nightly; then
   rustup default nightly
   ci/version-check.sh nightly
 fi
+
+_() {
+  echo "--- $*"
+  "$@"
+}
+
+set -o pipefail
 export RUST_BACKTRACE=1
 
 UPLOAD_METRICS=""

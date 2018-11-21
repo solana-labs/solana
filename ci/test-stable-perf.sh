@@ -13,17 +13,18 @@ if ! ci/version-check.sh stable; then
   rustup default stable
   ci/version-check.sh stable
 fi
+
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
-
-./fetch-perf-libs.sh
-# shellcheck source=/dev/null
-source ./target/perf-libs/env.sh
 
 _() {
   echo "--- $*"
   "$@"
 }
+
+./fetch-perf-libs.sh
+# shellcheck source=/dev/null
+source ./target/perf-libs/env.sh
 
 FEATURES=bpf_c,cuda,erasure,chacha
 _ cargo build --all --verbose --features="$FEATURES"
