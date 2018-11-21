@@ -25,8 +25,8 @@ maybe_install() {
 }
 
 _ rustup install beta
-_ rustc beta --version
-_ cargo beta --version
+_ rustc +beta --version
+_ cargo +beta --version
 
 _ cargo fmt -- --check
 _ cargo clippy -- --version
