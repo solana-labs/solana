@@ -100,8 +100,12 @@ fn main() {
         println!("bench_name, median, last_median, deviation, last_deviation");
         for (entry, values) in results {
             println!(
-                "{}, {}, {}, {}, {}",
-                entry, values.0, values.2, values.1, values.3
+                "{:#10?}, {:#10?}, {:#10?}, {:#10?}, {}",
+                values.0,
+                values.2.parse::<i32>().unwrap(),
+                values.1,
+                values.3.parse::<i32>().unwrap(),
+                entry,
             );
         }
     } else {
@@ -109,7 +113,7 @@ fn main() {
         println!("hash: {}", trimmed_hash);
         println!("bench_name, median, deviation");
         for (entry, values) in results {
-            println!("{}, {}, {}", entry, values.0, values.1);
+            println!("{:10?}, {:10?}, {}", values.0, values.1, entry);
         }
     }
     solana_metrics::flush();
