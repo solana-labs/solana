@@ -2,7 +2,6 @@
 use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use counter::Counter;
-use db_ledger::DEFAULT_SLOT_HEIGHT;
 #[cfg(test)]
 use entry::Entry;
 #[cfg(test)]
@@ -148,14 +147,10 @@ impl fmt::Debug for Blob {
 //auto derive doesn't support large arrays
 impl Default for Blob {
     fn default() -> Blob {
-        let mut blob = Blob {
+        Blob {
             data: [0u8; BLOB_SIZE],
             meta: Meta::default(),
-        };
-
-        blob.set_slot(DEFAULT_SLOT_HEIGHT)
-            .expect("Should be able to set slot in default blob");
-        blob
+        }
     }
 }
 

@@ -274,6 +274,8 @@ pub fn process_blob(
     let is_coding = blob.read().unwrap().is_coding();
 
     // Check if the blob is in the range of our known leaders. If not, we return.
+    // TODO: Need to update slot in broadcast, otherwise this check will fail with
+    // leader rotation enabled
     let slot = blob.read().unwrap().slot()?;
     let leader = leader_scheduler.get_leader_for_slot(slot);
 
@@ -293,27 +295,11 @@ pub fn process_blob(
         )?;
         vec![]
     } else {
-        let data_key = ErasureCf::key(slot, pix);
+        let data_key = DataCf::key(slot, pix);
         db_ledger.insert_data_blob(&data_key, &blob.read().unwrap())?
     };
 
-    // TODO: Once erasure is fixed, add those to the consumed queue as well
-        /*#[cfg(feature = "erasure")]
-        {
-            let window_size = self.window_size();
-            if erasure::recover(id, self, *consumed, (*consumed % window_size) as usize).is_err() {
-                trace!("{}: erasure::recover failed", id);
-            }
-        }
-        // Check that we can get the entries from the blobs
-        if let Ok(entries) = reconstruct_entries_from_blobs(vec![consumed_blob_queue]) {
-            for entry in &entries {
-                *tick_height += entry.is_tick() as u64;
-            }
-
-            consume_queue.extend(entries);
-        }*/
-
+    // TODO: Once erasure is fixed, readd that logic here
     for entry in &consumed_entries {
         *tick_height += entry.is_tick() as u64;
     }

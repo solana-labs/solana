@@ -68,8 +68,8 @@ impl Tvu {
         ledger_path: Option<&str>,
         db_ledger_path: String,
     ) -> Self {
-        // Eventually will be passed into LedgerWriteStage as well, so wrap the object
-        // in a Arc<RwLock>
+        // Eventually will be passed into LedgerWriteStage as well to replace the ledger,
+        // so wrap the object in a Arc<RwLock>
         let db_ledger = Arc::new(RwLock::new(
             DbLedger::open(&db_ledger_path).expect("Expected to be able to open database ledger"),
         ));
