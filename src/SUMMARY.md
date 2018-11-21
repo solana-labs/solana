@@ -4,10 +4,8 @@
 
 - [Terminology](terminology.md)
 
-- [Synchronization](synchronization.md)
-  - [Introduction to VDFs](vdf.md)
-  - [Proof of History](poh.md)
-  - [Leader Rotation](leader-scheduler.md)
+- [On-chain programs](programs.md)
+  - [The Runtime](runtime.md)
 
 - [Fullnode](fullnode.md)
   - [Tpu](tpu.md)
@@ -15,12 +13,13 @@
   - [Ncp](ncp.md)
   - [JsonRpcService](jsonrpc-service.md)
 
-- [Avalanche replication](avalanche.md)
-  - [Storage](storage.md)
-
-- [On-chain programs](programs.md)
-  - [The Runtime](runtime.md)
-  - [Ledger format](ledger.md)
+- [A Solana Cluster](cluster.md)
+  - [Synchronization](synchronization.md)
+    - [Introduction to VDFs](vdf.md)
+    - [Proof of History](poh.md)
+  - [Ledger Broadcasting](avalanche.md)
+  - [Ledger Replication](storage.md)
+  - [Leader Rotation](leader-scheduler.md)
 
 ## Appendix
 
