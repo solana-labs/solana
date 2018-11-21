@@ -24,6 +24,13 @@ maybe_install() {
   done
 }
 
+_ rustup install beta
+_ rustup default beta
+_ rustup component add rustfmt-previewm --toolchain beta
+_ rustup component add clippy-preview --toolchain beta
+_ rustc --version
+_ cargo --version
+
 _ cargo fmt -- --check
 _ cargo clippy -- --version
 _ cargo clippy -- --deny=warnings
