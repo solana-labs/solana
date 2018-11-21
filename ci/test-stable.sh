@@ -24,21 +24,17 @@ maybe_install() {
   done
 }
 
-_ rustup install beta
-_ rustc +beta --version
-_ cargo +beta --version
-
 _ cargo fmt -- --check
 _ cargo clippy -- --version
 _ cargo clippy -- --deny=warnings
-_ cargo +beta build --all --verbose
-_ cargo +beta test --verbose --lib
+_ cargo build --all --verbose
+_ cargo test --verbose --lib
 
 # Run integration tests serially
 for test in tests/*.rs; do
   test=${test##*/} # basename x
   test=${test%.rs} # basename x .rs
-  _ cargo +beta test --verbose --test="$test" -- --test-threads=1
+  _ cargo test --verbose --test="$test" -- --test-threads=1
 done
 
 # Run native program tests
@@ -47,7 +43,7 @@ for program in programs/native/*; do
   (
     set -x
     cd "$program"
-    cargo +beta test --verbose
+    cargo test --verbose
   )
 done
 
