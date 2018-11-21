@@ -8,7 +8,6 @@ source ci/upload_ci_artifact.sh
 
 eval "$(ci/channel-info.sh)"
 
-ci/version-check.sh nightly
 if ! ci/version-check.sh nightly; then
   # This job doesn't run within a container, try once to upgrade tooling on a
   # version check failure
