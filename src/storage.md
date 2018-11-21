@@ -1,4 +1,4 @@
-# Storage
+# Ledger Replication
 
 ## Background
 

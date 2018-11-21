@@ -1,4 +1,4 @@
-# Avalanche replication
+# Ledger Broadcasting
 
 The [Avalance explainer video](https://www.youtube.com/watch?v=qt_gDRXHrHQ) is
 a conceptual overview of how a Solana leader can continuously process a gigabit
