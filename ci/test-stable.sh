@@ -25,23 +25,22 @@ maybe_install() {
 }
 
 _ rustup install beta
-_ rustup default beta
 _ rustup component add rustfmt-preview --toolchain beta
 _ rustup component add clippy-preview --toolchain beta
-_ rustc --version
-_ cargo --version
+_ rustc +beta --version
+_ cargo +beta --version
 
 _ cargo fmt -- --check
 _ cargo clippy -- --version
 _ cargo clippy -- --deny=warnings
-_ cargo build --all --verbose
-_ cargo test --verbose --lib
+_ cargo +beta build --all --verbose
+_ cargo +beta test --verbose --lib
 
 # Run integration tests serially
 for test in tests/*.rs; do
   test=${test##*/} # basename x
   test=${test%.rs} # basename x .rs
-  _ cargo test --verbose --test="$test" -- --test-threads=1
+  _ cargo +beta test --verbose --test="$test" -- --test-threads=1
 done
 
 # Run native program tests
@@ -50,7 +49,7 @@ for program in programs/native/*; do
   (
     set -x
     cd "$program"
-    cargo test --verbose
+    cargo +beta test --verbose
   )
 done
 
