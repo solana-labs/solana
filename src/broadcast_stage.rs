@@ -214,7 +214,7 @@ impl BroadcastStage {
         let me = cluster_info.read().unwrap().my_data().clone();
         let mut tick_height_ = tick_height;
         loop {
-            let broadcast_table = cluster_info.read().unwrap().tpu_peers();
+            let broadcast_table = cluster_info.read().unwrap().tvu_peers();
             let leader_id = cluster_info.read().unwrap().leader_id();
             if let Err(e) = broadcast(
                 max_tick_height,
