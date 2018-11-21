@@ -15,12 +15,14 @@ _() {
 
 set -o pipefail
 
-_ rustup install nightly
-_ rustup default nightly
-_ rustc --version
-_ cargo --version
-
 ci/version-check.sh nightly
+if ! ci/version-check.sh nightly; then
+  # This job doesn't run within a container, try once to upgrade tooling on a
+  # version check failure
+  rustup install nightly
+  rustup default nightly
+  ci/version-check.sh nightly
+fi
 export RUST_BACKTRACE=1
 
 UPLOAD_METRICS=""
