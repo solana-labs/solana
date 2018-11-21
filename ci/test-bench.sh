@@ -8,6 +8,12 @@ source ci/upload_ci_artifact.sh
 
 eval "$(ci/channel-info.sh)"
 
+curl https://sh.rustup.rs -sSf | sh
+rustup install nightly
+rustup default nightly
+rustc --version
+cargo --version
+
 ci/version-check.sh nightly
 export RUST_BACKTRACE=1
 
