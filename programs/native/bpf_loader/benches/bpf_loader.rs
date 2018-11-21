@@ -113,6 +113,5 @@ fn bench_program_alu(bencher: &mut Bencher) {
     assert!(0f64 != summary.median);
     let mips = (instructions * (ns_per_s / summary.median as u64)) / one_million;
     println!("  {:?} MIPS", mips);
-      println!("{{ \"type\": \"bench\", \"name\": \"bench_program_alu_jit_to_native_mips\", \"median\": {:?}, \"deviation\": 0 }}", mips);
-
+    println!("{{ \"type\": \"bench\", \"name\": \"bench_program_alu_jit_to_native_mips\", \"median\": {:?}, \"deviation\": 0 }}", mips);
 }
