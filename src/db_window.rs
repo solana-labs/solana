@@ -81,14 +81,13 @@ pub fn repair(
         max_entry_height + 2
     };
 
-    let mut idxs = find_missing_data_indexes(
+    let idxs = find_missing_data_indexes(
         slot,
         db_ledger,
         consumed,
         max_repair_entry_height - 1,
         MAX_REPAIR_LENGTH,
     );
-    idxs.truncate(MAX_REPAIR_LENGTH);
 
     let reqs: Vec<_> = idxs
         .into_iter()
