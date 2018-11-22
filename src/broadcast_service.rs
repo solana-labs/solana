@@ -1,6 +1,7 @@
 //! The `broadcast_service` broadcasts data from a leader node to validators
 //!
 use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
+use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
 use crate::counter::Counter;
 use crate::entry::Entry;
 #[cfg(feature = "erasure")]
@@ -31,6 +32,7 @@ pub enum BroadcastServiceReturnType {
 
 #[allow(clippy::too_many_arguments)]
 fn broadcast(
+    db_ledger: &Arc<RwLock<DbLedger>>,
     max_tick_height: Option<u64>,
     tick_height: &mut u64,
     leader_id: Pubkey,
@@ -123,6 +125,8 @@ fn broadcast(
                 assert!(win[pos].data.is_none());
                 win[pos].data = Some(b.clone());
             }
+
+            db_ledger.write().unwrap().write_shared_blobs(DEFAULT_SLOT_HEIGHT, &blobs)?;
         }
 
         // Fill in the coding blob data from the window data blobs
@@ -198,6 +202,7 @@ pub struct BroadcastService {
 
 impl BroadcastService {
     fn run(
+        db_ledger: Arc<RwLock<DbLedger>>,
         sock: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window: &SharedWindow,
@@ -219,6 +224,7 @@ impl BroadcastService {
             inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
             let leader_id = cluster_info.read().unwrap().leader_id();
             if let Err(e) = broadcast(
+                &db_ledger,
                 max_tick_height,
                 &mut tick_height_,
                 leader_id,
@@ -262,6 +268,7 @@ impl BroadcastService {
     /// which will then close FetchStage in the Tpu, and then the rest of the Tpu,
     /// completing the cycle.
     pub fn new(
+        db_ledger: Arc<RwLock<DbLedger>>,
         sock: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window: SharedWindow,
@@ -277,6 +284,7 @@ impl BroadcastService {
             .spawn(move || {
                 let _exit = Finalizer::new(exit_sender);
                 Self::run(
+                    db_ledger,
                     &sock,
                     &cluster_info,
                     &window,
