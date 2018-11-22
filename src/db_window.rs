@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use streamer::BlobSender;
 
-pub const MAX_REPAIR_LENGTH: usize = 100;
+pub const MAX_REPAIR_LENGTH: usize = 128;
 
 pub fn repair(
     slot: u64,
