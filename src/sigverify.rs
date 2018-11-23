@@ -323,7 +323,7 @@ pub fn make_packet_from_transaction(tx: Transaction) -> Packet {
 #[cfg(test)]
 mod tests {
     use bincode::serialize;
-    use budget_program::BudgetState;
+    use budget_program::BudgetProgram;
     use packet::{Packet, SharedPackets};
     use signature::{Keypair, KeypairUtil};
     use sigverify;
@@ -429,7 +429,7 @@ mod tests {
 
         let system_instruction = SystemInstruction::Move { tokens };
 
-        let program_ids = vec![SystemProgram::id(), BudgetState::id()];
+        let program_ids = vec![SystemProgram::id(), BudgetProgram::id()];
 
         let instructions = vec![transaction::Instruction::new(
             0,

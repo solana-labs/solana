@@ -25,7 +25,7 @@ pub enum BudgetError {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
-pub struct BudgetState {
+pub struct BudgetProgram {
     pub initialized: bool,
     pub pending_budget: Option<BudgetExpr>,
 }
@@ -35,7 +35,7 @@ const BUDGET_PROGRAM_ID: [u8; 32] = [
     0,
 ];
 
-impl BudgetState {
+impl BudgetProgram {
     fn is_pending(&self) -> bool {
         self.pending_budget != None
     }
@@ -109,7 +109,7 @@ impl BudgetState {
         Ok(())
     }
 
-    fn apply_debits_to_budget_state(
+    fn apply_debits(
         tx: &Transaction,
         instruction_index: usize,
         accounts: &mut [&mut Account],
@@ -131,44 +131,44 @@ impl BudgetState {
                         trace!("contract already exists");
                         Err(BudgetError::ContractAlreadyExists)
                     } else {
-                        let mut state = BudgetState::default();
-                        state.pending_budget = Some(expr);
+                        let mut program = BudgetProgram::default();
+                        program.pending_budget = Some(expr);
                         accounts[1].tokens += accounts[0].tokens;
                         accounts[0].tokens = 0;
-                        state.initialized = true;
-                        state.serialize(&mut accounts[1].userdata)
+                        program.initialized = true;
+                        program.serialize(&mut accounts[1].userdata)
                     }
                 }
             }
             Instruction::ApplyTimestamp(dt) => {
-                if let Ok(mut state) = Self::deserialize(&accounts[1].userdata) {
-                    if !state.is_pending() {
+                if let Ok(mut program) = Self::deserialize(&accounts[1].userdata) {
+                    if !program.is_pending() {
                         Err(BudgetError::ContractNotPending)
-                    } else if !state.initialized {
+                    } else if !program.initialized {
                         trace!("contract is uninitialized");
                         Err(BudgetError::UninitializedContract)
                     } else {
                         trace!("apply timestamp");
-                        state.apply_timestamp(tx, instruction_index, accounts, *dt)?;
+                        program.apply_timestamp(tx, instruction_index, accounts, *dt)?;
                         trace!("apply timestamp committed");
-                        state.serialize(&mut accounts[1].userdata)
+                        program.serialize(&mut accounts[1].userdata)
                     }
                 } else {
                     Err(BudgetError::UninitializedContract)
                 }
             }
             Instruction::ApplySignature => {
-                if let Ok(mut state) = Self::deserialize(&accounts[1].userdata) {
-                    if !state.is_pending() {
+                if let Ok(mut program) = Self::deserialize(&accounts[1].userdata) {
+                    if !program.is_pending() {
                         Err(BudgetError::ContractNotPending)
-                    } else if !state.initialized {
+                    } else if !program.initialized {
                         trace!("contract is uninitialized");
                         Err(BudgetError::UninitializedContract)
                     } else {
                         trace!("apply signature");
-                        state.apply_signature(tx, instruction_index, accounts)?;
+                        program.apply_signature(tx, instruction_index, accounts)?;
                         trace!("apply signature committed");
-                        state.serialize(&mut accounts[1].userdata)
+                        program.serialize(&mut accounts[1].userdata)
                     }
                 } else {
                     Err(BudgetError::UninitializedContract)
@@ -224,7 +224,7 @@ impl BudgetState {
     ) -> Result<(), BudgetError> {
         if let Ok(instruction) = deserialize(tx.userdata(instruction_index)) {
             trace!("process_transaction: {:?}", instruction);
-            Self::apply_debits_to_budget_state(tx, instruction_index, accounts, &instruction)
+            Self::apply_debits(tx, instruction_index, accounts, &instruction)
         } else {
             info!(
                 "Invalid transaction userdata: {:?}",
@@ -236,9 +236,9 @@ impl BudgetState {
 
     //TODO the contract needs to provide a "get_balance" introspection call of the userdata
     pub fn get_balance(account: &Account) -> u64 {
-        if let Ok(state) = deserialize(&account.userdata) {
-            let state: BudgetState = state;
-            if state.is_pending() {
+        if let Ok(program) = deserialize(&account.userdata) {
+            let program: BudgetProgram = program;
+            if program.is_pending() {
                 0
             } else {
                 account.tokens
@@ -251,7 +251,7 @@ impl BudgetState {
 #[cfg(test)]
 mod test {
     use bincode::serialize;
-    use budget_program::{BudgetError, BudgetState};
+    use budget_program::{BudgetError, BudgetProgram};
     use budget_transaction::BudgetTransaction;
     use chrono::prelude::{DateTime, NaiveDate, Utc};
     use signature::{GenKeys, Keypair, KeypairUtil};
@@ -262,23 +262,23 @@ mod test {
 
     fn process_transaction(tx: &Transaction, accounts: &mut [Account]) -> Result<(), BudgetError> {
         let mut refs: Vec<&mut Account> = accounts.iter_mut().collect();
-        BudgetState::process_transaction(&tx, 0, &mut refs[..])
+        BudgetProgram::process_transaction(&tx, 0, &mut refs[..])
     }
     #[test]
     fn test_serializer() {
-        let mut a = Account::new(0, 512, BudgetState::id());
-        let b = BudgetState::default();
+        let mut a = Account::new(0, 512, BudgetProgram::id());
+        let b = BudgetProgram::default();
         b.serialize(&mut a.userdata).unwrap();
         let buf = serialize(&b).unwrap();
         assert_eq!(a.userdata[8..8 + buf.len()], buf[0..]);
-        let c = BudgetState::deserialize(&a.userdata).unwrap();
+        let c = BudgetProgram::deserialize(&a.userdata).unwrap();
         assert_eq!(b, c);
     }
 
     #[test]
     fn test_serializer_userdata_too_small() {
-        let mut a = Account::new(0, 1, BudgetState::id());
-        let b = BudgetState::default();
+        let mut a = Account::new(0, 1, BudgetProgram::id());
+        let b = BudgetProgram::default();
         assert_eq!(
             b.serialize(&mut a.userdata),
             Err(BudgetError::UserdataTooSmall)
@@ -287,8 +287,8 @@ mod test {
     #[test]
     fn test_invalid_instruction() {
         let mut accounts = vec![
-            Account::new(1, 0, BudgetState::id()),
-            Account::new(0, 512, BudgetState::id()),
+            Account::new(1, 0, BudgetProgram::id()),
+            Account::new(0, 512, BudgetProgram::id()),
         ];
         let from = Keypair::new();
         let contract = Keypair::new();
@@ -296,7 +296,7 @@ mod test {
         let tx = Transaction::new(
             &from,
             &[contract.pubkey()],
-            BudgetState::id(),
+            BudgetProgram::id(),
             &userdata,
             Hash::default(),
             0,
@@ -307,12 +307,12 @@ mod test {
     #[test]
     fn test_unsigned_witness_key() {
         let mut accounts = vec![
-            Account::new(1, 0, BudgetState::id()),
-            Account::new(0, 512, BudgetState::id()),
-            Account::new(0, 0, BudgetState::id()),
+            Account::new(1, 0, BudgetProgram::id()),
+            Account::new(0, 512, BudgetProgram::id()),
+            Account::new(0, 0, BudgetProgram::id()),
         ];
 
-        // Initialize BudgetState
+        // Initialize BudgetProgram
         let from = Keypair::new();
         let contract = Keypair::new().pubkey();
         let to = Keypair::new().pubkey();
@@ -346,12 +346,12 @@ mod test {
     #[test]
     fn test_unsigned_timestamp() {
         let mut accounts = vec![
-            Account::new(1, 0, BudgetState::id()),
-            Account::new(0, 512, BudgetState::id()),
-            Account::new(0, 0, BudgetState::id()),
+            Account::new(1, 0, BudgetProgram::id()),
+            Account::new(0, 512, BudgetProgram::id()),
+            Account::new(0, 0, BudgetProgram::id()),
         ];
 
-        // Initialize BudgetState
+        // Initialize BudgetProgram
         let from = Keypair::new();
         let contract = Keypair::new().pubkey();
         let to = Keypair::new().pubkey();
@@ -386,9 +386,9 @@ mod test {
     #[test]
     fn test_transfer_on_date() {
         let mut accounts = vec![
-            Account::new(1, 0, BudgetState::id()),
-            Account::new(0, 512, BudgetState::id()),
-            Account::new(0, 0, BudgetState::id()),
+            Account::new(1, 0, BudgetProgram::id()),
+            Account::new(0, 512, BudgetProgram::id()),
+            Account::new(0, 0, BudgetProgram::id()),
         ];
         let from_account = 0;
         let contract_account = 1;
@@ -411,8 +411,8 @@ mod test {
         process_transaction(&tx, &mut accounts).unwrap();
         assert_eq!(accounts[from_account].tokens, 0);
         assert_eq!(accounts[contract_account].tokens, 1);
-        let state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
-        assert!(state.is_pending());
+        let program = BudgetProgram::deserialize(&accounts[contract_account].userdata).unwrap();
+        assert!(program.is_pending());
 
         // Attack! Try to payout to a rando key
         let tx = Transaction::budget_new_timestamp(
@@ -430,8 +430,8 @@ mod test {
         assert_eq!(accounts[contract_account].tokens, 1);
         assert_eq!(accounts[to_account].tokens, 0);
 
-        let state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
-        assert!(state.is_pending());
+        let program = BudgetProgram::deserialize(&accounts[contract_account].userdata).unwrap();
+        assert!(program.is_pending());
 
         // Now, acknowledge the time in the condition occurred and
         // that pubkey's funds are now available.
@@ -447,8 +447,8 @@ mod test {
         assert_eq!(accounts[contract_account].tokens, 0);
         assert_eq!(accounts[to_account].tokens, 1);
 
-        let state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
-        assert!(!state.is_pending());
+        let program = BudgetProgram::deserialize(&accounts[contract_account].userdata).unwrap();
+        assert!(!program.is_pending());
 
         // try to replay the timestamp contract
         assert_eq!(
@@ -462,9 +462,9 @@ mod test {
     #[test]
     fn test_cancel_transfer() {
         let mut accounts = vec![
-            Account::new(1, 0, BudgetState::id()),
-            Account::new(0, 512, BudgetState::id()),
-            Account::new(0, 0, BudgetState::id()),
+            Account::new(1, 0, BudgetProgram::id()),
+            Account::new(0, 512, BudgetProgram::id()),
+            Account::new(0, 0, BudgetProgram::id()),
         ];
         let from_account = 0;
         let contract_account = 1;
@@ -486,8 +486,8 @@ mod test {
         process_transaction(&tx, &mut accounts).unwrap();
         assert_eq!(accounts[from_account].tokens, 0);
         assert_eq!(accounts[contract_account].tokens, 1);
-        let state = BudgetState::deserialize(&accounts[contract_account].userdata).unwrap();
-        assert!(state.is_pending());
+        let program = BudgetProgram::deserialize(&accounts[contract_account].userdata).unwrap();
+        assert!(program.is_pending());
 
         // Attack! try to put the tokens into the wrong account with cancel
         let tx =
@@ -532,9 +532,9 @@ mod test {
     #[test]
     fn test_userdata_too_small() {
         let mut accounts = vec![
-            Account::new(1, 0, BudgetState::id()),
-            Account::new(1, 0, BudgetState::id()), // <== userdata is 0, which is not enough
-            Account::new(1, 0, BudgetState::id()),
+            Account::new(1, 0, BudgetProgram::id()),
+            Account::new(1, 0, BudgetProgram::id()), // <== userdata is 0, which is not enough
+            Account::new(1, 0, BudgetProgram::id()),
         ];
         let from = Keypair::new();
         let contract = Keypair::new();
@@ -551,7 +551,7 @@ mod test {
         );
 
         assert!(process_transaction(&tx, &mut accounts).is_err());
-        assert!(BudgetState::deserialize(&accounts[1].userdata).is_err());
+        assert!(BudgetProgram::deserialize(&accounts[1].userdata).is_err());
 
         let tx = Transaction::budget_new_timestamp(
             &from,
@@ -561,7 +561,7 @@ mod test {
             Hash::default(),
         );
         assert!(process_transaction(&tx, &mut accounts).is_err());
-        assert!(BudgetState::deserialize(&accounts[1].userdata).is_err());
+        assert!(BudgetProgram::deserialize(&accounts[1].userdata).is_err());
 
         // Success if there was no panic...
     }

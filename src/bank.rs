@@ -6,7 +6,7 @@
 use bincode::deserialize;
 use bincode::serialize;
 use bpf_loader;
-use budget_program::BudgetState;
+use budget_program::BudgetProgram;
 use counter::Counter;
 use entry::Entry;
 use itertools::Itertools;
@@ -827,8 +827,9 @@ impl Bank {
                 };
                 return Err(err);
             }
-        } else if BudgetState::check_id(&program_id) {
-            if BudgetState::process_transaction(&tx, instruction_index, program_accounts).is_err() {
+        } else if BudgetProgram::check_id(&program_id) {
+            if BudgetProgram::process_transaction(&tx, instruction_index, program_accounts).is_err()
+            {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }
         } else if StorageProgram::check_id(&program_id) {
@@ -1310,8 +1311,8 @@ impl Bank {
     pub fn read_balance(account: &Account) -> u64 {
         if SystemProgram::check_id(&account.owner) {
             SystemProgram::get_balance(account)
-        } else if BudgetState::check_id(&account.owner) {
-            BudgetState::get_balance(account)
+        } else if BudgetProgram::check_id(&account.owner) {
+            BudgetProgram::get_balance(account)
         } else {
             account.tokens
         }
@@ -1497,7 +1498,7 @@ impl Bank {
 mod tests {
     use super::*;
     use bincode::serialize;
-    use budget_program::BudgetState;
+    use budget_program::BudgetProgram;
     use entry::next_entry;
     use entry::Entry;
     use jsonrpc_macros::pubsub::{Subscriber, SubscriptionId};
@@ -2020,7 +2021,7 @@ mod tests {
             last_id,
             1,
             16,
-            BudgetState::id(),
+            BudgetProgram::id(),
             0,
         );
         bank.process_transaction(&tx).unwrap();
@@ -2255,7 +2256,7 @@ mod tests {
         assert_eq!(SystemProgram::id(), system);
         assert_eq!(native_loader::id(), native);
         assert_eq!(bpf_loader::id(), bpf);
-        assert_eq!(BudgetState::id(), budget);
+        assert_eq!(BudgetProgram::id(), budget);
         assert_eq!(StorageProgram::id(), storage);
         assert_eq!(token_program::id(), token);
         assert_eq!(VoteProgram::id(), vote);
@@ -2268,7 +2269,7 @@ mod tests {
             SystemProgram::id(),
             native_loader::id(),
             bpf_loader::id(),
-            BudgetState::id(),
+            BudgetProgram::id(),
             StorageProgram::id(),
             token_program::id(),
             VoteProgram::id(),

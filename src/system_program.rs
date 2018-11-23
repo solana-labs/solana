@@ -246,7 +246,7 @@ mod test {
     #[test]
     fn test_sdk_serialize() {
         let keypair = Keypair::new();
-        use budget_program::BudgetState;
+        use budget_program::BudgetProgram;
 
         // CreateAccount
         let tx = Transaction::system_create(
@@ -255,7 +255,7 @@ mod test {
             Hash::default(),
             111,
             222,
-            BudgetState::id(),
+            BudgetProgram::id(),
             0,
         );
 
@@ -287,7 +287,7 @@ mod test {
         );
 
         // Assign
-        let tx = Transaction::system_assign(&keypair, Hash::default(), BudgetState::id(), 0);
+        let tx = Transaction::system_assign(&keypair, Hash::default(), BudgetProgram::id(), 0);
         assert_eq!(
             tx.userdata(0).to_vec(),
             vec![

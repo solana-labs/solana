@@ -246,7 +246,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use budget_program::BudgetState;
+    use budget_program::BudgetProgram;
     use budget_transaction::BudgetTransaction;
     use jsonrpc_core::futures::sync::mpsc;
     use mint::Mint;
@@ -400,7 +400,7 @@ mod tests {
         let witness = Keypair::new();
         let contract_funds = Keypair::new();
         let contract_state = Keypair::new();
-        let budget_program_id = BudgetState::id();
+        let budget_program_id = BudgetProgram::id();
         let loader = Pubkey::default(); // TODO
         let executable = false; // TODO
         let bank = Bank::new(&alice);
