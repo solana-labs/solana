@@ -19,6 +19,7 @@ use native_loader;
 use payment_plan::Payment;
 use poh_recorder::PohRecorder;
 use poh_service::NUM_TICKS_PER_SECOND;
+use program::ProgramError;
 use rayon::prelude::*;
 use rpc::RpcSignatureStatus;
 use signature::Keypair;
@@ -86,10 +87,8 @@ pub enum BankError {
     /// Contract's instruction token balance does not equal the balance after the instruction
     UnbalancedInstruction(u8),
 
-    /// Contract's transactions resulted in an account with a negative balance
-    /// The difference from InsufficientFundsForFee is that the transaction was executed by the
-    /// contract
-    ResultWithNegativeTokens(u8),
+    /// The program returned an error
+    ProgramError(u8, ProgramError),
 
     /// Contract id is unknown
     UnknownContractId(u8),
@@ -99,9 +98,6 @@ pub enum BankError {
 
     /// Contract spent the tokens of an account that doesn't belong to it
     ExternalAccountTokenSpend(u8),
-
-    /// The program returned an error
-    ProgramRuntimeError(u8),
 
     /// Recoding into PoH failed
     RecordFailure,
@@ -499,9 +495,7 @@ impl Bank {
                 let status = match res[i] {
                     Ok(_) => RpcSignatureStatus::Confirmed,
                     Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
-                    Err(BankError::ProgramRuntimeError(_)) => {
-                        RpcSignatureStatus::ProgramRuntimeError
-                    }
+                    Err(BankError::ProgramError(_, _)) => RpcSignatureStatus::ProgramRuntimeError,
                     Err(_) => RpcSignatureStatus::GenericFailure,
                 };
                 if status != RpcSignatureStatus::SignatureNotFound {
@@ -823,28 +817,31 @@ impl Bank {
             {
                 let err = match err {
                     system_program::Error::ResultWithNegativeTokens => {
-                        BankError::ResultWithNegativeTokens(instruction_index as u8)
+                        ProgramError::ResultWithNegativeTokens
                     }
-                    _ => BankError::ProgramRuntimeError(instruction_index as u8),
+                    _ => ProgramError::RuntimeError,
                 };
-                return Err(err);
+                return Err(BankError::ProgramError(instruction_index as u8, err));
             }
         } else if budget_program::check_id(&program_id) {
             if budget_program::process_instruction(&tx, instruction_index, program_accounts)
                 .is_err()
             {
-                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
+                let err = ProgramError::RuntimeError;
+                return Err(BankError::ProgramError(instruction_index as u8, err));
             }
         } else if storage_program::check_id(&program_id) {
             if storage_program::process_instruction(&tx, instruction_index, program_accounts)
                 .is_err()
             {
-                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
+                let err = ProgramError::RuntimeError;
+                return Err(BankError::ProgramError(instruction_index as u8, err));
             }
         } else if vote_program::check_id(&program_id) {
             if vote_program::process_instruction(&tx, instruction_index, program_accounts).is_err()
             {
-                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
+                let err = ProgramError::RuntimeError;
+                return Err(BankError::ProgramError(instruction_index as u8, err));
             }
         } else {
             let mut accounts = self.load_executable_accounts(tx.program_ids[instruction_index])?;
@@ -864,7 +861,8 @@ impl Bank {
                 &tx.instructions[instruction_index].userdata,
                 self.tick_height(),
             ) {
-                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
+                let err = ProgramError::RuntimeError;
+                return Err(BankError::ProgramError(instruction_index as u8, err));
             }
         }
 
@@ -1606,13 +1604,22 @@ mod tests {
         );
         let res = bank.process_transactions(&vec![t1.clone()]);
         assert_eq!(res.len(), 1);
-        assert_eq!(res[0], Err(BankError::ResultWithNegativeTokens(1)));
+        assert_eq!(
+            res[0],
+            Err(BankError::ProgramError(
+                1,
+                ProgramError::ResultWithNegativeTokens
+            ))
+        );
         assert_eq!(bank.get_balance(&mint.pubkey()), 1);
         assert_eq!(bank.get_balance(&key1), 0);
         assert_eq!(bank.get_balance(&key2), 0);
         assert_eq!(
             bank.get_signature(&t1.last_id, &t1.signatures[0]),
-            Some(Err(BankError::ResultWithNegativeTokens(1)))
+            Some(Err(BankError::ProgramError(
+                1,
+                ProgramError::ResultWithNegativeTokens
+            )))
         );
     }
 
@@ -1667,7 +1674,10 @@ mod tests {
         assert!(bank.has_signature(&signature));
         assert_matches!(
             bank.get_signature_status(&signature),
-            Err(BankError::ResultWithNegativeTokens(0))
+            Err(BankError::ProgramError(
+                0,
+                ProgramError::ResultWithNegativeTokens
+            ))
         );
 
         // The tokens didn't move, but the from address paid the transaction fee.
@@ -1700,7 +1710,10 @@ mod tests {
         assert_eq!(bank.get_balance(&pubkey), 1_000);
         assert_matches!(
             bank.transfer(10_001, &mint.keypair(), pubkey, mint.last_id()),
-            Err(BankError::ResultWithNegativeTokens(0))
+            Err(BankError::ProgramError(
+                0,
+                ProgramError::ResultWithNegativeTokens
+            ))
         );
         assert_eq!(bank.transaction_count(), 1);
 
