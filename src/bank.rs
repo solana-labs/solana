@@ -790,24 +790,15 @@ impl Bank {
         Ok(accounts)
     }
 
-    /// Execute an instruction
-    /// This method calls the instruction's program entry pont method and verifies that the result of
-    /// the call does not violate the bank's accounting rules.
-    /// The accounts are committed back to the bank only if this function returns Ok(_).
-    fn execute_instruction(
+    /// Process an instruction
+    /// This method calls the instruction's program entry pont method
+    fn process_instruction(
         &self,
         tx: &Transaction,
         instruction_index: usize,
         program_accounts: &mut [&mut Account],
     ) -> Result<()> {
         let program_id = tx.program_id(instruction_index);
-        // TODO: the runtime should be checking read/write access to memory
-        // we are trusting the hard coded contracts not to clobber or allocate
-        let pre_total: u64 = program_accounts.iter().map(|a| a.tokens).sum();
-        let pre_data: Vec<_> = program_accounts
-            .iter_mut()
-            .map(|a| (a.owner, a.tokens))
-            .collect();
 
         // Call the contract method
         // It's up to the contract to implement its own rules on moving funds
@@ -865,6 +856,29 @@ impl Bank {
                 return Err(BankError::ProgramError(instruction_index as u8, err));
             }
         }
+        Ok(())
+    }
+
+    /// Execute an instruction
+    /// This method calls the instruction's program entry pont method and verifies that the result of
+    /// the call does not violate the bank's accounting rules.
+    /// The accounts are committed back to the bank only if this function returns Ok(_).
+    fn execute_instruction(
+        &self,
+        tx: &Transaction,
+        instruction_index: usize,
+        program_accounts: &mut [&mut Account],
+    ) -> Result<()> {
+        let program_id = tx.program_id(instruction_index);
+        // TODO: the runtime should be checking read/write access to memory
+        // we are trusting the hard coded contracts not to clobber or allocate
+        let pre_total: u64 = program_accounts.iter().map(|a| a.tokens).sum();
+        let pre_data: Vec<_> = program_accounts
+            .iter_mut()
+            .map(|a| (a.owner, a.tokens))
+            .collect();
+
+        self.process_instruction(tx, instruction_index, program_accounts)?;
 
         // Verify the instruction
         for ((pre_program_id, pre_tokens), post_account) in
