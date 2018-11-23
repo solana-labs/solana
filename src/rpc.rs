@@ -191,7 +191,7 @@ impl RpcSol for RpcSolImpl {
             match meta.request_processor.get_signature_status(signature) {
                 Ok(_) => RpcSignatureStatus::Confirmed,
                 Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
-                Err(BankError::ProgramRuntimeError(_)) => RpcSignatureStatus::ProgramRuntimeError,
+                Err(BankError::ProgramError(_, _)) => RpcSignatureStatus::ProgramRuntimeError,
                 // Report SignatureReserved as SignatureNotFound as SignatureReserved is
                 // transitory while the bank processes the associated transaction.
                 Err(BankError::SignatureReserved) => RpcSignatureStatus::SignatureNotFound,

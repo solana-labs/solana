@@ -56,6 +56,7 @@ pub mod payment_plan;
 pub mod poh;
 pub mod poh_recorder;
 pub mod poh_service;
+pub mod program;
 pub mod recvmmsg;
 pub mod replicate_stage;
 pub mod replicator;
