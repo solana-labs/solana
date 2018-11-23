@@ -215,7 +215,7 @@ impl ClusterInfo {
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
-            .filter(|x| x.id != me)
+            .filter(|x| x.id != me && x.id != self.leader_id())
             .filter(|x| ContactInfo::is_valid_address(&x.tvu))
             .cloned()
             .collect()
@@ -456,7 +456,7 @@ impl ClusterInfo {
     pub fn window_index_request(&self, ix: u64) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication, as indicated
         //  by a valid tvu port location
-        let valid: Vec<_> = self.tvu_peers();
+        let valid: Vec<_> = self.ncp_peers();
         if valid.is_empty() {
             Err(ClusterInfoError::NoPeers)?;
         }
