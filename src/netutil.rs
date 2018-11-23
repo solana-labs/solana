@@ -58,14 +58,11 @@ fn find_eth0ish_ip_addr(ifaces: &mut Vec<datalink::NetworkInterface>) -> Option<
             .cmp(&b.name.chars().last().unwrap())
     });
 
+    let mut lo = None;
     for iface in ifaces.clone() {
         trace!("get_ip_addr considering iface {}", iface.name);
         for p in iface.ips {
             trace!("  ip {}", p);
-            if p.ip().is_loopback() {
-                trace!("    loopback");
-                continue;
-            }
             if p.ip().is_multicast() {
                 trace!("    multicast");
                 continue;
@@ -76,6 +73,13 @@ fn find_eth0ish_ip_addr(ifaces: &mut Vec<datalink::NetworkInterface>) -> Option<
                         trace!("    link local");
                         continue;
                     }
+                    if p.ip().is_loopback() {
+                        // Fall back to loopback if no better option exists
+                        // (local development and test)
+                        trace!("    loopback");
+                        lo = Some(p.ip());
+                        continue;
+                    }
                     trace!("    picked {}", p.ip());
                     return Some(p.ip());
                 }
@@ -83,13 +87,19 @@ fn find_eth0ish_ip_addr(ifaces: &mut Vec<datalink::NetworkInterface>) -> Option<
                     // Select an ipv6 address if the config is selected
                     #[cfg(feature = "ipv6")]
                     {
+                        if p.ip().is_loopback() {
+                            trace!("    loopback");
+                            lo = Some(p.ip());
+                            continue;
+                        }
                         return Some(p.ip());
                     }
                 }
             }
         }
     }
-    None
+    trace!("    picked {:?}", lo);
+    lo
 }
 
 pub fn get_ip_addr() -> Option<IpAddr> {
@@ -214,10 +224,18 @@ mod tests {
             };
         }
 
-        // loopback bad
+        // loopback bad when alternatives exist
+        assert_eq!(
+            find_eth0ish_ip_addr(&mut vec![
+                mock_interface!(eth0, "192.168.137.1/8"),
+                mock_interface!(lo, "127.0.0.1/24")
+            ]),
+            Some(mock_interface!(eth0, "192.168.137.1/8").ips[0].ip())
+        );
+        // find loopback as a last resort
         assert_eq!(
             find_eth0ish_ip_addr(&mut vec![mock_interface!(lo, "127.0.0.1/24")]),
-            None
+            Some(mock_interface!(lo, "127.0.0.1/24").ips[0].ip()),
         );
         // multicast bad
         assert_eq!(
