@@ -14,7 +14,7 @@ use std::collections::HashSet;
 use std::io::Cursor;
 use system_transaction::SystemTransaction;
 use transaction::Transaction;
-use vote_program::{Vote, VoteProgram};
+use vote_program::{self, Vote, VoteProgram};
 use vote_transaction::VoteTransaction;
 
 pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = 1000;
@@ -309,7 +309,7 @@ impl LeaderScheduler {
                 .accounts
                 .values()
                 .filter_map(|account| {
-                    if VoteProgram::check_id(&account.owner) {
+                    if vote_program::check_id(&account.owner) {
                         if let Ok(vote_state) = VoteProgram::deserialize(&account.userdata) {
                             return vote_state
                                 .votes

@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::thread::sleep;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
-use vote_program::VoteProgram;
+use vote_program::{self, VoteProgram};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum FinalityError {
@@ -46,7 +46,7 @@ impl ComputeLeaderFinalityService {
                 .filter_map(|account| {
                     // Filter out any accounts that don't belong to the VoteProgram
                     // by returning None
-                    if VoteProgram::check_id(&account.owner) {
+                    if vote_program::check_id(&account.owner) {
                         if let Ok(vote_state) = VoteProgram::deserialize(&account.userdata) {
                             let validator_stake = bank.get_stake(&vote_state.node_id);
                             total_stake += validator_stake;

@@ -1,7 +1,7 @@
 use bincode::serialize;
 use bpf_loader;
 use bs58;
-use budget_program::BudgetProgram;
+use budget_program;
 use budget_transaction::BudgetTransaction;
 use chrono::prelude::*;
 use clap::ArgMatches;
@@ -497,7 +497,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
 
                 let contract_funds = Keypair::new();
                 let contract_state = Keypair::new();
-                let budget_program_id = BudgetProgram::id();
+                let budget_program_id = budget_program::id();
 
                 // Create account for contract funds
                 let tx = Transaction::system_create(
@@ -553,7 +553,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
 
                 let contract_funds = Keypair::new();
                 let contract_state = Keypair::new();
-                let budget_program_id = BudgetProgram::id();
+                let budget_program_id = budget_program::id();
 
                 // Create account for contract funds
                 let tx = Transaction::system_create(

@@ -56,15 +56,77 @@ const VOTE_PROGRAM_ID: [u8; 32] = [
     0,
 ];
 
+pub fn check_id(program_id: &Pubkey) -> bool {
+    program_id.as_ref() == VOTE_PROGRAM_ID
+}
+
+pub fn id() -> Pubkey {
+    Pubkey::new(&VOTE_PROGRAM_ID)
+}
+
+pub fn process_transaction(
+    tx: &Transaction,
+    instruction_index: usize,
+    accounts: &mut [&mut Account],
+) -> Result<()> {
+    match deserialize(tx.userdata(instruction_index)) {
+        Ok(VoteInstruction::RegisterAccount) => {
+            // TODO: a single validator could register multiple "vote accounts"
+            // which would clutter the "accounts" structure. See github issue 1654.
+            accounts[1].owner = id();
+
+            let mut vote_state = VoteProgram {
+                votes: VecDeque::new(),
+                node_id: *tx.from(),
+            };
+
+            vote_state.serialize(&mut accounts[1].userdata)?;
+
+            Ok(())
+        }
+        Ok(VoteInstruction::NewVote(vote)) => {
+            if !check_id(&accounts[0].owner) {
+                error!("accounts[0] is not assigned to the VOTE_PROGRAM");
+                Err(Error::InvalidArguments)?;
+            }
+
+            let mut vote_state = VoteProgram::deserialize(&accounts[0].userdata)?;
+
+            // TODO: Integrity checks
+            // a) Verify the vote's bank hash matches what is expected
+            // b) Verify vote is older than previous votes
+
+            // Only keep around the most recent MAX_VOTE_HISTORY votes
+            if vote_state.votes.len() == MAX_VOTE_HISTORY {
+                vote_state.votes.pop_front();
+            }
+
+            vote_state.votes.push_back(vote);
+            vote_state.serialize(&mut accounts[0].userdata)?;
+
+            Ok(())
+        }
+        Err(_) => {
+            info!(
+                "Invalid vote transaction userdata: {:?}",
+                tx.userdata(instruction_index)
+            );
+            Err(Error::UserdataDeserializeFailure)
+        }
+    }
+}
+
+pub fn get_max_size() -> usize {
+    // Upper limit on the size of the Vote State. Equal to
+    // sizeof(VoteProgram) + MAX_VOTE_HISTORY * sizeof(Vote) +
+    // 32 (the size of the Pubkey) + 2 (2 bytes for the size)
+    mem::size_of::<VoteProgram>()
+        + MAX_VOTE_HISTORY * mem::size_of::<Vote>()
+        + mem::size_of::<Pubkey>()
+        + mem::size_of::<u16>()
+}
+
 impl VoteProgram {
-    pub fn check_id(program_id: &Pubkey) -> bool {
-        program_id.as_ref() == VOTE_PROGRAM_ID
-    }
-
-    pub fn id() -> Pubkey {
-        Pubkey::new(&VOTE_PROGRAM_ID)
-    }
-
     pub fn deserialize(input: &[u8]) -> Result<VoteProgram> {
         let len = LittleEndian::read_u16(&input[0..2]) as usize;
 
@@ -95,68 +157,6 @@ impl VoteProgram {
         output[2..=serialized_len as usize + 1].clone_from_slice(&self_serialized);
         Ok(())
     }
-
-    pub fn process_transaction(
-        tx: &Transaction,
-        instruction_index: usize,
-        accounts: &mut [&mut Account],
-    ) -> Result<()> {
-        match deserialize(tx.userdata(instruction_index)) {
-            Ok(VoteInstruction::RegisterAccount) => {
-                // TODO: a single validator could register multiple "vote accounts"
-                // which would clutter the "accounts" structure. See github issue 1654.
-                accounts[1].owner = Self::id();
-
-                let mut vote_state = VoteProgram {
-                    votes: VecDeque::new(),
-                    node_id: *tx.from(),
-                };
-
-                vote_state.serialize(&mut accounts[1].userdata)?;
-
-                Ok(())
-            }
-            Ok(VoteInstruction::NewVote(vote)) => {
-                if !Self::check_id(&accounts[0].owner) {
-                    error!("accounts[0] is not assigned to the VOTE_PROGRAM");
-                    Err(Error::InvalidArguments)?;
-                }
-
-                let mut vote_state = Self::deserialize(&accounts[0].userdata)?;
-
-                // TODO: Integrity checks
-                // a) Verify the vote's bank hash matches what is expected
-                // b) Verify vote is older than previous votes
-
-                // Only keep around the most recent MAX_VOTE_HISTORY votes
-                if vote_state.votes.len() == MAX_VOTE_HISTORY {
-                    vote_state.votes.pop_front();
-                }
-
-                vote_state.votes.push_back(vote);
-                vote_state.serialize(&mut accounts[0].userdata)?;
-
-                Ok(())
-            }
-            Err(_) => {
-                info!(
-                    "Invalid vote transaction userdata: {:?}",
-                    tx.userdata(instruction_index)
-                );
-                Err(Error::UserdataDeserializeFailure)
-            }
-        }
-    }
-
-    pub fn get_max_size() -> usize {
-        // Upper limit on the size of the Vote State. Equal to
-        // sizeof(VoteProgram) + MAX_VOTE_HISTORY * sizeof(Vote) +
-        // 32 (the size of the Pubkey) + 2 (2 bytes for the size)
-        mem::size_of::<VoteProgram>()
-            + MAX_VOTE_HISTORY * mem::size_of::<Vote>()
-            + mem::size_of::<Pubkey>()
-            + mem::size_of::<u16>()
-    }
 }
 
 #[cfg(test)]
@@ -165,7 +165,7 @@ mod tests {
 
     #[test]
     fn test_serde() -> Result<()> {
-        let mut buffer: Vec<u8> = vec![0; VoteProgram::get_max_size()];
+        let mut buffer: Vec<u8> = vec![0; get_max_size()];
         let mut vote_program = VoteProgram::default();
         vote_program.votes = (0..MAX_VOTE_HISTORY).map(|_| Vote::default()).collect();
         vote_program.serialize(&mut buffer).unwrap();

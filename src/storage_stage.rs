@@ -18,7 +18,7 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
-use vote_program::VoteProgram;
+use vote_program;
 
 // Block of hash answers to validate against
 // Vec of [ledger blocks] x [keys]
@@ -215,7 +215,7 @@ impl StorageStage {
             // the storage_keys with their signatures.
             for tx in entry.transactions {
                 for program_id in tx.program_ids {
-                    if VoteProgram::check_id(&program_id) {
+                    if vote_program::check_id(&program_id) {
                         debug!(
                             "generating storage_keys from votes current_key_idx: {}",
                             *current_key_idx

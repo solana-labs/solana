@@ -4,7 +4,7 @@ use signature::{Keypair, KeypairUtil};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction::SystemInstruction;
-use system_program::SystemProgram;
+use system_program;
 
 use transaction::{Instruction, Transaction};
 
@@ -60,7 +60,7 @@ impl SystemTransaction for Transaction {
         Transaction::new(
             from_keypair,
             &[to],
-            SystemProgram::id(),
+            system_program::id(),
             &create,
             last_id,
             fee,
@@ -72,7 +72,7 @@ impl SystemTransaction for Transaction {
         Transaction::new(
             from_keypair,
             &[],
-            SystemProgram::id(),
+            system_program::id(),
             &assign,
             last_id,
             fee,
@@ -94,7 +94,7 @@ impl SystemTransaction for Transaction {
         Transaction::new(
             from_keypair,
             &[to],
-            SystemProgram::id(),
+            system_program::id(),
             &move_tokens,
             last_id,
             fee,
@@ -116,14 +116,21 @@ impl SystemTransaction for Transaction {
             &to_keys,
             last_id,
             fee,
-            vec![SystemProgram::id()],
+            vec![system_program::id()],
             instructions,
         )
     }
     /// Create and sign new SystemInstruction::Spawn transaction
     fn system_spawn(from_keypair: &Keypair, last_id: Hash, fee: u64) -> Self {
         let spawn = SystemInstruction::Spawn;
-        Transaction::new(from_keypair, &[], SystemProgram::id(), &spawn, last_id, fee)
+        Transaction::new(
+            from_keypair,
+            &[],
+            system_program::id(),
+            &spawn,
+            last_id,
+            fee,
+        )
     }
 }
 

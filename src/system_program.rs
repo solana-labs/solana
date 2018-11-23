@@ -23,86 +23,82 @@ impl std::error::Error for Error {}
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-pub struct SystemProgram {}
-
 pub const SYSTEM_PROGRAM_ID: [u8; 32] = [0u8; 32];
 
-impl SystemProgram {
-    pub fn check_id(program_id: &Pubkey) -> bool {
-        program_id.as_ref() == SYSTEM_PROGRAM_ID
-    }
+pub fn check_id(program_id: &Pubkey) -> bool {
+    program_id.as_ref() == SYSTEM_PROGRAM_ID
+}
 
-    pub fn id() -> Pubkey {
-        Pubkey::new(&SYSTEM_PROGRAM_ID)
-    }
-    pub fn get_balance(account: &Account) -> u64 {
-        account.tokens
-    }
-    pub fn process_transaction(
-        tx: &Transaction,
-        pix: usize,
-        accounts: &mut [&mut Account],
-    ) -> Result<()> {
-        if let Ok(syscall) = deserialize(tx.userdata(pix)) {
-            trace!("process_transaction: {:?}", syscall);
-            match syscall {
-                SystemInstruction::CreateAccount {
-                    tokens,
-                    space,
-                    program_id,
-                } => {
-                    if !Self::check_id(&accounts[0].owner) {
-                        info!("Invalid account[0] owner");
-                        Err(Error::InvalidArgument)?;
-                    }
+pub fn id() -> Pubkey {
+    Pubkey::new(&SYSTEM_PROGRAM_ID)
+}
+pub fn get_balance(account: &Account) -> u64 {
+    account.tokens
+}
+pub fn process_transaction(
+    tx: &Transaction,
+    pix: usize,
+    accounts: &mut [&mut Account],
+) -> Result<()> {
+    if let Ok(syscall) = deserialize(tx.userdata(pix)) {
+        trace!("process_transaction: {:?}", syscall);
+        match syscall {
+            SystemInstruction::CreateAccount {
+                tokens,
+                space,
+                program_id,
+            } => {
+                if !check_id(&accounts[0].owner) {
+                    info!("Invalid account[0] owner");
+                    Err(Error::InvalidArgument)?;
+                }
 
-                    if space > 0
-                        && (!accounts[1].userdata.is_empty() || !Self::check_id(&accounts[1].owner))
-                    {
-                        info!("Invalid account[1]");
-                        Err(Error::InvalidArgument)?;
-                    }
-                    if tokens > accounts[0].tokens {
-                        info!("Insufficient tokens in account[0]");
-                        Err(Error::ResultWithNegativeTokens(pix as u8))?;
-                    }
-                    accounts[0].tokens -= tokens;
-                    accounts[1].tokens += tokens;
-                    accounts[1].owner = program_id;
-                    accounts[1].userdata = vec![0; space as usize];
-                    accounts[1].executable = false;
-                    accounts[1].loader = Pubkey::default();
+                if space > 0 && (!accounts[1].userdata.is_empty() || !check_id(&accounts[1].owner))
+                {
+                    info!("Invalid account[1]");
+                    Err(Error::InvalidArgument)?;
                 }
-                SystemInstruction::Assign { program_id } => {
-                    if !Self::check_id(&accounts[0].owner) {
-                        Err(Error::AssignOfUnownedAccount)?;
-                    }
-                    accounts[0].owner = program_id;
+                if tokens > accounts[0].tokens {
+                    info!("Insufficient tokens in account[0]");
+                    Err(Error::ResultWithNegativeTokens(pix as u8))?;
                 }
-                SystemInstruction::Move { tokens } => {
-                    //bank should be verifying correctness
-                    if tokens > accounts[0].tokens {
-                        info!("Insufficient tokens in account[0]");
-                        Err(Error::ResultWithNegativeTokens(pix as u8))?;
-                    }
-                    accounts[0].tokens -= tokens;
-                    accounts[1].tokens += tokens;
-                }
-                SystemInstruction::Spawn => {
-                    if !accounts[0].executable || accounts[0].loader != Pubkey::default() {
-                        Err(Error::AccountNotFinalized)?;
-                    }
-                    accounts[0].loader = accounts[0].owner;
-                    accounts[0].owner = tx.account_keys[0];
-                }
+                accounts[0].tokens -= tokens;
+                accounts[1].tokens += tokens;
+                accounts[1].owner = program_id;
+                accounts[1].userdata = vec![0; space as usize];
+                accounts[1].executable = false;
+                accounts[1].loader = Pubkey::default();
             }
-            Ok(())
-        } else {
-            info!("Invalid transaction userdata: {:?}", tx.userdata(pix));
-            Err(Error::InvalidArgument)
+            SystemInstruction::Assign { program_id } => {
+                if !check_id(&accounts[0].owner) {
+                    Err(Error::AssignOfUnownedAccount)?;
+                }
+                accounts[0].owner = program_id;
+            }
+            SystemInstruction::Move { tokens } => {
+                //bank should be verifying correctness
+                if tokens > accounts[0].tokens {
+                    info!("Insufficient tokens in account[0]");
+                    Err(Error::ResultWithNegativeTokens(pix as u8))?;
+                }
+                accounts[0].tokens -= tokens;
+                accounts[1].tokens += tokens;
+            }
+            SystemInstruction::Spawn => {
+                if !accounts[0].executable || accounts[0].loader != Pubkey::default() {
+                    Err(Error::AccountNotFinalized)?;
+                }
+                accounts[0].loader = accounts[0].owner;
+                accounts[0].owner = tx.account_keys[0];
+            }
         }
+        Ok(())
+    } else {
+        info!("Invalid transaction userdata: {:?}", tx.userdata(pix));
+        Err(Error::InvalidArgument)
     }
 }
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -110,13 +106,12 @@ mod test {
     use solana_sdk::account::Account;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
-    use system_program::SystemProgram;
     use system_transaction::SystemTransaction;
     use transaction::Transaction;
 
     fn process_transaction(tx: &Transaction, accounts: &mut [Account]) -> Result<()> {
         let mut refs: Vec<&mut Account> = accounts.iter_mut().collect();
-        SystemProgram::process_transaction(&tx, 0, &mut refs[..])
+        super::process_transaction(&tx, 0, &mut refs[..])
     }
 
     #[test]
@@ -246,7 +241,7 @@ mod test {
     #[test]
     fn test_sdk_serialize() {
         let keypair = Keypair::new();
-        use budget_program::BudgetProgram;
+        use budget_program;
 
         // CreateAccount
         let tx = Transaction::system_create(
@@ -255,7 +250,7 @@ mod test {
             Hash::default(),
             111,
             222,
-            BudgetProgram::id(),
+            budget_program::id(),
             0,
         );
 
@@ -287,7 +282,7 @@ mod test {
         );
 
         // Assign
-        let tx = Transaction::system_assign(&keypair, Hash::default(), BudgetProgram::id(), 0);
+        let tx = Transaction::system_assign(&keypair, Hash::default(), budget_program::id(), 0);
         assert_eq!(
             tx.userdata(0).to_vec(),
             vec![
