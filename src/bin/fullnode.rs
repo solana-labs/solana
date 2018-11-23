@@ -32,6 +32,11 @@ fn main() {
     let matches = App::new("fullnode")
         .version(crate_version!())
         .arg(
+            Arg::with_name("nosigverify")
+                .short("v")
+                .long("nosigverify")
+                .help("Run without signature verification"),
+        ).arg(
             Arg::with_name("identity")
                 .short("i")
                 .long("identity")
@@ -60,6 +65,8 @@ fn main() {
                 .takes_value(true)
                 .help("Custom RPC port for this node"),
         ).get_matches();
+
+    let sigverify = !matches.is_present("nosigverify");
 
     let (keypair, vote_account_keypair, ncp) = if let Some(i) = matches.value_of("identity") {
         let path = i.to_string();
@@ -139,7 +146,7 @@ fn main() {
         keypair.clone(),
         vote_account_keypair.clone(),
         network,
-        false,
+        sigverify,
         leader_scheduler,
         rpc_port,
     );
