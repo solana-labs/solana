@@ -822,8 +822,8 @@ impl Bank {
                 system_program::process_instruction(&tx, instruction_index, program_accounts)
             {
                 let err = match err {
-                    system_program::Error::ResultWithNegativeTokens(i) => {
-                        BankError::ResultWithNegativeTokens(i)
+                    system_program::Error::ResultWithNegativeTokens => {
+                        BankError::ResultWithNegativeTokens(instruction_index as u8)
                     }
                     _ => BankError::ProgramRuntimeError(instruction_index as u8),
                 };

@@ -12,7 +12,7 @@ pub enum Error {
     InvalidArgument,
     AssignOfUnownedAccount,
     AccountNotFinalized,
-    ResultWithNegativeTokens(u8),
+    ResultWithNegativeTokens,
 }
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -60,7 +60,7 @@ pub fn process_instruction(
                 }
                 if tokens > accounts[0].tokens {
                     info!("Insufficient tokens in account[0]");
-                    Err(Error::ResultWithNegativeTokens(pix as u8))?;
+                    Err(Error::ResultWithNegativeTokens)?;
                 }
                 accounts[0].tokens -= tokens;
                 accounts[1].tokens += tokens;
@@ -79,7 +79,7 @@ pub fn process_instruction(
                 //bank should be verifying correctness
                 if tokens > accounts[0].tokens {
                     info!("Insufficient tokens in account[0]");
-                    Err(Error::ResultWithNegativeTokens(pix as u8))?;
+                    Err(Error::ResultWithNegativeTokens)?;
                 }
                 accounts[0].tokens -= tokens;
                 accounts[1].tokens += tokens;
