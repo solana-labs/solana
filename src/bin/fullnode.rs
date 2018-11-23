@@ -96,7 +96,8 @@ fn main() {
 
     let ledger_path = matches.value_of("ledger").unwrap();
 
-    // Create the RocksDb ledger
+    // Create the RocksDb ledger, eventually will simply repurpose the input
+    // ledger path as the RocksDb ledger path
     let db_ledger_path = format!("{}/{}", ledger_path, DB_LEDGER_DIRECTORY);
     // Destroy old ledger
     DB::destroy(&Options::default(), &db_ledger_path)
