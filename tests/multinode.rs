@@ -922,7 +922,7 @@ fn test_leader_to_validator_transition() {
     // Leader could have executed transactions in bank but not recorded them, so
     // we only have an upper bound on the balance
     if let Ok(bal) = leader_client.poll_get_balance(&bob_pubkey) {
-        assert!(bal <= i - 1);
+        assert!(bal <= i);
     }
 
     // Check the ledger to make sure it's the right height, we should've
@@ -1060,7 +1060,7 @@ fn test_leader_validator_basic() {
     // Leader could have executed transactions in bank but not recorded them, so
     // we only have an upper bound on the balance
     if let Ok(bal) = leader_client.poll_get_balance(&bob_pubkey) {
-        assert!(bal <= i - 1);
+        assert!(bal <= i);
     }
 
     // Shut down

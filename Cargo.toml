@@ -121,6 +121,9 @@ name = "bank"
 name = "banking_stage"
 
 [[bench]]
+name = "db_ledger"
+
+[[bench]]
 name = "ledger"
 
 [[bench]]

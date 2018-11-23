@@ -3,9 +3,7 @@
 //! access read to a persistent file-based ledger.
 
 use bincode::{self, deserialize_from, serialize_into, serialized_size};
-#[cfg(test)]
 use budget_transaction::BudgetTransaction;
-#[cfg(test)]
 use chrono::prelude::Utc;
 use entry::Entry;
 use log::Level::Trace;
@@ -13,9 +11,7 @@ use mint::Mint;
 use packet::{SharedBlob, BLOB_DATA_SIZE};
 use rayon::prelude::*;
 use signature::{Keypair, KeypairUtil};
-#[cfg(test)]
-use solana_sdk::hash::hash;
-use solana_sdk::hash::Hash;
+use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use std::fs::{create_dir_all, remove_dir_all, File, OpenOptions};
 use std::io::prelude::*;
@@ -642,7 +638,6 @@ pub fn create_tmp_sample_ledger(
     (mint, path, genesis)
 }
 
-#[cfg(test)]
 pub fn make_tiny_test_entries(num: usize) -> Vec<Entry> {
     let zero = Hash::default();
     let one = hash(&zero.as_ref());
@@ -664,6 +659,26 @@ pub fn make_tiny_test_entries(num: usize) -> Vec<Entry> {
                 )],
             )
         }).collect()
+}
+
+pub fn make_large_test_entries(num_entries: usize) -> Vec<Entry> {
+    let zero = Hash::default();
+    let one = hash(&zero.as_ref());
+    let keypair = Keypair::new();
+
+    let tx = Transaction::budget_new_timestamp(
+        &keypair,
+        keypair.pubkey(),
+        keypair.pubkey(),
+        Utc::now(),
+        one,
+    );
+
+    let serialized_size = serialized_size(&vec![&tx]).unwrap();
+    let num_txs = BLOB_DATA_SIZE / serialized_size as usize;
+    let txs = vec![tx; num_txs];
+    let entry = next_entries(&one, 1, txs)[0].clone();
+    vec![entry; num_entries]
 }
 
 #[cfg(test)]
