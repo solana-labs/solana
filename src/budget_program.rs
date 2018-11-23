@@ -4,6 +4,7 @@ use budget_expr::BudgetExpr;
 use budget_instruction::Instruction;
 use chrono::prelude::{DateTime, Utc};
 use payment_plan::Witness;
+use program::ProgramError;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use std::io;
@@ -131,6 +132,14 @@ pub fn process_instruction(
         );
         Err(BudgetError::UserdataDeserializeFailure)
     }
+}
+
+pub fn process(
+    tx: &Transaction,
+    instruction_index: usize,
+    accounts: &mut [&mut Account],
+) -> std::result::Result<(), ProgramError> {
+    process_instruction(&tx, instruction_index, accounts).map_err(|_| ProgramError::RuntimeError)
 }
 
 //TODO the contract needs to provide a "get_balance" introspection call of the userdata

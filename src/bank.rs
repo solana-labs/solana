@@ -803,37 +803,17 @@ impl Bank {
         // Call the contract method
         // It's up to the contract to implement its own rules on moving funds
         if system_program::check_id(&program_id) {
-            if let Err(err) =
-                system_program::process_instruction(&tx, instruction_index, program_accounts)
-            {
-                let err = match err {
-                    system_program::Error::ResultWithNegativeTokens => {
-                        ProgramError::ResultWithNegativeTokens
-                    }
-                    _ => ProgramError::RuntimeError,
-                };
-                return Err(BankError::ProgramError(instruction_index as u8, err));
-            }
+            system_program::process(&tx, instruction_index, program_accounts)
+                .map_err(|err| BankError::ProgramError(instruction_index as u8, err))?;
         } else if budget_program::check_id(&program_id) {
-            if budget_program::process_instruction(&tx, instruction_index, program_accounts)
-                .is_err()
-            {
-                let err = ProgramError::RuntimeError;
-                return Err(BankError::ProgramError(instruction_index as u8, err));
-            }
+            budget_program::process(&tx, instruction_index, program_accounts)
+                .map_err(|err| BankError::ProgramError(instruction_index as u8, err))?;
         } else if storage_program::check_id(&program_id) {
-            if storage_program::process_instruction(&tx, instruction_index, program_accounts)
-                .is_err()
-            {
-                let err = ProgramError::RuntimeError;
-                return Err(BankError::ProgramError(instruction_index as u8, err));
-            }
+            storage_program::process(&tx, instruction_index, program_accounts)
+                .map_err(|err| BankError::ProgramError(instruction_index as u8, err))?;
         } else if vote_program::check_id(&program_id) {
-            if vote_program::process_instruction(&tx, instruction_index, program_accounts).is_err()
-            {
-                let err = ProgramError::RuntimeError;
-                return Err(BankError::ProgramError(instruction_index as u8, err));
-            }
+            vote_program::process(&tx, instruction_index, program_accounts)
+                .map_err(|err| BankError::ProgramError(instruction_index as u8, err))?;
         } else {
             let mut accounts = self.load_executable_accounts(tx.program_ids[instruction_index])?;
             let mut keyed_accounts = create_keyed_accounts(&mut accounts);
