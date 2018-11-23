@@ -215,7 +215,7 @@ impl ClusterInfo {
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
-            .filter(|x| x.id != me)
+            .filter(|x| x.id != me && x.id != self.leader_id())
             .filter(|x| ContactInfo::is_valid_address(&x.tvu))
             .cloned()
             .collect()
@@ -987,7 +987,6 @@ impl Node {
 
         let (replicate_port, replicate_sockets) =
             multi_bind_in_range(FULLNODE_PORT_RANGE, 8).expect("tvu multi_bind");
-
         let (transaction_port, transaction_sockets) =
             multi_bind_in_range(FULLNODE_PORT_RANGE, 32).expect("tpu multi_bind");
 
