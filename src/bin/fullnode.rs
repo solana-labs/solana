@@ -106,7 +106,7 @@ fn main() {
         .expect("opening ledger")
         .map(|entry| entry.unwrap())
         .collect();
-    write_entries_to_ledger(&vec![db_ledger_path], &ledger_entries[..]);
+    write_entries_to_ledger(&[db_ledger_path], &ledger_entries[..]);
 
     // socketaddr that is initial pointer into the network's gossip (ncp)
     let network = matches
