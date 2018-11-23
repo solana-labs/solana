@@ -66,12 +66,12 @@ impl Tvu {
         repair_socket: UdpSocket,
         retransmit_socket: UdpSocket,
         ledger_path: Option<&str>,
-        db_ledger_path: String,
+        db_ledger_path: &str,
     ) -> Self {
         // Eventually will be passed into LedgerWriteStage as well to replace the ledger,
         // so wrap the object in a Arc<RwLock>
         let db_ledger = Arc::new(RwLock::new(
-            DbLedger::open(&db_ledger_path).expect("Expected to be able to open database ledger"),
+            DbLedger::open(db_ledger_path).expect("Expected to be able to open database ledger"),
         ));
 
         let exit = Arc::new(AtomicBool::new(false));
@@ -284,7 +284,7 @@ pub mod tests {
             target1.sockets.repair,
             target1.sockets.retransmit,
             None,
-            db_ledger_path.clone(),
+            &db_ledger_path.clone(),
         );
 
         let mut alice_ref_balance = starting_balance;

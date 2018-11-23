@@ -262,7 +262,7 @@ impl DbLedger {
         })
     }
 
-    pub fn write_shared_blobs<'a, I>(&mut self, slot: u64, shared_blobs: I) -> Result<()>
+    pub fn write_shared_blobs<I>(&mut self, slot: u64, shared_blobs: I) -> Result<()>
     where
         I: IntoIterator,
         I::Item: Borrow<SharedBlob>,

@@ -282,7 +282,7 @@ impl Fullnode {
                     .try_clone()
                     .expect("Failed to clone retransmit socket"),
                 Some(ledger_path),
-                format!("{}/{}", ledger_path, DB_LEDGER_DIRECTORY),
+                &format!("{}/{}", ledger_path, DB_LEDGER_DIRECTORY),
             );
             let tpu_forwarder = TpuForwarder::new(
                 node.sockets
@@ -435,7 +435,7 @@ impl Fullnode {
                     .try_clone()
                     .expect("Failed to clone retransmit socket"),
                 Some(&self.ledger_path),
-                format!("{}/{}", self.ledger_path, DB_LEDGER_DIRECTORY),
+                &format!("{}/{}", self.ledger_path, DB_LEDGER_DIRECTORY),
             );
             let tpu_forwarder = TpuForwarder::new(
                 self.transaction_sockets
