@@ -819,7 +819,7 @@ impl Bank {
         // It's up to the contract to implement its own rules on moving funds
         if system_program::check_id(&program_id) {
             if let Err(err) =
-                system_program::process_transaction(&tx, instruction_index, program_accounts)
+                system_program::process_instruction(&tx, instruction_index, program_accounts)
             {
                 let err = match err {
                     system_program::Error::ResultWithNegativeTokens(i) => {
@@ -830,19 +830,19 @@ impl Bank {
                 return Err(err);
             }
         } else if budget_program::check_id(&program_id) {
-            if budget_program::process_transaction(&tx, instruction_index, program_accounts)
+            if budget_program::process_instruction(&tx, instruction_index, program_accounts)
                 .is_err()
             {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }
         } else if storage_program::check_id(&program_id) {
-            if storage_program::process_transaction(&tx, instruction_index, program_accounts)
+            if storage_program::process_instruction(&tx, instruction_index, program_accounts)
                 .is_err()
             {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }
         } else if vote_program::check_id(&program_id) {
-            if vote_program::process_transaction(&tx, instruction_index, program_accounts).is_err()
+            if vote_program::process_instruction(&tx, instruction_index, program_accounts).is_err()
             {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }
