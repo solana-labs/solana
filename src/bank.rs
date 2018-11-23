@@ -790,6 +790,13 @@ impl Bank {
         Ok(accounts)
     }
 
+    fn is_legacy_program(program_id: &Pubkey) -> bool {
+        system_program::check_id(program_id)
+            || budget_program::check_id(program_id)
+            || storage_program::check_id(program_id)
+            || vote_program::check_id(program_id)
+    }
+
     /// Process an instruction
     /// This method calls the instruction's program entry pont method
     fn process_instruction(
@@ -802,18 +809,19 @@ impl Bank {
 
         // Call the contract method
         // It's up to the contract to implement its own rules on moving funds
-        if system_program::check_id(&program_id) {
-            system_program::process(&tx, instruction_index, program_accounts)
-                .map_err(|err| BankError::ProgramError(instruction_index as u8, err))?;
-        } else if budget_program::check_id(&program_id) {
-            budget_program::process(&tx, instruction_index, program_accounts)
-                .map_err(|err| BankError::ProgramError(instruction_index as u8, err))?;
-        } else if storage_program::check_id(&program_id) {
-            storage_program::process(&tx, instruction_index, program_accounts)
-                .map_err(|err| BankError::ProgramError(instruction_index as u8, err))?;
-        } else if vote_program::check_id(&program_id) {
-            vote_program::process(&tx, instruction_index, program_accounts)
-                .map_err(|err| BankError::ProgramError(instruction_index as u8, err))?;
+        if Self::is_legacy_program(&program_id) {
+            let res = if system_program::check_id(&program_id) {
+                system_program::process(&tx, instruction_index, program_accounts)
+            } else if budget_program::check_id(&program_id) {
+                budget_program::process(&tx, instruction_index, program_accounts)
+            } else if storage_program::check_id(&program_id) {
+                storage_program::process(&tx, instruction_index, program_accounts)
+            } else if vote_program::check_id(&program_id) {
+                vote_program::process(&tx, instruction_index, program_accounts)
+            } else {
+                unreachable!();
+            };
+            res.map_err(|err| BankError::ProgramError(instruction_index as u8, err))?;
         } else {
             let mut accounts = self.load_executable_accounts(tx.program_ids[instruction_index])?;
             let mut keyed_accounts = create_keyed_accounts(&mut accounts);
