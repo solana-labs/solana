@@ -1,6 +1,7 @@
 //! system program
 
 use bincode::deserialize;
+use program::ProgramError;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction::SystemInstruction;
@@ -97,6 +98,17 @@ pub fn process_instruction(
         info!("Invalid transaction userdata: {:?}", tx.userdata(pix));
         Err(Error::InvalidArgument)
     }
+}
+
+pub fn process(
+    tx: &Transaction,
+    instruction_index: usize,
+    accounts: &mut [&mut Account],
+) -> std::result::Result<(), ProgramError> {
+    process_instruction(&tx, instruction_index, accounts).map_err(|err| match err {
+        Error::ResultWithNegativeTokens => ProgramError::ResultWithNegativeTokens,
+        _ => ProgramError::RuntimeError,
+    })
 }
 
 #[cfg(test)]

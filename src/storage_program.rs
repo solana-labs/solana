@@ -3,6 +3,7 @@
 //!  and give reward for good proofs.
 
 use bincode::deserialize;
+use program::ProgramError;
 use solana_sdk::account::Account;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -49,6 +50,14 @@ pub fn process_instruction(
     } else {
         return Err(StorageError::InvalidUserData);
     }
+}
+
+pub fn process(
+    tx: &Transaction,
+    instruction_index: usize,
+    accounts: &mut [&mut Account],
+) -> std::result::Result<(), ProgramError> {
+    process_instruction(&tx, instruction_index, accounts).map_err(|_| ProgramError::RuntimeError)
 }
 
 #[cfg(test)]

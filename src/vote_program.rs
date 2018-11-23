@@ -3,6 +3,7 @@
 
 use bincode::{deserialize, serialize};
 use byteorder::{ByteOrder, LittleEndian};
+use program::ProgramError;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use std;
@@ -114,6 +115,14 @@ pub fn process_instruction(
             Err(Error::UserdataDeserializeFailure)
         }
     }
+}
+
+pub fn process(
+    tx: &Transaction,
+    instruction_index: usize,
+    accounts: &mut [&mut Account],
+) -> std::result::Result<(), ProgramError> {
+    process_instruction(&tx, instruction_index, accounts).map_err(|_| ProgramError::RuntimeError)
 }
 
 pub fn get_max_size() -> usize {
