@@ -323,14 +323,6 @@ impl WindowUtil for Window {
         self[w].leader_unknown = leader_unknown;
         *pending_retransmits = true;
 
-        #[cfg(feature = "erasure")]
-        {
-            let window_size = self.window_size();
-            if erasure::recover(id, self, *consumed, (*consumed % window_size) as usize).is_err() {
-                trace!("{}: erasure::recover failed", id);
-            }
-        }
-
         // push all contiguous blobs into consumed queue, increment consumed
         loop {
             let k = (*consumed % self.window_size()) as usize;
