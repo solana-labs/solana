@@ -12,7 +12,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use system_transaction::SystemTransaction;
 use transaction::Transaction;
-use vote_program::{Vote, VoteInstruction, VoteProgram};
+use vote_program::{self, Vote, VoteInstruction};
 
 pub trait VoteTransaction {
     fn vote_new(vote_account: &Keypair, vote: Vote, last_id: Hash, fee: u64) -> Self;
@@ -37,7 +37,7 @@ impl VoteTransaction for Transaction {
         Transaction::new(
             vote_account,
             &[],
-            VoteProgram::id(),
+            vote_program::id(),
             &instruction,
             last_id,
             fee,
@@ -55,8 +55,8 @@ impl VoteTransaction for Transaction {
             new_vote_account_id,
             last_id,
             num_tokens,
-            VoteProgram::get_max_size() as u64,
-            VoteProgram::id(),
+            vote_program::get_max_size() as u64,
+            vote_program::id(),
             0,
         )
     }
@@ -71,7 +71,7 @@ impl VoteTransaction for Transaction {
         Transaction::new(
             validator_id,
             &[vote_account_id],
-            VoteProgram::id(),
+            vote_program::id(),
             &register_tx,
             last_id,
             fee,
@@ -82,7 +82,7 @@ impl VoteTransaction for Transaction {
         let mut votes = vec![];
         for i in 0..self.instructions.len() {
             let tx_program_id = self.program_id(i);
-            if VoteProgram::check_id(&tx_program_id) {
+            if vote_program::check_id(&tx_program_id) {
                 if let Ok(Some(VoteInstruction::NewVote(vote))) = deserialize(&self.userdata(i)) {
                     votes.push((self.account_keys[0], vote, self.last_id))
                 }

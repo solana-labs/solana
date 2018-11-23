@@ -1,6 +1,6 @@
 use signature::{Keypair, KeypairUtil};
 use solana_sdk::hash::Hash;
-use storage_program::StorageProgram;
+use storage_program::{self, StorageProgram};
 use transaction::Transaction;
 
 pub trait StorageTransaction {
@@ -13,7 +13,7 @@ impl StorageTransaction for Transaction {
         Transaction::new(
             from_keypair,
             &[from_keypair.pubkey()],
-            StorageProgram::id(),
+            storage_program::id(),
             &program,
             last_id,
             0,

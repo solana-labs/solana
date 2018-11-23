@@ -109,14 +109,14 @@ mod tests {
     use bincode::deserialize;
     use ledger::Block;
     use solana_sdk::system_instruction::SystemInstruction;
-    use system_program::SystemProgram;
+    use system_program;
 
     #[test]
     fn test_create_transactions() {
         let mut transactions = Mint::new(100).create_transaction().into_iter();
         let tx = transactions.next().unwrap();
         assert_eq!(tx.instructions.len(), 1);
-        assert!(SystemProgram::check_id(tx.program_id(0)));
+        assert!(system_program::check_id(tx.program_id(0)));
         let instruction: SystemInstruction = deserialize(tx.userdata(0)).unwrap();
         if let SystemInstruction::Move { tokens } = instruction {
             assert_eq!(tokens, 100);
@@ -133,8 +133,8 @@ mod tests {
             .into_iter();
         let tx = transactions.next().unwrap();
         assert_eq!(tx.instructions.len(), 2);
-        assert!(SystemProgram::check_id(tx.program_id(0)));
-        assert!(SystemProgram::check_id(tx.program_id(1)));
+        assert!(system_program::check_id(tx.program_id(0)));
+        assert!(system_program::check_id(tx.program_id(1)));
         let instruction: SystemInstruction = deserialize(tx.userdata(0)).unwrap();
         if let SystemInstruction::Move { tokens } = instruction {
             assert_eq!(tokens, 100);

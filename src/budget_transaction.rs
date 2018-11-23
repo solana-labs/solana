@@ -3,7 +3,7 @@
 use bincode::deserialize;
 use budget_expr::{BudgetExpr, Condition};
 use budget_instruction::Instruction;
-use budget_program::BudgetProgram;
+use budget_program;
 use chrono::prelude::*;
 use payment_plan::Payment;
 use signature::{Keypair, KeypairUtil};
@@ -85,7 +85,7 @@ impl BudgetTransaction for Transaction {
         };
         let budget_instruction = Instruction::NewBudget(BudgetExpr::Pay(payment));
 
-        let program_ids = vec![Pubkey::new(&SYSTEM_PROGRAM_ID), BudgetProgram::id()];
+        let program_ids = vec![Pubkey::new(&SYSTEM_PROGRAM_ID), budget_program::id()];
 
         let instructions = vec![
             transaction::Instruction::new(0, &system_instruction, vec![0, 1]),
@@ -119,7 +119,7 @@ impl BudgetTransaction for Transaction {
         Self::new(
             from_keypair,
             &[contract, to],
-            BudgetProgram::id(),
+            budget_program::id(),
             &instruction,
             last_id,
             0,
@@ -137,7 +137,7 @@ impl BudgetTransaction for Transaction {
         Self::new(
             from_keypair,
             &[contract, to],
-            BudgetProgram::id(),
+            budget_program::id(),
             &instruction,
             last_id,
             0,
@@ -167,7 +167,7 @@ impl BudgetTransaction for Transaction {
         Self::new(
             from_keypair,
             &[contract],
-            BudgetProgram::id(),
+            budget_program::id(),
             &instruction,
             last_id,
             0,
@@ -195,7 +195,7 @@ impl BudgetTransaction for Transaction {
         Self::new(
             from_keypair,
             &[contract],
-            BudgetProgram::id(),
+            budget_program::id(),
             &instruction,
             last_id,
             0,

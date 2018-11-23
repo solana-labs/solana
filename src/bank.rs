@@ -6,7 +6,7 @@
 use bincode::deserialize;
 use bincode::serialize;
 use bpf_loader;
-use budget_program::BudgetProgram;
+use budget_program;
 use counter::Counter;
 use entry::Entry;
 use itertools::Itertools;
@@ -34,13 +34,13 @@ use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
-use storage_program::StorageProgram;
-use system_program::{Error, SystemProgram};
+use storage_program;
+use system_program;
 use system_transaction::SystemTransaction;
 use token_program;
 use tokio::prelude::Future;
 use transaction::Transaction;
-use vote_program::VoteProgram;
+use vote_program;
 
 /// The number of most recent `last_id` values that the bank will track the signatures
 /// of. Once the bank discards a `last_id`, it will reject any transactions that use
@@ -736,7 +736,7 @@ impl Bank {
         // Verify the transaction
 
         // Make sure that program_id is still the same or this was just assigned by the system call contract
-        if *pre_program_id != account.owner && !SystemProgram::check_id(&program_id) {
+        if *pre_program_id != account.owner && !system_program::check_id(&program_id) {
             return Err(BankError::ModifiedContractId(instruction_index as u8));
         }
         // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
@@ -817,29 +817,33 @@ impl Bank {
 
         // Call the contract method
         // It's up to the contract to implement its own rules on moving funds
-        if SystemProgram::check_id(&program_id) {
+        if system_program::check_id(&program_id) {
             if let Err(err) =
-                SystemProgram::process_transaction(&tx, instruction_index, program_accounts)
+                system_program::process_transaction(&tx, instruction_index, program_accounts)
             {
                 let err = match err {
-                    Error::ResultWithNegativeTokens(i) => BankError::ResultWithNegativeTokens(i),
+                    system_program::Error::ResultWithNegativeTokens(i) => {
+                        BankError::ResultWithNegativeTokens(i)
+                    }
                     _ => BankError::ProgramRuntimeError(instruction_index as u8),
                 };
                 return Err(err);
             }
-        } else if BudgetProgram::check_id(&program_id) {
-            if BudgetProgram::process_transaction(&tx, instruction_index, program_accounts).is_err()
-            {
-                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
-            }
-        } else if StorageProgram::check_id(&program_id) {
-            if StorageProgram::process_transaction(&tx, instruction_index, program_accounts)
+        } else if budget_program::check_id(&program_id) {
+            if budget_program::process_transaction(&tx, instruction_index, program_accounts)
                 .is_err()
             {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }
-        } else if VoteProgram::check_id(&program_id) {
-            if VoteProgram::process_transaction(&tx, instruction_index, program_accounts).is_err() {
+        } else if storage_program::check_id(&program_id) {
+            if storage_program::process_transaction(&tx, instruction_index, program_accounts)
+                .is_err()
+            {
+                return Err(BankError::ProgramRuntimeError(instruction_index as u8));
+            }
+        } else if vote_program::check_id(&program_id) {
+            if vote_program::process_transaction(&tx, instruction_index, program_accounts).is_err()
+            {
                 return Err(BankError::ProgramRuntimeError(instruction_index as u8));
             }
         } else {
@@ -1233,8 +1237,8 @@ impl Bank {
         {
             // Process the first transaction
             let tx = &entry1.transactions[0];
-            assert!(SystemProgram::check_id(tx.program_id(0)), "Invalid ledger");
-            assert!(SystemProgram::check_id(tx.program_id(1)), "Invalid ledger");
+            assert!(system_program::check_id(tx.program_id(0)), "Invalid ledger");
+            assert!(system_program::check_id(tx.program_id(1)), "Invalid ledger");
             let mut instruction: SystemInstruction = deserialize(tx.userdata(0)).unwrap();
             let mint_deposit = if let SystemInstruction::Move { tokens } = instruction {
                 Some(tokens)
@@ -1309,10 +1313,10 @@ impl Bank {
     }
 
     pub fn read_balance(account: &Account) -> u64 {
-        if SystemProgram::check_id(&account.owner) {
-            SystemProgram::get_balance(account)
-        } else if BudgetProgram::check_id(&account.owner) {
-            BudgetProgram::get_balance(account)
+        if system_program::check_id(&account.owner) {
+            system_program::get_balance(account)
+        } else if budget_program::check_id(&account.owner) {
+            budget_program::get_balance(account)
         } else {
             account.tokens
         }
@@ -1498,7 +1502,6 @@ impl Bank {
 mod tests {
     use super::*;
     use bincode::serialize;
-    use budget_program::BudgetProgram;
     use entry::next_entry;
     use entry::Entry;
     use jsonrpc_macros::pubsub::{Subscriber, SubscriptionId};
@@ -1598,7 +1601,7 @@ mod tests {
             &[key1, key2],
             mint.last_id(),
             0,
-            vec![SystemProgram::id()],
+            vec![system_program::id()],
             instructions,
         );
         let res = bank.process_transactions(&vec![t1.clone()]);
@@ -2021,7 +2024,7 @@ mod tests {
             last_id,
             1,
             16,
-            BudgetProgram::id(),
+            budget_program::id(),
             0,
         );
         bank.process_transaction(&tx).unwrap();
@@ -2253,26 +2256,26 @@ mod tests {
             0, 0, 0, 0,
         ]);
 
-        assert_eq!(SystemProgram::id(), system);
+        assert_eq!(system_program::id(), system);
         assert_eq!(native_loader::id(), native);
         assert_eq!(bpf_loader::id(), bpf);
-        assert_eq!(BudgetProgram::id(), budget);
-        assert_eq!(StorageProgram::id(), storage);
+        assert_eq!(budget_program::id(), budget);
+        assert_eq!(storage_program::id(), storage);
         assert_eq!(token_program::id(), token);
-        assert_eq!(VoteProgram::id(), vote);
+        assert_eq!(vote_program::id(), vote);
     }
 
     #[test]
     fn test_program_id_uniqueness() {
         let mut unique = HashSet::new();
         let ids = vec![
-            SystemProgram::id(),
+            system_program::id(),
             native_loader::id(),
             bpf_loader::id(),
-            BudgetProgram::id(),
-            StorageProgram::id(),
+            budget_program::id(),
+            storage_program::id(),
             token_program::id(),
-            VoteProgram::id(),
+            vote_program::id(),
         ];
         assert!(ids.into_iter().all(move |id| unique.insert(id)));
     }
