@@ -35,13 +35,13 @@ pub fn id() -> Pubkey {
 pub fn get_balance(account: &Account) -> u64 {
     account.tokens
 }
-pub fn process_transaction(
+pub fn process_instruction(
     tx: &Transaction,
     pix: usize,
     accounts: &mut [&mut Account],
 ) -> Result<()> {
     if let Ok(syscall) = deserialize(tx.userdata(pix)) {
-        trace!("process_transaction: {:?}", syscall);
+        trace!("process_instruction: {:?}", syscall);
         match syscall {
             SystemInstruction::CreateAccount {
                 tokens,
@@ -111,7 +111,7 @@ mod test {
 
     fn process_transaction(tx: &Transaction, accounts: &mut [Account]) -> Result<()> {
         let mut refs: Vec<&mut Account> = accounts.iter_mut().collect();
-        super::process_transaction(&tx, 0, &mut refs[..])
+        super::process_instruction(&tx, 0, &mut refs[..])
     }
 
     #[test]

@@ -116,13 +116,13 @@ fn apply_debits(
 /// * accounts[0] - The source of the tokens
 /// * accounts[1] - The contract context.  Once the contract has been completed, the tokens can
 /// be spent from this account .
-pub fn process_transaction(
+pub fn process_instruction(
     tx: &Transaction,
     instruction_index: usize,
     accounts: &mut [&mut Account],
 ) -> Result<(), BudgetError> {
     if let Ok(instruction) = deserialize(tx.userdata(instruction_index)) {
-        trace!("process_transaction: {:?}", instruction);
+        trace!("process_instruction: {:?}", instruction);
         apply_debits(tx, instruction_index, accounts, &instruction)
     } else {
         info!(
@@ -264,7 +264,7 @@ mod test {
 
     fn process_transaction(tx: &Transaction, accounts: &mut [Account]) -> Result<(), BudgetError> {
         let mut refs: Vec<&mut Account> = accounts.iter_mut().collect();
-        super::process_transaction(&tx, 0, &mut refs[..])
+        super::process_instruction(&tx, 0, &mut refs[..])
     }
     #[test]
     fn test_serializer() {

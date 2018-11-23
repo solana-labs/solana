@@ -34,7 +34,7 @@ pub fn get_balance(account: &Account) -> u64 {
     account.tokens
 }
 
-pub fn process_transaction(
+pub fn process_instruction(
     tx: &Transaction,
     pix: usize,
     _accounts: &mut [&mut Account],
@@ -61,6 +61,6 @@ mod test {
     fn test_storage_tx() {
         let keypair = Keypair::new();
         let tx = Transaction::new(&keypair, &[], id(), &(), Default::default(), 0);
-        assert!(process_transaction(&tx, 0, &mut []).is_err());
+        assert!(process_instruction(&tx, 0, &mut []).is_err());
     }
 }

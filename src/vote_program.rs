@@ -64,7 +64,7 @@ pub fn id() -> Pubkey {
     Pubkey::new(&VOTE_PROGRAM_ID)
 }
 
-pub fn process_transaction(
+pub fn process_instruction(
     tx: &Transaction,
     instruction_index: usize,
     accounts: &mut [&mut Account],
