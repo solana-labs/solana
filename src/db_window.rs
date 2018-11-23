@@ -531,8 +531,8 @@ mod test {
         assert!(gap > 3);
         let num_entries = 10;
         let shared_blobs = make_tiny_test_entries(num_entries).to_blobs();
-        for (b, i) in shared_blobs.iter().zip(0..shared_blobs.len() as u64) {
-            b.write().unwrap().set_index(i * gap).unwrap();
+        for (i, b) in shared_blobs.iter().enumerate() {
+            b.write().unwrap().set_index(i as u64 * gap).unwrap();
         }
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();

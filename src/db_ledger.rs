@@ -294,8 +294,12 @@ impl DbLedger {
         I: IntoIterator<Item = &'a Entry>,
     {
         let default_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
-        let shared_blobs = entries.into_iter().zip(0..).map(|(entry, idx)| {
-            entry.to_blob(Some(idx), Some(Pubkey::default()), Some(&default_addr))
+        let shared_blobs = entries.into_iter().enumerate().map(|(idx, entry)| {
+            entry.to_blob(
+                Some(idx as u64),
+                Some(Pubkey::default()),
+                Some(&default_addr),
+            )
         });
         self.write_shared_blobs(slot, shared_blobs)
     }
@@ -661,7 +665,7 @@ mod tests {
             let num_entries = 8;
             let shared_blobs = make_tiny_test_entries(num_entries).to_blobs();
 
-            for (b, i) in shared_blobs.iter().zip(0..num_entries) {
+            for (i, b) in shared_blobs.iter().enumerate() {
                 b.write().unwrap().set_index(1 << (i * 8)).unwrap();
             }
 
