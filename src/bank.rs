@@ -761,6 +761,10 @@ impl Bank {
     }
 
     fn load_executable_accounts(&self, mut program_id: Pubkey) -> Result<Vec<(Pubkey, Account)>> {
+        if Self::is_legacy_program(&program_id) {
+            return Ok(vec![]);
+        }
+
         let mut accounts = Vec::new();
         let mut depth = 0;
         loop {
@@ -800,9 +804,9 @@ impl Bank {
     /// Process an instruction
     /// This method calls the instruction's program entry pont method
     fn process_instruction(
-        &self,
         tx: &Transaction,
         instruction_index: usize,
+        executable_accounts: &mut [(Pubkey, Account)],
         program_accounts: &mut [&mut Account],
         tick_height: u64,
     ) -> Result<()> {
@@ -824,8 +828,7 @@ impl Bank {
             };
             res.map_err(|err| BankError::ProgramError(instruction_index as u8, err))?;
         } else {
-            let mut accounts = self.load_executable_accounts(tx.program_ids[instruction_index])?;
-            let mut keyed_accounts = create_keyed_accounts(&mut accounts);
+            let mut keyed_accounts = create_keyed_accounts(executable_accounts);
             let mut keyed_accounts2: Vec<_> = tx.instructions[instruction_index]
                 .accounts
                 .iter()
@@ -853,9 +856,9 @@ impl Bank {
     /// the call does not violate the bank's accounting rules.
     /// The accounts are committed back to the bank only if this function returns Ok(_).
     fn execute_instruction(
-        &self,
         tx: &Transaction,
         instruction_index: usize,
+        executable_accounts: &mut [(Pubkey, Account)],
         program_accounts: &mut [&mut Account],
         tick_height: u64,
     ) -> Result<()> {
@@ -868,7 +871,13 @@ impl Bank {
             .map(|a| (a.owner, a.tokens))
             .collect();
 
-        self.process_instruction(tx, instruction_index, program_accounts, tick_height)?;
+        Self::process_instruction(
+            tx,
+            instruction_index,
+            executable_accounts,
+            program_accounts,
+            tick_height,
+        )?;
 
         // Verify the instruction
         for ((pre_program_id, pre_tokens), post_account) in
@@ -901,8 +910,16 @@ impl Bank {
         tick_height: u64,
     ) -> Result<()> {
         for (instruction_index, instruction) in tx.instructions.iter().enumerate() {
+            let program_id = tx.program_id(instruction_index);
             Self::with_subset(tx_accounts, &instruction.accounts, |program_accounts| {
-                self.execute_instruction(tx, instruction_index, program_accounts, tick_height)
+                let mut executable_accounts = self.load_executable_accounts(*program_id)?;
+                Self::execute_instruction(
+                    tx,
+                    instruction_index,
+                    &mut executable_accounts,
+                    program_accounts,
+                    tick_height,
+                )
             })?;
         }
         Ok(())
