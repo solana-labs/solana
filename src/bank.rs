@@ -804,6 +804,7 @@ impl Bank {
         tx: &Transaction,
         instruction_index: usize,
         program_accounts: &mut [&mut Account],
+        tick_height: u64,
     ) -> Result<()> {
         let program_id = tx.program_id(instruction_index);
 
@@ -838,7 +839,7 @@ impl Bank {
                 &program_id,
                 &mut keyed_accounts,
                 &tx.instructions[instruction_index].userdata,
-                self.tick_height(),
+                tick_height,
             ) {
                 let err = ProgramError::RuntimeError;
                 return Err(BankError::ProgramError(instruction_index as u8, err));
@@ -856,6 +857,7 @@ impl Bank {
         tx: &Transaction,
         instruction_index: usize,
         program_accounts: &mut [&mut Account],
+        tick_height: u64,
     ) -> Result<()> {
         let program_id = tx.program_id(instruction_index);
         // TODO: the runtime should be checking read/write access to memory
@@ -866,7 +868,7 @@ impl Bank {
             .map(|a| (a.owner, a.tokens))
             .collect();
 
-        self.process_instruction(tx, instruction_index, program_accounts)?;
+        self.process_instruction(tx, instruction_index, program_accounts, tick_height)?;
 
         // Verify the instruction
         for ((pre_program_id, pre_tokens), post_account) in
@@ -892,10 +894,15 @@ impl Bank {
     /// Execute a transaction.
     /// This method calls each instruction in the transaction over the set of loaded Accounts
     /// The accounts are committed back to the bank only if every instruction succeeds
-    fn execute_transaction(&self, tx: &Transaction, tx_accounts: &mut [Account]) -> Result<()> {
+    fn execute_transaction(
+        &self,
+        tx: &Transaction,
+        tx_accounts: &mut [Account],
+        tick_height: u64,
+    ) -> Result<()> {
         for (instruction_index, instruction) in tx.instructions.iter().enumerate() {
             Self::with_subset(tx_accounts, &instruction.accounts, |program_accounts| {
-                self.execute_instruction(tx, instruction_index, program_accounts)
+                self.execute_instruction(tx, instruction_index, program_accounts, tick_height)
             })?;
         }
         Ok(())
@@ -999,6 +1006,7 @@ impl Bank {
         let now = Instant::now();
         let mut loaded_accounts =
             self.load_accounts(txs, locked_accounts.clone(), max_age, &mut error_counters);
+        let tick_height = self.tick_height();
 
         let load_elapsed = now.elapsed();
         let now = Instant::now();
@@ -1007,7 +1015,7 @@ impl Bank {
             .zip(txs.iter())
             .map(|(acc, tx)| match acc {
                 Err(e) => Err(e.clone()),
-                Ok(ref mut accounts) => self.execute_transaction(tx, accounts),
+                Ok(ref mut accounts) => self.execute_transaction(tx, accounts, tick_height),
             }).collect();
         let execution_elapsed = now.elapsed();
         let now = Instant::now();
