@@ -14,6 +14,7 @@ use serde::Serialize;
 use solana_sdk::hash::Hash;
 pub use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
+use std::cmp;
 use std::fmt;
 use std::io;
 use std::mem::size_of;
@@ -274,6 +275,16 @@ pub const BLOB_FLAG_IS_CODING: u32 = 0x1;
 pub const BLOB_HEADER_SIZE: usize = align!(BLOB_SIZE_END, 64);
 
 impl Blob {
+    pub fn new(data: &[u8]) -> Self {
+        let mut blob = Self::default();
+        let data_len = cmp::min(data.len(), blob.data.len());
+        let bytes = &data[..data_len];
+        blob.data[..data_len].copy_from_slice(bytes);
+        blob.meta.size = blob.data_size().expect("Expected valid data size") as usize;
+        println!("new() size: {}, data_len: {}", blob.meta.size, data_len);
+        blob
+    }
+
     pub fn slot(&self) -> Result<u64> {
         let mut rdr = io::Cursor::new(&self.data[0..BLOB_SLOT_END]);
         let r = rdr.read_u64::<LittleEndian>()?;

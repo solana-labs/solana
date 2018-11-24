@@ -4,8 +4,6 @@ use cluster_info::ClusterInfo;
 use counter::Counter;
 use entry::reconstruct_entries_from_blobs;
 use entry::Entry;
-#[cfg(feature = "erasure")]
-use erasure;
 use leader_scheduler::LeaderScheduler;
 use log::Level;
 use packet::SharedBlob;
