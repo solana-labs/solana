@@ -16,7 +16,7 @@ pub fn is_legacy_program(program_id: &Pubkey) -> bool {
 }
 
 /// Process an instruction
-/// This method calls the instruction's program entry pont method
+/// This method calls the instruction's program entrypoint method
 fn process_instruction(
     tx: &Transaction,
     instruction_index: usize,
@@ -83,7 +83,7 @@ fn verify_instruction(
 }
 
 /// Execute an instruction
-/// This method calls the instruction's program entry pont method and verifies that the result of
+/// This method calls the instruction's program entrypoint method and verifies that the result of
 /// the call does not violate the bank's accounting rules.
 /// The accounts are committed back to the bank only if this function returns Ok(_).
 pub fn execute_instruction(
