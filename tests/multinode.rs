@@ -2,21 +2,19 @@
 extern crate log;
 extern crate bincode;
 extern crate chrono;
-extern crate rocksdb;
 extern crate serde_json;
 extern crate solana;
 extern crate solana_sdk;
 
-use rocksdb::{Options, DB};
 use solana::blob_fetch_stage::BlobFetchStage;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
 use solana::contact_info::ContactInfo;
-use solana::db_ledger::{write_entries_to_ledger, DB_LEDGER_DIRECTORY};
+use solana::db_ledger::DbLedger;
 use solana::entry::{reconstruct_entries_from_blobs, Entry};
 use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
 use solana::ledger::{
-    create_tmp_genesis, create_tmp_sample_ledger, get_tmp_ledger_path, read_ledger, LedgerWindow,
+    create_tmp_genesis, create_tmp_sample_ledger, read_ledger, tmp_copy_ledger, LedgerWindow,
     LedgerWriter,
 };
 use solana::logger;
@@ -36,9 +34,8 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{duration_as_ms, duration_as_s};
 use std::collections::{HashSet, VecDeque};
 use std::env;
-use std::fs::{copy, create_dir_all, remove_dir_all};
+use std::fs::remove_dir_all;
 use std::net::UdpSocket;
-use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
@@ -111,22 +108,6 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     assert!(converged);
     ncp.close().unwrap();
     rv
-}
-
-fn tmp_copy_ledger(from: &str, name: &str) -> String {
-    let tostr = get_tmp_ledger_path(name);
-
-    {
-        let to = Path::new(&tostr);
-        let from = Path::new(&from);
-
-        create_dir_all(to).unwrap();
-
-        copy(from.join("data"), to.join("data")).unwrap();
-        copy(from.join("index"), to.join("index")).unwrap();
-    }
-
-    tostr
 }
 
 fn make_tiny_test_entries(start_hash: Hash, num: usize) -> Vec<Entry> {
@@ -962,7 +943,7 @@ fn test_leader_validator_basic() {
 
     // Make a common mint and a genesis entry for both leader + validator ledgers
     let num_ending_ticks = 1;
-    let (mint, leader_ledger_path, mut genesis_entries) = create_tmp_sample_ledger(
+    let (mint, leader_ledger_path, genesis_entries) = create_tmp_sample_ledger(
         "test_leader_validator_basic",
         10_000,
         num_ending_ticks,
@@ -988,20 +969,6 @@ fn test_leader_validator_basic() {
     let (active_set_entries, vote_account_keypair) =
         make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id, 0);
     ledger_writer.write_entries(&active_set_entries).unwrap();
-
-    // Create RocksDb ledgers, write genesis entries to them
-    let db_leader_ledger_path = format!("{}/{}", leader_ledger_path, DB_LEDGER_DIRECTORY);
-    let db_validator_ledger_path = format!("{}/{}", validator_ledger_path, DB_LEDGER_DIRECTORY);
-
-    // Write the validator entries to the validator database, they
-    // will have repair the missing leader "active_set_entries"
-    write_entries_to_ledger(&vec![db_validator_ledger_path.clone()], &genesis_entries);
-
-    // Next write the leader entries to the leader
-    genesis_entries.extend(active_set_entries);
-    write_entries_to_ledger(&vec![db_leader_ledger_path.clone()], &genesis_entries);
-
-    let db_ledger_paths = vec![db_leader_ledger_path, db_validator_ledger_path];
 
     // Create the leader scheduler config
     let num_bootstrap_slots = 2;
@@ -1103,11 +1070,8 @@ fn test_leader_validator_basic() {
 
     assert!(min_len >= bootstrap_height);
 
-    for path in db_ledger_paths {
-        DB::destroy(&Options::default(), &path).expect("Expected successful database destruction");
-    }
-
     for path in ledger_paths {
+        DbLedger::destroy(&path).expect("Expected successful database destruction");
         remove_dir_all(path).unwrap();
     }
 }
@@ -1308,7 +1272,7 @@ fn test_full_leader_validator_network() {
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
     let num_ending_ticks = 1;
-    let (mint, bootstrap_leader_ledger_path, mut genesis_entries) = create_tmp_sample_ledger(
+    let (mint, bootstrap_leader_ledger_path, genesis_entries) = create_tmp_sample_ledger(
         "test_full_leader_validator_network",
         10_000,
         num_ending_ticks,
@@ -1355,20 +1319,7 @@ fn test_full_leader_validator_network() {
             .expect("expected at least one genesis entry")
             .id;
         ledger_writer.write_entries(&bootstrap_entries).unwrap();
-        genesis_entries.extend(bootstrap_entries);
     }
-
-    // Create RocksDb ledger for bootstrap leader, write genesis entries to them
-    let db_bootstrap_leader_ledger_path =
-        format!("{}/{}", bootstrap_leader_ledger_path, DB_LEDGER_DIRECTORY);
-
-    // Write the validator entries to the validator databases.
-    write_entries_to_ledger(
-        &vec![db_bootstrap_leader_ledger_path.clone()],
-        &genesis_entries,
-    );
-
-    let mut db_ledger_paths = vec![db_bootstrap_leader_ledger_path];
 
     // Create the common leader scheduling configuration
     let num_slots_per_epoch = (N + 1) as u64;
@@ -1401,15 +1352,8 @@ fn test_full_leader_validator_network() {
             &bootstrap_leader_ledger_path,
             "test_full_leader_validator_network",
         );
+
         ledger_paths.push(validator_ledger_path.clone());
-
-        // Create RocksDb ledgers, write genesis entries to them
-        let db_validator_ledger_path = format!("{}/{}", validator_ledger_path, DB_LEDGER_DIRECTORY);
-        db_ledger_paths.push(db_validator_ledger_path.clone());
-
-        // Write the validator entries to the validator database, they
-        // will have repair the missing leader "active_set_entries"
-        write_entries_to_ledger(&vec![db_validator_ledger_path.clone()], &genesis_entries);
 
         let validator_id = kp.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(validator_id);
@@ -1550,11 +1494,8 @@ fn test_full_leader_validator_network() {
 
     assert!(shortest.unwrap() >= target_height);
 
-    for path in db_ledger_paths {
-        DB::destroy(&Options::default(), &path).expect("Expected successful database destruction");
-    }
-
     for path in ledger_paths {
+        DbLedger::destroy(&path).expect("Expected successful database destruction");
         remove_dir_all(path).unwrap();
     }
 }

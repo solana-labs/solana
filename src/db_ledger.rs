@@ -234,6 +234,8 @@ pub const ERASURE_CF: &str = "erasure";
 impl DbLedger {
     // Opens a Ledger in directory, provides "infinite" window of blobs
     pub fn open(ledger_path: &str) -> Result<Self> {
+        let ledger_path = format!("{}/{}", ledger_path, DB_LEDGER_DIRECTORY);
+
         // Use default database options
         let mut options = Options::default();
         options.create_if_missing(true);
@@ -260,6 +262,12 @@ impl DbLedger {
             data_cf,
             erasure_cf,
         })
+    }
+
+    pub fn destroy(ledger_path: &str) -> Result<()> {
+        let ledger_path = format!("{}/{}", ledger_path, DB_LEDGER_DIRECTORY);
+        DB::destroy(&Options::default(), &ledger_path)?;
+        Ok(())
     }
 
     pub fn write_shared_blobs<I>(&mut self, slot: u64, shared_blobs: I) -> Result<()>
@@ -289,13 +297,14 @@ impl DbLedger {
         Ok(())
     }
 
-    pub fn write_entries<'a, I>(&mut self, slot: u64, entries: I) -> Result<()>
+    pub fn write_entries<I>(&mut self, slot: u64, entries: I) -> Result<()>
     where
-        I: IntoIterator<Item = &'a Entry>,
+        I: IntoIterator,
+        I::Item: Borrow<Entry>,
     {
         let default_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let shared_blobs = entries.into_iter().enumerate().map(|(idx, entry)| {
-            entry.to_blob(
+            entry.borrow().to_blob(
                 Some(idx as u64),
                 Some(Pubkey::default()),
                 Some(&default_addr),
@@ -439,15 +448,17 @@ impl DbLedger {
     }
 }
 
-pub fn write_entries_to_ledger<'a, I>(ledger_paths: &[String], entries: I)
+pub fn write_entries_to_ledger<I>(ledger_paths: &[&str], entries: I)
 where
-    I: IntoIterator<Item = &'a Entry> + Copy,
+    I: IntoIterator,
+    I::Item: Borrow<Entry>,
 {
+    let mut entries = entries.into_iter();
     for ledger_path in ledger_paths {
         let mut db_ledger =
             DbLedger::open(ledger_path).expect("Expected to be able to open database ledger");
         db_ledger
-            .write_entries(DEFAULT_SLOT_HEIGHT, entries)
+            .write_entries(DEFAULT_SLOT_HEIGHT, entries.by_ref())
             .expect("Expected successful write of genesis entries");
     }
 }
@@ -456,7 +467,6 @@ where
 mod tests {
     use super::*;
     use ledger::{get_tmp_ledger_path, make_tiny_test_entries, Block};
-    use rocksdb::{Options, DB};
 
     #[test]
     fn test_put_get_simple() {
@@ -506,8 +516,7 @@ mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        DB::destroy(&Options::default(), &ledger_path)
-            .expect("Expected successful database destruction");
+        DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -569,8 +578,7 @@ mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        DB::destroy(&Options::default(), &ledger_path)
-            .expect("Expected successful database destruction");
+        DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -612,8 +620,7 @@ mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        DB::destroy(&Options::default(), &ledger_path)
-            .expect("Expected successful database destruction");
+        DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -649,8 +656,7 @@ mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        DB::destroy(&Options::default(), &ledger_path)
-            .expect("Expected successful database destruction");
+        DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -689,7 +695,6 @@ mod tests {
                 db_iterator.next();
             }
         }
-        DB::destroy(&Options::default(), &db_ledger_path)
-            .expect("Expected successful database destruction");
+        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
     }
 }

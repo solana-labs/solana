@@ -6,17 +6,13 @@ extern crate log;
 extern crate serde_json;
 #[macro_use]
 extern crate solana;
-extern crate rocksdb;
 extern crate solana_metrics;
 
 use clap::{App, Arg};
-use rocksdb::{Options, DB};
 use solana::client::mk_client;
 use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
-use solana::db_ledger::{write_entries_to_ledger, DB_LEDGER_DIRECTORY};
 use solana::fullnode::{Config, Fullnode, FullnodeReturnType};
 use solana::leader_scheduler::LeaderScheduler;
-use solana::ledger::read_ledger;
 use solana::logger;
 use solana::netutil::find_available_port_in_range;
 use solana::signature::{Keypair, KeypairUtil};
@@ -95,18 +91,6 @@ fn main() {
     };
 
     let ledger_path = matches.value_of("ledger").unwrap();
-
-    // Create the RocksDb ledger, eventually will simply repurpose the input
-    // ledger path as the RocksDb ledger path
-    let db_ledger_path = format!("{}/{}", ledger_path, DB_LEDGER_DIRECTORY);
-    // Destroy old ledger
-    DB::destroy(&Options::default(), &db_ledger_path)
-        .expect("Expected successful database destruction");
-    let ledger_entries: Vec<_> = read_ledger(ledger_path, true)
-        .expect("opening ledger")
-        .map(|entry| entry.unwrap())
-        .collect();
-    write_entries_to_ledger(&[db_ledger_path], &ledger_entries[..]);
 
     // socketaddr that is initial pointer into the network's gossip (ncp)
     let network = matches

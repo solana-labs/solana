@@ -3,7 +3,7 @@
 use bank::Bank;
 use broadcast_stage::BroadcastStage;
 use cluster_info::{ClusterInfo, Node, NodeInfo};
-use db_ledger::DB_LEDGER_DIRECTORY;
+use db_ledger::{write_entries_to_ledger, DbLedger};
 use leader_scheduler::LeaderScheduler;
 use ledger::read_ledger;
 use ncp::Ncp;
@@ -107,6 +107,7 @@ pub struct Fullnode {
     broadcast_socket: UdpSocket,
     rpc_addr: SocketAddr,
     rpc_pubsub_addr: SocketAddr,
+    db_ledger: Arc<RwLock<DbLedger>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -259,6 +260,10 @@ impl Fullnode {
             .expect("Leader not known after processing bank");
 
         cluster_info.write().unwrap().set_leader(scheduled_leader);
+
+        // Create the RocksDb ledger
+        let db_ledger = Self::make_db_ledger(ledger_path);
+
         let node_role = if scheduled_leader != keypair.pubkey() {
             // Start in validator mode.
             let tvu = Tvu::new(
@@ -282,7 +287,7 @@ impl Fullnode {
                     .try_clone()
                     .expect("Failed to clone retransmit socket"),
                 Some(ledger_path),
-                &format!("{}/{}", ledger_path, DB_LEDGER_DIRECTORY),
+                db_ledger.clone(),
             );
             let tpu_forwarder = TpuForwarder::new(
                 node.sockets
@@ -353,6 +358,7 @@ impl Fullnode {
             broadcast_socket: node.sockets.broadcast,
             rpc_addr,
             rpc_pubsub_addr,
+            db_ledger,
         }
     }
 
@@ -435,7 +441,7 @@ impl Fullnode {
                     .try_clone()
                     .expect("Failed to clone retransmit socket"),
                 Some(&self.ledger_path),
-                &format!("{}/{}", self.ledger_path, DB_LEDGER_DIRECTORY),
+                self.db_ledger.clone(),
             );
             let tpu_forwarder = TpuForwarder::new(
                 self.transaction_sockets
@@ -590,6 +596,19 @@ impl Fullnode {
             ),
         )
     }
+
+    fn make_db_ledger(ledger_path: &str) -> Arc<RwLock<DbLedger>> {
+        // Destroy any existing instances of the RocksDb ledger
+        DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
+        let ledger_entries = read_ledger(ledger_path, true)
+            .expect("opening ledger")
+            .map(|entry| entry.unwrap());
+
+        write_entries_to_ledger(&[ledger_path], ledger_entries);
+        let db =
+            DbLedger::open(ledger_path).expect("Expected to successfully open database ledger");
+        Arc::new(RwLock::new(db))
+    }
 }
 
 impl Service for Fullnode {
@@ -630,9 +649,8 @@ mod tests {
     use db_ledger::*;
     use fullnode::{Fullnode, FullnodeReturnType, NodeRole, TvuReturnType};
     use leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
-    use ledger::{create_tmp_genesis, create_tmp_sample_ledger, LedgerWriter};
+    use ledger::{create_tmp_genesis, create_tmp_sample_ledger, tmp_copy_ledger, LedgerWriter};
     use packet::make_consecutive_blobs;
-    use rocksdb::{Options, DB};
     use service::Service;
     use signature::{Keypair, KeypairUtil};
     use std::cmp;
@@ -842,6 +860,13 @@ mod tests {
             + num_ending_ticks as u64;
         ledger_writer.write_entries(&active_set_entries).unwrap();
 
+        let validator_ledger_path =
+            tmp_copy_ledger(&bootstrap_leader_ledger_path, "test_wrong_role_transition");
+        let ledger_paths = vec![
+            bootstrap_leader_ledger_path.clone(),
+            validator_ledger_path.clone(),
+        ];
+
         // Create the common leader scheduling configuration
         let num_slots_per_epoch = 3;
         let leader_rotation_interval = 5;
@@ -858,45 +883,53 @@ mod tests {
             Some(genesis_tick_height),
         );
 
-        // Test that a node knows to transition to a validator based on parsing the ledger
-        let leader_vote_account_keypair = Arc::new(Keypair::new());
-        let bootstrap_leader = Fullnode::new(
-            bootstrap_leader_node,
-            &bootstrap_leader_ledger_path,
-            bootstrap_leader_keypair,
-            leader_vote_account_keypair,
-            Some(bootstrap_leader_info.ncp),
-            false,
-            LeaderScheduler::new(&leader_scheduler_config),
-            None,
-        );
+        {
+            // Test that a node knows to transition to a validator based on parsing the ledger
+            let leader_vote_account_keypair = Arc::new(Keypair::new());
+            let bootstrap_leader = Fullnode::new(
+                bootstrap_leader_node,
+                &bootstrap_leader_ledger_path,
+                bootstrap_leader_keypair,
+                leader_vote_account_keypair,
+                Some(bootstrap_leader_info.ncp),
+                false,
+                LeaderScheduler::new(&leader_scheduler_config),
+                None,
+            );
 
-        match bootstrap_leader.node_role {
-            Some(NodeRole::Validator(_)) => (),
-            _ => {
-                panic!("Expected bootstrap leader to be a validator");
+            match bootstrap_leader.node_role {
+                Some(NodeRole::Validator(_)) => (),
+                _ => {
+                    panic!("Expected bootstrap leader to be a validator");
+                }
             }
-        }
 
-        // Test that a node knows to transition to a leader based on parsing the ledger
-        let validator = Fullnode::new(
-            validator_node,
-            &bootstrap_leader_ledger_path,
-            Arc::new(validator_keypair),
-            Arc::new(validator_vote_account_keypair),
-            Some(bootstrap_leader_info.ncp),
-            false,
-            LeaderScheduler::new(&leader_scheduler_config),
-            None,
-        );
+            // Test that a node knows to transition to a leader based on parsing the ledger
+            let validator = Fullnode::new(
+                validator_node,
+                &validator_ledger_path,
+                Arc::new(validator_keypair),
+                Arc::new(validator_vote_account_keypair),
+                Some(bootstrap_leader_info.ncp),
+                false,
+                LeaderScheduler::new(&leader_scheduler_config),
+                None,
+            );
 
-        match validator.node_role {
-            Some(NodeRole::Leader(_)) => (),
-            _ => {
-                panic!("Expected node to be the leader");
+            match validator.node_role {
+                Some(NodeRole::Leader(_)) => (),
+                _ => {
+                    panic!("Expected node to be the leader");
+                }
             }
+
+            validator.close().expect("Expected node to close");
+            bootstrap_leader.close().expect("Expected node to close");
         }
-        let _ignored = remove_dir_all(&bootstrap_leader_ledger_path);
+        for path in ledger_paths {
+            DbLedger::destroy(&path).expect("Expected successful database destruction");
+            let _ignored = remove_dir_all(&path);
+        }
     }
 
     #[test]
@@ -909,7 +942,7 @@ mod tests {
 
         // Create validator identity
         let num_ending_ticks = 1;
-        let (mint, validator_ledger_path, mut genesis_entries) = create_tmp_sample_ledger(
+        let (mint, validator_ledger_path, genesis_entries) = create_tmp_sample_ledger(
             "test_validator_to_leader_transition",
             10_000,
             num_ending_ticks,
@@ -945,11 +978,6 @@ mod tests {
         last_id = active_set_entries.last().unwrap().id;
         ledger_writer.write_entries(&active_set_entries).unwrap();
         let ledger_initial_len = genesis_entries.len() as u64 + active_set_entries_len;
-
-        // Create RocksDb ledger, write genesis entries to it
-        let db_ledger_path = format!("{}/{}", validator_ledger_path, DB_LEDGER_DIRECTORY);
-        genesis_entries.extend(active_set_entries);
-        write_entries_to_ledger(&vec![db_ledger_path.clone()], &genesis_entries);
 
         // Set the leader scheduler for the validator
         let leader_rotation_interval = 10;
@@ -1043,7 +1071,7 @@ mod tests {
         // Shut down
         t_responder.join().expect("responder thread join");
         validator.close().unwrap();
-        DB::destroy(&Options::default(), &db_ledger_path)
+        DbLedger::destroy(&validator_ledger_path)
             .expect("Expected successful database destruction");
         let _ignored = remove_dir_all(&validator_ledger_path).unwrap();
     }

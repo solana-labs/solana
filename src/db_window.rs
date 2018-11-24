@@ -276,6 +276,7 @@ pub fn process_blob(
     // Check if the blob is in the range of our known leaders. If not, we return.
     // TODO: Need to update slot in broadcast, otherwise this check will fail with
     // leader rotation enabled
+    // Github issue: https://github.com/solana-labs/solana/issues/1899.
     let slot = blob.read().unwrap().slot()?;
     let leader = leader_scheduler.get_leader_for_slot(slot);
 
