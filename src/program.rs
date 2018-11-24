@@ -8,4 +8,13 @@ pub enum ProgramError {
 
     /// The program returned an error
     RuntimeError,
+
+    /// Program's instruction token balance does not equal the balance after the instruction
+    UnbalancedInstruction,
+
+    /// Program modified an account's program id
+    ModifiedProgramId,
+
+    /// Program spent the tokens of an account that doesn't belong to it
+    ExternalAccountTokenSpend,
 }

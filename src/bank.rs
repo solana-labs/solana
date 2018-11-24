@@ -22,9 +22,10 @@ use poh_service::NUM_TICKS_PER_SECOND;
 use program::ProgramError;
 use rayon::prelude::*;
 use rpc::RpcSignatureStatus;
+use runtime;
 use signature::Keypair;
 use signature::Signature;
-use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
+use solana_sdk::account::Account;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction::SystemInstruction;
@@ -35,13 +36,11 @@ use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
-use storage_program;
 use system_program;
 use system_transaction::SystemTransaction;
 use token_program;
 use tokio::prelude::Future;
 use transaction::Transaction;
-use vote_program;
 
 /// The number of most recent `last_id` values that the bank will track the signatures
 /// of. Once the bank discards a `last_id`, it will reject any transactions that use
@@ -84,20 +83,11 @@ pub enum BankError {
     /// Proof of History verification failed.
     LedgerVerificationFailed,
 
-    /// Contract's instruction token balance does not equal the balance after the instruction
-    UnbalancedInstruction(u8),
-
     /// The program returned an error
     ProgramError(u8, ProgramError),
 
     /// Contract id is unknown
     UnknownContractId(u8),
-
-    /// Contract modified an accounts contract id
-    ModifiedContractId(u8),
-
-    /// Contract spent the tokens of an account that doesn't belong to it
-    ExternalAccountTokenSpend(u8),
 
     /// Recoding into PoH failed
     RecordFailure,
@@ -720,28 +710,6 @@ impl Bank {
             }).collect()
     }
 
-    pub fn verify_instruction(
-        instruction_index: usize,
-        program_id: &Pubkey,
-        pre_program_id: &Pubkey,
-        pre_tokens: u64,
-        account: &Account,
-    ) -> Result<()> {
-        // Verify the transaction
-
-        // Make sure that program_id is still the same or this was just assigned by the system call contract
-        if *pre_program_id != account.owner && !system_program::check_id(&program_id) {
-            return Err(BankError::ModifiedContractId(instruction_index as u8));
-        }
-        // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
-        if *program_id != account.owner && pre_tokens > account.tokens {
-            return Err(BankError::ExternalAccountTokenSpend(
-                instruction_index as u8,
-            ));
-        }
-        Ok(())
-    }
-
     /// Execute a function with a subset of accounts as writable references.
     /// Since the subset can point to the same references, in any order there is no way
     /// for the borrow checker to track them with regards to the original set.
@@ -761,7 +729,7 @@ impl Bank {
     }
 
     fn load_executable_accounts(&self, mut program_id: Pubkey) -> Result<Vec<(Pubkey, Account)>> {
-        if Self::is_legacy_program(&program_id) {
+        if runtime::is_legacy_program(&program_id) {
             return Ok(vec![]);
         }
 
@@ -794,112 +762,6 @@ impl Bank {
         Ok(accounts)
     }
 
-    fn is_legacy_program(program_id: &Pubkey) -> bool {
-        system_program::check_id(program_id)
-            || budget_program::check_id(program_id)
-            || storage_program::check_id(program_id)
-            || vote_program::check_id(program_id)
-    }
-
-    /// Process an instruction
-    /// This method calls the instruction's program entry pont method
-    fn process_instruction(
-        tx: &Transaction,
-        instruction_index: usize,
-        executable_accounts: &mut [(Pubkey, Account)],
-        program_accounts: &mut [&mut Account],
-        tick_height: u64,
-    ) -> Result<()> {
-        let program_id = tx.program_id(instruction_index);
-
-        // Call the contract method
-        // It's up to the contract to implement its own rules on moving funds
-        if Self::is_legacy_program(&program_id) {
-            let res = if system_program::check_id(&program_id) {
-                system_program::process(&tx, instruction_index, program_accounts)
-            } else if budget_program::check_id(&program_id) {
-                budget_program::process(&tx, instruction_index, program_accounts)
-            } else if storage_program::check_id(&program_id) {
-                storage_program::process(&tx, instruction_index, program_accounts)
-            } else if vote_program::check_id(&program_id) {
-                vote_program::process(&tx, instruction_index, program_accounts)
-            } else {
-                unreachable!();
-            };
-            res.map_err(|err| BankError::ProgramError(instruction_index as u8, err))?;
-        } else {
-            let mut keyed_accounts = create_keyed_accounts(executable_accounts);
-            let mut keyed_accounts2: Vec<_> = tx.instructions[instruction_index]
-                .accounts
-                .iter()
-                .map(|&index| &tx.account_keys[index as usize])
-                .zip(program_accounts.iter_mut())
-                .map(|(key, account)| KeyedAccount { key, account })
-                .collect();
-            keyed_accounts.append(&mut keyed_accounts2);
-
-            if !native_loader::process_instruction(
-                &program_id,
-                &mut keyed_accounts,
-                &tx.instructions[instruction_index].userdata,
-                tick_height,
-            ) {
-                let err = ProgramError::RuntimeError;
-                return Err(BankError::ProgramError(instruction_index as u8, err));
-            }
-        }
-        Ok(())
-    }
-
-    /// Execute an instruction
-    /// This method calls the instruction's program entry pont method and verifies that the result of
-    /// the call does not violate the bank's accounting rules.
-    /// The accounts are committed back to the bank only if this function returns Ok(_).
-    fn execute_instruction(
-        tx: &Transaction,
-        instruction_index: usize,
-        executable_accounts: &mut [(Pubkey, Account)],
-        program_accounts: &mut [&mut Account],
-        tick_height: u64,
-    ) -> Result<()> {
-        let program_id = tx.program_id(instruction_index);
-        // TODO: the runtime should be checking read/write access to memory
-        // we are trusting the hard coded contracts not to clobber or allocate
-        let pre_total: u64 = program_accounts.iter().map(|a| a.tokens).sum();
-        let pre_data: Vec<_> = program_accounts
-            .iter_mut()
-            .map(|a| (a.owner, a.tokens))
-            .collect();
-
-        Self::process_instruction(
-            tx,
-            instruction_index,
-            executable_accounts,
-            program_accounts,
-            tick_height,
-        )?;
-
-        // Verify the instruction
-        for ((pre_program_id, pre_tokens), post_account) in
-            pre_data.iter().zip(program_accounts.iter())
-        {
-            Self::verify_instruction(
-                instruction_index,
-                &program_id,
-                pre_program_id,
-                *pre_tokens,
-                post_account,
-            )?;
-        }
-        // The total sum of all the tokens in all the accounts cannot change.
-        let post_total: u64 = program_accounts.iter().map(|a| a.tokens).sum();
-        if pre_total != post_total {
-            Err(BankError::UnbalancedInstruction(instruction_index as u8))
-        } else {
-            Ok(())
-        }
-    }
-
     /// Execute a transaction.
     /// This method calls each instruction in the transaction over the set of loaded Accounts
     /// The accounts are committed back to the bank only if every instruction succeeds
@@ -913,13 +775,14 @@ impl Bank {
             let program_id = tx.program_id(instruction_index);
             Self::with_subset(tx_accounts, &instruction.accounts, |program_accounts| {
                 let mut executable_accounts = self.load_executable_accounts(*program_id)?;
-                Self::execute_instruction(
+                runtime::execute_instruction(
                     tx,
                     instruction_index,
                     &mut executable_accounts,
                     program_accounts,
                     tick_height,
-                )
+                ).map_err(|err| BankError::ProgramError(instruction_index as u8, err))?;
+                Ok(())
             })?;
         }
         Ok(())
@@ -1535,9 +1398,11 @@ mod tests {
     use signature::{GenKeys, KeypairUtil};
     use solana_sdk::hash::hash;
     use std;
+    use storage_program;
     use system_transaction::SystemTransaction;
     use tokio::prelude::{Async, Stream};
     use transaction::Instruction;
+    use vote_program;
 
     #[test]
     fn test_bank_new() {
