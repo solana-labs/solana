@@ -354,7 +354,6 @@ pub fn generate_coding(
 //   any of the blocks, the block is skipped.
 //   Side effect: old blobs in a block are None'd
 pub fn recover(
-    id: &Pubkey,
     db_ledger: &mut DbLedger,
     slot: u64,
     start_idx: u64,
@@ -366,8 +365,7 @@ pub fn recover(
     let coding_start_idx = block_start_idx + NUM_DATA as u64 - NUM_CODING as u64;
     let block_end_idx = block_start_idx + NUM_DATA as u64;
     trace!(
-        "recover {}: coding_start_idx: {} block_end_idx: {}",
-        id,
+        "recover: coding_start_idx: {} block_end_idx: {}",
         coding_start_idx,
         block_end_idx
     );
@@ -386,8 +384,7 @@ pub fn recover(
 
     if (data_missing + coding_missing) > NUM_CODING {
         trace!(
-            "recover {}: start: {} skipping recovery data: {} coding: {}",
-            id,
+            "recover: start: {} skipping recovery data: {} coding: {}",
             block_start_idx,
             data_missing,
             coding_missing
@@ -397,8 +394,7 @@ pub fn recover(
     }
 
     trace!(
-        "recover {}: recovering: data: {} coding: {}",
-        id,
+        "recover: recovering: data: {} coding: {}",
         data_missing,
         coding_missing
     );
@@ -455,8 +451,7 @@ pub fn recover(
                 if size.is_none() {
                     size = Some(b.len() - BLOB_HEADER_SIZE);
                     trace!(
-                        "{} recover size {} from {}",
-                        id,
+                        "recover size {} from {}",
                         size.unwrap(),
                         i as u64 + block_start_idx
                     );
@@ -478,7 +473,7 @@ pub fn recover(
     let size = size.unwrap();
     // marks end of erasures
     erasures.push(-1);
-    trace!("erasures[]: {} {:?} data_size: {}", id, erasures, size,);
+    trace!("erasures[]:{:?} data_size: {}", erasures, size,);
 
     let mut locks = Vec::with_capacity(NUM_DATA + NUM_CODING);
     {
@@ -517,7 +512,7 @@ pub fn recover(
             data_size = locks[n].data_size().unwrap() as usize;
             data_size -= BLOB_HEADER_SIZE;
             if data_size > BLOB_DATA_SIZE {
-                error!("{} corrupt data blob[{}] data_size: {}", id, idx, data_size);
+                error!("corrupt data blob[{}] data_size: {}", idx, data_size);
                 corrupt = true;
             }
         } else {
@@ -526,18 +521,14 @@ pub fn recover(
             locks[n].set_index(idx).unwrap();
 
             if data_size - BLOB_HEADER_SIZE > BLOB_DATA_SIZE {
-                error!(
-                    "{} corrupt coding blob[{}] data_size: {}",
-                    id, idx, data_size
-                );
+                error!("corrupt coding blob[{}] data_size: {}", idx, data_size);
                 corrupt = true;
             }
         }
 
         locks[n].set_size(data_size);
         trace!(
-            "{} erasures[{}] ({}) size: {} data[0]: {}",
-            id,
+            "erasures[{}] ({}) size: {} data[0]: {}",
             *i,
             idx,
             data_size,
@@ -545,7 +536,7 @@ pub fn recover(
         );
     }
 
-    assert!(!corrupt, " {} ", id);
+    assert!(!corrupt);
     Ok((missing_data, missing_coding))
 }
 
@@ -660,8 +651,8 @@ mod test {
     }
 
     // TODO: Temprorary function used in tests to generate a database ledger
-    // from the window (which is used to generate the erasure coding) 
-    // until we also transition generate_coding() and BroadcastStage to use RocksDb. 
+    // from the window (which is used to generate the erasure coding)
+    // until we also transition generate_coding() and BroadcastStage to use RocksDb.
     // Github issue: https://github.com/solana-labs/solana/issues/1899.
     fn generate_db_ledger_from_window(
         ledger_path: &str,
@@ -775,12 +766,9 @@ mod test {
             generate_db_ledger_from_window(&ledger_path, &window, DEFAULT_SLOT_HEIGHT);
 
         // Recover it from coding
-        let (recovered_data, recovered_coding) = erasure::recover(
-            &Pubkey::default(),
-            &mut db_ledger,
-            0,
-            (offset + WINDOW_SIZE) as u64,
-        ).expect("Expected successful recovery of erased blobs");
+        let (recovered_data, recovered_coding) =
+            erasure::recover(&mut db_ledger, 0, (offset + WINDOW_SIZE) as u64)
+                .expect("Expected successful recovery of erased blobs");
 
         assert!(recovered_coding.is_empty());
         {
@@ -829,12 +817,9 @@ mod test {
             generate_db_ledger_from_window(&ledger_path, &window, DEFAULT_SLOT_HEIGHT);
 
         // Recover it from coding
-        let (recovered_data, recovered_coding) = erasure::recover(
-            &Pubkey::default(),
-            &mut db_ledger,
-            0,
-            (offset + WINDOW_SIZE) as u64,
-        ).expect("Expected successful recovery of erased blobs");
+        let (recovered_data, recovered_coding) =
+            erasure::recover(&mut db_ledger, 0, (offset + WINDOW_SIZE) as u64)
+                .expect("Expected successful recovery of erased blobs");
 
         {
             let recovered_data_blob = recovered_data
