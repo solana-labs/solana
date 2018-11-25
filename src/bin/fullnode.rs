@@ -66,7 +66,7 @@ fn main() {
                 .help("Custom RPC port for this node"),
         ).get_matches();
 
-    let sigverify = !matches.is_present("nosigverify");
+    let nosigverify = matches.is_present("nosigverify");
 
     let (keypair, vote_account_keypair, ncp) = if let Some(i) = matches.value_of("identity") {
         let path = i.to_string();
@@ -146,7 +146,7 @@ fn main() {
         keypair.clone(),
         vote_account_keypair.clone(),
         network,
-        sigverify,
+        nosigverify,
         leader_scheduler,
         rpc_port,
     );
