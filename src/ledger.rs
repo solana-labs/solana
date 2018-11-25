@@ -13,7 +13,7 @@ use rayon::prelude::*;
 use signature::{Keypair, KeypairUtil};
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
-use std::fs::{create_dir_all, remove_dir_all, File, OpenOptions};
+use std::fs::{copy, create_dir_all, remove_dir_all, File, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};
 use std::mem::size_of;
@@ -636,6 +636,22 @@ pub fn create_tmp_sample_ledger(
     writer.write_entries(&genesis.clone()).unwrap();
 
     (mint, path, genesis)
+}
+
+pub fn tmp_copy_ledger(from: &str, name: &str) -> String {
+    let tostr = get_tmp_ledger_path(name);
+
+    {
+        let to = Path::new(&tostr);
+        let from = Path::new(&from);
+
+        create_dir_all(to).unwrap();
+
+        copy(from.join("data"), to.join("data")).unwrap();
+        copy(from.join("index"), to.join("index")).unwrap();
+    }
+
+    tostr
 }
 
 pub fn make_tiny_test_entries(num: usize) -> Vec<Entry> {

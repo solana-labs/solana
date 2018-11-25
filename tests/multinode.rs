@@ -9,11 +9,12 @@ extern crate solana_sdk;
 use solana::blob_fetch_stage::BlobFetchStage;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
 use solana::contact_info::ContactInfo;
+use solana::db_ledger::DbLedger;
 use solana::entry::{reconstruct_entries_from_blobs, Entry};
 use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
 use solana::ledger::{
-    create_tmp_genesis, create_tmp_sample_ledger, get_tmp_ledger_path, read_ledger, LedgerWindow,
+    create_tmp_genesis, create_tmp_sample_ledger, read_ledger, tmp_copy_ledger, LedgerWindow,
     LedgerWriter,
 };
 use solana::logger;
@@ -33,9 +34,8 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{duration_as_ms, duration_as_s};
 use std::collections::{HashSet, VecDeque};
 use std::env;
-use std::fs::{copy, create_dir_all, remove_dir_all};
+use std::fs::remove_dir_all;
 use std::net::UdpSocket;
-use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
@@ -108,22 +108,6 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     assert!(converged);
     ncp.close().unwrap();
     rv
-}
-
-fn tmp_copy_ledger(from: &str, name: &str) -> String {
-    let tostr = get_tmp_ledger_path(name);
-
-    {
-        let to = Path::new(&tostr);
-        let from = Path::new(&from);
-
-        create_dir_all(to).unwrap();
-
-        copy(from.join("data"), to.join("data")).unwrap();
-        copy(from.join("index"), to.join("index")).unwrap();
-    }
-
-    tostr
 }
 
 fn make_tiny_test_entries(start_hash: Hash, num: usize) -> Vec<Entry> {
@@ -1087,6 +1071,7 @@ fn test_leader_validator_basic() {
     assert!(min_len >= bootstrap_height);
 
     for path in ledger_paths {
+        DbLedger::destroy(&path).expect("Expected successful database destruction");
         remove_dir_all(path).unwrap();
     }
 }
@@ -1346,28 +1331,20 @@ fn test_full_leader_validator_network() {
         Some(bootstrap_height),
         Some(leader_rotation_interval),
         Some(seed_rotation_interval),
-        Some(leader_rotation_interval),
+        Some(100),
     );
 
     let exit = Arc::new(AtomicBool::new(false));
-    // Start the bootstrap leader fullnode
-    let bootstrap_leader = Arc::new(RwLock::new(Fullnode::new(
-        bootstrap_leader_node,
-        &bootstrap_leader_ledger_path,
-        Arc::new(node_keypairs.pop_front().unwrap()),
-        Arc::new(vote_account_keypairs.pop_front().unwrap()),
-        Some(bootstrap_leader_info.ncp),
-        false,
-        LeaderScheduler::new(&leader_scheduler_config),
-        None,
-    )));
 
-    let mut nodes: Vec<Arc<RwLock<Fullnode>>> = vec![bootstrap_leader.clone()];
-    let mut t_nodes = vec![run_node(
-        bootstrap_leader_info.id,
-        bootstrap_leader,
-        exit.clone(),
-    )];
+    // Postpone starting the leader until after the validators are up and running
+    // to avoid
+    // 1) Scenario where leader rotates before validators can start up
+    // 2) Modifying the leader ledger which validators are going to be copying
+    // during startup
+    let leader_keypair = node_keypairs.pop_front().unwrap();
+    let leader_vote_keypair = vote_account_keypairs.pop_front().unwrap();
+    let mut nodes: Vec<Arc<RwLock<Fullnode>>> = vec![];
+    let mut t_nodes = vec![];
 
     // Start up the validators
     for kp in node_keypairs.into_iter() {
@@ -1375,7 +1352,9 @@ fn test_full_leader_validator_network() {
             &bootstrap_leader_ledger_path,
             "test_full_leader_validator_network",
         );
+
         ledger_paths.push(validator_ledger_path.clone());
+
         let validator_id = kp.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(validator_id);
         let validator = Arc::new(RwLock::new(Fullnode::new(
@@ -1392,6 +1371,25 @@ fn test_full_leader_validator_network() {
         nodes.push(validator.clone());
         t_nodes.push(run_node(validator_id, validator, exit.clone()));
     }
+
+    // Start up the bootstrap leader
+    let bootstrap_leader = Arc::new(RwLock::new(Fullnode::new(
+        bootstrap_leader_node,
+        &bootstrap_leader_ledger_path,
+        Arc::new(leader_keypair),
+        Arc::new(leader_vote_keypair),
+        Some(bootstrap_leader_info.ncp),
+        false,
+        LeaderScheduler::new(&leader_scheduler_config),
+        None,
+    )));
+
+    nodes.push(bootstrap_leader.clone());
+    t_nodes.push(run_node(
+        bootstrap_leader_info.id,
+        bootstrap_leader,
+        exit.clone(),
+    ));
 
     // Wait for convergence
     let num_converged = converge(&bootstrap_leader_info, N + 1).len();
@@ -1495,7 +1493,9 @@ fn test_full_leader_validator_network() {
     }
 
     assert!(shortest.unwrap() >= target_height);
+
     for path in ledger_paths {
+        DbLedger::destroy(&path).expect("Expected successful database destruction");
         remove_dir_all(path).unwrap();
     }
 }

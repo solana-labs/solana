@@ -218,9 +218,10 @@ pub fn retransmit_all_leader_blocks(
     for b in dq {
         // Check if the blob is from the scheduled leader for its slot. If so,
         // add to the retransmit_queue
-        let slot = b.read().unwrap().slot()?;
-        if let Some(leader_id) = leader_scheduler.get_leader_for_slot(slot) {
-            add_blob_to_retransmit_queue(b, leader_id, &mut retransmit_queue);
+        if let Ok(slot) = b.read().unwrap().slot() {
+            if let Some(leader_id) = leader_scheduler.get_leader_for_slot(slot) {
+                add_blob_to_retransmit_queue(b, leader_id, &mut retransmit_queue);
+            }
         }
     }
 
@@ -273,6 +274,9 @@ pub fn process_blob(
     let is_coding = blob.read().unwrap().is_coding();
 
     // Check if the blob is in the range of our known leaders. If not, we return.
+    // TODO: Need to update slot in broadcast, otherwise this check will fail with
+    // leader rotation enabled
+    // Github issue: https://github.com/solana-labs/solana/issues/1899.
     let slot = blob.read().unwrap().slot()?;
     let leader = leader_scheduler.get_leader_for_slot(slot);
 
@@ -292,12 +296,11 @@ pub fn process_blob(
         )?;
         vec![]
     } else {
-        let data_key = ErasureCf::key(slot, pix);
+        let data_key = DataCf::key(slot, pix);
         db_ledger.insert_data_blob(&data_key, &blob.read().unwrap())?
     };
 
     // TODO: Once erasure is fixed, readd that logic here
-
     for entry in &consumed_entries {
         *tick_height += entry.is_tick() as u64;
     }
@@ -529,8 +532,8 @@ mod test {
         assert!(gap > 3);
         let num_entries = 10;
         let shared_blobs = make_tiny_test_entries(num_entries).to_blobs();
-        for (b, i) in shared_blobs.iter().zip(0..shared_blobs.len() as u64) {
-            b.write().unwrap().set_index(i * gap).unwrap();
+        for (i, b) in shared_blobs.iter().enumerate() {
+            b.write().unwrap().set_index(i as u64 * gap).unwrap();
         }
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();

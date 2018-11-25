@@ -13,6 +13,7 @@
 use bank::Bank;
 use blob_fetch_stage::BlobFetchStage;
 use cluster_info::ClusterInfo;
+use db_ledger::DbLedger;
 use ledger_write_stage::LedgerWriteStage;
 use replicate_stage::{ReplicateStage, ReplicateStageReturnType};
 use retransmit_stage::RetransmitStage;
@@ -24,7 +25,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread;
 use storage_stage::{StorageStage, StorageState};
-use window::SharedWindow;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TvuReturnType {
@@ -62,11 +62,11 @@ impl Tvu {
         entry_height: u64,
         last_entry_id: Hash,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        window: SharedWindow,
         replicate_sockets: Vec<UdpSocket>,
         repair_socket: UdpSocket,
         retransmit_socket: UdpSocket,
         ledger_path: Option<&str>,
+        db_ledger: Arc<RwLock<DbLedger>>,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -76,12 +76,13 @@ impl Tvu {
         blob_sockets.push(repair_socket.clone());
         let (fetch_stage, blob_fetch_receiver) =
             BlobFetchStage::new_multi_socket(blob_sockets, exit.clone());
+
         //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
         //then sent to the window, which does the erasure coding reconstruction
         let (retransmit_stage, blob_window_receiver) = RetransmitStage::new(
+            db_ledger,
             &cluster_info,
-            window,
             bank.tick_height(),
             entry_height,
             Arc::new(retransmit_socket),
@@ -166,15 +167,19 @@ pub mod tests {
     use bank::Bank;
     use bincode::serialize;
     use cluster_info::{ClusterInfo, Node};
+    use db_ledger::DbLedger;
     use entry::Entry;
     use leader_scheduler::LeaderScheduler;
+    use ledger::get_tmp_ledger_path;
     use logger;
     use mint::Mint;
     use ncp::Ncp;
     use packet::SharedBlob;
+    use rocksdb::{Options, DB};
     use service::Service;
     use signature::{Keypair, KeypairUtil};
     use solana_sdk::hash::Hash;
+    use std::fs::remove_dir_all;
     use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
@@ -262,6 +267,9 @@ pub mod tests {
 
         let vote_account_keypair = Arc::new(Keypair::new());
         let mut cur_hash = Hash::default();
+        let db_ledger_path = get_tmp_ledger_path("test_replicate");
+        let db_ledger =
+            DbLedger::open(&db_ledger_path).expect("Expected to successfully open ledger");
         let tvu = Tvu::new(
             Arc::new(target1_keypair),
             vote_account_keypair,
@@ -269,11 +277,11 @@ pub mod tests {
             0,
             cur_hash,
             cref1,
-            dr_1.1,
             target1.sockets.replicate,
             target1.sockets.repair,
             target1.sockets.retransmit,
             None,
+            Arc::new(RwLock::new(db_ledger)),
         );
 
         let mut alice_ref_balance = starting_balance;
@@ -346,5 +354,8 @@ pub mod tests {
         dr_1.0.join().expect("join");
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
+        DB::destroy(&Options::default(), &db_ledger_path)
+            .expect("Expected successful database destuction");
+        let _ignored = remove_dir_all(&db_ledger_path);
     }
 }
