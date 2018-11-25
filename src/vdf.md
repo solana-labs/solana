@@ -1,4 +1,4 @@
-# Introduction to VDFs
+# Verifiable Delay Functions
 
 A Verifiable Delay Function is conceptually a water clock where its water marks
 can be recorded and later verified that the water most certainly passed
