@@ -1,6 +1,4 @@
-# The Solana SDK
-
-## Introduction
+# Programming Model
 
 With the Solana runtime, we can execute on-chain programs concurrently, and
 written in the client’s choice of programming language.
@@ -21,14 +19,14 @@ ELF and passes it the client's message for interpretation.
 Solana supports several kinds of persistent storage, called *accounts*:
 
 1. Executable
-2. Writable by a client
-3. Writable by a program
-4. Read-only
+2. Owned by a client
+3. Owned by a program
+4. Credit-only
 
 All accounts are identified by public keys and may hold arbirary data.
 When the client sends messages to programs, it requests access to storage
 using those keys. The runtime loads the account data and passes it to the
 program. The runtime also ensures accounts aren't written to if not owned
-by the client or program. Any writes to read-only accounts are discarded
+by the client or program. Any writes to credit-only accounts are discarded
 unless the write was to credit tokens. Any user may credit other accounts
 tokens, regardless of account permission.
