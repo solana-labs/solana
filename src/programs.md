@@ -1,4 +1,4 @@
-# On-chain Programs
+# Programming Model
 
 With the Solana runtime, we can execute on-chain programs concurrently, and
 written in the client’s choice of programming language.

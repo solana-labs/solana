@@ -4,14 +4,7 @@
 
 - [Terminology](terminology.md)
 
-- [On-chain programs](programs.md)
-  - [The Runtime](runtime.md)
-
-- [Fullnode](fullnode.md)
-  - [Tpu](tpu.md)
-  - [Tvu](tvu.md)
-  - [Ncp](ncp.md)
-  - [JsonRpcService](jsonrpc-service.md)
+- [Programming Model](programs.md)
 
 - [A Solana Cluster](cluster.md)
   - [Synchronization](synchronization.md)
@@ -20,6 +13,13 @@
   - [Ledger Broadcasting](avalanche.md)
   - [Ledger Replication](storage.md)
   - [Leader Rotation](leader-scheduler.md)
+
+- [Anatomy of a Fullnode](fullnode.md)
+  - [Tpu](tpu.md)
+  - [Tvu](tvu.md)
+  - [Ncp](ncp.md)
+  - [JsonRpcService](jsonrpc-service.md)
+  - [The Runtime](runtime.md)
 
 ## Appendix
 
