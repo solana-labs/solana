@@ -514,6 +514,7 @@ pub fn recover(
             if data_size > BLOB_DATA_SIZE {
                 error!("corrupt data blob[{}] data_size: {}", idx, data_size);
                 corrupt = true;
+                break;
             }
         } else {
             data_size = size;
@@ -523,6 +524,7 @@ pub fn recover(
             if data_size - BLOB_HEADER_SIZE > BLOB_DATA_SIZE {
                 error!("corrupt coding blob[{}] data_size: {}", idx, data_size);
                 corrupt = true;
+                break;
             }
         }
 
@@ -536,7 +538,10 @@ pub fn recover(
         );
     }
 
-    assert!(!corrupt);
+    if corrupt {
+        return Ok((vec![], vec![]));
+    }
+
     Ok((missing_data, missing_coding))
 }
 
