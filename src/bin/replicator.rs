@@ -10,7 +10,6 @@ use clap::{App, Arg};
 use solana::chacha::{chacha_cbc_encrypt_file, CHACHA_BLOCK_SIZE};
 use solana::client::mk_client;
 use solana::cluster_info::Node;
-use solana::db_ledger::DbLedger;
 use solana::fullnode::Config;
 use solana::ledger::LEDGER_DATA_FILE;
 use solana::logger;
@@ -24,7 +23,7 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::path::Path;
 use std::process::exit;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -95,13 +94,7 @@ fn main() {
     // TODO: ask network what slice we should store
     let entry_height = 0;
 
-    // Create the RocksDb ledger, eventually will simply repurpose the input
-    // ledger path as the RocksDb ledger path
-    let db_ledger = Arc::new(RwLock::new(
-        DbLedger::open(&ledger_path.unwrap()).expect("Expected to be able to open database ledger"),
-    ));
     let (replicator, leader_info) = Replicator::new(
-        db_ledger,
         entry_height,
         5,
         &exit,
