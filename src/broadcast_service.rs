@@ -1,12 +1,12 @@
 //! The `broadcast_service` broadcasts data from a leader node to validators
 //!
 use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
-use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
 use crate::counter::Counter;
+use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
 use crate::entry::Entry;
 #[cfg(feature = "erasure")]
 use crate::erasure;
-
+use crate::leader_scheduler::LeaderScheduler;
 use crate::ledger::Block;
 use crate::packet::{index_blobs, SharedBlobs};
 use crate::result::{Error, Result};
@@ -43,7 +43,7 @@ fn broadcast(
     sock: &UdpSocket,
     transmit_index: &mut WindowIndex,
     receive_index: &mut u64,
-    leader_slot: u64,
+    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
 ) -> Result<()> {
     let id = node_info.id;
     let timer = Duration::new(1, 0);
@@ -59,29 +59,40 @@ fn broadcast(
     inc_new_counter_info!("broadcast_service-entries_received", num_entries);
 
     let to_blobs_start = Instant::now();
-    let num_ticks: u64 = ventries
+
+    // Generate the tick heights for all the entries inside ventries
+    let tick_heights: Vec<u64> = ventries
         .iter()
-        .flatten()
-        .map(|entry| (entry.is_tick()) as u64)
-        .sum();
+        .flat_map(|p| {
+            let tick_heights: Vec<u64> = p
+                .iter()
+                .map(|e| {
+                    *tick_height += e.is_tick() as u64;
+                    *tick_height
+                })
+                .collect();
 
-    *tick_height += num_ticks;
+            tick_heights
+        })
+        .collect();
 
-    let dq: SharedBlobs = ventries
+    let blobs_vec: Vec<_> = ventries
         .into_par_iter()
         .flat_map(|p| p.to_blobs())
         .collect();
 
-    let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
+    let blobs_tick_heights: Vec<(SharedBlob, u64)> =
+        blobs_vec.into_iter().zip(tick_heights).collect();
 
-    // flatten deque to vec
-    let blobs_vec: SharedBlobs = dq.into_iter().collect();
+    let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
 
     let blobs_chunking = Instant::now();
     // We could receive more blobs than window slots so
     // break them up into window-sized chunks to process
     let window_size = window.read().unwrap().window_size();
-    let blobs_chunked = blobs_vec.chunks(window_size as usize).map(|x| x.to_vec());
+    let blobs_chunked = blobs_tick_heights
+        .chunks(window_size as usize)
+        .map(|x| x.to_vec());
     let chunking_elapsed = duration_as_ms(&blobs_chunking.elapsed());
 
     let broadcast_start = Instant::now();
@@ -89,13 +100,19 @@ fn broadcast(
         let blobs_len = blobs.len();
         trace!("{}: broadcast blobs.len: {}", id, blobs_len);
 
-        index_blobs(&blobs, &node_info.id, *receive_index, leader_slot);
+        index_blobs(
+            blobs.iter(),
+            &node_info.id,
+            *receive_index,
+            &leader_scheduler,
+        );
 
         // keep the cache of blobs that are broadcast
         inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
         {
             let mut win = window.write().unwrap();
             assert!(blobs.len() <= win.len());
+            let blobs: Vec<SharedBlob> = blobs.into_iter().map(|b| b.0).collect();
             for b in &blobs {
                 let ix = b.read().unwrap().index().expect("blob index");
                 let pos = (ix % window_size) as usize;
@@ -126,7 +143,10 @@ fn broadcast(
                 win[pos].data = Some(b.clone());
             }
 
-            db_ledger.write().unwrap().write_shared_blobs(DEFAULT_SLOT_HEIGHT, &blobs)?;
+            db_ledger
+                .write()
+                .unwrap()
+                .write_shared_blobs(DEFAULT_SLOT_HEIGHT, &blobs)?;
         }
 
         // Fill in the coding blob data from the window data blobs
@@ -207,7 +227,7 @@ impl BroadcastService {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window: &SharedWindow,
         entry_height: u64,
-        leader_slot: u64,
+        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         receiver: &Receiver<Vec<Entry>>,
         max_tick_height: Option<u64>,
         tick_height: u64,
@@ -235,7 +255,7 @@ impl BroadcastService {
                 &sock,
                 &mut transmit_index,
                 &mut receive_index,
-                leader_slot,
+                &leader_scheduler,
             ) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => {
@@ -273,7 +293,7 @@ impl BroadcastService {
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window: SharedWindow,
         entry_height: u64,
-        leader_slot: u64,
+        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         receiver: Receiver<Vec<Entry>>,
         max_tick_height: Option<u64>,
         tick_height: u64,
@@ -289,7 +309,7 @@ impl BroadcastService {
                     &cluster_info,
                     &window,
                     entry_height,
-                    leader_slot,
+                    leader_scheduler,
                     &receiver,
                     max_tick_height,
                     tick_height,

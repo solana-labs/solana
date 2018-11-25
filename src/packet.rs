@@ -2,6 +2,7 @@
 use crate::counter::Counter;
 #[cfg(test)]
 use crate::entry::Entry;
+use crate::leader_scheduler::LeaderScheduler;
 #[cfg(test)]
 use crate::ledger::Block;
 use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
@@ -14,6 +15,7 @@ use serde::Serialize;
 use solana_sdk::hash::Hash;
 pub use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
+use std::borrow::Borrow;
 use std::cmp;
 use std::fmt;
 use std::io;
@@ -436,10 +438,25 @@ impl Blob {
     }
 }
 
-pub fn index_blobs(blobs: &[SharedBlob], id: &Pubkey, mut index: u64, slot: u64) {
+pub fn index_blobs<I, J, K>(
+    blobs: I,
+    id: &Pubkey,
+    mut index: u64,
+    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
+) where
+    I: IntoIterator<Item = J>,
+    J: Borrow<(K, u64)>,
+    K: Borrow<SharedBlob>,
+{
     // enumerate all the blobs, those are the indices
     for b in blobs {
-        let mut blob = b.write().unwrap();
+        let (b, tick_height) = b.borrow();
+        let (_, slot) = leader_scheduler
+            .read()
+            .unwrap()
+            .get_scheduled_leader(*tick_height)
+            .expect("Leader schedule should never be unknown while indexing blobs");
+        let mut blob = b.borrow().write().unwrap();
 
         blob.set_index(index).expect("set_index");
         blob.set_slot(slot).expect("set_slot");

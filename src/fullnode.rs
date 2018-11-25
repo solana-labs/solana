@@ -260,7 +260,7 @@ impl Fullnode {
         }
 
         // Get the scheduled leader
-        let (scheduled_leader, leader_slot) = bank
+        let (scheduled_leader, _) = bank
             .get_current_leader()
             .expect("Leader not known after processing bank");
 
@@ -335,7 +335,7 @@ impl Fullnode {
                 cluster_info.clone(),
                 shared_window.clone(),
                 entry_height,
-                leader_slot,
+                bank.leader_scheduler.clone(),
                 entry_receiver,
                 max_tick_height,
                 bank.tick_height(),
@@ -501,7 +501,7 @@ impl Fullnode {
             self.cluster_info.clone(),
             self.shared_window.clone(),
             entry_height,
-            0, // TODO: get real leader slot from leader_scheduler
+            self.bank.leader_scheduler.clone(),
             blob_receiver,
             max_tick_height,
             tick_height,
