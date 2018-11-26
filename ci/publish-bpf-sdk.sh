@@ -3,9 +3,7 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-version=$(./ci/crate-version.sh)
 eval "$(ci/channel-info.sh)"
-
 if [[ $BUILDKITE_BRANCH = "$STABLE_CHANNEL" ]]; then
   CHANNEL=stable
 elif [[ $BUILDKITE_BRANCH = "$EDGE_CHANNEL" ]]; then
@@ -17,18 +15,9 @@ fi
 echo --- Creating tarball
 (
   set -x
-  rm -rf bpf-sdk/
-  mkdir bpf-sdk/
-  (
-    echo "$version"
-    git rev-parse HEAD
-  ) > bpf-sdk/version.txt
-
-  cp -ra programs/bpf/c/sdk/* bpf-sdk/
-
-  tar jvcf bpf-sdk.tar.bz2 bpf-sdk/
+  programs/bpf/c/sdk/scripts/package.sh
+  [[ -f bpf-sdk.tar.bz2 ]]
 )
-
 
 echo --- AWS S3 Store
 if [[ -z $CHANNEL ]]; then
@@ -48,4 +37,3 @@ else
 fi
 
 exit 0
-
