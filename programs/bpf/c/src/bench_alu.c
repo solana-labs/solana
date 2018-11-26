@@ -7,7 +7,8 @@
 #include <solana_sdk.h>
 
 extern bool entrypoint(const uint8_t *input) {
-  uint64_t x = *(uint64_t *)input;
+  uint64_t x = *(uint64_t *) input;
+  uint64_t *result = (uint64_t *) input + 1;
   uint64_t count = 0;
 
   for (int i = 1; i <= x; i++) {
@@ -23,5 +24,6 @@ extern bool entrypoint(const uint8_t *input) {
     }
   }
 
-  return count;
+  *result = count;
+  return true;
 }
