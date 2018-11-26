@@ -22,8 +22,7 @@ maybe_install() {
 
 export PATH=$CARGO_HOME/bin:$PATH
 maybe_install mdbook
-_ mdbook test book
-_ mdbook build book
+_ make -C book
 
 echo --- create book repo
 (

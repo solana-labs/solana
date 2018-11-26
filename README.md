@@ -73,19 +73,19 @@ cargo install mdbook
 Run any Rust tests in the markdown:
 
 ```bash
-mdbook test book
+make -C book test
 ```
 
 Render markdown as HTML:
 
 ```bash
-mdbook build book
+make -C book build
 ```
 
 Render and view the book:
 
 ```bash
-mdbook build --open book
+make -C book open
 ```
 
 
