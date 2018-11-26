@@ -116,7 +116,7 @@ impl Transaction {
     pub fn userdata(&self, instruction_index: usize) -> &[u8] {
         &self.instructions[instruction_index].userdata
     }
-    fn key_index(&self, instruction_index: usize, accounts_index: usize) -> Option<usize> {
+    pub fn key_index(&self, instruction_index: usize, accounts_index: usize) -> Option<usize> {
         self.instructions
             .get(instruction_index)
             .and_then(|instruction| instruction.accounts.get(accounts_index))

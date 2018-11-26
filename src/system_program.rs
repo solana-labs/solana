@@ -43,54 +43,67 @@ pub fn process_instruction(
 ) -> Result<()> {
     if let Ok(syscall) = deserialize(tx.userdata(pix)) {
         trace!("process_instruction: {:?}", syscall);
+
+        let from = tx.key_index(pix, 0).ok_or(Error::InvalidArgument)?;
+
         match syscall {
             SystemInstruction::CreateAccount {
                 tokens,
                 space,
                 program_id,
             } => {
-                if !check_id(&accounts[0].owner) {
-                    info!("Invalid account[0] owner");
-                    Err(Error::InvalidArgument)?;
-                }
+                let to = tx.key_index(pix, 1).ok_or(Error::InvalidArgument)?;
 
-                if space > 0 && (!accounts[1].userdata.is_empty() || !check_id(&accounts[1].owner))
-                {
-                    info!("Invalid account[1]");
+                if !check_id(&accounts[from].owner) {
+                    info!("Invalid account[from] owner");
                     Err(Error::InvalidArgument)?;
                 }
-                if tokens > accounts[0].tokens {
-                    info!("Insufficient tokens in account[0]");
+                if space > 0
+                    && (!accounts[to].userdata.is_empty() || !check_id(&accounts[to].owner))
+                {
+                    info!("Invalid account[to]");
+                    Err(Error::InvalidArgument)?;
+                }
+                if tokens > accounts[from].tokens {
+                    info!(
+                        "CreateAccount: insufficient tokens ({}, need {}) in account[{}] {}",
+                        accounts[from].tokens, tokens, from, tx.account_keys[from]
+                    );
                     Err(Error::ResultWithNegativeTokens)?;
                 }
-                accounts[0].tokens -= tokens;
-                accounts[1].tokens += tokens;
-                accounts[1].owner = program_id;
-                accounts[1].userdata = vec![0; space as usize];
-                accounts[1].executable = false;
-                accounts[1].loader = Pubkey::default();
+                accounts[from].tokens -= tokens;
+                accounts[to].tokens += tokens;
+                accounts[to].owner = program_id;
+                accounts[to].userdata = vec![0; space as usize];
+                accounts[to].executable = false;
+                accounts[to].loader = Pubkey::default();
             }
             SystemInstruction::Assign { program_id } => {
-                if !check_id(&accounts[0].owner) {
+                if !check_id(&accounts[from].owner) {
                     Err(Error::AssignOfUnownedAccount)?;
                 }
-                accounts[0].owner = program_id;
+                accounts[from].owner = program_id;
             }
             SystemInstruction::Move { tokens } => {
+                let to = tx.key_index(pix, 1).ok_or(Error::InvalidArgument)?;
+
                 //bank should be verifying correctness
-                if tokens > accounts[0].tokens {
-                    info!("Insufficient tokens in account[0]");
+                if tokens > accounts[from].tokens {
+                    info!(
+                        "Move: insufficient tokens ({}, need {}) in accounts[from] {}",
+                        accounts[from].tokens, tokens, tx.account_keys[from]
+                    );
                     Err(Error::ResultWithNegativeTokens)?;
                 }
-                accounts[0].tokens -= tokens;
-                accounts[1].tokens += tokens;
+                accounts[from].tokens -= tokens;
+                accounts[to].tokens += tokens;
             }
             SystemInstruction::Spawn => {
-                if !accounts[0].executable || accounts[0].loader != Pubkey::default() {
+                if !accounts[from].executable || accounts[from].loader != Pubkey::default() {
                     Err(Error::AccountNotFinalized)?;
                 }
-                accounts[0].loader = accounts[0].owner;
-                accounts[0].owner = tx.account_keys[0];
+                accounts[from].loader = accounts[from].owner;
+                accounts[from].owner = tx.account_keys[from];
             }
         }
         Ok(())
@@ -123,7 +136,11 @@ mod test {
 
     fn process_transaction(tx: &Transaction, accounts: &mut [Account]) -> Result<()> {
         let mut refs: Vec<&mut Account> = accounts.iter_mut().collect();
-        super::process_instruction(&tx, 0, &mut refs[..])
+
+        for (idx, _) in tx.instructions.iter().enumerate() {
+            super::process_instruction(&tx, idx, &mut refs[..])?;
+        }
+        Ok(())
     }
 
     #[test]
@@ -248,6 +265,22 @@ mod test {
         assert_eq!(accounts[0].tokens, 0);
         assert_eq!(accounts[1].tokens, 1);
     }
+
+    #[test]
+    fn test_move_many() {
+        use logger;
+        logger::setup();
+        let from = Keypair::new();
+        let tos = [(Keypair::new().pubkey(), 1), (Keypair::new().pubkey(), 1)];
+        let mut accounts = vec![Account::default(), Account::default(), Account::default()];
+        accounts[0].tokens = 2;
+        let tx = Transaction::system_move_many(&from, &tos, Hash::default(), 0);
+        process_transaction(&tx, &mut accounts).unwrap();
+        assert_eq!(accounts[0].tokens, 0);
+        assert_eq!(accounts[1].tokens, 1);
+        assert_eq!(accounts[2].tokens, 1);
+    }
+
     /// Detect binary changes in the serialized program userdata, which could have a downstream
     /// affect on SDKs and DApps
     #[test]
