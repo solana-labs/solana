@@ -1,5 +1,5 @@
-//! The `bank` module tracks client accounts and the progress of smart
-//! contracts. It offers a high-level API that signs transactions
+//! The `bank` module tracks client accounts and the progress of on-chain
+//! programs. It offers a high-level API that signs transactions
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 
@@ -85,9 +85,6 @@ pub enum BankError {
 
     /// The program returned an error
     ProgramError(u8, ProgramError),
-
-    /// Contract id is unknown
-    UnknownContractId(u8),
 
     /// Recoding into PoH failed
     RecordFailure,
@@ -274,7 +271,7 @@ impl Checkpoint for Accounts {
     }
 }
 
-/// Manager for the state of all accounts and contracts after processing its entries.
+/// Manager for the state of all accounts and programs after processing its entries.
 pub struct Bank {
     /// A map of account public keys to the balance in that account.
     pub accounts: RwLock<Accounts>,
@@ -642,8 +639,8 @@ impl Bank {
                 return Err(BankError::LastIdNotFound);
             }
 
-            // There is no way to predict what contract will execute without an error
-            // If a fee can pay for execution then the contract will be scheduled
+            // There is no way to predict what program will execute without an error
+            // If a fee can pay for execution then the program will be scheduled
             let err =
                 Self::reserve_signature_with_last_id(last_ids, &tx.last_id, &tx.signatures[0]);
             if let Err(BankError::LastIdNotFound) = err {
@@ -1209,15 +1206,15 @@ impl Bank {
             account.tokens
         }
     }
-    /// Each contract would need to be able to introspect its own state
-    /// this is hard coded to the budget contract language
+    /// Each program would need to be able to introspect its own state
+    /// this is hard-coded to the Budget language
     pub fn get_balance(&self, pubkey: &Pubkey) -> u64 {
         self.get_account(pubkey)
             .map(|x| Self::read_balance(&x))
             .unwrap_or(0)
     }
 
-    /// TODO: Need to implement a real staking contract to hold node stake.
+    /// TODO: Need to implement a real staking program to hold node stake.
     /// Right now this just gets the account balances. See github issue #1655.
     pub fn get_stake(&self, pubkey: &Pubkey) -> u64 {
         self.get_balance(pubkey)
@@ -1547,7 +1544,7 @@ mod tests {
         let bank = Bank::new(&mint);
         let dest = Keypair::new();
 
-        // source with 0 contract context
+        // source with 0 program context
         let tx = Transaction::system_create(
             &mint.keypair(),
             dest.pubkey(),
