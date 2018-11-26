@@ -124,12 +124,12 @@
 <path d="M 136 312 A 4 4 0 0 0 132 316" fill="none"/>
 </g>
 <g>
-<line x1="136" x2="264" y1="56" y2="56"/>
-<path d="M 268 60 A 4 4 0 0 0 264 56" fill="none"/>
+<line x1="136" x2="280" y1="56" y2="56"/>
+<path d="M 284 60 A 4 4 0 0 0 280 56" fill="none"/>
 </g>
 <g>
-<line x1="136" x2="264" y1="120" y2="120"/>
-<path d="M 264 120 A 4 4 0 0 0 268 116" fill="none"/>
+<line x1="136" x2="280" y1="120" y2="120"/>
+<path d="M 280 120 A 4 4 0 0 0 284 116" fill="none"/>
 </g>
 <g>
 <line x1="136" x2="156" y1="232" y2="232"/>
@@ -216,9 +216,6 @@
 <line marker-end="url(#triangle)" x1="236" x2="236" y1="208" y2="196"/>
 </g>
 <g>
-<line x1="268" x2="268" y1="60" y2="116"/>
-</g>
-<g>
 <line x1="268" x2="268" y1="156" y2="180"/>
 </g>
 <g>
@@ -235,6 +232,9 @@
 <line x1="396" x2="396" y1="248" y2="260"/>
 <path d="M 396 260 A 4 4 0 0 0 400 264" fill="none"/>
 <path d="M 400 184 A 4 4 0 0 0 396 188" fill="none"/>
+</g>
+<g>
+<line x1="284" x2="284" y1="60" y2="116"/>
 </g>
 <g>
 <line x1="308" x2="308" y1="316" y2="328"/>
@@ -314,7 +314,7 @@ Fullnode
 </g>
 <g>
 <text x="145" y="92">
-JsonRpcService
+JSON
 </text>
 </g>
 <g>
@@ -324,7 +324,17 @@ Bank
 </g>
 <g>
 <text x="145" y="332">
-Tpu
+TPU
+</text>
+</g>
+<g>
+<text x="185" y="92">
+RPC
+</text>
+</g>
+<g>
+<text x="217" y="92">
+Service
 </text>
 </g>
 <g>
@@ -339,12 +349,12 @@ Stage
 </g>
 <g>
 <text x="233" y="172">
-Ncp
+NCP
 </text>
 </g>
 <g>
 <text x="233" y="252">
-Tvu
+TVU
 </text>
 </g>
 <g>
