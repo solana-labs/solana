@@ -31,7 +31,6 @@ endif
 
 SYSTEM_INC_DIRS := -isystem $(LOCAL_PATH)inc
 
-
 C_FLAGS := \
   -Werror \
   -O2 \
@@ -64,6 +63,7 @@ OBJ_DUMP_FLAGS := \
   -disassemble \
 
 TESTFRAMEWORK_FLAGS := \
+  -DSOL_TEST \
   -isystem $(LOCAL_PATH)criterion-v2.3.2/include \
   -L $(LOCAL_PATH)criterion-v2.3.2/lib \
   -lcriterion \
