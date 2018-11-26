@@ -1,3 +1,4 @@
+LOCAL_PATH := $(dir $(lastword $(MAKEFILE_LIST)))
 
 all:
 .PHONY: help all clean
@@ -8,6 +9,7 @@ endif
 
 INC_DIRS ?=
 SRC_DIR ?= ./src
+TEST_DIR ?= ./test
 OUT_DIR ?= ./out
 
 OS=$(shell uname)
@@ -27,21 +29,32 @@ LLC := llc-7
 OBJ_DUMP := llvm-objdump-7
 endif
 
-SYSTEM_INC_DIRS := -isystem $(dir $(lastword $(MAKEFILE_LIST)))inc
+SYSTEM_INC_DIRS := -isystem $(LOCAL_PATH)inc
 
-CC_FLAGS := \
+
+C_FLAGS := \
   -Werror \
-  -target bpf \
   -O2 \
-  -emit-llvm \
   -fno-builtin \
   -std=c17 \
+  $(SYSTEM_INC_DIRS) \
+  $(addprefix -I,$(INC_DIRS))
 
 CXX_FLAGS := \
-  $(CC_FLAGS) \
+  $(C_FLAGS) \
   -std=c++17 \
 
-LLC_FLAGS := \
+BPF_C_FLAGS := \
+  $(C_FLAGS) \
+  -emit-llvm \
+  -target bpf \
+
+BPF_CXX_FLAGS := \
+  $(CXX_FLAGS) \
+  -emit-llvm \
+  -target bpf \
+
+BPF_LLC_FLAGS := \
   -march=bpf \
   -filetype=obj \
 
@@ -49,6 +62,19 @@ OBJ_DUMP_FLAGS := \
   -color \
   -source \
   -disassemble \
+
+TESTFRAMEWORK_FLAGS := \
+  -isystem $(LOCAL_PATH)criterion-v2.3.2/include \
+  -L $(LOCAL_PATH)criterion-v2.3.2/lib \
+  -lcriterion \
+
+TEST_C_FLAGS := \
+  $(C_FLAGS) \
+  $(TESTFRAMEWORK_FLAGS) \
+
+TEST_CXX_FLAGS := \
+  $(CXX_FLAGS) \
+  $(TESTFRAMEWORK_FLAGS) \
 
 help:
 	@echo 'BPF Program makefile'
@@ -59,6 +85,8 @@ help:
 	@echo '  - Programs are a single .c or .cc source file (may include headers)'
 	@echo '  - Programs are located in the source directory: $(SRC_DIR)'
 	@echo '  - Programs are named by their basename (eg. file name:foo.c/foo.cc -> program name:foo)'
+	@echo '  - Tests are located in the test directory: $(TEST_DIR)'
+	@echo '  - Tests are named by their basename (eg. file name:foo.c/foo.cc -> test name:test_foo)'
 	@echo '  - Output files will be placed in the directory: $(OUT_DIR)'
 	@echo ''
 	@echo 'User settings'
@@ -71,6 +99,8 @@ help:
 	@echo '      SYSTEM_INC_DIRS=$(SYSTEM_INC_DIRS)'
 	@echo '    - Location of source files:'
 	@echo '      SRC_DIR=$(SRC_DIR)'
+	@echo '    - Location of test files:'
+	@echo '      TEST_DIR=$(TEST_DIR)'
 	@echo '    - Location to place output files:'
 	@echo '      OUT_DIR=$(OUT_DIR)'
 	@echo '    - Location of LLVM:'
@@ -78,13 +108,15 @@ help:
 	@echo ''
 	@echo 'Usage:'
 	@echo '  - make help - This help message'
-	@echo '  - make all - Builds all the programs in the directory: $(SRC_DIR)'
-	@echo '  - make clean - Cleans all programs'
+	@echo '  - make all - Builds all the programs'
+	@echo '  - make test - Build and run all tests'
 	@echo '  - make dump_<program name> - Dumps the contents of the program to stdout'
 	@echo '  - make <program name> - Build a single program by name'
 	@echo ''
 	@echo 'Available programs:'
 	$(foreach name, $(PROGRAM_NAMES), @echo '  - $(name)'$(\n))
+	@echo 'Available tests:'
+	$(foreach name, $(TEST_NAMES), @echo '  - $(name)'$(\n))
 	@echo ''
 	@echo 'Example:'
 	@echo '  - Assuming a programed named foo (src/foo.c)'
@@ -95,21 +127,32 @@ help:
 $(OUT_DIR)/%.bc: $(SRC_DIR)/%.c
 	@echo "[cc] $@ ($<)"
 	$(_@)mkdir -p $(OUT_DIR)
-	$(_@)$(CC) $(CC_FLAGS) $(SYSTEM_INC_DIRS) $(addprefix -I,$(INC_DIRS)) -o $@ -c $< -MD -MF $(@:.bc=.d)
+	$(_@)$(CC) $(BPF_C_FLAGS) -o $@ -c $< -MD -MF $(@:.bc=.d)
 
 $(OUT_DIR)/%.bc: $(SRC_DIR)/%.cc
 	@echo "[cc] $@ ($<)"
 	$(_@)mkdir -p $(OUT_DIR)
-	$(_@)$(CXX) $(CXX_FLAGS) $(SYSTEM_INC_DIRS) $(addprefix -I,$(INC_DIRS)) -o $@ -c $< -MD -MF $(@:.bc=.d)
+	$(_@)$(CXX) $(BPF_CXX_FLAGS) -o $@ -c $< -MD -MF $(@:.bc=.d)
 
 .PRECIOUS: $(OUT_DIR)/%.o
 $(OUT_DIR)/%.o: $(OUT_DIR)/%.bc
 	@echo "[llc] $@ ($<)"
-	$(_@)$(LLC) $(LLC_FLAGS) -o $@ $<
+	$(_@)$(LLC) $(BPF_LLC_FLAGS) -o $@ $<
+
+$(OUT_DIR)/test_%: $(TEST_DIR)/%.c
+	@echo "[test cc] $@ ($<)"
+	$(_@)mkdir -p $(OUT_DIR)
+	$(_@)$(CC) $(TEST_C_FLAGS) -o $@ $< -MD -MF $(@:=.d)
+
+$(OUT_DIR)/test_%: $(TEST_DIR)/%.cc
+	@echo "[test cc] $@ ($<)"
+	$(_@)mkdir -p $(OUT_DIR)
+	$(_@)$(CXX) $(TEST_CXX_FLAGS) -o $@ $< -MD -MF $(@:=.d)
 
 -include $(wildcard $(OUT_DIR)/*.d)
 
 PROGRAM_NAMES := $(notdir $(basename $(wildcard $(SRC_DIR)/*.c $(SRC_DIR)/*.cc)))
+TEST_NAMES := $(addprefix test_,$(notdir $(basename $(wildcard $(TEST_DIR)/*.c))))
 
 define \n
 
@@ -118,7 +161,11 @@ endef
 
 all: $(PROGRAM_NAMES)
 
-%: $(addprefix $(OUT_DIR)/, %.o) ;
+test: $(TEST_NAMES)
+	$(foreach test, $(TEST_NAMES), $(OUT_DIR)/$(test)$(\n))
+
+$(PROGRAM_NAMES): %: $(addprefix $(OUT_DIR)/, %.o) ;
+$(TEST_NAMES): %: $(addprefix $(OUT_DIR)/, %) ;
 
 dump_%: %
 	$(_@)$(OBJ_DUMP) $(OBJ_DUMP_FLAGS) $(addprefix $(OUT_DIR)/, $(addsuffix .o, $<))
