@@ -259,7 +259,7 @@ Developing
 Architecture
 ---
 
-Before you jump into the code, review the [Solana Architecture](https://solana-labs.github.io/solana/).
+Before you jump into the code, review the online book [Solana: Blockchain Rebuilt for Scale](https://solana-labs.github.io/solana/).
 
 Building
 ---
