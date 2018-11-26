@@ -4,6 +4,8 @@
 
 - [Terminology](terminology.md)
 
+- [Getting Started](getting-started.md)
+
 - [Programming Model](programs.md)
 
 - [A Solana Cluster](cluster.md)
