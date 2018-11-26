@@ -26,8 +26,8 @@ fn process_instruction(
 ) -> Result<(), ProgramError> {
     let program_id = tx.program_id(instruction_index);
 
-    // Call the contract method
-    // It's up to the contract to implement its own rules on moving funds
+    // Call the program method
+    // It's up to the program to implement its own rules on moving funds
     if is_legacy_program(&program_id) {
         if system_program::check_id(&program_id) {
             system_program::process(&tx, instruction_index, program_accounts)?;
@@ -71,11 +71,11 @@ fn verify_instruction(
 ) -> Result<(), ProgramError> {
     // Verify the transaction
 
-    // Make sure that program_id is still the same or this was just assigned by the system call contract
+    // Make sure that program_id is still the same or this was just assigned by the system program
     if *pre_program_id != account.owner && !system_program::check_id(&program_id) {
         return Err(ProgramError::ModifiedProgramId);
     }
-    // For accounts unassigned to the contract, the individual balance of each accounts cannot decrease.
+    // For accounts unassigned to the program, the individual balance of each accounts cannot decrease.
     if *program_id != account.owner && pre_tokens > account.tokens {
         return Err(ProgramError::ExternalAccountTokenSpend);
     }
@@ -95,7 +95,7 @@ pub fn execute_instruction(
 ) -> Result<(), ProgramError> {
     let program_id = tx.program_id(instruction_index);
     // TODO: the runtime should be checking read/write access to memory
-    // we are trusting the hard coded contracts not to clobber or allocate
+    // we are trusting the hard-coded programs not to clobber or allocate
     let pre_total: u64 = program_accounts.iter().map(|a| a.tokens).sum();
     let pre_data: Vec<_> = program_accounts
         .iter_mut()
