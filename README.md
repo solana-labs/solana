@@ -3,7 +3,7 @@
 [![Build status](https://badge.buildkite.com/d4c4d7da9154e3a8fb7199325f430ccdb05be5fc1e92777e51.svg?branch=master)](https://solana-ci-gate.herokuapp.com/buildkite_public_log?https://buildkite.com/solana-labs/solana/builds/latest/master)
 [![codecov](https://codecov.io/gh/solana-labs/solana/branch/master/graph/badge.svg)](https://codecov.io/gh/solana-labs/solana)
 
-Blockchain, Rebuilt for Scale
+Blockchain Rebuilt for Scale
 ===
 
 Solana&trade; is a new blockchain architecture built from the ground up for scale. The architecture supports
