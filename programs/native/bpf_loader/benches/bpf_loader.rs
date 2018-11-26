@@ -5,12 +5,13 @@ extern crate solana_bpf_loader;
 extern crate solana_rbpf;
 extern crate test;
 
-use byteorder::{LittleEndian, WriteBytesExt};
+use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use solana_rbpf::EbpfVmRaw;
 use std::env;
 use std::fs::File;
 use std::io::Error;
 use std::io::Read;
+use std::mem;
 use std::path::PathBuf;
 use test::Bencher;
 
@@ -73,6 +74,7 @@ fn bench_program_alu(bencher: &mut Bencher) {
     inner_iter
         .write_u64::<LittleEndian>(ARMSTRONG_LIMIT)
         .unwrap();
+    inner_iter.write_u64::<LittleEndian>(0).unwrap();
 
     let mut file = File::open(create_bpf_path("bench_alu")).expect("file open failed");
     let mut elf = Vec::new();
@@ -81,9 +83,15 @@ fn bench_program_alu(bencher: &mut Bencher) {
 
     println!("Interpreted:");
     assert_eq!(
-        ARMSTRONG_EXPECTED,
+        1, /*true*/
         vm.execute_program(&mut inner_iter).unwrap()
     );
+    assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
+    assert_eq!(
+        ARMSTRONG_EXPECTED,
+        LittleEndian::read_u64(&inner_iter[mem::size_of::<u64>()..])
+    );
+
     bencher.iter(|| {
         vm.execute_program(&mut inner_iter).unwrap();
     });
@@ -100,10 +108,16 @@ fn bench_program_alu(bencher: &mut Bencher) {
     vm.jit_compile().unwrap();
     unsafe {
         assert_eq!(
-            ARMSTRONG_EXPECTED,
+            1, /*true*/
             vm.execute_program_jit(&mut inner_iter).unwrap()
         );
     }
+    assert_eq!(ARMSTRONG_LIMIT, LittleEndian::read_u64(&inner_iter));
+    assert_eq!(
+        ARMSTRONG_EXPECTED,
+        LittleEndian::read_u64(&inner_iter[mem::size_of::<u64>()..])
+    );
+
     bencher.iter(|| unsafe {
         vm.execute_program_jit(&mut inner_iter).unwrap();
     });
