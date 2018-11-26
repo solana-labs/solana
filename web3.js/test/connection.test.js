@@ -448,7 +448,11 @@ test('multi-instruction transaction', async () => {
     10,
   ).add(SystemProgram.move(accountTo.publicKey, accountFrom.publicKey, 10));
 
-  const signature = await connection.sendTransaction(transaction, accountFrom, accountTo);
+  const signature = await connection.sendTransaction(
+    transaction,
+    accountFrom,
+    accountTo,
+  );
   let i = 0;
   for (;;) {
     if (await connection.confirmTransaction(signature)) {
