@@ -303,8 +303,9 @@ impl Fullnode {
         } else {
             let max_tick_height = {
                 let ls_lock = bank.leader_scheduler.read().unwrap();
-                ls_lock.max_height_for_leader(bank.tick_height())
+                ls_lock.max_height_for_leader(bank.tick_height() + 1)
             };
+
             // Start in leader mode.
             let (tpu, entry_receiver, tpu_exit) = Tpu::new(
                 &bank,
@@ -465,7 +466,7 @@ impl Fullnode {
 
         let max_tick_height = {
             let ls_lock = self.bank.leader_scheduler.read().unwrap();
-            ls_lock.max_height_for_leader(tick_height)
+            ls_lock.max_height_for_leader(tick_height + 1)
         };
 
         let (tpu, blob_receiver, tpu_exit) = Tpu::new(

@@ -1300,7 +1300,7 @@ impl Bank {
         self.leader_scheduler
             .read()
             .unwrap()
-            .get_scheduled_leader(self.tick_height())
+            .get_scheduled_leader(self.tick_height() + 1)
     }
 
     pub fn tick_height(&self) -> u64 {
