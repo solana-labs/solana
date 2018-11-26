@@ -184,7 +184,7 @@ $ sudo snap set solana mode=leader
 
 1. Ensure rsync is installed with `sudo apt-get -y install rsync`
 2. Edit `/etc/rsyncd.conf` to include the following
-```
+```ini
 [config]
 path = /var/snap/solana/current/config
 hosts allow = *
