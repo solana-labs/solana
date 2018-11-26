@@ -142,6 +142,12 @@ pub fn find_missing_indexes(
     let mut prev_index = start_index;
     'outer: loop {
         if !db_iterator.valid() {
+            for i in prev_index..end_index {
+                missing_indexes.push(i);
+                if missing_indexes.len() == max_missing {
+                    break;
+                }
+            }
             break;
         }
         let current_key = db_iterator.key().expect("Expect a valid key");
@@ -608,6 +614,18 @@ mod test {
         assert_eq!(
             find_missing_data_indexes(slot, &db_ledger, 0, gap, 1),
             vec![1],
+        );
+
+        // Test with end indexes that are greater than the last item in the ledger
+        let mut expected: Vec<u64> = (1..gap).collect();
+        expected.push(gap + 1);
+        assert_eq!(
+            find_missing_data_indexes(slot, &db_ledger, 0, gap + 2, (gap + 2) as usize),
+            expected,
+        );
+        assert_eq!(
+            find_missing_data_indexes(slot, &db_ledger, 0, gap + 2, (gap - 1) as usize),
+            &expected[..expected.len() - 1],
         );
 
         for i in 0..num_entries as u64 {
