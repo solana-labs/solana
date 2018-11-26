@@ -1,11 +1,3 @@
-# Disclaimer
-
-All claims, content, designs, algorithms, estimates, roadmaps, specifications,
-and performance measurements described in this project are done with the
-author's best effort. It is up to the reader to check and validate their
-accuracy and truthfulness. Furthermore, nothing in this project constitutes a
-solicitation for investment.
-
 # What is Solana?
 
 Solana is the name of an open source project that is implementing a new
@@ -27,6 +19,14 @@ transactions per second (tps) on a standard gigabit network and 28.4 million
 tps on 40 gigabit. Furthermore, the architecture supports safe, concurrent
 execution of programs authored in general purpose programming languages such as
 C or Rust.
+
+# Disclaimer
+
+All claims, content, designs, algorithms, estimates, roadmaps, specifications,
+and performance measurements described in this project are done with the
+author's best effort. It is up to the reader to check and validate their
+accuracy and truthfulness. Furthermore, nothing in this project constitutes a
+solicitation for investment.
 
 # History of the Solana codebase
 
