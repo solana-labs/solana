@@ -15,10 +15,10 @@
   - [Leader Rotation](leader-scheduler.md)
 
 - [Anatomy of a Fullnode](fullnode.md)
-  - [Tpu](tpu.md)
-  - [Tvu](tvu.md)
-  - [Ncp](ncp.md)
-  - [JsonRpcService](jsonrpc-service.md)
+  - [TPU](tpu.md)
+  - [TVU](tvu.md)
+  - [NCP](ncp.md)
+  - [JSON RPC Service](jsonrpc-service.md)
   - [The Runtime](runtime.md)
 
 ## Appendix
