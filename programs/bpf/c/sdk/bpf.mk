@@ -12,9 +12,13 @@ SRC_DIR ?= ./src
 TEST_DIR ?= ./test
 OUT_DIR ?= ./out
 
+ifeq ($(USE_DOCKER),1)
+LLVM_DIR = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))/llvm-wrappers
+else
 OS=$(shell uname)
 ifeq ($(OS),Darwin)
 LLVM_DIR ?= $(shell brew --prefix llvm)
+endif
 endif
 
 ifdef LLVM_DIR

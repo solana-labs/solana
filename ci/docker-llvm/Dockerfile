@@ -1,3 +1,6 @@
+# This docker file is based on the llvm docker file example located here:
+# https://github.com/llvm-mirror/llvm/blob/master/utils/docker/debian8/Dockerfile
+
 FROM launcher.gcr.io/google/debian8:latest as builder
 LABEL maintainer "Solana Maintainers"
 
@@ -28,7 +31,7 @@ RUN wget "https://github.com/ninja-build/ninja/releases/download/v1.8.2/ninja-li
     rm ninja-linux.zip
 
 # Import public key required for verifying signature of cmake download.
-RUN gpg --keyserver hkp://pgp.mit.edu --recv 0x2D2CEF1034921684
+RUN gpg --no-tty --keyserver hkp://pgp.mit.edu --recv 0x2D2CEF1034921684
 
 # Download, verify and install cmake version that can compile clang into /usr/local.
 # (Version in debian8 repos is too old)
@@ -48,9 +51,9 @@ RUN mkdir /tmp/cmake-install && cd /tmp/cmake-install && \
 # Checkout the source code 
 RUN git clone https://github.com/solana-labs/llvm.git && \
     git clone https://github.com/solana-labs/clang.git llvm/tools/clang && \
-    git clone http://llvm.org/git/clang-tools-extra.git llvm/tools/clang/tools/extra  && \
+    git clone https://github.com/solana-labs/clang-tools-extra.git llvm/tools/clang/tools/extra  && \
     git clone https://github.com/solana-labs/lld.git llvm/tools/lld  && \
-    git clone http://llvm.org/git/compiler-rt.git llvm/projects/compiler-rt
+    git clone https://github.com/solana-labs/compiler-rt.git llvm/projects/compiler-rt
 
 RUN mkdir /llvm/build && \
     cd /llvm/build && \
@@ -58,20 +61,7 @@ RUN mkdir /llvm/build && \
     ninja -j6 && \
     ninja install
 
-# RUN cd /llvm/build && \
-#     cmake -G "Unix Makefiles" ..
-
-# RUN cd /llvm/build/tools/clang/ && \
-#     make -j 6 install
-
-# RUN cd /llvm/build/tools/lld/ && \
-#     make -j 6 install
-
-# RUN cd /llmv/build/tools/llvm-objdump/ && \
-#     make -j 6 install
-
 # Produce stage 2 docker with just the peices needed
 FROM launcher.gcr.io/google/debian8:latest
 LABEL maintainer "Solana Maintainers"
-
 COPY --from=builder root/local/bin /usr/local/bin
