@@ -61,13 +61,14 @@ static_assert(sizeof(uint64_t) == 8);
 /**
  * Helper function that prints a string to stdout
  */
-extern void sol_log(const char*);
+void sol_log(const char *);
 
 /**
  * Helper function that prints a 64 bit values represented in hexadecimal
  * to stdout
  */
-extern void sol_log_64(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
+void sol_log_64(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
+
 
 /**
  * Prefix for all BPF functions
@@ -227,8 +228,6 @@ SOL_FN_PREFIX bool sol_deserialize(
   uint64_t *data_len,
   SolClusterInfo *cluster_info
 ) {
-
-
   if (ka_len_out == NULL) {
     if (ka_len != *(uint64_t *) input) {
       return false;
@@ -336,7 +335,21 @@ SOL_FN_PREFIX void sol_log_params(
  * @param input Buffer of serialized input parameters.  Use sol_deserialize() to decode
  * @return true if the instruction executed successfully
  */
-extern bool entrypoint(const uint8_t *input);
+bool entrypoint(const uint8_t *input);
+
+
+#ifdef SOL_TEST
+/**
+ * Stub log functions when building tests
+ */
+#include <stdio.h>
+void sol_log(const char *s) {
+  printf("sol_log: %s\n", s);
+}
+void sol_log_64(uint64_t arg1, uint64_t arg2, uint64_t arg3, uint64_t arg4, uint64_t arg5) {
+  printf("sol_log_64: %llu, %llu, %llu, %llu, %llu\n", arg1, arg2, arg3, arg4, arg5);
+}
+#endif
 
 #ifdef __cplusplus
 }
