@@ -3,6 +3,8 @@ use cluster_info::ClusterInfo;
 use counter::Counter;
 use db_ledger::*;
 use entry::Entry;
+#[cfg(feature = "erasure")]
+use erasure;
 use leader_scheduler::LeaderScheduler;
 use log::Level;
 use packet::{SharedBlob, BLOB_HEADER_SIZE};
@@ -303,7 +305,19 @@ pub fn process_blob(
         db_ledger.insert_data_blob(&data_key, &blob.read().unwrap())?
     };
 
-    // TODO: Once erasure is fixed, readd that logic here
+    #[cfg(feature = "erasure")]
+    {
+        // If write_shared_blobs() of these recovered blobs fails fails, don't return
+        // because consumed_entries might be nonempty from earlier, and tick height needs to
+        // be updated. Hopefully we can recover these blobs next time successfully.
+        if let Err(e) = try_erasure(db_ledger, slot, consume_queue) {
+            trace!(
+                "erasure::recover failed to write recovered coding blobs. Err: {:?}",
+                e
+            );
+        }
+    }
+
     for entry in &consumed_entries {
         *tick_height += entry.is_tick() as u64;
     }
@@ -350,6 +364,30 @@ pub fn calculate_max_repair_entry_height(
     } else {
         cmp::max(consumed, received.saturating_sub(num_peers))
     }
+}
+
+#[cfg(feature = "erasure")]
+fn try_erasure(db_ledger: &mut DbLedger, slot: u64, consume_queue: &mut Vec<Entry>) -> Result<()> {
+    let meta = db_ledger.meta_cf.get(&db_ledger.db, &MetaCf::key(slot))?;
+    if let Some(meta) = meta {
+        let (data, coding) = erasure::recover(db_ledger, slot, meta.consumed)?;
+        for c in coding {
+            let cl = c.read().unwrap();
+            let erasure_key =
+                ErasureCf::key(slot, cl.index().expect("Recovered blob must set index"));
+            let size = cl.size().expect("Recovered blob must set size");
+            db_ledger.erasure_cf.put(
+                &db_ledger.db,
+                &erasure_key,
+                &cl.data[..BLOB_HEADER_SIZE + size],
+            )?;
+        }
+
+        let entries = db_ledger.write_shared_blobs(slot, data)?;
+        consume_queue.extend(entries);
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
