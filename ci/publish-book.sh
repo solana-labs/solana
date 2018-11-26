@@ -22,13 +22,13 @@ maybe_install() {
 
 export PATH=$CARGO_HOME/bin:$PATH
 maybe_install mdbook
-_ mdbook test
-_ mdbook build
+_ mdbook test book
+_ mdbook build book
 
 echo --- create book repo
 (
   set -x
-  cd book/
+  cd book/html/
   git init .
   git config user.email "maintainers@solana.com"
   git config user.name "$(basename "$0")"
@@ -40,7 +40,7 @@ echo --- publish
 if [[ $BUILDKITE_BRANCH = master ]]; then
   (
     set -x
-    cd book/
+    cd book/html/
     git remote add origin git@github.com:solana-labs/solana.git
     git push -f origin HEAD:gh-pages
   )
