@@ -175,6 +175,11 @@ impl LedgerColumnFamilyRaw for DataCf {
 pub struct ErasureCf {}
 
 impl ErasureCf {
+    pub fn delete_by_slot_index(&self, db: &DB, slot_height: u64, index: u64) -> Result<()> {
+        let key = Self::key(slot_height, index);
+        self.delete(db, &key)
+    }
+
     pub fn get_by_slot_index(
         &self,
         db: &DB,

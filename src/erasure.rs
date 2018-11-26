@@ -513,6 +513,13 @@ pub fn recover(
     }
 
     if corrupt {
+        // Remove the corrupted coding blobs so there's no effort wasted in trying to reconstruct
+        // the blobs again
+        for i in coding_start_idx..block_end_idx {
+            let _ = db_ledger
+                .erasure_cf
+                .delete_by_slot_index(&db_ledger.db, slot, i);
+        }
         return Ok((vec![], vec![]));
     }
 
