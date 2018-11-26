@@ -162,16 +162,17 @@ You can observe the effects of your client's transactions on our [dashboard](htt
 
 Linux Snap
 ---
-A Linux [Snap](https://snapcraft.io/) is available, which can be used to
-easily get Solana running on supported Linux systems without building anything
-from source.  The `edge` Snap channel is updated daily with the latest
+A Linux [Snap](https://snapcraft.io/) is available, which can be used to easily
+get Solana running on supported Linux systems without building anything from
+source for evaluation.  Note that CUDA is not supported by the Snap so
+performance will be limited.
+
+The `edge` Snap channel is updated daily with the latest
 development from the `master` branch.  To install:
 
 ```bash
 $ sudo snap install solana --edge --devmode
 ```
-
-(`--devmode` flag is required only for `solana.fullnode-cuda`)
 
 Once installed the usual Solana programs will be available as `solona.*` instead
 of `solana-*`.  For example, `solana.fullnode` instead of `solana-fullnode`.
@@ -211,12 +212,6 @@ Runtime configuration files for the daemon can be found in
 $ sudo snap set solana mode=leader
 ```
 
-If CUDA is available:
-
-```bash
-$ sudo snap set solana mode=leader enable-cuda=1
-```
-
 `rsync` must be configured and running on the leader.
 
 1. Ensure rsync is installed with `sudo apt-get -y install rsync`
@@ -246,11 +241,6 @@ $ sudo snap set solana mode=leader+drone
 ```bash
 $ sudo snap set solana mode=validator
 
-```
-If CUDA is available:
-
-```bash
-$ sudo snap set solana mode=validator enable-cuda=1
 ```
 
 By default the validator will connect to **testnet.solana.com**, override
