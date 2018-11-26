@@ -1,0 +1,8 @@
+[book]
+title = "Solana: Blockchain Rebuilt for Scale"
+
+[build]
+build-dir = "html"
+create-missing = false
+
+[output.html]
