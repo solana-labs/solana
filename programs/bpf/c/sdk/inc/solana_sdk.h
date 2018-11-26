@@ -51,11 +51,11 @@ static_assert(sizeof(uint64_t) == 8);
  */
 #define NULL 0
 
-#ifndef __cplusplus
 /**
  * Boolean type
  */
-typedef enum { false = 0, true } bool;
+#ifndef __cplusplus
+#include <stdbool.h>
 #endif
 
 /**
