@@ -111,7 +111,7 @@ SOL_FN_PREFIX bool SolPubkey_same(const SolPubkey *one, const SolPubkey *two) {
  */
 typedef struct {
   SolPubkey *key;        /** Public Key of the account */
-  int64_t *tokens;       /** Numer of tokens owned by this account */
+  uint64_t *tokens;      /** Numer of tokens owned by this account */
   uint64_t userdata_len; /** Length of userdata in bytes */
   uint8_t *userdata;     /** On-chain data owned by this account */
   SolPubkey *owner; /** Program that owns this account */
@@ -247,8 +247,8 @@ SOL_FN_PREFIX bool sol_deserialize(
     input += sizeof(SolPubkey);
 
     // tokens
-    ka[i].tokens = (int64_t *) input;
-    input += sizeof(int64_t);
+    ka[i].tokens = (uint64_t *) input;
+    input += sizeof(uint64_t);
 
     // account userdata
     ka[i].userdata_len = *(uint64_t *) input;
