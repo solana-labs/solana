@@ -62,11 +62,22 @@ OBJ_DUMP_FLAGS := \
   -source \
   -disassemble \
 
+TESTFRAMEWORK_RPATH := $(abspath $(LOCAL_PATH)criterion-v2.3.2/lib)
 TESTFRAMEWORK_FLAGS := \
   -DSOL_TEST \
   -isystem $(LOCAL_PATH)criterion-v2.3.2/include \
   -L $(LOCAL_PATH)criterion-v2.3.2/lib \
+  -rpath $(TESTFRAMEWORK_RPATH) \
   -lcriterion \
+
+# The "-rpath" in TESTFRAMEWORK_FLAGS doesn't work in macOS so rewrite the name
+# post-link.
+# TODO: Find a better way
+MACOS_ADJUST_TEST_DYLIB := \
+$(if $(filter $(OS),Darwin),\
+ $(_@)install_name_tool -change libcriterion.3.dylib $(TESTFRAMEWORK_RPATH)/libcriterion.3.dylib, \
+ : \
+)
 
 TEST_C_FLAGS := \
   $(C_FLAGS) \
@@ -143,11 +154,13 @@ $(OUT_DIR)/test_%: $(TEST_DIR)/%.c
 	@echo "[test cc] $@ ($<)"
 	$(_@)mkdir -p $(OUT_DIR)
 	$(_@)$(CC) $(TEST_C_FLAGS) -o $@ $< -MD -MF $(@:=.d)
+	$(_@)$(MACOS_ADJUST_TEST_DYLIB) $@
 
 $(OUT_DIR)/test_%: $(TEST_DIR)/%.cc
 	@echo "[test cc] $@ ($<)"
 	$(_@)mkdir -p $(OUT_DIR)
 	$(_@)$(CXX) $(TEST_CXX_FLAGS) -o $@ $< -MD -MF $(@:=.d)
+	$(_@)$(MACOS_ADJUST_TEST_DYLIB) $@
 
 -include $(wildcard $(OUT_DIR)/*.d)
 
