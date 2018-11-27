@@ -773,12 +773,11 @@ impl Bank {
     /// This method calls each instruction in the transaction over the set of loaded Accounts
     /// The accounts are committed back to the bank only if every instruction succeeds
     fn execute_transaction(
-        &self,
         tx: &Transaction,
+        loaders: &mut [Vec<(Pubkey, Account)>],
         tx_accounts: &mut [Account],
         tick_height: u64,
     ) -> Result<()> {
-        let mut loaders = self.load_loaders(tx)?;
         for (instruction_index, instruction) in tx.instructions.iter().enumerate() {
             let ref mut executable_accounts = &mut loaders[instruction.program_ids_index as usize];
             Self::with_subset(tx_accounts, &instruction.accounts, |program_accounts| {
@@ -902,7 +901,10 @@ impl Bank {
             .zip(txs.iter())
             .map(|(acc, tx)| match acc {
                 Err(e) => Err(e.clone()),
-                Ok(ref mut accounts) => self.execute_transaction(tx, accounts, tick_height),
+                Ok(ref mut accounts) => {
+                    let mut loaders = self.load_loaders(tx)?;
+                    Self::execute_transaction(tx, &mut loaders, accounts, tick_height)
+                }
             }).collect();
         let execution_elapsed = now.elapsed();
         let now = Instant::now();
