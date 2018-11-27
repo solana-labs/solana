@@ -46,6 +46,7 @@
     "test:cover": "cross-env NODE_ENV=test jest --coverage --useStderr",
     "codecov": "npm run test:cover && cat ./coverage/lcov.info | codecov",
     "fetch-bpf-sdk": "test -d bpf-sdk || curl http://solana-sdk.s3.amazonaws.com/$npm_package_solana_channel/bpf-sdk.tar.bz2 | tar jxv",
+    "remove-bpf-sdk-symlinks": "find bpf-sdk -type l -print -exec cp {} {}.tmp \\; -exec mv {}.tmp {} \\;",
     "flow": "flow stop; flow-typed install jest@22 && flow",
     "flow:watch": "flow stop; watch 'flow' . --wait=1 --ignoreDirectoryPattern=/doc/",
     "flow:stop": "flow stop",
@@ -58,7 +59,7 @@
     "localnet:logs": "bin/localnet.sh logs -f",
     "ok": "npm run lint && npm run flow && npm run test && npm run doc",
     "pretty": "prettier --write '{,{examples,src,test}/**/}*.js'",
-    "prepare": "npm run clean && npm run ok &&  npm run fetch-bpf-sdk && npm run build",
+    "prepare": "npm run clean && npm run ok && npm run fetch-bpf-sdk && npm run remove-bpf-sdk-symlinks && npm run build",
     "examples": "set -ex; for example in examples/*.js; do node $example; done",
     "re": "semantic-release --repository-url git@github.com:solana-labs/solana-web3.js.git"
   },
