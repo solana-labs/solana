@@ -31,6 +31,20 @@ Secure Enclaves (such as SGX) provide a layer of memory and computation protecti
     * The sign request contains the entry ID for the new vote
     * Enclave verifies that new vote's entry ID is on the correct branch (following the rules #1 and #2 above)
 
+## Ancestor Verification
+
+This is alternate, albeit, less certain approach to verifying voting branch.
+1. The validator maintains an active set of nodes in the network
+2. It observes the votes from the active set in the last voting period
+3. It stores the ancestor/last_tick at which each node voted
+4. It sends new vote request to vote-signing service
+    * It includes previous votes from nodes in the active set, and their corresponding ancestors
+5. The signer checks if the previous votes contains a vote from the validator, and the vote ancestor matches with majority of the nodes
+    * It signs the new vote if the check is successful
+    * It asserts (raises an alarm of some sort) if the check is unsuccessful
+
+The premise is that the validator can be spoofed at most once to vote on incorrect data. If someone hijacks the validator and submits a vote request for bogus data, that vote will not be included in the PoH (as it'll be rejected by the network). The next time the validator sends a request to sign the vote, the signing service will detect that validator's last vote is missing (as part of #5 above).
+
 ## Challenges
 
 1. The nodes are currently being configured with asymmetric keys that are generated and stored in PKCS8 files.
