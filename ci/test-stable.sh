@@ -12,23 +12,6 @@ _() {
   "$@"
 }
 
-maybe_install() {
-  declare cmd=$1
-  declare crate=$2
-
-  if [[ -z $crate ]]; then
-    crate=$cmd
-  fi
-
-  set +e
-  "$cmd" --help > /dev/null 2>&1
-  declare exitcode=$?
-  set -e
-  if [[ $exitcode -ne 0 ]]; then
-    _ cargo install "$crate"
-  fi
-}
-
 _ cargo build --all --verbose
 _ cargo test --verbose --lib
 
@@ -49,11 +32,7 @@ for program in programs/native/*; do
   )
 done
 
-# Build the HTML
-export PATH=$CARGO_HOME/bin:$PATH
-maybe_install mdbook
-maybe_install svgbob svgbob_cli
-_ make -C book
+book/build.sh
 
 echo --- ci/localnet-sanity.sh
 (

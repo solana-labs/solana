@@ -20,10 +20,7 @@ maybe_install() {
   done
 }
 
-export PATH=$CARGO_HOME/bin:$PATH
-maybe_install mdbook
-maybe_install svgbob_cli
-_ make -C book
+book/build.sh
 
 echo --- create book repo
 (
