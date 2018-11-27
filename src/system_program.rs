@@ -107,7 +107,7 @@ pub fn process(
 ) -> std::result::Result<(), ProgramError> {
     process_instruction(&tx, instruction_index, accounts).map_err(|err| match err {
         Error::ResultWithNegativeTokens => ProgramError::ResultWithNegativeTokens,
-        _ => ProgramError::RuntimeError,
+        _ => ProgramError::GenericError,
     })
 }
 

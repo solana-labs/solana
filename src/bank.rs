@@ -22,7 +22,7 @@ use poh_service::NUM_TICKS_PER_SECOND;
 use program::ProgramError;
 use rayon::prelude::*;
 use rpc::RpcSignatureStatus;
-use runtime;
+use runtime::{self, RuntimeError};
 use signature::Keypair;
 use signature::Signature;
 use solana_sdk::account::Account;
@@ -707,24 +707,6 @@ impl Bank {
             }).collect()
     }
 
-    /// Execute a function with a subset of accounts as writable references.
-    /// Since the subset can point to the same references, in any order there is no way
-    /// for the borrow checker to track them with regards to the original set.
-    fn with_subset<F, A>(accounts: &mut [Account], ixes: &[u8], func: F) -> A
-    where
-        F: FnOnce(&mut [&mut Account]) -> A,
-    {
-        let mut subset: Vec<&mut Account> = ixes
-            .iter()
-            .map(|ix| {
-                let ptr = &mut accounts[*ix as usize] as *mut Account;
-                // lifetime of this unsafe is only within the scope of the closure
-                // there is no way to reorder them without breaking borrow checker rules
-                unsafe { &mut *ptr }
-            }).collect();
-        func(&mut subset)
-    }
-
     fn load_executable_accounts(&self, mut program_id: Pubkey) -> Result<Vec<(Pubkey, Account)>> {
         if runtime::is_legacy_program(&program_id) {
             return Ok(vec![]);
@@ -767,31 +749,6 @@ impl Bank {
                 let program_id = tx.program_ids[ix.program_ids_index as usize];
                 self.load_executable_accounts(program_id)
             }).collect()
-    }
-
-    /// Execute a transaction.
-    /// This method calls each instruction in the transaction over the set of loaded Accounts
-    /// The accounts are committed back to the bank only if every instruction succeeds
-    fn execute_transaction(
-        tx: &Transaction,
-        loaders: &mut [Vec<(Pubkey, Account)>],
-        tx_accounts: &mut [Account],
-        tick_height: u64,
-    ) -> Result<()> {
-        for (instruction_index, instruction) in tx.instructions.iter().enumerate() {
-            let ref mut executable_accounts = &mut loaders[instruction.program_ids_index as usize];
-            Self::with_subset(tx_accounts, &instruction.accounts, |program_accounts| {
-                runtime::execute_instruction(
-                    tx,
-                    instruction_index,
-                    executable_accounts,
-                    program_accounts,
-                    tick_height,
-                ).map_err(|err| BankError::ProgramError(instruction_index as u8, err))?;
-                Ok(())
-            })?;
-        }
-        Ok(())
     }
 
     pub fn store_accounts(
@@ -903,7 +860,11 @@ impl Bank {
                 Err(e) => Err(e.clone()),
                 Ok(ref mut accounts) => {
                     let mut loaders = self.load_loaders(tx)?;
-                    Self::execute_transaction(tx, &mut loaders, accounts, tick_height)
+                    runtime::execute_transaction(tx, &mut loaders, accounts, tick_height).map_err(
+                        |RuntimeError::ProgramError(index, err)| {
+                            BankError::ProgramError(index, err)
+                        },
+                    )
                 }
             }).collect();
         let execution_elapsed = now.elapsed();
