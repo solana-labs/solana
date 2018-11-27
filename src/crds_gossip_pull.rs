@@ -292,11 +292,7 @@ mod test {
 
         // node contains a key from the dest node, but at an older local timestamp
         let dest_id = new.label().pubkey();
-        let same_key = CrdsValue::LeaderId(LeaderId {
-            id: dest_id,
-            leader_id: dest_id,
-            wallclock: 1,
-        });
+        let same_key = CrdsValue::LeaderId(LeaderId::new(dest_id, dest_id, 1));
         node_crds.insert(same_key.clone(), 0).unwrap();
         assert_eq!(
             node_crds

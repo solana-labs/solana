@@ -66,7 +66,7 @@ pub struct ClusterInfo {
 #[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
 enum Protocol {
-    /// Gosisp protocol messages
+    /// Gossip protocol messages
     PullRequest(Bloom<Hash>, CrdsValue),
     PullResponse(Pubkey, Vec<CrdsValue>),
     PushMessage(Pubkey, Vec<CrdsValue>),
@@ -165,11 +165,7 @@ impl ClusterInfo {
         let prev = self.leader_id();
         let self_id = self.gossip.id;
         let now = timestamp();
-        let leader = LeaderId {
-            id: self_id,
-            leader_id: key,
-            wallclock: now,
-        };
+        let leader = LeaderId::new(self_id, key, now);
         let entry = CrdsValue::LeaderId(leader);
         warn!("{}: LEADER_UPDATE TO {} from {}", self_id, key, prev);
         self.gossip.process_push_message(&[entry], now);
@@ -821,7 +817,7 @@ impl ClusterInfo {
         ledger_window: &mut Option<&mut LedgerWindow>,
     ) -> Vec<SharedBlob> {
         match request {
-            // TODO sigverify these
+            // TODO(sagar) sigverify these
             Protocol::PullRequest(filter, caller) => {
                 Self::handle_pull_request(me, filter, caller, from_addr)
             }

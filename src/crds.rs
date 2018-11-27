@@ -41,7 +41,7 @@ pub enum CrdsError {
     InsertFailed,
 }
 
-/// This structure stores some local metadata assosciated with the CrdsValue
+/// This structure stores some local metadata associated with the CrdsValue
 /// The implementation of PartialOrd ensures that the "highest" version is always picked to be
 /// stored in the Crds
 #[derive(PartialEq, Debug)]
@@ -188,11 +188,7 @@ mod test {
         let mut crds = Crds::default();
         let original = CrdsValue::LeaderId(LeaderId::default());
         assert_matches!(crds.insert(original.clone(), 0), Ok(_));
-        let val = CrdsValue::LeaderId(LeaderId {
-            id: Pubkey::default(),
-            leader_id: Pubkey::default(),
-            wallclock: 1,
-        });
+        let val = CrdsValue::LeaderId(LeaderId::new(Pubkey::default(), Pubkey::default(), 1));
         assert_eq!(
             crds.insert(val.clone(), 1).unwrap().unwrap().value,
             original
@@ -255,19 +251,11 @@ mod test {
         let key = Keypair::new();
         let v1 = VersionedCrdsValue::new(
             1,
-            CrdsValue::LeaderId(LeaderId {
-                id: key.pubkey(),
-                leader_id: Pubkey::default(),
-                wallclock: 0,
-            }),
+            CrdsValue::LeaderId(LeaderId::new(key.pubkey(), Pubkey::default(), 0)),
         );
         let v2 = VersionedCrdsValue::new(
             1,
-            CrdsValue::LeaderId(LeaderId {
-                id: key.pubkey(),
-                leader_id: Pubkey::default(),
-                wallclock: 0,
-            }),
+            CrdsValue::LeaderId(LeaderId::new(key.pubkey(), Pubkey::default(), 0)),
         );
         assert!(!(v1 != v2));
         assert!(v1 == v2);
@@ -277,19 +265,11 @@ mod test {
         let key = Keypair::new();
         let v1 = VersionedCrdsValue::new(
             1,
-            CrdsValue::LeaderId(LeaderId {
-                id: key.pubkey(),
-                leader_id: Pubkey::default(),
-                wallclock: 0,
-            }),
+            CrdsValue::LeaderId(LeaderId::new(key.pubkey(), Pubkey::default(), 0)),
         );
         let v2 = VersionedCrdsValue::new(
             1,
-            CrdsValue::LeaderId(LeaderId {
-                id: key.pubkey(),
-                leader_id: key.pubkey(),
-                wallclock: 0,
-            }),
+            CrdsValue::LeaderId(LeaderId::new(key.pubkey(), key.pubkey(), 0)),
         );
         assert!(v1 != v2);
         assert!(!(v1 == v2));
@@ -304,19 +284,11 @@ mod test {
         let key = Keypair::new();
         let v1 = VersionedCrdsValue::new(
             1,
-            CrdsValue::LeaderId(LeaderId {
-                id: key.pubkey(),
-                leader_id: Pubkey::default(),
-                wallclock: 1,
-            }),
+            CrdsValue::LeaderId(LeaderId::new(key.pubkey(), Pubkey::default(), 1)),
         );
         let v2 = VersionedCrdsValue::new(
             1,
-            CrdsValue::LeaderId(LeaderId {
-                id: key.pubkey(),
-                leader_id: Pubkey::default(),
-                wallclock: 0,
-            }),
+            CrdsValue::LeaderId(LeaderId::new(key.pubkey(),Pubkey::default(),0)),
         );
         assert!(v1 > v2);
         assert!(!(v1 < v2));
@@ -327,19 +299,11 @@ mod test {
     fn test_label_order() {
         let v1 = VersionedCrdsValue::new(
             1,
-            CrdsValue::LeaderId(LeaderId {
-                id: Keypair::new().pubkey(),
-                leader_id: Pubkey::default(),
-                wallclock: 0,
-            }),
+            CrdsValue::LeaderId(LeaderId::new(Keypair::new().pubkey(), Pubkey::default(), 0)),
         );
         let v2 = VersionedCrdsValue::new(
             1,
-            CrdsValue::LeaderId(LeaderId {
-                id: Keypair::new().pubkey(),
-                leader_id: Pubkey::default(),
-                wallclock: 0,
-            }),
+            CrdsValue::LeaderId(LeaderId::new(Keypair::new().pubkey(), Pubkey::default(),0)),
         );
         assert!(v1 != v2);
         assert!(!(v1 == v2));

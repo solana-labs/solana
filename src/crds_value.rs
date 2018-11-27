@@ -1,4 +1,6 @@
+use bincode::serialize;
 use contact_info::ContactInfo;
+use signature::{Keypair, Signature};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::Transaction;
 use std::fmt;
@@ -18,6 +20,7 @@ pub enum CrdsValue {
 #[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 pub struct LeaderId {
     pub id: Pubkey,
+    pub signature: Signature,
     pub leader_id: Pubkey,
     pub wallclock: u64,
 }
@@ -25,12 +28,13 @@ pub struct LeaderId {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Vote {
     pub transaction: Transaction,
+    pub signature: Signature,
     pub height: u64,
     pub wallclock: u64,
 }
 
 /// Type of the replicated value
-/// These are labels for values in a record that is assosciated with `Pubkey`
+/// These are labels for values in a record that is associated with `Pubkey`
 #[derive(PartialEq, Hash, Eq, Clone, Debug)]
 pub enum CrdsValueLabel {
     ContactInfo(Pubkey),
@@ -58,8 +62,30 @@ impl CrdsValueLabel {
     }
 }
 
+impl LeaderId {
+    pub fn new(id: Pubkey, leader_id: Pubkey, wallclock: u64) -> Self {
+        LeaderId {
+            id,
+            signature: Signature::default(),
+            leader_id,
+            wallclock,
+        }
+    }
+}
+
+impl Vote {
+    pub fn new(transaction: Transaction, height: u64, wallclock: u64) -> Self {
+        Vote {
+            transaction,
+            signature: Signature::default(),
+            height,
+            wallclock,
+        }
+    }
+}
+
 impl CrdsValue {
-    /// Totally unsecure unverfiable wallclock of the node that generatd this message
+    /// Totally unsecure unverfiable wallclock of the node that generated this message
     /// Latest wallclock is always picked.
     /// This is used to time out push messages.
     pub fn wallclock(&self) -> u64 {
@@ -102,11 +128,58 @@ impl CrdsValue {
             CrdsValueLabel::LeaderId(key),
         ]
     }
+
+    pub fn sign(&mut self, keypair: &Keypair) {
+        let sign_data = self.get_sign_data();
+        let signature = Signature::new(&keypair.sign(&sign_data).as_ref());
+        match self {
+            CrdsValue::ContactInfo(contact_info) => contact_info.signature = signature,
+            CrdsValue::Vote(vote) => vote.signature = signature,
+            CrdsValue::LeaderId(leader_id) => leader_id.signature = signature,
+        }
+    }
+
+    pub fn verify_signature(&self) -> bool {
+        let sig = match self {
+            CrdsValue::ContactInfo(contact_info) => contact_info.signature,
+            CrdsValue::Vote(vote) => vote.signature,
+            CrdsValue::LeaderId(leader_id) => leader_id.signature,
+        };
+        sig.verify(
+            &self.label().pubkey().as_ref(),
+            &self.get_sign_data(),
+        )
+    }
+
+    /// get all the data relevant to signing contained in this value (excludes signature fields)
+    fn get_sign_data(&self) -> Vec<u8> {
+        let mut data = serialize(&self.wallclock()).expect("serialize wallclock");
+
+        match self {
+            CrdsValue::ContactInfo(contact_info) => contact_info.get_sign_data(),
+            CrdsValue::Vote(vote) => {
+                let transaction = serialize(&vote.transaction).expect("serialize transaction");
+                data.extend_from_slice(&transaction);
+                let height = serialize(&vote.transaction).expect("serialize height");
+                data.extend_from_slice(&height);
+                data
+            }
+            CrdsValue::LeaderId(leader_id) => {
+                let id = serialize(&leader_id.id).expect("serialize id");
+                data.extend_from_slice(&id);
+                let leader_id = serialize(&leader_id.leader_id).expect("serialize leader_id");
+                data.extend_from_slice(&leader_id);
+                data
+            }
+        }
+    }
 }
 #[cfg(test)]
 mod test {
     use super::*;
     use contact_info::ContactInfo;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::timing::timestamp;
     use system_transaction::test_tx;
 
     #[test]
@@ -134,14 +207,21 @@ mod test {
         let key = v.clone().contact_info().unwrap().id;
         assert_eq!(v.label(), CrdsValueLabel::ContactInfo(key));
 
-        let v = CrdsValue::Vote(Vote {
-            transaction: test_tx(),
-            height: 1,
-            wallclock: 0,
-        });
+        let v = CrdsValue::Vote(Vote::new(test_tx(), 1, 0));
         assert_eq!(v.wallclock(), 0);
         let key = v.clone().vote().unwrap().transaction.account_keys[0];
         assert_eq!(v.label(), CrdsValueLabel::Vote(key));
+    }
+    #[test]
+    fn test_signature() {
+        let keypair = Keypair::new();
+        let fake_keypair = Keypair::new();
+        let leader = LeaderId::new(keypair.pubkey(), Pubkey::default(), timestamp());
+        let mut v = CrdsValue::LeaderId(leader);
+        v.sign(&keypair);
+        assert!(v.verify_signature());
+        v.sign(&fake_keypair);
+        assert!(!v.verify_signature());
     }
 
 }
