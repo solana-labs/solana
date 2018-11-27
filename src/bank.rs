@@ -759,6 +759,16 @@ impl Bank {
         Ok(accounts)
     }
 
+    /// For each program_id in the transaction, load its loaders.
+    fn load_loaders(&self, tx: &Transaction) -> Result<Vec<Vec<(Pubkey, Account)>>> {
+        tx.instructions
+            .iter()
+            .map(|ix| {
+                let program_id = tx.program_ids[ix.program_ids_index as usize];
+                self.load_executable_accounts(program_id)
+            }).collect()
+    }
+
     /// Execute a transaction.
     /// This method calls each instruction in the transaction over the set of loaded Accounts
     /// The accounts are committed back to the bank only if every instruction succeeds
@@ -768,14 +778,14 @@ impl Bank {
         tx_accounts: &mut [Account],
         tick_height: u64,
     ) -> Result<()> {
+        let mut loaders = self.load_loaders(tx)?;
         for (instruction_index, instruction) in tx.instructions.iter().enumerate() {
-            let program_id = tx.program_id(instruction_index);
-            let mut executable_accounts = self.load_executable_accounts(*program_id)?;
+            let ref mut executable_accounts = &mut loaders[instruction.program_ids_index as usize];
             Self::with_subset(tx_accounts, &instruction.accounts, |program_accounts| {
                 runtime::execute_instruction(
                     tx,
                     instruction_index,
-                    &mut executable_accounts,
+                    executable_accounts,
                     program_accounts,
                     tick_height,
                 ).map_err(|err| BankError::ProgramError(instruction_index as u8, err))?;
