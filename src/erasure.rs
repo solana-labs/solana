@@ -2,10 +2,9 @@
 use db_ledger::DbLedger;
 use db_window::{find_missing_coding_indexes, find_missing_data_indexes};
 use packet::{Blob, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE};
-use result::Result as SolanaResult;
+use result::{Error, Result};
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
-use std::result;
 use std::sync::{Arc, RwLock};
 use window::WindowSlot;
 
@@ -30,8 +29,6 @@ pub enum ErasureError {
     InvalidBlockSize,
     InvalidBlobData,
 }
-
-pub type Result<T> = result::Result<T, ErasureError>;
 
 // k = number of data devices
 // m = number of coding devices
@@ -94,7 +91,7 @@ pub fn generate_coding_blocks(coding: &mut [&mut [u8]], data: &[&[u8]]) -> Resul
                 block.len(),
                 block_len
             );
-            return Err(ErasureError::InvalidBlockSize);
+            return Err(Error::ErasureError(ErasureError::InvalidBlockSize));
         }
         data_arg.push(block.as_ptr());
     }
@@ -106,7 +103,7 @@ pub fn generate_coding_blocks(coding: &mut [&mut [u8]], data: &[&[u8]]) -> Resul
                 block.len(),
                 block_len
             );
-            return Err(ErasureError::InvalidBlockSize);
+            return Err(Error::ErasureError(ErasureError::InvalidBlockSize));
         }
         coding_arg.push(block.as_mut_ptr());
     }
@@ -144,7 +141,7 @@ pub fn decode_blocks(
     let mut coding_arg: Vec<*mut u8> = Vec::new();
     for x in coding.iter_mut() {
         if x.len() != block_len {
-            return Err(ErasureError::InvalidBlockSize);
+            return Err(Error::ErasureError(ErasureError::InvalidBlockSize));
         }
         coding_arg.push(x.as_mut_ptr());
     }
@@ -153,7 +150,7 @@ pub fn decode_blocks(
     let mut data_arg: Vec<*mut u8> = Vec::new();
     for x in data.iter_mut() {
         if x.len() != block_len {
-            return Err(ErasureError::InvalidBlockSize);
+            return Err(Error::ErasureError(ErasureError::InvalidBlockSize));
         }
         data_arg.push(x.as_mut_ptr());
     }
@@ -176,7 +173,7 @@ pub fn decode_blocks(
     }
     trace!("");
     if ret < 0 {
-        return Err(ErasureError::DecodeError);
+        return Err(Error::ErasureError(ErasureError::DecodeError));
     }
     Ok(())
 }
@@ -313,7 +310,7 @@ pub fn generate_coding(
             }
             coding_wl.set_size(max_data_size);
             if coding_wl.set_coding().is_err() {
-                return Err(ErasureError::EncodeError);
+                return Err(Error::ErasureError(ErasureError::EncodeError));
             }
 
             coding_blobs.push(coding.clone());
@@ -387,7 +384,7 @@ pub fn recover(
             coding_missing
         );
         // nothing to do...
-        return Err(ErasureError::NotEnoughBlocksToDecode);
+        return Err(Error::ErasureError(ErasureError::NotEnoughBlocksToDecode));
     }
 
     trace!(
@@ -405,15 +402,15 @@ pub fn recover(
 
     // Add the data blobs we have into the recovery vector, mark the missing ones
     for i in block_start_idx..block_end_idx {
-        let result = db_ledger.data_cf.get_by_slot_index(&db_ledger.db, slot, i);
+        let result = db_ledger
+            .data_cf
+            .get_by_slot_index(&db_ledger.db, slot, i)?;
 
         categorize_blob(
             &result,
             &mut blobs,
             &mut missing_data,
             &mut erasures,
-            slot,
-            i,
             (i - block_start_idx) as i32,
         )?;
     }
@@ -422,19 +419,17 @@ pub fn recover(
     for i in coding_start_idx..block_end_idx {
         let result = db_ledger
             .erasure_cf
-            .get_by_slot_index(&db_ledger.db, slot, i);
+            .get_by_slot_index(&db_ledger.db, slot, i)?;
 
         categorize_blob(
             &result,
             &mut blobs,
             &mut missing_coding,
             &mut erasures,
-            slot,
-            i,
             ((i - coding_start_idx) + NUM_DATA as u64) as i32,
         )?;
 
-        if let Ok(Some(b)) = result {
+        if let Some(b) = result {
             if size.is_none() {
                 size = Some(b.len() - BLOB_HEADER_SIZE);
             }
@@ -516,9 +511,9 @@ pub fn recover(
         // Remove the corrupted coding blobs so there's no effort wasted in trying to reconstruct
         // the blobs again
         for i in coding_start_idx..block_end_idx {
-            let _ = db_ledger
+            db_ledger
                 .erasure_cf
-                .delete_by_slot_index(&db_ledger.db, slot, i);
+                .delete_by_slot_index(&db_ledger.db, slot, i)?;
         }
         return Ok((vec![], vec![]));
     }
@@ -527,29 +522,20 @@ pub fn recover(
 }
 
 fn categorize_blob(
-    get_blob_result: &SolanaResult<Option<Vec<u8>>>,
+    get_blob_result: &Option<Vec<u8>>,
     blobs: &mut Vec<SharedBlob>,
     missing: &mut Vec<SharedBlob>,
     erasures: &mut Vec<i32>,
-    slot: u64,
-    index: u64,
     erasure_index: i32,
 ) -> Result<()> {
     match get_blob_result {
-        Err(err) => {
-            error!(
-                "error getting blob at slot: {}, index: {}, error: {:?}",
-                slot, index, err
-            );
-            return Err(ErasureError::InvalidBlobData);
-        }
-        Ok(Some(b)) => {
+        Some(b) => {
             if b.len() <= BLOB_HEADER_SIZE {
-                return Err(ErasureError::InvalidBlobData);
+                return Err(Error::ErasureError(ErasureError::InvalidBlobData));
             }
             blobs.push(Arc::new(RwLock::new(Blob::new(&b))));
         }
-        Ok(None) => {
+        None => {
             // Mark the missing memory
             erasures.push(erasure_index);
             blobs.push(SharedBlob::default());
