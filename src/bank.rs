@@ -712,7 +712,7 @@ impl Bank {
     /// for the borrow checker to track them with regards to the original set.
     fn with_subset<F, A>(accounts: &mut [Account], ixes: &[u8], func: F) -> A
     where
-        F: Fn(&mut [&mut Account]) -> A,
+        F: FnOnce(&mut [&mut Account]) -> A,
     {
         let mut subset: Vec<&mut Account> = ixes
             .iter()
@@ -770,8 +770,8 @@ impl Bank {
     ) -> Result<()> {
         for (instruction_index, instruction) in tx.instructions.iter().enumerate() {
             let program_id = tx.program_id(instruction_index);
+            let mut executable_accounts = self.load_executable_accounts(*program_id)?;
             Self::with_subset(tx_accounts, &instruction.accounts, |program_accounts| {
-                let mut executable_accounts = self.load_executable_accounts(*program_id)?;
                 runtime::execute_instruction(
                     tx,
                     instruction_index,
