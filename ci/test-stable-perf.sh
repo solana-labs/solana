@@ -6,13 +6,9 @@ cd "$(dirname "$0")/.."
 # Clear cached json keypair files
 rm -rf "$HOME/.config/solana"
 
-if ! ci/version-check.sh stable; then
-  # This job doesn't run within a container, try once to upgrade tooling on a
-  # version check failure
-  rustup install stable
-  rustup default stable
-  ci/version-check.sh stable
-fi
+# This job doesn't run within a container, try once to upgrade tooling on a
+# version check failure
+ci/version-check-with-upgrade.sh stable
 
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
