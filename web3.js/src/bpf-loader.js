@@ -37,7 +37,7 @@ export class BpfLoader {
     const transaction = SystemProgram.createAccount(
       owner.publicKey,
       programAccount.publicKey,
-      1,
+      1 + Math.ceil(elf.length / Loader.chunkSize) + 1,
       elf.length,
       BpfLoader.programId,
     );

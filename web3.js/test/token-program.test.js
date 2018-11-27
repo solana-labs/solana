@@ -50,7 +50,7 @@ test('create new token', async () => {
   const connection = new Connection(url);
   connection._disableLastIdCaching = mockRpcEnabled;
 
-  initialOwner = await newAccountWithTokens(connection);
+  initialOwner = await newAccountWithTokens(connection, 1024);
 
   {
     // mock SystemProgram.createAccount transaction for Token.createNewToken()
