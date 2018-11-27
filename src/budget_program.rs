@@ -139,7 +139,7 @@ pub fn process(
     instruction_index: usize,
     accounts: &mut [&mut Account],
 ) -> std::result::Result<(), ProgramError> {
-    process_instruction(&tx, instruction_index, accounts).map_err(|_| ProgramError::RuntimeError)
+    process_instruction(&tx, instruction_index, accounts).map_err(|_| ProgramError::GenericError)
 }
 
 //TODO the contract needs to provide a "get_balance" introspection call of the userdata

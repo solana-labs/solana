@@ -8,6 +8,13 @@ use system_program;
 use transaction::Transaction;
 use vote_program;
 
+/// Reasons the runtime might have rejected a transaction.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum RuntimeError {
+    /// Executing the instruction at the given index produced an error.
+    ProgramError(u8, ProgramError),
+}
+
 pub fn is_legacy_program(program_id: &Pubkey) -> bool {
     system_program::check_id(program_id)
         || budget_program::check_id(program_id)
@@ -57,7 +64,7 @@ fn process_instruction(
             &tx.instructions[instruction_index].userdata,
             tick_height,
         ) {
-            return Err(ProgramError::RuntimeError);
+            return Err(ProgramError::GenericError);
         }
     }
     Ok(())
@@ -86,7 +93,7 @@ fn verify_instruction(
 /// This method calls the instruction's program entrypoint method and verifies that the result of
 /// the call does not violate the bank's accounting rules.
 /// The accounts are committed back to the bank only if this function returns Ok(_).
-pub fn execute_instruction(
+fn execute_instruction(
     tx: &Transaction,
     instruction_index: usize,
     executable_accounts: &mut [(Pubkey, Account)],
@@ -119,6 +126,49 @@ pub fn execute_instruction(
     let post_total: u64 = program_accounts.iter().map(|a| a.tokens).sum();
     if pre_total != post_total {
         return Err(ProgramError::UnbalancedInstruction);
+    }
+    Ok(())
+}
+
+/// Execute a function with a subset of accounts as writable references.
+/// Since the subset can point to the same references, in any order there is no way
+/// for the borrow checker to track them with regards to the original set.
+fn with_subset<F, A>(accounts: &mut [Account], ixes: &[u8], func: F) -> A
+where
+    F: FnOnce(&mut [&mut Account]) -> A,
+{
+    let mut subset: Vec<&mut Account> = ixes
+        .iter()
+        .map(|ix| {
+            let ptr = &mut accounts[*ix as usize] as *mut Account;
+            // lifetime of this unsafe is only within the scope of the closure
+            // there is no way to reorder them without breaking borrow checker rules
+            unsafe { &mut *ptr }
+        }).collect();
+    func(&mut subset)
+}
+
+/// Execute a transaction.
+/// This method calls each instruction in the transaction over the set of loaded Accounts
+/// The accounts are committed back to the bank only if every instruction succeeds
+pub fn execute_transaction(
+    tx: &Transaction,
+    loaders: &mut [Vec<(Pubkey, Account)>],
+    tx_accounts: &mut [Account],
+    tick_height: u64,
+) -> Result<(), RuntimeError> {
+    for (instruction_index, instruction) in tx.instructions.iter().enumerate() {
+        let executable_accounts = &mut (&mut loaders[instruction.program_ids_index as usize]);
+        with_subset(tx_accounts, &instruction.accounts, |program_accounts| {
+            execute_instruction(
+                tx,
+                instruction_index,
+                executable_accounts,
+                program_accounts,
+                tick_height,
+            ).map_err(|err| RuntimeError::ProgramError(instruction_index as u8, err))?;
+            Ok(())
+        })?;
     }
     Ok(())
 }

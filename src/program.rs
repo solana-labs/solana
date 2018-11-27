@@ -7,7 +7,7 @@ pub enum ProgramError {
     ResultWithNegativeTokens,
 
     /// The program returned an error
-    RuntimeError,
+    GenericError,
 
     /// Program's instruction token balance does not equal the balance after the instruction
     UnbalancedInstruction,

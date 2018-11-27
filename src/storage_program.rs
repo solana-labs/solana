@@ -57,7 +57,7 @@ pub fn process(
     instruction_index: usize,
     accounts: &mut [&mut Account],
 ) -> std::result::Result<(), ProgramError> {
-    process_instruction(&tx, instruction_index, accounts).map_err(|_| ProgramError::RuntimeError)
+    process_instruction(&tx, instruction_index, accounts).map_err(|_| ProgramError::GenericError)
 }
 
 #[cfg(test)]
