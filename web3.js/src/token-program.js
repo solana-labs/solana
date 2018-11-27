@@ -240,6 +240,7 @@ export class Token {
       programId,
       userdata,
     });
+    transaction.fee = 0; // TODO: Batch with the `SystemProgram.createAccount` and remove this line
     await sendAndConfirmTransaction(connection, transaction, tokenAccount);
 
     return [token, initialAccountPublicKey];
@@ -294,7 +295,7 @@ export class Token {
       programId: this.programId,
       userdata,
     });
-
+    transaction.fee = 0; // TODO: Batch with the `SystemProgram.createAccount` and remove this line
     await sendAndConfirmTransaction(this.connection, transaction, tokenAccount);
 
     return tokenAccount.publicKey;

@@ -23,6 +23,14 @@ export class Loader {
    */
   programId: PublicKey;
 
+
+  /**
+   * Amount of program data placed in each load Transaction
+   */
+  static get chunkSize(): number {
+    return 256;
+  }
+
   /**
    * @param connection The connection to use
    * @param programId Public key that identifies the loader
@@ -50,7 +58,7 @@ export class Loader {
       ),
     ]);
 
-    const chunkSize = 256;
+    const chunkSize = Loader.chunkSize;
     let offset = 0;
     let array = data;
     let transactions = [];

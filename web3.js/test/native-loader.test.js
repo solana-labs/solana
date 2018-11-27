@@ -22,7 +22,7 @@ test('load native program', async () => {
   }
 
   const connection = new Connection(url);
-  const from = await newAccountWithTokens(connection);
+  const from = await newAccountWithTokens(connection, 1024);
   const programId = await NativeLoader.load(connection, from, 'noop');
   const transaction = new Transaction().add({
     keys: [from.publicKey],

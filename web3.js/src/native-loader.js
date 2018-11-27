@@ -40,7 +40,7 @@ export class NativeLoader {
     const transaction = SystemProgram.createAccount(
       owner.publicKey,
       programAccount.publicKey,
-      1,
+      1 + 1 + 1,
       bytes.length + 1,
       NativeLoader.programId,
     );
