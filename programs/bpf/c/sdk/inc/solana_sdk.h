@@ -107,7 +107,7 @@ SOL_FN_PREFIX bool SolPubkey_same(const SolPubkey *one, const SolPubkey *two) {
 }
 
 /**
- * Keyed Accounts
+ * Keyed Account
  */
 typedef struct {
   SolPubkey *key;        /** Public Key of the account */
@@ -115,7 +115,7 @@ typedef struct {
   uint64_t userdata_len; /** Length of userdata in bytes */
   uint8_t *userdata;     /** On-chain data owned by this account */
   SolPubkey *owner; /** Program that owns this account */
-} SolKeyedAccounts;
+} SolKeyedAccount;
 
 /**
  * Copies memory
@@ -203,14 +203,14 @@ typedef struct {
  *
  * Use this function to deserialize the buffer passed to the program entrypoint
  * into usable types.  This function does not perform copy deserialization,
- * instead it populates the pointers and lengths in SolKeyedAccounts and data so
+ * instead it populates the pointers and lengths in SolKeyedAccount and data so
  * that any modification to tokens or account data take place on the original
  * buffer.  Doing so also eliminates the need to serialize back into the buffer
  * at program end.
  *
  * @param input Source buffer containing serialized input parameters
- * @param ka Pointer to an array of SolKeyedAccounts to deserialize into
- * @param ka_len Number of SolKeyedAccounts entries in `ka`
+ * @param ka Pointer to an array of SolKeyedAccount to deserialize into
+ * @param ka_len Number of SolKeyedAccount entries in `ka`
  * @param ka_len_out If NULL, fill exactly `ka_len` accounts or fail.
  *                   If not NULL, fill up to `ka_len` accounts and return the
  *                   number of filled accounts in `ka_len_out`.
@@ -221,7 +221,7 @@ typedef struct {
  */
 SOL_FN_PREFIX bool sol_deserialize(
   const uint8_t *input,
-  SolKeyedAccounts *ka,
+  SolKeyedAccount *ka,
   uint64_t ka_len,
   uint64_t *ka_len_out,
   const uint8_t **data,
@@ -306,13 +306,13 @@ SOL_FN_PREFIX void sol_log_array(const uint8_t *array, int len) {
 /**
  * Prints the hexadecimal representation of the program's input parameters
  *
- * @param ka A pointer to an array of SolKeyedAccounts to print
- * @param ka_len Number of SolKeyedAccounts to print
+ * @param ka A pointer to an array of SolKeyedAccount to print
+ * @param ka_len Number of SolKeyedAccount to print
  * @param data A pointer to the instruction data to print
  * @param data_len The length in bytes of the instruction data
  */
 SOL_FN_PREFIX void sol_log_params(
-  const SolKeyedAccounts *ka,
+  const SolKeyedAccount *ka,
   uint64_t ka_len,
   const uint8_t *data,
   uint64_t data_len

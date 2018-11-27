@@ -50,7 +50,7 @@ and `src/program.c` containing:
 #include <solana_sdk.h>
 
 bool entrypoint(const uint8_t *input) {
-  SolKeyedAccounts ka[1];
+  SolKeyedAccount ka[1];
   uint8_t *data;
   uint64_t data_len;
 
