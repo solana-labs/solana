@@ -346,7 +346,8 @@ pub fn generate_coding(
     Ok(())
 }
 
-// Recover the missing data and coding blobs from the input ledger
+// Recover the missing data and coding blobs from the input ledger. Returns a vector
+// of the recovered missing data blobs and a vector of the recovered coding blobs
 pub fn recover(
     db_ledger: &mut DbLedger,
     slot: u64,
