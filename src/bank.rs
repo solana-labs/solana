@@ -219,9 +219,14 @@ impl Accounts {
     }
 
     fn store(&mut self, pubkey: &Pubkey, account: &Account) {
-        // purge if balance is 0 and no checkpoints
-        if account.tokens == 0 && self.checkpoints.is_empty() {
-            self.accounts.remove(pubkey);
+        if account.tokens == 0 {
+            if self.checkpoints.is_empty() {
+                // purge if balance is 0 and no checkpoints
+                self.accounts.remove(pubkey);
+            } else {
+                // store default account if balance is 0 and there's a checkpoint
+                self.accounts.insert(pubkey.clone(), Account::default());
+            }
         } else {
             self.accounts.insert(pubkey.clone(), account.clone());
         }
@@ -2208,6 +2213,37 @@ mod tests {
         assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
         assert_eq!(bank.transaction_count(), 3);
         assert_eq!(bank.checkpoint_depth(), 0);
+    }
+
+    #[test]
+    fn test_bank_checkpoint_zero_balance() {
+        let alice = Mint::new(1_000);
+        let bank = Bank::new(&alice);
+        let bob = Keypair::new();
+        let charlie = Keypair::new();
+
+        // bob should have 500
+        bank.transfer(500, &alice.keypair(), bob.pubkey(), alice.last_id())
+            .unwrap();
+        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
+        assert_eq!(bank.checkpoint_depth(), 0);
+
+        bank.checkpoint();
+        assert_eq!(bank.checkpoint_depth(), 1);
+
+        // charlie should have 500, alice should have 0
+        bank.transfer(500, &alice.keypair(), charlie.pubkey(), alice.last_id())
+            .unwrap();
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+        assert_eq!(bank.get_balance(&alice.pubkey()), 0);
+
+        let account = bank.get_account(&alice.pubkey()).unwrap();
+        let default_account = Account::default();
+        assert_eq!(account.tokens, default_account.tokens);
+        assert_eq!(account.userdata, default_account.userdata);
+        assert_eq!(account.owner, default_account.owner);
+        assert_eq!(account.executable, default_account.executable);
+        assert_eq!(account.loader, default_account.loader);
     }
 
     #[test]
