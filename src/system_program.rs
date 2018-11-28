@@ -60,7 +60,10 @@ pub fn process_instruction(
                     Err(Error::InvalidArgument)?;
                 }
                 if tokens > accounts[0].tokens {
-                    info!("Insufficient tokens in account[0]");
+                    info!(
+                        "Insufficient tokens in account[0] ({} > {})",
+                        tokens, accounts[0].tokens
+                    );
                     Err(Error::ResultWithNegativeTokens)?;
                 }
                 accounts[0].tokens -= tokens;
