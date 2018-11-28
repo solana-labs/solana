@@ -12,8 +12,8 @@ SRC_DIR ?= ./src
 TEST_DIR ?= ./test
 OUT_DIR ?= ./out
 
-ifeq ($(USE_DOCKER),1)
-LLVM_DIR = $(dir $(abspath $(lastword $(MAKEFILE_LIST))))/llvm-wrappers
+ifeq ($(DOCKER),1)
+LLVM_DIR = $(LOCAL_PATH)llvm/llvm-docker
 else
 OS=$(shell uname)
 ifeq ($(OS),Darwin)
@@ -108,6 +108,8 @@ help:
 	@echo '  - The following setting are overridable on the command line, default values shown:'
 	@echo '    - Show commands while building:'
 	@echo '      V=1'
+	@echo '    - Use LLVM from docker:'
+	@echo '      DOCKER=1'
 	@echo '    - List of include directories:'
 	@echo '      INC_DIRS=$(INC_DIRS)'
 	@echo '    - List of system include directories:'

@@ -1,0 +1,473 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>solana-wallet CLI - </title>
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link href="https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800" rel="stylesheet" type="text/css">
+        <link href="https://fonts.googleapis.com/css?family=Source+Code+Pro:500" rel="stylesheet" type="text/css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        
+
+        
+    </head>
+    <body class="light">
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">var path_to_root = "";</script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { } 
+            if (theme === null || theme === undefined) { theme = 'light'; }
+            document.body.className = theme;
+            document.querySelector('html').className = theme + ' js';
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <ol class="chapter"><li><a href="introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li><a href="terminology.html"><strong aria-hidden="true">2.</strong> Terminology</a></li><li><a href="synchronization.html"><strong aria-hidden="true">3.</strong> Synchronization</a></li><li><ol class="section"><li><a href="vdf.html"><strong aria-hidden="true">3.1.</strong> Introduction to VDFs</a></li><li><a href="poh.html"><strong aria-hidden="true">3.2.</strong> Proof of History</a></li><li><a href="leader-scheduler.html"><strong aria-hidden="true">3.3.</strong> Leader Rotation</a></li></ol></li><li><a href="fullnode.html"><strong aria-hidden="true">4.</strong> Fullnode</a></li><li><ol class="section"><li><a href="tpu.html"><strong aria-hidden="true">4.1.</strong> Tpu</a></li><li><a href="tvu.html"><strong aria-hidden="true">4.2.</strong> Tvu</a></li><li><a href="ncp.html"><strong aria-hidden="true">4.3.</strong> Ncp</a></li><li><a href="jsonrpc-service.html"><strong aria-hidden="true">4.4.</strong> JsonRpcService</a></li></ol></li><li><a href="avalanche.html"><strong aria-hidden="true">5.</strong> Avalanche replication</a></li><li><ol class="section"><li><a href="storage.html"><strong aria-hidden="true">5.1.</strong> Storage</a></li></ol></li><li><a href="programs.html"><strong aria-hidden="true">6.</strong> On-chain programs</a></li><li><ol class="section"><li><a href="runtime.html"><strong aria-hidden="true">6.1.</strong> The Runtime</a></li><li><a href="ledger.html"><strong aria-hidden="true">6.2.</strong> Ledger format</a></li></ol></li><li><a href="appendix.html"><strong aria-hidden="true">7.</strong> Appendix</a></li><li><ol class="section"><li><a href="jsonrpc-api.html"><strong aria-hidden="true">7.1.</strong> JSON RPC API</a></li><li><a href="wallet.html" class="active"><strong aria-hidden="true">7.2.</strong> solana-wallet CLI</a></li></ol></li></ol>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                
+                <div id="menu-bar" class="menu-bar">
+                    <div id="menu-bar-sticky-container">
+                        <div class="left-buttons">
+                            <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                                <i class="fa fa-bars"></i>
+                            </button>
+                            <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                                <i class="fa fa-paint-brush"></i>
+                            </button>
+                            <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                                <li role="none"><button role="menuitem" class="theme" id="light">Light <span class="default">(default)</span></button></li>
+                                <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                                <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                                <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                                <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                            </ul>
+                            
+                            <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                                <i class="fa fa-search"></i>
+                            </button>
+                            
+                        </div>
+
+                        <h1 class="menu-title"></h1> 
+
+                        <div class="right-buttons">
+                            <a href="print.html" title="Print this book" aria-label="Print this book">
+                                <i id="print-button" class="fa fa-print"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" name="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+                
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <a class="header" href="#solana-wallet-cli" id="solana-wallet-cli"><h2>solana-wallet CLI</h2></a>
+<p>The <a href="https://crates.io/crates/solana">solana crate</a> is distributed with a command-line interface tool</p>
+<a class="header" href="#examples" id="examples"><h3>Examples</h3></a>
+<a class="header" href="#get-pubkey" id="get-pubkey"><h4>Get Pubkey</h4></a>
+<pre><code class="language-sh">// Command
+$ solana-wallet address
+
+// Return
+&lt;PUBKEY&gt;
+</code></pre>
+<a class="header" href="#airdrop-tokens" id="airdrop-tokens"><h4>Airdrop Tokens</h4></a>
+<pre><code class="language-sh">// Command
+$ solana-wallet airdrop 123
+
+// Return
+&quot;Your balance is: 123&quot;
+</code></pre>
+<a class="header" href="#get-balance" id="get-balance"><h4>Get Balance</h4></a>
+<pre><code class="language-sh">// Command
+$ solana-wallet balance
+
+// Return
+&quot;Your balance is: 123&quot;
+</code></pre>
+<a class="header" href="#confirm-transaction" id="confirm-transaction"><h4>Confirm Transaction</h4></a>
+<pre><code class="language-sh">// Command
+$ solana-wallet confirm &lt;TX_SIGNATURE&gt;
+
+// Return
+&quot;Confirmed&quot; / &quot;Not found&quot;
+</code></pre>
+<a class="header" href="#deploy-program" id="deploy-program"><h4>Deploy program</h4></a>
+<pre><code class="language-sh">// Command
+$ solana-wallet deploy &lt;PATH&gt;
+
+// Return
+&lt;PROGRAM_ID&gt;
+</code></pre>
+<a class="header" href="#unconditional-immediate-transfer" id="unconditional-immediate-transfer"><h4>Unconditional Immediate Transfer</h4></a>
+<pre><code class="language-sh">// Command
+$ solana-wallet pay &lt;PUBKEY&gt; 123
+
+// Return
+&lt;TX_SIGNATURE&gt;
+</code></pre>
+<a class="header" href="#post-dated-transfer" id="post-dated-transfer"><h4>Post-Dated Transfer</h4></a>
+<pre><code class="language-sh">// Command
+$ solana-wallet pay &lt;PUBKEY&gt; 123 \
+    --after 2018-12-24T23:59:00 --require-timestamp-from &lt;PUBKEY&gt;
+
+// Return
+{signature: &lt;TX_SIGNATURE&gt;, processId: &lt;PROCESS_ID&gt;}
+</code></pre>
+<p><em><code>require-timestamp-from</code> is optional. If not provided, the transaction will expect a timestamp signed by this wallet's secret key</em></p>
+<a class="header" href="#authorized-transfer" id="authorized-transfer"><h4>Authorized Transfer</h4></a>
+<p>A third party must send a signature to unlock the tokens.</p>
+<pre><code class="language-sh">// Command
+$ solana-wallet pay &lt;PUBKEY&gt; 123 \
+    --require-signature-from &lt;PUBKEY&gt;
+
+// Return
+{signature: &lt;TX_SIGNATURE&gt;, processId: &lt;PROCESS_ID&gt;}
+</code></pre>
+<a class="header" href="#post-dated-and-authorized-transfer" id="post-dated-and-authorized-transfer"><h4>Post-Dated and Authorized Transfer</h4></a>
+<pre><code class="language-sh">// Command
+$ solana-wallet pay &lt;PUBKEY&gt; 123 \
+    --after 2018-12-24T23:59 --require-timestamp-from &lt;PUBKEY&gt; \
+    --require-signature-from &lt;PUBKEY&gt;
+
+// Return
+{signature: &lt;TX_SIGNATURE&gt;, processId: &lt;PROCESS_ID&gt;}
+</code></pre>
+<a class="header" href="#multiple-witnesses" id="multiple-witnesses"><h4>Multiple Witnesses</h4></a>
+<pre><code class="language-sh">// Command
+$ solana-wallet pay &lt;PUBKEY&gt; 123 \
+    --require-signature-from &lt;PUBKEY&gt; \
+    --require-signature-from &lt;PUBKEY&gt;
+
+// Return
+{signature: &lt;TX_SIGNATURE&gt;, processId: &lt;PROCESS_ID&gt;}
+</code></pre>
+<a class="header" href="#cancelable-transfer" id="cancelable-transfer"><h4>Cancelable Transfer</h4></a>
+<pre><code class="language-sh">// Command
+$ solana-wallet pay &lt;PUBKEY&gt; 123 \
+    --require-signature-from &lt;PUBKEY&gt; \
+    --cancelable
+
+// Return
+{signature: &lt;TX_SIGNATURE&gt;, processId: &lt;PROCESS_ID&gt;}
+</code></pre>
+<a class="header" href="#cancel-transfer" id="cancel-transfer"><h4>Cancel Transfer</h4></a>
+<pre><code class="language-sh">// Command
+$ solana-wallet cancel &lt;PROCESS_ID&gt;
+
+// Return
+&lt;TX_SIGNATURE&gt;
+</code></pre>
+<a class="header" href="#send-signature" id="send-signature"><h4>Send Signature</h4></a>
+<pre><code class="language-sh">// Command
+$ solana-wallet send-signature &lt;PUBKEY&gt; &lt;PROCESS_ID&gt;
+
+// Return
+&lt;TX_SIGNATURE&gt;
+</code></pre>
+<a class="header" href="#indicate-elapsed-time" id="indicate-elapsed-time"><h4>Indicate Elapsed Time</h4></a>
+<p>Use the current system time:</p>
+<pre><code class="language-sh">// Command
+$ solana-wallet send-timestamp &lt;PUBKEY&gt; &lt;PROCESS_ID&gt;
+
+// Return
+&lt;TX_SIGNATURE&gt;
+</code></pre>
+<p>Or specify some other arbitrary timestamp:</p>
+<pre><code class="language-sh">// Command
+$ solana-wallet send-timestamp &lt;PUBKEY&gt; &lt;PROCESS_ID&gt; --date 2018-12-24T23:59:00
+
+// Return
+&lt;TX_SIGNATURE&gt;
+</code></pre>
+<a class="header" href="#usage" id="usage"><h3>Usage</h3></a>
+<pre><code class="language-manpage">solana-wallet 0.11.0
+
+USAGE:
+    solana-wallet [OPTIONS] [SUBCOMMAND]
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+    -k, --keypair &lt;PATH&gt;         /path/to/id.json
+    -n, --network &lt;HOST:PORT&gt;    Rendezvous with the network at this gossip entry point; defaults to 127.0.0.1:8001
+        --proxy &lt;URL&gt;            Address of TLS proxy
+        --port &lt;NUM&gt;             Optional rpc-port configuration to connect to non-default nodes
+        --timeout &lt;SECS&gt;         Max seconds to wait to get necessary gossip from the network
+
+SUBCOMMANDS:
+    address                  Get your public key
+    airdrop                  Request a batch of tokens
+    balance                  Get your balance
+    cancel                   Cancel a transfer
+    confirm                  Confirm transaction by signature
+    deploy                   Deploy a program
+    get-transaction-count    Get current transaction count
+    help                     Prints this message or the help of the given subcommand(s)
+    pay                      Send a payment
+    send-signature           Send a signature to authorize a transfer
+    send-timestamp           Send a timestamp to unlock a transfer
+</code></pre>
+<pre><code class="language-manpage">solana-wallet-address 
+Get your public key
+
+USAGE:
+    solana-wallet address
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+</code></pre>
+<pre><code class="language-manpage">solana-wallet-airdrop 
+Request a batch of tokens
+
+USAGE:
+    solana-wallet airdrop &lt;NUM&gt;
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+ARGS:
+    &lt;NUM&gt;    The number of tokens to request
+</code></pre>
+<pre><code class="language-manpage">solana-wallet-balance 
+Get your balance
+
+USAGE:
+    solana-wallet balance
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+</code></pre>
+<pre><code class="language-manpage">solana-wallet-cancel 
+Cancel a transfer
+
+USAGE:
+    solana-wallet cancel &lt;PROCESS_ID&gt;
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+ARGS:
+    &lt;PROCESS_ID&gt;    The process id of the transfer to cancel
+</code></pre>
+<pre><code class="language-manpage">solana-wallet-confirm 
+Confirm transaction by signature
+
+USAGE:
+    solana-wallet confirm &lt;SIGNATURE&gt;
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+ARGS:
+    &lt;SIGNATURE&gt;    The transaction signature to confirm
+</code></pre>
+<pre><code class="language-manpage">solana-wallet-deploy 
+Deploy a program
+
+USAGE:
+    solana-wallet deploy &lt;PATH&gt;
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+ARGS:
+    &lt;PATH&gt;    /path/to/program.o
+</code></pre>
+<pre><code class="language-manpage">solana-wallet-get-transaction-count 
+Get current transaction count
+
+USAGE:
+    solana-wallet get-transaction-count
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+</code></pre>
+<pre><code class="language-manpage">solana-wallet-pay 
+Send a payment
+
+USAGE:
+    solana-wallet pay [FLAGS] [OPTIONS] &lt;PUBKEY&gt; &lt;NUM&gt;
+
+FLAGS:
+        --cancelable    
+    -h, --help          Prints help information
+    -V, --version       Prints version information
+
+OPTIONS:
+        --after &lt;DATETIME&gt;                      A timestamp after which transaction will execute
+        --require-timestamp-from &lt;PUBKEY&gt;       Require timestamp from this third party
+        --require-signature-from &lt;PUBKEY&gt;...    Any third party signatures required to unlock the tokens
+
+ARGS:
+    &lt;PUBKEY&gt;    The pubkey of recipient
+    &lt;NUM&gt;       The number of tokens to send
+</code></pre>
+<pre><code class="language-manpage">solana-wallet-send-signature 
+Send a signature to authorize a transfer
+
+USAGE:
+    solana-wallet send-signature &lt;PUBKEY&gt; &lt;PROCESS_ID&gt;
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+ARGS:
+    &lt;PUBKEY&gt;        The pubkey of recipient
+    &lt;PROCESS_ID&gt;    The process id of the transfer to authorize
+</code></pre>
+<pre><code class="language-manpage">solana-wallet-send-timestamp 
+Send a timestamp to unlock a transfer
+
+USAGE:
+    solana-wallet send-timestamp [OPTIONS] &lt;PUBKEY&gt; &lt;PROCESS_ID&gt;
+
+FLAGS:
+    -h, --help       Prints help information
+    -V, --version    Prints version information
+
+OPTIONS:
+        --date &lt;DATETIME&gt;    Optional arbitrary timestamp to apply
+
+ARGS:
+    &lt;PUBKEY&gt;        The pubkey of recipient
+    &lt;PROCESS_ID&gt;    The process id of the transfer to unlock
+</code></pre>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                        
+                            <a rel="prev" href="jsonrpc-api.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+                        
+
+                        
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                
+                    <a href="jsonrpc-api.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+                
+
+                
+            </nav>
+
+        </div>
+
+        
+
+        
+
+        
+
+        
+        <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
+        
+
+        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        
+
+        
+
+    </body>
+</html>

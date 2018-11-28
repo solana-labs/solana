@@ -1,0 +1,296 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Storage - </title>
+        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link href="https://fonts.googleapis.com/css?family=Open+Sans:300italic,400italic,600italic,700italic,800italic,400,300,600,700,800" rel="stylesheet" type="text/css">
+        <link href="https://fonts.googleapis.com/css?family=Source+Code+Pro:500" rel="stylesheet" type="text/css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="highlight.css">
+        <link rel="stylesheet" href="tomorrow-night.css">
+        <link rel="stylesheet" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        
+
+        
+    </head>
+    <body class="light">
+        <!-- Provide site root to javascript -->
+        <script type="text/javascript">var path_to_root = "";</script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script type="text/javascript">
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script type="text/javascript">
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { } 
+            if (theme === null || theme === undefined) { theme = 'light'; }
+            document.body.className = theme;
+            document.querySelector('html').className = theme + ' js';
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script type="text/javascript">
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <ol class="chapter"><li><a href="introduction.html"><strong aria-hidden="true">1.</strong> Introduction</a></li><li><a href="terminology.html"><strong aria-hidden="true">2.</strong> Terminology</a></li><li><a href="synchronization.html"><strong aria-hidden="true">3.</strong> Synchronization</a></li><li><ol class="section"><li><a href="vdf.html"><strong aria-hidden="true">3.1.</strong> Introduction to VDFs</a></li><li><a href="poh.html"><strong aria-hidden="true">3.2.</strong> Proof of History</a></li><li><a href="leader-scheduler.html"><strong aria-hidden="true">3.3.</strong> Leader Rotation</a></li></ol></li><li><a href="fullnode.html"><strong aria-hidden="true">4.</strong> Fullnode</a></li><li><ol class="section"><li><a href="tpu.html"><strong aria-hidden="true">4.1.</strong> Tpu</a></li><li><a href="tvu.html"><strong aria-hidden="true">4.2.</strong> Tvu</a></li><li><a href="ncp.html"><strong aria-hidden="true">4.3.</strong> Ncp</a></li><li><a href="jsonrpc-service.html"><strong aria-hidden="true">4.4.</strong> JsonRpcService</a></li></ol></li><li><a href="avalanche.html"><strong aria-hidden="true">5.</strong> Avalanche replication</a></li><li><ol class="section"><li><a href="storage.html" class="active"><strong aria-hidden="true">5.1.</strong> Storage</a></li></ol></li><li><a href="programs.html"><strong aria-hidden="true">6.</strong> On-chain programs</a></li><li><ol class="section"><li><a href="runtime.html"><strong aria-hidden="true">6.1.</strong> The Runtime</a></li><li><a href="ledger.html"><strong aria-hidden="true">6.2.</strong> Ledger format</a></li></ol></li><li><a href="appendix.html"><strong aria-hidden="true">7.</strong> Appendix</a></li><li><ol class="section"><li><a href="jsonrpc-api.html"><strong aria-hidden="true">7.1.</strong> JSON RPC API</a></li><li><a href="wallet.html"><strong aria-hidden="true">7.2.</strong> solana-wallet CLI</a></li></ol></li></ol>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                
+                <div id="menu-bar" class="menu-bar">
+                    <div id="menu-bar-sticky-container">
+                        <div class="left-buttons">
+                            <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                                <i class="fa fa-bars"></i>
+                            </button>
+                            <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                                <i class="fa fa-paint-brush"></i>
+                            </button>
+                            <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                                <li role="none"><button role="menuitem" class="theme" id="light">Light <span class="default">(default)</span></button></li>
+                                <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                                <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                                <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                                <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                            </ul>
+                            
+                            <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                                <i class="fa fa-search"></i>
+                            </button>
+                            
+                        </div>
+
+                        <h1 class="menu-title"></h1> 
+
+                        <div class="right-buttons">
+                            <a href="print.html" title="Print this book" aria-label="Print this book">
+                                <i id="print-button" class="fa fa-print"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" name="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+                
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script type="text/javascript">
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <a class="header" href="#storage" id="storage"><h1>Storage</h1></a>
+<a class="header" href="#background" id="background"><h2>Background</h2></a>
+<p>At full capacity on a 1gbps network Solana would generate 4 petabytes of data
+per year. If each fullnode was required to store the full ledger, the cost of
+storage would discourage fullnode participation, thus centralizing the network
+around those that could afford it. Solana aims to keep the cost of a fullnode
+below $5,000 USD to maximize participation. To achieve that, the network needs
+to minimize redundant storage while at the same time ensuring the validity and
+availability of each copy.</p>
+<p>To trust storage of ledger segments, Solana has <em>replicators</em> periodically
+submit proofs to the network that the data was replicated. Each proof is called
+a Proof of Replication.  The basic idea of it is to encrypt a dataset with a
+public symmetric key and then hash the encrypted dataset. Solana uses <a href="https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Cipher_Block_Chaining_(CBC)">CBC
+encryption</a>.
+To prevent a malicious replicator from deleting the data as soon as it's
+hashed, a replicator is required hash random segments of the dataset.
+Alternatively, Solana could require hashing the reverse of the encrypted data,
+but random sampling is sufficient and much faster.  Either solution ensures
+that all the data is present during the generation of the proof and also
+requires the validator to have the entirety of the encrypted data present for
+verification of every proof of every identity. The space required to validate
+is:</p>
+<p><code>number_of_proofs * data_size</code></p>
+<a class="header" href="#optimization-with-poh" id="optimization-with-poh"><h1>Optimization with PoH</h1></a>
+<p>Solana is not the only distribute systems project using Proof of Replication,
+but it might be the most efficient implementation because of its ability to
+synchronize nodes with its Proof of History. With PoH, Solana is able to record
+a hash of the PoRep samples in the ledger.  Thus the blocks stay in the exact
+same order for every PoRep and verification can stream the data and verify all
+the proofs in a single batch.  This way Solana can verify multiple proofs
+concurrently, each one on its own GPU core. With the current generation of
+graphics cards our network can support up to 14,000 replication identities or
+symmetric keys. The total space required for verification is:</p>
+<p><code>2 CBC_blocks * number_of_identities</code></p>
+<p>with core count of equal to (Number of Identities). A CBC block is expected to
+be 1MB in size.</p>
+<a class="header" href="#network" id="network"><h1>Network</h1></a>
+<p>Validators for PoRep are the same validators that are verifying transactions.
+They have some stake that they have put up as collateral that ensures that
+their work is honest. If you can prove that a validator verified a fake PoRep,
+then the validator's stake is slashed.</p>
+<p>Replicators are specialized light clients. They download a part of the ledger
+and store it and provide proofs of storing the ledger. For each verified proof,
+replicators are rewarded tokens from the mining pool.</p>
+<a class="header" href="#constraints" id="constraints"><h1>Constraints</h1></a>
+<p>Solana's PoRep protocol instroduces the following constraints:</p>
+<ul>
+<li>At most 14,000 replication identities can be used, because that is how many GPU
+cores are currently available to a computer costing under $5,000 USD.</li>
+<li>Verification requires generating the CBC blocks. That requires space of 2
+blocks per identity, and 1 GPU core per identity for the same dataset. As
+many identities at once are batched with as many proofs for those identities
+verified concurrently for the same dataset.</li>
+</ul>
+<a class="header" href="#validation-and-replication-protocol" id="validation-and-replication-protocol"><h1>Validation and Replication Protocol</h1></a>
+<ol>
+<li>The network sets a replication target number, let's say 1k. 1k PoRep
+identities are created from signatures of a PoH hash. They are tied to a
+specific PoH hash. It doesn't matter who creates them, or it could simply be
+the last 1k validation signatures we saw for the ledger at that count. This is
+maybe just the initial batch of identities, because we want to stagger identity
+rotation.</li>
+<li>Any client can use any of these identities to create PoRep proofs.
+Replicator identities are the CBC encryption keys.</li>
+<li>Periodically at a specific PoH count, a replicator that wants to create
+PoRep proofs signs the PoH hash at that count. That signature is the seed
+used to pick the block and identity to replicate. A block is 1TB of ledger.</li>
+<li>Periodically at a specific PoH count, a replicator submits PoRep proofs for
+their selected block. A signature of the PoH hash at that count is the seed
+used to sample the 1TB encrypted block, and hash it. This is done faster than
+it takes to encrypt the 1TB block with the original identity.</li>
+<li>Replicators must submit some number of fake proofs, which they can prove to
+be fake by providing the seed for the hash result.</li>
+<li>Periodically at a specific PoH count, validators sign the hash and use the
+signature to select the 1TB block that they need to validate. They batch all
+the identities and proofs and submit approval for all the verified ones.</li>
+<li>After #6, replicator client submit the proofs of fake proofs.</li>
+</ol>
+<p>For any random seed, Solana requires everyone to use a signature that is
+derived from a PoH hash. Every node uses the same count so that the same PoH
+hash is signed by every participant. The signatures are then each
+cryptographically tied to the keypair, which prevents a leader from grinding on
+the resulting value for more than 1 identity.</p>
+<p>Key rotation is <em>staggered</em>. Once going, the next identity is generated by
+hashing itself with a PoH hash.</p>
+<p>Since there are many more client identities then encryption identities, the
+reward is split amont multiple clients to prevent Sybil attacks from generating
+many clients to acquire the same block of data. To remain BFT, the network
+needs to avoid a single human entity from storing all the replications of a
+single chunk of the ledger.</p>
+<p>Solana's solution to this is to require clients to continue using the same
+identity. If the first round is used to acquire the same block for many client
+identities, the second round for the same client identities will require a
+redistribution of the signatures, and therefore PoRep identities and blocks.
+Thus to get a reward for storage, clients are not rewarded for storage of the
+first block. The network rewards long-lived client identities more than new
+ones.</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                        
+                            <a rel="prev" href="avalanche.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+                        
+
+                        
+                            <a rel="next" href="programs.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+                        
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                
+                    <a href="avalanche.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+                
+
+                
+                    <a href="programs.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+                
+            </nav>
+
+        </div>
+
+        
+
+        
+
+        
+
+        
+        <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
+        
+
+        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+
+        <!-- Custom JS scripts -->
+        
+
+        
+
+    </body>
+</html>
