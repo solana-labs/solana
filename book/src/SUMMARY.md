@@ -10,8 +10,6 @@
 
 - [A Solana Cluster](cluster.md)
   - [Synchronization](synchronization.md)
-    - [Introduction to VDFs](vdf.md)
-    - [Proof of History](poh.md)
   - [Ledger Replication](storage.md)
   - [Leader Rotation](leader-scheduler.md)
 
