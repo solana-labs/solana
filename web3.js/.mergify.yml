@@ -7,6 +7,14 @@ pull_request_rules:
       merge:
         method: rebase
         strict: true
+  - name: remove automerge label on CI failure
+    conditions:
+      - status-failure=continuous-integration/travis-ci/pr
+      - label=automerge
+    actions:
+      label:
+        remove:
+          - automerge
   - name: remove outdated reviews
     conditions:
       - base=master
