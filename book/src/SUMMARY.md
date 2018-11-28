@@ -11,7 +11,7 @@
 - [A Solana Cluster](cluster.md)
   - [Synchronization](synchronization.md)
   - [Ledger Replication](storage.md)
-  - [Leader Rotation](leader-scheduler.md)
+  - [Leader Rotation](leader-rotation.md)
 
 - [Anatomy of a Fullnode](fullnode.md)
   - [TPU](tpu.md)

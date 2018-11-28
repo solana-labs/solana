@@ -41,7 +41,8 @@ A Verifiable Delay Function is conceptually a water clock where its water marks
 can be recorded and later verified that the water most certainly passed
 through.  Anatoly describes the water clock analogy in detail here:
 
-[water clock analogy](https://medium.com/solana-labs/proof-of-history-explained-by-a-water-clock-e682183417b8)
+[water clock
+analogy](https://medium.com/solana-labs/proof-of-history-explained-by-a-water-clock-e682183417b8)
 
 The same technique has been used in Bitcoin since day one. The Bitcoin feature
 is called nLocktime and it can be used to postdate transactions using block
@@ -56,7 +57,8 @@ theoretical limit of 710,000 transactions per second.
 
 ## Proof of History
 
-[Proof of History overview](https://medium.com/solana-labs/proof-of-history-a-clock-for-blockchain-cf47a61a9274)
+[Proof of History
+overview](https://medium.com/solana-labs/proof-of-history-a-clock-for-blockchain-cf47a61a9274)
 
 ### Relationship to Consensus Mechanisms
 
@@ -81,11 +83,12 @@ A desirable property of a VDF is that verification time is very fast. Solana's
 approach to verifying its delay function is proportional to the time it took to
 create it. Split over a 4000 core GPU, it is sufficiently fast for Solana's
 needs, but if you asked the authors the paper cited above, they might tell you
-(and have) that Solana's approach is algorithmically slow it shouldn't be
-called a VDF. We argue the term VDF should represent the category of verifiable
-delay functions and not just the subset with certain performance
-characteristics. Until that's resolved, Solana will likely continue using the
-term PoH for its application-specific VDF.
+([and have](https://github.com/solana-labs/solana/issues/388)) that Solana's
+approach is algorithmically slow it shouldn't be called a VDF. We argue the
+term VDF should represent the category of verifiable delay functions and not
+just the subset with certain performance characteristics. Until that's
+resolved, Solana will likely continue using the term PoH for its
+application-specific VDF.
 
 Another difference between PoH and VDFs used only for tracking duration, is
 that PoH's hash chain includes hashes of any data the application observed.
@@ -93,7 +96,7 @@ That data is a double-edged sword. On one side, the data "proves history" -
 that the data most certainly existed before hashes after it. On the side, it
 means the application can manipulate the hash chain by changing *when* the data
 is hashed. The PoH chain therefore does not serve as a good source of
-randomness whereas a VDF without that data could. Solana's leader selection
-algorithm (TODO: add link), for example, is derived only from the VDF *height*
-and not its hash at that height.
+randomness whereas a VDF without that data could. Solana's [leader rotation
+algorithm](#leader-rotation), for example, is derived only from the VDF
+*height* and not its hash at that height.
 
