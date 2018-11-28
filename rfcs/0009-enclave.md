@@ -1,6 +1,6 @@
 # Signing using Secure Enclave
 
-The goal of this RFC is to define the security mechanism of signing keys used by the network nodes. Every node contains an asymmetric key that's used for signing and verifying the transactions (e.g. votes). The node signs the transactions using its private key. Other entities can verify the signature using the node's public key.
+The goal of this RFC is to define the security mechanism of signing keys used by the network nodes. Every node contains an asymmetric key that's used for signing and verifying the votes. The node signs the vote transactions using its private key. Other entities can verify the signature using the node's public key.
 
 The node's stake or its resources could be compromised if its private key is used to sign incorrect data (e.g. voting on multiple forks of the ledger). So, it's important to safeguard the private key.
 
@@ -52,6 +52,48 @@ Due to the fact that the enclave cannot process PoH, it has no direct knowledge 
 ## Enclave configuration
 
 A staking client should be configurable to prevent voting on inactive branches. This mechanism should use the client's known active set `N_active` along with a threshold vote `N_vote` and a threshold depth `N_depth` to determine whether or not to continue voting on a submitted branch. This configuration should take the form of a rule such that the client will only vote on a branch if it observes more than `N_vote` at `N_depth`. Practically, this represents the client from confirming that it has observed some probability of economic finality of the submitted branch at a depth where an additional vote would create a lockout for an undesirable amount of time if that branch turns out not to be live.
+
+## Signing service
+
+The signing service consists of a a JSONRPC server, and a request processor. At startup, it starts the RPC server at a configured port and waits for client/validator requests. It expects the following type of requests.
+1. Register a new validator node
+    * The request contains validator's identity (public key)
+    * The request is signed with validator's private key
+    * The service will drop the request if signature of the request cannot be verified
+    * The service will create a new voting asymmetric key for the validator, and return the public key as a response
+    * If a validator retries to register, it'll return the public key from the pre-existing keypair
+2. Sign a vote
+    * The request contains voting transaction, and all verification data (as described in Ancestor Verification)
+    * The request is signed with validator's private key
+    * The service will drop the request if signature of the request cannot be verified
+    * The service will verify the voting data
+    * The service will return a signed transaction (or signature for the transaction)
+
+The service could potentially have different variations, depending on the hardware platform capabilities. For example, if the hardware supports a secure enclave, the service can offload asymmetric key generation, and private key protection to the enclave. A less secure implementation of the service could simply carry the keypair in the process memory.
+
+## Validator voting
+
+A validator node, at startup, creates a new vote account and registers it with the network. This is done by submitting a new "vote register" transaction. The transaction contains validator's keypair, it's vote signing public key, and some additional information. The other nodes on the network process this transaction and include the new validator in the active set.
+
+Subsequently, the validator submits a "new vote" transaction on a voting event. This vote is signed with validator's voting private key.
+
+The validator code will change to interface with Signing service for "vote register" and "new vote" use cases.
+
+### Configuration
+
+The validator node will be configured with Signing service's network endpoint (IP/Port).
+
+### Register
+
+At startup, the validator will call Signing service using JSON RPC to register itself. The RPC call will return the voting public key for the validator node. The validator will create a new "vote register" transaction including this public key in it, and submit it to the network.
+
+### Collect votes for last period
+
+The validator will look up the votes submitted by all the nodes in the network for the last voting period. This information will be submitted to signing service with new vote signing request.
+
+### New Vote Signing
+
+The validator will create a "new vote" transaction and send it to the signing service using JSON RPC. The RPC request will also include the vote verification data. On success, RPC call will return the signature for the vote. On failure, RPC call will return the failure code.
 
 ## Challenges
 
