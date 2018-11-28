@@ -138,7 +138,7 @@ mod test {
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
     use system_transaction::SystemTransaction;
-    use transaction::Transaction;
+    use transaction::{Instruction, Transaction};
 
     /// Execute a function with a subset of accounts as writable references.
     /// Since the subset can point to the same references, in any order there is no way
@@ -287,6 +287,59 @@ mod test {
         process_transaction(&tx, &mut accounts).unwrap();
         assert_eq!(accounts[0].tokens, 0);
         assert_eq!(accounts[1].tokens, 1);
+    }
+
+    #[test]
+    fn test_move_chain() {
+        let froms = [&Keypair::new(), &Keypair::new()]; // also signers
+        let tos = [froms[1].pubkey(), Keypair::new().pubkey()];
+        let mut accounts = vec![Account::default(), Account::default(), Account::default()];
+        accounts[0].tokens = 4;
+
+        let instructions = vec![
+            Instruction::new(0, &SystemInstruction::Move { tokens: 3 }, vec![0, 1]),
+            Instruction::new(0, &SystemInstruction::Move { tokens: 2 }, vec![1, 2]),
+        ];
+
+        let tx = Transaction::new_with_instructions(
+            &froms,
+            &tos,
+            Hash::default(),
+            0,
+            vec![id()],
+            instructions,
+        );
+        process_transaction(&tx, &mut accounts).unwrap();
+        assert_eq!(accounts[0].tokens, 1);
+        assert_eq!(accounts[1].tokens, 1);
+        assert_eq!(accounts[2].tokens, 2);
+    }
+
+    #[test]
+    fn test_move_chain_no_sig() {
+        let froms = [&Keypair::new()];
+        let tos = [Keypair::new().pubkey(), Keypair::new().pubkey()];
+        let mut accounts = vec![Account::default(), Account::default(), Account::default()];
+        accounts[0].tokens = 4;
+
+        let instructions = vec![
+            Instruction::new(0, &SystemInstruction::Move { tokens: 3 }, vec![0, 1]),
+            Instruction::new(0, &SystemInstruction::Move { tokens: 2 }, vec![1, 2]),
+        ];
+
+        let tx = Transaction::new_with_instructions(
+            &froms,
+            &tos,
+            Hash::default(),
+            0,
+            vec![id()],
+            instructions,
+        );
+        assert!(process_transaction(&tx, &mut accounts).is_err());
+        // probably these are right, but nothing should be counted upon...
+        //assert_eq!(accounts[0].tokens, 1);
+        //assert_eq!(accounts[1].tokens, 3);
+        //assert_eq!(accounts[2].tokens, 0);
     }
 
     #[test]
