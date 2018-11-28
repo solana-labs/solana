@@ -9,7 +9,7 @@
 //!
 //! When the Contract is bought the first time, the `Contract::owner Pubkey` is changed, an the
 //! `Contract::escrow tokens` is filled with the tokens that the contract was bought for.  Once the
-//! contract has been fulfilled the escrow tokens are claimed by the `signer`.  If the `signer` fails
+//! contract has been signed the escrow tokens are claimed by the `signer`.  If the `signer` fails
 //! to fulfill the request the escrow tokens can be claimed by the current owner.
 //!
 //! A new owner can sell this contract again.  The second sale doesn't modify the escrow tokens.
@@ -57,23 +57,25 @@ struct Request {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 struct Contract {
-    // contains the pubkey of the template and the fulfilled challenge and the tempalte
+    /// Template that will be filled by the signer upon request
     template: Template,
-    // the identity that can claim the escrow and guarantee if the template is signed
+    /// The identity that can claim the escrow and guarantee if the template is signed.
     signer: Pubkey,
-    // the settlement guarantee
+    /// The signing guarantee.
     guarantee: u64,
-    // the tokens in escrow to be released to the signer if they sign the template
+    /// The tokens in escrow to be released to the signer if they sign the template.
     escrow: u64,
-    // template must be requested before this timeout
+    /// Request to sign must be made before template_timeout.
     template_timeout: u64,
-    // Once the template has been Requested, if this expires, the guarantee is claimable by the owner
+    /// Once request to sign has been made the signer needs to submit the signature before this
+    /// timeout.
     requested_timeout: u64,
-    // Once the template has been Fulfilled and this expires the guarantee and escrow is claimable by the singer
+    /// Once the template has been signed and `signed_timeout` expires the guarantee and
+    /// escrow is claimable by the signer.
     signed_timeout: u64,
-    // Current owner identity. This is the identity that can request a message to be signed.
+    /// Current owner identity. This is the identity that can request a message to be signed.
     owner: Pubkey,
-    // current state
+    /// current state
     state: State,
 }
 
@@ -81,11 +83,18 @@ struct Contract {
 enum State {
     Created,
     EscrowFilled,
-    Requested(Request),
-    Fulfilled(Request, Vec<u8>),
-    Expired,
-    BrokenBadSignature,
-    BrokenTimeout,
+    Requested {
+        pending: Request,
+    },
+    Signed {
+        pending: Request,
+        signature: Vec<u8>,
+    },
+    ConcurrentSignature {
+        pending: Option<Request>,
+        concurrent: Request,
+        signature: Vec<u8>,
+    },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -93,8 +102,8 @@ enum Message {
     /// Message to initalize the template.
     /// contract.state must be `State::Created`
     /// contract.escrow must be 0
-    Init { contract: Contract },
-    /// * escrow - Tokens transfered to the contract.
+    Init(Contract),
+    /// * u64 - Tokens transfered to the contract.
     /// * account[0] - must be signed, current owner
     /// * account[1] - the contract
     /// * account[2] - the new owner
@@ -102,7 +111,7 @@ enum Message {
     /// This should be executed in an atomic transaction with
     /// Instruction 0, System::Move tokens from new owner to current owner
     /// Instruction 1, Signer::InitEscrow, deposit the `escrow_token` amount into the contract
-    InitEscrow { escrow: u64 },
+    InitEscrow(u64),
 
     /// * account[0] - must be signed, current owner
     /// * account[1] - the new owner
@@ -113,9 +122,21 @@ enum Message {
     ChangeOwner,
 
     /// Message respond with a signed tx.  If the tx is valid, the state is moved to Signed
-    SignedTransaction { tx: Vec<u8> },
-    /// Message to move the state to a Timeout state.
-    Timeout,
+    Request(Request),
+
+    /// Valid signature that is a response
+    SignatureResponse(Vec<u8>),
+
+    /// Message to claim the tokens
+    /// * State::Created | State::EscrowFilled & `template_timeout`
+    ///    The signer can claim guarantee, the owner can claim the escrow.    
+    /// * Requested & `requested_timeout`
+    ///    The the owner can claim the escrow and the guarantee.    
+    /// * Signed & `signed_timeout`
+    ///    The the signer can claim the escrow and the guarantee.    
+    /// * ConcurrentSignature
+    ///    The the owner can claim the escrow and the guarantee.    
+    Claim,
 }
 
 impl Contract {
