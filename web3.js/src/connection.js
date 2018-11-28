@@ -421,6 +421,16 @@ export class Connection {
     }
 
     const wireTransaction = transaction.serialize();
+    return await this.sendRawTransaction(wireTransaction);
+  }
+
+  /**
+   * Send a transaction that has already been signed and serialized into the
+   * wire format
+   */
+  async sendRawTransaction(
+    wireTransaction: Buffer,
+  ): Promise<TransactionSignature> {
     const unsafeRes = await this._rpcRequest('sendTransaction', [
       [...wireTransaction],
     ]);
