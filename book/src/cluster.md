@@ -19,7 +19,7 @@ for the *Bootstrap Leader*. `solana-fullnode-config` is used to pin down what
 IP addresses and ports other nodes should use to contact it. Next, the
 information from the first two tools are passed to `solana-genesis` to create
 the genesis block. The genesis block is then be passed to all initial
-fullnodes. The fullnode holding the Bootstrap Leader's private key is
+fullnodes. The fullnode holding the Bootstrap Leader's secret key is
 responsible for appending the first entries to the ledger. It initializes its
 internal state with the Mint's account. That account will hold the number of
 fractional native tokens (called lamports) defined in the genesis block. All
