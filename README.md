@@ -51,7 +51,7 @@ $ rustup update
 On Linux systems you may need to install libssl-dev, pkg-config, zlib1g-dev, etc.  On Ubuntu:
 
 ```bash
-$ sudo apt-get install libssl-dev pkg-config zlib1g-dev llvm
+$ sudo apt-get install libssl-dev pkg-config zlib1g-dev llvm clang
 ```
 
 Download the source code:
