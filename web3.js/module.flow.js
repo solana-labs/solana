@@ -69,6 +69,9 @@ declare module '@solana/web3.js' {
       transaction: Transaction,
       ...signers: Array<Account>
     ): Promise<TransactionSignature>;
+    sendRawTransaction(
+      wireTransaction: Buffer,
+    ): Promise<TransactionSignature>;
     onAccountChange(
       publickey: PublicKey,
       callback: AccountChangeCallback,
