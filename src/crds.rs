@@ -288,7 +288,7 @@ mod test {
         );
         let v2 = VersionedCrdsValue::new(
             1,
-            CrdsValue::LeaderId(LeaderId::new(key.pubkey(),Pubkey::default(),0)),
+            CrdsValue::LeaderId(LeaderId::new(key.pubkey(), Pubkey::default(), 0)),
         );
         assert!(v1 > v2);
         assert!(!(v1 < v2));
@@ -303,7 +303,7 @@ mod test {
         );
         let v2 = VersionedCrdsValue::new(
             1,
-            CrdsValue::LeaderId(LeaderId::new(Keypair::new().pubkey(), Pubkey::default(),0)),
+            CrdsValue::LeaderId(LeaderId::new(Keypair::new().pubkey(), Pubkey::default(), 0)),
         );
         assert!(v1 != v2);
         assert!(!(v1 == v2));
