@@ -2228,6 +2228,13 @@ mod tests {
         assert_eq!(bank.get_balance(&bob.pubkey()), 500);
         assert_eq!(bank.checkpoint_depth(), 0);
 
+        let account = bank.get_account(&alice.pubkey()).unwrap();
+        let default_account = Account::default();
+        assert_eq!(account.userdata, default_account.userdata);
+        assert_eq!(account.owner, default_account.owner);
+        assert_eq!(account.executable, default_account.executable);
+        assert_eq!(account.loader, default_account.loader);
+
         bank.checkpoint();
         assert_eq!(bank.checkpoint_depth(), 1);
 
@@ -2238,7 +2245,6 @@ mod tests {
         assert_eq!(bank.get_balance(&alice.pubkey()), 0);
 
         let account = bank.get_account(&alice.pubkey()).unwrap();
-        let default_account = Account::default();
         assert_eq!(account.tokens, default_account.tokens);
         assert_eq!(account.userdata, default_account.userdata);
         assert_eq!(account.owner, default_account.owner);
