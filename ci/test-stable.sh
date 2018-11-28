@@ -13,13 +13,13 @@ _() {
 }
 
 _ cargo build --all --verbose
-_ cargo test --verbose --lib
+_ cargo test --verbose --lib -- --nocapture
 
 # Run integration tests serially
 for test in tests/*.rs; do
   test=${test##*/} # basename x
   test=${test%.rs} # basename x .rs
-  _ cargo test --verbose --test="$test" -- --test-threads=1
+  _ cargo test --verbose --test="$test" -- --test-threads=1 --nocapture
 done
 
 # Run native program tests
@@ -28,7 +28,7 @@ for program in programs/native/*; do
   (
     set -x
     cd "$program"
-    cargo test --verbose
+    cargo test --verbose -- --nocapture
   )
 done
 
