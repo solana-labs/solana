@@ -60,6 +60,8 @@ pub enum ClusterInfoError {
 pub struct ClusterInfo {
     /// The network
     pub gossip: CrdsGossip,
+    /// set the keypair that will be used to sign crds values generated. It is unset only in tests.
+    keypair: Option<Arc<Keypair>>,
 }
 
 // TODO These messages should be signed, and go through the gpu pipeline for spam filtering
@@ -79,8 +81,13 @@ enum Protocol {
 
 impl ClusterInfo {
     pub fn new(node_info: NodeInfo) -> Self {
+        //Without a keypair, gossip will not function. Only useful for tests.
+        ClusterInfo::new_with_keypair(node_info, None)
+    }
+    pub fn new_with_keypair(node_info: NodeInfo, keypair: Option<Arc<Keypair>>) -> Self {
         let mut me = ClusterInfo {
             gossip: CrdsGossip::default(),
+            keypair,
         };
         let id = node_info.id;
         me.gossip.set_self(id);
@@ -92,12 +99,18 @@ impl ClusterInfo {
         let mut my_data = self.my_data();
         let now = timestamp();
         my_data.wallclock = now;
-        let entry = CrdsValue::ContactInfo(my_data);
+        let mut entry = CrdsValue::ContactInfo(my_data);
+        if let Some(keypair) = self.keypair.clone() {
+            entry.sign(keypair.as_ref());
+        }
         self.gossip.refresh_push_active_set();
         self.gossip.process_push_message(&[entry], now);
     }
     pub fn insert_info(&mut self, node_info: NodeInfo) {
-        let value = CrdsValue::ContactInfo(node_info);
+        let mut value = CrdsValue::ContactInfo(node_info);
+        if let Some(keypair) = self.keypair.clone() {
+            value.sign(keypair.as_ref());
+        }
         let _ = self.gossip.crds.insert(value, timestamp());
     }
     pub fn id(&self) -> Pubkey {
@@ -166,8 +179,11 @@ impl ClusterInfo {
         let self_id = self.gossip.id;
         let now = timestamp();
         let leader = LeaderId::new(self_id, key, now);
-        let entry = CrdsValue::LeaderId(leader);
+        let mut entry = CrdsValue::LeaderId(leader);
         warn!("{}: LEADER_UPDATE TO {} from {}", self_id, key, prev);
+        if let Some(keypair) = self.keypair.clone() {
+            entry.sign(keypair.as_ref());
+        }
         self.gossip.process_push_message(&[entry], now);
     }
 
@@ -817,16 +833,25 @@ impl ClusterInfo {
         ledger_window: &mut Option<&mut LedgerWindow>,
     ) -> Vec<SharedBlob> {
         match request {
-            // TODO(sagar) sigverify these
+            // TODO verify messages faster
             Protocol::PullRequest(filter, caller) => {
-                Self::handle_pull_request(me, filter, caller, from_addr)
+                if caller.verify_signature() {
+                    Self::handle_pull_request(me, filter, caller, from_addr)
+                } else {
+                    vec![]
+                }
             }
-            Protocol::PullResponse(from, data) => {
+            Protocol::PullResponse(from, mut data) => {
+                data.retain(|v| v.verify_signature());
                 Self::handle_pull_response(me, from, data);
                 vec![]
             }
-            Protocol::PushMessage(from, data) => Self::handle_push_message(me, from, &data),
+            Protocol::PushMessage(from, mut data) => {
+                data.retain(|v| v.verify_signature());
+                Self::handle_push_message(me, from, &data)
+            }
             Protocol::PruneMessage(from, data) => {
+                //TODO does prune need sig verify?
                 inc_new_counter_info!("cluster_info-prune_message", 1);
                 inc_new_counter_info!("cluster_info-prune_message-size", data.len());
                 me.write().unwrap().gossip.process_prune_msg(from, &data);
