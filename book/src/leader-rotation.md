@@ -7,7 +7,7 @@ what node is the leader, how that mechanism may choose different leaders at the 
 
 ## Leader Seed Generation
 
-Leader selection is decided via a random seed.  The process is as follows:
+Leader scheduling is decided via a random seed.  The process is as follows:
 
 1. Periodically, at a specific PoH tick count, select the signatures of the votes that made up the last supermajority
 2. Concatenate the signatures
