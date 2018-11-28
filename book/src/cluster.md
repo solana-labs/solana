@@ -48,7 +48,7 @@ The [Avalance explainer video](https://www.youtube.com/watch?v=qt_gDRXHrHQ) is
 a conceptual overview of how a Solana leader can continuously process a gigabit
 of transaction data per second and then get that same data, after being
 recorded on the ledger, out to multiple validators on a single gigabit
-backplane.
+*data plane*.
 
 In practice, we found that just one level of the Avalanche validator tree is
 sufficient for at least 150 validators. We anticipate adding the second level
