@@ -20,6 +20,11 @@ export type TransactionSignature = string;
 export type TransactionId = string;
 
 /**
+ * Maximum over-the-wire size of a Transaction
+ */
+export const PACKET_DATA_SIZE = 512;
+
+/**
  * List of TransactionInstruction object fields that may be initialized at construction
  *
  * @typedef {Object} TransactionInstructionCtorFields
@@ -290,8 +295,8 @@ export class Transaction {
     });
     signData.copy(wireTransaction, 8 + signatures.length * 64);
     invariant(
-      wireTransaction.length < 512,
-      `${wireTransaction.length}, ${signatures.length}`,
+      wireTransaction.length <= PACKET_DATA_SIZE,
+      `Transaction too large: ${wireTransaction.length} > ${PACKET_DATA_SIZE}`,
     );
     return wireTransaction;
   }
