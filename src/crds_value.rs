@@ -145,10 +145,7 @@ impl CrdsValue {
             CrdsValue::Vote(vote) => vote.signature,
             CrdsValue::LeaderId(leader_id) => leader_id.signature,
         };
-        sig.verify(
-            &self.label().pubkey().as_ref(),
-            &self.get_sign_data(),
-        )
+        sig.verify(&self.label().pubkey().as_ref(), &self.get_sign_data())
     }
 
     /// get all the data relevant to signing contained in this value (excludes signature fields)
