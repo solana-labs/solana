@@ -1,6 +1,6 @@
-# DbLedger
+# Unified Window and Ledger
 
-This RFC describes a change to ledger and window to support Solana's [consensus](0002-consensus.md)algorithm.
+This RFC describes a change to ledger and window to support Solana's [consensus](0002-consensus.md) algorithm.
 
 ## Current Design
 
@@ -20,6 +20,7 @@ The window holds blobs (the over-the-air format, serialized Entries, one-per-blo
 ### Limitations
 
 #### One-dimensional key space
+
 The window and the ledger are indexed by ledger height, which is number of Entries ever generated in the PoH chain until the current blob.  This limitation prevents the window and the ledger from storing the overlapping histories possible in Solana's consensus protocol.
 
 #### Limited caching
@@ -44,7 +45,7 @@ Blobs will be moved to a fork-able key space the tuple of `leader slot` + `blob 
 
 Repair requests for recent blobs are served out of RAM or recent files and out of deeper storage for less recent blobs, as implemented by the store backing DbLedger.
 
-### Functionality of DbLedger (and hereafter "Ledger")
+### Functionalities of DbLedger (and hereafter "Ledger")
 
 1. Persistence: the ledger lives in the front of the nodes verification pipeline, right behind network receive and signature verification.  If the blob received is consistent with the leader schedule (i.e. was signed by the leader for the indicated slot), it is immediately stored.
 2. Repair: repair is the same as window repair above, but able to serve any blob that's been received. The ledger stores blobs with signatures, preserving the chain of origination.
@@ -55,8 +56,12 @@ Repair requests for recent blobs are served out of RAM or recent files and out o
 
 The bank exposes to replicate_stage:
 
- 1. the prev_id it's expecting, that is: which PoH chain it's working on
- 2.
+ 1. prev_id: which PoH chain it's working on as indicated by the id of the last entry it processed
+ 2. tick_height: the ticks in the PoH chain currently being verified by this bank
+ 4. votes: a stack of records that contain
+     a. prev_ids: what anything after this vote must chain to in PoH
+     b. tick height: the tick_height at which this vote was cast
+     c. lockout period: how long a chain must be observed to be in the ledger to be able to be chained below this vote
 
 ### Culling
 
