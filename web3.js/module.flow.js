@@ -98,13 +98,12 @@ declare module '@solana/web3.js' {
   declare export type TransactionId = string;
 
   declare type TransactionInstructionCtorFields = {|
-    keys?: Array<PublicKey>,
+    keys: ?Array<PublicKey>,
     programId?: PublicKey,
     userdata?: Buffer,
   |};
 
   declare export class TransactionInstruction {
-    fee: number;
     keys: Array<PublicKey>;
     programId: PublicKey;
     userdata: Buffer;
@@ -122,13 +121,15 @@ declare module '@solana/web3.js' {
   |};
 
   declare export class Transaction {
+    signatures: Array<SignaturePubkeyPair>;
     signature: ?Buffer;
-    fee: number;
     instructions: Array<TransactionInstruction>;
+    lastId: ?TransactionId;
+    fee: number;
 
     constructor(opts?: TransactionCtorFields): Transaction;
     add(
-      ...items: Array<TransactionInstruction | TransactionInstructionCtorFields>
+      ...items: Array<Transaction | TransactionInstructionCtorFields>
     ): Transaction;
     sign(...signers: Array<Account>): void;
     signPartial(...partialSigners: Array<PublicKey | Account>): void;
