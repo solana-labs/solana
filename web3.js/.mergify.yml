@@ -1,1 +1,14 @@
 pull_request_rules:
+  - name: automatic merge on CI success and review
+     conditions:
+       - status-success=continuous-integration/travis-ci/pr
+       - label=automerge
+     actions:
+       merge:
+         method: rebase
+         strict: true
+  - name: remove outdated reviews
+    conditions:
+      - base=master
+    actions:
+      dismiss_reviews:
