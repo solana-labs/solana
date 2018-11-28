@@ -110,6 +110,11 @@ declare module '@solana/web3.js' {
     userdata: Buffer;
   }
 
+  declare type SignaturePubkeyPair = {|
+    signature: Buffer | null,
+    publicKey: PublicKey,
+  |};
+
   declare type TransactionCtorFields = {|
     fee?: number,
     lastId?: TransactionId,

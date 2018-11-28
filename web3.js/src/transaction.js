@@ -63,6 +63,14 @@ export class TransactionInstruction {
 }
 
 /**
+ * @private
+ */
+type SignaturePubkeyPair = {|
+  signature: Buffer | null,
+  publicKey: PublicKey,
+|};
+
+/**
  * List of Transaction object fields that may be initialized at construction
  *
  * @typedef {Object} TransactionCtorFields
@@ -75,14 +83,6 @@ type TransactionCtorFields = {|
   fee?: number,
   lastId?: TransactionId,
   signatures?: Array<SignaturePubkeyPair>,
-|};
-
-/**
- * @private
- */
-type SignaturePubkeyPair = {|
-  signature: Buffer | null,
-  publicKey: PublicKey,
 |};
 
 /**
