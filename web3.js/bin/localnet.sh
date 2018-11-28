@@ -65,7 +65,7 @@ up)
 
   (
     set -x
-    RUST_LOG=${RUST_LOG:-solana=warn,solana_bpf=info,solana_jsonrpc=info,solana::rpc=info,solana_fullnode=info,solana::drone=info,solana::bank=info,solana::banking_stage=info}
+    RUST_LOG=${RUST_LOG:-solana=warn,solana_bpf=info,solana_jsonrpc=info,solana::rpc=info,solana_fullnode=info,solana::drone=info,solana::bank=info,solana::banking_stage=info,solana::system_program=info}
 
     docker run \
       --detach \
