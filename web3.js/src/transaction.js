@@ -7,7 +7,7 @@ import bs58 from 'bs58';
 
 import * as Layout from './layout';
 import {PublicKey} from './publickey';
-import type {Account} from './account';
+import {Account} from './account';
 
 /**
  * @typedef {string} TransactionSignature
@@ -67,9 +67,14 @@ export class TransactionInstruction {
  *
  * @typedef {Object} TransactionCtorFields
  * @property {?number} fee
+ * @property (?lastId} A recent transaction id
+ * @property (?signatures} One or more signatures
+ *
  */
 type TransactionCtorFields = {|
   fee?: number,
+  lastId?: TransactionId,
+  signatures?: Array<SignaturePubkeyPair>,
 |};
 
 /**
@@ -86,7 +91,7 @@ type SignaturePubkeyPair = {|
 export class Transaction {
   /**
    * Signatures for the transaction.  Typically created by invoking the
-   * `sign()` method one or more times.
+   * `sign()` method
    */
   signatures: Array<SignaturePubkeyPair> = [];
 
@@ -123,14 +128,22 @@ export class Transaction {
   }
 
   /**
-   * Add instructions to this Transaction
+   * Add one or more instructions to this Transaction
    */
-  add(item: Transaction | TransactionInstructionCtorFields): Transaction {
-    if (item instanceof Transaction) {
-      this.instructions = this.instructions.concat(item.instructions);
-    } else {
-      this.instructions.push(new TransactionInstruction(item));
+  add(
+    ...items: Array<Transaction | TransactionInstructionCtorFields>
+  ): Transaction {
+    if (items.length === 0) {
+      throw new Error('No instructions');
     }
+
+    items.forEach(item => {
+      if (item instanceof Transaction) {
+        this.instructions = this.instructions.concat(item.instructions);
+      } else {
+        this.instructions.push(new TransactionInstruction(item));
+      }
+    });
     return this;
   }
 
@@ -252,23 +265,66 @@ export class Transaction {
    * The Transaction must be assigned a valid `lastId` before invoking this method
    */
   sign(...signers: Array<Account>) {
-    if (signers.length === 0) {
+    this.signPartial(...signers);
+  }
+
+  /**
+   * Partially sign a Transaction with the specified accounts.  The `Account`
+   * inputs will be used to sign the Transaction immediately, while any
+   * `PublicKey` inputs will be referenced in the signed Transaction but need to
+   * be filled in later by calling `addSigner()` with the matching `Account`.
+   *
+   * All the caveats from the `sign` method apply to `signPartial`
+   */
+  signPartial(...partialSigners: Array<PublicKey | Account>) {
+    if (partialSigners.length === 0) {
       throw new Error('No signers');
     }
-    const signatures: Array<SignaturePubkeyPair> = signers.map(account => {
-      return {
-        signature: null,
-        publicKey: account.publicKey,
-      };
-    });
+    const signatures: Array<SignaturePubkeyPair> = partialSigners.map(
+      accountOrPublicKey => {
+        const publicKey =
+          accountOrPublicKey instanceof Account
+            ? accountOrPublicKey.publicKey
+            : accountOrPublicKey;
+        return {
+          signature: null,
+          publicKey,
+        };
+      },
+    );
     this.signatures = signatures;
     const signData = this._getSignData();
 
-    signers.forEach((account, index) => {
-      const signature = nacl.sign.detached(signData, account.secretKey);
+    partialSigners.forEach((accountOrPublicKey, index) => {
+      if (accountOrPublicKey instanceof PublicKey) {
+        return;
+      }
+      const signature = nacl.sign.detached(
+        signData,
+        accountOrPublicKey.secretKey,
+      );
       invariant(signature.length === 64);
       signatures[index].signature = signature;
     });
+  }
+
+  /**
+   * Fill in a signature for a partially signed Transaction.  The `signer` must
+   * be the corresponding `Account` for a `PublicKey` that was previously provided to
+   * `signPartial`
+   */
+  addSigner(signer: Account) {
+    const index = this.signatures.findIndex(sigpair =>
+      signer.publicKey.equals(sigpair.publicKey),
+    );
+    if (index < 0) {
+      throw new Error(`Unknown signer: ${signer.publicKey.toString()}`);
+    }
+
+    const signData = this._getSignData();
+    const signature = nacl.sign.detached(signData, signer.secretKey);
+    invariant(signature.length === 64);
+    this.signatures[index].signature = signature;
   }
 
   /**

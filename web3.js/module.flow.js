@@ -69,9 +69,7 @@ declare module '@solana/web3.js' {
       transaction: Transaction,
       ...signers: Array<Account>
     ): Promise<TransactionSignature>;
-    sendRawTransaction(
-      wireTransaction: Buffer,
-    ): Promise<TransactionSignature>;
+    sendRawTransaction(wireTransaction: Buffer): Promise<TransactionSignature>;
     onAccountChange(
       publickey: PublicKey,
       callback: AccountChangeCallback,
@@ -114,6 +112,8 @@ declare module '@solana/web3.js' {
 
   declare type TransactionCtorFields = {|
     fee?: number,
+    lastId?: TransactionId,
+    signatures?: Array<SignaturePubkeyPair>,
   |};
 
   declare export class Transaction {
@@ -123,9 +123,11 @@ declare module '@solana/web3.js' {
 
     constructor(opts?: TransactionCtorFields): Transaction;
     add(
-      item: TransactionInstruction | TransactionInstructionCtorFields,
+      ...items: Array<TransactionInstruction | TransactionInstructionCtorFields>
     ): Transaction;
-    sign(from: Account): void;
+    sign(...signers: Array<Account>): void;
+    signPartial(...partialSigners: Array<PublicKey | Account>): void;
+    addSigner(signer: Account): void;
     serialize(): Buffer;
   }
 
