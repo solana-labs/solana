@@ -38,12 +38,13 @@ RUN gpg --no-tty --keyserver hkp://pgp.mit.edu --recv 0x2D2CEF1034921684
 RUN mkdir /tmp/cmake-install && cd /tmp/cmake-install && \
     wget "https://cmake.org/files/v3.7/cmake-3.7.2-SHA-256.txt.asc" && \
     wget "https://cmake.org/files/v3.7/cmake-3.7.2-SHA-256.txt" && \
-    # gpg --verify cmake-3.7.2-SHA-256.txt.asc cmake-3.7.2-SHA-256.txt && \
+    gpg --verify cmake-3.7.2-SHA-256.txt.asc cmake-3.7.2-SHA-256.txt && \
     wget "https://cmake.org/files/v3.7/cmake-3.7.2-Linux-x86_64.tar.gz" && \
     ( grep "cmake-3.7.2-Linux-x86_64.tar.gz" cmake-3.7.2-SHA-256.txt | \
       sha256sum -c - ) && \
     tar xzf cmake-3.7.2-Linux-x86_64.tar.gz -C /usr/local --strip-components=1 && \
-    cd / && rm -rf /tmp/cmake-install
+    cd / && \
+    rm -rf /tmp/cmake-install
 
 # ADD checksums /tmp/checksums
 # ADD scripts /tmp/scripts

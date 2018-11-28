@@ -7,7 +7,7 @@ https://hub.docker.com/r/solanalabs/llvm/
 
 ### Usage:
 
-This Docker is optionally used by the SDK build system.
+This Docker is optionally used by the SDK BPF build system.
 
 For more information:
 
