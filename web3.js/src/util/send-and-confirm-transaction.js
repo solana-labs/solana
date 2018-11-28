@@ -1,5 +1,7 @@
 // @flow
 
+import invariant from 'assert';
+
 import {Connection} from '../connection';
 import {Transaction} from '../transaction';
 import {sleep} from './sleep';
@@ -13,7 +15,7 @@ export async function sendAndConfirmTransaction(
   connection: Connection,
   transaction: Transaction,
   ...signers: Array<Account>
-): Promise<?TransactionSignature> {
+): Promise<TransactionSignature> {
   let sendRetries = 10;
   let signature;
   for (;;) {
@@ -52,5 +54,6 @@ export async function sendAndConfirmTransaction(
     await sleep(Math.random() * 100);
   }
 
+  invariant(signature !== undefined);
   return signature;
 }
