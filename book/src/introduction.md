@@ -4,7 +4,7 @@ Solana is the name of an open source project that is implementing a new
 high-performance, permissionless blockchain. Solana is also the name of a
 company headquartered in San Francisco that maintains the open source project.
 
-# About this book
+# About this Book
 
 This book defines the architecture of Solana, a blockchain built from the
 ground up for scale. The goal of the architecture is to demonstrate there
@@ -28,7 +28,7 @@ author's best effort. It is up to the reader to check and validate their
 accuracy and truthfulness. Furthermore, nothing in this project constitutes a
 solicitation for investment.
 
-# History of the Solana codebase
+# History of the Solana Codebase
 
 In November of 2017 Anatoly Yakovenko published a whitepaper describing Proof
 of History, a technique for keeping time between computers that do not trust
@@ -87,7 +87,7 @@ thousand. The project was also extended to support on-chain programs written
 in the C programming language and run concurrently in a safe execution
 environment called BPF. Next step: going permissionless.
 
-# What is a Solana cluster and why would one use it?
+# What is a Solana Cluster?
 
 A cluster is a set of computers that work together and can be viewed from the
 outside as a single system. A Solana cluster is a set of independently owned
@@ -103,7 +103,7 @@ copy of the ledger, the output of its programs (which may contain a record of
 who possesses what) will forever be reproducible, independent of the
 organization that launched it.
 
-# What are sols?
+# What are Sols?
 
 A sol is the name of Solana's native token, which can be passed to nodes in a
 solana cluster in exchange for running an on-chain program or validating its

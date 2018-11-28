@@ -17,7 +17,6 @@
   - [TPU](tpu.md)
   - [TVU](tvu.md)
   - [NCP](ncp.md)
-  - [JSON RPC Service](jsonrpc-service.md)
   - [The Runtime](runtime.md)
 
 ## Appendix

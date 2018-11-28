@@ -58,7 +58,7 @@ theoretical limit of 710,000 transactions per second.
 
 [Proof of History overview](https://medium.com/solana-labs/proof-of-history-a-clock-for-blockchain-cf47a61a9274)
 
-### Relationship to consensus mechanisms
+### Relationship to Consensus Mechanisms
 
 Most confusingly, a Proof of History (PoH) is more similar to a Verifiable
 Delay Function (VDF) than a Proof of Work or Proof of Stake consensus

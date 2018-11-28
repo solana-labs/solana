@@ -9,7 +9,7 @@ discuss how a cluster is created, how nodes join the cluster, how they share
 the ledger, how they ensure the ledger is replicated, and how they cope with
 buggy and malicious nodes.
 
-## Creating a cluster
+## Creating a Cluster
 
 To create a cluster, one needs the fullnode software and a *genesis block*. A
 minimal genesis block can be created using the command-line tools
@@ -30,7 +30,7 @@ the validator is expected to store those entries until *replicator* nodes
 submit proofs that they have stored copies of it. Once the validator observes a
 sufficient number of copies exist, it deletes its copy.
 
-## Joining a cluster
+## Joining a Cluster
 
 Fullnodes and replicators enter the cluster via registration messages sent to
 its *control plane*. The control plane is implemented using a *gossip*
@@ -61,7 +61,7 @@ Both problems justify the additional level, but you won't find it implemented
 in the reference design just yet, because Solana's gossip implementation is
 currently the bottleneck on the number of nodes per Solana cluster.
 
-## Malicious nodes
+## Malicious Nodes
 
 Solana is a *permissionless* blockchain, meaning that anyone wanting to
 participate in the network may do so. They need only *stake* some
