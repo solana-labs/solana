@@ -11,7 +11,7 @@ use log::Level;
 use ncp::Ncp;
 use packet::PACKET_DATA_SIZE;
 use result::{Error, Result};
-use rpc_request::RpcRequest;
+use rpc_request::{RpcClient, RpcRequest};
 use serde_json;
 use signature::{Keypair, Signature};
 use solana_metrics;
@@ -42,6 +42,8 @@ pub struct ThinClient {
     balances: HashMap<Pubkey, Account>,
     signature_status: bool,
     finality: Option<usize>,
+
+    rpc_client: RpcClient,
 }
 
 impl ThinClient {
@@ -53,6 +55,7 @@ impl ThinClient {
         transactions_socket: UdpSocket,
     ) -> Self {
         ThinClient {
+            rpc_client: RpcClient::new(),
             rpc_addr,
             transactions_addr,
             transactions_socket,
@@ -122,7 +125,12 @@ impl ThinClient {
     pub fn get_account_userdata(&mut self, pubkey: &Pubkey) -> io::Result<Option<Vec<u8>>> {
         let params = json!([format!("{}", pubkey)]);
         let rpc_string = format!("http://{}", self.rpc_addr.to_string());
-        let resp = RpcRequest::GetAccountInfo.make_rpc_request(&rpc_string, 1, Some(params));
+        let resp = RpcRequest::GetAccountInfo.make_rpc_request(
+            &self.rpc_client,
+            &rpc_string,
+            1,
+            Some(params),
+        );
         if let Ok(account_json) = resp {
             let account: Account =
                 serde_json::from_value(account_json).expect("deserialize account");
@@ -141,7 +149,12 @@ impl ThinClient {
         trace!("get_balance sending request to {}", self.rpc_addr);
         let params = json!([format!("{}", pubkey)]);
         let rpc_string = format!("http://{}", self.rpc_addr.to_string());
-        let resp = RpcRequest::GetAccountInfo.make_rpc_request(&rpc_string, 1, Some(params));
+        let resp = RpcRequest::GetAccountInfo.make_rpc_request(
+            &self.rpc_client,
+            &rpc_string,
+            1,
+            Some(params),
+        );
         if let Ok(account_json) = resp {
             let account: Account =
                 serde_json::from_value(account_json).expect("deserialize account");
@@ -152,6 +165,7 @@ impl ThinClient {
             self.balances.remove(&pubkey);
         }
         trace!("get_balance {:?}", self.balances.get(pubkey));
+
         // TODO: This is a hard coded call to introspect the balance of a budget_dsl contract
         // In the future custom contracts would need their own introspection
         self.balances
@@ -167,7 +181,8 @@ impl ThinClient {
         let rpc_string = format!("http://{}", self.rpc_addr.to_string());
         while !done {
             debug!("get_finality send_to {}", &self.rpc_addr);
-            let resp = RpcRequest::GetFinality.make_rpc_request(&rpc_string, 1, None);
+            let resp =
+                RpcRequest::GetFinality.make_rpc_request(&self.rpc_client, &rpc_string, 1, None);
 
             if let Ok(value) = resp {
                 done = true;
@@ -187,7 +202,12 @@ impl ThinClient {
         let mut tries_left = 5;
         let rpc_string = format!("http://{}", self.rpc_addr.to_string());
         while tries_left > 0 {
-            let resp = RpcRequest::GetTransactionCount.make_rpc_request(&rpc_string, 1, None);
+            let resp = RpcRequest::GetTransactionCount.make_rpc_request(
+                &self.rpc_client,
+                &rpc_string,
+                1,
+                None,
+            );
 
             if let Ok(value) = resp {
                 debug!("transaction_count recv_response: {:?}", value);
@@ -209,7 +229,8 @@ impl ThinClient {
         let rpc_string = format!("http://{}", self.rpc_addr.to_string());
         while !done {
             debug!("get_last_id send_to {}", &self.rpc_addr);
-            let resp = RpcRequest::GetLastId.make_rpc_request(&rpc_string, 1, None);
+            let resp =
+                RpcRequest::GetLastId.make_rpc_request(&self.rpc_client, &rpc_string, 1, None);
 
             if let Ok(value) = resp {
                 done = true;
@@ -286,6 +307,7 @@ impl ThinClient {
         let mut done = false;
         while !done {
             let resp = RpcRequest::ConfirmTransaction.make_rpc_request(
+                &self.rpc_client,
                 &rpc_string,
                 1,
                 Some(params.clone()),
