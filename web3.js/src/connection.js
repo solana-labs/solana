@@ -142,7 +142,7 @@ const RequestAirdropRpcResult = jsonRpcResult('string');
 /**
  * Expected JSON RPC response for the "sendTransaction" message
  */
-const SendTokensRpcResult = jsonRpcResult('string');
+const SendTransactionRpcResult = jsonRpcResult('string');
 
 /**
  * Information describing an account
@@ -429,12 +429,12 @@ export class Connection {
    * wire format
    */
   async sendRawTransaction(
-    wireTransaction: Buffer,
+    rawTransaction: Buffer,
   ): Promise<TransactionSignature> {
     const unsafeRes = await this._rpcRequest('sendTransaction', [
-      [...wireTransaction],
+      [...rawTransaction],
     ]);
-    const res = SendTokensRpcResult(unsafeRes);
+    const res = SendTransactionRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
     }

@@ -255,4 +255,10 @@ declare module '@solana/web3.js' {
     transaction: Transaction,
     ...signers: Array<Account>
   ): Promise<TransactionSignature>;
+
+  // === src/util/send-and-confirm-raw-transaction.js ===
+  declare export function sendAndConfirmRawTransaction(
+    connection: Connection,
+    wireTransaction: Buffer,
+  ): Promise<TransactionSignature>;
 }

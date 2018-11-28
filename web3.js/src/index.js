@@ -10,3 +10,6 @@ export {SystemProgram} from './system-program';
 export {Token, TokenAmount} from './token-program';
 export {Transaction, TransactionInstruction} from './transaction';
 export {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
+export {
+  sendAndConfirmRawTransaction,
+} from './util/send-and-confirm-raw-transaction';
