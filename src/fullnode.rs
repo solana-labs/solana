@@ -234,7 +234,7 @@ impl Fullnode {
         node.info.wallclock = timestamp();
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_keypair(
             node.info,
-            Some(keypair.clone()),
+            keypair.clone(),
         )));
 
         let (rpc_service, rpc_pubsub_service) =

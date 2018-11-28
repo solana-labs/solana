@@ -61,7 +61,7 @@ pub struct ClusterInfo {
     /// The network
     pub gossip: CrdsGossip,
     /// set the keypair that will be used to sign crds values generated. It is unset only in tests.
-    keypair: Option<Arc<Keypair>>,
+    keypair: Arc<Keypair>,
 }
 
 // TODO These messages should be signed, and go through the gpu pipeline for spam filtering
@@ -82,9 +82,9 @@ enum Protocol {
 impl ClusterInfo {
     pub fn new(node_info: NodeInfo) -> Self {
         //Without a keypair, gossip will not function. Only useful for tests.
-        ClusterInfo::new_with_keypair(node_info, None)
+        ClusterInfo::new_with_keypair(node_info, Arc::new(Keypair::new()))
     }
-    pub fn new_with_keypair(node_info: NodeInfo, keypair: Option<Arc<Keypair>>) -> Self {
+    pub fn new_with_keypair(node_info: NodeInfo, keypair: Arc<Keypair>) -> Self {
         let mut me = ClusterInfo {
             gossip: CrdsGossip::default(),
             keypair,
@@ -100,17 +100,13 @@ impl ClusterInfo {
         let now = timestamp();
         my_data.wallclock = now;
         let mut entry = CrdsValue::ContactInfo(my_data);
-        if let Some(keypair) = self.keypair.clone() {
-            entry.sign(keypair.as_ref());
-        }
+        entry.sign(&self.keypair);
         self.gossip.refresh_push_active_set();
         self.gossip.process_push_message(&[entry], now);
     }
     pub fn insert_info(&mut self, node_info: NodeInfo) {
         let mut value = CrdsValue::ContactInfo(node_info);
-        if let Some(keypair) = self.keypair.clone() {
-            value.sign(keypair.as_ref());
-        }
+        value.sign(&self.keypair);
         let _ = self.gossip.crds.insert(value, timestamp());
     }
     pub fn id(&self) -> Pubkey {
@@ -181,9 +177,7 @@ impl ClusterInfo {
         let leader = LeaderId::new(self_id, key, now);
         let mut entry = CrdsValue::LeaderId(leader);
         warn!("{}: LEADER_UPDATE TO {} from {}", self_id, key, prev);
-        if let Some(keypair) = self.keypair.clone() {
-            entry.sign(keypair.as_ref());
-        }
+        entry.sign(&self.keypair);
         self.gossip.process_push_message(&[entry], now);
     }
 
@@ -1363,5 +1357,46 @@ mod tests {
         }
         assert!(node.sockets.repair.local_addr().unwrap().port() >= FULLNODE_PORT_RANGE.0);
         assert!(node.sockets.repair.local_addr().unwrap().port() < FULLNODE_PORT_RANGE.1);
+    }
+
+    //test that all cluster_info objects only generate signed messages
+    //when constructed with keypairs
+    #[test]
+    fn test_gossip_signature_verification() {
+        //create new cluster info, leader, and peer
+        let keypair = Keypair::new();
+        let peer_keypair = Keypair::new();
+        let leader_keypair = Keypair::new();
+        let node_info = NodeInfo::new_localhost(keypair.pubkey(), 0);
+        let leader = NodeInfo::new_localhost(leader_keypair.pubkey(), 0);
+        let peer = NodeInfo::new_localhost(peer_keypair.pubkey(), 0);
+        let mut cluster_info = ClusterInfo::new_with_keypair(node_info, Arc::new(keypair));
+        let peer_cluster_info = &Arc::new(RwLock::new(ClusterInfo::new_with_keypair(
+            peer.clone(),
+            Arc::new(peer_keypair),
+        )));
+        cluster_info.set_leader(leader.id);
+        cluster_info.insert_info(peer.clone());
+        //check that all types of gossip messages are signed correctly
+        let (_, _, vals) = cluster_info.gossip.new_push_messages(timestamp());
+        vals.par_iter().for_each(|v| assert!(v.verify_signature()));
+        let (_, _, val) = cluster_info
+            .gossip
+            .new_pull_request(timestamp())
+            .ok()
+            .unwrap();
+        assert!(val.verify_signature());
+        // there should be some pushes ready
+        assert!(vals.len() > 0);
+        //using PushMessage since it has the fewest dependencies, but any protocol should work here
+        let resp = ClusterInfo::handle_protocol(
+            &peer_cluster_info,
+            &peer.ncp,
+            Protocol::PushMessage(cluster_info.id(), vals),
+            &SharedWindow::default(),
+            &mut None,
+        );
+        // there should be no prunes but check anyway
+        assert_eq!(resp.len(), 0);
     }
 }
