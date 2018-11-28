@@ -12,9 +12,13 @@ SRC_DIR ?= ./src
 TEST_DIR ?= ./test
 OUT_DIR ?= ./out
 
+ifeq ($(DOCKER),1)
+LLVM_DIR = $(LOCAL_PATH)llvm/llvm-docker
+else
 OS=$(shell uname)
 ifeq ($(OS),Darwin)
 LLVM_DIR ?= $(shell brew --prefix llvm)
+endif
 endif
 
 ifdef LLVM_DIR
@@ -29,14 +33,14 @@ LLC := llc-7
 OBJ_DUMP := llvm-objdump-7
 endif
 
-SYSTEM_INC_DIRS := -isystem $(LOCAL_PATH)inc
+SYSTEM_INC_DIRS := $(LOCAL_PATH)inc
 
 C_FLAGS := \
   -Werror \
   -O2 \
   -fno-builtin \
   -std=c17 \
-  $(SYSTEM_INC_DIRS) \
+  $(addprefix -isystem,$(SYSTEM_INC_DIRS)) \
   $(addprefix -I,$(INC_DIRS))
 
 CXX_FLAGS := \
@@ -88,6 +92,7 @@ TEST_CXX_FLAGS := \
   $(TESTFRAMEWORK_FLAGS) \
 
 help:
+	@echo ''
 	@echo 'BPF Program makefile'
 	@echo ''
 	@echo 'This makefile will build BPF Programs from C or C++ source files into ELFs'
@@ -102,8 +107,11 @@ help:
 	@echo ''
 	@echo 'User settings'
 	@echo '  - The following setting are overridable on the command line, default values shown:'
-	@echo '    - Show commands while building:'
-	@echo '      V=1'
+	@echo '    - Show commands while building: V=1'
+	@echo '      V=$(V)'
+	@echo '    - Use LLVM from docker: DOCKER=1'
+	@echo '      Docker image must be pulled first: docker pull solanalabs/llvm'
+	@echo '      DOCKER=$(DOCKER)'
 	@echo '    - List of include directories:'
 	@echo '      INC_DIRS=$(INC_DIRS)'
 	@echo '    - List of system include directories:'
@@ -119,7 +127,7 @@ help:
 	@echo ''
 	@echo 'Usage:'
 	@echo '  - make help - This help message'
-	@echo '  - make all - Builds all the programs'
+	@echo '  - make all - Build all the programs'
 	@echo '  - make test - Build and run all tests'
 	@echo '  - make dump_<program name> - Dumps the contents of the program to stdout'
 	@echo '  - make <program name> - Build a single program by name'
@@ -133,6 +141,7 @@ help:
 	@echo '  - Assuming a programed named foo (src/foo.c)'
 	@echo '    - make foo'
 	@echo '    - make dump_foo'
+	@echo ''
 
 .PRECIOUS: $(OUT_DIR)/%.bc
 $(OUT_DIR)/%.bc: $(SRC_DIR)/%.c
