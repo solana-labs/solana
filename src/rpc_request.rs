@@ -14,15 +14,18 @@ pub enum RpcRequest {
     RequestAirdrop,
     SendTransaction,
 }
+pub type RpcClient = reqwest::Client;
+
 impl RpcRequest {
     pub fn make_rpc_request(
         &self,
+        client: &RpcClient,
         rpc_addr: &str,
         id: u64,
         params: Option<Value>,
     ) -> Result<Value, Box<error::Error>> {
         let request = self.build_request_json(id, params);
-        let client = reqwest::Client::new();
+
         let mut response = client
             .post(rpc_addr)
             .header(CONTENT_TYPE, "application/json")
@@ -37,6 +40,7 @@ impl RpcRequest {
         }
         Ok(json["result"].clone())
     }
+
     fn build_request_json(&self, id: u64, params: Option<Value>) -> Value {
         let jsonrpc = "2.0";
         let method = match self {
@@ -168,8 +172,10 @@ mod tests {
 
         let rpc_addr = receiver.recv().unwrap();
         let rpc_addr = format!("http://{}", rpc_addr.to_string());
+        let rpc_client = RpcClient::new();
 
         let balance = RpcRequest::GetBalance.make_rpc_request(
+            &rpc_client,
             &rpc_addr,
             1,
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])),
@@ -177,7 +183,7 @@ mod tests {
         assert!(balance.is_ok());
         assert_eq!(balance.unwrap().as_u64().unwrap(), 50);
 
-        let last_id = RpcRequest::GetLastId.make_rpc_request(&rpc_addr, 2, None);
+        let last_id = RpcRequest::GetLastId.make_rpc_request(&rpc_client, &rpc_addr, 2, None);
         assert!(last_id.is_ok());
         assert_eq!(
             last_id.unwrap().as_str().unwrap(),
@@ -185,7 +191,12 @@ mod tests {
         );
 
         // Send erroneous parameter
-        let last_id = RpcRequest::GetLastId.make_rpc_request(&rpc_addr, 3, Some(json!("paramter")));
+        let last_id = RpcRequest::GetLastId.make_rpc_request(
+            &rpc_client,
+            &rpc_addr,
+            3,
+            Some(json!("paramter")),
+        );
         assert_eq!(last_id.is_err(), true);
     }
 }

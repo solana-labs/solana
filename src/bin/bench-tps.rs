@@ -1,11 +1,6 @@
-extern crate bincode;
 #[macro_use]
 extern crate clap;
-extern crate rand;
 extern crate rayon;
-#[macro_use]
-extern crate log;
-extern crate serde_json;
 #[macro_use]
 extern crate solana;
 extern crate solana_drone;
@@ -14,7 +9,6 @@ extern crate solana_sdk;
 
 use clap::{App, Arg};
 
-use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana::client::mk_client;
 use solana::cluster_info::{ClusterInfo, NodeInfo};
@@ -190,7 +184,6 @@ fn generate_txs(
 ) {
     let mut client = mk_client(leader);
     let last_id = client.get_last_id();
-    info!("last_id: {} {:?}", last_id, Instant::now());
     let tx_count = source.len();
     println!("Signing transactions... {} (reclaim={})", tx_count, reclaim);
     let signing_start = Instant::now();
@@ -293,24 +286,17 @@ fn do_tx_transfers(
 }
 
 const MAX_SPENDS_PER_TX: usize = 4;
-fn verify_transfer(client: &mut ThinClient, tx: &Transaction) -> bool {
-    if client.poll_for_signature(&tx.signatures[0]).is_err() {
-        println!("no signature");
-        return false;
-    }
+
+fn verify_funding_transfer(client: &mut ThinClient, tx: &Transaction, amount: u64) -> bool {
     for a in &tx.account_keys[1..] {
-        if client.poll_get_balance(a).unwrap_or(0) == 0 {
-            println!(
-                "no balance {} source bal: {} {:?}",
-                a,
-                client.poll_get_balance(&tx.account_keys[0]).unwrap_or(0),
-                tx
-            );
-            return false;
+        if client.get_balance(a).unwrap_or(0) >= amount {
+            return true;
         }
     }
-    true
+
+    false
 }
+
 /// fund the dests keys by spending all of the source keys into MAX_SPENDS_PER_TX
 /// on every iteration.  This allows us to replay the transfers because the source is either empty,
 /// or full
@@ -343,34 +329,63 @@ fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], token
                 to_fund.push((f.0, moves));
             }
         }
-        println!("sending... {}", to_fund.len());
-        // try to transfer a few at a time with recent last_id
-        to_fund.chunks(10_000).for_each(|chunk| {
-            loop {
-                let last_id = client.get_last_id();
-                println!("generating... {} {}", chunk.len(), last_id);
-                let mut to_fund_txs: Vec<_> = chunk
-                    .par_iter()
-                    .map(|(k, m)| Transaction::system_move_many(k, &m, last_id, 0))
-                    .collect();
-                // with randomly distributed the failures
-                // most of the account pairs should have some funding in one of the pairs
-                // durring generate_tx step
-                thread_rng().shuffle(&mut to_fund_txs);
-                println!("transfering... {}", chunk.len());
-                to_fund_txs.iter().for_each(|tx| {
-                    let _ = client.transfer_signed(&tx).expect("transfer");
-                });
-                // randomly sample some of the transfers
-                thread_rng().shuffle(&mut to_fund_txs);
-                let max = cmp::min(10, to_fund_txs.len());
-                if to_fund_txs[..max]
+
+        // try to transfer a "few" at a time with recent last_id
+        //  assume 4MB network buffers, and 512 byte packets
+        const FUND_CHUNK_LEN: usize = 4 * 1024 * 1024 / 512;
+
+        to_fund.chunks(FUND_CHUNK_LEN).for_each(|chunk| {
+            let mut tries = 0;
+
+            // this set of transactions just initializes us for bookkeeping
+            #[cfg_attr(feature = "cargo-clippy", allow(clone_double_ref))] // sigh
+            let mut to_fund_txs: Vec<_> = chunk
+                .par_iter()
+                .map(|(k, m)| {
+                    (
+                        k.clone(),
+                        Transaction::system_move_many(k, &m, Default::default(), 0),
+                    )
+                }).collect();
+
+            let amount = chunk[0].1[0].1;
+
+            while !to_fund_txs.is_empty() {
+                let receivers = to_fund_txs
                     .iter()
-                    .all(|tx| verify_transfer(client, tx))
-                {
-                    break;
-                }
+                    .fold(0, |len, (_, tx)| len + tx.instructions.len());
+
+                println!(
+                    "{} {} to {} in {} txs",
+                    if tries == 0 {
+                        "transferring"
+                    } else {
+                        " retrying"
+                    },
+                    amount,
+                    receivers,
+                    to_fund_txs.len(),
+                );
+
+                let last_id = client.get_last_id();
+
+                // re-sign retained to_fund_txes with updated last_id
+                to_fund_txs.par_iter_mut().for_each(|(k, tx)| {
+                    tx.sign(&[k], last_id);
+                });
+
+                to_fund_txs.iter().for_each(|(_, tx)| {
+                    client.transfer_signed(&tx).expect("transfer");
+                });
+
+                // retry anything that seems to have dropped through cracks
+                //  again since these txs are all or nothing, they're fine to
+                //  retry
+                to_fund_txs.retain(|(_, tx)| !verify_funding_transfer(client, &tx, amount));
+
+                tries += 1;
             }
+            println!("transferred");
         });
         println!("funded: {} left: {}", new_funded.len(), notfunded.len());
         funded = new_funded;

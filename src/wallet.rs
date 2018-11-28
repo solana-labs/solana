@@ -11,7 +11,7 @@ use loader_transaction::LoaderTransaction;
 use ring::rand::SystemRandom;
 use ring::signature::Ed25519KeyPair;
 use rpc::RpcSignatureStatus;
-use rpc_request::RpcRequest;
+use rpc_request::{RpcClient, RpcRequest};
 use serde_json;
 use signature::{Keypair, KeypairUtil, Signature};
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
@@ -316,6 +316,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
     let tpu_addr = leader.tpu;
     let drone_addr = config.drone_addr(tpu_addr);
     let rpc_addr = config.rpc_addr(leader.rpc);
+    let rpc_client = RpcClient::new();
 
     match config.command {
         // Get address of this client
@@ -328,7 +329,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             );
             let params = json!([format!("{}", config.id.pubkey())]);
             let previous_balance = match RpcRequest::GetBalance
-                .make_rpc_request(&rpc_addr, 1, Some(params))?
+                .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))?
                 .as_u64()
             {
                 Some(tokens) => tokens,
@@ -337,14 +338,14 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 ))?,
             };
 
-            let last_id = get_last_id(&rpc_addr)?;
+            let last_id = get_last_id(&rpc_client, &rpc_addr)?;
             let transaction =
                 request_airdrop_transaction(&drone_addr, &config.id.pubkey(), tokens, last_id)?;
-            send_and_confirm_tx(&rpc_addr, &transaction)?;
+            send_and_confirm_tx(&rpc_client, &rpc_addr, &transaction)?;
 
             let params = json!([format!("{}", config.id.pubkey())]);
             let current_balance = RpcRequest::GetBalance
-                .make_rpc_request(&rpc_addr, 1, Some(params))?
+                .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))?
                 .as_u64()
                 .unwrap_or(previous_balance);
 
@@ -358,7 +359,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             println!("Balance requested...");
             let params = json!([format!("{}", config.id.pubkey())]);
             let balance = RpcRequest::GetBalance
-                .make_rpc_request(&rpc_addr, 1, Some(params))?
+                .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))?
                 .as_u64();
             match balance {
                 Some(0) => Ok("No account found! Request an airdrop to get started.".to_string()),
@@ -370,17 +371,17 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         }
         // Cancel a contract by contract Pubkey
         WalletCommand::Cancel(pubkey) => {
-            let last_id = get_last_id(&rpc_addr)?;
+            let last_id = get_last_id(&rpc_client, &rpc_addr)?;
             let tx =
                 Transaction::budget_new_signature(&config.id, pubkey, config.id.pubkey(), last_id);
-            let signature_str = send_tx(&rpc_addr, &tx)?;
+            let signature_str = send_tx(&rpc_client, &rpc_addr, &tx)?;
             Ok(signature_str.to_string())
         }
         // Confirm the last client transaction by signature
         WalletCommand::Confirm(signature) => {
             let params = json!([format!("{}", signature)]);
             let confirmation = RpcRequest::ConfirmTransaction
-                .make_rpc_request(&rpc_addr, 1, Some(params))?
+                .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))?
                 .as_bool();
             match confirmation {
                 Some(b) => {
@@ -399,7 +400,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         WalletCommand::Deploy(ref program_location) => {
             let params = json!([format!("{}", config.id.pubkey())]);
             let balance = RpcRequest::GetBalance
-                .make_rpc_request(&rpc_addr, 1, Some(params))?
+                .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))?
                 .as_u64();
             if let Some(tokens) = balance {
                 if tokens < 1 {
@@ -409,7 +410,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 }
             }
 
-            let last_id = get_last_id(&rpc_addr)?;
+            let last_id = get_last_id(&rpc_client, &rpc_addr)?;
             let program = Keypair::new();
             let program_userdata = elf::File::open_path(program_location)
                 .map_err(|_| {
@@ -431,7 +432,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 bpf_loader::id(),
                 0,
             );
-            send_and_confirm_tx(&rpc_addr, &tx).map_err(|_| {
+            send_and_confirm_tx(&rpc_client, &rpc_addr, &tx).map_err(|_| {
                 WalletError::DynamicProgramError("Program allocate space failed".to_string())
             })?;
 
@@ -445,7 +446,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                     last_id,
                     0,
                 );
-                send_and_confirm_tx(&rpc_addr, &tx).map_err(|_| {
+                send_and_confirm_tx(&rpc_client, &rpc_addr, &tx).map_err(|_| {
                     WalletError::DynamicProgramError(format!(
                         "Program write failed at offset {:?}",
                         offset
@@ -454,14 +455,14 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 offset += USERDATA_CHUNK_SIZE as u32;
             }
 
-            let last_id = get_last_id(&rpc_addr)?;
+            let last_id = get_last_id(&rpc_client, &rpc_addr)?;
             let tx = Transaction::loader_finalize(&program, bpf_loader::id(), last_id, 0);
-            send_and_confirm_tx(&rpc_addr, &tx).map_err(|_| {
+            send_and_confirm_tx(&rpc_client, &rpc_addr, &tx).map_err(|_| {
                 WalletError::DynamicProgramError("Program finalize transaction failed".to_string())
             })?;
 
             let tx = Transaction::system_spawn(&program, last_id, 0);
-            send_and_confirm_tx(&rpc_addr, &tx).map_err(|_| {
+            send_and_confirm_tx(&rpc_client, &rpc_addr, &tx).map_err(|_| {
                 WalletError::DynamicProgramError("Program spawn failed".to_string())
             })?;
 
@@ -471,7 +472,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         }
         WalletCommand::GetTransactionCount => {
             let transaction_count = RpcRequest::GetTransactionCount
-                .make_rpc_request(&rpc_addr, 1, None)?
+                .make_rpc_request(&rpc_client, &rpc_addr, 1, None)?
                 .as_u64();
             match transaction_count {
                 Some(count) => Ok(count.to_string()),
@@ -482,11 +483,11 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         }
         // If client has positive balance, pay tokens to another address
         WalletCommand::Pay(tokens, to, timestamp, timestamp_pubkey, ref witnesses, cancelable) => {
-            let last_id = get_last_id(&rpc_addr)?;
+            let last_id = get_last_id(&rpc_client, &rpc_addr)?;
 
             if timestamp == None && *witnesses == None {
                 let tx = Transaction::system_new(&config.id, to, tokens, last_id);
-                let signature_str = send_tx(&rpc_addr, &tx)?;
+                let signature_str = send_tx(&rpc_client, &rpc_addr, &tx)?;
                 Ok(signature_str.to_string())
             } else if *witnesses == None {
                 let dt = timestamp.unwrap();
@@ -509,7 +510,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                     budget_program_id,
                     0,
                 );
-                let _signature_str = send_tx(&rpc_addr, &tx)?;
+                let _signature_str = send_tx(&rpc_client, &rpc_addr, &tx)?;
 
                 // Create account for contract state
                 let tx = Transaction::system_create(
@@ -521,7 +522,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                     budget_program_id,
                     0,
                 );
-                let _signature_str = send_tx(&rpc_addr, &tx)?;
+                let _signature_str = send_tx(&rpc_client, &rpc_addr, &tx)?;
 
                 // Initializing contract
                 let tx = Transaction::budget_new_on_date(
@@ -534,14 +535,14 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                     tokens,
                     last_id,
                 );
-                let signature_str = send_tx(&rpc_addr, &tx)?;
+                let signature_str = send_tx(&rpc_client, &rpc_addr, &tx)?;
 
                 Ok(json!({
                     "signature": signature_str,
                     "processId": format!("{}", contract_state.pubkey()),
                 }).to_string())
             } else if timestamp == None {
-                let last_id = get_last_id(&rpc_addr)?;
+                let last_id = get_last_id(&rpc_client, &rpc_addr)?;
 
                 let witness = if let Some(ref witness_vec) = *witnesses {
                     witness_vec[0]
@@ -565,7 +566,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                     budget_program_id,
                     0,
                 );
-                let _signature_str = send_tx(&rpc_addr, &tx)?;
+                let _signature_str = send_tx(&rpc_client, &rpc_addr, &tx)?;
 
                 // Create account for contract state
                 let tx = Transaction::system_create(
@@ -577,7 +578,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                     budget_program_id,
                     0,
                 );
-                let _signature_str = send_tx(&rpc_addr, &tx)?;
+                let _signature_str = send_tx(&rpc_client, &rpc_addr, &tx)?;
 
                 // Initializing contract
                 let tx = Transaction::budget_new_when_signed(
@@ -589,7 +590,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                     tokens,
                     last_id,
                 );
-                let signature_str = send_tx(&rpc_addr, &tx)?;
+                let signature_str = send_tx(&rpc_client, &rpc_addr, &tx)?;
 
                 Ok(json!({
                     "signature": signature_str,
@@ -603,20 +604,20 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         WalletCommand::TimeElapsed(to, pubkey, dt) => {
             let params = json!(format!("{}", config.id.pubkey()));
             let balance = RpcRequest::GetBalance
-                .make_rpc_request(&rpc_addr, 1, Some(params))?
+                .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))?
                 .as_u64();
 
             if let Some(0) = balance {
                 let params = json!([format!("{}", config.id.pubkey()), 1]);
                 RpcRequest::RequestAirdrop
-                    .make_rpc_request(&rpc_addr, 1, Some(params))
+                    .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
                     .unwrap();
             }
 
-            let last_id = get_last_id(&rpc_addr)?;
+            let last_id = get_last_id(&rpc_client, &rpc_addr)?;
 
             let tx = Transaction::budget_new_timestamp(&config.id, pubkey, to, dt, last_id);
-            let signature_str = send_tx(&rpc_addr, &tx)?;
+            let signature_str = send_tx(&rpc_client, &rpc_addr, &tx)?;
 
             Ok(signature_str.to_string())
         }
@@ -624,19 +625,19 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
         WalletCommand::Witness(to, pubkey) => {
             let params = json!([format!("{}", config.id.pubkey())]);
             let balance = RpcRequest::GetBalance
-                .make_rpc_request(&rpc_addr, 1, Some(params))?
+                .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))?
                 .as_u64();
 
             if let Some(0) = balance {
                 let params = json!([format!("{}", config.id.pubkey()), 1]);
                 RpcRequest::RequestAirdrop
-                    .make_rpc_request(&rpc_addr, 1, Some(params))
+                    .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
                     .unwrap();
             }
 
-            let last_id = get_last_id(&rpc_addr)?;
+            let last_id = get_last_id(&rpc_client, &rpc_addr)?;
             let tx = Transaction::budget_new_signature(&config.id, pubkey, to, last_id);
-            let signature_str = send_tx(&rpc_addr, &tx)?;
+            let signature_str = send_tx(&rpc_client, &rpc_addr, &tx)?;
 
             Ok(signature_str.to_string())
         }
@@ -674,8 +675,8 @@ pub fn gen_keypair_file(outfile: String) -> Result<String, Box<error::Error>> {
     Ok(serialized)
 }
 
-fn get_last_id(rpc_addr: &str) -> Result<Hash, Box<error::Error>> {
-    let result = RpcRequest::GetLastId.make_rpc_request(&rpc_addr, 1, None)?;
+fn get_last_id(rpc_client: &RpcClient, rpc_addr: &str) -> Result<Hash, Box<error::Error>> {
+    let result = RpcRequest::GetLastId.make_rpc_request(rpc_client, &rpc_addr, 1, None)?;
     if result.as_str().is_none() {
         Err(WalletError::RpcRequestError(
             "Received bad last_id".to_string(),
@@ -688,10 +689,15 @@ fn get_last_id(rpc_addr: &str) -> Result<Hash, Box<error::Error>> {
     Ok(Hash::new(&last_id_vec))
 }
 
-fn send_tx(rpc_addr: &str, tx: &Transaction) -> Result<String, Box<error::Error>> {
+fn send_tx(
+    rpc_client: &RpcClient,
+    rpc_addr: &str,
+    tx: &Transaction,
+) -> Result<String, Box<error::Error>> {
     let serialized = serialize(tx).unwrap();
     let params = json!([serialized]);
-    let signature = RpcRequest::SendTransaction.make_rpc_request(&rpc_addr, 2, Some(params))?;
+    let signature =
+        RpcRequest::SendTransaction.make_rpc_request(rpc_client, &rpc_addr, 2, Some(params))?;
     if signature.as_str().is_none() {
         Err(WalletError::RpcRequestError(
             "Received result of an unexpected type".to_string(),
@@ -700,10 +706,14 @@ fn send_tx(rpc_addr: &str, tx: &Transaction) -> Result<String, Box<error::Error>
     Ok(signature.as_str().unwrap().to_string())
 }
 
-fn confirm_tx(rpc_addr: &str, signature: &str) -> Result<RpcSignatureStatus, Box<error::Error>> {
+fn confirm_tx(
+    rpc_client: &RpcClient,
+    rpc_addr: &str,
+    signature: &str,
+) -> Result<RpcSignatureStatus, Box<error::Error>> {
     let params = json!([signature.to_string()]);
     let signature_status =
-        RpcRequest::GetSignatureStatus.make_rpc_request(&rpc_addr, 1, Some(params))?;
+        RpcRequest::GetSignatureStatus.make_rpc_request(rpc_client, &rpc_addr, 1, Some(params))?;
     if let Some(status) = signature_status.as_str() {
         let rpc_status = RpcSignatureStatus::from_str(status).map_err(|_| {
             WalletError::RpcRequestError("Unable to parse signature status".to_string())
@@ -716,13 +726,17 @@ fn confirm_tx(rpc_addr: &str, signature: &str) -> Result<RpcSignatureStatus, Box
     }
 }
 
-fn send_and_confirm_tx(rpc_addr: &str, tx: &Transaction) -> Result<(), Box<error::Error>> {
+fn send_and_confirm_tx(
+    rpc_client: &RpcClient,
+    rpc_addr: &str,
+    tx: &Transaction,
+) -> Result<(), Box<error::Error>> {
     let mut send_retries = 3;
     while send_retries > 0 {
         let mut status_retries = 4;
-        let signature_str = send_tx(rpc_addr, tx)?;
+        let signature_str = send_tx(rpc_client, rpc_addr, tx)?;
         let status = loop {
-            let status = confirm_tx(rpc_addr, &signature_str)?;
+            let status = confirm_tx(rpc_client, rpc_addr, &signature_str)?;
             if status == RpcSignatureStatus::SignatureNotFound {
                 status_retries -= 1;
                 if status_retries == 0 {
@@ -1200,9 +1214,11 @@ mod tests {
         assert!(sig_response.is_ok());
 
         let rpc_addr = format!("http://{}", leader_data.rpc.to_string());
+        let rpc_client = RpcClient::new();
+
         let params = json!([format!("{}", bob_config.id.pubkey())]);
         let balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_addr, 1, Some(params))
+            .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
@@ -1272,6 +1288,7 @@ mod tests {
         let drone_addr = receiver.recv().unwrap();
 
         let rpc_addr = format!("http://{}", leader_data.rpc.to_string());
+        let rpc_client = RpcClient::new();
 
         let mut config_payer = WalletConfig::default();
         config_payer.network = leader_data.ncp;
@@ -1283,11 +1300,11 @@ mod tests {
 
         assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
-        let last_id = get_last_id(&rpc_addr).unwrap();
+        let last_id = get_last_id(&rpc_client, &rpc_addr).unwrap();
         let transaction =
             request_airdrop_transaction(&drone_addr, &config_payer.id.pubkey(), 50, last_id)
                 .unwrap();
-        send_and_confirm_tx(&rpc_addr, &transaction).unwrap();
+        send_and_confirm_tx(&rpc_client, &rpc_addr, &transaction).unwrap();
 
         // Make transaction (from config_payer to bob_pubkey) requiring timestamp from config_witness
         let date_string = "\"2018-09-19T17:30:59Z\"";
@@ -1312,21 +1329,21 @@ mod tests {
 
         let params = json!([format!("{}", config_payer.id.pubkey())]);
         let config_payer_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_addr, 1, Some(params))
+            .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
         let params = json!([format!("{}", process_id)]);
         let contract_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_addr, 1, Some(params))
+            .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(contract_balance, 11);
         let params = json!([format!("{}", bob_pubkey)]);
         let recipient_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_addr, 1, Some(params))
+            .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
@@ -1339,21 +1356,21 @@ mod tests {
 
         let params = json!([format!("{}", config_payer.id.pubkey())]);
         let config_payer_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_addr, 1, Some(params))
+            .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
         let params = json!([format!("{}", process_id)]);
         let contract_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_addr, 1, Some(params))
+            .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(contract_balance, 1);
         let params = json!([format!("{}", bob_pubkey)]);
         let recipient_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_addr, 1, Some(params))
+            .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
@@ -1400,14 +1417,15 @@ mod tests {
         let drone_addr = receiver.recv().unwrap();
 
         let rpc_addr = format!("http://{}", leader_data.rpc.to_string());
+        let rpc_client = RpcClient::new();
 
         assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
-        let last_id = get_last_id(&rpc_addr).unwrap();
+        let last_id = get_last_id(&rpc_client, &rpc_addr).unwrap();
         let transaction =
             request_airdrop_transaction(&drone_addr, &config_payer.id.pubkey(), 50, last_id)
                 .unwrap();
-        send_and_confirm_tx(&rpc_addr, &transaction).unwrap();
+        send_and_confirm_tx(&rpc_client, &rpc_addr, &transaction).unwrap();
 
         // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
         config_payer.command = WalletCommand::Pay(
@@ -1430,21 +1448,21 @@ mod tests {
 
         let params = json!([format!("{}", config_payer.id.pubkey())]);
         let config_payer_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_addr, 1, Some(params))
+            .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
         let params = json!([format!("{}", process_id)]);
         let contract_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_addr, 1, Some(params))
+            .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(contract_balance, 11);
         let params = json!([format!("{}", bob_pubkey)]);
         let recipient_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_addr, 1, Some(params))
+            .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
@@ -1457,21 +1475,21 @@ mod tests {
 
         let params = json!([format!("{}", config_payer.id.pubkey())]);
         let config_payer_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_addr, 1, Some(params))
+            .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
         let params = json!([format!("{}", process_id)]);
         let contract_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_addr, 1, Some(params))
+            .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(contract_balance, 1);
         let params = json!([format!("{}", bob_pubkey)]);
         let recipient_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_addr, 1, Some(params))
+            .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
@@ -1517,6 +1535,7 @@ mod tests {
         let drone_addr = receiver.recv().unwrap();
 
         let rpc_addr = format!("http://{}", leader_data.rpc.to_string());
+        let rpc_client = RpcClient::new();
 
         let mut config_payer = WalletConfig::default();
         config_payer.network = leader_data.ncp;
@@ -1528,11 +1547,11 @@ mod tests {
 
         assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
-        let last_id = get_last_id(&rpc_addr).unwrap();
+        let last_id = get_last_id(&rpc_client, &rpc_addr).unwrap();
         let transaction =
             request_airdrop_transaction(&drone_addr, &config_payer.id.pubkey(), 50, last_id)
                 .unwrap();
-        send_and_confirm_tx(&rpc_addr, &transaction).unwrap();
+        send_and_confirm_tx(&rpc_client, &rpc_addr, &transaction).unwrap();
 
         // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
         config_payer.command = WalletCommand::Pay(
@@ -1555,21 +1574,21 @@ mod tests {
 
         let params = json!([format!("{}", config_payer.id.pubkey())]);
         let config_payer_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_addr, 1, Some(params))
+            .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(config_payer_balance, 39);
         let params = json!([format!("{}", process_id)]);
         let contract_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_addr, 1, Some(params))
+            .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(contract_balance, 11);
         let params = json!([format!("{}", bob_pubkey)]);
         let recipient_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_addr, 1, Some(params))
+            .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
@@ -1582,21 +1601,21 @@ mod tests {
 
         let params = json!([format!("{}", config_payer.id.pubkey())]);
         let config_payer_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_addr, 1, Some(params))
+            .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(config_payer_balance, 49);
         let params = json!([format!("{}", process_id)]);
         let contract_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_addr, 1, Some(params))
+            .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
         assert_eq!(contract_balance, 1);
         let params = json!([format!("{}", bob_pubkey)]);
         let recipient_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_addr, 1, Some(params))
+            .make_rpc_request(&rpc_client, &rpc_addr, 1, Some(params))
             .unwrap()
             .as_u64()
             .unwrap();
