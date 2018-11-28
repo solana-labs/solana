@@ -19,7 +19,7 @@ dryer and the first is being folded. In this way, one can make progress on
 three loads of laundry simultaneously. Given infinite loads, the pipeline will
 consistently complete a load at the rate of the slowest stage in the pipeline.
 
-## Pipelining in the fullnode
+## Pipelining in the Fullnode
 
 The fullnode contains two pipelined processes, one used in leader mode called
 the Tpu and one used in validator mode called the Tvu. In both cases, the

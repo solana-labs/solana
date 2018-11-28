@@ -152,7 +152,7 @@ $ snap info solana
 $ sudo snap refresh solana --devmode
 ```
 
-### Daemon support
+### Daemon Support
 The snap supports running a leader, validator or leader+drone node as a system
 daemon.
 
@@ -174,7 +174,7 @@ $ sudo snap set solana mode=
 Runtime configuration files for the daemon can be found in
 `/var/snap/solana/current/config`.
 
-#### Leader daemon
+#### Leader Daemon
 
 ```bash
 $ sudo snap set solana mode=leader

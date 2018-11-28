@@ -26,7 +26,7 @@ is:
 
 ``` number_of_proofs * data_size ```
 
-# Optimization with PoH
+## Optimization with PoH
 
 Solana is not the only distribute systems project using Proof of Replication,
 but it might be the most efficient implementation because of its ability to
@@ -43,7 +43,7 @@ symmetric keys. The total space required for verification is:
 with core count of equal to (Number of Identities). A CBC block is expected to
 be 1MB in size.
 
-# Network
+## Network
 
 Validators for PoRep are the same validators that are verifying transactions.
 They have some stake that they have put up as collateral that ensures that
@@ -54,7 +54,7 @@ Replicators are specialized light clients. They download a part of the ledger
 and store it and provide proofs of storing the ledger. For each verified proof,
 replicators are rewarded tokens from the mining pool.
 
-# Constraints
+## Constraints
 
 Solana's PoRep protocol instroduces the following constraints:
 
@@ -65,7 +65,7 @@ Solana's PoRep protocol instroduces the following constraints:
 many identities at once are batched with as many proofs for those identities
 verified concurrently for the same dataset.
 
-# Validation and Replication Protocol
+## Validation and Replication Protocol
 
 1. The network sets a replication target number, let's say 1k. 1k PoRep
    identities are created from signatures of a PoH hash. They are tied to a

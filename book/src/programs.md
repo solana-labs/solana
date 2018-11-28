@@ -3,7 +3,7 @@
 With the Solana runtime, we can execute on-chain programs concurrently, and
 written in the client’s choice of programming language.
 
-## Client interactions with Solana
+## Client Interactions with Solana
 
 <img alt="SDK tools" src="img/sdk-tools.svg" class="center"/>
 

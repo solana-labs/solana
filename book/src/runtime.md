@@ -16,7 +16,7 @@ states associated with the account keys.  For the transaction to be committed
 all the instructions must execute successfully; if any abort the whole
 transaction fails to commit.
 
-### Account structure
+### Account Structure
 
 Accounts maintain a token balance and program-specific memory.
 
