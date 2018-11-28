@@ -23,7 +23,6 @@ export class Loader {
    */
   programId: PublicKey;
 
-
   /**
    * Amount of program data placed in each load Transaction
    */
