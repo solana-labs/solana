@@ -6,7 +6,7 @@
 #include <solana_sdk.h>
 
 extern bool entrypoint(const uint8_t *input) {
-  SolKeyedAccounts ka[1];
+  SolKeyedAccount ka[1];
   uint64_t ka_len;
   const uint8_t *data;
   uint64_t data_len;
