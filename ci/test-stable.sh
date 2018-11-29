@@ -18,7 +18,7 @@ if [[ $(ulimit -n) -lt 65000 ]]; then
 fi
 
 _ cargo build --all --verbose
-_ cargo test --verbose --lib -- --nocapture
+_ cargo test --verbose --lib -- --nocapture --test-threads=1
 
 # Run integration tests serially
 for test in tests/*.rs; do

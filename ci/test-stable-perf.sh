@@ -24,7 +24,7 @@ source ./target/perf-libs/env.sh
 
 FEATURES=bpf_c,cuda,erasure,chacha
 _ cargo build --all --verbose --features="$FEATURES"
-_ cargo test --verbose --features="$FEATURES" --lib
+_ cargo test --verbose --features="$FEATURES" --lib -- --nocapture --test-threads=1
 
 # Run integration tests serially
 for test in tests/*.rs; do
