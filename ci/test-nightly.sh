@@ -13,7 +13,7 @@ _() {
 }
 
 # Uncomment this to run nightly test suit
-# _ cargo test --verbose --features=unstable
+# _ cargo test --verbose --features=unstable -- --test-threads=1
 
 maybe_cargo_install() {
   for cmd in "$@"; do
