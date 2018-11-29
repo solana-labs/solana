@@ -72,12 +72,15 @@ pub struct PruneData {
     pub signature: Signature,
     /// The Pubkey of the intended node/destination for this message
     pub destination: Pubkey,
+    /// The source Addr this message should have been received from
+    pub source: SocketAddr,
 }
 
 impl PruneData {
     pub fn get_sign_data(&self) -> Vec<u8> {
         let mut data = serialize(&self.prunes).expect("serialize prunes");
         data.extend_from_slice(&serialize(&self.destination).expect("serialize destination"));
+        data.extend_from_slice(&serialize(&self.source).expect("serialize source"));
         data
     }
 }
@@ -769,25 +772,28 @@ impl ClusterInfo {
         if !prunes.is_empty() {
             let mut wme = me.write().unwrap();
             inc_new_counter_info!("cluster_info-push_message-prunes", prunes.len());
-            let mut prune_msg = PruneData {
-                prunes,
-                signature: Signature::default(),
-                destination: from,
-            };
-            prune_msg.signature = Signature::new(
-                me.read()
-                    .unwrap()
-                    .keypair
-                    .sign(prune_msg.get_sign_data().as_ref())
-                    .as_ref(),
-            );
-            let rsp = Protocol::PruneMessage(self_id, prune_msg);
             let ci = wme.lookup(from).cloned();
             let pushes: Vec<_> = wme.new_push_requests();
             inc_new_counter_info!("cluster_info-push_message-pushes", pushes.len());
             let mut rsp: Vec<_> = ci
-                .and_then(|ci| to_blob(rsp, ci.ncp).ok())
-                .into_iter()
+                .and_then(|ci| {
+                    let mut prune_msg = PruneData {
+                        prunes,
+                        signature: Signature::default(),
+                        destination: from,
+                        source: ci.ncp.clone(),
+                    };
+                    prune_msg.signature = Signature::new(
+                        me.read()
+                            .unwrap()
+                            .keypair
+                            .sign(prune_msg.get_sign_data().as_ref())
+                            .as_ref(),
+                    );
+                    let rsp = Protocol::PruneMessage(self_id, prune_msg);
+
+                    to_blob(rsp, ci.ncp).ok()
+                }).into_iter()
                 .collect();
             let mut blobs: Vec<_> = pushes
                 .into_iter()
@@ -875,7 +881,7 @@ impl ClusterInfo {
                 Self::handle_push_message(me, from, &data)
             }
             Protocol::PruneMessage(from, data) => {
-                if data.destination == me.read().unwrap().id() && data
+                if data.destination == me.read().unwrap().id() && data.source == *from_addr && data
                     .signature
                     .verify(from.as_ref(), data.get_sign_data().as_ref())
                 {
@@ -1436,4 +1442,6 @@ mod tests {
         // there should be no prunes but check anyway
         assert_eq!(resp.len(), 0);
     }
+
+    //TODO test prunes and make sure they can't be forwarded.
 }
