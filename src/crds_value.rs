@@ -1,6 +1,6 @@
 use bincode::serialize;
 use contact_info::ContactInfo;
-use signature::{Keypair, Signature};
+use signature::{Keypair, Signable, Signature};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::Transaction;
 use std::fmt;
@@ -31,6 +31,64 @@ pub struct Vote {
     pub signature: Signature,
     pub height: u64,
     pub wallclock: u64,
+}
+
+impl Signable for LeaderId {
+    fn pubkey(&self) -> Pubkey {
+        self.id
+    }
+
+    fn get_sign_data(&self) -> Vec<u8> {
+        #[derive(Serialize)]
+        struct SignData {
+            id: Pubkey,
+            leader_id: Pubkey,
+            wallclock: u64,
+        }
+        let data = SignData {
+            id: self.id,
+            leader_id: self.leader_id,
+            wallclock: self.wallclock,
+        };
+        serialize(&data).expect("unable to serialize LeaderId")
+    }
+
+    fn get_signature(&self) -> Signature {
+        self.signature
+    }
+
+    fn set_signature(&mut self, signature: Signature) {
+        self.signature = signature
+    }
+}
+
+impl Signable for Vote {
+    fn pubkey(&self) -> Pubkey {
+        self.transaction.account_keys[0]
+    }
+
+    fn get_sign_data(&self) -> Vec<u8> {
+        #[derive(Serialize)]
+        struct SignData {
+            transaction: Transaction,
+            height: u64,
+            wallclock: u64,
+        }
+        let data = SignData {
+            transaction: self.transaction.clone(),
+            height: self.height,
+            wallclock: self.wallclock,
+        };
+        serialize(&data).expect("unable to serialize Vote")
+    }
+
+    fn get_signature(&self) -> Signature {
+        self.signature
+    }
+
+    fn set_signature(&mut self, signature: Signature) {
+        self.signature = signature
+    }
 }
 
 /// Type of the replicated value
@@ -97,9 +155,11 @@ impl CrdsValue {
     }
     pub fn label(&self) -> CrdsValueLabel {
         match self {
-            CrdsValue::ContactInfo(contact_info) => CrdsValueLabel::ContactInfo(contact_info.id),
-            CrdsValue::Vote(vote) => CrdsValueLabel::Vote(vote.transaction.account_keys[0]),
-            CrdsValue::LeaderId(leader_id) => CrdsValueLabel::LeaderId(leader_id.id),
+            CrdsValue::ContactInfo(contact_info) => {
+                CrdsValueLabel::ContactInfo(contact_info.pubkey())
+            }
+            CrdsValue::Vote(vote) => CrdsValueLabel::Vote(vote.pubkey()),
+            CrdsValue::LeaderId(leader_id) => CrdsValueLabel::LeaderId(leader_id.pubkey()),
         }
     }
     pub fn contact_info(&self) -> Option<&ContactInfo> {
@@ -128,49 +188,45 @@ impl CrdsValue {
             CrdsValueLabel::LeaderId(key),
         ]
     }
+}
 
-    pub fn sign(&mut self, keypair: &Keypair) {
-        let sign_data = self.get_sign_data();
-        let signature = Signature::new(&keypair.sign(&sign_data).as_ref());
+impl Signable for CrdsValue {
+    fn sign(&mut self, keypair: &Keypair) {
         match self {
-            CrdsValue::ContactInfo(contact_info) => contact_info.signature = signature,
-            CrdsValue::Vote(vote) => vote.signature = signature,
-            CrdsValue::LeaderId(leader_id) => leader_id.signature = signature,
-        }
-    }
-
-    pub fn verify_signature(&self) -> bool {
-        let sig = match self {
-            CrdsValue::ContactInfo(contact_info) => contact_info.signature,
-            CrdsValue::Vote(vote) => vote.signature,
-            CrdsValue::LeaderId(leader_id) => leader_id.signature,
+            CrdsValue::ContactInfo(contact_info) => contact_info.sign(keypair),
+            CrdsValue::Vote(vote) => vote.sign(keypair),
+            CrdsValue::LeaderId(leader_id) => leader_id.sign(keypair),
         };
-        sig.verify(&self.label().pubkey().as_ref(), &self.get_sign_data())
+    }
+    fn verify(&self) -> bool {
+        match self {
+            CrdsValue::ContactInfo(contact_info) => contact_info.verify(),
+            CrdsValue::Vote(vote) => vote.verify(),
+            CrdsValue::LeaderId(leader_id) => leader_id.verify(),
+        }
     }
 
-    /// get all the data relevant to signing contained in this value (excludes signature fields)
-    fn get_sign_data(&self) -> Vec<u8> {
-        let mut data = serialize(&self.wallclock()).expect("serialize wallclock");
-
+    fn pubkey(&self) -> Pubkey {
         match self {
-            CrdsValue::ContactInfo(contact_info) => contact_info.get_sign_data(),
-            CrdsValue::Vote(vote) => {
-                let transaction = serialize(&vote.transaction).expect("serialize transaction");
-                data.extend_from_slice(&transaction);
-                let height = serialize(&vote.transaction).expect("serialize height");
-                data.extend_from_slice(&height);
-                data
-            }
-            CrdsValue::LeaderId(leader_id) => {
-                let id = serialize(&leader_id.id).expect("serialize id");
-                data.extend_from_slice(&id);
-                let leader_id = serialize(&leader_id.leader_id).expect("serialize leader_id");
-                data.extend_from_slice(&leader_id);
-                data
-            }
+            CrdsValue::ContactInfo(contact_info) => contact_info.pubkey(),
+            CrdsValue::Vote(vote) => vote.pubkey(),
+            CrdsValue::LeaderId(leader_id) => leader_id.pubkey(),
         }
+    }
+
+    fn get_sign_data(&self) -> Vec<u8> {
+        unimplemented!()
+    }
+
+    fn get_signature(&self) -> Signature {
+        unimplemented!()
+    }
+
+    fn set_signature(&mut self, _: Signature) {
+        unimplemented!()
     }
 }
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -216,9 +272,9 @@ mod test {
         let leader = LeaderId::new(keypair.pubkey(), Pubkey::default(), timestamp());
         let mut v = CrdsValue::LeaderId(leader);
         v.sign(&keypair);
-        assert!(v.verify_signature());
+        assert!(v.verify());
         v.sign(&fake_keypair);
-        assert!(!v.verify_signature());
+        assert!(!v.verify());
     }
 
 }

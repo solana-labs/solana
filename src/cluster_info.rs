@@ -27,7 +27,7 @@ use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use result::Result;
 use rpc::RPC_PORT;
-use signature::{Keypair, KeypairUtil, Signature};
+use signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{duration_as_ms, timestamp};
@@ -66,6 +66,8 @@ pub struct ClusterInfo {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PruneData {
+    /// Pubkey of the node that sent this prune data
+    pub pubkey: Pubkey,
     /// Pubkeys of nodes that should be pruned
     pub prunes: Vec<Pubkey>,
     /// Signature of this Prune Message
@@ -76,12 +78,34 @@ pub struct PruneData {
     pub source: SocketAddr,
 }
 
-impl PruneData {
-    pub fn get_sign_data(&self) -> Vec<u8> {
-        let mut data = serialize(&self.prunes).expect("serialize prunes");
-        data.extend_from_slice(&serialize(&self.destination).expect("serialize destination"));
-        data.extend_from_slice(&serialize(&self.source).expect("serialize source"));
-        data
+impl Signable for PruneData {
+    fn pubkey(&self) -> Pubkey {
+        self.pubkey
+    }
+
+    fn get_sign_data(&self) -> Vec<u8> {
+        #[derive(Serialize)]
+        struct SignData {
+            pubkey: Pubkey,
+            prunes: Vec<Pubkey>,
+            destination: Pubkey,
+            source: SocketAddr,
+        }
+        let data = SignData {
+            pubkey: self.pubkey,
+            prunes: self.prunes.clone(),
+            destination: self.destination,
+            source: self.source,
+        };
+        serialize(&data).expect("serialize PruneData")
+    }
+
+    fn get_signature(&self) -> Signature {
+        self.signature
+    }
+
+    fn set_signature(&mut self, signature: Signature) {
+        self.signature = signature
     }
 }
 
@@ -778,18 +802,13 @@ impl ClusterInfo {
             let mut rsp: Vec<_> = ci
                 .and_then(|ci| {
                     let mut prune_msg = PruneData {
+                        pubkey: self_id,
                         prunes,
                         signature: Signature::default(),
                         destination: from,
                         source: ci.ncp.clone(),
                     };
-                    prune_msg.signature = Signature::new(
-                        me.read()
-                            .unwrap()
-                            .keypair
-                            .sign(prune_msg.get_sign_data().as_ref())
-                            .as_ref(),
-                    );
+                    prune_msg.sign(&me.read().unwrap().keypair);
                     let rsp = Protocol::PruneMessage(self_id, prune_msg);
 
                     to_blob(rsp, ci.ncp).ok()
@@ -865,19 +884,19 @@ impl ClusterInfo {
         match request {
             // TODO verify messages faster
             Protocol::PullRequest(filter, caller) => {
-                if caller.verify_signature() {
+                if caller.verify() {
                     Self::handle_pull_request(me, filter, caller, from_addr)
                 } else {
                     vec![]
                 }
             }
             Protocol::PullResponse(from, mut data) => {
-                data.retain(|v| v.verify_signature());
+                data.retain(|v| v.verify());
                 Self::handle_pull_response(me, from, data);
                 vec![]
             }
             Protocol::PushMessage(from, mut data) => {
-                data.retain(|v| v.verify_signature());
+                data.retain(|v| v.verify());
                 Self::handle_push_message(me, from, &data)
             }
             Protocol::PruneMessage(from, data) => {
@@ -1422,13 +1441,13 @@ mod tests {
         cluster_info.insert_info(peer.clone());
         //check that all types of gossip messages are signed correctly
         let (_, _, vals) = cluster_info.gossip.new_push_messages(timestamp());
-        vals.par_iter().for_each(|v| assert!(v.verify_signature()));
+        vals.par_iter().for_each(|v| assert!(v.verify()));
         let (_, _, val) = cluster_info
             .gossip
             .new_pull_request(timestamp())
             .ok()
             .unwrap();
-        assert!(val.verify_signature());
+        assert!(val.verify());
         // there should be some pushes ready
         assert!(vals.len() > 0);
         //using PushMessage since it has the fewest dependencies, but any protocol should work here

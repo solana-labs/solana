@@ -30,6 +30,24 @@ impl Signature {
     }
 }
 
+pub trait Signable {
+    fn sign(&mut self, keypair: &Keypair) {
+        let data = self.get_sign_data();
+        self.set_signature(Signature::new(
+            &keypair.sign(&data).as_ref(),
+        ));
+    }
+    fn verify(&self) -> bool {
+        self.get_signature()
+            .verify(&self.pubkey().as_ref(), &self.get_sign_data())
+    }
+
+    fn pubkey(&self) -> Pubkey;
+    fn get_sign_data(&self) -> Vec<u8>;
+    fn get_signature(&self) -> Signature;
+    fn set_signature(&mut self, signature: Signature);
+}
+
 impl AsRef<[u8]> for Signature {
     fn as_ref(&self) -> &[u8] {
         &self.0[..]

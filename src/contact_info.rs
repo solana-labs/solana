@@ -1,6 +1,6 @@
 use bincode::serialize;
 use rpc::RPC_PORT;
-use signature::{Keypair, KeypairUtil, Signature};
+use signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::timestamp;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -164,23 +164,46 @@ impl ContactInfo {
     pub fn is_valid_address(addr: &SocketAddr) -> bool {
         (addr.port() != 0) && Self::is_valid_ip(addr.ip())
     }
-    pub fn get_sign_data(&self) -> Vec<u8> {
-        let mut data = serialize(&self.id).expect("serialize id");
-        let ncp = serialize(&self.ncp).expect("serialize ncp");
-        data.extend_from_slice(&ncp);
-        let tvu = serialize(&self.tvu).expect("serialize tvu");
-        data.extend_from_slice(&tvu);
-        let tpu = serialize(&self.tpu).expect("serialize tpu");
-        data.extend_from_slice(&tpu);
-        let storage_addr = serialize(&self.storage_addr).expect("serialize storage_addr");
-        data.extend_from_slice(&storage_addr);
-        let rpc = serialize(&self.rpc).expect("serialize rpc");
-        data.extend_from_slice(&rpc);
-        let rpc_pubsub = serialize(&self.rpc_pubsub).expect("serialize rpc_pubsub");
-        data.extend_from_slice(&rpc_pubsub);
-        let wallclock = serialize(&self.wallclock).expect("serialize wallclock");
-        data.extend_from_slice(&wallclock);
-        data
+}
+
+impl Signable for ContactInfo {
+    fn pubkey(&self) -> Pubkey {
+        self.id
+    }
+
+    fn get_sign_data(&self) -> Vec<u8> {
+        #[derive(Serialize)]
+        struct SignData {
+            id: Pubkey,
+            ncp: SocketAddr,
+            tvu: SocketAddr,
+            tpu: SocketAddr,
+            storage_addr: SocketAddr,
+            rpc: SocketAddr,
+            rpc_pubsub: SocketAddr,
+            wallclock: u64,
+        }
+
+        let me = self;
+        let data = SignData {
+            id: me.id,
+            ncp: me.ncp,
+            tvu: me.tvu,
+            tpu: me.tpu,
+            storage_addr: me.storage_addr,
+            rpc: me.rpc,
+            rpc_pubsub: me.rpc_pubsub,
+            wallclock: me.wallclock,
+        };
+        serialize(&data).expect("failed to serialize ContactInfo")
+    }
+
+    fn get_signature(&self) -> Signature {
+        self.signature
+    }
+
+    fn set_signature(&mut self, signature: Signature) {
+        self.signature = signature
     }
 }
 
