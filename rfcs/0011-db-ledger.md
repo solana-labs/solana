@@ -50,7 +50,7 @@ Repair requests for recent blobs are served out of RAM or recent files and out o
 1. Persistence: the ledger lives in the front of the nodes verification pipeline, right behind network receive and signature verification.  If the blob received is consistent with the leader schedule (i.e. was signed by the leader for the indicated slot), it is immediately stored.
 2. Repair: repair is the same as window repair above, but able to serve any blob that's been received. The ledger stores blobs with signatures, preserving the chain of origination.
 3. Forks: the ledger supports random access of blobs, so can support a validator's need to rollback and replay from a Bank checkpoint.
-4. Restart: the
+4. Restart: with proper culling, the ledger can be replayed by ordered enumeration of entries from slot 0.  The logic of the replicate_stage (i.e. dealing with ledger forks) will have to be used for the most recent entries in the ledger.
 
 ### Interfacing with Bank
 
@@ -58,10 +58,12 @@ The bank exposes to replicate_stage:
 
  1. prev_id: which PoH chain it's working on as indicated by the id of the last entry it processed
  2. tick_height: the ticks in the PoH chain currently being verified by this bank
- 4. votes: a stack of records that contain
+ 3. votes: a stack of records that contain
      a. prev_ids: what anything after this vote must chain to in PoH
      b. tick height: the tick_height at which this vote was cast
      c. lockout period: how long a chain must be observed to be in the ledger to be able to be chained below this vote
+
+Replicate_stage (TODO better name) uses ledger APIs to find the longest chain of entries it can hang off a previous vote.  If that chain of entries does not hang off the latest vote, the replicate stage rolls back the bank to that vote and replays the chain from there.
 
 ### Culling
 
