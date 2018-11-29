@@ -15,6 +15,7 @@ pub enum StorageProgram {
 }
 
 pub enum StorageError {
+    InvalidArgument,
     InvalidUserData,
 }
 
@@ -40,6 +41,11 @@ pub fn process_instruction(
     pix: usize,
     _accounts: &mut [&mut Account],
 ) -> Result<(), StorageError> {
+    // accounts_keys[0] must be signed
+    if tx.signed_key(pix, 0).is_none() {
+        Err(StorageError::InvalidArgument)?;
+    }
+
     if let Ok(syscall) = deserialize(tx.userdata(pix)) {
         match syscall {
             StorageProgram::SubmitMiningProof { sha_state } => {
