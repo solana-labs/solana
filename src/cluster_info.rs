@@ -794,10 +794,9 @@ impl ClusterInfo {
             .gossip
             .process_push_message(&data, timestamp());
         if !prunes.is_empty() {
-            let mut wme = me.write().unwrap();
             inc_new_counter_info!("cluster_info-push_message-prunes", prunes.len());
-            let ci = wme.lookup(from).cloned();
-            let pushes: Vec<_> = wme.new_push_requests();
+            let ci = me.read().unwrap().lookup(from).cloned();
+            let pushes: Vec<_> = me.write().unwrap().new_push_requests();
             inc_new_counter_info!("cluster_info-push_message-pushes", pushes.len());
             let mut rsp: Vec<_> = ci
                 .and_then(|ci| {
@@ -1432,7 +1431,7 @@ mod tests {
         let node_info = NodeInfo::new_localhost(keypair.pubkey(), 0);
         let leader = NodeInfo::new_localhost(leader_keypair.pubkey(), 0);
         let peer = NodeInfo::new_localhost(peer_keypair.pubkey(), 0);
-        let mut cluster_info = ClusterInfo::new_with_keypair(node_info, Arc::new(keypair));
+        let mut cluster_info = ClusterInfo::new_with_keypair(node_info.clone(), Arc::new(keypair));
         let peer_cluster_info = &Arc::new(RwLock::new(ClusterInfo::new_with_keypair(
             peer.clone(),
             Arc::new(peer_keypair),
@@ -1453,14 +1452,86 @@ mod tests {
         //using PushMessage since it has the fewest dependencies, but any protocol should work here
         let resp = ClusterInfo::handle_protocol(
             &peer_cluster_info,
-            &peer.ncp,
+            &node_info.ncp,
             Protocol::PushMessage(cluster_info.id(), vals),
+            &SharedWindow::default(),
+            &mut None,
+        );
+        // there should be no prunes
+        assert_eq!(resp.len(), 0);
+    }
+
+    //TODO test prunes and make sure they can't be forwarded.
+    #[test]
+    fn test_prune_signatures() {
+        //create new cluster info, leader, and peer
+        let keypair = Keypair::new();
+        let peer_keypair = Keypair::new();
+        let leader_keypair = Keypair::new();
+        let node_info = NodeInfo::new_localhost(keypair.pubkey(), 0);
+        let leader = NodeInfo::new_localhost(leader_keypair.pubkey(), 0);
+        let peer = NodeInfo::new_localhost(peer_keypair.pubkey(), 0);
+        let mut cluster_info = ClusterInfo::new_with_keypair(node_info.clone(), Arc::new(keypair));
+        let peer_cluster_info = &Arc::new(RwLock::new(ClusterInfo::new_with_keypair(
+            peer.clone(),
+            Arc::new(peer_keypair),
+        )));
+        let mut leader_cluster_info =
+            ClusterInfo::new_with_keypair(leader.clone(), Arc::new(leader_keypair));
+        peer_cluster_info.write().unwrap().set_leader(leader.id);
+        peer_cluster_info
+            .write()
+            .unwrap()
+            .insert_info(leader.clone());
+        cluster_info.set_leader(leader.id);
+        cluster_info.insert_info(peer.clone());
+        cluster_info.insert_info(leader.clone());
+        leader_cluster_info.set_leader(leader.id);
+        leader_cluster_info.insert_info(peer.clone());
+        let time = timestamp();
+        let (_, _, me_vals) = cluster_info.gossip.new_push_messages(time);
+        let (_, _, leader_vals) = leader_cluster_info.gossip.new_push_messages(time);
+
+        assert_eq!(me_vals.len(), 2);
+        assert_eq!(leader_vals.len(), 2);
+        let mut resp = ClusterInfo::handle_protocol(
+            &peer_cluster_info,
+            &node_info.ncp,
+            Protocol::PushMessage(cluster_info.id(), me_vals.clone()),
             &SharedWindow::default(),
             &mut None,
         );
         // there should be no prunes but check anyway
         assert_eq!(resp.len(), 0);
+        assert!(
+            peer_cluster_info
+                .read()
+                .unwrap()
+                .lookup(node_info.id)
+                .is_some()
+        );
+        resp = ClusterInfo::handle_protocol(
+            &peer_cluster_info,
+            &leader.ncp,
+            Protocol::PushMessage(leader_cluster_info.id(), me_vals.clone()),
+            &SharedWindow::default(),
+            &mut None,
+        );
+        // there should be a prune
+        assert_eq!(resp.len(), 1);
+        //check that the prune is valid
+        let blob = resp[0].read().unwrap();
+        deserialize(&blob.data[..blob.meta.size])
+            .iter()
+            .for_each(|request| match request {
+                //check that the request was sent to the leader to prune the peer node
+                Protocol::PruneMessage(from, data) => {
+                    assert!(data.verify());
+                    assert_eq!(data.source, blob.meta.addr());
+                    assert_eq!(data.destination, leader_cluster_info.id());
+                    assert_eq!(data.pubkey, *from);
+                }
+                _ => assert!(false),
+            });
     }
-
-    //TODO test prunes and make sure they can't be forwarded.
 }
