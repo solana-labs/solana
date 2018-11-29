@@ -743,11 +743,10 @@ impl ClusterInfo {
             .gossip
             .process_push_message(&data, timestamp());
         if !prunes.is_empty() {
-            let mut wme = me.write().unwrap();
             inc_new_counter_info!("cluster_info-push_message-prunes", prunes.len());
             let rsp = Protocol::PruneMessage(self_id, prunes);
-            let ci = wme.lookup(from).cloned();
-            let pushes: Vec<_> = wme.new_push_requests();
+            let ci = me.read().unwrap().lookup(from).cloned();
+            let pushes: Vec<_> = me.write().unwrap().new_push_requests();
             inc_new_counter_info!("cluster_info-push_message-pushes", pushes.len());
             let mut rsp: Vec<_> = ci
                 .and_then(|ci| to_blob(rsp, ci.ncp).ok())
