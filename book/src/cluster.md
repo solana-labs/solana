@@ -40,22 +40,57 @@ censored by any one node.
 
 ## Ledger Broadcasting
 
-The [Avalance explainer video](https://www.youtube.com/watch?v=qt_gDRXHrHQ) is
-a conceptual overview of how a Solana leader can continuously process a gigabit
-of transaction data per second and then get that same data, after being
-recorded on the ledger, out to multiple validators on a single gigabit *data
-plane*.
+A gossip network is much too slow to achieve subsecond finality once the
+network grows beyond a certain size. The time it takes to send messages to all
+nodes is proportional to the square of the number of nodes. If a blockchain
+wants to achieve low finality and attempts to do it using a gossip network, it
+will be forced to centralize to just a handful of nodes.  Solana believes that
+being decentralized and permissionless are fundamental properties of a public
+blockchain. If a blockchain wants to maintain subsecond finality, it must find
+a solution that does not restrict the number of participants in the cluster.
 
-In practice, we found that just one level of the Avalanche validator tree is
-sufficient for at least 150 validators. We anticipate adding the second level
-to solve one of two problems:
+Scalable finality requires a few tricks:
 
-1. To transmit ledger segments to slower "replicator" nodes.
-2. To scale up the number of validators nodes.
+1. Break transactions up into small batches and hash each with a VDF.
+2. Sign each batch with the leader's private key.
+3. Structure nodes as a conceptual tree to efficiently propate the batch.
 
-Both problems justify the additional level, but you won't find it implemented
-in the reference design just yet, because Solana's gossip implementation is
-currently the bottleneck on the number of nodes per Solana cluster.
+To hash the transaction batch, Solana uses its Proof of History VDF. Its hashes
+tell validators that the transactions have not been reordered and what leader
+slot they belong to.
+
+Next, each batch is signed by the leader to ensure that a malicious leader is
+not sending transactions beyond its allotted *slot*. When a validator verifies
+the signature and the Proof of History hash, it can use the Proof of History
+*tick height* to calculate the expected leader and reliably verify the
+signature belongs to that leader.
+
+Last, the fullnodes form a conceptual tree to efficiently pass each transaction
+batch across a separate network called the *data plane*. The data plane
+operates independently from the control plane described above, but can
+physically reside on the same IP network. By forming a tree, data moves across
+the network at a rate proportional to the height of the tree. That implies
+finality times will increase with the logarithm of the number of nodes, where
+the logarithm's base is the multiple of the number of nodes at each level.
+
+<img alt="Data Plane Diagram" src="img/data-plane.svg" class="center"/>
+
+In the diagram above, the multiple is 2 only because it is easiest to
+visualize. In practice, the multiple is much heigher. Since network latency can
+be higher than validation time, it's desirable to minimize the height of the
+tree, which implies maximizing the multiple. However, increasing the multiple
+means splitting the transaction batch into smaller pieces. When split so far
+that the 32-byte Proof of History hash and 28 byte UDP/IP headers exceed its
+size, the multiple is about as big as it's going to get.  We expect the
+multiple to end up somewhere in the ballpark of 1,000 and that even a massive
+worldwide cluster of fullnodes may have no more than three levels.
+
+At the time of this writing, the 150 validator testnet is just two levels: the
+leader on one and all validators on the other. We anticipate adding a third
+level soon to serve replicator nodes, which the cluster permits to have high
+network latency. Because of that additional latency, they cannot sit in the
+second level, where quickly sharing data with their peers is required to reach
+finality.
 
 ## Malicious Nodes
 
