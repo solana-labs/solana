@@ -22,6 +22,8 @@ use std::io::Write;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::Path;
 use std::str::FromStr;
+use std::thread::sleep;
+use std::time::Duration;
 use std::{error, fmt, mem};
 use system_transaction::SystemTransaction;
 use thin_client::poll_gossip_for_leader;
@@ -745,6 +747,7 @@ fn send_and_confirm_tx(
             } else {
                 break status;
             }
+            sleep(Duration::from_secs(1));
         };
         match status {
             RpcSignatureStatus::AccountInUse => {
