@@ -539,8 +539,9 @@ fn categorize_blob(
         None => {
             // Mark the missing memory
             erasures.push(erasure_index);
-            blobs.push(SharedBlob::default());
-            missing.push(blobs.last_mut().unwrap().clone());
+            let b = SharedBlob::default();
+            blobs.push(b.clone());
+            missing.push(b);
         }
     }
 
