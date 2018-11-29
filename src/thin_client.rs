@@ -10,6 +10,7 @@ use cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
 use log::Level;
 use ncp::Ncp;
 use packet::PACKET_DATA_SIZE;
+use reqwest;
 use result::{Error, Result};
 use rpc_request::{RpcClient, RpcRequest};
 use serde_json;
@@ -54,8 +55,35 @@ impl ThinClient {
         transactions_addr: SocketAddr,
         transactions_socket: UdpSocket,
     ) -> Self {
+        Self::new_from_client(
+            rpc_addr,
+            transactions_addr,
+            transactions_socket,
+            RpcClient::new(),
+        )
+    }
+
+    pub fn new_with_timeout(
+        rpc_addr: SocketAddr,
+        transactions_addr: SocketAddr,
+        transactions_socket: UdpSocket,
+        timeout: Duration,
+    ) -> Self {
+        let rpc_client = reqwest::Client::builder()
+            .timeout(timeout)
+            .build()
+            .expect("build rpc client");
+        Self::new_from_client(rpc_addr, transactions_addr, transactions_socket, rpc_client)
+    }
+
+    fn new_from_client(
+        rpc_addr: SocketAddr,
+        transactions_addr: SocketAddr,
+        transactions_socket: UdpSocket,
+        rpc_client: RpcClient,
+    ) -> Self {
         ThinClient {
-            rpc_client: RpcClient::new(),
+            rpc_client,
             rpc_addr,
             transactions_addr,
             transactions_socket,
@@ -686,7 +714,8 @@ mod tests {
         logger::setup();
         let addr = "0.0.0.0:1234".parse().unwrap();
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let mut client = ThinClient::new(addr, addr, transactions_socket);
+        let mut client =
+            ThinClient::new_with_timeout(addr, addr, transactions_socket, Duration::from_secs(2));
         assert_eq!(client.transaction_count(), 0);
     }
 
