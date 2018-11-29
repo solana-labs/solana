@@ -12,6 +12,11 @@ _() {
   "$@"
 }
 
+if [[ $(ulimit -n) -lt 65000 ]]; then
+  echo 'Error: nofiles too small, run "ulimit -n 65000" to continue'
+  exit 1
+fi
+
 _ cargo build --all --verbose
 _ cargo test --verbose --lib -- --nocapture
 
