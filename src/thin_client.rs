@@ -642,26 +642,19 @@ mod tests {
 
         assert!(client.poll_for_signature(&signature).is_ok());
 
-        // Create the vote account
+        // Create and register the vote account
         let validator_vote_account_keypair = Keypair::new();
         let vote_account_id = validator_vote_account_keypair.pubkey();
         let last_id = client.get_last_id();
 
         let transaction =
-            VoteTransaction::vote_account_new(&validator_keypair, vote_account_id, last_id, 1);
+            VoteTransaction::vote_account_new(&validator_keypair, vote_account_id, last_id, 1, 1);
         let signature = client.transfer_signed(&transaction).unwrap();
         assert!(client.poll_for_signature(&signature).is_ok());
 
         let balance = retry_get_balance(&mut client, &vote_account_id, Some(1))
             .expect("Expected balance for new account to exist");
         assert_eq!(balance, 1);
-
-        // Register the vote account to the validator
-        let last_id = client.get_last_id();
-        let transaction =
-            VoteTransaction::vote_account_register(&validator_keypair, vote_account_id, last_id, 0);
-        let signature = client.transfer_signed(&transaction).unwrap();
-        assert!(client.poll_for_signature(&signature).is_ok());
 
         const LAST: usize = 30;
         for run in 0..=LAST {
