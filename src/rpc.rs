@@ -59,8 +59,8 @@ impl JsonRpcService {
                             AccessControlAllowOrigin::Any,
                         ]))
                         .start_http(&rpc_addr);
-                if server.is_err() {
-                    warn!("JSON RPC service unavailable: unable to bind to RPC port {}. \nMake sure this port is not already in use by another application", rpc_addr.port());
+                if let Err(e) = server {
+                    warn!("JSON RPC service unavailable error: {:?}. \nAlso, check that port {} is not already in use by another application", e, rpc_addr.port());
                     return;
                 }
                 while !exit_.load(Ordering::Relaxed) {

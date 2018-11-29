@@ -59,8 +59,8 @@ impl PubSubService {
                 })
                 .start(&pubsub_addr);
 
-                if server.is_err() {
-                    warn!("Pubsub service unavailable: unable to bind to port {}. \nMake sure this port is not already in use by another application", pubsub_addr.port());
+                if let Err(e) = server {
+                    warn!("Pubsub service unavailable error: {:?}. \nAlso, check that port {} is not already in use by another application", e, pubsub_addr.port());
                     return;
                 }
                 while !exit_.load(Ordering::Relaxed) {
