@@ -169,7 +169,7 @@ fn main() {
         loop {
             let last_id = client.get_last_id();
             let transaction =
-                VoteTransaction::vote_account_new(&keypair, vote_account_id, last_id, 1);
+                VoteTransaction::vote_account_new(&keypair, vote_account_id, last_id, 1, 1);
             if client.transfer_signed(&transaction).is_err() {
                 sleep(Duration::from_secs(2));
                 continue;
@@ -183,26 +183,16 @@ fn main() {
         }
     }
 
-    // Register the vote account to this node
     loop {
-        let last_id = client.get_last_id();
-        let transaction =
-            VoteTransaction::vote_account_register(&keypair, vote_account_id, last_id, 0);
-        if client.transfer_signed(&transaction).is_err() {
-            sleep(Duration::from_secs(2));
-            continue;
-        }
-
-        let account_user_data = client.get_account_userdata(&vote_account_id);
-        if let Ok(Some(account_user_data)) = account_user_data {
-            if let Ok(vote_state) = VoteProgram::deserialize(&account_user_data) {
+        let vote_account_user_data = client.get_account_userdata(&vote_account_id);
+        if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
+            if let Ok(vote_state) = VoteProgram::deserialize(&vote_account_user_data) {
                 if vote_state.node_id == pubkey {
                     break;
                 }
             }
         }
-
-        sleep(Duration::from_secs(2));
+        panic!("Expected successful vote account registration");
     }
 
     loop {

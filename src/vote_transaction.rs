@@ -10,24 +10,21 @@ use signature::Keypair;
 use signature::KeypairUtil;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use system_transaction::SystemTransaction;
-use transaction::Transaction;
+use solana_sdk::system_instruction::SystemInstruction;
+use system_program;
+use transaction::{Instruction, Transaction};
 use vote_program::{self, Vote, VoteInstruction};
 
 pub trait VoteTransaction {
     fn vote_new(vote_account: &Keypair, vote: Vote, last_id: Hash, fee: u64) -> Self;
     fn vote_account_new(
         validator_id: &Keypair,
-        new_vote_account_id: Pubkey,
-        last_id: Hash,
-        num_tokens: u64,
-    ) -> Self;
-    fn vote_account_register(
-        validator_id: &Keypair,
         vote_account_id: Pubkey,
         last_id: Hash,
+        num_tokens: u64,
         fee: u64,
     ) -> Self;
+
     fn get_votes(&self) -> Vec<(Pubkey, Vote, Hash)>;
 }
 
@@ -46,35 +43,29 @@ impl VoteTransaction for Transaction {
 
     fn vote_account_new(
         validator_id: &Keypair,
-        new_vote_account_id: Pubkey,
-        last_id: Hash,
-        num_tokens: u64,
-    ) -> Self {
-        Transaction::system_create(
-            validator_id,
-            new_vote_account_id,
-            last_id,
-            num_tokens,
-            vote_program::get_max_size() as u64,
-            vote_program::id(),
-            0,
-        )
-    }
-
-    fn vote_account_register(
-        validator_id: &Keypair,
         vote_account_id: Pubkey,
         last_id: Hash,
+        num_tokens: u64,
         fee: u64,
     ) -> Self {
-        let register_tx = VoteInstruction::RegisterAccount;
-        Transaction::new(
-            validator_id,
+        Transaction::new_with_instructions(
+            &[validator_id],
             &[vote_account_id],
-            vote_program::id(),
-            &register_tx,
             last_id,
             fee,
+            vec![system_program::id(), vote_program::id()],
+            vec![
+                Instruction::new(
+                    0,
+                    &SystemInstruction::CreateAccount {
+                        tokens: num_tokens,
+                        space: vote_program::get_max_size() as u64,
+                        program_id: vote_program::id(),
+                    },
+                    vec![0, 1],
+                ),
+                Instruction::new(1, &VoteInstruction::RegisterAccount, vec![0, 1]),
+            ],
         )
     }
 
@@ -101,14 +92,14 @@ pub fn create_vote_account(
 ) -> Result<Keypair> {
     let new_vote_account = Keypair::new();
 
-    // Create the new vote account
-    let tx =
-        Transaction::vote_account_new(node_keypair, new_vote_account.pubkey(), last_id, num_tokens);
-    bank.process_transaction(&tx)?;
-
-    // Register the vote account to the validator
-    let tx =
-        Transaction::vote_account_register(node_keypair, new_vote_account.pubkey(), last_id, 0);
+    // Create and register the new vote account
+    let tx = Transaction::vote_account_new(
+        node_keypair,
+        new_vote_account.pubkey(),
+        last_id,
+        num_tokens,
+        0,
+    );
     bank.process_transaction(&tx)?;
 
     Ok(new_vote_account)
