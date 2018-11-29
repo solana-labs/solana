@@ -52,9 +52,12 @@ fn process_instruction(
         let mut keyed_accounts2: Vec<_> = tx.instructions[instruction_index]
             .accounts
             .iter()
-            .map(|&index| &tx.account_keys[index as usize])
-            .zip(program_accounts.iter_mut())
-            .map(|(key, account)| KeyedAccount { key, account })
+            .map(|&index| {
+                let index = index as usize;
+                let key = &tx.account_keys[index];
+                (key, index < tx.signatures.len())
+            }).zip(program_accounts.iter_mut())
+            .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
             .collect();
         keyed_accounts.append(&mut keyed_accounts2);
 

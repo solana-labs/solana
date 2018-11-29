@@ -170,7 +170,7 @@ impl BudgetProgram {
     ) -> Result<(), BudgetError> {
         let mut final_payment = None;
         if let Some(ref mut expr) = self.pending_budget {
-            let key = match tx.signed_key(instruction_index, 0) {
+            let key = match tx.signer_key(instruction_index, 0) {
                 None => return Err(BudgetError::UnsignedKey),
                 Some(key) => key,
             };
@@ -203,7 +203,7 @@ impl BudgetProgram {
         let mut final_payment = None;
 
         if let Some(ref mut expr) = self.pending_budget {
-            let key = match tx.signed_key(instruction_index, 0) {
+            let key = match tx.signer_key(instruction_index, 0) {
                 None => return Err(BudgetError::UnsignedKey),
                 Some(key) => key,
             };

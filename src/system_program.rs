@@ -43,7 +43,7 @@ fn process_instruction(tx: &Transaction, pix: usize, accounts: &mut [&mut Accoun
         let from = 0;
 
         // all system instructions require that accounts_keys[0] be a signer
-        if tx.signed_key(pix, from).is_none() {
+        if tx.signer_key(pix, from).is_none() {
             Err(Error::InvalidArgument)?;
         }
 

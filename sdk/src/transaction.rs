@@ -126,7 +126,7 @@ impl Transaction {
         self.key_index(instruction_index, accounts_index)
             .and_then(|account_keys_index| self.account_keys.get(account_keys_index))
     }
-    pub fn signed_key(&self, instruction_index: usize, accounts_index: usize) -> Option<&Pubkey> {
+    pub fn signer_key(&self, instruction_index: usize, accounts_index: usize) -> Option<&Pubkey> {
         match self.key_index(instruction_index, accounts_index) {
             None => None,
             Some(signature_index) => {
@@ -232,22 +232,22 @@ mod tests {
         assert!(tx.verify_refs());
 
         assert_eq!(tx.key(0, 0), Some(&key.pubkey()));
-        assert_eq!(tx.signed_key(0, 0), Some(&key.pubkey()));
+        assert_eq!(tx.signer_key(0, 0), Some(&key.pubkey()));
 
         assert_eq!(tx.key(1, 0), Some(&key.pubkey()));
-        assert_eq!(tx.signed_key(1, 0), Some(&key.pubkey()));
+        assert_eq!(tx.signer_key(1, 0), Some(&key.pubkey()));
 
         assert_eq!(tx.key(0, 1), Some(&key1));
-        assert_eq!(tx.signed_key(0, 1), None);
+        assert_eq!(tx.signer_key(0, 1), None);
 
         assert_eq!(tx.key(1, 1), Some(&key2));
-        assert_eq!(tx.signed_key(1, 1), None);
+        assert_eq!(tx.signer_key(1, 1), None);
 
         assert_eq!(tx.key(2, 0), None);
-        assert_eq!(tx.signed_key(2, 0), None);
+        assert_eq!(tx.signer_key(2, 0), None);
 
         assert_eq!(tx.key(0, 2), None);
-        assert_eq!(tx.signed_key(0, 2), None);
+        assert_eq!(tx.signer_key(0, 2), None);
 
         assert_eq!(*tx.program_id(0), prog1);
         assert_eq!(*tx.program_id(1), prog2);

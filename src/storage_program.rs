@@ -42,7 +42,7 @@ pub fn process_instruction(
     _accounts: &mut [&mut Account],
 ) -> Result<(), StorageError> {
     // accounts_keys[0] must be signed
-    if tx.signed_key(pix, 0).is_none() {
+    if tx.signer_key(pix, 0).is_none() {
         Err(StorageError::InvalidArgument)?;
     }
 

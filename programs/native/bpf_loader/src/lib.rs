@@ -110,7 +110,9 @@ fn serialize_parameters(
     v.write_u64::<LittleEndian>(keyed_accounts.len() as u64)
         .unwrap();
     for info in keyed_accounts.iter_mut() {
-        v.write_all(info.key.as_ref()).unwrap();
+        v.write_u64::<LittleEndian>(info.signer_key().is_some() as u64)
+            .unwrap();
+        v.write_all(info.unsigned_key().as_ref()).unwrap();
         v.write_u64::<LittleEndian>(info.account.tokens).unwrap();
         v.write_u64::<LittleEndian>(info.account.userdata.len() as u64)
             .unwrap();
@@ -129,6 +131,7 @@ fn deserialize_parameters(keyed_accounts: &mut [KeyedAccount], buffer: &[u8]) {
 
     let mut start = mem::size_of::<u64>();
     for info in keyed_accounts.iter_mut() {
+        start += mem::size_of::<u64>(); // skip signer_key boolean
         start += mem::size_of::<Pubkey>(); // skip pubkey
         info.account.tokens = LittleEndian::read_u64(&buffer[start..]);
 
@@ -185,6 +188,10 @@ fn entrypoint(
             vm.get_last_instruction_count()
         );
     } else if let Ok(instruction) = deserialize(tx_data) {
+        if keyed_accounts[0].signer_key().is_none() {
+            warn!("key[0] did not sign the transaction");
+            return false;
+        }
         match instruction {
             LoaderInstruction::Write { offset, bytes } => {
                 let offset = offset as usize;
@@ -202,7 +209,10 @@ fn entrypoint(
             }
             LoaderInstruction::Finalize => {
                 keyed_accounts[0].account.executable = true;
-                info!("Finalize: account {:?}", keyed_accounts[0].key);
+                info!(
+                    "Finalize: account {:?}",
+                    keyed_accounts[0].signer_key().unwrap()
+                );
             }
         }
     } else {

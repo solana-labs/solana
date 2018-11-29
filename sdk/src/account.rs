@@ -33,19 +33,50 @@ impl Account {
 #[repr(C)]
 #[derive(Debug)]
 pub struct KeyedAccount<'a> {
-    pub key: &'a Pubkey,
+    is_signer: bool, // Transaction was signed by this account's key
+    key: &'a Pubkey,
     pub account: &'a mut Account,
+}
+
+impl<'a> KeyedAccount<'a> {
+    pub fn signer_key(&self) -> Option<&Pubkey> {
+        if self.is_signer {
+            Some(self.key)
+        } else {
+            None
+        }
+    }
+
+    pub fn unsigned_key(&self) -> &Pubkey {
+        self.key
+    }
+
+    pub fn new(key: &'a Pubkey, is_signer: bool, account: &'a mut Account) -> KeyedAccount<'a> {
+        KeyedAccount {
+            key,
+            is_signer,
+            account,
+        }
+    }
 }
 
 impl<'a> From<(&'a Pubkey, &'a mut Account)> for KeyedAccount<'a> {
     fn from((key, account): (&'a Pubkey, &'a mut Account)) -> Self {
-        KeyedAccount { key, account }
+        KeyedAccount {
+            is_signer: false,
+            key,
+            account,
+        }
     }
 }
 
 impl<'a> From<&'a mut (Pubkey, Account)> for KeyedAccount<'a> {
     fn from((key, account): &'a mut (Pubkey, Account)) -> Self {
-        KeyedAccount { key, account }
+        KeyedAccount {
+            is_signer: false,
+            key,
+            account,
+        }
     }
 }
 

@@ -99,6 +99,10 @@ pub fn process_instruction(
             }
         }
     } else if let Ok(instruction) = deserialize(ix_userdata) {
+        if keyed_accounts[0].signer_key().is_none() {
+            warn!("key[0] did not sign the transaction");
+            return false;
+        }
         match instruction {
             LoaderInstruction::Write { offset, bytes } => {
                 trace!("NativeLoader::Write offset {} bytes {:?}", offset, bytes);
@@ -117,7 +121,10 @@ pub fn process_instruction(
 
             LoaderInstruction::Finalize => {
                 keyed_accounts[0].account.executable = true;
-                trace!("NativeLoader::Finalize prog: {:?}", keyed_accounts[0].key);
+                trace!(
+                    "NativeLoader::Finalize prog: {:?}",
+                    keyed_accounts[0].signer_key().unwrap()
+                );
             }
         }
     } else {
