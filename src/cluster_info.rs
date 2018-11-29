@@ -27,7 +27,7 @@ use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use result::Result;
 use rpc::RPC_PORT;
-use signature::{Keypair, KeypairUtil};
+use signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{duration_as_ms, timestamp};
@@ -64,7 +64,25 @@ pub struct ClusterInfo {
     keypair: Arc<Keypair>,
 }
 
-// TODO These messages should be signed, and go through the gpu pipeline for spam filtering
+#[derive(Debug, Deserialize, Serialize)]
+pub struct PruneData {
+    /// Pubkeys of nodes that should be pruned
+    pub prunes: Vec<Pubkey>,
+    /// Signature of this Prune Message
+    pub signature: Signature,
+    /// The Pubkey of the intended node/destination for this message
+    pub destination: Pubkey,
+}
+
+impl PruneData {
+    pub fn get_sign_data(&self) -> Vec<u8> {
+        let mut data = serialize(&self.prunes).expect("serialize prunes");
+        data.extend_from_slice(&serialize(&self.destination).expect("serialize destination"));
+        data
+    }
+}
+
+// TODO These messages should go through the gpu pipeline for spam filtering
 #[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
 enum Protocol {
@@ -72,7 +90,7 @@ enum Protocol {
     PullRequest(Bloom<Hash>, CrdsValue),
     PullResponse(Pubkey, Vec<CrdsValue>),
     PushMessage(Pubkey, Vec<CrdsValue>),
-    PruneMessage(Pubkey, Vec<Pubkey>),
+    PruneMessage(Pubkey, PruneData),
 
     /// Window protocol messages
     /// TODO: move this message to a different module
@@ -751,7 +769,19 @@ impl ClusterInfo {
         if !prunes.is_empty() {
             let mut wme = me.write().unwrap();
             inc_new_counter_info!("cluster_info-push_message-prunes", prunes.len());
-            let rsp = Protocol::PruneMessage(self_id, prunes);
+            let mut prune_msg = PruneData {
+                prunes,
+                signature: Signature::default(),
+                destination: from,
+            };
+            prune_msg.signature = Signature::new(
+                me.read()
+                    .unwrap()
+                    .keypair
+                    .sign(prune_msg.get_sign_data().as_ref())
+                    .as_ref(),
+            );
+            let rsp = Protocol::PruneMessage(self_id, prune_msg);
             let ci = wme.lookup(from).cloned();
             let pushes: Vec<_> = wme.new_push_requests();
             inc_new_counter_info!("cluster_info-push_message-pushes", pushes.len());
@@ -845,10 +875,17 @@ impl ClusterInfo {
                 Self::handle_push_message(me, from, &data)
             }
             Protocol::PruneMessage(from, data) => {
-                //TODO does prune need sig verify?
-                inc_new_counter_info!("cluster_info-prune_message", 1);
-                inc_new_counter_info!("cluster_info-prune_message-size", data.len());
-                me.write().unwrap().gossip.process_prune_msg(from, &data);
+                if data.destination == me.read().unwrap().id() && data
+                    .signature
+                    .verify(from.as_ref(), data.get_sign_data().as_ref())
+                {
+                    inc_new_counter_info!("cluster_info-prune_message", 1);
+                    inc_new_counter_info!("cluster_info-prune_message-size", data.prunes.len());
+                    me.write()
+                        .unwrap()
+                        .gossip
+                        .process_prune_msg(from, &data.prunes);
+                }
                 vec![]
             }
             Protocol::RequestWindowIndex(from, ix) => {
