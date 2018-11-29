@@ -147,4 +147,5 @@ members = [
     "programs/native/erc20",
     "programs/native/lua_loader",
     "programs/native/noop",
+    "vote-signer",
 ]
