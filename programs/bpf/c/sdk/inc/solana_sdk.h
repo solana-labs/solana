@@ -110,11 +110,12 @@ SOL_FN_PREFIX bool SolPubkey_same(const SolPubkey *one, const SolPubkey *two) {
  * Keyed Account
  */
 typedef struct {
-  SolPubkey *key;        /** Public Key of the account */
-  uint64_t *tokens;      /** Numer of tokens owned by this account */
-  uint64_t userdata_len; /** Length of userdata in bytes */
-  uint8_t *userdata;     /** On-chain data owned by this account */
-  SolPubkey *owner; /** Program that owns this account */
+  SolPubkey *key;        /** Public key of the account */
+  bool is_signer;        /** Transaction was signed by this account's key */
+  uint64_t *tokens;      /** Number of tokens owned by this account */
+  uint64_t userdata_len; /** Length of data in bytes */
+  uint8_t *userdata;     /** On-chain data within this account */
+  SolPubkey *owner;      /** Program that owns this account */
 } SolKeyedAccount;
 
 /**
@@ -243,6 +244,8 @@ SOL_FN_PREFIX bool sol_deserialize(
   input += sizeof(uint64_t);
   for (int i = 0; i < ka_len; i++) {
     // key
+    ka[i].is_signer = *(uint64_t *) input != 0;
+    input += sizeof(uint64_t);
     ka[i].key = (SolPubkey *) input;
     input += sizeof(SolPubkey);
 
@@ -319,6 +322,7 @@ SOL_FN_PREFIX void sol_log_params(
 ) {
   sol_log_64(0, 0, 0, 0, ka_len);
   for (int i = 0; i < ka_len; i++) {
+    sol_log_64(0, 0, 0, 0, ka[i].is_signer);
     sol_log_key(ka[i].key);
     sol_log_64(0, 0, 0, 0, *ka[i].tokens);
     sol_log_array(ka[i].userdata, ka[i].userdata_len);

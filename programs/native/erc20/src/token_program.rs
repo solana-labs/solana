@@ -182,7 +182,7 @@ impl TokenProgram {
         }
 
         if let TokenProgram::Account(dest_account) = &input_program_accounts[1] {
-            if info[0].key != &dest_account.token {
+            if info[0].signer_key().unwrap() != &dest_account.token {
                 error!("account 1 token mismatch");
                 Err(Error::InvalidArgument)?;
             }
@@ -225,16 +225,15 @@ impl TokenProgram {
             error!("account 0 is already allocated");
             Err(Error::InvalidArgument)?;
         }
-
         let mut token_account_info = TokenAccountInfo {
-            token: *info[2].key,
-            owner: *info[1].key,
+            token: *info[2].unsigned_key(),
+            owner: *info[1].unsigned_key(),
             amount: 0,
             delegate: None,
         };
         if input_program_accounts.len() >= 4 {
             token_account_info.delegate = Some(TokenAccountDelegateInfo {
-                source: *info[3].key,
+                source: *info[3].unsigned_key(),
                 original_amount: 0,
             });
         }
@@ -266,7 +265,7 @@ impl TokenProgram {
                 Err(Error::InvalidArgument)?;
             }
 
-            if info[0].key != &source_account.owner {
+            if info[0].signer_key().unwrap() != &source_account.owner {
                 error!("owner of account 1 not present");
                 Err(Error::InvalidArgument)?;
             }
@@ -291,7 +290,7 @@ impl TokenProgram {
                         error!("account 1/3 token mismatch");
                         Err(Error::InvalidArgument)?;
                     }
-                    if info[3].key != &delegate_info.source {
+                    if info[3].unsigned_key() != &delegate_info.source {
                         error!("Account 1 is not a delegate of account 3");
                         Err(Error::InvalidArgument)?;
                     }
@@ -338,7 +337,7 @@ impl TokenProgram {
                 Err(Error::InvalidArgument)?;
             }
 
-            if info[0].key != &source_account.owner {
+            if info[0].signer_key().unwrap() != &source_account.owner {
                 error!("owner of account 1 not present");
                 Err(Error::InvalidArgument)?;
             }
@@ -354,7 +353,7 @@ impl TokenProgram {
                     Err(Error::InvalidArgument)?;
                 }
                 Some(delegate_info) => {
-                    if info[1].key != &delegate_info.source {
+                    if info[1].unsigned_key() != &delegate_info.source {
                         error!("account 2 is not a delegate of account 1");
                         Err(Error::InvalidArgument)?;
                     }
@@ -387,13 +386,13 @@ impl TokenProgram {
         }
 
         if let TokenProgram::Account(source_account) = &input_program_accounts[1] {
-            if info[0].key != &source_account.owner {
+            if info[0].signer_key().unwrap() != &source_account.owner {
                 info!("owner of account 1 not present");
                 Err(Error::InvalidArgument)?;
             }
 
             let mut output_source_account = source_account.clone();
-            output_source_account.owner = *info[2].key;
+            output_source_account.owner = *info[2].unsigned_key();
             output_program_accounts.push((1, TokenProgram::Account(output_source_account)));
         } else {
             info!("account 1 is invalid");
@@ -405,6 +404,10 @@ impl TokenProgram {
     pub fn process(program_id: &Pubkey, info: &mut [KeyedAccount], input: &[u8]) -> Result<()> {
         let command = bincode::deserialize::<Command>(input).map_err(Self::map_to_invalid_args)?;
         info!("process_transaction: command={:?}", command);
+
+        if info[0].signer_key().is_none() {
+            Err(Error::InvalidArgument)?;
+        }
 
         let input_program_accounts: Vec<TokenProgram> = info
             .iter()

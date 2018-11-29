@@ -71,7 +71,7 @@ pub fn process_instruction(
     accounts: &mut [&mut Account],
 ) -> Result<()> {
     // all vote instructions require that accounts_keys[0] be a signer
-    if tx.signed_key(instruction_index, 0).is_none() {
+    if tx.signer_key(instruction_index, 0).is_none() {
         Err(Error::InvalidArguments)?;
     }
 

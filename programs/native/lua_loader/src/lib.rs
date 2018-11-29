@@ -19,7 +19,14 @@ fn set_accounts(lua: &Lua, name: &str, keyed_accounts: &[KeyedAccount]) -> Resul
     let accounts = lua.create_table()?;
     for (i, keyed_account) in keyed_accounts.iter().enumerate() {
         let account = lua.create_table()?;
-        account.set("key", keyed_account.key.to_string())?;
+        account.set(
+            if keyed_account.signer_key().is_some() {
+                "signer_key"
+            } else {
+                "unsigned_key"
+            },
+            keyed_account.unsigned_key().to_string(),
+        )?;
         account.set("tokens", keyed_account.account.tokens)?;
         let data_str = lua.create_string(&keyed_account.account.userdata)?;
         account.set("userdata", data_str)?;
@@ -80,6 +87,10 @@ fn entrypoint(
             }
         }
     } else if let Ok(instruction) = deserialize(tx_data) {
+        if keyed_accounts[0].signer_key().is_none() {
+            warn!("key[0] did not sign the transaction");
+            return false;
+        }
         match instruction {
             LoaderInstruction::Write { offset, bytes } => {
                 let offset = offset as usize;
@@ -98,7 +109,10 @@ fn entrypoint(
 
             LoaderInstruction::Finalize => {
                 keyed_accounts[0].account.executable = true;
-                trace!("LuaLoader::Finalize prog: {:?}", keyed_accounts[0].key);
+                trace!(
+                    "LuaLoader::Finalize prog: {:?}",
+                    keyed_accounts[0].signer_key().unwrap()
+                );
             }
         }
     } else {
