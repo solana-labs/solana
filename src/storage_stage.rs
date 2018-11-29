@@ -263,12 +263,13 @@ mod tests {
     use ledger::make_tiny_test_entries;
     use ledger::{create_tmp_sample_ledger, LedgerWriter};
     use logger;
+    use rayon::prelude::*;
     use service::Service;
     use signature::{Keypair, KeypairUtil};
     use solana_sdk::hash::Hash;
     use std::cmp::{max, min};
     use std::fs::remove_dir_all;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::Arc;
     use std::thread::sleep;
@@ -436,19 +437,28 @@ mod tests {
 
     #[test]
     fn test_pubkey_distribution() {
-        logger::setup();
         // See that pub keys have an even-ish distribution..
-        let mut hist = [0; NUM_IDENTITIES];
-        for _ in 0..(128 * 256) {
-            let keypair = Keypair::new();
-            let ix = get_identity_index_from_pubkey(&keypair.pubkey());
-            hist[ix] += 1;
+        let mut hist = Arc::new(vec![]);
+        for _ in 0..NUM_IDENTITIES {
+            Arc::get_mut(&mut hist).unwrap().push(AtomicUsize::new(0));
         }
+        {
+            let hist = hist.clone();
+            (0..(32 * NUM_IDENTITIES))
+                .into_par_iter()
+                .for_each(move |_| {
+                    let keypair = Keypair::new();
+                    let ix = get_identity_index_from_pubkey(&keypair.pubkey());
+                    hist[ix].fetch_add(1, Ordering::Relaxed);
+                });
+        }
+
         let mut hist_max = 0;
         let mut hist_min = NUM_IDENTITIES;
         for x in hist.iter() {
-            hist_max = max(*x, hist_max);
-            hist_min = min(*x, hist_min);
+            let val = x.load(Ordering::Relaxed);
+            hist_max = max(val, hist_max);
+            hist_min = min(val, hist_min);
         }
         info!("min: {} max: {}", hist_min, hist_max);
         assert_ne!(hist_min, 0);
