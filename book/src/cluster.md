@@ -38,7 +38,7 @@ but in exchange for that time, a node is assured that it eventually has all the
 same information as every other node, and that that information cannot be
 censored by any one node.
 
-## Ledger Broadcasting
+## Broadcasting Transactions to Validators
 
 A gossip network is much too slow to achieve subsecond finality once the
 network grows beyond a certain size. The time it takes to send messages to all
@@ -53,14 +53,14 @@ Scalable finality requires a few tricks:
 
 1. Break transactions up into small batches and hash each with a VDF.
 2. Sign each batch with the leader's private key.
-3. Structure nodes as a conceptual tree to efficiently propate the batch.
+3. Structure nodes as a conceptual tree to efficiently propagate each batch.
 
 To hash the transaction batch, Solana uses its Proof of History VDF. Its hashes
 tell validators that the transactions have not been reordered and what leader
-slot they belong to.
+*slot* they belong to.
 
 Next, each batch is signed by the leader to ensure that a malicious leader is
-not sending transactions beyond its allotted *slot*. When a validator verifies
+not sending transactions beyond its allotted slot. When a validator verifies
 the signature and the Proof of History hash, it can use the Proof of History
 *tick height* to calculate the expected leader and reliably verify the
 signature belongs to that leader.
@@ -75,15 +75,15 @@ the logarithm's base is the multiple of the number of nodes at each level.
 
 <img alt="Data Plane Diagram" src="img/data-plane.svg" class="center"/>
 
-In the diagram above, the multiple is 2 only because it is easiest to
-visualize. In practice, the multiple is much heigher. Since network latency can
-be higher than validation time, it's desirable to minimize the height of the
-tree, which implies maximizing the multiple. However, increasing the multiple
-means splitting the transaction batch into smaller pieces. When split so far
-that the 32-byte Proof of History hash and 28 byte UDP/IP headers exceed its
-size, the multiple is about as big as it's going to get.  We expect the
-multiple to end up somewhere in the ballpark of 1,000 and that even a massive
-worldwide cluster of fullnodes may have no more than three levels.
+In the diagram above, the multiple is only two to help conceptualize data flow.
+In practice, the multiple is much heigher. Since network latency can be higher
+than validation time, it's desirable to minimize the height of the tree, which
+implies maximizing the multiple. However, increasing the multiple means
+splitting the transaction batch into smaller pieces. When split so far that the
+64-byte signature, 32-byte Proof of History hash and 28 byte UDP/IP headers
+exceed its size, the multiple is about as big as it's going to get. We expect
+the multiple to end up somewhere in the ballpark of 1,000 and that even a
+massive worldwide cluster of fullnodes may have no more than three levels.
 
 At the time of this writing, the 150 validator testnet is just two levels: the
 leader on one and all validators on the other. We anticipate adding a third
