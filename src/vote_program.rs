@@ -70,12 +70,20 @@ pub fn process_instruction(
     instruction_index: usize,
     accounts: &mut [&mut Account],
 ) -> Result<()> {
+    // all vote instructions require that accounts_keys[0] be a signer
+    if tx.signed_key(instruction_index, 0).is_none() {
+        Err(Error::InvalidArguments)?;
+    }
+
     match deserialize(tx.userdata(instruction_index)) {
         Ok(VoteInstruction::RegisterAccount) => {
+            if !check_id(&accounts[1].owner) {
+                error!("accounts[1] is not assigned to the VOTE_PROGRAM");
+                Err(Error::InvalidArguments)?;
+            }
+
             // TODO: a single validator could register multiple "vote accounts"
             // which would clutter the "accounts" structure. See github issue 1654.
-            accounts[1].owner = id();
-
             let mut vote_state = VoteProgram {
                 votes: VecDeque::new(),
                 node_id: *tx.from(),
