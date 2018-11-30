@@ -104,7 +104,6 @@ help:
 	@echo '    - Show commands while building: V=1'
 	@echo '      V=$(V)'
 	@echo '    - Use LLVM from docker: DOCKER=1'
-	@echo '      Docker image must be pulled first: docker pull solanalabs/llvm'
 	@echo '      DOCKER=$(DOCKER)'
 	@echo '    - List of include directories:'
 	@echo '      INC_DIRS=$(INC_DIRS)'
