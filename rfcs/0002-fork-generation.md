@@ -1,17 +1,17 @@
-# Branch Generation
+# Fork Generation
 
-The goal of this RFC is to define how Solana generates branches.
+The goal of this RFC is to define how Solana generates forks.
 
 
 ## Basic Design Idea
 
-Nodes take turns being leader and generating the PoH that encodes state changes.  The network can tolerate loss of connection to any leader by synthesizing what the leader ***would have generated*** had it been connected but not ingesting any state changes.  The complexity of forks is thereby limited to a "there/not-there" skip list of branches that may arise on leader rotation slot boundaries.  A leader can only transmit durring their predefined PoH slot.
+Nodes take turns being leader and generating the PoH that encodes state changes.  The network can tolerate loss of connection to any leader by synthesizing what the leader ***would have generated*** had it been connected but not ingesting any state changes.  The possible number of forks is thereby limited to a "there/not-there" skip list of forks that may arise on leader rotation slot boundaries.  At any given slot, only a single leader's transactions will be accepted.
 
 ## Message Flow
 
-1. Transactions are ingested at the current leader.
-2. Leader filters for valid transactions.
-3. Leader executes valid transactions on its state.
+1. Transactions are ingested by the current leader.
+2. Leader filters valid transactions.
+3. Leader executes valid transactions updating its state.
 4. Leader packages transactions into entries based off its current PoH slot.
 5. Leader transmits the entries to validator nodes (in signed blobs)
     a. The PoH stream includes ticks; empty entries that indicate liveness of the leader and the passage of time on the network.
@@ -33,7 +33,7 @@ There are only two possible versions of the PoH during a voting slot: PoH with `
 
 Validators can ignore forks at other points (e.g. from the wrong leader), or slash the leader responsible for the fork.
 
-Validators vote based on a greedy choice to maximze their reward described in [branch selection](rfcs/0008-branch_selection.md).
+Validators vote based on a greedy choice to maximze their reward described in [forks selection](rfcs/0008-fork-selection.md).
 
 ### Validator's View
 
@@ -56,7 +56,7 @@ V     +----+                                           hang on to E(L4) and E(L5
 
 ```
 
-Note that an `E` appearing on 2 branches at the same slot is a slashable condition, so a validator observing `E(L3)` and `E(L3)'` can slash L3 and safely choose `x` for that slot.  Once a validator commits to a branch, other branches can be discarded below that tick count.  For any slot, validators need only consider a single "has entries" chain or a "ticks only" chain to be proposed by a leader.  But multiple virtual entries may overlap as they link back to the a previous slot.
+Note that an `E` appearing on 2 forks at the same slot is a slashable condition, so a validator observing `E(L3)` and `E(L3)'` can slash L3 and safely choose `x` for that slot.  Once a validator commits to a forks, other forks can be discarded below that tick count.  For any slot, validators need only consider a single "has entries" chain or a "ticks only" chain to be proposed by a leader.  But multiple virtual entries may overlap as they link back to the a previous slot.
 
 #### Time Division
 
@@ -73,4 +73,4 @@ This arrangement of the network data streams permits nodes to save exactly this 
 
 ### Leader's View
 
-When a new leader begins a slot, it must first transmit any PoH (ticks) required to link the new slot with the most recently observed and voted slot.  The branch the leader proposes would link the current slot to a previous slot that the leader has voted on with virtual ticks.
+When a new leader begins a slot, it must first transmit any PoH (ticks) required to link the new slot with the most recently observed and voted slot.  The fork the leader proposes would link the current slot to a previous fork that the leader has voted on with virtual ticks.
