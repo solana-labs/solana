@@ -883,11 +883,8 @@ impl ClusterInfo {
         match request {
             // TODO verify messages faster
             Protocol::PullRequest(filter, caller) => {
-                if caller.verify() {
-                    Self::handle_pull_request(me, filter, caller, from_addr)
-                } else {
-                    vec![]
-                }
+                //Pulls don't need to be verified
+                Self::handle_pull_request(me, filter, caller, from_addr)
             }
             Protocol::PullResponse(from, mut data) => {
                 data.retain(|v| v.verify());
@@ -899,9 +896,9 @@ impl ClusterInfo {
                 Self::handle_push_message(me, from, &data)
             }
             Protocol::PruneMessage(from, data) => {
-                if data.destination == me.read().unwrap().id() && data.source == *from_addr && data
-                    .signature
-                    .verify(from.as_ref(), data.get_sign_data().as_ref())
+                if data.destination == me.read().unwrap().id()
+                    && data.source == *from_addr
+                    && data.verify()
                 {
                     inc_new_counter_info!("cluster_info-prune_message", 1);
                     inc_new_counter_info!("cluster_info-prune_message-size", data.prunes.len());
