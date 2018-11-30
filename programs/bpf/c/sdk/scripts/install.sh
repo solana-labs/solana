@@ -3,6 +3,7 @@
 cd "$(dirname "$0")"/..
 
 # Install Criterion for all supported platforms
+# if changing version here must also change in bpf.mk
 version=v2.3.2
 if [[ ! -d criterion-$version ]]; then
   (
@@ -25,6 +26,7 @@ if [[ ! -d criterion-$version ]]; then
 fi
 
 # Install LLVM
+# if changing version here must also change in bpf.mk
 version=v0.0.1
 if [ "$(uname)" == "Darwin" ]; then
   machine=macos
@@ -37,7 +39,7 @@ if [[ ! -d llvm/native-$version ]]; then
     mkdir -p llvm/native-$version
     cd llvm/native-$version
     wget https://github.com/solana-labs/llvm-builder/releases/download/$version/solana-llvm-$machine.tgz
-    tar xvzf solana-llvm-$machine.tgz
+    tar xzf solana-llvm-$machine.tgz
     rm -rf solana-llvm-$machine.tgz
 
     [[ ! -f llvm/native-$version/README.md ]]
