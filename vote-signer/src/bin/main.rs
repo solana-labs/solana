@@ -9,10 +9,6 @@ use clap::{App, Arg};
 use solana_vote_signer::rpc::VoteSignerRpcService;
 use std::error;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::thread::sleep;
-use std::time::Duration;
 
 pub const RPC_PORT: u16 = 8989;
 
@@ -37,16 +33,10 @@ fn main() -> Result<(), Box<error::Error>> {
         RPC_PORT
     };
 
-    let exit = Arc::new(AtomicBool::new(false));
+    let service =
+        VoteSignerRpcService::new(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port));
 
-    let _ = VoteSignerRpcService::new(
-        SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port),
-        exit.clone(),
-    );
-
-    while !exit.load(Ordering::Relaxed) {
-        sleep(Duration::from_millis(100));
-    }
+    service.join().unwrap();
 
     Ok(())
 }

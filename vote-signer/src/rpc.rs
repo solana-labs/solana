@@ -3,7 +3,6 @@
 use bs58;
 use jsonrpc_core::*;
 use jsonrpc_http_server::*;
-use solana::service::Service;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use std::mem;
@@ -19,8 +18,9 @@ pub struct VoteSignerRpcService {
 }
 
 impl VoteSignerRpcService {
-    pub fn new(rpc_addr: SocketAddr, exit: Arc<AtomicBool>) -> Self {
+    pub fn new(rpc_addr: SocketAddr) -> Self {
         let request_processor = VoteSignRequestProcessor::new();
+        let exit = Arc::new(AtomicBool::new(false));
         let exit_ = exit.clone();
         let thread_hdl = Builder::new()
             .name("solana-vote-signer-jsonrpc".to_string())
@@ -60,12 +60,8 @@ impl VoteSignerRpcService {
         self.exit();
         self.join()
     }
-}
 
-impl Service for VoteSignerRpcService {
-    type JoinReturnType = ();
-
-    fn join(self) -> thread::Result<()> {
+    pub fn join(self) -> thread::Result<()> {
         self.thread_hdl.join()
     }
 }
