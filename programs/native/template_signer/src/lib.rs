@@ -124,6 +124,7 @@ enum State {
         concurrent: Vec<u8>,
         sig: Vec<u8>,
     },
+    Claimed,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -176,7 +177,7 @@ enum Message {
     /// * account[1] - the SigningContract
     ///
     /// Message to claim the tokens
-    /// * (State::Created | State::EscrowFilled) & `template_timeout`
+    /// * (State::Created | State::EscrowFilled | State::Claimed) & `template_timeout`
     ///    The `signer` can claim `guarantee`, the `owner` can claim the `escrow`.    
     /// * Requested & `requested_timeout`
     ///    The the `owner` can claim the `escrow` and the `guarantee`.    
@@ -184,6 +185,7 @@ enum Message {
     ///    The the `signer` can claim the `escrow` and the `guarantee`.    
     /// * ConcurrentSignature
     ///    The the `owner` can claim the `escrow` and the `guarantee`.    
+    /// Moves the state to State::Claimed
     Claim,
 }
 
@@ -231,6 +233,8 @@ impl SigningContract {
         {
             return Err(Error::Error);
         }
+        keyed_accounts[1].account.tokens += self.guarantee;
+        keyed_accounts[0].account.tokens -= self.guarantee;
         Ok(())
     }
     pub fn init_escrow(
@@ -352,8 +356,73 @@ impl SigningContract {
         self.state = nxt;
         Ok(())
     }
-    pub fn claim(&mut self, _keyed_accounts: &mut Vec<KeyedAccount>) -> Result<(), Error> {
+    pub fn claim(&mut self, keyed_accounts: &mut Vec<KeyedAccount>) -> Result<(), Error> {
         //TODO: implement this
+        let nxt = match self.state {
+            State::Requested { .. } => {
+                if !self.requested_timeout() {
+                    return Err(Error::Error);
+                }
+                if self.owner != *keyed_accounts[0].key {
+                    return Err(Error::Error);
+                }
+                let total = keyed_accounts[1].account.tokens;
+                keyed_accounts[0].account.tokens += total;
+                keyed_accounts[1].account.tokens -= total;
+                self.escrow = 0;
+                self.guarantee = 0;
+                //TODO: abstract guarantee and escrow of non token assets
+                State::Claimed
+            }
+            State::Signed { .. } => {
+                if !self.signed_timeout() {
+                    return Err(Error::Error);
+                }
+                if self.signer != *keyed_accounts[0].key {
+                    return Err(Error::Error);
+                }
+                let total = keyed_accounts[1].account.tokens;
+                keyed_accounts[0].account.tokens += total;
+                keyed_accounts[1].account.tokens -= total;
+                self.escrow = 0;
+                self.guarantee = 0;
+                //TODO: abstract guarantee and escrow of non token assets
+                State::Claimed
+            }
+            State::ConcurrentSignature { .. } => {
+                if self.owner != *keyed_accounts[0].key {
+                    return Err(Error::Error);
+                }
+                let total = keyed_accounts[1].account.tokens;
+                keyed_accounts[0].account.tokens += total;
+                keyed_accounts[1].account.tokens -= total;
+                self.escrow = 0;
+                self.guarantee = 0;
+                //TODO: abstract guarantee and escrow of non token assets
+                State::Claimed
+            }
+            _ => {
+                if !self.template_timeout() {
+                    return Err(Error::Error);
+                }
+                if self.owner == *keyed_accounts[0].key {
+                    let total = self.escrow;
+                    keyed_accounts[0].account.tokens += total;
+                    keyed_accounts[1].account.tokens -= total;
+                    self.escrow = 0;
+                //TODO: abstract guarantee and escrow of non token assets
+                } else if self.signer == *keyed_accounts[0].key {
+                    let total = self.guarantee;
+                    keyed_accounts[0].account.tokens += total;
+                    keyed_accounts[1].account.tokens -= total;
+                    self.guarantee = 0;
+                } else {
+                    return Err(Error::Error);
+                }
+                State::Claimed
+            }
+        };
+        self.state = nxt;
         Ok(())
     }
 }
