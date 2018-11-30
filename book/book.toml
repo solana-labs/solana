@@ -1,8 +1,10 @@
 [book]
 title = "Solana: Blockchain Rebuilt for Scale"
+authors = ["The Solana Team"]
 
 [build]
 build-dir = "html"
 create-missing = false
 
 [output.html]
+theme = "src/theme"
