@@ -19,7 +19,7 @@ pub struct VoteSignerRpcService {
 
 impl VoteSignerRpcService {
     pub fn new(rpc_addr: SocketAddr) -> Self {
-        let request_processor = VoteSignRequestProcessor::new();
+        let request_processor = VoteSignRequestProcessor::default();
         let exit = Arc::new(AtomicBool::new(false));
         let exit_ = exit.clone();
         let thread_hdl = Builder::new()
@@ -111,14 +111,9 @@ impl VoteSignerRpc for VoteSignerRpcImpl {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct VoteSignRequestProcessor {}
 impl VoteSignRequestProcessor {
-    /// Create a new request processor that wraps the given Bank.
-    pub fn new() -> Self {
-        VoteSignRequestProcessor {}
-    }
-
     /// Process JSON-RPC request items sent via JSON-RPC.
     pub fn register(&self, pubkey: Pubkey) -> Result<Pubkey> {
         Ok(pubkey)
