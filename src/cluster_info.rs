@@ -1426,10 +1426,6 @@ mod tests {
         let leader = NodeInfo::new_localhost(leader_keypair.pubkey(), 0);
         let peer = NodeInfo::new_localhost(peer_keypair.pubkey(), 0);
         let mut cluster_info = ClusterInfo::new_with_keypair(node_info.clone(), Arc::new(keypair));
-        let peer_cluster_info = &Arc::new(RwLock::new(ClusterInfo::new_with_keypair(
-            peer.clone(),
-            Arc::new(peer_keypair),
-        )));
         cluster_info.set_leader(leader.id);
         cluster_info.insert_info(peer.clone());
         //check that all types of gossip messages are signed correctly
