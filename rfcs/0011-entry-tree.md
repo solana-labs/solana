@@ -1,3 +1,4 @@
+bg
 # Unified Window and Ledger
 
 This RFC describes a change to ledger and window to support Solana's [consensus](0002-consensus.md) algorithm.
@@ -37,20 +38,20 @@ The window and the ledger can't handle replay of alternate forks.  Once a Blob h
 
 ## New Design
 
-### Unified Window and Ledger: DbLedger
+### Unified Window and Ledger: EntryTree
 
 A unified window and ledger would allow a validator to record every blob it observes on the network, in any order, as long as the blob is consistent with the network's leader schedule.
 
 Blobs will be moved to a fork-able key space the tuple of `leader slot` + `blob index` (within the slot).  This permits the skip-list structure of the Solana protocol to be stored in its entirety, without a-priori choosing which fork to follow, which Entries to persist or when to persist them.
 
-Repair requests for recent blobs are served out of RAM or recent files and out of deeper storage for less recent blobs, as implemented by the store backing DbLedger.
+Repair requests for recent blobs are served out of RAM or recent files and out of deeper storage for less recent blobs, as implemented by the store backing EntryTree.
 
-### Functionalities of DbLedger (and hereafter "Ledger")
+### Functionalities of EntryTree
 
-1. Persistence: the ledger lives in the front of the nodes verification pipeline, right behind network receive and signature verification.  If the blob received is consistent with the leader schedule (i.e. was signed by the leader for the indicated slot), it is immediately stored.
-2. Repair: repair is the same as window repair above, but able to serve any blob that's been received. The ledger stores blobs with signatures, preserving the chain of origination.
-3. Forks: the ledger supports random access of blobs, so can support a validator's need to rollback and replay from a Bank checkpoint.
-4. Restart: with proper culling, the ledger can be replayed by ordered enumeration of entries from slot 0.  The logic of the replicate_stage (i.e. dealing with ledger forks) will have to be used for the most recent entries in the ledger.
+1. Persistence: the EntryTree lives in the front of the nodes verification pipeline, right behind network receive and signature verification.  If the blob received is consistent with the leader schedule (i.e. was signed by the leader for the indicated slot), it is immediately stored.
+2. Repair: repair is the same as window repair above, but able to serve any blob that's been received. EntryTree stores blobs with signatures, preserving the chain of origination.
+3. Forks: EntryTree supports random access of blobs, so can support a validator's need to rollback and replay from a Bank checkpoint.
+4. Restart: with proper pruning/culling, the EntryTree can be replayed by ordered enumeration of entries from slot 0.  The logic of the replicate_stage (i.e. dealing with branches) will have to be used for the most recent entries in the EntryTree.
 
 ### Interfacing with Bank
 
@@ -63,10 +64,10 @@ The bank exposes to replicate_stage:
      b. tick height: the tick_height at which this vote was cast
      c. lockout period: how long a chain must be observed to be in the ledger to be able to be chained below this vote
 
-Replicate_stage (TODO better name) uses ledger APIs to find the longest chain of entries it can hang off a previous vote.  If that chain of entries does not hang off the latest vote, the replicate stage rolls back the bank to that vote and replays the chain from there.
+Replicate_stage (TODO better name) uses EntryTreer APIs to find the longest chain of entries it can hang off a previous vote.  If that chain of entries does not hang off the latest vote, the replicate stage rolls back the bank to that vote and replays the chain from there.
 
-### Culling
+### Pruning EntryTree
 
-Once ledger entries are old enough, representing the possible forks becomes less useful, perhaps even problematic for replay upon restart.  Once a validator's votes have reached max lockout, however, any ledger contents that are not on the PoH chain voted for can be expunged.
+Once EntryTree entries are old enough, representing all the possible forks becomes less useful, perhaps even problematic for replay upon restart.  Once a validator's votes have reached max lockout, however, any EntryTree contents that are not on the PoH chain for that vote for can be pruned, expunged.
 
 Replicator nodes will be responsible for storing really old ledger contents, and validators need only persist their bank periodically.
