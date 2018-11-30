@@ -13,6 +13,9 @@ pub enum RpcRequest {
     GetTransactionCount,
     RequestAirdrop,
     SendTransaction,
+    RegisterNode,
+    SignVote,
+    DeregisterNode,
 }
 pub type RpcClient = reqwest::Client;
 
@@ -53,6 +56,9 @@ impl RpcRequest {
             RpcRequest::GetTransactionCount => "getTransactionCount",
             RpcRequest::RequestAirdrop => "requestAirdrop",
             RpcRequest::SendTransaction => "sendTransaction",
+            RpcRequest::RegisterNode => "registerNode",
+            RpcRequest::SignVote => "signVote",
+            RpcRequest::DeregisterNode => "deregisterNode",
         };
         let mut request = json!({
            "jsonrpc": jsonrpc,

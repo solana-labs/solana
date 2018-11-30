@@ -109,6 +109,7 @@ solana-lualoader = { path = "programs/native/lua_loader", version = "0.11.0" }
 solana-metrics = { path = "metrics", version = "0.11.0" }
 solana-noop = { path = "programs/native/noop", version = "0.11.0" }
 solana-sdk = { path = "sdk", version = "0.11.0" }
+solana-vote-signer = { path = "vote-signer", version = "0.0.1" }
 sys-info = "0.5.6"
 tokio = "0.1"
 tokio-codec = "0.1"
@@ -147,4 +148,5 @@ members = [
     "programs/native/erc20",
     "programs/native/lua_loader",
     "programs/native/noop",
+    "vote-signer",
 ]
