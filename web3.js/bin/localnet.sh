@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
+channel=$(cd "$(dirname "$0")"; node -p 'require("../package.json")["solana-channel"]')
+
 usage() {
   exitcode=0
   if [[ -n "$1" ]]; then
@@ -24,7 +26,9 @@ Operate a local testnet
 
  update/up-specific options:
    edge   - Update/start the "edge" channel network
-   beta   - Update/start the "beta" channel network (default)
+   beta   - Update/start the "beta" channel network
+
+   Default channel: $channel
 
  down-specific options:
    none
@@ -41,8 +45,6 @@ EOF
 [[ -n $1 ]] || usage
 cmd="$1"
 shift
-
-channel=beta
 
 docker --version || usage "It appears that docker is not installed"
 case $cmd in
