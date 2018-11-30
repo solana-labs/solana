@@ -12,8 +12,7 @@ mkdir bpf-sdk/
   git rev-parse HEAD
 ) > bpf-sdk/version.txt
 
-"$SOLANA_ROOT"/programs/bpf/c/sdk/scripts/install.sh
 cp -ra "$SOLANA_ROOT"/programs/bpf/c/sdk/* bpf-sdk/
-rm -rf bpf-sdk/scripts/
+rm -rf bpf-sdk/scripts/package.sh
 
 tar jvcf bpf-sdk.tar.bz2 bpf-sdk/

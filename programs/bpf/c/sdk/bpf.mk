@@ -13,12 +13,9 @@ TEST_DIR ?= ./test
 OUT_DIR ?= ./out
 
 ifeq ($(DOCKER),1)
-LLVM_DIR = $(LOCAL_PATH)llvm/llvm-docker
+LLVM_DIR = $(LOCAL_PATH)llvm/docker
 else
-OS=$(shell uname)
-ifeq ($(OS),Darwin)
-LLVM_DIR ?= $(shell brew --prefix llvm)
-endif
+LLVM_DIR = $(LOCAL_PATH)llvm/native-v0.0.1
 endif
 
 ifdef LLVM_DIR
@@ -26,14 +23,11 @@ CC := $(LLVM_DIR)/bin/clang
 CXX := $(LLVM_DIR)/bin/clang++
 LLC := $(LLVM_DIR)/bin/llc
 OBJ_DUMP := $(LLVM_DIR)/bin/llvm-objdump
-else
-CC := clang-7
-CXX := clang++-7
-LLC := llc-7
-OBJ_DUMP := llvm-objdump-7
 endif
 
-SYSTEM_INC_DIRS := $(LOCAL_PATH)inc
+SYSTEM_INC_DIRS := \
+  $(LOCAL_PATH)inc \
+  $(LLVM_DIR)lib/clang/8.0.0/include \
 
 C_FLAGS := \
   -Werror \
@@ -110,7 +104,6 @@ help:
 	@echo '    - Show commands while building: V=1'
 	@echo '      V=$(V)'
 	@echo '    - Use LLVM from docker: DOCKER=1'
-	@echo '      Docker image must be pulled first: docker pull solanalabs/llvm'
 	@echo '      DOCKER=$(DOCKER)'
 	@echo '    - List of include directories:'
 	@echo '      INC_DIRS=$(INC_DIRS)'
