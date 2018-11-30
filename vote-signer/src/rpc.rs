@@ -1,4 +1,4 @@
-//! The `rpc` module implements the Voting service RPC interface.
+//! The `rpc` module implements the Vote signing service RPC interface.
 
 use bs58;
 use jsonrpc_core::*;
@@ -13,16 +13,13 @@ use std::sync::Arc;
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
 
-pub const RPC_PORT: u16 = 8989;
-
 pub struct VoteSignerRpcService {
     thread_hdl: JoinHandle<()>,
     exit: Arc<AtomicBool>,
 }
 
 impl VoteSignerRpcService {
-    pub fn new(rpc_addr: SocketAddr) -> Self {
-        let exit = Arc::new(AtomicBool::new(false));
+    pub fn new(rpc_addr: SocketAddr, exit: Arc<AtomicBool>) -> Self {
         let request_processor = VoteSignRequestProcessor::new();
         let exit_ = exit.clone();
         let thread_hdl = Builder::new()
