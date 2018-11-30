@@ -8,32 +8,32 @@
 //!     * `signer` - The Pubkey of the entity that sign the template.  This is a Solana Pubkey and
 //!       this key is different and unreleated to the template.
 //!
-//!     * `escrow` - The tokens held by the contract
+//!     * `escrow` - The tokens held by the SigningContract.
 //!
-//!     * `contract` - The instance of the signing obligation.  
+//!     * `SigningContract` - An instance of the statem machine for the specific template to be signed.
 //!
 //!     * `guarantee` - The tokens held as a guarantee that the `signer` will actually sign the
 //!       message when the request is made.
 //!
-//!     * `owner` - The current owner of the contract.  Only the owner can make the request to
+//!     * `owner` - The current owner of the SigningContract.  Only the owner can make the request to
 //!     sign.
 //!
 //! A template is composed of an arbitratry key, a message, and a mask as well as proof of owning
 //! that key.
 //!
-//! A Contract to sign a message that fits the template is created with some `guarantee`.  The
+//! A SigningContract to sign a message that fits the template is created with some `guarantee`.  The
 //! `guarantee` is only used for ensure that signing is completed, it is not there to ensure
 //! whatever is represented by the template message.
 //!
-//! When the Contract is bought the first time, the `Contract::owner Pubkey` is changed, an the
-//! `Contract::escrow tokens` is filled with the tokens that the contract was bought for.  Once the
-//! contract has been signed the escrow tokens are claimed by the `signer`.  If the `signer` fails
+//! When the SigningContract is bought the first time, the `SigningContract::owner Pubkey` is changed, an the
+//! `SigningContract::escrow tokens` is filled with the tokens that the SigningContract was bought for.  Once the
+//! SigningContract has been signed the escrow tokens are claimed by the `signer`.  If the `signer` fails
 //! to fulfill the request the escrow tokens can be claimed by the current owner.
 //!
-//! A new owner can sell this contract again.  The second sale doesn't modify the escrow tokens.
+//! A new owner can sell this SigningContract again.  The second sale doesn't modify the escrow tokens.
 //!
 //! An owner can make a request for a signature.  This must be done before the
-//! `Contract::template_timeout`.  Once the request has been made, the `signer` has
+//! `SigningContract::template_timeout`.  Once the request has been made, the `signer` has
 //! `requested_timeout` amount of time to fulfill the request.  If the `signer` fails to do so, the
 //! `escrow` and `guarantee` can be claimed by the owner.
 //!
@@ -43,39 +43,47 @@
 //!
 //! If the template expires, the current `owner` can claim the `escrow`, and the `signer` can claim
 //! the `guarantee`.
+//!
+//! Future Work:
+//! * adding real keys, secp256k1 and ed25519 curves
+//! * advanced template langauge, so a template could be aware of version numbers inside the
+//!   message
 
 extern crate bincode;
 extern crate serde;
-extern crate solana_program_interface;
+extern crate solana_sdk;
 #[macro_use]
 extern crate serde_derive;
 
 use bincode::{deserialize, serialize_into};
-use solana_program_interface::account::KeyedAccount;
-use solana_program_interface::pubkey::Pubkey;
+use solana_sdk::account::KeyedAccount;
+use solana_sdk::pubkey::Pubkey;
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 enum Key {
     Noop(Vec<u8>),
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 struct Template {
     /// a key that will be used to sign a message that fits the template
     key: Key,
     /// message that will be signed
-    message: Vec<u8>,
+    msg: Vec<u8>,
     /// mask for the message. 0 bits are to be filled out by the request.
     mask: Vec<u8>,
     /// signature of the mask
     sig: Vec<u8>,
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 struct Request {
-    /// (request.message & template.mask) == (template.message & template.mask)
-    message: Vec<u8>,
+    /// (request.msg & template.mask) == (template.msg & template.mask)
+    msg: Vec<u8>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-struct Contract {
+struct SigningContract {
     /// Template that will be filled by the signer upon request
     template: Template,
     /// The identity that can claim the escrow and `guarantee` if the template is signed.
@@ -111,7 +119,7 @@ enum State {
     },
     ConcurrentSignature {
         pending: Option<Request>,
-        concurrent: Request,
+        concurrent: Vec<u8>,
         sig: Vec<u8>,
     },
 }
@@ -119,23 +127,24 @@ enum State {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 enum Message {
     /// Message to initalize the template.
-    /// contract.state must be `State::Created`
-    /// contract.escrow must be 0
+    /// SigningContract.state must be `State::Created`
+    /// SigningContract.escrow must be 0
     /// * account[0] - must be signed, current owner
-    /// * account[1] - the contract
-    Init(Contract),
-    /// * u64 - Tokens transfered to the contract.
+    /// * account[1] - the SigningContract
+    Init(SigningContract),
+    /// * u64 - Tokens transfered to the SigningContract.
     /// * account[0] - must be signed, current owner
-    /// * account[1] - the contract
+    /// * account[1] - the SigningContract
     /// * account[2] - the new owner
     ///
     /// This should be executed in an atomic transaction with
     /// Instruction 0, System::Move tokens from new owner to current owner
-    /// Instruction 1, Signer::InitEscrow, deposit the `escrow_token` amount into the contract
+    /// Instruction 1, Signer::InitEscrow, deposit the `escrow_token` amount into the
+    /// SigningContract
     InitEscrow(u64),
 
     /// * account[0] - must be signed, current owner
-    /// * account[1] - the contract
+    /// * account[1] - the SigningContract
     /// * account[2] - the new owner
     ///
     /// This should be executed in an atomic transaction with
@@ -144,23 +153,26 @@ enum Message {
     ChangeOwner,
 
     /// * account[0] - must be signed, current owner
-    /// * account[1] - the contract
+    /// * account[1] - the SigningContract
     ///
     /// Message respond with a signed tx.  If the tx is valid, the state is moved to Signed
     Request(Request),
 
     /// * account[0] - any caller
-    /// * account[1] - the contract
+    /// * account[1] - the SigningContract
     ///
     /// Valid signature that is a response
     SignatureResponse(Vec<u8>),
 
     /// * account[0] - any caller
-    /// * account[1] - the contract
+    /// * account[1] - the SigningContract
     ///
     /// Signature prooves that there was a double spend
     ConcurrentSignature { msg: Vec<u8>, sig: Vec<u8> },
 
+    /// * account[0] - caller
+    /// * account[1] - the SigningContract
+    ///
     /// Message to claim the tokens
     /// * (State::Created | State::EscrowFilled) & `template_timeout`
     ///    The `signer` can claim `guarantee`, the `owner` can claim the `escrow`.    
@@ -173,10 +185,23 @@ enum Message {
     Claim,
 }
 
-impl Contract {
-    fn verify_init(&self) -> bool {
-        self.escrow == 0 && self.state == State::Created
+impl Key {
+    fn check_sig(&self, _msg: &[u8], _sig: &[u8]) -> bool {
+        //TODO: implement this
+        true
     }
+}
+impl Template {
+    fn verify_request(&self, request: &Request) -> Result<(), Error> {
+        for ((r, m), mask) in request.msg.iter().zip(&self.msg).zip(&self.mask) {
+            if *r & *mask != *m & *mask {
+                return Err(Error::Error);
+            }
+        }
+        Ok(())
+    }
+}
+impl SigningContract {
     fn template_timeout(&self) -> bool {
         //TODO: transaction height is necessary for this check
         false
@@ -185,167 +210,202 @@ impl Contract {
         //TODO: transaction height is necessary for this check
         false
     }
+    fn signed_timeout(&self) -> bool {
+        //TODO: transaction height is necessary for this check
+        false
+    }
+    fn verify_init(&self, keyed_accounts: &mut Vec<KeyedAccount>) -> Result<(), Error> {
+        if !(self.escrow == 0 && self.state == State::Created) {
+            return Err(Error::Error);
+        }
+        //TODO: keyed_accounts[0].is_signed()?;
+        if self.owner != *keyed_accounts[0].key {
+            return Err(Error::Error);
+        }
+        Ok(())
+    }
     pub fn init_escrow(
         &mut self,
         keyed_accounts: &mut Vec<KeyedAccount>,
         escrow: u64,
-    ) -> Result<(), ()> {
-        if contract.state != State::Created {
-            return Err(());
+    ) -> Result<(), Error> {
+        if self.state != State::Created {
+            return Err(Error::Error);
         }
-        if contract.template_timeout() {
-            return Err(());
+        if self.template_timeout() {
+            return Err(Error::Error);
         }
         //TODO: keyed_accounts[0].is_signed()?;
-        contract.owner = keyed_accounts[2].owner;
-        keyed_accounts[1].tokens += escrow;
-        keyed_accounts[0].tokens -= escrow;
-        contract.escrow = escrow;
-        contract.state = State::EscrowFilled;
+        self.owner = *keyed_accounts[2].key;
+        keyed_accounts[1].account.tokens += escrow;
+        keyed_accounts[0].account.tokens -= escrow;
+        self.escrow = escrow;
+        self.state = State::EscrowFilled;
         Ok(())
     }
-    pub fn change_owner(&mut self, keyed_accounts: &mut Vec<KeyedAccount>) -> Result<(), ()> {
-        if contract.state != State::EscrowFilled {
-            return Err(());
+    pub fn change_owner(&mut self, keyed_accounts: &mut Vec<KeyedAccount>) -> Result<(), Error> {
+        if self.state != State::EscrowFilled {
+            return Err(Error::Error);
         }
-        if contract.template_timeout() {
-            return Err(());
+        if self.template_timeout() {
+            return Err(Error::Error);
         }
         //TODO: keyed_accounts[0].is_signed()?;
-        if contract.owner != keyed_accounts[0].pubkey {
-            return Err(());
+        if self.owner != *keyed_accounts[0].key {
+            return Err(Error::Error);
         }
-        contract.owner = keyed_accounts[2].owner;
+        self.owner = *keyed_accounts[2].key;
         Ok(())
     }
     pub fn start_request(
         &mut self,
         keyed_accounts: &mut Vec<KeyedAccount>,
         request: Request,
-    ) -> Result<(), ()> {
-        let mut contract = deserialize(&keyed_accounts[1].userdata);
-        if contract.state != State::EscrowFilled {
-            return Err(());
+    ) -> Result<(), Error> {
+        if self.state != State::EscrowFilled {
+            return Err(Error::Error);
         }
-        if contract.template_timeout() {
-            return Err(());
+        if self.template_timeout() {
+            return Err(Error::Error);
         }
-        if contract.owner != keyed_accounts[0].pubkey {
-            return Err(());
+        if self.owner != *keyed_accounts[0].key {
+            return Err(Error::Error);
         }
-        if !contract.template.verify_request(request) {
-            return Err(());
-        }
+        self.template.verify_request(&request)?;
         //TODO: keyed_accounts[0].is_signed()?;
-        contract.state = Requested(request);
+        self.state = State::Requested { pending: request };
         Ok(())
     }
-    pub fn signature_response(
-        &mut self,
-        keyed_accounts: &mut Vec<KeyedAccount>,
-        sig: Vec<u8>,
-    ) -> Result<(), ()> {
-        match contract.state {
-            State::Requested { pending } => {
-                if contract.request_timeout() {
-                    return Err(());
+    pub fn signature_response(&mut self, sig: Vec<u8>) -> Result<(), Error> {
+        let nxt = match self.state {
+            State::Requested { ref pending } => {
+                if self.requested_timeout() {
+                    return Err(Error::Error);
                 }
-                contract.state = State::Signed {
-                    pending: request,
+                if !self.template.key.check_sig(&pending.msg, &sig) {
+                    return Err(Error::Error);
+                }
+                State::Signed {
+                    pending: pending.clone(),
                     sig,
-                };
+                }
             }
-            _ => return Err(()),
-        }
+            _ => return Err(Error::Error),
+        };
+        self.state = nxt;
+        Ok(())
     }
-    pub fn concurrent_signature(
-        &mut self,
-        keyed_accounts: &mut Vec<KeyedAccount>,
-        msg: Vec<u8>,
-        sig: Vec<u8>,
-    ) -> Result<(), ()> {
-        match contract.state {
-            State::Requested { pending } => {
-                if msg != pending || !contract.template.check_sig(msg, sig) {
-                    return Err(());
+    pub fn concurrent_signature(&mut self, msg: Vec<u8>, sig: Vec<u8>) -> Result<(), Error> {
+        let nxt = match self.state {
+            State::Requested { ref pending } => {
+                if msg != pending.msg || !self.template.key.check_sig(&msg, &sig) {
+                    return Err(Error::Error);
                 }
-                if contract.requested_timeout() {
-                    return Err(());
+                if self.requested_timeout() {
+                    return Err(Error::Error);
                 }
-                contract.state = State::ConcurrentSignature {
-                    pending: Some(pending),
+                State::ConcurrentSignature {
+                    pending: Some(pending.clone()),
                     concurrent: msg,
                     sig,
-                };
+                }
             }
-            State::Signed { pending, sig } => {
-                if msg != pending || !contract.template.check_sig(msg, sig) {
-                    return Err(());
+            State::Signed {
+                ref pending,
+                ref sig,
+            } => {
+                if msg != pending.msg || !self.template.key.check_sig(&msg, sig) {
+                    return Err(Error::Error);
                 }
-                if contract.signed_timeout() {
-                    return Err(());
+                if self.signed_timeout() {
+                    return Err(Error::Error);
                 }
-                contract.state = State::ConcurrentSignature {
-                    pending: Some(pending),
+                State::ConcurrentSignature {
+                    pending: Some(pending.clone()),
                     concurrent: msg,
-                    sig,
-                };
+                    sig: sig.clone(),
+                }
             }
             _ => {
-                if contract.template_timeout() {
-                    return Err(());
+                if self.template_timeout() {
+                    return Err(Error::Error);
                 }
-                if !contract.template.check_sig(msg, sig) {
-                    return Err(());
+                if !self.template.key.check_sig(&msg, &sig) {
+                    return Err(Error::Error);
                 }
-                contract.state = State::ConcurrentSignature {
+                State::ConcurrentSignature {
                     pending: None,
                     concurrent: msg,
                     sig,
-                };
+                }
             }
-        }
+        };
+        self.state = nxt;
+        Ok(())
+    }
+    pub fn claim(&mut self, _keyed_accounts: &mut Vec<KeyedAccount>) -> Result<(), Error> {
+        //TODO: implement this
+        Ok(())
     }
 }
 
-fn process_data(keyed_accounts: &mut Vec<KeyedAccount>, data: &[u8]) -> Result<(), ()> {
+#[derive(Debug)]
+pub enum Error {
+    Error,
+}
+impl std::convert::From<std::boxed::Box<bincode::ErrorKind>> for Error {
+    fn from(_e: std::boxed::Box<bincode::ErrorKind>) -> Error {
+        Error::Error
+    }
+}
+
+fn process_data(keyed_accounts: &mut Vec<KeyedAccount>, data: &[u8]) -> Result<(), Error> {
     let message = deserialize(data);
     match message {
         Ok(Message::Init(contract)) => {
-            if !contract.verify_init() {
-                return Err(());
-            }
+            contract.verify_init(keyed_accounts)?;
             //TODO: keyed_accounts[0].is_signed()?;
-            serialize_into(&keyed_accounts[1].userdata, &contract)?;
+            serialize_into(&mut keyed_accounts[1].account.userdata, &contract)?;
+            Ok(())
         }
         Ok(Message::InitEscrow(escrow)) => {
-            let mut contract = deserialize(&keyed_accounts[1].userdata);
+            let mut contract: SigningContract = deserialize(&keyed_accounts[1].account.userdata)?;
             contract.init_escrow(keyed_accounts, escrow)?;
-            serialize_into(&keyed_accounts[1].userdata, &contract)?;
+            serialize_into(&mut keyed_accounts[1].account.userdata, &contract)?;
+            Ok(())
         }
         Ok(Message::ChangeOwner) => {
-            let mut contract = deserialize(&keyed_accounts[1].userdata);
-            contract.change_owner()?;
-            serialize_into(&keyed_accounts[1].userdata, &contract)?;
+            let mut contract: SigningContract = deserialize(&keyed_accounts[1].account.userdata)?;
+            contract.change_owner(keyed_accounts)?;
+            serialize_into(&mut keyed_accounts[1].account.userdata, &contract)?;
+            Ok(())
         }
         Ok(Message::Request(request)) => {
-            let mut contract = deserialize(&keyed_accounts[1].userdata);
-            contract.start_request()?;
-            serialize_into(&keyed_accounts[1].userdata, &contract)?;
+            let mut contract: SigningContract = deserialize(&keyed_accounts[1].account.userdata)?;
+            contract.start_request(keyed_accounts, request)?;
+            serialize_into(&mut keyed_accounts[1].account.userdata, &contract)?;
+            Ok(())
         }
         Ok(Message::SignatureResponse(sig)) => {
-            let mut contract = deserialize(&keyed_accounts[1].userdata);
-            contract.signature_response()?;
-            serialize_into(&keyed_accounts[1].userdata, &contract)?;
+            let mut contract: SigningContract = deserialize(&keyed_accounts[1].account.userdata)?;
+            contract.signature_response(sig)?;
+            serialize_into(&mut keyed_accounts[1].account.userdata, &contract)?;
+            Ok(())
         }
         Ok(Message::ConcurrentSignature { msg, sig }) => {
-            let mut contract = deserialize(&keyed_accounts[1].userdata);
-            contract.concurrent_signature()?;
-            serialize_into(&keyed_accounts[1].userdata, &contract)?;
+            let mut contract: SigningContract = deserialize(&keyed_accounts[1].account.userdata)?;
+            contract.concurrent_signature(msg, sig)?;
+            serialize_into(&mut keyed_accounts[1].account.userdata, &contract)?;
+            Ok(())
         }
-        _ => Err(()),
+        Ok(Message::Claim) => {
+            let mut contract: SigningContract = deserialize(&keyed_accounts[1].account.userdata)?;
+            contract.claim(keyed_accounts)?;
+            serialize_into(&mut keyed_accounts[1].account.userdata, &contract)?;
+            Ok(())
+        }
+        Err(_) => Err(Error::Error),
     }
-    Ok(())
 }
 
 #[no_mangle]

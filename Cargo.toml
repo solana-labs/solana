@@ -105,6 +105,7 @@ solana-jsonrpc-http-server = "0.3.0"
 solana-jsonrpc-macros = "0.3.0"
 solana-jsonrpc-pubsub = "0.3.0"
 solana-jsonrpc-ws-server = "0.3.0"
+solana-template-signer = { path = "programs/native/template_signer", version = "0.11.0" }
 solana-lualoader = { path = "programs/native/lua_loader", version = "0.11.0" }
 solana-metrics = { path = "metrics", version = "0.11.0" }
 solana-noop = { path = "programs/native/noop", version = "0.11.0" }

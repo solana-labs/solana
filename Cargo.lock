@@ -1723,6 +1723,7 @@ dependencies = [
  "solana-metrics 0.11.0",
  "solana-noop 0.11.0",
  "solana-sdk 0.11.0",
+ "solana-template-signer 0.11.0",
  "sys-info 0.5.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-codec 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1905,6 +1906,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-template-signer"
+version = "0.11.0"
+dependencies = [
+ "bincode 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "generic-array 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-sdk 0.11.0",
+]
+
+[[package]]
 name = "solana-ws"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2007,17 +2019,6 @@ dependencies = [
  "redox_syscall 0.1.42 (registry+https://github.com/rust-lang/crates.io-index)",
  "remove_dir_all 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "winapi 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "template_signer"
-version = "0.1.0"
-dependencies = [
- "bincode 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "generic-array 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-sdk 0.11.0",
 ]
 
 [[package]]
