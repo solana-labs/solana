@@ -18,8 +18,8 @@
 //!     * `owner` - The current owner of the SigningContract.  Only the owner can make the request to
 //!     sign.
 //!
-//! A template is composed of an arbitratry key, a message, and a mask as well as proof of owning
-//! that key.
+//! A template is composed of an arbitratry key, a message, and a mask as well as a signature and a
+//! challenge to prove ownership of the key.
 //!
 //! A SigningContract to sign a message that fits the template is created with some `guarantee`.  The
 //! `guarantee` is only used for ensure that signing is completed, it is not there to ensure
@@ -72,7 +72,9 @@ struct Template {
     msg: Vec<u8>,
     /// mask for the message. 0 bits are to be filled out by the request.
     mask: Vec<u8>,
-    /// signature of the mask
+    /// challenge to validate the key
+    challenge: Vec<u8>,
+    /// signature of the challenge
     sig: Vec<u8>,
 }
 
@@ -225,7 +227,7 @@ impl SigningContract {
         if !self
             .template
             .key
-            .check_sig(&self.template.mask, &self.template.sig)
+            .check_sig(&self.template.challenge, &self.template.sig)
         {
             return Err(Error::Error);
         }
