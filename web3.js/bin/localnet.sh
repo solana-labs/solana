@@ -1,7 +1,18 @@
 #!/usr/bin/env bash
 set -e
 
-channel=$(cd "$(dirname "$0")"; node -p 'require("../package.json")["solana-channel"]')
+channel=$(
+  cd "$(dirname "$0")";
+  node -p '
+    let p;
+    try {
+      p = require("@solana/web3.js/package.json");
+    } catch (err) {
+      p = require("../package.json");
+    }
+    p["solana-channel"]
+  '
+)
 
 usage() {
   exitcode=0
