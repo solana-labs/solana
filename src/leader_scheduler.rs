@@ -10,10 +10,10 @@ use ledger::create_ticks;
 use signature::{Keypair, KeypairUtil};
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::transaction::Transaction;
 use std::collections::HashSet;
 use std::io::Cursor;
 use system_transaction::SystemTransaction;
-use transaction::Transaction;
 use vote_program::{self, Vote, VoteProgram};
 use vote_transaction::VoteTransaction;
 
@@ -503,10 +503,10 @@ mod tests {
     use signature::{Keypair, KeypairUtil};
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::transaction::Transaction;
     use std::collections::HashSet;
     use std::hash::Hash as StdHash;
     use std::iter::FromIterator;
-    use transaction::Transaction;
     use vote_program::Vote;
     use vote_transaction::{create_vote_account, VoteTransaction};
 

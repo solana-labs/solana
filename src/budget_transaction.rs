@@ -10,7 +10,7 @@ use signature::{Keypair, KeypairUtil};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction::{SystemInstruction, SYSTEM_PROGRAM_ID};
-use transaction::{self, Transaction};
+use solana_sdk::transaction::{self, Transaction};
 
 pub trait BudgetTransaction {
     fn budget_new_taxed(
@@ -228,7 +228,6 @@ mod tests {
     use super::*;
     use bincode::{deserialize, serialize};
     use signature::KeypairUtil;
-    use transaction;
 
     #[test]
     fn test_claim() {

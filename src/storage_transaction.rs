@@ -1,7 +1,7 @@
 use signature::{Keypair, KeypairUtil};
 use solana_sdk::hash::Hash;
+use solana_sdk::transaction::Transaction;
 use storage_program::{self, StorageProgram};
-use transaction::Transaction;
 
 pub trait StorageTransaction {
     fn storage_new_mining_proof(from_keypair: &Keypair, sha_state: Hash, last_id: Hash) -> Self;

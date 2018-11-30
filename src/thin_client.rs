@@ -21,6 +21,7 @@ use solana_sdk::account::Account;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
+use solana_sdk::transaction::Transaction;
 use std;
 use std::collections::HashMap;
 use std::io;
@@ -31,7 +32,6 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::time::Instant;
 use system_transaction::SystemTransaction;
-use transaction::Transaction;
 
 /// An object for querying and sending transactions to the network.
 pub struct ThinClient {

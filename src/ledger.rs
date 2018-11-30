@@ -13,13 +13,13 @@ use rayon::prelude::*;
 use signature::{Keypair, KeypairUtil};
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::transaction::Transaction;
 use std::fs::{copy, create_dir_all, remove_dir_all, File, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};
 use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::Path;
-use transaction::Transaction;
 use vote_program::Vote;
 use vote_transaction::VoteTransaction;
 
@@ -706,9 +706,9 @@ mod tests {
     use packet::{to_blobs, BLOB_DATA_SIZE, PACKET_DATA_SIZE};
     use signature::{Keypair, KeypairUtil};
     use solana_sdk::hash::hash;
+    use solana_sdk::transaction::Transaction;
     use std;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    use transaction::Transaction;
     use vote_program::Vote;
 
     #[test]

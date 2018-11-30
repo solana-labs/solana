@@ -251,10 +251,10 @@ mod tests {
     use jsonrpc_core::futures::sync::mpsc;
     use mint::Mint;
     use signature::{Keypair, KeypairUtil};
+    use solana_sdk::transaction::Transaction;
     use std::net::{IpAddr, Ipv4Addr};
     use system_transaction::SystemTransaction;
     use tokio::prelude::{Async, Stream};
-    use transaction::Transaction;
 
     #[test]
     fn test_pubsub_new() {

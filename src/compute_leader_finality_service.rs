@@ -140,10 +140,10 @@ pub mod tests {
     use mint::Mint;
     use signature::{Keypair, KeypairUtil};
     use solana_sdk::hash::hash;
+    use solana_sdk::transaction::Transaction;
     use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;
-    use transaction::Transaction;
     use vote_program::Vote;
     use vote_transaction::{create_vote_account, VoteTransaction};
 

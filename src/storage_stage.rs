@@ -266,6 +266,7 @@ mod tests {
     use service::Service;
     use signature::{Keypair, KeypairUtil};
     use solana_sdk::hash::Hash;
+    use solana_sdk::transaction::Transaction;
     use std::cmp::{max, min};
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -276,7 +277,6 @@ mod tests {
     use storage_stage::StorageState;
     use storage_stage::NUM_IDENTITIES;
     use storage_stage::{get_identity_index_from_pubkey, StorageStage};
-    use transaction::Transaction;
     use vote_program::Vote;
     use vote_transaction::VoteTransaction;
 

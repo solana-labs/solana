@@ -9,11 +9,11 @@ use packet::SharedBlob;
 use result::{Error, Result};
 use signature::Keypair;
 use solana_sdk::hash::Hash;
+use solana_sdk::transaction::Transaction;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
 use streamer::BlobSender;
-use transaction::Transaction;
 use vote_program::Vote;
 use vote_transaction::VoteTransaction;
 

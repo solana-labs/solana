@@ -5,8 +5,8 @@ use program::ProgramError;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction::SystemInstruction;
+use solana_sdk::transaction::Transaction;
 use std;
-use transaction::Transaction;
 
 #[derive(Debug)]
 pub enum Error {
@@ -137,8 +137,8 @@ mod test {
     use solana_sdk::account::Account;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::transaction::Instruction;
     use system_transaction::SystemTransaction;
-    use transaction::{Instruction, Transaction};
 
     /// Execute a function with a subset of accounts as writable references.
     /// Since the subset can point to the same references, in any order there is no way

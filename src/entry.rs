@@ -8,11 +8,11 @@ use poh::Poh;
 use result::Result;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::transaction::Transaction;
 use std::io::Cursor;
 use std::mem::size_of;
 use std::net::SocketAddr;
 use std::sync::mpsc::{Receiver, Sender};
-use transaction::Transaction;
 
 pub type EntrySender = Sender<Vec<Entry>>;
 pub type EntryReceiver = Receiver<Vec<Entry>>;
@@ -277,8 +277,8 @@ mod tests {
     use entry::Entry;
     use signature::{Keypair, KeypairUtil};
     use solana_sdk::hash::hash;
+    use solana_sdk::transaction::Transaction;
     use system_transaction::SystemTransaction;
-    use transaction::Transaction;
 
     #[test]
     fn test_entry_verify() {

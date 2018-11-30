@@ -17,6 +17,7 @@ use signature::{Keypair, KeypairUtil, Signature};
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::transaction::Transaction;
 use std::fs::{self, File};
 use std::io::Write;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -27,7 +28,6 @@ use std::time::Duration;
 use std::{error, fmt, mem};
 use system_transaction::SystemTransaction;
 use thin_client::poll_gossip_for_leader;
-use transaction::Transaction;
 
 const PLATFORM_SECTION_C: &str = ".text.entrypoint";
 const USERDATA_CHUNK_SIZE: usize = 256;

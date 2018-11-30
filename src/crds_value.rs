@@ -1,7 +1,7 @@
 use contact_info::ContactInfo;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::transaction::Transaction;
 use std::fmt;
-use transaction::Transaction;
 
 /// CrdsValue that is replicated across the cluster
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

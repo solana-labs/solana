@@ -4,9 +4,8 @@ use signature::{Keypair, KeypairUtil};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction::SystemInstruction;
+use solana_sdk::transaction::{Instruction, Transaction};
 use system_program;
-
-use transaction::{Instruction, Transaction};
 
 pub trait SystemTransaction {
     fn system_create(
@@ -159,7 +158,7 @@ mod tests {
     use bincode::{deserialize, serialize};
     use packet::PACKET_DATA_SIZE;
     use sigverify;
-    use transaction::SIG_OFFSET;
+    use solana_sdk::transaction::SIG_OFFSET;
 
     #[test]
     fn test_layout() {

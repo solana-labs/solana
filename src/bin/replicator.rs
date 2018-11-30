@@ -5,6 +5,7 @@ extern crate serde_json;
 #[macro_use]
 extern crate solana;
 extern crate solana_drone;
+extern crate solana_sdk;
 
 use clap::{App, Arg};
 use solana::chacha::{chacha_cbc_encrypt_file, CHACHA_BLOCK_SIZE};
@@ -16,8 +17,8 @@ use solana::logger;
 use solana::replicator::{sample_file, Replicator};
 use solana::signature::{Keypair, KeypairUtil};
 use solana::storage_transaction::StorageTransaction;
-use solana::transaction::Transaction;
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
+use solana_sdk::transaction::Transaction;
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::Path;

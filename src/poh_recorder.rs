@@ -6,9 +6,9 @@ use entry::Entry;
 use poh::Poh;
 use result::{Error, Result};
 use solana_sdk::hash::Hash;
+use solana_sdk::transaction::Transaction;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
-use transaction::Transaction;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PohRecorderError {
