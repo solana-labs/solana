@@ -2,7 +2,7 @@
 set -ex
 
 cd "$(dirname "$0")"
-eval "$(../channel-info.sh)"
+eval "$(../../ci/channel-info.sh)"
 
 if [[ $BUILDKITE_BRANCH = "$STABLE_CHANNEL" ]]; then
   CHANNEL=stable
@@ -14,7 +14,7 @@ fi
 
 if [[ -z $CHANNEL ]]; then
   echo Unable to determine channel to publish into, exiting.
-  exit 0
+  exit 1
 fi
 
 rm -rf usr/
