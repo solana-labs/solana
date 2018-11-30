@@ -222,6 +222,13 @@ impl SigningContract {
         if self.owner != *keyed_accounts[0].key {
             return Err(Error::Error);
         }
+        if !self
+            .template
+            .key
+            .check_sig(&self.template.mask, &self.template.sig)
+        {
+            return Err(Error::Error);
+        }
         Ok(())
     }
     pub fn init_escrow(
