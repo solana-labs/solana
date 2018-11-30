@@ -33,9 +33,7 @@ impl Signature {
 pub trait Signable {
     fn sign(&mut self, keypair: &Keypair) {
         let data = self.get_sign_data();
-        self.set_signature(Signature::new(
-            &keypair.sign(&data).as_ref(),
-        ));
+        self.set_signature(Signature::new(&keypair.sign(&data).as_ref()));
     }
     fn verify(&self) -> bool {
         self.get_signature()
