@@ -10,34 +10,30 @@ Gossip runs on a well-known UDP/IP port, or a port in a well-known range.  Once 
 
 ## Gossip Records
 
-Records shared over gossip are arbitrary, but signed and versioned (with a timestamp), and need to make sense to the node receiving them.  A strategy of "most recently recevied wins" is employed to manage what's stored in cluster info.
+Records shared over gossip are arbitrary, but signed and versioned (with a timestamp), and need to make sense to the node receiving them.  A strategy of "most recent timestamp wins" is employed to manage what's stored in cluster info.  If 2 values from the same creator have the same timestamp, the value with the greater hash wins.
 
 ## Push
 
 ### Push Message
 
-A push message is "hey network, I have something new to share".  Nodes send push messages to a `fanout` number of push peers.
+A push message is "hey network, I have something new to share".  Nodes send push messages to `PUSH_FANOUT` push peers.
 
 Upon receiving a push message, a node examines the message for:
 
-1. duplication: if the message has been seen before, the node responds with a "prune" message drops the message.
+1. duplication: if the message has been seen before, the node responds with `PushMessagePrune` and drops the message
 
 2. new info: if the message is new the node
    a. stores the new information with an updated version in its cluster info
-   b. stores the message in "pushed once" (used for detecting duplicates)
+   b. stores the message in `pushed_once` (used for detecting duplicates, purged after `PUSH_MSG_TIMEOUT * 5` ms)
    c. retransmits the messages to its own push peers
 
-3. timeout: a push message has a time to live, beyond which the message is dropped
+3. expiration: nodes drop push messages that are older than `PUSH_MSG_TIMEOUT`
 
 ### Push Peers, Prune Message
 
-A nodes selects its push peers at random from the set of known peers.  The node keeps this selection for a relatively long time.  When a prune message is received, the node drops the push peer that sent the prune.  Prune is an indication that there is another, faster path to that node than direct push.
+A nodes selects its push peers at random from the active set of known peers.  The node keeps this selection for a relatively long time.  When a prune message is received, the node drops the push peer that sent the prune.  Prune is an indication that there is another, faster path to that node than direct push.
 
-A new set of push peers is selected (TODO: when is that??).
-
-### Other Stuff
-
-A node holds messages for duplicate detection for `dup_timeout`, currently 5x a push message `timeout`.
+The set of push peers is kept fresh by rotating a new node into the set every `PUSH_MSG_TIMEOUT/2` milliseconds.
 
 ## Pull
 
