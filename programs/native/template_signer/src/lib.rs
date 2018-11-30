@@ -10,7 +10,7 @@
 //!
 //!     * `escrow` - The tokens held by the SigningContract.
 //!
-//!     * `SigningContract` - An instance of the statem machine for the specific template to be signed.
+//!     * `SigningContract` - An instance of the state machine for the specific template to be signed.
 //!
 //!     * `guarantee` - The tokens held as a guarantee that the `signer` will actually sign the
 //!       message when the request is made.
@@ -463,7 +463,7 @@ fn process_data(keyed_accounts: &mut Vec<KeyedAccount>, data: &[u8]) -> Result<(
     match message {
         Ok(Message::Init(contract)) => {
             contract.init(keyed_accounts)?;
-            //TODO: keyed_accounts[0].is_signed()?;
+            assert_eq!(contract.state, State::Created);
             serialize_into(&mut keyed_accounts[1].account.userdata, &contract)?;
             Ok(())
         }
@@ -471,7 +471,10 @@ fn process_data(keyed_accounts: &mut Vec<KeyedAccount>, data: &[u8]) -> Result<(
             let mut contract: SigningContract = deserialize(&keyed_accounts[1].account.userdata)?;
             contract.init_escrow(keyed_accounts, escrow)?;
             assert_eq!(contract.state, State::EscrowFilled);
-            serialize_into(&mut keyed_accounts[1].account.userdata, &contract)?;
+            serialize_into(&mut keyed_accounts[1].account.userdata, &contract).unwrap();
+
+            let test: SigningContract = deserialize(&keyed_accounts[1].account.userdata).unwrap();
+            assert_eq!(test.state, State::EscrowFilled);
             Ok(())
         }
         Ok(Message::ChangeOwner) => {
@@ -540,6 +543,8 @@ mod test {
 
         let msg = Message::InitEscrow(2);
         assert!(process(&mut accounts, &serialize(&msg).unwrap()));
+        let test: SigningContract = deserialize(&accounts[1].account.userdata).unwrap();
+        assert_eq!(test.state, State::EscrowFilled);
 
         //TODO: figure out how to test this better
         let msg = Message::Request(Request { msg: vec![] });
