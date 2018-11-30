@@ -63,8 +63,13 @@ use solana_sdk::pubkey::Pubkey;
 enum Key {
     Noop(Vec<u8>),
 }
+impl Default for Key {
+    fn default() -> Self {
+        Key::Noop(vec![])
+    }
+}
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 struct Template {
     /// a key that will be used to sign a message that fits the template
     key: Key,
@@ -78,13 +83,13 @@ struct Template {
     sig: Vec<u8>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 struct Request {
     /// (request.msg & template.mask) == (template.msg & template.mask)
     msg: Vec<u8>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 struct SigningContract {
     /// Template that will be filled by the signer upon request
     template: Template,
@@ -125,6 +130,11 @@ enum State {
         sig: Vec<u8>,
     },
     Claimed,
+}
+impl Default for State {
+    fn default() -> Self {
+        State::Created
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -197,6 +207,12 @@ impl Key {
 }
 impl Template {
     fn verify_request(&self, request: &Request) -> Result<(), Error> {
+        if request.msg.len() != self.msg.len() {
+            return Err(Error::Error);
+        }
+        if request.msg.len() != self.mask.len() {
+            return Err(Error::Error);
+        }
         for ((r, m), mask) in request.msg.iter().zip(&self.msg).zip(&self.mask) {
             if *r & *mask != *m & *mask {
                 return Err(Error::Error);
@@ -218,12 +234,15 @@ impl SigningContract {
         //TODO: transaction height is necessary for this check
         false
     }
-    fn verify_init(&self, keyed_accounts: &mut Vec<KeyedAccount>) -> Result<(), Error> {
+    fn init(&self, keyed_accounts: &mut Vec<KeyedAccount>) -> Result<(), Error> {
         if !(self.escrow == 0 && self.state == State::Created) {
             return Err(Error::Error);
         }
         //TODO: keyed_accounts[0].is_signed()?;
         if self.owner != *keyed_accounts[0].key {
+            return Err(Error::Error);
+        }
+        if self.signer != *keyed_accounts[0].key {
             return Err(Error::Error);
         }
         if !self
@@ -233,6 +252,7 @@ impl SigningContract {
         {
             return Err(Error::Error);
         }
+        //TODO: this could be done by a System::Move outside of this program
         keyed_accounts[1].account.tokens += self.guarantee;
         keyed_accounts[0].account.tokens -= self.guarantee;
         Ok(())
@@ -250,8 +270,9 @@ impl SigningContract {
         }
         //TODO: keyed_accounts[0].is_signed()?;
         self.owner = *keyed_accounts[2].key;
+        //TODO: this could be done by a System::Move outside of this program
         keyed_accounts[1].account.tokens += escrow;
-        keyed_accounts[0].account.tokens -= escrow;
+        keyed_accounts[2].account.tokens -= escrow;
         self.escrow = escrow;
         self.state = State::EscrowFilled;
         Ok(())
@@ -281,7 +302,7 @@ impl SigningContract {
         if self.template_timeout() {
             return Err(Error::Error);
         }
-        if self.owner != *keyed_accounts[0].key {
+        if self.owner != *keyed_accounts[2].key {
             return Err(Error::Error);
         }
         self.template.verify_request(&request)?;
@@ -441,7 +462,7 @@ fn process_data(keyed_accounts: &mut Vec<KeyedAccount>, data: &[u8]) -> Result<(
     let message = deserialize(data);
     match message {
         Ok(Message::Init(contract)) => {
-            contract.verify_init(keyed_accounts)?;
+            contract.init(keyed_accounts)?;
             //TODO: keyed_accounts[0].is_signed()?;
             serialize_into(&mut keyed_accounts[1].account.userdata, &contract)?;
             Ok(())
@@ -449,6 +470,7 @@ fn process_data(keyed_accounts: &mut Vec<KeyedAccount>, data: &[u8]) -> Result<(
         Ok(Message::InitEscrow(escrow)) => {
             let mut contract: SigningContract = deserialize(&keyed_accounts[1].account.userdata)?;
             contract.init_escrow(keyed_accounts, escrow)?;
+            assert_eq!(contract.state, State::EscrowFilled);
             serialize_into(&mut keyed_accounts[1].account.userdata, &contract)?;
             Ok(())
         }
@@ -489,4 +511,47 @@ fn process_data(keyed_accounts: &mut Vec<KeyedAccount>, data: &[u8]) -> Result<(
 #[no_mangle]
 pub extern "C" fn process(keyed_accounts: &mut Vec<KeyedAccount>, data: &[u8]) -> bool {
     process_data(keyed_accounts, data).is_ok()
+}
+#[cfg(test)]
+mod test {
+    use super::*;
+    use bincode::{serialize, serialized_size};
+    use solana_sdk::account::{create_keyed_accounts, Account};
+    use solana_sdk::signature::{Keypair, KeypairUtil};
+    #[test]
+    pub fn test_template_protocol() {
+        let program_id = Keypair::new().pubkey();
+        let signer = (Keypair::new().pubkey(), Account::new(1, 0, program_id));
+        let owner = (Keypair::new().pubkey(), Account::new(2, 0, program_id));
+        let mut contract = SigningContract::default();
+        contract.guarantee = 1;
+        contract.owner = signer.0;
+        contract.signer = signer.0;
+        let sz = serialized_size(&contract).unwrap();
+        let state = (
+            Keypair::new().pubkey(),
+            Account::new(0, sz as usize, program_id),
+        );
+        let mut original = [signer, state, owner];
+        let mut accounts = create_keyed_accounts(&mut original);
+
+        let msg = Message::Init(contract);
+        assert!(process(&mut accounts, &serialize(&msg).unwrap()));
+
+        let msg = Message::InitEscrow(2);
+        assert!(process(&mut accounts, &serialize(&msg).unwrap()));
+
+        //TODO: figure out how to test this better
+        let msg = Message::Request(Request { msg: vec![] });
+        assert!(process(&mut accounts, &serialize(&msg).unwrap()));
+
+        let msg = Message::SignatureResponse(vec![]);
+        assert!(process(&mut accounts, &serialize(&msg).unwrap()));
+
+        let msg = Message::Claim;
+        assert!(process(&mut accounts, &serialize(&msg).unwrap()));
+
+        assert_eq!(accounts[0].account.tokens, 3);
+        assert_eq!(accounts[1].account.tokens, 0);
+    }
 }
