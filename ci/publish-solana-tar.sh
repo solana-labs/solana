@@ -29,7 +29,7 @@ fi
 
 if [[ -z $CHANNEL_OR_TAG ]]; then
   echo Unable to determine channel to publish into, exiting.
-  exit 0
+  exit 1
 fi
 
 

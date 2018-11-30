@@ -29,7 +29,7 @@ fi
 
 if [[ -z $CHANNEL ]]; then
   echo Unable to determine channel to publish into, exiting.
-  exit 0
+  exit 1
 fi
 
 if [[ -z $DRYRUN ]]; then
