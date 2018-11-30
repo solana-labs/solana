@@ -7,8 +7,8 @@ use payment_plan::Witness;
 use program::ProgramError;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::transaction::Transaction;
 use std::io;
-use transaction::Transaction;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum BudgetError {
@@ -269,7 +269,7 @@ mod test {
     use solana_sdk::account::Account;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
-    use transaction::Transaction;
+    use solana_sdk::transaction::Transaction;
 
     fn process_transaction(tx: &Transaction, accounts: &mut [Account]) -> Result<(), BudgetError> {
         let mut refs: Vec<&mut Account> = accounts.iter_mut().collect();

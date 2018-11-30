@@ -11,8 +11,8 @@ use signature::KeypairUtil;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction::SystemInstruction;
+use solana_sdk::transaction::{Instruction, Transaction};
 use system_program;
-use transaction::{Instruction, Transaction};
 use vote_program::{self, Vote, VoteInstruction};
 
 pub trait VoteTransaction {

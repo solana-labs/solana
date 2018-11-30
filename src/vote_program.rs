@@ -6,10 +6,10 @@ use byteorder::{ByteOrder, LittleEndian};
 use program::ProgramError;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::transaction::Transaction;
 use std;
 use std::collections::VecDeque;
 use std::mem;
-use transaction::Transaction;
 
 // Maximum number of votes to keep around
 const MAX_VOTE_HISTORY: usize = 32;

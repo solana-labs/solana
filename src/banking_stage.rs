@@ -16,6 +16,7 @@ use service::Service;
 use sigverify_stage::VerifiedPackets;
 use solana_sdk::hash::Hash;
 use solana_sdk::timing;
+use solana_sdk::transaction::Transaction;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
@@ -23,7 +24,6 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
-use transaction::Transaction;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BankingStageReturnType {
@@ -256,9 +256,9 @@ mod tests {
     use mint::Mint;
     use packet::to_packets;
     use signature::{Keypair, KeypairUtil};
+    use solana_sdk::transaction::Transaction;
     use std::thread::sleep;
     use system_transaction::SystemTransaction;
-    use transaction::Transaction;
 
     #[test]
     fn test_banking_stage_shutdown1() {

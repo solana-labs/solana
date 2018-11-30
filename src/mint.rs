@@ -5,8 +5,8 @@ use ring::rand::SystemRandom;
 use signature::{Keypair, KeypairUtil};
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::transaction::Transaction;
 use system_transaction::SystemTransaction;
-use transaction::Transaction;
 use untrusted::Input;
 
 #[derive(Serialize, Deserialize, Debug)]

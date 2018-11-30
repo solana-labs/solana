@@ -9,8 +9,8 @@ use solana::bank::*;
 use solana::mint::Mint;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::system_transaction::SystemTransaction;
-use solana::transaction::Transaction;
 use solana_sdk::hash::hash;
+use solana_sdk::transaction::Transaction;
 use test::Bencher;
 
 #[bench]

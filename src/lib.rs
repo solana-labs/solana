@@ -81,7 +81,6 @@ pub mod thin_client;
 pub mod token_program;
 pub mod tpu;
 pub mod tpu_forwarder;
-pub mod transaction;
 pub mod tvu;
 pub mod vote_program;
 pub mod vote_stage;

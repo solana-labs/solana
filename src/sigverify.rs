@@ -11,11 +11,11 @@ use packet::{Packet, SharedPackets};
 use result::Result;
 use signature::Signature;
 use solana_sdk::pubkey::Pubkey;
+#[cfg(test)]
+use solana_sdk::transaction::Transaction;
 use std::io;
 use std::mem::size_of;
 use std::sync::atomic::AtomicUsize;
-#[cfg(test)]
-use transaction::Transaction;
 
 pub const TX_OFFSET: usize = 0;
 
@@ -329,10 +329,9 @@ mod tests {
     use sigverify;
     use solana_sdk::hash::Hash;
     use solana_sdk::system_instruction::SystemInstruction;
+    use solana_sdk::transaction::{Instruction, Transaction};
     use system_program;
     use system_transaction::{memfind, test_tx};
-    use transaction;
-    use transaction::Transaction;
 
     #[test]
     fn test_layout() {
@@ -431,11 +430,7 @@ mod tests {
 
         let program_ids = vec![system_program::id(), budget_program::id()];
 
-        let instructions = vec![transaction::Instruction::new(
-            0,
-            &system_instruction,
-            vec![0, 1],
-        )];
+        let instructions = vec![Instruction::new(0, &system_instruction, vec![0, 1])];
 
         let tx = Transaction::new_with_instructions(
             &keypairs,

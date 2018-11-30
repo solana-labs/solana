@@ -13,8 +13,8 @@ use solana::mint::Mint;
 use solana::native_loader;
 use solana::signature::{Keypair, KeypairUtil};
 use solana::system_transaction::SystemTransaction;
-use solana::transaction::Transaction;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::transaction::Transaction;
 #[cfg(feature = "bpf_c")]
 use std::env;
 #[cfg(feature = "bpf_c")]

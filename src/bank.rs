@@ -30,6 +30,7 @@ use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::timing::{duration_as_us, timestamp};
+use solana_sdk::transaction::Transaction;
 use std;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::result;
@@ -40,7 +41,6 @@ use system_program;
 use system_transaction::SystemTransaction;
 use token_program;
 use tokio::prelude::Future;
-use transaction::Transaction;
 
 /// The number of most recent `last_id` values that the bank will track the signatures
 /// of. Once the bank discards a `last_id`, it will reject any transactions that use
@@ -1372,11 +1372,11 @@ mod tests {
     use signature::Keypair;
     use signature::{GenKeys, KeypairUtil};
     use solana_sdk::hash::hash;
+    use solana_sdk::transaction::Instruction;
     use std;
     use storage_program;
     use system_transaction::SystemTransaction;
     use tokio::prelude::{Async, Stream};
-    use transaction::Instruction;
     use vote_program;
 
     #[test]
