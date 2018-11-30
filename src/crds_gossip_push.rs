@@ -12,6 +12,7 @@ use bincode::serialized_size;
 use bloom::Bloom;
 use contact_info::ContactInfo;
 use crds::{Crds, VersionedCrdsValue};
+use crds_gossip::CRDS_GOSSIP_BLOOM_SIZE;
 use crds_gossip_error::CrdsGossipError;
 use crds_value::{CrdsValue, CrdsValueLabel};
 use indexmap::map::IndexMap;
@@ -183,7 +184,8 @@ impl CrdsGossipPush {
                     continue;
                 }
             }
-            let bloom = Bloom::random(network_size, 0.1, 1024 * 8 * 4);
+            let size = cmp::max(CRDS_GOSSIP_BLOOM_SIZE, network_size);
+            let mut bloom = Bloom::random(size, 0.1, 1024 * 8 * 4);
             new_items.insert(val.0.pubkey(), bloom);
             if new_items.len() == need {
                 break;

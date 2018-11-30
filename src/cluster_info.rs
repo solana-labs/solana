@@ -809,7 +809,6 @@ impl ClusterInfo {
                     };
                     prune_msg.sign(&me.read().unwrap().keypair);
                     let rsp = Protocol::PruneMessage(self_id, prune_msg);
-
                     to_blob(rsp, ci.ncp).ok()
                 }).into_iter()
                 .collect();
@@ -896,16 +895,14 @@ impl ClusterInfo {
                 Self::handle_push_message(me, from, &data)
             }
             Protocol::PruneMessage(from, data) => {
-                if data.destination == me.read().unwrap().id()
-                    && data.source == *from_addr
-                    && data.verify()
-                {
+                if data.source == *from_addr && data.verify() {
                     inc_new_counter_info!("cluster_info-prune_message", 1);
                     inc_new_counter_info!("cluster_info-prune_message-size", data.prunes.len());
                     me.write()
                         .unwrap()
                         .gossip
-                        .process_prune_msg(from, &data.prunes);
+                        .process_prune_msg(from, data.destination, &data.prunes)
+                        .ok();
                 }
                 vec![]
             }
@@ -1437,98 +1434,15 @@ mod tests {
         cluster_info.insert_info(peer.clone());
         //check that all types of gossip messages are signed correctly
         let (_, _, vals) = cluster_info.gossip.new_push_messages(timestamp());
+        // there should be some pushes ready
+        assert!(vals.len() > 0);
         vals.par_iter().for_each(|v| assert!(v.verify()));
+
         let (_, _, val) = cluster_info
             .gossip
             .new_pull_request(timestamp())
             .ok()
             .unwrap();
         assert!(val.verify());
-        // there should be some pushes ready
-        assert!(vals.len() > 0);
-        //using PushMessage since it has the fewest dependencies, but any protocol should work here
-        let resp = ClusterInfo::handle_protocol(
-            &peer_cluster_info,
-            &node_info.ncp,
-            Protocol::PushMessage(cluster_info.id(), vals),
-            &SharedWindow::default(),
-            &mut None,
-        );
-        // there should be no prunes
-        assert_eq!(resp.len(), 0);
-    }
-
-    //TODO test prunes and make sure they can't be forwarded.
-    #[test]
-    fn test_prune_signatures() {
-        //create new cluster info, leader, and peer
-        let keypair = Keypair::new();
-        let peer_keypair = Keypair::new();
-        let leader_keypair = Keypair::new();
-        let node_info = NodeInfo::new_localhost(keypair.pubkey(), 0);
-        let leader = NodeInfo::new_localhost(leader_keypair.pubkey(), 0);
-        let peer = NodeInfo::new_localhost(peer_keypair.pubkey(), 0);
-        let mut cluster_info = ClusterInfo::new_with_keypair(node_info.clone(), Arc::new(keypair));
-        let peer_cluster_info = &Arc::new(RwLock::new(ClusterInfo::new_with_keypair(
-            peer.clone(),
-            Arc::new(peer_keypair),
-        )));
-        let mut leader_cluster_info =
-            ClusterInfo::new_with_keypair(leader.clone(), Arc::new(leader_keypair));
-        peer_cluster_info.write().unwrap().set_leader(leader.id);
-        peer_cluster_info
-            .write()
-            .unwrap()
-            .insert_info(leader.clone());
-        cluster_info.set_leader(leader.id);
-        cluster_info.insert_info(peer.clone());
-        cluster_info.insert_info(leader.clone());
-        leader_cluster_info.set_leader(leader.id);
-        leader_cluster_info.insert_info(peer.clone());
-        let time = timestamp();
-        let (_, _, me_vals) = cluster_info.gossip.new_push_messages(time);
-        let (_, _, leader_vals) = leader_cluster_info.gossip.new_push_messages(time);
-
-        assert_eq!(me_vals.len(), 2);
-        assert_eq!(leader_vals.len(), 2);
-        let mut resp = ClusterInfo::handle_protocol(
-            &peer_cluster_info,
-            &node_info.ncp,
-            Protocol::PushMessage(cluster_info.id(), me_vals.clone()),
-            &SharedWindow::default(),
-            &mut None,
-        );
-        // there should be no prunes but check anyway
-        assert_eq!(resp.len(), 0);
-        assert!(
-            peer_cluster_info
-                .read()
-                .unwrap()
-                .lookup(node_info.id)
-                .is_some()
-        );
-        resp = ClusterInfo::handle_protocol(
-            &peer_cluster_info,
-            &leader.ncp,
-            Protocol::PushMessage(leader_cluster_info.id(), me_vals.clone()),
-            &SharedWindow::default(),
-            &mut None,
-        );
-        // there should be a prune
-        assert_eq!(resp.len(), 1);
-        //check that the prune is valid
-        let blob = resp[0].read().unwrap();
-        deserialize(&blob.data[..blob.meta.size])
-            .iter()
-            .for_each(|request| match request {
-                //check that the request was sent to the leader to prune the peer node
-                Protocol::PruneMessage(from, data) => {
-                    assert!(data.verify());
-                    assert_eq!(data.source, blob.meta.addr());
-                    assert_eq!(data.destination, leader_cluster_info.id());
-                    assert_eq!(data.pubkey, *from);
-                }
-                _ => assert!(false),
-            });
     }
 }

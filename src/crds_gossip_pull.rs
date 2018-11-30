@@ -12,6 +12,7 @@
 use bincode::serialized_size;
 use bloom::Bloom;
 use crds::Crds;
+use crds_gossip::CRDS_GOSSIP_BLOOM_SIZE;
 use crds_gossip_error::CrdsGossipError;
 use crds_value::{CrdsValue, CrdsValueLabel};
 use packet::BLOB_DATA_SIZE;
@@ -135,7 +136,10 @@ impl CrdsGossipPull {
     }
     /// build a filter of the current crds table
     fn build_crds_filter(&self, crds: &Crds) -> Bloom<Hash> {
-        let num = crds.table.values().count() + self.purged_values.len();
+        let num = cmp::max(
+            CRDS_GOSSIP_BLOOM_SIZE,
+            crds.table.values().count() + self.purged_values.len(),
+        );
         let mut bloom = Bloom::random(num, 0.1, 4 * 1024 * 8 - 1);
         for v in crds.table.values() {
             bloom.add(&v.value_hash);

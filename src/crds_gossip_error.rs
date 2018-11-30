@@ -4,4 +4,5 @@ pub enum CrdsGossipError {
     PushMessageTimeout,
     PushMessagePrune,
     PushMessageOldVersion,
+    BadPruneDestination,
 }
