@@ -16,14 +16,14 @@ The seed that is selected is predictable but unbiasable.  There is no grinding a
 
 ## Leader Rotation
 
-* The leader is rotated every `T` PoH ticks (leader period), accoding to the leader schedule
+* The leader is rotated every `T` PoH ticks (leader period), accoding to the leader schedule.  This amount of time as represented by the PoH ticks is called a slot.
 
-Leader's transmit for a count of `T` PoH ticks.  When `T` is reached all the validators should switch to the next scheduled leader.  Leaders that transmit out of order can be ignored or slashed.
+Leader's transmit for a count of `T` PoH ticks.  When `T` is reached all the validators should switch to the next scheduled leader.  Leaders that transmit out of order can be ignored.
 
 All `T` ticks must be observed from the current leader for that part of PoH to be accepted by the network.  If `T` ticks (and any intervening transactions) are not observed, the network optimistically fills in the `T` ticks, and continues with PoH from the next leader.  See [branch generation](rfcs/0002-branch_generation.md).
 
 ## Network Variables
 
-`N` - Number of voting rounds for which a leader schedule is considered before a new leader schedule is used This number should be large and potentially cover 2 weeks.
+`N` - Number of voting rounds for which a leader schedule is considered before a new leader schedule is used.  This number should be large and potentially cover 2 weeks.
 
-`T` - number of PoH ticks per leader period.
+`T` - Number of PoH ticks per leader slot.
