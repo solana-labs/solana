@@ -1,5 +1,5 @@
-# IPC
- 
+# Observer
+
 The goal of this RFC is to define a set of conventions for securely observing changes between programs such that programs can be reused without modifications.
 
 ## Terminology
@@ -20,8 +20,8 @@ enum ProgramState {
     Computation{
         output: Pubkey,
         observer: Pubkey,
-    },   
-    Output(Option<ProgramOutput>),   
+    },
+    Output(Option<ProgramOutput>),
 }
 ```
 
@@ -51,7 +51,7 @@ struct Observer {
 ## Example
 
 * Subject: TicTacToe
-* Observer: TransferableItem 
+* Observer: TransferableItem
 
 ### Subject
 
@@ -59,50 +59,63 @@ struct Observer {
 enum TicTacToe {
     Computation{
         // address of TicTacToe::Winner account
-        winner: Pubkey,
-        // address of TransferbleItem::TransferOnOutput account
+        result: Pubkey,
+        // address of TransferbleItem account
         observer: Pubkey,
-    },   
+    },
     // address of the winner
-    Winner(Option<Pubkey>),   
+    Winner(Option<Pubkey>),
 }
 ```
+
+The Subject doesn't need to actually store the `observer` or `result` addresses.  But if the subject stores them and the clients can follow the structure it is easy for runtime programs to verify that the pointers actually point to the right place.  It is also possible to observe an offset directly into the state of the game.
 
 ### Observer
 
 ```
 enum TransferableItem {
-    Item { 
-        owner_id: Option<Pubkey>
+    Owned {
+        owner_id: Pubkey
     },
     TransferOnOutput {
         //8, size of enum descriminator for data in TicTacToe::Winner
         output_msg_offset:  u64,
 
         //points to TicTacToe::Winner account address
-        output_id:  Pubkey, 
-
-        //TransferableItem::Item to set
-        item: Pubkey,
+        output_id:  Pubkey,
     },
 }
 ```
 
-TransferableItem is agnostic to the definition of the actual item whose ownership is transfered.
+TransferableItem is agnostic to the definition of the actual item whose ownership is transfered, or the output which decides the ownership of the item.
 
 ```
 struct Prize {
-    //points to a TransferableItem::Item
+    //points to a TransferableItem
     owner: Pubkey,
 }
 ```
 
 `Prize` just needs to honor the value of Item.owner in its code.
 
-### TransferOnOutput
+### Initialize Game
+Inputs:
+* account[0] - owner of item
+* account[1] - game state
+* account[2] - game result `TicTacToe::Winner`
+* account[3] - `TransferableItem::Owned` instance
 
-* account[0] - TransferableItem::TransferOnOutput instance
-* account[1] - TransferOnOutput.item instance
-* account[2] - TicTacToe::Winner instance
+This would atomically call `TicTacToe::init` and `TransferableItem::init_transfer_on_output`, to simultaneously configure both.
 
-When this function executes, it checks that `Winner` deserializes into `Some(Pubkey)`.  If that succeeds it serializes `Some(Pubkey)` into the TransferOnOutput.item userdata.
+#### `TicTacToe::init`
+* accounts: [0,1,2] - initialize the game to point to the right result and observer.
+
+#### `TransferableItem::init_transfer_on_output`
+* accounts: [0,3,2] - Transmute `account[3]` from `TransferableItem::Owned` to `TransferableItem::TransferOnOutput`, and configure the output.
+
+### `TransferableItem::claim`
+
+* account[0] - `TransferableItem::TransferOnOutput` instance
+* account[1] - `TicTacToe::Winner` instance
+
+When this function executes, it checks that `account[1]` is the right `TicTacToe::Winner` and it is `Some(Pubkey)`. This function will transmute itelf to `TransferableItem::Owned` if the result actually deserializes to the right thing.
