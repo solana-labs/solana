@@ -16,7 +16,7 @@ OUT_DIR ?= ./out
 ifeq ($(DOCKER),1)
 LLVM_DIR = $(LOCAL_PATH)llvm/docker
 else
-LLVM_DIR = $(LOCAL_PATH)llvm/native-v0.0.1
+LLVM_DIR = $(LOCAL_PATH)llvm/native
 endif
 
 ifdef LLVM_DIR
@@ -61,11 +61,11 @@ OBJ_DUMP_FLAGS := \
   -source \
   -disassemble \
 
-TESTFRAMEWORK_RPATH := $(abspath $(LOCAL_PATH)criterion-v2.3.2/lib)
+TESTFRAMEWORK_RPATH := $(abspath $(LOCAL_PATH)criterion/lib)
 TESTFRAMEWORK_FLAGS := \
   -DSOL_TEST \
-  -isystem $(LOCAL_PATH)criterion-v2.3.2/include \
-  -L $(LOCAL_PATH)criterion-v2.3.2/lib \
+  -isystem $(LOCAL_PATH)criterion/include \
+  -L $(LOCAL_PATH)criterion/lib \
   -rpath $(TESTFRAMEWORK_RPATH) \
   -lcriterion \
 
