@@ -26,6 +26,7 @@ use std::collections::HashMap;
 pub const CRDS_GOSSIP_NUM_ACTIVE: usize = 30;
 pub const CRDS_GOSSIP_PUSH_FANOUT: usize = 6;
 pub const CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS: u64 = 5000;
+pub const CRDS_GOSSIP_PRUNE_MSG_TIMEOUT_MS: u64 = 500;
 
 pub struct CrdsGossipPush {
     /// max bytes per message
@@ -38,6 +39,7 @@ pub struct CrdsGossipPush {
     pub num_active: usize,
     pub push_fanout: usize,
     pub msg_timeout: u64,
+    pub prune_timeout: u64,
 }
 
 impl Default for CrdsGossipPush {
@@ -50,6 +52,8 @@ impl Default for CrdsGossipPush {
             num_active: CRDS_GOSSIP_NUM_ACTIVE,
             push_fanout: CRDS_GOSSIP_PUSH_FANOUT,
             msg_timeout: CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS,
+            prune_timeout: CRDS_GOSSIP_PRUNE_MSG_TIMEOUT_MS,
+
         }
     }
 }

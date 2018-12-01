@@ -74,8 +74,8 @@ pub struct PruneData {
     pub signature: Signature,
     /// The Pubkey of the intended node/destination for this message
     pub destination: Pubkey,
-    /// The source Addr this message should have been received from
-    pub source: SocketAddr,
+    /// Wallclock of the node that generated this message
+    pub wallclock: u64,
 }
 
 impl Signable for PruneData {
@@ -89,13 +89,13 @@ impl Signable for PruneData {
             pubkey: Pubkey,
             prunes: Vec<Pubkey>,
             destination: Pubkey,
-            source: SocketAddr,
+            wallclock: u64,
         }
         let data = SignData {
             pubkey: self.pubkey,
             prunes: self.prunes.clone(),
             destination: self.destination,
-            source: self.source,
+            wallclock: self.wallclock,
         };
         serialize(&data).expect("serialize PruneData")
     }
@@ -805,7 +805,7 @@ impl ClusterInfo {
                         prunes,
                         signature: Signature::default(),
                         destination: from,
-                        source: ci.ncp,
+                        wallclock: timestamp(),
                     };
                     prune_msg.sign(&me.read().unwrap().keypair);
                     let rsp = Protocol::PruneMessage(self_id, prune_msg);
@@ -895,14 +895,19 @@ impl ClusterInfo {
                 Self::handle_push_message(me, from, &data)
             }
             Protocol::PruneMessage(from, data) => {
-                if data.source == *from_addr && data.verify() {
+                if data.verify() {
                     inc_new_counter_info!("cluster_info-prune_message", 1);
                     inc_new_counter_info!("cluster_info-prune_message-size", data.prunes.len());
                     me.write()
                         .unwrap()
                         .gossip
-                        .process_prune_msg(from, data.destination, &data.prunes)
-                        .ok();
+                        .process_prune_msg(
+                            from,
+                            data.destination,
+                            &data.prunes,
+                            data.wallclock,
+                            timestamp(),
+                        ).ok();
                 }
                 vec![]
             }
