@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 set -ex
 
-SOLANA_ROOT="$(cd "$(dirname "$0")"/../../../../..; pwd)"
-[[ -f "$SOLANA_ROOT"/LICENSE && -d "$SOLANA_ROOT"/ci ]]
+cd "$(dirname "$0")"/../../..
 
-rm -rf bpf-sdk/
+rm -rf bpf-sdk.tar.bz2 bpf-sdk/
 mkdir bpf-sdk/
+cp LICENSE bpf-sdk/
 
 (
-  "$SOLANA_ROOT"/ci/crate-version.sh
+  ci/crate-version.sh
   git rev-parse HEAD
 ) > bpf-sdk/version.txt
 
-cp -ra "$SOLANA_ROOT"/programs/bpf/c/sdk/* bpf-sdk/
-rm -rf bpf-sdk/scripts/package.sh
+cp -ra sdk/bpf/* bpf-sdk/
+rm -f bpf-sdk/scripts/package.sh
 
 tar jvcf bpf-sdk.tar.bz2 bpf-sdk/
