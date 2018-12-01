@@ -11,8 +11,9 @@ fn main() {
             + &env::var("PROFILE").unwrap()
             + &"/bpf".to_string();
 
-        println!("cargo:rerun-if-changed=../../bpf/c/sdk/bpf.mk");
-        println!("cargo:rerun-if-changed=../../bpf/c/sdk/inc/solana_sdk.h");
+        println!("cargo:rerun-if-changed=../../../sdk/bpf/bpf.mk");
+        println!("cargo:rerun-if-changed=../../../sdk/bpf/inc/solana_sdk.h");
+
         println!("cargo:rerun-if-changed=../../bpf/c/makefile");
         println!("cargo:rerun-if-changed=../../bpf/c/src/bench_alu.c");
         println!("cargo:rerun-if-changed=../../bpf/c/src/move_funds.c");

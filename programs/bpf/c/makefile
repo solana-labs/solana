@@ -1,2 +1,3 @@
-$(shell ./sdk/scripts/install.sh)
-include sdk/bpf.mk
+BPF_SDK := ../../../sdk/bpf
+$(shell $(BPF_SDK)/scripts/install.sh)
+include $(BPF_SDK)/bpf.mk
