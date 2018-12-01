@@ -32,7 +32,7 @@ fi
 
 # Install LLVM
 version=v0.0.1
-if [[ ! -f llvm/native/README.md ]]; then
+if [[ ! -f llvm-native/README.md ]]; then
   (
     if [[ "$(uname)" = Darwin ]]; then
       machine=macos
@@ -41,20 +41,20 @@ if [[ ! -f llvm/native/README.md ]]; then
     fi
 
     set -ex
-    rm -rf llvm/native
-    mkdir -p llvm/native
-    cd llvm/native
+    rm -rf llvm-native
+    mkdir -p llvm-native
+    cd llvm-native
     wget --progress=dot:giga https://github.com/solana-labs/llvm-builder/releases/download/$version/solana-llvm-$machine.tgz
     tar xzf solana-llvm-$machine.tgz
     rm -rf solana-llvm-$machine.tgz
 
-    [[ ! -f llvm/native/README.md ]]
+    [[ ! -f llvm-native/README.md ]]
     echo "https://github.com/solana-labs/llvm-builder/releases/tag/$version" > README.md
   )
 
   # shellcheck disable=SC2181
   if [[ $? -ne 0 ]]; then
-    rm -rf llvm/native
+    rm -rf llvm-native
     exit 1
   fi
 fi
