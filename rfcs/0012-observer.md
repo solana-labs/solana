@@ -25,18 +25,19 @@ enum ProgramState {
 }
 ```
 
-* `ProgramState::Computation.output` - This value contains the `Account` address which the `ProgramState::Output` is stored.
+* `ProgramState::Computation.output` - This value contains the `Account` address which the `ProgramState::Output` is stored.  Program code ensures that output is only written to the address that its set to, and that address is immutable once initialized.
 * `ProgramState::Computation.observer` - This value contains the `Account` address which the observer is stored.
 * `ProgramState::Output` - This value is stored in an `Account.userdata`, and the data indicates the output of the program.  When it is initialized the value is `ProgramState::Output(None)`, to indicate that no output has been produced yet.
 
 The program runs until it produces an output, which it stores in the `ProgramState::Computation.output` account userdata as `ProgramState::Output(Some(ProgramOutput))`.  The program's code guarantees that output can only be written to `ProgramState::Computation.output`, and a different address could not be swapped.  At program initialization, 2 Accounts are required, one for `ProgramState::Computation` and the other one for `ProgramState::Output`.
 
+The computation doesn't need to store the observer address.  But in doing so would make it easy find the observer from the program state alone.
 
 ## Observer Design
 
 Observer is configured with the following data.
 
-* Subject output enum value.  In the above case this would be `1`.
+* Subject output msg offset.  In the above case this would be the size of the serialized enum descriminator.
 * Subject output account address.  This would be the same as `ProgramState::Computation.output`.
 
 ```
