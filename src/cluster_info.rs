@@ -899,14 +899,13 @@ impl ClusterInfo {
                 if data.verify() {
                     inc_new_counter_info!("cluster_info-prune_message", 1);
                     inc_new_counter_info!("cluster_info-prune_message-size", data.prunes.len());
-                    let prune_res = me.write().unwrap().gossip.process_prune_msg(
+                    match prune_res = me.write().unwrap().gossip.process_prune_msg(
                         from,
                         data.destination,
                         &data.prunes,
                         data.wallclock,
                         timestamp(),
-                    );
-                    match prune_res {
+                    ) {
                         Err(CrdsGossipError::PruneMessageTimeout) => {
                             inc_new_counter_info!("cluster_info-prune_message_timeout", 1)
                         }
