@@ -17,6 +17,7 @@ use bloom::Bloom;
 use contact_info::ContactInfo;
 use counter::Counter;
 use crds_gossip::CrdsGossip;
+use crds_gossip_error::CrdsGossipError;
 use crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
 use crds_value::{CrdsValue, CrdsValueLabel, LeaderId};
 use ledger::LedgerWindow;
@@ -898,16 +899,22 @@ impl ClusterInfo {
                 if data.verify() {
                     inc_new_counter_info!("cluster_info-prune_message", 1);
                     inc_new_counter_info!("cluster_info-prune_message-size", data.prunes.len());
-                    me.write()
-                        .unwrap()
-                        .gossip
-                        .process_prune_msg(
-                            from,
-                            data.destination,
-                            &data.prunes,
-                            data.wallclock,
-                            timestamp(),
-                        ).ok();
+                    let prune_res = me.write().unwrap().gossip.process_prune_msg(
+                        from,
+                        data.destination,
+                        &data.prunes,
+                        data.wallclock,
+                        timestamp(),
+                    );
+                    match prune_res {
+                        Err(CrdsGossipError::PruneMessageTimeout) => {
+                            inc_new_counter_info!("cluster_info-prune_message_timeout", 1)
+                        }
+                        Err(CrdsGossipError::BadPruneDestination) => {
+                            inc_new_counter_info!("cluster_info-bad_prune_destination", 1)
+                        }
+                        Ok(_) => (),
+                    }
                 }
                 vec![]
             }
