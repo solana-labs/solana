@@ -2,10 +2,9 @@
 
 cd "$(dirname "$0")"/..
 
-# Install Criterion for all supported platforms
-# if changing version here must also change in bpf.mk
+# Install Criterion
 version=v2.3.2
-if [[ ! -d criterion-$version ]]; then
+if [[ ! -r criterion/README.md ]]; then
   (
     if [[ "$(uname)" = Darwin ]]; then
       machine=osx
@@ -14,24 +13,26 @@ if [[ ! -d criterion-$version ]]; then
     fi
 
     set -ex
+    rm -rf criterion
+    mkdir criterion
+    cd criterion
     wget --progress=dot:mega https://github.com/Snaipe/Criterion/releases/download/$version/criterion-$version-$machine-x86_64.tar.bz2
-    tar jxf criterion-$version-$machine-x86_64.tar.bz2
+    tar --strip-components 1 -jxf criterion-$version-$machine-x86_64.tar.bz2
     rm -rf criterion-$version-$machine-x86_64.tar.bz2
 
-    [[ ! -f criterion-$version/README.md ]]
-    echo "https://github.com/Snaipe/Criterion/releases/tag/$version" > criterion-$version/README.md
+    [[ ! -f README.md ]]
+    echo "https://github.com/Snaipe/Criterion/releases/tag/$version" > README.md
   )
   # shellcheck disable=SC2181
   if [[ $? -ne 0 ]]; then
-    rm -rf criterion-$version*
+    rm -rf criterion
     exit 1
   fi
 fi
 
 # Install LLVM
-# if changing version here must also change in bpf.mk
 version=v0.0.1
-if [[ ! -d llvm/native-$version ]]; then
+if [[ ! -f llvm/native/README.md ]]; then
   (
     if [[ "$(uname)" = Darwin ]]; then
       machine=macos
@@ -40,19 +41,20 @@ if [[ ! -d llvm/native-$version ]]; then
     fi
 
     set -ex
-    mkdir -p llvm/native-$version
-    cd llvm/native-$version
+    rm -rf llvm/native
+    mkdir -p llvm/native
+    cd llvm/native
     wget --progress=dot:giga https://github.com/solana-labs/llvm-builder/releases/download/$version/solana-llvm-$machine.tgz
     tar xzf solana-llvm-$machine.tgz
     rm -rf solana-llvm-$machine.tgz
 
-    [[ ! -f llvm/native-$version/README.md ]]
+    [[ ! -f llvm/native/README.md ]]
     echo "https://github.com/solana-labs/llvm-builder/releases/tag/$version" > README.md
   )
 
   # shellcheck disable=SC2181
   if [[ $? -ne 0 ]]; then
-    rm -rf llvm/native-$version
+    rm -rf llvm/native
     exit 1
   fi
 fi
