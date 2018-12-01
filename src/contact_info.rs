@@ -171,7 +171,7 @@ impl Signable for ContactInfo {
         self.id
     }
 
-    fn get_sign_data(&self) -> Vec<u8> {
+    fn signable_data(&self) -> Vec<u8> {
         #[derive(Serialize)]
         struct SignData {
             id: Pubkey,

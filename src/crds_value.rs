@@ -38,7 +38,7 @@ impl Signable for LeaderId {
         self.id
     }
 
-    fn get_sign_data(&self) -> Vec<u8> {
+    fn signable_data(&self) -> Vec<u8> {
         #[derive(Serialize)]
         struct SignData {
             id: Pubkey,
@@ -67,7 +67,7 @@ impl Signable for Vote {
         self.transaction.account_keys[0]
     }
 
-    fn get_sign_data(&self) -> Vec<u8> {
+    fn signable_data(&self) -> Vec<u8> {
         #[derive(Serialize)]
         struct SignData {
             transaction: Transaction,
@@ -214,7 +214,7 @@ impl Signable for CrdsValue {
         }
     }
 
-    fn get_sign_data(&self) -> Vec<u8> {
+    fn signable_data(&self) -> Vec<u8> {
         unimplemented!()
     }
 

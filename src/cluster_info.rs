@@ -83,7 +83,7 @@ impl Signable for PruneData {
         self.pubkey
     }
 
-    fn get_sign_data(&self) -> Vec<u8> {
+    fn signable_data(&self) -> Vec<u8> {
         #[derive(Serialize)]
         struct SignData {
             pubkey: Pubkey,
@@ -805,7 +805,7 @@ impl ClusterInfo {
                         prunes,
                         signature: Signature::default(),
                         destination: from,
-                        source: ci.ncp.clone(),
+                        source: ci.ncp,
                     };
                     prune_msg.sign(&me.read().unwrap().keypair);
                     let rsp = Protocol::PruneMessage(self_id, prune_msg);
