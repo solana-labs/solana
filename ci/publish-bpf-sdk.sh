@@ -15,7 +15,7 @@ fi
 echo --- Creating tarball
 (
   set -x
-  programs/bpf/c/sdk/scripts/package.sh
+  sdk/bpf/scripts/package.sh
   [[ -f bpf-sdk.tar.bz2 ]]
 )
 
