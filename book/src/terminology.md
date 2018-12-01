@@ -40,7 +40,7 @@ consensus.
 An entry on the [ledger](#ledger) either a [tick](#tick) or a [transactions
 entry](#transactions-entry).
 
-#### finality
+#### leader finality
 
 The wallclock duration between a [leader](#leader) creating a [tick
 entry](#tick) and recognizing a supermajority of [ledger votes](#ledger-vote)
