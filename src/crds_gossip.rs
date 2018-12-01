@@ -529,15 +529,15 @@ mod test {
             Pubkey::new(hash(&[1; 32]).as_ref()),
             &[prune_pubkey],
             now,
-            now
+            now,
         );
         assert_eq!(res.err(), Some(CrdsGossipError::BadPruneDestination));
         //correct dest
-        res = crds_gossip.process_prune_msg(ci.id, id, &[prune_pubkey], now ,now);
+        res = crds_gossip.process_prune_msg(ci.id, id, &[prune_pubkey], now, now);
         assert!(res.is_ok());
         //test timeout
-        let timeout = now + crds_gossip.push.prune_timeout*2;
-        res = crds_gossip.process_prune_msg(ci.id, id, &[prune_pubkey], now , timeout);
+        let timeout = now + crds_gossip.push.prune_timeout * 2;
+        res = crds_gossip.process_prune_msg(ci.id, id, &[prune_pubkey], now, timeout);
         assert_eq!(res.err(), Some(CrdsGossipError::PruneMessageTimeout));
     }
 }

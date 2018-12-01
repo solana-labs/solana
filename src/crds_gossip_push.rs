@@ -53,7 +53,6 @@ impl Default for CrdsGossipPush {
             push_fanout: CRDS_GOSSIP_PUSH_FANOUT,
             msg_timeout: CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS,
             prune_timeout: CRDS_GOSSIP_PRUNE_MSG_TIMEOUT_MS,
-
         }
     }
 }
