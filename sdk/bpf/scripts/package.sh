@@ -13,6 +13,5 @@ cp LICENSE bpf-sdk/
 ) > bpf-sdk/version.txt
 
 cp -ra sdk/bpf/* bpf-sdk/
-rm -f bpf-sdk/scripts/package.sh
 
 tar jvcf bpf-sdk.tar.bz2 bpf-sdk/
