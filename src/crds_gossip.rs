@@ -12,6 +12,9 @@ use crds_value::CrdsValue;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 
+///The min size for bloom filters
+pub const CRDS_GOSSIP_BLOOM_SIZE: usize = 1000;
+
 pub struct CrdsGossip {
     pub crds: Crds,
     pub id: Pubkey,
@@ -64,8 +67,24 @@ impl CrdsGossip {
     }
 
     /// add the `from` to the peer's filter of nodes
-    pub fn process_prune_msg(&mut self, peer: Pubkey, origin: &[Pubkey]) {
-        self.push.process_prune_msg(peer, origin)
+    pub fn process_prune_msg(
+        &mut self,
+        peer: Pubkey,
+        destination: Pubkey,
+        origin: &[Pubkey],
+        wallclock: u64,
+        now: u64,
+    ) -> Result<(), CrdsGossipError> {
+        let expired = now > wallclock + self.push.prune_timeout;
+        if expired {
+            return Err(CrdsGossipError::PruneMessageTimeout);
+        }
+        if self.id == destination {
+            self.push.process_prune_msg(peer, origin);
+            Ok(())
+        } else {
+            Err(CrdsGossipError::BadPruneDestination)
+        }
     }
 
     /// refresh the push active set
@@ -138,11 +157,14 @@ impl CrdsGossip {
 mod test {
     use super::*;
     use bincode::serialized_size;
+    use cluster_info::NodeInfo;
     use contact_info::ContactInfo;
     use crds_gossip_push::CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS;
     use crds_value::CrdsValueLabel;
     use rayon::prelude::*;
     use signature::{Keypair, KeypairUtil};
+    use solana_sdk::hash::hash;
+    use solana_sdk::timing::timestamp;
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
 
@@ -317,8 +339,13 @@ mod test {
                         prunes += rsps.len();
                         network
                             .get(&from)
-                            .map(|node| node.lock().unwrap().process_prune_msg(*to, &rsps))
-                            .unwrap();
+                            .map(|node| {
+                                let mut node = node.lock().unwrap();
+                                let destination = node.id;
+                                let now = timestamp();
+                                node.process_prune_msg(*to, destination, &rsps, now, now)
+                                    .unwrap()
+                            }).unwrap();
                         delivered += rsps.is_empty() as usize;
                     }
                     (bytes, delivered, num_msgs, prunes)
@@ -482,5 +509,35 @@ mod test {
         logger::setup();
         let mut network = star_network_create(4002);
         network_simulator(&mut network);
+    }
+    #[test]
+    fn test_prune_errors() {
+        let mut crds_gossip = CrdsGossip::default();
+        crds_gossip.id = Pubkey::new(&[0; 32]);
+        let id = crds_gossip.id;
+        let ci = NodeInfo::new_localhost(Pubkey::new(&[1; 32]), 0);
+        let prune_pubkey = Pubkey::new(&[2; 32]);
+        crds_gossip
+            .crds
+            .insert(CrdsValue::ContactInfo(ci.clone()), 0)
+            .unwrap();
+        crds_gossip.refresh_push_active_set();
+        let now = timestamp();
+        //incorrect dest
+        let mut res = crds_gossip.process_prune_msg(
+            ci.id,
+            Pubkey::new(hash(&[1; 32]).as_ref()),
+            &[prune_pubkey],
+            now,
+            now,
+        );
+        assert_eq!(res.err(), Some(CrdsGossipError::BadPruneDestination));
+        //correct dest
+        res = crds_gossip.process_prune_msg(ci.id, id, &[prune_pubkey], now, now);
+        assert!(res.is_ok());
+        //test timeout
+        let timeout = now + crds_gossip.push.prune_timeout * 2;
+        res = crds_gossip.process_prune_msg(ci.id, id, &[prune_pubkey], now, timeout);
+        assert_eq!(res.err(), Some(CrdsGossipError::PruneMessageTimeout));
     }
 }

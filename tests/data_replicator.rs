@@ -11,6 +11,7 @@ use solana::ncp::Ncp;
 use solana::packet::{Blob, SharedBlob};
 use solana::result;
 use solana::service::Service;
+use solana::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -19,8 +20,9 @@ use std::thread::sleep;
 use std::time::Duration;
 
 fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<ClusterInfo>>, Ncp, UdpSocket) {
-    let mut tn = Node::new_localhost();
-    let cluster_info = ClusterInfo::new(tn.info.clone());
+    let keypair = Keypair::new();
+    let mut tn = Node::new_localhost_with_pubkey(keypair.pubkey());
+    let cluster_info = ClusterInfo::new_with_keypair(tn.info.clone(), Arc::new(keypair));
     let c = Arc::new(RwLock::new(cluster_info));
     let w = Arc::new(RwLock::new(vec![]));
     let d = Ncp::new(&c.clone(), w, None, tn.sockets.gossip, exit);

@@ -12,6 +12,7 @@ use bincode::serialized_size;
 use bloom::Bloom;
 use contact_info::ContactInfo;
 use crds::{Crds, VersionedCrdsValue};
+use crds_gossip::CRDS_GOSSIP_BLOOM_SIZE;
 use crds_gossip_error::CrdsGossipError;
 use crds_value::{CrdsValue, CrdsValueLabel};
 use indexmap::map::IndexMap;
@@ -25,6 +26,7 @@ use std::collections::HashMap;
 pub const CRDS_GOSSIP_NUM_ACTIVE: usize = 30;
 pub const CRDS_GOSSIP_PUSH_FANOUT: usize = 6;
 pub const CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS: u64 = 5000;
+pub const CRDS_GOSSIP_PRUNE_MSG_TIMEOUT_MS: u64 = 500;
 
 pub struct CrdsGossipPush {
     /// max bytes per message
@@ -37,6 +39,7 @@ pub struct CrdsGossipPush {
     pub num_active: usize,
     pub push_fanout: usize,
     pub msg_timeout: u64,
+    pub prune_timeout: u64,
 }
 
 impl Default for CrdsGossipPush {
@@ -49,6 +52,7 @@ impl Default for CrdsGossipPush {
             num_active: CRDS_GOSSIP_NUM_ACTIVE,
             push_fanout: CRDS_GOSSIP_PUSH_FANOUT,
             msg_timeout: CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS,
+            prune_timeout: CRDS_GOSSIP_PRUNE_MSG_TIMEOUT_MS,
         }
     }
 }
@@ -183,7 +187,8 @@ impl CrdsGossipPush {
                     continue;
                 }
             }
-            let bloom = Bloom::random(network_size, 0.1, 1024 * 8 * 4);
+            let size = cmp::max(CRDS_GOSSIP_BLOOM_SIZE, network_size);
+            let mut bloom = Bloom::random(size, 0.1, 1024 * 8 * 4);
             new_items.insert(val.0.pubkey(), bloom);
             if new_items.len() == need {
                 break;

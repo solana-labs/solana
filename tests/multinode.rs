@@ -42,12 +42,13 @@ use std::thread::{sleep, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 
 fn make_spy_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<ClusterInfo>>, Pubkey) {
+    let keypair = Keypair::new();
     let exit = Arc::new(AtomicBool::new(false));
-    let mut spy = Node::new_localhost();
+    let mut spy = Node::new_localhost_with_pubkey(keypair.pubkey());
     let me = spy.info.id.clone();
     let daddr = "0.0.0.0:0".parse().unwrap();
     spy.info.tvu = daddr;
-    let mut spy_cluster_info = ClusterInfo::new(spy.info);
+    let mut spy_cluster_info = ClusterInfo::new_with_keypair(spy.info, Arc::new(keypair));
     spy_cluster_info.insert_info(leader.clone());
     spy_cluster_info.set_leader(leader.id);
     let spy_cluster_info_ref = Arc::new(RwLock::new(spy_cluster_info));
@@ -64,11 +65,12 @@ fn make_spy_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<ClusterInfo>>, Pubkey) {
 }
 
 fn make_listening_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<ClusterInfo>>, Node, Pubkey) {
+    let keypair = Keypair::new();
     let exit = Arc::new(AtomicBool::new(false));
-    let new_node = Node::new_localhost();
+    let new_node = Node::new_localhost_with_pubkey(keypair.pubkey());
     let new_node_info = new_node.info.clone();
     let me = new_node.info.id.clone();
-    let mut new_node_cluster_info = ClusterInfo::new(new_node_info);
+    let mut new_node_cluster_info = ClusterInfo::new_with_keypair(new_node_info, Arc::new(keypair));
     new_node_cluster_info.insert_info(leader.clone());
     new_node_cluster_info.set_leader(leader.id);
     let new_node_cluster_info_ref = Arc::new(RwLock::new(new_node_cluster_info));

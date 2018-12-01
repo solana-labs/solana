@@ -12,6 +12,7 @@
 use bincode::serialized_size;
 use bloom::Bloom;
 use crds::Crds;
+use crds_gossip::CRDS_GOSSIP_BLOOM_SIZE;
 use crds_gossip_error::CrdsGossipError;
 use crds_value::{CrdsValue, CrdsValueLabel};
 use packet::BLOB_DATA_SIZE;
@@ -135,7 +136,10 @@ impl CrdsGossipPull {
     }
     /// build a filter of the current crds table
     fn build_crds_filter(&self, crds: &Crds) -> Bloom<Hash> {
-        let num = crds.table.values().count() + self.purged_values.len();
+        let num = cmp::max(
+            CRDS_GOSSIP_BLOOM_SIZE,
+            crds.table.values().count() + self.purged_values.len(),
+        );
         let mut bloom = Bloom::random(num, 0.1, 4 * 1024 * 8 - 1);
         for v in crds.table.values() {
             bloom.add(&v.value_hash);
@@ -292,11 +296,7 @@ mod test {
 
         // node contains a key from the dest node, but at an older local timestamp
         let dest_id = new.label().pubkey();
-        let same_key = CrdsValue::LeaderId(LeaderId {
-            id: dest_id,
-            leader_id: dest_id,
-            wallclock: 1,
-        });
+        let same_key = CrdsValue::LeaderId(LeaderId::new(dest_id, dest_id, 1));
         node_crds.insert(same_key.clone(), 0).unwrap();
         assert_eq!(
             node_crds
