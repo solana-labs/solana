@@ -16,8 +16,10 @@ maybe_cargo_install() {
     crate=$cmd
   fi
 
+  set +e
   "$cmd" --help > /dev/null 2>&1
   declare exitcode=$?
+  set -e
   if [[ $exitcode -ne 0 ]]; then
     _ cargo install "$crate"
   fi
