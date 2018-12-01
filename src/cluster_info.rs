@@ -899,7 +899,7 @@ impl ClusterInfo {
                 if data.verify() {
                     inc_new_counter_info!("cluster_info-prune_message", 1);
                     inc_new_counter_info!("cluster_info-prune_message-size", data.prunes.len());
-                    match prune_res = me.write().unwrap().gossip.process_prune_msg(
+                    match me.write().unwrap().gossip.process_prune_msg(
                         from,
                         data.destination,
                         &data.prunes,
@@ -912,6 +912,7 @@ impl ClusterInfo {
                         Err(CrdsGossipError::BadPruneDestination) => {
                             inc_new_counter_info!("cluster_info-bad_prune_destination", 1)
                         }
+                        Err(_) => (),
                         Ok(_) => (),
                     }
                 }
