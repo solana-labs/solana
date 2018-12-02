@@ -4,7 +4,7 @@ cd "$(dirname "$0")"/..
 
 # Install Criterion
 version=v2.3.2
-if [[ ! -r criterion/version.md ]]; then
+if [[ ! -r criterion-version.md ]]; then
   (
     if [[ "$(uname)" = Darwin ]]; then
       machine=osx
@@ -20,7 +20,7 @@ if [[ ! -r criterion/version.md ]]; then
     tar --strip-components 1 -jxf criterion-$version-$machine-x86_64.tar.bz2
     rm -rf criterion-$version-$machine-x86_64.tar.bz2
 
-    echo "https://github.com/Snaipe/Criterion/releases/tag/$version" >> version.md
+    echo "https://github.com/Snaipe/Criterion/releases/tag/$version" > ../criterion-version.md
   )
   # shellcheck disable=SC2181
   if [[ $? -ne 0 ]]; then
@@ -31,7 +31,7 @@ fi
 
 # Install LLVM
 version=v0.0.1
-if [[ ! -f llvm-native/version.md ]]; then
+if [[ ! -f llvm-native-version.md ]]; then
   (
     if [[ "$(uname)" = Darwin ]]; then
       machine=macos
@@ -47,7 +47,7 @@ if [[ ! -f llvm-native/version.md ]]; then
     tar xzf solana-llvm-$machine.tgz
     rm -rf solana-llvm-$machine.tgz
 
-    echo "https://github.com/solana-labs/llvm-builder/releases/tag/$version" >> version.md
+    echo "https://github.com/solana-labs/llvm-builder/releases/tag/$version" > ../llvm-native-version.md
   )
 
   # shellcheck disable=SC2181
