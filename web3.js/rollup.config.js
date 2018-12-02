@@ -28,12 +28,8 @@ function generateConfig(configType) {
   if (env === 'production') {
     config.plugins.push(
       uglify({
-        compress: {
-          pure_getters: true,
-          unsafe: true,
-          unsafe_comps: true,
-          warnings: false,
-        },
+        mangle: false,
+        compress: false,
       }),
     );
   }
@@ -45,6 +41,7 @@ function generateConfig(configType) {
           file: 'lib/index.iife.js',
           format: 'iife',
           name: 'solanaWeb3',
+          sourcemap: true,
         },
       ];
       config.plugins.push(builtins());
@@ -60,10 +57,12 @@ function generateConfig(configType) {
         {
           file: 'lib/index.cjs.js',
           format: 'cjs',
+          sourcemap: true,
         },
         {
           file: 'lib/index.esm.js',
           format: 'es',
+          sourcemap: true,
         },
       ];
 
