@@ -4,24 +4,24 @@ cd "$(dirname "$0")"/..
 
 # Install Criterion
 version=v2.3.2
-if [[ ! -r criterion-version.md ]]; then
+if [[ "$(uname)" = Darwin ]]; then
+  machine=osx
+else
+  machine=linux
+fi
+if [[ ! -r criterion-$machine-$version.md ]]; then
   (
-    if [[ "$(uname)" = Darwin ]]; then
-      machine=osx
-    else
-      machine=linux
-    fi
     filename=criterion-$version-$machine-x86_64.tar.bz2
 
     set -ex
-    rm -rf criterion
+    rm -rf criterion*
     mkdir criterion
     cd criterion
     wget --progress=dot:mega https://github.com/Snaipe/Criterion/releases/download/$version/$filename
     tar --strip-components 1 -jxf $filename
     rm -rf $filename
 
-    echo "https://github.com/Snaipe/Criterion/releases/tag/$version" > ../criterion-version.md
+    echo "https://github.com/Snaipe/Criterion/releases/tag/$version" > ../criterion-$machine-$version.md
   )
   # shellcheck disable=SC2181
   if [[ $? -ne 0 ]]; then
@@ -31,25 +31,25 @@ if [[ ! -r criterion-version.md ]]; then
 fi
 
 # Install LLVM
-version=v0.0.2
-if [[ ! -f llvm-native-version.md ]]; then
+version=v0.0.3
+if [[ "$(uname)" = Darwin ]]; then
+  machine=macos
+else
+  machine=linux
+fi
+if [[ ! -f llvm-native-$machine-$version.md ]]; then
   (
-    if [[ "$(uname)" = Darwin ]]; then
-      machine=macos
-    else
-      machine=linux
-    fi
     filename=solana-llvm-$machine.tar.bz2
 
     set -ex
-    rm -rf llvm-native
+    rm -rf llvm-native*
     mkdir -p llvm-native
     cd llvm-native
     wget --progress=dot:giga https://github.com/solana-labs/llvm-builder/releases/download/$version/$filename
     tar -jxf $filename
     rm -rf $filename
 
-    echo "https://github.com/solana-labs/llvm-builder/releases/tag/$version" > ../llvm-native-version.md
+    echo "https://github.com/solana-labs/llvm-builder/releases/tag/$version" > ../llvm-native-$machine-$version.md
   )
   # shellcheck disable=SC2181
   if [[ $? -ne 0 ]]; then
