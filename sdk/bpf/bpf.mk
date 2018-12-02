@@ -144,7 +144,7 @@ $(OUT_DIR)/%.bc: $(SRC_DIR)/%.c
 	$(_@)$(CC) $(BPF_C_FLAGS) -o $@ -c $< -MD -MF $(@:.bc=.d)
 
 $(OUT_DIR)/%.bc: $(SRC_DIR)/%.cc
-	@echo "[cc] $@ ($<)"
+	@echo "[cxx] $@ ($<)"
 	$(_@)mkdir -p $(OUT_DIR)
 	$(_@)$(CXX) $(BPF_CXX_FLAGS) -o $@ -c $< -MD -MF $(@:.bc=.d)
 
@@ -160,7 +160,7 @@ $(OUT_DIR)/test_%: $(TEST_DIR)/%.c
 	$(_@)$(MACOS_ADJUST_TEST_DYLIB) $@
 
 $(OUT_DIR)/test_%: $(TEST_DIR)/%.cc
-	@echo "[test cc] $@ ($<)"
+	@echo "[test cxx] $@ ($<)"
 	$(_@)mkdir -p $(OUT_DIR)
 	$(_@)$(CXX) $(TEST_CXX_FLAGS) -o $@ $< -MD -MF $(@:=.d)
 	$(_@)$(MACOS_ADJUST_TEST_DYLIB) $@
