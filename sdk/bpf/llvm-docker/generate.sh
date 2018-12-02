@@ -2,9 +2,10 @@
 
 read -r -d '' SCRIPT << 'EOM'
 #!/usr/bin/env bash
-set -ex
-SDKPATH="$( cd "$(dirname "$0")" ; pwd -P )"/../../../..
-docker run --workdir /solana_sdk --volume $SDKPATH:/solana_sdk --rm solanalabs/llvm `basename "$0"` "$@"
+set -e
+WORKDIR=$( pwd )
+SDKPATH="$( cd "$(dirname "$0")" ; pwd -P )"/../../inc
+docker run --workdir /workdir --volume $WORKDIR:/workdir --volume $SDKPATH:/usr/local/include --rm solanalabs/llvm `basename "$0"` "$@"
 EOM
 
 echo "$SCRIPT" > bin/clang
