@@ -20,8 +20,7 @@ if [[ ! -r criterion/README.md ]]; then
     tar --strip-components 1 -jxf criterion-$version-$machine-x86_64.tar.bz2
     rm -rf criterion-$version-$machine-x86_64.tar.bz2
 
-    [[ ! -f README.md ]]
-    echo "https://github.com/Snaipe/Criterion/releases/tag/$version" > README.md
+    echo "https://github.com/Snaipe/Criterion/releases/tag/$version" >> version.md
   )
   # shellcheck disable=SC2181
   if [[ $? -ne 0 ]]; then
@@ -48,8 +47,7 @@ if [[ ! -f llvm-native/README.md ]]; then
     tar xzf solana-llvm-$machine.tgz
     rm -rf solana-llvm-$machine.tgz
 
-    [[ ! -f llvm-native/README.md ]]
-    echo "https://github.com/solana-labs/llvm-builder/releases/tag/$version" > README.md
+    echo "https://github.com/solana-labs/llvm-builder/releases/tag/$version" >> version.md
   )
 
   # shellcheck disable=SC2181
