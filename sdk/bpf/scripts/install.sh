@@ -4,7 +4,7 @@ cd "$(dirname "$0")"/..
 
 # Install Criterion
 version=v2.3.2
-if [[ ! -r criterion/README.md ]]; then
+if [[ ! -r criterion/version.md ]]; then
   (
     if [[ "$(uname)" = Darwin ]]; then
       machine=osx
@@ -31,7 +31,7 @@ fi
 
 # Install LLVM
 version=v0.0.1
-if [[ ! -f llvm-native/README.md ]]; then
+if [[ ! -f llvm-native/version.md ]]; then
   (
     if [[ "$(uname)" = Darwin ]]; then
       machine=macos
