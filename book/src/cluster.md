@@ -11,56 +11,88 @@ buggy and malicious nodes.
 
 ## Creating a Cluster
 
-Before starting any fullnodes, one first needs to create a  *genesis block*.
+Before starting any fullnodes, one first needs to create a *genesis block*.
 The block contains entries referencing two public keys, a *mint* and a
 *bootstrap leader*. The fullnode holding the bootstrap leader's secret key is
 responsible for appending the first entries to the ledger. It initializes its
 internal state with the mint's account. That account will hold the number of
-native tokens defined by the genesis block. The second fullnode then contact
-the bootstrap leader to register as a validator or replicator. Additional
+native tokens defined by the genesis block. The second fullnode then contacts
+the bootstrap leader to register as a *validator* or *replicator*. Additional
 fullnodes then register with any registered member of the cluster.
 
-A validator receives all entries from the leader and is expected to submit
-votes confirming those entries are valid. After voting, the validator is
-expected to store those entries until *replicator* nodes submit proofs that
-they have stored copies of it. Once the validator observes a sufficient number
-of copies exist, it deletes its copy.
+A validator receives all entries from the leader and submits votes confirming
+those entries are valid. After voting, the validator is expected to store those
+entries until replicator nodes submit proofs that they have stored copies of
+it. Once the validator observes a sufficient number of copies exist, it deletes
+its copy.
 
 ## Joining a Cluster
 
 Fullnodes and replicators enter the cluster via registration messages sent to
 its *control plane*. The control plane is implemented using a *gossip*
 protocol, meaning that a node may register with any existing node, and expect
-its registeration to propogate to all nodes in the cluster. The time it takes
-for all nodes to synchonize is proportional to the square of the number of
-nodes particating in the cluster. Algorithmically, that's considered very slow,
+its registration to propagate to all nodes in the cluster. The time it takes
+for all nodes to synchronize is proportional to the square of the number of
+nodes participating in the cluster. Algorithmically, that's considered very slow,
 but in exchange for that time, a node is assured that it eventually has all the
 same information as every other node, and that that information cannot be
 censored by any one node.
 
-## Ledger Broadcasting
+## Sending Transactions to a Cluster
 
-The [Avalance explainer video](https://www.youtube.com/watch?v=qt_gDRXHrHQ) is
-a conceptual overview of how a Solana leader can continuously process a gigabit
-of transaction data per second and then get that same data, after being
-recorded on the ledger, out to multiple validators on a single gigabit *data
-plane*.
+Clients send transactions to any fullnode's Transaction Processing Unit (TPU)
+port. If the node is in the validator role, it forwards the transaction to the
+designated leader. If in the leader role, the node bundles incoming
+transactions, timestamps them creating an *entry*, and pushes them onto the
+cluster's *data plane*. Once on the data plane, the transactions are validated
+by validator nodes and replicated by replicator nodes, effectively appending
+them to the ledger.
 
-In practice, we found that just one level of the Avalanche validator tree is
-sufficient for at least 150 validators. We anticipate adding the second level
-to solve one of two problems:
+## Finalizing Transactions
 
-1. To transmit ledger segments to slower "replicator" nodes.
-2. To scale up the number of validators nodes.
+A Solana cluster is capable of subsecond *leader finality* for up to 150 nodes
+with plans to scale up to hundreds of thousands of nodes. Once fully
+implemented, finality times are expected to increase only with the logarithm of
+the number of validators, where the logarithm's base is very high. If the base
+is one thousand, for example, it means that for the first thousand nodes,
+finality will be the duration of three network hops plus the time it takes the
+slowest validator of a supermajority to vote. For the next million nodes,
+finality increases by only one network hop.
 
-Both problems justify the additional level, but you won't find it implemented
-in the reference design just yet, because Solana's gossip implementation is
-currently the bottleneck on the number of nodes per Solana cluster.
+Solana defines leader finality as the duration of time from when the leader
+timestamps a new entry to the moment when it recognizes a supermajority of
+ledger votes.
 
-## Malicious Nodes
+A gossip network is much too slow to achieve subsecond finality once the
+network grows beyond a certain size. The time it takes to send messages to all
+nodes is proportional to the square of the number of nodes. If a blockchain
+wants to achieve low finality and attempts to do it using a gossip network, it
+will be forced to centralize to just a handful of nodes.
 
-Solana is a *permissionless* blockchain, meaning that anyone wanting to
-participate in the network may do so. They need only *stake* some
-cluster-defined number of tokens and be willing to lose that stake if the
-cluster observes the node acting maliciously. The process is called *Proof of
-Stake* consensus, which defines rules to *slash* the stakes of malicious nodes.
+Scalable finality can be achieved using the follow combination of techniques:
+
+1. Timestamp transactions with a VDF sample and sign the timestamp.
+2. Split the transactions into batches, send each to separate nodes and have
+   each node share its batch with its peers.
+3. Repeat the previous step recursively until all nodes have all batches.
+
+Solana rotates leaders at fixed intervals, called *slots*. Each leader may only
+produce entries during its allotted slot. The leader therefore timestamps
+transactions so that validators may lookup the public key of the designated
+leader. The leader then signs the timestamp so that a validator may verify the
+signature, proving the signer is owner of the designated leader's public key.
+
+Next, transactions are broken into batches so that a node can send transactions
+to multiple parties without making multiple copies. If, for example, the leader
+needed to send 60 transactions to 6 nodes, it would break that collection of 60
+into batches of 10 transactions and send one to each node. This allows the
+leader to put 60 transactions on the wire, not 60 transactions for each node.
+Each node then shares its batch with its peers. Once the node has collected all
+6 batches, it reconstructs the original set of 60 transactions.
+
+A batch of transactions can only be split so many times before it is so small
+that header information becomes the primary consumer of network bandwidth. At
+the time of this writing, the approach is scaling well up to about 150
+validators. To scale up to hundreds of thousands of validators, each node can
+apply the same technique as the leader node to another set of nodes of equal
+size. We call the technique *data plane fanout*, but it is not yet implemented.
