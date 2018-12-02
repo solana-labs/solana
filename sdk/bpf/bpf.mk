@@ -15,9 +15,9 @@ OUT_DIR ?= ./out
 OS := $(uname)
 
 ifeq ($(DOCKER),1)
-LLVM_DIR = $(LOCAL_PATH)llvm-docker
+LLVM_DIR = $(LOCAL_PATH)llvm-docker/
 else
-LLVM_DIR = $(LOCAL_PATH)llvm-native
+LLVM_DIR = $(LOCAL_PATH)llvm-native/
 endif
 
 ifdef LLVM_DIR
