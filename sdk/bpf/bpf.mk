@@ -1,5 +1,5 @@
 LOCAL_PATH := $(dir $(lastword $(MAKEFILE_LIST)))
-$(shell $(LOCAL_PATH)/scripts/install.sh)
+$(info $(shell $(LOCAL_PATH)/scripts/install.sh))
 
 all:
 .PHONY: help all clean
