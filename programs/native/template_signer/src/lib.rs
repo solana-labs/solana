@@ -22,7 +22,7 @@
 //!     * `owner` - The current owner of the SigningContract.  Only the owner can make the request to
 //!     sign.
 //!
-//! A template is composed of an arbitratry key, a message, and a mask as well as a signature and a
+//! A template is composed of an arbitrary key, a message, and a mask as well as a signature and a
 //! challenge to prove ownership of the key.
 //!
 //! A SigningContract to sign a message that fits the template is created with some `guarantee`.  The
@@ -148,7 +148,7 @@ impl Default for State {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 enum Message {
-    /// Message to initalize the template.
+    /// Message to initialize the template.
     /// SigningContract.state must be `State::Created`
     /// SigningContract.escrow must be 0
     /// * account[0] - must be signed, current owner
@@ -189,7 +189,7 @@ enum Message {
     /// * account[0] - any caller
     /// * account[1] - the SigningContract
     ///
-    /// Signature prooves that there was a double spend
+    /// Signature proves that there was a double spend
     ConcurrentSignature { msg: Vec<u8>, sig: Vec<u8> },
 
     /// * account[0] - caller
@@ -199,11 +199,11 @@ enum Message {
     /// * (State::Created | State::EscrowFilled | State::Claimed) & `template_timeout`
     ///    The `signer` can claim `guarantee`, the `owner` can claim the `escrow`.    
     /// * Requested & `requested_timeout`
-    ///    The the `owner` can claim the `escrow` and the `guarantee`.    
+    ///    The `owner` can claim the `escrow` and the `guarantee`.    
     /// * Signed & `signed_timeout`
-    ///    The the `signer` can claim the `escrow` and the `guarantee`.    
+    ///    The `signer` can claim the `escrow` and the `guarantee`.    
     /// * ConcurrentSignature
-    ///    The the `owner` can claim the `escrow` and the `guarantee`.    
+    ///    The `owner` can claim the `escrow` and the `guarantee`.    
     /// Moves the state to State::Claimed
     Claim,
 }
