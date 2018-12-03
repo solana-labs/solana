@@ -10,7 +10,6 @@ use cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
 use log::Level;
 use ncp::Ncp;
 use packet::PACKET_DATA_SIZE;
-use reqwest;
 use result::{Error, Result};
 use rpc_request::{RpcClient, RpcRequest};
 use serde_json;
@@ -59,7 +58,7 @@ impl ThinClient {
             rpc_addr,
             transactions_addr,
             transactions_socket,
-            RpcClient::new(),
+            RpcClient::new_from_socket(rpc_addr),
         )
     }
 
@@ -69,10 +68,7 @@ impl ThinClient {
         transactions_socket: UdpSocket,
         timeout: Duration,
     ) -> Self {
-        let rpc_client = reqwest::Client::builder()
-            .timeout(timeout)
-            .build()
-            .expect("build rpc client");
+        let rpc_client = RpcClient::new_with_timeout(rpc_addr, timeout);
         Self::new_from_client(rpc_addr, transactions_addr, transactions_socket, rpc_client)
     }
 
@@ -152,13 +148,7 @@ impl ThinClient {
 
     pub fn get_account_userdata(&mut self, pubkey: &Pubkey) -> io::Result<Option<Vec<u8>>> {
         let params = json!([format!("{}", pubkey)]);
-        let rpc_string = format!("http://{}", self.rpc_addr.to_string());
-        let resp = RpcRequest::GetAccountInfo.make_rpc_request(
-            &self.rpc_client,
-            &rpc_string,
-            1,
-            Some(params),
-        );
+        let resp = RpcRequest::GetAccountInfo.make_rpc_request(&self.rpc_client, 1, Some(params));
         if let Ok(account_json) = resp {
             let account: Account =
                 serde_json::from_value(account_json).expect("deserialize account");
@@ -176,13 +166,7 @@ impl ThinClient {
     pub fn get_balance(&mut self, pubkey: &Pubkey) -> io::Result<u64> {
         trace!("get_balance sending request to {}", self.rpc_addr);
         let params = json!([format!("{}", pubkey)]);
-        let rpc_string = format!("http://{}", self.rpc_addr.to_string());
-        let resp = RpcRequest::GetAccountInfo.make_rpc_request(
-            &self.rpc_client,
-            &rpc_string,
-            1,
-            Some(params),
-        );
+        let resp = RpcRequest::GetAccountInfo.make_rpc_request(&self.rpc_client, 1, Some(params));
         if let Ok(account_json) = resp {
             let account: Account =
                 serde_json::from_value(account_json).expect("deserialize account");
@@ -206,11 +190,9 @@ impl ThinClient {
     pub fn get_finality(&mut self) -> usize {
         trace!("get_finality");
         let mut done = false;
-        let rpc_string = format!("http://{}", self.rpc_addr.to_string());
         while !done {
             debug!("get_finality send_to {}", &self.rpc_addr);
-            let resp =
-                RpcRequest::GetFinality.make_rpc_request(&self.rpc_client, &rpc_string, 1, None);
+            let resp = RpcRequest::GetFinality.make_rpc_request(&self.rpc_client, 1, None);
 
             if let Ok(value) = resp {
                 done = true;
@@ -228,14 +210,8 @@ impl ThinClient {
     pub fn transaction_count(&mut self) -> u64 {
         debug!("transaction_count");
         let mut tries_left = 5;
-        let rpc_string = format!("http://{}", self.rpc_addr.to_string());
         while tries_left > 0 {
-            let resp = RpcRequest::GetTransactionCount.make_rpc_request(
-                &self.rpc_client,
-                &rpc_string,
-                1,
-                None,
-            );
+            let resp = RpcRequest::GetTransactionCount.make_rpc_request(&self.rpc_client, 1, None);
 
             if let Ok(value) = resp {
                 debug!("transaction_count recv_response: {:?}", value);
@@ -254,11 +230,9 @@ impl ThinClient {
     pub fn get_last_id(&mut self) -> Hash {
         trace!("get_last_id");
         let mut done = false;
-        let rpc_string = format!("http://{}", self.rpc_addr.to_string());
         while !done {
             debug!("get_last_id send_to {}", &self.rpc_addr);
-            let resp =
-                RpcRequest::GetLastId.make_rpc_request(&self.rpc_client, &rpc_string, 1, None);
+            let resp = RpcRequest::GetLastId.make_rpc_request(&self.rpc_client, 1, None);
 
             if let Ok(value) = resp {
                 done = true;
@@ -331,12 +305,10 @@ impl ThinClient {
         trace!("check_signature");
         let params = json!([format!("{}", signature)]);
         let now = Instant::now();
-        let rpc_string = format!("http://{}", self.rpc_addr.to_string());
         let mut done = false;
         while !done {
             let resp = RpcRequest::ConfirmTransaction.make_rpc_request(
                 &self.rpc_client,
-                &rpc_string,
                 1,
                 Some(params.clone()),
             );
