@@ -9,8 +9,8 @@ use counter::Counter;
 use log::Level;
 use packet::{Packet, SharedPackets};
 use result::Result;
-use signature::Signature;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::Signature;
 #[cfg(test)]
 use solana_sdk::transaction::Transaction;
 use std::io;
@@ -70,8 +70,8 @@ pub fn init() {
 
 fn verify_packet(packet: &Packet) -> u8 {
     use ring::signature;
-    use signature::Signature;
     use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::signature::Signature;
     use untrusted;
 
     let (sig_len, sig_start, msg_start, pubkey_start) = get_packet_offsets(packet, 0);
@@ -325,9 +325,9 @@ mod tests {
     use bincode::serialize;
     use budget_program;
     use packet::{Packet, SharedPackets};
-    use signature::{Keypair, KeypairUtil};
     use sigverify;
     use solana_sdk::hash::Hash;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::transaction::{Instruction, Transaction};
     use system_program;

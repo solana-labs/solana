@@ -1,7 +1,7 @@
 use bincode::serialize;
 use contact_info::ContactInfo;
-use signature::{Keypair, Signable, Signature};
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::{Keypair, Signable, Signature};
 use solana_sdk::transaction::Transaction;
 use std::fmt;
 

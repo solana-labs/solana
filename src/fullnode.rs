@@ -10,8 +10,8 @@ use ncp::Ncp;
 use rpc::JsonRpcService;
 use rpc_pubsub::PubSubService;
 use service::Service;
-use signature::{Keypair, KeypairUtil};
 use solana_sdk::hash::Hash;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -656,7 +656,7 @@ mod tests {
     use ledger::{create_tmp_genesis, create_tmp_sample_ledger, tmp_copy_ledger, LedgerWriter};
     use packet::make_consecutive_blobs;
     use service::Service;
-    use signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::cmp;
     use std::fs::remove_dir_all;
     use std::net::UdpSocket;

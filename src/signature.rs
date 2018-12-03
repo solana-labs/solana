@@ -2,9 +2,8 @@
 
 use rand::{ChaChaRng, Rng, SeedableRng};
 use rayon::prelude::*;
+use solana_sdk::signature::Keypair;
 use untrusted::Input;
-
-pub use solana_sdk::signature::*;
 
 pub struct GenKeys {
     generator: ChaChaRng,
@@ -38,6 +37,7 @@ impl GenKeys {
 mod tests {
     use super::*;
     pub use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::signature::KeypairUtil;
     use std::collections::HashSet;
 
     #[test]

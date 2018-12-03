@@ -5,11 +5,11 @@ use bank::Bank;
 use bincode::deserialize;
 #[cfg(test)]
 use result::Result;
-use signature::Keypair;
-#[cfg(test)]
-use signature::KeypairUtil;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::Keypair;
+#[cfg(test)]
+use solana_sdk::signature::KeypairUtil;
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::transaction::{Instruction, Transaction};
 use system_program;

@@ -598,8 +598,8 @@ mod test {
     use logger;
     use packet::{index_blobs, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE, BLOB_SIZE};
     use rand::{thread_rng, Rng};
-    use signature::{Keypair, KeypairUtil};
     use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     //    use std::sync::{Arc, RwLock};
     use window::WindowSlot;
 

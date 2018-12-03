@@ -1,6 +1,7 @@
 #[macro_use]
 extern crate log;
 extern crate solana;
+extern crate solana_sdk;
 
 use solana::client::mk_client;
 use solana::cluster_info::Node;
@@ -10,7 +11,7 @@ use solana::leader_scheduler::LeaderScheduler;
 use solana::ledger::{create_tmp_genesis, get_tmp_ledger_path, read_ledger};
 use solana::logger;
 use solana::replicator::Replicator;
-use solana::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::fs::remove_dir_all;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;

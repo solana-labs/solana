@@ -7,9 +7,9 @@ use bincode::serialize;
 use byteorder::{LittleEndian, ReadBytesExt};
 use entry::Entry;
 use ledger::create_ticks;
-use signature::{Keypair, KeypairUtil};
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
 use std::collections::HashSet;
 use std::io::Cursor;
@@ -511,9 +511,9 @@ mod tests {
         DEFAULT_LEADER_ROTATION_INTERVAL, DEFAULT_SEED_ROTATION_INTERVAL,
     };
     use mint::Mint;
-    use signature::{Keypair, KeypairUtil};
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
     use std::collections::HashSet;
     use std::hash::Hash as StdHash;

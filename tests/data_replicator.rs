@@ -11,7 +11,7 @@ use solana::ncp::Ncp;
 use solana::packet::{Blob, SharedBlob};
 use solana::result;
 use solana::service::Service;
-use solana::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};

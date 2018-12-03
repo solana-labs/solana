@@ -196,7 +196,7 @@ mod test {
     use super::*;
     use contact_info::ContactInfo;
     use crds_value::LeaderId;
-    use signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, KeypairUtil};
 
     #[test]
     fn test_new_pull_request() {

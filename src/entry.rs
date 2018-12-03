@@ -275,8 +275,8 @@ mod tests {
     use budget_transaction::BudgetTransaction;
     use chrono::prelude::*;
     use entry::Entry;
-    use signature::{Keypair, KeypairUtil};
     use solana_sdk::hash::hash;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
     use system_transaction::SystemTransaction;
 

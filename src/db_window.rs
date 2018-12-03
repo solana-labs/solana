@@ -358,7 +358,7 @@ mod test {
     use ledger::{get_tmp_ledger_path, make_tiny_test_entries, Block};
     use packet::{Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
     use rocksdb::{Options, DB};
-    use signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;

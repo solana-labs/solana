@@ -255,7 +255,7 @@ mod tests {
     use ledger::Block;
     use mint::Mint;
     use packet::to_packets;
-    use signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
     use std::thread::sleep;
     use system_transaction::SystemTransaction;

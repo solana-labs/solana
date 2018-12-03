@@ -2,9 +2,9 @@
 
 use entry::Entry;
 use ring::rand::SystemRandom;
-use signature::{Keypair, KeypairUtil};
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
 use system_transaction::SystemTransaction;
 use untrusted::Input;

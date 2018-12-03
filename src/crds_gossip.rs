@@ -162,8 +162,8 @@ mod test {
     use crds_gossip_push::CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS;
     use crds_value::CrdsValueLabel;
     use rayon::prelude::*;
-    use signature::{Keypair, KeypairUtil};
     use solana_sdk::hash::hash;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::timing::timestamp;
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};

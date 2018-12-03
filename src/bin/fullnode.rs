@@ -7,6 +7,7 @@ extern crate serde_json;
 #[macro_use]
 extern crate solana;
 extern crate solana_metrics;
+extern crate solana_sdk;
 
 use clap::{App, Arg};
 use solana::client::mk_client;
@@ -15,10 +16,10 @@ use solana::fullnode::{Config, Fullnode, FullnodeReturnType};
 use solana::leader_scheduler::LeaderScheduler;
 use solana::logger;
 use solana::netutil::find_available_port_in_range;
-use solana::signature::{Keypair, KeypairUtil};
 use solana::thin_client::poll_gossip_for_leader;
 use solana::vote_program::VoteProgram;
 use solana::vote_transaction::VoteTransaction;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::process::exit;

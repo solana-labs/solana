@@ -138,8 +138,8 @@ pub mod tests {
     use compute_leader_finality_service::ComputeLeaderFinalityService;
     use logger;
     use mint::Mint;
-    use signature::{Keypair, KeypairUtil};
     use solana_sdk::hash::hash;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
     use std::sync::Arc;
     use std::thread::sleep;

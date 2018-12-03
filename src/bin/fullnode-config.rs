@@ -4,6 +4,7 @@ extern crate dirs;
 extern crate ring;
 extern crate serde_json;
 extern crate solana;
+extern crate solana_sdk;
 
 use clap::{App, Arg};
 use ring::rand::SystemRandom;
@@ -12,7 +13,7 @@ use solana::cluster_info::FULLNODE_PORT_RANGE;
 use solana::fullnode::Config;
 use solana::logger;
 use solana::netutil::{get_ip_addr, get_public_ip_addr, parse_port_or_addr};
-use solana::signature::read_pkcs8;
+use solana_sdk::signature::read_pkcs8;
 use std::io;
 use std::net::SocketAddr;
 
