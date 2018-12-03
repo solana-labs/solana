@@ -4,7 +4,7 @@ use crate::bank::Bank;
 use crate::broadcast_service::BroadcastService;
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
 use crate::counter::Counter;
-use crate::db_ledger::{write_entries_to_ledger, DbLedger};
+use crate::db_ledger::{write_entries_to_ledger, DbLedger, DEFAULT_SLOT_HEIGHT};
 use crate::gossip_service::GossipService;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::ledger::read_ledger;
@@ -614,7 +614,7 @@ impl Fullnode {
             .expect("opening ledger")
             .map(|entry| entry.unwrap());
 
-        write_entries_to_ledger(&[ledger_path], ledger_entries);
+        write_entries_to_ledger(&[ledger_path], ledger_entries, DEFAULT_SLOT_HEIGHT);
         let db =
             DbLedger::open(ledger_path).expect("Expected to successfully open database ledger");
         Arc::new(RwLock::new(db))

@@ -22,7 +22,6 @@ use std::sync::{Arc, RwLock};
 pub const MAX_REPAIR_LENGTH: usize = 128;
 
 pub fn repair(
-    slot: u64,
     db_ledger: &DbLedger,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
     id: &Pubkey,
@@ -33,7 +32,9 @@ pub fn repair(
 ) -> Result<Vec<(SocketAddr, Vec<u8>)>> {
     let rcluster_info = cluster_info.read().unwrap();
     let mut is_next_leader = false;
-    let meta = db_ledger.meta_cf.get(&db_ledger.db, &MetaCf::key(slot))?;
+    let meta = db_ledger
+        .meta_cf
+        .get(&db_ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))?;
     if meta.is_none() {
         return Ok(vec![]);
     }
