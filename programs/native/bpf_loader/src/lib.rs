@@ -14,14 +14,35 @@ use bincode::deserialize;
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use libc::c_char;
 use solana_rbpf::EbpfVmRaw;
-use solana_sdk::account::KeyedAccount;
+use solana_sdk::account::{Account, KeyedAccount};
 use solana_sdk::loader_instruction::LoaderInstruction;
+use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use std::ffi::CStr;
 use std::io::prelude::*;
 use std::io::{Error, ErrorKind};
 use std::mem;
 use std::sync::{Once, ONCE_INIT};
+
+const BPF_LOADER_NAME: &str = "solana_bpf_loader";
+const BPF_LOADER_PROGRAM_ID: [u8; 32] = [
+    128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0,
+];
+
+pub fn id() -> Pubkey {
+    Pubkey::new(&BPF_LOADER_PROGRAM_ID)
+}
+
+pub fn account() -> Account {
+    Account {
+        tokens: 1,
+        owner: id(),
+        userdata: BPF_LOADER_NAME.as_bytes().to_vec(),
+        executable: true,
+        loader: native_loader::id(),
+    }
+}
 
 // TODO use rbpf's disassemble
 #[allow(dead_code)]
