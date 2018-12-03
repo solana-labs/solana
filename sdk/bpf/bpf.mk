@@ -16,8 +16,10 @@ OS := $(shell uname)
 
 ifeq ($(DOCKER),1)
 LLVM_DIR = $(LOCAL_PATH)llvm-docker/
+LLVM_SYSTEM_INC_DIRS := /usr/local/lib/clang/8.0.0/include
 else
 LLVM_DIR = $(LOCAL_PATH)llvm-native/
+LLVM_SYSTEM_INC_DIRS := $(LLVM_DIR)/lib/clang/8.0.0/include
 endif
 
 ifdef LLVM_DIR
@@ -29,7 +31,7 @@ endif
 
 SYSTEM_INC_DIRS := \
   $(LOCAL_PATH)inc \
-  $(LOCAL_PATH)llvm-native/lib/clang/8.0.0/include \
+  $(LLVM_SYSTEM_INC_DIRS) \
 
 C_FLAGS := \
   -Werror \
