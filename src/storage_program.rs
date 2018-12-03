@@ -3,9 +3,9 @@
 //!  and give reward for good proofs.
 
 use bincode::deserialize;
-use program::ProgramError;
 use solana_sdk::account::Account;
 use solana_sdk::hash::Hash;
+use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::Transaction;
 

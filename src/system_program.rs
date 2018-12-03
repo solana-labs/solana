@@ -1,8 +1,8 @@
 //! system program
 
 use bincode::deserialize;
-use program::ProgramError;
 use solana_sdk::account::Account;
+use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction::{SystemInstruction, SYSTEM_PROGRAM_ID};
 use solana_sdk::transaction::Transaction;
