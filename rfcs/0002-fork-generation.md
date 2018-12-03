@@ -42,21 +42,20 @@ The diagram below represents a validator's view of the PoH stream with possible 
 
 
 ```
-time  +----+                                          validator action
-|     | L1 |                 E(L1)
-|     |----|            /             \                vote(E(L2))
-|     | L2 |        E(L2)               x
-|     |----|        /    \           /     \           vote(E(L2))
-|     | L3 |    E(L3)      x       E(L3)'    x
-|     |----|    /  \     /   \     /  \     /  \       slash(L3)
-|     | L4 |  x     x  E(L4)  x   x    x   x    x
-V     |----|  |     |  |      |   |    |   |    |      vote(E(L4))
-V     | L5 |  xx   xx  xx   E(L5) xx   xx  xx   xx
-V     +----+                                           hang on to E(L4) and E(L5) for more...
+                                                                validator action
+               +----+                                           ----------------
+         |     | L1 |                  E1
+         |     +----+            /             \                vote(E1)
+         |     | L2 |          E2                x
+         |     +----+        /    \           /     \           vote(E2)
+  time   |     | L3 |     E3        x        E3'      x
+         |     +----+    /  \     /   \     /  \     /  \       slash(E3)
+         |     | L4 |  x     x  E4     x   x    x   x    x
+         |     +----+  |     |  |      |   |    |   |    |      vote(E4)
+         v     | L5 |  xx   xx  xx    E5  xx   xx  xx   xx
+               +----+                                           hang on to E4 and E5 for more...
 
-```
-
-Note that an `E` appearing on 2 forks at the same slot is a slashable condition, so a validator observing `E(L3)` and `E(L3)'` can slash L3 and safely choose `x` for that slot.  Once a validator commits to a forks, other forks can be discarded below that tick count.  For any slot, validators need only consider a single "has entries" chain or a "ticks only" chain to be proposed by a leader.  But multiple virtual entries may overlap as they link back to the a previous slot.
+Note that an `E` appearing on 2 forks at the same slot is a slashable condition, so a validator observing `E3` and `E3'` can slash L3 and safely choose `x` for that slot.  Once a validator commits to a forks, other forks can be discarded below that tick count.  For any slot, validators need only consider a single "has entries" chain or a "ticks only" chain to be proposed by a leader.  But multiple virtual entries may overlap as they link back to the a previous slot.
 
 #### Time Division
 
@@ -64,8 +63,8 @@ It's useful to consider leader rotation over PoH tick count as time division of 
 
 leader slot |  L1 | L2 | L3 | L4 | L5
 -------|----|----|----|----|----
-data      |  E(L1)| E(L2) | E(L3) | E(L4)  | E(L5)
-ticks to prev  | | | | x | xx
+data      |  E1| E2 | E3 | E4  | E5
+ticks since prev  | | | | x | xx
 
 Note that only data from leader L3 will be accepted during leader slot L3.  Data from L3 may include "catchup" ticks back to a slot other than L2 if L3 did not observe L2's data.  L4 and L5's transmissions include the "ticks to prev" PoH entries.
 
