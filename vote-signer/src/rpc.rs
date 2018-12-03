@@ -1,14 +1,13 @@
 //! The `rpc` module implements the Vote signing service RPC interface.
 
-use bs58;
 use jsonrpc_core::*;
 use jsonrpc_http_server::*;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signature;
-use std::mem;
+use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
 
@@ -32,7 +31,6 @@ impl VoteSignerRpcService {
                 let server =
                     ServerBuilder::with_meta_extractor(io, move |_req: &hyper::Request<hyper::Body>| Meta {
                         request_processor: request_processor.clone(),
-                        rpc_addr,
                     }).threads(4)
                         .cors(DomainsValidation::AllowOnly(vec![
                             AccessControlAllowOrigin::Any,
@@ -69,7 +67,6 @@ impl VoteSignerRpcService {
 #[derive(Clone)]
 pub struct Meta {
     pub request_processor: VoteSignRequestProcessor,
-    pub rpc_addr: SocketAddr,
 }
 impl Metadata for Meta {}
 
@@ -78,13 +75,13 @@ build_rpc_trait! {
         type Metadata;
 
         #[rpc(meta, name = "registerNode")]
-        fn register(&self, Self::Metadata, String) -> Result<Pubkey>;
+        fn register(&self, Self::Metadata, Pubkey, Signature, Vec<u8>) -> Result<Pubkey>;
 
         #[rpc(meta, name = "signVote")]
-        fn sign(&self, Self::Metadata, String) -> Result<Signature>;
+        fn sign(&self, Self::Metadata, Pubkey, Signature, Vec<u8>) -> Result<Signature>;
 
         #[rpc(meta, name = "deregisterNode")]
-        fn deregister(&self, Self::Metadata, String) -> Result<()>;
+        fn deregister(&self, Self::Metadata, Pubkey, Signature, Vec<u8>) -> Result<()>;
     }
 }
 
@@ -92,54 +89,86 @@ pub struct VoteSignerRpcImpl;
 impl VoteSignerRpc for VoteSignerRpcImpl {
     type Metadata = Meta;
 
-    fn register(&self, meta: Self::Metadata, id: String) -> Result<Pubkey> {
+    fn register(
+        &self,
+        meta: Self::Metadata,
+        id: Pubkey,
+        sig: Signature,
+        signed_msg: Vec<u8>,
+    ) -> Result<Pubkey> {
         info!("register rpc request received: {:?}", id);
-        let pubkey = get_pubkey(id)?;
-        meta.request_processor.register(pubkey)
+        match sig.verify(id.as_ref(), signed_msg.as_ref()) {
+            true => meta.request_processor.register(id),
+            false => Err(Error::invalid_request()),
+        }
     }
 
-    fn sign(&self, meta: Self::Metadata, id: String) -> Result<Signature> {
+    fn sign(
+        &self,
+        meta: Self::Metadata,
+        id: Pubkey,
+        sig: Signature,
+        signed_msg: Vec<u8>,
+    ) -> Result<Signature> {
         info!("sign rpc request received: {:?}", id);
-        let pubkey = get_pubkey(id)?;
-        meta.request_processor.sign(pubkey)
+        match sig.verify(id.as_ref(), signed_msg.as_ref()) {
+            true => meta.request_processor.sign(id, signed_msg),
+            false => Err(Error::invalid_request()),
+        }
     }
 
-    fn deregister(&self, meta: Self::Metadata, id: String) -> Result<()> {
+    fn deregister(
+        &self,
+        meta: Self::Metadata,
+        id: Pubkey,
+        sig: Signature,
+        signed_msg: Vec<u8>,
+    ) -> Result<()> {
         info!("deregister rpc request received: {:?}", id);
-        let pubkey = get_pubkey(id)?;
-        meta.request_processor.deregister(pubkey)
+        match sig.verify(id.as_ref(), signed_msg.as_ref()) {
+            true => meta.request_processor.deregister(id),
+            false => Err(Error::invalid_request()),
+        }
     }
 }
 
-#[derive(Clone, Default)]
-pub struct VoteSignRequestProcessor {}
+#[derive(Clone)]
+pub struct VoteSignRequestProcessor {
+    nodes: Arc<RwLock<HashMap<Pubkey, Keypair>>>,
+}
 impl VoteSignRequestProcessor {
     /// Process JSON-RPC request items sent via JSON-RPC.
     pub fn register(&self, pubkey: Pubkey) -> Result<Pubkey> {
-        Ok(pubkey)
+        match self.nodes.read().unwrap().get(&pubkey) {
+            Some(voting_keypair) => Ok(voting_keypair.pubkey()),
+            None => {
+                let voting_keypair = Keypair::new();
+                let voting_pubkey = voting_keypair.pubkey();
+                self.nodes.write().unwrap().insert(pubkey, voting_keypair);
+                Ok(voting_pubkey)
+            }
+        }
     }
-    pub fn sign(&self, _pubkey: Pubkey) -> Result<Signature> {
-        let signature = [0u8; 16];
-        Ok(Signature::new(&signature))
+    pub fn sign(&self, pubkey: Pubkey, msg: Vec<u8>) -> Result<Signature> {
+        match self.nodes.read().unwrap().get(&pubkey) {
+            Some(voting_keypair) => {
+                let sig = Signature::new(&voting_keypair.sign(&msg).as_ref());
+                Ok(sig)
+            }
+            None => Err(Error::invalid_request()),
+        }
     }
-    pub fn deregister(&self, _pubkey: Pubkey) -> Result<()> {
+    pub fn deregister(&self, pubkey: Pubkey) -> Result<()> {
+        self.nodes.write().unwrap().remove(&pubkey);
         Ok(())
     }
 }
 
-fn get_pubkey(input: String) -> Result<Pubkey> {
-    let pubkey_vec = bs58::decode(input).into_vec().map_err(|err| {
-        info!("get_pubkey: invalid input: {:?}", err);
-        Error::invalid_request()
-    })?;
-    if pubkey_vec.len() != mem::size_of::<Pubkey>() {
-        info!(
-            "get_pubkey: invalid pubkey_vec length: {}",
-            pubkey_vec.len()
-        );
-        Err(Error::invalid_request())
-    } else {
-        Ok(Pubkey::new(&pubkey_vec))
+impl Default for VoteSignRequestProcessor {
+    fn default() -> Self {
+        VoteSignRequestProcessor {
+            nodes: Arc::new(RwLock::new(HashMap::new())),
+        }
     }
 }
 
