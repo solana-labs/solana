@@ -16,5 +16,5 @@ solana-sdk = { path = "../../../sdk", version = "0.11.0" }
 
 [lib]
 name = "solana_erc20"
-crate-type = ["cdylib"]
+crate-type = ["lib", "cdylib"]
 
