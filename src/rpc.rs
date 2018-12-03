@@ -372,6 +372,7 @@ mod tests {
     use mint::Mint;
     use reqwest;
     use reqwest::header::CONTENT_TYPE;
+    use rpc_request::get_rpc_request_str;
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
@@ -418,7 +419,7 @@ mod tests {
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-jsonrpc");
 
-        let rpc_string = format!("http://{}", rpc_addr.to_string());
+        let rpc_string = get_rpc_request_str(rpc_addr);
         let client = reqwest::Client::new();
         let request = json!({
            "jsonrpc": "2.0",
@@ -662,7 +663,7 @@ mod tests {
            "params": json!([serial_tx])
         });
         let rpc_addr = leader_data.rpc;
-        let rpc_string = format!("http://{}", rpc_addr.to_string());
+        let rpc_string = get_rpc_request_str(rpc_addr);
         let mut response = client
             .post(&rpc_string)
             .header(CONTENT_TYPE, "application/json")

@@ -1,7 +1,44 @@
 use reqwest;
 use reqwest::header::CONTENT_TYPE;
 use serde_json::{self, Value};
+use std::net::SocketAddr;
+use std::time::Duration;
 use std::{error, fmt};
+
+pub struct RpcClient {
+    pub client: reqwest::Client,
+    pub addr: String,
+}
+
+impl RpcClient {
+    pub fn new(addr: String) -> Self {
+        RpcClient {
+            client: reqwest::Client::new(),
+            addr,
+        }
+    }
+
+    pub fn new_with_timeout(addr: SocketAddr, timeout: Duration) -> Self {
+        let addr = get_rpc_request_str(addr);
+        let client = reqwest::Client::builder()
+            .timeout(timeout)
+            .build()
+            .expect("build rpc client");
+        RpcClient { client, addr }
+    }
+
+    pub fn new_from_socket(addr: SocketAddr) -> Self {
+        let addr = get_rpc_request_str(addr);
+        RpcClient {
+            client: reqwest::Client::new(),
+            addr,
+        }
+    }
+}
+
+pub fn get_rpc_request_str(rpc_addr: SocketAddr) -> String {
+    format!("http://{}", rpc_addr)
+}
 
 pub enum RpcRequest {
     ConfirmTransaction,
@@ -17,20 +54,19 @@ pub enum RpcRequest {
     SignVote,
     DeregisterNode,
 }
-pub type RpcClient = reqwest::Client;
 
 impl RpcRequest {
     pub fn make_rpc_request(
         &self,
         client: &RpcClient,
-        rpc_addr: &str,
         id: u64,
         params: Option<Value>,
     ) -> Result<Value, Box<error::Error>> {
         let request = self.build_request_json(id, params);
 
         let mut response = client
-            .post(rpc_addr)
+            .client
+            .post(&client.addr)
             .header(CONTENT_TYPE, "application/json")
             .body(request.to_string())
             .send()?;
@@ -177,19 +213,17 @@ mod tests {
         });
 
         let rpc_addr = receiver.recv().unwrap();
-        let rpc_addr = format!("http://{}", rpc_addr.to_string());
-        let rpc_client = RpcClient::new();
+        let rpc_client = RpcClient::new_from_socket(rpc_addr);
 
         let balance = RpcRequest::GetBalance.make_rpc_request(
             &rpc_client,
-            &rpc_addr,
             1,
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])),
         );
         assert!(balance.is_ok());
         assert_eq!(balance.unwrap().as_u64().unwrap(), 50);
 
-        let last_id = RpcRequest::GetLastId.make_rpc_request(&rpc_client, &rpc_addr, 2, None);
+        let last_id = RpcRequest::GetLastId.make_rpc_request(&rpc_client, 2, None);
         assert!(last_id.is_ok());
         assert_eq!(
             last_id.unwrap().as_str().unwrap(),
@@ -197,12 +231,8 @@ mod tests {
         );
 
         // Send erroneous parameter
-        let last_id = RpcRequest::GetLastId.make_rpc_request(
-            &rpc_client,
-            &rpc_addr,
-            3,
-            Some(json!("paramter")),
-        );
+        let last_id =
+            RpcRequest::GetLastId.make_rpc_request(&rpc_client, 3, Some(json!("paramter")));
         assert_eq!(last_id.is_err(), true);
     }
 }
