@@ -2,8 +2,12 @@
 //! Terminology
 //!     * `template` - The partially filled message that is to be signed by the signer.  The
 //!       template contains the Key for the kind of cryptographic key the message is signed with,
-//!       a mask that identifies the undefined regions of the message and signature to proove that
+//!       a mask that identifies the undefined regions of the message and signature to prove that
 //!       the signer has control of the Key.
+//!
+//!     * `challenge` - Anything that is signed by the template private key owner to prove they own
+//!        the key.  This challenge should be a string that is not a valid transaction on any chain
+//!        like a last_id from PoH.
 //!
 //!     * `signer` - The Pubkey of the entity that sign the template.  This is a Solana Pubkey and
 //!       this key is different and unreleated to the template.
@@ -46,8 +50,12 @@
 //!
 //! Future Work:
 //! * adding real keys, secp256k1 and ed25519 curves
-//! * advanced template langauge, so a template could be aware of version numbers inside the
+//! * advanced template language, so a template could be aware of version numbers inside the
 //!   message
+//! * Generalizing ownership and templates as separate programs that are plugged into the
+//!   protocol.
+//! * Protocol for accepting a signed transaction TO the protocol instance creator.  This would
+//!   follow the `reveal secret` design pattern in cross-chain atomic swaps.
 
 extern crate bincode;
 extern crate serde;
@@ -379,7 +387,6 @@ impl SigningContract {
         Ok(())
     }
     pub fn claim(&mut self, keyed_accounts: &mut Vec<KeyedAccount>) -> Result<(), Error> {
-        //TODO: implement this
         let nxt = match self.state {
             State::Requested { .. } => {
                 if !self.requested_timeout() {
@@ -447,7 +454,6 @@ impl SigningContract {
     fn serialize(&self, output: &mut [u8]) -> Result<(), Error> {
         let len = serialized_size(self).unwrap() as u64;
         if output.len() < len as usize {
-            assert!(false);
             return Err(Error::Error);
         }
         {
