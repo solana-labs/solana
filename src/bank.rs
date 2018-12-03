@@ -5,7 +5,6 @@
 
 use bincode::deserialize;
 use bincode::serialize;
-use bpf_loader;
 use budget_program;
 use counter::Counter;
 use entry::Entry;
@@ -402,7 +401,7 @@ impl Bank {
         let mut accounts = self.accounts.write().unwrap();
 
         // Preload Bpf Loader account
-        accounts.store(&bpf_loader::id(), &bpf_loader::account());
+        accounts.store(&solana_bpf_loader::id(), &solana_bpf_loader::account());
 
         // Preload Erc20 token program
         accounts.store(&solana_erc20::id(), &solana_erc20::account());
@@ -2139,7 +2138,7 @@ mod tests {
 
         assert_eq!(system_program::id(), system);
         assert_eq!(native_loader::id(), native);
-        assert_eq!(bpf_loader::id(), bpf);
+        assert_eq!(solana_bpf_loader::id(), bpf);
         assert_eq!(budget_program::id(), budget);
         assert_eq!(storage_program::id(), storage);
         assert_eq!(solana_erc20::id(), token);
@@ -2152,7 +2151,7 @@ mod tests {
         let ids = vec![
             system_program::id(),
             native_loader::id(),
-            bpf_loader::id(),
+            solana_bpf_loader::id(),
             budget_program::id(),
             storage_program::id(),
             solana_erc20::id(),

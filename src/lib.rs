@@ -13,7 +13,6 @@ pub mod bank;
 pub mod banking_stage;
 pub mod blob_fetch_stage;
 pub mod bloom;
-pub mod bpf_loader;
 pub mod broadcast_stage;
 pub mod budget_expr;
 pub mod budget_instruction;
@@ -126,6 +125,7 @@ extern crate solana_jsonrpc_core as jsonrpc_core;
 extern crate solana_jsonrpc_http_server as jsonrpc_http_server;
 #[macro_use]
 extern crate solana_jsonrpc_macros as jsonrpc_macros;
+extern crate solana_bpf_loader;
 extern crate solana_erc20;
 extern crate solana_jsonrpc_pubsub as jsonrpc_pubsub;
 extern crate solana_jsonrpc_ws_server as jsonrpc_ws_server;

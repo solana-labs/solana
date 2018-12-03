@@ -2,16 +2,18 @@ extern crate bincode;
 extern crate elf;
 extern crate serde_derive;
 extern crate solana;
+#[cfg(feature = "bpf_c")]
+extern crate solana_bpf_loader;
 extern crate solana_sdk;
 
 use solana::bank::Bank;
-#[cfg(feature = "bpf_c")]
-use solana::bpf_loader;
 use solana::loader_transaction::LoaderTransaction;
 use solana::logger;
 use solana::mint::Mint;
 use solana::native_loader;
 use solana::system_transaction::SystemTransaction;
+#[cfg(feature = "bpf_c")]
+use solana_bpf_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
@@ -110,7 +112,7 @@ impl Loader {
     pub fn new_bpf() -> Self {
         let mint = Mint::new(50);
         let bank = Bank::new(&mint);
-        let loader = bpf_loader::id();
+        let loader = solana_bpf_loader::id();
 
         Loader { mint, bank, loader }
     }
