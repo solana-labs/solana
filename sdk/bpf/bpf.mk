@@ -12,7 +12,7 @@ INC_DIRS ?=
 SRC_DIR ?= ./src
 TEST_DIR ?= ./test
 OUT_DIR ?= ./out
-OS := $(uname)
+OS := $(shell uname)
 
 ifeq ($(DOCKER),1)
 LLVM_DIR = $(LOCAL_PATH)llvm-docker/
