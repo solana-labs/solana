@@ -4,7 +4,7 @@ use bincode::deserialize;
 use program::ProgramError;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::system_instruction::SystemInstruction;
+use solana_sdk::system_instruction::{SystemInstruction, SYSTEM_PROGRAM_ID};
 use solana_sdk::transaction::Transaction;
 use std;
 
@@ -23,8 +23,6 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {}
 
 pub type Result<T> = std::result::Result<T, Error>;
-
-pub const SYSTEM_PROGRAM_ID: [u8; 32] = [0u8; 32];
 
 pub fn check_id(program_id: &Pubkey) -> bool {
     program_id.as_ref() == SYSTEM_PROGRAM_ID
