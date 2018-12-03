@@ -21,14 +21,15 @@ use poh_service::NUM_TICKS_PER_SECOND;
 use rayon::prelude::*;
 use rpc::RpcSignatureStatus;
 use runtime::{self, RuntimeError};
-use solana_erc20;
 use solana_sdk::account::Account;
+use solana_sdk::bpf_loader;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signature::Signature;
 use solana_sdk::system_instruction::SystemInstruction;
+use solana_sdk::system_program;
 use solana_sdk::timing::{duration_as_us, timestamp};
 use solana_sdk::transaction::Transaction;
 use std;
@@ -37,7 +38,6 @@ use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
-use system_program;
 use system_transaction::SystemTransaction;
 use tokio::prelude::Future;
 
@@ -397,14 +397,44 @@ impl Bank {
         bank
     }
 
-    fn add_builtin_programs(&self) {
+    fn add_system_program(&self) {
         let mut accounts = self.accounts.write().unwrap();
 
-        // Preload Bpf Loader account
-        accounts.store(&solana_bpf_loader::id(), &solana_bpf_loader::account());
+        let system_program_account = Account {
+            tokens: 1,
+            owner: system_program::id(),
+            userdata: b"solana_system_program".to_vec(),
+            executable: true,
+            loader: native_loader::id(),
+        };
+        accounts.store(&system_program::id(), &system_program_account);
+    }
 
-        // Preload Erc20 token program
-        accounts.store(&solana_erc20::id(), &solana_erc20::account());
+    fn add_builtin_programs(&self) {
+        self.add_system_program();
+        let mut accounts = self.accounts.write().unwrap();
+
+        // Bpf Loader
+        let bpf_loader_account = Account {
+            tokens: 1,
+            owner: bpf_loader::id(),
+            userdata: b"solana_bpf_loader".to_vec(),
+            executable: true,
+            loader: native_loader::id(),
+        };
+
+        accounts.store(&bpf_loader::id(), &bpf_loader_account);
+
+        // Erc20 token program
+        let erc20_account = Account {
+            tokens: 1,
+            owner: runtime::erc20_id(),
+            userdata: b"solana_erc20".to_vec(),
+            executable: true,
+            loader: native_loader::id(),
+        };
+
+        accounts.store(&runtime::erc20_id(), &erc20_account);
     }
 
     /// Return the last entry ID registered.
@@ -1175,9 +1205,7 @@ impl Bank {
     }
 
     pub fn read_balance(account: &Account) -> u64 {
-        if system_program::check_id(&account.owner) {
-            system_program::get_balance(account)
-        } else if budget_program::check_id(&account.owner) {
+        if budget_program::check_id(&account.owner) {
             budget_program::get_balance(account)
         } else {
             account.tokens
@@ -1812,6 +1840,7 @@ mod tests {
     fn test_process_ledger_simple() {
         let (ledger, pubkey) = create_sample_ledger(1);
         let bank = Bank::default();
+        bank.add_system_program();
         let (ledger_height, last_id) = bank.process_ledger(ledger).unwrap();
         assert_eq!(bank.get_balance(&pubkey), 1);
         assert_eq!(ledger_height, 5);
@@ -1832,8 +1861,10 @@ mod tests {
         let ledger1 = create_sample_ledger_with_mint_and_keypairs(&mint, &keypairs);
 
         let bank0 = Bank::default();
+        bank0.add_system_program();
         bank0.process_ledger(ledger0).unwrap();
         let bank1 = Bank::default();
+        bank1.add_system_program();
         bank1.process_ledger(ledger1).unwrap();
 
         let initial_state = bank0.hash_internal_state();
@@ -2127,7 +2158,7 @@ mod tests {
             130, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0,
         ]);
-        let token = Pubkey::new(&[
+        let erc20 = Pubkey::new(&[
             131, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0,
         ]);
@@ -2138,10 +2169,10 @@ mod tests {
 
         assert_eq!(system_program::id(), system);
         assert_eq!(native_loader::id(), native);
-        assert_eq!(solana_bpf_loader::id(), bpf);
+        assert_eq!(bpf_loader::id(), bpf);
         assert_eq!(budget_program::id(), budget);
         assert_eq!(storage_program::id(), storage);
-        assert_eq!(solana_erc20::id(), token);
+        assert_eq!(runtime::erc20_id(), erc20);
         assert_eq!(vote_program::id(), vote);
     }
 
@@ -2151,10 +2182,10 @@ mod tests {
         let ids = vec![
             system_program::id(),
             native_loader::id(),
-            solana_bpf_loader::id(),
+            bpf_loader::id(),
             budget_program::id(),
             storage_program::id(),
-            solana_erc20::id(),
+            runtime::erc20_id(),
             vote_program::id(),
         ];
         assert!(ids.into_iter().all(move |id| unique.insert(id)));

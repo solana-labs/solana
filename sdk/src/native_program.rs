@@ -1,5 +1,44 @@
 use account::KeyedAccount;
 use pubkey::Pubkey;
+use std;
+
+/// Reasons a program might have rejected an instruction.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum ProgramError {
+    /// The program instruction returned an error
+    GenericError,
+
+    /// The arguments provided to a program instruction where invalid
+    InvalidArgument,
+
+    /// An instruction resulted in an account with a negative balance
+    /// The difference from InsufficientFundsForFee is that the transaction was executed by the
+    /// contract
+    ResultWithNegativeTokens,
+
+    /// Program's instruction token balance does not equal the balance after the instruction
+    UnbalancedInstruction,
+
+    /// Program modified an account's program id
+    ModifiedProgramId,
+
+    /// Program spent the tokens of an account that doesn't belong to it
+    ExternalAccountTokenSpend,
+
+    /// SystemInstruction::Assign was attempted on an account unowned by the system program
+    AssignOfUnownedAccount,
+
+    /// SystemInstruction::Spawn was attempted on an account that was not finalized by
+    /// LoaderInstruction::Finalize
+    AccountNotFinalized,
+}
+
+impl std::fmt::Display for ProgramError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "error")
+    }
+}
+impl std::error::Error for ProgramError {}
 
 // All native programs export a symbol named process()
 pub const ENTRYPOINT: &str = "process";
@@ -10,7 +49,7 @@ pub type Entrypoint = unsafe extern "C" fn(
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
     tick_height: u64,
-) -> bool;
+) -> Result<(), ProgramError>;
 
 // Convenience macro to define the native program entrypoint.  Supply a fn to this macro that
 // conforms to the `Entrypoint` type signature.
@@ -23,29 +62,8 @@ macro_rules! solana_entrypoint(
             keyed_accounts: &mut [KeyedAccount],
             data: &[u8],
             tick_height: u64
-        ) -> bool {
-            return $entrypoint(program_id, keyed_accounts, data, tick_height);
+        ) -> Result<(), ProgramError> {
+            $entrypoint(program_id, keyed_accounts, data, tick_height)
         }
     )
 );
-
-/// Reasons a program might have rejected an instruction.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum ProgramError {
-    /// Contract's transactions resulted in an account with a negative balance
-    /// The difference from InsufficientFundsForFee is that the transaction was executed by the
-    /// contract
-    ResultWithNegativeTokens,
-
-    /// The program returned an error
-    GenericError,
-
-    /// Program's instruction token balance does not equal the balance after the instruction
-    UnbalancedInstruction,
-
-    /// Program modified an account's program id
-    ModifiedProgramId,
-
-    /// Program spent the tokens of an account that doesn't belong to it
-    ExternalAccountTokenSpend,
-}

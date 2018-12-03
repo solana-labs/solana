@@ -109,7 +109,7 @@ mod tests {
     use bincode::deserialize;
     use ledger::Block;
     use solana_sdk::system_instruction::SystemInstruction;
-    use system_program;
+    use solana_sdk::system_program;
 
     #[test]
     fn test_create_transactions() {

@@ -13,7 +13,8 @@ use solana_sdk::hash::Hash;
 use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
-use solana_sdk::system_instruction::{SystemInstruction, SYSTEM_PROGRAM_ID};
+use solana_sdk::system_instruction::SystemInstruction;
+use solana_sdk::system_program;
 use solana_sdk::transaction::Transaction;
 use std::io;
 use std::io::{Error, ErrorKind};
@@ -143,7 +144,7 @@ impl Drone {
                     let mut transaction = Transaction::new(
                         &self.mint_keypair,
                         &[to],
-                        Pubkey::new(&SYSTEM_PROGRAM_ID),
+                        system_program::id(),
                         &create_instruction,
                         last_id,
                         0, /*fee*/

@@ -1,7 +1,5 @@
 use pubkey::Pubkey;
 
-pub const SYSTEM_PROGRAM_ID: [u8; 32] = [0u8; 32];
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum SystemInstruction {
     /// Create a new account

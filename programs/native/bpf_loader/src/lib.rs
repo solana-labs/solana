@@ -14,35 +14,15 @@ use bincode::deserialize;
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use libc::c_char;
 use solana_rbpf::EbpfVmRaw;
-use solana_sdk::account::{Account, KeyedAccount};
+use solana_sdk::account::KeyedAccount;
 use solana_sdk::loader_instruction::LoaderInstruction;
-use solana_sdk::native_loader;
+use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use std::ffi::CStr;
 use std::io::prelude::*;
 use std::io::{Error, ErrorKind};
 use std::mem;
 use std::sync::{Once, ONCE_INIT};
-
-const BPF_LOADER_NAME: &str = "solana_bpf_loader";
-const BPF_LOADER_PROGRAM_ID: [u8; 32] = [
-    128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0,
-];
-
-pub fn id() -> Pubkey {
-    Pubkey::new(&BPF_LOADER_PROGRAM_ID)
-}
-
-pub fn account() -> Account {
-    Account {
-        tokens: 1,
-        owner: id(),
-        userdata: BPF_LOADER_NAME.as_bytes().to_vec(),
-        executable: true,
-        loader: native_loader::id(),
-    }
-}
 
 // TODO use rbpf's disassemble
 #[allow(dead_code)]
@@ -172,7 +152,7 @@ fn entrypoint(
     keyed_accounts: &mut [KeyedAccount],
     tx_data: &[u8],
     tick_height: u64,
-) -> bool {
+) -> Result<(), ProgramError> {
     static INIT: Once = ONCE_INIT;
     INIT.call_once(|| {
         // env_logger can only be initialized once
@@ -187,7 +167,7 @@ fn entrypoint(
             Ok(vm) => vm,
             Err(e) => {
                 warn!("create_vm failed: {}", e);
-                return false;
+                return Err(ProgramError::GenericError);
             }
         };
         let mut v =
@@ -195,12 +175,12 @@ fn entrypoint(
         match vm.execute_program(v.as_mut_slice()) {
             Ok(status) => {
                 if 0 == status {
-                    return false;
+                    return Err(ProgramError::GenericError);
                 }
             }
             Err(e) => {
                 warn!("execute_program failed: {}", e);
-                return false;
+                return Err(ProgramError::GenericError);
             }
         }
         deserialize_parameters(&mut keyed_accounts[1..], &v);
@@ -211,7 +191,7 @@ fn entrypoint(
     } else if let Ok(instruction) = deserialize(tx_data) {
         if keyed_accounts[0].signer_key().is_none() {
             warn!("key[0] did not sign the transaction");
-            return false;
+            return Err(ProgramError::GenericError);
         }
         match instruction {
             LoaderInstruction::Write { offset, bytes } => {
@@ -224,7 +204,7 @@ fn entrypoint(
                         keyed_accounts[0].account.userdata.len(),
                         offset + len
                     );
-                    return false;
+                    return Err(ProgramError::GenericError);
                 }
                 keyed_accounts[0].account.userdata[offset..offset + len].copy_from_slice(&bytes);
             }
@@ -238,8 +218,9 @@ fn entrypoint(
         }
     } else {
         warn!("Invalid program transaction: {:?}", tx_data);
+        return Err(ProgramError::GenericError);
     }
-    true
+    Ok(())
 }
 
 #[cfg(test)]

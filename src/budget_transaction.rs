@@ -9,7 +9,9 @@ use payment_plan::Payment;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_instruction::{SystemInstruction, SYSTEM_PROGRAM_ID};
+use solana_sdk::system_instruction::SystemInstruction;
+use solana_sdk::system_program;
+
 use solana_sdk::transaction::{self, Transaction};
 
 pub trait BudgetTransaction {
@@ -85,7 +87,7 @@ impl BudgetTransaction for Transaction {
         };
         let budget_instruction = Instruction::NewBudget(BudgetExpr::Pay(payment));
 
-        let program_ids = vec![Pubkey::new(&SYSTEM_PROGRAM_ID), budget_program::id()];
+        let program_ids = vec![system_program::id(), budget_program::id()];
 
         let instructions = vec![
             transaction::Instruction::new(0, &system_instruction, vec![0, 1]),

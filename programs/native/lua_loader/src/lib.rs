@@ -7,15 +7,16 @@ extern crate rlua;
 extern crate solana_sdk;
 
 use bincode::deserialize;
-use rlua::{Lua, Result, Table};
+use rlua::{Lua, Table};
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::loader_instruction::LoaderInstruction;
+use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use std::str;
 use std::sync::{Once, ONCE_INIT};
 
 /// Make KeyAccount values available to Lua.
-fn set_accounts(lua: &Lua, name: &str, keyed_accounts: &[KeyedAccount]) -> Result<()> {
+fn set_accounts(lua: &Lua, name: &str, keyed_accounts: &[KeyedAccount]) -> rlua::Result<()> {
     let accounts = lua.create_table()?;
     for (i, keyed_account) in keyed_accounts.iter().enumerate() {
         let account = lua.create_table()?;
@@ -37,7 +38,7 @@ fn set_accounts(lua: &Lua, name: &str, keyed_accounts: &[KeyedAccount]) -> Resul
 }
 
 /// Commit the new KeyedAccount values.
-fn update_accounts(lua: &Lua, name: &str, keyed_accounts: &mut [KeyedAccount]) -> Result<()> {
+fn update_accounts(lua: &Lua, name: &str, keyed_accounts: &mut [KeyedAccount]) -> rlua::Result<()> {
     let globals = lua.globals();
     let accounts: Table = globals.get(name)?;
     for (i, keyed_account) in keyed_accounts.into_iter().enumerate() {
@@ -49,7 +50,7 @@ fn update_accounts(lua: &Lua, name: &str, keyed_accounts: &mut [KeyedAccount]) -
     Ok(())
 }
 
-fn run_lua(keyed_accounts: &mut [KeyedAccount], code: &str, data: &[u8]) -> Result<()> {
+fn run_lua(keyed_accounts: &mut [KeyedAccount], code: &str, data: &[u8]) -> rlua::Result<()> {
     let lua = Lua::new();
     let globals = lua.globals();
     let data_str = lua.create_string(data)?;
@@ -66,7 +67,7 @@ fn entrypoint(
     keyed_accounts: &mut [KeyedAccount],
     tx_data: &[u8],
     _tick_height: u64,
-) -> bool {
+) -> Result<(), ProgramError> {
     static INIT: Once = ONCE_INIT;
     INIT.call_once(|| {
         // env_logger can only be initialized once
@@ -79,17 +80,16 @@ fn entrypoint(
         match run_lua(&mut keyed_accounts[1..], &code, tx_data) {
             Ok(()) => {
                 trace!("Lua success");
-                return true;
             }
             Err(e) => {
                 warn!("Lua Error: {:#?}", e);
-                return false;
+                return Err(ProgramError::GenericError);
             }
         }
     } else if let Ok(instruction) = deserialize(tx_data) {
         if keyed_accounts[0].signer_key().is_none() {
             warn!("key[0] did not sign the transaction");
-            return false;
+            return Err(ProgramError::GenericError);
         }
         match instruction {
             LoaderInstruction::Write { offset, bytes } => {
@@ -102,7 +102,7 @@ fn entrypoint(
                         keyed_accounts[0].account.userdata.len(),
                         offset + len
                     );
-                    return false;
+                    return Err(ProgramError::GenericError);
                 }
                 keyed_accounts[0].account.userdata[offset..offset + len].copy_from_slice(&bytes);
             }
@@ -117,9 +117,9 @@ fn entrypoint(
         }
     } else {
         warn!("Invalid program transaction: {:?}", tx_data);
-        return false;
+        return Err(ProgramError::GenericError);
     }
-    true
+    Ok(())
 }
 
 #[cfg(test)]
