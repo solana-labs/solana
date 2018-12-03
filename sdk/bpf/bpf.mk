@@ -15,6 +15,7 @@ OUT_DIR ?= ./out
 OS := $(shell uname)
 
 ifeq ($(DOCKER),1)
+$(warning DOCKER=1 is experimential and may not work as advertised)
 LLVM_DIR = $(LOCAL_PATH)llvm-docker/
 LLVM_SYSTEM_INC_DIRS := /usr/local/lib/clang/8.0.0/include
 else
@@ -107,8 +108,6 @@ help:
 	@echo '  - The following setting are overridable on the command line, default values shown:'
 	@echo '    - Show commands while building: V=1'
 	@echo '      V=$(V)'
-	@echo '    - Use LLVM from docker: DOCKER=1'
-	@echo '      DOCKER=$(DOCKER)'
 	@echo '    - List of include directories:'
 	@echo '      INC_DIRS=$(INC_DIRS)'
 	@echo '    - List of system include directories:'
