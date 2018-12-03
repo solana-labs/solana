@@ -3,12 +3,17 @@
 read -r -d '' SCRIPT << 'EOM'
 #!/usr/bin/env bash
 set -e
-WORKDIR=$( pwd )
-SDKPATH="$( cd "$(dirname "$0")" ; pwd -P )"/../../inc
-docker run --workdir /workdir --volume $WORKDIR:/workdir --volume $SDKPATH:/usr/local/include --rm solanalabs/llvm `basename "$0"` "$@"
+PROGRAM=$(basename "$0")
+SDKROOT="$(cd "$(dirname "$0")"/../..; pwd -P)"
+[[ -z $V ]] || set -x
+exec docker run \
+  --workdir "$PWD" \
+  --volume "$PWD:$PWD" \
+  --volume "$SDKROOT:$SDKROOT" \
+  --rm solanalabs/llvm \
+  "$PROGRAM" "$@"
 EOM
 
-echo "$SCRIPT" > bin/clang
-echo "$SCRIPT" > bin/clang++
-echo "$SCRIPT" > bin/llc
-echo "$SCRIPT" > bin/llvm-objdump
+for program in clang clang++ llc llvm-objdump; do
+  echo "$SCRIPT" > bin/$program
+done
