@@ -10,9 +10,15 @@ architecture.
 A persistent file addressed by [public key](#public-key) and with
 [lamports](#lamport) tracking its lifetime.
 
+#### ballot
+
+A [block](#block) of the ledger covered by a [vote](#vote).  Ballot length is a
+network hyper parameter, specified in [ticks](#tick).  Also called [voting
+period](#voting period).
+
 #### block
 
-The [entries](#entry) generated within a [slot](#slot).
+A contiguous set of [entries](#entry), i.e. some segment of the PoH chain.
 
 #### bootstrap leader
 
@@ -107,7 +113,10 @@ A list of [entries](#entry) containing [transactions](#transaction) signed by
 #### ledger vote
 
 A [hash](#hash) of the [fullnode's state](#fullnode-state) at a given [tick
-height](#tick-height).
+height](#tick-height). It comprises a validator's affirmation that the ledger it
+has received has been verified and a promise not to vote for a conflicting
+ledger, or [fork](#fork) for a specific amount of time, or [lockout](#lockout)
+period.
 
 #### lockout
 
@@ -149,7 +158,8 @@ The private key of a [keypair](#keypair).
 
 #### slot
 
-The time in which a single [leader](#leader) may produce [entries](#entry).
+The time (some number of [voting periods](#voting period)) during which a
+[leader](#leader) ingests transactions and produces [entries](#entry).
 
 #### sol
 
@@ -191,6 +201,13 @@ A set of [transactions](#transaction) that may be executed in parallel.
 The role of a [fullnode](#fullnode) when it is validating the
 [leader's](#leader) latest [entries](#entry).
 
+#### vote
+
+See [ledger vote](#ledger vote)
+
+#### voting period
+
+See [ballot](#ballot)
 
 ## Terminology Reserved for Future Use
 
