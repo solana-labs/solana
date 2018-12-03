@@ -29,7 +29,7 @@ endif
 
 SYSTEM_INC_DIRS := \
   $(LOCAL_PATH)inc \
-  $(LLVM_DIR)lib/clang/8.0.0/include \
+  $(LOCAL_PATH)llvm-native/lib/clang/8.0.0/include \
 
 C_FLAGS := \
   -Werror \
