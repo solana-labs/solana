@@ -265,10 +265,11 @@ mod test {
     use bincode::serialize;
     use budget_transaction::BudgetTransaction;
     use chrono::prelude::{DateTime, NaiveDate, Utc};
-    use signature::{GenKeys, Keypair, KeypairUtil};
+    use signature::GenKeys;
     use solana_sdk::account::Account;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
 
     fn process_transaction(tx: &Transaction, accounts: &mut [Account]) -> Result<(), BudgetError> {

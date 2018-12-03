@@ -177,8 +177,8 @@ impl Replicator {
 mod tests {
     use logger;
     use replicator::sample_file;
-    use signature::{Keypair, KeypairUtil};
     use solana_sdk::hash::Hash;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::File;
     use std::fs::{create_dir_all, remove_file};
     use std::io::Write;

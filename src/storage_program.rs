@@ -69,8 +69,7 @@ pub fn process(
 #[cfg(test)]
 mod test {
     use super::*;
-    use signature::Keypair;
-    use signature::KeypairUtil;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
 
     #[test]
     fn test_storage_tx() {

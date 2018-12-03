@@ -3,11 +3,12 @@ extern crate clap;
 extern crate dirs;
 #[macro_use]
 extern crate solana;
+extern crate solana_sdk;
 
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana::logger;
-use solana::signature::{read_keypair, KeypairUtil};
 use solana::wallet::{gen_keypair_file, parse_command, process_command, WalletConfig, WalletError};
+use solana_sdk::signature::{read_keypair, KeypairUtil};
 use std::error;
 use std::net::SocketAddr;
 

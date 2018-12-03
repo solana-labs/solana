@@ -1,5 +1,5 @@
-use signature::{Keypair, KeypairUtil};
 use solana_sdk::hash::Hash;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
 use storage_program::{self, StorageProgram};
 

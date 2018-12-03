@@ -244,7 +244,7 @@ impl CrdsGossipPush {
 mod test {
     use super::*;
     use contact_info::ContactInfo;
-    use signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     #[test]
     fn test_process_push() {
         let mut crds = Crds::default();

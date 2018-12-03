@@ -5,13 +5,14 @@ extern crate atty;
 extern crate clap;
 extern crate serde_json;
 extern crate solana;
+extern crate solana_sdk;
 extern crate untrusted;
 
 use clap::{App, Arg};
 use solana::fullnode::Config;
 use solana::ledger::LedgerWriter;
 use solana::mint::Mint;
-use solana::signature::KeypairUtil;
+use solana_sdk::signature::KeypairUtil;
 use std::error;
 use std::fs::File;
 use std::path::Path;

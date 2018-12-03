@@ -467,8 +467,8 @@ mod tests {
         to_packets, Blob, Meta, Packet, Packets, SharedBlob, SharedPackets, NUM_PACKETS,
         PACKET_DATA_SIZE,
     };
-    use signature::{Keypair, KeypairUtil};
     use solana_sdk::hash::Hash;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
     use std::io;
     use std::io::Write;

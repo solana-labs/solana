@@ -133,10 +133,10 @@ pub fn process(
 #[cfg(test)]
 mod test {
     use super::*;
-    use signature::{Keypair, KeypairUtil};
     use solana_sdk::account::Account;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Instruction;
     use system_transaction::SystemTransaction;
 
