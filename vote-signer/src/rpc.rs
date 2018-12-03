@@ -97,9 +97,10 @@ impl VoteSignerRpc for VoteSignerRpcImpl {
         signed_msg: Vec<u8>,
     ) -> Result<Pubkey> {
         info!("register rpc request received: {:?}", id);
-        match sig.verify(id.as_ref(), signed_msg.as_ref()) {
-            true => meta.request_processor.register(id),
-            false => Err(Error::invalid_request()),
+        if sig.verify(id.as_ref(), signed_msg.as_ref()) {
+            meta.request_processor.register(id)
+        } else {
+            Err(Error::invalid_request())
         }
     }
 
@@ -111,9 +112,10 @@ impl VoteSignerRpc for VoteSignerRpcImpl {
         signed_msg: Vec<u8>,
     ) -> Result<Signature> {
         info!("sign rpc request received: {:?}", id);
-        match sig.verify(id.as_ref(), signed_msg.as_ref()) {
-            true => meta.request_processor.sign(id, signed_msg),
-            false => Err(Error::invalid_request()),
+        if sig.verify(id.as_ref(), signed_msg.as_ref()) {
+            meta.request_processor.sign(id, &signed_msg)
+        } else {
+            Err(Error::invalid_request())
         }
     }
 
@@ -125,9 +127,10 @@ impl VoteSignerRpc for VoteSignerRpcImpl {
         signed_msg: Vec<u8>,
     ) -> Result<()> {
         info!("deregister rpc request received: {:?}", id);
-        match sig.verify(id.as_ref(), signed_msg.as_ref()) {
-            true => meta.request_processor.deregister(id),
-            false => Err(Error::invalid_request()),
+        if sig.verify(id.as_ref(), signed_msg.as_ref()) {
+            meta.request_processor.deregister(id)
+        } else {
+            Err(Error::invalid_request())
         }
     }
 }
@@ -149,7 +152,7 @@ impl VoteSignRequestProcessor {
             }
         }
     }
-    pub fn sign(&self, pubkey: Pubkey, msg: Vec<u8>) -> Result<Signature> {
+    pub fn sign(&self, pubkey: Pubkey, msg: &[u8]) -> Result<Signature> {
         match self.nodes.read().unwrap().get(&pubkey) {
             Some(voting_keypair) => {
                 let sig = Signature::new(&voting_keypair.sign(&msg).as_ref());
