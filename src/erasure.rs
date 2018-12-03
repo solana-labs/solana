@@ -489,6 +489,7 @@ pub fn recover(
         } else {
             data_size = size;
             idx -= NUM_CODING as u64;
+            locks[n].set_slot(slot).unwrap();
             locks[n].set_index(idx).unwrap();
 
             if data_size - BLOB_HEADER_SIZE > BLOB_DATA_SIZE {
@@ -549,16 +550,15 @@ fn categorize_blob(
 }
 
 #[cfg(test)]
-mod test {
+pub mod test {
+    use super::*;
     use db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
-    use erasure;
-    use ledger::get_tmp_ledger_path;
+    use ledger::{get_tmp_ledger_path, make_tiny_test_entries, Block};
     use logger;
-    use packet::{index_blobs, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE, BLOB_SIZE};
+    use packet::{index_blobs, SharedBlob, BLOB_DATA_SIZE, BLOB_SIZE};
     use rand::{thread_rng, Rng};
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    //    use std::sync::{Arc, RwLock};
     use window::WindowSlot;
 
     #[test]
@@ -576,10 +576,8 @@ mod test {
             let v_slices: Vec<_> = vs.iter().map(|x| x.as_slice()).collect();
 
             assert!(
-                erasure::generate_coding_blocks(
-                    coding_blocks_slices.as_mut_slice(),
-                    v_slices.as_slice(),
-                ).is_ok()
+                generate_coding_blocks(coding_blocks_slices.as_mut_slice(), v_slices.as_slice(),)
+                    .is_ok()
             );
         }
         trace!("coding blocks:");
@@ -597,7 +595,7 @@ mod test {
             let mut v_slices: Vec<_> = vs.iter_mut().map(|x| x.as_mut_slice()).collect();
 
             assert!(
-                erasure::decode_blocks(
+                decode_blocks(
                     v_slices.as_mut_slice(),
                     coding_blocks_slices.as_mut_slice(),
                     erasures.as_slice(),
@@ -612,8 +610,107 @@ mod test {
         assert_eq!(v_orig, vs[0]);
     }
 
+    // TODO: Temprorary function used in tests to generate a database ledger
+    // from the window (which is used to generate the erasure coding)
+    // until we also transition generate_coding() and BroadcastStage to use RocksDb.
+    // Github issue: https://github.com/solana-labs/solana/issues/1899.
+    pub fn generate_db_ledger_from_window(
+        ledger_path: &str,
+        window: &[WindowSlot],
+        slot_height: u64,
+        use_random: bool,
+    ) -> DbLedger {
+        let mut db_ledger =
+            DbLedger::open(ledger_path).expect("Expected to be able to open database ledger");
+        for slot in window {
+            if let Some(ref data) = slot.data {
+                // If we're using gibberish blobs, skip validation checks and insert
+                // directly into the ledger
+                if use_random {
+                    let data_l = data.read().unwrap();
+                    db_ledger
+                        .data_cf
+                        .put_by_slot_index(
+                            &db_ledger.db,
+                            slot_height,
+                            data_l.index().unwrap(),
+                            &data_l.data[..data_l.data_size().unwrap() as usize],
+                        ).expect("Expected successful put into data column of ledger");
+                } else {
+                    db_ledger
+                        .write_shared_blobs(slot_height, vec![data].into_iter())
+                        .unwrap();
+                }
+            }
+
+            if let Some(ref coding) = slot.coding {
+                let coding_lock = coding.read().unwrap();
+
+                let index = coding_lock
+                    .index()
+                    .expect("Expected coding blob to have valid index");
+
+                let data_size = coding_lock
+                    .size()
+                    .expect("Expected coding blob to have valid ata size");
+
+                db_ledger
+                    .erasure_cf
+                    .put_by_slot_index(
+                        &db_ledger.db,
+                        slot_height,
+                        index,
+                        &coding_lock.data[..data_size as usize + BLOB_HEADER_SIZE],
+                    ).unwrap();
+            }
+        }
+
+        db_ledger
+    }
+
+    pub fn setup_window_ledger(
+        offset: usize,
+        num_blobs: usize,
+        use_random_window: bool,
+        slot: u64,
+    ) -> Vec<WindowSlot> {
+        // Generate a window
+        let mut window = {
+            if use_random_window {
+                generate_window(offset, num_blobs, slot)
+            } else {
+                generate_entry_window(offset, num_blobs)
+            }
+        };
+
+        for slot in &window {
+            if let Some(blob) = &slot.data {
+                let blob_r = blob.read().unwrap();
+                assert!(!blob_r.is_coding());
+            }
+        }
+
+        // Generate the coding blocks
+        let mut index = (NUM_DATA + 2) as u64;
+        assert!(
+            generate_coding(
+                &Pubkey::default(),
+                &mut window,
+                offset as u64,
+                num_blobs,
+                &mut index
+            ).is_ok()
+        );
+        assert_eq!(index, (NUM_DATA - NUM_CODING) as u64);
+
+        // put junk in the tails, simulates re-used blobs
+        scramble_window_tails(&mut window, num_blobs);
+
+        window
+    }
+
     const WINDOW_SIZE: usize = 64;
-    fn generate_window(offset: usize, num_blobs: usize) -> Vec<WindowSlot> {
+    fn generate_window(offset: usize, num_blobs: usize, slot: u64) -> Vec<WindowSlot> {
         let mut window = vec![
             WindowSlot {
                 data: None,
@@ -649,7 +746,7 @@ mod test {
             blobs.push(b_);
         }
 
-        index_blobs(&blobs, &Keypair::new().pubkey(), offset as u64, 13);
+        index_blobs(&blobs, &Keypair::new().pubkey(), offset as u64, slot);
         for b in blobs {
             let idx = b.read().unwrap().index().unwrap() as usize % WINDOW_SIZE;
 
@@ -658,47 +755,25 @@ mod test {
         window
     }
 
-    // TODO: Temprorary function used in tests to generate a database ledger
-    // from the window (which is used to generate the erasure coding)
-    // until we also transition generate_coding() and BroadcastStage to use RocksDb.
-    // Github issue: https://github.com/solana-labs/solana/issues/1899.
-    fn generate_db_ledger_from_window(
-        ledger_path: &str,
-        window: &[WindowSlot],
-        slot_height: u64,
-    ) -> DbLedger {
-        let mut db_ledger =
-            DbLedger::open(ledger_path).expect("Expected to be able to open database ledger");
-        for slot in window {
-            if let Some(ref data) = slot.data {
-                db_ledger
-                    .write_shared_blobs(slot_height, vec![data].into_iter())
-                    .unwrap();
-            }
+    fn generate_entry_window(offset: usize, num_blobs: usize) -> Vec<WindowSlot> {
+        let mut window = vec![
+            WindowSlot {
+                data: None,
+                coding: None,
+                leader_unknown: false,
+            };
+            WINDOW_SIZE
+        ];
+        let entries = make_tiny_test_entries(num_blobs);
+        let blobs = entries.to_blobs();
 
-            if let Some(ref coding) = slot.coding {
-                let coding_lock = coding.read().unwrap();
+        index_blobs(&blobs, &Keypair::new().pubkey(), offset as u64, 13);
+        for b in blobs.into_iter() {
+            let idx = b.read().unwrap().index().unwrap() as usize % WINDOW_SIZE;
 
-                let index = coding_lock
-                    .index()
-                    .expect("Expected coding blob to have valid index");
-
-                let data_size = coding_lock
-                    .size()
-                    .expect("Expected coding blob to have valid ata size");
-
-                db_ledger
-                    .erasure_cf
-                    .put_by_slot_index(
-                        &db_ledger.db,
-                        slot_height,
-                        index,
-                        &coding_lock.data[..data_size as usize + BLOB_HEADER_SIZE],
-                    ).unwrap();
-            }
+            window[idx].data = Some(b);
         }
-
-        db_ledger
+        window
     }
 
     fn scramble_window_tails(window: &mut [WindowSlot], num_blobs: usize) {
@@ -717,36 +792,6 @@ mod test {
         }
     }
 
-    fn setup_window_ledger(offset: usize, num_blobs: usize) -> Vec<WindowSlot> {
-        // Generate a window
-        let mut window = generate_window(WINDOW_SIZE, num_blobs);
-
-        for slot in &window {
-            if let Some(blob) = &slot.data {
-                let blob_r = blob.read().unwrap();
-                assert!(!blob_r.is_coding());
-            }
-        }
-
-        // Generate the coding blocks
-        let mut index = (erasure::NUM_DATA + 2) as u64;
-        assert!(
-            erasure::generate_coding(
-                &Pubkey::default(),
-                &mut window,
-                offset as u64,
-                num_blobs,
-                &mut index
-            ).is_ok()
-        );
-        assert_eq!(index, (erasure::NUM_DATA - erasure::NUM_CODING) as u64);
-
-        // put junk in the tails, simulates re-used blobs
-        scramble_window_tails(&mut window, num_blobs);
-
-        window
-    }
-
     // Remove a data block, test for successful recovery
     #[test]
     pub fn test_window_recover_basic() {
@@ -754,29 +799,25 @@ mod test {
 
         // Setup the window
         let offset = 0;
-        let num_blobs = erasure::NUM_DATA + 2;
-        let mut window = setup_window_ledger(offset, num_blobs);
+        let num_blobs = NUM_DATA + 2;
+        let mut window = setup_window_ledger(offset, num_blobs, true, DEFAULT_SLOT_HEIGHT);
 
         println!("** whack data block:");
         // Test erasing a data block
-        let erase_offset = offset;
+        let erase_offset = offset % window.len();
 
         // Create a hole in the window
         let refwindow = window[erase_offset].data.clone();
         window[erase_offset].data = None;
 
-        // Put junk in the tails, simulates re-used blobs
-        scramble_window_tails(&mut window, num_blobs);
-
         // Generate the db_ledger from the window
         let ledger_path = get_tmp_ledger_path("test_window_recover_basic");
         let mut db_ledger =
-            generate_db_ledger_from_window(&ledger_path, &window, DEFAULT_SLOT_HEIGHT);
+            generate_db_ledger_from_window(&ledger_path, &window, DEFAULT_SLOT_HEIGHT, true);
 
         // Recover it from coding
-        let (recovered_data, recovered_coding) =
-            erasure::recover(&mut db_ledger, 0, (offset + WINDOW_SIZE) as u64)
-                .expect("Expected successful recovery of erased blobs");
+        let (recovered_data, recovered_coding) = recover(&mut db_ledger, 0, offset as u64)
+            .expect("Expected successful recovery of erased blobs");
 
         assert!(recovered_coding.is_empty());
         {
@@ -793,7 +834,8 @@ mod test {
                 result.data[..ref_l2.data_size().unwrap() as usize],
                 ref_l2.data[..ref_l2.data_size().unwrap() as usize]
             );
-            assert_eq!(result.index().unwrap(), (erase_offset + WINDOW_SIZE) as u64);
+            assert_eq!(result.index().unwrap(), offset as u64);
+            assert_eq!(result.slot().unwrap(), DEFAULT_SLOT_HEIGHT as u64);
         }
         drop(db_ledger);
         DbLedger::destroy(&ledger_path)
@@ -807,12 +849,13 @@ mod test {
 
         // Setup the window
         let offset = 0;
-        let num_blobs = erasure::NUM_DATA + 2;
-        let mut window = setup_window_ledger(offset, num_blobs);
+        let num_blobs = NUM_DATA + 2;
+        let mut window = setup_window_ledger(offset, num_blobs, true, DEFAULT_SLOT_HEIGHT);
 
         println!("** whack coding block and data block");
         // Tests erasing a coding block and a data block
-        let erase_offset = offset + erasure::NUM_DATA - erasure::NUM_CODING;
+        let coding_start = offset - (offset % NUM_DATA) + (NUM_DATA - NUM_CODING);
+        let erase_offset = coding_start % window.len();
 
         // Create a hole in the window
         let refwindowdata = window[erase_offset].data.clone();
@@ -821,12 +864,11 @@ mod test {
         window[erase_offset].coding = None;
         let ledger_path = get_tmp_ledger_path("test_window_recover_basic2");
         let mut db_ledger =
-            generate_db_ledger_from_window(&ledger_path, &window, DEFAULT_SLOT_HEIGHT);
+            generate_db_ledger_from_window(&ledger_path, &window, DEFAULT_SLOT_HEIGHT, true);
 
         // Recover it from coding
-        let (recovered_data, recovered_coding) =
-            erasure::recover(&mut db_ledger, 0, (offset + WINDOW_SIZE) as u64)
-                .expect("Expected successful recovery of erased blobs");
+        let (recovered_data, recovered_coding) = recover(&mut db_ledger, 0, offset as u64)
+            .expect("Expected successful recovery of erased blobs");
 
         {
             let recovered_data_blob = recovered_data
@@ -847,7 +889,8 @@ mod test {
                 result.data[..ref_l2.data_size().unwrap() as usize],
                 ref_l2.data[..ref_l2.data_size().unwrap() as usize]
             );
-            assert_eq!(result.index().unwrap(), (erase_offset + WINDOW_SIZE) as u64);
+            assert_eq!(result.index().unwrap(), coding_start as u64);
+            assert_eq!(result.slot().unwrap(), DEFAULT_SLOT_HEIGHT as u64);
 
             // Check the recovered erasure result
             let ref_l = refwindowcoding.clone().unwrap();
@@ -859,7 +902,8 @@ mod test {
                 result.data()[..ref_l2.size().unwrap() as usize],
                 ref_l2.data()[..ref_l2.size().unwrap() as usize]
             );
-            assert_eq!(result.index().unwrap(), (erase_offset + WINDOW_SIZE) as u64);
+            assert_eq!(result.index().unwrap(), coding_start as u64);
+            assert_eq!(result.slot().unwrap(), DEFAULT_SLOT_HEIGHT as u64);
         }
         drop(db_ledger);
         DbLedger::destroy(&ledger_path)
@@ -873,25 +917,25 @@ mod test {
     //        logger::setup();
     //        let offset = 4;
     //        let data_len = 16;
-    //        let num_blobs = erasure::NUM_DATA + 2;
+    //        let num_blobs = NUM_DATA + 2;
     //        let (mut window, blobs_len) = generate_window(data_len, offset, num_blobs);
     //        println!("** after-gen:");
     //        print_window(&window);
-    //        assert!(erasure::generate_coding(&mut window, offset, blobs_len).is_ok());
+    //        assert!(generate_coding(&mut window, offset, blobs_len).is_ok());
     //        println!("** after-coding:");
     //        print_window(&window);
     //        let refwindow = window[offset + 1].clone();
     //        window[offset + 1] = None;
     //        window[offset + 2] = None;
-    //        window[offset + erasure::SET_SIZE + 3] = None;
-    //        window[offset + (2 * erasure::SET_SIZE) + 0] = None;
-    //        window[offset + (2 * erasure::SET_SIZE) + 1] = None;
-    //        window[offset + (2 * erasure::SET_SIZE) + 2] = None;
-    //        let window_l0 = &(window[offset + (3 * erasure::SET_SIZE)]).clone().unwrap();
+    //        window[offset + SET_SIZE + 3] = None;
+    //        window[offset + (2 * SET_SIZE) + 0] = None;
+    //        window[offset + (2 * SET_SIZE) + 1] = None;
+    //        window[offset + (2 * SET_SIZE) + 2] = None;
+    //        let window_l0 = &(window[offset + (3 * SET_SIZE)]).clone().unwrap();
     //        window_l0.write().unwrap().data[0] = 55;
     //        println!("** after-nulling:");
     //        print_window(&window);
-    //        assert!(erasure::recover(&mut window, offset, offset + blobs_len).is_ok());
+    //        assert!(recover(&mut window, offset, offset + blobs_len).is_ok());
     //        println!("** after-restore:");
     //        print_window(&window);
     //        let window_l = window[offset + 1].clone().unwrap();
