@@ -22,6 +22,7 @@ use poh_service::NUM_TICKS_PER_SECOND;
 use rayon::prelude::*;
 use rpc::RpcSignatureStatus;
 use runtime::{self, RuntimeError};
+use solana_erc20;
 use solana_sdk::account::Account;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::native_program::ProgramError;
@@ -39,7 +40,6 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 use system_program;
 use system_transaction::SystemTransaction;
-use token_program;
 use tokio::prelude::Future;
 
 /// The number of most recent `last_id` values that the bank will track the signatures
@@ -405,7 +405,7 @@ impl Bank {
         accounts.store(&bpf_loader::id(), &bpf_loader::account());
 
         // Preload Erc20 token program
-        accounts.store(&token_program::id(), &token_program::account());
+        accounts.store(&solana_erc20::id(), &solana_erc20::account());
     }
 
     /// Return the last entry ID registered.
@@ -2142,7 +2142,7 @@ mod tests {
         assert_eq!(bpf_loader::id(), bpf);
         assert_eq!(budget_program::id(), budget);
         assert_eq!(storage_program::id(), storage);
-        assert_eq!(token_program::id(), token);
+        assert_eq!(solana_erc20::id(), token);
         assert_eq!(vote_program::id(), vote);
     }
 
@@ -2155,7 +2155,7 @@ mod tests {
             bpf_loader::id(),
             budget_program::id(),
             storage_program::id(),
-            token_program::id(),
+            solana_erc20::id(),
             vote_program::id(),
         ];
         assert!(ids.into_iter().all(move |id| unique.insert(id)));
