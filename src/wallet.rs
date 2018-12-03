@@ -12,8 +12,8 @@ use ring::signature::Ed25519KeyPair;
 use rpc::RpcSignatureStatus;
 use rpc_request::{get_rpc_request_str, RpcClient, RpcRequest};
 use serde_json;
-use solana_bpf_loader;
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
+use solana_sdk::bpf_loader;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
@@ -431,7 +431,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 last_id,
                 1,
                 program_userdata.len() as u64,
-                solana_bpf_loader::id(),
+                bpf_loader::id(),
                 0,
             );
             send_and_confirm_tx(&rpc_client, &tx).map_err(|_| {
@@ -442,7 +442,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
             for chunk in program_userdata.chunks(USERDATA_CHUNK_SIZE) {
                 let tx = Transaction::loader_write(
                     &program,
-                    solana_bpf_loader::id(),
+                    bpf_loader::id(),
                     offset,
                     chunk.to_vec(),
                     last_id,
@@ -457,9 +457,9 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error
                 offset += USERDATA_CHUNK_SIZE as u32;
             }
 
-            let last_id = get_last_id(&rpc_client, &rpc_addr)?;
+            let last_id = get_last_id(&rpc_client)?;
             let tx = Transaction::loader_finalize(&program, bpf_loader::id(), last_id, 0);
-            send_and_confirm_tx(&rpc_client, &rpc_addr, &tx).map_err(|_| {
+            send_and_confirm_tx(&rpc_client, &tx).map_err(|_| {
                 WalletError::DynamicProgramError("Program finalize transaction failed".to_string())
             })?;
 
@@ -826,7 +826,7 @@ mod tests {
                             .takes_value(true)
                             .required(true)
                             .help("/path/to/program.o"),
-                    ), // TODO: Add "loader" argument; current default is solana_bpf_loader
+                    ), // TODO: Add "loader" argument; current default is bpf_loader
             ).subcommand(
                 SubCommand::with_name("get-transaction-count")
                     .about("Get current transaction count"),

@@ -329,8 +329,8 @@ mod tests {
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
+    use solana_sdk::system_program;
     use solana_sdk::transaction::{Instruction, Transaction};
-    use system_program;
     use system_transaction::{memfind, test_tx};
 
     #[test]

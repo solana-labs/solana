@@ -9,6 +9,7 @@ use solana_sdk::account::KeyedAccount;
 use solana_sdk::loader_instruction::LoaderInstruction;
 pub use solana_sdk::native_loader::*;
 use solana_sdk::native_program;
+use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use std::env;
 use std::path::PathBuf;
@@ -51,7 +52,7 @@ pub fn process_instruction(
     keyed_accounts: &mut [KeyedAccount],
     ix_userdata: &[u8],
     tick_height: u64,
-) -> bool {
+) -> Result<(), ProgramError> {
     if keyed_accounts[0].account.executable {
         // dispatch it
         let name = keyed_accounts[0].account.userdata.clone();
@@ -59,7 +60,7 @@ pub fn process_instruction(
             Ok(v) => v,
             Err(e) => {
                 warn!("Invalid UTF-8 sequence: {}", e);
-                return false;
+                return Err(ProgramError::GenericError);
             }
         };
         trace!("Call native {:?}", name);
@@ -76,7 +77,7 @@ pub fn process_instruction(
                                 e,
                                 native_program::ENTRYPOINT
                             );
-                            return false;
+                            return Err(ProgramError::GenericError);
                         }
                     };
                 return entrypoint(
@@ -88,13 +89,13 @@ pub fn process_instruction(
             },
             Err(e) => {
                 warn!("Unable to load: {:?}", e);
-                return false;
+                return Err(ProgramError::GenericError);
             }
         }
     } else if let Ok(instruction) = deserialize(ix_userdata) {
         if keyed_accounts[0].signer_key().is_none() {
             warn!("key[0] did not sign the transaction");
-            return false;
+            return Err(ProgramError::GenericError);
         }
         match instruction {
             LoaderInstruction::Write { offset, bytes } => {
@@ -106,7 +107,7 @@ pub fn process_instruction(
                         keyed_accounts[0].account.userdata.len(),
                         offset + bytes.len()
                     );
-                    return false;
+                    return Err(ProgramError::GenericError);
                 }
                 // native loader takes a name and we assume it all comes in at once
                 keyed_accounts[0].account.userdata = bytes;
@@ -122,6 +123,7 @@ pub fn process_instruction(
         }
     } else {
         warn!("Invalid userdata in instruction: {:?}", ix_userdata);
+        return Err(ProgramError::GenericError);
     }
-    true
+    Ok(())
 }

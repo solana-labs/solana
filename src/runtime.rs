@@ -3,9 +3,9 @@ use native_loader;
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::system_program;
 use solana_sdk::transaction::Transaction;
 use storage_program;
-use system_program;
 use vote_program;
 
 /// Reasons the runtime might have rejected a transaction.
@@ -16,10 +16,19 @@ pub enum RuntimeError {
 }
 
 pub fn is_legacy_program(program_id: &Pubkey) -> bool {
-    system_program::check_id(program_id)
-        || budget_program::check_id(program_id)
+    budget_program::check_id(program_id)
         || storage_program::check_id(program_id)
         || vote_program::check_id(program_id)
+}
+
+// TODO: Rename and find a better home for this in the sdk/
+pub fn erc20_id() -> Pubkey {
+    const ERC20_PROGRAM_ID: [u8; 32] = [
+        131, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0,
+    ];
+
+    Pubkey::new(&ERC20_PROGRAM_ID)
 }
 
 /// Process an instruction
@@ -36,9 +45,7 @@ fn process_instruction(
     // Call the program method
     // It's up to the program to implement its own rules on moving funds
     if is_legacy_program(&program_id) {
-        if system_program::check_id(&program_id) {
-            system_program::process(&tx, instruction_index, program_accounts)?;
-        } else if budget_program::check_id(&program_id) {
+        if budget_program::check_id(&program_id) {
             budget_program::process(&tx, instruction_index, program_accounts)?;
         } else if storage_program::check_id(&program_id) {
             storage_program::process(&tx, instruction_index, program_accounts)?;
@@ -47,6 +54,7 @@ fn process_instruction(
         } else {
             unreachable!();
         };
+        Ok(())
     } else {
         let mut keyed_accounts = create_keyed_accounts(executable_accounts);
         let mut keyed_accounts2: Vec<_> = tx.instructions[instruction_index]
@@ -61,16 +69,13 @@ fn process_instruction(
             .collect();
         keyed_accounts.append(&mut keyed_accounts2);
 
-        if !native_loader::process_instruction(
+        native_loader::process_instruction(
             &program_id,
             &mut keyed_accounts,
             &tx.instructions[instruction_index].userdata,
             tick_height,
-        ) {
-            return Err(ProgramError::GenericError);
-        }
+        )
     }
-    Ok(())
 }
 
 fn verify_instruction(

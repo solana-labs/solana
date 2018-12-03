@@ -1773,6 +1773,7 @@ dependencies = [
  "solana-metrics 0.11.0",
  "solana-noop 0.11.0",
  "solana-sdk 0.11.0",
+ "solana-system-program 0.11.0",
  "solana-vote-signer 0.0.1",
  "sys-info 0.5.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1953,6 +1954,17 @@ dependencies = [
  "serde_json 1.0.33 (registry+https://github.com/rust-lang/crates.io-index)",
  "sha2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "untrusted 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "solana-system-program"
+version = "0.11.0"
+dependencies = [
+ "bincode 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "env_logger 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-sdk 0.11.0",
 ]
 
 [[package]]

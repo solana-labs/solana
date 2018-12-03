@@ -11,8 +11,8 @@ use solana_sdk::signature::Keypair;
 #[cfg(test)]
 use solana_sdk::signature::KeypairUtil;
 use solana_sdk::system_instruction::SystemInstruction;
+use solana_sdk::system_program;
 use solana_sdk::transaction::{Instruction, Transaction};
-use system_program;
 use vote_program::{self, Vote, VoteInstruction};
 
 pub trait VoteTransaction {

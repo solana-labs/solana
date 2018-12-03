@@ -1,4 +1,5 @@
 pub mod account;
+pub mod bpf_loader;
 pub mod hash;
 pub mod loader_instruction;
 pub mod native_loader;
@@ -7,6 +8,7 @@ pub mod packet;
 pub mod pubkey;
 pub mod signature;
 pub mod system_instruction;
+pub mod system_program;
 pub mod timing;
 pub mod transaction;
 
