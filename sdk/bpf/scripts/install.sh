@@ -2,13 +2,14 @@
 
 cd "$(dirname "$0")"/..
 
-# Install Criterion
-version=v2.3.2
 if [[ "$(uname)" = Darwin ]]; then
   machine=osx
 else
   machine=linux
 fi
+
+# Install Criterion
+version=v2.3.2
 if [[ ! -r criterion-$machine-$version.md ]]; then
   (
     filename=criterion-$version-$machine-x86_64.tar.bz2
@@ -31,12 +32,7 @@ if [[ ! -r criterion-$machine-$version.md ]]; then
 fi
 
 # Install LLVM
-version=v0.0.3
-if [[ "$(uname)" = Darwin ]]; then
-  machine=macos
-else
-  machine=linux
-fi
+version=v0.0.4
 if [[ ! -f llvm-native-$machine-$version.md ]]; then
   (
     filename=solana-llvm-$machine.tar.bz2
