@@ -1,7 +1,7 @@
 use budget_program;
 use native_loader;
-use program::ProgramError;
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
+use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::Transaction;
 use storage_program;

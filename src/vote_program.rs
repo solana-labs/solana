@@ -3,8 +3,8 @@
 
 use bincode::{deserialize, serialize};
 use byteorder::{ByteOrder, LittleEndian};
-use program::ProgramError;
 use solana_sdk::account::Account;
+use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::Transaction;
 use std;
