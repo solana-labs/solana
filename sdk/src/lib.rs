@@ -1,6 +1,7 @@
 pub mod account;
 pub mod hash;
 pub mod loader_instruction;
+pub mod native_loader;
 pub mod native_program;
 pub mod packet;
 pub mod pubkey;

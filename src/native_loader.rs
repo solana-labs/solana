@@ -7,6 +7,7 @@ use libloading::os::unix::*;
 use libloading::os::windows::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::loader_instruction::LoaderInstruction;
+pub use solana_sdk::native_loader::*;
 use solana_sdk::native_program;
 use solana_sdk::pubkey::Pubkey;
 use std::env;
@@ -41,16 +42,8 @@ fn create_path(name: &str) -> PathBuf {
     )
 }
 
-const NATIVE_LOADER_PROGRAM_ID: [u8; 32] = [
-    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-];
-
 pub fn check_id(program_id: &Pubkey) -> bool {
     program_id.as_ref() == NATIVE_LOADER_PROGRAM_ID
-}
-
-pub fn id() -> Pubkey {
-    Pubkey::new(&NATIVE_LOADER_PROGRAM_ID)
 }
 
 pub fn process_instruction(

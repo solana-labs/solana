@@ -1,6 +1,6 @@
 //! ERC20-like Token program
-use native_loader;
 use solana_sdk::account::Account;
+use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 
 const ERC20_NAME: &str = "solana_erc20";

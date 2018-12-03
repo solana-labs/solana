@@ -1,6 +1,6 @@
 //! BPF loader
-use native_loader;
 use solana_sdk::account::Account;
+use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 
 const BPF_LOADER_NAME: &str = "solana_bpf_loader";
