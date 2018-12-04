@@ -91,3 +91,8 @@ As long as the stake weight of the first layer 2 node is known(or the last layer
 
 We can cache most of the broadcast pool and only update this on some interval since the network shouldn't be changing drastically once it's stable. Recomputing neighborhoods and layers every broadcast stage could be 
 unnecessarily expensive. 
+
+#### Constraints: 
+Layer 1 will have a fixed number of nodes (200 probably). Layer 2 will have upto `layer_1_size` neighborhoods. Neighborhoods can keep growing 
+and layer 2 nodes will be responsible for sharing their data with neighbors.
+   
