@@ -31,6 +31,7 @@ use solana_sdk::signature::Signature;
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::system_program;
 use solana_sdk::timing::{duration_as_us, timestamp};
+use solana_sdk::token_program;
 use solana_sdk::transaction::Transaction;
 use std;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
@@ -428,13 +429,13 @@ impl Bank {
         // Erc20 token program
         let erc20_account = Account {
             tokens: 1,
-            owner: runtime::erc20_id(),
+            owner: token_program::id(),
             userdata: b"solana_erc20".to_vec(),
             executable: true,
             loader: native_loader::id(),
         };
 
-        accounts.store(&runtime::erc20_id(), &erc20_account);
+        accounts.store(&token_program::id(), &erc20_account);
     }
 
     /// Return the last entry ID registered.
@@ -2158,7 +2159,7 @@ mod tests {
             130, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0,
         ]);
-        let erc20 = Pubkey::new(&[
+        let token = Pubkey::new(&[
             131, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0,
         ]);
@@ -2172,7 +2173,7 @@ mod tests {
         assert_eq!(bpf_loader::id(), bpf);
         assert_eq!(budget_program::id(), budget);
         assert_eq!(storage_program::id(), storage);
-        assert_eq!(runtime::erc20_id(), erc20);
+        assert_eq!(token_program::id(), token);
         assert_eq!(vote_program::id(), vote);
     }
 
@@ -2185,7 +2186,7 @@ mod tests {
             bpf_loader::id(),
             budget_program::id(),
             storage_program::id(),
-            runtime::erc20_id(),
+            token_program::id(),
             vote_program::id(),
         ];
         assert!(ids.into_iter().all(move |id| unique.insert(id)));

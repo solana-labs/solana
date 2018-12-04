@@ -21,16 +21,6 @@ pub fn is_legacy_program(program_id: &Pubkey) -> bool {
         || vote_program::check_id(program_id)
 }
 
-// TODO: Rename and find a better home for this in the sdk/
-pub fn erc20_id() -> Pubkey {
-    const ERC20_PROGRAM_ID: [u8; 32] = [
-        131, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0,
-    ];
-
-    Pubkey::new(&ERC20_PROGRAM_ID)
-}
-
 /// Process an instruction
 /// This method calls the instruction's program entrypoint method
 fn process_instruction(
