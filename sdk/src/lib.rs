@@ -7,6 +7,7 @@ pub mod native_program;
 pub mod packet;
 pub mod pubkey;
 pub mod signature;
+pub mod storage_program;
 pub mod system_instruction;
 pub mod system_program;
 pub mod timing;

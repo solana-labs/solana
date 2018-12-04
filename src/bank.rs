@@ -28,11 +28,13 @@ use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signature::Signature;
+use solana_sdk::storage_program;
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::system_program;
 use solana_sdk::timing::{duration_as_us, timestamp};
 use solana_sdk::token_program;
 use solana_sdk::transaction::Transaction;
+use solana_sdk::vote_program;
 use std;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::result;
@@ -41,7 +43,6 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 use system_transaction::SystemTransaction;
 use tokio::prelude::Future;
-use solana_sdk::vote_program;
 
 /// The number of most recent `last_id` values that the bank will track the signatures
 /// of. Once the bank discards a `last_id`, it will reject any transactions that use
@@ -412,9 +413,11 @@ impl Bank {
         accounts.store(&system_program::id(), &system_program_account);
     }
 
-    fn add_vote_program(&self) {
+    fn add_builtin_programs(&self) {
+        self.add_system_program();
         let mut accounts = self.accounts.write().unwrap();
 
+        // Vote program
         let vote_program_account = Account {
             tokens: 1,
             owner: vote_program::id(),
@@ -423,12 +426,16 @@ impl Bank {
             loader: native_loader::id(),
         };
         accounts.store(&vote_program::id(), &vote_program_account);
-    }
 
-    fn add_builtin_programs(&self) {
-        self.add_system_program();
-        self.add_vote_program();
-        let mut accounts = self.accounts.write().unwrap();
+        // Storage program
+        let storage_program_account = Account {
+            tokens: 1,
+            owner: storage_program::id(),
+            userdata: b"solana_storage_program".to_vec(),
+            executable: true,
+            loader: native_loader::id(),
+        };
+        accounts.store(&storage_program::id(), &storage_program_account);
 
         // Bpf Loader
         let bpf_loader_account = Account {
@@ -1418,7 +1425,6 @@ mod tests {
     use solana_sdk::signature::KeypairUtil;
     use solana_sdk::transaction::Instruction;
     use std;
-    use storage_program;
     use system_transaction::SystemTransaction;
     use tokio::prelude::{Async, Stream};
 
