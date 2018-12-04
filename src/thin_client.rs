@@ -30,7 +30,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::Duration;
 use std::time::Instant;
-use system_transaction::SystemTransaction;
+use solana_sdk::system_transaction::SystemTransaction;
 
 /// An object for querying and sending transactions to the network.
 pub struct ThinClient {

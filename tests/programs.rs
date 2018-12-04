@@ -8,12 +8,12 @@ use solana::bank::Bank;
 use solana::logger;
 use solana::mint::Mint;
 use solana::native_loader;
-use solana::system_transaction::SystemTransaction;
 #[cfg(feature = "bpf_c")]
 use solana_sdk::bpf_loader;
 use solana_sdk::loader_transaction::LoaderTransaction;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 #[cfg(feature = "bpf_c")]
 use std::env;

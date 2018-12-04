@@ -473,7 +473,7 @@ mod tests {
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;
-    use system_transaction::SystemTransaction;
+    use solana_sdk::system_transaction::SystemTransaction;
 
     #[test]
     pub fn packet_send_recv() {

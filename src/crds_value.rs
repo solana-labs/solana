@@ -233,7 +233,7 @@ mod test {
     use contact_info::ContactInfo;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::timing::timestamp;
-    use system_transaction::test_tx;
+    use test_tx::test_tx;
 
     #[test]
     fn test_labels() {

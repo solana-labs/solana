@@ -6,7 +6,7 @@ use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
-use system_transaction::SystemTransaction;
+use solana_sdk::system_transaction::SystemTransaction;
 use untrusted::Input;
 
 #[derive(Serialize, Deserialize, Debug)]

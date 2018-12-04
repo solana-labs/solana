@@ -187,7 +187,7 @@ pub mod tests {
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
     use streamer;
-    use system_transaction::SystemTransaction;
+    use solana_sdk::system_transaction::SystemTransaction;
     use tvu::Tvu;
     use window::{self, SharedWindow};
 

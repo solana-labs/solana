@@ -5,9 +5,9 @@ extern crate test;
 
 use solana::entry::reconstruct_entries_from_blobs;
 use solana::ledger::{next_entries, Block};
-use solana::system_transaction::SystemTransaction;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use test::Bencher;
 

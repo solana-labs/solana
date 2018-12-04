@@ -378,7 +378,7 @@ mod tests {
     use solana_sdk::transaction::Transaction;
     use std::fs::remove_dir_all;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    use system_transaction::SystemTransaction;
+    use solana_sdk::system_transaction::SystemTransaction;
 
     fn start_rpc_handler_with_tx(pubkey: Pubkey) -> (MetaIoHandler<Meta>, Meta, Hash, Keypair) {
         let alice = Mint::new(10_000);

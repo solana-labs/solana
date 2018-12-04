@@ -6,7 +6,7 @@ extern crate test;
 
 use solana::packet::to_packets;
 use solana::sigverify;
-use solana::system_transaction::test_tx;
+use solana::test_tx::test_tx;
 use test::Bencher;
 
 #[bench]
