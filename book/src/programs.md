@@ -22,13 +22,13 @@ used to reference the program in subsequent transactions.
 
 After a program has been deployed, a client utilizes it by sending transactions
 to the Solana cluster. A transaction contains one or more *instructions*. Each
-instruction references the program ID that coresponds to the program that the
+instruction references the program ID that corresponds to the program that the
 runtime should use to execute it. Instructions are executed atomically. If any
 instruction is invalid, any changes made within the transaction are discarded.
 
 ## Storing State between Transactions
 
-If the the program needs to store state between transactions, it does so using
+If the program needs to store state between transactions, it does so using
 *accounts*. Solana supports several kinds of accounts:
 
 1. Executable
@@ -37,7 +37,7 @@ If the the program needs to store state between transactions, it does so using
 4. Credit-only
 
 All accounts are identified by public keys and may hold arbitrary data.  When
-the client sends messages to programs, it requests access to accounts using
+the client sends transactions to programs, it requests access to accounts using
 those keys. The runtime loads the account and passes it to the program.  The
 runtime also ensures accounts aren't written to if not owned by the client or
 program. Any writes to credit-only accounts are discarded unless the write was
