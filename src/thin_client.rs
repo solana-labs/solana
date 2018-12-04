@@ -440,7 +440,7 @@ mod tests {
     use solana_sdk::system_instruction::SystemInstruction;
     use std::fs::remove_dir_all;
     use solana_sdk::vote_program::VoteProgram;
-    use vote_transaction::VoteTransaction;
+    use solana_sdk::vote_transaction::VoteTransaction;
 
     #[test]
     fn test_thin_client() {

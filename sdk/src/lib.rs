@@ -19,6 +19,7 @@ pub mod timing;
 pub mod token_program;
 pub mod transaction;
 pub mod vote_program;
+pub mod vote_transaction;
 
 extern crate bincode;
 extern crate bs58;

@@ -21,7 +21,7 @@ use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};
 use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::Path;
-use vote_transaction::VoteTransaction;
+use solana_sdk::vote_transaction::VoteTransaction;
 
 //
 // A persistent ledger is 2 files:

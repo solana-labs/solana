@@ -26,6 +26,7 @@ pub mod crds_gossip_pull;
 pub mod crds_gossip_push;
 pub mod crds_traits_impls;
 pub mod crds_value;
+pub mod create_vote_account;
 #[macro_use]
 pub mod contact_info;
 pub mod cluster_info;
@@ -72,7 +73,6 @@ pub mod tpu;
 pub mod tpu_forwarder;
 pub mod tvu;
 pub mod vote_stage;
-pub mod vote_transaction;
 pub mod wallet;
 pub mod window;
 pub mod window_service;
