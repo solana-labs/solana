@@ -76,10 +76,10 @@ build_rpc_trait! {
         type Metadata;
 
         #[rpc(meta, name = "registerNode")]
-        fn register(&self, Self::Metadata, String, Signature, Vec<u8>) -> Result<Pubkey>;
+        fn register(&self, Self::Metadata, String, Signature, Vec<u8>) -> Result<String>;
 
         #[rpc(meta, name = "signVote")]
-        fn sign(&self, Self::Metadata, String, Signature, Vec<u8>) -> Result<Signature>;
+        fn sign(&self, Self::Metadata, String, Signature, Vec<u8>) -> Result<String>;
 
         #[rpc(meta, name = "deregisterNode")]
         fn deregister(&self, Self::Metadata, String, Signature, Vec<u8>) -> Result<()>;
@@ -96,7 +96,7 @@ impl VoteSignerRpc for VoteSignerRpcImpl {
         id: String,
         sig: Signature,
         signed_msg: Vec<u8>,
-    ) -> Result<Pubkey> {
+    ) -> Result<String> {
         info!("register rpc request received: {:?}", id);
         let pubkey = verify_pubkey(id)?;
         verify_signature(&sig, &pubkey, &signed_msg)?;
@@ -109,7 +109,7 @@ impl VoteSignerRpc for VoteSignerRpcImpl {
         id: String,
         sig: Signature,
         signed_msg: Vec<u8>,
-    ) -> Result<Signature> {
+    ) -> Result<String> {
         info!("sign rpc request received: {:?}", id);
         let pubkey = verify_pubkey(id)?;
         verify_signature(&sig, &pubkey, &signed_msg)?;
@@ -144,22 +144,22 @@ pub struct VoteSignRequestProcessor {
 }
 impl VoteSignRequestProcessor {
     /// Process JSON-RPC request items sent via JSON-RPC.
-    pub fn register(&self, pubkey: Pubkey) -> Result<Pubkey> {
+    pub fn register(&self, pubkey: Pubkey) -> Result<String> {
         {
             if let Some(voting_keypair) = self.nodes.read().unwrap().get(&pubkey) {
-                return Ok(voting_keypair.pubkey());
+                return Ok(bs58::encode(voting_keypair.pubkey()).into_string());
             }
         }
         let voting_keypair = Keypair::new();
         let voting_pubkey = voting_keypair.pubkey();
         self.nodes.write().unwrap().insert(pubkey, voting_keypair);
-        Ok(voting_pubkey)
+        Ok(bs58::encode(voting_pubkey).into_string())
     }
-    pub fn sign(&self, pubkey: Pubkey, msg: &[u8]) -> Result<Signature> {
+    pub fn sign(&self, pubkey: Pubkey, msg: &[u8]) -> Result<String> {
         match self.nodes.read().unwrap().get(&pubkey) {
             Some(voting_keypair) => {
                 let sig = Signature::new(&voting_keypair.sign(&msg).as_ref());
-                Ok(sig)
+                Ok(bs58::encode(sig).into_string())
             }
             None => Err(Error::invalid_request()),
         }
@@ -178,7 +178,7 @@ impl Default for VoteSignRequestProcessor {
     }
 }
 
-fn verify_pubkey(input: String) -> Result<Pubkey> {
+pub fn verify_pubkey(input: String) -> Result<Pubkey> {
     let pubkey_vec = bs58::decode(input).into_vec().map_err(|err| {
         info!("verify_pubkey: invalid input: {:?}", err);
         Error::invalid_request()
@@ -232,11 +232,8 @@ mod tests {
             if let Output::Success(succ) = out {
                 assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
                 assert_eq!(succ.id, Id::Num(1));
-                assert!(succ.result.is_array());
-                assert_eq!(
-                    succ.result.as_array().unwrap().len(),
-                    mem::size_of::<Pubkey>()
-                );
+                assert!(succ.result.is_string());
+                let _pubkey = verify_pubkey(succ.result.as_str().unwrap().to_string()).unwrap();
             } else {
                 assert!(false);
             }
@@ -355,7 +352,22 @@ mod tests {
            "method": "registerNode",
            "params": [node_pubkey.to_string(), sig, msg.as_bytes()],
         });
-        let _res = io.handle_request_sync(&req.to_string(), meta.clone());
+        let res = io.handle_request_sync(&req.to_string(), meta.clone());
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+        let mut vote_pubkey = Keypair::new().pubkey();
+        if let Response::Single(out) = result {
+            if let Output::Success(succ) = out {
+                assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
+                assert_eq!(succ.id, Id::Num(1));
+                assert!(succ.result.is_string());
+                vote_pubkey = verify_pubkey(succ.result.as_str().unwrap().to_string()).unwrap();
+            } else {
+                assert!(false);
+            }
+        } else {
+            assert!(false);
+        }
 
         let req = json!({
            "jsonrpc": "2.0",
@@ -372,6 +384,17 @@ mod tests {
             if let Output::Success(succ) = out {
                 assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
                 assert_eq!(succ.id, Id::Num(1));
+                assert!(succ.result.is_string());
+                let sig_vec = bs58::decode(succ.result.as_str().unwrap().to_string())
+                    .into_vec()
+                    .map_err(|err| {
+                        info!("invalid input: {:?}", err);
+                        Error::invalid_request()
+                    })
+                    .unwrap();
+                assert_eq!(sig_vec.len(), mem::size_of::<Signature>());
+                let sig = Signature::new(&sig_vec);
+                assert_eq!(verify_signature(&sig, &vote_pubkey, msg.as_bytes()), Ok(()));
             } else {
                 assert!(false);
             }

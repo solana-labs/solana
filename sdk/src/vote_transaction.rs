@@ -10,7 +10,7 @@ use crate::vote_program::{self, Vote, VoteInstruction};
 use bincode::deserialize;
 
 pub trait VoteTransaction {
-    fn vote_new(vote_account: &Keypair, vote: Vote, last_id: Hash, fee: u64) -> Self;
+    fn vote_new(vote_account: &Pubkey, vote: Vote, last_id: Hash, fee: u64) -> Self;
     fn vote_account_new(
         validator_id: &Keypair,
         vote_account_id: Pubkey,
@@ -23,11 +23,10 @@ pub trait VoteTransaction {
 }
 
 impl VoteTransaction for Transaction {
-    fn vote_new(vote_account: &Keypair, vote: Vote, last_id: Hash, fee: u64) -> Self {
+    fn vote_new(vote_account: &Pubkey, vote: Vote, last_id: Hash, fee: u64) -> Self {
         let instruction = VoteInstruction::NewVote(vote);
-        Transaction::new(
-            vote_account,
-            &[],
+        Transaction::new_unsigned(
+            &[vote_account.clone()],
             vote_program::id(),
             &instruction,
             last_id,

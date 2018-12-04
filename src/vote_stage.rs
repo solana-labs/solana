@@ -9,7 +9,7 @@ use crate::streamer::BlobSender;
 use bincode::serialize;
 use log::Level;
 use solana_sdk::hash::Hash;
-use solana_sdk::signature::Keypair;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::Vote;
 use solana_sdk::vote_transaction::VoteTransaction;
@@ -27,7 +27,7 @@ pub enum VoteError {
 // TODO: Change voting to be on fixed tick intervals based on bank state
 pub fn create_new_signed_vote_blob(
     last_id: &Hash,
-    vote_account: &Keypair,
+    vote_account: &Pubkey,
     bank: &Arc<Bank>,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
 ) -> Result<SharedBlob> {
@@ -68,7 +68,7 @@ fn get_leader_tpu(bank: &Bank, cluster_info: &Arc<RwLock<ClusterInfo>>) -> Resul
 
 pub fn send_validator_vote(
     bank: &Arc<Bank>,
-    vote_account: &Keypair,
+    vote_account: &Pubkey,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
     vote_blob_sender: &BlobSender,
 ) -> Result<()> {

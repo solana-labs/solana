@@ -1,14 +1,17 @@
 use clap::{crate_version, App, Arg};
 use log::*;
+
 use solana::client::mk_client;
 use solana::cluster_info::{Node, NodeInfo, FULLNODE_PORT_RANGE};
 use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::leader_scheduler::LeaderScheduler;
+use solana::logger;
+use solana::netutil::find_available_port_in_range;
+use solana::rpc_request::{RpcClient, RpcRequest};
 use solana::socketaddr;
 use solana::thin_client::poll_gossip_for_leader;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::vote_program::VoteProgram;
-use solana_sdk::vote_transaction::VoteTransaction;
+use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+use solana_vote_signer::rpc::verify_pubkey;
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::process::exit;
@@ -49,6 +52,14 @@ fn main() {
                 .help("Rendezvous with the network at this gossip entry point"),
         )
         .arg(
+            Arg::with_name("signer")
+                .short("s")
+                .long("signer")
+                .value_name("HOST:PORT")
+                .takes_value(true)
+                .help("Rendezvous with the vote signer at this RPC end point"),
+        )
+        .arg(
             Arg::with_name("ledger")
                 .short("l")
                 .long("ledger")
@@ -69,7 +80,7 @@ fn main() {
     let nosigverify = matches.is_present("nosigverify");
     let use_only_bootstrap_leader = matches.is_present("no-leader-rotation");
 
-    let (keypair, vote_account_keypair, gossip) = if let Some(i) = matches.value_of("identity") {
+    let (keypair, _vote_account_keypair, gossip) = if let Some(i) = matches.value_of("identity") {
         let path = i.to_string();
         if let Ok(file) = File::open(path.clone()) {
             let parse: serde_json::Result<solana_fullnode_config::Config> =
@@ -106,13 +117,31 @@ fn main() {
         .value_of("network")
         .map(|network| network.parse().expect("failed to parse network address"));
 
+    let signer = matches
+        .value_of("signer")
+        .map(|signer| signer.parse().expect("failed to parse vote signer address"))
+        .unwrap();
+
     let node = Node::new_with_external_ip(keypair.pubkey(), &gossip);
 
     // save off some stuff for airdrop
     let mut node_info = node.info.clone();
 
-    let vote_account_keypair = Arc::new(vote_account_keypair);
-    let vote_account_id = vote_account_keypair.pubkey();
+    let rpc_client = RpcClient::new_from_socket(signer);
+
+    let msg = "Registering a new node";
+    let sig = Signature::new(&keypair.sign(msg.as_bytes()).as_ref());
+
+    let params = json!([keypair.pubkey().to_string(), sig, msg.as_bytes()]);
+    let vote_account_id_str = RpcRequest::RegisterNode
+        .make_rpc_request(&rpc_client, 1, Some(params))
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .to_string();
+    let vote_account_id = verify_pubkey(vote_account_id_str).unwrap();
+    info!("New vote account ID is {:?}", vote_account_id);
+    let vote_account_id_arc = Arc::new(vote_account_id);
     let keypair = Arc::new(keypair);
     let pubkey = keypair.pubkey();
 
@@ -153,7 +182,7 @@ fn main() {
         node,
         ledger_path,
         keypair.clone(),
-        vote_account_keypair.clone(),
+        vote_account_id_arc.clone(),
         network,
         nosigverify,
         leader_scheduler,

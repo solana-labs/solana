@@ -16,6 +16,7 @@ use crate::tvu::{Sockets, Tvu, TvuReturnType};
 use crate::window::{new_window, SharedWindow};
 use log::Level;
 use solana_sdk::hash::Hash;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
@@ -90,7 +91,7 @@ pub enum FullnodeReturnType {
 pub struct Fullnode {
     pub node_role: Option<NodeRole>,
     keypair: Arc<Keypair>,
-    vote_account_keypair: Arc<Keypair>,
+    vote_account_id: Arc<Pubkey>,
     exit: Arc<AtomicBool>,
     rpc_service: Option<JsonRpcService>,
     rpc_pubsub_service: Option<PubSubService>,
@@ -115,7 +116,7 @@ impl Fullnode {
         node: Node,
         ledger_path: &str,
         keypair: Arc<Keypair>,
-        vote_account_keypair: Arc<Keypair>,
+        vote_account_id: Arc<Pubkey>,
         leader_addr: Option<SocketAddr>,
         sigverify_disabled: bool,
         leader_scheduler: LeaderScheduler,
@@ -144,7 +145,7 @@ impl Fullnode {
         let leader_info = leader_addr.map(|i| NodeInfo::new_entry_point(&i));
         let server = Self::new_with_bank(
             keypair,
-            vote_account_keypair,
+            vote_account_id,
             bank,
             Some(db_ledger),
             entry_height,
@@ -175,7 +176,7 @@ impl Fullnode {
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_bank(
         keypair: Arc<Keypair>,
-        vote_account_keypair: Arc<Keypair>,
+        vote_account_id: Arc<Pubkey>,
         bank: Bank,
         db_ledger: Option<Arc<DbLedger>>,
         entry_height: u64,
@@ -329,7 +330,7 @@ impl Fullnode {
 
         Fullnode {
             keypair,
-            vote_account_keypair,
+            vote_account_id,
             cluster_info,
             shared_window,
             bank,
@@ -430,7 +431,8 @@ impl Fullnode {
             };
 
             let tvu = Tvu::new(
-                self.vote_account_keypair.clone(),
+                self.keypair.clone(),
+                self.vote_account_id.clone(),
                 &self.bank,
                 entry_height,
                 last_entry_id,
@@ -848,7 +850,7 @@ mod tests {
 
         // Write the entries to the ledger that will cause leader rotation
         // after the bootstrap height
-        let (active_set_entries, validator_vote_account_keypair) = make_active_set_entries(
+        let (active_set_entries, validator_vote_account_id) = make_active_set_entries(
             &validator_keypair,
             &mint.keypair(),
             &last_id,
@@ -899,11 +901,12 @@ mod tests {
         {
             // Test that a node knows to transition to a validator based on parsing the ledger
             let leader_vote_account_keypair = Arc::new(Keypair::new());
+            let leader_vote_account_id = leader_vote_account_keypair.pubkey();
             let bootstrap_leader = Fullnode::new(
                 bootstrap_leader_node,
                 &bootstrap_leader_ledger_path,
                 bootstrap_leader_keypair,
-                leader_vote_account_keypair,
+                leader_vote_account_id,
                 Some(bootstrap_leader_info.gossip),
                 false,
                 LeaderScheduler::new(&leader_scheduler_config),
@@ -922,7 +925,7 @@ mod tests {
                 validator_node,
                 &validator_ledger_path,
                 Arc::new(validator_keypair),
-                Arc::new(validator_vote_account_keypair),
+                Arc::new(validator_vote_account_id),
                 Some(bootstrap_leader_info.gossip),
                 false,
                 LeaderScheduler::new(&leader_scheduler_config),
@@ -981,7 +984,7 @@ mod tests {
         // after the bootstrap height
         //
         // 2) A vote from the validator
-        let (active_set_entries, validator_vote_account_keypair) =
+        let (active_set_entries, validator_vote_account_id) =
             make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id, 0);
         let initial_tick_height = genesis_entries
             .iter()
@@ -1021,7 +1024,7 @@ mod tests {
             validator_node,
             &validator_ledger_path,
             Arc::new(validator_keypair),
-            Arc::new(validator_vote_account_keypair),
+            Arc::new(validator_vote_account_id),
             Some(leader_gossip),
             false,
             LeaderScheduler::new(&leader_scheduler_config),

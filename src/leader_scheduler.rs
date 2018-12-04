@@ -500,7 +500,7 @@ pub fn make_active_set_entries(
 
     // 3) Create vote entry
     let vote = Vote { tick_height: 1 };
-    let vote_tx = Transaction::vote_new(&vote_account, vote, *last_tick_id, 0);
+    let vote_tx = Transaction::vote_new(&vote_account.pubkey(), vote, *last_tick_id, 0);
     let vote_entry = Entry::new(&last_entry_id, 0, 1, vec![vote_tx]);
     last_entry_id = vote_entry.id;
 

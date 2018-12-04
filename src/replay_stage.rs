@@ -14,6 +14,7 @@ use crate::streamer::{responder, BlobSender};
 use crate::vote_stage::send_validator_vote;
 use log::Level;
 use solana_metrics::{influxdb, submit};
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
@@ -63,7 +64,7 @@ impl ReplayStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window_receiver: &EntryReceiver,
         keypair: &Arc<Keypair>,
-        vote_account_keypair: &Arc<Keypair>,
+        vote_account_id: &Arc<Pubkey>,
         vote_blob_sender: Option<&BlobSender>,
         ledger_entry_sender: &EntrySender,
         entry_height: &mut u64,
@@ -192,7 +193,7 @@ impl ReplayStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         keypair: Arc<Keypair>,
-        vote_account_keypair: Arc<Keypair>,
+        vote_account_id: Arc<Pubkey>,
         bank: Arc<Bank>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window_receiver: EntryReceiver,
@@ -235,7 +236,7 @@ impl ReplayStage {
                         &cluster_info,
                         &window_receiver,
                         &keypair,
-                        &vote_account_keypair,
+                        &vote_account_id,
                         Some(&vote_blob_sender),
                         &ledger_entry_sender,
                         &mut entry_height_,
@@ -324,7 +325,7 @@ mod test {
         // Write two entries to the ledger so that the validator is in the active set:
         // 1) Give the validator a nonzero number of tokens 2) A vote from the validator .
         // This will cause leader rotation after the bootstrap height
-        let (active_set_entries, vote_account_keypair) =
+        let (active_set_entries, vote_account_id) =
             make_active_set_entries(&my_keypair, &mint.keypair(), &last_id, &last_id, 0);
         last_id = active_set_entries.last().unwrap().id;
         let initial_tick_height = genesis_entries
@@ -370,7 +371,7 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let (replay_stage, ledger_writer_recv) = ReplayStage::new(
             Arc::new(my_keypair),
-            Arc::new(vote_account_keypair),
+            Arc::new(vote_account_id),
             Arc::new(bank),
             Arc::new(RwLock::new(cluster_info_me)),
             entry_receiver,
@@ -456,13 +457,13 @@ mod test {
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
 
         // Set up the replay stage
-        let vote_account_keypair = Arc::new(Keypair::new());
+        let vote_account_id = Arc::new(Keypair::new().pubkey());
         let bank = Arc::new(bank);
         let (entry_sender, entry_receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         let (replay_stage, ledger_writer_recv) = ReplayStage::new(
             Arc::new(my_keypair),
-            vote_account_keypair.clone(),
+            vote_account_id.clone(),
             bank.clone(),
             cluster_info_me.clone(),
             entry_receiver,
@@ -475,7 +476,7 @@ mod test {
         // ClusterInfo
         let (mock_sender, _mock_receiver) = channel();
         let _vote_err =
-            send_validator_vote(&bank, &vote_account_keypair, &cluster_info_me, &mock_sender);
+            send_validator_vote(&bank, &vote_account_id, &cluster_info_me, &mock_sender);
 
         // Send ReplayStage an entry, should see it on the ledger writer receiver
         let next_tick = create_ticks(
@@ -527,7 +528,7 @@ mod test {
         // Write two entries to the ledger so that the validator is in the active set:
         // 1) Give the validator a nonzero number of tokens 2) A vote from the validator.
         // This will cause leader rotation after the bootstrap height
-        let (active_set_entries, vote_account_keypair) =
+        let (active_set_entries, vote_account_id) =
             make_active_set_entries(&my_keypair, &mint.keypair(), &last_id, &last_id, 0);
         last_id = active_set_entries.last().unwrap().id;
         let initial_tick_height = genesis_entries
@@ -572,13 +573,13 @@ mod test {
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
 
         // Set up the replay stage
-        let vote_account_keypair = Arc::new(vote_account_keypair);
+        let vote_account_id = Arc::new(vote_account_id);
         let bank = Arc::new(bank);
         let (entry_sender, entry_receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         let (replay_stage, ledger_writer_recv) = ReplayStage::new(
             Arc::new(my_keypair),
-            vote_account_keypair.clone(),
+            vote_account_id.clone(),
             bank.clone(),
             cluster_info_me.clone(),
             entry_receiver,
@@ -591,7 +592,7 @@ mod test {
         // ClusterInfo
         let (mock_sender, _mock_receiver) = channel();
         let _vote_err =
-            send_validator_vote(&bank, &vote_account_keypair, &cluster_info_me, &mock_sender);
+            send_validator_vote(&bank, &vote_account_id, &cluster_info_me, &mock_sender);
 
         // Send enough ticks to trigger leader rotation
         let total_entries_to_send = (bootstrap_height - initial_tick_height) as usize;

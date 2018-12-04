@@ -91,8 +91,16 @@ use solana_jsonrpc_core as jsonrpc_core;
 use solana_jsonrpc_http_server as jsonrpc_http_server;
 #[macro_use]
 extern crate solana_jsonrpc_macros as jsonrpc_macros;
-use solana_jsonrpc_pubsub as jsonrpc_pubsub;
-use solana_jsonrpc_ws_server as jsonrpc_ws_server;
+extern crate solana_jsonrpc_pubsub as jsonrpc_pubsub;
+extern crate solana_jsonrpc_ws_server as jsonrpc_ws_server;
+extern crate solana_metrics;
+extern crate solana_native_loader;
+extern crate solana_sdk;
+extern crate solana_vote_signer;
+extern crate sys_info;
+extern crate tokio;
+extern crate tokio_codec;
+extern crate untrusted;
 
 #[cfg(test)]
 #[macro_use]
