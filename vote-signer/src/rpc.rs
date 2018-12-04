@@ -232,7 +232,6 @@ mod tests {
 
         if let Response::Single(out) = result {
             if let Output::Success(succ) = out {
-                println!("success: {:?}", succ);
                 assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
                 assert_eq!(succ.id, Id::Num(1));
                 assert!(succ.result.is_array());
@@ -240,6 +239,38 @@ mod tests {
                     succ.result.as_array().unwrap().len(),
                     mem::size_of::<Pubkey>()
                 );
+            } else {
+                assert!(false);
+            }
+        } else {
+            assert!(false);
+        }
+    }
+
+    #[test]
+    fn test_rpc_register_node_invalid_sig() {
+        let (io, meta) = start_rpc_handler();
+
+        let node_keypair = Keypair::new();
+        let node_pubkey = node_keypair.pubkey();
+        let msg = "This is a test";
+        let msg1 = "This is a Test1";
+        let sig = Signature::new(&node_keypair.sign(msg.as_bytes()).as_ref());
+        let req = json!({
+           "jsonrpc": "2.0",
+           "id": 1,
+           "method": "registerNode",
+           "params": [node_pubkey.to_string(), sig, msg1.as_bytes()],
+        });
+        let res = io.handle_request_sync(&req.to_string(), meta);
+
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+
+        if let Response::Single(out) = result {
+            if let Output::Failure(succ) = out {
+                assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
+                assert_eq!(succ.id, Id::Num(1));
             } else {
                 assert!(false);
             }
@@ -269,7 +300,38 @@ mod tests {
 
         if let Response::Single(out) = result {
             if let Output::Success(succ) = out {
-                println!("success: {:?}", succ);
+                assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
+                assert_eq!(succ.id, Id::Num(1));
+            } else {
+                assert!(false);
+            }
+        } else {
+            assert!(false);
+        }
+    }
+
+    #[test]
+    fn test_rpc_deregister_node_invalid_sig() {
+        let (io, meta) = start_rpc_handler();
+
+        let node_keypair = Keypair::new();
+        let node_pubkey = node_keypair.pubkey();
+        let msg = "This is a test";
+        let msg1 = "This is a Test1";
+        let sig = Signature::new(&node_keypair.sign(msg.as_bytes()).as_ref());
+        let req = json!({
+           "jsonrpc": "2.0",
+           "id": 1,
+           "method": "deregisterNode",
+           "params": [node_pubkey.to_string(), sig, msg1.as_bytes()],
+        });
+        let res = io.handle_request_sync(&req.to_string(), meta);
+
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+
+        if let Response::Single(out) = result {
+            if let Output::Failure(succ) = out {
                 assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
                 assert_eq!(succ.id, Id::Num(1));
             } else {
