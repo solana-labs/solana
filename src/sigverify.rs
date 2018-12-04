@@ -322,7 +322,7 @@ pub fn make_packet_from_transaction(tx: Transaction) -> Packet {
 
 #[cfg(test)]
 mod tests {
-    use bincode::serialize;
+    use bincode::{deserialize, serialize};
     use packet::{Packet, SharedPackets};
     use sigverify;
     use solana_sdk::budget_program;
@@ -330,8 +330,19 @@ mod tests {
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_program;
-    use solana_sdk::transaction::{Instruction, Transaction};
-    use system_transaction::{memfind, test_tx};
+    use solana_sdk::transaction::{Instruction, Transaction, SIG_OFFSET};
+    use test_tx::test_tx;
+
+    pub fn memfind<A: Eq>(a: &[A], b: &[A]) -> Option<usize> {
+        assert!(a.len() >= b.len());
+        let end = a.len() - b.len() + 1;
+        for i in 0..end {
+            if a[i..i + b.len()] == b[..] {
+                return Some(i);
+            }
+        }
+        None
+    }
 
     #[test]
     fn test_layout() {
@@ -340,6 +351,57 @@ mod tests {
         let packet = serialize(&tx).unwrap();
         assert_matches!(memfind(&packet, &tx_bytes), Some(sigverify::TX_OFFSET));
         assert_matches!(memfind(&packet, &[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]), None);
+    }
+
+    #[test]
+    fn test_system_transaction_layout() {
+        let tx = test_tx();
+        let tx_bytes = serialize(&tx).unwrap();
+        let sign_data = tx.get_sign_data();
+        let packet = sigverify::make_packet_from_transaction(tx.clone());
+
+        let (sig_len, sig_start, msg_start_offset, pubkey_offset) =
+            sigverify::get_packet_offsets(&packet, 0);
+
+        assert_eq!(
+            memfind(&tx_bytes, &tx.signatures[0].as_ref()),
+            Some(SIG_OFFSET)
+        );
+        assert_eq!(
+            memfind(&tx_bytes, &tx.account_keys[0].as_ref()),
+            Some(pubkey_offset as usize)
+        );
+        assert_eq!(
+            memfind(&tx_bytes, &sign_data),
+            Some(msg_start_offset as usize)
+        );
+        assert_eq!(
+            memfind(&tx_bytes, &tx.signatures[0].as_ref()),
+            Some(sig_start as usize)
+        );
+        assert_eq!(sig_len, 1);
+        assert!(tx.verify_signature());
+    }
+
+    #[test]
+    fn test_system_transaction_userdata_layout() {
+        use packet::PACKET_DATA_SIZE;
+        let mut tx0 = test_tx();
+        tx0.instructions[0].userdata = vec![1, 2, 3];
+        let sign_data0a = tx0.get_sign_data();
+        let tx_bytes = serialize(&tx0).unwrap();
+        assert!(tx_bytes.len() < PACKET_DATA_SIZE);
+        assert_eq!(
+            memfind(&tx_bytes, &tx0.signatures[0].as_ref()),
+            Some(SIG_OFFSET)
+        );
+        let tx1 = deserialize(&tx_bytes).unwrap();
+        assert_eq!(tx0, tx1);
+        assert_eq!(tx1.instructions[0].userdata, vec![1, 2, 3]);
+
+        tx0.instructions[0].userdata = vec![1, 2, 4];
+        let sign_data0b = tx0.get_sign_data();
+        assert_ne!(sign_data0a, sign_data0b);
     }
 
     #[test]

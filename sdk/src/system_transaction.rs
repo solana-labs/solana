@@ -1,11 +1,11 @@
 //! The `system_transaction` module provides functionality for creating system transactions.
 
-use solana_sdk::hash::Hash;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_instruction::SystemInstruction;
-use solana_sdk::system_program;
-use solana_sdk::transaction::{Instruction, Transaction};
+use hash::Hash;
+use pubkey::Pubkey;
+use signature::Keypair;
+use system_instruction::SystemInstruction;
+use system_program;
+use transaction::{Instruction, Transaction};
 
 pub trait SystemTransaction {
     fn system_create(
@@ -133,82 +133,11 @@ impl SystemTransaction for Transaction {
     }
 }
 
-pub fn test_tx() -> Transaction {
-    let keypair1 = Keypair::new();
-    let pubkey1 = keypair1.pubkey();
-    let zero = Hash::default();
-    Transaction::system_new(&keypair1, pubkey1, 42, zero)
-}
-
-#[cfg(test)]
-pub fn memfind<A: Eq>(a: &[A], b: &[A]) -> Option<usize> {
-    assert!(a.len() >= b.len());
-    let end = a.len() - b.len() + 1;
-    for i in 0..end {
-        if a[i..i + b.len()] == b[..] {
-            return Some(i);
-        }
-    }
-    None
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bincode::{deserialize, serialize};
-    use packet::PACKET_DATA_SIZE;
-    use sigverify;
-    use solana_sdk::transaction::SIG_OFFSET;
+    use signature::KeypairUtil;
 
-    #[test]
-    fn test_layout() {
-        let tx = test_tx();
-        let tx_bytes = serialize(&tx).unwrap();
-        let sign_data = tx.get_sign_data();
-        let packet = sigverify::make_packet_from_transaction(tx.clone());
-
-        let (sig_len, sig_start, msg_start_offset, pubkey_offset) =
-            sigverify::get_packet_offsets(&packet, 0);
-
-        assert_eq!(
-            memfind(&tx_bytes, &tx.signatures[0].as_ref()),
-            Some(SIG_OFFSET)
-        );
-        assert_eq!(
-            memfind(&tx_bytes, &tx.account_keys[0].as_ref()),
-            Some(pubkey_offset as usize)
-        );
-        assert_eq!(
-            memfind(&tx_bytes, &sign_data),
-            Some(msg_start_offset as usize)
-        );
-        assert_eq!(
-            memfind(&tx_bytes, &tx.signatures[0].as_ref()),
-            Some(sig_start as usize)
-        );
-        assert_eq!(sig_len, 1);
-        assert!(tx.verify_signature());
-    }
-
-    #[test]
-    fn test_userdata_layout() {
-        let mut tx0 = test_tx();
-        tx0.instructions[0].userdata = vec![1, 2, 3];
-        let sign_data0a = tx0.get_sign_data();
-        let tx_bytes = serialize(&tx0).unwrap();
-        assert!(tx_bytes.len() < PACKET_DATA_SIZE);
-        assert_eq!(
-            memfind(&tx_bytes, &tx0.signatures[0].as_ref()),
-            Some(SIG_OFFSET)
-        );
-        let tx1 = deserialize(&tx_bytes).unwrap();
-        assert_eq!(tx0, tx1);
-        assert_eq!(tx1.instructions[0].userdata, vec![1, 2, 3]);
-
-        tx0.instructions[0].userdata = vec![1, 2, 4];
-        let sign_data0b = tx0.get_sign_data();
-        assert_ne!(sign_data0a, sign_data0b);
-    }
     #[test]
     fn test_move_many() {
         let from = Keypair::new();

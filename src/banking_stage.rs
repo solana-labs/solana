@@ -258,7 +258,7 @@ mod tests {
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
     use std::thread::sleep;
-    use system_transaction::SystemTransaction;
+    use solana_sdk::system_transaction::SystemTransaction;
 
     #[test]
     fn test_banking_stage_shutdown1() {

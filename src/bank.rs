@@ -41,7 +41,7 @@ use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
-use system_transaction::SystemTransaction;
+use solana_sdk::system_transaction::SystemTransaction;
 use tokio::prelude::Future;
 
 /// The number of most recent `last_id` values that the bank will track the signatures
@@ -1433,7 +1433,7 @@ mod tests {
     use solana_sdk::signature::KeypairUtil;
     use solana_sdk::transaction::Instruction;
     use std;
-    use system_transaction::SystemTransaction;
+    use solana_sdk::system_transaction::SystemTransaction;
     use tokio::prelude::{Async, Stream};
 
     #[test]

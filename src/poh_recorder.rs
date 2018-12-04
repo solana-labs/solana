@@ -122,7 +122,7 @@ mod tests {
     use solana_sdk::hash::hash;
     use std::sync::mpsc::channel;
     use std::sync::Arc;
-    use system_transaction::test_tx;
+    use test_tx::test_tx;
 
     #[test]
     fn test_poh() {

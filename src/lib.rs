@@ -66,7 +66,7 @@ pub mod sigverify_stage;
 pub mod storage_stage;
 pub mod store_ledger_stage;
 pub mod streamer;
-pub mod system_transaction;
+pub mod test_tx;
 pub mod thin_client;
 pub mod tpu;
 pub mod tpu_forwarder;

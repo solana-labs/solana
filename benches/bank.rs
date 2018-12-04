@@ -7,9 +7,9 @@ extern crate test;
 
 use solana::bank::*;
 use solana::mint::Mint;
-use solana::system_transaction::SystemTransaction;
 use solana_sdk::hash::hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use test::Bencher;
 

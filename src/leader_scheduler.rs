@@ -15,7 +15,7 @@ use solana_sdk::vote_program::{self, Vote, VoteProgram};
 use solana_sdk::vote_transaction::VoteTransaction;
 use std::collections::HashSet;
 use std::io::Cursor;
-use system_transaction::SystemTransaction;
+use solana_sdk::system_transaction::SystemTransaction;
 
 pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = 1000;
 pub const DEFAULT_LEADER_ROTATION_INTERVAL: u64 = 100;

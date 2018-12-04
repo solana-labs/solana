@@ -26,7 +26,7 @@ use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{error, fmt, mem};
-use system_transaction::SystemTransaction;
+use solana_sdk::system_transaction::SystemTransaction;
 use thin_client::poll_gossip_for_leader;
 
 const PLATFORM_SECTION_C: &str = ".text.entrypoint";
