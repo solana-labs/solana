@@ -281,7 +281,6 @@ impl Blob {
         let bytes = &data[..data_len];
         blob.data[..data_len].copy_from_slice(bytes);
         blob.meta.size = blob.data_size().expect("Expected valid data size") as usize;
-        println!("new() size: {}, data_len: {}", blob.meta.size, data_len);
         blob
     }
 

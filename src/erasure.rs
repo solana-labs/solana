@@ -1,7 +1,7 @@
 // Support erasure coding
 use db_ledger::DbLedger;
 use db_window::{find_missing_coding_indexes, find_missing_data_indexes};
-use packet::{Blob, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE};
+use packet::{Blob, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE, BLOB_SIZE};
 use result::{Error, Result};
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
@@ -532,7 +532,7 @@ fn categorize_blob(
 ) -> Result<()> {
     match get_blob_result {
         Some(b) => {
-            if b.len() <= BLOB_HEADER_SIZE {
+            if b.len() <= BLOB_HEADER_SIZE || b.len() > BLOB_SIZE {
                 return Err(Error::ErasureError(ErasureError::InvalidBlobData));
             }
             blobs.push(Arc::new(RwLock::new(Blob::new(&b))));
