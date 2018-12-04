@@ -1762,6 +1762,7 @@ dependencies = [
  "sha2 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "socket2 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-bpfloader 0.11.0",
+ "solana-budget-program 0.11.0",
  "solana-drone 0.11.0",
  "solana-erc20 0.11.0",
  "solana-jsonrpc-core 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1804,6 +1805,19 @@ dependencies = [
  "serde 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-sdk 0.11.0",
  "solana_rbpf 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "solana-budget-program"
+version = "0.11.0"
+dependencies = [
+ "bincode 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "env_logger 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-sdk 0.11.0",
 ]
 
 [[package]]
@@ -1949,6 +1963,7 @@ dependencies = [
  "bincode 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "bs58 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "generic-array 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "ring 0.13.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1987,6 +2002,7 @@ name = "solana-vote-program"
 version = "0.11.0"
 dependencies = [
  "bincode 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "env_logger 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.80 (registry+https://github.com/rust-lang/crates.io-index)",

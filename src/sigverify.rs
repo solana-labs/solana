@@ -323,9 +323,9 @@ pub fn make_packet_from_transaction(tx: Transaction) -> Packet {
 #[cfg(test)]
 mod tests {
     use bincode::serialize;
-    use budget_program;
     use packet::{Packet, SharedPackets};
     use sigverify;
+    use solana_sdk::budget_program;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;

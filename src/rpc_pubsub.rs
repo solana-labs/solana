@@ -246,10 +246,10 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use budget_program;
-    use budget_transaction::BudgetTransaction;
     use jsonrpc_core::futures::sync::mpsc;
     use mint::Mint;
+    use solana_sdk::budget_program;
+    use solana_sdk::budget_transaction::BudgetTransaction;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
     use std::net::{IpAddr, Ipv4Addr};

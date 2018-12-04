@@ -272,9 +272,9 @@ pub fn reconstruct_entries_from_blobs(blobs: Vec<SharedBlob>) -> Result<(Vec<Ent
 #[cfg(test)]
 mod tests {
     use super::*;
-    use budget_transaction::BudgetTransaction;
     use chrono::prelude::*;
     use entry::Entry;
+    use solana_sdk::budget_transaction::BudgetTransaction;
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
