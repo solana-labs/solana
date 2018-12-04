@@ -29,18 +29,31 @@ instruction is invalid, any changes made within the transaction are discarded.
 ## Storing State between Transactions
 
 If the program needs to store state between transactions, it does so using
-*accounts*. Solana supports several kinds of accounts:
+*accounts*. Accounts are similar to files in operating systems such as Linux.
+Like files, an account may hold arbitrary data and that data persists beyond
+the liftime of a program. Also like files, an account includes metadata that
+tells the runtime who is allowed to access the data and how. Unlike files, the
+account includes metadata for the liftime of the file. That lifetime is
+expressed in "tokens", which is a number of fractional native tokens, called
+*lamports*. Accounts are held in validator memory and pay "rent" to stay there.
+Each fullnode periodically scan all accounts and collects rent. Any account
+that drops to zero lamports is purged.
 
-1. Executable
-2. Owned by a client
-3. Owned by a program
-4. Credit-only
+If an account is marked "executable", it will only be used by a *loader* to run
+programs. For example, programs compiled to BPF are marked executable and
+loaded by the BPF loader. No program is allowed to modify the contents of an
+executable account.
 
-All accounts are identified by public keys and may hold arbitrary data.  When
-the client sends transactions to programs, it requests access to accounts using
-those keys. The runtime loads the account and passes it to the program.  The
-runtime also ensures accounts aren't written to if not owned by the client or
-program. Any writes to credit-only accounts are discarded unless the write was
-to credit tokens. Any user may credit other accounts tokens, regardless of
-account permission.
+Accounts also include "owner" metadata. The owner is the program ID. The
+runtime grants the program write access to the account if its ID is the account
+owner. If an account is not owned by a program, the program is permitted to
+read its data and credit the account. There's one exception, however, accounts
+owned by the `SystemProgram` may be written to and debited if the account
+holder signed the transaction.
 
+Accounts are identified by client-generated public keys. When the client sends
+transactions to programs, it requests access to accounts using those keys. The
+runtime loads the account and passes it to the program. After the program
+finishes executing, the runtime uses the account metadata to verify that none
+of the access rules were violated, and if so, discards those changes, and marks
+the transaction as failed.
