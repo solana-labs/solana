@@ -7,13 +7,13 @@ use bank::Bank;
 use service::Service;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::timing;
+use solana_sdk::vote_program::{self, VoteProgram};
 use std::result;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
-use solana_sdk::vote_program::{self, VoteProgram};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum FinalityError {
@@ -136,16 +136,17 @@ pub mod tests {
     use bank::Bank;
     use bincode::serialize;
     use compute_leader_finality_service::ComputeLeaderFinalityService;
+    use create_vote_account::*;
     use logger;
     use mint::Mint;
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
+    use solana_sdk::vote_program::Vote;
+    use solana_sdk::vote_transaction::VoteTransaction;
     use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;
-    use solana_sdk::vote_program::Vote;
-    use vote_transaction::{create_vote_account, VoteTransaction};
 
     #[test]
     fn test_compute_finality() {

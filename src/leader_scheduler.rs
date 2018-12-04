@@ -11,11 +11,11 @@ use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
+use solana_sdk::vote_program::{self, Vote, VoteProgram};
+use solana_sdk::vote_transaction::VoteTransaction;
 use std::collections::HashSet;
 use std::io::Cursor;
 use system_transaction::SystemTransaction;
-use solana_sdk::vote_program::{self, Vote, VoteProgram};
-use vote_transaction::VoteTransaction;
 
 pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = 1000;
 pub const DEFAULT_LEADER_ROTATION_INTERVAL: u64 = 100;
@@ -506,6 +506,7 @@ pub fn make_active_set_entries(
 #[cfg(test)]
 mod tests {
     use bank::Bank;
+    use create_vote_account::*;
     use leader_scheduler::{
         LeaderScheduler, LeaderSchedulerConfig, DEFAULT_BOOTSTRAP_HEIGHT,
         DEFAULT_LEADER_ROTATION_INTERVAL, DEFAULT_SEED_ROTATION_INTERVAL,
@@ -515,11 +516,11 @@ mod tests {
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
+    use solana_sdk::vote_program::Vote;
+    use solana_sdk::vote_transaction::VoteTransaction;
     use std::collections::HashSet;
     use std::hash::Hash as StdHash;
     use std::iter::FromIterator;
-    use solana_sdk::vote_program::Vote;
-    use vote_transaction::{create_vote_account, VoteTransaction};
 
     fn to_hashset_owned<T>(slice: &[T]) -> HashSet<T>
     where

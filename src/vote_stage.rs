@@ -15,7 +15,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
 use streamer::BlobSender;
 use solana_sdk::vote_program::Vote;
-use vote_transaction::VoteTransaction;
+use solana_sdk::vote_transaction::VoteTransaction;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum VoteError {
