@@ -2,7 +2,6 @@ extern crate bincode;
 extern crate elf;
 extern crate serde_derive;
 extern crate solana;
-#[cfg(feature = "bpf_c")]
 extern crate solana_sdk;
 
 use solana::bank::Bank;

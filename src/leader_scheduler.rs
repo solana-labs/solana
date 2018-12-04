@@ -14,7 +14,7 @@ use solana_sdk::transaction::Transaction;
 use std::collections::HashSet;
 use std::io::Cursor;
 use system_transaction::SystemTransaction;
-use vote_program::{self, Vote, VoteProgram};
+use solana_sdk::vote_program::{self, Vote, VoteProgram};
 use vote_transaction::VoteTransaction;
 
 pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = 1000;
@@ -518,7 +518,7 @@ mod tests {
     use std::collections::HashSet;
     use std::hash::Hash as StdHash;
     use std::iter::FromIterator;
-    use vote_program::Vote;
+    use solana_sdk::vote_program::Vote;
     use vote_transaction::{create_vote_account, VoteTransaction};
 
     fn to_hashset_owned<T>(slice: &[T]) -> HashSet<T>

@@ -41,6 +41,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 use system_transaction::SystemTransaction;
 use tokio::prelude::Future;
+use solana_sdk::vote_program;
 
 /// The number of most recent `last_id` values that the bank will track the signatures
 /// of. Once the bank discards a `last_id`, it will reject any transactions that use
@@ -411,8 +412,22 @@ impl Bank {
         accounts.store(&system_program::id(), &system_program_account);
     }
 
+    fn add_vote_program(&self) {
+        let mut accounts = self.accounts.write().unwrap();
+
+        let vote_program_account = Account {
+            tokens: 1,
+            owner: vote_program::id(),
+            userdata: b"solana_vote_program".to_vec(),
+            executable: true,
+            loader: native_loader::id(),
+        };
+        accounts.store(&vote_program::id(), &vote_program_account);
+    }
+
     fn add_builtin_programs(&self) {
         self.add_system_program();
+        self.add_vote_program();
         let mut accounts = self.accounts.write().unwrap();
 
         // Bpf Loader
@@ -1406,7 +1421,6 @@ mod tests {
     use storage_program;
     use system_transaction::SystemTransaction;
     use tokio::prelude::{Async, Stream};
-    use vote_program;
 
     #[test]
     fn test_bank_new() {

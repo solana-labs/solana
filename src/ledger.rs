@@ -20,7 +20,7 @@ use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};
 use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::Path;
-use vote_program::Vote;
+use solana_sdk::vote_program::Vote;
 use vote_transaction::VoteTransaction;
 
 //
@@ -709,7 +709,7 @@ mod tests {
     use solana_sdk::transaction::Transaction;
     use std;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    use vote_program::Vote;
+    use solana_sdk::vote_program::Vote;
 
     #[test]
     fn test_verify_slice() {

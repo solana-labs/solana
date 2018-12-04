@@ -12,9 +12,11 @@ pub mod system_program;
 pub mod timing;
 pub mod token_program;
 pub mod transaction;
+pub mod vote_program;
 
 extern crate bincode;
 extern crate bs58;
+extern crate byteorder;
 extern crate generic_array;
 extern crate log;
 extern crate ring;

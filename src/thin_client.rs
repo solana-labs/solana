@@ -439,7 +439,7 @@ mod tests {
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
     use std::fs::remove_dir_all;
-    use vote_program::VoteProgram;
+    use solana_sdk::vote_program::VoteProgram;
     use vote_transaction::VoteTransaction;
 
     #[test]

@@ -18,7 +18,7 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
-use vote_program;
+use solana_sdk::vote_program;
 
 // Block of hash answers to validate against
 // Vec of [ledger blocks] x [keys]
@@ -278,7 +278,7 @@ mod tests {
     use storage_stage::StorageState;
     use storage_stage::NUM_IDENTITIES;
     use storage_stage::{get_identity_index_from_pubkey, StorageStage};
-    use vote_program::Vote;
+    use solana_sdk::vote_program::Vote;
     use vote_transaction::VoteTransaction;
 
     #[test]

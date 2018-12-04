@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::thread::sleep;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
-use vote_program::{self, VoteProgram};
+use solana_sdk::vote_program::{self, VoteProgram};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum FinalityError {
@@ -144,7 +144,7 @@ pub mod tests {
     use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;
-    use vote_program::Vote;
+    use solana_sdk::vote_program::Vote;
     use vote_transaction::{create_vote_account, VoteTransaction};
 
     #[test]
