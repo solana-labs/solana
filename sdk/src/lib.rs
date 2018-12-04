@@ -10,6 +10,7 @@ pub mod signature;
 pub mod system_instruction;
 pub mod system_program;
 pub mod timing;
+pub mod token_program;
 pub mod transaction;
 
 extern crate bincode;
