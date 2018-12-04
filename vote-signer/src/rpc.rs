@@ -4,11 +4,12 @@ use bs58;
 use jsonrpc_core::*;
 use jsonrpc_http_server::*;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Signature;
+use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+use std::collections::HashMap;
 use std::mem;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
 
@@ -32,7 +33,6 @@ impl VoteSignerRpcService {
                 let server =
                     ServerBuilder::with_meta_extractor(io, move |_req: &hyper::Request<hyper::Body>| Meta {
                         request_processor: request_processor.clone(),
-                        rpc_addr,
                     }).threads(4)
                         .cors(DomainsValidation::AllowOnly(vec![
                             AccessControlAllowOrigin::Any,
@@ -69,7 +69,6 @@ impl VoteSignerRpcService {
 #[derive(Clone)]
 pub struct Meta {
     pub request_processor: VoteSignRequestProcessor,
-    pub rpc_addr: SocketAddr,
 }
 impl Metadata for Meta {}
 
@@ -78,13 +77,13 @@ build_rpc_trait! {
         type Metadata;
 
         #[rpc(meta, name = "registerNode")]
-        fn register(&self, Self::Metadata, String) -> Result<Pubkey>;
+        fn register(&self, Self::Metadata, String, Signature, Vec<u8>) -> Result<Pubkey>;
 
         #[rpc(meta, name = "signVote")]
-        fn sign(&self, Self::Metadata, String) -> Result<Signature>;
+        fn sign(&self, Self::Metadata, String, Signature, Vec<u8>) -> Result<Signature>;
 
         #[rpc(meta, name = "deregisterNode")]
-        fn deregister(&self, Self::Metadata, String) -> Result<()>;
+        fn deregister(&self, Self::Metadata, String, Signature, Vec<u8>) -> Result<()>;
     }
 }
 
@@ -92,49 +91,102 @@ pub struct VoteSignerRpcImpl;
 impl VoteSignerRpc for VoteSignerRpcImpl {
     type Metadata = Meta;
 
-    fn register(&self, meta: Self::Metadata, id: String) -> Result<Pubkey> {
+    fn register(
+        &self,
+        meta: Self::Metadata,
+        id: String,
+        sig: Signature,
+        signed_msg: Vec<u8>,
+    ) -> Result<Pubkey> {
         info!("register rpc request received: {:?}", id);
-        let pubkey = get_pubkey(id)?;
+        let pubkey = verify_pubkey(id)?;
+        verify_signature(&sig, &pubkey, &signed_msg)?;
         meta.request_processor.register(pubkey)
     }
 
-    fn sign(&self, meta: Self::Metadata, id: String) -> Result<Signature> {
+    fn sign(
+        &self,
+        meta: Self::Metadata,
+        id: String,
+        sig: Signature,
+        signed_msg: Vec<u8>,
+    ) -> Result<Signature> {
         info!("sign rpc request received: {:?}", id);
-        let pubkey = get_pubkey(id)?;
-        meta.request_processor.sign(pubkey)
+        let pubkey = verify_pubkey(id)?;
+        verify_signature(&sig, &pubkey, &signed_msg)?;
+        meta.request_processor.sign(pubkey, &signed_msg)
     }
 
-    fn deregister(&self, meta: Self::Metadata, id: String) -> Result<()> {
+    fn deregister(
+        &self,
+        meta: Self::Metadata,
+        id: String,
+        sig: Signature,
+        signed_msg: Vec<u8>,
+    ) -> Result<()> {
         info!("deregister rpc request received: {:?}", id);
-        let pubkey = get_pubkey(id)?;
+        let pubkey = verify_pubkey(id)?;
+        verify_signature(&sig, &pubkey, &signed_msg)?;
         meta.request_processor.deregister(pubkey)
     }
 }
 
-#[derive(Clone, Default)]
-pub struct VoteSignRequestProcessor {}
+fn verify_signature(sig: &Signature, pubkey: &Pubkey, msg: &[u8]) -> Result<()> {
+    if sig.verify(pubkey.as_ref(), msg) {
+        Ok(())
+    } else {
+        Err(Error::invalid_request())
+    }
+}
+
+#[derive(Clone)]
+pub struct VoteSignRequestProcessor {
+    nodes: Arc<RwLock<HashMap<Pubkey, Keypair>>>,
+}
 impl VoteSignRequestProcessor {
     /// Process JSON-RPC request items sent via JSON-RPC.
     pub fn register(&self, pubkey: Pubkey) -> Result<Pubkey> {
-        Ok(pubkey)
+        {
+            if let Some(voting_keypair) = self.nodes.read().unwrap().get(&pubkey) {
+                return Ok(voting_keypair.pubkey());
+            }
+        }
+        let voting_keypair = Keypair::new();
+        let voting_pubkey = voting_keypair.pubkey();
+        self.nodes.write().unwrap().insert(pubkey, voting_keypair);
+        Ok(voting_pubkey)
     }
-    pub fn sign(&self, _pubkey: Pubkey) -> Result<Signature> {
-        let signature = [0u8; 16];
-        Ok(Signature::new(&signature))
+    pub fn sign(&self, pubkey: Pubkey, msg: &[u8]) -> Result<Signature> {
+        match self.nodes.read().unwrap().get(&pubkey) {
+            Some(voting_keypair) => {
+                let sig = Signature::new(&voting_keypair.sign(&msg).as_ref());
+                Ok(sig)
+            }
+            None => Err(Error::invalid_request()),
+        }
     }
-    pub fn deregister(&self, _pubkey: Pubkey) -> Result<()> {
+    pub fn deregister(&self, pubkey: Pubkey) -> Result<()> {
+        self.nodes.write().unwrap().remove(&pubkey);
         Ok(())
     }
 }
 
-fn get_pubkey(input: String) -> Result<Pubkey> {
+impl Default for VoteSignRequestProcessor {
+    fn default() -> Self {
+        VoteSignRequestProcessor {
+            nodes: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+}
+
+fn verify_pubkey(input: String) -> Result<Pubkey> {
     let pubkey_vec = bs58::decode(input).into_vec().map_err(|err| {
-        info!("get_pubkey: invalid input: {:?}", err);
+        info!("verify_pubkey: invalid input: {:?}", err);
         Error::invalid_request()
     })?;
     if pubkey_vec.len() != mem::size_of::<Pubkey>() {
         info!(
-            "get_pubkey: invalid pubkey_vec length: {}",
+            "verify_pubkey: invalid pubkey_vec length: {}",
             pubkey_vec.len()
         );
         Err(Error::invalid_request())
@@ -144,4 +196,308 @@ fn get_pubkey(input: String) -> Result<Pubkey> {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use super::*;
+    use jsonrpc_core::Response;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
+
+    fn start_rpc_handler() -> (MetaIoHandler<Meta>, Meta) {
+        let request_processor = VoteSignRequestProcessor::default();
+        let mut io = MetaIoHandler::default();
+        let rpc = VoteSignerRpcImpl;
+        io.extend_with(rpc.to_delegate());
+        let meta = Meta { request_processor };
+        (io, meta)
+    }
+
+    #[test]
+    fn test_rpc_register_node() {
+        let (io, meta) = start_rpc_handler();
+
+        let node_keypair = Keypair::new();
+        let node_pubkey = node_keypair.pubkey();
+        let msg = "This is a test";
+        let sig = Signature::new(&node_keypair.sign(msg.as_bytes()).as_ref());
+        let req = json!({
+           "jsonrpc": "2.0",
+           "id": 1,
+           "method": "registerNode",
+           "params": [node_pubkey.to_string(), sig, msg.as_bytes()],
+        });
+        let res = io.handle_request_sync(&req.to_string(), meta);
+
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+
+        if let Response::Single(out) = result {
+            if let Output::Success(succ) = out {
+                assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
+                assert_eq!(succ.id, Id::Num(1));
+                assert!(succ.result.is_array());
+                assert_eq!(
+                    succ.result.as_array().unwrap().len(),
+                    mem::size_of::<Pubkey>()
+                );
+            } else {
+                assert!(false);
+            }
+        } else {
+            assert!(false);
+        }
+    }
+
+    #[test]
+    fn test_rpc_register_node_invalid_sig() {
+        let (io, meta) = start_rpc_handler();
+
+        let node_keypair = Keypair::new();
+        let node_pubkey = node_keypair.pubkey();
+        let msg = "This is a test";
+        let msg1 = "This is a Test1";
+        let sig = Signature::new(&node_keypair.sign(msg.as_bytes()).as_ref());
+        let req = json!({
+           "jsonrpc": "2.0",
+           "id": 1,
+           "method": "registerNode",
+           "params": [node_pubkey.to_string(), sig, msg1.as_bytes()],
+        });
+        let res = io.handle_request_sync(&req.to_string(), meta);
+
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+
+        if let Response::Single(out) = result {
+            if let Output::Failure(succ) = out {
+                assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
+                assert_eq!(succ.id, Id::Num(1));
+            } else {
+                assert!(false);
+            }
+        } else {
+            assert!(false);
+        }
+    }
+
+    #[test]
+    fn test_rpc_deregister_node() {
+        let (io, meta) = start_rpc_handler();
+
+        let node_keypair = Keypair::new();
+        let node_pubkey = node_keypair.pubkey();
+        let msg = "This is a test";
+        let sig = Signature::new(&node_keypair.sign(msg.as_bytes()).as_ref());
+        let req = json!({
+           "jsonrpc": "2.0",
+           "id": 1,
+           "method": "deregisterNode",
+           "params": [node_pubkey.to_string(), sig, msg.as_bytes()],
+        });
+        let res = io.handle_request_sync(&req.to_string(), meta);
+
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+
+        if let Response::Single(out) = result {
+            if let Output::Success(succ) = out {
+                assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
+                assert_eq!(succ.id, Id::Num(1));
+            } else {
+                assert!(false);
+            }
+        } else {
+            assert!(false);
+        }
+    }
+
+    #[test]
+    fn test_rpc_deregister_node_invalid_sig() {
+        let (io, meta) = start_rpc_handler();
+
+        let node_keypair = Keypair::new();
+        let node_pubkey = node_keypair.pubkey();
+        let msg = "This is a test";
+        let msg1 = "This is a Test1";
+        let sig = Signature::new(&node_keypair.sign(msg.as_bytes()).as_ref());
+        let req = json!({
+           "jsonrpc": "2.0",
+           "id": 1,
+           "method": "deregisterNode",
+           "params": [node_pubkey.to_string(), sig, msg1.as_bytes()],
+        });
+        let res = io.handle_request_sync(&req.to_string(), meta);
+
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+
+        if let Response::Single(out) = result {
+            if let Output::Failure(succ) = out {
+                assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
+                assert_eq!(succ.id, Id::Num(1));
+            } else {
+                assert!(false);
+            }
+        } else {
+            assert!(false);
+        }
+    }
+
+    #[test]
+    fn test_rpc_sign_vote() {
+        let (io, meta) = start_rpc_handler();
+
+        let node_keypair = Keypair::new();
+        let node_pubkey = node_keypair.pubkey();
+        let msg = "This is a test";
+        let sig = Signature::new(&node_keypair.sign(msg.as_bytes()).as_ref());
+
+        let req = json!({
+           "jsonrpc": "2.0",
+           "id": 1,
+           "method": "registerNode",
+           "params": [node_pubkey.to_string(), sig, msg.as_bytes()],
+        });
+        let _res = io.handle_request_sync(&req.to_string(), meta.clone());
+
+        let req = json!({
+           "jsonrpc": "2.0",
+           "id": 1,
+           "method": "signVote",
+           "params": [node_pubkey.to_string(), sig, msg.as_bytes()],
+        });
+        let res = io.handle_request_sync(&req.to_string(), meta);
+
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+
+        if let Response::Single(out) = result {
+            if let Output::Success(succ) = out {
+                assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
+                assert_eq!(succ.id, Id::Num(1));
+            } else {
+                assert!(false);
+            }
+        } else {
+            assert!(false);
+        }
+    }
+
+    #[test]
+    fn test_rpc_sign_vote_before_register() {
+        let (io, meta) = start_rpc_handler();
+
+        let node_keypair = Keypair::new();
+        let node_pubkey = node_keypair.pubkey();
+        let msg = "This is a test";
+        let sig = Signature::new(&node_keypair.sign(msg.as_bytes()).as_ref());
+        let req = json!({
+           "jsonrpc": "2.0",
+           "id": 1,
+           "method": "signVote",
+           "params": [node_pubkey.to_string(), sig, msg.as_bytes()],
+        });
+        let res = io.handle_request_sync(&req.to_string(), meta);
+
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+
+        if let Response::Single(out) = result {
+            if let Output::Failure(succ) = out {
+                assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
+                assert_eq!(succ.id, Id::Num(1));
+            } else {
+                assert!(false);
+            }
+        } else {
+            assert!(false);
+        }
+    }
+
+    #[test]
+    fn test_rpc_sign_vote_after_deregister() {
+        let (io, meta) = start_rpc_handler();
+
+        let node_keypair = Keypair::new();
+        let node_pubkey = node_keypair.pubkey();
+        let msg = "This is a test";
+        let sig = Signature::new(&node_keypair.sign(msg.as_bytes()).as_ref());
+
+        let req = json!({
+           "jsonrpc": "2.0",
+           "id": 1,
+           "method": "registerNode",
+           "params": [node_pubkey.to_string(), sig, msg.as_bytes()],
+        });
+        let _res = io.handle_request_sync(&req.to_string(), meta.clone());
+
+        let req = json!({
+           "jsonrpc": "2.0",
+           "id": 1,
+           "method": "deregisterNode",
+           "params": [node_pubkey.to_string(), sig, msg.as_bytes()],
+        });
+        let _res = io.handle_request_sync(&req.to_string(), meta.clone());
+
+        let req = json!({
+           "jsonrpc": "2.0",
+           "id": 1,
+           "method": "signVote",
+           "params": [node_pubkey.to_string(), sig, msg.as_bytes()],
+        });
+        let res = io.handle_request_sync(&req.to_string(), meta);
+
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+
+        if let Response::Single(out) = result {
+            if let Output::Failure(succ) = out {
+                assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
+                assert_eq!(succ.id, Id::Num(1));
+            } else {
+                assert!(false);
+            }
+        } else {
+            assert!(false);
+        }
+    }
+
+    #[test]
+    fn test_rpc_sign_vote_invalid_sig() {
+        let (io, meta) = start_rpc_handler();
+
+        let node_keypair = Keypair::new();
+        let node_pubkey = node_keypair.pubkey();
+        let msg = "This is a test";
+        let msg1 = "This is a Test";
+        let sig = Signature::new(&node_keypair.sign(msg.as_bytes()).as_ref());
+
+        let req = json!({
+           "jsonrpc": "2.0",
+           "id": 1,
+           "method": "registerNode",
+           "params": [node_pubkey.to_string(), sig, msg.as_bytes()],
+        });
+        let _res = io.handle_request_sync(&req.to_string(), meta.clone());
+
+        let req = json!({
+           "jsonrpc": "2.0",
+           "id": 1,
+           "method": "signVote",
+           "params": [node_pubkey.to_string(), sig, msg1.as_bytes()],
+        });
+        let res = io.handle_request_sync(&req.to_string(), meta);
+
+        let result: Response = serde_json::from_str(&res.expect("actual response"))
+            .expect("actual response deserialization");
+
+        if let Response::Single(out) = result {
+            if let Output::Failure(succ) = out {
+                assert_eq!(succ.jsonrpc.unwrap(), Version::V2);
+                assert_eq!(succ.id, Id::Num(1));
+            } else {
+                assert!(false);
+            }
+        } else {
+            assert!(false);
+        }
+    }
+}
