@@ -6,7 +6,6 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_program;
 use solana_sdk::transaction::Transaction;
 use storage_program;
-use vote_program;
 
 /// Reasons the runtime might have rejected a transaction.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -16,9 +15,7 @@ pub enum RuntimeError {
 }
 
 pub fn is_legacy_program(program_id: &Pubkey) -> bool {
-    budget_program::check_id(program_id)
-        || storage_program::check_id(program_id)
-        || vote_program::check_id(program_id)
+    budget_program::check_id(program_id) || storage_program::check_id(program_id)
 }
 
 /// Process an instruction
@@ -39,8 +36,6 @@ fn process_instruction(
             budget_program::process(&tx, instruction_index, program_accounts)?;
         } else if storage_program::check_id(&program_id) {
             storage_program::process(&tx, instruction_index, program_accounts)?;
-        } else if vote_program::check_id(&program_id) {
-            vote_program::process(&tx, instruction_index, program_accounts)?;
         } else {
             unreachable!();
         };

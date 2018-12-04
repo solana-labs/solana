@@ -13,7 +13,7 @@ use solana_sdk::signature::KeypairUtil;
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::system_program;
 use solana_sdk::transaction::{Instruction, Transaction};
-use vote_program::{self, Vote, VoteInstruction};
+use solana_sdk::vote_program::{self, Vote, VoteInstruction};
 
 pub trait VoteTransaction {
     fn vote_new(vote_account: &Keypair, vote: Vote, last_id: Hash, fee: u64) -> Self;

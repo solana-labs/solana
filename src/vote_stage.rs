@@ -14,7 +14,7 @@ use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
 use streamer::BlobSender;
-use vote_program::Vote;
+use solana_sdk::vote_program::Vote;
 use vote_transaction::VoteTransaction;
 
 #[derive(Debug, PartialEq, Eq)]
