@@ -1,13 +1,10 @@
 //! budget program
 use bincode::{self, deserialize, serialize_into, serialized_size};
-use budget_expr::BudgetExpr;
-use budget_instruction::Instruction;
 use chrono::prelude::{DateTime, Utc};
-use payment_plan::Witness;
-use solana_sdk::account::Account;
-use solana_sdk::native_program::ProgramError;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::transaction::Transaction;
+use solana_sdk::account::KeyedAccount;
+use solana_sdk::budget_expr::BudgetExpr;
+use solana_sdk::budget_instruction::Instruction;
+use solana_sdk::payment_plan::Witness;
 use std::io;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -31,26 +28,11 @@ pub struct BudgetProgram {
     pub pending_budget: Option<BudgetExpr>,
 }
 
-const BUDGET_PROGRAM_ID: [u8; 32] = [
-    129, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0,
-];
-
-pub fn id() -> Pubkey {
-    Pubkey::new(&BUDGET_PROGRAM_ID)
-}
-
-pub fn check_id(program_id: &Pubkey) -> bool {
-    program_id.as_ref() == BUDGET_PROGRAM_ID
-}
-
 fn apply_debits(
-    tx: &Transaction,
-    instruction_index: usize,
-    accounts: &mut [&mut Account],
+    keyed_accounts: &mut [KeyedAccount],
     instruction: &Instruction,
 ) -> Result<(), BudgetError> {
-    if !accounts[0].userdata.is_empty() {
+    if !keyed_accounts[0].account.userdata.is_empty() {
         trace!("source is pending");
         return Err(BudgetError::SourceIsPendingContract);
     }
@@ -58,25 +40,26 @@ fn apply_debits(
         Instruction::NewBudget(expr) => {
             let expr = expr.clone();
             if let Some(payment) = expr.final_payment() {
-                accounts[1].tokens += payment.tokens;
+                keyed_accounts[1].account.tokens += payment.tokens;
                 Ok(())
             } else {
-                let existing = BudgetProgram::deserialize(&accounts[1].userdata).ok();
+                let existing = BudgetProgram::deserialize(&keyed_accounts[1].account.userdata).ok();
                 if Some(true) == existing.map(|x| x.initialized) {
                     trace!("contract already exists");
                     Err(BudgetError::ContractAlreadyExists)
                 } else {
                     let mut program = BudgetProgram::default();
                     program.pending_budget = Some(expr);
-                    accounts[1].tokens += accounts[0].tokens;
-                    accounts[0].tokens = 0;
+                    keyed_accounts[1].account.tokens += keyed_accounts[0].account.tokens;
+                    keyed_accounts[0].account.tokens = 0;
                     program.initialized = true;
-                    program.serialize(&mut accounts[1].userdata)
+                    program.serialize(&mut keyed_accounts[1].account.userdata)
                 }
             }
         }
         Instruction::ApplyTimestamp(dt) => {
-            if let Ok(mut program) = BudgetProgram::deserialize(&accounts[1].userdata) {
+            if let Ok(mut program) = BudgetProgram::deserialize(&keyed_accounts[1].account.userdata)
+            {
                 if !program.is_pending() {
                     Err(BudgetError::ContractNotPending)
                 } else if !program.initialized {
@@ -84,16 +67,17 @@ fn apply_debits(
                     Err(BudgetError::UninitializedContract)
                 } else {
                     trace!("apply timestamp");
-                    program.apply_timestamp(tx, instruction_index, accounts, *dt)?;
+                    program.apply_timestamp(keyed_accounts, *dt)?;
                     trace!("apply timestamp committed");
-                    program.serialize(&mut accounts[1].userdata)
+                    program.serialize(&mut keyed_accounts[1].account.userdata)
                 }
             } else {
                 Err(BudgetError::UninitializedContract)
             }
         }
         Instruction::ApplySignature => {
-            if let Ok(mut program) = BudgetProgram::deserialize(&accounts[1].userdata) {
+            if let Ok(mut program) = BudgetProgram::deserialize(&keyed_accounts[1].account.userdata)
+            {
                 if !program.is_pending() {
                     Err(BudgetError::ContractNotPending)
                 } else if !program.initialized {
@@ -101,9 +85,9 @@ fn apply_debits(
                     Err(BudgetError::UninitializedContract)
                 } else {
                     trace!("apply signature");
-                    program.apply_signature(tx, instruction_index, accounts)?;
+                    program.apply_signature(keyed_accounts)?;
                     trace!("apply signature committed");
-                    program.serialize(&mut accounts[1].userdata)
+                    program.serialize(&mut keyed_accounts[1].account.userdata)
                 }
             } else {
                 Err(BudgetError::UninitializedContract)
@@ -113,36 +97,24 @@ fn apply_debits(
 }
 
 /// Budget DSL contract interface
-/// * tx - the transaction
 /// * accounts[0] - The source of the tokens
 /// * accounts[1] - The contract context.  Once the contract has been completed, the tokens can
 /// be spent from this account .
 pub fn process_instruction(
-    tx: &Transaction,
-    instruction_index: usize,
-    accounts: &mut [&mut Account],
+    keyed_accounts: &mut [KeyedAccount],
+    data: &[u8],
 ) -> Result<(), BudgetError> {
-    if let Ok(instruction) = deserialize(tx.userdata(instruction_index)) {
+    if let Ok(instruction) = deserialize(data) {
         trace!("process_instruction: {:?}", instruction);
-        apply_debits(tx, instruction_index, accounts, &instruction)
+        apply_debits(keyed_accounts, &instruction)
     } else {
-        info!(
-            "Invalid transaction userdata: {:?}",
-            tx.userdata(instruction_index)
-        );
+        info!("Invalid transaction userdata: {:?}", data);
         Err(BudgetError::UserdataDeserializeFailure)
     }
 }
 
-pub fn process(
-    tx: &Transaction,
-    instruction_index: usize,
-    accounts: &mut [&mut Account],
-) -> std::result::Result<(), ProgramError> {
-    process_instruction(&tx, instruction_index, accounts).map_err(|_| ProgramError::GenericError)
-}
-
-//TODO the contract needs to provide a "get_balance" introspection call of the userdata
+// TODO: Re-instate budget_program special case in bank.rs?
+/*
 pub fn get_balance(account: &Account) -> u64 {
     if let Ok(program) = deserialize(&account.userdata) {
         let program: BudgetProgram = program;
@@ -155,6 +127,7 @@ pub fn get_balance(account: &Account) -> u64 {
         account.tokens
     }
 }
+*/
 
 impl BudgetProgram {
     fn is_pending(&self) -> bool {
@@ -162,15 +135,10 @@ impl BudgetProgram {
     }
     /// Process a Witness Signature. Any payment plans waiting on this signature
     /// will progress one step.
-    fn apply_signature(
-        &mut self,
-        tx: &Transaction,
-        instruction_index: usize,
-        accounts: &mut [&mut Account],
-    ) -> Result<(), BudgetError> {
+    fn apply_signature(&mut self, keyed_accounts: &mut [KeyedAccount]) -> Result<(), BudgetError> {
         let mut final_payment = None;
         if let Some(ref mut expr) = self.pending_budget {
-            let key = match tx.signer_key(instruction_index, 0) {
+            let key = match keyed_accounts[0].signer_key() {
                 None => return Err(BudgetError::UnsignedKey),
                 Some(key) => key,
             };
@@ -179,13 +147,13 @@ impl BudgetProgram {
         }
 
         if let Some(payment) = final_payment {
-            if Some(&payment.to) != tx.key(instruction_index, 2) {
+            if &payment.to != keyed_accounts[2].unsigned_key() {
                 trace!("destination missing");
                 return Err(BudgetError::DestinationMissing);
             }
             self.pending_budget = None;
-            accounts[1].tokens -= payment.tokens;
-            accounts[2].tokens += payment.tokens;
+            keyed_accounts[1].account.tokens -= payment.tokens;
+            keyed_accounts[2].account.tokens += payment.tokens;
         }
         Ok(())
     }
@@ -194,16 +162,14 @@ impl BudgetProgram {
     /// will progress one step.
     fn apply_timestamp(
         &mut self,
-        tx: &Transaction,
-        instruction_index: usize,
-        accounts: &mut [&mut Account],
+        keyed_accounts: &mut [KeyedAccount],
         dt: DateTime<Utc>,
     ) -> Result<(), BudgetError> {
         // Check to see if any timelocked transactions can be completed.
         let mut final_payment = None;
 
         if let Some(ref mut expr) = self.pending_budget {
-            let key = match tx.signer_key(instruction_index, 0) {
+            let key = match keyed_accounts[0].signer_key() {
                 None => return Err(BudgetError::UnsignedKey),
                 Some(key) => key,
             };
@@ -212,13 +178,13 @@ impl BudgetProgram {
         }
 
         if let Some(payment) = final_payment {
-            if Some(&payment.to) != tx.key(instruction_index, 2) {
+            if &payment.to != keyed_accounts[2].unsigned_key() {
                 trace!("destination missing");
                 return Err(BudgetError::DestinationMissing);
             }
             self.pending_budget = None;
-            accounts[1].tokens -= payment.tokens;
-            accounts[2].tokens += payment.tokens;
+            keyed_accounts[1].account.tokens -= payment.tokens;
+            keyed_accounts[2].account.tokens += payment.tokens;
         }
         Ok(())
     }
@@ -259,22 +225,40 @@ impl BudgetProgram {
         deserialize(&input[8..8 + len as usize])
     }
 }
+
 #[cfg(test)]
 mod test {
     use super::*;
     use bincode::serialize;
-    use budget_transaction::BudgetTransaction;
-    use chrono::prelude::{DateTime, NaiveDate, Utc};
-    use signature::GenKeys;
     use solana_sdk::account::Account;
+    use solana_sdk::budget_program::*;
+    use solana_sdk::budget_transaction::BudgetTransaction;
     use solana_sdk::hash::Hash;
-    use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::transaction::Transaction;
+    use solana_sdk::transaction::{Instruction, Transaction};
 
-    fn process_transaction(tx: &Transaction, accounts: &mut [Account]) -> Result<(), BudgetError> {
-        let mut refs: Vec<&mut Account> = accounts.iter_mut().collect();
-        super::process_instruction(&tx, 0, &mut refs[..])
+    fn process_transaction(
+        tx: &Transaction,
+        program_accounts: &mut [Account],
+    ) -> Result<(), BudgetError> {
+        assert_eq!(tx.instructions.len(), 1);
+        let Instruction {
+            ref accounts,
+            ref userdata,
+            ..
+        } = tx.instructions[0];
+
+        let mut keyed_accounts: Vec<_> = accounts
+            .iter()
+            .map(|&index| {
+                let index = index as usize;
+                let key = &tx.account_keys[index];
+                (key, index < tx.signatures.len())
+            }).zip(program_accounts.iter_mut())
+            .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
+            .collect();
+
+        super::process_instruction(&mut keyed_accounts, &userdata)
     }
     #[test]
     fn test_serializer() {
@@ -573,78 +557,5 @@ mod test {
         assert!(BudgetProgram::deserialize(&accounts[1].userdata).is_err());
 
         // Success if there was no panic...
-    }
-
-    /// Detect binary changes in the serialized contract userdata, which could have a downstream
-    /// affect on SDKs and DApps
-    #[test]
-    fn test_sdk_serialize() {
-        let keypair = &GenKeys::new([0u8; 32]).gen_n_keypairs(1)[0];
-        let to = Pubkey::new(&[
-            1, 1, 1, 4, 5, 6, 7, 8, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 8, 7, 6, 5, 4,
-            1, 1, 1,
-        ]);
-        let contract = Pubkey::new(&[
-            2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4,
-            2, 2, 2,
-        ]);
-        let date =
-            DateTime::<Utc>::from_utc(NaiveDate::from_ymd(2016, 7, 8).and_hms(9, 10, 11), Utc);
-        let date_iso8601 = "2016-07-08T09:10:11Z";
-
-        let tx = Transaction::budget_new(&keypair, to, 192, Hash::default());
-        assert_eq!(
-            tx.userdata(0).to_vec(),
-            vec![2, 0, 0, 0, 192, 0, 0, 0, 0, 0, 0, 0]
-        );
-        assert_eq!(
-            tx.userdata(1).to_vec(),
-            vec![
-                0, 0, 0, 0, 0, 0, 0, 0, 192, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 4, 5, 6, 7, 8, 9, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 8, 7, 6, 5, 4, 1, 1, 1
-            ]
-        );
-
-        let tx = Transaction::budget_new_on_date(
-            &keypair,
-            to,
-            contract,
-            date,
-            keypair.pubkey(),
-            Some(keypair.pubkey()),
-            192,
-            Hash::default(),
-        );
-        assert_eq!(
-            tx.userdata(0).to_vec(),
-            vec![
-                0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 50, 48, 49, 54, 45,
-                48, 55, 45, 48, 56, 84, 48, 57, 58, 49, 48, 58, 49, 49, 90, 32, 253, 186, 201, 177,
-                11, 117, 135, 187, 167, 181, 188, 22, 59, 206, 105, 231, 150, 215, 30, 78, 212, 76,
-                16, 252, 180, 72, 134, 137, 247, 161, 68, 192, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 4, 5,
-                6, 7, 8, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9, 8, 7, 6, 5, 4, 1, 1, 1, 1,
-                0, 0, 0, 32, 253, 186, 201, 177, 11, 117, 135, 187, 167, 181, 188, 22, 59, 206,
-                105, 231, 150, 215, 30, 78, 212, 76, 16, 252, 180, 72, 134, 137, 247, 161, 68, 192,
-                0, 0, 0, 0, 0, 0, 0, 32, 253, 186, 201, 177, 11, 117, 135, 187, 167, 181, 188, 22,
-                59, 206, 105, 231, 150, 215, 30, 78, 212, 76, 16, 252, 180, 72, 134, 137, 247, 161,
-                68
-            ]
-        );
-
-        // ApplyTimestamp(date)
-        let tx = Transaction::budget_new_timestamp(
-            &keypair,
-            keypair.pubkey(),
-            to,
-            date,
-            Hash::default(),
-        );
-        let mut expected_userdata = vec![1, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0];
-        expected_userdata.extend(date_iso8601.as_bytes());
-        assert_eq!(tx.userdata(0).to_vec(), expected_userdata);
-
-        // ApplySignature
-        let tx = Transaction::budget_new_signature(&keypair, keypair.pubkey(), to, Hash::default());
-        assert_eq!(tx.userdata(0).to_vec(), vec![2, 0, 0, 0]);
     }
 }

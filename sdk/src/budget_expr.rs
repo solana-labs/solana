@@ -5,7 +5,7 @@
 
 use chrono::prelude::*;
 use payment_plan::{Payment, Witness};
-use solana_sdk::pubkey::Pubkey;
+use pubkey::Pubkey;
 use std::mem;
 
 /// A data type representing a `Witness` that the payment plan is waiting on.
@@ -141,7 +141,7 @@ impl BudgetExpr {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use signature::{Keypair, KeypairUtil};
 
     #[test]
     fn test_signature_satisfied() {

@@ -5,7 +5,6 @@
 
 use bincode::deserialize;
 use bincode::serialize;
-use budget_program;
 use counter::Counter;
 use entry::Entry;
 use itertools::Itertools;
@@ -15,7 +14,6 @@ use ledger::Block;
 use log::Level;
 use mint::Mint;
 use native_loader;
-use payment_plan::Payment;
 use poh_recorder::PohRecorder;
 use poh_service::NUM_TICKS_PER_SECOND;
 use rayon::prelude::*;
@@ -23,8 +21,10 @@ use rpc::RpcSignatureStatus;
 use runtime::{self, RuntimeError};
 use solana_sdk::account::Account;
 use solana_sdk::bpf_loader;
+use solana_sdk::budget_program;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::native_program::ProgramError;
+use solana_sdk::payment_plan::Payment;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signature::Signature;
@@ -448,6 +448,16 @@ impl Bank {
 
         accounts.store(&bpf_loader::id(), &bpf_loader_account);
 
+        // Budget program
+        let budget_program_account = Account {
+            tokens: 1,
+            owner: budget_program::id(),
+            userdata: b"solana_budget_program".to_vec(),
+            executable: true,
+            loader: native_loader::id(),
+        };
+        accounts.store(&budget_program::id(), &budget_program_account);
+
         // Erc20 token program
         let erc20_account = Account {
             tokens: 1,
@@ -765,10 +775,6 @@ impl Bank {
     }
 
     fn load_executable_accounts(&self, mut program_id: Pubkey) -> Result<Vec<(Pubkey, Account)>> {
-        if runtime::is_legacy_program(&program_id) {
-            return Ok(vec![]);
-        }
-
         let mut accounts = Vec::new();
         let mut depth = 0;
         loop {
@@ -1228,11 +1234,13 @@ impl Bank {
     }
 
     pub fn read_balance(account: &Account) -> u64 {
+        // TODO: Re-instate budget_program special case?
+        /*
         if budget_program::check_id(&account.owner) {
-            budget_program::get_balance(account)
-        } else {
-            account.tokens
+           return budget_program::get_balance(account);
         }
+        */
+        account.tokens
     }
     /// Each program would need to be able to introspect its own state
     /// this is hard-coded to the Budget language

@@ -1,4 +1,3 @@
-use budget_program;
 use native_loader;
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
 use solana_sdk::native_program::ProgramError;
@@ -13,10 +12,6 @@ pub enum RuntimeError {
     ProgramError(u8, ProgramError),
 }
 
-pub fn is_legacy_program(program_id: &Pubkey) -> bool {
-    budget_program::check_id(program_id)
-}
-
 /// Process an instruction
 /// This method calls the instruction's program entrypoint method
 fn process_instruction(
@@ -28,36 +23,25 @@ fn process_instruction(
 ) -> Result<(), ProgramError> {
     let program_id = tx.program_id(instruction_index);
 
-    // Call the program method
-    // It's up to the program to implement its own rules on moving funds
-    if is_legacy_program(&program_id) {
-        if budget_program::check_id(&program_id) {
-            budget_program::process(&tx, instruction_index, program_accounts)?;
-        } else {
-            unreachable!();
-        };
-        Ok(())
-    } else {
-        let mut keyed_accounts = create_keyed_accounts(executable_accounts);
-        let mut keyed_accounts2: Vec<_> = tx.instructions[instruction_index]
-            .accounts
-            .iter()
-            .map(|&index| {
-                let index = index as usize;
-                let key = &tx.account_keys[index];
-                (key, index < tx.signatures.len())
-            }).zip(program_accounts.iter_mut())
-            .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
-            .collect();
-        keyed_accounts.append(&mut keyed_accounts2);
+    let mut keyed_accounts = create_keyed_accounts(executable_accounts);
+    let mut keyed_accounts2: Vec<_> = tx.instructions[instruction_index]
+        .accounts
+        .iter()
+        .map(|&index| {
+            let index = index as usize;
+            let key = &tx.account_keys[index];
+            (key, index < tx.signatures.len())
+        }).zip(program_accounts.iter_mut())
+        .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
+        .collect();
+    keyed_accounts.append(&mut keyed_accounts2);
 
-        native_loader::process_instruction(
-            &program_id,
-            &mut keyed_accounts,
-            &tx.instructions[instruction_index].userdata,
-            tick_height,
-        )
-    }
+    native_loader::process_instruction(
+        &program_id,
+        &mut keyed_accounts,
+        &tx.instructions[instruction_index].userdata,
+        tick_height,
+    )
 }
 
 fn verify_instruction(
