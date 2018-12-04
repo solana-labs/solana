@@ -7,4 +7,4 @@ build-dir = "html"
 create-missing = false
 
 [output.html]
-theme = "src/theme"
+theme = "theme"
