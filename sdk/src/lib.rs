@@ -6,6 +6,7 @@ pub mod budget_program;
 pub mod budget_transaction;
 pub mod hash;
 pub mod loader_instruction;
+pub mod loader_transaction;
 pub mod native_loader;
 pub mod native_program;
 pub mod packet;

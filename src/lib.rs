@@ -41,7 +41,6 @@ pub mod fullnode;
 pub mod leader_scheduler;
 pub mod ledger;
 pub mod ledger_write_stage;
-pub mod loader_transaction;
 pub mod logger;
 pub mod mint;
 pub mod native_loader;
