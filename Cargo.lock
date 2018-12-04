@@ -1909,8 +1909,10 @@ dependencies = [
 name = "solana-vote-signer"
 version = "0.0.1"
 dependencies = [
+ "bs58 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.33 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-jsonrpc-core 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-jsonrpc-http-server 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-jsonrpc-macros 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
