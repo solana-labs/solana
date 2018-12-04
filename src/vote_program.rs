@@ -14,19 +14,7 @@ use std::mem;
 // Maximum number of votes to keep around
 const MAX_VOTE_HISTORY: usize = 32;
 
-#[derive(Debug, PartialEq)]
-pub enum Error {
-    UserdataDeserializeFailure,
-    InvalidArguments,
-    InvalidUserdata,
-    UserdataTooSmall,
-}
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "error")
-    }
-}
-pub type Result<T> = std::result::Result<T, Error>;
+pub type Result<T> = std::result::Result<T, ProgramError>;
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Vote {
@@ -65,21 +53,21 @@ pub fn id() -> Pubkey {
     Pubkey::new(&VOTE_PROGRAM_ID)
 }
 
-pub fn process_instruction(
+pub fn process(
     tx: &Transaction,
     instruction_index: usize,
     accounts: &mut [&mut Account],
 ) -> Result<()> {
     // all vote instructions require that accounts_keys[0] be a signer
     if tx.signer_key(instruction_index, 0).is_none() {
-        Err(Error::InvalidArguments)?;
+        Err(ProgramError::InvalidArgument)?;
     }
 
     match deserialize(tx.userdata(instruction_index)) {
         Ok(VoteInstruction::RegisterAccount) => {
             if !check_id(&accounts[1].owner) {
                 error!("accounts[1] is not assigned to the VOTE_PROGRAM");
-                Err(Error::InvalidArguments)?;
+                Err(ProgramError::InvalidArgument)?;
             }
 
             // TODO: a single validator could register multiple "vote accounts"
@@ -96,7 +84,7 @@ pub fn process_instruction(
         Ok(VoteInstruction::NewVote(vote)) => {
             if !check_id(&accounts[0].owner) {
                 error!("accounts[0] is not assigned to the VOTE_PROGRAM");
-                Err(Error::InvalidArguments)?;
+                Err(ProgramError::InvalidArgument)?;
             }
 
             let mut vote_state = VoteProgram::deserialize(&accounts[0].userdata)?;
@@ -120,17 +108,9 @@ pub fn process_instruction(
                 "Invalid vote transaction userdata: {:?}",
                 tx.userdata(instruction_index)
             );
-            Err(Error::UserdataDeserializeFailure)
+            Err(ProgramError::InvalidUserdata)
         }
     }
-}
-
-pub fn process(
-    tx: &Transaction,
-    instruction_index: usize,
-    accounts: &mut [&mut Account],
-) -> std::result::Result<(), ProgramError> {
-    process_instruction(&tx, instruction_index, accounts).map_err(|_| ProgramError::GenericError)
 }
 
 pub fn get_max_size() -> usize {
@@ -148,11 +128,11 @@ impl VoteProgram {
         let len = LittleEndian::read_u16(&input[0..2]) as usize;
 
         if len == 0 || input.len() < len + 2 {
-            Err(Error::InvalidUserdata)
+            Err(ProgramError::InvalidUserdata)
         } else {
             deserialize(&input[2..=len + 1]).map_err(|err| {
                 error!("Unable to deserialize vote state: {:?}", err);
-                Error::InvalidUserdata
+                ProgramError::InvalidUserdata
             })
         }
     }
@@ -166,7 +146,7 @@ impl VoteProgram {
                 self_serialized.len(),
                 output.len() + 2,
             );
-            return Err(Error::UserdataTooSmall);
+            return Err(ProgramError::UserdataTooSmall);
         }
 
         let serialized_len = self_serialized.len() as u16;

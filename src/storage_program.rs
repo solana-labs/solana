@@ -14,11 +14,6 @@ pub enum StorageProgram {
     SubmitMiningProof { sha_state: Hash },
 }
 
-pub enum StorageError {
-    InvalidArgument,
-    InvalidUserData,
-}
-
 const STORAGE_PROGRAM_ID: [u8; 32] = [
     130, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0,
@@ -36,14 +31,14 @@ pub fn get_balance(account: &Account) -> u64 {
     account.tokens
 }
 
-pub fn process_instruction(
+pub fn process(
     tx: &Transaction,
     pix: usize,
     _accounts: &mut [&mut Account],
-) -> Result<(), StorageError> {
+) -> Result<(), ProgramError> {
     // accounts_keys[0] must be signed
     if tx.signer_key(pix, 0).is_none() {
-        Err(StorageError::InvalidArgument)?;
+        Err(ProgramError::InvalidArgument)?;
     }
 
     if let Ok(syscall) = deserialize(tx.userdata(pix)) {
@@ -54,16 +49,8 @@ pub fn process_instruction(
             }
         }
     } else {
-        return Err(StorageError::InvalidUserData);
+        return Err(ProgramError::InvalidUserdata);
     }
-}
-
-pub fn process(
-    tx: &Transaction,
-    instruction_index: usize,
-    accounts: &mut [&mut Account],
-) -> std::result::Result<(), ProgramError> {
-    process_instruction(&tx, instruction_index, accounts).map_err(|_| ProgramError::GenericError)
 }
 
 #[cfg(test)]
@@ -75,6 +62,6 @@ mod test {
     fn test_storage_tx() {
         let keypair = Keypair::new();
         let tx = Transaction::new(&keypair, &[], id(), &(), Default::default(), 0);
-        assert!(process_instruction(&tx, 0, &mut []).is_err());
+        assert!(process(&tx, 0, &mut []).is_err());
     }
 }
