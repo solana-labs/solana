@@ -77,9 +77,9 @@ slot.
    normal
 3. `M` cycles through the ranks until one of them is leader, generating ticks for
    slots where the leader is in `K`.
-4. `M` validators observe 10% of the vote pool, finality is not reached.
+4. `M` validators observe 10% of the vote pool, confirmation is not reached.
 5. `M` and `K` reconnect.
-6. `M` validators cancel their votes on `M`, which has not reached finality, and
+6. `M` validators cancel their votes on `M`, which has not reached confirmation, and
    re-cast on `K` (after their vote lockout on `M`).
 
 ### Leader Timeout
