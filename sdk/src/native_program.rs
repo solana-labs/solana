@@ -25,6 +25,12 @@ pub enum ProgramError {
     /// Program spent the tokens of an account that doesn't belong to it
     ExternalAccountTokenSpend,
 
+    /// An account's userdata contents was invalid
+    InvalidUserdata,
+
+    /// An account's userdata was too small
+    UserdataTooSmall,
+
     /// SystemInstruction::Assign was attempted on an account unowned by the system program
     AssignOfUnownedAccount,
 
