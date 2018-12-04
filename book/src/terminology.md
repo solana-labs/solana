@@ -125,6 +125,10 @@ The number of [fullnodes](#fullnode) participating in a [cluster](#cluster).
 
 The code that interprets [instructions](#instruction).
 
+#### program ID
+
+The public key of the [account](#account) containing a [program](#program).
+
 #### public key
 
 The public key of a [keypair](#keypair).
@@ -203,6 +207,10 @@ A type of [client](#client) that can verify it's pointing to a valid [cluster](#
 #### mips
 
 Millions of [instructions](#instruction) per second.
+
+#### runtime
+
+The component of a [fullnode](#fullnode) responsible for [program](#program) execution.
 
 #### thin client
 
