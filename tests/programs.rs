@@ -5,13 +5,13 @@ extern crate solana;
 extern crate solana_sdk;
 
 use solana::bank::Bank;
-use solana::loader_transaction::LoaderTransaction;
 use solana::logger;
 use solana::mint::Mint;
 use solana::native_loader;
 use solana::system_transaction::SystemTransaction;
 #[cfg(feature = "bpf_c")]
 use solana_sdk::bpf_loader;
+use solana_sdk::loader_transaction::LoaderTransaction;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
