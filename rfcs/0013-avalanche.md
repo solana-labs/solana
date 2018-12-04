@@ -83,7 +83,7 @@ These top stake holders will be considered Layer 1. For the leader this step sho
 #### Replicate stage:  
 The biggest challenge is to update replicate stage and make it "layer aware"; i.e using the bank each layer 1 node can figure out which layer 2 nodes to send blobs to with minimal overlap. 
 The plan to avoid this overlap
-will be to broadcast using indices based on `((node.layer_1_index) % (layer-2_neighborhood_size) * cur_neighborhood_index)` for where `cur_neighborhood_index` is loop index in `num_neighborhoods`.
+will be to broadcast using indices based on `((node.layer_1_index) % (layer-2_neighborhood_size) * cur_neighborhood_index)` where `cur_neighborhood_index` is loop index in `num_neighborhoods`.
 
 Layer 2 nodes should be able to reuse this logic to avoid going *up* to layer 1 and to only replicate within its neighborhood.
 As long as the stake weight of the first layer 2 node is known(or the last layer 1) given that the fanout will be fixed we should be able to figure out with decent certainty who the layer 2 neighbors are.
