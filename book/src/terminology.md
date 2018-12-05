@@ -12,7 +12,9 @@ A persistent file addressed by [public key](#public-key) and with
 
 #### block
 
-The [entries](#entry) generated within a [slot](#slot).
+A contiguous set of [entries](#entry) on the ledger covered by a [vote](#ledger-vote).
+The length of a block is network hyper parameter, specified in [ticks](#tick).
+Also called [voting period](#voting-period).
 
 #### bootstrap leader
 
@@ -107,12 +109,15 @@ A list of [entries](#entry) containing [transactions](#transaction) signed by
 #### ledger vote
 
 A [hash](#hash) of the [fullnode's state](#fullnode-state) at a given [tick
-height](#tick-height).
+height](#tick-height). It comprises a validator's affirmation that a
+[block](#block) it has received has been verified, as well as a promise not to
+vote for a conflicting [block](#block) (i.e. [fork](#fork)) for a specific amount
+of time, the [lockout](#lockout) period.
 
 #### lockout
 
 The duration of time for which a [fullnode](#fullnode) is unable to
-[vote](#vote) on another [fork](#fork).
+[vote](#ledger-vote) on another [fork](#fork).
 
 #### native token
 
@@ -149,7 +154,8 @@ The private key of a [keypair](#keypair).
 
 #### slot
 
-The time in which a single [leader](#leader) may produce [entries](#entry).
+The time (i.e. number of [blocks](#block)) for which a [leader](#leader) ingests
+transactions and produces [entries](#entry).
 
 #### sol
 
@@ -158,7 +164,7 @@ by the company Solana.
 
 #### stake
 
-Tokens forfeit to the [cluster](#cluster] if malicious [fullnode](#fullnode)
+Tokens forfeit to the [cluster](#cluster) if malicious [fullnode](#fullnode)
 behavior can be proven.
 
 #### tick
@@ -191,6 +197,13 @@ A set of [transactions](#transaction) that may be executed in parallel.
 The role of a [fullnode](#fullnode) when it is validating the
 [leader's](#leader) latest [entries](#entry).
 
+#### vote
+
+See [ledger vote](#ledger-vote)
+
+#### voting period
+
+See [block](#block)
 
 ## Terminology Reserved for Future Use
 
@@ -208,7 +221,7 @@ A scarce, non-fungible member of a set of curios.
 
 #### epoch
 
-The time for which a [leader schedule](#leader-schedule) is valid.
+The time, i.e. number of [slots](#slot), for which a [leader schedule](#leader-schedule) is valid.
 
 #### light client
 
