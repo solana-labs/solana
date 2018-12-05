@@ -15,5 +15,9 @@ solana-sdk = { path = "../../../sdk", version = "0.11.0" }
 
 [lib]
 name = "solana_system_program"
-crate-type = ["cdylib"]
+
+# Must be a static lib instead of cdylib because `SystemInstruction::CreateAccount`
+# allocates Rust memory.
+# cc: https://github.com/solana-labs/solana/issues/2004#issuecomment-444570081
+crate-type = ["lib"]
 

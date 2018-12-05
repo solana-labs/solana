@@ -1,5 +1,4 @@
 extern crate bincode;
-extern crate env_logger;
 #[macro_use]
 extern crate log;
 #[macro_use]
@@ -11,21 +10,14 @@ use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::system_program;
-use std::sync::{Once, ONCE_INIT};
 
 solana_entrypoint!(entrypoint);
-fn entrypoint(
+pub fn entrypoint(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     data: &[u8],
     _tick_height: u64,
 ) -> Result<(), ProgramError> {
-    static INIT: Once = ONCE_INIT;
-    INIT.call_once(|| {
-        // env_logger can only be initialized once
-        env_logger::init();
-    });
-
     if let Ok(syscall) = deserialize(data) {
         trace!("process_instruction: {:?}", syscall);
         trace!("keyed_accounts: {:?}", keyed_accounts);

@@ -4,6 +4,7 @@ use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_program;
 use solana_sdk::transaction::Transaction;
+use solana_system_program;
 
 /// Reasons the runtime might have rejected a transaction.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -36,12 +37,21 @@ fn process_instruction(
         .collect();
     keyed_accounts.append(&mut keyed_accounts2);
 
-    native_loader::process_instruction(
-        &program_id,
-        &mut keyed_accounts,
-        &tx.instructions[instruction_index].userdata,
-        tick_height,
-    )
+    if system_program::check_id(&program_id) {
+        solana_system_program::entrypoint(
+            &program_id,
+            &mut keyed_accounts[1..],
+            &tx.instructions[instruction_index].userdata,
+            tick_height,
+        )
+    } else {
+        native_loader::process_instruction(
+            &program_id,
+            &mut keyed_accounts,
+            &tx.instructions[instruction_index].userdata,
+            tick_height,
+        )
+    }
 }
 
 fn verify_instruction(
