@@ -73,8 +73,12 @@ echo "--- Node count"
   source multinode-demo/common.sh
   set -x
   client_id=/tmp/client-id.json-$$
-  $solana_keygen -o $client_id
-  $solana_bench_tps --identity $client_id --num-nodes 3 --reject-extra-nodes --converge-only
+  $solana_keygen -o $client_id || exit $?
+  $solana_bench_tps \
+    --identity $client_id \
+    --num-nodes 3 \
+    --reject-extra-nodes \
+    --converge-only || exit $?
   rm -rf $client_id
 ) || flag_error
 
@@ -85,7 +89,7 @@ echo "--- Ledger verification"
   source multinode-demo/common.sh
   set -x
   cp -R "$SOLANA_CONFIG_DIR"/ledger /tmp/ledger-$$
-  $solana_ledger_tool --ledger /tmp/ledger-$$ verify
+  $solana_ledger_tool --ledger /tmp/ledger-$$ verify || exit $?
   rm -rf /tmp/ledger-$$
 ) || flag_error
 
