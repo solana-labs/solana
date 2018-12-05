@@ -83,6 +83,11 @@ A [public key](#public-key) and coesponding [secret key](#secret-key).
 A fractional [native token](#native-token) with the value of approximately
 0.0000000000582 [sol](#sol) (2^-34).
 
+#### loader
+
+A [program](#program) with the ability to interpret the binary encoding
+of other on-chain programs.
+
 #### leader
 
 The role of a [fullnode](#fullnode) when it is appending [entries](#entry) to
