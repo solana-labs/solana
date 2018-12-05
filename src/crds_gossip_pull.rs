@@ -17,7 +17,7 @@ use crds_gossip_error::CrdsGossipError;
 use crds_value::{CrdsValue, CrdsValueLabel};
 use packet::BLOB_DATA_SIZE;
 use rand;
-use rand::distributions::{Distribution, Weighted, WeightedChoice};
+use rand::distributions::{Distribution, WeightedIndex};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
@@ -54,7 +54,7 @@ impl CrdsGossipPull {
         self_id: Pubkey,
         now: u64,
     ) -> Result<(Pubkey, Bloom<Hash>, CrdsValue), CrdsGossipError> {
-        let mut options: Vec<_> = crds
+        let options: Vec<_> = crds
             .table
             .values()
             .filter_map(|v| v.value.contact_info())
@@ -66,17 +66,18 @@ impl CrdsGossipPull {
                     1,
                     cmp::min(u64::from(u16::max_value()) - 1, (now - req_time) / 1024) as u32,
                 );
-                Weighted { weight, item }
+                (weight, item)
             }).collect();
         if options.is_empty() {
             return Err(CrdsGossipError::NoPeers);
         }
         let filter = self.build_crds_filter(crds);
-        let random = WeightedChoice::new(&mut options).sample(&mut rand::thread_rng());
+        let index = WeightedIndex::new(options.iter().map(|weighted| weighted.0)).unwrap();
+        let random = index.sample(&mut rand::thread_rng());
         let self_info = crds
             .lookup(&CrdsValueLabel::ContactInfo(self_id))
             .unwrap_or_else(|| panic!("self_id invalid {}", self_id));
-        Ok((random.id, filter, self_info.clone()))
+        Ok((options[random].1.id, filter, self_info.clone()))
     }
 
     /// time when a request to `from` was initiated

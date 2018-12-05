@@ -1,6 +1,7 @@
 //! The `signature` module provides functionality for public, and private keys.
 
-use rand::{ChaChaRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaChaRng;
 use rayon::prelude::*;
 use solana_sdk::signature::Keypair;
 use untrusted::Input;
