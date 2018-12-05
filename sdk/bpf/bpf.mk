@@ -49,27 +49,27 @@ CXX_FLAGS := \
 
 BPF_C_FLAGS := \
   $(C_FLAGS) \
-	-S \
+  -S \
   -emit-llvm \
   -target bpf \
-	-fPIC \
+  -fPIC \
 
 BPF_CXX_FLAGS := \
   $(CXX_FLAGS) \
-	-S \
+  -S \
   -emit-llvm \
   -target bpf \
-	-fPIC \
+  -fPIC \
 
 BPF_LLC_FLAGS := \
   -march=bpf \
   -filetype=obj \
 
 BPF_LLD_FLAGS := \
-	-z notext \
-	-shared \
-	--Bdynamic \
-	$(LOCAL_PATH)bpf.ld \
+  -z notext \
+  -shared \
+  --Bdynamic \
+  $(LOCAL_PATH)bpf.ld \
 
 OBJ_DUMP_FLAGS := \
   -color \
