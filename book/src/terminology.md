@@ -154,8 +154,8 @@ The private key of a [keypair](#keypair).
 
 #### slot
 
-The time (some number of [voting periods](#voting-period)) during which a
-[leader](#leader) ingests transactions and produces [entries](#entry).
+The number of [blocks](#block) for which a [leader](#leader) ingests
+transactions and produces [entries](#entry).
 
 #### sol
 
