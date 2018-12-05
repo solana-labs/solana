@@ -6,13 +6,15 @@ company headquartered in San Francisco that maintains the open source project.
 
 # About this Book
 
-This book defines the architecture of Solana, a blockchain built from the
-ground up for scale. The goal of the architecture is to demonstrate there
-exists a set of software algorithms that in combination, removes software as a
-performance bottleneck, allowing transaction throughput to scale proportionally
-with network bandwidth. The architecture goes on to satisfy all three desirable
-properties of a proper blockchain: that it not only be scalable, but that it is
-also secure and decentralized.
+This book describes the Solana open source project, a blockchain built from the
+ground up for scale. The book covers why to use it, how to use it, how it
+works, and why it will continue to work long after the company Solana closes
+its doors. The goal of the Solana architecture is to demonstrate there exists a
+set of software algorithms that when used in combination to implement a
+blockchain, removes software as a performance bottleneck, allowing transaction
+throughput to scale proportionally with network bandwidth. The architecture
+goes on to satisfy all three desirable properties of a proper blockchain: that
+it not only be scalable, but that it is also secure and decentralized.
 
 The architecture describes a theoretical upper bound of 710 thousand
 transactions per second (tps) on a standard gigabit network and 28.4 million
@@ -83,9 +85,9 @@ consistently supporting bursts of 250,000 transactions per second. In the most
 recent release, v0.10 Pillbox, the team published a permissioned testnet
 running 150 nodes on a gigabit network and demonstrated soak tests processing
 an *average* of 200 thousand transactions per second with bursts over 500
-thousand. The project was also extended to support on-chain programs written
-in the C programming language and run concurrently in a safe execution
-environment called BPF. Next step: going permissionless.
+thousand. The project was also extended to support on-chain programs written in
+the C programming language and run concurrently in a safe execution environment
+called BPF. Next step: going permissionless.
 
 # What is a Solana Cluster?
 
@@ -106,10 +108,10 @@ organization that launched it.
 # What are Sols?
 
 A sol is the name of Solana's native token, which can be passed to nodes in a
-solana cluster in exchange for running an on-chain program or validating its
+Solana cluster in exchange for running an on-chain program or validating its
 output. The Solana protocol defines that only 1 billion sols will ever exist,
 but that the system may perform micropayments of fractional sols and that a sol
-may be split as many as 34 times. The fractional sol is called a lamport in
-honor of Solana's biggest technical influence, [Leslie
+may be split as many as 34 times. The fractional sol is called a *lamport*. It
+is named in honor of Solana's biggest technical influence, [Leslie
 Lamport](https://en.wikipedia.org/wiki/Leslie_Lamport). A lamport has a value
 of approximately 0.0000000000582 sol (2^-34).
