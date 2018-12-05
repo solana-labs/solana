@@ -154,7 +154,7 @@ The private key of a [keypair](#keypair).
 
 #### slot
 
-The number of [blocks](#block) for which a [leader](#leader) ingests
+The time (i.e. number of [blocks](#block)) for which a [leader](#leader) ingests
 transactions and produces [entries](#entry).
 
 #### sol
@@ -221,7 +221,7 @@ A scarce, non-fungible member of a set of curios.
 
 #### epoch
 
-The time for which a [leader schedule](#leader-schedule) is valid.
+The time, i.e. number of [slots](#slot), for which a [leader schedule](#leader-schedule) is valid.
 
 #### light client
 
