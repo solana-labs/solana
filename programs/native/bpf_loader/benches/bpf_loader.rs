@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use test::Bencher;
 
 /// BPF program file extension
-const PLATFORM_FILE_EXTENSION_BPF: &str = "o";
+const PLATFORM_FILE_EXTENSION_BPF: &str = "so";
 /// Create a BPF program file name
 fn create_bpf_path(name: &str) -> PathBuf {
     let mut pathbuf = {

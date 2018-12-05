@@ -24,6 +24,7 @@ ifdef LLVM_DIR
 CC := $(LLVM_DIR)/bin/clang
 CXX := $(LLVM_DIR)/bin/clang++
 LLC := $(LLVM_DIR)/bin/llc
+LLD := $(LLVM_DIR)/bin/ld.lld
 OBJ_DUMP := $(LLVM_DIR)/bin/llvm-objdump
 endif
 
@@ -45,17 +46,27 @@ CXX_FLAGS := \
 
 BPF_C_FLAGS := \
   $(C_FLAGS) \
+	-S \
   -emit-llvm \
   -target bpf \
+	-fPIC \
 
 BPF_CXX_FLAGS := \
   $(CXX_FLAGS) \
+	-S \
   -emit-llvm \
   -target bpf \
+	-fPIC \
 
 BPF_LLC_FLAGS := \
   -march=bpf \
   -filetype=obj \
+
+BPF_LLD_FLAGS := \
+	-z notext \
+	-shared \
+	--Bdynamic \
+	$(LOCAL_PATH)bpf.ld \
 
 OBJ_DUMP_FLAGS := \
   -color \
@@ -138,21 +149,26 @@ help:
 	@echo '    - make dump_foo'
 	@echo ''
 
-.PRECIOUS: $(OUT_DIR)/%.bc
-$(OUT_DIR)/%.bc: $(SRC_DIR)/%.c
+.PRECIOUS: $(OUT_DIR)/%.ll
+$(OUT_DIR)/%.ll: $(SRC_DIR)/%.c
 	@echo "[cc] $@ ($<)"
 	$(_@)mkdir -p $(OUT_DIR)
-	$(_@)$(CC) $(BPF_C_FLAGS) -o $@ -c $< -MD -MF $(@:.bc=.d)
+	$(_@)$(CC) $(BPF_C_FLAGS) -o $@ -c $< -MD -MF $(@:.ll=.d)
 
-$(OUT_DIR)/%.bc: $(SRC_DIR)/%.cc
+$(OUT_DIR)/%.ll: $(SRC_DIR)/%.cc
 	@echo "[cxx] $@ ($<)"
 	$(_@)mkdir -p $(OUT_DIR)
-	$(_@)$(CXX) $(BPF_CXX_FLAGS) -o $@ -c $< -MD -MF $(@:.bc=.d)
+	$(_@)$(CXX) $(BPF_CXX_FLAGS) -o $@ -c $< -MD -MF $(@:.ll=.d)
 
 .PRECIOUS: $(OUT_DIR)/%.o
-$(OUT_DIR)/%.o: $(OUT_DIR)/%.bc
+$(OUT_DIR)/%.o: $(OUT_DIR)/%.ll
 	@echo "[llc] $@ ($<)"
 	$(_@)$(LLC) $(BPF_LLC_FLAGS) -o $@ $<
+
+.PRECIOUS: $(OUT_DIR)/%.so
+$(OUT_DIR)/%.so: $(OUT_DIR)/%.o
+	@echo "[lld] $@ ($<)"
+	$(_@)$(LLD) $(BPF_LLD_FLAGS) -o $@ $<
 
 $(OUT_DIR)/test_%: $(TEST_DIR)/%.c
 	@echo "[test cc] $@ ($<)"
@@ -181,11 +197,11 @@ all: $(PROGRAM_NAMES)
 test: $(TEST_NAMES)
 	$(foreach test, $(TEST_NAMES), $(OUT_DIR)/$(test)$(\n))
 
-$(PROGRAM_NAMES): %: $(addprefix $(OUT_DIR)/, %.o) ;
+$(PROGRAM_NAMES): %: $(addprefix $(OUT_DIR)/, %.so) ;
 $(TEST_NAMES): %: $(addprefix $(OUT_DIR)/, %) ;
 
 dump_%: %
-	$(_@)$(OBJ_DUMP) $(OBJ_DUMP_FLAGS) $(addprefix $(OUT_DIR)/, $(addsuffix .o, $<))
+	$(_@)$(OBJ_DUMP) $(OBJ_DUMP_FLAGS) $(addprefix $(OUT_DIR)/, $(addsuffix .so, $<))
 
 clean:
 	rm -rf $(OUT_DIR)
