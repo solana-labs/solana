@@ -175,6 +175,11 @@ impl LedgerColumnFamilyRaw for DataCf {
 pub struct ErasureCf {}
 
 impl ErasureCf {
+    pub fn delete_by_slot_index(&self, db: &DB, slot_height: u64, index: u64) -> Result<()> {
+        let key = Self::key(slot_height, index);
+        self.delete(db, &key)
+    }
+
     pub fn get_by_slot_index(
         &self,
         db: &DB,
@@ -270,34 +275,37 @@ impl DbLedger {
         Ok(())
     }
 
-    pub fn write_shared_blobs<I>(&mut self, slot: u64, shared_blobs: I) -> Result<()>
+    pub fn write_shared_blobs<I>(&mut self, slot: u64, shared_blobs: I) -> Result<Vec<Entry>>
     where
         I: IntoIterator,
         I::Item: Borrow<SharedBlob>,
     {
+        let mut entries = vec![];
         for b in shared_blobs {
             let bl = b.borrow().read().unwrap();
             let index = bl.index()?;
             let key = DataCf::key(slot, index);
-            self.insert_data_blob(&key, &*bl)?;
+            let new_entries = self.insert_data_blob(&key, &*bl)?;
+            entries.extend(new_entries);
         }
-
-        Ok(())
+        Ok(entries)
     }
 
-    pub fn write_blobs<'a, I>(&mut self, slot: u64, blobs: I) -> Result<()>
+    pub fn write_blobs<'a, I>(&mut self, slot: u64, blobs: I) -> Result<Vec<Entry>>
     where
         I: IntoIterator<Item = &'a &'a Blob>,
     {
+        let mut entries = vec![];
         for blob in blobs.into_iter() {
             let index = blob.index()?;
             let key = DataCf::key(slot, index);
-            self.insert_data_blob(&key, blob)?;
+            let new_entries = self.insert_data_blob(&key, blob)?;
+            entries.extend(new_entries);
         }
-        Ok(())
+        Ok(entries)
     }
 
-    pub fn write_entries<I>(&mut self, slot: u64, entries: I) -> Result<()>
+    pub fn write_entries<I>(&mut self, slot: u64, entries: I) -> Result<Vec<Entry>>
     where
         I: IntoIterator,
         I::Item: Borrow<Entry>,
