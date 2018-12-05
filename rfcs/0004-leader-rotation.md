@@ -20,7 +20,7 @@ The seed that is selected is predictable but unbiasable.  There is no grinding a
 
 Leader's transmit for a count of `T` PoH ticks.  When `T` is reached all the validators should switch to the next scheduled leader.  Leaders that transmit out of order can be ignored.
 
-All `T` ticks must be observed from the current leader for that part of PoH to be accepted by the network.  If `T` ticks (and any intervening transactions) are not observed, the network optimistically fills in the `T` ticks, and continues with PoH from the next leader.  See [fork generation](rfcs/0002-fork-generation.md).
+All `T` ticks must be observed from the current leader for that part of PoH to be accepted by the network.  If `T` ticks (and any intervening transactions) are not observed, the network optimistically fills in the `T` ticks, and continues with PoH from the next leader.  See [fork generation](0002-fork-generation.md).
 
 ## Network Variables
 
