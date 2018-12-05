@@ -130,3 +130,4 @@ extern crate untrusted;
 extern crate matches;
 
 extern crate rand;
+extern crate rand_chacha;

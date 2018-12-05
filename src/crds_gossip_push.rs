@@ -17,7 +17,8 @@ use crds_gossip_error::CrdsGossipError;
 use crds_value::{CrdsValue, CrdsValueLabel};
 use indexmap::map::IndexMap;
 use packet::BLOB_DATA_SIZE;
-use rand::{self, Rng};
+use rand;
+use rand::seq::SliceRandom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
@@ -97,7 +98,7 @@ impl CrdsGossipPush {
     pub fn new_push_messages(&mut self, crds: &Crds, now: u64) -> (Vec<Pubkey>, Vec<CrdsValue>) {
         let max = self.active_set.len();
         let mut nodes: Vec<_> = (0..max).collect();
-        rand::thread_rng().shuffle(&mut nodes);
+        nodes.shuffle(&mut rand::thread_rng());
         let peers: Vec<Pubkey> = nodes
             .into_iter()
             .filter_map(|n| self.active_set.get_index(n))
@@ -165,7 +166,7 @@ impl CrdsGossipPush {
         let need = Self::compute_need(self.num_active, self.active_set.len(), ratio);
         let mut new_items = HashMap::new();
         let mut ixs: Vec<_> = (0..crds.table.len()).collect();
-        rand::thread_rng().shuffle(&mut ixs);
+        ixs.shuffle(&mut rand::thread_rng());
 
         for ix in ixs {
             let item = crds.table.get_index(ix);
@@ -195,7 +196,7 @@ impl CrdsGossipPush {
             }
         }
         let mut keys: Vec<Pubkey> = self.active_set.keys().cloned().collect();
-        rand::thread_rng().shuffle(&mut keys);
+        keys.shuffle(&mut rand::thread_rng());
         let num = keys.len() / ratio;
         for k in &keys[..num] {
             self.active_set.remove(k);

@@ -5,7 +5,8 @@
 #[cfg(all(feature = "chacha", feature = "cuda"))]
 use chacha_cuda::chacha_cbc_encrypt_file_many_keys;
 use entry::EntryReceiver;
-use rand::{ChaChaRng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaChaRng;
 use result::{Error, Result};
 use service::Service;
 use solana_sdk::hash::Hash;
