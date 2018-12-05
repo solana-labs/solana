@@ -113,6 +113,7 @@ extern crate socket2;
 extern crate solana_drone;
 extern crate solana_jsonrpc_core as jsonrpc_core;
 extern crate solana_jsonrpc_http_server as jsonrpc_http_server;
+extern crate solana_system_program;
 #[macro_use]
 extern crate solana_jsonrpc_macros as jsonrpc_macros;
 extern crate solana_jsonrpc_pubsub as jsonrpc_pubsub;
