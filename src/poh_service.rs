@@ -106,7 +106,7 @@ mod tests {
     use std::sync::mpsc::channel;
     use std::sync::Arc;
     use std::thread::{Builder, JoinHandle};
-    use system_transaction::test_tx;
+    use test_tx::test_tx;
 
     #[test]
     fn test_poh_service() {
