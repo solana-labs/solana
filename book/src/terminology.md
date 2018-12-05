@@ -199,7 +199,7 @@ The role of a [fullnode](#fullnode) when it is validating the
 
 #### vote
 
-See [ledger vote](#ledger vote)
+See [ledger vote](#ledger-vote)
 
 #### voting period
 
