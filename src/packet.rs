@@ -469,11 +469,11 @@ mod tests {
     };
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Transaction;
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;
-    use solana_sdk::system_transaction::SystemTransaction;
 
     #[test]
     pub fn packet_send_recv() {

@@ -12,13 +12,13 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signature::Signature;
+use solana_sdk::vote_program;
 use std::mem::size_of;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
-use solana_sdk::vote_program;
 
 // Block of hash answers to validate against
 // Vec of [ledger blocks] x [keys]
@@ -268,6 +268,8 @@ mod tests {
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
+    use solana_sdk::vote_program::Vote;
+    use solana_sdk::vote_transaction::VoteTransaction;
     use std::cmp::{max, min};
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -278,8 +280,6 @@ mod tests {
     use storage_stage::StorageState;
     use storage_stage::NUM_IDENTITIES;
     use storage_stage::{get_identity_index_from_pubkey, StorageStage};
-    use solana_sdk::vote_program::Vote;
-    use solana_sdk::vote_transaction::VoteTransaction;
 
     #[test]
     fn test_storage_stage_none_ledger() {

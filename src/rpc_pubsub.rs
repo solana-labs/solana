@@ -251,9 +251,9 @@ mod tests {
     use solana_sdk::budget_program;
     use solana_sdk::budget_transaction::BudgetTransaction;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Transaction;
     use std::net::{IpAddr, Ipv4Addr};
-    use solana_sdk::system_transaction::SystemTransaction;
     use tokio::prelude::{Async, Stream};
 
     #[test]

@@ -10,12 +10,12 @@ use result::{Error, Result};
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Keypair;
 use solana_sdk::transaction::Transaction;
+use solana_sdk::vote_program::Vote;
+use solana_sdk::vote_transaction::VoteTransaction;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
 use streamer::BlobSender;
-use solana_sdk::vote_program::Vote;
-use solana_sdk::vote_transaction::VoteTransaction;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum VoteError {
