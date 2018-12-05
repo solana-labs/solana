@@ -33,10 +33,10 @@ its *control plane*. The control plane is implemented using a *gossip*
 protocol, meaning that a node may register with any existing node, and expect
 its registration to propagate to all nodes in the cluster. The time it takes
 for all nodes to synchronize is proportional to the square of the number of
-nodes participating in the cluster. Algorithmically, that's considered very slow,
-but in exchange for that time, a node is assured that it eventually has all the
-same information as every other node, and that that information cannot be
-censored by any one node.
+nodes participating in the cluster. Algorithmically, that's considered very
+slow, but in exchange for that time, a node is assured that it eventually has
+all the same information as every other node, and that that information cannot
+be censored by any one node.
 
 ## Sending Transactions to a Cluster
 
@@ -48,28 +48,29 @@ cluster's *data plane*. Once on the data plane, the transactions are validated
 by validator nodes and replicated by replicator nodes, effectively appending
 them to the ledger.
 
-## Finalizing Transactions
+## Confirming Transactions
 
-A Solana cluster is capable of subsecond *leader finality* for up to 150 nodes
+A Solana cluster is capable of subsecond *confirmation* for up to 150 nodes
 with plans to scale up to hundreds of thousands of nodes. Once fully
-implemented, finality times are expected to increase only with the logarithm of
-the number of validators, where the logarithm's base is very high. If the base
-is one thousand, for example, it means that for the first thousand nodes,
-finality will be the duration of three network hops plus the time it takes the
-slowest validator of a supermajority to vote. For the next million nodes,
-finality increases by only one network hop.
+implemented, confirmation times are expected to increase only with the
+logarithm of the number of validators, where the logarithm's base is very high.
+If the base is one thousand, for example, it means that for the first thousand
+nodes, confirmation will be the duration of three network hops plus the time it
+takes the slowest validator of a supermajority to vote. For the next million
+nodes, confirmation increases by only one network hop.
 
-Solana defines leader finality as the duration of time from when the leader
+Solana defines confirmation as the duration of time from when the leader
 timestamps a new entry to the moment when it recognizes a supermajority of
 ledger votes.
 
-A gossip network is much too slow to achieve subsecond finality once the
+A gossip network is much too slow to achieve subsecond confirmation once the
 network grows beyond a certain size. The time it takes to send messages to all
 nodes is proportional to the square of the number of nodes. If a blockchain
-wants to achieve low finality and attempts to do it using a gossip network, it
-will be forced to centralize to just a handful of nodes.
+wants to achieve low confirmation and attempts to do it using a gossip network,
+it will be forced to centralize to just a handful of nodes.
 
-Scalable finality can be achieved using the follow combination of techniques:
+Scalable confirmation can be achieved using the follow combination of
+techniques:
 
 1. Timestamp transactions with a VDF sample and sign the timestamp.
 2. Split the transactions into batches, send each to separate nodes and have
