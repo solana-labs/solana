@@ -111,7 +111,7 @@ A list of [entries](#entry) containing [transactions](#transaction) signed by
 A [hash](#hash) of the [fullnode's state](#fullnode-state) at a given [tick
 height](#tick-height). It comprises a validator's affirmation that a
 [block](#block) it has received has been verified, as well as a promise not to
-vote for a conflicting [block](#block) or [fork](#fork) for a specific amount
+vote for a conflicting [block](#block) (i.e. [fork](#fork)) for a specific amount
 of time, the [lockout](#lockout) period.
 
 #### lockout
