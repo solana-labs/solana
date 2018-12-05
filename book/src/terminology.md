@@ -96,8 +96,8 @@ the [ledger](#ledger).
 #### leader schedule
 
 A sequence of [fullnode](#fullnode) [public keys](#public-key). The cluster
-uses the leader schedule to determine which fullnode is in the
-[leader](#leader) at any moment in time.
+uses the leader schedule to determine which fullnode is the [leader](#leader)
+at any moment in time.
 
 #### ledger
 
@@ -111,7 +111,7 @@ height](#tick-height).
 
 #### lockout
 
-The duration of time in which a [fullnode](#fullnode) is unable to
+The duration of time for which a [fullnode](#fullnode) is unable to
 [vote](#vote) on another [fork](#fork).
 
 #### native token
@@ -208,7 +208,7 @@ A scarce, non-fungible member of a set of curios.
 
 #### epoch
 
-The time in which a [leader schedule](#leader-schedule) is valid.
+The time for which a [leader schedule](#leader-schedule) is valid.
 
 #### light client
 

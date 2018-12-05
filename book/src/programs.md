@@ -30,9 +30,9 @@ instruction is invalid, any changes made within the transaction are discarded.
 
 If the program needs to store state between transactions, it does so using
 *accounts*. Accounts are similar to files in operating systems such as Linux.
-Like files, an account may hold arbitrary data and that data persists beyond
-the lifetime of a program. Also like files, an account includes metadata that
-tells the runtime who is allowed to access the data and how. Unlike files, the
+Like a file, an account may hold arbitrary data and that data persists beyond
+the lifetime of a program. Also like a file, an account includes metadata that
+tells the runtime who is allowed to access the data and how. Unlike a file, the
 account includes metadata for the lifetime of the file. That lifetime is
 expressed in "tokens", which is a number of fractional native tokens, called
 *lamports*. Accounts are held in validator memory and pay "rent" to stay there.
@@ -40,23 +40,23 @@ Each fullnode periodically scan all accounts and collects rent. Any account
 that drops to zero lamports is purged.
 
 If an account is marked "executable", it will only be used by a *loader* to run
-programs. For example, programs compiled to BPF are marked executable and
-loaded by the BPF loader. No program is allowed to modify the contents of an
+programs. For example, a BPF-compiled program is marked executable and loaded
+by the BPF loader. No program is allowed to modify the contents of an
 executable account.
 
-Accounts also include "owner" metadata. The owner is a program ID. The runtime
-grants the program write access to the account if its ID matches the owner. If
-an account is not owned by a program, the program is permitted to read its data
-and credit the account.
+An account also includes "owner" metadata. The owner is a program ID. The
+runtime grants the program write access to the account if its ID matches the
+owner. If an account is not owned by a program, the program is permitted to
+read its data and credit the account.
 
 In the same way that a Linux user uses a path to look up a file, a Solana
 client uses public keys to look up accounts. To create an account, the client
 generates a *keypair* and registers its public key using the CreateAccount
 instruction. Once registered, transactions reference account keys to grant
 programs access to accounts. The runtime grants programs read access by
-default. To grant write access, the client must either assign the account
-to a program ID or sign the transaction using the keypair's *secret key*. Since
-only the owner of the secret key can produce valid signatures matching the
+default. To grant write access, the client must either assign the account to a
+program or sign the transaction using the keypair's *secret key*. Since only
+the holder of the secret key can produce valid signatures matching the
 account's public key, the runtime recognizes the signature as authorization to
 modify account data or debit the account.
 
