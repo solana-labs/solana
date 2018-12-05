@@ -68,7 +68,7 @@ impl PohService {
         loop {
             match config {
                 Config::Tick(num) => {
-                    for _ in 0..num {
+                    for _ in 1..num {
                         poh.hash()?;
                     }
                 }
@@ -91,4 +91,88 @@ impl Service for PohService {
     fn join(self) -> thread::Result<Result<()>> {
         self.tick_producer.join()
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Config, PohService};
+    use bank::Bank;
+    use mint::Mint;
+    use poh_recorder::PohRecorder;
+    use result::Result;
+    use service::Service;
+    use solana_sdk::hash::hash;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::mpsc::channel;
+    use std::sync::Arc;
+    use std::thread::{Builder, JoinHandle};
+    use system_transaction::test_tx;
+
+    #[test]
+    fn test_poh_service() {
+        let mint = Mint::new(1);
+        let bank = Arc::new(Bank::new(&mint));
+        let prev_id = bank.last_id();
+        let (entry_sender, entry_receiver) = channel();
+        let poh_recorder = PohRecorder::new(bank, entry_sender, prev_id, None);
+        let exit = Arc::new(AtomicBool::new(false));
+
+        let entry_producer: JoinHandle<Result<()>> = {
+            let poh_recorder = poh_recorder.clone();
+            let exit = exit.clone();
+
+            Builder::new()
+                .name("solana-poh-service-entry_producer".to_string())
+                .spawn(move || {
+                    loop {
+                        // send some data
+                        let h1 = hash(b"hello world!");
+                        let tx = test_tx();
+                        assert!(poh_recorder.record(h1, vec![tx]).is_ok());
+
+                        if exit.load(Ordering::Relaxed) {
+                            break Ok(());
+                        }
+                    }
+                }).unwrap()
+        };
+
+        const HASHES_PER_TICK: u64 = 2;
+        let poh_service = PohService::new(poh_recorder, Config::Tick(HASHES_PER_TICK as usize));
+
+        // get some events
+        let mut hashes = 0;
+        let mut need_tick = true;
+        let mut need_entry = true;
+        let mut need_partial = true;
+
+        while need_tick || need_entry || need_partial {
+            for entry in entry_receiver.recv().unwrap() {
+                if entry.is_tick() {
+                    assert!(entry.num_hashes <= HASHES_PER_TICK);
+
+                    if entry.num_hashes == HASHES_PER_TICK {
+                        need_tick = false;
+                    } else {
+                        need_partial = false;
+                    }
+
+                    hashes += entry.num_hashes;
+
+                    assert_eq!(hashes, HASHES_PER_TICK);
+
+                    hashes = 0;
+                } else {
+                    assert!(entry.num_hashes >= 1);
+                    need_entry = false;
+                    hashes += entry.num_hashes - 1;
+                }
+            }
+        }
+        exit.store(true, Ordering::Relaxed);
+        poh_service.exit();
+        assert!(poh_service.join().is_ok());
+        assert!(entry_producer.join().is_ok());
+    }
+
 }
