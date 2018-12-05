@@ -25,7 +25,7 @@ test('load BPF program', async () => {
 
   const connection = new Connection(url);
   const from = await newAccountWithTokens(connection, 1024);
-  const data = await fs.readFile('test/fixtures/noop/noop.o');
+  const data = await fs.readFile('test/fixtures/noop/noop.so');
   const programId = await BpfLoader.load(connection, from, data);
   const transaction = new Transaction().add({
     keys: [from.publicKey],
