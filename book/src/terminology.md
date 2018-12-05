@@ -12,7 +12,7 @@ A persistent file addressed by [public key](#public-key) and with
 
 #### block
 
-A contiguous set of [entries](#entry) on the ledger covered by a [vote](#vote).
+A contiguous set of [entries](#entry) on the ledger covered by a [vote](#ledger-vote).
 The length of a block is network hyper parameter, specified in [ticks](#tick).
 Also called [voting period](#voting-period).
 
@@ -117,7 +117,7 @@ of time, the [lockout](#lockout) period.
 #### lockout
 
 The duration of time for which a [fullnode](#fullnode) is unable to
-[vote](#vote) on another [fork](#fork).
+[vote](#ledger-vote) on another [fork](#fork).
 
 #### native token
 
