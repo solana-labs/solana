@@ -50,5 +50,7 @@ echo --- ci/localnet-sanity.sh
   set -x
   # Assume |cargo build| has populated target/debug/ successfully.
   export PATH=$PWD/target/debug:$PATH
+  # Move programs into the executable location so native_loader can find them
+  scripts/install-native-programs.sh "$PWD"/target/debug
   USE_INSTALL=1 ci/localnet-sanity.sh
 )
