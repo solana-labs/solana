@@ -277,8 +277,8 @@ mod tests {
     use solana_sdk::budget_transaction::BudgetTransaction;
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::transaction::Transaction;
     use solana_sdk::system_transaction::SystemTransaction;
+    use solana_sdk::transaction::Transaction;
 
     #[test]
     fn test_entry_verify() {

@@ -179,6 +179,7 @@ pub mod tests {
     use service::Service;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Transaction;
     use std::fs::remove_dir_all;
     use std::net::UdpSocket;
@@ -187,7 +188,6 @@ pub mod tests {
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
     use streamer;
-    use solana_sdk::system_transaction::SystemTransaction;
     use tvu::Tvu;
     use window::{self, SharedWindow};
 

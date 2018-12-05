@@ -31,6 +31,7 @@ use solana_sdk::signature::Signature;
 use solana_sdk::storage_program;
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::system_program;
+use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::{duration_as_us, timestamp};
 use solana_sdk::token_program;
 use solana_sdk::transaction::Transaction;
@@ -41,7 +42,6 @@ use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
-use solana_sdk::system_transaction::SystemTransaction;
 use tokio::prelude::Future;
 
 /// The number of most recent `last_id` values that the bank will track the signatures
@@ -1431,9 +1431,9 @@ mod tests {
     use solana_sdk::hash::hash;
     use solana_sdk::signature::Keypair;
     use solana_sdk::signature::KeypairUtil;
+    use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Instruction;
     use std;
-    use solana_sdk::system_transaction::SystemTransaction;
     use tokio::prelude::{Async, Stream};
 
     #[test]

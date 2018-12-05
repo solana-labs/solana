@@ -10,12 +10,12 @@ use ledger::create_ticks;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, Vote, VoteProgram};
 use solana_sdk::vote_transaction::VoteTransaction;
 use std::collections::HashSet;
 use std::io::Cursor;
-use solana_sdk::system_transaction::SystemTransaction;
 
 pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = 1000;
 pub const DEFAULT_LEADER_ROTATION_INTERVAL: u64 = 100;

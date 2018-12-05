@@ -15,13 +15,13 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::Vote;
+use solana_sdk::vote_transaction::VoteTransaction;
 use std::fs::{copy, create_dir_all, remove_dir_all, File, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};
 use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::Path;
-use solana_sdk::vote_transaction::VoteTransaction;
 
 //
 // A persistent ledger is 2 files:

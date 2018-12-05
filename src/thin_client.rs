@@ -19,6 +19,7 @@ use solana_sdk::account::Account;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signature};
+use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
 use std;
@@ -30,7 +31,6 @@ use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::Duration;
 use std::time::Instant;
-use solana_sdk::system_transaction::SystemTransaction;
 
 /// An object for querying and sending transactions to the network.
 pub struct ThinClient {
@@ -438,9 +438,9 @@ mod tests {
     use mint::Mint;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
-    use std::fs::remove_dir_all;
     use solana_sdk::vote_program::VoteProgram;
     use solana_sdk::vote_transaction::VoteTransaction;
+    use std::fs::remove_dir_all;
 
     #[test]
     fn test_thin_client() {

@@ -17,6 +17,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::loader_transaction::LoaderTransaction;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use std::fs::{self, File};
 use std::io::Write;
@@ -26,7 +27,6 @@ use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
 use std::{error, fmt, mem};
-use solana_sdk::system_transaction::SystemTransaction;
 use thin_client::poll_gossip_for_leader;
 
 const PLATFORM_SECTION_C: &str = ".text.entrypoint";
