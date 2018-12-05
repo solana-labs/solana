@@ -45,7 +45,7 @@ fn process_instruction(
             tick_height,
         )
     } else {
-        native_loader::process_instruction(
+        native_loader::entrypoint(
             &program_id,
             &mut keyed_accounts,
             &tx.instructions[instruction_index].userdata,

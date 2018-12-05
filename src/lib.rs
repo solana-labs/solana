@@ -43,7 +43,6 @@ pub mod ledger;
 pub mod ledger_write_stage;
 pub mod logger;
 pub mod mint;
-pub mod native_loader;
 pub mod ncp;
 pub mod netutil;
 pub mod packet;
@@ -93,7 +92,6 @@ extern crate indexmap;
 extern crate ipnetwork;
 extern crate itertools;
 extern crate libc;
-extern crate libloading;
 #[macro_use]
 extern crate log;
 extern crate nix;
@@ -107,6 +105,7 @@ extern crate serde;
 extern crate serde_derive;
 #[macro_use]
 extern crate serde_json;
+extern crate native_loader;
 extern crate serde_cbor;
 extern crate sha2;
 extern crate socket2;

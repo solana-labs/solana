@@ -81,7 +81,6 @@ indexmap = "1.0"
 ipnetwork = "0.12.7"
 itertools = "0.7.11"
 libc = "0.2.44"
-libloading = "0.5.0"
 log = "0.4.2"
 matches = "0.1.6"
 nix = "0.12.0"
@@ -108,6 +107,7 @@ solana-jsonrpc-pubsub = "0.3.0"
 solana-jsonrpc-ws-server = "0.3.0"
 solana-lualoader = { path = "programs/native/lua_loader", version = "0.11.0" }
 solana-metrics = { path = "metrics", version = "0.11.0" }
+solana-native-loader = { path = "programs/native/native_loader", version = "0.11.0" }
 solana-noop = { path = "programs/native/noop", version = "0.11.0" }
 solana-sdk = { path = "sdk", version = "0.11.0" }
 solana-storage-program = { path = "programs/native/storage", version = "0.11.0" }
@@ -151,6 +151,7 @@ members = [
     "programs/native/budget",
     "programs/native/erc20",
     "programs/native/lua_loader",
+    "programs/native/native_loader",
     "programs/native/noop",
     "programs/native/vote",
     "sdk",
