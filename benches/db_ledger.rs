@@ -4,7 +4,7 @@ extern crate rocksdb;
 extern crate solana;
 extern crate test;
 
-use rand::distributions::{Distribution, Range};
+use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};
 use rocksdb::{Options, DB};
 use solana::db_ledger::{DataCf, DbLedger, LedgerColumnFamilyRaw};
@@ -94,13 +94,10 @@ fn bench_read_sequential(bench: &mut Bencher) {
     setup_read_bench(&mut db_ledger, num_small_blobs, num_large_blobs, slot);
 
     let num_reads = total_blobs / 15;
-    // Make range [0, total_blobs - 1]
-    let range = Range::new(0, num_small_blobs + num_large_blobs);
-
     let mut rng = rand::thread_rng();
     bench.iter(move || {
-        // Generate random starting point in that range, read num_reads blobs sequentially
-        let start_index = range.sample(&mut rng);
+        // Generate random starting point in the range [0, total_blobs - 1], read num_reads blobs sequentially
+        let start_index = rng.gen_range(0, num_small_blobs + num_large_blobs);
         for i in start_index..start_index + num_reads {
             let _ =
                 db_ledger
@@ -129,14 +126,11 @@ fn bench_read_random(bench: &mut Bencher) {
 
     let num_reads = total_blobs / 15;
 
-    // Make range [0, total_blobs - 1]
-    let range = Range::new(0, total_blobs);
-
     // Generate a num_reads sized random sample of indexes in range [0, total_blobs - 1],
     // simulating random reads
     let mut rng = rand::thread_rng();
     let indexes: Vec<usize> = (0..num_reads)
-        .map(|_| range.sample(&mut rng) as usize)
+        .map(|_| rng.gen_range(0, total_blobs) as usize)
         .collect();
     bench.iter(move || {
         for i in indexes.iter() {
@@ -161,7 +155,7 @@ fn bench_insert_data_blob_small(bench: &mut Bencher) {
     let shared_blobs = entries.to_blobs();
     let mut blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.write().unwrap()).collect();
     let mut blobs: Vec<&mut Blob> = blob_locks.iter_mut().map(|b| &mut **b).collect();
-    thread_rng().shuffle(&mut blobs);
+    blobs.shuffle(&mut thread_rng());
     let slot = 0;
 
     bench.iter(move || {
@@ -188,7 +182,7 @@ fn bench_insert_data_blob_big(bench: &mut Bencher) {
     let shared_blobs = entries.to_blobs();
     let mut blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.write().unwrap()).collect();
     let mut blobs: Vec<&mut Blob> = blob_locks.iter_mut().map(|b| &mut **b).collect();
-    thread_rng().shuffle(&mut blobs);
+    blobs.shuffle(&mut thread_rng());
     let slot = 0;
 
     bench.iter(move || {
