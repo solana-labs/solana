@@ -33,7 +33,7 @@ pub fn create_new_signed_vote_blob(
     last_id: &Hash,
     keypair: &Arc<Keypair>,
     vote_account: &Pubkey,
-    vote_signer_addr: SocketAddr,
+    rpc_client: &RpcClient,
     bank: &Arc<Bank>,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
 ) -> Result<SharedBlob> {
@@ -45,7 +45,6 @@ pub fn create_new_signed_vote_blob(
     debug!("voting on {:?}", &last_id.as_ref()[..8]);
     let vote = Vote { tick_height };
     let tx = Transaction::vote_new(&vote_account, vote, *last_id, 0);
-    let rpc_client = RpcClient::new_from_socket(vote_signer_addr);
 
     let msg = tx.get_sign_data();
     let sig = Signature::new(&keypair.sign(&msg).as_ref());
@@ -96,17 +95,18 @@ pub fn send_validator_vote(
     bank: &Arc<Bank>,
     keypair: &Arc<Keypair>,
     vote_account: &Pubkey,
-    vote_signer_addr: SocketAddr,
+    vote_signer_rpc: &RpcClient,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
     vote_blob_sender: &BlobSender,
 ) -> Result<()> {
     let last_id = bank.last_id();
 
     if let Ok(shared_blob) =
-        create_new_signed_vote_blob(&last_id, vote_account, vote_signer_addr, bank, cluster_info)
+        create_new_signed_vote_blob(&last_id, vote_account, vote_signer_rpc, bank, cluster_info)
     {
         inc_new_counter_info!("validator-vote_sent", 1);
         vote_blob_sender.send(vec![shared_blob])?;
     }
+
     Ok(())
 }

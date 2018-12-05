@@ -13,6 +13,10 @@ use crate::service::Service;
 use crate::streamer::{responder, BlobSender};
 use crate::vote_stage::send_validator_vote;
 use log::Level;
+use packet::BlobError;
+use result::{Error, Result};
+use rpc_request::RpcClient;
+use service::Service;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -64,8 +68,8 @@ impl ReplayStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window_receiver: &EntryReceiver,
         keypair: &Arc<Keypair>,
-        vote_account_id: Pubkey,
-        vote_signer_addr: SocketAddr,
+        vote_account_id: &Pubkey,
+        vote_signer_rpc: &RpcClient,
         vote_blob_sender: Option<&BlobSender>,
         ledger_entry_sender: &EntrySender,
         entry_height: &mut u64,
@@ -142,7 +146,7 @@ impl ReplayStage {
                         send_validator_vote(
                             bank,
                             &vote_account_id,
-                            vote_signer_addr,
+                            vote_signer_rpc,
                             &cluster_info,
                             sender,
                         )
@@ -201,7 +205,7 @@ impl ReplayStage {
     pub fn new(
         keypair: Arc<Keypair>,
         vote_account_id: &Pubkey,
-        vote_signer_addr: SocketAddr,
+        vote_signer_addr: &SocketAddr,
         bank: Arc<Bank>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window_receiver: EntryReceiver,
@@ -217,6 +221,7 @@ impl ReplayStage {
         let keypair = Arc::new(keypair);
         let vote_account_id = vote_account_id.clone();
 
+        let rpc_client = RpcClient::new_from_socket(vote_signer_addr.clone());
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
@@ -245,8 +250,8 @@ impl ReplayStage {
                         &cluster_info,
                         &window_receiver,
                         &keypair,
-                        vote_account_id,
-                        vote_signer_addr,
+                        &vote_account_id,
+                        &rpc_client,
                         Some(&vote_blob_sender),
                         &ledger_entry_sender,
                         &mut entry_height_,

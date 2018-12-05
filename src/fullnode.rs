@@ -149,7 +149,7 @@ impl Fullnode {
         ledger_path: &str,
         keypair: Arc<Keypair>,
         vote_account_id: &Pubkey,
-        vote_signer_addr: SocketAddr,
+        vote_signer_addr: &SocketAddr,
         leader_addr: Option<SocketAddr>,
         sigverify_disabled: bool,
         leader_scheduler: LeaderScheduler,
@@ -211,7 +211,7 @@ impl Fullnode {
     pub fn new_with_bank(
         keypair: Arc<Keypair>,
         vote_account_id: &Pubkey,
-        vote_signer_addr: SocketAddr,
+        vote_signer_addr: &SocketAddr,
         bank: Bank,
         db_ledger: Option<Arc<DbLedger>>,
         entry_height: u64,
@@ -469,7 +469,7 @@ impl Fullnode {
             let tvu = Tvu::new(
                 self.keypair.clone(),
                 &self.vote_account_id,
-                self.vote_signer_addr,
+                &self.vote_signer_addr,
                 &self.bank,
                 entry_height,
                 last_entry_id,

@@ -60,7 +60,7 @@ impl Tvu {
     /// * `db_ledger` - the ledger itself
     pub fn new(
         vote_account_id: &Pubkey,
-        vote_signer_addr: SocketAddr,
+        vote_signer_addr: &SocketAddr,
         bank: &Arc<Bank>,
         entry_height: u64,
         last_entry_id: Hash,

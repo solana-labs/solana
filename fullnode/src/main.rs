@@ -14,11 +14,12 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::vote_program::VoteProgram;
 use solana_sdk::vote_transaction::VoteTransaction;
+use solana_vote_signer::rpc::VoteSignerRpcService;
 use std::fs::File;
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::process::exit;
 use std::sync::Arc;
-use std::thread::sleep;
+use std::thread::{sleep, Builder};
 use std::time::Duration;
 
 fn main() {
@@ -119,10 +120,25 @@ fn main() {
         .value_of("network")
         .map(|network| network.parse().expect("failed to parse network address"));
 
-    let signer = matches
-        .value_of("signer")
-        .map(|signer| signer.parse().expect("failed to parse vote signer address"))
-        .unwrap();
+    let signer = if let Some(signer_addr) = matches.value_of("signer") {
+        signer_addr.to_string().parse().expect("Signer IP Address")
+    } else {
+        // If a remote vote-signer service is not provided, run a local instance
+        let addr = match find_available_port_in_range(FULLNODE_PORT_RANGE) {
+            Ok(port) => SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port),
+            Err(_) => SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+        };
+        let service_addr = addr.clone();
+        Builder::new()
+            .name("solana-vote-signer".to_string())
+            .spawn(move || {
+                let service = VoteSignerRpcService::new(service_addr);
+                service.join().unwrap();
+                ()
+            })
+            .unwrap();
+        addr
+    };
 
     let node = Node::new_with_external_ip(keypair.pubkey(), &gossip);
 
@@ -181,7 +197,7 @@ fn main() {
         ledger_path,
         keypair.clone(),
         &vote_account_id,
-        signer,
+        &signer,
         network,
         nosigverify,
         leader_scheduler,
