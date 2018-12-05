@@ -21,7 +21,7 @@ if [[ ! -d $installDir ]]; then
 fi
 
 for dir in "$SOLANA_ROOT"/programs/native/*; do
-  for program in echo "$SOLANA_ROOT"/target/"$variant"/deps/lib{,solana_}"$(basename "$dir")".{so,dylib,dll}; do
+  for program in echo "$SOLANA_ROOT"/target/"$variant"/deps/lib{,solana_}"$(basename "$dir")"{,_program}.{so,dylib,dll}; do
     if [[ -f $program ]]; then
       cp -v "$program" "$installDir"
     fi
