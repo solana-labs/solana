@@ -2,6 +2,7 @@
 //! Receive and processes votes from validators
 
 extern crate bincode;
+extern crate env_logger;
 #[macro_use]
 extern crate log;
 #[macro_use]
@@ -13,6 +14,7 @@ use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::vote_program::*;
 use std::collections::VecDeque;
+use std::sync::{Once, ONCE_INIT};
 
 solana_entrypoint!(entrypoint);
 fn entrypoint(
@@ -21,6 +23,12 @@ fn entrypoint(
     data: &[u8],
     _tick_height: u64,
 ) -> Result<(), ProgramError> {
+    static INIT: Once = ONCE_INIT;
+    INIT.call_once(|| {
+        // env_logger can only be initialized once
+        env_logger::init();
+    });
+
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
