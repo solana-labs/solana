@@ -14,7 +14,7 @@ A persistent file addressed by [public key](#public-key) and with
 
 A contiguous set of [entries](#entry) on the ledger covered by a [vote](#vote).
 The length of a block is network hyper parameter, specified in [ticks](#tick).
-Also called [voting period](#voting period).
+Also called [voting period](#voting-period).
 
 #### bootstrap leader
 
@@ -154,7 +154,7 @@ The private key of a [keypair](#keypair).
 
 #### slot
 
-The time (some number of [voting periods](#voting period)) during which a
+The time (some number of [voting periods](#voting-period)) during which a
 [leader](#leader) ingests transactions and produces [entries](#entry).
 
 #### sol
