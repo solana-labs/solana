@@ -12,6 +12,7 @@
 //! * layer 2 - Everyone else, if layer 1 is `2^10`, layer 2 should be able to fit `2^20` number of nodes.
 //!
 //! Bank needs to provide an interface for us to query the stake weight
+use crate::bank::Bank;
 use crate::bloom::Bloom;
 use crate::contact_info::ContactInfo;
 use crate::counter::Counter;
@@ -36,6 +37,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::timing::{duration_as_ms, timestamp};
+use std::cmp::min;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -46,6 +48,12 @@ use std::time::{Duration, Instant};
 pub type NodeInfo = ContactInfo;
 
 pub const FULLNODE_PORT_RANGE: (u16, u16) = (8000, 10_000);
+
+/// The fanout for Ledger Replication
+pub const DATA_PLANE_FANOUT: usize = 200;
+pub const NEIGHBORHOOD_SIZE: usize = DATA_PLANE_FANOUT;
+/// Set whether node capacity should grow as layers are added
+pub const GROW_LAYER_CAPACITY: bool = false;
 
 /// milliseconds we sleep for between gossip requests
 const GOSSIP_SLEEP_MILLIS: u64 = 100;
@@ -64,6 +72,20 @@ pub struct ClusterInfo {
     pub gossip: CrdsGossip,
     /// set the keypair that will be used to sign crds values generated. It is unset only in tests.
     pub(crate) keypair: Arc<Keypair>,
+}
+
+#[derive(Default, Clone)]
+pub struct Locality {
+    /// The bounds of the neighborhood represented by this locality
+    pub neighbor_bounds: (usize, usize),
+    /// The `avalanche` layer this locality is in
+    pub layer_ix: usize,
+    /// The bounds of the current layer
+    pub layer_bounds: (usize, usize),
+    /// The bounds of the next layer
+    pub child_layer_bounds: Option<(usize, usize)>,
+    /// The indices of the nodes that should be contacted in next layer
+    pub child_layer_peers: Vec<usize>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -297,6 +319,28 @@ impl ClusterInfo {
             .collect()
     }
 
+    pub fn sorted_retransmit_peers(&self, bank: &Arc<Bank>) -> Vec<NodeInfo> {
+        let peers = self.retransmit_peers();
+        let mut peers_with_stakes: Vec<(&NodeInfo, u64)> =
+            peers.iter().map(|c| (c, bank.get_stake(&c.id))).collect();
+        peers_with_stakes.sort_unstable_by(|l, r| r.1.cmp(&l.1));
+        peers_with_stakes
+            .iter()
+            .map(|(peer, _)| (*peer).clone())
+            .collect()
+    }
+
+    pub fn sorted_tvu_peers(&self, bank: &Arc<Bank>) -> Vec<NodeInfo> {
+        let peers = self.tvu_peers();
+        let mut peers_with_stakes: Vec<(&NodeInfo, u64)> =
+            peers.iter().map(|c| (c, bank.get_stake(&c.id))).collect();
+        peers_with_stakes.sort_unstable_by(|l, r| r.1.cmp(&l.1));
+        peers_with_stakes
+            .iter()
+            .map(|(peer, _)| (*peer).clone())
+            .collect()
+    }
+
     /// compute broadcast table
     pub fn tpu_peers(&self) -> Vec<NodeInfo> {
         let me = self.my_data().id;
@@ -309,6 +353,125 @@ impl ClusterInfo {
             .filter(|x| ContactInfo::is_valid_address(&x.tpu))
             .cloned()
             .collect()
+    }
+
+    /// calc num layers and their respective indices
+    pub fn describe_data_plane(
+        nodes: usize,
+        fanout: usize,
+        hood_size: usize,
+        grow: bool,
+    ) -> (usize, Vec<usize>) {
+        let mut layer_indices: Vec<usize> = vec![0];
+        if nodes == 0 {
+            return (0, vec![]);
+        } else if nodes <= fanout {
+            // single layer data plane
+            return (1, layer_indices);
+        } else {
+            //layer 1 is going to be the first num fanout nodes, so exclude those
+            let mut remaining_nodes = nodes - fanout;
+            layer_indices.push(fanout);
+            let mut num_layers = 2;
+            let mut num_neighborhoods = fanout / 2;
+            let mut layer_capacity = hood_size * num_neighborhoods;
+            while remaining_nodes > 0 {
+                if remaining_nodes > layer_capacity {
+                    // Needs more layers.
+                    num_layers += 1;
+                    remaining_nodes -= layer_capacity;
+                    let end = layer_indices.last().unwrap().clone();
+                    layer_indices.push(layer_capacity + end);
+
+                    if grow {
+                        // Next layer's capacity
+                        num_neighborhoods *= num_neighborhoods;
+                        layer_capacity = hood_size * num_neighborhoods;
+                    }
+                } else {
+                    //everything will now fit in the layers we have
+                    let end = layer_indices.last().unwrap().clone();
+                    layer_indices.push(layer_capacity + end);
+                    break;
+                }
+            }
+            assert_eq!(num_layers, layer_indices.len() - 1);
+            (num_layers, layer_indices)
+        }
+    }
+
+    /// Given a array of layer indices and another index, returns (as a `Locality`) the layer,
+    /// layer-bounds and neighborhood-bounds in which the index resides
+    pub fn localize(layer_indices: &[usize], hood_size: usize, select_index: usize) -> Locality {
+        let end = layer_indices.len() - 1;
+        let mut locality = Locality::default();
+
+        for ix in 0..layer_indices.len() {
+            let next = min(end, ix + 1);
+            let value = layer_indices[ix];
+            let localized = select_index >= value && select_index < layer_indices[next];
+            if localized {
+                match ix {
+                    ix if ix == 0 => {
+                        locality.layer_ix = 0;
+                        locality.layer_bounds = (0, hood_size);
+                        locality.neighbor_bounds = locality.layer_bounds;
+                        if next == end {
+                            locality.child_layer_bounds = None;
+                            locality.child_layer_peers = vec![];
+                        } else {
+                            locality.child_layer_bounds =
+                                Some((layer_indices[next], layer_indices[next + 1]));
+                            locality.child_layer_peers = ClusterInfo::lower_layer_peers(
+                                select_index,
+                                layer_indices[next],
+                                layer_indices[next + 1],
+                                hood_size,
+                            );
+                        }
+                    }
+                    ix if ix == end => {
+                        locality.layer_ix = end;
+                        locality.layer_bounds = (end - hood_size, end);
+                        locality.neighbor_bounds = locality.layer_bounds;
+                        locality.child_layer_bounds = None;
+                        locality.child_layer_peers = vec![];
+                    }
+                    ix => {
+                        let hood_ix = (select_index - value) / hood_size;
+                        locality.layer_ix = ix;
+                        locality.layer_bounds = (value, layer_indices[next]);
+                        locality.neighbor_bounds = (
+                            ((hood_ix * hood_size) + value),
+                            ((hood_ix + 1) * hood_size + value),
+                        );
+                        if next == end {
+                            locality.child_layer_bounds = None;
+                            locality.child_layer_peers = vec![];
+                        } else {
+                            locality.child_layer_bounds =
+                                Some((layer_indices[next], layer_indices[next + 1]));
+                            locality.child_layer_peers = ClusterInfo::lower_layer_peers(
+                                select_index,
+                                layer_indices[next],
+                                layer_indices[next + 1],
+                                hood_size,
+                            );
+                        }
+                    }
+                }
+                break;
+            }
+        }
+        locality
+    }
+
+    fn lower_layer_peers(index: usize, start: usize, end: usize, hood_size: usize) -> Vec<usize> {
+        let mut ret = Vec::new();
+        for x in (start..end).step_by(hood_size) {
+            ret.push(x + (index % hood_size))
+        }
+        ret
     }
 
     /// broadcast messages from the leader to layer 1 nodes
@@ -369,14 +532,19 @@ impl ClusterInfo {
         Ok(())
     }
 
-    /// retransmit messages from the leader to layer 1 nodes
+    /// retransmit messages to a list of nodes
     /// # Remarks
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
-    pub fn retransmit(obj: &Arc<RwLock<Self>>, blob: &SharedBlob, s: &UdpSocket) -> Result<()> {
+    pub fn retransmit_to(
+        obj: &Arc<RwLock<Self>>,
+        peers: Vec<NodeInfo>,
+        blob: &SharedBlob,
+        s: &UdpSocket,
+    ) -> Result<()> {
         let (me, orders): (NodeInfo, Vec<NodeInfo>) = {
             // copy to avoid locking during IO
             let s = obj.read().expect("'obj' read lock in pub fn retransmit");
-            (s.my_data().clone(), s.retransmit_peers())
+            (s.my_data().clone(), peers)
         };
         blob.write()
             .unwrap()
@@ -407,6 +575,14 @@ impl ClusterInfo {
             e?;
         }
         Ok(())
+    }
+
+    /// retransmit messages from the leader to layer 1 nodes
+    /// # Remarks
+    /// We need to avoid having obj locked while doing any io, such as the `send_to`
+    pub fn retransmit(obj: &Arc<RwLock<Self>>, blob: &SharedBlob, s: &UdpSocket) -> Result<()> {
+        let me = obj.read().expect("'obj' read lock in retransmit");
+        ClusterInfo::retransmit_to(obj, me.retransmit_peers(), blob, s)
     }
 
     fn send_orders(
@@ -1361,4 +1537,140 @@ mod tests {
             .unwrap();
         assert!(val.verify());
     }
+
+    #[test]
+    fn test_describe_data_plane() {
+        // no nodes
+        let (num_layers, _) = ClusterInfo::describe_data_plane(0, 200, 200, false);
+        assert_eq!(num_layers, 0);
+
+        // 1 node
+        let (num_layers, _) = ClusterInfo::describe_data_plane(1, 200, 200, false);
+        assert_eq!(num_layers, 1);
+
+        // 10 nodes with fanout of 2 and hood size of 2
+        let (num_layers, _) = ClusterInfo::describe_data_plane(10, 2, 2, false);
+        assert_eq!(num_layers, 5);
+
+        // fanout + 1 nodes with fanout of 2 and hood size of 2
+        let (num_layers, _) = ClusterInfo::describe_data_plane(3, 2, 2, false);
+        assert_eq!(num_layers, 2);
+
+        // 10 nodes with fanout of 4 and hood size of 2 while growing
+        let (num_layers, _) = ClusterInfo::describe_data_plane(10, 4, 2, true);
+        assert_eq!(num_layers, 3);
+
+        // A little more realistic
+        let (num_layers, _) = ClusterInfo::describe_data_plane(100, 10, 10, false);
+        assert_eq!(num_layers, 3);
+
+        // A little more realistic with odd numbers
+        let (num_layers, _) = ClusterInfo::describe_data_plane(103, 13, 13, false);
+        assert_eq!(num_layers, 3);
+
+        // larger
+        let (num_layers, layer_indices) = ClusterInfo::describe_data_plane(10_000, 10, 10, false);
+        assert_eq!(num_layers, 201);
+        // distances between index values should be the same since we aren't growing.
+        let capacity = 10 / 2 * 10;
+        assert_eq!(layer_indices[1], 10);
+        layer_indices[1..layer_indices.len()]
+            .chunks(2)
+            .for_each(|x| {
+                if x.len() == 2 {
+                    assert_eq!(x[1] - x[0], capacity);
+                }
+            });
+
+        // massive
+        let (num_layers, layer_indices) =
+            ClusterInfo::describe_data_plane(500_000, 200, 200, false);
+        let capacity = 200 / 2 * 200;
+        let cnt = 500_000 / capacity + 1;
+        assert_eq!(num_layers, cnt);
+        // distances between index values should be the same since we aren't growing.
+        assert_eq!(layer_indices[1], 200);
+        layer_indices[1..layer_indices.len()]
+            .chunks(2)
+            .for_each(|x| {
+                if x.len() == 2 {
+                    assert_eq!(x[1] - x[0], capacity);
+                }
+            });
+        let total_capacity: usize = *layer_indices.last().unwrap();
+        assert!(total_capacity >= 500_000);
+
+        // massive with growth
+        let (num_layers, _) = ClusterInfo::describe_data_plane(500_000, 200, 200, true);
+        assert_eq!(num_layers, 3);
+    }
+
+    #[test]
+    fn test_localize() {
+        // go for gold
+        let (_, layer_indices) = ClusterInfo::describe_data_plane(500_000, 200, 200, false);
+        let mut me = 0;
+        let mut layer_ix = 0;
+        let locality = ClusterInfo::localize(&layer_indices, 200, me);
+        assert_eq!(locality.layer_ix, layer_ix);
+        assert_eq!(
+            locality.child_layer_bounds,
+            Some((layer_indices[layer_ix + 1], layer_indices[layer_ix + 2]))
+        );
+        me = 201;
+        layer_ix = 1;
+        let locality = ClusterInfo::localize(&layer_indices, 200, me);
+        assert_eq!(
+            locality.layer_ix, layer_ix,
+            "layer_indices[layer_ix] is actually {}",
+            layer_indices[layer_ix]
+        );
+        assert_eq!(
+            locality.child_layer_bounds,
+            Some((layer_indices[layer_ix + 1], layer_indices[layer_ix + 2]))
+        );
+        me = 20_201;
+        layer_ix = 2;
+        let locality = ClusterInfo::localize(&layer_indices, 200, me);
+        assert_eq!(
+            locality.layer_ix, layer_ix,
+            "layer_indices[layer_ix] is actually {}",
+            layer_indices[layer_ix]
+        );
+        assert_eq!(
+            locality.child_layer_bounds,
+            Some((layer_indices[layer_ix + 1], layer_indices[layer_ix + 2]))
+        );
+
+        // test no child layer since last layer should have massive capacity
+        let (_, layer_indices) = ClusterInfo::describe_data_plane(500_000, 200, 200, true);
+        me = 20_201;
+        layer_ix = 2;
+        let locality = ClusterInfo::localize(&layer_indices, 200, me);
+        assert_eq!(
+            locality.layer_ix, layer_ix,
+            "layer_indices[layer_ix] is actually {}",
+            layer_indices[layer_ix]
+        );
+        assert_eq!(locality.child_layer_bounds, None);
+    }
+
+    #[test]
+    fn test_localize_child_peer_overlap() {
+        let (_, layer_indices) = ClusterInfo::describe_data_plane(500_000, 200, 200, false);
+        let last_ix = layer_indices.len() - 1;
+        // sample every 33 pairs to reduce test time
+        for x in (0..*layer_indices.get(last_ix - 2).unwrap()).step_by(33) {
+            let me_locality = ClusterInfo::localize(&layer_indices, 200, x);
+            let buddy_locality = ClusterInfo::localize(&layer_indices, 200, x + 1);
+            assert!(!me_locality.child_layer_peers.is_empty());
+            assert!(!buddy_locality.child_layer_peers.is_empty());
+            me_locality
+                .child_layer_peers
+                .iter()
+                .zip(buddy_locality.child_layer_peers.iter())
+                .for_each(|(x, y)| assert_ne!(x, y));
+        }
+    }
+
 }

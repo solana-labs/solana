@@ -303,6 +303,7 @@ impl Fullnode {
 
             let (broadcast_service, _) = BroadcastService::new(
                 db_ledger.clone(),
+                bank.clone(),
                 node.sockets
                     .broadcast
                     .try_clone()
@@ -476,6 +477,7 @@ impl Fullnode {
 
         let (broadcast_service, _) = BroadcastService::new(
             self.db_ledger.clone(),
+            self.bank.clone(),
             self.broadcast_socket
                 .try_clone()
                 .expect("Failed to clone broadcast socket"),

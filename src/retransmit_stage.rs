@@ -1,10 +1,10 @@
 //! The `retransmit_stage` retransmits blobs between validators
 
-use crate::cluster_info::ClusterInfo;
+use crate::bank::Bank;
+use crate::cluster_info::{ClusterInfo, DATA_PLANE_FANOUT, GROW_LAYER_CAPACITY, NEIGHBORHOOD_SIZE};
 use crate::counter::Counter;
 use crate::db_ledger::DbLedger;
 use crate::entry::Entry;
-
 use crate::leader_scheduler::LeaderScheduler;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -21,6 +21,7 @@ use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 
 fn retransmit(
+    bank: &Arc<Bank>,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
     r: &BlobReceiver,
     sock: &UdpSocket,
@@ -37,13 +38,50 @@ fn retransmit(
             .to_owned(),
     );
 
-    for b in &mut dq {
-        ClusterInfo::retransmit(&cluster_info, b, sock)?;
+    // TODO layer 2 logic here
+    // 1 - find out if I am in layer 1 first
+    // 1.1 - If yes, then broadcast to all layer 1 nodes
+    //      1 - using my layer 1 index, broadcast to all layer 2 nodes assuming you know neighborhood size
+    // 1.2 - If no, then figure out what layer I am in and who my neighbors are and only broadcast to them
+    //      1 - also check if there are nodes in lower layers and repeat the layer 1 to layer 2 logic
+    let peers = cluster_info.read().unwrap().sorted_retransmit_peers(bank);
+    let my_id = cluster_info.read().unwrap().id();
+    //calc num_layers and num_neighborhoods using the total number of nodes
+    let (num_layers, layer_indices) = ClusterInfo::describe_data_plane(
+        peers.len(),
+        DATA_PLANE_FANOUT,
+        NEIGHBORHOOD_SIZE,
+        GROW_LAYER_CAPACITY,
+    );
+    if num_layers <= 1 {
+        /* single layer data plane */
+        for b in &mut dq {
+            ClusterInfo::retransmit(&cluster_info, b, sock)?;
+        }
+    } else {
+        //find my index (my ix is the same as the first node with smaller stake)
+        let my_index = peers
+            .iter()
+            .position(|ci| bank.get_stake(&ci.id) <= bank.get_stake(&my_id));
+        //find my layer
+        let locality =
+            ClusterInfo::localize(&layer_indices, NEIGHBORHOOD_SIZE, my_index.unwrap_or(0));
+        let mut retransmit_peers =
+            peers[locality.neighbor_bounds.0..locality.neighbor_bounds.1].to_vec();
+        locality.child_layer_peers.iter().cloned().for_each(|ix| {
+            if let Some(peer) = peers.get(ix) {
+                retransmit_peers.push(peer.clone());
+            }
+        });
+
+        for b in &mut dq {
+            ClusterInfo::retransmit_to(&cluster_info, retransmit_peers.to_vec(), b, sock)?;
+        }
     }
     Ok(())
 }
 
-/// Service to retransmit messages from the leader to layer 1 nodes.
+/// Service to retransmit messages from the leader or layer 1 to relevant peer nodes.
 /// See `cluster_info` for network layer definitions.
 /// # Arguments
 /// * `sock` - Socket to read from.  Read timeout is set to 1.
@@ -53,6 +91,7 @@ fn retransmit(
 /// * `r` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
 fn retransmitter(
     sock: Arc<UdpSocket>,
+    bank: Arc<Bank>,
     cluster_info: Arc<RwLock<ClusterInfo>>,
     r: BlobReceiver,
 ) -> JoinHandle<()> {
@@ -61,7 +100,7 @@ fn retransmitter(
         .spawn(move || {
             trace!("retransmitter started");
             loop {
-                if let Err(e) = retransmit(&cluster_info, &r, &sock) {
+                if let Err(e) = retransmit(&bank, &cluster_info, &r, &sock) {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
@@ -83,6 +122,7 @@ pub struct RetransmitStage {
 impl RetransmitStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
+        bank: &Arc<Bank>,
         db_ledger: Arc<DbLedger>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         tick_height: u64,
@@ -94,8 +134,12 @@ impl RetransmitStage {
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (retransmit_sender, retransmit_receiver) = channel();
 
-        let t_retransmit =
-            retransmitter(retransmit_socket, cluster_info.clone(), retransmit_receiver);
+        let t_retransmit = retransmitter(
+            retransmit_socket,
+            bank.clone(),
+            cluster_info.clone(),
+            retransmit_receiver,
+        );
         let (entry_sender, entry_receiver) = channel();
         let done = Arc::new(AtomicBool::new(false));
         let t_window = window_service(
