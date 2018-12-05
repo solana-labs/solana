@@ -23,7 +23,7 @@ use crate::storage_stage::StorageStage;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
-use std::net::UdpSocket;
+use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread;
@@ -59,7 +59,8 @@ impl Tvu {
     /// * `sockets` - My fetch, repair, and restransmit sockets
     /// * `db_ledger` - the ledger itself
     pub fn new(
-        vote_account_id: Arc<Pubkey>,
+        vote_account_id: &Pubkey,
+        vote_signer_addr: SocketAddr,
         bank: &Arc<Bank>,
         entry_height: u64,
         last_entry_id: Hash,
@@ -105,6 +106,7 @@ impl Tvu {
         let (replay_stage, ledger_entry_receiver) = ReplayStage::new(
             keypair.clone(),
             vote_account_id,
+            vote_signer_addr,
             bank.clone(),
             cluster_info.clone(),
             blob_window_receiver,
@@ -265,7 +267,7 @@ pub mod tests {
         let cref1 = Arc::new(RwLock::new(cluster_info1));
         let dr_1 = new_ncp(cref1.clone(), target1.sockets.gossip, exit.clone());
 
-        let vote_account_id = Arc::new(Keypair::new().pubkey());
+        let vote_account_id = Keypair::new().pubkey();
         let mut cur_hash = Hash::default();
         let db_ledger_path = get_tmp_ledger_path("test_replay");
         let db_ledger =

@@ -91,7 +91,7 @@ pub enum FullnodeReturnType {
 pub struct Fullnode {
     pub node_role: Option<NodeRole>,
     keypair: Arc<Keypair>,
-    vote_account_id: Arc<Pubkey>,
+    vote_account_id: Pubkey,
     exit: Arc<AtomicBool>,
     rpc_service: Option<JsonRpcService>,
     rpc_pubsub_service: Option<PubSubService>,
@@ -108,7 +108,39 @@ pub struct Fullnode {
     rpc_addr: SocketAddr,
     rpc_pubsub_addr: SocketAddr,
     drone_addr: SocketAddr,
+    vote_signer_addr: SocketAddr,
     db_ledger: Arc<DbLedger>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "PascalCase")]
+/// Fullnode configuration to be stored in file
+pub struct Config {
+    pub node_info: NodeInfo,
+    pkcs8: Vec<u8>,
+    vote_account_pkcs8: Vec<u8>,
+}
+
+impl Config {
+    pub fn new(bind_addr: &SocketAddr, pkcs8: Vec<u8>, vote_account_pkcs8: Vec<u8>) -> Self {
+        let keypair =
+            Keypair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in fullnode::Config new");
+        let pubkey = keypair.pubkey();
+        let node_info = NodeInfo::new_with_pubkey_socketaddr(pubkey, bind_addr);
+        Config {
+            node_info,
+            pkcs8,
+            vote_account_pkcs8,
+        }
+    }
+    pub fn keypair(&self) -> Keypair {
+        Keypair::from_pkcs8(Input::from(&self.pkcs8))
+            .expect("from_pkcs8 in fullnode::Config keypair")
+    }
+    pub fn vote_account_keypair(&self) -> Keypair {
+        Keypair::from_pkcs8(Input::from(&self.vote_account_pkcs8))
+            .expect("from_pkcs8 in fullnode::Config vote_account_keypair")
+    }
 }
 
 impl Fullnode {
@@ -116,7 +148,8 @@ impl Fullnode {
         node: Node,
         ledger_path: &str,
         keypair: Arc<Keypair>,
-        vote_account_id: Arc<Pubkey>,
+        vote_account_id: &Pubkey,
+        vote_signer_addr: SocketAddr,
         leader_addr: Option<SocketAddr>,
         sigverify_disabled: bool,
         leader_scheduler: LeaderScheduler,
@@ -146,6 +179,7 @@ impl Fullnode {
         let server = Self::new_with_bank(
             keypair,
             vote_account_id,
+            vote_signer_addr,
             bank,
             Some(db_ledger),
             entry_height,
@@ -176,7 +210,8 @@ impl Fullnode {
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_bank(
         keypair: Arc<Keypair>,
-        vote_account_id: Arc<Pubkey>,
+        vote_account_id: &Pubkey,
+        vote_signer_addr: SocketAddr,
         bank: Bank,
         db_ledger: Option<Arc<DbLedger>>,
         entry_height: u64,
@@ -330,7 +365,7 @@ impl Fullnode {
 
         Fullnode {
             keypair,
-            vote_account_id,
+            vote_account_id: vote_account_id.clone(),
             cluster_info,
             shared_window,
             bank,
@@ -348,6 +383,7 @@ impl Fullnode {
             rpc_addr,
             rpc_pubsub_addr,
             drone_addr,
+            vote_signer_addr,
             db_ledger,
         }
     }
@@ -432,7 +468,8 @@ impl Fullnode {
 
             let tvu = Tvu::new(
                 self.keypair.clone(),
-                self.vote_account_id.clone(),
+                &self.vote_account_id,
+                self.vote_signer_addr,
                 &self.bank,
                 entry_height,
                 last_entry_id,
@@ -906,7 +943,7 @@ mod tests {
                 bootstrap_leader_node,
                 &bootstrap_leader_ledger_path,
                 bootstrap_leader_keypair,
-                leader_vote_account_id,
+                &leader_vote_account_id,
                 Some(bootstrap_leader_info.gossip),
                 false,
                 LeaderScheduler::new(&leader_scheduler_config),
@@ -925,7 +962,7 @@ mod tests {
                 validator_node,
                 &validator_ledger_path,
                 Arc::new(validator_keypair),
-                Arc::new(validator_vote_account_id),
+                &validator_vote_account_id,
                 Some(bootstrap_leader_info.gossip),
                 false,
                 LeaderScheduler::new(&leader_scheduler_config),
@@ -1024,7 +1061,7 @@ mod tests {
             validator_node,
             &validator_ledger_path,
             Arc::new(validator_keypair),
-            Arc::new(validator_vote_account_id),
+            &validator_vote_account_id,
             Some(leader_gossip),
             false,
             LeaderScheduler::new(&leader_scheduler_config),

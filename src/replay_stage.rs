@@ -17,7 +17,7 @@ use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::duration_as_ms;
-use std::net::UdpSocket;
+use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::mpsc::RecvTimeoutError;
@@ -64,7 +64,8 @@ impl ReplayStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window_receiver: &EntryReceiver,
         keypair: &Arc<Keypair>,
-        vote_account_id: &Arc<Pubkey>,
+        vote_account_id: Pubkey,
+        vote_signer_addr: SocketAddr,
         vote_blob_sender: Option<&BlobSender>,
         ledger_entry_sender: &EntrySender,
         entry_height: &mut u64,
@@ -138,8 +139,14 @@ impl ReplayStage {
 
                 if 0 == num_ticks_to_next_vote {
                     if let Some(sender) = vote_blob_sender {
-                        send_validator_vote(bank, vote_account_keypair, &cluster_info, sender)
-                            .unwrap();
+                        send_validator_vote(
+                            bank,
+                            &vote_account_id,
+                            vote_signer_addr,
+                            &cluster_info,
+                            sender,
+                        )
+                        .unwrap();
                     }
                 }
                 let (scheduled_leader, _) = bank
@@ -193,7 +200,8 @@ impl ReplayStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         keypair: Arc<Keypair>,
-        vote_account_id: Arc<Pubkey>,
+        vote_account_id: &Pubkey,
+        vote_signer_addr: SocketAddr,
         bank: Arc<Bank>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window_receiver: EntryReceiver,
@@ -207,6 +215,7 @@ impl ReplayStage {
         let t_responder = responder("replay_stage", Arc::new(send), vote_blob_receiver);
 
         let keypair = Arc::new(keypair);
+        let vote_account_id = vote_account_id.clone();
 
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
@@ -236,7 +245,8 @@ impl ReplayStage {
                         &cluster_info,
                         &window_receiver,
                         &keypair,
-                        &vote_account_id,
+                        vote_account_id,
+                        vote_signer_addr,
                         Some(&vote_blob_sender),
                         &ledger_entry_sender,
                         &mut entry_height_,

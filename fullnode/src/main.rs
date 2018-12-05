@@ -10,8 +10,10 @@ use solana::netutil::find_available_port_in_range;
 use solana::rpc_request::{RpcClient, RpcRequest};
 use solana::socketaddr;
 use solana::thin_client::poll_gossip_for_leader;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_vote_signer::rpc::verify_pubkey;
+use solana_sdk::vote_program::VoteProgram;
+use solana_sdk::vote_transaction::VoteTransaction;
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::process::exit;
@@ -133,15 +135,11 @@ fn main() {
     let sig = Signature::new(&keypair.sign(msg.as_bytes()).as_ref());
 
     let params = json!([keypair.pubkey().to_string(), sig, msg.as_bytes()]);
-    let vote_account_id_str = RpcRequest::RegisterNode
+    let resp = RpcRequest::RegisterNode
         .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap()
-        .as_str()
-        .unwrap()
-        .to_string();
-    let vote_account_id = verify_pubkey(vote_account_id_str).unwrap();
+        .unwrap();
+    let vote_account_id: Pubkey = serde_json::from_value(resp).unwrap();
     info!("New vote account ID is {:?}", vote_account_id);
-    let vote_account_id_arc = Arc::new(vote_account_id);
     let keypair = Arc::new(keypair);
     let pubkey = keypair.pubkey();
 
@@ -182,7 +180,8 @@ fn main() {
         node,
         ledger_path,
         keypair.clone(),
-        vote_account_id_arc.clone(),
+        &vote_account_id,
+        signer,
         network,
         nosigverify,
         leader_scheduler,
