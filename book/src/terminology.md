@@ -164,7 +164,7 @@ by the company Solana.
 
 #### stake
 
-Tokens forfeit to the [cluster](#cluster] if malicious [fullnode](#fullnode)
+Tokens forfeit to the [cluster](#cluster) if malicious [fullnode](#fullnode)
 behavior can be proven.
 
 #### tick
