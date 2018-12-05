@@ -1,6 +1,12 @@
 //! Native loader
+extern crate bincode;
+extern crate libc;
+extern crate libloading;
+#[macro_use]
+extern crate log;
+extern crate solana_sdk;
+
 use bincode::deserialize;
-use libc;
 #[cfg(unix)]
 use libloading::os::unix::*;
 #[cfg(windows)]
@@ -47,7 +53,7 @@ pub fn check_id(program_id: &Pubkey) -> bool {
     program_id.as_ref() == NATIVE_LOADER_PROGRAM_ID
 }
 
-pub fn process_instruction(
+pub fn entrypoint(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
     ix_userdata: &[u8],

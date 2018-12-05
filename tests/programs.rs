@@ -1,5 +1,6 @@
 extern crate bincode;
 extern crate elf;
+extern crate native_loader;
 extern crate serde_derive;
 extern crate solana;
 extern crate solana_sdk;
@@ -7,7 +8,6 @@ extern crate solana_sdk;
 use solana::bank::Bank;
 use solana::logger;
 use solana::mint::Mint;
-use solana::native_loader;
 #[cfg(feature = "bpf_c")]
 use solana_sdk::bpf_loader;
 use solana_sdk::loader_transaction::LoaderTransaction;
