@@ -10,15 +10,11 @@ architecture.
 A persistent file addressed by [public key](#public-key) and with
 [lamports](#lamport) tracking its lifetime.
 
-#### ballot
-
-A [block](#block) of the ledger covered by a [vote](#vote).  Ballot length is a
-network hyper parameter, specified in [ticks](#tick).  Also called [voting
-period](#voting period).
-
 #### block
 
-A contiguous set of [entries](#entry), i.e. some segment of the PoH chain.
+A contiguous set of [entries](#entry) on the ledger covered by a [vote](#vote).
+The length of a block is network hyper parameter, specified in [ticks](#tick).
+Also called [voting period](#voting period).
 
 #### bootstrap leader
 
@@ -113,10 +109,10 @@ A list of [entries](#entry) containing [transactions](#transaction) signed by
 #### ledger vote
 
 A [hash](#hash) of the [fullnode's state](#fullnode-state) at a given [tick
-height](#tick-height). It comprises a validator's affirmation that the ledger it
-has received has been verified and a promise not to vote for a conflicting
-ledger, or [fork](#fork) for a specific amount of time, or [lockout](#lockout)
-period.
+height](#tick-height). It comprises a validator's affirmation that a
+[block](#block) it has received has been verified, as well as a promise not to
+vote for a conflicting [block](#block) or [fork](#fork) for a specific amount
+of time, the [lockout](#lockout) period.
 
 #### lockout
 
@@ -207,7 +203,7 @@ See [ledger vote](#ledger vote)
 
 #### voting period
 
-See [ballot](#ballot)
+See [block](#block)
 
 ## Terminology Reserved for Future Use
 
