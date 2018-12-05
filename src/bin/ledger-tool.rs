@@ -108,7 +108,7 @@ fn main() {
                 );
                 exit(1);
             }
-            let bank = Bank::default();
+            let bank = Bank::new_with_builtin_programs();
             {
                 let genesis = match read_ledger(ledger_path, true) {
                     Ok(entries) => entries,
