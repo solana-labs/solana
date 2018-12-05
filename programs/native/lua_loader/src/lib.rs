@@ -135,28 +135,25 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn test_update_accounts() -> Result<()> {
+    fn test_update_accounts() {
         let mut accounts = [(Pubkey::default(), Account::default())];
         let mut keyed_accounts = create_keyed_accounts(&mut accounts);
         let lua = Lua::new();
-        set_accounts(&lua, "xs", &keyed_accounts)?;
+        set_accounts(&lua, "xs", &keyed_accounts).unwrap();
         keyed_accounts[0].account.tokens = 42;
         keyed_accounts[0].account.userdata = vec![];
-        update_accounts(&lua, "xs", &mut keyed_accounts)?;
+        update_accounts(&lua, "xs", &mut keyed_accounts).unwrap();
 
         // Ensure update_accounts() overwrites the local value 42.
         assert_eq!(keyed_accounts[0].account.tokens, 0);
-
-        Ok(())
     }
 
     #[test]
-    fn test_credit_with_lua() -> Result<()> {
+    fn test_credit_with_lua() {
         let code = r#"accounts[1].tokens = accounts[1].tokens + 1"#;
         let mut accounts = [(Pubkey::default(), Account::default())];
-        run_lua(&mut create_keyed_accounts(&mut accounts), code, &[])?;
+        run_lua(&mut create_keyed_accounts(&mut accounts), code, &[]).unwrap();
         assert_eq!(accounts[0].1.tokens, 1);
-        Ok(())
     }
 
     #[test]
@@ -194,11 +191,11 @@ mod tests {
             (bob_pubkey, Account::new(1, 0, owner)),
         ];
         let data = serialize(&10u64).unwrap();
-        process(&owner, &mut create_keyed_accounts(&mut accounts), &data, 0);
+        process(&owner, &mut create_keyed_accounts(&mut accounts), &data, 0).unwrap();
         assert_eq!(accounts[1].1.tokens, 90);
         assert_eq!(accounts[2].1.tokens, 11);
 
-        process(&owner, &mut create_keyed_accounts(&mut accounts), &data, 0);
+        process(&owner, &mut create_keyed_accounts(&mut accounts), &data, 0).unwrap();
         assert_eq!(accounts[1].1.tokens, 80);
         assert_eq!(accounts[2].1.tokens, 21);
     }
@@ -242,7 +239,7 @@ mod tests {
             (Pubkey::default(), Account::new(1, 0, owner)),
         ];
         let mut keyed_accounts = create_keyed_accounts(&mut accounts);
-        process(&owner, &mut keyed_accounts, &[], 0);
+        process(&owner, &mut keyed_accounts, &[], 0).unwrap();
         // Verify deterministic ordering of a serialized Lua table.
         assert_eq!(
             str::from_utf8(&keyed_accounts[3].account.userdata).unwrap(),
@@ -301,19 +298,19 @@ mod tests {
         ).as_bytes()
         .to_vec();
 
-        process(&owner, &mut keyed_accounts, &data, 0);
+        process(&owner, &mut keyed_accounts, &data, 0).unwrap();
         assert_eq!(keyed_accounts[4].account.tokens, 1);
 
         let data = format!(r#""{}""#, carol_pubkey).into_bytes();
-        process(&owner, &mut keyed_accounts, &data, 0);
+        process(&owner, &mut keyed_accounts, &data, 0).unwrap();
         assert_eq!(keyed_accounts[4].account.tokens, 1);
 
         let data = format!(r#""{}""#, dan_pubkey).into_bytes();
-        process(&owner, &mut keyed_accounts, &data, 0);
+        process(&owner, &mut keyed_accounts, &data, 0).unwrap();
         assert_eq!(keyed_accounts[4].account.tokens, 101); // Pay day!
 
         let data = format!(r#""{}""#, erin_pubkey).into_bytes();
-        process(&owner, &mut keyed_accounts, &data, 0);
+        process(&owner, &mut keyed_accounts, &data, 0).unwrap();
         assert_eq!(keyed_accounts[4].account.tokens, 101); // No change!
     }
 }
