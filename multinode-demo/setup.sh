@@ -34,7 +34,6 @@ ip_address_arg=-l
 num_tokens=1000000000
 node_type_leader=true
 node_type_validator=true
-node_type_client=true
 while getopts "h?n:lpt:" opt; do
   case $opt in
   h|\?)
@@ -56,17 +55,10 @@ while getopts "h?n:lpt:" opt; do
     leader)
       node_type_leader=true
       node_type_validator=false
-      node_type_client=false
       ;;
     validator)
       node_type_leader=false
       node_type_validator=true
-      node_type_client=false
-      ;;
-    client)
-      node_type_leader=false
-      node_type_validator=false
-      node_type_client=true
       ;;
     *)
       usage "Error: unknown node type: $node_type"
@@ -88,12 +80,6 @@ for i in "$SOLANA_CONFIG_DIR" "$SOLANA_CONFIG_VALIDATOR_DIR" "$SOLANA_CONFIG_PRI
   mkdir -p "$i"
 done
 
-if $node_type_client; then
-  client_id_path="$SOLANA_CONFIG_PRIVATE_DIR"/client-id.json
-  $solana_keygen -o "$client_id_path"
-  ls -lhR "$SOLANA_CONFIG_PRIVATE_DIR"/
-fi
-
 if $node_type_leader; then
   leader_address_args=("$ip_address_arg")
   leader_id_path="$SOLANA_CONFIG_PRIVATE_DIR"/leader-id.json
@@ -105,10 +91,16 @@ if $node_type_leader; then
   $solana_keygen -o "$mint_path"
 
   echo "Creating $SOLANA_CONFIG_DIR/leader.json"
-  $solana_fullnode_config --keypair="$leader_id_path" "${leader_address_args[@]}" > "$SOLANA_CONFIG_DIR"/leader.json
-  
+  $solana_fullnode_config \
+    --keypair="$leader_id_path" \
+    "${leader_address_args[@]}" > "$SOLANA_CONFIG_DIR"/leader.json
+
   echo "Creating $SOLANA_CONFIG_DIR/ledger"
-  $solana_genesis --num_tokens "$num_tokens" --mint "$mint_path" --bootstrap_leader "$SOLANA_CONFIG_DIR"/leader.json --ledger "$SOLANA_CONFIG_DIR"/ledger
+  $solana_genesis \
+    --num_tokens "$num_tokens" \
+    --mint "$mint_path" \
+    --bootstrap_leader "$SOLANA_CONFIG_DIR"/leader.json \
+    --ledger "$SOLANA_CONFIG_DIR"/ledger \
 
   ls -lhR "$SOLANA_CONFIG_DIR"/
   ls -lhR "$SOLANA_CONFIG_PRIVATE_DIR"/
@@ -122,7 +114,9 @@ if $node_type_validator; then
   $solana_keygen -o "$validator_id_path"
 
   echo "Creating $SOLANA_CONFIG_VALIDATOR_DIR/validator.json"
-  $solana_fullnode_config --keypair="$validator_id_path" "${validator_address_args[@]}" > "$SOLANA_CONFIG_VALIDATOR_DIR"/validator.json
+  $solana_fullnode_config \
+    --keypair="$validator_id_path"  \
+    "${validator_address_args[@]}" > "$SOLANA_CONFIG_VALIDATOR_DIR"/validator.json
 
   ls -lhR "$SOLANA_CONFIG_VALIDATOR_DIR"/
 fi
