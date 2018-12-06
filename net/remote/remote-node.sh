@@ -48,7 +48,7 @@ snap)
 
   # shellcheck disable=SC2089
   commonNodeConfig="\
-    leader-ip=\"$entrypointIp\" \
+    entrypoint-ip=\"$entrypointIp\" \
     metrics-config=\"$SOLANA_METRICS_CONFIG\" \
     rust-log=\"$RUST_LOG\" \
     setup-args=\"$setupArgs\" \
@@ -64,7 +64,7 @@ snap)
   fi
 
   if [[ $nodeType = bootstrap-fullnode ]]; then
-    nodeConfig="mode=leader+drone $commonNodeConfig"
+    nodeConfig="mode=bootstrap-fullnode+drone $commonNodeConfig"
     ln -sf -T /var/snap/solana/current/leader/current fullnode.log
     ln -sf -T /var/snap/solana/current/drone/current drone.log
   else

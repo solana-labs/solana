@@ -177,7 +177,7 @@ Runtime configuration files for the daemon can be found in
 #### Leader Daemon
 
 ```bash
-$ sudo snap set solana mode=leader
+$ sudo snap set solana mode=bootstrap-fullnode
 ```
 
 `rsync` must be configured and running on the leader.
@@ -200,24 +200,24 @@ to port tcp:873, tcp:9900 and the port range udp:8000-udp:10000**
 To run both the Leader and Drone:
 
 ```bash
-$ sudo snap set solana mode=leader+drone
+$ sudo snap set solana mode=bootstrap-fullnode+drone
 
 ```
 
 #### Validator daemon
 
 ```bash
-$ sudo snap set solana mode=validator
+$ sudo snap set solana mode=fullnode
 
 ```
 
-By default the validator will connect to **testnet.solana.com**, override
-the leader IP address by running:
+By default the node will attempt to connect to **testnet.solana.com**, override the
+cluster entrypoint IP address by running:
 
 ```bash
-$ sudo snap set solana mode=validator leader-address=127.0.0.1 #<-- change IP address
+$ sudo snap set solana mode=fullnode entrypoint-ip=127.0.0.1 #<-- change IP address
 ```
 
-It's assumed that the leader will be running `rsync` configured as described in
-the previous **Leader daemon** section.
+It's assumed that the node at the entrypoint IP will be running `rsync`
+configured as described in the previous **Leader daemon** section.
 
