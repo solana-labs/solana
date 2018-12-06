@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Starts a leader node
+# Start the bootstrap leader node
 #
 
 here=$(dirname "$0")
@@ -16,8 +16,8 @@ if [[ -d "$SNAP" ]]; then
   [[ -n "$(snapctl get mode)" ]] || exit 0
 fi
 
-[[ -f "$SOLANA_CONFIG_DIR"/leader.json ]] || {
-  echo "$SOLANA_CONFIG_DIR/leader.json not found, create it by running:"
+[[ -f "$SOLANA_CONFIG_DIR"/bootstrap-leader.json ]] || {
+  echo "$SOLANA_CONFIG_DIR/bootstrap-leader.json not found, create it by running:"
   echo
   echo "  ${here}/setup.sh"
   exit 1
@@ -34,10 +34,10 @@ tune_networking
 trap 'kill "$pid" && wait "$pid"' INT TERM
 $program \
   --no-leader-rotation \
-  --identity "$SOLANA_CONFIG_DIR"/leader.json \
-  --ledger "$SOLANA_CONFIG_DIR"/ledger \
+  --identity "$SOLANA_CONFIG_DIR"/bootstrap-leader.json \
+  --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger \
   --rpc 8899 \
-  > >($leader_logger) 2>&1 &
+  > >($bootstrap_leader_logger) 2>&1 &
 pid=$!
 oom_score_adj "$pid" 1000
 wait "$pid"
