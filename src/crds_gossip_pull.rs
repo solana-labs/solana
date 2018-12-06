@@ -59,7 +59,7 @@ impl CrdsGossipPull {
             .values()
             .filter_map(|v| v.value.contact_info())
             .filter(|v| {
-                v.id != self_id && !v.ncp.ip().is_unspecified() && !v.ncp.ip().is_multicast()
+                v.id != self_id && !v.gossip.ip().is_unspecified() && !v.gossip.ip().is_multicast()
             }).map(|item| {
                 let req_time: u64 = *self.pull_request_time.get(&item.id).unwrap_or(&0);
                 let weight = cmp::max(

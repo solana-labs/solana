@@ -1,4 +1,4 @@
-//! The `ncp` module implements the network control plane.
+//! The `gossip_service` module implements the network control plane.
 
 use cluster_info::ClusterInfo;
 use service::Service;
@@ -10,12 +10,12 @@ use std::thread::{self, JoinHandle};
 use streamer;
 use window::SharedWindow;
 
-pub struct Ncp {
+pub struct GossipService {
     exit: Arc<AtomicBool>,
     thread_hdls: Vec<JoinHandle<()>>,
 }
 
-impl Ncp {
+impl GossipService {
     pub fn new(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window: SharedWindow,
@@ -26,14 +26,14 @@ impl Ncp {
         let (request_sender, request_receiver) = channel();
         let gossip_socket = Arc::new(gossip_socket);
         trace!(
-            "Ncp: id: {}, listening on: {:?}",
+            "GossipService: id: {}, listening on: {:?}",
             &cluster_info.read().unwrap().my_data().id,
             gossip_socket.local_addr().unwrap()
         );
         let t_receiver =
             streamer::blob_receiver(gossip_socket.clone(), exit.clone(), request_sender);
         let (response_sender, response_receiver) = channel();
-        let t_responder = streamer::responder("ncp", gossip_socket, response_receiver);
+        let t_responder = streamer::responder("gossip", gossip_socket, response_receiver);
         let t_listen = ClusterInfo::listen(
             cluster_info.clone(),
             window,
@@ -44,7 +44,7 @@ impl Ncp {
         );
         let t_gossip = ClusterInfo::gossip(cluster_info.clone(), response_sender, exit.clone());
         let thread_hdls = vec![t_receiver, t_responder, t_listen, t_gossip];
-        Ncp { exit, thread_hdls }
+        Self { exit, thread_hdls }
     }
 
     pub fn close(self) -> thread::Result<()> {
@@ -53,7 +53,7 @@ impl Ncp {
     }
 }
 
-impl Service for Ncp {
+impl Service for GossipService {
     type JoinReturnType = ();
 
     fn join(self) -> thread::Result<()> {
@@ -66,8 +66,8 @@ impl Service for Ncp {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use cluster_info::{ClusterInfo, Node};
-    use ncp::Ncp;
     use std::sync::atomic::AtomicBool;
     use std::sync::{Arc, RwLock};
 
@@ -80,7 +80,7 @@ mod tests {
         let cluster_info = ClusterInfo::new(tn.info.clone());
         let c = Arc::new(RwLock::new(cluster_info));
         let w = Arc::new(RwLock::new(vec![]));
-        let d = Ncp::new(&c, w, None, tn.sockets.gossip, exit.clone());
+        let d = GossipService::new(&c, w, None, tn.sockets.gossip, exit.clone());
         d.close().expect("thread join");
     }
 }

@@ -13,7 +13,7 @@ pub mod bank;
 pub mod banking_stage;
 pub mod blob_fetch_stage;
 pub mod bloom;
-pub mod broadcast_stage;
+pub mod broadcast_service;
 #[cfg(feature = "chacha")]
 pub mod chacha;
 #[cfg(all(feature = "chacha", feature = "cuda"))]
@@ -38,12 +38,12 @@ pub mod entry;
 pub mod erasure;
 pub mod fetch_stage;
 pub mod fullnode;
+pub mod gossip_service;
 pub mod leader_scheduler;
 pub mod ledger;
 pub mod ledger_write_stage;
 pub mod logger;
 pub mod mint;
-pub mod ncp;
 pub mod netutil;
 pub mod packet;
 pub mod poh;

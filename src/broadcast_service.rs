@@ -1,4 +1,4 @@
-//! The `broadcast_stage` broadcasts data from a leader node to validators
+//! The `broadcast_service` broadcasts data from a leader node to validators
 //!
 use cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
 use counter::Counter;
@@ -24,7 +24,7 @@ use std::time::{Duration, Instant};
 use window::{SharedWindow, WindowIndex, WindowUtil};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum BroadcastStageReturnType {
+pub enum BroadcastServiceReturnType {
     LeaderRotation,
     ChannelDisconnected,
 }
@@ -54,7 +54,7 @@ fn broadcast(
         num_entries += entries.len();
         ventries.push(entries);
     }
-    inc_new_counter_info!("broadcast_stage-entries_received", num_entries);
+    inc_new_counter_info!("broadcast_service-entries_received", num_entries);
 
     let to_blobs_start = Instant::now();
     let num_ticks: u64 = ventries
@@ -154,7 +154,7 @@ fn broadcast(
     let broadcast_elapsed = duration_as_ms(&broadcast_start.elapsed());
 
     inc_new_counter_info!(
-        "broadcast_stage-time_ms",
+        "broadcast_service-time_ms",
         duration_as_ms(&now.elapsed()) as usize
     );
     info!(
@@ -163,7 +163,7 @@ fn broadcast(
     );
 
     submit(
-        influxdb::Point::new("broadcast-stage")
+        influxdb::Point::new("broadcast-service")
             .add_field(
                 "transmit-index",
                 influxdb::Value::Integer(transmit_index.data as i64),
@@ -173,7 +173,7 @@ fn broadcast(
     Ok(())
 }
 
-// Implement a destructor for the BroadcastStage thread to signal it exited
+// Implement a destructor for the BroadcastService3 thread to signal it exited
 // even on panics
 struct Finalizer {
     exit_sender: Arc<AtomicBool>,
@@ -191,11 +191,11 @@ impl Drop for Finalizer {
     }
 }
 
-pub struct BroadcastStage {
-    thread_hdl: JoinHandle<BroadcastStageReturnType>,
+pub struct BroadcastService {
+    thread_hdl: JoinHandle<BroadcastServiceReturnType>,
 }
 
-impl BroadcastStage {
+impl BroadcastService {
     fn run(
         sock: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -205,7 +205,7 @@ impl BroadcastStage {
         receiver: &Receiver<Vec<Entry>>,
         max_tick_height: Option<u64>,
         tick_height: u64,
-    ) -> BroadcastStageReturnType {
+    ) -> BroadcastServiceReturnType {
         let mut transmit_index = WindowIndex {
             data: entry_height,
             coding: entry_height,
@@ -231,7 +231,7 @@ impl BroadcastStage {
             ) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => {
-                        return BroadcastStageReturnType::ChannelDisconnected
+                        return BroadcastServiceReturnType::ChannelDisconnected
                     }
                     Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                     Error::ClusterInfoError(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
@@ -252,11 +252,11 @@ impl BroadcastStage {
     /// * `cluster_info` - ClusterInfo structure
     /// * `window` - Cache of blobs that we have broadcast
     /// * `receiver` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
-    /// * `exit_sender` - Set to true when this stage exits, allows rest of Tpu to exit cleanly. Otherwise,
-    /// when a Tpu stage closes, it only closes the stages that come after it. The stages
+    /// * `exit_sender` - Set to true when this service exits, allows rest of Tpu to exit cleanly.
+    /// Otherwise, when a Tpu closes, it only closes the stages that come after it. The stages
     /// that come before could be blocked on a receive, and never notice that they need to
     /// exit. Now, if any stage of the Tpu closes, it will lead to closing the WriteStage (b/c
-    /// WriteStage is the last stage in the pipeline), which will then close Broadcast stage,
+    /// WriteStage is the last stage in the pipeline), which will then close Broadcast service,
     /// which will then close FetchStage in the Tpu, and then the rest of the Tpu,
     /// completing the cycle.
     pub fn new(
@@ -286,14 +286,14 @@ impl BroadcastStage {
                 )
             }).unwrap();
 
-        BroadcastStage { thread_hdl }
+        Self { thread_hdl }
     }
 }
 
-impl Service for BroadcastStage {
-    type JoinReturnType = BroadcastStageReturnType;
+impl Service for BroadcastService {
+    type JoinReturnType = BroadcastServiceReturnType;
 
-    fn join(self) -> thread::Result<BroadcastStageReturnType> {
+    fn join(self) -> thread::Result<BroadcastServiceReturnType> {
         self.thread_hdl.join()
     }
 }

@@ -1,12 +1,12 @@
 //! The `fullnode` module hosts all the fullnode microservices.
 
 use bank::Bank;
-use broadcast_stage::BroadcastStage;
+use broadcast_service::BroadcastService;
 use cluster_info::{ClusterInfo, Node, NodeInfo};
 use db_ledger::{write_entries_to_ledger, DbLedger};
+use gossip_service::GossipService;
 use leader_scheduler::LeaderScheduler;
 use ledger::read_ledger;
-use ncp::Ncp;
 use rpc::JsonRpcService;
 use rpc_pubsub::PubSubService;
 use service::Service;
@@ -31,19 +31,19 @@ pub enum NodeRole {
 
 pub struct LeaderServices {
     tpu: Tpu,
-    broadcast_stage: BroadcastStage,
+    broadcast_service: BroadcastService,
 }
 
 impl LeaderServices {
-    fn new(tpu: Tpu, broadcast_stage: BroadcastStage) -> Self {
+    fn new(tpu: Tpu, broadcast_service: BroadcastService) -> Self {
         LeaderServices {
             tpu,
-            broadcast_stage,
+            broadcast_service,
         }
     }
 
     pub fn join(self) -> Result<Option<TpuReturnType>> {
-        self.broadcast_stage.join()?;
+        self.broadcast_service.join()?;
         self.tpu.join()
     }
 
@@ -94,7 +94,7 @@ pub struct Fullnode {
     exit: Arc<AtomicBool>,
     rpc_service: Option<JsonRpcService>,
     rpc_pubsub_service: Option<PubSubService>,
-    ncp: Ncp,
+    gossip_service: GossipService,
     bank: Arc<Bank>,
     cluster_info: Arc<RwLock<ClusterInfo>>,
     ledger_path: String,
@@ -164,7 +164,7 @@ impl Fullnode {
 
         info!(
             "starting... local gossip address: {} (advertising {})",
-            local_gossip_addr, node.info.ncp
+            local_gossip_addr, node.info.gossip
         );
         let mut rpc_addr = node.info.rpc;
         if let Some(port) = rpc_port {
@@ -240,7 +240,7 @@ impl Fullnode {
         let (rpc_service, rpc_pubsub_service) =
             Self::startup_rpc_services(rpc_addr, rpc_pubsub_addr, &bank, &cluster_info);
 
-        let ncp = Ncp::new(
+        let gossip_service = GossipService::new(
             &cluster_info,
             shared_window.clone(),
             Some(ledger_path),
@@ -324,7 +324,7 @@ impl Fullnode {
                 last_entry_id,
             );
 
-            let broadcast_stage = BroadcastStage::new(
+            let broadcast_service = BroadcastService::new(
                 node.sockets
                     .broadcast
                     .try_clone()
@@ -338,7 +338,7 @@ impl Fullnode {
                 bank.tick_height(),
                 tpu_exit,
             );
-            let leader_state = LeaderServices::new(tpu, broadcast_stage);
+            let leader_state = LeaderServices::new(tpu, broadcast_service);
             Some(NodeRole::Leader(leader_state))
         };
 
@@ -349,7 +349,7 @@ impl Fullnode {
             shared_window,
             bank,
             sigverify_disabled,
-            ncp,
+            gossip_service,
             rpc_service: Some(rpc_service),
             rpc_pubsub_service: Some(rpc_pubsub_service),
             node_role,
@@ -488,7 +488,7 @@ impl Fullnode {
             &last_id,
         );
 
-        let broadcast_stage = BroadcastStage::new(
+        let broadcast_service = BroadcastService::new(
             self.broadcast_socket
                 .try_clone()
                 .expect("Failed to clone broadcast socket"),
@@ -501,7 +501,7 @@ impl Fullnode {
             tick_height,
             tpu_exit,
         );
-        let leader_state = LeaderServices::new(tpu, broadcast_stage);
+        let leader_state = LeaderServices::new(tpu, broadcast_service);
         self.node_role = Some(NodeRole::Leader(leader_state));
     }
 
@@ -626,7 +626,7 @@ impl Service for Fullnode {
             rpc_pubsub_service.join()?;
         }
 
-        self.ncp.join()?;
+        self.gossip_service.join()?;
 
         match self.node_role {
             Some(NodeRole::Validator(validator_service)) => {
@@ -796,7 +796,7 @@ mod tests {
             &bootstrap_leader_ledger_path,
             Arc::new(bootstrap_leader_keypair),
             Arc::new(Keypair::new()),
-            Some(bootstrap_leader_info.ncp),
+            Some(bootstrap_leader_info.gossip),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
             None,
@@ -895,7 +895,7 @@ mod tests {
                 &bootstrap_leader_ledger_path,
                 bootstrap_leader_keypair,
                 leader_vote_account_keypair,
-                Some(bootstrap_leader_info.ncp),
+                Some(bootstrap_leader_info.gossip),
                 false,
                 LeaderScheduler::new(&leader_scheduler_config),
                 None,
@@ -914,7 +914,7 @@ mod tests {
                 &validator_ledger_path,
                 Arc::new(validator_keypair),
                 Arc::new(validator_vote_account_keypair),
-                Some(bootstrap_leader_info.ncp),
+                Some(bootstrap_leader_info.gossip),
                 false,
                 LeaderScheduler::new(&leader_scheduler_config),
                 None,
@@ -942,7 +942,7 @@ mod tests {
         let leader_keypair = Keypair::new();
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_id = leader_node.info.id;
-        let leader_ncp = leader_node.info.ncp;
+        let leader_gossip = leader_node.info.gossip;
 
         // Create validator identity
         let num_ending_ticks = 1;
@@ -1001,7 +1001,7 @@ mod tests {
             &validator_ledger_path,
             Arc::new(validator_keypair),
             Arc::new(validator_vote_account_keypair),
-            Some(leader_ncp),
+            Some(leader_gossip),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
             None,

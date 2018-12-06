@@ -7,8 +7,8 @@ use bank::Bank;
 use bincode::serialize;
 use bs58;
 use cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
+use gossip_service::GossipService;
 use log::Level;
-use ncp::Ncp;
 use packet::PACKET_DATA_SIZE;
 use result::{Error, Result};
 use rpc_request::{RpcClient, RpcRequest};
@@ -347,7 +347,7 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
     let my_addr = gossip_socket.local_addr().unwrap();
     let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(node)));
     let window = Arc::new(RwLock::new(vec![]));
-    let ncp = Ncp::new(
+    let gossip_service = GossipService::new(
         &cluster_info.clone(),
         window,
         None,
@@ -390,7 +390,7 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
         sleep(Duration::from_millis(100));
     }
 
-    ncp.close()?;
+    gossip_service.close()?;
 
     if log_enabled!(Level::Trace) {
         trace!("{}", cluster_info.read().unwrap().node_info_trace());

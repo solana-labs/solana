@@ -160,7 +160,7 @@ mod tests {
         sleep(Duration::from_millis(100));
 
         let mut data = vec![0u8; 64];
-        // should be nothing on any socket ncp
+        // should be nothing on any gossip socket
         assert!(nodes[0].0.recv_from(&mut data).is_err());
         assert!(nodes[1].0.recv_from(&mut data).is_err());
         assert!(nodes[2].0.recv_from(&mut data).is_err());

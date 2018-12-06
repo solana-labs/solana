@@ -12,6 +12,7 @@ use solana::contact_info::ContactInfo;
 use solana::db_ledger::DbLedger;
 use solana::entry::{reconstruct_entries_from_blobs, Entry};
 use solana::fullnode::{Fullnode, FullnodeReturnType};
+use solana::gossip_service::GossipService;
 use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
 use solana::ledger::{
     create_tmp_genesis, create_tmp_sample_ledger, read_ledger, tmp_copy_ledger, LedgerWindow,
@@ -19,7 +20,6 @@ use solana::ledger::{
 };
 use solana::logger;
 use solana::mint::Mint;
-use solana::ncp::Ncp;
 use solana::packet::SharedBlob;
 use solana::poh_service::NUM_TICKS_PER_SECOND;
 use solana::result;
@@ -41,7 +41,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 
-fn make_spy_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<ClusterInfo>>, Pubkey) {
+fn make_spy_node(leader: &NodeInfo) -> (GossipService, Arc<RwLock<ClusterInfo>>, Pubkey) {
     let keypair = Keypair::new();
     let exit = Arc::new(AtomicBool::new(false));
     let mut spy = Node::new_localhost_with_pubkey(keypair.pubkey());
@@ -53,7 +53,7 @@ fn make_spy_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<ClusterInfo>>, Pubkey) {
     spy_cluster_info.set_leader(leader.id);
     let spy_cluster_info_ref = Arc::new(RwLock::new(spy_cluster_info));
     let spy_window = Arc::new(RwLock::new(default_window()));
-    let ncp = Ncp::new(
+    let gossip_service = GossipService::new(
         &spy_cluster_info_ref,
         spy_window,
         None,
@@ -61,10 +61,12 @@ fn make_spy_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<ClusterInfo>>, Pubkey) {
         exit.clone(),
     );
 
-    (ncp, spy_cluster_info_ref, me)
+    (gossip_service, spy_cluster_info_ref, me)
 }
 
-fn make_listening_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<ClusterInfo>>, Node, Pubkey) {
+fn make_listening_node(
+    leader: &NodeInfo,
+) -> (GossipService, Arc<RwLock<ClusterInfo>>, Node, Pubkey) {
     let keypair = Keypair::new();
     let exit = Arc::new(AtomicBool::new(false));
     let new_node = Node::new_localhost_with_pubkey(keypair.pubkey());
@@ -75,7 +77,7 @@ fn make_listening_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<ClusterInfo>>, Nod
     new_node_cluster_info.set_leader(leader.id);
     let new_node_cluster_info_ref = Arc::new(RwLock::new(new_node_cluster_info));
     let new_node_window = Arc::new(RwLock::new(default_window()));
-    let ncp = Ncp::new(
+    let gossip_service = GossipService::new(
         &new_node_cluster_info_ref,
         new_node_window,
         None,
@@ -87,12 +89,12 @@ fn make_listening_node(leader: &NodeInfo) -> (Ncp, Arc<RwLock<ClusterInfo>>, Nod
         exit.clone(),
     );
 
-    (ncp, new_node_cluster_info_ref, new_node, me)
+    (gossip_service, new_node_cluster_info_ref, new_node, me)
 }
 
 fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     //lets spy on the network
-    let (ncp, spy_ref, _) = make_spy_node(leader);
+    let (gossip_service, spy_ref, _) = make_spy_node(leader);
 
     //wait for the network to converge
     let mut converged = false;
@@ -108,7 +110,7 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
         sleep(Duration::new(1, 0));
     }
     assert!(converged);
-    ncp.close().unwrap();
+    gossip_service.close().unwrap();
     rv
 }
 
@@ -170,7 +172,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         &zero_ledger_path,
         keypair,
         Arc::new(Keypair::new()),
-        Some(leader_data.ncp),
+        Some(leader_data.gossip),
         false,
         LeaderScheduler::from_bootstrap_leader(leader_pubkey),
         None,
@@ -275,7 +277,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
             &ledger_path,
             keypair,
             Arc::new(Keypair::new()),
-            Some(leader_data.ncp),
+            Some(leader_data.gossip),
             false,
             LeaderScheduler::from_bootstrap_leader(leader_pubkey),
             None,
@@ -313,7 +315,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
         &zero_ledger_path,
         keypair,
         Arc::new(Keypair::new()),
-        Some(leader_data.ncp),
+        Some(leader_data.gossip),
         false,
         LeaderScheduler::from_bootstrap_leader(leader_pubkey),
         None,
@@ -407,7 +409,7 @@ fn test_multi_node_basic() {
             &ledger_path,
             keypair,
             Arc::new(Keypair::new()),
-            Some(leader_data.ncp),
+            Some(leader_data.gossip),
             false,
             LeaderScheduler::from_bootstrap_leader(leader_pubkey),
             None,
@@ -483,7 +485,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
         &ledger_path,
         keypair,
         Arc::new(Keypair::new()),
-        Some(leader_data.ncp),
+        Some(leader_data.gossip),
         false,
         LeaderScheduler::from_bootstrap_leader(leader_pubkey),
         None,
@@ -571,7 +573,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
         &stale_ledger_path,
         keypair,
         Arc::new(Keypair::new()),
-        Some(leader_data.ncp),
+        Some(leader_data.gossip),
         false,
         LeaderScheduler::from_bootstrap_leader(leader_data.id),
         None,
@@ -702,7 +704,7 @@ fn test_multi_node_dynamic_network() {
                         &ledger_path,
                         Arc::new(keypair),
                         Arc::new(Keypair::new()),
-                        Some(leader_data.ncp),
+                        Some(leader_data.gossip),
                         true,
                         LeaderScheduler::from_bootstrap_leader(leader_pubkey),
                         None,
@@ -848,7 +850,7 @@ fn test_leader_to_validator_transition() {
         &leader_ledger_path,
         leader_keypair,
         Arc::new(Keypair::new()),
-        Some(leader_info.ncp),
+        Some(leader_info.gossip),
         false,
         LeaderScheduler::new(&leader_scheduler_config),
         None,
@@ -856,7 +858,7 @@ fn test_leader_to_validator_transition() {
 
     // Make an extra node for our leader to broadcast to,
     // who won't vote and mess with our leader's entry count
-    let (ncp, spy_node, _) = make_spy_node(&leader_info);
+    let (gossip_service, spy_node, _) = make_spy_node(&leader_info);
 
     // Wait for the leader to see the spy node
     let mut converged = false;
@@ -921,7 +923,7 @@ fn test_leader_to_validator_transition() {
     assert_eq!(bank.tick_height(), bootstrap_height);
 
     // Shut down
-    ncp.close().unwrap();
+    gossip_service.close().unwrap();
     leader.close().unwrap();
     remove_dir_all(leader_ledger_path).unwrap();
 }
@@ -988,7 +990,7 @@ fn test_leader_validator_basic() {
         &validator_ledger_path,
         validator_keypair,
         Arc::new(vote_account_keypair),
-        Some(leader_info.ncp),
+        Some(leader_info.gossip),
         false,
         LeaderScheduler::new(&leader_scheduler_config),
         None,
@@ -1000,7 +1002,7 @@ fn test_leader_validator_basic() {
         &leader_ledger_path,
         leader_keypair,
         Arc::new(Keypair::new()),
-        Some(leader_info.ncp),
+        Some(leader_info.gossip),
         false,
         LeaderScheduler::new(&leader_scheduler_config),
         None,
@@ -1177,7 +1179,7 @@ fn test_dropped_handoff_recovery() {
         &bootstrap_leader_ledger_path,
         bootstrap_leader_keypair,
         Arc::new(Keypair::new()),
-        Some(bootstrap_leader_info.ncp),
+        Some(bootstrap_leader_info.gossip),
         false,
         LeaderScheduler::new(&leader_scheduler_config),
         None,
@@ -1200,7 +1202,7 @@ fn test_dropped_handoff_recovery() {
             &validator_ledger_path,
             kp,
             Arc::new(Keypair::new()),
-            Some(bootstrap_leader_info.ncp),
+            Some(bootstrap_leader_info.gossip),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
             None,
@@ -1226,7 +1228,7 @@ fn test_dropped_handoff_recovery() {
         &next_leader_ledger_path,
         next_leader_keypair,
         Arc::new(vote_account_keypair),
-        Some(bootstrap_leader_info.ncp),
+        Some(bootstrap_leader_info.gossip),
         false,
         LeaderScheduler::new(&leader_scheduler_config),
         None,
@@ -1364,7 +1366,7 @@ fn test_full_leader_validator_network() {
             &validator_ledger_path,
             Arc::new(kp),
             Arc::new(vote_account_keypairs.pop_front().unwrap()),
-            Some(bootstrap_leader_info.ncp),
+            Some(bootstrap_leader_info.gossip),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
             None,
@@ -1380,7 +1382,7 @@ fn test_full_leader_validator_network() {
         &bootstrap_leader_ledger_path,
         Arc::new(leader_keypair),
         Arc::new(leader_vote_keypair),
-        Some(bootstrap_leader_info.ncp),
+        Some(bootstrap_leader_info.gossip),
         false,
         LeaderScheduler::new(&leader_scheduler_config),
         None,
@@ -1562,7 +1564,7 @@ fn test_broadcast_last_tick() {
         &bootstrap_leader_ledger_path,
         Arc::new(bootstrap_leader_keypair),
         Arc::new(Keypair::new()),
-        Some(bootstrap_leader_info.ncp),
+        Some(bootstrap_leader_info.gossip),
         false,
         LeaderScheduler::new(&leader_scheduler_config),
         None,

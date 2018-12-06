@@ -16,7 +16,7 @@
 - [Anatomy of a Fullnode](fullnode.md)
   - [TPU](tpu.md)
   - [TVU](tvu.md)
-  - [NCP](ncp.md)
+  - [Gossip Service](gossip.md)
   - [The Runtime](runtime.md)
 
 ## Appendix
