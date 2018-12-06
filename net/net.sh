@@ -38,7 +38,7 @@ Operate a configured testnet
 
  sanity/start-specific options:
    -o noLedgerVerify    - Skip ledger verification
-   -o noValidatorSanity - Skip validator sanity
+   -o noValidatorSanity - Skip fullnode sanity
    -o rejectExtraNodes  - Require the exact number of nodes
 
  stop-specific options:
@@ -117,7 +117,7 @@ while getopts "h?S:s:T:t:o:f:" opt; do
 done
 
 loadConfigFile
-expectedNodeCount=$((${#validatorIpList[@]} + 1))
+expectedNodeCount=$((${#additionalFullNodeIps[@]} + 1))
 
 build() {
   declare MAYBE_DOCKER=
@@ -156,14 +156,14 @@ startCommon() {
     "$ipAddress":~/solana/
 }
 
-startLeader() {
+startBootstrapNode() {
   declare ipAddress=$1
   declare logFile="$2"
-  echo "--- Starting leader: $leaderIp"
+  echo "--- Starting bootstrap full node: $bootstrapFullNodeIp"
   echo "start log: $logFile"
 
-  # Deploy local binaries to leader.  Validators and clients later fetch the
-  # binaries from the leader.
+  # Deploy local binaries to bootstrap full node.  Other full nodes and clients later fetch the
+  # binaries from it
   (
     set -x
     startCommon "$ipAddress" || exit 1
@@ -183,7 +183,7 @@ startLeader() {
     esac
 
     ssh "${sshOptions[@]}" -n "$ipAddress" \
-      "./solana/net/remote/remote-node.sh $deployMethod leader $publicNetwork $entrypointIp $expectedNodeCount \"$RUST_LOG\""
+      "./solana/net/remote/remote-node.sh $deployMethod bootstrap_fullnode $publicNetwork $entrypointIp $expectedNodeCount \"$RUST_LOG\""
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
     echo "^^^ +++"
@@ -191,20 +191,20 @@ startLeader() {
   }
 }
 
-startValidator() {
+startNode() {
   declare ipAddress=$1
-  declare logFile="$netLogDir/validator-$ipAddress.log"
+  declare logFile="$netLogDir/fullnode-$ipAddress.log"
 
-  echo "--- Starting validator: $ipAddress"
+  echo "--- Starting full node: $ipAddress"
   echo "start log: $logFile"
   (
     set -x
     startCommon "$ipAddress"
     ssh "${sshOptions[@]}" -n "$ipAddress" \
-      "./solana/net/remote/remote-node.sh $deployMethod validator $publicNetwork $entrypointIp $expectedNodeCount \"$RUST_LOG\""
+      "./solana/net/remote/remote-node.sh $deployMethod fullnode $publicNetwork $entrypointIp $expectedNodeCount \"$RUST_LOG\""
   ) >> "$logFile" 2>&1 &
   declare pid=$!
-  ln -sfT "validator-$ipAddress.log" "$netLogDir/validator-$pid.log"
+  ln -sfT "fullnode-$ipAddress.log" "$netLogDir/fullnode-$pid.log"
   pids+=("$pid")
 }
 
@@ -226,13 +226,13 @@ startClient() {
 }
 
 sanity() {
-  declare expectedNodeCount=$((${#validatorIpList[@]} + 1))
+  declare expectedNodeCount=$((${#additionalFullNodeIps[@]} + 1))
   declare ok=true
 
   echo "--- Sanity"
   $metricsWriteDatapoint "testnet-deploy net-sanity-begin=1"
 
-  declare host=$leaderIp # TODO: maybe use ${validatorIpList[0]} ?
+  declare host=$bootstrapFullNodeIp # TODO: maybe use ${additionalFullNodeIps[0]} ?
   (
     set -x
     # shellcheck disable=SC2029 # remote-client.sh args are expanded on client side intentionally
@@ -279,13 +279,18 @@ start() {
   tar)
     if [[ -n $releaseChannel ]]; then
       rm -f "$SOLANA_ROOT"/solana-release.tar.bz2
-      cd "$SOLANA_ROOT"
-
-      set -x
-      curl -o solana-release.tar.bz2 http://solana-release.s3.amazonaws.com/"$releaseChannel"/solana-release.tar.bz2
-      tarballFilename=solana-release.tar.bz2
+      (
+        set -x
+        curl -o "$SOLANA_ROOT"/solana-release.tar.bz2 http://solana-release.s3.amazonaws.com/"$releaseChannel"/solana-release.tar.bz2
+      )
+      tarballFilename="$SOLANA_ROOT"/solana-release.tar.bz2
     fi
-    tar jxvf $tarballFilename
+    (
+      set -x
+      rm -rf "$SOLANA_ROOT"/solana-release
+      (cd "$SOLANA_ROOT"; tar jxv) < "$tarballFilename"
+      cat "$SOLANA_ROOT"/solana-release/version.txt
+    )
     ;;
   local)
     build
@@ -299,20 +304,20 @@ start() {
   $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
 
   SECONDS=0
-  declare leaderDeployTime=
-  startLeader "$leaderIp" "$netLogDir/leader-$leaderIp.log"
-  leaderDeployTime=$SECONDS
+  declare bootstrapNodeDeployTime=
+  startBootstrapNode "$bootstrapFullNodeIp" "$netLogDir/bootstrap-fullnode-$bootstrapFullNodeIp.log"
+  bootstrapNodeDeployTime=$SECONDS
   $metricsWriteDatapoint "testnet-deploy net-leader-started=1"
 
   SECONDS=0
   pids=()
   loopCount=0
-  for ipAddress in "${validatorIpList[@]}"; do
-    startValidator "$ipAddress"
+  for ipAddress in "${additionalFullNodeIps[@]}"; do
+    startNode "$ipAddress"
 
-    # Staggering validator startup time. If too many validators
-    # bootup simultaneously, leader node gets more rsync requests
-    # from the validators than it can handle.
+    # Stagger additional node start time. If too many nodes start simultaneously
+    # the bootstrap node gets more rsync requests from the additional nodes than
+    # it can handle.
     ((loopCount++ % 2 == 0)) && sleep 2
   done
 
@@ -320,14 +325,14 @@ start() {
     declare ok=true
     wait "$pid" || ok=false
     if ! $ok; then
-      cat "$netLogDir/validator-$pid.log"
+      cat "$netLogDir/fullnode-$pid.log"
       echo ^^^ +++
       exit 1
     fi
   done
 
   $metricsWriteDatapoint "testnet-deploy net-validators-started=1"
-  validatorDeployTime=$SECONDS
+  additionalNodeDeployTime=$SECONDS
 
   sanity
 
@@ -342,7 +347,7 @@ start() {
   case $deployMethod in
   snap)
     IFS=\  read -r _ networkVersion _ < <(
-      ssh "${sshOptions[@]}" "$leaderIp" \
+      ssh "${sshOptions[@]}" "$bootstrapFullNodeIp" \
         "snap info solana | grep \"^installed:\""
     )
     networkVersion=${networkVersion/0+git./}
@@ -363,8 +368,8 @@ start() {
 
   echo
   echo "+++ Deployment Successful"
-  echo "Leader deployment took $leaderDeployTime seconds"
-  echo "Validator deployment (${#validatorIpList[@]} instances) took $validatorDeployTime seconds"
+  echo "Bootstrap full node deployment took $bootstrapNodeDeployTime seconds"
+  echo "Additional full node deployment (${#additionalFullNodeIps[@]} instances) took $additionalNodeDeployTime seconds"
   echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
   echo "Network start logs in $netLogDir:"
   ls -l "$netLogDir"
@@ -394,9 +399,9 @@ stop() {
   SECONDS=0
   $metricsWriteDatapoint "testnet-deploy net-stop-begin=1"
 
-  stopNode "$leaderIp"
+  stopNode "$bootstrapFullNodeIp"
 
-  for ipAddress in "${validatorIpList[@]}" "${clientIpList[@]}"; do
+  for ipAddress in "${additionalFullNodeIps[@]}" "${clientIpList[@]}"; do
     stopNode "$ipAddress"
   done
 

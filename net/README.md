@@ -26,12 +26,12 @@ access to create a new InfluxDB database.  Ask mvines@ for help if needed.
 
 ## Quick Start
 
-NOTE: This example uses GCP.  If you are using AWS, replace `./gce.sh` with
+NOTE: This example uses GCE.  If you are using AWS EC2, replace `./gce.sh` with
 `./ec2.sh` in the commands.
 
 ```bash
 $ cd net/
-$ ./gce.sh create -n 5 -c 1  #<-- Create a GCE testnet with 5 validators, 1 client (billing starts here)
+$ ./gce.sh create -n 5 -c 1  #<-- Create a GCE testnet with 5 additional nodes (beyond the bootstrap node), 1 client bencher (billing starts here)
 $ ./init-metrics.sh $(whoami)   #<-- Configure a metrics database for the testnet
 $ ./net.sh start             #<-- Deploy the network from the local workspace
 $ ./ssh.sh                   #<-- Details on how to ssh into any testnet node to access logs/etc

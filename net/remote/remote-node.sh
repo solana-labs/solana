@@ -3,12 +3,14 @@ set -e
 
 cd "$(dirname "$0")"/../..
 
+set -x
 deployMethod="$1"
 nodeType="$2"
 publicNetwork="$3"
 entrypointIp="$4"
 numNodes="$5"
 RUST_LOG="$6"
+set +x
 export RUST_LOG=${RUST_LOG:-solana=warn} # if RUST_LOG is unset, default to warn
 
 missing() {
@@ -40,7 +42,7 @@ fi
 case $deployMethod in
 snap)
   SECONDS=0
-  [[ $nodeType = leader ]] ||
+  [[ $nodeType = bootstrap_fullnode ]] ||
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp:~/solana/solana.snap" .
   sudo snap install solana.snap --devmode --dangerous
 
@@ -61,13 +63,13 @@ snap)
     echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
   fi
 
-  if [[ $nodeType = leader ]]; then
+  if [[ $nodeType = bootstrap-fullnode ]]; then
     nodeConfig="mode=leader+drone $commonNodeConfig"
-    ln -sf -T /var/snap/solana/current/leader/current leader.log
+    ln -sf -T /var/snap/solana/current/leader/current fullnode.log
     ln -sf -T /var/snap/solana/current/drone/current drone.log
   else
     nodeConfig="mode=validator $commonNodeConfig"
-    ln -sf -T /var/snap/solana/current/validator/current validator.log
+    ln -sf -T /var/snap/solana/current/validator/current fullnode.log
   fi
 
   logmarker="solana deploy $(date)/$RANDOM"
@@ -96,7 +98,7 @@ local|tar)
   scripts/net-stats.sh  > net-stats.log 2>&1 &
 
   case $nodeType in
-  leader)
+  bootstrap_fullnode)
     if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-fullnode-cuda ]]; then
       echo Selecting solana-fullnode-cuda
       export SOLANA_CUDA=1
@@ -104,9 +106,10 @@ local|tar)
     ./multinode-demo/setup.sh -t leader $setupArgs
     ./multinode-demo/drone.sh > drone.log 2>&1 &
     ./multinode-demo/leader.sh > leader.log 2>&1 &
+    ln -sTf leader.log fullnode.log
     ;;
-  validator)
-    net/scripts/rsync-retry.sh -vPrc "$entrypointIp:~/.cargo/bin/solana*" ~/.cargo/bin/
+  fullnode)
+    net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
 
     if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-fullnode-cuda ]]; then
       echo Selecting solana-fullnode-cuda
@@ -114,7 +117,8 @@ local|tar)
     fi
 
     ./multinode-demo/setup.sh -t validator $setupArgs
-    ./multinode-demo/validator.sh "$entrypointIp":~/solana "$entrypointIp:8001" >validator.log 2>&1 &
+    ./multinode-demo/validator.sh "$entrypointIp":~/solana "$entrypointIp:8001" > validator.log 2>&1 &
+    ln -sTf validator.log fullnode.log
     ;;
   *)
     echo "Error: unknown node type: $nodeType"

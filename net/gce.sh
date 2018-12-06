@@ -12,20 +12,20 @@ gce)
   # shellcheck source=net/scripts/gce-provider.sh
   source "$here"/scripts/gce-provider.sh
 
-  cpuLeaderMachineType=n1-standard-16
-  gpuLeaderMachineType="$cpuLeaderMachineType --accelerator count=4,type=nvidia-tesla-k80"
-  leaderMachineType=$cpuLeaderMachineType
-  validatorMachineType=n1-standard-16
+  cpuBootstrapFullNodeMachineType=n1-standard-16
+  gpuBootstrapFullNodeMachineType="$cpuBootstrapFullNodeMachineType --accelerator count=4,type=nvidia-tesla-k80"
+  bootstrapFullNodeMachineType=$cpuBootstrapFullNodeMachineType
+  fullNodeMachineType=n1-standard-16
   clientMachineType=n1-standard-16
   ;;
 ec2)
   # shellcheck source=net/scripts/ec2-provider.sh
   source "$here"/scripts/ec2-provider.sh
 
-  cpuLeaderMachineType=m4.4xlarge
-  gpuLeaderMachineType=p2.xlarge
-  leaderMachineType=$cpuLeaderMachineType
-  validatorMachineType=m4.2xlarge
+  cpuBootstrapFullNodeMachineType=m4.4xlarge
+  gpuBootstrapFullNodeMachineType=p2.xlarge
+  bootstrapFullNodeMachineType=$cpuBootstrapFullNodeMachineType
+  fullNodeMachineType=m4.2xlarge
   clientMachineType=m4.2xlarge
   ;;
 *)
@@ -35,15 +35,14 @@ esac
 
 
 prefix=testnet-dev-${USER//[^A-Za-z0-9]/}
-validatorNodeCount=5
+additionalFullNodeCount=5
 clientNodeCount=1
-leaderBootDiskSizeInGb=1000
-validatorBootDiskSizeInGb=$leaderBootDiskSizeInGb
+fullNodeBootDiskSizeInGb=1000
 clientBootDiskSizeInGb=75
 
 publicNetwork=false
 enableGpu=false
-leaderAddress=
+bootstrapFullNodeAddress=
 
 usage() {
   exitcode=0
@@ -65,13 +64,13 @@ Manage testnet instances
                       collisions (default: $prefix)
 
  create-specific options:
-   -n [number]      - Number of validator nodes (default: $validatorNodeCount)
+   -n [number]      - Number of additional full nodes (default: $additionalFullNodeCount)
    -c [number]      - Number of client nodes (default: $clientNodeCount)
    -P               - Use public network IP addresses (default: $publicNetwork)
    -z [zone]        - Zone for the nodes (default: $zone)
    -g               - Enable GPU (default: $enableGpu)
-   -G               - Enable GPU, and set count/type of GPUs to use (e.g $cpuLeaderMachineType --accelerator count=4,type=nvidia-tesla-k80)
-   -a [address]     - Set the leader node's external IP address to this value.
+   -G               - Enable GPU, and set count/type of GPUs to use (e.g $cpuBootstrapFullNodeMachineType --accelerator count=4,type=nvidia-tesla-k80)
+   -a [address]     - Set the bootstreap full node's external IP address to this value.
                       For GCE, [address] is the "name" of the desired External
                       IP Address.
                       For EC2, [address] is the "allocation ID" of the desired
@@ -107,7 +106,7 @@ while getopts "h?p:Pn:c:z:gG:a:d:" opt; do
     publicNetwork=true
     ;;
   n)
-    validatorNodeCount=$OPTARG
+    additionalFullNodeCount=$OPTARG
     ;;
   c)
     clientNodeCount=$OPTARG
@@ -117,14 +116,14 @@ while getopts "h?p:Pn:c:z:gG:a:d:" opt; do
     ;;
   g)
     enableGpu=true
-    leaderMachineType=$gpuLeaderMachineType
+    bootstrapFullNodeMachineType=$gpuBootstrapFullNodeMachineType
     ;;
   G)
     enableGpu=true
-    leaderMachineType="$OPTARG"
+    bootstrapFullNodeMachineType="$OPTARG"
     ;;
   a)
-    leaderAddress=$OPTARG
+    bootstrapFullNodeAddress=$OPTARG
     ;;
   d)
     bootDiskType=$OPTARG
@@ -231,7 +230,7 @@ EOF
     declare arrayName="$5"
 
     echo "$arrayName+=($publicIp)  # $name" >> "$configFile"
-    if [[ $arrayName = "leaderIp" ]]; then
+    if [[ $arrayName = "bootstrapFullNodeIp" ]]; then
       if $publicNetwork; then
         echo "entrypointIp=$publicIp" >> "$configFile"
       else
@@ -262,29 +261,29 @@ EOF
     echo "$name has booted."
   }
 
-  echo "Looking for leader instance..."
-  cloud_FindInstance "$prefix-leader"
+  echo "Looking for bootstrap fullnode instance..."
+  cloud_FindInstance "$prefix-bootstrap-fullnode"
   [[ ${#instances[@]} -eq 1 ]] || {
-    echo "Unable to find leader"
+    echo "Unable to find bootstrap fullnode"
     exit 1
   }
 
   (
-    declare leaderName
-    declare leaderIp
-    IFS=: read -r leaderName leaderIp _ < <(echo "${instances[0]}")
+    declare nodeName
+    declare nodeIp
+    IFS=: read -r nodeName nodeIp _ < <(echo "${instances[0]}")
 
     # Try to ping the machine first.
-    timeout 90s bash -c "set -o pipefail; until ping -c 3 $leaderIp | tr - _; do echo .; done"
+    timeout 90s bash -c "set -o pipefail; until ping -c 3 $nodeIp | tr - _; do echo .; done"
 
     if [[ ! -r $sshPrivateKey ]]; then
-      echo "Fetching $sshPrivateKey from $leaderName"
+      echo "Fetching $sshPrivateKey from $nodeName"
 
       # Try to scp in a couple times, sshd may not yet be up even though the
       # machine can be pinged...
       set -x -o pipefail
       for i in $(seq 1 30); do
-        if cloud_FetchFile "$leaderName" "$leaderIp" /solana-id_ecdsa "$sshPrivateKey"; then
+        if cloud_FetchFile "$nodeName" "$nodeIp" /solana-id_ecdsa "$sshPrivateKey"; then
           break
         fi
 
@@ -297,22 +296,22 @@ EOF
     fi
   )
 
-  echo "leaderIp=()" >> "$configFile"
-  cloud_ForEachInstance recordInstanceIp leaderIp
+  echo "bootstrapFullNodeIp=()" >> "$configFile"
+  cloud_ForEachInstance recordInstanceIp bootstrapFullNodeIp
   cloud_ForEachInstance waitForStartupComplete
 
-  echo "Looking for validator instances..."
-  cloud_FindInstances "$prefix-validator"
+  echo "Looking for additional fullnode instances..."
+  cloud_FindInstances "$prefix-fullnode"
   [[ ${#instances[@]} -gt 0 ]] || {
-    echo "Unable to find validators"
+    echo "Unable to find additional fullnodes"
     exit 1
   }
-  echo "validatorIpList=()" >> "$configFile"
-  cloud_ForEachInstance recordInstanceIp validatorIpList
+  echo "additionalFullNodeIps=()" >> "$configFile"
+  cloud_ForEachInstance recordInstanceIp additionalFullNodeIps
   cloud_ForEachInstance waitForStartupComplete
 
   echo "clientIpList=()" >> "$configFile"
-  echo "Looking for client instances..."
+  echo "Looking for client bencher instances..."
   cloud_FindInstances "$prefix-client"
   [[ ${#instances[@]} -eq 0 ]] || {
     cloud_ForEachInstance recordInstanceIp clientIpList
@@ -326,11 +325,11 @@ EOF
 delete() {
   $metricsWriteDatapoint "testnet-deploy net-delete-begin=1"
 
-  # Delete the leader node first to prevent unusual metrics on the dashboard
-  # during shutdown.
+  # Delete the bootstrap fullnode first to prevent unusual metrics on the dashboard
+  # during shutdown (only applicable when leader rotation is disabled).
   # TODO: It would be better to fully cut-off metrics reporting before any
   # instances are deleted.
-  for filter in "$prefix-leader" "$prefix-"; do
+  for filter in "$prefix-bootstrap-fullnode" "$prefix-"; do
     echo "Searching for instances: $filter"
     cloud_FindInstances "$filter"
 
@@ -352,9 +351,9 @@ delete)
   ;;
 
 create)
-  [[ -n $validatorNodeCount ]] || usage "Need number of nodes"
-  if [[ $validatorNodeCount -le 0 ]]; then
-    usage "One or more validator nodes is required"
+  [[ -n $additionalFullNodeCount ]] || usage "Need number of nodes"
+  if [[ $additionalFullNodeCount -le 0 ]]; then
+    usage "One or more additional fullnodes are required"
   fi
 
   delete
@@ -371,8 +370,8 @@ create)
 ========================================================================================
 
 Network composition:
-  Leader = $leaderMachineType (GPU=$enableGpu)
-  Validators = $validatorNodeCount x $validatorMachineType
+  Bootstrap full node = $bootstrapFullNodeMachineType (GPU=$enableGpu)
+  Additional full nodes = $additionalFullNodeCount x $fullNodeMachineType
   Client(s) = $clientNodeCount x $clientMachineType
 
 ========================================================================================
@@ -435,12 +434,12 @@ touch /.instance-startup-complete
 
 EOF
 
-  cloud_CreateInstances "$prefix" "$prefix-leader" 1 \
-    "$imageName" "$leaderMachineType" "$leaderBootDiskSizeInGb" \
-    "$startupScript" "$leaderAddress" "$bootDiskType"
+  cloud_CreateInstances "$prefix" "$prefix-bootstrap-fullnode" 1 \
+    "$imageName" "$bootstrapFullNodeMachineType" "$fullNodeBootDiskSizeInGb" \
+    "$startupScript" "$bootstrapFullNodeAddress" "$bootDiskType"
 
-  cloud_CreateInstances "$prefix" "$prefix-validator" "$validatorNodeCount" \
-    "$imageName" "$validatorMachineType" "$validatorBootDiskSizeInGb" \
+  cloud_CreateInstances "$prefix" "$prefix-fullnode" "$additionalFullNodeCount" \
+    "$imageName" "$fullNodeMachineType" "$fullNodeBootDiskSizeInGb" \
     "$startupScript" "" "$bootDiskType"
 
   if [[ $clientNodeCount -gt 0 ]]; then

@@ -4,10 +4,10 @@ set -e
 cd "$(dirname "$0")"/..
 
 zone=
-leaderAddress=
-leaderMachineType=
+bootstrapFullNodeAddress=
+bootstrapFullNodeMachineType=
 clientNodeCount=0
-validatorNodeCount=10
+additionalFullNodeCount=10
 publicNetwork=false
 snapChannel=edge
 tarChannelOrTag=edge
@@ -37,12 +37,12 @@ Deploys a CD testnet
                                  specified release channel (edge|beta|stable) or release tag
                                  (vX.Y.Z)
                                  (default: $tarChannelOrTag)
-   -n [number]          - Number of validator nodes (default: $validatorNodeCount)
-   -c [number]          - Number of client nodes (default: $clientNodeCount)
+   -n [number]          - Number of additional full nodes (default: $additionalFullNodeCount)
+   -c [number]          - Number of client bencher nodes (default: $clientNodeCount)
    -P                   - Use public network IP addresses (default: $publicNetwork)
    -G                   - Enable GPU, and set count/type of GPUs to use (e.g n1-standard-16 --accelerator count=4,type=nvidia-tesla-k80)
    -g                   - Enable GPU (default: $enableGpu)
-   -a [address]         - Set the leader node's external IP address to this GCE address
+   -a [address]         - Set the bootstrap fullnode's external IP address to this GCE address
    -d                   - Delete the network
 
    Note: the SOLANA_METRICS_CONFIG environment variable is used to configure
@@ -68,7 +68,7 @@ while getopts "h?p:Pn:c:s:t:gG:a:d" opt; do
     publicNetwork=true
     ;;
   n)
-    validatorNodeCount=$OPTARG
+    additionalFullNodeCount=$OPTARG
     ;;
   c)
     clientNodeCount=$OPTARG
@@ -99,10 +99,10 @@ while getopts "h?p:Pn:c:s:t:gG:a:d" opt; do
     ;;
   G)
     enableGpu=true
-    leaderMachineType=$OPTARG
+    bootstrapFullNodeMachineType=$OPTARG
     ;;
   a)
-    leaderAddress=$OPTARG
+    bootstrapFullNodeAddress=$OPTARG
     ;;
   d)
     delete=true
@@ -115,18 +115,18 @@ done
 
 
 create_args=(
-  -a "$leaderAddress"
+  -a "$bootstrapFullNodeAddress"
   -c "$clientNodeCount"
-  -n "$validatorNodeCount"
+  -n "$additionalFullNodeCount"
   -p "$netName"
   -z "$zone"
 )
 
 if $enableGpu; then
-  if [[ -z $leaderMachineType ]]; then
+  if [[ -z $bootstrapFullNodeMachineType ]]; then
     create_args+=(-g)
   else
-    create_args+=(-G "$leaderMachineType")
+    create_args+=(-G "$bootstrapFullNodeMachineType")
   fi
 fi
 

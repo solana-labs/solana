@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 #
-# This script is to be run on the leader node
+# This script is to be run on the bootstrap full node
 #
 
 cd "$(dirname "$0")"/../..
@@ -139,18 +139,18 @@ if $validatorSanity; then
   (
     set -x -o pipefail
     ./multinode-demo/setup.sh -t validator || exit $?
-    timeout 10s ./multinode-demo/validator.sh "$entrypointRsyncUrl" "$entrypointIp:8001" 2>&1 | tee validator.log
+    timeout 10s ./multinode-demo/validator.sh "$entrypointRsyncUrl" "$entrypointIp:8001" 2>&1 | tee validator-sanity.log
   ) || {
     exitcode=$?
     [[ $exitcode -eq 124 ]] || exit $exitcode
   }
-  wc -l validator.log
-  if grep -C100 panic validator.log; then
+  wc -l validator-sanity.log
+  if grep -C100 panic validator-sanity.log; then
     echo "^^^ +++"
     echo "Panic observed"
     exit 1
   else
-    echo "Validator log looks ok"
+    echo "Validator sanity log looks ok"
   fi
 else
   echo "^^^ +++"
