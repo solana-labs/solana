@@ -1,8 +1,8 @@
 use blob_fetch_stage::BlobFetchStage;
 use cluster_info::{ClusterInfo, Node, NodeInfo};
 use db_ledger::DbLedger;
+use gossip_service::GossipService;
 use leader_scheduler::LeaderScheduler;
-use ncp::Ncp;
 use service::Service;
 use solana_sdk::hash::{Hash, Hasher};
 use std::fs::File;
@@ -28,7 +28,7 @@ use window;
 use window_service::window_service;
 
 pub struct Replicator {
-    ncp: Ncp,
+    gossip_service: GossipService,
     fetch_stage: BlobFetchStage,
     store_ledger_stage: StoreLedgerStage,
     t_window: JoinHandle<()>,
@@ -134,7 +134,7 @@ impl Replicator {
 
         let store_ledger_stage = StoreLedgerStage::new(entry_window_receiver, ledger_path);
 
-        let ncp = Ncp::new(
+        let gossip_service = GossipService::new(
             &cluster_info,
             shared_window.clone(),
             ledger_path,
@@ -147,7 +147,7 @@ impl Replicator {
 
         (
             Replicator {
-                ncp,
+                gossip_service,
                 fetch_stage,
                 store_ledger_stage,
                 t_window,
@@ -158,7 +158,7 @@ impl Replicator {
     }
 
     pub fn join(self) {
-        self.ncp.join().unwrap();
+        self.gossip_service.join().unwrap();
         self.fetch_stage.join().unwrap();
         self.t_window.join().unwrap();
         self.store_ledger_stage.join().unwrap();

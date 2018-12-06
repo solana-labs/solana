@@ -12,7 +12,7 @@ pub struct ContactInfo {
     /// signature of this ContactInfo
     pub signature: Signature,
     /// gossip address
-    pub ncp: SocketAddr,
+    pub gossip: SocketAddr,
     /// address to connect to for replication
     pub tvu: SocketAddr,
     /// transactions address
@@ -48,7 +48,7 @@ impl Default for ContactInfo {
     fn default() -> Self {
         ContactInfo {
             id: Pubkey::default(),
-            ncp: socketaddr_any!(),
+            gossip: socketaddr_any!(),
             tvu: socketaddr_any!(),
             tpu: socketaddr_any!(),
             storage_addr: socketaddr_any!(),
@@ -63,7 +63,7 @@ impl Default for ContactInfo {
 impl ContactInfo {
     pub fn new(
         id: Pubkey,
-        ncp: SocketAddr,
+        gossip: SocketAddr,
         tvu: SocketAddr,
         tpu: SocketAddr,
         storage_addr: SocketAddr,
@@ -74,7 +74,7 @@ impl ContactInfo {
         ContactInfo {
             id,
             signature: Signature::default(),
-            ncp,
+            gossip,
             tvu,
             tpu,
             storage_addr,
@@ -175,7 +175,7 @@ impl Signable for ContactInfo {
         #[derive(Serialize)]
         struct SignData {
             id: Pubkey,
-            ncp: SocketAddr,
+            gossip: SocketAddr,
             tvu: SocketAddr,
             tpu: SocketAddr,
             storage_addr: SocketAddr,
@@ -187,7 +187,7 @@ impl Signable for ContactInfo {
         let me = self;
         let data = SignData {
             id: me.id,
-            ncp: me.ncp,
+            gossip: me.gossip,
             tvu: me.tvu,
             tpu: me.tpu,
             storage_addr: me.storage_addr,
@@ -227,7 +227,7 @@ mod tests {
     #[test]
     fn test_default() {
         let ci = ContactInfo::default();
-        assert!(ci.ncp.ip().is_unspecified());
+        assert!(ci.gossip.ip().is_unspecified());
         assert!(ci.tvu.ip().is_unspecified());
         assert!(ci.rpc.ip().is_unspecified());
         assert!(ci.rpc_pubsub.ip().is_unspecified());
@@ -237,7 +237,7 @@ mod tests {
     #[test]
     fn test_multicast() {
         let ci = ContactInfo::new_multicast();
-        assert!(ci.ncp.ip().is_multicast());
+        assert!(ci.gossip.ip().is_multicast());
         assert!(ci.tvu.ip().is_multicast());
         assert!(ci.rpc.ip().is_multicast());
         assert!(ci.rpc_pubsub.ip().is_multicast());
@@ -248,7 +248,7 @@ mod tests {
     fn test_entry_point() {
         let addr = socketaddr!("127.0.0.1:10");
         let ci = ContactInfo::new_entry_point(&addr);
-        assert_eq!(ci.ncp, addr);
+        assert_eq!(ci.gossip, addr);
         assert!(ci.tvu.ip().is_unspecified());
         assert!(ci.rpc.ip().is_unspecified());
         assert!(ci.rpc_pubsub.ip().is_unspecified());
@@ -260,7 +260,7 @@ mod tests {
         let addr = socketaddr!("127.0.0.1:10");
         let ci = ContactInfo::new_with_socketaddr(&addr);
         assert_eq!(ci.tpu, addr);
-        assert_eq!(ci.ncp.port(), 11);
+        assert_eq!(ci.gossip.port(), 11);
         assert_eq!(ci.tvu.port(), 12);
         assert_eq!(ci.rpc.port(), 8899);
         assert_eq!(ci.rpc_pubsub.port(), 8900);
@@ -274,7 +274,7 @@ mod tests {
             &socketaddr!("127.0.0.1:1234"),
         );
         assert_eq!(d1.id, keypair.pubkey());
-        assert_eq!(d1.ncp, socketaddr!("127.0.0.1:1235"));
+        assert_eq!(d1.gossip, socketaddr!("127.0.0.1:1235"));
         assert_eq!(d1.tvu, socketaddr!("127.0.0.1:1236"));
         assert_eq!(d1.tpu, socketaddr!("127.0.0.1:1234"));
         assert_eq!(d1.rpc, socketaddr!("127.0.0.1:8899"));

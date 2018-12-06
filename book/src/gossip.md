@@ -1,8 +1,8 @@
-# The Network Control Plane
+# The Gossip Service
 
-The Network Control Plane (NCP) acts as a gateway to nodes in the control
-plane. Fullnodes use the NCP to ensure information is available to all other
-nodes in a cluster. The NCP broadcasts information using a gossip protocol.
+The Gossip Service acts as a gateway to nodes in the control plane. Fullnodes
+use the service to ensure information is available to all other nodes in a cluster.
+The service broadcasts information using a gossip protocol.
 
 ## Gossip Overview
 
@@ -25,7 +25,7 @@ timestamp) as needed to make sense to the node receiving them. If a node
 recieves two records from the same source, it it updates its own copy with the
 record with the most recent timestamp.
 
-## NCP Interface
+## Gossip Service Interface
 
 ### Push Message
 

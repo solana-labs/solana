@@ -59,12 +59,12 @@ fn main() {
 
     let ledger_path = matches.value_of("ledger");
 
-    let (keypair, ncp) = if let Some(i) = matches.value_of("identity") {
+    let (keypair, gossip) = if let Some(i) = matches.value_of("identity") {
         let path = i.to_string();
         if let Ok(file) = File::open(path.clone()) {
             let parse: serde_json::Result<Config> = serde_json::from_reader(file);
             if let Ok(data) = parse {
-                (data.keypair(), data.node_info.ncp)
+                (data.keypair(), data.node_info.gossip)
             } else {
                 eprintln!("failed to parse {}", path);
                 exit(1);
@@ -77,12 +77,12 @@ fn main() {
         (Keypair::new(), socketaddr!([127, 0, 0, 1], 8700))
     };
 
-    let node = Node::new_with_external_ip(keypair.pubkey(), &ncp);
+    let node = Node::new_with_external_ip(keypair.pubkey(), &gossip);
 
     println!(
-        "replicating the data with keypair: {:?} ncp:{:?}",
+        "replicating the data with keypair: {:?} gossip:{:?}",
         keypair.pubkey(),
-        ncp
+        gossip
     );
 
     let exit = Arc::new(AtomicBool::new(false));

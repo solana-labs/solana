@@ -1128,7 +1128,7 @@ mod tests {
         let drone_addr = receiver.recv().unwrap();
 
         let mut config = WalletConfig::default();
-        config.network = leader_data.ncp;
+        config.network = leader_data.gossip;
         config.drone_port = Some(drone_addr.port());
 
         let tokens = 50;
@@ -1199,7 +1199,7 @@ mod tests {
         let drone_addr = receiver.recv().unwrap();
 
         let mut bob_config = WalletConfig::default();
-        bob_config.network = leader_data.ncp;
+        bob_config.network = leader_data.gossip;
         bob_config.drone_port = Some(drone_addr.port());
         bob_config.command = WalletCommand::AirDrop(50);
 
@@ -1282,11 +1282,11 @@ mod tests {
         let rpc_client = RpcClient::new_from_socket(leader_data.rpc);
 
         let mut config_payer = WalletConfig::default();
-        config_payer.network = leader_data.ncp;
+        config_payer.network = leader_data.gossip;
         config_payer.drone_port = Some(drone_addr.port());
 
         let mut config_witness = WalletConfig::default();
-        config_witness.network = leader_data.ncp;
+        config_witness.network = leader_data.gossip;
         config_witness.drone_port = Some(drone_addr.port());
 
         assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
@@ -1527,11 +1527,11 @@ mod tests {
         let rpc_client = RpcClient::new_from_socket(leader_data.rpc);
 
         let mut config_payer = WalletConfig::default();
-        config_payer.network = leader_data.ncp;
+        config_payer.network = leader_data.gossip;
         config_payer.drone_port = Some(drone_addr.port());
 
         let mut config_witness = WalletConfig::default();
-        config_witness.network = leader_data.ncp;
+        config_witness.network = leader_data.gossip;
         config_witness.drone_port = Some(drone_addr.port());
 
         assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());

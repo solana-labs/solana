@@ -12,8 +12,8 @@ use clap::{App, Arg};
 use rayon::prelude::*;
 use solana::client::mk_client;
 use solana::cluster_info::{ClusterInfo, NodeInfo};
+use solana::gossip_service::GossipService;
 use solana::logger;
-use solana::ncp::Ncp;
 use solana::service::Service;
 use solana::signature::GenKeys;
 use solana::thin_client::{poll_gossip_for_leader, ThinClient};
@@ -642,7 +642,7 @@ fn main() {
     let leader = poll_gossip_for_leader(network, None).expect("unable to find leader on network");
 
     let exit_signal = Arc::new(AtomicBool::new(false));
-    let (nodes, leader, ncp) = converge(&leader, &exit_signal, num_nodes);
+    let (nodes, leader, gossip_service) = converge(&leader, &exit_signal, num_nodes);
 
     if nodes.len() < num_nodes {
         println!(
@@ -825,14 +825,14 @@ fn main() {
     );
 
     // join the cluster_info client threads
-    ncp.join().unwrap();
+    gossip_service.join().unwrap();
 }
 
 fn converge(
     leader: &NodeInfo,
     exit_signal: &Arc<AtomicBool>,
     num_nodes: usize,
-) -> (Vec<NodeInfo>, Option<NodeInfo>, Ncp) {
+) -> (Vec<NodeInfo>, Option<NodeInfo>, GossipService) {
     //lets spy on the network
     let (node, gossip_socket) = ClusterInfo::spy_node();
     let mut spy_cluster_info = ClusterInfo::new(node);
@@ -840,7 +840,8 @@ fn converge(
     spy_cluster_info.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_cluster_info));
     let window = Arc::new(RwLock::new(default_window()));
-    let ncp = Ncp::new(&spy_ref, window, None, gossip_socket, exit_signal.clone());
+    let gossip_service =
+        GossipService::new(&spy_ref, window, None, gossip_socket, exit_signal.clone());
     let mut v: Vec<NodeInfo> = vec![];
     // wait for the network to converge, 30 seconds should be plenty
     for _ in 0..30 {
@@ -866,7 +867,7 @@ fn converge(
         sleep(Duration::new(1, 0));
     }
     let leader = spy_ref.read().unwrap().leader_data().cloned();
-    (v, leader, ncp)
+    (v, leader, gossip_service)
 }
 
 #[cfg(test)]

@@ -191,10 +191,10 @@ impl ClusterInfo {
             .into_iter()
             .map(|node| {
                 format!(
-                    " ncp: {:20} | {}{}\n \
+                    " gossip: {:20} | {}{}\n \
                      tpu: {:20} |\n \
                      rpc: {:20} |\n",
-                    node.ncp.to_string(),
+                    node.gossip.to_string(),
                     node.id,
                     if node.id == leader_id {
                         " <==== leader"
@@ -231,7 +231,7 @@ impl ClusterInfo {
         self.gossip.purge(now);
     }
     pub fn convergence(&self) -> usize {
-        self.ncp_peers().len() + 1
+        self.gossip_peers().len() + 1
     }
     pub fn rpc_peers(&self) -> Vec<NodeInfo> {
         let me = self.my_data().id;
@@ -246,7 +246,7 @@ impl ClusterInfo {
             .collect()
     }
 
-    pub fn ncp_peers(&self) -> Vec<NodeInfo> {
+    pub fn gossip_peers(&self) -> Vec<NodeInfo> {
         let me = self.my_data().id;
         self.gossip
             .crds
@@ -254,7 +254,7 @@ impl ClusterInfo {
             .values()
             .filter_map(|x| x.value.contact_info())
             .filter(|x| x.id != me)
-            .filter(|x| ContactInfo::is_valid_address(&x.ncp))
+            .filter(|x| ContactInfo::is_valid_address(&x.gossip))
             .cloned()
             .collect()
     }
@@ -508,12 +508,12 @@ impl ClusterInfo {
     pub fn window_index_request(&self, ix: u64) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication, as indicated
         //  by a valid tvu port location
-        let valid: Vec<_> = self.ncp_peers();
+        let valid: Vec<_> = self.gossip_peers();
         if valid.is_empty() {
             Err(ClusterInfoError::NoPeers)?;
         }
         let n = thread_rng().gen::<usize>() % valid.len();
-        let addr = valid[n].ncp; // send the request to the peer's gossip port
+        let addr = valid[n].gossip; // send the request to the peer's gossip port
         let req = Protocol::RequestWindowIndex(self.my_data().clone(), ix);
         let out = serialize(&req)?;
         Ok((addr, out))
@@ -530,12 +530,12 @@ impl ClusterInfo {
                     .crds
                     .lookup(&peer_label)
                     .and_then(|v| v.contact_info())
-                    .map(|peer_info| (peer, filter, peer_info.ncp, self_info))
+                    .map(|peer_info| (peer, filter, peer_info.gossip, self_info))
             }).collect();
         pr.into_iter()
-            .map(|(peer, filter, ncp, self_info)| {
+            .map(|(peer, filter, gossip, self_info)| {
                 self.gossip.mark_pull_request_creation_time(peer, now);
-                (ncp, Protocol::PullRequest(filter, self_info))
+                (gossip, Protocol::PullRequest(filter, self_info))
             }).collect()
     }
     fn new_push_requests(&mut self) -> Vec<(SocketAddr, Protocol)> {
@@ -549,7 +549,7 @@ impl ClusterInfo {
                     .crds
                     .lookup(&peer_label)
                     .and_then(|v| v.contact_info())
-                    .map(|p| p.ncp)
+                    .map(|p| p.gossip)
             }).map(|peer| (peer, Protocol::PushMessage(self_id, msgs.clone())))
             .collect()
     }
@@ -760,12 +760,12 @@ impl ClusterInfo {
             // the remote side may not know his public IP:PORT, record what he looks like to us
             //  this may or may not be correct for everybody but it's better than leaving him with
             //  an unspecified address in our table
-            if from.ncp.ip().is_unspecified() {
-                inc_new_counter_info!("cluster_info-window-request-updates-unspec-ncp", 1);
-                from.ncp = *from_addr;
+            if from.gossip.ip().is_unspecified() {
+                inc_new_counter_info!("cluster_info-window-request-updates-unspec-gossip", 1);
+                from.gossip = *from_addr;
             }
             inc_new_counter_info!("cluster_info-pull_request-rsp", len);
-            to_blob(rsp, from.ncp).ok().into_iter().collect()
+            to_blob(rsp, from.gossip).ok().into_iter().collect()
         }
     }
     fn handle_pull_response(me: &Arc<RwLock<Self>>, from: Pubkey, data: Vec<CrdsValue>) {
@@ -810,7 +810,7 @@ impl ClusterInfo {
                     };
                     prune_msg.sign(&me.read().unwrap().keypair);
                     let rsp = Protocol::PruneMessage(self_id, prune_msg);
-                    to_blob(rsp, ci.ncp).ok()
+                    to_blob(rsp, ci.gossip).ok()
                 }).into_iter()
                 .collect();
             let mut blobs: Vec<_> = pushes
@@ -1056,13 +1056,16 @@ impl Node {
             },
         }
     }
-    pub fn new_with_external_ip(pubkey: Pubkey, ncp: &SocketAddr) -> Node {
+    pub fn new_with_external_ip(pubkey: Pubkey, gossip_addr: &SocketAddr) -> Node {
         fn bind() -> (u16, UdpSocket) {
             bind_in_range(FULLNODE_PORT_RANGE).expect("Failed to bind")
         };
 
-        let (gossip_port, gossip) = if ncp.port() != 0 {
-            (ncp.port(), bind_to(ncp.port(), false).expect("ncp bind"))
+        let (gossip_port, gossip) = if gossip_addr.port() != 0 {
+            (
+                gossip_addr.port(),
+                bind_to(gossip_addr.port(), false).expect("gossip_addr bind"),
+            )
         } else {
             bind()
         };
@@ -1080,12 +1083,12 @@ impl Node {
 
         let info = NodeInfo::new(
             pubkey,
-            SocketAddr::new(ncp.ip(), gossip_port),
-            SocketAddr::new(ncp.ip(), replicate_port),
-            SocketAddr::new(ncp.ip(), transaction_port),
-            SocketAddr::new(ncp.ip(), storage_port),
-            SocketAddr::new(ncp.ip(), RPC_PORT),
-            SocketAddr::new(ncp.ip(), RPC_PORT + 1),
+            SocketAddr::new(gossip_addr.ip(), gossip_port),
+            SocketAddr::new(gossip_addr.ip(), replicate_port),
+            SocketAddr::new(gossip_addr.ip(), transaction_port),
+            SocketAddr::new(gossip_addr.ip(), storage_port),
+            SocketAddr::new(gossip_addr.ip(), RPC_PORT),
+            SocketAddr::new(gossip_addr.ip(), RPC_PORT + 1),
             0,
         );
         trace!("new NodeInfo: {:?}", info);
@@ -1171,10 +1174,10 @@ mod tests {
         let rv = cluster_info.window_index_request(0);
         assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
 
-        let ncp = socketaddr!([127, 0, 0, 1], 1234);
+        let gossip_addr = socketaddr!([127, 0, 0, 1], 1234);
         let nxt = NodeInfo::new(
             Keypair::new().pubkey(),
-            ncp,
+            gossip_addr,
             socketaddr!([127, 0, 0, 1], 1235),
             socketaddr!([127, 0, 0, 1], 1236),
             socketaddr!([127, 0, 0, 1], 1237),
@@ -1184,13 +1187,13 @@ mod tests {
         );
         cluster_info.insert_info(nxt.clone());
         let rv = cluster_info.window_index_request(0).unwrap();
-        assert_eq!(nxt.ncp, ncp);
-        assert_eq!(rv.0, nxt.ncp);
+        assert_eq!(nxt.gossip, gossip_addr);
+        assert_eq!(rv.0, nxt.gossip);
 
-        let ncp2 = socketaddr!([127, 0, 0, 2], 1234);
+        let gossip_addr2 = socketaddr!([127, 0, 0, 2], 1234);
         let nxt = NodeInfo::new(
             Keypair::new().pubkey(),
-            ncp2,
+            gossip_addr2,
             socketaddr!([127, 0, 0, 1], 1235),
             socketaddr!([127, 0, 0, 1], 1236),
             socketaddr!([127, 0, 0, 1], 1237),
@@ -1204,10 +1207,10 @@ mod tests {
         while !one || !two {
             //this randomly picks an option, so eventually it should pick both
             let rv = cluster_info.window_index_request(0).unwrap();
-            if rv.0 == ncp {
+            if rv.0 == gossip_addr {
                 one = true;
             }
-            if rv.0 == ncp2 {
+            if rv.0 == gossip_addr2 {
                 two = true;
             }
         }

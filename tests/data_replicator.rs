@@ -6,8 +6,8 @@ extern crate solana_sdk;
 
 use rayon::iter::*;
 use solana::cluster_info::{ClusterInfo, Node};
+use solana::gossip_service::GossipService;
 use solana::logger;
-use solana::ncp::Ncp;
 use solana::packet::{Blob, SharedBlob};
 use solana::result;
 use solana::service::Service;
@@ -19,13 +19,13 @@ use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::Duration;
 
-fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<ClusterInfo>>, Ncp, UdpSocket) {
+fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<ClusterInfo>>, GossipService, UdpSocket) {
     let keypair = Keypair::new();
     let mut tn = Node::new_localhost_with_pubkey(keypair.pubkey());
     let cluster_info = ClusterInfo::new_with_keypair(tn.info.clone(), Arc::new(keypair));
     let c = Arc::new(RwLock::new(cluster_info));
     let w = Arc::new(RwLock::new(vec![]));
-    let d = Ncp::new(&c.clone(), w, None, tn.sockets.gossip, exit);
+    let d = GossipService::new(&c.clone(), w, None, tn.sockets.gossip, exit);
     let _ = c.read().unwrap().my_data();
     (c, d, tn.sockets.replicate.pop().unwrap())
 }
@@ -36,7 +36,7 @@ fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<ClusterInfo>>, Ncp, UdpSocket
 /// tests that actually use this function are below
 fn run_gossip_topo<F>(num: usize, topo: F)
 where
-    F: Fn(&Vec<(Arc<RwLock<ClusterInfo>>, Ncp, UdpSocket)>) -> (),
+    F: Fn(&Vec<(Arc<RwLock<ClusterInfo>>, GossipService, UdpSocket)>) -> (),
 {
     let exit = Arc::new(AtomicBool::new(false));
     let listen: Vec<_> = (0..num).map(|_| test_node(exit.clone())).collect();
@@ -46,7 +46,7 @@ where
         done = true;
         let total: usize = listen
             .iter()
-            .map(|v| v.0.read().unwrap().ncp_peers().len())
+            .map(|v| v.0.read().unwrap().gossip_peers().len())
             .sum();
         if (total + num) * 10 > num * num * 9 {
             done = true;
@@ -165,9 +165,9 @@ pub fn cluster_info_retransmit() -> result::Result<()> {
     trace!("waiting to converge:");
     let mut done = false;
     for _ in 0..30 {
-        done = c1.read().unwrap().ncp_peers().len() == num - 1
-            && c2.read().unwrap().ncp_peers().len() == num - 1
-            && c3.read().unwrap().ncp_peers().len() == num - 1;
+        done = c1.read().unwrap().gossip_peers().len() == num - 1
+            && c2.read().unwrap().gossip_peers().len() == num - 1
+            && c3.read().unwrap().gossip_peers().len() == num - 1;
         if done {
             break;
         }

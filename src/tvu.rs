@@ -169,11 +169,11 @@ pub mod tests {
     use cluster_info::{ClusterInfo, Node};
     use db_ledger::DbLedger;
     use entry::Entry;
+    use gossip_service::GossipService;
     use leader_scheduler::LeaderScheduler;
     use ledger::get_tmp_ledger_path;
     use logger;
     use mint::Mint;
-    use ncp::Ncp;
     use packet::SharedBlob;
     use rocksdb::{Options, DB};
     use service::Service;
@@ -195,10 +195,10 @@ pub mod tests {
         cluster_info: Arc<RwLock<ClusterInfo>>,
         gossip: UdpSocket,
         exit: Arc<AtomicBool>,
-    ) -> (Ncp, SharedWindow) {
+    ) -> (GossipService, SharedWindow) {
         let window = Arc::new(RwLock::new(window::default_window()));
-        let ncp = Ncp::new(&cluster_info, window.clone(), None, gossip, exit);
-        (ncp, window)
+        let gossip_service = GossipService::new(&cluster_info, window.clone(), None, gossip, exit);
+        (gossip_service, window)
     }
 
     /// Test that message sent from leader to target1 and replicated to target2

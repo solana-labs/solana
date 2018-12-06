@@ -184,7 +184,7 @@ impl CrdsGossipPush {
                 continue;
             }
             if let Some(contact) = val.1.value.contact_info() {
-                if !ContactInfo::is_valid_address(&contact.ncp) {
+                if !ContactInfo::is_valid_address(&contact.gossip) {
                     continue;
                 }
             }

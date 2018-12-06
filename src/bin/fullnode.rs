@@ -74,7 +74,7 @@ fn main() {
     let nosigverify = matches.is_present("nosigverify");
     let use_only_bootstrap_leader = matches.is_present("no-leader-rotation");
 
-    let (keypair, vote_account_keypair, ncp) = if let Some(i) = matches.value_of("identity") {
+    let (keypair, vote_account_keypair, gossip) = if let Some(i) = matches.value_of("identity") {
         let path = i.to_string();
         if let Ok(file) = File::open(path.clone()) {
             let parse: serde_json::Result<Config> = serde_json::from_reader(file);
@@ -82,7 +82,7 @@ fn main() {
                 (
                     data.keypair(),
                     data.vote_account_keypair(),
-                    data.node_info.ncp,
+                    data.node_info.gossip,
                 )
             } else {
                 eprintln!("failed to parse {}", path);
@@ -98,12 +98,12 @@ fn main() {
 
     let ledger_path = matches.value_of("ledger").unwrap();
 
-    // socketaddr that is initial pointer into the network's gossip (ncp)
+    // socketaddr that is initial pointer into the network's gossip
     let network = matches
         .value_of("network")
         .map(|network| network.parse().expect("failed to parse network address"));
 
-    let node = Node::new_with_external_ip(keypair.pubkey(), &ncp);
+    let node = Node::new_with_external_ip(keypair.pubkey(), &gossip);
 
     // save off some stuff for airdrop
     let mut node_info = node.info.clone();
