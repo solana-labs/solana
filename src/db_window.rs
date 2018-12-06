@@ -85,7 +85,7 @@ pub fn repair(
     };
 
     let idxs = find_missing_data_indexes(
-        slot,
+        DEFAULT_SLOT_HEIGHT,
         db_ledger,
         consumed,
         max_repair_entry_height - 1,
@@ -317,7 +317,7 @@ pub fn process_blob(
         // If write_shared_blobs() of these recovered blobs fails fails, don't return
         // because consumed_entries might be nonempty from earlier, and tick height needs to
         // be updated. Hopefully we can recover these blobs next time successfully.
-        if let Err(e) = try_erasure(db_ledger, slot, consume_queue) {
+        if let Err(e) = try_erasure(db_ledger, consume_queue) {
             trace!(
                 "erasure::recover failed to write recovered coding blobs. Err: {:?}",
                 e
@@ -335,7 +335,7 @@ pub fn process_blob(
     if max_ix != 0 && !consumed_entries.is_empty() {
         let meta = db_ledger
             .meta_cf
-            .get(&db_ledger.db, &MetaCf::key(slot))?
+            .get(&db_ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))?
             .expect("Expect metadata to exist if consumed entries is nonzero");
 
         let consumed = meta.consumed;
@@ -374,14 +374,18 @@ pub fn calculate_max_repair_entry_height(
 }
 
 #[cfg(feature = "erasure")]
-fn try_erasure(db_ledger: &mut DbLedger, slot: u64, consume_queue: &mut Vec<Entry>) -> Result<()> {
-    let meta = db_ledger.meta_cf.get(&db_ledger.db, &MetaCf::key(slot))?;
+fn try_erasure(db_ledger: &mut DbLedger, consume_queue: &mut Vec<Entry>) -> Result<()> {
+    let meta = db_ledger
+        .meta_cf
+        .get(&db_ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))?;
     if let Some(meta) = meta {
-        let (data, coding) = erasure::recover(db_ledger, slot, meta.consumed)?;
+        let (data, coding) = erasure::recover(db_ledger, meta.consumed_slot, meta.consumed)?;
         for c in coding {
             let cl = c.read().unwrap();
-            let erasure_key =
-                ErasureCf::key(slot, cl.index().expect("Recovered blob must set index"));
+            let erasure_key = ErasureCf::key(
+                meta.consumed_slot,
+                cl.index().expect("Recovered blob must set index"),
+            );
             let size = cl.size().expect("Recovered blob must set size");
             db_ledger.erasure_cf.put(
                 &db_ledger.db,
@@ -390,7 +394,7 @@ fn try_erasure(db_ledger: &mut DbLedger, slot: u64, consume_queue: &mut Vec<Entr
             )?;
         }
 
-        let entries = db_ledger.write_shared_blobs(slot, data)?;
+        let entries = db_ledger.write_shared_blobs(meta.consumed_slot, data)?;
         consume_queue.extend(entries);
     }
 
@@ -718,7 +722,7 @@ mod test {
             generate_db_ledger_from_window(&ledger_path, &window, slot_height, false);
 
         let mut consume_queue = vec![];
-        try_erasure(&mut db_ledger, slot_height, &mut consume_queue)
+        try_erasure(&mut db_ledger, &mut consume_queue)
             .expect("Expected successful erasure attempt");
         window[erase_offset].data = erased_data;
 

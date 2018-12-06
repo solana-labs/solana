@@ -88,6 +88,10 @@ pub struct SlotMeta {
     pub consumed: u64,
     // The entry height of the highest blob received for this slot.
     pub received: u64,
+    // The slot the blob with index == "consumed" is in
+    pub consumed_slot: u64,
+    // The slot the blob with index == "received" is in
+    pub received_slot: u64,
 }
 
 impl SlotMeta {
@@ -95,6 +99,8 @@ impl SlotMeta {
         SlotMeta {
             consumed: 0,
             received: 0,
+            consumed_slot: 0,
+            received_slot: 0,
         }
     }
 }
@@ -203,6 +209,10 @@ impl ErasureCf {
 
     pub fn key(slot_height: u64, index: u64) -> Vec<u8> {
         DataCf::key(slot_height, index)
+    }
+
+    pub fn slot_height_from_key(key: &[u8]) -> Result<u64> {
+        DataCf::slot_height_from_key(key)
     }
 
     pub fn index_from_key(key: &[u8]) -> Result<u64> {
@@ -318,7 +328,7 @@ impl DbLedger {
     }
 
     pub fn insert_data_blob(&self, key: &[u8], new_blob: &Blob) -> Result<Vec<Entry>> {
-        let mut slot_height = DataCf::slot_height_from_key(key)?;
+        let slot_height = DataCf::slot_height_from_key(key)?;
         let meta_key = MetaCf::key(DEFAULT_SLOT_HEIGHT);
 
         let mut should_write_meta = false;
@@ -344,6 +354,7 @@ impl DbLedger {
         // so received = index + 1 for the same blob.
         if index >= meta.received {
             meta.received = index + 1;
+            meta.received_slot = slot_height;
             should_write_meta = true;
         }
 
@@ -363,16 +374,18 @@ impl DbLedger {
             // TODO: account for consecutive blocks that
             // span multiple slots
 
+            let mut current_slot = slot_height;
             loop {
                 index += 1;
-                let key = DataCf::key(slot_height, index);
+                let key = DataCf::key(current_slot, index);
                 let blob_data = {
                     if let Some(blob_data) = self.data_cf.get(&self.db, &key)? {
                         blob_data
                     } else if meta.consumed < meta.received {
-                        let key = DataCf::key(slot_height + 1, index);
+                        let key = DataCf::key(current_slot + 1, index);
                         if let Some(blob_data) = self.data_cf.get(&self.db, &key)? {
-                            slot_height += 1;
+                            current_slot += 1;
+                            meta.consumed_slot = current_slot;
                             blob_data
                         } else {
                             break;
@@ -551,7 +564,7 @@ mod tests {
 
         // Test meta column family
         let meta = SlotMeta::new();
-        let meta_key = MetaCf::key(0);
+        let meta_key = MetaCf::key(DEFAULT_SLOT_HEIGHT);
         ledger.meta_cf.put(&ledger.db, &meta_key, &meta).unwrap();
         let result = ledger
             .meta_cf
@@ -753,6 +766,7 @@ mod tests {
                 &DataCf::key(DEFAULT_SLOT_HEIGHT + 1, (num_blobs - 1) as u64),
                 blobs.last().unwrap(),
             ).unwrap();
+        assert_eq!(result.len(), 0);
 
         // Insert blobs into first slot, check for consecutive blobs
         for i in (0..num_blobs - 1).rev() {

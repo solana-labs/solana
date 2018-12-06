@@ -207,7 +207,6 @@ pub fn window_service(
                     trace!("{} let's repair! times = {}", id, times);
 
                     let reqs = repair(
-                        DEFAULT_SLOT_HEIGHT,
                         db_ledger.read().unwrap().borrow(),
                         &cluster_info,
                         &id,
