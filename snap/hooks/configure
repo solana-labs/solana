@@ -3,7 +3,7 @@
 echo Stopping daemons
 snapctl stop --disable solana.daemon-drone
 snapctl stop --disable solana.daemon-bootstrap-fullnode
-snapctl stop --disable solana.daemon-validator
+snapctl stop --disable solana.daemon-fullnode
 snapctl stop --disable solana.daemon-oom-monitor
 snapctl stop --disable solana.daemon-net-stats
 
