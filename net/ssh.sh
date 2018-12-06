@@ -49,12 +49,12 @@ printNode() {
   printf "  %-25s | For logs run: $0 $ip tail -f solana/$nodeType.log\n" "$0 $ip"
 }
 
-echo Leader:
-printNode leader "$leaderIp"
+echo Bootstrap full node:
+printNode fullnode "$bootstrapFullNodeIp"
 echo
-echo Validators:
-for ipAddress in "${validatorIpList[@]}"; do
-  printNode validator "$ipAddress"
+echo Additional full nodes:
+for ipAddress in "${additionalFullNodeIps[@]}"; do
+  printNode fullnode "$ipAddress"
 done
 echo
 echo Clients:

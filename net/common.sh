@@ -22,12 +22,12 @@ configFile="$netConfigDir/config"
 
 entrypointIp=
 publicNetwork=
-leaderIp=
+bootstrapFullNodeIp=
 netBasename=
 sshPrivateKey=
 clientIpList=()
 sshOptions=()
-validatorIpList=()
+additionalFullNodeIps=()
 
 buildSshOptions() {
   sshOptions=(
@@ -48,10 +48,10 @@ loadConfigFile() {
   source "$configFile"
   [[ -n "$entrypointIp" ]] || usage "Config file invalid, entrypointIp unspecified: $configFile"
   [[ -n "$publicNetwork" ]] || usage "Config file invalid, publicNetwork unspecified: $configFile"
-  [[ -n "$leaderIp" ]] || usage "Config file invalid, leaderIp unspecified: $configFile"
+  [[ -n "$bootstrapFullNodeIp" ]] || usage "Config file invalid, bootstrapFullNodeIp unspecified: $configFile"
   [[ -n "$netBasename" ]] || usage "Config file invalid, netBasename unspecified: $configFile"
   [[ -n $sshPrivateKey ]] || usage "Config file invalid, sshPrivateKey unspecified: $configFile"
-  [[ ${#validatorIpList[@]} -gt 0 ]] || usage "Config file invalid, validatorIpList unspecified: $configFile"
+  [[ ${#additionalFullNodeIps[@]} -gt 0 ]] || usage "Config file invalid, additionalFullNodeIps unspecified: $configFile"
 
   buildSshOptions
   configureMetrics
