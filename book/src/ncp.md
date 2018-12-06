@@ -1,21 +1,21 @@
 # The Network Control Plane
 
-The Network Control Plane (NCP) is the gateway to the control plane. Any node
-may join the control plane. It is when nodes need to ensure information is
-available to *all* nodes in a Solana cluster. The control plane is implemented
-using a gossip protocol.
+The Network Control Plane (NCP) acts as a gateway to nodes in the control
+plane. Fullnodes use the NCP to ensure information is available to all other
+nodes in a cluster. The NCP broadcasts information using a gossip protocol.
 
 ## Gossip Overview
 
-Nodes continuously share signed data objects among themselves in order to find
-each other, structure the network data plane, prevent censoring, etc.
+Nodes continuously share signed data objects among themselves in order to
+manage a cluster. For example, they share their contact information, ledger
+height, and votes.
 
-The basic mechanism is a 10Hz loop wherein every node sends a push message
-and/or a pull message.  Push and pull messages may elicit responses, and push
-messages may be forwarded on to others in the network.
+Every tenth of a second, each node sends a "push" message and/or a "pull"
+message.  Push and pull messages may elicit responses, and push messages may be
+forwarded on to others in the cluster.
 
 Gossip runs on a well-known UDP/IP port or a port in a well-known range.  Once
-a network is bootstrapped, nodes advertise to each other where to find their
+a cluster is bootstrapped, nodes advertise to each other where to find their
 gossip endpoint (a socket address).
 
 ## Gossip Records
@@ -29,7 +29,7 @@ record with the most recent timestamp.
 
 ### Push Message
 
-A node sends a push message to tells the network it has information to share.
+A node sends a push message to tells the cluster it has information to share.
 Nodes send push messages to `PUSH_FANOUT` push peers.
 
 Upon receiving a push message, a node examines the message for:
@@ -60,7 +60,7 @@ The set of push peers is kept fresh by rotating a new node into the set every
 
 ### Pull Message
 
-A node sends a pull message to ask the network if there is any new information.
+A node sends a pull message to ask the cluster if there is any new information.
 A pull message is sent to a single peer at random and comprises a Bloom filter
 that represents things it already has.  A node receiving a pull message
 iterates over its values and constructs a pull response of things that miss the
