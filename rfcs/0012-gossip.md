@@ -34,14 +34,12 @@ Upon receiving a push message, a node examines the message for:
 1. duplication: if the message has been seen before, the node responds with
    `PushMessagePrune` and drops the message
 
-2. new info: if the message is new the node
-
-   a. stores the new information with an updated version in its cluster info
-
-   b. stores the message in `pushed_once` (used for detecting duplicates,
-purged after `PUSH_MSG_TIMEOUT * 5` ms)
-
-   c. retransmits the messages to its own push peers
+2. new data: if the message is new to the node
+    * stores the new information with an updated version in its cluster info and
+       purges any previous older value
+    * stores the message in `pushed_once` (used for detecting duplicates,
+       purged after `PUSH_MSG_TIMEOUT * 5` ms)
+    * retransmits the messages to its own push peers
 
 3. expiration: nodes drop push messages that are older than `PUSH_MSG_TIMEOUT`
 
@@ -61,9 +59,20 @@ The set of push peers is kept fresh by rotating a new node into the set every
 
 A pull message is "hey dude, got anything new?".  A pull message is sent to a
 single peer at random and comprises a Bloom filter that represents "things I
-already have".  A node receiving a pull message iterates over its values and
-constructs a pull response of things that miss the filter and would fit in a
+have or recently had".  A node receiving a pull message iterates over its values
+and constructs a pull response of things that miss the filter and would fit in a
 message.
 
-A node constructs the pull Bloom filter by iterating over the values it
-currently has.
+A node constructs the pull Bloom filter by iterating over current values and
+recently purged values.
+
+A node handles items in a pull response the same way it handles new data in a
+push message.
+
+
+## Purging
+
+Nodes retain prior versions of values (those updated by a pull or push) and
+expired values (those older than `GOSSIP_PULL_CRDS_TIMEOUT_MS`) in
+`purged_values` (things I recently had).  Nodes purge `purged_values` that are
+older than `5 * GOSSIP_PULL_CRDS_TIMEOUT_MS`.
