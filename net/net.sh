@@ -307,7 +307,7 @@ start() {
   declare bootstrapNodeDeployTime=
   startBootstrapNode "$bootstrapFullNodeIp" "$netLogDir/bootstrap-fullnode-$bootstrapFullNodeIp.log"
   bootstrapNodeDeployTime=$SECONDS
-  $metricsWriteDatapoint "testnet-deploy net-leader-started=1"
+  $metricsWriteDatapoint "testnet-deploy net-bootnode-fullnode-started=1"
 
   SECONDS=0
   pids=()
@@ -331,7 +331,7 @@ start() {
     fi
   done
 
-  $metricsWriteDatapoint "testnet-deploy net-validators-started=1"
+  $metricsWriteDatapoint "testnet-deploy net-fullnodes-started=1"
   additionalNodeDeployTime=$SECONDS
 
   sanity

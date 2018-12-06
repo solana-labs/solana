@@ -68,7 +68,7 @@ snap)
     ln -sf -T /var/snap/solana/current/leader/current fullnode.log
     ln -sf -T /var/snap/solana/current/drone/current drone.log
   else
-    nodeConfig="mode=validator $commonNodeConfig"
+    nodeConfig="mode=fullnode $commonNodeConfig"
     ln -sf -T /var/snap/solana/current/validator/current fullnode.log
   fi
 
