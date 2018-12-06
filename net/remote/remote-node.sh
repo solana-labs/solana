@@ -11,6 +11,7 @@ entrypointIp="$4"
 numNodes="$5"
 RUST_LOG="$6"
 skipSetup="$7"
+leaderRotation="$8"
 set +x
 export RUST_LOG=${RUST_LOG:-solana=warn} # if RUST_LOG is unset, default to warn
 
@@ -25,11 +26,13 @@ missing() {
 [[ -n $entrypointIp ]]  || missing entrypointIp
 [[ -n $numNodes ]]      || missing numNodes
 [[ -n $skipSetup ]]     || missing skipSetup
+[[ -n $leaderRotation ]] || missing leaderRotation
 
 cat > deployConfig <<EOF
 deployMethod="$deployMethod"
 entrypointIp="$entrypointIp"
 numNodes="$numNodes"
+leaderRotation=$leaderRotation
 EOF
 
 source net/common.sh
@@ -83,6 +86,7 @@ snap)
     rust-log=\"$RUST_LOG\" \
     setup-args=\"$setupArgs\" \
     skip-setup=$skipSetup \
+    leader-rotation=\"$leaderRotation\" \
   "
 
   if [[ -e /dev/nvidia0 ]]; then
@@ -134,6 +138,12 @@ local|tar)
   scripts/oom-monitor.sh  > oom-monitor.log 2>&1 &
   scripts/net-stats.sh  > net-stats.log 2>&1 &
 
+  maybeNoLeaderRotation=
+  if ! $leaderRotation; then
+    maybeNoLeaderRotation="--no-leader-rotation"
+  fi
+
+
   case $nodeType in
   bootstrap-leader)
     if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-fullnode-cuda ]]; then
@@ -144,7 +154,7 @@ local|tar)
       ./multinode-demo/setup.sh -t bootstrap-leader $setupArgs
     fi
     ./multinode-demo/drone.sh > drone.log 2>&1 &
-    ./multinode-demo/bootstrap-leader.sh > bootstrap-leader.log 2>&1 &
+    ./multinode-demo/bootstrap-leader.sh $maybeNoLeaderRotation > bootstrap-leader.log 2>&1 &
     ln -sTf bootstrap-leader.log fullnode.log
     ;;
   fullnode)
@@ -158,7 +168,7 @@ local|tar)
     if [[ $skipSetup != true ]]; then
       ./multinode-demo/setup.sh -t fullnode $setupArgs
     fi
-    ./multinode-demo/fullnode.sh "$entrypointIp":~/solana "$entrypointIp:8001" > fullnode.log 2>&1 &
+    ./multinode-demo/fullnode.sh $maybeNoLeaderRotation "$entrypointIp":~/solana "$entrypointIp:8001" > fullnode.log 2>&1 &
     ;;
   *)
     echo "Error: unknown node type: $nodeType"

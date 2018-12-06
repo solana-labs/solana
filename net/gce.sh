@@ -43,6 +43,7 @@ clientBootDiskSizeInGb=75
 publicNetwork=false
 enableGpu=false
 bootstrapLeaderAddress=
+leaderRotation=true
 
 usage() {
   exitcode=0
@@ -76,6 +77,7 @@ Manage testnet instances
                       For EC2, [address] is the "allocation ID" of the desired
                       Elastic IP.
    -d [disk-type]   - Specify a boot disk type (default None) Use pd-ssd to get ssd on GCE.
+   -b               - Disable leader rotation
 
  config-specific options:
    -P               - Use public network IP addresses (default: $publicNetwork)
@@ -93,7 +95,7 @@ command=$1
 shift
 [[ $command = create || $command = config || $command = delete ]] || usage "Invalid command: $command"
 
-while getopts "h?p:Pn:c:z:gG:a:d:" opt; do
+while getopts "h?p:Pn:c:z:gG:a:d:b" opt; do
   case $opt in
   h | \?)
     usage
@@ -113,6 +115,9 @@ while getopts "h?p:Pn:c:z:gG:a:d:" opt; do
     ;;
   z)
     cloud_SetZone "$OPTARG"
+    ;;
+  b)
+    leaderRotation=false
     ;;
   g)
     enableGpu=true
@@ -179,6 +184,9 @@ ec2)
   ;;
 esac
 
+if $leaderRotation; then
+  fullNodeMachineType=$bootstrapLeaderMachineType
+fi
 
 # cloud_ForEachInstance [cmd] [extra args to cmd]
 #
@@ -218,6 +226,7 @@ prepareInstancesAndWriteConfigFile() {
 netBasename=$prefix
 publicNetwork=$publicNetwork
 sshPrivateKey=$sshPrivateKey
+leaderRotation=$leaderRotation
 EOF
 
   buildSshOptions
@@ -368,6 +377,8 @@ Network composition:
   Bootstrap leader = $bootstrapLeaderMachineType (GPU=$enableGpu)
   Additional fullnodes = $additionalFullNodeCount x $fullNodeMachineType
   Client(s) = $clientNodeCount x $clientMachineType
+
+Leader rotation: $leaderRotation
 
 ========================================================================================
 

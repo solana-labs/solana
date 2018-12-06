@@ -197,6 +197,7 @@ startBootstrapLeader() {
          ${#fullnodeIpList[@]} \
          \"$RUST_LOG\" \
          $skipSetup \
+         $leaderRotation \
       "
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
@@ -223,6 +224,7 @@ startNode() {
          ${#fullnodeIpList[@]} \
          \"$RUST_LOG\" \
          $skipSetup \
+         $leaderRotation \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!

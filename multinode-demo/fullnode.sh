@@ -20,11 +20,12 @@ usage() {
     echo "$*"
     echo
   fi
-  echo "usage: $0 [-x] [rsync network path to bootstrap leader configuration] [network entry point]"
+  echo "usage: $0 [-x] [--no-leader-rotation] [rsync network path to bootstrap leader configuration] [network entry point]"
   echo
   echo " Start a full node on the specified network"
   echo
   echo "   -x: runs a new, dynamically-configured full node"
+  echo "   --no-leader-rotation: disable leader rotation"
   echo
   exit 1
 }
@@ -33,11 +34,23 @@ if [[ $1 = -h ]]; then
   usage
 fi
 
-if [[ $1 == -x ]]; then
+if [[ $1 = -x ]]; then
   self_setup=1
   shift
 else
   self_setup=0
+fi
+
+maybe_no_leader_rotation=
+if [[ $1 = --no-leader-rotation ]]; then
+  maybe_no_leader_rotation="--no-leader-rotation"
+  shift
+fi
+
+if [[ -d $SNAP ]]; then
+  if [[ $(snapctl get leader-rotation) = false ]]; then
+    maybe_no_leader_rotation="--no-leader-rotation"
+  fi
 fi
 
 if [[ -n $3 ]]; then
@@ -175,7 +188,7 @@ $solana_wallet \
 
 trap 'kill "$pid" && wait "$pid"' INT TERM
 $program \
-  --no-leader-rotation \
+  $maybe_no_leader_rotation \
   --identity "$fullnode_json_path" \
   --network "$leader_address" \
   --ledger "$ledger_config_dir"/ledger \
