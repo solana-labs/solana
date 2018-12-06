@@ -19,8 +19,8 @@ usage() {
   exit 1
 }
 
-[[ -f "$SOLANA_CONFIG_PRIVATE_DIR"/mint.json ]] || {
-  echo "$SOLANA_CONFIG_PRIVATE_DIR/mint.json not found, create it by running:"
+[[ -f "$SOLANA_CONFIG_PRIVATE_DIR"/mint-id.json ]] || {
+  echo "$SOLANA_CONFIG_PRIVATE_DIR/mint-id.json not found, create it by running:"
   echo
   echo "  ${here}/setup.sh -t leader"
   exit 1
@@ -30,7 +30,7 @@ set -ex
 
 trap 'kill "$pid" && wait "$pid"' INT TERM
 $solana_drone \
-  --keypair "$SOLANA_CONFIG_PRIVATE_DIR"/mint.json \
+  --keypair "$SOLANA_CONFIG_PRIVATE_DIR"/mint-id.json \
   > >($drone_logger) 2>&1 &
 pid=$!
 wait "$pid"

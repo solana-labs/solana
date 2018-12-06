@@ -83,12 +83,12 @@ done
 if $node_type_leader; then
   leader_address_args=("$ip_address_arg")
   leader_id_path="$SOLANA_CONFIG_PRIVATE_DIR"/leader-id.json
-  mint_path="$SOLANA_CONFIG_PRIVATE_DIR"/mint.json
+  mint_id_path="$SOLANA_CONFIG_PRIVATE_DIR"/mint-id.json
 
   $solana_keygen -o "$leader_id_path"
 
-  echo "Creating $mint_path with $num_tokens tokens"
-  $solana_keygen -o "$mint_path"
+  echo "Creating $mint_id_path with $num_tokens tokens"
+  $solana_keygen -o "$mint_id_path"
 
   echo "Creating $SOLANA_CONFIG_DIR/leader.json"
   $solana_fullnode_config \
@@ -98,7 +98,7 @@ if $node_type_leader; then
   echo "Creating $SOLANA_CONFIG_DIR/ledger"
   $solana_genesis \
     --num_tokens "$num_tokens" \
-    --mint "$mint_path" \
+    --mint "$mint_id_path" \
     --bootstrap_leader "$SOLANA_CONFIG_DIR"/leader.json \
     --ledger "$SOLANA_CONFIG_DIR"/ledger \
 
