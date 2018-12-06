@@ -13,6 +13,7 @@ snapChannel=edge
 tarChannelOrTag=edge
 delete=false
 enableGpu=false
+leaderRotation=true
 useTarReleaseChannel=false
 
 usage() {
@@ -42,6 +43,7 @@ Deploys a CD testnet
    -P                   - Use public network IP addresses (default: $publicNetwork)
    -G                   - Enable GPU, and set count/type of GPUs to use (e.g n1-standard-16 --accelerator count=4,type=nvidia-tesla-k80)
    -g                   - Enable GPU (default: $enableGpu)
+   -b                   - Disable leader rotation
    -a [address]         - Set the bootstrap fullnode's external IP address to this GCE address
    -d                   - Delete the network
 
@@ -59,7 +61,7 @@ zone=$3
 [[ -n $zone ]] || usage "Zone not specified"
 shift 3
 
-while getopts "h?p:Pn:c:s:t:gG:a:d" opt; do
+while getopts "h?p:Pn:c:s:t:gG:a:db" opt; do
   case $opt in
   h | \?)
     usage
@@ -93,6 +95,9 @@ while getopts "h?p:Pn:c:s:t:gG:a:d" opt; do
       usage "Invalid release channel: $OPTARG"
       ;;
     esac
+    ;;
+  b)
+    leaderRotation=false
     ;;
   g)
     enableGpu=true
@@ -128,6 +133,10 @@ if $enableGpu; then
   else
     create_args+=(-G "$bootstrapFullNodeMachineType")
   fi
+fi
+
+if ! $leaderRotation; then
+  create_args+=(-b)
 fi
 
 if $publicNetwork; then

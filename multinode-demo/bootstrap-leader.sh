@@ -29,11 +29,28 @@ else
   program="$solana_fullnode"
 fi
 
+maybe_no_leader_rotation=
+if [[ $1 = --no-leader-rotation ]]; then
+  maybe_no_leader_rotation="--no-leader-rotation"
+  shift
+fi
+
+if [[ -n $1 ]]; then
+  echo "Unknown argument: $1"
+  exit 1
+fi
+
+if [[ -d $SNAP ]]; then
+  if [[ $(snapctl get leader-rotation) = false ]]; then
+    maybe_no_leader_rotation="--no-leader-rotation"
+  fi
+fi
+
 tune_networking
 
 trap 'kill "$pid" && wait "$pid"' INT TERM
 $program \
-  --no-leader-rotation \
+  $maybe_no_leader_rotation \
   --identity "$SOLANA_CONFIG_DIR"/bootstrap-leader.json \
   --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger \
   --rpc 8899 \

@@ -22,9 +22,10 @@ missing() {
   exit 1
 }
 
-[[ -n $deployMethod ]] || missing deployMethod
-[[ -n $entrypointIp ]] || missing entrypointIp
-[[ -n $numNodes ]]     || missing numNodes
+[[ -n $deployMethod ]]   || missing deployMethod
+[[ -n $entrypointIp ]]   || missing entrypointIp
+[[ -n $numNodes ]]       || missing numNodes
+[[ -n $leaderRotation ]] || missing leaderRotation
 
 ledgerVerify=true
 validatorSanity=true
