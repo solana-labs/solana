@@ -1,43 +1,69 @@
-# 1. Storage
+# Storage
 
 The goal of this RFC is to define a protocol for storing a very large ledger over a p2p network that is verified by solana validators.  At full capacity on a 1gbps network solana will generate 4 petabytes of data per year.  To prevent the network from centralizing around full nodes that have to store the full data set this protocol proposes a way for mining nodes to provide storage capacity for pieces of the network.
 
-# 2. Definitions
+## Definitions
 
-1. Replicator: storage mining client, stores some part of the ledger enumerated in blocks and submits storage proofs to the chain. Not a full-node.
-2. Ledger block: portion of the ledger which is downloaded by the replicator where storage proof data is derived.
-3. CBC block: smallest encrypted chunk of ledger, an encrypted ledger block would be made of many CBC blocks. `(size of ledger block) / (size of cbc block)` to be exact.
-4. Storage proof: a set of sha hash state which is constructed by sampling the encrypted version of the stored ledger block at certain offsets.
-5. Fake storage proof: A proof which has the same format as a storage proof, but the sha state is actually from hashing a known ledger value which the storage
+#### replicator
+
+Storage mining client, stores some part of the ledger enumerated in blocks and submits storage proofs to the chain. Not a full-node.
+
+#### ledger block
+
+Portion of the ledger which is downloaded by the replicator where storage proof data is derived.
+
+#### CBC block
+
+Smallest encrypted chunk of ledger, an encrypted ledger block would be made of many CBC blocks. `(size of ledger block) / (size of cbc block)` to be exact.
+
+#### storage proof
+
+A set of sha hash state which is constructed by sampling the encrypted version of the stored ledger block at certain offsets.
+
+#### fake storage proof
+
+A proof which has the same format as a storage proof, but the sha state is actually from hashing a known ledger value which the storage
 client can reveal and is also easily verifiable by the network on-chain.
-6. Storage proof confirmation: A transaction by a validator which indicates the set of real and fake proofs submitted by a storage miner. The transaction would contain a list of proof hash values and a bit which says if this hash is valid or fake.
-7. Storage proof challenge: A transaction from a replicator that verifiably proves that a validator confirmed a fake proof.
-8. Storage proof claim: A transaction from a validator which is after the timeout period given from the storage proof confirmation and which no successful challenges have been observed which rewards the parties of the storage proofs and confirmations.
-9. Storage validation capacity: the number of keys and samples that a validator can verify each storage epoch.
 
-# 3. Background
+#### storage proof confirmation
+
+A transaction by a validator which indicates the set of real and fake proofs submitted by a storage miner. The transaction would contain a list of proof hash values and a bit which says if this hash is valid or fake.
+
+#### storage proof challenge
+
+A transaction from a replicator that verifiably proves that a validator confirmed a fake proof.
+
+#### storage proof claim
+
+A transaction from a validator which is after the timeout period given from the storage proof confirmation and which no successful challenges have been observed which rewards the parties of the storage proofs and confirmations.
+
+#### storage validation capacity
+
+The number of keys and samples that a validator can verify each storage epoch.
+
+## Background
 
 The basic idea to Proof of Replication is encrypting a dataset with a public symmetric key using CBC encryption, then hash the encrypted dataset. The main problem with the naive approach is that a dishonest storage node can stream the encryption and delete the data as its hashed. The simple solution is to force the hash to be done on the reverse of the encryption, or perhaps with a random order. This ensures that all the data is present during the generation of the proof and it also requires the validator to have the entirety of the encrypted data present for verification of every proof of every identity. So the space required to validate is `(Number of Proofs)*(data size)`
 
-# 4. Optimization with PoH
+## Optimization with PoH
 
 Our improvement on this approach is to randomly sample the encrypted blocks faster than it takes to encrypt, and record the hash of those samples into the PoH ledger. Thus the blocks stay in the exact same order for every PoRep and verification can stream the data and verify all the proofs in a single batch. This way we can verify multiple proofs concurrently, each one on its own CUDA core. The total space required for verification is `(1 ledger block) + (2 CBC blocks) * (Number of Identities)`, with core count of equal to (Number of Identities). We use a 64-byte chacha CBC block size.
 
-# 5. Network
+## Network
 
 Validators for PoRep are the same validators that are verifying transactions. They have some stake that they have put up as collateral that ensures that their work is honest. If you can prove that a validator verified a fake PoRep, then the validators stake can be slashed.
 
 Replicators are specialized thin clients. They download a part of the ledger and store it, and provide PoReps of storing the ledger. For each verified PoRep replicators earn a reward of sol from the mining pool.
 
-# 6. Constraints
+## Constraints
 
 We have the following constraints:
 * Verification requires generating the CBC blocks. That requires space of 2 blocks per identity, and 1 CUDA core per identity for the same dataset. So as many identities at once should be batched with as many proofs for those identities verified concurrently for the same dataset.
 * Validators will randomly sample the set of storage proofs to the set that they can handle, and only the creators of those chosen proofs will be rewarded. The validator can run a benchmark whenever its hardware configuration changes to determine what rate it can validate storage proofs.
 
-# 7. Validation and Replication Protocol
+## Validation and Replication Protocol
 
-## 7.2 Constants
+### Constants
 
 1. NUM\_STORAGE\_ENTRIES: Number of entries in a block of ledger data. The unit of storage for a replicator.
 2. NUM\_KEY\_ROTATION\_TICKS: Number of ticks to save a PoH value and cause a key generation for the section of ledger just generated and the rotation of another key in the set.
@@ -46,7 +72,7 @@ We have the following constraints:
 5. NUM\_STORAGE\_SAMPLES: Number of samples required for a storage mining proof.
 6. NUM\_CHACHA\_ROUNDS: Number of encryption rounds performed to generate encrypted state.
 
-## 7.3 Validator behavior
+### Validator behavior
 
 1. Validator joins the network and submits a storage validation capacity transaction which tells the network how many proofs it can process in a given period defined by NUM\_KEY\_ROTATION\_TICKS.
 2. Every NUM\_KEY\_ROTATION\_TICKS the validator stores the PoH value at that height.
@@ -61,7 +87,7 @@ We have the following constraints:
 of the storage reward if no challenges were seen for the proof to the validators and replicators party to the proofs.
 6. Validator responds to RPC interfaces for what the last storage epoch PoH value is and its entry\_height.
 
-## 7.4 Replicator behavior
+### Replicator behavior
 
 1. Since a replicator is somewhat of a light client and not downloading all the ledger data, they have to rely on other full nodes (validators) for information. Any given validator may or may not be malicious and give incorrect information, although there are not any obvious attack vectors that this could accomplish besides having the replicator do extra wasted work.
 For many of the operations there are number of options depending on how paranoid a replicator is:
@@ -80,12 +106,12 @@ For many of the operations there are number of options depending on how paranoid
      - A fake proof should consist of a replicator hash of a signature of a PoH value. That way when the replicator reveals the fake proof, it can be verified on chain.
 10. The replicator monitors the ledger, if it sees a fake proof integrated, it creates a challenge transaction and submits it to the current leader. The transacation proves the validator incorrectly validated a fake storage proof. The replicator is rewarded and the validator's staking balance is slashed or frozen.
 
-## 7.5 Finding who has a given block of ledger
+### Finding who has a given block of ledger
 
 1. Validators monitor the transaction stream for storage mining proofs, and keep a mapping of ledger blocks by entry\_height to public keys. When it sees a storage mining proof it updates this mapping and provides an RPC interface which takes an entry\_height and hands back a list of public keys. The client then looks up in their cluster\_info table to see which network address that corresponds to and sends a repair request to retrieve the necessary blocks of ledger.
 2. Validators would need to prune this list which it could do by periodically looking at the oldest entries in its mappings and doing a network query to see if the storage host is still serving the first entry.
 
-# 8. Sybil attacks
+## Sybil attacks
 
 For any random seed, we force everyone to use a signature that is derived from a PoH hash. Everyone must use the same count, so the same PoH hash is signed by every participant. The signatures are then each cryptographically tied to the keypair, which prevents a leader from grinding on the resulting value for more than 1 identity.
 
@@ -93,20 +119,20 @@ Since there are many more client identities then encryption identities, we need 
 
 Our solution to this is to force the clients to continue using the same identity. If the first round is used to acquire the same block for many client identities, the second round for the same client identities will force a redistribution of the signatures, and therefore PoRep identities and blocks. Thus to get a reward for replicators need to store the first block for free and the network can reward long lived client identities more than new ones.
 
-# 9. Validator attacks
+## Validator attacks
 
 - If a validator approves fake proofs, replicator can easily out them by showing the initial state for the hash.
 - If a validator marks real proofs as fake, no on-chain computation can be done to distinguish who is correct. Rewards would have to rely on the results from multiple validators in a stake-weighted fashion to catch bad actors and replicators from being locked out of the network.
 - Validator stealing mining proof results for itself. The proofs are derived from a signature from a replicator, since the validator does not know the private key used to generate the encryption key, it cannot be the generator of the proof.
 
-# 10. Reward incentives
+## Reward incentives
 
 Fake proofs are easy to generate but difficult to verify. For this reason, PoRep proof transactions generated by replicators may require a higher fee than
 a normal transaction to represent the computational cost required by validators.
 
 Some percentage of fake proofs are also necessary to receive a reward from storage mining.
 
-# 11. Notes
+## Notes
 
 * We can reduce the costs of verification of PoRep by using PoH, and actually make it feasible to verify a large number of proofs for a global dataset.
 * We can eliminate grinding by forcing everyone to sign the same PoH hash and use the signatures as the seed
