@@ -21,16 +21,18 @@ solana_entrypoint!(entrypoint);
 fn entrypoint(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
-    data: &[u8],
+    argdata: &[u8],
+    _input: &[u8],
     _tick_height: u64,
-) -> Result<(), ProgramError> {
+) -> Result<Vec<u8>, ProgramError> {
     static INIT: Once = ONCE_INIT;
     INIT.call_once(|| {
         // env_logger can only be initialized once
         env_logger::init();
     });
 
-    trace!("process_instruction: {:?}", data);
+    trace!("process_instruction: {:?}", argdata);
     trace!("keyed_accounts: {:?}", keyed_accounts);
-    process_instruction(keyed_accounts, data).map_err(|_| ProgramError::GenericError)
+    process_instruction(keyed_accounts, argdata).map_err(|_| ProgramError::GenericError)?;
+    Ok(vec![])
 }

@@ -11,6 +11,9 @@ pub enum ProgramError {
     /// The arguments provided to a program instruction where invalid
     InvalidArgument,
 
+    /// The arguments data provided to a program instruction was invalid
+    InvalidArgumentsData,
+
     /// An instruction resulted in an account with a negative balance
     /// The difference from InsufficientFundsForFee is that the transaction was executed by the
     /// contract
@@ -53,9 +56,10 @@ pub const ENTRYPOINT: &str = "process";
 pub type Entrypoint = unsafe extern "C" fn(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
-    data: &[u8],
+    argdata: &[u8],
+    input: &[u8],
     tick_height: u64,
-) -> Result<(), ProgramError>;
+) -> Result<Vec<u8>, ProgramError>;
 
 // Convenience macro to define the native program entrypoint.  Supply a fn to this macro that
 // conforms to the `Entrypoint` type signature.
@@ -66,10 +70,11 @@ macro_rules! solana_entrypoint(
         pub extern "C" fn process(
             program_id: &Pubkey,
             keyed_accounts: &mut [KeyedAccount],
-            data: &[u8],
+            argdata: &[u8],
+            input: &[u8],
             tick_height: u64
-        ) -> Result<(), ProgramError> {
-            $entrypoint(program_id, keyed_accounts, data, tick_height)
+        ) -> Result<Vec<u8>, ProgramError> {
+            $entrypoint(program_id, keyed_accounts, argdata, input, tick_height)
         }
     )
 );

@@ -20,16 +20,17 @@ solana_entrypoint!(entrypoint);
 fn entrypoint(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
-    data: &[u8],
+    argdata: &[u8],
+    _input: &[u8],
     _tick_height: u64,
-) -> Result<(), ProgramError> {
+) -> Result<Vec<u8>, ProgramError> {
     static INIT: Once = ONCE_INIT;
     INIT.call_once(|| {
         // env_logger can only be initialized once
         env_logger::init();
     });
 
-    trace!("process_instruction: {:?}", data);
+    trace!("process_instruction: {:?}", argdata);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
     // all vote instructions require that accounts_keys[0] be a signer
@@ -38,7 +39,7 @@ fn entrypoint(
         Err(ProgramError::InvalidArgument)?;
     }
 
-    match deserialize(data) {
+    match deserialize(argdata) {
         Ok(VoteInstruction::RegisterAccount) => {
             if !check_id(&keyed_accounts[1].account.owner) {
                 error!("account[1] is not assigned to the VOTE_PROGRAM");
@@ -54,7 +55,7 @@ fn entrypoint(
 
             vote_state.serialize(&mut keyed_accounts[1].account.userdata)?;
 
-            Ok(())
+            Ok(vec![])
         }
         Ok(VoteInstruction::NewVote(vote)) => {
             if !check_id(&keyed_accounts[0].account.owner) {
@@ -76,11 +77,11 @@ fn entrypoint(
             vote_state.votes.push_back(vote);
             vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
 
-            Ok(())
+            Ok(vec![])
         }
         Err(_) => {
-            info!("Invalid transaction instruction userdata: {:?}", data);
-            Err(ProgramError::InvalidUserdata)
+            info!("Invalid instruction argdata: {:?}", argdata);
+            Err(ProgramError::InvalidArgumentsData)
         }
     }
 }

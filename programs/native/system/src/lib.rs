@@ -15,10 +15,11 @@ solana_entrypoint!(entrypoint);
 pub fn entrypoint(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
-    data: &[u8],
+    argdata: &[u8],
+    _input: &[u8],
     _tick_height: u64,
-) -> Result<(), ProgramError> {
-    if let Ok(syscall) = deserialize(data) {
+) -> Result<Vec<u8>, ProgramError> {
+    if let Ok(syscall) = deserialize(argdata) {
         trace!("process_instruction: {:?}", syscall);
         trace!("keyed_accounts: {:?}", keyed_accounts);
         let from = 0;
@@ -96,9 +97,9 @@ pub fn entrypoint(
                 keyed_accounts[from].account.owner = *keyed_accounts[from].signer_key().unwrap();
             }
         }
-        Ok(())
+        Ok(vec![])
     } else {
-        info!("Invalid transaction instruction userdata: {:?}", data);
-        Err(ProgramError::InvalidArgument)
+        info!("Invalid instruction argdata: {:?}", argdata);
+        Err(ProgramError::InvalidArgumentsData)
     }
 }

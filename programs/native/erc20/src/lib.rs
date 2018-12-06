@@ -21,15 +21,17 @@ solana_entrypoint!(entrypoint);
 fn entrypoint(
     program_id: &Pubkey,
     info: &mut [KeyedAccount],
-    input: &[u8],
+    argdata: &[u8],
+    _input: &[u8],
     _tick_height: u64,
-) -> Result<(), ProgramError> {
+) -> Result<Vec<u8>, ProgramError> {
     // env_logger can only be initialized once
     static INIT: Once = ONCE_INIT;
     INIT.call_once(env_logger::init);
 
-    token_program::TokenProgram::process(program_id, info, input).map_err(|err| {
+    token_program::TokenProgram::process(program_id, info, argdata).map_err(|err| {
         error!("error: {:?}", err);
         ProgramError::GenericError
-    })
+    })?;
+    Ok(vec![])
 }

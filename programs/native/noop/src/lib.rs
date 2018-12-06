@@ -9,12 +9,14 @@ solana_entrypoint!(entrypoint);
 fn entrypoint(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
-    data: &[u8],
+    argdata: &[u8],
+    input: &[u8],
     tick_height: u64,
-) -> Result<(), ProgramError> {
+) -> Result<Vec<u8>, ProgramError> {
     println!("noop: program_id: {:?}", program_id);
     println!("noop: keyed_accounts: {:#?}", keyed_accounts);
-    println!("noop: data: {:?}", data);
+    println!("noop: argdata: {:?}", argdata);
+    println!("noop: input: {:?}", input);
     println!("noop: tick_height: {:?}", tick_height);
-    Ok(())
+    Ok(vec![])
 }

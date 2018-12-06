@@ -20,9 +20,10 @@ solana_entrypoint!(entrypoint);
 fn entrypoint(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
-    data: &[u8],
+    argdata: &[u8],
+    _input: &[u8],
     _tick_height: u64,
-) -> Result<(), ProgramError> {
+) -> Result<Vec<u8>, ProgramError> {
     static INIT: Once = ONCE_INIT;
     INIT.call_once(|| {
         // env_logger can only be initialized once
@@ -35,16 +36,16 @@ fn entrypoint(
         Err(ProgramError::InvalidArgument)?;
     }
 
-    if let Ok(syscall) = deserialize(data) {
+    if let Ok(syscall) = deserialize(argdata) {
         match syscall {
             StorageProgram::SubmitMiningProof { sha_state } => {
                 info!("Mining proof submitted with state {:?}", sha_state);
             }
         }
-        Ok(())
+        Ok(vec![])
     } else {
-        info!("Invalid instruction userdata: {:?}", data);
-        Err(ProgramError::InvalidUserdata)
+        info!("Invalid instruction argdata: {:?}", argdata);
+        Err(ProgramError::InvalidArgumentsData)
     }
 }
 

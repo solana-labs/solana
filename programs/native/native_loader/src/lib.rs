@@ -56,9 +56,10 @@ pub fn check_id(program_id: &Pubkey) -> bool {
 pub fn entrypoint(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
-    ix_userdata: &[u8],
+    argdata: &[u8],
+    input: &[u8],
     tick_height: u64,
-) -> Result<(), ProgramError> {
+) -> Result<Vec<u8>, ProgramError> {
     if keyed_accounts[0].account.executable {
         // dispatch it
         let name = keyed_accounts[0].account.userdata.clone();
@@ -89,7 +90,8 @@ pub fn entrypoint(
                 return entrypoint(
                     program_id,
                     &mut keyed_accounts[1..],
-                    ix_userdata,
+                    argdata,
+                    input,
                     tick_height,
                 );
             },
@@ -98,7 +100,7 @@ pub fn entrypoint(
                 return Err(ProgramError::GenericError);
             }
         }
-    } else if let Ok(instruction) = deserialize(ix_userdata) {
+    } else if let Ok(instruction) = deserialize(argdata) {
         if keyed_accounts[0].signer_key().is_none() {
             warn!("key[0] did not sign the transaction");
             return Err(ProgramError::GenericError);
@@ -128,8 +130,8 @@ pub fn entrypoint(
             }
         }
     } else {
-        warn!("Invalid userdata in instruction: {:?}", ix_userdata);
-        return Err(ProgramError::GenericError);
+        warn!("Invalid instruction argdata: {:?}", argdata);
+        return Err(ProgramError::InvalidArgumentsData);
     }
-    Ok(())
+    Ok(vec![])
 }

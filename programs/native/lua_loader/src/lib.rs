@@ -65,9 +65,10 @@ solana_entrypoint!(entrypoint);
 fn entrypoint(
     _program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
-    tx_data: &[u8],
+    argdata: &[u8],
+    _input: &[u8],
     _tick_height: u64,
-) -> Result<(), ProgramError> {
+) -> Result<Vec<u8>, ProgramError> {
     static INIT: Once = ONCE_INIT;
     INIT.call_once(|| {
         // env_logger can only be initialized once
@@ -77,7 +78,7 @@ fn entrypoint(
     if keyed_accounts[0].account.executable {
         let code = keyed_accounts[0].account.userdata.clone();
         let code = str::from_utf8(&code).unwrap();
-        match run_lua(&mut keyed_accounts[1..], &code, tx_data) {
+        match run_lua(&mut keyed_accounts[1..], &code, argdata) {
             Ok(()) => {
                 trace!("Lua success");
             }
@@ -86,7 +87,7 @@ fn entrypoint(
                 return Err(ProgramError::GenericError);
             }
         }
-    } else if let Ok(instruction) = deserialize(tx_data) {
+    } else if let Ok(instruction) = deserialize(argdata) {
         if keyed_accounts[0].signer_key().is_none() {
             warn!("key[0] did not sign the transaction");
             return Err(ProgramError::GenericError);
@@ -116,10 +117,10 @@ fn entrypoint(
             }
         }
     } else {
-        warn!("Invalid program transaction: {:?}", tx_data);
-        return Err(ProgramError::GenericError);
+        warn!("Invalid instruction argdata: {:?}", argdata);
+        return Err(ProgramError::InvalidArgumentsData);
     }
-    Ok(())
+    Ok(vec![])
 }
 
 #[cfg(test)]

@@ -150,9 +150,10 @@ solana_entrypoint!(entrypoint);
 fn entrypoint(
     program_id: &Pubkey,
     keyed_accounts: &mut [KeyedAccount],
-    tx_data: &[u8],
+    argdata: &[u8],
+    _input: &[u8],
     tick_height: u64,
-) -> Result<(), ProgramError> {
+) -> Result<Vec<u8>, ProgramError> {
     static INIT: Once = ONCE_INIT;
     INIT.call_once(|| {
         // env_logger can only be initialized once
@@ -171,7 +172,7 @@ fn entrypoint(
             }
         };
         let mut v =
-            serialize_parameters(program_id, &mut keyed_accounts[1..], &tx_data, tick_height);
+            serialize_parameters(program_id, &mut keyed_accounts[1..], &argdata, tick_height);
         match vm.execute_program(v.as_mut_slice()) {
             Ok(status) => {
                 if 0 == status {
@@ -188,7 +189,7 @@ fn entrypoint(
             "BPF program executed {} instructions",
             vm.get_last_instruction_count()
         );
-    } else if let Ok(instruction) = deserialize(tx_data) {
+    } else if let Ok(instruction) = deserialize(argdata) {
         if keyed_accounts[0].signer_key().is_none() {
             warn!("key[0] did not sign the transaction");
             return Err(ProgramError::GenericError);
@@ -217,10 +218,10 @@ fn entrypoint(
             }
         }
     } else {
-        warn!("Invalid program transaction: {:?}", tx_data);
-        return Err(ProgramError::GenericError);
+        warn!("Invalid instruction argdata: {:?}", argdata);
+        return Err(ProgramError::InvalidArgumentsData);
     }
-    Ok(())
+    Ok(vec![])
 }
 
 #[cfg(test)]

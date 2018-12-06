@@ -20,8 +20,9 @@ fn process_instruction(
     instruction_index: usize,
     executable_accounts: &mut [(Pubkey, Account)],
     program_accounts: &mut [&mut Account],
+    input: &[u8],
     tick_height: u64,
-) -> Result<(), ProgramError> {
+) -> Result<Vec<u8>, ProgramError> {
     let program_id = tx.program_id(instruction_index);
 
     let mut keyed_accounts = create_keyed_accounts(executable_accounts);
@@ -37,21 +38,20 @@ fn process_instruction(
         .collect();
     keyed_accounts.append(&mut keyed_accounts2);
 
-    if system_program::check_id(&program_id) {
-        solana_system_program::entrypoint(
-            &program_id,
-            &mut keyed_accounts[1..],
-            &tx.instructions[instruction_index].userdata,
-            tick_height,
-        )
+    let entrypoint = if system_program::check_id(&program_id) {
+        keyed_accounts.remove(0);
+        solana_system_program::entrypoint
     } else {
-        native_loader::entrypoint(
-            &program_id,
-            &mut keyed_accounts,
-            &tx.instructions[instruction_index].userdata,
-            tick_height,
-        )
-    }
+        native_loader::entrypoint
+    };
+
+    entrypoint(
+        &program_id,
+        &mut keyed_accounts,
+        &tx.instructions[instruction_index].userdata,
+        input,
+        tick_height,
+    )
 }
 
 fn verify_instruction(
@@ -82,8 +82,9 @@ fn execute_instruction(
     instruction_index: usize,
     executable_accounts: &mut [(Pubkey, Account)],
     program_accounts: &mut [&mut Account],
+    input: &[u8],
     tick_height: u64,
-) -> Result<(), ProgramError> {
+) -> Result<Vec<u8>, ProgramError> {
     let program_id = tx.program_id(instruction_index);
     // TODO: the runtime should be checking read/write access to memory
     // we are trusting the hard-coded programs not to clobber or allocate
@@ -93,11 +94,12 @@ fn execute_instruction(
         .map(|a| (a.owner, a.tokens))
         .collect();
 
-    process_instruction(
+    let res = process_instruction(
         tx,
         instruction_index,
         executable_accounts,
         program_accounts,
+        input,
         tick_height,
     )?;
 
@@ -111,7 +113,7 @@ fn execute_instruction(
     if pre_total != post_total {
         return Err(ProgramError::UnbalancedInstruction);
     }
-    Ok(())
+    Ok(res)
 }
 
 /// Execute a function with a subset of accounts as writable references.
@@ -141,17 +143,18 @@ pub fn execute_transaction(
     tx_accounts: &mut [Account],
     tick_height: u64,
 ) -> Result<(), RuntimeError> {
+    let mut prev_output = vec![];
     for (instruction_index, instruction) in tx.instructions.iter().enumerate() {
         let executable_accounts = &mut (&mut loaders[instruction.program_ids_index as usize]);
-        with_subset(tx_accounts, &instruction.accounts, |program_accounts| {
+        prev_output = with_subset(tx_accounts, &instruction.accounts, |program_accounts| {
             execute_instruction(
                 tx,
                 instruction_index,
                 executable_accounts,
                 program_accounts,
+                &prev_output,
                 tick_height,
-            ).map_err(|err| RuntimeError::ProgramError(instruction_index as u8, err))?;
-            Ok(())
+            ).map_err(|err| RuntimeError::ProgramError(instruction_index as u8, err))
         })?;
     }
     Ok(())
