@@ -2,7 +2,7 @@
 
 echo Stopping daemons
 snapctl stop --disable solana.daemon-drone
-snapctl stop --disable solana.daemon-leader
+snapctl stop --disable solana.daemon-bootstrap-fullnode
 snapctl stop --disable solana.daemon-validator
 snapctl stop --disable solana.daemon-oom-monitor
 snapctl stop --disable solana.daemon-net-stats
@@ -18,18 +18,18 @@ num_tokens="${num_tokens:+-n $num_tokens}"
 setup_args="$(snapctl get setup-args)"
 
 case $mode in
-leader+drone)
+bootstrap-fullnode+drone)
   "$SNAP"/multinode-demo/setup.sh -t leader $num_tokens -p $setup_args
   snapctl start --enable solana.daemon-drone
-  snapctl start --enable solana.daemon-leader
+  snapctl start --enable solana.daemon-bootstrap-fullnode
   ;;
-leader)
+bootstrap-fullnode)
   "$SNAP"/multinode-demo/setup.sh -t leader $num_tokens -p $setup_args
-  snapctl start --enable solana.daemon-leader
+  snapctl start --enable solana.daemon-bootstrap-fullnode
   ;;
-validator)
+fullnode)
   "$SNAP"/multinode-demo/setup.sh -t validator -p $setup_args
-  snapctl start --enable solana.daemon-validator
+  snapctl start --enable solana.daemon-fullnode
   ;;
 *)
   echo "Error: Unknown mode: $mode"

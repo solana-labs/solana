@@ -53,13 +53,13 @@ apps:
     plugs:
       - network
       - home
-  daemon-validator:
+  daemon-fullnode:
     daemon: simple
     command: scripts/snap-config-to-env.sh $SNAP/multinode-demo/validator.sh
     plugs:
       - network
       - network-bind
-  daemon-leader:
+  daemon-bootstrap-fullnode:
     daemon: simple
     command: scripts/snap-config-to-env.sh $SNAP/multinode-demo/leader.sh
     plugs:

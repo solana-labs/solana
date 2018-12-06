@@ -166,7 +166,7 @@ find_leader() {
     fi
 
     # Select leader from the Snap configuration
-    leader_ip=$(snapctl get leader-ip)
+    leader_ip=$(snapctl get entrypoint-ip)
     if [[ -z $leader_ip ]]; then
       leader=testnet.solana.com
       leader_ip=$(dig +short "${leader%:*}" | head -n1)
