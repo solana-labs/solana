@@ -130,74 +130,8 @@ tune_networking() {
   fi
 }
 
-
 SOLANA_CONFIG_DIR=${SNAP_DATA:-$PWD}/config
 SOLANA_CONFIG_PRIVATE_DIR=${SNAP_DATA:-$PWD}/config-private
 SOLANA_CONFIG_VALIDATOR_DIR=${SNAP_DATA:-$PWD}/config-validator
 SOLANA_CONFIG_CLIENT_DIR=${SNAP_USER_DATA:-$PWD}/config-client
 
-rsync_url() { # adds the 'rsync://` prefix to URLs that need it
-  declare url="$1"
-
-  if [[ $url =~ ^.*:.*$ ]]; then
-    # assume remote-shell transport when colon is present, use $url unmodified
-    echo "$url"
-    return 0
-  fi
-
-  if [[ -d $url ]]; then
-    # assume local directory if $url is a valid directory, use $url unmodified
-    echo "$url"
-    return 0
-  fi
-
-  # Default to rsync:// URL
-  echo "rsync://$url"
-}
-
-# called from drone, validator, client
-find_leader() {
-  declare leader leader_address
-  declare shift=0
-
-  if [[ -d $SNAP ]]; then
-    if [[ -n $1 ]]; then
-      usage "Error: unexpected parameter: $1"
-    fi
-
-    # Select leader from the Snap configuration
-    leader_ip=$(snapctl get entrypoint-ip)
-    if [[ -z $leader_ip ]]; then
-      leader=testnet.solana.com
-      leader_ip=$(dig +short "${leader%:*}" | head -n1)
-      if [[ -z $leader_ip ]]; then
-          usage "Error: unable to resolve IP address for $leader"
-      fi
-    fi
-    leader=$leader_ip
-    leader_address=$leader_ip:8001
-  else
-    if [[ -z $1 ]]; then
-      leader=${here}/..        # Default to local tree for rsync
-      leader_address=127.0.0.1:8001 # Default to local leader
-    elif [[ -z $2 ]]; then
-      leader=$1
-
-      declare leader_ip
-      leader_ip=$(dig +short "${leader%:*}" | head -n1)
-
-      if [[ -z $leader_ip ]]; then
-          usage "Error: unable to resolve IP address for $leader"
-      fi
-
-      leader_address=$leader_ip:8001
-      shift=1
-    else
-      leader=$1
-      leader_address=$2
-      shift=2
-    fi
-  fi
-
-  echo "$leader" "$leader_address" "$shift"
-}
