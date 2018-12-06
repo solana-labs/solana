@@ -10,19 +10,10 @@ _() {
 
 maybe_cargo_install() {
   declare cmd=$1
-  declare crate=$2
+  declare crate=${2:-$cmd}
 
-  if [[ -z $crate ]]; then
-    crate=$cmd
-  fi
-
-  set +e
-  "$cmd" --help > /dev/null 2>&1
-  declare exitcode=$?
-  set -e
-  if [[ $exitcode -ne 0 ]]; then
+  "$cmd" --help > /dev/null 2>&1 || \
     _ cargo install "$crate"
-  fi
 }
 
 export PATH=$CARGO_HOME/bin:$PATH
