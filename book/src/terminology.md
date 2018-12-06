@@ -20,6 +20,11 @@ Also called [voting period](#voting-period).
 
 The first [fullnode](#fullnode) to take the [leader](#leader) role.
 
+#### CBC block
+
+Smallest encrypted chunk of ledger, an encrypted ledger segment would be made of
+many CBC blocks; `ledger_segment_size / cbc_block_size` to be exact.
+
 #### client
 
 A [node](#node) that utilizes the [cluster](#cluster).
@@ -47,6 +52,12 @@ entry](#transactions-entry).
 The wallclock duration between a [leader](#leader) creating a [tick
 entry](#tick) and recognizing a supermajority of [ledger votes](#ledger-vote)
 with a ledger interpretation that matches the leader's.
+
+#### fake storage proof
+
+A proof which has the same format as a storage proof, but the sha state is
+actually from hashing a known ledger value which the storage client can reveal
+and is also easily verifiable by the network on-chain.
 
 #### fork
 
@@ -106,6 +117,10 @@ at any moment in time.
 A list of [entries](#entry) containing [transactions](#transaction) signed by
 [clients](#client).
 
+#### ledger segment
+
+A sequence of [blocks](#block).
+
 #### ledger vote
 
 A [hash](#hash) of the [fullnode's state](#fullnode-state) at a given [tick
@@ -145,8 +160,9 @@ The public key of a [keypair](#keypair).
 
 #### replicator
 
-A type of [client](#client) that stores copies of segments of the
-[ledger](#ledger).
+A type of [client](#client) that stores [ledger](#ledger) segments and
+periodically submits storage proofs to the cluster; not a
+[fullnode](#fullnode).
 
 #### secret key
 
@@ -154,8 +170,8 @@ The private key of a [keypair](#keypair).
 
 #### slot
 
-The time (i.e. number of [blocks](#block)) for which a [leader](#leader) ingests
-transactions and produces [entries](#entry).
+The time (i.e. number of [blocks](#block)) for which a [leader](#leader)
+ingests transactions and produces [entries](#entry).
 
 #### sol
 
@@ -166,6 +182,37 @@ by the company Solana.
 
 Tokens forfeit to the [cluster](#cluster) if malicious [fullnode](#fullnode)
 behavior can be proven.
+
+#### storage proof
+
+A set of SHA hash states which is constructed by sampling the encrypted version
+of the stored [ledger segment](#ledger-segment) at certain offsets.
+
+#### storage proof challenge
+
+A [transaction](#transaction) from a [replicator](#replicator) that verifiably
+proves that a [validator](#validator) [confirmed](#storage-proof-confirmation)
+a [fake proof](#fake-storage-proof).
+
+#### storage proof claim
+
+A [transaction](#transaction) from a [validator](#validator) which is after the
+timeout period given from the [storage proof
+confirmation](#storage-proof-confirmation) and which no successful
+[challenges](#storage-proof-challenge) have been observed which rewards the
+parties of the [storage proofs](#storage-proof) and confirmations.
+
+#### storage proof confirmation
+
+A [transaction](#transaction) from a [validator](#validator) which indicates
+the set of [real](#storage-proof) and [fake proofs](#fake-storage-proof)
+submitted by a [replicator](#replicator). The transaction would contain a list
+of proof hash values and a bit which says if this hash is valid or fake.
+
+#### storage validation capacity
+
+The number of keys and samples that a [validator](#validator) can verify each
+storage epoch.
 
 #### tick
 
@@ -221,7 +268,8 @@ A scarce, non-fungible member of a set of curios.
 
 #### epoch
 
-The time, i.e. number of [slots](#slot), for which a [leader schedule](#leader-schedule) is valid.
+The time, i.e. number of [slots](#slot), for which a [leader
+schedule](#leader-schedule) is valid.
 
 #### light client
 

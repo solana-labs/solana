@@ -1,11 +1,19 @@
-# Storage
+# Leader Replication
 
-The goal of this RFC is to define a protocol for storing a very large ledger
-over a p2p network that is verified by solana validators.  At full capacity on
-a 1gbps network solana will generate 4 petabytes of data per year.  To prevent
-the network from centralizing around full nodes that have to store the full
-data set this protocol proposes a way for mining nodes to provide storage
-capacity for pieces of the network.
+At full capacity on a 1gbps network solana will generate 4 petabytes of data
+per year.  To prevent the network from centralizing around full nodes that have
+to store the full data set this protocol proposes a way for mining nodes to
+provide storage capacity for pieces of the network.
+
+The basic idea to Proof of Replication is encrypting a dataset with a public
+symmetric key using CBC encryption, then hash the encrypted dataset. The main
+problem with the naive approach is that a dishonest storage node can stream the
+encryption and delete the data as its hashed. The simple solution is to force
+the hash to be done on the reverse of the encryption, or perhaps with a random
+order. This ensures that all the data is present during the generation of the
+proof and it also requires the validator to have the entirety of the encrypted
+data present for verification of every proof of every identity. So the space
+required to validate is `number_of_proofs * data_size`
 
 ## Definitions
 
@@ -14,20 +22,20 @@ capacity for pieces of the network.
 Storage mining client, stores some part of the ledger enumerated in blocks and
 submits storage proofs to the chain. Not a full-node.
 
-#### ledger block
+#### ledger segment
 
 Portion of the ledger which is downloaded by the replicator where storage proof
 data is derived.
 
 #### CBC block
 
-Smallest encrypted chunk of ledger, an encrypted ledger block would be made of
-many CBC blocks. `(size of ledger block) / (size of cbc block)` to be exact.
+Smallest encrypted chunk of ledger, an encrypted ledger segment would be made of
+many CBC blocks. `ledger_segment_size / cbc_block_size` to be exact.
 
 #### storage proof
 
 A set of sha hash state which is constructed by sampling the encrypted version
-of the stored ledger block at certain offsets.
+of the stored ledger segment at certain offsets.
 
 #### fake storage proof
 
@@ -56,28 +64,16 @@ observed which rewards the parties of the storage proofs and confirmations.
 
 The number of keys and samples that a validator can verify each storage epoch.
 
-## Background
-
-The basic idea to Proof of Replication is encrypting a dataset with a public
-symmetric key using CBC encryption, then hash the encrypted dataset. The main
-problem with the naive approach is that a dishonest storage node can stream the
-encryption and delete the data as its hashed. The simple solution is to force
-the hash to be done on the reverse of the encryption, or perhaps with a random
-order. This ensures that all the data is present during the generation of the
-proof and it also requires the validator to have the entirety of the encrypted
-data present for verification of every proof of every identity. So the space
-required to validate is `(Number of Proofs)*(data size)`
-
 ## Optimization with PoH
 
-Our improvement on this approach is to randomly sample the encrypted blocks
+Our improvement on this approach is to randomly sample the encrypted segments
 faster than it takes to encrypt, and record the hash of those samples into the
-PoH ledger. Thus the blocks stay in the exact same order for every PoRep and
+PoH ledger. Thus the segments stay in the exact same order for every PoRep and
 verification can stream the data and verify all the proofs in a single batch.
 This way we can verify multiple proofs concurrently, each one on its own CUDA
-core. The total space required for verification is `(1 ledger block) + (2 CBC
-blocks) * (Number of Identities)`, with core count of equal to (Number of
-Identities). We use a 64-byte chacha CBC block size.
+core. The total space required for verification is `1_ledger_segment +
+2_cbc_blocks * number_of_identities` with core count of equal to
+`number_of_identities`. We use a 64-byte chacha CBC block size.
 
 ## Network
 
@@ -106,8 +102,8 @@ changes to determine what rate it can validate storage proofs.
 
 ### Constants
 
-1. NUM\_STORAGE\_ENTRIES: Number of entries in a block of ledger data. The unit
-of storage for a replicator.
+1. NUM\_STORAGE\_ENTRIES: Number of entries in a segment of ledger data. The
+unit of storage for a replicator.
 2. NUM\_KEY\_ROTATION\_TICKS: Number of ticks to save a PoH value and cause a
 key generation for the section of ledger just generated and the rotation of
 another key in the set.
@@ -167,19 +163,19 @@ is:
 2. A replicator obtains the PoH hash corresponding to the last key rotation
 along with its entry\_height.
 3. The replicator signs the PoH hash with its keypair. That signature is the
-seed used to pick the block to replicate and also the encryption key. The
-replicator mods the signature with the entry\_height to get which block to
+seed used to pick the segment to replicate and also the encryption key. The
+replicator mods the signature with the entry\_height to get which segment to
 replicate.
 4. The replicator retrives the ledger by asking peer validators and
 replicators. See 6.5.
-5. The replicator then encrypts that block with the key with chacha algorithm
+5. The replicator then encrypts that segment with the key with chacha algorithm
 in CBC mode with NUM\_CHACHA\_ROUNDS of encryption.
 6. The replicator initializes a chacha rng with the signature from step 2 as
 the seed.
 7. The replicator generates NUM\_STORAGE\_SAMPLES samples in the range of the
-entry size and samples the encrypted block with sha256 for 32-bytes at each
+entry size and samples the encrypted segment with sha256 for 32-bytes at each
 offset value. Sampling the state should be faster than generating the encrypted
-block.
+segment.
 8. The replicator sends a PoRep proof transaction which contains its sha state
 at the end of the sampling operation, its seed and the samples it used to the
 current leader and it is put onto the ledger.
@@ -198,9 +194,9 @@ frozen.
 ### Finding who has a given block of ledger
 
 1. Validators monitor the transaction stream for storage mining proofs, and
-keep a mapping of ledger blocks by entry\_height to public keys. When it sees a
-storage mining proof it updates this mapping and provides an RPC interface
-which takes an entry\_height and hands back a list of public keys. The client
+keep a mapping of ledger segments by entry\_height to public keys. When it sees
+a storage mining proof it updates this mapping and provides an RPC interface
+which takes an entry\_height and hands back a list of public keys.  The client
 then looks up in their cluster\_info table to see which network address that
 corresponds to and sends a repair request to retrieve the necessary blocks of
 ledger.
