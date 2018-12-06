@@ -539,7 +539,6 @@ fn main() {
                 .long("identity")
                 .value_name("PATH")
                 .takes_value(true)
-                .required(true)
                 .help("File containing a client identity (keypair)"),
         )
         .arg(
@@ -609,8 +608,11 @@ fn main() {
         addr
     };
 
-    let id =
-        read_keypair(matches.value_of("identity").unwrap()).expect("can't read client identity");
+    let id = if matches.is_present("identity") {
+        read_keypair(matches.value_of("identity").unwrap()).expect("can't read client identity")
+    } else {
+        Keypair::new()
+    };
 
     let threads = if let Some(t) = matches.value_of("threads") {
         t.to_string().parse().expect("can't parse threads")
