@@ -108,6 +108,7 @@ $rsync -vPr "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_DIR"
 
 trap 'kill "$pid" && wait "$pid"' INT TERM
 $program \
+  --no-leader-rotation \
   --identity "$validator_json_path" \
   --network "$leader_address" \
   --ledger "$SOLANA_LEADER_CONFIG_DIR"/ledger \

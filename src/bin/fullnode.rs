@@ -38,6 +38,10 @@ fn main() {
                 .long("nosigverify")
                 .help("Run without signature verification"),
         ).arg(
+            Arg::with_name("no-leader-rotation")
+                .long("no-leader-rotation")
+                .help("Disable leader rotation"),
+        ).arg(
             Arg::with_name("identity")
                 .short("i")
                 .long("identity")
@@ -68,6 +72,7 @@ fn main() {
         ).get_matches();
 
     let nosigverify = matches.is_present("nosigverify");
+    let use_only_bootstrap_leader = matches.is_present("no-leader-rotation");
 
     let (keypair, vote_account_keypair, ncp) = if let Some(i) = matches.value_of("identity") {
         let path = i.to_string();
@@ -111,7 +116,7 @@ fn main() {
     let mut leader_scheduler = LeaderScheduler::default();
 
     // Remove this line to enable leader rotation
-    leader_scheduler.use_only_bootstrap_leader = true;
+    leader_scheduler.use_only_bootstrap_leader = use_only_bootstrap_leader;
 
     let rpc_port = if let Some(port) = matches.value_of("rpc") {
         let port_number = port.to_string().parse().expect("integer");

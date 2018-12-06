@@ -33,6 +33,7 @@ tune_networking
 
 trap 'kill "$pid" && wait "$pid"' INT TERM
 $program \
+  --no-leader-rotation \
   --identity "$SOLANA_CONFIG_DIR"/leader.json \
   --ledger "$SOLANA_CONFIG_DIR"/ledger \
   --rpc 8899 \
