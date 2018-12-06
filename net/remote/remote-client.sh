@@ -32,7 +32,6 @@ snap)
   sudo snap install solana.snap --devmode --dangerous
 
   solana_bench_tps=/snap/bin/solana.bench-tps
-  solana_keygen=/snap/bin/solana.keygen
   ;;
 local|tar)
   PATH="$HOME"/.cargo/bin:"$PATH"
@@ -44,7 +43,6 @@ local|tar)
 
   net/scripts/rsync-retry.sh -vPrc "$entrypointIp:~/.cargo/bin/solana*" ~/.cargo/bin/
   solana_bench_tps=solana-bench-tps
-  solana_keygen=solana-keygen
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"
@@ -60,19 +58,12 @@ clientCommand="\
   $solana_bench_tps \
     --network $entrypointIp:8001 \
     --drone $entrypointIp:9900 \
-    --identity client.json \
     --duration 7500 \
     --sustained \
     --threads $threadCount \
 "
 
-keygenCommand="$solana_keygen -o client.json"
 tmux new -s solana-bench-tps -d "
-  [[ -r client.json ]] || {
-    echo '$ $keygenCommand'  | tee -a client.log
-    $keygenCommand >> client.log 2>&1
-  }
-
   while true; do
     echo === Client start: \$(date) | tee -a client.log
     $metricsWriteDatapoint 'testnet-deploy client-begin=1'

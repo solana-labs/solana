@@ -133,5 +133,4 @@ tune_networking() {
 SOLANA_CONFIG_DIR=${SNAP_DATA:-$PWD}/config
 SOLANA_CONFIG_PRIVATE_DIR=${SNAP_DATA:-$PWD}/config-private
 SOLANA_CONFIG_VALIDATOR_DIR=${SNAP_DATA:-$PWD}/config-validator
-SOLANA_CONFIG_CLIENT_DIR=${SNAP_USER_DATA:-$PWD}/config-client
 

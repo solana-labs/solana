@@ -20,10 +20,7 @@ usage() {
 }
 
 if [[ -z $1 ]]; then # default behavior
-  mkdir -p config-client/
-  $solana_keygen -o config-client/client-id.json
   $solana_bench_tps \
-    --identity config-client/client-id.json \
     --network 127.0.0.1:8001 \
     --drone 127.0.0.1:9900 \
     --duration 90 \
