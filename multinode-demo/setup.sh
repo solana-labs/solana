@@ -99,7 +99,7 @@ if $node_type_leader; then
   $solana_genesis \
     --num_tokens "$num_tokens" \
     --mint "$mint_id_path" \
-    --bootstrap_leader "$SOLANA_CONFIG_DIR"/leader.json \
+    --bootstrap-leader-keypair "$leader_id_path" \
     --ledger "$SOLANA_CONFIG_DIR"/ledger \
 
   ls -lhR "$SOLANA_CONFIG_DIR"/
