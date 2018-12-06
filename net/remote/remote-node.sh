@@ -64,12 +64,12 @@ snap)
   fi
 
   if [[ $nodeType = bootstrap-fullnode ]]; then
-    nodeConfig="mode=bootstrap-fullnode+drone $commonNodeConfig"
-    ln -sf -T /var/snap/solana/current/leader/current fullnode.log
+    nodeConfig="mode=bootstrap-leader+drone $commonNodeConfig"
+    ln -sf -T /var/snap/solana/current/bootstrap-leader/current fullnode.log
     ln -sf -T /var/snap/solana/current/drone/current drone.log
   else
     nodeConfig="mode=fullnode $commonNodeConfig"
-    ln -sf -T /var/snap/solana/current/validator/current fullnode.log
+    ln -sf -T /var/snap/solana/current/fullnode/current fullnode.log
   fi
 
   logmarker="solana deploy $(date)/$RANDOM"
@@ -103,10 +103,10 @@ local|tar)
       echo Selecting solana-fullnode-cuda
       export SOLANA_CUDA=1
     fi
-    ./multinode-demo/setup.sh -t leader $setupArgs
+    ./multinode-demo/setup.sh -t bootstrap_leader $setupArgs
     ./multinode-demo/drone.sh > drone.log 2>&1 &
-    ./multinode-demo/leader.sh > leader.log 2>&1 &
-    ln -sTf leader.log fullnode.log
+    ./multinode-demo/bootstrap-leader.sh > bootstrap-leader.log 2>&1 &
+    ln -sTf bootstrap-leader.log fullnode.log
     ;;
   fullnode)
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
@@ -116,9 +116,8 @@ local|tar)
       export SOLANA_CUDA=1
     fi
 
-    ./multinode-demo/setup.sh -t validator $setupArgs
-    ./multinode-demo/validator.sh "$entrypointIp":~/solana "$entrypointIp:8001" > validator.log 2>&1 &
-    ln -sTf validator.log fullnode.log
+    ./multinode-demo/setup.sh -t fullnode $setupArgs
+    ./multinode-demo/fullnode.sh "$entrypointIp":~/solana "$entrypointIp:8001" > fullnode.log 2>&1 &
     ;;
   *)
     echo "Error: unknown node type: $nodeType"

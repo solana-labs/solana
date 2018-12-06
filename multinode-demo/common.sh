@@ -8,8 +8,8 @@
 #
 
 rsync=rsync
-leader_logger="tee leader.log"
-validator_logger="tee validator.log"
+bootstrap_leader_logger="tee bootstrap-leader.log"
+fullnode_logger="tee fullnode.log"
 drone_logger="tee drone.log"
 
 if [[ $(uname) != Linux ]]; then
@@ -32,12 +32,12 @@ if [[ -d $SNAP ]]; then # Running inside a Linux Snap?
   }
   rsync="$SNAP"/bin/rsync
   multilog="$SNAP/bin/multilog t s16777215 n200"
-  leader_logger="$multilog $SNAP_DATA/leader"
-  validator_logger="$multilog t $SNAP_DATA/validator"
+  bootstrap_leader_logger="$multilog $SNAP_DATA/bootstrap-leader"
+  fullnode_logger="$multilog t $SNAP_DATA/fullnode"
   drone_logger="$multilog $SNAP_DATA/drone"
   # Create log directories manually to prevent multilog from creating them as
   # 0700
-  mkdir -p "$SNAP_DATA"/{drone,leader,validator}
+  mkdir -p "$SNAP_DATA"/{drone,bootstrap-leader,fullnode}
 
 elif [[ -n $USE_SNAP ]]; then # Use the Linux Snap binaries
   solana_program() {
@@ -130,7 +130,9 @@ tune_networking() {
   fi
 }
 
-SOLANA_CONFIG_DIR=${SNAP_DATA:-$PWD}/config
-SOLANA_CONFIG_PRIVATE_DIR=${SNAP_DATA:-$PWD}/config-private
-SOLANA_CONFIG_VALIDATOR_DIR=${SNAP_DATA:-$PWD}/config-validator
+# The directory on the bootstrap leader that is rsynced by other full nodes as
+# they boot (TODO: Eventually this should go away)
+SOLANA_RSYNC_CONFIG_DIR=${SNAP_DATA:-$PWD}/config
 
+# Configuration that remains local
+SOLANA_CONFIG_DIR=${SNAP_DATA:-$PWD}/config-local

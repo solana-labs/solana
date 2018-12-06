@@ -11,7 +11,7 @@ source scripts/configure-metrics.sh
 
 multinode-demo/setup.sh
 
-backgroundCommands="drone leader validator validator-x"
+backgroundCommands="drone bootstrap-leader fullnode fullnode-x"
 pids=()
 
 for cmd in $backgroundCommands; do
@@ -88,7 +88,7 @@ echo "--- Ledger verification"
 (
   source multinode-demo/common.sh
   set -x
-  cp -R "$SOLANA_CONFIG_DIR"/ledger /tmp/ledger-$$
+  cp -R "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger /tmp/ledger-$$
   $solana_ledger_tool --ledger /tmp/ledger-$$ verify || exit $?
   rm -rf /tmp/ledger-$$
 ) || flag_error

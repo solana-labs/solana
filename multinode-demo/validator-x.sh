@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# Start a dynamically-configured validator node
+# Start a dynamically-configured full node
 #
 
 here=$(dirname "$0")
 
-exec "$here"/validator.sh -x "$@"
+exec "$here"/fullnode.sh -x "$@"

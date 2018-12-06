@@ -6,13 +6,10 @@
 **/*.rs.bk
 .cargo
 
-# node configuration files
+# node config that is rsynced
 /config/
-/config-private/
-/config-drone/
-/config-validator/
-/config-client/
-/multinode-demo/test/config-client/
+# node config that remains local
+/config-local/
 
 # log files
 *.log

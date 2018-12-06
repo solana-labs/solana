@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Start a validator node
+# Start a full node
 #
 here=$(dirname "$0")
 # shellcheck source=multinode-demo/common.sh
@@ -20,11 +20,11 @@ usage() {
     echo "$*"
     echo
   fi
-  echo "usage: $0 [-x] [rsync network path to leader] [network entry point]"
+  echo "usage: $0 [-x] [rsync network path to bootstrap leader configuration] [network entry point]"
   echo
-  echo " Start a validator on the specified network"
+  echo " Start a full node on the specified network"
   echo
-  echo "   -x: runs a new, dynamically-configured validator"
+  echo "   -x: runs a new, dynamically-configured full node"
   echo
   exit 1
 }
@@ -100,46 +100,35 @@ else
 fi
 
 if ((!self_setup)); then
-  [[ -f $SOLANA_CONFIG_VALIDATOR_DIR/validator.json ]] || {
-    echo "$SOLANA_CONFIG_VALIDATOR_DIR/validator.json not found, create it by running:"
+  [[ -f $SOLANA_CONFIG_DIR/fullnode.json ]] || {
+    echo "$SOLANA_CONFIG_DIR/fullnode.json not found, create it by running:"
     echo
     echo "  ${here}/setup.sh"
     exit 1
   }
-  validator_id_path=$SOLANA_CONFIG_PRIVATE_DIR/validator-id.json
-  validator_json_path=$SOLANA_CONFIG_VALIDATOR_DIR/validator.json
-  SOLANA_LEADER_CONFIG_DIR=$SOLANA_CONFIG_VALIDATOR_DIR/leader-config
+  fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id.json
+  fullnode_json_path=$SOLANA_CONFIG_DIR/fullnode.json
+  ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger
 else
-  mkdir -p "$SOLANA_CONFIG_PRIVATE_DIR"
-  validator_id_path=$SOLANA_CONFIG_PRIVATE_DIR/validator-id-x$$.json
-  $solana_keygen -o "$validator_id_path"
+  mkdir -p "$SOLANA_CONFIG_DIR"
+  fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id-x$$.json
+  $solana_keygen -o "$fullnode_id_path"
 
-  mkdir -p "$SOLANA_CONFIG_VALIDATOR_DIR"
-  validator_json_path=$SOLANA_CONFIG_VALIDATOR_DIR/validator-x$$.json
+  mkdir -p "$SOLANA_CONFIG_DIR"
+  fullnode_json_path=$SOLANA_CONFIG_DIR/fullnode-x$$.json
 
   port=9000
   (((port += ($$ % 1000)) && (port == 9000) && port++))
 
-  $solana_fullnode_config --keypair="$validator_id_path" -l -b "$port" > "$validator_json_path"
+  $solana_fullnode_config --keypair="$fullnode_id_path" -l -b "$port" > "$fullnode_json_path"
 
-  SOLANA_LEADER_CONFIG_DIR=$SOLANA_CONFIG_VALIDATOR_DIR/leader-config-x$$
+  ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger-x$$
 fi
 
-[[ -r $validator_id_path ]] || {
-  echo "$validator_id_path does not exist"
+[[ -r $fullnode_id_path ]] || {
+  echo "$fullnode_id_path does not exist"
   exit 1
 }
-
-# A fullnode requires 2 tokens to function:
-# - one token to create an instance of the vote_program with
-# - one second token to keep the node identity public key valid.
-(
-  set -x
-  $solana_wallet \
-    --keypair "$validator_id_path" \
-    --network "$leader_address" \
-    airdrop 2
-)
 
 rsync_url() { # adds the 'rsync://` prefix to URLs that need it
   declare url="$1"
@@ -165,19 +154,27 @@ rsync_leader_url=$(rsync_url "$leader")
 tune_networking
 
 set -ex
-$rsync -vPr "$rsync_leader_url"/config/ "$SOLANA_LEADER_CONFIG_DIR"
-[[ -d $SOLANA_LEADER_CONFIG_DIR/ledger ]] || {
+$rsync -vPr "$rsync_leader_url"/config/ "$ledger_config_dir"
+[[ -d $ledger_config_dir/ledger ]] || {
   echo "Unable to retrieve ledger from $rsync_leader_url"
   exit 1
 }
 
+# A fullnode requires 2 tokens to function:
+# - one token to create an instance of the vote_program with
+# - one second token to keep the node identity public key valid.
+$solana_wallet \
+  --keypair "$fullnode_id_path" \
+  --network "$leader_address" \
+  airdrop 2
+
 trap 'kill "$pid" && wait "$pid"' INT TERM
 $program \
   --no-leader-rotation \
-  --identity "$validator_json_path" \
+  --identity "$fullnode_json_path" \
   --network "$leader_address" \
-  --ledger "$SOLANA_LEADER_CONFIG_DIR"/ledger \
-  > >($validator_logger) 2>&1 &
+  --ledger "$ledger_config_dir"/ledger \
+  > >($fullnode_logger) 2>&1 &
 pid=$!
 oom_score_adj "$pid" 1000
 wait "$pid"
