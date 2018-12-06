@@ -12,9 +12,9 @@ A persistent file addressed by [public key](#public-key) and with
 
 #### block
 
-A contiguous set of [entries](#entry) on the ledger covered by a [vote](#ledger-vote).
-The length of a block is network hyper parameter, specified in [ticks](#tick).
-Also called [voting period](#voting-period).
+A contiguous set of [entries](#entry) on the ledger covered by a
+[vote](#ledger-vote).  The length of a block is network hyper parameter,
+specified in [ticks](#tick).  Also called [voting period](#voting-period).
 
 #### bootstrap leader
 
@@ -42,6 +42,16 @@ consensus.
 An entry on the [ledger](#ledger) either a [tick](#tick) or a [transactions
 entry](#transactions-entry).
 
+#### escrow account
+
+An account owned by an [escrow service](#escrow-service).
+
+#### escrow service
+
+An interactive [service](#service) that manages [escrow
+accounts](#escrow-account) by interpreting client-submited
+[instructions](#instruction).
+
 #### confirmation
 
 The wallclock duration between a [leader](#leader) creating a [tick
@@ -59,9 +69,9 @@ A full participant in the [cluster](#cluster) either a [leader](#leader) or
 
 #### fullnode state
 
-The result of interpreting all programs on the ledger a given [tick
-height](#tick-height). It includes at least the set of all [accounts](#account)
-holding nonzero [native tokens](#native-tokens).
+The result of interpreting the ledger at a given [tick height](#tick-height).
+It includes at least the set of all [accounts](#account) holding nonzero
+[native tokens](#native-tokens).
 
 #### genesis block
 
@@ -73,8 +83,7 @@ A digital fingerprint of a sequence of bytes.
 
 #### instruction
 
-The smallest unit of a [program](#program) that a [client](#client) can include
-in a [transaction](#instruction).
+[client](#client)-submitted data that drives a [service](#service).
 
 #### keypair
 
@@ -87,8 +96,8 @@ A fractional [native token](#native-token) with the value of approximately
 
 #### loader
 
-A [program](#program) with the ability to interpret the binary encoding
-of other on-chain programs.
+A [service](#service) with the ability to interpret the binary encoding of
+other services.
 
 #### leader
 
@@ -111,8 +120,8 @@ A list of [entries](#entry) containing [transactions](#transaction) signed by
 A [hash](#hash) of the [fullnode's state](#fullnode-state) at a given [tick
 height](#tick-height). It comprises a validator's affirmation that a
 [block](#block) it has received has been verified, as well as a promise not to
-vote for a conflicting [block](#block) (i.e. [fork](#fork)) for a specific amount
-of time, the [lockout](#lockout) period.
+vote for a conflicting [block](#block) (i.e. [fork](#fork)) for a specific
+amount of time, the [lockout](#lockout) period.
 
 #### lockout
 
@@ -131,14 +140,6 @@ A computer particpating in a [cluster](#cluster).
 
 The number of [fullnodes](#fullnode) participating in a [cluster](#cluster).
 
-#### program
-
-The code that interprets [instructions](#instruction).
-
-#### program ID
-
-The public key of the [account](#account) containing a [program](#program).
-
 #### public key
 
 The public key of a [keypair](#keypair).
@@ -152,10 +153,18 @@ A type of [client](#client) that stores copies of segments of the
 
 The private key of a [keypair](#keypair).
 
+#### service
+
+The code that interprets client-submited [instructions](#instruction).
+
+#### service ID
+
+The public key of the [account](#account) containing a [service](#service).
+
 #### slot
 
-The time (i.e. number of [blocks](#block)) for which a [leader](#leader) ingests
-transactions and produces [entries](#entry).
+The time (i.e. number of [blocks](#block)) for which a [leader](#leader)
+ingests transactions and produces [entries](#entry).
 
 #### sol
 
@@ -221,7 +230,8 @@ A scarce, non-fungible member of a set of curios.
 
 #### epoch
 
-The time, i.e. number of [slots](#slot), for which a [leader schedule](#leader-schedule) is valid.
+The time, i.e. number of [slots](#slot), for which a [leader
+schedule](#leader-schedule) is valid.
 
 #### light client
 
@@ -234,8 +244,8 @@ Millions of [instructions](#instruction) per second.
 
 #### runtime
 
-The component of a [fullnode](#fullnode) responsible for [program](#program)
-execution.
+The component of a [fullnode](#fullnode) responsible for executing
+[instructions](#instruction).
 
 #### thin client
 
