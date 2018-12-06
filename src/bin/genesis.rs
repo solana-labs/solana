@@ -9,10 +9,9 @@ extern crate solana_sdk;
 extern crate untrusted;
 
 use clap::{App, Arg};
-use solana::fullnode::Config;
 use solana::ledger::LedgerWriter;
 use solana::mint::Mint;
-use solana_sdk::signature::KeypairUtil;
+use solana_sdk::signature::{read_keypair, KeypairUtil};
 use std::error;
 use std::fs::File;
 use std::path::Path;
@@ -44,13 +43,13 @@ fn main() -> Result<(), Box<error::Error>> {
                 .required(true)
                 .help("Path to file containing keys of the mint"),
         ).arg(
-            Arg::with_name("bootstrap_leader")
+            Arg::with_name("bootstrap-leader-keypair")
                 .short("b")
-                .long("bootstrap_leader")
-                .value_name("BOOTSTRAP LEADER")
+                .long("bootstrap-leader-keypair")
+                .value_name("BOOTSTRAP LEADER KEYPAIR")
                 .takes_value(true)
                 .required(true)
-                .help("Path to file containing keys of the bootstrap leader"),
+                .help("Path to file containing the bootstrap leader's keypair"),
         ).arg(
             Arg::with_name("ledger")
                 .short("l")
@@ -61,10 +60,11 @@ fn main() -> Result<(), Box<error::Error>> {
                 .help("Use directory as persistent ledger location"),
         ).get_matches();
 
-    // Parse the input leader configuration
-    let file = File::open(Path::new(&matches.value_of("bootstrap_leader").unwrap())).unwrap();
-    let leader_config: Config = serde_json::from_reader(file).unwrap();
-    let leader_keypair = leader_config.keypair();
+    // Load the bootstreap leader keypair
+    // TODO: Only the public key is really needed, genesis should not have access to the leader's
+    //       secret key.
+    let leader_keypair = read_keypair(matches.value_of("bootstrap-leader-keypair").unwrap())
+        .expect("failed to read bootstrap leader keypair");
 
     // Parse the input mint configuration
     let num_tokens = value_t_or_exit!(matches, "num_tokens", u64);
