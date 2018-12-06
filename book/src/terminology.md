@@ -140,6 +140,10 @@ A computer particpating in a [cluster](#cluster).
 
 The number of [fullnodes](#fullnode) participating in a [cluster](#cluster).
 
+#### plugin
+
+The binary form of a [service](#service); a shared object in the ELF format.
+
 #### public key
 
 The public key of a [keypair](#keypair).
