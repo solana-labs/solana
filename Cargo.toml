@@ -101,11 +101,11 @@ solana-bpfloader = { path = "programs/native/bpf_loader", version = "0.11.0" }
 solana-budget-program = { path = "programs/native/budget", version = "0.11.0" }
 solana-drone = { path = "drone", version = "0.11.0" }
 solana-erc20 = { path = "programs/native/erc20", version = "0.11.0" }
-solana-jsonrpc-core = "0.3.0"
-solana-jsonrpc-http-server = "0.3.0"
-solana-jsonrpc-macros = "0.3.0"
-solana-jsonrpc-pubsub = "0.3.0"
-solana-jsonrpc-ws-server = "0.3.0"
+solana-jsonrpc-core = "0.4.0"
+solana-jsonrpc-http-server = "0.4.0"
+solana-jsonrpc-macros = "0.4.0"
+solana-jsonrpc-pubsub = "0.4.0"
+solana-jsonrpc-ws-server = "0.4.0"
 solana-lualoader = { path = "programs/native/lua_loader", version = "0.11.0" }
 solana-metrics = { path = "metrics", version = "0.11.0" }
 solana-native-loader = { path = "programs/native/native_loader", version = "0.11.0" }
