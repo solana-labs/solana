@@ -74,7 +74,7 @@ impl ReplayStage {
         }
 
         submit(
-            influxdb::Point::new("replay-stage")
+            influxdb::Point::new("replicate-stage")
                 .add_field("count", influxdb::Value::Integer(entries.len() as i64))
                 .to_owned(),
         );
@@ -83,11 +83,11 @@ impl ReplayStage {
         let mut num_entries_to_write = entries.len();
         let now = Instant::now();
         if !entries.as_slice().verify(last_entry_id) {
-            inc_new_counter_info!("replay_stage-verify-fail", entries.len());
+            inc_new_counter_info!("replicate_stage-verify-fail", entries.len());
             return Err(Error::BlobError(BlobError::VerificationFailed));
         }
         inc_new_counter_info!(
-            "replay_stage-verify-duration",
+            "replicate_stage-verify-duration",
             duration_as_ms(&now.elapsed()) as usize
         );
         let (current_leader, _) = bank
@@ -128,7 +128,7 @@ impl ReplayStage {
             .id;
 
         inc_new_counter_info!(
-            "replay-transactions",
+            "replicate-transactions",
             entries.iter().map(|x| x.transactions.len()).sum()
         );
 
