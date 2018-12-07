@@ -48,7 +48,7 @@ pub fn create_vote_account(
 ) -> Result<Pubkey> {
     let msg = "Registering a new node";
     let sig = Signature::new(&node_keypair.sign(msg.as_bytes()).as_ref());
-    let params = json!([node_keypair.pubkey().to_string(), sig, msg.as_bytes()]);
+    let params = json!([node_keypair.pubkey(), sig, msg.as_bytes()]);
     let resp = RpcRequest::RegisterNode
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap();

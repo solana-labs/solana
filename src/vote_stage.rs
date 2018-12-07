@@ -41,7 +41,7 @@ pub fn create_new_signed_vote_transaction(
     let msg = tx.get_sign_data();
     let sig = Signature::new(&keypair.sign(&msg).as_ref());
 
-    let params = json!([keypair.pubkey().to_string(), sig, &msg]);
+    let params = json!([keypair.pubkey(), sig, &msg]);
     let resp = RpcRequest::SignVote
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap();
