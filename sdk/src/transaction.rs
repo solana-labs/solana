@@ -13,6 +13,9 @@ pub const SIG_OFFSET: usize = size_of::<u64>();
 /// specified accounts and userdata
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Instruction {
+    /// True if the runtime should pass the output of the previous instruction to this one.
+    pub accept_input: bool,
+
     /// The program code that executes this transaction is identified by the program_id.
     /// this is an offset into the Transaction::program_ids field
     pub program_ids_index: u8,
@@ -26,6 +29,7 @@ impl Instruction {
     pub fn new<T: Serialize>(program_ids_index: u8, userdata: &T, accounts: Vec<u8>) -> Self {
         let userdata = serialize(userdata).unwrap();
         Instruction {
+            accept_input: false,
             program_ids_index,
             userdata,
             accounts,

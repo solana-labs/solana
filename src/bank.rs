@@ -1507,11 +1507,13 @@ mod tests {
         let spend = SystemInstruction::Move { tokens: 1 };
         let instructions = vec![
             Instruction {
+                accept_input: false,
                 program_ids_index: 0,
                 userdata: serialize(&spend).unwrap(),
                 accounts: vec![0, 1],
             },
             Instruction {
+                accept_input: false,
                 program_ids_index: 0,
                 userdata: serialize(&spend).unwrap(),
                 accounts: vec![0, 2],

@@ -45,6 +45,12 @@ fn process_instruction(
         native_loader::entrypoint
     };
 
+    let input = if tx.instructions[instruction_index].accept_input {
+        input
+    } else {
+        &[]
+    };
+
     entrypoint(
         &program_id,
         &mut keyed_accounts,
