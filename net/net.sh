@@ -183,7 +183,7 @@ startBootstrapNode() {
     esac
 
     ssh "${sshOptions[@]}" -n "$ipAddress" \
-      "./solana/net/remote/remote-node.sh $deployMethod bootstrap_fullnode $publicNetwork $entrypointIp $expectedNodeCount \"$RUST_LOG\""
+      "./solana/net/remote/remote-node.sh $deployMethod bootstrap-leader $publicNetwork $entrypointIp $expectedNodeCount \"$RUST_LOG\""
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
     echo "^^^ +++"

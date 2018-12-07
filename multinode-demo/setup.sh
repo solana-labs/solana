@@ -23,7 +23,7 @@ Creates a fullnode configuration
                   may be a private IP address unaccessible on the Intenet (default)
  -p             - Detect public address using public Internet servers
  -t node_type   - Create configuration files only for this kind of node.  Valid
-                  options are bootstrap_leader or fullnode.  Creates configuration files
+                  options are bootstrap-leader or fullnode.  Creates configuration files
                   for both by default
 
 EOF
@@ -52,7 +52,7 @@ while getopts "h?n:lpt:" opt; do
   t)
     node_type="$OPTARG"
     case $OPTARG in
-    bootstrap_leader|leader) # TODO: Remove legacy 'leader' option
+    bootstrap-leader|leader) # TODO: Remove legacy 'leader' option
       bootstrap_leader=true
       fullnode=false
       ;;
