@@ -142,7 +142,7 @@ build() {
       cargo install --path drone --features=$cargoFeatures --root farf
       cargo install --path . --features=$cargoFeatures --root farf
     "
-    ./scripts/install-native-programs.sh farf/
+    ./scripts/install-native-programs.sh farf/ release
   )
   echo "Build took $SECONDS seconds"
 }
