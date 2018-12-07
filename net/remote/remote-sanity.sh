@@ -138,8 +138,8 @@ echo "--- $entrypointIp: validator sanity"
 if $validatorSanity; then
   (
     set -x -o pipefail
-    ./multinode-demo/setup.sh -t validator || exit $?
-    timeout 10s ./multinode-demo/validator.sh "$entrypointRsyncUrl" "$entrypointIp:8001" 2>&1 | tee validator-sanity.log
+    ./multinode-demo/setup.sh -t fullnode || exit $?
+    timeout 10s ./multinode-demo/fullnode.sh "$entrypointRsyncUrl" "$entrypointIp:8001" 2>&1 | tee validator-sanity.log
   ) || {
     exitcode=$?
     [[ $exitcode -eq 124 ]] || exit $exitcode
