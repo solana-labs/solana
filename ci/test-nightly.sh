@@ -16,14 +16,16 @@ _() {
 # _ cargo test --verbose --features=unstable -- --test-threads=1
 
 maybe_cargo_install() {
-  declare cmd=$1
-  declare crate=${2:-$cmd}
+  for i in "$@"; do
+      declare cmd=${i%:*}
+      declare crate=${i#*:}
 
-  "$cmd" --help > /dev/null 2>&1 || \
-    _ cargo install "$crate"
+      "$cmd" --help > /dev/null 2>&1 || \
+         _ cargo install "$crate"
+  done
 }
 
-maybe_cargo_install cov
+maybe_cargo_install cargo-cov
 
 # Generate coverage data and report via unit-test suite.
 _ cargo cov clean

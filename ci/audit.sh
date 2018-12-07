@@ -16,14 +16,23 @@ _() {
 }
 
 maybe_cargo_install() {
-  declare cmd=$1
-  declare crate=${2:-$cmd}
+  for i in "$@"; do
+      declare cmd=${i%:*}
+      declare crate=${i#*:}
 
-  "$cmd" --help > /dev/null 2>&1 || \
-    _ cargo install "$crate"
+      exit=0 && "$cmd" --help > /dev/null 2>&1 || exit=$?
+
+      # remove when https://github.com/RustSec/cargo-audit/issues/56
+      #  is resolved
+      [[ $cmd == cargo-audit ]] && (( exit == 2 )) && exit=0
+
+      if (( exit )) ; then
+          _ cargo install "$crate"
+      fi
+  done
 }
 
-maybe_cargo_install audit tree
+maybe_cargo_install cargo-audit cargo-tree
 
 _ cargo tree
 _ cargo audit
