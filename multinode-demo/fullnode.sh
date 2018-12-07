@@ -163,13 +163,14 @@ $rsync -vPr "$rsync_leader_url"/config/ "$ledger_config_dir"
   exit 1
 }
 
-# A fullnode requires 2 tokens to function:
+# A fullnode requires 3 tokens to function:
 # - one token to create an instance of the vote_program with
-# - one second token to keep the node identity public key valid.
+# - one token for the transaction fee
+# - one token to keep the node identity public key valid.
 $solana_wallet \
   --keypair "$fullnode_id_path" \
   --network "$leader_address" \
-  airdrop 2
+  airdrop 3
 
 trap 'kill "$pid" && wait "$pid"' INT TERM
 $program \

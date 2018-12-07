@@ -6,6 +6,7 @@ use bank::Bank;
 
 use service::Service;
 use solana_metrics::{influxdb, submit};
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
 use solana_sdk::vote_program::{self, VoteProgram};
 use std::result;
@@ -29,6 +30,7 @@ pub struct ComputeLeaderFinalityService {
 impl ComputeLeaderFinalityService {
     fn get_last_supermajority_timestamp(
         bank: &Arc<Bank>,
+        leader_id: Pubkey,
         now: u64,
         last_valid_validator_timestamp: u64,
     ) -> result::Result<u64, FinalityError> {
@@ -48,6 +50,9 @@ impl ComputeLeaderFinalityService {
                     // by returning None
                     if vote_program::check_id(&account.owner) {
                         if let Ok(vote_state) = VoteProgram::deserialize(&account.userdata) {
+                            if leader_id == vote_state.node_id {
+                                return None;
+                            }
                             let validator_stake = bank.get_stake(&vote_state.node_id);
                             total_stake += validator_stake;
                             // Filter out any validators that don't have at least one vote
@@ -86,11 +91,18 @@ impl ComputeLeaderFinalityService {
         Err(FinalityError::NoValidSupermajority)
     }
 
-    pub fn compute_finality(bank: &Arc<Bank>, last_valid_validator_timestamp: &mut u64) {
+    pub fn compute_finality(
+        bank: &Arc<Bank>,
+        leader_id: Pubkey,
+        last_valid_validator_timestamp: &mut u64,
+    ) {
         let now = timing::timestamp();
-        if let Ok(super_majority_timestamp) =
-            Self::get_last_supermajority_timestamp(bank, now, *last_valid_validator_timestamp)
-        {
+        if let Ok(super_majority_timestamp) = Self::get_last_supermajority_timestamp(
+            bank,
+            leader_id,
+            now,
+            *last_valid_validator_timestamp,
+        ) {
             let finality_ms = now - super_majority_timestamp;
 
             *last_valid_validator_timestamp = super_majority_timestamp;
@@ -105,7 +117,7 @@ impl ComputeLeaderFinalityService {
     }
 
     /// Create a new ComputeLeaderFinalityService for computing finality.
-    pub fn new(bank: Arc<Bank>, exit: Arc<AtomicBool>) -> Self {
+    pub fn new(bank: Arc<Bank>, leader_id: Pubkey, exit: Arc<AtomicBool>) -> Self {
         let compute_finality_thread = Builder::new()
             .name("solana-leader-finality-stage".to_string())
             .spawn(move || {
@@ -114,7 +126,7 @@ impl ComputeLeaderFinalityService {
                     if exit.load(Ordering::Relaxed) {
                         break;
                     }
-                    Self::compute_finality(&bank, &mut last_valid_validator_timestamp);
+                    Self::compute_finality(&bank, leader_id, &mut last_valid_validator_timestamp);
                     sleep(Duration::from_millis(COMPUTE_FINALITY_MS));
                 }
             })
@@ -156,6 +168,7 @@ pub mod tests {
         logger::setup();
 
         let mint = Mint::new(1234);
+        let dummy_leader_id = Keypair::new().pubkey();
         let bank = Arc::new(Bank::new(&mint));
         // generate 10 validators, but only vote for the first 6 validators
         let ids: Vec<_> = (0..10)
@@ -195,7 +208,11 @@ pub mod tests {
 
         // There isn't 2/3 consensus, so the bank's finality value should be the default
         let mut last_finality_time = 0;
-        ComputeLeaderFinalityService::compute_finality(&bank, &mut last_finality_time);
+        ComputeLeaderFinalityService::compute_finality(
+            &bank,
+            dummy_leader_id,
+            &mut last_finality_time,
+        );
         assert_eq!(bank.finality(), std::usize::MAX);
 
         // Get another validator to vote, so we now have 2/3 consensus
@@ -204,7 +221,11 @@ pub mod tests {
         let vote_tx = Transaction::vote_new(&vote_account, vote, ids[6], 0);
         bank.process_transaction(&vote_tx).unwrap();
 
-        ComputeLeaderFinalityService::compute_finality(&bank, &mut last_finality_time);
+        ComputeLeaderFinalityService::compute_finality(
+            &bank,
+            dummy_leader_id,
+            &mut last_finality_time,
+        );
         assert!(bank.finality() != std::usize::MAX);
         assert!(last_finality_time > 0);
     }

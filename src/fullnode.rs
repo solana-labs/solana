@@ -322,6 +322,7 @@ impl Fullnode {
                 sigverify_disabled,
                 max_tick_height,
                 last_entry_id,
+                scheduled_leader,
             );
 
             let broadcast_service = BroadcastService::new(
@@ -486,6 +487,7 @@ impl Fullnode {
             // the window didn't overwrite the slot at for the last entry that the replicate stage
             // processed. We also want to avoid reading processing the ledger for the last id.
             &last_id,
+            self.keypair.pubkey(),
         );
 
         let broadcast_service = BroadcastService::new(

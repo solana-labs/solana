@@ -10,6 +10,7 @@ use poh_service::Config;
 use service::Service;
 use sigverify_stage::SigVerifyStage;
 use solana_sdk::hash::Hash;
+use solana_sdk::pubkey::Pubkey;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Receiver;
@@ -38,6 +39,7 @@ impl Tpu {
         sigverify_disabled: bool,
         max_tick_height: Option<u64>,
         last_entry_id: &Hash,
+        leader_id: Pubkey,
     ) -> (Self, Receiver<Vec<Entry>>, Arc<AtomicBool>) {
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -52,6 +54,7 @@ impl Tpu {
             tick_duration,
             last_entry_id,
             max_tick_height,
+            leader_id,
         );
 
         let (ledger_write_stage, entry_forwarder) =

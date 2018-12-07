@@ -15,7 +15,7 @@ use solana::mint::Mint;
 use solana::packet::to_packets_chunked;
 use solana_sdk::hash::hash;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{KeypairUtil, Signature};
+use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use std::iter;
@@ -50,6 +50,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 
     let (verified_sender, verified_receiver) = channel();
     let bank = Arc::new(Bank::new(&mint));
+    let dummy_leader_id = Keypair::new().pubkey();
     let dummy = Transaction::system_move(
         &mint.keypair(),
         mint.keypair().pubkey(),
@@ -107,6 +108,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         Default::default(),
         &mint.last_id(),
         None,
+        dummy_leader_id,
     );
 
     let mut id = mint.last_id();
@@ -137,6 +139,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
 
     let (verified_sender, verified_receiver) = channel();
     let bank = Arc::new(Bank::new(&mint));
+    let dummy_leader_id = Keypair::new().pubkey();
     let dummy = Transaction::system_move(
         &mint.keypair(),
         mint.keypair().pubkey(),
@@ -209,6 +212,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         Default::default(),
         &mint.last_id(),
         None,
+        dummy_leader_id,
     );
 
     let mut id = mint.last_id();

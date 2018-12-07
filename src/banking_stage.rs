@@ -15,6 +15,7 @@ use result::{Error, Result};
 use service::Service;
 use sigverify_stage::VerifiedPackets;
 use solana_sdk::hash::Hash;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
 use std::net::SocketAddr;
@@ -51,6 +52,7 @@ impl BankingStage {
         config: Config,
         last_entry_id: &Hash,
         max_tick_height: Option<u64>,
+        leader_id: Pubkey,
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (entry_sender, entry_receiver) = channel();
         let shared_verified_receiver = Arc::new(Mutex::new(verified_receiver));
@@ -63,8 +65,11 @@ impl BankingStage {
         let poh_service = PohService::new(poh_recorder.clone(), config);
 
         // Single thread to compute finality
-        let compute_finality_service =
-            ComputeLeaderFinalityService::new(bank.clone(), poh_service.poh_exit.clone());
+        let compute_finality_service = ComputeLeaderFinalityService::new(
+            bank.clone(),
+            leader_id,
+            poh_service.poh_exit.clone(),
+        );
 
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<Option<BankingStageReturnType>>> = (0..NUM_THREADS)
@@ -268,6 +273,7 @@ mod tests {
     #[test]
     fn test_banking_stage_shutdown1() {
         let bank = Arc::new(Bank::new(&Mint::new(2)));
+        let dummy_leader_id = Keypair::new().pubkey();
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, _entry_receiver) = BankingStage::new(
             &bank,
@@ -275,6 +281,7 @@ mod tests {
             Default::default(),
             &bank.last_id(),
             None,
+            dummy_leader_id,
         );
         drop(verified_sender);
         assert_eq!(
@@ -286,6 +293,7 @@ mod tests {
     #[test]
     fn test_banking_stage_shutdown2() {
         let bank = Arc::new(Bank::new(&Mint::new(2)));
+        let dummy_leader_id = Keypair::new().pubkey();
         let (_verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
@@ -293,6 +301,7 @@ mod tests {
             Default::default(),
             &bank.last_id(),
             None,
+            dummy_leader_id,
         );
         drop(entry_receiver);
         assert_eq!(
@@ -304,6 +313,7 @@ mod tests {
     #[test]
     fn test_banking_stage_tick() {
         let bank = Arc::new(Bank::new(&Mint::new(2)));
+        let dummy_leader_id = Keypair::new().pubkey();
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
@@ -312,6 +322,7 @@ mod tests {
             Config::Sleep(Duration::from_millis(1)),
             &bank.last_id(),
             None,
+            dummy_leader_id,
         );
         sleep(Duration::from_millis(500));
         drop(verified_sender);
@@ -330,6 +341,7 @@ mod tests {
     fn test_banking_stage_entries_only() {
         let mint = Mint::new(2);
         let bank = Arc::new(Bank::new(&mint));
+        let dummy_leader_id = Keypair::new().pubkey();
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
@@ -338,6 +350,7 @@ mod tests {
             Default::default(),
             &bank.last_id(),
             None,
+            dummy_leader_id,
         );
 
         // good tx
@@ -385,6 +398,7 @@ mod tests {
         // Entry OR if the verifier tries to parallelize across multiple Entries.
         let mint = Mint::new(2);
         let bank = Arc::new(Bank::new(&mint));
+        let dummy_leader_id = Keypair::new().pubkey();
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
@@ -392,6 +406,7 @@ mod tests {
             Default::default(),
             &bank.last_id(),
             None,
+            dummy_leader_id,
         );
 
         // Process a batch that includes a transaction that receives two tokens.
@@ -437,6 +452,7 @@ mod tests {
     #[test]
     fn test_max_tick_height_shutdown() {
         let bank = Arc::new(Bank::new(&Mint::new(2)));
+        let dummy_leader_id = Keypair::new().pubkey();
         let (_verified_sender_, verified_receiver) = channel();
         let max_tick_height = 10;
         let (banking_stage, _entry_receiver) = BankingStage::new(
@@ -445,6 +461,7 @@ mod tests {
             Default::default(),
             &bank.last_id(),
             Some(max_tick_height),
+            dummy_leader_id,
         );
         assert_eq!(
             banking_stage.join().unwrap(),
