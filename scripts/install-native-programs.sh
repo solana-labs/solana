@@ -23,6 +23,7 @@ fi
 for dir in "$SOLANA_ROOT"/programs/native/*; do
   for program in echo "$SOLANA_ROOT"/target/"$variant"/deps/lib{,solana_}"$(basename "$dir")"{,_program}.{so,dylib,dll}; do
     if [[ -f $program ]]; then
+      rm -f "$installDir/$(basename "$program")"
       cp -v "$program" "$installDir"
     fi
   done
