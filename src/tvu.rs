@@ -1,21 +1,25 @@
 //! The `tvu` module implements the Transaction Validation Unit, a
-//! 3-stage transaction validation pipeline in software.
+//! 5-stage transaction validation pipeline in software.
 //!
-//! 1. Fetch Stage
-//! - Incoming blobs are picked up from the replicate socket and repair socket.
-//! 2. SharedWindow Stage
+//! 1. BlobFetchStage
+//! - Incoming blobs are picked up from the TVU sockets and repair socket.
+//! 2. RetransmitStage
 //! - Blobs are windowed until a contiguous chunk is available.  This stage also repairs and
 //! retransmits blobs that are in the queue.
-//! 3. Replicate Stage
+//! 3. ReplayStage
 //! - Transactions in blobs are processed and applied to the bank.
 //! - TODO We need to verify the signatures in the blobs.
+//! 4. LedgerWriteStage
+//! - Write the replayed ledger to disk.
+//! 5. StorageStage
+//! - Generating the keys used to encrypt the ledger and sample it for storage mining.
 
 use crate::bank::Bank;
 use crate::blob_fetch_stage::BlobFetchStage;
 use crate::cluster_info::ClusterInfo;
 use crate::db_ledger::DbLedger;
 use crate::ledger_write_stage::LedgerWriteStage;
-use crate::replicate_stage::{ReplicateStage, ReplicateStageReturnType};
+use crate::replay_stage::{ReplayStage, ReplayStageReturnType};
 use crate::retransmit_stage::RetransmitStage;
 use crate::service::Service;
 use crate::storage_stage::StorageStage;
@@ -32,9 +36,9 @@ pub enum TvuReturnType {
 }
 
 pub struct Tvu {
-    replicate_stage: ReplicateStage,
     fetch_stage: BlobFetchStage,
     retransmit_stage: RetransmitStage,
+    replay_stage: ReplayStage,
     ledger_write_stage: LedgerWriteStage,
     storage_stage: StorageStage,
     exit: Arc<AtomicBool>,
@@ -50,7 +54,7 @@ impl Tvu {
     /// * `entry_height` - Initial ledger height
     /// * `cluster_info` - The cluster_info state.
     /// * `window` - The window state.
-    /// * `replicate_socket` - my replicate socket
+    /// * `fetch_sockets` - my fetch sockets
     /// * `repair_socket` - my repair socket
     /// * `retransmit_socket` - my retransmit socket
     /// * `ledger_path` - path to the ledger file
@@ -62,7 +66,7 @@ impl Tvu {
         entry_height: u64,
         last_entry_id: Hash,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        replicate_sockets: Vec<UdpSocket>,
+        fetch_sockets: Vec<UdpSocket>,
         repair_socket: UdpSocket,
         retransmit_socket: UdpSocket,
         ledger_path: Option<&str>,
@@ -72,7 +76,7 @@ impl Tvu {
 
         let repair_socket = Arc::new(repair_socket);
         let mut blob_sockets: Vec<Arc<UdpSocket>> =
-            replicate_sockets.into_iter().map(Arc::new).collect();
+            fetch_sockets.into_iter().map(Arc::new).collect();
         blob_sockets.push(repair_socket.clone());
         let (fetch_stage, blob_fetch_receiver) =
             BlobFetchStage::new_multi_socket(blob_sockets, exit.clone());
@@ -91,7 +95,7 @@ impl Tvu {
             bank.leader_scheduler.clone(),
         );
 
-        let (replicate_stage, ledger_entry_receiver) = ReplicateStage::new(
+        let (replay_stage, ledger_entry_receiver) = ReplayStage::new(
             keypair.clone(),
             vote_account_keypair,
             bank.clone(),
@@ -115,9 +119,9 @@ impl Tvu {
         );
 
         Tvu {
-            replicate_stage,
             fetch_stage,
             retransmit_stage,
+            replay_stage,
             ledger_write_stage,
             storage_stage,
             exit,
@@ -146,8 +150,8 @@ impl Service for Tvu {
         self.fetch_stage.join()?;
         self.ledger_write_stage.join()?;
         self.storage_stage.join()?;
-        match self.replicate_stage.join()? {
-            Some(ReplicateStageReturnType::LeaderRotation(
+        match self.replay_stage.join()? {
+            Some(ReplayStageReturnType::LeaderRotation(
                 tick_height,
                 entry_height,
                 last_entry_id,
@@ -200,10 +204,10 @@ pub mod tests {
         (gossip_service, window)
     }
 
-    /// Test that message sent from leader to target1 and replicated to target2
+    /// Test that message sent from leader to target1 and replayed to target2
     #[test]
     #[ignore]
-    fn test_replicate() {
+    fn test_replay() {
         logger::setup();
         let leader = Node::new_localhost();
         let target1_keypair = Keypair::new();
@@ -230,26 +234,22 @@ pub mod tests {
         // to simulate the source peer and get blobs out of the socket to
         // simulate target peer
         let (s_reader, r_reader) = channel();
-        let blob_sockets: Vec<Arc<UdpSocket>> = target2
-            .sockets
-            .replicate
-            .into_iter()
-            .map(Arc::new)
-            .collect();
+        let blob_sockets: Vec<Arc<UdpSocket>> =
+            target2.sockets.tvu.into_iter().map(Arc::new).collect();
 
         let t_receiver = streamer::blob_receiver(blob_sockets[0].clone(), exit.clone(), s_reader);
 
         // simulate leader sending messages
         let (s_responder, r_responder) = channel();
         let t_responder = streamer::responder(
-            "test_replicate",
+            "test_replay",
             Arc::new(leader.sockets.retransmit),
             r_responder,
         );
 
         let starting_balance = 10_000;
         let mint = Mint::new(starting_balance);
-        let replicate_addr = target1.info.tvu;
+        let tvu_addr = target1.info.tvu;
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_id,
         )));
@@ -266,7 +266,7 @@ pub mod tests {
 
         let vote_account_keypair = Arc::new(Keypair::new());
         let mut cur_hash = Hash::default();
-        let db_ledger_path = get_tmp_ledger_path("test_replicate");
+        let db_ledger_path = get_tmp_ledger_path("test_replay");
         let db_ledger =
             DbLedger::open(&db_ledger_path).expect("Expected to successfully open ledger");
         let tvu = Tvu::new(
@@ -276,7 +276,7 @@ pub mod tests {
             0,
             cur_hash,
             cref1,
-            target1.sockets.replicate,
+            target1.sockets.tvu,
             target1.sockets.repair,
             target1.sockets.retransmit,
             None,
@@ -324,7 +324,7 @@ pub mod tests {
 
                     w.data_mut()[..serialized_entry.len()].copy_from_slice(&serialized_entry);
                     w.set_size(serialized_entry.len());
-                    w.meta.set_addr(&replicate_addr);
+                    w.meta.set_addr(&tvu_addr);
                 }
                 msgs.push(b);
             }

@@ -164,7 +164,7 @@ impl Replicator {
 
         let repair_socket = Arc::new(node.sockets.repair);
         let mut blob_sockets: Vec<Arc<UdpSocket>> =
-            node.sockets.replicate.into_iter().map(Arc::new).collect();
+            node.sockets.tvu.into_iter().map(Arc::new).collect();
         blob_sockets.push(repair_socket.clone());
         let (fetch_stage, blob_fetch_receiver) =
             BlobFetchStage::new_multi_socket(blob_sockets, exit.clone());

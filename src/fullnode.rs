@@ -100,10 +100,10 @@ pub struct Fullnode {
     ledger_path: String,
     sigverify_disabled: bool,
     shared_window: SharedWindow,
-    replicate_socket: Vec<UdpSocket>,
+    tvu_sockets: Vec<UdpSocket>,
     repair_socket: UdpSocket,
     retransmit_socket: UdpSocket,
-    transaction_sockets: Vec<UdpSocket>,
+    tpu_sockets: Vec<UdpSocket>,
     broadcast_socket: UdpSocket,
     rpc_addr: SocketAddr,
     rpc_pubsub_addr: SocketAddr,
@@ -277,9 +277,9 @@ impl Fullnode {
                 *last_entry_id,
                 cluster_info.clone(),
                 node.sockets
-                    .replicate
+                    .tvu
                     .iter()
-                    .map(|s| s.try_clone().expect("Failed to clone replicate sockets"))
+                    .map(|s| s.try_clone().expect("Failed to clone TVU sockets"))
                     .collect(),
                 node.sockets
                     .repair
@@ -294,9 +294,9 @@ impl Fullnode {
             );
             let tpu_forwarder = TpuForwarder::new(
                 node.sockets
-                    .transaction
+                    .tpu
                     .iter()
-                    .map(|s| s.try_clone().expect("Failed to clone transaction sockets"))
+                    .map(|s| s.try_clone().expect("Failed to clone TPU sockets"))
                     .collect(),
                 cluster_info.clone(),
             );
@@ -314,9 +314,9 @@ impl Fullnode {
                 &bank,
                 Default::default(),
                 node.sockets
-                    .transaction
+                    .tpu
                     .iter()
-                    .map(|s| s.try_clone().expect("Failed to clone transaction sockets"))
+                    .map(|s| s.try_clone().expect("Failed to clone TPU sockets"))
                     .collect(),
                 ledger_path,
                 sigverify_disabled,
@@ -356,10 +356,10 @@ impl Fullnode {
             node_role,
             ledger_path: ledger_path.to_owned(),
             exit,
-            replicate_socket: node.sockets.replicate,
+            tvu_sockets: node.sockets.tvu,
             repair_socket: node.sockets.repair,
             retransmit_socket: node.sockets.retransmit,
-            transaction_sockets: node.sockets.transaction,
+            tpu_sockets: node.sockets.tpu,
             broadcast_socket: node.sockets.broadcast,
             rpc_addr,
             rpc_pubsub_addr,
@@ -435,9 +435,9 @@ impl Fullnode {
                 entry_height,
                 last_entry_id,
                 self.cluster_info.clone(),
-                self.replicate_socket
+                self.tvu_sockets
                     .iter()
-                    .map(|s| s.try_clone().expect("Failed to clone replicate sockets"))
+                    .map(|s| s.try_clone().expect("Failed to clone TVU sockets"))
                     .collect(),
                 self.repair_socket
                     .try_clone()
@@ -449,9 +449,9 @@ impl Fullnode {
                 self.db_ledger.clone(),
             );
             let tpu_forwarder = TpuForwarder::new(
-                self.transaction_sockets
+                self.tpu_sockets
                     .iter()
-                    .map(|s| s.try_clone().expect("Failed to clone transaction sockets"))
+                    .map(|s| s.try_clone().expect("Failed to clone TPU sockets"))
                     .collect(),
                 self.cluster_info.clone(),
             );
@@ -476,15 +476,15 @@ impl Fullnode {
         let (tpu, blob_receiver, tpu_exit) = Tpu::new(
             &self.bank,
             Default::default(),
-            self.transaction_sockets
+            self.tpu_sockets
                 .iter()
-                .map(|s| s.try_clone().expect("Failed to clone transaction sockets"))
+                .map(|s| s.try_clone().expect("Failed to clone TPU sockets"))
                 .collect(),
             &self.ledger_path,
             self.sigverify_disabled,
             max_tick_height,
-            // We pass the last_entry_id from the replicate stage because we can't trust that
-            // the window didn't overwrite the slot at for the last entry that the replicate stage
+            // We pass the last_entry_id from the replay stage because we can't trust that
+            // the window didn't overwrite the slot at for the last entry that the replay stage
             // processed. We also want to avoid reading processing the ledger for the last id.
             &last_id,
             self.keypair.pubkey(),
@@ -1017,12 +1017,8 @@ mod tests {
         // Send blobs to the validator from our mock leader
         let t_responder = {
             let (s_responder, r_responder) = channel();
-            let blob_sockets: Vec<Arc<UdpSocket>> = leader_node
-                .sockets
-                .replicate
-                .into_iter()
-                .map(Arc::new)
-                .collect();
+            let blob_sockets: Vec<Arc<UdpSocket>> =
+                leader_node.sockets.tvu.into_iter().map(Arc::new).collect();
 
             let t_responder = responder(
                 "test_validator_to_leader_transition",

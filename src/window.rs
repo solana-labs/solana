@@ -156,12 +156,12 @@ impl WindowUtil for Window {
                         // In the case that we are not in the current scope of the leader schedule
                         // window then either:
                         //
-                        // 1) The replicate stage hasn't caught up to the "consumed" entries we sent,
+                        // 1) The replay stage hasn't caught up to the "consumed" entries we sent,
                         // in which case it will eventually catch up
                         //
                         // 2) We are on the border between seed_rotation_intervals, so the
                         // schedule won't be known until the entry on that cusp is received
-                        // by the replicate stage (which comes after this stage). Hence, the next
+                        // by the replay stage (which comes after this stage). Hence, the next
                         // leader at the beginning of that next epoch will not know they are the
                         // leader until they receive that last "cusp" entry. The leader also won't ask for repairs
                         // for that entry because "is_next_leader" won't be set here. In this case,

@@ -75,7 +75,7 @@ pub fn send_validator_vote(
     let last_id = bank.last_id();
 
     let shared_blob = create_new_signed_vote_blob(&last_id, vote_account, bank, cluster_info)?;
-    inc_new_counter_info!("replicate-vote_sent", 1);
+    inc_new_counter_info!("validator-vote_sent", 1);
     vote_blob_sender.send(vec![shared_blob])?;
 
     Ok(())

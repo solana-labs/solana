@@ -24,7 +24,7 @@ fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<ClusterInfo>>, GossipService,
     let w = Arc::new(RwLock::new(vec![]));
     let d = GossipService::new(&c.clone(), w, None, tn.sockets.gossip, exit);
     let _ = c.read().unwrap().my_data();
-    (c, d, tn.sockets.replicate.pop().unwrap())
+    (c, d, tn.sockets.tvu.pop().unwrap())
 }
 
 /// Test that the network converges.
