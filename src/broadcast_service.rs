@@ -29,7 +29,7 @@ pub enum BroadcastServiceReturnType {
     ChannelDisconnected,
 }
 
-#[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
+#[allow(clippy::too_many_arguments)]
 fn broadcast(
     max_tick_height: Option<u64>,
     tick_height: &mut u64,

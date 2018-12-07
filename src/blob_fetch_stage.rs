@@ -14,6 +14,7 @@ pub struct BlobFetchStage {
 }
 
 impl BlobFetchStage {
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(socket: Arc<UdpSocket>, exit: Arc<AtomicBool>) -> (Self, BlobReceiver) {
         Self::new_multi_socket(vec![socket], exit)
     }
@@ -27,7 +28,7 @@ impl BlobFetchStage {
             .map(|socket| streamer::blob_receiver(socket, exit.clone(), sender.clone()))
             .collect();
 
-        (BlobFetchStage { exit, thread_hdls }, receiver)
+        (Self { exit, thread_hdls }, receiver)
     }
 
     pub fn close(&self) {

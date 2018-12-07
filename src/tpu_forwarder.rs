@@ -77,7 +77,6 @@ impl TpuForwarder {
             .name("solana-tpu_forwarder".to_string())
             .spawn(move || {
                 let _ignored = Self::forward(&receiver, &cluster_info);
-                ()
             })
             .unwrap();
 

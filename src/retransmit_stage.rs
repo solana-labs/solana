@@ -81,6 +81,7 @@ pub struct RetransmitStage {
 }
 
 impl RetransmitStage {
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(
         db_ledger: Arc<RwLock<DbLedger>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -112,7 +113,7 @@ impl RetransmitStage {
         );
 
         let thread_hdls = vec![t_retransmit, t_window];
-        (RetransmitStage { thread_hdls }, entry_receiver)
+        (Self { thread_hdls }, entry_receiver)
     }
 }
 

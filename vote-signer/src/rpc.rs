@@ -46,10 +46,9 @@ impl VoteSignerRpcService {
                     sleep(Duration::from_millis(100));
                 }
                 server.unwrap().close();
-                ()
             })
             .unwrap();
-        VoteSignerRpcService { thread_hdl, exit }
+        Self { thread_hdl, exit }
     }
 
     pub fn exit(&self) {

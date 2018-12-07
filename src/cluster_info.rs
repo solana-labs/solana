@@ -112,7 +112,7 @@ impl Signable for PruneData {
 
 // TODO These messages should go through the gpu pipeline for spam filtering
 #[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
+#[allow(clippy::large_enum_variant)]
 enum Protocol {
     /// Gossip protocol messages
     PullRequest(Bloom<Hash>, CrdsValue),
@@ -217,7 +217,7 @@ impl ClusterInfo {
         )
     }
 
-    pub fn set_leader(&mut self, key: Pubkey) -> () {
+    pub fn set_leader(&mut self, key: Pubkey) {
         let prev = self.leader_id();
         let self_id = self.gossip.id;
         let now = timestamp();

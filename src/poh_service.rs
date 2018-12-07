@@ -33,7 +33,7 @@ pub struct PohService {
 }
 
 impl PohService {
-    pub fn exit(&self) -> () {
+    pub fn exit(&self) {
         self.poh_exit.store(true, Ordering::Relaxed);
     }
 
@@ -59,7 +59,7 @@ impl PohService {
             })
             .unwrap();
 
-        PohService {
+        Self {
             tick_producer,
             poh_exit,
         }

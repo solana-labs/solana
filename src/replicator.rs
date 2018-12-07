@@ -83,6 +83,7 @@ pub fn sample_file(in_path: &Path, sample_offsets: &[u64]) -> io::Result<Hash> {
 }
 
 impl Replicator {
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(
         ledger_path: Option<&str>,
         node: Node,
@@ -256,9 +257,25 @@ impl Replicator {
         })
     }
 
+<<<<<<< HEAD
     pub fn close(self) {
         self.exit.store(true, Ordering::Relaxed);
         self.join()
+=======
+        let leader =
+            poll_gossip_for_leader(network_addr.unwrap(), Some(10)).expect("couldn't reach leader");
+
+        (
+            Self {
+                gossip_service,
+                fetch_stage,
+                store_ledger_stage,
+                t_window,
+                retransmit_receiver,
+            },
+            leader,
+        )
+>>>>>>> Fix all clippy warnings
     }
 
     pub fn join(self) {

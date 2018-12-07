@@ -44,6 +44,7 @@ pub struct BankingStage {
 
 impl BankingStage {
     /// Create the stage using `bank`. Exit when `verified_receiver` is dropped.
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(
         bank: &Arc<Bank>,
         verified_receiver: Receiver<VerifiedPackets>,
@@ -111,7 +112,7 @@ impl BankingStage {
             .collect();
 
         (
-            BankingStage {
+            Self {
                 bank_thread_hdls,
                 poh_service,
                 compute_finality_service,

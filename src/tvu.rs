@@ -54,7 +54,7 @@ impl Tvu {
     /// * `repair_socket` - my repair socket
     /// * `retransmit_socket` - my retransmit socket
     /// * `ledger_path` - path to the ledger file
-    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         keypair: Arc<Keypair>,
         vote_account_keypair: Arc<Keypair>,

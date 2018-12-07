@@ -344,7 +344,7 @@ fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], token
             let mut tries = 0;
 
             // this set of transactions just initializes us for bookkeeping
-            #[cfg_attr(feature = "cargo-clippy", allow(clone_double_ref))] // sigh
+            #[allow(clippy::clone_double_ref)] // sigh
             let mut to_fund_txs: Vec<_> = chunk
                 .par_iter()
                 .map(|(k, m)| {

@@ -15,10 +15,10 @@ pub struct Hasher {
 }
 
 impl Hasher {
-    pub fn hash(&mut self, val: &[u8]) -> () {
+    pub fn hash(&mut self, val: &[u8]) {
         self.hasher.input(val);
     }
-    pub fn hashv(&mut self, vals: &[&[u8]]) -> () {
+    pub fn hashv(&mut self, vals: &[&[u8]]) {
         for val in vals {
             self.hash(val);
         }

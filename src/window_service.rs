@@ -50,7 +50,7 @@ fn repair_backoff(last: &mut u64, times: &mut usize, consumed: u64) -> bool {
     thread_rng().gen_range(0, *times as u64) == 0
 }
 
-#[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
+#[allow(clippy::too_many_arguments)]
 fn recv_window(
     db_ledger: &mut DbLedger,
     id: &Pubkey,
@@ -119,7 +119,7 @@ fn recv_window(
     Ok(())
 }
 
-#[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
+#[allow(clippy::too_many_arguments)]
 pub fn window_service(
     db_ledger: Arc<RwLock<DbLedger>>,
     cluster_info: Arc<RwLock<ClusterInfo>>,

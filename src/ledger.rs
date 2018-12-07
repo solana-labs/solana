@@ -75,7 +75,7 @@ const LEDGER_INDEX_FILE: &str = "index";
 // use a CONST because there's a cast, and we don't want "sizeof::<u64> as u64"...
 const SIZEOF_U64: u64 = size_of::<u64>() as u64;
 
-#[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
+#[allow(clippy::needless_pass_by_value)]
 fn err_bincode_to_io(e: Box<bincode::ErrorKind>) -> io::Error {
     io::Error::new(io::ErrorKind::Other, e.to_string())
 }

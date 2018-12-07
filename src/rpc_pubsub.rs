@@ -67,7 +67,6 @@ impl PubSubService {
                     sleep(Duration::from_millis(100));
                 }
                 server.unwrap().close();
-                ()
             })
             .unwrap();
         PubSubService { thread_hdl, exit }

@@ -51,7 +51,7 @@ impl LeaderServices {
         self.tpu.is_exited()
     }
 
-    pub fn exit(&self) -> () {
+    pub fn exit(&self) {
         self.tpu.exit();
     }
 }
@@ -63,7 +63,7 @@ pub struct ValidatorServices {
 
 impl ValidatorServices {
     fn new(tvu: Tvu, tpu_forwarder: TpuForwarder) -> Self {
-        ValidatorServices { tvu, tpu_forwarder }
+        Self { tvu, tpu_forwarder }
     }
 
     pub fn join(self) -> Result<Option<TvuReturnType>> {
@@ -76,7 +76,7 @@ impl ValidatorServices {
         self.tvu.is_exited()
     }
 
-    pub fn exit(&self) -> () {
+    pub fn exit(&self) {
         self.tvu.exit()
     }
 }
@@ -201,7 +201,7 @@ impl Fullnode {
     }
 
     /// Create a fullnode instance acting as a leader or validator.
-    #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
+    #[allow(clippy::too_many_arguments)]
     pub fn new_with_bank(
         keypair: Arc<Keypair>,
         vote_account_keypair: Arc<Keypair>,

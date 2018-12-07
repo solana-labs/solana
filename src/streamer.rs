@@ -59,7 +59,6 @@ pub fn receiver(
         .name("solana-receiver".to_string())
         .spawn(move || {
             let _ = recv_loop(&sock, &exit, &packet_sender, sender_tag);
-            ()
         })
         .unwrap()
 }

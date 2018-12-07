@@ -67,10 +67,9 @@ impl JsonRpcService {
                     sleep(Duration::from_millis(100));
                 }
                 server.unwrap().close();
-                ()
             })
             .unwrap();
-        JsonRpcService { thread_hdl, exit }
+        Self { thread_hdl, exit }
     }
 
     pub fn exit(&self) {
