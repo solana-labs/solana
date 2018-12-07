@@ -3,6 +3,7 @@ use log::*;
 
 use solana::client::mk_client;
 use solana::cluster_info::{Node, NodeInfo, FULLNODE_PORT_RANGE};
+use solana::create_vote_account;
 use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::leader_scheduler::LeaderScheduler;
 use solana::logger;
@@ -14,12 +15,11 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::vote_program::VoteProgram;
 use solana_sdk::vote_transaction::VoteTransaction;
-use solana_vote_signer::rpc::VoteSignerRpcService;
 use std::fs::File;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::{Ipv4Addr, SocketAddr};
 use std::process::exit;
 use std::sync::Arc;
-use std::thread::{sleep, Builder};
+use std::thread::sleep;
 use std::time::Duration;
 
 fn main() {
@@ -120,24 +120,17 @@ fn main() {
         .value_of("network")
         .map(|network| network.parse().expect("failed to parse network address"));
 
-    let signer = if let Some(signer_addr) = matches.value_of("signer") {
-        signer_addr.to_string().parse().expect("Signer IP Address")
+    let (signer, t_signer, signer_exit) = if let Some(signer_addr) = matches.value_of("signer") {
+        (
+            signer_addr.to_string().parse().expect("Signer IP Address"),
+            None,
+            None,
+        )
     } else {
         // If a remote vote-signer service is not provided, run a local instance
-        let addr = match find_available_port_in_range(FULLNODE_PORT_RANGE) {
-            Ok(port) => SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port),
-            Err(_) => SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
-        };
-        let service_addr = addr.clone();
-        Builder::new()
-            .name("solana-vote-signer".to_string())
-            .spawn(move || {
-                let service = VoteSignerRpcService::new(service_addr);
-                service.join().unwrap();
-                ()
-            })
-            .unwrap();
-        addr
+        let (signer, t_signer, signer_exit) = create_vote_account::local_vote_signer_service()
+            .expect("Failed to start vote signer service");
+        (signer, Some(t_signer), Some(signer_exit))
     };
 
     let node = Node::new_with_external_ip(keypair.pubkey(), &gossip);
@@ -168,6 +161,11 @@ fn main() {
         let port_number = port.to_string().parse().expect("integer");
         if port_number == 0 {
             eprintln!("Invalid RPC port requested: {:?}", port);
+            if let Some(t) = t_signer {
+                if let Some(exit) = signer_exit {
+                    create_vote_account::stop_local_vote_signer_service(t, &exit);
+                }
+            }
             exit(1);
         }
         Some(port_number)
@@ -209,6 +207,11 @@ fn main() {
     info!("balance is {}", balance);
     if balance < 1 {
         error!("insufficient tokens");
+        if let Some(t) = t_signer {
+            if let Some(exit) = signer_exit {
+                create_vote_account::stop_local_vote_signer_service(t, &exit);
+            }
+        }
         exit(1);
     }
 
@@ -217,6 +220,11 @@ fn main() {
         // Need at least two tokens as one token will be spent on a vote_account_new() transaction
         if balance < 2 {
             error!("insufficient tokens");
+            if let Some(t) = t_signer {
+                if let Some(exit) = signer_exit {
+                    create_vote_account::stop_local_vote_signer_service(t, &exit);
+                }
+            }
             exit(1);
         }
         loop {
@@ -256,6 +264,11 @@ fn main() {
             _ => {
                 // Fullnode tpu/tvu exited for some unexpected
                 // reason, so exit
+                if let Some(t) = t_signer {
+                    if let Some(exit) = signer_exit {
+                        create_vote_account::stop_local_vote_signer_service(t, &exit);
+                    }
+                }
                 exit(1);
             }
         }

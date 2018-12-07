@@ -485,7 +485,7 @@ mod tests {
             tick_height: 123456,
         };
         let keypair = Keypair::new();
-        let vote_tx = VoteTransaction::vote_new(&keypair, vote, Hash::default(), 1);
+        let vote_tx = VoteTransaction::vote_new(&keypair.pubkey(), vote, Hash::default(), 1);
         vote_txs.push(vote_tx);
         let vote_entries = vec![Entry::new(&Hash::default(), 0, 1, vote_txs)];
         storage_entry_sender.send(vote_entries).unwrap();

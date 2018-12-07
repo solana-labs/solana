@@ -17,9 +17,8 @@ pub struct VoteSignerRpcService {
 }
 
 impl VoteSignerRpcService {
-    pub fn new(rpc_addr: SocketAddr) -> Self {
+    pub fn new(rpc_addr: SocketAddr, exit: Arc<AtomicBool>) -> Self {
         let request_processor = VoteSignRequestProcessor::default();
-        let exit = Arc::new(AtomicBool::new(false));
         let exit_ = exit.clone();
         let thread_hdl = Builder::new()
             .name("solana-vote-signer-jsonrpc".to_string())

@@ -438,6 +438,7 @@ mod tests {
     use solana_sdk::vote_program::VoteProgram;
     use solana_sdk::vote_transaction::VoteTransaction;
     use std::fs::remove_dir_all;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     #[test]
     fn test_thin_client() {
@@ -460,7 +461,8 @@ mod tests {
         let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            vote_account_keypair,
+            &vote_account_keypair.pubkey(),
+            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             bank,
             None,
             entry_height,
@@ -514,7 +516,8 @@ mod tests {
         let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            vote_account_keypair,
+            &vote_account_keypair.pubkey(),
+            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             bank,
             None,
             0,
@@ -573,7 +576,8 @@ mod tests {
         let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            vote_account_keypair,
+            &vote_account_keypair.pubkey(),
+            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             bank,
             None,
             entry_height,
@@ -619,7 +623,8 @@ mod tests {
         let leader_vote_account_keypair = Arc::new(Keypair::new());
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            leader_vote_account_keypair.clone(),
+            &leader_vote_account_keypair.pubkey(),
+            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             bank,
             None,
             entry_height,
@@ -713,7 +718,8 @@ mod tests {
         let entry_height = alice.create_entries().len() as u64;
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            vote_account_keypair,
+            &vote_account_keypair.pubkey(),
+            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             bank,
             None,
             entry_height,

@@ -820,6 +820,7 @@ mod tests {
     use solana_sdk::signature::{gen_keypair_file, read_keypair, read_pkcs8, Keypair, KeypairUtil};
     use std::fs;
     use std::fs::remove_dir_all;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::path::Path;
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
@@ -1341,7 +1342,8 @@ mod tests {
         let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            vote_account_keypair,
+            &vote_account_keypair.pubkey(),
+            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             bank,
             None,
             0,
@@ -1467,7 +1469,8 @@ mod tests {
         let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            vote_account_keypair,
+            &vote_account_keypair.pubkey(),
+            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             bank,
             None,
             0,
@@ -1582,7 +1585,8 @@ mod tests {
         let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            vote_account_keypair,
+            &vote_account_keypair.pubkey(),
+            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             bank,
             None,
             0,

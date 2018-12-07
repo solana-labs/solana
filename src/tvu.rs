@@ -192,6 +192,7 @@ pub mod tests {
     use solana_sdk::transaction::Transaction;
     use std::fs::remove_dir_all;
     use std::net::UdpSocket;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
@@ -273,7 +274,8 @@ pub mod tests {
         let db_ledger =
             DbLedger::open(&db_ledger_path).expect("Expected to successfully open ledger");
         let tvu = Tvu::new(
-            vote_account_id,
+            &vote_account_id,
+            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             &bank,
             0,
             cur_hash,

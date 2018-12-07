@@ -697,6 +697,7 @@ mod tests {
     use std::cmp;
     use std::fs::remove_dir_all;
     use std::net::UdpSocket;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
 
@@ -719,7 +720,8 @@ mod tests {
         let last_id = bank.last_id();
         let v = Fullnode::new_with_bank(
             Arc::new(keypair),
-            Arc::new(Keypair::new()),
+            &Keypair::new().pubkey(),
+            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             bank,
             None,
             entry_height,
@@ -760,7 +762,8 @@ mod tests {
                 let last_id = bank.last_id();
                 Fullnode::new_with_bank(
                     Arc::new(keypair),
-                    Arc::new(Keypair::new()),
+                    &Keypair::new().pubkey(),
+                    &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
                     bank,
                     None,
                     entry_height,
@@ -834,7 +837,8 @@ mod tests {
             bootstrap_leader_node,
             &bootstrap_leader_ledger_path,
             Arc::new(bootstrap_leader_keypair),
-            Arc::new(Keypair::new()),
+            &Keypair::new().pubkey(),
+            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             Some(bootstrap_leader_info.gossip),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
@@ -937,13 +941,12 @@ mod tests {
 
         {
             // Test that a node knows to transition to a validator based on parsing the ledger
-            let leader_vote_account_keypair = Arc::new(Keypair::new());
-            let leader_vote_account_id = leader_vote_account_keypair.pubkey();
             let bootstrap_leader = Fullnode::new(
                 bootstrap_leader_node,
                 &bootstrap_leader_ledger_path,
                 bootstrap_leader_keypair,
-                &leader_vote_account_id,
+                &Keypair::new().pubkey(),
+                &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
                 Some(bootstrap_leader_info.gossip),
                 false,
                 LeaderScheduler::new(&leader_scheduler_config),
@@ -962,7 +965,8 @@ mod tests {
                 validator_node,
                 &validator_ledger_path,
                 Arc::new(validator_keypair),
-                &validator_vote_account_id,
+                &Keypair::new().pubkey(),
+                &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
                 Some(bootstrap_leader_info.gossip),
                 false,
                 LeaderScheduler::new(&leader_scheduler_config),
@@ -1061,7 +1065,8 @@ mod tests {
             validator_node,
             &validator_ledger_path,
             Arc::new(validator_keypair),
-            &validator_vote_account_id,
+            &Keypair::new().pubkey(),
+            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             Some(leader_gossip),
             false,
             LeaderScheduler::new(&leader_scheduler_config),

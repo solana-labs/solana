@@ -16,6 +16,8 @@ use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use std::fs::remove_dir_all;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
@@ -42,7 +44,8 @@ fn test_replicator_startup() {
             leader_node,
             &leader_ledger_path,
             leader_keypair,
-            vote_account_keypair.clone(),
+            &vote_account_keypair.pubkey(),
+            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             None,
             false,
             LeaderScheduler::from_bootstrap_leader(leader_info.id.clone()),

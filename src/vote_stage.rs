@@ -28,6 +28,35 @@ pub enum VoteError {
     LeaderInfoNotFound,
 }
 
+pub fn create_new_signed_vote_transaction(
+    last_id: &Hash,
+    keypair: &Arc<Keypair>,
+    tick_height: u64,
+    vote_account: &Pubkey,
+    rpc_client: &RpcClient,
+) -> Transaction {
+    let vote = Vote { tick_height };
+    let tx = Transaction::vote_new(&vote_account, vote, *last_id, 0);
+
+    let msg = tx.get_sign_data();
+    let sig = Signature::new(&keypair.sign(&msg).as_ref());
+
+    let params = json!([keypair.pubkey().to_string(), sig, &msg]);
+    let resp = RpcRequest::SignVote
+        .make_rpc_request(&rpc_client, 1, Some(params))
+        .unwrap();
+    let vote_signature: Signature = serde_json::from_value(resp).unwrap();
+
+    Transaction {
+        signatures: vec![vote_signature],
+        account_keys: tx.account_keys,
+        last_id: tx.last_id,
+        fee: tx.fee,
+        program_ids: tx.program_ids,
+        instructions: tx.instructions,
+    }
+}
+
 // TODO: Change voting to be on fixed tick intervals based on bank state
 pub fn create_new_signed_vote_blob(
     last_id: &Hash,
@@ -43,30 +72,12 @@ pub fn create_new_signed_vote_blob(
     let leader_tpu = get_leader_tpu(&bank, cluster_info)?;
     //TODO: doesn't seem like there is a synchronous call to get height and id
     debug!("voting on {:?}", &last_id.as_ref()[..8]);
-    let vote = Vote { tick_height };
-    let tx = Transaction::vote_new(&vote_account, vote, *last_id, 0);
-
-    let msg = tx.get_sign_data();
-    let sig = Signature::new(&keypair.sign(&msg).as_ref());
-
-    let params = json!([keypair.pubkey().to_string(), sig, &msg]);
-    let resp = RpcRequest::SignVote
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap();
-    let vote_signature: Signature = serde_json::from_value(resp).unwrap();
-
-    let signed_tx = Transaction {
-        signatures: vec![vote_signature],
-        account_keys: tx.account_keys,
-        last_id: tx.last_id,
-        fee: tx.fee,
-        program_ids: tx.program_ids,
-        instructions: tx.instructions,
-    };
+    let tx =
+        create_new_signed_vote_transaction(last_id, keypair, tick_height, vote_account, rpc_client);
 
     {
         let mut blob = shared_blob.write().unwrap();
-        let bytes = serialize(&signed_tx)?;
+        let bytes = serialize(&tx)?;
         let len = bytes.len();
         blob.data[..len].copy_from_slice(&bytes);
         blob.meta.set_addr(&leader_tpu);
