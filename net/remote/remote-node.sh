@@ -90,6 +90,12 @@ local|tar)
   export USE_INSTALL=1
   export RUST_LOG
 
+  # Setup `/var/snap/solana/current/config` symlink so rsyncing the genesis
+  # ledger works (reference: `net/scripts/install-rsync.sh`)
+  sudo rm -rf /var/snap/solana/current/config
+  sudo mkdir -p /var/snap/solana/current/
+  sudo ln -sT /home/solana/solana/config /var/snap/solana/current/config
+
   ./fetch-perf-libs.sh
   # shellcheck source=/dev/null
   source ./target/perf-libs/env.sh
