@@ -10,7 +10,7 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use hashbrown::HashSet;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, Vote, VoteProgram};
@@ -500,7 +500,17 @@ pub fn make_active_set_entries(
 
     // 3) Create vote entry
     let vote = Vote { tick_height: 1 };
-    let vote_tx = Transaction::vote_new(&vote_account.pubkey(), vote, *last_tick_id, 0);
+    let tx = Transaction::vote_new(&vote_account.pubkey(), vote, *last_tick_id, 0);
+    let msg = tx.get_sign_data();
+    let sig = Signature::new(&active_keypair.sign(&msg).as_ref());
+    let vote_tx = Transaction {
+        signatures: vec![sig],
+        account_keys: tx.account_keys,
+        last_id: tx.last_id,
+        fee: tx.fee,
+        program_ids: tx.program_ids,
+        instructions: tx.instructions,
+    };
     let vote_entry = Entry::new(&last_entry_id, 0, 1, vec![vote_tx]);
     last_entry_id = vote_entry.id;
 
