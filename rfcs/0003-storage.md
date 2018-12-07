@@ -263,10 +263,6 @@ storage mining.
 to prevent colluding groups from having overlap on data or validation.
 * Replicator clients fish for lazy validators by submitting fake proofs that
   they can prove are fake.
-* Replication identities are just symmetric encryption keys, the number of them
-  on the network is our storage replication target. Many more client identities
-can exist than replicator identities, so unlimited number of clients can
-provide proofs of the same replicator identity.
 * To defend against Sybil client identities that try to store the same block we
   force the clients to store for multiple rounds before receiving a reward.
 * Validators should also get rewarded for validating submitted storage proofs
