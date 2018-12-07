@@ -16,15 +16,11 @@ _() {
 }
 
 maybe_cargo_install() {
-  for cmd in "$@"; do
-    set +e
-    cargo "$cmd" --help > /dev/null 2>&1
-    declare exitcode=$?
-    set -e
-    if [[ $exitcode -eq 101 ]]; then
-      _ cargo install cargo-"$cmd"
-    fi
-  done
+  declare cmd=$1
+  declare crate=${2:-$cmd}
+
+  "$cmd" --help > /dev/null 2>&1 || \
+    _ cargo install "$crate"
 }
 
 maybe_cargo_install audit tree
