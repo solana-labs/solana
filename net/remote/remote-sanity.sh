@@ -62,7 +62,7 @@ snap)
   solana_ledger_tool=solana.ledger-tool
   solana_keygen=solana.keygen
 
-  ledger=/var/snap/solana/current/config/ledger
+  ledger=/var/snap/solana/current/config-local/bootstrap-leader-ledger
   client_id=~/snap/solana/current/config/client-id.json
 
   ;;
@@ -80,7 +80,7 @@ local|tar)
   solana_ledger_tool=solana-ledger-tool
   solana_keygen=solana-keygen
 
-  ledger=config/ledger
+  ledger=config-local/bootstrap-leader-ledger
   client_id=config/client-id.json
   ;;
 *)
@@ -138,8 +138,9 @@ echo "--- $entrypointIp: validator sanity"
 if $validatorSanity; then
   (
     set -x -o pipefail
-    ./multinode-demo/setup.sh -t fullnode || exit $?
-    timeout 10s ./multinode-demo/fullnode.sh "$entrypointRsyncUrl" "$entrypointIp:8001" 2>&1 | tee validator-sanity.log
+    timeout 10s ./multinode-demo/fullnode-x.sh \
+      "$entrypointRsyncUrl" \
+      "$entrypointIp:8001" 2>&1 | tee validator-sanity.log
   ) || {
     exitcode=$?
     [[ $exitcode -eq 124 ]] || exit $exitcode
