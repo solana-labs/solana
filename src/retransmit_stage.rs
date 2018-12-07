@@ -37,7 +37,7 @@ fn retransmit(
             .add_field("count", influxdb::Value::Integer(dq.len() as i64))
             .to_owned(),
     );
-    
+
     // TODO layer 2 logic here
     // 1 - find out if I am in layer 1 first
     // 1.1 - If yes, then broadcast to all layer 1 nodes

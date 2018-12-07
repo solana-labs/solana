@@ -380,7 +380,7 @@ impl ClusterInfo {
                     // Needs more layers.
                     num_layers += 1;
                     remaining_nodes -= layer_capacity;
-                    let end = layer_indices.last().unwrap().clone();
+                    let end = *layer_indices.last().unwrap();
                     layer_indices.push(layer_capacity + end);
 
                     if grow {
@@ -390,7 +390,7 @@ impl ClusterInfo {
                     }
                 } else {
                     //everything will now fit in the layers we have
-                    let end = layer_indices.last().unwrap().clone();
+                    let end = *layer_indices.last().unwrap();
                     layer_indices.push(layer_capacity + end);
                     break;
                 }
