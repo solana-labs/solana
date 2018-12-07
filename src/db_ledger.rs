@@ -765,7 +765,8 @@ mod tests {
             .insert_data_blob(
                 &DataCf::key(DEFAULT_SLOT_HEIGHT + 1, (num_blobs - 1) as u64),
                 blobs.last().unwrap(),
-            ).unwrap();
+            )
+            .unwrap();
         assert_eq!(result.len(), 0);
 
         // Insert blobs into first slot, check for consecutive blobs

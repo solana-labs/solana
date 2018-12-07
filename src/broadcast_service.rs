@@ -8,7 +8,7 @@ use crate::entry::Entry;
 use crate::erasure;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::ledger::Block;
-use crate::packet::{index_blobs, SharedBlobs};
+use crate::packet::{index_blobs, SharedBlob};
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::window::{SharedWindow, WindowIndex, WindowUtil};
@@ -67,8 +67,12 @@ fn broadcast(
             let tick_heights: Vec<u64> = p
                 .iter()
                 .map(|e| {
-                    *tick_height += e.is_tick() as u64;
-                    *tick_height
+                    if e.is_tick() {
+                        *tick_height += e.is_tick() as u64;
+                        *tick_height
+                    } else {
+                        *tick_height + 1
+                    }
                 })
                 .collect();
 
@@ -222,12 +226,12 @@ pub struct BroadcastService {
 
 impl BroadcastService {
     fn run(
-        db_ledger: Arc<RwLock<DbLedger>>,
+        db_ledger: &Arc<RwLock<DbLedger>>,
         sock: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window: &SharedWindow,
         entry_height: u64,
-        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
         receiver: &Receiver<Vec<Entry>>,
         max_tick_height: Option<u64>,
         tick_height: u64,
@@ -244,7 +248,7 @@ impl BroadcastService {
             inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
             let leader_id = cluster_info.read().unwrap().leader_id();
             if let Err(e) = broadcast(
-                &db_ledger,
+                db_ledger,
                 max_tick_height,
                 &mut tick_height_,
                 leader_id,
@@ -255,7 +259,7 @@ impl BroadcastService {
                 &sock,
                 &mut transmit_index,
                 &mut receive_index,
-                &leader_scheduler,
+                leader_scheduler,
             ) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => {
@@ -287,6 +291,7 @@ impl BroadcastService {
     /// WriteStage is the last stage in the pipeline), which will then close Broadcast service,
     /// which will then close FetchStage in the Tpu, and then the rest of the Tpu,
     /// completing the cycle.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         db_ledger: Arc<RwLock<DbLedger>>,
         sock: UdpSocket,
@@ -304,12 +309,12 @@ impl BroadcastService {
             .spawn(move || {
                 let _exit = Finalizer::new(exit_sender);
                 Self::run(
-                    db_ledger,
+                    &db_ledger,
                     &sock,
                     &cluster_info,
                     &window,
                     entry_height,
-                    leader_scheduler,
+                    &leader_scheduler,
                     &receiver,
                     max_tick_height,
                     tick_height,
