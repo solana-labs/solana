@@ -47,7 +47,6 @@ fi
 find_leader() {
   declare leader leader_address
   declare shift=0
-
   if [[ -d $SNAP ]]; then
     if [[ -n $1 ]]; then
       usage "Error: unexpected parameter: $1"
@@ -72,10 +71,14 @@ find_leader() {
       leader=$1
 
       declare leader_ip
-      leader_ip=$(dig +short "${leader%:*}" | head -n1)
+      if [[ $leader =~ ^[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}.[0-9]{1,3}$ ]]; then
+        leader_ip=$leader
+      else
+        leader_ip=$(dig +short "${leader%:*}" | head -n1)
 
-      if [[ -z $leader_ip ]]; then
-          usage "Error: unable to resolve IP address for $leader"
+        if [[ -z $leader_ip ]]; then
+            usage "Error: unable to resolve IP address for $leader"
+        fi
       fi
 
       leader_address=$leader_ip:8001
