@@ -100,7 +100,7 @@ if $bootstrap_leader; then
       --keypair="$SOLANA_CONFIG_DIR"/bootstrap-leader-id.json \
       "$ip_address_arg" > "$SOLANA_CONFIG_DIR"/bootstrap-leader.json
 
-    cp -ra "$SOLANA_RSYNC_CONFIG_DIR"/ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger
+    cp -a "$SOLANA_RSYNC_CONFIG_DIR"/ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger
   )
 fi
 
