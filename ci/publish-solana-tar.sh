@@ -45,7 +45,7 @@ echo --- Creating tarball
 
   cargo install --path drone --root solana-release
   cargo install --path . --root solana-release
-  ./scripts/install-native-programs.sh solana-release/bin
+  ./scripts/install-native-programs.sh solana-release/bin release
 
   ./fetch-perf-libs.sh
   # shellcheck source=/dev/null
