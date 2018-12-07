@@ -42,7 +42,7 @@ fi
 case $deployMethod in
 snap)
   SECONDS=0
-  [[ $nodeType = bootstrap_fullnode ]] ||
+  [[ $nodeType = bootstrap-leader ]] ||
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp:~/solana/solana.snap" .
   sudo snap install solana.snap --devmode --dangerous
 
@@ -63,7 +63,7 @@ snap)
     echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
   fi
 
-  if [[ $nodeType = bootstrap-fullnode ]]; then
+  if [[ $nodeType = bootstrap-leader ]]; then
     nodeConfig="mode=bootstrap-leader+drone $commonNodeConfig"
     ln -sf -T /var/snap/solana/current/bootstrap-leader/current fullnode.log
     ln -sf -T /var/snap/solana/current/drone/current drone.log
@@ -104,12 +104,12 @@ local|tar)
   scripts/net-stats.sh  > net-stats.log 2>&1 &
 
   case $nodeType in
-  bootstrap_fullnode)
+  bootstrap-leader)
     if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-fullnode-cuda ]]; then
       echo Selecting solana-fullnode-cuda
       export SOLANA_CUDA=1
     fi
-    ./multinode-demo/setup.sh -t bootstrap_leader $setupArgs
+    ./multinode-demo/setup.sh -t bootstrap-leader $setupArgs
     ./multinode-demo/drone.sh > drone.log 2>&1 &
     ./multinode-demo/bootstrap-leader.sh > bootstrap-leader.log 2>&1 &
     ln -sTf bootstrap-leader.log fullnode.log
