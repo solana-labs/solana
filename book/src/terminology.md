@@ -145,8 +145,9 @@ The public key of a [keypair](#keypair).
 
 #### replicator
 
-A type of [client](#client) that stores copies of segments of the
-[ledger](#ledger).
+A type of [client](#client) that stores [ledger](#ledger) segments and
+periodically submits storage proofs to the cluster; not a
+[fullnode](#fullnode).
 
 #### secret key
 
@@ -154,8 +155,8 @@ The private key of a [keypair](#keypair).
 
 #### slot
 
-The time (i.e. number of [blocks](#block)) for which a [leader](#leader) ingests
-transactions and produces [entries](#entry).
+The time (i.e. number of [blocks](#block)) for which a [leader](#leader)
+ingests transactions and produces [entries](#entry).
 
 #### sol
 
@@ -215,13 +216,29 @@ for potential future use.
 A fraction of a [block](#block); the smallest unit sent between
 [fullnodes](#fullnode).
 
+#### CBC block
+
+Smallest encrypted chunk of ledger, an encrypted ledger segment would be made of
+many CBC blocks; `ledger_segment_size / cbc_block_size` to be exact.
+
 #### curio
 
 A scarce, non-fungible member of a set of curios.
 
 #### epoch
 
-The time, i.e. number of [slots](#slot), for which a [leader schedule](#leader-schedule) is valid.
+The time, i.e. number of [slots](#slot), for which a [leader
+schedule](#leader-schedule) is valid.
+
+#### fake storage proof
+
+A proof which has the same format as a storage proof, but the sha state is
+actually from hashing a known ledger value which the storage client can reveal
+and is also easily verifiable by the network on-chain.
+
+#### ledger segment
+
+A sequence of [blocks](#block).
 
 #### light client
 
@@ -236,6 +253,37 @@ Millions of [instructions](#instruction) per second.
 
 The component of a [fullnode](#fullnode) responsible for [program](#program)
 execution.
+
+#### storage proof
+
+A set of SHA hash states which is constructed by sampling the encrypted version
+of the stored [ledger segment](#ledger-segment) at certain offsets.
+
+#### storage proof challenge
+
+A [transaction](#transaction) from a [replicator](#replicator) that verifiably
+proves that a [validator](#validator) [confirmed](#storage-proof-confirmation)
+a [fake proof](#fake-storage-proof).
+
+#### storage proof claim
+
+A [transaction](#transaction) from a [validator](#validator) which is after the
+timeout period given from the [storage proof
+confirmation](#storage-proof-confirmation) and which no successful
+[challenges](#storage-proof-challenge) have been observed which rewards the
+parties of the [storage proofs](#storage-proof) and confirmations.
+
+#### storage proof confirmation
+
+A [transaction](#transaction) from a [validator](#validator) which indicates
+the set of [real](#storage-proof) and [fake proofs](#fake-storage-proof)
+submitted by a [replicator](#replicator). The transaction would contain a list
+of proof hash values and a bit which says if this hash is valid or fake.
+
+#### storage validation capacity
+
+The number of keys and samples that a [validator](#validator) can verify each
+storage epoch.
 
 #### thin client
 
