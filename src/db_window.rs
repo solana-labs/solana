@@ -238,7 +238,8 @@ pub fn retransmit_all_leader_blocks(
             .add_field(
                 "count",
                 influxdb::Value::Integer(retransmit_queue.len() as i64),
-            ).to_owned(),
+            )
+            .to_owned(),
     );
 
     if !retransmit_queue.is_empty() {
@@ -641,7 +642,8 @@ mod test {
                         let begin = k * gap + 1;
                         let end = (k + 1) * gap;
                         (begin..end)
-                    }).collect();
+                    })
+                    .collect();
                 assert_eq!(
                     find_missing_data_indexes(
                         slot,

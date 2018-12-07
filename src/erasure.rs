@@ -324,7 +324,8 @@ pub fn generate_coding(
             .map(|(i, l)| {
                 trace!("{} i: {} data: {}", id, i, l.data[0]);
                 &l.data[..max_data_size]
-            }).collect();
+            })
+            .collect();
 
         let mut coding_locks: Vec<_> = coding_blobs.iter().map(|b| b.write().unwrap()).collect();
 
@@ -334,7 +335,8 @@ pub fn generate_coding(
             .map(|(i, l)| {
                 trace!("{} i: {} coding: {}", id, i, l.data[0],);
                 &mut l.data_mut()[..max_data_size]
-            }).collect();
+            })
+            .collect();
 
         generate_coding_blocks(coding_ptrs.as_mut_slice(), &data_ptrs)?;
         debug!(
@@ -575,10 +577,11 @@ pub mod test {
                 coding_blocks.iter_mut().map(|x| x.as_mut_slice()).collect();
             let v_slices: Vec<_> = vs.iter().map(|x| x.as_slice()).collect();
 
-            assert!(
-                generate_coding_blocks(coding_blocks_slices.as_mut_slice(), v_slices.as_slice(),)
-                    .is_ok()
-            );
+            assert!(generate_coding_blocks(
+                coding_blocks_slices.as_mut_slice(),
+                v_slices.as_slice(),
+            )
+            .is_ok());
         }
         trace!("coding blocks:");
         for b in &coding_blocks {
@@ -594,13 +597,12 @@ pub mod test {
                 coding_blocks.iter_mut().map(|x| x.as_mut_slice()).collect();
             let mut v_slices: Vec<_> = vs.iter_mut().map(|x| x.as_mut_slice()).collect();
 
-            assert!(
-                decode_blocks(
-                    v_slices.as_mut_slice(),
-                    coding_blocks_slices.as_mut_slice(),
-                    erasures.as_slice(),
-                ).is_ok()
-            );
+            assert!(decode_blocks(
+                v_slices.as_mut_slice(),
+                coding_blocks_slices.as_mut_slice(),
+                erasures.as_slice(),
+            )
+            .is_ok());
         }
 
         trace!("vs:");
@@ -635,7 +637,8 @@ pub mod test {
                             slot_height,
                             data_l.index().unwrap(),
                             &data_l.data[..data_l.data_size().unwrap() as usize],
-                        ).expect("Expected successful put into data column of ledger");
+                        )
+                        .expect("Expected successful put into data column of ledger");
                 } else {
                     db_ledger
                         .write_shared_blobs(slot_height, vec![data].into_iter())
@@ -661,7 +664,8 @@ pub mod test {
                         slot_height,
                         index,
                         &coding_lock.data[..data_size as usize + BLOB_HEADER_SIZE],
-                    ).unwrap();
+                    )
+                    .unwrap();
             }
         }
 
@@ -692,15 +696,14 @@ pub mod test {
 
         // Generate the coding blocks
         let mut index = (NUM_DATA + 2) as u64;
-        assert!(
-            generate_coding(
-                &Pubkey::default(),
-                &mut window,
-                offset as u64,
-                num_blobs,
-                &mut index
-            ).is_ok()
-        );
+        assert!(generate_coding(
+            &Pubkey::default(),
+            &mut window,
+            offset as u64,
+            num_blobs,
+            &mut index
+        )
+        .is_ok());
         assert_eq!(index, (NUM_DATA - NUM_CODING) as u64);
 
         // put junk in the tails, simulates re-used blobs

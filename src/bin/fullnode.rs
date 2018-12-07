@@ -37,25 +37,29 @@ fn main() {
                 .short("v")
                 .long("nosigverify")
                 .help("Run without signature verification"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("no-leader-rotation")
                 .long("no-leader-rotation")
                 .help("Disable leader rotation"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("identity")
                 .short("i")
                 .long("identity")
                 .value_name("PATH")
                 .takes_value(true)
                 .help("Run with the identity found in FILE"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("network")
                 .short("n")
                 .long("network")
                 .value_name("HOST:PORT")
                 .takes_value(true)
                 .help("Rendezvous with the network at this gossip entry point"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("ledger")
                 .short("l")
                 .long("ledger")
@@ -63,13 +67,15 @@ fn main() {
                 .takes_value(true)
                 .required(true)
                 .help("Use DIR as persistent ledger location"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("rpc")
                 .long("rpc")
                 .value_name("PORT")
                 .takes_value(true)
                 .help("Custom RPC port for this node"),
-        ).get_matches();
+        )
+        .get_matches();
 
     let nosigverify = matches.is_present("nosigverify");
     let use_only_bootstrap_leader = matches.is_present("no-leader-rotation");

@@ -462,7 +462,8 @@ mod tests {
             arc_bank
                 .process_transaction(&tx)
                 .expect("process transaction");
-        }).join()
+        })
+        .join()
         .unwrap();
         assert_eq!(request_processor.get_transaction_count().unwrap(), 1);
     }

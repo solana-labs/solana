@@ -213,7 +213,8 @@ fn test_program_lua_move_funds() {
             local tokens, _ = string.unpack("I", data)
             accounts[1].tokens = accounts[1].tokens - tokens
             accounts[2].tokens = accounts[2].tokens + tokens
-        "#.as_bytes()
+        "#
+    .as_bytes()
     .to_vec();
     let program = Program::new(&loader, &userdata);
     let from = Keypair::new();

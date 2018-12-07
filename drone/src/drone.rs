@@ -131,7 +131,8 @@ impl Drone {
                             .add_field(
                                 "request_current",
                                 influxdb::Value::Integer(self.request_current as i64),
-                            ).to_owned(),
+                            )
+                            .to_owned(),
                     );
 
                     info!("Requesting airdrop of {} to {:?}", tokens, to);
@@ -283,7 +284,8 @@ pub fn run_local_drone(mint_keypair: Keypair, sender: Sender<SocketAddr>) {
                             io::ErrorKind::Other,
                             format!("Drone response: {:?}", err),
                         ))
-                    })).then(|_| Ok(()));
+                    }))
+                    .then(|_| Ok(()));
                 tokio::spawn(server)
             });
         tokio::run(done);

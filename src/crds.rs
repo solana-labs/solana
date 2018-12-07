@@ -150,7 +150,8 @@ impl Crds {
                 } else {
                     None
                 }
-            }).cloned()
+            })
+            .cloned()
             .collect()
     }
 

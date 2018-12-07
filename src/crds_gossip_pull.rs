@@ -60,14 +60,16 @@ impl CrdsGossipPull {
             .filter_map(|v| v.value.contact_info())
             .filter(|v| {
                 v.id != self_id && !v.gossip.ip().is_unspecified() && !v.gossip.ip().is_multicast()
-            }).map(|item| {
+            })
+            .map(|item| {
                 let req_time: u64 = *self.pull_request_time.get(&item.id).unwrap_or(&0);
                 let weight = cmp::max(
                     1,
                     cmp::min(u64::from(u16::max_value()) - 1, (now - req_time) / 1024) as u32,
                 );
                 (weight, item)
-            }).collect();
+            })
+            .collect();
         if options.is_empty() {
             return Err(CrdsGossipError::NoPeers);
         }
@@ -179,7 +181,8 @@ impl CrdsGossipPull {
                     .map(|val| (val.value_hash, val.local_timestamp));
                 crds.remove(label);
                 rv
-            }).collect();
+            })
+            .collect();
         self.purged_values.append(&mut purged);
     }
     /// Purge values from the `self.purged_values` queue that are older then purge_timeout

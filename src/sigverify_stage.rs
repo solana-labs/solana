@@ -106,7 +106,8 @@ impl SigVerifyStage {
                 .add_field(
                     "total_time_ms",
                     influxdb::Value::Integer(total_time_ms as i64),
-                ).to_owned(),
+                )
+                .to_owned(),
         );
 
         Ok(())

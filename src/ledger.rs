@@ -493,7 +493,8 @@ impl Block for [Entry] {
                     .transactions
                     .iter()
                     .flat_map(VoteTransaction::get_votes)
-            }).collect()
+            })
+            .collect()
     }
 }
 
@@ -674,7 +675,8 @@ pub fn make_tiny_test_entries(num: usize) -> Vec<Entry> {
                     one,
                 )],
             )
-        }).collect()
+        })
+        .collect()
 }
 
 pub fn make_large_test_entries(num_entries: usize) -> Vec<Entry> {
@@ -792,7 +794,8 @@ mod tests {
             num_hashes: 0,
             id: Hash::default(),
             transactions: vec![],
-        }).unwrap() as usize;
+        })
+        .unwrap() as usize;
         assert!(tx_small_size < tx_large_size);
         assert!(tx_large_size < PACKET_DATA_SIZE);
 

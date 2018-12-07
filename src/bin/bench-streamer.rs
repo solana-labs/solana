@@ -62,7 +62,8 @@ fn main() -> Result<()> {
                 .value_name("NUM")
                 .takes_value(true)
                 .help("Use NUM receive sockets"),
-        ).get_matches();
+        )
+        .get_matches();
 
     if let Some(n) = matches.value_of("num-recv-sockets") {
         num_sockets = max(num_sockets, n.to_string().parse().expect("integer"));

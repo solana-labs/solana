@@ -52,7 +52,8 @@ impl StoreLedgerStage {
                         _ => error!("{:?}", e),
                     }
                 }
-            }).unwrap();
+            })
+            .unwrap();
 
         let thread_hdls = vec![t_store_requests];
 

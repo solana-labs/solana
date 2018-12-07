@@ -167,7 +167,8 @@ fn broadcast(
             .add_field(
                 "transmit-index",
                 influxdb::Value::Integer(transmit_index.data as i64),
-            ).to_owned(),
+            )
+            .to_owned(),
     );
 
     Ok(())
@@ -284,7 +285,8 @@ impl BroadcastService {
                     max_tick_height,
                     tick_height,
                 )
-            }).unwrap();
+            })
+            .unwrap();
 
         Self { thread_hdl }
     }

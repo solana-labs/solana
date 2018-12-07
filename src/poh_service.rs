@@ -56,7 +56,8 @@ impl PohService {
                 let return_value = Self::tick_producer(&mut poh_recorder_, config, &poh_exit_);
                 poh_exit_.store(true, Ordering::Relaxed);
                 return_value
-            }).unwrap();
+            })
+            .unwrap();
 
         PohService {
             tick_producer,
@@ -134,7 +135,8 @@ mod tests {
                             break Ok(());
                         }
                     }
-                }).unwrap()
+                })
+                .unwrap()
         };
 
         const HASHES_PER_TICK: u64 = 2;

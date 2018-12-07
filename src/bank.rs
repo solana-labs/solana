@@ -775,7 +775,8 @@ impl Bank {
                     self.load_account(tx, &accounts, &mut last_ids, max_age, error_counters)
                 }
                 (_, Err(e)) => Err(e),
-            }).collect()
+            })
+            .collect()
     }
 
     fn load_executable_accounts(&self, mut program_id: Pubkey) -> Result<Vec<(Pubkey, Account)>> {
@@ -815,7 +816,8 @@ impl Bank {
             .map(|ix| {
                 let program_id = tx.program_ids[ix.program_ids_index as usize];
                 self.load_executable_accounts(program_id)
-            }).collect()
+            })
+            .collect()
     }
 
     pub fn store_accounts(
@@ -889,7 +891,8 @@ impl Bank {
                     debug!("process transaction failed {:?}", e);
                     None
                 }
-            }).collect();
+            })
+            .collect();
         // unlock all the accounts with errors which are filtered by the above `filter_map`
         if !processed_transactions.is_empty() {
             let hash = Transaction::hash(&processed_transactions);
@@ -933,7 +936,8 @@ impl Bank {
                         },
                     )
                 }
-            }).collect();
+            })
+            .collect();
         let execution_elapsed = now.elapsed();
         let now = Instant::now();
         self.store_accounts(txs, &executed, &loaded_accounts);
@@ -1052,7 +1056,8 @@ impl Bank {
                 );
                 self.unlock_accounts(&e.transactions, &results);
                 Self::first_err(&results)
-            }).collect();
+            })
+            .collect();
         Self::first_err(&results)
     }
 
@@ -1169,14 +1174,16 @@ impl Bank {
                 Some(tokens)
             } else {
                 None
-            }.expect("invalid ledger, needs to start with mint deposit");
+            }
+            .expect("invalid ledger, needs to start with mint deposit");
 
             instruction = deserialize(tx.userdata(1)).unwrap();
             let leader_payment = if let SystemInstruction::Move { tokens } = instruction {
                 Some(tokens)
             } else {
                 None
-            }.expect("invalid ledger, bootstrap leader payment expected");
+            }
+            .expect("invalid ledger, bootstrap leader payment expected");
 
             assert!(leader_payment <= mint_deposit);
             assert!(leader_payment > 0);
@@ -1737,7 +1744,8 @@ mod tests {
                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
                 bank.register_tick(&last_id);
                 last_id
-            }).collect();
+            })
+            .collect();
         assert_eq!(bank.count_valid_ids(&[]).len(), 0);
         assert_eq!(bank.count_valid_ids(&[mint.last_id()]).len(), 0);
         for (i, id) in bank.count_valid_ids(&ids).iter().enumerate() {
@@ -1979,12 +1987,11 @@ mod tests {
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
         bank.add_account_subscription(bank_sub_id, alice.pubkey(), sink);
 
-        assert!(
-            bank.account_subscriptions
-                .write()
-                .unwrap()
-                .contains_key(&alice.pubkey())
-        );
+        assert!(bank
+            .account_subscriptions
+            .write()
+            .unwrap()
+            .contains_key(&alice.pubkey()));
 
         let account = bank.get_account(&alice.pubkey()).unwrap();
         bank.check_account_subscriptions(&alice.pubkey(), &account);
@@ -1996,13 +2003,11 @@ mod tests {
         }
 
         bank.remove_account_subscription(&bank_sub_id, &alice.pubkey());
-        assert!(
-            !bank
-                .account_subscriptions
-                .write()
-                .unwrap()
-                .contains_key(&alice.pubkey())
-        );
+        assert!(!bank
+            .account_subscriptions
+            .write()
+            .unwrap()
+            .contains_key(&alice.pubkey()));
     }
     #[test]
     fn test_bank_signature_subscribe() {
@@ -2021,12 +2026,11 @@ mod tests {
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
         bank.add_signature_subscription(bank_sub_id, signature, sink);
 
-        assert!(
-            bank.signature_subscriptions
-                .write()
-                .unwrap()
-                .contains_key(&signature)
-        );
+        assert!(bank
+            .signature_subscriptions
+            .write()
+            .unwrap()
+            .contains_key(&signature));
 
         bank.check_signature_subscriptions(&signature, RpcSignatureStatus::Confirmed);
         let string = transport_receiver.poll();
@@ -2037,13 +2041,11 @@ mod tests {
         }
 
         bank.remove_signature_subscription(&bank_sub_id, &signature);
-        assert!(
-            !bank
-                .signature_subscriptions
-                .write()
-                .unwrap()
-                .contains_key(&signature)
-        );
+        assert!(!bank
+            .signature_subscriptions
+            .write()
+            .unwrap()
+            .contains_key(&signature));
     }
     #[test]
     fn test_first_err() {

@@ -32,7 +32,8 @@ fn process_instruction(
             let index = index as usize;
             let key = &tx.account_keys[index];
             (key, index < tx.signatures.len())
-        }).zip(program_accounts.iter_mut())
+        })
+        .zip(program_accounts.iter_mut())
         .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
         .collect();
     keyed_accounts.append(&mut keyed_accounts2);
@@ -128,7 +129,8 @@ where
             // lifetime of this unsafe is only within the scope of the closure
             // there is no way to reorder them without breaking borrow checker rules
             unsafe { &mut *ptr }
-        }).collect();
+        })
+        .collect();
     func(&mut subset)
 }
 
@@ -150,7 +152,8 @@ pub fn execute_transaction(
                 executable_accounts,
                 program_accounts,
                 tick_height,
-            ).map_err(|err| RuntimeError::ProgramError(instruction_index as u8, err))?;
+            )
+            .map_err(|err| RuntimeError::ProgramError(instruction_index as u8, err))?;
             Ok(())
         })?;
     }

@@ -70,14 +70,16 @@ impl TpuForwarder {
                     sender.clone(),
                     "tpu-forwarder",
                 )
-            }).collect();
+            })
+            .collect();
 
         let thread_hdl = Builder::new()
             .name("solana-tpu_forwarder".to_string())
             .spawn(move || {
                 let _ignored = Self::forward(&receiver, &cluster_info);
                 ()
-            }).unwrap();
+            })
+            .unwrap();
 
         thread_hdls.push(thread_hdl);
 
@@ -123,7 +125,8 @@ mod tests {
                     s,
                     ContactInfo::new_with_socketaddr(&socketaddr!([127, 0, 0, 1], port)),
                 )
-            }).collect();
+            })
+            .collect();
 
         let mut cluster_info = ClusterInfo::new(nodes[0].1.clone());
 

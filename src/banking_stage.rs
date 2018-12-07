@@ -105,8 +105,10 @@ impl BankingStage {
                         };
                         thread_banking_exit.store(true, Ordering::Relaxed);
                         return_result
-                    }).unwrap()
-            }).collect();
+                    })
+                    .unwrap()
+            })
+            .collect();
 
         (
             BankingStage {
@@ -127,7 +129,8 @@ impl BankingStage {
                 deserialize(&x.data[0..x.meta.size])
                     .map(|req| (req, x.meta.addr()))
                     .ok()
-            }).collect()
+            })
+            .collect()
     }
 
     fn process_transactions(
@@ -190,7 +193,8 @@ impl BankingStage {
                             None
                         }
                     }
-                }).collect();
+                })
+                .collect();
             debug!("verified transactions {}", transactions.len());
             Self::process_transactions(bank, &transactions, poh)?;
             new_tx_count += transactions.len();

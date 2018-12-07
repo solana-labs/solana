@@ -24,8 +24,8 @@ impl<T: BloomHashIndex> Bloom<T> {
     /// https://hur.st/bloomfilter/
     pub fn random(num: usize, false_rate: f64, max_bits: usize) -> Self {
         let min_num_bits = ((num as f64 * false_rate.log(2f64))
-            / (1f64 / 2f64.powf(2f64.log(2f64))).log(2f64)).ceil()
-            as usize;
+            / (1f64 / 2f64.powf(2f64.log(2f64))).log(2f64))
+        .ceil() as usize;
         let num_bits = cmp::max(1, cmp::min(min_num_bits, max_bits));
         let num_keys = ((num_bits as f64 / num as f64) * 2f64.log(2f64)).round() as usize;
         let keys: Vec<u64> = (0..num_keys).map(|_| rand::thread_rng().gen()).collect();

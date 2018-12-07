@@ -254,7 +254,8 @@ mod test {
                 let index = index as usize;
                 let key = &tx.account_keys[index];
                 (key, index < tx.signatures.len())
-            }).zip(program_accounts.iter_mut())
+            })
+            .zip(program_accounts.iter_mut())
             .map(|((key, is_signer), account)| KeyedAccount::new(key, is_signer, account))
             .collect();
 

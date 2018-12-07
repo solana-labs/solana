@@ -128,7 +128,8 @@ impl StorageStage {
                         break;
                     }
                 }
-            }).unwrap();
+            })
+            .unwrap();
 
         StorageStage {
             t_storage_mining_verifier,

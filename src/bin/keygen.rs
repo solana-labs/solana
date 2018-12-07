@@ -19,7 +19,8 @@ fn main() -> Result<(), Box<error::Error>> {
                 .value_name("PATH")
                 .takes_value(true)
                 .help("Path to generated file"),
-        ).get_matches();
+        )
+        .get_matches();
 
     let mut path = dirs::home_dir().expect("home directory");
     let outfile = if matches.is_present("outfile") {
