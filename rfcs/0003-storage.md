@@ -1,4 +1,4 @@
-# Leader Replication
+# Ledger Replication
 
 At full capacity on a 1gbps network solana will generate 4 petabytes of data
 per year.  To prevent the network from centralizing around full nodes that have
