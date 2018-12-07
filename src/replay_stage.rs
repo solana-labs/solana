@@ -1,4 +1,4 @@
-//! The `replicate_stage` replicates transactions broadcast by the leader.
+//! The `replay_stage` replays transactions broadcast by the leader.
 
 use crate::bank::Bank;
 use crate::cluster_info::ClusterInfo;
@@ -26,11 +26,11 @@ use std::time::Duration;
 use std::time::Instant;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum ReplicateStageReturnType {
+pub enum ReplayStageReturnType {
     LeaderRotation(u64, u64, Hash),
 }
 
-// Implement a destructor for the ReplicateStage thread to signal it exited
+// Implement a destructor for the ReplayStage thread to signal it exited
 // even on panics
 struct Finalizer {
     exit_sender: Arc<AtomicBool>,
@@ -48,14 +48,14 @@ impl Drop for Finalizer {
     }
 }
 
-pub struct ReplicateStage {
+pub struct ReplayStage {
     t_responder: JoinHandle<()>,
-    t_replicate: JoinHandle<Option<ReplicateStageReturnType>>,
+    t_replay: JoinHandle<Option<ReplayStageReturnType>>,
 }
 
-impl ReplicateStage {
+impl ReplayStage {
     /// Process entry blobs, already in order
-    fn replicate_requests(
+    fn process_entries(
         bank: &Arc<Bank>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window_receiver: &EntryReceiver,
@@ -74,7 +74,7 @@ impl ReplicateStage {
         }
 
         submit(
-            influxdb::Point::new("replicate-stage")
+            influxdb::Point::new("replay-stage")
                 .add_field("count", influxdb::Value::Integer(entries.len() as i64))
                 .to_owned(),
         );
@@ -83,11 +83,11 @@ impl ReplicateStage {
         let mut num_entries_to_write = entries.len();
         let now = Instant::now();
         if !entries.as_slice().verify(last_entry_id) {
-            inc_new_counter_info!("replicate_stage-verify-fail", entries.len());
+            inc_new_counter_info!("replay_stage-verify-fail", entries.len());
             return Err(Error::BlobError(BlobError::VerificationFailed));
         }
         inc_new_counter_info!(
-            "replicate_stage-verify-duration",
+            "replay_stage-verify-duration",
             duration_as_ms(&now.elapsed()) as usize
         );
         let (current_leader, _) = bank
@@ -128,7 +128,7 @@ impl ReplicateStage {
             .id;
 
         inc_new_counter_info!(
-            "replicate-transactions",
+            "replay-transactions",
             entries.iter().map(|x| x.transactions.len()).sum()
         );
 
@@ -164,12 +164,12 @@ impl ReplicateStage {
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let (ledger_entry_sender, ledger_entry_receiver) = channel();
         let send = UdpSocket::bind("0.0.0.0:0").expect("bind");
-        let t_responder = responder("replicate_stage", Arc::new(send), vote_blob_receiver);
+        let t_responder = responder("replay_stage", Arc::new(send), vote_blob_receiver);
 
         let keypair = Arc::new(keypair);
 
-        let t_replicate = Builder::new()
-            .name("solana-replicate-stage".to_string())
+        let t_replay = Builder::new()
+            .name("solana-replay-stage".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit);
                 let now = Instant::now();
@@ -182,7 +182,7 @@ impl ReplicateStage {
                         .expect("Scheduled leader id should never be unknown at this point");
 
                     if leader_id == keypair.pubkey() {
-                        return Some(ReplicateStageReturnType::LeaderRotation(
+                        return Some(ReplayStageReturnType::LeaderRotation(
                             bank.tick_height(),
                             entry_height_,
                             // We should never start the TPU / this stage on an exact entry that causes leader
@@ -201,7 +201,7 @@ impl ReplicateStage {
                         None
                     };
 
-                    match Self::replicate_requests(
+                    match Self::process_entries(
                         &bank,
                         &cluster_info,
                         &window_receiver,
@@ -226,19 +226,19 @@ impl ReplicateStage {
         (
             Self {
                 t_responder,
-                t_replicate,
+                t_replay,
             },
             ledger_entry_receiver,
         )
     }
 }
 
-impl Service for ReplicateStage {
-    type JoinReturnType = Option<ReplicateStageReturnType>;
+impl Service for ReplayStage {
+    type JoinReturnType = Option<ReplayStageReturnType>;
 
-    fn join(self) -> thread::Result<Option<ReplicateStageReturnType>> {
+    fn join(self) -> thread::Result<Option<ReplayStageReturnType>> {
         self.t_responder.join()?;
-        self.t_replicate.join()
+        self.t_replay.join()
     }
 }
 
@@ -254,7 +254,7 @@ mod test {
     use crate::ledger::{create_ticks, create_tmp_sample_ledger, LedgerWriter};
     use crate::logger;
     use crate::packet::BlobError;
-    use crate::replicate_stage::{ReplicateStage, ReplicateStageReturnType};
+    use crate::replay_stage::{ReplayStage, ReplayStageReturnType};
     use crate::result::Error;
     use crate::service::Service;
     use crate::vote_stage::{send_validator_vote, VoteError};
@@ -266,10 +266,10 @@ mod test {
     use std::sync::{Arc, RwLock};
 
     #[test]
-    pub fn test_replicate_stage_leader_rotation_exit() {
+    pub fn test_replay_stage_leader_rotation_exit() {
         logger::setup();
 
-        // Set up dummy node to host a ReplicateStage
+        // Set up dummy node to host a ReplayStage
         let my_keypair = Keypair::new();
         let my_id = my_keypair.pubkey();
         let my_node = Node::new_localhost_with_pubkey(my_id);
@@ -281,7 +281,7 @@ mod test {
         // Create a ledger
         let num_ending_ticks = 1;
         let (mint, my_ledger_path, genesis_entries) = create_tmp_sample_ledger(
-            "test_replicate_stage_leader_rotation_exit",
+            "test_replay_stage_leader_rotation_exit",
             10_000,
             num_ending_ticks,
             old_leader_id,
@@ -327,10 +327,10 @@ mod test {
         let (bank, _, last_entry_id) =
             Fullnode::new_bank_from_ledger(&my_ledger_path, leader_scheduler);
 
-        // Set up the replicate stage
+        // Set up the replay stage
         let (entry_sender, entry_receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
-        let (replicate_stage, ledger_writer_recv) = ReplicateStage::new(
+        let (replay_stage, ledger_writer_recv) = ReplayStage::new(
             Arc::new(my_keypair),
             Arc::new(vote_account_keypair),
             Arc::new(bank),
@@ -363,14 +363,14 @@ mod test {
         let expected_last_id = entries_to_send[leader_rotation_index].id;
         entry_sender.send(entries_to_send.clone()).unwrap();
 
-        // Wait for replicate_stage to exit and check return value is correct
+        // Wait for replay_stage to exit and check return value is correct
         assert_eq!(
-            Some(ReplicateStageReturnType::LeaderRotation(
+            Some(ReplayStageReturnType::LeaderRotation(
                 bootstrap_height,
                 expected_entry_height,
                 expected_last_id,
             )),
-            replicate_stage.join().expect("replicate stage join")
+            replay_stage.join().expect("replay stage join")
         );
 
         // Check that the entries on the ledger writer channel are correct
@@ -389,8 +389,8 @@ mod test {
     }
 
     #[test]
-    fn test_vote_error_replicate_stage_correctness() {
-        // Set up dummy node to host a ReplicateStage
+    fn test_vote_error_replay_stage_correctness() {
+        // Set up dummy node to host a ReplayStage
         let my_keypair = Keypair::new();
         let my_id = my_keypair.pubkey();
         let my_node = Node::new_localhost_with_pubkey(my_id);
@@ -401,7 +401,7 @@ mod test {
 
         let num_ending_ticks = 0;
         let (_, my_ledger_path, genesis_entries) = create_tmp_sample_ledger(
-            "test_vote_error_replicate_stage_correctness",
+            "test_vote_error_replay_stage_correctness",
             10_000,
             num_ending_ticks,
             leader_id,
@@ -417,12 +417,12 @@ mod test {
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
 
-        // Set up the replicate stage
+        // Set up the replay stage
         let vote_account_keypair = Arc::new(Keypair::new());
         let bank = Arc::new(bank);
         let (entry_sender, entry_receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
-        let (replicate_stage, ledger_writer_recv) = ReplicateStage::new(
+        let (replay_stage, ledger_writer_recv) = ReplayStage::new(
             Arc::new(my_keypair),
             vote_account_keypair.clone(),
             bank.clone(),
@@ -444,7 +444,7 @@ mod test {
             panic!("Expected validator vote to fail with LeaderInfoNotFound");
         }
 
-        // Send ReplicateStage an entry, should see it on the ledger writer receiver
+        // Send ReplayStage an entry, should see it on the ledger writer receiver
         let next_tick = create_ticks(
             1,
             genesis_entries
@@ -454,22 +454,22 @@ mod test {
         );
         entry_sender
             .send(next_tick.clone())
-            .expect("Error sending entry to ReplicateStage");
+            .expect("Error sending entry to ReplayStage");
         let received_tick = ledger_writer_recv
             .recv()
             .expect("Expected to recieve an entry on the ledger writer receiver");
 
         assert_eq!(next_tick, received_tick);
         drop(entry_sender);
-        replicate_stage
+        replay_stage
             .join()
-            .expect("Expect successful ReplicateStage exit");
+            .expect("Expect successful ReplayStage exit");
         let _ignored = remove_dir_all(&my_ledger_path);
     }
 
     #[test]
-    fn test_vote_error_replicate_stage_leader_rotation() {
-        // Set up dummy node to host a ReplicateStage
+    fn test_vote_error_replay_stage_leader_rotation() {
+        // Set up dummy node to host a ReplayStage
         let my_keypair = Keypair::new();
         let my_id = my_keypair.pubkey();
         let my_node = Node::new_localhost_with_pubkey(my_id);
@@ -479,7 +479,7 @@ mod test {
 
         // Create the ledger
         let (mint, my_ledger_path, genesis_entries) = create_tmp_sample_ledger(
-            "test_vote_error_replicate_stage_leader_rotation",
+            "test_vote_error_replay_stage_leader_rotation",
             10_000,
             0,
             leader_id,
@@ -529,12 +529,12 @@ mod test {
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
 
-        // Set up the replicate stage
+        // Set up the replay stage
         let vote_account_keypair = Arc::new(vote_account_keypair);
         let bank = Arc::new(bank);
         let (entry_sender, entry_receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
-        let (replicate_stage, ledger_writer_recv) = ReplicateStage::new(
+        let (replay_stage, ledger_writer_recv) = ReplayStage::new(
             Arc::new(my_keypair),
             vote_account_keypair.clone(),
             bank.clone(),
@@ -571,7 +571,7 @@ mod test {
             last_id = entry.id;
             entry_sender
                 .send(vec![entry.clone()])
-                .expect("Expected to be able to send entry to ReplicateStage");
+                .expect("Expected to be able to send entry to ReplayStage");
             // Check that the entries on the ledger writer channel are correct
             let received_entry = ledger_writer_recv
                 .recv()
@@ -585,14 +585,14 @@ mod test {
 
         assert_ne!(expected_last_id, Hash::default());
 
-        // Wait for replicate_stage to exit and check return value is correct
+        // Wait for replay_stage to exit and check return value is correct
         assert_eq!(
-            Some(ReplicateStageReturnType::LeaderRotation(
+            Some(ReplayStageReturnType::LeaderRotation(
                 bootstrap_height,
                 expected_entry_height,
                 expected_last_id,
             )),
-            replicate_stage.join().expect("replicate stage join")
+            replay_stage.join().expect("replay stage join")
         );
 
         assert_eq!(exit.load(Ordering::Relaxed), true);
@@ -600,8 +600,8 @@ mod test {
     }
 
     #[test]
-    fn test_replicate_stage_poh_error_entry_receiver() {
-        // Set up dummy node to host a ReplicateStage
+    fn test_replay_stage_poh_error_entry_receiver() {
+        // Set up dummy node to host a ReplayStage
         let my_keypair = Keypair::new();
         let my_id = my_keypair.pubkey();
         let vote_keypair = Keypair::new();
@@ -615,7 +615,7 @@ mod test {
         let old_leader_id = Keypair::new().pubkey();
 
         let (_, my_ledger_path, _) = create_tmp_sample_ledger(
-            "test_replicate_stage_leader_rotation_exit",
+            "test_replay_stage_leader_rotation_exit",
             10_000,
             0,
             old_leader_id,
@@ -634,7 +634,7 @@ mod test {
             .send(entries.clone())
             .expect("Expected to err out");
 
-        let res = ReplicateStage::replicate_requests(
+        let res = ReplayStage::process_entries(
             &Arc::new(Bank::default()),
             &cluster_info_me,
             &entry_receiver,
@@ -660,7 +660,7 @@ mod test {
             .send(entries.clone())
             .expect("Expected to err out");
 
-        let res = ReplicateStage::replicate_requests(
+        let res = ReplayStage::process_entries(
             &Arc::new(Bank::default()),
             &cluster_info_me,
             &entry_receiver,

@@ -295,7 +295,7 @@ mod test {
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let blob_sockets: Vec<Arc<UdpSocket>> =
-                tn.sockets.replicate.into_iter().map(Arc::new).collect();
+                tn.sockets.tvu.into_iter().map(Arc::new).collect();
 
             let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
             let num_blobs_to_make = 10;
@@ -365,7 +365,7 @@ mod test {
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let blob_sockets: Vec<Arc<UdpSocket>> =
-                tn.sockets.replicate.into_iter().map(Arc::new).collect();
+                tn.sockets.tvu.into_iter().map(Arc::new).collect();
             let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
             let mut msgs = Vec::new();
             for v in 0..10 {

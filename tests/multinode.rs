@@ -1548,7 +1548,7 @@ fn test_broadcast_last_tick() {
         .iter_mut()
         .map(|(_, _, node, _)| {
             BlobFetchStage::new(
-                Arc::new(node.sockets.replicate.pop().unwrap()),
+                Arc::new(node.sockets.tvu.pop().unwrap()),
                 blob_receiver_exit.clone(),
             )
         })

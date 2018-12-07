@@ -119,16 +119,16 @@ impl ContactInfo {
         nxt_addr
     }
     pub fn new_with_pubkey_socketaddr(pubkey: Pubkey, bind_addr: &SocketAddr) -> Self {
-        let transactions_addr = *bind_addr;
+        let tpu_addr = *bind_addr;
         let gossip_addr = Self::next_port(&bind_addr, 1);
-        let replicate_addr = Self::next_port(&bind_addr, 2);
+        let tvu_addr = Self::next_port(&bind_addr, 2);
         let rpc_addr = SocketAddr::new(bind_addr.ip(), RPC_PORT);
         let rpc_pubsub_addr = SocketAddr::new(bind_addr.ip(), RPC_PORT + 1);
         ContactInfo::new(
             pubkey,
             gossip_addr,
-            replicate_addr,
-            transactions_addr,
+            tvu_addr,
+            tpu_addr,
             "0.0.0.0:0".parse().unwrap(),
             rpc_addr,
             rpc_pubsub_addr,
@@ -267,7 +267,7 @@ mod tests {
         assert!(ci.storage_addr.ip().is_unspecified());
     }
     #[test]
-    fn replicated_data_new_with_socketaddr_with_pubkey() {
+    fn replayed_data_new_with_socketaddr_with_pubkey() {
         let keypair = Keypair::new();
         let d1 = ContactInfo::new_with_pubkey_socketaddr(
             keypair.pubkey().clone(),
