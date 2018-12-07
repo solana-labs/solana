@@ -364,10 +364,10 @@ impl ClusterInfo {
     ) -> (usize, Vec<usize>) {
         let mut layer_indices: Vec<usize> = vec![0];
         if nodes == 0 {
-            return (0, vec![]);
+            (0, vec![])
         } else if nodes <= fanout {
             // single layer data plane
-            return (1, layer_indices);
+            (1, layer_indices)
         } else {
             //layer 1 is going to be the first num fanout nodes, so exclude those
             let mut remaining_nodes = nodes - fanout;
