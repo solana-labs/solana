@@ -219,9 +219,9 @@ impl ReplayStage {
         let t_responder = responder("replay_stage", Arc::new(send), vote_blob_receiver);
 
         let keypair = Arc::new(keypair);
-        let vote_account_id = vote_account_id.clone();
+        let vote_account_id = *vote_account_id;
 
-        let rpc_client = RpcClient::new_from_socket(vote_signer_addr.clone());
+        let rpc_client = RpcClient::new_from_socket(*vote_signer_addr);
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {

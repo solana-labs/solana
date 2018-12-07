@@ -20,7 +20,7 @@ pub fn local_vote_signer_service() -> io::Result<(SocketAddr, JoinHandle<()>, Ar
         Ok(port) => SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port),
         Err(e) => return Err(e),
     };
-    let service_addr = addr.clone();
+    let service_addr = addr;
     let exit = Arc::new(AtomicBool::new(false));
     let thread_exit = exit.clone();
     let thread = Builder::new()

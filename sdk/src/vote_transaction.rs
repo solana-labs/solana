@@ -26,7 +26,7 @@ impl VoteTransaction for Transaction {
     fn vote_new(vote_account: &Pubkey, vote: Vote, last_id: Hash, fee: u64) -> Self {
         let instruction = VoteInstruction::NewVote(vote);
         Transaction::new_unsigned(
-            &[vote_account.clone()],
+            &[*vote_account],
             vote_program::id(),
             &instruction,
             last_id,

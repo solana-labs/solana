@@ -365,7 +365,7 @@ impl Fullnode {
 
         Fullnode {
             keypair,
-            vote_account_id: vote_account_id.clone(),
+            vote_account_id: *vote_account_id,
             cluster_info,
             shared_window,
             bank,
