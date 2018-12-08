@@ -96,7 +96,7 @@ impl Counter {
 }
 #[cfg(test)]
 mod tests {
-    use counter::{Counter, DEFAULT_LOG_RATE};
+    use crate::counter::{Counter, DEFAULT_LOG_RATE};
     use log::Level;
     use std::env;
     use std::sync::atomic::{AtomicUsize, Ordering};

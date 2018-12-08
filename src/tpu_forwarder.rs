@@ -2,18 +2,18 @@
 //!  transaction processing unit responsibility, which
 //!  forwards received packets to the current leader
 
-use cluster_info::ClusterInfo;
-use contact_info::ContactInfo;
-use counter::Counter;
+use crate::cluster_info::ClusterInfo;
+use crate::contact_info::ContactInfo;
+use crate::counter::Counter;
+use crate::result::Result;
+use crate::service::Service;
+use crate::streamer::{self, PacketReceiver};
 use log::Level;
-use result::Result;
-use service::Service;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
-use streamer::{self, PacketReceiver};
 
 pub struct TpuForwarder {
     exit: Arc<AtomicBool>,
@@ -105,9 +105,9 @@ impl Service for TpuForwarder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cluster_info::ClusterInfo;
-    use contact_info::ContactInfo;
-    use netutil::bind_in_range;
+    use crate::cluster_info::ClusterInfo;
+    use crate::contact_info::ContactInfo;
+    use crate::netutil::bind_in_range;
     use solana_sdk::pubkey::Pubkey;
     use std::net::UdpSocket;
     use std::net::{Ipv4Addr, SocketAddr};

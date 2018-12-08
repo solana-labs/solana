@@ -1,17 +1,21 @@
-use blob_fetch_stage::BlobFetchStage;
+use crate::blob_fetch_stage::BlobFetchStage;
+use crate::client::mk_client;
+use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
+use crate::db_ledger::DbLedger;
+use crate::gossip_service::GossipService;
+use crate::leader_scheduler::LeaderScheduler;
+use crate::ledger::LEDGER_DATA_FILE;
+use crate::result::Result;
+use crate::rpc_request::{RpcClient, RpcRequest};
+use crate::service::Service;
+use crate::store_ledger_stage::StoreLedgerStage;
+use crate::streamer::BlobReceiver;
+use crate::window;
+use crate::window_service::window_service;
 #[cfg(feature = "chacha")]
 use chacha::{chacha_cbc_encrypt_file, CHACHA_BLOCK_SIZE};
-use client::mk_client;
-use cluster_info::{ClusterInfo, Node, NodeInfo};
-use db_ledger::DbLedger;
-use gossip_service::GossipService;
-use leader_scheduler::LeaderScheduler;
-use ledger::LEDGER_DATA_FILE;
 use rand::thread_rng;
 use rand::Rng;
-use result::Result;
-use rpc_request::{RpcClient, RpcRequest};
-use service::Service;
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -33,10 +37,6 @@ use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::thread::JoinHandle;
 use std::time::Duration;
-use store_ledger_stage::StoreLedgerStage;
-use streamer::BlobReceiver;
-use window;
-use window_service::window_service;
 
 pub struct Replicator {
     gossip_service: GossipService,
@@ -280,8 +280,8 @@ impl Replicator {
 
 #[cfg(test)]
 mod tests {
-    use logger;
-    use replicator::sample_file;
+    use crate::logger;
+    use crate::replicator::sample_file;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::File;

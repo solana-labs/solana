@@ -1,14 +1,14 @@
 //! The `gossip_service` module implements the network control plane.
 
-use cluster_info::ClusterInfo;
-use service::Service;
+use crate::cluster_info::ClusterInfo;
+use crate::service::Service;
+use crate::streamer;
+use crate::window::SharedWindow;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
-use streamer;
-use window::SharedWindow;
 
 pub struct GossipService {
     exit: Arc<AtomicBool>,
@@ -67,7 +67,7 @@ impl Service for GossipService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cluster_info::{ClusterInfo, Node};
+    use crate::cluster_info::{ClusterInfo, Node};
     use std::sync::atomic::AtomicBool;
     use std::sync::{Arc, RwLock};
 

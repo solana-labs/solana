@@ -3,12 +3,12 @@
 //! designed to run with a simulator or over a UDP network connection with messages up to a
 //! packet::BLOB_DATA_SIZE size.
 
-use bloom::Bloom;
-use crds::Crds;
-use crds_gossip_error::CrdsGossipError;
-use crds_gossip_pull::CrdsGossipPull;
-use crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE};
-use crds_value::CrdsValue;
+use crate::bloom::Bloom;
+use crate::crds::Crds;
+use crate::crds_gossip_error::CrdsGossipError;
+use crate::crds_gossip_pull::CrdsGossipPull;
+use crate::crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE};
+use crate::crds_value::CrdsValue;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 
@@ -158,11 +158,11 @@ impl CrdsGossip {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::cluster_info::NodeInfo;
+    use crate::contact_info::ContactInfo;
+    use crate::crds_gossip_push::CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS;
+    use crate::crds_value::CrdsValueLabel;
     use bincode::serialized_size;
-    use cluster_info::NodeInfo;
-    use contact_info::ContactInfo;
-    use crds_gossip_push::CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS;
-    use crds_value::CrdsValueLabel;
     use rayon::prelude::*;
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -491,7 +491,7 @@ mod test {
     #[test]
     #[ignore]
     fn test_star_network_large_pull() {
-        use logger;
+        use crate::logger;
         logger::setup();
         let mut network = star_network_create(2000);
         network_simulator_pull_only(&mut network);
@@ -499,7 +499,7 @@ mod test {
     #[test]
     #[ignore]
     fn test_rstar_network_large_push() {
-        use logger;
+        use crate::logger;
         logger::setup();
         let mut network = rstar_network_create(4000);
         network_simulator(&mut network);
@@ -507,7 +507,7 @@ mod test {
     #[test]
     #[ignore]
     fn test_ring_network_large_push() {
-        use logger;
+        use crate::logger;
         logger::setup();
         let mut network = ring_network_create(4001);
         network_simulator(&mut network);
@@ -515,7 +515,7 @@ mod test {
     #[test]
     #[ignore]
     fn test_star_network_large_push() {
-        use logger;
+        use crate::logger;
         logger::setup();
         let mut network = star_network_create(4002);
         network_simulator(&mut network);

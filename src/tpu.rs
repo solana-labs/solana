@@ -1,14 +1,14 @@
 //! The `tpu` module implements the Transaction Processing Unit, a
 //! 5-stage transaction processing pipeline in software.
 
-use bank::Bank;
-use banking_stage::{BankingStage, BankingStageReturnType};
-use entry::Entry;
-use fetch_stage::FetchStage;
-use ledger_write_stage::LedgerWriteStage;
-use poh_service::Config;
-use service::Service;
-use sigverify_stage::SigVerifyStage;
+use crate::bank::Bank;
+use crate::banking_stage::{BankingStage, BankingStageReturnType};
+use crate::entry::Entry;
+use crate::fetch_stage::FetchStage;
+use crate::ledger_write_stage::LedgerWriteStage;
+use crate::poh_service::Config;
+use crate::service::Service;
+use crate::sigverify_stage::SigVerifyStage;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::net::UdpSocket;

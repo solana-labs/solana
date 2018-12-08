@@ -2,10 +2,10 @@
 //! unique ID that is the hash of the Entry before it, plus the hash of the
 //! transactions within it. Entries cannot be reordered, and its field `num_hashes`
 //! represents an approximate amount of time since the last Entry was created.
+use crate::packet::{SharedBlob, BLOB_DATA_SIZE};
+use crate::poh::Poh;
+use crate::result::Result;
 use bincode::{deserialize, serialize_into, serialized_size};
-use packet::{SharedBlob, BLOB_DATA_SIZE};
-use poh::Poh;
-use result::Result;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::Transaction;
@@ -272,8 +272,8 @@ pub fn reconstruct_entries_from_blobs(blobs: Vec<SharedBlob>) -> Result<(Vec<Ent
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::entry::Entry;
     use chrono::prelude::*;
-    use entry::Entry;
     use solana_sdk::budget_transaction::BudgetTransaction;
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};

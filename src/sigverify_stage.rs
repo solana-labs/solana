@@ -5,14 +5,15 @@
 //! transaction. All processing is done on the CPU by default and on a GPU
 //! if the `cuda` feature is enabled with `--features=cuda`.
 
-use counter::Counter;
+use crate::counter::Counter;
 
+use crate::packet::SharedPackets;
+use crate::result::{Error, Result};
+use crate::service::Service;
+use crate::sigverify;
+use crate::streamer::{self, PacketReceiver};
 use log::Level;
-use packet::SharedPackets;
 use rand::{thread_rng, Rng};
-use result::{Error, Result};
-use service::Service;
-use sigverify;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::timing;
 use std::sync::atomic::AtomicUsize;
@@ -20,7 +21,6 @@ use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, spawn, JoinHandle};
 use std::time::Instant;
-use streamer::{self, PacketReceiver};
 
 pub type VerifiedPackets = Vec<(SharedPackets, Vec<u8>)>;
 

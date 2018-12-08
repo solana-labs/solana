@@ -1,18 +1,18 @@
 //! The `result` module exposes a Result type that propagates one of many different Error types.
 
-use bank;
+use crate::bank;
+use crate::cluster_info;
+use crate::db_ledger;
+use crate::packet;
+use crate::poh_recorder;
+use crate::vote_stage;
 use bincode;
-use cluster_info;
-use db_ledger;
 #[cfg(feature = "erasure")]
 use erasure;
-use packet;
-use poh_recorder;
 use rocksdb;
 use serde_json;
 use std;
 use std::any::Any;
-use vote_stage;
 
 #[derive(Debug)]
 pub enum Error {
@@ -124,8 +124,8 @@ impl std::convert::From<db_ledger::DbLedgerError> for Error {
 
 #[cfg(test)]
 mod tests {
-    use result::Error;
-    use result::Result;
+    use crate::result::Error;
+    use crate::result::Result;
     use serde_json;
     use std::io;
     use std::io::Write;

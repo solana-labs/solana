@@ -1,4 +1,4 @@
-use bloom::BloomHashIndex;
+use crate::bloom::BloomHashIndex;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 

@@ -12,22 +12,24 @@
 //! * layer 2 - Everyone else, if layer 1 is `2^10`, layer 2 should be able to fit `2^20` number of nodes.
 //!
 //! Bank needs to provide an interface for us to query the stake weight
+use crate::bloom::Bloom;
+use crate::contact_info::ContactInfo;
+use crate::counter::Counter;
+use crate::crds_gossip::CrdsGossip;
+use crate::crds_gossip_error::CrdsGossipError;
+use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
+use crate::crds_value::{CrdsValue, CrdsValueLabel, LeaderId};
+use crate::ledger::LedgerWindow;
+use crate::netutil::{bind_in_range, bind_to, find_available_port_in_range, multi_bind_in_range};
+use crate::packet::{to_blob, Blob, SharedBlob, BLOB_SIZE};
+use crate::result::Result;
+use crate::rpc::RPC_PORT;
+use crate::streamer::{BlobReceiver, BlobSender};
+use crate::window::{SharedWindow, WindowIndex};
 use bincode::{deserialize, serialize};
-use bloom::Bloom;
-use contact_info::ContactInfo;
-use counter::Counter;
-use crds_gossip::CrdsGossip;
-use crds_gossip_error::CrdsGossipError;
-use crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
-use crds_value::{CrdsValue, CrdsValueLabel, LeaderId};
-use ledger::LedgerWindow;
 use log::Level;
-use netutil::{bind_in_range, bind_to, find_available_port_in_range, multi_bind_in_range};
-use packet::{to_blob, Blob, SharedBlob, BLOB_SIZE};
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use result::Result;
-use rpc::RPC_PORT;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
@@ -39,8 +41,6 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
 use std::time::{Duration, Instant};
-use streamer::{BlobReceiver, BlobSender};
-use window::{SharedWindow, WindowIndex};
 
 pub type NodeInfo = ContactInfo;
 
@@ -1129,18 +1129,18 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crds_value::CrdsValueLabel;
-    use entry::Entry;
-    use ledger::{get_tmp_ledger_path, LedgerWindow, LedgerWriter};
-    use logger;
-    use packet::SharedBlob;
-    use result::Error;
+    use crate::crds_value::CrdsValueLabel;
+    use crate::entry::Entry;
+    use crate::ledger::{get_tmp_ledger_path, LedgerWindow, LedgerWriter};
+    use crate::logger;
+    use crate::packet::SharedBlob;
+    use crate::result::Error;
+    use crate::window::default_window;
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::{Arc, RwLock};
-    use window::default_window;
 
     #[test]
     fn test_cluster_spy_gossip() {

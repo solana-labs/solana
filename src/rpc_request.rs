@@ -135,8 +135,8 @@ impl error::Error for RpcError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use jsonrpc_core::*;
-    use jsonrpc_http_server::*;
+    use crate::jsonrpc_core::*;
+    use crate::jsonrpc_http_server::*;
     use serde_json::Number;
     use std::net::{Ipv4Addr, SocketAddr};
     use std::sync::mpsc::channel;

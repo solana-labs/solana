@@ -1,5 +1,5 @@
+use crate::contact_info::ContactInfo;
 use bincode::serialize;
-use contact_info::ContactInfo;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, Signable, Signature};
 use solana_sdk::transaction::Transaction;
@@ -230,10 +230,10 @@ impl Signable for CrdsValue {
 #[cfg(test)]
 mod test {
     use super::*;
-    use contact_info::ContactInfo;
+    use crate::contact_info::ContactInfo;
+    use crate::test_tx::test_tx;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::timing::timestamp;
-    use test_tx::test_tx;
 
     #[test]
     fn test_labels() {

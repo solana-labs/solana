@@ -2,13 +2,13 @@
 // for storage mining. Replicators submit storage proofs, validator then bundles them
 // to submit its proof for mining to be rewarded.
 
+use crate::entry::EntryReceiver;
+use crate::result::{Error, Result};
+use crate::service::Service;
 #[cfg(all(feature = "chacha", feature = "cuda"))]
 use chacha_cuda::chacha_cbc_encrypt_file_many_keys;
-use entry::EntryReceiver;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
-use result::{Error, Result};
-use service::Service;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signature::Signature;
@@ -266,12 +266,15 @@ impl Service for StorageStage {
 
 #[cfg(test)]
 mod tests {
-    use entry::Entry;
-    use ledger::make_tiny_test_entries;
-    use ledger::{create_tmp_sample_ledger, LedgerWriter};
-    use logger;
+    use crate::entry::Entry;
+    use crate::ledger::make_tiny_test_entries;
+    use crate::ledger::{create_tmp_sample_ledger, LedgerWriter};
+    use crate::logger;
+    use crate::service::Service;
+    use crate::storage_stage::StorageState;
+    use crate::storage_stage::NUM_IDENTITIES;
+    use crate::storage_stage::{get_identity_index_from_signature, StorageStage};
     use rayon::prelude::*;
-    use service::Service;
     use solana_sdk::hash::Hash;
     use solana_sdk::hash::Hasher;
     use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
@@ -285,9 +288,6 @@ mod tests {
     use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;
-    use storage_stage::StorageState;
-    use storage_stage::NUM_IDENTITIES;
-    use storage_stage::{get_identity_index_from_signature, StorageStage};
 
     #[test]
     fn test_storage_stage_none_ledger() {

@@ -8,15 +8,15 @@
 //!    the local nodes wallclock window they are drooped silently.
 //! 2. The prune set is stored in a Bloom filter.
 
+use crate::bloom::Bloom;
+use crate::contact_info::ContactInfo;
+use crate::crds::{Crds, VersionedCrdsValue};
+use crate::crds_gossip::CRDS_GOSSIP_BLOOM_SIZE;
+use crate::crds_gossip_error::CrdsGossipError;
+use crate::crds_value::{CrdsValue, CrdsValueLabel};
+use crate::packet::BLOB_DATA_SIZE;
 use bincode::serialized_size;
-use bloom::Bloom;
-use contact_info::ContactInfo;
-use crds::{Crds, VersionedCrdsValue};
-use crds_gossip::CRDS_GOSSIP_BLOOM_SIZE;
-use crds_gossip_error::CrdsGossipError;
-use crds_value::{CrdsValue, CrdsValueLabel};
 use indexmap::map::IndexMap;
-use packet::BLOB_DATA_SIZE;
 use rand;
 use rand::seq::SliceRandom;
 use solana_sdk::hash::Hash;
@@ -245,7 +245,7 @@ impl CrdsGossipPush {
 #[cfg(test)]
 mod test {
     use super::*;
-    use contact_info::ContactInfo;
+    use crate::contact_info::ContactInfo;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     #[test]
     fn test_process_push() {
@@ -342,7 +342,7 @@ mod test {
     }
     #[test]
     fn test_refresh_active_set() {
-        use logger;
+        use crate::logger;
         logger::setup();
         let mut crds = Crds::default();
         let mut push = CrdsGossipPush::default();

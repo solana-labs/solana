@@ -2,12 +2,12 @@
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
 
+use crate::entry::Entry;
+use crate::mint::Mint;
+use crate::packet::{SharedBlob, BLOB_DATA_SIZE};
 use bincode::{self, deserialize_from, serialize_into, serialized_size};
 use chrono::prelude::Utc;
-use entry::Entry;
 use log::Level::Trace;
-use mint::Mint;
-use packet::{SharedBlob, BLOB_DATA_SIZE};
 use rayon::prelude::*;
 use solana_sdk::budget_transaction::BudgetTransaction;
 use solana_sdk::hash::{hash, Hash};
@@ -702,9 +702,9 @@ pub fn make_large_test_entries(num_entries: usize) -> Vec<Entry> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::entry::{next_entry, reconstruct_entries_from_blobs, Entry};
+    use crate::packet::{to_blobs, BLOB_DATA_SIZE, PACKET_DATA_SIZE};
     use bincode::{deserialize, serialized_size};
-    use entry::{next_entry, reconstruct_entries_from_blobs, Entry};
-    use packet::{to_blobs, BLOB_DATA_SIZE, PACKET_DATA_SIZE};
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
@@ -714,7 +714,7 @@ mod tests {
 
     #[test]
     fn test_verify_slice() {
-        use logger;
+        use crate::logger;
         logger::setup();
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
@@ -758,7 +758,7 @@ mod tests {
 
     #[test]
     fn test_entries_to_blobs() {
-        use logger;
+        use crate::logger;
         logger::setup();
         let entries = make_test_entries();
 
@@ -769,7 +769,7 @@ mod tests {
 
     #[test]
     fn test_bad_blobs_attack() {
-        use logger;
+        use crate::logger;
         logger::setup();
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
         let blobs_q = to_blobs(vec![(0, addr)]).unwrap(); // <-- attack!
@@ -778,7 +778,7 @@ mod tests {
 
     #[test]
     fn test_next_entries() {
-        use logger;
+        use crate::logger;
         logger::setup();
         let id = Hash::default();
         let next_id = hash(&id.as_ref());
@@ -827,7 +827,7 @@ mod tests {
 
     #[test]
     fn test_ledger_reader_writer() {
-        use logger;
+        use crate::logger;
         logger::setup();
         let ledger_path = get_tmp_ledger_path("test_ledger_reader_writer");
         let entries = make_tiny_test_entries(10);
@@ -905,7 +905,7 @@ mod tests {
 
     #[test]
     fn test_recover_ledger() {
-        use logger;
+        use crate::logger;
         logger::setup();
 
         let entries = make_tiny_test_entries(10);
@@ -956,7 +956,7 @@ mod tests {
 
     #[test]
     fn test_verify_ledger() {
-        use logger;
+        use crate::logger;
         logger::setup();
 
         let entries = make_tiny_test_entries(10);
@@ -974,7 +974,7 @@ mod tests {
 
     #[test]
     fn test_get_entries_bytes() {
-        use logger;
+        use crate::logger;
         logger::setup();
         let entries = make_tiny_test_entries(10);
         let ledger_path = get_tmp_ledger_path("test_raw_entries");

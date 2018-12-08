@@ -96,7 +96,7 @@ pub fn verify(initial: Hash, entries: &[PohEntry]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use poh::{self, PohEntry};
+    use crate::poh::{self, PohEntry};
     use solana_sdk::hash::Hash;
 
     #[test]

@@ -1,5 +1,5 @@
-use bank::Bank;
-use result::Result;
+use crate::bank::Bank;
+use crate::result::Result;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;

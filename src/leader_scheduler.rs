@@ -1,12 +1,12 @@
 //! The `leader_scheduler` module implements a structure and functions for tracking and
 //! managing the schedule for leader rotation
 
-use bank::Bank;
+use crate::bank::Bank;
 
+use crate::entry::Entry;
+use crate::ledger::create_ticks;
 use bincode::serialize;
 use byteorder::{LittleEndian, ReadBytesExt};
-use entry::Entry;
-use ledger::create_ticks;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -508,13 +508,13 @@ pub fn make_active_set_entries(
 
 #[cfg(test)]
 mod tests {
-    use bank::Bank;
-    use create_vote_account::*;
-    use leader_scheduler::{
+    use crate::bank::Bank;
+    use crate::create_vote_account::*;
+    use crate::leader_scheduler::{
         LeaderScheduler, LeaderSchedulerConfig, DEFAULT_BOOTSTRAP_HEIGHT,
         DEFAULT_LEADER_ROTATION_INTERVAL, DEFAULT_SEED_ROTATION_INTERVAL,
     };
-    use mint::Mint;
+    use crate::mint::Mint;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
