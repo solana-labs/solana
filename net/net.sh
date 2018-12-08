@@ -141,7 +141,7 @@ build() {
       export NDEBUG=1
       cargo install --path drone --features=$cargoFeatures --root farf
       cargo install --path . --features=$cargoFeatures --root farf
-      ./scripts/install-native-programs.sh farf/ release
+      ./scripts/install-native-programs.sh farf/bin/deps/ release
     "
   )
   echo "Build took $SECONDS seconds"

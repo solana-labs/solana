@@ -24,7 +24,7 @@ rm -rf usr/
   cargo install --path . --root sdk/docker-solana/usr
 "
 cp -f entrypoint.sh usr/bin/solana-entrypoint.sh
-../../scripts/install-native-programs.sh usr/bin/ release
+../../scripts/install-native-programs.sh usr/bin/deps/ release
 
 docker build -t solanalabs/solana:$CHANNEL .
 
