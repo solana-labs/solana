@@ -38,15 +38,20 @@ const PLATFORM_FILE_EXTENSION_NATIVE: &str = "so";
 const PLATFORM_FILE_EXTENSION_NATIVE: &str = "dll";
 
 fn create_path(name: &str) -> PathBuf {
-    let pathbuf = {
-        let current_exe = env::current_exe().unwrap();
-        PathBuf::from(current_exe.parent().unwrap())
-    };
+    let current_exe = env::current_exe().unwrap();
+    let current_exe_directory = PathBuf::from(current_exe.parent().unwrap());
+    let library_file_name = PathBuf::from(PLATFORM_FILE_PREFIX_NATIVE.to_string() + name)
+        .with_extension(PLATFORM_FILE_EXTENSION_NATIVE);
 
-    pathbuf.join(
-        PathBuf::from(PLATFORM_FILE_PREFIX_NATIVE.to_string() + name)
-            .with_extension(PLATFORM_FILE_EXTENSION_NATIVE),
-    )
+    // Check the current_exe directory for the library as `cargo tests` are run
+    // from the deps/ subdirectory
+    let file_path = current_exe_directory.join(&library_file_name);
+    if file_path.exists() {
+        file_path
+    } else {
+        // `cargo build` places dependent libraries in the deps/ subdirectory
+        current_exe_directory.join("deps").join(library_file_name)
+    }
 }
 
 pub fn check_id(program_id: &Pubkey) -> bool {

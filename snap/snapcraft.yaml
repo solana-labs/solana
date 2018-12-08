@@ -95,7 +95,8 @@ parts:
       cargo install --path . --root $SNAPCRAFT_PART_INSTALL --bins
 
       # Install native programs
-      ./scripts/install-native-programs.sh $SNAPCRAFT_PART_INSTALL/bin/ release
+      mkdir -p $SNAPCRAFT_PART_INSTALL/bin/deps/
+      ./scripts/install-native-programs.sh $SNAPCRAFT_PART_INSTALL/bin/deps/ release
 
       # Install multinode-demo/
       mkdir -p $SNAPCRAFT_PART_INSTALL/multinode-demo/
