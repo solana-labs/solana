@@ -19,12 +19,12 @@ setup_args="$(snapctl get setup-args)"
 
 case $mode in
 bootstrap-leader+drone)
-  "$SNAP"/multinode-demo/setup.sh -t bootstrap_leader $num_tokens -p $setup_args
+  "$SNAP"/multinode-demo/setup.sh -t bootstrap-leader $num_tokens -p $setup_args
   snapctl start --enable solana.daemon-drone
   snapctl start --enable solana.daemon-bootstrap-leader
   ;;
 bootstrap-leader)
-  "$SNAP"/multinode-demo/setup.sh -t bootstrap_leader $num_tokens -p $setup_args
+  "$SNAP"/multinode-demo/setup.sh -t bootstrap-leader $num_tokens -p $setup_args
   snapctl start --enable solana.daemon-bootstrap-leader
   ;;
 fullnode)
