@@ -1,11 +1,11 @@
 //! The `store_ledger` stores the ledger from received entries for storage nodes
 
-use counter::Counter;
-use entry::EntryReceiver;
-use ledger::LedgerWriter;
+use crate::counter::Counter;
+use crate::entry::EntryReceiver;
+use crate::ledger::LedgerWriter;
+use crate::result::{Error, Result};
+use crate::service::Service;
 use log::Level;
-use result::{Error, Result};
-use service::Service;
 use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::RecvTimeoutError;
 use std::thread::{self, Builder, JoinHandle};

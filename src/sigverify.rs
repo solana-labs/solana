@@ -4,11 +4,11 @@
 //! offloaded to the GPU.
 //!
 
+use crate::counter::Counter;
+use crate::packet::{Packet, SharedPackets};
+use crate::result::Result;
 use byteorder::{LittleEndian, ReadBytesExt};
-use counter::Counter;
 use log::Level;
-use packet::{Packet, SharedPackets};
-use result::Result;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 #[cfg(test)]
@@ -325,16 +325,16 @@ pub fn make_packet_from_transaction(tx: Transaction) -> Packet {
 
 #[cfg(test)]
 mod tests {
+    use crate::packet::{Packet, SharedPackets};
+    use crate::sigverify;
+    use crate::test_tx::test_tx;
     use bincode::{deserialize, serialize};
-    use packet::{Packet, SharedPackets};
-    use sigverify;
     use solana_sdk::budget_program;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_program;
     use solana_sdk::transaction::{Instruction, Transaction, SIG_OFFSET};
-    use test_tx::test_tx;
 
     pub fn memfind<A: Eq>(a: &[A], b: &[A]) -> Option<usize> {
         assert!(a.len() >= b.len());
@@ -388,7 +388,7 @@ mod tests {
 
     #[test]
     fn test_system_transaction_userdata_layout() {
-        use packet::PACKET_DATA_SIZE;
+        use crate::packet::PACKET_DATA_SIZE;
         let mut tx0 = test_tx();
         tx0.instructions[0].userdata = vec![1, 2, 3];
         let sign_data0a = tx0.get_sign_data();
@@ -481,7 +481,7 @@ mod tests {
 
     #[test]
     fn test_verify_multi_sig() {
-        use logger;
+        use crate::logger;
         logger::setup();
         let keypair0 = Keypair::new();
         let keypair1 = Keypair::new();

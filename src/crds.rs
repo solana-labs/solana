@@ -24,8 +24,8 @@
 //! A value is updated to a new version if the labels match, and the value
 //! wallclock is later, or the value hash is greater.
 
+use crate::crds_value::{CrdsValue, CrdsValueLabel};
 use bincode::serialize;
-use crds_value::{CrdsValue, CrdsValueLabel};
 use indexmap::map::IndexMap;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
@@ -163,8 +163,8 @@ impl Crds {
 #[cfg(test)]
 mod test {
     use super::*;
-    use contact_info::ContactInfo;
-    use crds_value::LeaderId;
+    use crate::contact_info::ContactInfo;
+    use crate::crds_value::LeaderId;
     use solana_sdk::signature::{Keypair, KeypairUtil};
 
     #[test]

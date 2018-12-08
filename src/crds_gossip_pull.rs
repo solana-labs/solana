@@ -9,13 +9,13 @@
 //! with random hash functions.  So each subsequent request will have a different distribution
 //! of false positives.
 
+use crate::bloom::Bloom;
+use crate::crds::Crds;
+use crate::crds_gossip::CRDS_GOSSIP_BLOOM_SIZE;
+use crate::crds_gossip_error::CrdsGossipError;
+use crate::crds_value::{CrdsValue, CrdsValueLabel};
+use crate::packet::BLOB_DATA_SIZE;
 use bincode::serialized_size;
-use bloom::Bloom;
-use crds::Crds;
-use crds_gossip::CRDS_GOSSIP_BLOOM_SIZE;
-use crds_gossip_error::CrdsGossipError;
-use crds_value::{CrdsValue, CrdsValueLabel};
-use packet::BLOB_DATA_SIZE;
 use rand;
 use rand::distributions::{Distribution, WeightedIndex};
 use solana_sdk::hash::Hash;
@@ -198,8 +198,8 @@ impl CrdsGossipPull {
 #[cfg(test)]
 mod test {
     use super::*;
-    use contact_info::ContactInfo;
-    use crds_value::LeaderId;
+    use crate::contact_info::ContactInfo;
+    use crate::crds_value::LeaderId;
     use solana_sdk::signature::{Keypair, KeypairUtil};
 
     #[test]

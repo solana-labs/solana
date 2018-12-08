@@ -1,12 +1,13 @@
 //! The `vote_stage` votes on the `last_id` of the bank at a regular cadence
 
-use bank::Bank;
+use crate::bank::Bank;
+use crate::cluster_info::ClusterInfo;
+use crate::counter::Counter;
+use crate::packet::SharedBlob;
+use crate::result::{Error, Result};
+use crate::streamer::BlobSender;
 use bincode::serialize;
-use cluster_info::ClusterInfo;
-use counter::Counter;
 use log::Level;
-use packet::SharedBlob;
-use result::{Error, Result};
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Keypair;
 use solana_sdk::transaction::Transaction;
@@ -15,7 +16,6 @@ use solana_sdk::vote_transaction::VoteTransaction;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
-use streamer::BlobSender;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum VoteError {

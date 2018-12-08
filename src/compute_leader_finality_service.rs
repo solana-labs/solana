@@ -2,9 +2,9 @@
 //! to generate a thread which regularly calculates the last finality times
 //! observed by the leader
 
-use bank::Bank;
+use crate::bank::Bank;
 
-use service::Service;
+use crate::service::Service;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
@@ -148,12 +148,12 @@ impl Service for ComputeLeaderFinalityService {
 
 #[cfg(test)]
 pub mod tests {
-    use bank::Bank;
+    use crate::bank::Bank;
+    use crate::compute_leader_finality_service::ComputeLeaderFinalityService;
+    use crate::create_vote_account::*;
+    use crate::logger;
+    use crate::mint::Mint;
     use bincode::serialize;
-    use compute_leader_finality_service::ComputeLeaderFinalityService;
-    use create_vote_account::*;
-    use logger;
-    use mint::Mint;
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;

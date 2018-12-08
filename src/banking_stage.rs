@@ -2,18 +2,18 @@
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
 
-use bank::Bank;
+use crate::bank::Bank;
+use crate::compute_leader_finality_service::ComputeLeaderFinalityService;
+use crate::counter::Counter;
+use crate::entry::Entry;
+use crate::packet::Packets;
+use crate::poh_recorder::{PohRecorder, PohRecorderError};
+use crate::poh_service::{Config, PohService};
+use crate::result::{Error, Result};
+use crate::service::Service;
+use crate::sigverify_stage::VerifiedPackets;
 use bincode::deserialize;
-use compute_leader_finality_service::ComputeLeaderFinalityService;
-use counter::Counter;
-use entry::Entry;
 use log::Level;
-use packet::Packets;
-use poh_recorder::{PohRecorder, PohRecorderError};
-use poh_service::{Config, PohService};
-use result::{Error, Result};
-use service::Service;
-use sigverify_stage::VerifiedPackets;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
@@ -260,11 +260,11 @@ impl Service for BankingStage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bank::Bank;
-    use banking_stage::BankingStageReturnType;
-    use ledger::Block;
-    use mint::Mint;
-    use packet::to_packets;
+    use crate::bank::Bank;
+    use crate::banking_stage::BankingStageReturnType;
+    use crate::ledger::Block;
+    use crate::mint::Mint;
+    use crate::packet::to_packets;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Transaction;

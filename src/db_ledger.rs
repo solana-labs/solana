@@ -2,11 +2,11 @@
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
 
+use crate::entry::Entry;
+use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
+use crate::result::{Error, Result};
 use bincode::{deserialize, serialize};
 use byteorder::{BigEndian, ByteOrder, ReadBytesExt};
-use entry::Entry;
-use packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
-use result::{Error, Result};
 use rocksdb::{ColumnFamily, Options, WriteBatch, DB};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -474,7 +474,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ledger::{get_tmp_ledger_path, make_tiny_test_entries, Block};
+    use crate::ledger::{get_tmp_ledger_path, make_tiny_test_entries, Block};
 
     #[test]
     fn test_put_get_simple() {

@@ -1,6 +1,6 @@
 //! The `mint` module is a library for generating the chain's genesis block.
 
-use entry::Entry;
+use crate::entry::Entry;
 use ring::rand::SystemRandom;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
@@ -106,8 +106,8 @@ impl Mint {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ledger::Block;
     use bincode::deserialize;
-    use ledger::Block;
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_program;
 

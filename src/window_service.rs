@@ -1,15 +1,16 @@
 //! The `window_service` provides a thread for maintaining a window (tail of the ledger).
 //!
-use cluster_info::ClusterInfo;
-use counter::Counter;
-use db_ledger::{DbLedger, LedgerColumnFamily, MetaCf, DEFAULT_SLOT_HEIGHT};
-use db_window::*;
-use entry::EntrySender;
+use crate::cluster_info::ClusterInfo;
+use crate::counter::Counter;
+use crate::db_ledger::{DbLedger, LedgerColumnFamily, MetaCf, DEFAULT_SLOT_HEIGHT};
+use crate::db_window::*;
+use crate::entry::EntrySender;
 
-use leader_scheduler::LeaderScheduler;
+use crate::leader_scheduler::LeaderScheduler;
+use crate::result::{Error, Result};
+use crate::streamer::{BlobReceiver, BlobSender};
 use log::Level;
 use rand::{thread_rng, Rng};
-use result::{Error, Result};
 use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
@@ -20,7 +21,6 @@ use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, RwLock};
 use std::thread::{Builder, JoinHandle};
 use std::time::{Duration, Instant};
-use streamer::{BlobReceiver, BlobSender};
 
 pub const MAX_REPAIR_BACKOFF: usize = 128;
 
@@ -227,13 +227,15 @@ pub fn window_service(
 
 #[cfg(test)]
 mod test {
-    use cluster_info::{ClusterInfo, Node};
-    use db_ledger::DbLedger;
-    use entry::Entry;
-    use leader_scheduler::LeaderScheduler;
-    use ledger::get_tmp_ledger_path;
-    use logger;
-    use packet::{make_consecutive_blobs, SharedBlob, PACKET_DATA_SIZE};
+    use crate::cluster_info::{ClusterInfo, Node};
+    use crate::db_ledger::DbLedger;
+    use crate::entry::Entry;
+    use crate::leader_scheduler::LeaderScheduler;
+    use crate::ledger::get_tmp_ledger_path;
+    use crate::logger;
+    use crate::packet::{make_consecutive_blobs, SharedBlob, PACKET_DATA_SIZE};
+    use crate::streamer::{blob_receiver, responder};
+    use crate::window_service::{repair_backoff, window_service};
     use rocksdb::{Options, DB};
     use solana_sdk::hash::Hash;
     use std::fs::remove_dir_all;
@@ -242,8 +244,6 @@ mod test {
     use std::sync::mpsc::{channel, Receiver};
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
-    use streamer::{blob_receiver, responder};
-    use window_service::{repair_backoff, window_service};
 
     fn get_entries(r: Receiver<Vec<Entry>>, num: &mut usize) {
         for _t in 0..5 {

@@ -1,12 +1,12 @@
 //! The `window` module defines data structure for storing the tail of the ledger.
 //!
-use cluster_info::ClusterInfo;
-use counter::Counter;
-use entry::reconstruct_entries_from_blobs;
-use entry::Entry;
-use leader_scheduler::LeaderScheduler;
+use crate::cluster_info::ClusterInfo;
+use crate::counter::Counter;
+use crate::entry::reconstruct_entries_from_blobs;
+use crate::entry::Entry;
+use crate::leader_scheduler::LeaderScheduler;
+use crate::packet::SharedBlob;
 use log::Level;
-use packet::SharedBlob;
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
 use std::mem;
@@ -398,7 +398,9 @@ pub fn default_window() -> Window {
 
 #[cfg(test)]
 mod test {
-    use packet::{Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
+    use crate::packet::{Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
+    use crate::streamer::{receiver, responder, PacketReceiver};
+    use crate::window::{calculate_max_repair, new_window, Window, WindowUtil};
     use solana_sdk::pubkey::Pubkey;
     use std::io;
     use std::io::Write;
@@ -407,8 +409,6 @@ mod test {
     use std::sync::mpsc::channel;
     use std::sync::Arc;
     use std::time::Duration;
-    use streamer::{receiver, responder, PacketReceiver};
-    use window::{calculate_max_repair, new_window, Window, WindowUtil};
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
         for _t in 0..5 {

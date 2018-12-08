@@ -1,14 +1,14 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
+use crate::counter::Counter;
+#[cfg(test)]
+use crate::entry::Entry;
+#[cfg(test)]
+use crate::ledger::Block;
+use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
+use crate::result::{Error, Result};
 use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use counter::Counter;
-#[cfg(test)]
-use entry::Entry;
-#[cfg(test)]
-use ledger::Block;
 use log::Level;
-use recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
-use result::{Error, Result};
 use serde::Serialize;
 #[cfg(test)]
 use solana_sdk::hash::Hash;
@@ -473,7 +473,7 @@ pub fn make_consecutive_blobs(
 
 #[cfg(test)]
 mod tests {
-    use packet::{
+    use crate::packet::{
         to_packets, Blob, Meta, Packet, Packets, SharedBlob, SharedPackets, NUM_PACKETS,
         PACKET_DATA_SIZE,
     };

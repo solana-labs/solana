@@ -1,12 +1,12 @@
 //! The `fetch_stage` batches input from a UDP socket and sends it to a channel.
 
-use service::Service;
+use crate::service::Service;
+use crate::streamer::{self, PacketReceiver};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
-use streamer::{self, PacketReceiver};
 
 pub struct FetchStage {
     exit: Arc<AtomicBool>,

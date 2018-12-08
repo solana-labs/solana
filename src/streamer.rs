@@ -1,8 +1,8 @@
 //! The `streamer` module defines a set of services for efficiently pulling data from UDP sockets.
 //!
 
-use packet::{Blob, SharedBlobs, SharedPackets};
-use result::{Error, Result};
+use crate::packet::{Blob, SharedBlobs, SharedPackets};
+use crate::result::{Error, Result};
 use solana_metrics::{influxdb, submit};
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
@@ -135,7 +135,9 @@ pub fn blob_receiver(sock: Arc<UdpSocket>, exit: Arc<AtomicBool>, s: BlobSender)
 
 #[cfg(test)]
 mod test {
-    use packet::{Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
+    use crate::packet::{Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
+    use crate::streamer::PacketReceiver;
+    use crate::streamer::{receiver, responder};
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;
@@ -143,8 +145,6 @@ mod test {
     use std::sync::mpsc::channel;
     use std::sync::Arc;
     use std::time::Duration;
-    use streamer::PacketReceiver;
-    use streamer::{receiver, responder};
 
     fn get_msgs(r: PacketReceiver, num: &mut usize) {
         for _t in 0..5 {

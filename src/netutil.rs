@@ -203,9 +203,9 @@ pub fn find_available_port_in_range(range: (u16, u16)) -> io::Result<u16> {
 
 #[cfg(test)]
 mod tests {
+    use crate::logger;
+    use crate::netutil::*;
     use ipnetwork::IpNetwork;
-    use logger;
-    use netutil::*;
     use pnet_datalink as datalink;
 
     #[test]

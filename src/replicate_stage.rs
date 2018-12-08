@@ -1,16 +1,18 @@
 //! The `replicate_stage` replicates transactions broadcast by the leader.
 
-use bank::Bank;
-use cluster_info::ClusterInfo;
-use counter::Counter;
-use entry::{EntryReceiver, EntrySender};
+use crate::bank::Bank;
+use crate::cluster_info::ClusterInfo;
+use crate::counter::Counter;
+use crate::entry::{EntryReceiver, EntrySender};
 use solana_sdk::hash::Hash;
 
-use ledger::Block;
+use crate::ledger::Block;
+use crate::packet::BlobError;
+use crate::result::{Error, Result};
+use crate::service::Service;
+use crate::streamer::{responder, BlobSender};
+use crate::vote_stage::send_validator_vote;
 use log::Level;
-use packet::BlobError;
-use result::{Error, Result};
-use service::Service;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::duration_as_ms;
@@ -22,8 +24,6 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
-use streamer::{responder, BlobSender};
-use vote_stage::send_validator_vote;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ReplicateStageReturnType {
@@ -244,24 +244,26 @@ impl Service for ReplicateStage {
 
 #[cfg(test)]
 mod test {
-    use bank::Bank;
-    use cluster_info::{ClusterInfo, Node};
-    use entry::Entry;
-    use fullnode::Fullnode;
-    use leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
-    use ledger::{create_ticks, create_tmp_sample_ledger, LedgerWriter};
-    use logger;
-    use packet::BlobError;
-    use replicate_stage::{ReplicateStage, ReplicateStageReturnType};
-    use result::Error;
-    use service::Service;
+    use crate::bank::Bank;
+    use crate::cluster_info::{ClusterInfo, Node};
+    use crate::entry::Entry;
+    use crate::fullnode::Fullnode;
+    use crate::leader_scheduler::{
+        make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
+    };
+    use crate::ledger::{create_ticks, create_tmp_sample_ledger, LedgerWriter};
+    use crate::logger;
+    use crate::packet::BlobError;
+    use crate::replicate_stage::{ReplicateStage, ReplicateStageReturnType};
+    use crate::result::Error;
+    use crate::service::Service;
+    use crate::vote_stage::{send_validator_vote, VoteError};
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
-    use vote_stage::{send_validator_vote, VoteError};
 
     #[test]
     pub fn test_replicate_stage_leader_rotation_exit() {
