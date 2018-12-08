@@ -16,6 +16,7 @@ _() {
 }
 
 maybe_cargo_install() {
+  set -x
   for i in "$@"; do
       declare cmd=${i%:*}
       declare crate=${i#*:}
@@ -27,7 +28,7 @@ maybe_cargo_install() {
       [[ $cmd == cargo-audit ]] && (( exit == 2 )) && exit=0
 
       if (( exit )) ; then
-          _ cargo install "$crate"
+        _ cargo install "$crate"
       fi
   done
 }
