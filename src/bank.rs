@@ -13,12 +13,12 @@ use leader_scheduler::LeaderScheduler;
 use ledger::Block;
 use log::Level;
 use mint::Mint;
-use native_loader;
 use poh_recorder::PohRecorder;
 use poh_service::NUM_TICKS_PER_SECOND;
 use rayon::prelude::*;
 use rpc::RpcSignatureStatus;
 use runtime::{self, RuntimeError};
+use solana_native_loader;
 use solana_sdk::account::Account;
 use solana_sdk::bpf_loader;
 use solana_sdk::budget_program;
@@ -412,7 +412,7 @@ impl Bank {
             owner: system_program::id(),
             userdata: b"solana_system_program".to_vec(),
             executable: true,
-            loader: native_loader::id(),
+            loader: solana_native_loader::id(),
         };
         accounts.store(&system_program::id(), &system_program_account);
     }
@@ -427,7 +427,7 @@ impl Bank {
             owner: vote_program::id(),
             userdata: b"solana_vote_program".to_vec(),
             executable: true,
-            loader: native_loader::id(),
+            loader: solana_native_loader::id(),
         };
         accounts.store(&vote_program::id(), &vote_program_account);
 
@@ -437,7 +437,7 @@ impl Bank {
             owner: storage_program::id(),
             userdata: b"solana_storage_program".to_vec(),
             executable: true,
-            loader: native_loader::id(),
+            loader: solana_native_loader::id(),
         };
         accounts.store(&storage_program::id(), &storage_program_account);
 
@@ -447,7 +447,7 @@ impl Bank {
             owner: bpf_loader::id(),
             userdata: b"solana_bpf_loader".to_vec(),
             executable: true,
-            loader: native_loader::id(),
+            loader: solana_native_loader::id(),
         };
 
         accounts.store(&bpf_loader::id(), &bpf_loader_account);
@@ -458,7 +458,7 @@ impl Bank {
             owner: budget_program::id(),
             userdata: b"solana_budget_program".to_vec(),
             executable: true,
-            loader: native_loader::id(),
+            loader: solana_native_loader::id(),
         };
         accounts.store(&budget_program::id(), &budget_program_account);
 
@@ -468,7 +468,7 @@ impl Bank {
             owner: token_program::id(),
             userdata: b"solana_erc20".to_vec(),
             executable: true,
-            loader: native_loader::id(),
+            loader: solana_native_loader::id(),
         };
 
         accounts.store(&token_program::id(), &erc20_account);
@@ -783,7 +783,7 @@ impl Bank {
         let mut accounts = Vec::new();
         let mut depth = 0;
         loop {
-            if native_loader::check_id(&program_id) {
+            if solana_native_loader::check_id(&program_id) {
                 // at the root of the chain, ready to dispatch
                 break;
             }
@@ -2203,7 +2203,7 @@ mod tests {
         ]);
 
         assert_eq!(system_program::id(), system);
-        assert_eq!(native_loader::id(), native);
+        assert_eq!(solana_native_loader::id(), native);
         assert_eq!(bpf_loader::id(), bpf);
         assert_eq!(budget_program::id(), budget);
         assert_eq!(storage_program::id(), storage);
@@ -2216,7 +2216,7 @@ mod tests {
         let mut unique = HashSet::new();
         let ids = vec![
             system_program::id(),
-            native_loader::id(),
+            solana_native_loader::id(),
             bpf_loader::id(),
             budget_program::id(),
             storage_program::id(),

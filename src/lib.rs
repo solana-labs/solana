@@ -105,7 +105,6 @@ extern crate serde;
 extern crate serde_derive;
 #[macro_use]
 extern crate serde_json;
-extern crate native_loader;
 extern crate serde_cbor;
 extern crate sha2;
 extern crate socket2;
@@ -118,6 +117,7 @@ extern crate solana_jsonrpc_macros as jsonrpc_macros;
 extern crate solana_jsonrpc_pubsub as jsonrpc_pubsub;
 extern crate solana_jsonrpc_ws_server as jsonrpc_ws_server;
 extern crate solana_metrics;
+extern crate solana_native_loader;
 extern crate solana_sdk;
 extern crate sys_info;
 extern crate tokio;
