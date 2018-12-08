@@ -15,17 +15,15 @@ _() {
 # Uncomment this to run nightly test suit
 # _ cargo test --verbose --features=unstable -- --test-threads=1
 
-maybe_cargo_install() {
-  for i in "$@"; do
-      declare cmd=${i%:*}
-      declare crate=${i#*:}
+cargo_install_unless() {
+  declare crate=$1
+  shift
 
-      "$cmd" --help > /dev/null 2>&1 || \
-         _ cargo install "$crate"
-  done
+  "$@" > /dev/null 2>&1 || \
+    _ cargo install "$crate"
 }
 
-maybe_cargo_install cargo-cov
+cargo_install_unless cargo-cov cargo cov --help
 
 # Generate coverage data and report via unit-test suite.
 _ cargo cov clean

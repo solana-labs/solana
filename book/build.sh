@@ -8,17 +8,16 @@ _() {
   "$@"
 }
 
-maybe_cargo_install() {
-  for i in "$@"; do
-      declare cmd=${i%:*}
-      declare crate=${i#*:}
+cargo_install_unless() {
+  declare crate=$1
+  shift
 
-      "$cmd" --help > /dev/null 2>&1 || \
-         _ cargo install "$crate"
-  done
+  "$@" > /dev/null 2>&1 || \
+    _ cargo install "$crate"
 }
 
 export PATH=$CARGO_HOME/bin:$PATH
-maybe_cargo_install mdbook svgbob:svgbob_cli
+cargo_install_unless mdbook mdbook --help
+cargo_install_unless svgbob_cli svgbob --help
 
 _ make
