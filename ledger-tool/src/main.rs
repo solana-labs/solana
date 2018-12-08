@@ -26,6 +26,14 @@ fn main() {
                 .help("Limit to at most the first NUM entries in ledger\n  (only applies to verify, print, json commands)"),
         )
         .arg(
+            Arg::with_name("min-hashes")
+                .short("h")
+                .long("min-hashes")
+                .value_name("NUM")
+                .takes_value(true)
+                .help("Skip entries with fewer than NUM hashes\n  (only applies to print and json commands)"),
+        )
+        .arg(
             Arg::with_name("precheck")
                 .short("p")
                 .long("precheck")
@@ -64,6 +72,13 @@ fn main() {
         None => <usize>::max_value(),
     };
 
+    let min_hashes = match matches.value_of("min-hashes") {
+        Some(hashes) => hashes
+            .parse()
+            .expect("please pass a number for --min-hashes"),
+        None => 0,
+    } as u64;
+
     match matches.subcommand() {
         ("print", _) => {
             let entries = match read_ledger(ledger_path, true) {
@@ -78,6 +93,9 @@ fn main() {
                     break;
                 }
                 let entry = entry.unwrap();
+                if entry.num_hashes < min_hashes {
+                    continue;
+                }
                 println!("{:?}", entry);
             }
         }
@@ -88,6 +106,9 @@ fn main() {
                     break;
                 }
                 let entry = entry.unwrap();
+                if entry.num_hashes < min_hashes {
+                    continue;
+                }
                 serde_json::to_writer(stdout(), &entry).expect("serialize");
                 stdout().write_all(b",\n").expect("newline");
             }
