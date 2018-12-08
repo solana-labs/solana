@@ -122,7 +122,7 @@ multinode variation, you'll see TPS measurements for each validator node as well
 In this example the client connects to our public testnet. To run validators on the testnet you would need to open udp ports `8000-10000`.
 
 ```bash
-$ ./multinode-demo/client.sh --network $(dig +short testnet.solana.com):8001 --identity config-private/client-id.json --duration 60
+$ ./multinode-demo/client.sh --network $(dig +short testnet.solana.com):8001 --duration 60
 ```
 
 You can observe the effects of your client's transactions on our [dashboard](https://metrics.solana.com:3000/d/testnet/testnet-hud?orgId=2&from=now-30m&to=now&refresh=5s&var-testnet=testnet)
