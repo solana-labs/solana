@@ -7,12 +7,21 @@ export RUST_BACKTRACE=1
 solana-keygen -o /config/leader-keypair.json
 solana-keygen -o /config/drone-keypair.json
 
-solana-fullnode-config --keypair=/config/leader-keypair.json -l > /config/leader-config.json
-solana-genesis --num_tokens 1000000000 --mint /config/drone-keypair.json --bootstrap_leader /config/leader-config.json --ledger /ledger
+solana-fullnode-config \
+  --keypair=/config/leader-keypair.json -l > /config/leader-config.json
+solana-genesis \
+  --num_tokens 1000000000 \
+  --mint /config/drone-keypair.json \
+  --bootstrap-leader-keypair /config/leader-config.json \
+  --ledger /ledger
 
 solana-drone --keypair /config/drone-keypair.json &
 drone=$!
-solana-fullnode --identity /config/leader-config.json --ledger /ledger/ --rpc 8899 &
+
+solana-fullnode \
+  --identity /config/leader-config.json \
+  --ledger /ledger/ \
+  --rpc 8899 &
 fullnode=$!
 
 abort() {
