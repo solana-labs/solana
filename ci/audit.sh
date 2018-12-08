@@ -25,7 +25,7 @@ maybe_cargo_install() {
 
       # remove when https://github.com/RustSec/cargo-audit/issues/56
       #  is resolved
-      [[ $cmd == cargo-audit ]] && (( exit == 2 )) && exit=0
+      [[ $cmd == cargo-audit ]] && (( exit == 2 || exit == 127 )) && exit=0
 
       if (( exit )) ; then
         _ cargo install "$crate"
