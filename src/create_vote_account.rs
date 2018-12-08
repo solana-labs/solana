@@ -28,7 +28,6 @@ pub fn local_vote_signer_service() -> io::Result<(SocketAddr, JoinHandle<()>, Ar
         .spawn(move || {
             let service = VoteSignerRpcService::new(service_addr, thread_exit);
             service.join().unwrap();
-            ()
         })
         .unwrap();
     Ok((addr, thread, exit))
