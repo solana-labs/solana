@@ -60,7 +60,8 @@ impl ComputeLeaderFinalityService {
                     }
 
                     None
-                }).collect()
+                })
+                .collect()
         };
 
         let super_majority_stake = (2 * total_stake) / 3;
@@ -77,7 +78,8 @@ impl ComputeLeaderFinalityService {
                     .add_field(
                         "duration_ms",
                         influxdb::Value::Integer((now - last_valid_validator_timestamp) as i64),
-                    ).to_owned(),
+                    )
+                    .to_owned(),
             );
         }
 
@@ -115,7 +117,8 @@ impl ComputeLeaderFinalityService {
                     Self::compute_finality(&bank, &mut last_valid_validator_timestamp);
                     sleep(Duration::from_millis(COMPUTE_FINALITY_MS));
                 }
-            }).unwrap();
+            })
+            .unwrap();
 
         (ComputeLeaderFinalityService {
             compute_finality_thread,
@@ -162,7 +165,8 @@ pub mod tests {
                 // sleep to get a different timestamp in the bank
                 sleep(Duration::from_millis(1));
                 last_id
-            }).collect();
+            })
+            .collect();
 
         // Create a total of 10 vote accounts, each will have a balance of 1 (after giving 1 to
         // their vote account), for a total staking pool of 10 tokens.
@@ -186,7 +190,8 @@ pub mod tests {
                     bank.process_transaction(&vote_tx).unwrap();
                 }
                 vote_account
-            }).collect();
+            })
+            .collect();
 
         // There isn't 2/3 consensus, so the bank's finality value should be the default
         let mut last_finality_time = 0;

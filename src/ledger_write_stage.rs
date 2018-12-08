@@ -54,6 +54,7 @@ impl LedgerWriteStage {
         Ok(())
     }
 
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(ledger_path: Option<&str>, entry_receiver: EntryReceiver) -> (Self, EntryReceiver) {
         let mut ledger_writer = ledger_path.map(|p| LedgerWriter::open(p, false).unwrap());
 
@@ -77,9 +78,10 @@ impl LedgerWriteStage {
                         }
                     }
                 };
-            }).unwrap();
+            })
+            .unwrap();
 
-        (LedgerWriteStage { write_thread }, entry_forwarder)
+        (Self { write_thread }, entry_forwarder)
     }
 }
 

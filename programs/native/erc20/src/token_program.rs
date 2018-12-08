@@ -106,7 +106,7 @@ impl Default for TokenProgram {
 }
 
 impl TokenProgram {
-    #[cfg_attr(feature = "cargo-clippy", allow(needless_pass_by_value))]
+    #[allow(clippy::needless_pass_by_value)]
     fn map_to_invalid_args(err: std::boxed::Box<bincode::ErrorKind>) -> Error {
         warn!("invalid argument: {:?}", err);
         Error::InvalidArgument
@@ -424,7 +424,8 @@ impl TokenProgram {
                 } else {
                     TokenProgram::Invalid
                 }
-            }).collect();
+            })
+            .collect();
 
         for program_account in &input_program_accounts {
             info!("input_program_account: userdata={:?}", program_account);

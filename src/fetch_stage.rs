@@ -14,6 +14,7 @@ pub struct FetchStage {
 }
 
 impl FetchStage {
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(sockets: Vec<UdpSocket>, exit: Arc<AtomicBool>) -> (Self, PacketReceiver) {
         let tx_sockets = sockets.into_iter().map(Arc::new).collect();
         Self::new_multi_socket(tx_sockets, exit)
@@ -28,7 +29,7 @@ impl FetchStage {
             .map(|socket| streamer::receiver(socket, exit.clone(), sender.clone(), "fetch-stage"))
             .collect();
 
-        (FetchStage { exit, thread_hdls }, receiver)
+        (Self { exit, thread_hdls }, receiver)
     }
 
     pub fn close(&self) {

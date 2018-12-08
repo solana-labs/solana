@@ -23,7 +23,8 @@ fn main() -> Result<(), Box<error::Error>> {
                 .value_name("NUM")
                 .takes_value(true)
                 .help("JSON RPC listener port"),
-        ).get_matches();
+        )
+        .get_matches();
 
     let port = if let Some(p) = matches.value_of("port") {
         p.to_string()

@@ -69,7 +69,8 @@ fn test_replicator_startup() {
             replicator_node,
             &leader_info,
             &replicator_keypair,
-        ).unwrap();
+        )
+        .unwrap();
 
         let mut num_entries = 0;
         for _ in 0..60 {

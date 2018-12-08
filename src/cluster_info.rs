@@ -112,7 +112,7 @@ impl Signable for PruneData {
 
 // TODO These messages should go through the gpu pipeline for spam filtering
 #[derive(Serialize, Deserialize, Debug)]
-#[cfg_attr(feature = "cargo-clippy", allow(large_enum_variant))]
+#[allow(clippy::large_enum_variant)]
 enum Protocol {
     /// Gossip protocol messages
     PullRequest(Bloom<Hash>, CrdsValue),
@@ -204,7 +204,8 @@ impl ClusterInfo {
                     node.tpu.to_string(),
                     node.rpc.to_string()
                 )
-            }).collect();
+            })
+            .collect();
 
         format!(
             " NodeInfo.contact_info     | Node identifier\n\
@@ -216,7 +217,7 @@ impl ClusterInfo {
         )
     }
 
-    pub fn set_leader(&mut self, key: Pubkey) -> () {
+    pub fn set_leader(&mut self, key: Pubkey) {
         let prev = self.leader_id();
         let self_id = self.gossip.id;
         let now = timestamp();
@@ -373,7 +374,8 @@ impl ClusterInfo {
                 //TODO profile this, may need multiple sockets for par_iter
                 assert!(rblob.meta.size <= BLOB_SIZE);
                 s.send_to(&rblob.data[..rblob.meta.size], &v.tvu)
-            }).collect();
+            })
+            .collect();
         for e in errs {
             if let Err(e) = &e {
                 inc_new_counter_info!("cluster_info-retransmit-send_to_error", 1, 1);
@@ -429,9 +431,11 @@ impl ClusterInfo {
                             ids_and_tvus
                         );
                         e
-                    }).collect();
+                    })
+                    .collect();
                 send_errs_for_blob
-            }).collect()
+            })
+            .collect()
     }
 
     fn create_broadcast_orders<'a>(
@@ -531,12 +535,14 @@ impl ClusterInfo {
                     .lookup(&peer_label)
                     .and_then(|v| v.contact_info())
                     .map(|peer_info| (peer, filter, peer_info.gossip, self_info))
-            }).collect();
+            })
+            .collect();
         pr.into_iter()
             .map(|(peer, filter, gossip, self_info)| {
                 self.gossip.mark_pull_request_creation_time(peer, now);
                 (gossip, Protocol::PullRequest(filter, self_info))
-            }).collect()
+            })
+            .collect()
     }
     fn new_push_requests(&mut self) -> Vec<(SocketAddr, Protocol)> {
         let self_id = self.gossip.id;
@@ -550,7 +556,8 @@ impl ClusterInfo {
                     .lookup(&peer_label)
                     .and_then(|v| v.contact_info())
                     .map(|p| p.gossip)
-            }).map(|peer| (peer, Protocol::PushMessage(self_id, msgs.clone())))
+            })
+            .map(|peer| (peer, Protocol::PushMessage(self_id, msgs.clone())))
             .collect()
     }
 
@@ -597,7 +604,8 @@ impl ClusterInfo {
             .and_then(|x| {
                 let leader_label = CrdsValueLabel::ContactInfo(x);
                 self.gossip.crds.lookup(&leader_label)
-            }).and_then(|x| x.contact_info())
+            })
+            .and_then(|x| x.contact_info())
     }
 
     /// randomly pick a node and ask them for updates asynchronously
@@ -629,7 +637,8 @@ impl ClusterInfo {
                         sleep(Duration::from_millis(time_left));
                     }
                 }
-            }).unwrap()
+            })
+            .unwrap()
     }
     fn run_window_request(
         from: &NodeInfo,
@@ -722,7 +731,8 @@ impl ClusterInfo {
             .into_iter()
             .flat_map(|request| {
                 ClusterInfo::handle_protocol(obj, &blob.meta.addr(), request, window, ledger_window)
-            }).collect()
+            })
+            .collect()
     }
     fn handle_pull_request(
         me: &Arc<RwLock<Self>>,
@@ -811,7 +821,8 @@ impl ClusterInfo {
                     prune_msg.sign(&me.read().unwrap().keypair);
                     let rsp = Protocol::PruneMessage(self_id, prune_msg);
                     to_blob(rsp, ci.gossip).ok()
-                }).into_iter()
+                })
+                .into_iter()
                 .collect();
             let mut blobs: Vec<_> = pushes
                 .into_iter()
@@ -977,7 +988,8 @@ impl ClusterInfo {
                         me.gossip.crds.table.len()
                     );
                 }
-            }).unwrap()
+            })
+            .unwrap()
     }
 
     pub fn spy_node() -> (NodeInfo, UdpSocket) {
@@ -1282,8 +1294,10 @@ mod tests {
                     &vec![
                         Entry::new_tick(&zero, 0, &zero),
                         Entry::new_tick(&one, 0, &one),
-                    ].to_vec(),
-                ).unwrap();
+                    ]
+                    .to_vec(),
+                )
+                .unwrap();
             path
         }
 
@@ -1340,7 +1354,8 @@ mod tests {
                 &me,
                 leader_id,
                 0,
-            )[0].clone();
+            )[0]
+            .clone();
             let blob = shared_blob.read().unwrap();
             // Test we copied the blob
             assert_eq!(blob.meta.size, blob_size);

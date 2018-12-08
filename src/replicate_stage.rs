@@ -150,6 +150,7 @@ impl ReplicateStage {
         Ok(())
     }
 
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(
         keypair: Arc<Keypair>,
         vote_account_keypair: Arc<Keypair>,
@@ -219,10 +220,11 @@ impl ReplicateStage {
                 }
 
                 None
-            }).unwrap();
+            })
+            .unwrap();
 
         (
-            ReplicateStage {
+            Self {
                 t_responder,
                 t_replicate,
             },

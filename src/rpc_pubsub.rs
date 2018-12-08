@@ -67,7 +67,6 @@ impl PubSubService {
                     sleep(Duration::from_millis(100));
                 }
                 server.unwrap().close();
-                ()
             })
             .unwrap();
         PubSubService { thread_hdl, exit }
@@ -146,7 +145,8 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                     code: ErrorCode::InvalidParams,
                     message: "Invalid Request: Invalid pubkey provided".into(),
                     data: None,
-                }).unwrap();
+                })
+                .unwrap();
             return;
         }
         let pubkey = Pubkey::new(&pubkey_vec);
@@ -194,7 +194,8 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                     code: ErrorCode::InvalidParams,
                     message: "Invalid Request: Invalid signature provided".into(),
                     data: None,
-                }).unwrap();
+                })
+                .unwrap();
             return;
         }
         let signature = Signature::new(&signature_vec);

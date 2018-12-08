@@ -44,6 +44,7 @@ pub struct BankingStage {
 
 impl BankingStage {
     /// Create the stage using `bank`. Exit when `verified_receiver` is dropped.
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(
         bank: &Arc<Bank>,
         verified_receiver: Receiver<VerifiedPackets>,
@@ -105,11 +106,13 @@ impl BankingStage {
                         };
                         thread_banking_exit.store(true, Ordering::Relaxed);
                         return_result
-                    }).unwrap()
-            }).collect();
+                    })
+                    .unwrap()
+            })
+            .collect();
 
         (
-            BankingStage {
+            Self {
                 bank_thread_hdls,
                 poh_service,
                 compute_finality_service,
@@ -127,7 +130,8 @@ impl BankingStage {
                 deserialize(&x.data[0..x.meta.size])
                     .map(|req| (req, x.meta.addr()))
                     .ok()
-            }).collect()
+            })
+            .collect()
     }
 
     fn process_transactions(
@@ -190,7 +194,8 @@ impl BankingStage {
                             None
                         }
                     }
-                }).collect();
+                })
+                .collect();
             debug!("verified transactions {}", transactions.len());
             Self::process_transactions(bank, &transactions, poh)?;
             new_tx_count += transactions.len();

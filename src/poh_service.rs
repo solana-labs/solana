@@ -33,7 +33,7 @@ pub struct PohService {
 }
 
 impl PohService {
-    pub fn exit(&self) -> () {
+    pub fn exit(&self) {
         self.poh_exit.store(true, Ordering::Relaxed);
     }
 
@@ -56,9 +56,10 @@ impl PohService {
                 let return_value = Self::tick_producer(&mut poh_recorder_, config, &poh_exit_);
                 poh_exit_.store(true, Ordering::Relaxed);
                 return_value
-            }).unwrap();
+            })
+            .unwrap();
 
-        PohService {
+        Self {
             tick_producer,
             poh_exit,
         }
@@ -134,7 +135,8 @@ mod tests {
                             break Ok(());
                         }
                     }
-                }).unwrap()
+                })
+                .unwrap()
         };
 
         const HASHES_PER_TICK: u64 = 2;

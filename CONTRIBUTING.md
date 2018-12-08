@@ -17,7 +17,7 @@ Rust coding conventions
 * All Rust code is linted with Clippy. If you'd prefer to ignore its advice, do so explicitly:
 
   ```rust
-  #[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
+  #[allow(clippy::too_many_arguments)]
   ```
 
   Note: Clippy defaults can be overridden in the top-level file `.clippy.toml`.

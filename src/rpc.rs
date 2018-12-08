@@ -67,10 +67,9 @@ impl JsonRpcService {
                     sleep(Duration::from_millis(100));
                 }
                 server.unwrap().close();
-                ()
             })
             .unwrap();
-        JsonRpcService { thread_hdl, exit }
+        Self { thread_hdl, exit }
     }
 
     pub fn exit(&self) {
@@ -462,7 +461,8 @@ mod tests {
             arc_bank
                 .process_transaction(&tx)
                 .expect("process transaction");
-        }).join()
+        })
+        .join()
         .unwrap();
         assert_eq!(request_processor.get_transaction_count().unwrap(), 1);
     }

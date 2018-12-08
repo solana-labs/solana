@@ -40,19 +40,22 @@ fn main() -> Result<(), Box<error::Error>> {
                 .takes_value(true)
                 .required(true)
                 .help("File from which to read the mint's keypair"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("slice")
                 .long("slice")
                 .value_name("SECS")
                 .takes_value(true)
                 .help("Time slice over which to limit requests to drone"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("cap")
                 .long("cap")
                 .value_name("NUM")
                 .takes_value(true)
                 .help("Request limit for time slice"),
-        ).get_matches();
+        )
+        .get_matches();
 
     let mint_keypair =
         read_keypair(matches.value_of("keypair").unwrap()).expect("failed to read client keypair");
@@ -139,7 +142,8 @@ fn main() -> Result<(), Box<error::Error>> {
                         io::ErrorKind::Other,
                         format!("Drone response: {:?}", err),
                     ))
-                })).then(|_| Ok(()));
+                }))
+                .then(|_| Ok(()));
             tokio::spawn(server)
         });
     tokio::run(done);

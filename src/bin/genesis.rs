@@ -34,7 +34,8 @@ fn main() -> Result<(), Box<error::Error>> {
                 .takes_value(true)
                 .required(true)
                 .help("Number of tokens to create in the mint"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("mint")
                 .short("m")
                 .long("mint")
@@ -42,7 +43,8 @@ fn main() -> Result<(), Box<error::Error>> {
                 .takes_value(true)
                 .required(true)
                 .help("Path to file containing keys of the mint"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("bootstrap-leader-keypair")
                 .short("b")
                 .long("bootstrap-leader-keypair")
@@ -50,7 +52,8 @@ fn main() -> Result<(), Box<error::Error>> {
                 .takes_value(true)
                 .required(true)
                 .help("Path to file containing the bootstrap leader's keypair"),
-        ).arg(
+        )
+        .arg(
             Arg::with_name("ledger")
                 .short("l")
                 .long("ledger")
@@ -58,7 +61,8 @@ fn main() -> Result<(), Box<error::Error>> {
                 .takes_value(true)
                 .required(true)
                 .help("Use directory as persistent ledger location"),
-        ).get_matches();
+        )
+        .get_matches();
 
     // Load the bootstreap leader keypair
     // TODO: Only the public key is really needed, genesis should not have access to the leader's

@@ -44,7 +44,8 @@ impl CrdsGossip {
             .map(|val| {
                 self.push
                     .process_push_message(&mut self.crds, val.clone(), now)
-            }).collect();
+            })
+            .collect();
         results
             .into_iter()
             .zip(values)
@@ -58,7 +59,8 @@ impl CrdsGossip {
                 } else {
                     None
                 }
-            }).collect()
+            })
+            .collect()
     }
 
     pub fn new_push_messages(&mut self, now: u64) -> (Pubkey, Vec<Pubkey>, Vec<CrdsValue>) {
@@ -182,7 +184,8 @@ mod test {
                 node.crds.insert(entry.clone(), 0).unwrap();
                 node.set_self(id);
                 (new.label().pubkey(), Arc::new(Mutex::new(node)))
-            }).collect();
+            })
+            .collect();
         let mut node = CrdsGossip::default();
         let id = entry.label().pubkey();
         node.crds.insert(entry.clone(), 0).unwrap();
@@ -207,7 +210,8 @@ mod test {
                 origin.crds.insert(new.clone(), 0).unwrap();
                 node.set_self(id);
                 (new.label().pubkey(), Arc::new(Mutex::new(node)))
-            }).collect();
+            })
+            .collect();
         network.insert(id, Arc::new(Mutex::new(origin)));
         network
     }
@@ -222,7 +226,8 @@ mod test {
                 node.crds.insert(new.clone(), 0).unwrap();
                 node.set_self(id);
                 (new.label().pubkey(), Arc::new(Mutex::new(node)))
-            }).collect();
+            })
+            .collect();
         let keys: Vec<Pubkey> = network.keys().cloned().collect();
         for k in 0..keys.len() {
             let start_info = {
@@ -320,7 +325,8 @@ mod test {
                 .map(|node| {
                     node.lock().unwrap().purge(now);
                     node.lock().unwrap().new_push_messages(now)
-                }).collect();
+                })
+                .collect();
             let transfered: Vec<_> = requests
                 .par_iter()
                 .map(|(from, peers, msgs)| {
@@ -345,11 +351,13 @@ mod test {
                                 let now = timestamp();
                                 node.process_prune_msg(*to, destination, &rsps, now, now)
                                     .unwrap()
-                            }).unwrap();
+                            })
+                            .unwrap();
                         delivered += rsps.is_empty() as usize;
                     }
                     (bytes, delivered, num_msgs, prunes)
-                }).collect();
+                })
+                .collect();
             for (b, d, m, p) in transfered {
                 bytes += b;
                 delivered += d;
@@ -415,7 +423,8 @@ mod test {
                             node.lock()
                                 .unwrap()
                                 .process_pull_request(caller_info, request, now)
-                        }).unwrap();
+                        })
+                        .unwrap();
                     bytes += serialized_size(&rsp).unwrap() as usize;
                     msgs += rsp.len();
                     network.get(&from).map(|node| {
@@ -425,7 +434,8 @@ mod test {
                         overhead += node.lock().unwrap().process_pull_response(from, rsp, now);
                     });
                     (bytes, msgs, overhead)
-                }).collect();
+                })
+                .collect();
             for (b, m, o) in transfered {
                 bytes += b;
                 msgs += m;

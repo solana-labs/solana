@@ -40,7 +40,8 @@ fn bench_process_transaction(bencher: &mut Bencher) {
 
             // Finally, return the transaction to the benchmark.
             tx
-        }).collect();
+        })
+        .collect();
 
     let mut id = bank.last_id();
 

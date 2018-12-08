@@ -50,7 +50,7 @@ fn repair_backoff(last: &mut u64, times: &mut usize, consumed: u64) -> bool {
     thread_rng().gen_range(0, *times as u64) == 0
 }
 
-#[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
+#[allow(clippy::too_many_arguments)]
 fn recv_window(
     db_ledger: &mut DbLedger,
     id: &Pubkey,
@@ -119,7 +119,7 @@ fn recv_window(
     Ok(())
 }
 
-#[cfg_attr(feature = "cargo-clippy", allow(too_many_arguments))]
+#[allow(clippy::too_many_arguments)]
 pub fn window_service(
     db_ledger: Arc<RwLock<DbLedger>>,
     cluster_info: Arc<RwLock<ClusterInfo>>,
@@ -221,7 +221,8 @@ pub fn window_service(
                     }
                 }
             }
-        }).unwrap()
+        })
+        .unwrap()
 }
 
 #[cfg(test)]
@@ -305,7 +306,8 @@ mod test {
                 0,
                 Hash::default(),
                 &gossip_address,
-            ).into_iter()
+            )
+            .into_iter()
             .rev()
             .collect();;
             s_responder.send(msgs).expect("send");
@@ -425,7 +427,8 @@ mod test {
                         let rv = repair_backoff(&mut last, &mut times, 1) as usize;
                         assert_eq!(times, x + 2);
                         rv
-                    }).sum();
+                    })
+                    .sum();
                 assert_eq!(times, 128);
                 assert_eq!(last, 1);
                 repair_backoff(&mut last, &mut times, 1);
@@ -434,7 +437,8 @@ mod test {
                 assert_eq!(times, 2);
                 assert_eq!(last, 2);
                 total
-            }).sum();
+            })
+            .sum();
         let avg = res / num_tests;
         assert!(avg >= 3);
         assert!(avg <= 5);

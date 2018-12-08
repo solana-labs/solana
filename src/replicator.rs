@@ -83,6 +83,7 @@ pub fn sample_file(in_path: &Path, sample_offsets: &[u64]) -> io::Result<Hash> {
 }
 
 impl Replicator {
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(
         ledger_path: Option<&str>,
         node: Node,
@@ -246,7 +247,7 @@ impl Replicator {
             Err(e) => info!("Error occurred while sampling: {:?}", e),
         }
 
-        Ok(Replicator {
+        Ok(Self {
             gossip_service,
             fetch_stage,
             store_ledger_stage,

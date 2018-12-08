@@ -221,7 +221,8 @@ impl CrdsGossipPush {
                 } else {
                     Some(k)
                 }
-            }).cloned()
+            })
+            .cloned()
             .collect();
         for k in old_msgs {
             self.push_messages.remove(&k);

@@ -29,6 +29,7 @@ pub struct SigVerifyStage {
 }
 
 impl SigVerifyStage {
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(
         packet_receiver: Receiver<SharedPackets>,
         sigverify_disabled: bool,
@@ -37,7 +38,7 @@ impl SigVerifyStage {
         let (verified_sender, verified_receiver) = channel();
         let thread_hdls =
             Self::verifier_services(packet_receiver, verified_sender, sigverify_disabled);
-        (SigVerifyStage { thread_hdls }, verified_receiver)
+        (Self { thread_hdls }, verified_receiver)
     }
 
     fn verify_batch(batch: Vec<SharedPackets>, sigverify_disabled: bool) -> VerifiedPackets {
@@ -106,7 +107,8 @@ impl SigVerifyStage {
                 .add_field(
                     "total_time_ms",
                     influxdb::Value::Integer(total_time_ms as i64),
-                ).to_owned(),
+                )
+                .to_owned(),
         );
 
         Ok(())

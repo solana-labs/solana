@@ -29,6 +29,7 @@ pub struct Tpu {
 }
 
 impl Tpu {
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(
         bank: &Arc<Bank>,
         tick_duration: Config,
@@ -56,7 +57,7 @@ impl Tpu {
         let (ledger_write_stage, entry_forwarder) =
             LedgerWriteStage::new(Some(ledger_path), entry_receiver);
 
-        let tpu = Tpu {
+        let tpu = Self {
             fetch_stage,
             sigverify_stage,
             banking_stage,
