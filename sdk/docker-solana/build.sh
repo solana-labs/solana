@@ -18,7 +18,7 @@ if [[ -z $CHANNEL ]]; then
 fi
 
 rm -rf usr/
-../../ci/docker-run.sh solanalabs/rust:1.30.1 bash -c "
+../../ci/docker-run.sh solanalabs/rust:1.31.0 bash -c "
   set -ex
   cargo install --path drone --root sdk/docker-solana/usr
   cargo install --path . --root sdk/docker-solana/usr
