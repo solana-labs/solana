@@ -1,4 +1,4 @@
-use native_loader;
+use solana_native_loader;
 use solana_sdk::account::{create_keyed_accounts, Account, KeyedAccount};
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
@@ -46,7 +46,7 @@ fn process_instruction(
             tick_height,
         )
     } else {
-        native_loader::entrypoint(
+        solana_native_loader::entrypoint(
             &program_id,
             &mut keyed_accounts,
             &tx.instructions[instruction_index].userdata,

@@ -1,8 +1,8 @@
 extern crate bincode;
 extern crate elf;
-extern crate native_loader;
 extern crate serde_derive;
 extern crate solana;
+extern crate solana_native_loader;
 extern crate solana_sdk;
 
 use solana::bank::Bank;
@@ -69,7 +69,7 @@ impl Loader {
             mint.last_id(),
             1,
             56, // TODO
-            native_loader::id(),
+            solana_native_loader::id(),
             0,
         );
         check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
@@ -77,7 +77,7 @@ impl Loader {
         let name = String::from(loader_name);
         let tx = Transaction::loader_write(
             &loader,
-            native_loader::id(),
+            solana_native_loader::id(),
             0,
             name.as_bytes().to_vec(),
             mint.last_id(),
@@ -85,7 +85,8 @@ impl Loader {
         );
         check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
-        let tx = Transaction::loader_finalize(&loader, native_loader::id(), mint.last_id(), 0);
+        let tx =
+            Transaction::loader_finalize(&loader, solana_native_loader::id(), mint.last_id(), 0);
         check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
         let tx = Transaction::system_spawn(&loader, mint.last_id(), 0);
@@ -101,7 +102,7 @@ impl Loader {
     pub fn new_native() -> Self {
         let mint = Mint::new(50);
         let bank = Bank::new(&mint);
-        let loader = native_loader::id();
+        let loader = solana_native_loader::id();
 
         Loader { mint, bank, loader }
     }
