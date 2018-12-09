@@ -78,7 +78,7 @@ Manage testnet instances
    -d [disk-type]   - Specify a boot disk type (default None) Use pd-ssd to get ssd on GCE.
 
  config-specific options:
-   none
+   -P               - Use public network IP addresses (default: $publicNetwork)
 
  delete-specific options:
    none
