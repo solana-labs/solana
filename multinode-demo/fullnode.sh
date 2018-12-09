@@ -167,6 +167,7 @@ $rsync -vPr "$rsync_leader_url"/config/ "$ledger_config_dir"
 # - one token to create an instance of the vote_program with
 # - one token for the transaction fee
 # - one token to keep the node identity public key valid.
+$solana_wallet --keypair "$fullnode_id_path" address
 $solana_wallet \
   --keypair "$fullnode_id_path" \
   --network "$leader_address" \
