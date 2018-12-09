@@ -1,8 +1,6 @@
 #[macro_use]
 extern crate log;
 
-
-
 use solana::client::mk_client;
 use solana::cluster_info::{Node, NodeInfo};
 use solana::db_ledger::DbLedger;

@@ -1,10 +1,7 @@
 #[macro_use]
 extern crate log;
 
-
-
 use solana;
-
 
 use solana::blob_fetch_stage::BlobFetchStage;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};

@@ -1,8 +1,8 @@
 //! The `logger` module provides a setup function for `env_logger`. Its only function,
 //! `setup()` may be called multiple times.
 
-use std::sync::{Once, ONCE_INIT};
 use env_logger;
+use std::sync::{Once, ONCE_INIT};
 
 static INIT: Once = ONCE_INIT;
 

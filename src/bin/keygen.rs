@@ -2,9 +2,6 @@
 extern crate clap;
 use dirs;
 
-
-
-
 use clap::{App, Arg};
 use solana::wallet::gen_keypair_file;
 use std::error;

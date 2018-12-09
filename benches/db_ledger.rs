@@ -1,7 +1,6 @@
 #![feature(test)]
 use rand;
 
-
 extern crate test;
 
 use rand::seq::SliceRandom;

@@ -1,6 +1,8 @@
 use crate::chacha::{CHACHA_BLOCK_SIZE, CHACHA_KEY_SIZE};
 use crate::ledger::LedgerWindow;
-use crate::sigverify::{chacha_cbc_encrypt_many_sample, chacha_end_sha_state, chacha_init_sha_state};
+use crate::sigverify::{
+    chacha_cbc_encrypt_many_sample, chacha_end_sha_state, chacha_init_sha_state,
+};
 use solana_sdk::hash::Hash;
 use std::io;
 use std::mem::size_of;

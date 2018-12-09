@@ -5,8 +5,6 @@ use serde_json;
 #[macro_use]
 extern crate solana;
 
-
-
 use clap::{App, Arg};
 use solana::cluster_info::{Node, NodeInfo};
 use solana::fullnode::Config;

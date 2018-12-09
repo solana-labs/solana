@@ -1,9 +1,5 @@
-
-
-
 use solana;
 use solana_native_loader;
-
 
 use solana::bank::Bank;
 use solana::logger;

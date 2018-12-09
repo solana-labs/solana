@@ -1,6 +1,5 @@
 #![feature(test)]
 
-
 extern crate test;
 
 use solana::signature::GenKeys;

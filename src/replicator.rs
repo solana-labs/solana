@@ -1,4 +1,6 @@
 use crate::blob_fetch_stage::BlobFetchStage;
+#[cfg(feature = "chacha")]
+use crate::chacha::{chacha_cbc_encrypt_file, CHACHA_BLOCK_SIZE};
 use crate::client::mk_client;
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
 use crate::db_ledger::DbLedger;
@@ -12,8 +14,6 @@ use crate::store_ledger_stage::StoreLedgerStage;
 use crate::streamer::BlobReceiver;
 use crate::window;
 use crate::window_service::window_service;
-#[cfg(feature = "chacha")]
-use crate::chacha::{chacha_cbc_encrypt_file, CHACHA_BLOCK_SIZE};
 use rand::thread_rng;
 use rand::Rng;
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
