@@ -234,7 +234,7 @@ pub fn init() {
 
 #[cfg(feature = "cuda")]
 pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
-    use packet::PACKET_DATA_SIZE;
+    use crate::packet::PACKET_DATA_SIZE;
     let count = batch_size(batches);
 
     // micro-benchmarks show GPU time for smallest batch around 15-20ms

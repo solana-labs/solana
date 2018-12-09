@@ -4,7 +4,7 @@ use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
 use crate::counter::Counter;
 use crate::entry::Entry;
 #[cfg(feature = "erasure")]
-use erasure;
+use crate::erasure;
 
 use crate::ledger::Block;
 use crate::packet::{index_blobs, SharedBlobs};

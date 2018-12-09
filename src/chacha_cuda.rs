@@ -1,11 +1,11 @@
-use chacha::{CHACHA_BLOCK_SIZE, CHACHA_KEY_SIZE};
-use ledger::LedgerWindow;
-use sigverify::{chacha_cbc_encrypt_many_sample, chacha_end_sha_state, chacha_init_sha_state};
+use crate::chacha::{CHACHA_BLOCK_SIZE, CHACHA_KEY_SIZE};
+use crate::ledger::LedgerWindow;
+use crate::sigverify::{chacha_cbc_encrypt_many_sample, chacha_end_sha_state, chacha_init_sha_state};
 use solana_sdk::hash::Hash;
 use std::io;
 use std::mem::size_of;
 
-use storage_stage::ENTRIES_PER_SLICE;
+use crate::storage_stage::ENTRIES_PER_SLICE;
 
 // Encrypt a file with multiple starting IV states, determined by ivecs.len()
 //
@@ -100,18 +100,18 @@ pub fn chacha_cbc_encrypt_file_many_keys(
 
 #[cfg(test)]
 mod tests {
-    use chacha::chacha_cbc_encrypt_file;
-    use chacha_cuda::chacha_cbc_encrypt_file_many_keys;
-    use ledger::LedgerWriter;
-    use ledger::{get_tmp_ledger_path, make_tiny_test_entries, LEDGER_DATA_FILE};
-    use replicator::sample_file;
+    use crate::chacha::chacha_cbc_encrypt_file;
+    use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
+    use crate::ledger::LedgerWriter;
+    use crate::ledger::{get_tmp_ledger_path, make_tiny_test_entries, LEDGER_DATA_FILE};
+    use crate::replicator::sample_file;
     use solana_sdk::hash::Hash;
     use std::fs::{remove_dir_all, remove_file};
     use std::path::Path;
 
     #[test]
     fn test_encrypt_file_many_keys_single() {
-        use logger;
+        use crate::logger;
         logger::setup();
 
         let entries = make_tiny_test_entries(32);
@@ -151,7 +151,7 @@ mod tests {
 
     #[test]
     fn test_encrypt_file_many_keys_multiple_keys() {
-        use logger;
+        use crate::logger;
         logger::setup();
 
         let entries = make_tiny_test_entries(32);

@@ -8,7 +8,7 @@ use crate::poh_recorder;
 use crate::vote_stage;
 use bincode;
 #[cfg(feature = "erasure")]
-use erasure;
+use crate::erasure;
 use rocksdb;
 use serde_json;
 use std;
