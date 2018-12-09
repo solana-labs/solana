@@ -3,12 +3,12 @@
 use crate::bank;
 use crate::cluster_info;
 use crate::db_ledger;
+#[cfg(feature = "erasure")]
+use crate::erasure;
 use crate::packet;
 use crate::poh_recorder;
 use crate::vote_stage;
 use bincode;
-#[cfg(feature = "erasure")]
-use crate::erasure;
 use rocksdb;
 use serde_json;
 use std;

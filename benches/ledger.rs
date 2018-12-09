@@ -1,6 +1,5 @@
 #![feature(test)]
 
-
 extern crate test;
 
 use solana::entry::reconstruct_entries_from_blobs;

@@ -2,11 +2,11 @@
 // for storage mining. Replicators submit storage proofs, validator then bundles them
 // to submit its proof for mining to be rewarded.
 
+#[cfg(all(feature = "chacha", feature = "cuda"))]
+use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
 use crate::entry::EntryReceiver;
 use crate::result::{Error, Result};
 use crate::service::Service;
-#[cfg(all(feature = "chacha", feature = "cuda"))]
-use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use solana_sdk::hash::Hash;

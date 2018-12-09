@@ -1,9 +1,6 @@
 #[macro_use]
 extern crate log;
 
-
-
-
 use rayon::iter::*;
 use solana::cluster_info::{ClusterInfo, Node};
 use solana::gossip_service::GossipService;

@@ -4,8 +4,6 @@ use dirs;
 
 use serde_json;
 
-
-
 use clap::{App, Arg};
 use ring::rand::SystemRandom;
 use ring::signature::Ed25519KeyPair;

@@ -98,4 +98,3 @@ use solana_jsonrpc_ws_server as jsonrpc_ws_server;
 #[cfg(test)]
 #[macro_use]
 extern crate matches;
-

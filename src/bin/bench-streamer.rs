@@ -1,6 +1,3 @@
-
-
-
 use clap::{App, Arg};
 use solana::netutil::bind_to;
 use solana::packet::{Packet, SharedPackets, BLOB_SIZE, PACKET_DATA_SIZE};

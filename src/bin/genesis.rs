@@ -1,12 +1,8 @@
 //! A command-line executable for generating the chain's genesis block.
 
-
 #[macro_use]
 extern crate clap;
 use serde_json;
-
-
-
 
 use clap::{App, Arg};
 use solana::ledger::LedgerWriter;

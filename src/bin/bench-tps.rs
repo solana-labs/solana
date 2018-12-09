@@ -6,7 +6,6 @@ extern crate solana;
 
 use solana_metrics;
 
-
 use clap::{App, Arg};
 
 use rayon::prelude::*;

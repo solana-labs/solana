@@ -727,7 +727,10 @@ fn confirm_tx(
     }
 }
 
-fn send_and_confirm_tx(rpc_client: &RpcClient, tx: &Transaction) -> Result<(), Box<dyn error::Error>> {
+fn send_and_confirm_tx(
+    rpc_client: &RpcClient,
+    tx: &Transaction,
+) -> Result<(), Box<dyn error::Error>> {
     let mut send_retries = 3;
     while send_retries > 0 {
         let mut status_retries = 4;

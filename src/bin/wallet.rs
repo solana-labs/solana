@@ -4,7 +4,6 @@ use dirs;
 #[macro_use]
 extern crate solana;
 
-
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana::logger;
 use solana::wallet::{gen_keypair_file, parse_command, process_command, WalletConfig, WalletError};

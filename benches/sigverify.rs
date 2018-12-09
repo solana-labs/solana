@@ -1,7 +1,5 @@
 #![feature(test)]
 
-
-
 extern crate test;
 
 use solana::packet::to_packets;

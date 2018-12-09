@@ -8,7 +8,6 @@ use serde_json;
 extern crate solana;
 use solana_metrics;
 
-
 use clap::{App, Arg};
 use solana::client::mk_client;
 use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};

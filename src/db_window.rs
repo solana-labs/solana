@@ -3,12 +3,12 @@ use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
 use crate::db_ledger::*;
 use crate::entry::Entry;
+#[cfg(feature = "erasure")]
+use crate::erasure;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::packet::{SharedBlob, BLOB_HEADER_SIZE};
 use crate::result::Result;
 use crate::streamer::BlobSender;
-#[cfg(feature = "erasure")]
-use crate::erasure;
 use log::Level;
 use rocksdb::DBRawIterator;
 use solana_metrics::{influxdb, submit};
@@ -400,15 +400,15 @@ fn try_erasure(db_ledger: &mut DbLedger, slot: u64, consume_queue: &mut Vec<Entr
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::ledger::{get_tmp_ledger_path, make_tiny_test_entries, Block};
-    use crate::packet::{Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
-    use crate::streamer::{receiver, responder, PacketReceiver};
     #[cfg(all(feature = "erasure", test))]
     use crate::entry::reconstruct_entries_from_blobs;
     #[cfg(all(feature = "erasure", test))]
     use crate::erasure::test::{generate_db_ledger_from_window, setup_window_ledger};
     #[cfg(all(feature = "erasure", test))]
     use crate::erasure::{NUM_CODING, NUM_DATA};
+    use crate::ledger::{get_tmp_ledger_path, make_tiny_test_entries, Block};
+    use crate::packet::{Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
+    use crate::streamer::{receiver, responder, PacketReceiver};
     use rocksdb::{Options, DB};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::io;
