@@ -13,7 +13,7 @@ use crate::streamer::BlobReceiver;
 use crate::window;
 use crate::window_service::window_service;
 #[cfg(feature = "chacha")]
-use chacha::{chacha_cbc_encrypt_file, CHACHA_BLOCK_SIZE};
+use crate::chacha::{chacha_cbc_encrypt_file, CHACHA_BLOCK_SIZE};
 use rand::thread_rng;
 use rand::Rng;
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};

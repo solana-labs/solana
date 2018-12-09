@@ -59,7 +59,7 @@ pub fn chacha_cbc_encrypt_file(
 
 #[cfg(test)]
 mod tests {
-    use chacha::chacha_cbc_encrypt_file;
+    use crate::chacha::chacha_cbc_encrypt_file;
     use std::fs::remove_file;
     use std::fs::File;
     use std::io::Read;

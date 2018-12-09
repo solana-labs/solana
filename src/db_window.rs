@@ -8,7 +8,7 @@ use crate::packet::{SharedBlob, BLOB_HEADER_SIZE};
 use crate::result::Result;
 use crate::streamer::BlobSender;
 #[cfg(feature = "erasure")]
-use erasure;
+use crate::erasure;
 use log::Level;
 use rocksdb::DBRawIterator;
 use solana_metrics::{influxdb, submit};
@@ -404,11 +404,11 @@ mod test {
     use crate::packet::{Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
     use crate::streamer::{receiver, responder, PacketReceiver};
     #[cfg(all(feature = "erasure", test))]
-    use entry::reconstruct_entries_from_blobs;
+    use crate::entry::reconstruct_entries_from_blobs;
     #[cfg(all(feature = "erasure", test))]
-    use erasure::test::{generate_db_ledger_from_window, setup_window_ledger};
+    use crate::erasure::test::{generate_db_ledger_from_window, setup_window_ledger};
     #[cfg(all(feature = "erasure", test))]
-    use erasure::{NUM_CODING, NUM_DATA};
+    use crate::erasure::{NUM_CODING, NUM_DATA};
     use rocksdb::{Options, DB};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::io;
