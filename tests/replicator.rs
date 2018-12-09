@@ -17,7 +17,6 @@ use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use std::fs::remove_dir_all;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
