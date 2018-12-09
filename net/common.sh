@@ -22,12 +22,13 @@ configFile="$netConfigDir/config"
 
 entrypointIp=
 publicNetwork=
-bootstrapFullNodeIp=
 netBasename=
 sshPrivateKey=
-clientIpList=()
 sshOptions=()
-additionalFullNodeIps=()
+fullnodeIpList=()
+fullnodeIpListPrivate=()
+clientIpList=()
+clientIpListPrivate=()
 
 buildSshOptions() {
   sshOptions=(
@@ -46,12 +47,17 @@ loadConfigFile() {
 
   # shellcheck source=/dev/null
   source "$configFile"
-  [[ -n "$entrypointIp" ]] || usage "Config file invalid, entrypointIp unspecified: $configFile"
   [[ -n "$publicNetwork" ]] || usage "Config file invalid, publicNetwork unspecified: $configFile"
-  [[ -n "$bootstrapFullNodeIp" ]] || usage "Config file invalid, bootstrapFullNodeIp unspecified: $configFile"
   [[ -n "$netBasename" ]] || usage "Config file invalid, netBasename unspecified: $configFile"
   [[ -n $sshPrivateKey ]] || usage "Config file invalid, sshPrivateKey unspecified: $configFile"
-  [[ ${#additionalFullNodeIps[@]} -gt 0 ]] || usage "Config file invalid, additionalFullNodeIps unspecified: $configFile"
+  [[ ${#fullnodeIpList[@]} -gt 0 ]] || usage "Config file invalid, fullnodeIpList unspecified: $configFile"
+  [[ ${#fullnodeIpListPrivate[@]} -gt 0 ]] || usage "Config file invalid, fullnodeIpListPrivate unspecified: $configFile"
+
+  if $publicNetwork; then
+    entrypointIp=${fullnodeIpList[0]}
+  else
+    entrypointIp=${fullnodeIpListPrivate[0]}
+  fi
 
   buildSshOptions
   configureMetrics

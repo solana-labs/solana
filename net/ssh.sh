@@ -49,11 +49,8 @@ printNode() {
   printf "  %-25s | For logs run: $0 $ip tail -f solana/$nodeType.log\n" "$0 $ip"
 }
 
-echo Bootstrap full node:
-printNode fullnode "$bootstrapFullNodeIp"
-echo
-echo Additional full nodes:
-for ipAddress in "${additionalFullNodeIps[@]}"; do
+echo Full nodes:
+for ipAddress in "${fullnodeIpList[@]}"; do
   printNode fullnode "$ipAddress"
 done
 echo
