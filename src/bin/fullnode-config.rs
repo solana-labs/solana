@@ -1,10 +1,10 @@
 #[macro_use]
 extern crate clap;
-extern crate dirs;
-extern crate ring;
-extern crate serde_json;
-extern crate solana;
-extern crate solana_sdk;
+use dirs;
+
+use serde_json;
+
+
 
 use clap::{App, Arg};
 use ring::rand::SystemRandom;

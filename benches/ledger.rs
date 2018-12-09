@@ -1,6 +1,6 @@
 #![feature(test)]
-extern crate solana;
-extern crate solana_sdk;
+
+
 extern crate test;
 
 use solana::entry::reconstruct_entries_from_blobs;

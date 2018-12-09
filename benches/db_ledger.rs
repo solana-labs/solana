@@ -1,7 +1,7 @@
 #![feature(test)]
-extern crate rand;
-extern crate rocksdb;
-extern crate solana;
+use rand;
+
+
 extern crate test;
 
 use rand::seq::SliceRandom;

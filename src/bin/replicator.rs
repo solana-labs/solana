@@ -1,11 +1,11 @@
 #[macro_use]
 extern crate clap;
-extern crate getopts;
-extern crate serde_json;
+
+use serde_json;
 #[macro_use]
 extern crate solana;
-extern crate solana_drone;
-extern crate solana_sdk;
+
+
 
 use clap::{App, Arg};
 use solana::cluster_info::{Node, NodeInfo};

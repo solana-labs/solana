@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate log;
-extern crate solana;
-extern crate solana_sdk;
+
+
 
 use solana::client::mk_client;
 use solana::cluster_info::{Node, NodeInfo};

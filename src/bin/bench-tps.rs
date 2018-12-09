@@ -1,11 +1,11 @@
 #[macro_use]
 extern crate clap;
-extern crate rayon;
+
 #[macro_use]
 extern crate solana;
-extern crate solana_drone;
-extern crate solana_metrics;
-extern crate solana_sdk;
+
+use solana_metrics;
+
 
 use clap::{App, Arg};
 

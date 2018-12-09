@@ -125,8 +125,8 @@ pub fn find_missing_indexes(
     slot: u64,
     start_index: u64,
     end_index: u64,
-    key: &Fn(u64, u64) -> Vec<u8>,
-    index_from_key: &Fn(&[u8]) -> Result<u64>,
+    key: &dyn Fn(u64, u64) -> Vec<u8>,
+    index_from_key: &dyn Fn(&[u8]) -> Result<u64>,
     max_missing: usize,
 ) -> Vec<u64> {
     if start_index >= end_index || max_missing == 0 {
@@ -458,7 +458,7 @@ mod test {
             let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);
             let mut msgs = Vec::new();
             for i in 0..10 {
-                let mut b = SharedBlob::default();
+                let b = SharedBlob::default();
                 {
                     let mut w = b.write().unwrap();
                     w.data[0] = i as u8;

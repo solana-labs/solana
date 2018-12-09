@@ -1,13 +1,13 @@
 #[macro_use]
 extern crate clap;
-extern crate getopts;
+
 #[macro_use]
 extern crate log;
-extern crate serde_json;
+use serde_json;
 #[macro_use]
 extern crate solana;
-extern crate solana_metrics;
-extern crate solana_sdk;
+use solana_metrics;
+
 
 use clap::{App, Arg};
 use solana::client::mk_client;

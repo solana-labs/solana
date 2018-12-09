@@ -313,7 +313,7 @@ pub mod tests {
             alice_ref_balance -= transfer_amount;
 
             for entry in vec![entry0, entry_tick0, entry_tick1, entry1, entry_tick2] {
-                let mut b = SharedBlob::default();
+                let b = SharedBlob::default();
                 {
                     let mut w = b.write().unwrap();
                     w.set_index(blob_idx).unwrap();

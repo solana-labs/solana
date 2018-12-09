@@ -62,7 +62,7 @@ impl RpcRequest {
         client: &RpcClient,
         id: u64,
         params: Option<Value>,
-    ) -> Result<Value, Box<error::Error>> {
+    ) -> Result<Value, Box<dyn error::Error>> {
         let request = self.build_request_json(id, params);
 
         let mut response = client
@@ -116,7 +116,7 @@ pub enum RpcError {
 }
 
 impl fmt::Display for RpcError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "invalid")
     }
 }
@@ -126,7 +126,7 @@ impl error::Error for RpcError {
         "invalid"
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         // Generic error, underlying cause isn't tracked.
         None
     }

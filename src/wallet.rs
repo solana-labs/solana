@@ -65,7 +65,7 @@ pub enum WalletError {
 }
 
 impl fmt::Display for WalletError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "invalid")
     }
 }
@@ -75,7 +75,7 @@ impl error::Error for WalletError {
         "invalid"
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         // Generic error, underlying cause isn't tracked.
         None
     }
@@ -119,8 +119,8 @@ impl WalletConfig {
 
 pub fn parse_command(
     pubkey: Pubkey,
-    matches: &ArgMatches,
-) -> Result<WalletCommand, Box<error::Error>> {
+    matches: &ArgMatches<'_>,
+) -> Result<WalletCommand, Box<dyn error::Error>> {
     let response = match matches.subcommand() {
         ("address", Some(_address_matches)) => Ok(WalletCommand::Address),
         ("airdrop", Some(airdrop_matches)) => {
@@ -308,7 +308,7 @@ pub fn parse_command(
     Ok(response)
 }
 
-pub fn process_command(config: &WalletConfig) -> Result<String, Box<error::Error>> {
+pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::Error>> {
     if let WalletCommand::Address = config.command {
         // Get address of this client
         return Ok(format!("{}", config.id.pubkey()));
@@ -667,7 +667,7 @@ pub fn read_leader(path: &str) -> Result<Config, WalletError> {
     })
 }
 
-pub fn gen_keypair_file(outfile: String) -> Result<String, Box<error::Error>> {
+pub fn gen_keypair_file(outfile: String) -> Result<String, Box<dyn error::Error>> {
     let rnd = SystemRandom::new();
     let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&rnd)?;
     let serialized = serde_json::to_string(&pkcs8_bytes.to_vec())?;
@@ -682,7 +682,7 @@ pub fn gen_keypair_file(outfile: String) -> Result<String, Box<error::Error>> {
     Ok(serialized)
 }
 
-fn get_last_id(rpc_client: &RpcClient) -> Result<Hash, Box<error::Error>> {
+fn get_last_id(rpc_client: &RpcClient) -> Result<Hash, Box<dyn error::Error>> {
     let result = RpcRequest::GetLastId.make_rpc_request(rpc_client, 1, None)?;
     if result.as_str().is_none() {
         Err(WalletError::RpcRequestError(
@@ -696,7 +696,7 @@ fn get_last_id(rpc_client: &RpcClient) -> Result<Hash, Box<error::Error>> {
     Ok(Hash::new(&last_id_vec))
 }
 
-fn send_tx(rpc_client: &RpcClient, tx: &Transaction) -> Result<String, Box<error::Error>> {
+fn send_tx(rpc_client: &RpcClient, tx: &Transaction) -> Result<String, Box<dyn error::Error>> {
     let serialized = serialize(tx).unwrap();
     let params = json!([serialized]);
     let signature = RpcRequest::SendTransaction.make_rpc_request(rpc_client, 2, Some(params))?;
@@ -711,7 +711,7 @@ fn send_tx(rpc_client: &RpcClient, tx: &Transaction) -> Result<String, Box<error
 fn confirm_tx(
     rpc_client: &RpcClient,
     signature: &str,
-) -> Result<RpcSignatureStatus, Box<error::Error>> {
+) -> Result<RpcSignatureStatus, Box<dyn error::Error>> {
     let params = json!([signature.to_string()]);
     let signature_status =
         RpcRequest::GetSignatureStatus.make_rpc_request(rpc_client, 1, Some(params))?;
@@ -727,7 +727,7 @@ fn confirm_tx(
     }
 }
 
-fn send_and_confirm_tx(rpc_client: &RpcClient, tx: &Transaction) -> Result<(), Box<error::Error>> {
+fn send_and_confirm_tx(rpc_client: &RpcClient, tx: &Transaction) -> Result<(), Box<dyn error::Error>> {
     let mut send_retries = 3;
     while send_retries > 0 {
         let mut status_retries = 4;

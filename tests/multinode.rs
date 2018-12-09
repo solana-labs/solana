@@ -1,10 +1,10 @@
 #[macro_use]
 extern crate log;
-extern crate bincode;
-extern crate chrono;
-extern crate serde_json;
-extern crate solana;
-extern crate solana_sdk;
+
+
+
+use solana;
+
 
 use solana::blob_fetch_stage::BlobFetchStage;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
@@ -272,7 +272,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
                 .unwrap();
         info!("validator balance {}", validator_balance);
 
-        let mut val = Fullnode::new(
+        let val = Fullnode::new(
             validator,
             &ledger_path,
             keypair,
@@ -871,7 +871,7 @@ fn test_leader_to_validator_transition() {
     let mut converged = false;
     for _ in 0..30 {
         let num = spy_node.read().unwrap().convergence();
-        let mut v: Vec<NodeInfo> = spy_node.read().unwrap().rpc_peers();
+        let v: Vec<NodeInfo> = spy_node.read().unwrap().rpc_peers();
         // There's only one person excluding the spy node (the leader) who should see
         // two nodes on the network
         if num >= 2 && v.len() >= 1 {
@@ -1605,7 +1605,7 @@ fn test_broadcast_last_tick() {
     // Check that the nodes got the last broadcasted blob
     for (_, receiver) in blob_fetch_stages.iter() {
         let mut last_tick_blob: SharedBlob = SharedBlob::default();
-        while let Ok(mut new_blobs) = receiver.try_recv() {
+        while let Ok(new_blobs) = receiver.try_recv() {
             let last_blob = new_blobs.into_iter().find(|b| {
                 b.read().unwrap().index().expect("Expected index in blob")
                     == last_tick_entry_height - 1
