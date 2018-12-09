@@ -117,7 +117,6 @@ while getopts "h?S:s:T:t:o:f:" opt; do
 done
 
 loadConfigFile
-expectedNodeCount=$((${#additionalFullNodeIps[@]} + 1))
 
 build() {
   declare MAYBE_DOCKER=
@@ -157,13 +156,13 @@ startCommon() {
     "$ipAddress":~/solana/
 }
 
-startBootstrapNode() {
+startBootstrapLeader() {
   declare ipAddress=$1
   declare logFile="$2"
-  echo "--- Starting bootstrap full node: $bootstrapFullNodeIp"
+  echo "--- Starting bootstrap leader: $ipAddress"
   echo "start log: $logFile"
 
-  # Deploy local binaries to bootstrap full node.  Other full nodes and clients later fetch the
+  # Deploy local binaries to bootstrap fullnode.  Other fullnodes and clients later fetch the
   # binaries from it
   (
     set -x
@@ -184,7 +183,14 @@ startBootstrapNode() {
     esac
 
     ssh "${sshOptions[@]}" -n "$ipAddress" \
-      "./solana/net/remote/remote-node.sh $deployMethod bootstrap-leader $publicNetwork $entrypointIp $expectedNodeCount \"$RUST_LOG\""
+      "./solana/net/remote/remote-node.sh \
+         $deployMethod \
+         bootstrap-leader \
+         $publicNetwork \
+         $entrypointIp \
+         ${#fullnodeIpList[@]} \
+         \"$RUST_LOG\" \
+      "
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
     echo "^^^ +++"
@@ -196,13 +202,20 @@ startNode() {
   declare ipAddress=$1
   declare logFile="$netLogDir/fullnode-$ipAddress.log"
 
-  echo "--- Starting full node: $ipAddress"
+  echo "--- Starting fullnode: $ipAddress"
   echo "start log: $logFile"
   (
     set -x
     startCommon "$ipAddress"
     ssh "${sshOptions[@]}" -n "$ipAddress" \
-      "./solana/net/remote/remote-node.sh $deployMethod fullnode $publicNetwork $entrypointIp $expectedNodeCount \"$RUST_LOG\""
+      "./solana/net/remote/remote-node.sh \
+         $deployMethod \
+         fullnode \
+         $publicNetwork \
+         $entrypointIp \
+         ${#fullnodeIpList[@]} \
+         \"$RUST_LOG\" \
+      "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
   ln -sfT "fullnode-$ipAddress.log" "$netLogDir/fullnode-$pid.log"
@@ -227,13 +240,12 @@ startClient() {
 }
 
 sanity() {
-  declare expectedNodeCount=$((${#additionalFullNodeIps[@]} + 1))
   declare ok=true
 
   echo "--- Sanity"
   $metricsWriteDatapoint "testnet-deploy net-sanity-begin=1"
 
-  declare host=$bootstrapFullNodeIp # TODO: maybe use ${additionalFullNodeIps[0]} ?
+  declare host=${fullnodeIpList[0]}
   (
     set -x
     # shellcheck disable=SC2029 # remote-client.sh args are expanded on client side intentionally
@@ -304,22 +316,27 @@ start() {
   echo "Deployment started at $(date)"
   $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
 
-  SECONDS=0
-  declare bootstrapNodeDeployTime=
-  startBootstrapNode "$bootstrapFullNodeIp" "$netLogDir/bootstrap-fullnode-$bootstrapFullNodeIp.log"
-  bootstrapNodeDeployTime=$SECONDS
-  $metricsWriteDatapoint "testnet-deploy net-bootnode-fullnode-started=1"
+  bootstrapLeader=true
+  for ipAddress in "${fullnodeIpList[@]}"; do
+    if $bootstrapLeader; then
+      SECONDS=0
+      declare bootstrapNodeDeployTime=
+      startBootstrapLeader "$ipAddress" "$netLogDir/bootstrap-leader-$ipAddress.log"
+      bootstrapNodeDeployTime=$SECONDS
+      $metricsWriteDatapoint "testnet-deploy net-bootnode-leader-started=1"
 
-  SECONDS=0
-  pids=()
-  loopCount=0
-  for ipAddress in "${additionalFullNodeIps[@]}"; do
-    startNode "$ipAddress"
+      bootstrapLeader=false
+      SECONDS=0
+      pids=()
+      loopCount=0
+    else
+      startNode "$ipAddress"
 
-    # Stagger additional node start time. If too many nodes start simultaneously
-    # the bootstrap node gets more rsync requests from the additional nodes than
-    # it can handle.
-    ((loopCount++ % 2 == 0)) && sleep 2
+      # Stagger additional node start time. If too many nodes start simultaneously
+      # the bootstrap node gets more rsync requests from the additional nodes than
+      # it can handle.
+      ((loopCount++ % 2 == 0)) && sleep 2
+    fi
   done
 
   for pid in "${pids[@]}"; do
@@ -348,7 +365,7 @@ start() {
   case $deployMethod in
   snap)
     IFS=\  read -r _ networkVersion _ < <(
-      ssh "${sshOptions[@]}" "$bootstrapFullNodeIp" \
+      ssh "${sshOptions[@]}" "${fullnodeIpList[0]}" \
         "snap info solana | grep \"^installed:\""
     )
     networkVersion=${networkVersion/0+git./}
@@ -369,8 +386,8 @@ start() {
 
   echo
   echo "+++ Deployment Successful"
-  echo "Bootstrap full node deployment took $bootstrapNodeDeployTime seconds"
-  echo "Additional full node deployment (${#additionalFullNodeIps[@]} instances) took $additionalNodeDeployTime seconds"
+  echo "Bootstrap leader deployment took $bootstrapNodeDeployTime seconds"
+  echo "Additional fullnode deployment (${#fullnodeIpList[@]} instances) took $additionalNodeDeployTime seconds"
   echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
   echo "Network start logs in $netLogDir:"
   ls -l "$netLogDir"
@@ -400,9 +417,7 @@ stop() {
   SECONDS=0
   $metricsWriteDatapoint "testnet-deploy net-stop-begin=1"
 
-  stopNode "$bootstrapFullNodeIp"
-
-  for ipAddress in "${additionalFullNodeIps[@]}" "${clientIpList[@]}"; do
+  for ipAddress in "${fullnodeIpList[@]}" "${clientIpList[@]}"; do
     stopNode "$ipAddress"
   done
 

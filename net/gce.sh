@@ -12,9 +12,9 @@ gce)
   # shellcheck source=net/scripts/gce-provider.sh
   source "$here"/scripts/gce-provider.sh
 
-  cpuBootstrapFullNodeMachineType=n1-standard-16
-  gpuBootstrapFullNodeMachineType="$cpuBootstrapFullNodeMachineType --accelerator count=4,type=nvidia-tesla-k80"
-  bootstrapFullNodeMachineType=$cpuBootstrapFullNodeMachineType
+  cpuBootstrapLeaderMachineType=n1-standard-16
+  gpuBootstrapLeaderMachineType="$cpuBootstrapLeaderMachineType --accelerator count=4,type=nvidia-tesla-k80"
+  bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
   fullNodeMachineType=n1-standard-16
   clientMachineType=n1-standard-16
   ;;
@@ -22,9 +22,9 @@ ec2)
   # shellcheck source=net/scripts/ec2-provider.sh
   source "$here"/scripts/ec2-provider.sh
 
-  cpuBootstrapFullNodeMachineType=m4.4xlarge
-  gpuBootstrapFullNodeMachineType=p2.xlarge
-  bootstrapFullNodeMachineType=$cpuBootstrapFullNodeMachineType
+  cpuBootstrapLeaderMachineType=m4.4xlarge
+  gpuBootstrapLeaderMachineType=p2.xlarge
+  bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
   fullNodeMachineType=m4.2xlarge
   clientMachineType=m4.2xlarge
   ;;
@@ -42,7 +42,7 @@ clientBootDiskSizeInGb=75
 
 publicNetwork=false
 enableGpu=false
-bootstrapFullNodeAddress=
+bootstrapLeaderAddress=
 
 usage() {
   exitcode=0
@@ -64,13 +64,13 @@ Manage testnet instances
                       collisions (default: $prefix)
 
  create-specific options:
-   -n [number]      - Number of additional full nodes (default: $additionalFullNodeCount)
+   -n [number]      - Number of additional fullnodes (default: $additionalFullNodeCount)
    -c [number]      - Number of client nodes (default: $clientNodeCount)
    -P               - Use public network IP addresses (default: $publicNetwork)
    -z [zone]        - Zone for the nodes (default: $zone)
    -g               - Enable GPU (default: $enableGpu)
-   -G               - Enable GPU, and set count/type of GPUs to use (e.g $cpuBootstrapFullNodeMachineType --accelerator count=4,type=nvidia-tesla-k80)
-   -a [address]     - Set the bootstreap full node's external IP address to this value.
+   -G               - Enable GPU, and set count/type of GPUs to use (e.g $cpuBootstrapLeaderMachineType --accelerator count=4,type=nvidia-tesla-k80)
+   -a [address]     - Set the bootstreap fullnode's external IP address to this value.
                       For GCE, [address] is the "name" of the desired External
                       IP Address.
                       For EC2, [address] is the "allocation ID" of the desired
@@ -116,14 +116,14 @@ while getopts "h?p:Pn:c:z:gG:a:d:" opt; do
     ;;
   g)
     enableGpu=true
-    bootstrapFullNodeMachineType=$gpuBootstrapFullNodeMachineType
+    bootstrapLeaderMachineType=$gpuBootstrapLeaderMachineType
     ;;
   G)
     enableGpu=true
-    bootstrapFullNodeMachineType="$OPTARG"
+    bootstrapLeaderMachineType="$OPTARG"
     ;;
   a)
-    bootstrapFullNodeAddress=$OPTARG
+    bootstrapLeaderAddress=$OPTARG
     ;;
   d)
     bootDiskType=$OPTARG
@@ -230,13 +230,7 @@ EOF
     declare arrayName="$5"
 
     echo "$arrayName+=($publicIp)  # $name" >> "$configFile"
-    if [[ $arrayName = "bootstrapFullNodeIp" ]]; then
-      if $publicNetwork; then
-        echo "entrypointIp=$publicIp" >> "$configFile"
-      else
-        echo "entrypointIp=$privateIp" >> "$configFile"
-      fi
-    fi
+    echo "${arrayName}Private+=($privateIp)  # $name" >> "$configFile"
   }
 
   waitForStartupComplete() {
@@ -261,10 +255,10 @@ EOF
     echo "$name has booted."
   }
 
-  echo "Looking for bootstrap fullnode instance..."
-  cloud_FindInstance "$prefix-bootstrap-fullnode"
+  echo "Looking for bootstrap leader instance..."
+  cloud_FindInstance "$prefix-bootstrap-leader"
   [[ ${#instances[@]} -eq 1 ]] || {
-    echo "Unable to find bootstrap fullnode"
+    echo "Unable to find bootstrap leader"
     exit 1
   }
 
@@ -296,8 +290,9 @@ EOF
     fi
   )
 
-  echo "bootstrapFullNodeIp=()" >> "$configFile"
-  cloud_ForEachInstance recordInstanceIp bootstrapFullNodeIp
+  echo "fullnodeIpList=()" >> "$configFile"
+  echo "fullnodeIpListPrivate=()" >> "$configFile"
+  cloud_ForEachInstance recordInstanceIp fullnodeIpList
   cloud_ForEachInstance waitForStartupComplete
 
   echo "Looking for additional fullnode instances..."
@@ -306,11 +301,11 @@ EOF
     echo "Unable to find additional fullnodes"
     exit 1
   }
-  echo "additionalFullNodeIps=()" >> "$configFile"
-  cloud_ForEachInstance recordInstanceIp additionalFullNodeIps
+  cloud_ForEachInstance recordInstanceIp fullnodeIpList
   cloud_ForEachInstance waitForStartupComplete
 
   echo "clientIpList=()" >> "$configFile"
+  echo "clientIpListPrivate=()" >> "$configFile"
   echo "Looking for client bencher instances..."
   cloud_FindInstances "$prefix-client"
   [[ ${#instances[@]} -eq 0 ]] || {
@@ -325,11 +320,11 @@ EOF
 delete() {
   $metricsWriteDatapoint "testnet-deploy net-delete-begin=1"
 
-  # Delete the bootstrap fullnode first to prevent unusual metrics on the dashboard
+  # Delete the bootstrap leader first to prevent unusual metrics on the dashboard
   # during shutdown (only applicable when leader rotation is disabled).
   # TODO: It would be better to fully cut-off metrics reporting before any
   # instances are deleted.
-  for filter in "$prefix-bootstrap-fullnode" "$prefix-"; do
+  for filter in "$prefix-bootstrap-leader" "$prefix-"; do
     echo "Searching for instances: $filter"
     cloud_FindInstances "$filter"
 
@@ -370,8 +365,8 @@ create)
 ========================================================================================
 
 Network composition:
-  Bootstrap full node = $bootstrapFullNodeMachineType (GPU=$enableGpu)
-  Additional full nodes = $additionalFullNodeCount x $fullNodeMachineType
+  Bootstrap leader = $bootstrapLeaderMachineType (GPU=$enableGpu)
+  Additional fullnodes = $additionalFullNodeCount x $fullNodeMachineType
   Client(s) = $clientNodeCount x $clientMachineType
 
 ========================================================================================
@@ -434,9 +429,9 @@ touch /.instance-startup-complete
 
 EOF
 
-  cloud_CreateInstances "$prefix" "$prefix-bootstrap-fullnode" 1 \
-    "$imageName" "$bootstrapFullNodeMachineType" "$fullNodeBootDiskSizeInGb" \
-    "$startupScript" "$bootstrapFullNodeAddress" "$bootDiskType"
+  cloud_CreateInstances "$prefix" "$prefix-bootstrap-leader" 1 \
+    "$imageName" "$bootstrapLeaderMachineType" "$fullNodeBootDiskSizeInGb" \
+    "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType"
 
   cloud_CreateInstances "$prefix" "$prefix-fullnode" "$additionalFullNodeCount" \
     "$imageName" "$fullNodeMachineType" "$fullNodeBootDiskSizeInGb" \
