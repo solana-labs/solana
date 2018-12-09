@@ -15,14 +15,10 @@ if [[ -z $installDir ]]; then
   exit 1
 fi
 
-if [[ ! -d $installDir ]]; then
-  echo "Not a directory: $installDir"
-  exit 1
-fi
-
 for dir in "$SOLANA_ROOT"/programs/native/*; do
   for program in echo "$SOLANA_ROOT"/target/"$variant"/deps/lib{,solana_}"$(basename "$dir")"{,_program}.{so,dylib,dll}; do
     if [[ -f $program ]]; then
+      mkdir -p "$installDir"
       rm -f "$installDir/$(basename "$program")"
       cp -v "$program" "$installDir"
     fi
