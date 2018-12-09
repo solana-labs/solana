@@ -15,19 +15,15 @@ _() {
 # Uncomment this to run nightly test suit
 # _ cargo test --verbose --features=unstable -- --test-threads=1
 
-maybe_cargo_install() {
-  for cmd in "$@"; do
-    set +e
-    cargo "$cmd" --help > /dev/null 2>&1
-    declare exitcode=$?
-    set -e
-    if [[ $exitcode -eq 101 ]]; then
-      _ cargo install cargo-"$cmd"
-    fi
-  done
+cargo_install_unless() {
+  declare crate=$1
+  shift
+
+  "$@" > /dev/null 2>&1 || \
+    _ cargo install "$crate"
 }
 
-maybe_cargo_install cov
+cargo_install_unless cargo-cov cargo cov --help
 
 # Generate coverage data and report via unit-test suite.
 _ cargo cov clean

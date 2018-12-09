@@ -8,25 +8,16 @@ _() {
   "$@"
 }
 
-maybe_cargo_install() {
-  declare cmd=$1
-  declare crate=$2
+cargo_install_unless() {
+  declare crate=$1
+  shift
 
-  if [[ -z $crate ]]; then
-    crate=$cmd
-  fi
-
-  set +e
-  "$cmd" --help > /dev/null 2>&1
-  declare exitcode=$?
-  set -e
-  if [[ $exitcode -ne 0 ]]; then
+  "$@" > /dev/null 2>&1 || \
     _ cargo install "$crate"
-  fi
 }
 
 export PATH=$CARGO_HOME/bin:$PATH
-maybe_cargo_install mdbook
-maybe_cargo_install svgbob svgbob_cli
+cargo_install_unless mdbook mdbook --help
+cargo_install_unless svgbob_cli svgbob --help
 
 _ make
