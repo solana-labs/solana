@@ -24,7 +24,5 @@ cargo_install_unless() {
 }
 
 cargo_install_unless cargo-audit cargo audit --version
-cargo_install_unless cargo-tree cargo tree --version
 
-_ cargo tree
 _ cargo audit
