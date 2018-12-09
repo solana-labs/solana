@@ -448,7 +448,7 @@ mod test {
             let t_responder = responder("streamer_send_test", Arc::new(send), r_responder);
             let mut msgs = Vec::new();
             for i in 0..10 {
-                let mut b = SharedBlob::default();
+                let b = SharedBlob::default();
                 {
                     let mut w = b.write().unwrap();
                     w.data[0] = i as u8;

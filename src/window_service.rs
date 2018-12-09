@@ -298,7 +298,7 @@ mod test {
                 tn.sockets.replicate.into_iter().map(Arc::new).collect();
 
             let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
-            let mut num_blobs_to_make = 10;
+            let num_blobs_to_make = 10;
             let gossip_address = &tn.info.gossip;
             let msgs = make_consecutive_blobs(
                 me_id,

@@ -96,7 +96,7 @@ pub fn generate_coding_blocks(coding: &mut [&mut [u8]], data: &[&[u8]]) -> Resul
         data_arg.push(block.as_ptr());
     }
     let mut coding_arg = Vec::with_capacity(coding.len());
-    for mut block in coding {
+    for block in coding {
         if block_len != block.len() as i32 {
             error!(
                 "coding block size incorrect {} expected {}",

@@ -83,7 +83,7 @@ fn broadcast(
     let chunking_elapsed = duration_as_ms(&blobs_chunking.elapsed());
 
     let broadcast_start = Instant::now();
-    for mut blobs in blobs_chunked {
+    for blobs in blobs_chunked {
         let blobs_len = blobs.len();
         trace!("{}: broadcast blobs.len: {}", id, blobs_len);
 

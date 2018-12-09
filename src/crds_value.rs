@@ -101,7 +101,7 @@ pub enum CrdsValueLabel {
 }
 
 impl fmt::Display for CrdsValueLabel {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             CrdsValueLabel::ContactInfo(_) => write!(f, "ContactInfo({})", self.pubkey()),
             CrdsValueLabel::Vote(_) => write!(f, "Vote({})", self.pubkey()),

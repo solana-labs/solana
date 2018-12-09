@@ -294,7 +294,7 @@ pub fn ed25519_verify(batches: &[SharedPackets]) -> Vec<Vec<u8>> {
     trace!("done verify");
     let mut num = 0;
     for (vs, sig_vs) in rvs.iter_mut().zip(sig_lens.iter()) {
-        for (mut v, sig_v) in vs.iter_mut().zip(sig_vs.iter()) {
+        for (v, sig_v) in vs.iter_mut().zip(sig_vs.iter()) {
             let mut vout = 1;
             for _ in 0..*sig_v {
                 if 0 == out[num] {

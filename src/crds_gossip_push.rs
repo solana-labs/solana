@@ -189,7 +189,7 @@ impl CrdsGossipPush {
                 }
             }
             let size = cmp::max(CRDS_GOSSIP_BLOOM_SIZE, network_size);
-            let mut bloom = Bloom::random(size, 0.1, 1024 * 8 * 4);
+            let bloom = Bloom::random(size, 0.1, 1024 * 8 * 4);
             new_items.insert(val.0.pubkey(), bloom);
             if new_items.len() == need {
                 break;

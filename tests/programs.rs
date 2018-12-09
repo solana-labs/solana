@@ -1,9 +1,9 @@
-extern crate bincode;
-extern crate elf;
-extern crate serde_derive;
-extern crate solana;
-extern crate solana_native_loader;
-extern crate solana_sdk;
+
+
+
+use solana;
+use solana_native_loader;
+
 
 use solana::bank::Bank;
 use solana::logger;

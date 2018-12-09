@@ -1,9 +1,9 @@
 #[macro_use]
 extern crate clap;
-extern crate dirs;
+use dirs;
 #[macro_use]
 extern crate solana;
-extern crate solana_sdk;
+
 
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana::logger;
@@ -12,7 +12,7 @@ use solana_sdk::signature::{read_keypair, KeypairUtil};
 use std::error;
 use std::net::SocketAddr;
 
-pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error>> {
+pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn error::Error>> {
     let network = if let Some(addr) = matches.value_of("network") {
         addr.parse().or_else(|_| {
             Err(WalletError::BadParameter(
@@ -61,7 +61,7 @@ pub fn parse_args(matches: &ArgMatches) -> Result<WalletConfig, Box<error::Error
     })
 }
 
-fn main() -> Result<(), Box<error::Error>> {
+fn main() -> Result<(), Box<dyn error::Error>> {
     logger::setup();
     let matches = App::new("solana-wallet")
         .version(crate_version!())

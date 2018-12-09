@@ -401,7 +401,7 @@ mod test {
         let network_values: Vec<Node> = network.values().cloned().collect();
         for t in start..end {
             let now = t as u64 * 100;
-            let mut requests: Vec<_> = {
+            let requests: Vec<_> = {
                 network_values
                     .par_iter()
                     .filter_map(|from| from.lock().unwrap().new_pull_request(now).ok())

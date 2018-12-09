@@ -1,6 +1,6 @@
-extern crate serde_json;
-extern crate solana;
-extern crate solana_metrics;
+use serde_json;
+
+use solana_metrics;
 
 use serde_json::Value;
 use solana_metrics::influxdb;

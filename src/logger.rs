@@ -2,7 +2,7 @@
 //! `setup()` may be called multiple times.
 
 use std::sync::{Once, ONCE_INIT};
-extern crate env_logger;
+use env_logger;
 
 static INIT: Once = ONCE_INIT;
 

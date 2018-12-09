@@ -19,7 +19,7 @@ pub enum Error {
     IO(std::io::Error),
     JSON(serde_json::Error),
     AddrParse(std::net::AddrParseError),
-    JoinError(Box<Any + Send + 'static>),
+    JoinError(Box<dyn Any + Send + 'static>),
     RecvError(std::sync::mpsc::RecvError),
     RecvTimeoutError(std::sync::mpsc::RecvTimeoutError),
     Serialize(std::boxed::Box<bincode::ErrorKind>),
@@ -38,7 +38,7 @@ pub enum Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "solana error")
     }
 }
@@ -76,8 +76,8 @@ impl<T> std::convert::From<std::sync::mpsc::SendError<T>> for Error {
         Error::SendError
     }
 }
-impl std::convert::From<Box<Any + Send + 'static>> for Error {
-    fn from(e: Box<Any + Send + 'static>) -> Error {
+impl std::convert::From<Box<dyn Any + Send + 'static>> for Error {
+    fn from(e: Box<dyn Any + Send + 'static>) -> Error {
         Error::JoinError(e)
     }
 }

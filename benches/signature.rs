@@ -1,6 +1,6 @@
 #![feature(test)]
-extern crate solana;
-extern crate solana_sdk;
+
+
 extern crate test;
 
 use solana::signature::GenKeys;

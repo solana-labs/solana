@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate clap;
-extern crate serde_json;
-extern crate solana;
+use serde_json;
+
 
 use clap::{App, Arg, SubCommand};
 use solana::bank::Bank;

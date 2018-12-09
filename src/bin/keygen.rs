@@ -1,15 +1,15 @@
 #[macro_use]
 extern crate clap;
-extern crate dirs;
-extern crate ring;
-extern crate serde_json;
-extern crate solana;
+use dirs;
+
+
+
 
 use clap::{App, Arg};
 use solana::wallet::gen_keypair_file;
 use std::error;
 
-fn main() -> Result<(), Box<error::Error>> {
+fn main() -> Result<(), Box<dyn error::Error>> {
     let matches = App::new("solana-keygen")
         .version(crate_version!())
         .arg(

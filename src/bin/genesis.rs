@@ -1,12 +1,12 @@
 //! A command-line executable for generating the chain's genesis block.
 
-extern crate atty;
+
 #[macro_use]
 extern crate clap;
-extern crate serde_json;
-extern crate solana;
-extern crate solana_sdk;
-extern crate untrusted;
+use serde_json;
+
+
+
 
 use clap::{App, Arg};
 use solana::ledger::LedgerWriter;
@@ -23,7 +23,7 @@ use std::path::Path;
  */
 pub const BOOTSTRAP_LEADER_TOKENS: u64 = 2;
 
-fn main() -> Result<(), Box<error::Error>> {
+fn main() -> Result<(), Box<dyn error::Error>> {
     let matches = App::new("solana-genesis")
         .version(crate_version!())
         .arg(
