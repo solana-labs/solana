@@ -450,16 +450,11 @@ pub fn index_blobs<I, J, K>(
 {
     // enumerate all the blobs, those are the indices
     for b in blobs {
-        let (b, tick_height) = b.borrow();
-        let (_, slot) = leader_scheduler
-            .read()
-            .unwrap()
-            .get_scheduled_leader(*tick_height)
-            .expect("Leader schedule should never be unknown while indexing blobs");
+        let (b, slot) = b.borrow();
         let mut blob = b.borrow().write().unwrap();
 
         blob.set_index(index).expect("set_index");
-        blob.set_slot(slot).expect("set_slot");
+        blob.set_slot(*slot).expect("set_slot");
         blob.set_id(id).expect("set_id");
         blob.set_flags(0).unwrap();
 

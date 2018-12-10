@@ -61,32 +61,41 @@ fn broadcast(
     let to_blobs_start = Instant::now();
 
     // Generate the tick heights for all the entries inside ventries
-    let tick_heights: Vec<u64> = ventries
-        .iter()
-        .flat_map(|p| {
-            let tick_heights: Vec<u64> = p
-                .iter()
-                .map(|e| {
-                    if e.is_tick() {
-                        *tick_height += e.is_tick() as u64;
-                        *tick_height
-                    } else {
-                        *tick_height + 1
-                    }
-                })
-                .collect();
+    let slot_heights: Vec<u64> = {
+        let r_leader_scheduler = leader_scheduler.read().unwrap();
+        ventries
+            .iter()
+            .flat_map(|p| {
+                let slot_heights: Vec<u64> = p
+                    .iter()
+                    .map(|e| {
+                        let tick_height = {
+                            if e.is_tick() {
+                                *tick_height += e.is_tick() as u64;
+                                *tick_height
+                            } else {
+                                *tick_height + 1
+                            }
+                        };
+                        let (_, slot) = r_leader_scheduler
+                            .get_scheduled_leader(tick_height)
+                            .expect("Leader schedule should never be unknown while indexing blobs");
+                        slot
+                    })
+                    .collect();
 
-            tick_heights
-        })
-        .collect();
+                slot_heights
+            })
+            .collect()
+    };
 
     let blobs_vec: Vec<_> = ventries
         .into_par_iter()
         .flat_map(|p| p.to_blobs())
         .collect();
 
-    let blobs_tick_heights: Vec<(SharedBlob, u64)> =
-        blobs_vec.into_iter().zip(tick_heights).collect();
+    let blobs_slot_heights: Vec<(SharedBlob, u64)> =
+        blobs_vec.into_iter().zip(slot_heights).collect();
 
     let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
 
@@ -94,7 +103,7 @@ fn broadcast(
     // We could receive more blobs than window slots so
     // break them up into window-sized chunks to process
     let window_size = window.read().unwrap().window_size();
-    let blobs_chunked = blobs_tick_heights
+    let blobs_chunked = blobs_slot_heights
         .chunks(window_size as usize)
         .map(|x| x.to_vec());
     let chunking_elapsed = duration_as_ms(&blobs_chunking.elapsed());
