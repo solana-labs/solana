@@ -54,6 +54,8 @@ pub enum RpcRequest {
     SignVote,
     DeregisterNode,
     GetStorageMiningLastId,
+    GetStorageMiningEntryHeight,
+    GetStoragePubkeysForEntryHeight,
 }
 
 impl RpcRequest {
@@ -97,6 +99,8 @@ impl RpcRequest {
             RpcRequest::SignVote => "signVote",
             RpcRequest::DeregisterNode => "deregisterNode",
             RpcRequest::GetStorageMiningLastId => "getStorageMiningLastId",
+            RpcRequest::GetStorageMiningEntryHeight => "getStorageMiningEntryHeight",
+            RpcRequest::GetStoragePubkeysForEntryHeight => "getStoragePubkeysForEntryHeight",
         };
         let mut request = json!({
            "jsonrpc": jsonrpc,

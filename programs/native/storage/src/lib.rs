@@ -14,7 +14,6 @@ use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::storage_program::*;
-use std::sync::{Once, ONCE_INIT};
 
 solana_entrypoint!(entrypoint);
 fn entrypoint(
@@ -23,12 +22,6 @@ fn entrypoint(
     data: &[u8],
     _tick_height: u64,
 ) -> Result<(), ProgramError> {
-    static INIT: Once = ONCE_INIT;
-    INIT.call_once(|| {
-        // env_logger can only be initialized once
-        env_logger::init();
-    });
-
     // accounts_keys[0] must be signed
     if keyed_accounts[0].signer_key().is_none() {
         info!("account[0] is unsigned");
@@ -37,8 +30,14 @@ fn entrypoint(
 
     if let Ok(syscall) = deserialize(data) {
         match syscall {
-            StorageProgram::SubmitMiningProof { sha_state } => {
-                info!("Mining proof submitted with state {:?}", sha_state);
+            StorageProgram::SubmitMiningProof {
+                sha_state,
+                entry_height,
+            } => {
+                info!(
+                    "Mining proof submitted with state {:?} entry_height: {}",
+                    sha_state, entry_height
+                );
             }
         }
         Ok(())

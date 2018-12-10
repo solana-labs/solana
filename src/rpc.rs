@@ -155,6 +155,12 @@ build_rpc_trait! {
 
         #[rpc(meta, name = "getStorageMiningLastId")]
         fn get_storage_mining_last_id(&self, Self::Metadata) -> Result<String>;
+
+        #[rpc(meta, name = "getStorageMiningEntryHeight")]
+        fn get_storage_mining_entry_height(&self, Self::Metadata) -> Result<u64>;
+
+        #[rpc(meta, name = "getStoragePubkeysForEntryHeight")]
+        fn get_storage_pubkeys_for_entry_height(&self, Self::Metadata, u64) -> Result<Vec<Pubkey>>;
     }
 }
 
@@ -284,6 +290,17 @@ impl RpcSol for RpcSolImpl {
     fn get_storage_mining_last_id(&self, meta: Self::Metadata) -> Result<String> {
         meta.request_processor.get_storage_mining_last_id()
     }
+    fn get_storage_mining_entry_height(&self, meta: Self::Metadata) -> Result<u64> {
+        meta.request_processor.get_storage_mining_entry_height()
+    }
+    fn get_storage_pubkeys_for_entry_height(
+        &self,
+        meta: Self::Metadata,
+        entry_height: u64,
+    ) -> Result<Vec<Pubkey>> {
+        meta.request_processor
+            .get_storage_pubkeys_for_entry_height(entry_height)
+    }
 }
 #[derive(Clone)]
 pub struct JsonRpcRequestProcessor {
@@ -321,6 +338,13 @@ impl JsonRpcRequestProcessor {
     fn get_storage_mining_last_id(&self) -> Result<String> {
         let id = self.bank.storage_state.get_last_id();
         Ok(bs58::encode(id).into_string())
+    }
+    fn get_storage_mining_entry_height(&self) -> Result<u64> {
+        let entry_height = self.bank.storage_state.get_entry_height();
+        Ok(entry_height)
+    }
+    fn get_storage_pubkeys_for_entry_height(&self, entry_height: u64) -> Result<Vec<Pubkey>> {
+        Ok(self.bank.get_pubkeys_for_entry_height(entry_height))
     }
 }
 

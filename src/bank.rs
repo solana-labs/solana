@@ -486,6 +486,11 @@ impl Bank {
             .expect("no last_id has been set")
     }
 
+    pub fn get_pubkeys_for_entry_height(&self, entry_height: u64) -> Vec<Pubkey> {
+        self.storage_state
+            .get_pubkeys_for_entry_height(entry_height)
+    }
+
     /// Store the given signature. The bank will reject any transaction with the same signature.
     fn reserve_signature(signatures: &mut SignatureStatusMap, signature: &Signature) -> Result<()> {
         if let Some(_result) = signatures.get(signature) {

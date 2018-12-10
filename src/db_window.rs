@@ -350,9 +350,10 @@ pub fn process_blob(
 
         // Check if we ran over the last wanted entry
         if consumed > max_ix {
-            let extra_unwanted_entries_len = consumed - (max_ix + 1);
             let consumed_entries_len = consumed_entries.len();
-            consumed_entries.truncate(consumed_entries_len - extra_unwanted_entries_len as usize);
+            let extra_unwanted_entries_len =
+                cmp::min(consumed_entries_len, (consumed - (max_ix + 1)) as usize);
+            consumed_entries.truncate(consumed_entries_len - extra_unwanted_entries_len);
             done.store(true, Ordering::Relaxed);
         }
     }

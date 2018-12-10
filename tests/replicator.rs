@@ -1,12 +1,16 @@
 #[macro_use]
 extern crate log;
 
+#[cfg(feature = "chacha")]
+#[macro_use]
+extern crate serde_json;
+
 use solana::client::mk_client;
 use solana::cluster_info::{Node, NodeInfo};
 use solana::db_ledger::DbLedger;
 use solana::fullnode::Fullnode;
 use solana::leader_scheduler::LeaderScheduler;
-use solana::ledger::{create_tmp_genesis, get_tmp_ledger_path, read_ledger};
+use solana::ledger::{create_tmp_genesis, get_tmp_ledger_path, read_ledger, tmp_copy_ledger};
 use solana::replicator::Replicator;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
@@ -30,13 +34,33 @@ fn test_replicator_startup() {
     let leader_ledger_path = "replicator_test_leader_ledger";
     let (mint, leader_ledger_path) = create_tmp_genesis(leader_ledger_path, 100, leader_info.id, 1);
 
+    let validator_ledger_path =
+        tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");
+
     {
         let leader = Fullnode::new(
             leader_node,
             &leader_ledger_path,
             leader_keypair,
-            vote_account_keypair,
+            vote_account_keypair.clone(),
             None,
+            false,
+            LeaderScheduler::from_bootstrap_leader(leader_info.id.clone()),
+            None,
+        );
+
+        let validator_keypair = Arc::new(Keypair::new());
+        let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
+
+        #[cfg(feature = "chacha")]
+        let validator_node_info = validator_node.info.clone();
+
+        let validator = Fullnode::new(
+            validator_node,
+            &validator_ledger_path,
+            validator_keypair,
+            vote_account_keypair,
+            Some(leader_info.gossip),
             false,
             LeaderScheduler::from_bootstrap_leader(leader_info.id),
             None,
@@ -53,6 +77,7 @@ fn test_replicator_startup() {
 
         let replicator_keypair = Keypair::new();
 
+        // Give the replicator some tokens
         let amount = 1;
         let mut tx = Transaction::system_new(
             &mint.keypair(),
@@ -77,6 +102,7 @@ fn test_replicator_startup() {
         )
         .unwrap();
 
+        // Poll the ledger dir to see that some is downloaded
         let mut num_entries = 0;
         for _ in 0..60 {
             match read_ledger(replicator_ledger_path, true) {
@@ -94,13 +120,43 @@ fn test_replicator_startup() {
                 }
             }
             sleep(Duration::from_millis(300));
+
+            // Do a transfer to make sure new entries are created which
+            // stimulates the repair process
             let last_id = leader_client.get_last_id();
             leader_client
                 .transfer(1, &mint.keypair(), bob.pubkey(), &last_id)
                 .unwrap();
         }
+
+        // The replicator will not submit storage proofs if
+        // chacha is not enabled
+        #[cfg(feature = "chacha")]
+        {
+            use solana::rpc_request::{RpcClient, RpcRequest};
+
+            let rpc_client = RpcClient::new_from_socket(validator_node_info.rpc);
+            let mut non_zero_pubkeys = false;
+            for _ in 0..30 {
+                let params = json!([0]);
+                let pubkeys = RpcRequest::GetStoragePubkeysForEntryHeight
+                    .make_rpc_request(&rpc_client, 1, Some(params))
+                    .unwrap();
+                info!("pubkeys: {:?}", pubkeys);
+                if pubkeys.as_array().unwrap().len() != 0 {
+                    non_zero_pubkeys = true;
+                    break;
+                }
+                sleep(Duration::from_secs(1));
+            }
+            assert!(non_zero_pubkeys);
+        }
+
+        // Check that some ledger was downloaded
         assert!(num_entries > 0);
+
         replicator.close();
+        validator.exit();
         leader.close().expect("Expected successful node closure");
     }
 
