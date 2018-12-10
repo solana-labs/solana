@@ -21,7 +21,7 @@ use std::env;
 use std::path::PathBuf;
 use std::str;
 
-/// Dynamic link library prefixs
+/// Dynamic link library prefixes
 #[cfg(unix)]
 const PLATFORM_FILE_PREFIX_NATIVE: &str = "lib";
 #[cfg(windows)]
