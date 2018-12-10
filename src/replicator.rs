@@ -12,6 +12,7 @@ use crate::rpc_request::{RpcClient, RpcRequest};
 use crate::service::Service;
 use crate::store_ledger_stage::StoreLedgerStage;
 use crate::streamer::BlobReceiver;
+use crate::thin_client::retry_get_balance;
 use crate::window;
 use crate::window_service::window_service;
 use rand::thread_rng;
@@ -194,7 +195,7 @@ impl Replicator {
 
         let mut client = mk_client(&leader);
 
-        if client.get_balance(&keypair.pubkey()).is_err() {
+        if retry_get_balance(&mut client, &keypair.pubkey(), None).is_none() {
             let mut drone_addr = leader_info.tpu;
             drone_addr.set_port(DRONE_PORT);
 

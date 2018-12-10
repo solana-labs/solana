@@ -10,6 +10,8 @@ use solana::ledger::{create_tmp_genesis, get_tmp_ledger_path, read_ledger};
 use solana::logger;
 use solana::replicator::Replicator;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::system_transaction::SystemTransaction;
+use solana_sdk::transaction::Transaction;
 use std::fs::remove_dir_all;
 use std::sync::Arc;
 use std::thread::sleep;
@@ -53,8 +55,15 @@ fn test_replicator_startup() {
 
         let replicator_keypair = Keypair::new();
 
+        let amount = 1;
+        let mut tx = Transaction::system_new(
+            &mint.keypair(),
+            replicator_keypair.pubkey(),
+            amount,
+            last_id,
+        );
         leader_client
-            .transfer(1, &mint.keypair(), replicator_keypair.pubkey(), &last_id)
+            .retry_transfer(&mint.keypair(), &mut tx, 5)
             .unwrap();
 
         info!("starting replicator node");
