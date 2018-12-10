@@ -61,6 +61,7 @@ fn entrypoint(
                 error!("account[0] is not assigned to the VOTE_PROGRAM");
                 Err(ProgramError::InvalidArgument)?;
             }
+            debug!("{:?} by {}", vote, keyed_accounts[0].signer_key().unwrap());
 
             let mut vote_state = VoteProgram::deserialize(&keyed_accounts[0].account.userdata)?;
 
