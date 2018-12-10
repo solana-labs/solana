@@ -50,7 +50,7 @@ echo --- Creating tarball
   ./fetch-perf-libs.sh
   # shellcheck source=/dev/null
   source ./target/perf-libs/env.sh
-  cargo install --features=cuda --root solana-release-cuda
+  cargo install --path . --features=cuda --root solana-release-cuda
   cp solana-release-cuda/bin/solana-fullnode solana-release/bin/solana-fullnode-cuda
 
   tar jvcf solana-release.tar.bz2 solana-release/
