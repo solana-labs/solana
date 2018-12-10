@@ -1,9 +1,9 @@
 //! The `gossip_service` module implements the network control plane.
 
 use crate::cluster_info::ClusterInfo;
+use crate::db_ledger::DbLedger;
 use crate::service::Service;
 use crate::streamer;
-use crate::window::SharedWindow;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
@@ -18,8 +18,7 @@ pub struct GossipService {
 impl GossipService {
     pub fn new(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        window: SharedWindow,
-        ledger_path: Option<&str>,
+        db_ledger: Option<Arc<RwLock<DbLedger>>>,
         gossip_socket: UdpSocket,
         exit: Arc<AtomicBool>,
     ) -> Self {
@@ -36,8 +35,7 @@ impl GossipService {
         let t_responder = streamer::responder("gossip", gossip_socket, response_receiver);
         let t_listen = ClusterInfo::listen(
             cluster_info.clone(),
-            window,
-            ledger_path,
+            db_ledger,
             request_receiver,
             response_sender.clone(),
             exit.clone(),
@@ -79,8 +77,7 @@ mod tests {
         let tn = Node::new_localhost();
         let cluster_info = ClusterInfo::new(tn.info.clone());
         let c = Arc::new(RwLock::new(cluster_info));
-        let w = Arc::new(RwLock::new(vec![]));
-        let d = GossipService::new(&c, w, None, tn.sockets.gossip, exit.clone());
+        let d = GossipService::new(&c, None, tn.sockets.gossip, exit.clone());
         d.close().expect("thread join");
     }
 }

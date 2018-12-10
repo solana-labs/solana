@@ -99,7 +99,6 @@ impl Replicator {
 
         const REPLICATOR_WINDOW_SIZE: usize = 32 * 1024;
         let window = window::new_window(REPLICATOR_WINDOW_SIZE);
-        let shared_window = Arc::new(RwLock::new(window));
 
         info!("Replicator: id: {}", keypair.pubkey());
         info!("Creating cluster info....");
@@ -127,8 +126,7 @@ impl Replicator {
 
         let gossip_service = GossipService::new(
             &cluster_info,
-            shared_window.clone(),
-            ledger_path,
+            Some(db_ledger.clone()),
             node.sockets.gossip,
             exit.clone(),
         );

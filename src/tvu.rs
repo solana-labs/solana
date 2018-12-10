@@ -200,7 +200,7 @@ pub mod tests {
         exit: Arc<AtomicBool>,
     ) -> (GossipService, SharedWindow) {
         let window = Arc::new(RwLock::new(window::default_window()));
-        let gossip_service = GossipService::new(&cluster_info, window.clone(), None, gossip, exit);
+        let gossip_service = GossipService::new(&cluster_info, None, gossip, exit);
         (gossip_service, window)
     }
 

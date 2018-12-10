@@ -16,7 +16,6 @@ use solana::logger;
 use solana::service::Service;
 use solana::signature::GenKeys;
 use solana::thin_client::{poll_gossip_for_leader, ThinClient};
-use solana::window::default_window;
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
 use solana_metrics::influxdb;
 use solana_sdk::hash::Hash;
@@ -850,9 +849,7 @@ fn converge(
     spy_cluster_info.insert_info(leader.clone());
     spy_cluster_info.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_cluster_info));
-    let window = Arc::new(RwLock::new(default_window()));
-    let gossip_service =
-        GossipService::new(&spy_ref, window, None, gossip_socket, exit_signal.clone());
+    let gossip_service = GossipService::new(&spy_ref, None, gossip_socket, exit_signal.clone());
     let mut v: Vec<NodeInfo> = vec![];
     // wait for the network to converge, 30 seconds should be plenty
     for _ in 0..30 {
