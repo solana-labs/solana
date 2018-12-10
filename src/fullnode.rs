@@ -216,6 +216,9 @@ impl Fullnode {
         sigverify_disabled: bool,
         rpc_port: Option<u16>,
     ) -> Self {
+        // Create the RocksDb ledger
+        let db_ledger = Self::make_db_ledger(ledger_path);
+
         let mut rpc_addr = node.info.rpc;
         let mut rpc_pubsub_addr = node.info.rpc_pubsub;
         // Use custom RPC port, if provided (`Some(port)`)
@@ -244,8 +247,7 @@ impl Fullnode {
 
         let gossip_service = GossipService::new(
             &cluster_info,
-            shared_window.clone(),
-            Some(ledger_path),
+            Some(db_ledger.clone()),
             node.sockets.gossip,
             exit.clone(),
         );
@@ -265,9 +267,6 @@ impl Fullnode {
             .expect("Leader not known after processing bank");
 
         cluster_info.write().unwrap().set_leader(scheduled_leader);
-
-        // Create the RocksDb ledger
-        let db_ledger = Self::make_db_ledger(ledger_path);
 
         let node_role = if scheduled_leader != keypair.pubkey() {
             // Start in validator mode.

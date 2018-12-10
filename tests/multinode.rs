@@ -49,10 +49,8 @@ fn make_spy_node(leader: &NodeInfo) -> (GossipService, Arc<RwLock<ClusterInfo>>,
     spy_cluster_info.insert_info(leader.clone());
     spy_cluster_info.set_leader(leader.id);
     let spy_cluster_info_ref = Arc::new(RwLock::new(spy_cluster_info));
-    let spy_window = Arc::new(RwLock::new(default_window()));
     let gossip_service = GossipService::new(
         &spy_cluster_info_ref,
-        spy_window,
         None,
         spy.sockets.gossip,
         exit.clone(),
@@ -73,10 +71,8 @@ fn make_listening_node(
     new_node_cluster_info.insert_info(leader.clone());
     new_node_cluster_info.set_leader(leader.id);
     let new_node_cluster_info_ref = Arc::new(RwLock::new(new_node_cluster_info));
-    let new_node_window = Arc::new(RwLock::new(default_window()));
     let gossip_service = GossipService::new(
         &new_node_cluster_info_ref,
-        new_node_window,
         None,
         new_node
             .sockets

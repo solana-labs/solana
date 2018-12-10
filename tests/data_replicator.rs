@@ -21,8 +21,7 @@ fn test_node(exit: Arc<AtomicBool>) -> (Arc<RwLock<ClusterInfo>>, GossipService,
     let mut tn = Node::new_localhost_with_pubkey(keypair.pubkey());
     let cluster_info = ClusterInfo::new_with_keypair(tn.info.clone(), Arc::new(keypair));
     let c = Arc::new(RwLock::new(cluster_info));
-    let w = Arc::new(RwLock::new(vec![]));
-    let d = GossipService::new(&c.clone(), w, None, tn.sockets.gossip, exit);
+    let d = GossipService::new(&c.clone(), None, tn.sockets.gossip, exit);
     let _ = c.read().unwrap().my_data();
     (c, d, tn.sockets.tvu.pop().unwrap())
 }

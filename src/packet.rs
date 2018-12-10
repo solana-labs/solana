@@ -363,7 +363,9 @@ impl Blob {
     }
     pub fn size(&self) -> Result<usize> {
         let size = self.data_size()? as usize;
-        if self.meta.size == size {
+        if size <= BLOB_HEADER_SIZE {
+            Err(Error::BlobError(BlobError::BadState))
+        } else if self.meta.size == size {
             Ok(size - BLOB_HEADER_SIZE)
         } else {
             Err(Error::BlobError(BlobError::BadState))
