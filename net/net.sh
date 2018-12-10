@@ -32,6 +32,8 @@ Operate a configured testnet
                                  (vX.Y.Z)
    -f [cargoFeatures]          - List of |cargo --feaures=| to activate
                                  (ignored if -s or -S is specified)
+   -r                          - Reuse existing node/ledger configuration from a
+                                 previous |start| (ie, don't run ./mulitnode-demo/setup.sh).
 
    Note: if RUST_LOG is set in the environment it will be propogated into the
          network nodes.
@@ -54,12 +56,13 @@ snapFilename=
 deployMethod=local
 sanityExtraArgs=
 cargoFeatures=
+skipSetup=false
 
 command=$1
 [[ -n $command ]] || usage
 shift
 
-while getopts "h?S:s:T:t:o:f:" opt; do
+while getopts "h?S:s:T:t:o:f:r" opt; do
   case $opt in
   h | \?)
     usage
@@ -98,6 +101,9 @@ while getopts "h?S:s:T:t:o:f:" opt; do
     ;;
   f)
     cargoFeatures=$OPTARG
+    ;;
+  r)
+    skipSetup=true
     ;;
   o)
     case $OPTARG in
@@ -190,6 +196,7 @@ startBootstrapLeader() {
          $entrypointIp \
          ${#fullnodeIpList[@]} \
          \"$RUST_LOG\" \
+         $skipSetup \
       "
   ) >> "$logFile" 2>&1 || {
     cat "$logFile"
@@ -215,6 +222,7 @@ startNode() {
          $entrypointIp \
          ${#fullnodeIpList[@]} \
          \"$RUST_LOG\" \
+         $skipSetup \
       "
   ) >> "$logFile" 2>&1 &
   declare pid=$!
@@ -403,7 +411,6 @@ stopNode() {
       set -x
       if snap list solana; then
         sudo snap set solana mode=
-        sudo snap remove solana
       fi
       ! tmux list-sessions || tmux kill-session
       for pattern in solana- remote- oom-monitor net-stats; do

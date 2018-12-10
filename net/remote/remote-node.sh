@@ -10,6 +10,7 @@ publicNetwork="$3"
 entrypointIp="$4"
 numNodes="$5"
 RUST_LOG="$6"
+skipSetup="$7"
 set +x
 export RUST_LOG=${RUST_LOG:-solana=warn} # if RUST_LOG is unset, default to warn
 
@@ -23,6 +24,7 @@ missing() {
 [[ -n $publicNetwork ]] || missing publicNetwork
 [[ -n $entrypointIp ]]  || missing entrypointIp
 [[ -n $numNodes ]]      || missing numNodes
+[[ -n $skipSetup ]]     || missing skipSetup
 
 cat > deployConfig <<EOF
 deployMethod="$deployMethod"
@@ -42,9 +44,37 @@ fi
 case $deployMethod in
 snap)
   SECONDS=0
+
+  if [[ $skipSetup = true ]]; then
+    for configDir in /var/snap/solana/current/config{,-local}; do
+      if [[ ! -d $configDir ]]; then
+        echo Error: not a directory: $configDir
+        exit 1
+      fi
+    done
+    (
+      set -x
+      sudo rm -rf /saved-node-config
+      sudo mkdir /saved-node-config
+      sudo mv /var/snap/solana/current/config{,-local} /saved-node-config
+    )
+  fi
+
   [[ $nodeType = bootstrap-leader ]] ||
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp:~/solana/solana.snap" .
+  if snap list solana; then
+    sudo snap remove solana
+  fi
   sudo snap install solana.snap --devmode --dangerous
+
+  if [[ $skipSetup = true ]]; then
+    (
+      set -x
+      sudo rm -rf /var/snap/solana/current/config{,-local}
+      sudo mv /saved-node-config/* /var/snap/solana/current/
+      sudo rm -rf /saved-node-config
+    )
+  fi
 
   # shellcheck disable=SC2089
   commonNodeConfig="\
@@ -52,6 +82,7 @@ snap)
     metrics-config=\"$SOLANA_METRICS_CONFIG\" \
     rust-log=\"$RUST_LOG\" \
     setup-args=\"$setupArgs\" \
+    skip-setup=$skipSetup \
   "
 
   if [[ -e /dev/nvidia0 ]]; then
@@ -90,11 +121,11 @@ local|tar)
   export USE_INSTALL=1
   export RUST_LOG
 
-  # Setup `/var/snap/solana/current/config` symlink so rsyncing the genesis
+  # Setup `/var/snap/solana/current` symlink so rsyncing the genesis
   # ledger works (reference: `net/scripts/install-rsync.sh`)
-  sudo rm -rf /var/snap/solana/current/config
-  sudo mkdir -p /var/snap/solana/current/
-  sudo ln -sT /home/solana/solana/config /var/snap/solana/current/config
+  sudo rm -rf /var/snap/solana/current
+  sudo mkdir -p /var/snap/solana
+  sudo ln -sT /home/solana/solana /var/snap/solana/current
 
   ./fetch-perf-libs.sh
   # shellcheck source=/dev/null
@@ -109,7 +140,9 @@ local|tar)
       echo Selecting solana-fullnode-cuda
       export SOLANA_CUDA=1
     fi
-    ./multinode-demo/setup.sh -t bootstrap-leader $setupArgs
+    if [[ $skipSetup != true ]]; then
+      ./multinode-demo/setup.sh -t bootstrap-leader $setupArgs
+    fi
     ./multinode-demo/drone.sh > drone.log 2>&1 &
     ./multinode-demo/bootstrap-leader.sh > bootstrap-leader.log 2>&1 &
     ln -sTf bootstrap-leader.log fullnode.log
@@ -122,7 +155,9 @@ local|tar)
       export SOLANA_CUDA=1
     fi
 
-    ./multinode-demo/setup.sh -t fullnode $setupArgs
+    if [[ $skipSetup != true ]]; then
+      ./multinode-demo/setup.sh -t fullnode $setupArgs
+    fi
     ./multinode-demo/fullnode.sh "$entrypointIp":~/solana "$entrypointIp:8001" > fullnode.log 2>&1 &
     ;;
   *)
