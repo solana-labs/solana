@@ -110,7 +110,7 @@
     "prettier": "^1.14.3",
     "rimraf": "2.6.2",
     "rollup": "0.67.4",
-    "rollup-plugin-babel": "3.0.3",
+    "rollup-plugin-babel": "3.0.7",
     "rollup-plugin-commonjs": "9.2.0",
     "rollup-plugin-json": "^3.0.0",
     "rollup-plugin-node-builtins": "^2.1.2",
