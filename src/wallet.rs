@@ -341,9 +341,9 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
             };
 
             let last_id = get_last_id(&rpc_client)?;
-            let transaction =
+            let mut transaction =
                 request_airdrop_transaction(&drone_addr, &config.id.pubkey(), tokens, last_id)?;
-            send_and_confirm_tx(&rpc_client, &transaction)?;
+            send_and_confirm_tx(&rpc_client, &mut transaction, None)?;
 
             let params = json!([format!("{}", config.id.pubkey())]);
             let current_balance = RpcRequest::GetBalance
@@ -427,7 +427,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
                 .data
                 .clone();
 
-            let tx = Transaction::system_create(
+            let mut tx = Transaction::system_create(
                 &config.id,
                 program.pubkey(),
                 last_id,
@@ -436,13 +436,13 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
                 bpf_loader::id(),
                 0,
             );
-            send_and_confirm_tx(&rpc_client, &tx).map_err(|_| {
+            send_and_confirm_tx(&rpc_client, &mut tx, Some(&config.id)).map_err(|_| {
                 WalletError::DynamicProgramError("Program allocate space failed".to_string())
             })?;
 
             let mut offset = 0;
             for chunk in program_userdata.chunks(USERDATA_CHUNK_SIZE) {
-                let tx = Transaction::loader_write(
+                let mut tx = Transaction::loader_write(
                     &program,
                     bpf_loader::id(),
                     offset,
@@ -450,7 +450,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
                     last_id,
                     0,
                 );
-                send_and_confirm_tx(&rpc_client, &tx).map_err(|_| {
+                send_and_confirm_tx(&rpc_client, &mut tx, Some(&program)).map_err(|_| {
                     WalletError::DynamicProgramError(format!(
                         "Program write failed at offset {:?}",
                         offset
@@ -460,13 +460,13 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
             }
 
             let last_id = get_last_id(&rpc_client)?;
-            let tx = Transaction::loader_finalize(&program, bpf_loader::id(), last_id, 0);
-            send_and_confirm_tx(&rpc_client, &tx).map_err(|_| {
+            let mut tx = Transaction::loader_finalize(&program, bpf_loader::id(), last_id, 0);
+            send_and_confirm_tx(&rpc_client, &mut tx, Some(&program)).map_err(|_| {
                 WalletError::DynamicProgramError("Program finalize transaction failed".to_string())
             })?;
 
-            let tx = Transaction::system_spawn(&program, last_id, 0);
-            send_and_confirm_tx(&rpc_client, &tx).map_err(|_| {
+            let mut tx = Transaction::system_spawn(&program, last_id, 0);
+            send_and_confirm_tx(&rpc_client, &mut tx, Some(&program)).map_err(|_| {
                 WalletError::DynamicProgramError("Program spawn failed".to_string())
             })?;
 
@@ -729,7 +729,8 @@ fn confirm_tx(
 
 fn send_and_confirm_tx(
     rpc_client: &RpcClient,
-    tx: &Transaction,
+    tx: &mut Transaction,
+    signer: Option<&Keypair>,
 ) -> Result<(), Box<dyn error::Error>> {
     let mut send_retries = 3;
     while send_retries > 0 {
@@ -749,7 +750,15 @@ fn send_and_confirm_tx(
         };
         match status {
             RpcSignatureStatus::AccountInUse => {
-                send_retries -= 1;
+                if let Some(signer_key) = signer {
+                    resign_tx(rpc_client, tx, signer_key)?;
+                    send_retries -= 1;
+                } else {
+                    return Err(WalletError::RpcRequestError(format!(
+                        "Transaction {:?} failed: {:?}",
+                        signature_str, status
+                    )))?;
+                }
             }
             RpcSignatureStatus::Confirmed => {
                 return Ok(());
@@ -766,6 +775,16 @@ fn send_and_confirm_tx(
         "AccountInUse after 3 retries: {:?}",
         tx.account_keys[0]
     )))?
+}
+
+fn resign_tx(
+    rpc_client: &RpcClient,
+    tx: &mut Transaction,
+    signer_key: &Keypair,
+) -> Result<(), Box<dyn error::Error>> {
+    let last_id = get_last_id(&rpc_client)?;
+    tx.sign(&[signer_key], last_id);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -785,6 +804,54 @@ mod tests {
     use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
+
+    #[test]
+    fn test_resign_tx() {
+        let leader_keypair = Arc::new(Keypair::new());
+        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+        let leader_data = leader.info.clone();
+        let (alice, ledger_path) =
+            create_tmp_genesis("wallet_request_airdrop", 10_000_000, leader_data.id, 1000);
+        let mut bank = Bank::new(&alice);
+
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
+            leader_data.id,
+        )));
+        bank.leader_scheduler = leader_scheduler;
+        let vote_account_keypair = Arc::new(Keypair::new());
+        let last_id = bank.last_id();
+        let entry_height = alice.create_entries().len() as u64;
+        let _server = Fullnode::new_with_bank(
+            leader_keypair,
+            vote_account_keypair,
+            bank,
+            entry_height,
+            &last_id,
+            leader,
+            None,
+            &ledger_path,
+            false,
+            None,
+        );
+        sleep(Duration::from_millis(900));
+
+        let rpc_client = RpcClient::new_from_socket(leader_data.rpc);
+
+        let key = Keypair::new();
+        let to = Keypair::new().pubkey();
+        let last_id = Hash::default();
+        let prev_tx = Transaction::system_new(&key, to, 50, last_id);
+        let mut tx = Transaction::system_new(&key, to, 50, last_id);
+
+        resign_tx(&rpc_client, &mut tx, &key).unwrap();
+
+        assert_ne!(prev_tx, tx);
+        assert_ne!(prev_tx.signatures, tx.signatures);
+        assert_ne!(prev_tx.last_id, tx.last_id);
+        assert_eq!(prev_tx.fee, tx.fee);
+        assert_eq!(prev_tx.account_keys, tx.account_keys);
+        assert_eq!(prev_tx.instructions, tx.instructions);
+    }
 
     #[test]
     fn test_wallet_parse_command() {
@@ -1315,10 +1382,10 @@ mod tests {
         assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
         let last_id = get_last_id(&rpc_client).unwrap();
-        let transaction =
+        let mut transaction =
             request_airdrop_transaction(&drone_addr, &config_payer.id.pubkey(), 50, last_id)
                 .unwrap();
-        send_and_confirm_tx(&rpc_client, &transaction).unwrap();
+        send_and_confirm_tx(&rpc_client, &mut transaction, None).unwrap();
 
         // Make transaction (from config_payer to bob_pubkey) requiring timestamp from config_witness
         let date_string = "\"2018-09-19T17:30:59Z\"";
@@ -1435,10 +1502,10 @@ mod tests {
         assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
         let last_id = get_last_id(&rpc_client).unwrap();
-        let transaction =
+        let mut transaction =
             request_airdrop_transaction(&drone_addr, &config_payer.id.pubkey(), 50, last_id)
                 .unwrap();
-        send_and_confirm_tx(&rpc_client, &transaction).unwrap();
+        send_and_confirm_tx(&rpc_client, &mut transaction, None).unwrap();
 
         // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
         config_payer.command = WalletCommand::Pay(
@@ -1560,10 +1627,10 @@ mod tests {
         assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
         let last_id = get_last_id(&rpc_client).unwrap();
-        let transaction =
+        let mut transaction =
             request_airdrop_transaction(&drone_addr, &config_payer.id.pubkey(), 50, last_id)
                 .unwrap();
-        send_and_confirm_tx(&rpc_client, &transaction).unwrap();
+        send_and_confirm_tx(&rpc_client, &mut transaction, None).unwrap();
 
         // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
         config_payer.command = WalletCommand::Pay(
