@@ -1690,5 +1690,8 @@ mod tests {
         for i in 0..25_000 {
             assert!(broadcast_set.contains(&(i as usize)));
         }
+        assert!(broadcast_set.contains(&(layer_indices.last().unwrap() - 1)));
+        //sanity check for past total capacity.
+        assert!(!broadcast_set.contains(&(layer_indices.last().unwrap())));
     }
 }
