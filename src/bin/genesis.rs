@@ -15,9 +15,10 @@ use std::path::Path;
 /**
  * Bootstrap leader gets two tokens:
  * - one token to create an instance of the vote_program with
+ * - one token for the transaction fee
  * - one second token to keep the node identity public key valid
  */
-pub const BOOTSTRAP_LEADER_TOKENS: u64 = 2;
+pub const BOOTSTRAP_LEADER_TOKENS: u64 = 3;
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     let matches = App::new("solana-genesis")
