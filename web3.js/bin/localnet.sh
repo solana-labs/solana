@@ -38,6 +38,7 @@ Operate a local testnet
  update/up-specific options:
    edge   - Update/start the "edge" channel network
    beta   - Update/start the "beta" channel network
+   -n     - Optional Docker network to join
 
    Default channel: $channel
 
@@ -76,6 +77,11 @@ up)
   fi
   [[ $channel = edge || $channel = beta ]] || usage "Invalid channel: $channel"
 
+  if [[ $2 = -n ]]; then
+    [[ -n $3 ]] || usage "Invalid -n argument"
+    network="$3"
+  fi
+
   (
     set -x
     RUST_LOG=${RUST_LOG:-solana=warn,solana_bpf=info,solana_jsonrpc=info,solana::rpc=info,solana_fullnode=info,solana::drone=info,solana::bank=info,solana::banking_stage=info,solana::system_program=info}
@@ -83,6 +89,7 @@ up)
     docker run \
       --detach \
       --name solana-localnet \
+      --network "$network" \
       --rm \
       --publish 8899:8899 \
       --publish 8900:8900 \
