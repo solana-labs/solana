@@ -15,8 +15,8 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 3,
-  "iteration": 1543087985461,
+  "id": 74,
+  "iteration": 1544477352265,
   "links": [
     {
       "asDropdown": true,
@@ -1525,6 +1525,44 @@
           "query": "SELECT mean(\"valid_peers\") as \"valid peers\" FROM \"$testnet\".\"autogen\".\"vote_stage-peer_count\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
           "rawQuery": true,
           "refId": "B",
+          "resultFormat": "time_series",
+          "select": [
+            [
+              {
+                "params": [
+                  "value"
+                ],
+                "type": "field"
+              },
+              {
+                "params": [],
+                "type": "mean"
+              }
+            ]
+          ],
+          "tags": []
+        },
+        {
+          "groupBy": [
+            {
+              "params": [
+                "$__interval"
+              ],
+              "type": "time"
+            },
+            {
+              "params": [
+                "null"
+              ],
+              "type": "fill"
+            }
+          ],
+          "hide": false,
+          "orderByTime": "ASC",
+          "policy": "default",
+          "query": "SELECT mean(\"count\") AS \"peers\" FROM \"$testnet\".\"autogen\".\"counter-broadcast_service-num_peers\" WHERE $timeFilter GROUP BY time(1s) FILL(0)",
+          "rawQuery": true,
+          "refId": "C",
           "resultFormat": "time_series",
           "select": [
             [
@@ -5572,5 +5610,5 @@
   "timezone": "",
   "title": "Testnet Monitor (edge)",
   "uid": "testnet-edge",
-  "version": 110
+  "version": 111
 }

@@ -216,6 +216,7 @@ impl BroadcastService {
         let mut tick_height_ = tick_height;
         loop {
             let broadcast_table = cluster_info.read().unwrap().tvu_peers();
+            inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
             let leader_id = cluster_info.read().unwrap().leader_id();
             if let Err(e) = broadcast(
                 max_tick_height,
