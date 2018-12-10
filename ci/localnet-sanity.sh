@@ -18,6 +18,12 @@ for cmd in $backgroundCommands; do
   echo "--- Start $cmd"
   rm -f log-"$cmd".txt
   multinode-demo/"$cmd".sh > log-"$cmd".txt 2>&1 &
+  if [[ $cmd = drone ]]; then
+    # Give the drone time to startup before the fullnodes attempt to airdrop
+    # from it (TODO: alternatively adjust `solana-wallet airdrop` to retry on
+    # "Connection refused" errors)
+    sleep 2
+  fi
   declare pid=$!
   pids+=("$pid")
   echo "pid: $pid"
