@@ -12,23 +12,26 @@ if [[ -z "$mode" ]]; then
   exit 0
 fi
 
-num_tokens="$(snapctl get num-tokens)"
-num_tokens="${num_tokens:+-n $num_tokens}"
+skipSetup="$(snapctl get skip-setup)"
+if [[ "$skipSetup" != true ]]; then
+  numTokens="$(snapctl get num-tokens)"
+  numTokens="${numTokens:+-n $numTokens}"
 
-setup_args="$(snapctl get setup-args)"
+  setupArgs="$(snapctl get setup-args)"
+  "$SNAP"/multinode-demo/setup.sh $numTokens -p $setupArgs
+else
+  echo Setup skipped
+fi
 
 case $mode in
 bootstrap-leader+drone)
-  "$SNAP"/multinode-demo/setup.sh -t bootstrap-leader $num_tokens -p $setup_args
   snapctl start --enable solana.daemon-drone
   snapctl start --enable solana.daemon-bootstrap-leader
   ;;
 bootstrap-leader)
-  "$SNAP"/multinode-demo/setup.sh -t bootstrap-leader $num_tokens -p $setup_args
   snapctl start --enable solana.daemon-bootstrap-leader
   ;;
 fullnode)
-  "$SNAP"/multinode-demo/setup.sh -t fullnode -p $setup_args
   snapctl start --enable solana.daemon-fullnode
   ;;
 *)
