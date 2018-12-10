@@ -12,7 +12,7 @@ solana-fullnode-config \
 solana-genesis \
   --num_tokens 1000000000 \
   --mint /config/drone-keypair.json \
-  --bootstrap-leader-keypair /config/leader-config.json \
+  --bootstrap-leader-keypair /config/leader-keypair.json \
   --ledger /ledger
 
 solana-drone --keypair /config/drone-keypair.json &
