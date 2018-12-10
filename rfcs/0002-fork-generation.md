@@ -54,6 +54,7 @@ The diagram below represents a validator's view of the PoH stream with possible 
          |     +----+  |     |  |      |   |    |   |    |      vote(E4)
          v     | L5 |  xx   xx  xx    E5  xx   xx  xx   xx
                +----+                                           hang on to E4 and E5 for more...
+```
 
 Note that an `E` appearing on 2 forks at the same slot is a slashable condition, so a validator observing `E3` and `E3'` can slash L3 and safely choose `x` for that slot.  Once a validator commits to a forks, other forks can be discarded below that tick count.  For any slot, validators need only consider a single "has entries" chain or a "ticks only" chain to be proposed by a leader.  But multiple virtual entries may overlap as they link back to the a previous slot.
 
