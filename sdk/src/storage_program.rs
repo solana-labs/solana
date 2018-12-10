@@ -5,7 +5,7 @@ use transaction::Transaction;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum StorageProgram {
-    SubmitMiningProof { sha_state: Hash },
+    SubmitMiningProof { sha_state: Hash, entry_height: u64 },
 }
 
 pub const STORAGE_PROGRAM_ID: [u8; 32] = [
@@ -22,12 +22,25 @@ pub fn id() -> Pubkey {
 }
 
 pub trait StorageTransaction {
-    fn storage_new_mining_proof(from_keypair: &Keypair, sha_state: Hash, last_id: Hash) -> Self;
+    fn storage_new_mining_proof(
+        from_keypair: &Keypair,
+        sha_state: Hash,
+        last_id: Hash,
+        entry_height: u64,
+    ) -> Self;
 }
 
 impl StorageTransaction for Transaction {
-    fn storage_new_mining_proof(from_keypair: &Keypair, sha_state: Hash, last_id: Hash) -> Self {
-        let program = StorageProgram::SubmitMiningProof { sha_state };
+    fn storage_new_mining_proof(
+        from_keypair: &Keypair,
+        sha_state: Hash,
+        last_id: Hash,
+        entry_height: u64,
+    ) -> Self {
+        let program = StorageProgram::SubmitMiningProof {
+            sha_state,
+            entry_height,
+        };
         Transaction::new(
             from_keypair,
             &[from_keypair.pubkey()],

@@ -10,6 +10,7 @@ use crate::ledger::LEDGER_DATA_FILE;
 use crate::result::Result;
 use crate::rpc_request::{RpcClient, RpcRequest};
 use crate::service::Service;
+use crate::storage_stage::ENTRIES_PER_SEGMENT;
 use crate::store_ledger_stage::StoreLedgerStage;
 use crate::streamer::BlobReceiver;
 use crate::thin_client::retry_get_balance;
@@ -93,12 +94,9 @@ impl Replicator {
         let exit = Arc::new(AtomicBool::new(false));
         let done = Arc::new(AtomicBool::new(false));
 
-        let entry_height = 0;
-        let max_entry_height = 1;
-
         info!("Replicator: id: {}", keypair.pubkey());
         info!("Creating cluster info....");
-        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(node.info)));
+        let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(node.info.clone())));
 
         let leader_pubkey = leader_info.id;
         {
@@ -141,20 +139,40 @@ impl Replicator {
 
         info!("Got leader: {:?}", leader);
 
-        let rpc_client = {
-            let cluster_info = cluster_info.read().unwrap();
-            let rpc_peers = cluster_info.rpc_peers();
-            info!("rpc peers: {:?}", rpc_peers);
-            let node_idx = thread_rng().gen_range(0, rpc_peers.len());
-            RpcClient::new_from_socket(rpc_peers[node_idx].rpc)
-        };
+        let mut storage_last_id;
+        let mut storage_entry_height;
+        loop {
+            let rpc_client = {
+                let cluster_info = cluster_info.read().unwrap();
+                let rpc_peers = cluster_info.rpc_peers();
+                info!("rpc peers: {:?}", rpc_peers);
+                let node_idx = thread_rng().gen_range(0, rpc_peers.len());
+                RpcClient::new_from_socket(rpc_peers[node_idx].rpc)
+            };
 
-        let storage_last_id = RpcRequest::GetStorageMiningLastId
-            .make_rpc_request(&rpc_client, 2, None)
-            .expect("rpc request")
-            .to_string();
-        let _signature = keypair.sign(storage_last_id.as_ref());
-        // TODO: use this signature to pick the key and block
+            storage_last_id = RpcRequest::GetStorageMiningLastId
+                .make_rpc_request(&rpc_client, 2, None)
+                .expect("rpc request")
+                .to_string();
+            storage_entry_height = RpcRequest::GetStorageMiningEntryHeight
+                .make_rpc_request(&rpc_client, 2, None)
+                .expect("rpc request")
+                .as_u64()
+                .unwrap();
+            if storage_entry_height != 0 {
+                break;
+            }
+        }
+
+        let signature = keypair.sign(storage_last_id.as_ref());
+        let signature = signature.as_ref();
+        let block_index = u64::from(signature[0])
+            | (u64::from(signature[1]) << 8)
+            | (u64::from(signature[1]) << 16)
+            | (u64::from(signature[2]) << 24);
+        let mut entry_height = block_index * ENTRIES_PER_SEGMENT;
+        entry_height %= storage_entry_height;
+        let max_entry_height = entry_height + ENTRIES_PER_SEGMENT;
 
         let repair_socket = Arc::new(node.sockets.repair);
         let mut blob_sockets: Vec<Arc<UdpSocket>> =
@@ -185,6 +203,13 @@ impl Replicator {
         info!("window created, waiting for ledger download done");
         while !done.load(Ordering::Relaxed) {
             sleep(Duration::from_millis(100));
+        }
+
+        let mut node_info = node.info.clone();
+        node_info.tvu = "0.0.0.0:0".parse().unwrap();
+        {
+            let mut cluster_info_w = cluster_info.write().unwrap();
+            cluster_info_w.insert_info(node_info);
         }
 
         let mut client = mk_client(&leader);
@@ -236,7 +261,8 @@ impl Replicator {
             Ok(hash) => {
                 let last_id = client.get_last_id();
                 info!("sampled hash: {}", hash);
-                let tx = Transaction::storage_new_mining_proof(&keypair, hash, last_id);
+                let tx =
+                    Transaction::storage_new_mining_proof(&keypair, hash, last_id, entry_height);
                 client.transfer_signed(&tx).expect("transfer didn't work!");
             }
             Err(e) => info!("Error occurred while sampling: {:?}", e),
