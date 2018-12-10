@@ -160,18 +160,14 @@ pub mod tests {
     use crate::create_vote_account::*;
 
     use crate::mint::Mint;
+    use crate::rpc_request::RpcClient;
+    use crate::vote_stage::create_new_signed_vote_transaction;
     use bincode::serialize;
-    use compute_leader_finality_service::ComputeLeaderFinalityService;
-    use create_vote_account::*;
-    use logger;
-    use mint::Mint;
-    use rpc_request::RpcClient;
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;
-    use vote_stage::create_new_signed_vote_transaction;
 
     #[test]
     fn test_compute_confirmation() {

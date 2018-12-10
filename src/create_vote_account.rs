@@ -1,8 +1,8 @@
 use crate::bank::Bank;
 use crate::cluster_info::FULLNODE_PORT_RANGE;
-use crate::netutil::find_available_port_in_range;
 use crate::result::Result;
 use crate::rpc_request::{RpcClient, RpcRequest};
+use solana_netutil::find_available_port_in_range;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};

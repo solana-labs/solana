@@ -531,6 +531,7 @@ mod tests {
     };
     use crate::mint::Mint;
     use crate::rpc_request::RpcClient;
+    use crate::vote_stage::create_new_signed_vote_transaction;
     use hashbrown::HashSet;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
@@ -541,7 +542,6 @@ mod tests {
     use std::hash::Hash as StdHash;
     use std::iter::FromIterator;
     use std::sync::Arc;
-    use vote_stage::create_new_signed_vote_transaction;
 
     fn to_hashset_owned<T>(slice: &[T]) -> HashSet<T>
     where
