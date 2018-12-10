@@ -545,10 +545,10 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT sum(\"count\") AS \" \" FROM \"$testnet\".\"autogen\".\"counter-crdt-vote-count\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n\n",
+          "query": "SELECT sum(\"count\") AS \" \" FROM \"$testnet\".\"autogen\".\"counter-cluster_info-vote-count\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -1289,7 +1289,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT sum(\"count\") AS \"transactions\" FROM \"$testnet\".\"autogen\".\"counter-banking_stage-process_transactions\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n",
@@ -1481,7 +1481,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT mean(\"total_peers\") as \"total peers\" FROM \"$testnet\".\"autogen\".\"vote_stage-peer_count\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
@@ -1648,7 +1648,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT mean(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"leader-finality\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n",
@@ -1763,7 +1763,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT \"request_amount\" FROM \"$testnet\".\"autogen\".\"drone\" WHERE $timeFilter  AND \"op\"='airdrop' fill(null)\n\n\n\n",
@@ -1880,7 +1880,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT mean(\"duration_ms\") / 1000 AS \".\"  FROM  \"$testnet\".\"autogen\".\"thinclient\" WHERE $timeFilter GROUP BY time($__interval), \"op\" \n\n\n\n\n\n",
@@ -2132,7 +2132,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT sum(*) FROM \"$testnet\".\"autogen\".\"testnet-deploy\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n\n\n\n\n\n\n\n\n",
@@ -2362,7 +2362,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT sum(\"killed\") as \".\" FROM \"$testnet\".\"autogen\".\"oom-killer\" WHERE $timeFilter   GROUP BY time($__interval), \"victim\", \"hostname\" fill(null)\n\n\n\n",
@@ -2676,7 +2676,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT sum(\"one\") as \".\" FROM \"$testnet\".\"autogen\".\"panic\" WHERE $timeFilter   GROUP BY time($__interval), \"program\" fill(null)\n\n\n\n",
@@ -2805,7 +2805,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT balance FROM  \"$testnet\".\"autogen\".\"bench-tps\" WHERE $timeFilter  AND \"op\" = 'token_balance' fill(null)\n\n\n\n",
@@ -2921,7 +2921,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT \"duration\" / 1000 as \"Generation Time\" FROM  \"$testnet\".\"autogen\".\"bench-tps\" WHERE $timeFilter  AND \"op\" = 'generate_txs' fill(null)\n\n\n\n\n",
@@ -3111,7 +3111,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT sum(\"count\") AS \"transactions\" FROM \"$testnet\".\"autogen\".\"counter-bank-appy_debits-generic_account_not_found\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n",
@@ -3241,7 +3241,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT sum(\"count\") AS \"window receive\" FROM \"$testnet\".\"autogen\".\"counter-streamer-recv_window-recv\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n",
@@ -3394,7 +3394,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT sum(\"count\") AS \"retransmit\" FROM \"$testnet\".\"autogen\".\"counter-streamer-recv_window-retransmit\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n",
@@ -3585,7 +3585,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT sum(\"count\") AS \"sigverify\" FROM \"$testnet\".\"autogen\".\"counter-sigverify_stage-entries_received\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n",
@@ -3925,7 +3925,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT sum(\"count\") AS \"sigverify\" FROM \"$testnet\".\"autogen\".\"counter-sigverify_stage-time_ms\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n",
@@ -4190,7 +4190,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT mean(\"packets_received\") as \"packets_received\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE \"hostname\" =~ /leader/ AND $timeFilter   GROUP BY time(5s) fill(null)\n\n\n\n",
@@ -4228,7 +4228,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT mean(\"receive_errors\") as \"receive_errors\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE \"hostname\" =~ /leader/ AND $timeFilter   GROUP BY time(5s) fill(null)\n\n\n\n",
@@ -4266,7 +4266,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT mean(\"rcvbuf_errors\") as \"rcvbuf_errors\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE \"hostname\" =~ /leader/ AND $timeFilter   GROUP BY time(5s) fill(null)\n\n\n\n",
@@ -4304,7 +4304,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT mean(\"packets_sent\") as \"packets_sent\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE \"hostname\" =~ /leader/ AND $timeFilter   GROUP BY time(5s) fill(null)\n\n\n\n",
@@ -4424,7 +4424,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT mean(\"packets_received\") as \"packets_received\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE \"hostname\" =~ /client/ AND $timeFilter   GROUP BY time(5s) fill(null)\n\n\n\n",
@@ -4463,7 +4463,7 @@
             }
           ],
           "hide": false,
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT mean(\"receive_errors\") as \"receive_errors\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE \"hostname\" =~ /client/ AND $timeFilter   GROUP BY time(5s) fill(null)\n\n\n\n",
@@ -4501,7 +4501,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT mean(\"rcvbuf_errors\") as \"rcvbuf_errors\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE \"hostname\" =~ /client/ AND $timeFilter   GROUP BY time(5s) fill(null)\n\n\n\n",
@@ -4540,7 +4540,7 @@
             }
           ],
           "hide": false,
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT mean(\"packets_sent\") as \"packets_sent\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE \"hostname\" =~ /client/ AND $timeFilter   GROUP BY time(5s) fill(null)\n\n\n\n",
@@ -4660,7 +4660,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT mean(\"in_octets\") as \"recv\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE $timeFilter   GROUP BY time(1s) fill(null)\n\n\n\n",
@@ -4698,7 +4698,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT mean(\"out_octets\") as \"sent\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE $timeFilter   GROUP BY time(1s) fill(null)\n\n\n\n",
@@ -4816,7 +4816,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT mean(\"packets_received\") as \"packets_received\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE \"hostname\" =~ /validator/ AND $timeFilter   GROUP BY time(5s) fill(null)\n\n\n\n",
@@ -4854,7 +4854,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT mean(\"receive_errors\") as \"receive_errors\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE \"hostname\" =~ /validator/ AND $timeFilter   GROUP BY time(5s) fill(null)\n\n\n\n",
@@ -4892,7 +4892,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT mean(\"rcvbuf_errors\") as \"rcvbuf_errors\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE \"hostname\" =~ /validator/ AND $timeFilter   GROUP BY time(5s) fill(null)\n\n\n\n",
@@ -4930,7 +4930,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT mean(\"packets_sent\") as \"packets_sent\" FROM \"$testnet\".\"autogen\".\"net-stats\" WHERE \"hostname\" =~ /validator/ AND $timeFilter   GROUP BY time(5s) fill(null)\n\n\n\n",
@@ -5048,7 +5048,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT sum(\"count\") AS \"retransmit\" FROM \"$testnet\".\"autogen\".\"retransmit-stage\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
@@ -5086,7 +5086,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT sum(\"count\") AS \"replicate\" FROM \"$testnet\".\"autogen\".\"replicate-stage\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
@@ -5124,7 +5124,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT sum(\"count\") AS \"retransmit_q\" FROM \"$testnet\".\"autogen\".\"retransmit-queue\" WHERE  $timeFilter GROUP BY time($__interval) FILL(0)",
@@ -5162,7 +5162,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT sum(\"count\") AS \"recv_window\" FROM \"$testnet\".\"autogen\".\"recv-window\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
@@ -5279,7 +5279,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT last(\"consumed\") AS \"validator\" FROM \"$testnet\".\"autogen\".\"window-stage\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
@@ -5317,7 +5317,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT last(\"transmit-index\") AS \"leader\" FROM \"$testnet\".\"autogen\".\"broadcast-stage\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
@@ -5445,7 +5445,7 @@
               "type": "fill"
             }
           ],
-          "measurement": "counter-crdt-vote-count",
+          "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
           "query": "SELECT max(\"total_time_ms\") AS \"max\" FROM \"$testnet\".\"autogen\".\"sigverify_stage-total_verify_time\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)\n\n",
