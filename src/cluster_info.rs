@@ -1299,6 +1299,8 @@ mod tests {
     use crate::packet::BLOB_HEADER_SIZE;
     use crate::result::Error;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use std::collections::HashSet;
+    use std::fs::remove_dir_all;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::{Arc, RwLock};
 
@@ -1673,4 +1675,20 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_network_coverage() {
+        // pretend to be each node in a scaled down network and make sure the set of all the broadcast peers
+        // includes every node in the network.
+        let (_, layer_indices) = ClusterInfo::describe_data_plane(25_000, 10, 10, false);
+        let mut broadcast_set = HashSet::new();
+        for my_index in 0..25_000 {
+            let my_locality = ClusterInfo::localize(&layer_indices, 10, my_index);
+            broadcast_set.extend(my_locality.neighbor_bounds.0..my_locality.neighbor_bounds.1);
+            broadcast_set.extend(my_locality.child_layer_peers);
+        }
+
+        for i in 0..25_000 {
+            assert!(broadcast_set.contains(&(i as usize)));
+        }
+    }
 }

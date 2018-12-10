@@ -64,8 +64,11 @@ fn retransmit(
             .iter()
             .position(|ci| bank.get_stake(&ci.id) <= bank.get_stake(&my_id));
         //find my layer
-        let locality =
-            ClusterInfo::localize(&layer_indices, NEIGHBORHOOD_SIZE, my_index.unwrap_or(0));
+        let locality = ClusterInfo::localize(
+            &layer_indices,
+            NEIGHBORHOOD_SIZE,
+            my_index.unwrap_or(peers.len() - 1),
+        );
         let mut retransmit_peers =
             peers[locality.neighbor_bounds.0..locality.neighbor_bounds.1].to_vec();
         locality.child_layer_peers.iter().cloned().for_each(|ix| {
