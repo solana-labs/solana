@@ -60,34 +60,8 @@ fn broadcast(
 
     let to_blobs_start = Instant::now();
 
-    // Generate the tick heights for all the entries inside ventries
-    let slot_heights: Vec<u64> = {
-        let r_leader_scheduler = leader_scheduler.read().unwrap();
-        ventries
-            .iter()
-            .flat_map(|p| {
-                let slot_heights: Vec<u64> = p
-                    .iter()
-                    .map(|e| {
-                        let tick_height = {
-                            if e.is_tick() {
-                                *tick_height += e.is_tick() as u64;
-                                *tick_height
-                            } else {
-                                *tick_height + 1
-                            }
-                        };
-                        let (_, slot) = r_leader_scheduler
-                            .get_scheduled_leader(tick_height)
-                            .expect("Leader schedule should never be unknown while indexing blobs");
-                        slot
-                    })
-                    .collect();
-
-                slot_heights
-            })
-            .collect()
-    };
+    // Generate the slot heights for all the entries inside ventries
+    let slot_heights = generate_slots(&ventries, leader_scheduler, tick_height);
 
     let blobs_vec: Vec<_> = ventries
         .into_par_iter()
@@ -113,12 +87,7 @@ fn broadcast(
         let blobs_len = blobs.len();
         trace!("{}: broadcast blobs.len: {}", id, blobs_len);
 
-        index_blobs(
-            blobs.iter(),
-            &node_info.id,
-            *receive_index,
-            &leader_scheduler,
-        );
+        index_blobs(blobs.iter(), &node_info.id, *receive_index);
 
         // keep the cache of blobs that are broadcast
         inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
@@ -209,6 +178,39 @@ fn broadcast(
     );
 
     Ok(())
+}
+
+fn generate_slots(
+    ventries: &[Vec<Entry>],
+    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
+    tick_height: &mut u64,
+) -> Vec<u64> {
+    // Generate the slot heights for all the entries inside ventries
+    let r_leader_scheduler = leader_scheduler.read().unwrap();
+    ventries
+        .iter()
+        .flat_map(|p| {
+            let slot_heights: Vec<u64> = p
+                .iter()
+                .map(|e| {
+                    let tick_height = {
+                        if e.is_tick() {
+                            *tick_height += e.is_tick() as u64;
+                            *tick_height
+                        } else {
+                            *tick_height + 1
+                        }
+                    };
+                    let (_, slot) = r_leader_scheduler
+                        .get_scheduled_leader(tick_height)
+                        .expect("Leader schedule should never be unknown while indexing blobs");
+                    slot
+                })
+                .collect();
+
+            slot_heights
+        })
+        .collect()
 }
 
 // Implement a destructor for the BroadcastService3 thread to signal it exited

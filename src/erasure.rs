@@ -555,7 +555,6 @@ fn categorize_blob(
 pub mod test {
     use super::*;
     use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
-    use crate::leader_scheduler::LeaderScheduler;
     use crate::ledger::{get_tmp_ledger_path, make_tiny_test_entries, Block};
     use crate::logger;
     use crate::packet::{index_blobs, SharedBlob, BLOB_DATA_SIZE, BLOB_SIZE};
@@ -753,14 +752,9 @@ pub mod test {
 
         {
             // Make some dummy slots
-            let blob_tick_height: Vec<(&SharedBlob, u64)> =
+            let slot_tick_heights: Vec<(&SharedBlob, u64)> =
                 blobs.iter().zip(vec![slot; blobs.len()]).collect();
-            index_blobs(
-                blob_tick_height,
-                &Keypair::new().pubkey(),
-                offset as u64,
-                &Arc::new(RwLock::new(LeaderScheduler::default())),
-            );
+            index_blobs(slot_tick_heights, &Keypair::new().pubkey(), offset as u64);
         }
         for b in blobs {
             let idx = b.read().unwrap().index().unwrap() as usize % WINDOW_SIZE;
@@ -784,14 +778,9 @@ pub mod test {
 
         {
             // Make some dummy slots
-            let blob_tick_height: Vec<(&SharedBlob, u64)> =
+            let slot_tick_heights: Vec<(&SharedBlob, u64)> =
                 blobs.iter().zip(vec![0; blobs.len()]).collect();
-            index_blobs(
-                blob_tick_height,
-                &Keypair::new().pubkey(),
-                offset as u64,
-                &Arc::new(RwLock::new(LeaderScheduler::default())),
-            );
+            index_blobs(slot_tick_heights, &Keypair::new().pubkey(), offset as u64);
         }
 
         for b in blobs.into_iter() {

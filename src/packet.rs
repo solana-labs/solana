@@ -2,7 +2,6 @@
 use crate::counter::Counter;
 #[cfg(test)]
 use crate::entry::Entry;
-use crate::leader_scheduler::LeaderScheduler;
 #[cfg(test)]
 use crate::ledger::Block;
 use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
@@ -438,12 +437,8 @@ impl Blob {
     }
 }
 
-pub fn index_blobs<I, J, K>(
-    blobs: I,
-    id: &Pubkey,
-    mut index: u64,
-    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-) where
+pub fn index_blobs<I, J, K>(blobs: I, id: &Pubkey, mut index: u64)
+where
     I: IntoIterator<Item = J>,
     J: Borrow<(K, u64)>,
     K: Borrow<SharedBlob>,
