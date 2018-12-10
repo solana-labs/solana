@@ -898,12 +898,24 @@ impl ClusterInfo {
                 Self::handle_pull_request(me, filter, caller, from_addr)
             }
             Protocol::PullResponse(from, mut data) => {
-                data.retain(|v| v.verify());
+                data.retain(|v| {
+                    let ret = v.verify();
+                    if !ret {
+                        inc_new_counter_info!("cluster_info-gossip_pull_response_verify_fail", 1);
+                    }
+                    ret
+                });
                 Self::handle_pull_response(me, from, data);
                 vec![]
             }
             Protocol::PushMessage(from, mut data) => {
-                data.retain(|v| v.verify());
+                data.retain(|v| {
+                    let ret = v.verify();
+                    if !ret {
+                        inc_new_counter_info!("cluster_info-gossip_push_msg_verify_fail", 1);
+                    }
+                    ret
+                });
                 Self::handle_push_message(me, from, &data)
             }
             Protocol::PruneMessage(from, data) => {
@@ -926,6 +938,8 @@ impl ClusterInfo {
                         Err(_) => (),
                         Ok(_) => (),
                     }
+                } else {
+                    inc_new_counter_info!("cluster_info-gossip_prune_msg_verify_fail", 1);
                 }
                 vec![]
             }
