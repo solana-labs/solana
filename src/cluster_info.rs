@@ -62,7 +62,7 @@ pub struct ClusterInfo {
     /// The network
     pub gossip: CrdsGossip,
     /// set the keypair that will be used to sign crds values generated. It is unset only in tests.
-    keypair: Arc<Keypair>,
+    pub(crate) keypair: Arc<Keypair>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
