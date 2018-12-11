@@ -43,7 +43,11 @@ A leader transmits entries during its slot.  After `T` ticks, all the
 validators switch to the next scheduled leader. Validators must ignore entries
 sent outside a leader's assigned slot.
 
-All `T` ticks must be observed from the current leader for that part of PoH to
-be accepted by the cluster. If entries are not observed (leader is down) or
-entries are invalid (leader is buggy or malicious), a validator should fill the
-gap with empty entries and continue with PoH from the next leader.
+All `T` ticks must be observed by the next leader for it to build its own
+entries on. If entries are not observed (leader is down) or entries are invalid
+(leader is buggy or malicious), the next leader must produce empty entries to
+fill the previous leader's slot. Note that the next leader should do repair
+requests in parallel, and postpone sending empty entries until it is confident
+other validators also failed to observe the previous leader's entries. If a
+leader incorrectly builds on empty entries, the leader following it must
+replace all its entries with empties.
