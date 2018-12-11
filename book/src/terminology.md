@@ -10,6 +10,10 @@ architecture.
 A persistent file addressed by [public key](#public-key) and with
 [lamports](#lamport) tracking its lifetime.
 
+#### app
+
+A front-end application that interacts with a Solana cluster.
+
 #### block
 
 A contiguous set of [entries](#entry) on the ledger covered by a [vote](#ledger-vote).
@@ -36,6 +40,11 @@ A gossip network connecting all [nodes](#node) of a [cluster](#cluster).
 
 A multicast network used to efficiently validate [entries](#entry) and gain
 consensus.
+
+#### drone
+
+An off-chain service that acts as a custodian for a user's private key. It
+typically serves to validate and sign transactions.
 
 #### entry
 
