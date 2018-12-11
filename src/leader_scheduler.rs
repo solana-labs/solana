@@ -295,6 +295,11 @@ impl LeaderScheduler {
         self.get_scheduled_leader(tick_height).map(|(id, _)| id)
     }
 
+    #[cfg(test)]
+    pub fn set_leader_schedule(&mut self, schedule: Vec<Pubkey>) {
+        self.leader_schedule = schedule;
+    }
+
     // Maps the nth slot (where n == slot_height) to the tick height of
     // the first tick for that slot
     fn slot_height_to_first_tick_height(&self, slot_height: u64) -> u64 {

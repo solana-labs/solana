@@ -327,7 +327,7 @@ impl Fullnode {
                 scheduled_leader,
             );
 
-            let broadcast_service = BroadcastService::new(
+            let (broadcast_service, _) = BroadcastService::new(
                 db_ledger.clone(),
                 node.sockets
                     .broadcast
@@ -495,7 +495,7 @@ impl Fullnode {
             self.keypair.pubkey(),
         );
 
-        let broadcast_service = BroadcastService::new(
+        let (broadcast_service, _) = BroadcastService::new(
             self.db_ledger.clone(),
             self.broadcast_socket
                 .try_clone()

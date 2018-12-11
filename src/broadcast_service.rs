@@ -28,6 +28,7 @@ use std::time::{Duration, Instant};
 pub enum BroadcastServiceReturnType {
     LeaderRotation,
     ChannelDisconnected,
+    ExitSignal,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -246,6 +247,7 @@ impl BroadcastService {
         receiver: &Receiver<Vec<Entry>>,
         max_tick_height: Option<u64>,
         tick_height: u64,
+        exit_signal: Arc<AtomicBool>,
     ) -> BroadcastServiceReturnType {
         let mut transmit_index = WindowIndex {
             data: entry_height,
@@ -255,6 +257,9 @@ impl BroadcastService {
         let me = cluster_info.read().unwrap().my_data().clone();
         let mut tick_height_ = tick_height;
         loop {
+            if exit_signal.load(Ordering::Relaxed) {
+                return BroadcastServiceReturnType::ExitSignal;
+            }
             let broadcast_table = cluster_info.read().unwrap().tvu_peers();
             inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
             let leader_id = cluster_info.read().unwrap().leader_id();
@@ -314,7 +319,9 @@ impl BroadcastService {
         max_tick_height: Option<u64>,
         tick_height: u64,
         exit_sender: Arc<AtomicBool>,
-    ) -> Self {
+    ) -> (Self, Arc<AtomicBool>) {
+        let exit_signal = Arc::new(AtomicBool::new(false));
+        let exit_signal_ = exit_signal.clone();
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
@@ -329,11 +336,12 @@ impl BroadcastService {
                     &receiver,
                     max_tick_height,
                     tick_height,
+                    exit_signal_,
                 )
             })
             .unwrap();
 
-        Self { thread_hdl }
+        (Self { thread_hdl }, exit_signal)
     }
 }
 
@@ -342,5 +350,142 @@ impl Service for BroadcastService {
 
     fn join(self) -> thread::Result<BroadcastServiceReturnType> {
         self.thread_hdl.join()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::cluster_info::{ClusterInfo, Node};
+    use crate::db_ledger::DbLedger;
+    use crate::ledger::create_ticks;
+    use crate::ledger::get_tmp_ledger_path;
+    use crate::service::Service;
+    use crate::window::new_window;
+    use solana_sdk::hash::Hash;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use std::sync::atomic::AtomicBool;
+    use std::sync::mpsc::channel;
+    use std::sync::mpsc::Sender;
+    use std::sync::{Arc, RwLock};
+    use std::thread::sleep;
+    use std::time::Duration;
+
+    struct DummyBroadcastService {
+        db_ledger: Arc<RwLock<DbLedger>>,
+        broadcast_service: BroadcastService,
+        entry_sender: Sender<Vec<Entry>>,
+        exit_signal: Arc<AtomicBool>,
+    }
+
+    fn setup_dummy_broadcast_service(
+        leader_pubkey: Pubkey,
+        ledger_path: &str,
+        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+        entry_height: u64,
+        tick_height: u64,
+        max_tick_height: u64,
+    ) -> DummyBroadcastService {
+        // Make the database ledger
+        let db_ledger = Arc::new(RwLock::new(DbLedger::open(ledger_path).unwrap()));
+
+        // Make the leader node and scheduler
+        let leader_info = Node::new_localhost_with_pubkey(leader_pubkey);
+
+        // Make a node to broadcast to
+        let buddy_keypair = Keypair::new();
+        let broadcast_buddy = Node::new_localhost_with_pubkey(buddy_keypair.pubkey());
+
+        // Fill the cluster_info with the buddy's info
+        let mut cluster_info = ClusterInfo::new(leader_info.info.clone());
+        cluster_info.insert_info(broadcast_buddy.info);
+        let cluster_info = Arc::new(RwLock::new(cluster_info));
+
+        let window = new_window(32 * 1024);
+        let shared_window = Arc::new(RwLock::new(window));
+        let (entry_sender, entry_receiver) = channel();
+        let exit_sender = Arc::new(AtomicBool::new(false));
+
+        // Start up the broadcast stage
+        let (broadcast_service, exit_signal) = BroadcastService::new(
+            db_ledger.clone(),
+            leader_info.sockets.broadcast,
+            cluster_info,
+            shared_window,
+            entry_height,
+            leader_scheduler,
+            entry_receiver,
+            Some(max_tick_height),
+            tick_height,
+            exit_sender,
+        );
+
+        DummyBroadcastService {
+            db_ledger,
+            broadcast_service,
+            entry_sender,
+            exit_signal,
+        }
+    }
+
+    #[test]
+    fn test_broadcast_ledger() {
+        let ledger_path = get_tmp_ledger_path("test_broadcast");
+        {
+            // Create the leader scheduler
+            let leader_keypair = Keypair::new();
+            let mut leader_scheduler =
+                LeaderScheduler::from_bootstrap_leader(leader_keypair.pubkey());
+
+            // Mock the tick height to look like the tick height right after a leader transition
+            leader_scheduler.last_seed_height = Some(leader_scheduler.bootstrap_height);
+            leader_scheduler.set_leader_schedule(vec![leader_keypair.pubkey()]);
+            leader_scheduler.use_only_bootstrap_leader = false;
+            let tick_height = leader_scheduler.bootstrap_height;
+            let max_tick_height = tick_height + leader_scheduler.last_seed_height.unwrap();
+            let entry_height = 2 * tick_height;
+
+            let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
+            let broadcast_service = setup_dummy_broadcast_service(
+                leader_keypair.pubkey(),
+                &ledger_path,
+                leader_scheduler.clone(),
+                entry_height,
+                tick_height,
+                max_tick_height,
+            );
+
+            let ticks = create_ticks((max_tick_height - tick_height) as usize, Hash::default());
+            for tick in ticks {
+                broadcast_service
+                    .entry_sender
+                    .send(vec![tick])
+                    .expect("Expect successful send to broadcast service");
+            }
+
+            sleep(Duration::from_millis(1000));
+            let r_db = broadcast_service.db_ledger.read().unwrap();
+            for i in 0..max_tick_height - tick_height {
+                let (_, slot) = leader_scheduler
+                    .read()
+                    .unwrap()
+                    .get_scheduled_leader(tick_height + i + 1)
+                    .expect("Leader should exist");
+                let result = r_db
+                    .data_cf
+                    .get_by_slot_index(&r_db.db, slot, entry_height + i)
+                    .unwrap();
+
+                assert!(result.is_some());
+            }
+
+            broadcast_service.exit_signal.store(true, Ordering::Relaxed);
+            broadcast_service
+                .broadcast_service
+                .join()
+                .expect("Expect successful join of broadcast service");
+        }
+
+        DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 }
