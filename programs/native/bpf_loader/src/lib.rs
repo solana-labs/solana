@@ -161,7 +161,7 @@ fn entrypoint(
 
     if keyed_accounts[0].account.executable {
         let prog = keyed_accounts[0].account.userdata.clone();
-        trace!("Call BPF, {} instructions", prog.len() / 8);
+        info!("Call BPF program");
         //dump_program(keyed_accounts[0].key, &prog);
         let mut vm = match create_vm(&prog) {
             Ok(vm) => vm,
@@ -184,7 +184,7 @@ fn entrypoint(
             }
         }
         deserialize_parameters(&mut keyed_accounts[1..], &v);
-        trace!(
+        info!(
             "BPF program executed {} instructions",
             vm.get_last_instruction_count()
         );
