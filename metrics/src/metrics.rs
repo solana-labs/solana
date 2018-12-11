@@ -3,16 +3,27 @@
 extern crate reqwest;
 
 use influx_db_client as influxdb;
-use rand;
+use solana_sdk::hash::hash;
 use solana_sdk::timing;
 use std::env;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Barrier, Mutex, Once, ONCE_INIT};
 use std::thread;
 use std::time::{Duration, Instant};
+use sys_info::hostname;
 
 lazy_static! {
-    static ref HOST_ID: i64 = rand::random::<i64>();
+    static ref HOST_INFO: String = {
+        let v = env::var("SOLANA_METRICS_DISPLAY_HOSTNAME")
+            .map(|x| x.parse().unwrap_or(0))
+            .unwrap_or(0);
+        let name: String = hostname().unwrap_or_else(|_| "".to_string());
+        if v == 0 {
+            hash(name.as_bytes()).to_string()
+        } else {
+            name
+        }
+    };
 }
 
 #[derive(Debug)]
@@ -135,7 +146,7 @@ impl MetricsAgent {
     }
 
     pub fn submit(&self, mut point: influxdb::Point) {
-        point.add_field("host_id", influxdb::Value::Integer(*HOST_ID));
+        point.add_field("host_id", influxdb::Value::String(HOST_INFO.to_string()));
         if point.timestamp.is_none() {
             point.timestamp = Some(timing::timestamp() as i64);
         }
@@ -244,7 +255,7 @@ pub fn set_panic_hook(program: &'static str) {
                             None => "?".to_string(),
                         }),
                     )
-                    .add_field("host_id", influxdb::Value::Integer(*HOST_ID))
+                    .add_field("host_id", influxdb::Value::String(HOST_INFO.to_string()))
                     .to_owned(),
             );
             // Flush metrics immediately in case the process exits immediately

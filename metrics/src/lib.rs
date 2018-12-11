@@ -1,11 +1,11 @@
 pub extern crate influx_db_client;
 #[macro_use]
 extern crate lazy_static;
-extern crate rand;
 extern crate reqwest;
 #[macro_use]
 extern crate log;
 extern crate solana_sdk;
+extern crate sys_info;
 
 mod metrics;
 pub use metrics::flush;
