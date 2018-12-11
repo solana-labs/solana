@@ -332,7 +332,7 @@ impl ClusterInfo {
 
     pub fn sorted_tvu_peers(&self, bank: &Arc<Bank>) -> Vec<NodeInfo> {
         let peers = self.tvu_peers();
-        let mut peers_with_stakes: Vec<(&NodeInfo, u64)> =
+        let mut peers_with_stakes: Vec<_> =
             peers.iter().map(|c| (c, bank.get_stake(&c.id))).collect();
         peers_with_stakes.sort_unstable_by(|l, r| {
             let cmp = r.1.cmp(&l.1);
