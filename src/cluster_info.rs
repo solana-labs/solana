@@ -1292,8 +1292,8 @@ mod tests {
             writer
                 .write_entries(
                     &vec![
-                        Entry::new_tick(&zero, 0, &zero),
-                        Entry::new_tick(&one, 0, &one),
+                        Entry::new_tick(&zero, 0, 0, &zero),
+                        Entry::new_tick(&one, 1, 0, &one),
                     ]
                     .to_vec(),
                 )

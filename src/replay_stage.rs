@@ -348,7 +348,7 @@ mod test {
         let mut entries_to_send = vec![];
 
         while entries_to_send.len() < total_entries_to_send {
-            let entry = Entry::new(&mut last_id, num_hashes, vec![]);
+            let entry = Entry::new(&mut last_id, 0, num_hashes, vec![]);
             last_id = entry.id;
             entries_to_send.push(entry);
         }
@@ -567,7 +567,7 @@ mod test {
         let leader_rotation_index = (bootstrap_height - initial_tick_height - 1) as usize;
         let mut expected_last_id = Hash::default();
         for i in 0..total_entries_to_send {
-            let entry = Entry::new(&mut last_id, num_hashes, vec![]);
+            let entry = Entry::new(&mut last_id, 0, num_hashes, vec![]);
             last_id = entry.id;
             entry_sender
                 .send(vec![entry.clone()])
@@ -626,7 +626,7 @@ mod test {
         let mut last_id = Hash::default();
         let mut entries = Vec::new();
         for _ in 0..5 {
-            let entry = Entry::new(&mut last_id, 1, vec![]); //just ticks
+            let entry = Entry::new(&mut last_id, 0, 1, vec![]); //just ticks
             last_id = entry.id;
             entries.push(entry);
         }
@@ -653,7 +653,7 @@ mod test {
 
         entries.clear();
         for _ in 0..5 {
-            let entry = Entry::new(&mut Hash::default(), 0, vec![]); //just broken entries
+            let entry = Entry::new(&mut Hash::default(), 0, 0, vec![]); //just broken entries
             entries.push(entry);
         }
         entry_sender

@@ -93,6 +93,7 @@ impl PohRecorder {
         assert!(!txs.is_empty(), "Entries without transactions are used to track real-time passing in the ledger and can only be generated with PohRecorder::tick function");
         let entry = Entry {
             prev_id: entry.prev_id,
+            tick_height: entry.tick_height,
             num_hashes: entry.num_hashes,
             id: entry.id,
             transactions: txs,
@@ -105,6 +106,7 @@ impl PohRecorder {
         let tick = poh.tick();
         let tick = Entry {
             prev_id: tick.prev_id,
+            tick_height: tick.tick_height,
             num_hashes: tick.num_hashes,
             id: tick.id,
             transactions: vec![],
@@ -136,11 +138,17 @@ mod tests {
         let h1 = hash(b"hello world!");
         let tx = test_tx();
         assert!(poh_recorder.record(h1, vec![tx]).is_ok());
-        assert!(poh_recorder.tick().is_ok());
-
         //get some events
-        let _ = entry_receiver.recv().unwrap();
-        let _ = entry_receiver.recv().unwrap();
+        let e = entry_receiver.recv().unwrap();
+        assert_eq!(e[0].tick_height, 1);
+
+        assert!(poh_recorder.tick().is_ok());
+        let e = entry_receiver.recv().unwrap();
+        assert_eq!(e[0].tick_height, 1);
+
+        assert!(poh_recorder.tick().is_ok());
+        let e = entry_receiver.recv().unwrap();
+        assert_eq!(e[0].tick_height, 2);
 
         //make sure it handles channel close correctly
         drop(entry_receiver);

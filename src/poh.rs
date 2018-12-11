@@ -12,6 +12,7 @@ pub struct Poh {
 #[derive(Debug)]
 pub struct PohEntry {
     pub prev_id: Hash,
+    pub tick_height: u64,
     pub num_hashes: u64,
     pub id: Hash,
     pub mixin: Option<Hash>,
@@ -43,6 +44,7 @@ impl Poh {
 
         PohEntry {
             prev_id,
+            tick_height: self.tick_height,
             num_hashes,
             id: self.id,
             mixin: Some(mixin),
@@ -60,10 +62,12 @@ impl Poh {
         let prev_id = self.prev_id;
         self.prev_id = self.id;
 
+        let tick_height = self.tick_height;
         self.tick_height += 1;
 
         PohEntry {
             prev_id,
+            tick_height,
             num_hashes,
             id: self.id,
             mixin: None,
@@ -106,6 +110,7 @@ mod tests {
             Hash::default(),
             &[PohEntry {
                 prev_id: Hash::default(),
+                tick_height: 0,
                 num_hashes: 0,
                 id: Hash::default(),
                 mixin: None,

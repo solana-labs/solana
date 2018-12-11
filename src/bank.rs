@@ -1821,7 +1821,7 @@ mod tests {
             let mut e = ledger::next_entries(&hash, 0, txs);
             entries.append(&mut e);
             hash = entries.last().unwrap().id;
-            let tick = Entry::new(&hash, num_hashes, vec![]);
+            let tick = Entry::new(&hash, 0, num_hashes, vec![]);
             hash = tick.id;
             last_id = hash;
             entries.push(tick);
@@ -1842,11 +1842,11 @@ mod tests {
         for i in 0..length {
             let keypair = Keypair::new();
             let tx = Transaction::system_new(&mint.keypair(), keypair.pubkey(), 1, last_id);
-            let entry = Entry::new(&hash, num_hashes, vec![tx]);
+            let entry = Entry::new(&hash, 0, num_hashes, vec![tx]);
             hash = entry.id;
             entries.push(entry);
             if (i + 1) % ticks == 0 {
-                let tick = Entry::new(&hash, num_hashes, vec![]);
+                let tick = Entry::new(&hash, 0, num_hashes, vec![]);
                 hash = tick.id;
                 last_id = hash;
                 entries.push(tick);
@@ -2154,16 +2154,16 @@ mod tests {
         // ensure bank can process 2 entries that do not have a common account and tick is registered
         let tx = Transaction::system_new(&keypair2, keypair3.pubkey(), 1, bank.last_id());
         let entry_1 = next_entry(&last_id, 1, vec![tx]);
-        let new_tick = next_entry(&entry_1.id, 1, vec![]);
-        let tx = Transaction::system_new(&keypair1, keypair4.pubkey(), 1, new_tick.id);
-        let entry_2 = next_entry(&new_tick.id, 1, vec![tx]);
+        let tick = next_entry(&entry_1.id, 1, vec![]);
+        let tx = Transaction::system_new(&keypair1, keypair4.pubkey(), 1, tick.id);
+        let entry_2 = next_entry(&tick.id, 1, vec![tx]);
         assert_eq!(
-            bank.par_process_entries(&[entry_1.clone(), new_tick.clone(), entry_2]),
+            bank.par_process_entries(&[entry_1.clone(), tick.clone(), entry_2]),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
         assert_eq!(bank.get_balance(&keypair4.pubkey()), 1);
-        assert_eq!(bank.last_id(), new_tick.id);
+        assert_eq!(bank.last_id(), tick.id);
         // ensure that errors are returned
         assert_eq!(
             bank.par_process_entries(&[entry_1]),

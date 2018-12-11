@@ -462,7 +462,7 @@ pub fn make_consecutive_blobs(
     let num_hashes = 1;
     let mut all_entries = Vec::with_capacity(num_blobs_to_make as usize);
     for _ in 0..num_blobs_to_make {
-        let entry = Entry::new(&last_hash, num_hashes, vec![]);
+        let entry = Entry::new(&last_hash, 0, num_hashes, vec![]);
         last_hash = entry.id;
         all_entries.push(entry);
     }

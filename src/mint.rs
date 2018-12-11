@@ -96,9 +96,9 @@ impl Mint {
     }
 
     pub fn create_entries(&self) -> Vec<Entry> {
-        let e0 = Entry::new(&self.seed(), 0, vec![]);
-        let e1 = Entry::new(&e0.id, 1, self.create_transaction());
-        let e2 = Entry::new(&e1.id, 1, vec![]); // include a tick
+        let e0 = Entry::new(&self.seed(), 0, 0, vec![]);
+        let e1 = Entry::new(&e0.id, 0, 1, self.create_transaction());
+        let e2 = Entry::new(&e1.id, 0, 1, vec![]); // include a tick
         vec![e0, e1, e2]
     }
 }
