@@ -5,10 +5,12 @@ extern crate bincode;
 extern crate env_logger;
 #[macro_use]
 extern crate log;
+extern crate solana_metrics;
 #[macro_use]
 extern crate solana_sdk;
 
 use bincode::deserialize;
+use solana_metrics::{influxdb, submit};
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
@@ -62,6 +64,11 @@ fn entrypoint(
                 Err(ProgramError::InvalidArgument)?;
             }
             debug!("{:?} by {}", vote, keyed_accounts[0].signer_key().unwrap());
+            submit(
+                influxdb::Point::new("vote-native")
+                    .add_field("count", influxdb::Value::Integer(1))
+                    .to_owned(),
+            );
 
             let mut vote_state = VoteProgram::deserialize(&keyed_accounts[0].account.userdata)?;
 
