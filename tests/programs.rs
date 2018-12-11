@@ -299,12 +299,7 @@ fn test_program_builtin_bpf_noop() {
 fn test_program_bpf_c() {
     logger::setup();
 
-    let programs = [
-        "noop",
-        "struct_pass",
-        "struct_ret",
-        "noop++"
-    ];
+    let programs = ["noop", "struct_pass", "struct_ret", "noop++"];
     for program in programs.iter() {
         println!("Test program: {:?}", program);
         let mut file = File::open(create_bpf_path(program)).expect("file open failed");
