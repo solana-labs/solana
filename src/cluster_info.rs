@@ -30,6 +30,7 @@ use bincode::{deserialize, serialize};
 use log::Level;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
+use solana_metrics::{influxdb, submit};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
@@ -520,6 +521,13 @@ impl ClusterInfo {
         let addr = valid[n].gossip; // send the request to the peer's gossip port
         let req = Protocol::RequestWindowIndex(self.my_data().clone(), ix);
         let out = serialize(&req)?;
+
+        submit(
+            influxdb::Point::new("cluster-info")
+                .add_field("repair-ix", influxdb::Value::Integer(ix as i64))
+                .to_owned(),
+        );
+
         Ok((addr, out))
     }
     fn new_pull_requests(&mut self) -> Vec<(SocketAddr, Protocol)> {
