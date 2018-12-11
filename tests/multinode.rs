@@ -1056,8 +1056,10 @@ fn test_leader_validator_basic() {
     }
 
     // Shut down
-    validator.close().unwrap();
-    leader.close().unwrap();
+    validator
+        .close()
+        .expect("Expected successful validator close");
+    leader.close().expect("Expected successful leader close");
 
     // Check the ledger of the validator to make sure the entry height is correct
     // and that the old leader and the new leader's ledgers agree up to the point

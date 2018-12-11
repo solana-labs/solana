@@ -56,11 +56,13 @@ fn broadcast(
     let mut contains_last_tick = false;
     while let Ok(entries) = receiver.try_recv() {
         num_entries += entries.len();
-        if let Some(last) = entries.last() {
-            contains_last_tick |= Some(last.tick_height) == max_tick_height && last.is_tick()
-        }
         ventries.push(entries);
     }
+
+    if let Some(Some(last)) = ventries.last().map(|entries| entries.last()) {
+        contains_last_tick |= Some(last.tick_height + 1) == max_tick_height && last.is_tick();
+    }
+
     inc_new_counter_info!("broadcast_service-entries_received", num_entries);
 
     let to_blobs_start = Instant::now();
@@ -198,7 +200,7 @@ fn generate_slots(
                 .iter()
                 .map(|e| {
                     let (_, slot) = r_leader_scheduler
-                        .get_scheduled_leader(e.tick_height)
+                        .get_scheduled_leader(e.tick_height + 1)
                         .expect("Leader schedule should never be unknown while indexing blobs");
                     slot
                 })
@@ -447,14 +449,15 @@ mod test {
                 Hash::default(),
             );
             for (i, mut tick) in ticks.into_iter().enumerate() {
-                tick.tick_height = start_tick_height + i as u64 + 1;
+                // Simulate the tick heights generated in poh.rs
+                tick.tick_height = start_tick_height + i as u64;
                 broadcast_service
                     .entry_sender
                     .send(vec![tick])
                     .expect("Expect successful send to broadcast service");
             }
 
-            sleep(Duration::from_millis(1000));
+            sleep(Duration::from_millis(2000));
             let r_db = broadcast_service.db_ledger.read().unwrap();
             for i in 0..max_tick_height - start_tick_height {
                 let (_, slot) = leader_scheduler

@@ -308,7 +308,7 @@ impl Fullnode {
         } else {
             let max_tick_height = {
                 let ls_lock = bank.leader_scheduler.read().unwrap();
-                ls_lock.max_height_for_leader(bank.tick_height())
+                ls_lock.max_height_for_leader(bank.tick_height() + 1)
             };
 
             // Start in leader mode.
@@ -401,7 +401,7 @@ impl Fullnode {
             let new_bank = Arc::new(new_bank);
             let (scheduled_leader, _) = new_bank
                 .get_current_leader()
-                .expect("Scheduled leader should exist after rebuilding bank");
+                .expect("Scheduled leader id should be calculated after rebuilding bank");
 
             (new_bank, scheduled_leader, entry_height, last_id)
         };
@@ -843,7 +843,7 @@ mod tests {
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
         // Make a common mint and a genesis entry for both leader + validator's ledgers
-        let num_ending_ticks = 2;
+        let num_ending_ticks = 1;
         let (mint, bootstrap_leader_ledger_path, genesis_entries) = create_tmp_sample_ledger(
             "test_wrong_role_transition",
             10_000,
@@ -890,7 +890,7 @@ mod tests {
         // Set the bootstrap height exactly the current tick height, so that we can
         // test if the bootstrap leader knows to immediately transition to a validator
         // after parsing the ledger during startup
-        let bootstrap_height = genesis_tick_height - 1;
+        let bootstrap_height = genesis_tick_height;
         let leader_scheduler_config = LeaderSchedulerConfig::new(
             Some(bootstrap_height),
             Some(leader_rotation_interval),

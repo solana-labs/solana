@@ -93,14 +93,13 @@ impl ReplayStage {
 
         let (current_leader, _) = bank
             .get_current_leader()
-            .expect("Scheduled leader id for current tick should be calculated by this point");
+            .expect("Scheduled leader should be calculated by this point");
         for (i, entry) in entries.iter().enumerate() {
             res = bank.process_entry(&entry);
             let my_id = keypair.pubkey();
-            let tick_height = bank.tick_height();
             let (scheduled_leader, _) = bank
-                .get_leader(tick_height + 1)
-                .expect("Scheduled leader id for next tick should be calculated by this point");
+                .get_current_leader()
+                .expect("Scheduled leader should be calculated by this point");
 
             // TODO: Remove this soon once we boot the leader from ClusterInfo
             if scheduled_leader != current_leader {
@@ -179,10 +178,9 @@ impl ReplayStage {
                 let mut entry_height_ = entry_height;
                 let mut last_entry_id = last_entry_id;
                 loop {
-                    let tick_height = bank.tick_height();
-                    let (leader_id, _) = bank.get_leader(tick_height + 1).expect(
-                        "Scheduled leader id for next tick should be calculated by this point",
-                    );
+                    let (leader_id, _) = bank
+                        .get_current_leader()
+                        .expect("Scheduled leader should be calculated by this point");
 
                     if leader_id == keypair.pubkey() {
                         return Some(ReplayStageReturnType::LeaderRotation(
