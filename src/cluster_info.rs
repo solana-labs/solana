@@ -268,8 +268,37 @@ impl ClusterInfo {
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
+            .filter(|x| x.id != me)
+            .filter(|x| ContactInfo::is_valid_address(&x.tvu))
+            .cloned()
+            .collect()
+    }
+
+    /// all peers that have a valid tvu except the leader
+    pub fn retransmit_peers(&self) -> Vec<NodeInfo> {
+        let me = self.my_data().id;
+        self.gossip
+            .crds
+            .table
+            .values()
+            .filter_map(|x| x.value.contact_info())
             .filter(|x| x.id != me && x.id != self.leader_id())
             .filter(|x| ContactInfo::is_valid_address(&x.tvu))
+            .cloned()
+            .collect()
+    }
+
+    /// all peers with valid tvus and gossip ports
+    pub fn repair_peers(&self) -> Vec<NodeInfo> {
+        let me = self.my_data().id;
+        self.gossip
+            .crds
+            .table
+            .values()
+            .filter_map(|x| x.value.contact_info())
+            .filter(|x| x.id != me)
+            .filter(|x| ContactInfo::is_valid_address(&x.tvu))
+            .filter(|x| ContactInfo::is_valid_address(&x.gossip))
             .cloned()
             .collect()
     }
@@ -353,7 +382,7 @@ impl ClusterInfo {
         let (me, orders): (NodeInfo, Vec<NodeInfo>) = {
             // copy to avoid locking during IO
             let s = obj.read().expect("'obj' read lock in pub fn retransmit");
-            (s.my_data().clone(), s.tvu_peers())
+            (s.my_data().clone(), s.retransmit_peers())
         };
         blob.write()
             .unwrap()
@@ -512,7 +541,7 @@ impl ClusterInfo {
     pub fn window_index_request(&self, ix: u64) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication, as indicated
         //  by a valid tvu port location
-        let valid: Vec<_> = self.gossip_peers();
+        let valid: Vec<_> = self.repair_peers();
         if valid.is_empty() {
             Err(ClusterInfoError::NoPeers)?;
         }

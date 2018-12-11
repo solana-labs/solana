@@ -74,7 +74,7 @@ pub fn repair(
         }
     }
 
-    let num_peers = rcluster_info.tvu_peers().len() as u64;
+    let num_peers = rcluster_info.repair_peers().len() as u64;
 
     // Check if there's a max_entry_height limitation
     let max_repair_entry_height = if max_entry_height == 0 {
