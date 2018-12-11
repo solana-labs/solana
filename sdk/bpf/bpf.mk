@@ -1,5 +1,5 @@
 LOCAL_PATH := $(dir $(lastword $(MAKEFILE_LIST)))
-$(info $(shell $(LOCAL_PATH)/scripts/install.sh))
+INSTALL_SH := $(abspath $(LOCAL_PATH)/scripts/install.sh)
 
 all:
 .PHONY: help all clean
@@ -154,34 +154,38 @@ help:
 	@echo '    - make dump_foo'
 	@echo ''
 
+.PHONY: $(INSTALL_SH)
+$(INSTALL_SH):
+	$(INSTALL_SH)
+
 .PRECIOUS: $(OUT_DIR)/%.ll
-$(OUT_DIR)/%.ll: $(SRC_DIR)/%.c
+$(OUT_DIR)/%.ll: $(SRC_DIR)/%.c $(INSTALL_SH)
 	@echo "[cc] $@ ($<)"
 	$(_@)mkdir -p $(OUT_DIR)
 	$(_@)$(CC) $(BPF_C_FLAGS) -o $@ -c $< -MD -MF $(@:.ll=.d)
 
-$(OUT_DIR)/%.ll: $(SRC_DIR)/%.cc
+$(OUT_DIR)/%.ll: $(SRC_DIR)/%.cc $(INSTALL_SH)
 	@echo "[cxx] $@ ($<)"
 	$(_@)mkdir -p $(OUT_DIR)
 	$(_@)$(CXX) $(BPF_CXX_FLAGS) -o $@ -c $< -MD -MF $(@:.ll=.d)
 
 .PRECIOUS: $(OUT_DIR)/%.o
-$(OUT_DIR)/%.o: $(OUT_DIR)/%.ll
+$(OUT_DIR)/%.o: $(OUT_DIR)/%.ll $(INSTALL_SH)
 	@echo "[llc] $@ ($<)"
 	$(_@)$(LLC) $(BPF_LLC_FLAGS) -o $@ $<
 
 .PRECIOUS: $(OUT_DIR)/%.so
-$(OUT_DIR)/%.so: $(OUT_DIR)/%.o
+$(OUT_DIR)/%.so: $(OUT_DIR)/%.o $(INSTALL_SH)
 	@echo "[lld] $@ ($<)"
 	$(_@)$(LLD) $(BPF_LLD_FLAGS) -o $@ $<
 
-$(OUT_DIR)/test_%: $(TEST_DIR)/%.c
+$(OUT_DIR)/test_%: $(TEST_DIR)/%.c $(INSTALL_SH)
 	@echo "[test cc] $@ ($<)"
 	$(_@)mkdir -p $(OUT_DIR)
 	$(_@)$(CC) $(TEST_C_FLAGS) -o $@ $< -MD -MF $(@:=.d)
 	$(_@)$(MACOS_ADJUST_TEST_DYLIB) $@
 
-$(OUT_DIR)/test_%: $(TEST_DIR)/%.cc
+$(OUT_DIR)/test_%: $(TEST_DIR)/%.cc $(INSTALL_SH)
 	@echo "[test cxx] $@ ($<)"
 	$(_@)mkdir -p $(OUT_DIR)
 	$(_@)$(CXX) $(TEST_CXX_FLAGS) -o $@ $< -MD -MF $(@:=.d)
