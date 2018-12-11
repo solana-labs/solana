@@ -19,7 +19,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 
-pub const MAX_REPAIR_LENGTH: usize = 8192;
+pub const MAX_REPAIR_LENGTH: usize = 128;
 
 pub fn repair(
     slot: u64,
