@@ -12,6 +12,7 @@ extern bool entrypoint(const uint8_t *input) {
   SolClusterInfo info;
 
   sol_log(__FILE__);
+   
   if (!sol_deserialize(input, ka, SOL_ARRAY_SIZE(ka), &ka_len, &data, &data_len, &info)) {
     return false;
   }
