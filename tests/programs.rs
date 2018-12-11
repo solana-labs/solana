@@ -300,10 +300,10 @@ fn test_program_bpf_c() {
     logger::setup();
 
     let programs = [
-        "noop",
-        "struct_pass",
-        "struct_ret",
-        //"noop++" // TODO fails with buffer overflow
+        // "noop",
+        // "struct_pass",
+        // "struct_ret",
+        "noop++" // TODO fails with buffer overflow
     ];
     for program in programs.iter() {
         println!("Test program: {:?}", program);
