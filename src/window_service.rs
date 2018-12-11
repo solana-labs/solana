@@ -91,6 +91,12 @@ fn recv_window(
             (p.index()?, p.meta.size)
         };
 
+        submit(
+            influxdb::Point::new("window-service")
+                .add_field("last-recv", influxdb::Value::Integer(pix as i64))
+                .to_owned(),
+        );
+
         pixs.push(pix);
 
         trace!("{} window pix: {} size: {}", id, pix, meta_size);
