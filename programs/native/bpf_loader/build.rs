@@ -18,6 +18,9 @@ fn main() {
         println!("cargo:rerun-if-changed=../../bpf/c/src/bench_alu.c");
         println!("cargo:rerun-if-changed=../../bpf/c/src/move_funds.c");
         println!("cargo:rerun-if-changed=../../bpf/c/src/noop.c");
+        println!("cargo:rerun-if-changed=../../bpf/c/src/noop++.c");
+        println!("cargo:rerun-if-changed=../../bpf/c/src/struct_pass.c");
+        println!("cargo:rerun-if-changed=../../bpf/c/src/struct_ret.c");
         println!("cargo:warning=(not a warning) Compiling C-based BPF programs");
         let status = Command::new("make")
             .current_dir("../../bpf/c")

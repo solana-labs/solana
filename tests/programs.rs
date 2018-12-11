@@ -296,28 +296,37 @@ fn test_program_builtin_bpf_noop() {
 
 #[cfg(feature = "bpf_c")]
 #[test]
-fn test_program_bpf_noop_c() {
+fn test_program_bpf_c() {
     logger::setup();
 
-    let mut file = File::open(create_bpf_path("noop")).expect("file open failed");
-    let mut elf = Vec::new();
-    file.read_to_end(&mut elf).unwrap();
+    let programs = [
+        "noop",
+        "struct_pass",
+        "struct_ret",
+        //"noop++" // TODO fails with buffer overflow
+    ];
+    for program in programs.iter() {
+        println!("Test program: {:?}", program);
+        let mut file = File::open(create_bpf_path(program)).expect("file open failed");
+        let mut elf = Vec::new();
+        file.read_to_end(&mut elf).unwrap();
 
-    let loader = Loader::new_dynamic("solana_bpf_loader");
-    let program = Program::new(&loader, &elf);
+        let loader = Loader::new_dynamic("solana_bpf_loader");
+        let program = Program::new(&loader, &elf);
 
-    // Call user program
-    let tx = Transaction::new(
-        &loader.mint.keypair(),
-        &[],
-        program.program.pubkey(),
-        &vec![1u8],
-        loader.mint.last_id(),
-        0,
-    );
-    check_tx_results(
-        &loader.bank,
-        &tx,
-        loader.bank.process_transactions(&vec![tx.clone()]),
-    );
+        // Call user program
+        let tx = Transaction::new(
+            &loader.mint.keypair(),
+            &[],
+            program.program.pubkey(),
+            &vec![1u8],
+            loader.mint.last_id(),
+            0,
+        );
+        check_tx_results(
+            &loader.bank,
+            &tx,
+            loader.bank.process_transactions(&vec![tx.clone()]),
+        );
+    }
 }
