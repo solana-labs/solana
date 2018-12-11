@@ -308,7 +308,7 @@ impl Fullnode {
         } else {
             let max_tick_height = {
                 let ls_lock = bank.leader_scheduler.read().unwrap();
-                ls_lock.max_height_for_leader(bank.tick_height() + 1)
+                ls_lock.max_height_for_leader(bank.tick_height())
             };
 
             // Start in leader mode.
@@ -339,7 +339,6 @@ impl Fullnode {
                 bank.leader_scheduler.clone(),
                 entry_receiver,
                 max_tick_height,
-                bank.tick_height(),
                 tpu_exit,
             );
             let leader_state = LeaderServices::new(tpu, broadcast_service);
@@ -506,7 +505,6 @@ impl Fullnode {
             self.bank.leader_scheduler.clone(),
             blob_receiver,
             max_tick_height,
-            tick_height,
             tpu_exit,
         );
         let leader_state = LeaderServices::new(tpu, broadcast_service);
@@ -845,7 +843,7 @@ mod tests {
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
         // Make a common mint and a genesis entry for both leader + validator's ledgers
-        let num_ending_ticks = 1;
+        let num_ending_ticks = 2;
         let (mint, bootstrap_leader_ledger_path, genesis_entries) = create_tmp_sample_ledger(
             "test_wrong_role_transition",
             10_000,
@@ -892,7 +890,7 @@ mod tests {
         // Set the bootstrap height exactly the current tick height, so that we can
         // test if the bootstrap leader knows to immediately transition to a validator
         // after parsing the ledger during startup
-        let bootstrap_height = genesis_tick_height;
+        let bootstrap_height = genesis_tick_height - 1;
         let leader_scheduler_config = LeaderSchedulerConfig::new(
             Some(bootstrap_height),
             Some(leader_rotation_interval),
@@ -940,8 +938,10 @@ mod tests {
                 }
             }
 
-            validator.close().expect("Expected node to close");
-            bootstrap_leader.close().expect("Expected node to close");
+            validator.close().expect("Expected leader node to close");
+            bootstrap_leader
+                .close()
+                .expect("Expected validator node to close");
         }
         for path in ledger_paths {
             DbLedger::destroy(&path).expect("Expected successful database destruction");

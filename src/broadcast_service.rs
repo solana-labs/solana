@@ -35,7 +35,6 @@ pub enum BroadcastServiceReturnType {
 fn broadcast(
     db_ledger: &Arc<RwLock<DbLedger>>,
     max_tick_height: Option<u64>,
-    tick_height: &mut u64,
     leader_id: Pubkey,
     node_info: &NodeInfo,
     broadcast_table: &[NodeInfo],
@@ -53,8 +52,13 @@ fn broadcast(
     let mut num_entries = entries.len();
     let mut ventries = Vec::new();
     ventries.push(entries);
+
+    let mut contains_last_tick = false;
     while let Ok(entries) = receiver.try_recv() {
         num_entries += entries.len();
+        if let Some(last) = entries.last() {
+            contains_last_tick |= Some(last.tick_height) == max_tick_height && last.is_tick()
+        }
         ventries.push(entries);
     }
     inc_new_counter_info!("broadcast_service-entries_received", num_entries);
@@ -62,7 +66,7 @@ fn broadcast(
     let to_blobs_start = Instant::now();
 
     // Generate the slot heights for all the entries inside ventries
-    let slot_heights = generate_slots(&ventries, leader_scheduler, tick_height);
+    let slot_heights = generate_slots(&ventries, leader_scheduler);
 
     let blobs_vec: Vec<_> = ventries
         .into_par_iter()
@@ -148,7 +152,7 @@ fn broadcast(
 
         // Send blobs out from the window
         ClusterInfo::broadcast(
-            Some(*tick_height) == max_tick_height,
+            contains_last_tick,
             leader_id,
             &node_info,
             &broadcast_table,
@@ -184,7 +188,6 @@ fn broadcast(
 fn generate_slots(
     ventries: &[Vec<Entry>],
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-    tick_height: &mut u64,
 ) -> Vec<u64> {
     // Generate the slot heights for all the entries inside ventries
     let r_leader_scheduler = leader_scheduler.read().unwrap();
@@ -194,16 +197,8 @@ fn generate_slots(
             let slot_heights: Vec<u64> = p
                 .iter()
                 .map(|e| {
-                    let tick_height = {
-                        if e.is_tick() {
-                            *tick_height += e.is_tick() as u64;
-                            *tick_height
-                        } else {
-                            *tick_height + 1
-                        }
-                    };
                     let (_, slot) = r_leader_scheduler
-                        .get_scheduled_leader(tick_height)
+                        .get_scheduled_leader(e.tick_height)
                         .expect("Leader schedule should never be unknown while indexing blobs");
                     slot
                 })
@@ -246,8 +241,7 @@ impl BroadcastService {
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
         receiver: &Receiver<Vec<Entry>>,
         max_tick_height: Option<u64>,
-        tick_height: u64,
-        exit_signal: Arc<AtomicBool>,
+        exit_signal: &Arc<AtomicBool>,
     ) -> BroadcastServiceReturnType {
         let mut transmit_index = WindowIndex {
             data: entry_height,
@@ -255,7 +249,6 @@ impl BroadcastService {
         };
         let mut receive_index = entry_height;
         let me = cluster_info.read().unwrap().my_data().clone();
-        let mut tick_height_ = tick_height;
         loop {
             if exit_signal.load(Ordering::Relaxed) {
                 return BroadcastServiceReturnType::ExitSignal;
@@ -266,7 +259,6 @@ impl BroadcastService {
             if let Err(e) = broadcast(
                 db_ledger,
                 max_tick_height,
-                &mut tick_height_,
                 leader_id,
                 &me,
                 &broadcast_table,
@@ -307,7 +299,7 @@ impl BroadcastService {
     /// WriteStage is the last stage in the pipeline), which will then close Broadcast service,
     /// which will then close FetchStage in the Tpu, and then the rest of the Tpu,
     /// completing the cycle.
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments, clippy::new_ret_no_self)]
     pub fn new(
         db_ledger: Arc<RwLock<DbLedger>>,
         sock: UdpSocket,
@@ -317,7 +309,6 @@ impl BroadcastService {
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         receiver: Receiver<Vec<Entry>>,
         max_tick_height: Option<u64>,
-        tick_height: u64,
         exit_sender: Arc<AtomicBool>,
     ) -> (Self, Arc<AtomicBool>) {
         let exit_signal = Arc::new(AtomicBool::new(false));
@@ -335,8 +326,7 @@ impl BroadcastService {
                     &leader_scheduler,
                     &receiver,
                     max_tick_height,
-                    tick_height,
-                    exit_signal_,
+                    &exit_signal_,
                 )
             })
             .unwrap();
@@ -383,7 +373,6 @@ mod test {
         ledger_path: &str,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         entry_height: u64,
-        tick_height: u64,
         max_tick_height: u64,
     ) -> DummyBroadcastService {
         // Make the database ledger
@@ -416,7 +405,6 @@ mod test {
             leader_scheduler,
             entry_receiver,
             Some(max_tick_height),
-            tick_height,
             exit_sender,
         );
 
@@ -441,9 +429,9 @@ mod test {
             leader_scheduler.last_seed_height = Some(leader_scheduler.bootstrap_height);
             leader_scheduler.set_leader_schedule(vec![leader_keypair.pubkey()]);
             leader_scheduler.use_only_bootstrap_leader = false;
-            let tick_height = leader_scheduler.bootstrap_height;
-            let max_tick_height = tick_height + leader_scheduler.last_seed_height.unwrap();
-            let entry_height = 2 * tick_height;
+            let start_tick_height = leader_scheduler.bootstrap_height;
+            let max_tick_height = start_tick_height + leader_scheduler.last_seed_height.unwrap();
+            let entry_height = 2 * start_tick_height;
 
             let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
             let broadcast_service = setup_dummy_broadcast_service(
@@ -451,12 +439,15 @@ mod test {
                 &ledger_path,
                 leader_scheduler.clone(),
                 entry_height,
-                tick_height,
                 max_tick_height,
             );
 
-            let ticks = create_ticks((max_tick_height - tick_height) as usize, Hash::default());
-            for tick in ticks {
+            let ticks = create_ticks(
+                (max_tick_height - start_tick_height) as usize,
+                Hash::default(),
+            );
+            for (i, mut tick) in ticks.into_iter().enumerate() {
+                tick.tick_height = start_tick_height + i as u64 + 1;
                 broadcast_service
                     .entry_sender
                     .send(vec![tick])
@@ -465,11 +456,11 @@ mod test {
 
             sleep(Duration::from_millis(1000));
             let r_db = broadcast_service.db_ledger.read().unwrap();
-            for i in 0..max_tick_height - tick_height {
+            for i in 0..max_tick_height - start_tick_height {
                 let (_, slot) = leader_scheduler
                     .read()
                     .unwrap()
-                    .get_scheduled_leader(tick_height + i + 1)
+                    .get_scheduled_leader(start_tick_height + i + 1)
                     .expect("Leader should exist");
                 let result = r_db
                     .data_cf

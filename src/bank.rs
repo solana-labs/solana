@@ -1369,7 +1369,14 @@ impl Bank {
         self.leader_scheduler
             .read()
             .unwrap()
-            .get_scheduled_leader(self.tick_height() + 1)
+            .get_scheduled_leader(self.tick_height())
+    }
+
+    pub fn get_leader(&self, tick_height: u64) -> Option<(Pubkey, u64)> {
+        self.leader_scheduler
+            .read()
+            .unwrap()
+            .get_scheduled_leader(tick_height)
     }
 
     pub fn tick_height(&self) -> u64 {
