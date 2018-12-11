@@ -1,4 +1,3 @@
-
 PHDRS
 {
   text PT_LOAD  ;
@@ -11,7 +10,6 @@ SECTIONS
   . = SIZEOF_HEADERS;
   .text : { *(.text) } :text
   .rodata : { *(.rodata) } :rodata
-  .eh_frame : { *(.eh_frame) } :rodata
   .dynamic : { *(.dynamic) } :dynamic
   .dynsym : { *(.dynsym) } :dynamic
   .dynstr : { *(.dynstr) } :dynamic

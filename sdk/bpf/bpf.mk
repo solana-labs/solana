@@ -60,6 +60,10 @@ BPF_CXX_FLAGS := \
   -emit-llvm \
   -target bpf \
   -fPIC \
+  -fomit-frame-pointer \
+  -fno-exceptions \
+  -fno-asynchronous-unwind-tables \
+  -fno-unwind-tables \
 
 BPF_LLC_FLAGS := \
   -march=bpf \
