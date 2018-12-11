@@ -288,18 +288,11 @@ impl ClusterInfo {
             .collect()
     }
 
-    /// all peers with valid tvus and gossip ports
+    /// all tvu peers with valid gossip addrs
     pub fn repair_peers(&self) -> Vec<NodeInfo> {
-        let me = self.my_data().id;
-        self.gossip
-            .crds
-            .table
-            .values()
-            .filter_map(|x| x.value.contact_info())
-            .filter(|x| x.id != me)
-            .filter(|x| ContactInfo::is_valid_address(&x.tvu))
+        ClusterInfo::tvu_peers(self)
+            .into_iter()
             .filter(|x| ContactInfo::is_valid_address(&x.gossip))
-            .cloned()
             .collect()
     }
 
