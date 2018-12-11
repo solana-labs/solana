@@ -1,3 +1,4 @@
+
 PHDRS
 {
   text PT_LOAD  ;
@@ -17,5 +18,4 @@ SECTIONS
   .gnu.hash : { *(.gnu.hash) } :dynamic
   .rel.dyn : { *(.rel.dyn) } :dynamic
   .hash : { *(.hash) } :dynamic
-
 }
