@@ -45,9 +45,9 @@ sent outside a leader's assigned slot.
 
 All `T` ticks must be observed by the next leader for it to build its own
 entries on. If entries are not observed (leader is down) or entries are invalid
-(leader is buggy or malicious), the next leader must produce empty entries to
+(leader is buggy or malicious), the next leader must produce ticks to
 fill the previous leader's slot. Note that the next leader should do repair
-requests in parallel, and postpone sending empty entries until it is confident
-other validators also failed to observe the previous leader's entries. If a
-leader incorrectly builds on empty entries, the leader following it must
-replace all its entries with empties.
+requests in parallel, and postpone sending ticks until it is confident other
+validators also failed to observe the previous leader's entries. If a leader
+incorrectly builds on its own ticks, the leader following it must replace all
+its ticks.
