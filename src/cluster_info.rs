@@ -37,7 +37,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::timing::{duration_as_ms, timestamp};
-use std::cmp::min;
+use std::cmp::{min, Ordering as cmpOrdering};
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -334,7 +334,14 @@ impl ClusterInfo {
         let peers = self.tvu_peers();
         let mut peers_with_stakes: Vec<(&NodeInfo, u64)> =
             peers.iter().map(|c| (c, bank.get_stake(&c.id))).collect();
-        peers_with_stakes.sort_unstable_by(|l, r| r.1.cmp(&l.1));
+        peers_with_stakes.sort_unstable_by(|l, r| {
+            let cmp = r.1.cmp(&l.1);
+            if cmp == cmpOrdering::Equal {
+                r.0.id.cmp(&l.0.id)
+            } else {
+                cmp
+            }
+        });
         peers_with_stakes
             .iter()
             .map(|(peer, _)| (*peer).clone())
@@ -537,11 +544,11 @@ impl ClusterInfo {
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
     pub fn retransmit_to(
         obj: &Arc<RwLock<Self>>,
-        peers: Vec<NodeInfo>,
+        peers: &[NodeInfo],
         blob: &SharedBlob,
         s: &UdpSocket,
     ) -> Result<()> {
-        let (me, orders): (NodeInfo, Vec<NodeInfo>) = {
+        let (me, orders): (NodeInfo, &[NodeInfo]) = {
             // copy to avoid locking during IO
             let s = obj.read().expect("'obj' read lock in pub fn retransmit");
             (s.my_data().clone(), peers)
@@ -582,7 +589,7 @@ impl ClusterInfo {
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
     pub fn retransmit(obj: &Arc<RwLock<Self>>, blob: &SharedBlob, s: &UdpSocket) -> Result<()> {
         let me = obj.read().expect("'obj' read lock in retransmit");
-        ClusterInfo::retransmit_to(obj, me.retransmit_peers(), blob, s)
+        ClusterInfo::retransmit_to(obj, &me.retransmit_peers(), blob, s)
     }
 
     fn send_orders(

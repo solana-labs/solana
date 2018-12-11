@@ -71,14 +71,14 @@ fn retransmit(
         );
         let mut retransmit_peers =
             peers[locality.neighbor_bounds.0..locality.neighbor_bounds.1].to_vec();
-        locality.child_layer_peers.iter().cloned().for_each(|ix| {
+        locality.child_layer_peers.iter().for_each(|&ix| {
             if let Some(peer) = peers.get(ix) {
                 retransmit_peers.push(peer.clone());
             }
         });
 
         for b in &mut dq {
-            ClusterInfo::retransmit_to(&cluster_info, retransmit_peers.to_vec(), b, sock)?;
+            ClusterInfo::retransmit_to(&cluster_info, &retransmit_peers, b, sock)?;
         }
     }
     Ok(())
