@@ -7,6 +7,7 @@
 - [Getting Started](getting-started.md)
 
 - [Programming Model](programs.md)
+  - [Example: Tic-Tac-Toe](tictactoe.md)
 
 - [A Solana Cluster](cluster.md)
   - [Synchronization](synchronization.md)
