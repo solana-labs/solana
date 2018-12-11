@@ -483,20 +483,20 @@ pub fn make_active_set_entries(
     // 1) Create transfer token entry
     let transfer_tx =
         Transaction::system_new(&token_source, active_keypair.pubkey(), 3, *last_tick_id);
-    let transfer_entry = Entry::new(last_entry_id, 1, vec![transfer_tx]);
+    let transfer_entry = Entry::new(last_entry_id, 0, 1, vec![transfer_tx]);
     let mut last_entry_id = transfer_entry.id;
 
     // 2) Create and register the vote account
     let vote_account = Keypair::new();
     let new_vote_account_tx =
         Transaction::vote_account_new(active_keypair, vote_account.pubkey(), *last_tick_id, 1, 1);
-    let new_vote_account_entry = Entry::new(&last_entry_id, 1, vec![new_vote_account_tx]);
+    let new_vote_account_entry = Entry::new(&last_entry_id, 0, 1, vec![new_vote_account_tx]);
     last_entry_id = new_vote_account_entry.id;
 
     // 3) Create vote entry
     let vote = Vote { tick_height: 1 };
     let vote_tx = Transaction::vote_new(&vote_account, vote, *last_tick_id, 0);
-    let vote_entry = Entry::new(&last_entry_id, 1, vec![vote_tx]);
+    let vote_entry = Entry::new(&last_entry_id, 0, 1, vec![vote_tx]);
     last_entry_id = vote_entry.id;
 
     // 4) Create the ending empty ticks
