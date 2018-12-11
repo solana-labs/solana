@@ -1,9 +1,9 @@
 # Programming Model
 
-A client interacts with a Solana cluster by sending it *transactions* with one
-or more *instructions*. The Solana *runtime* passes those instructions to
-user-contributed *programs*. An instruction might, for example, tell a program
-to move *tokens* from one *account* to another or create an interactive
+A client *app* interacts with a Solana cluster by sending it *transactions*
+with one or more *instructions*. The Solana *runtime* passes those instructions
+to user-contributed *programs*. An instruction might, for example, tell a
+program to move *tokens* from one *account* to another or create an interactive
 contract that governs how tokens are moved. Instructions are executed
 atomically. If any instruction is invalid, any changes made within the
 transaction are discarded.
@@ -64,3 +64,4 @@ account metadata and transaction signatures to verify that none of the access
 rules were violated. If a program violates an access rule, the runtime discards
 all account changes made by all instructions and marks the transaction as
 failed.
+
