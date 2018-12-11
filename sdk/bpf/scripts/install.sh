@@ -47,10 +47,11 @@ if [[ ! -f llvm-native-$machine-$version.md ]]; then
 
     echo "https://github.com/solana-labs/llvm-builder/releases/tag/$version" > ../llvm-native-$machine-$version.md
   )
-  # shellcheck disable=SC2181
-  if [[ $? -ne 0 ]]; then
+  exitcode=$?
+  if [[ $exitcode -ne 0 ]]; then
     rm -rf llvm-native
     exit 1
   fi
 fi
 
+exit 0
