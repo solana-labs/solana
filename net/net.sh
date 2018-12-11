@@ -22,8 +22,9 @@ Operate a configured testnet
  sanity   - Sanity check the network
  stop     - Stop the network
  restart  - Shortcut for stop then start
+ update   - Live update all network nodes
 
- start-specific options:
+ start/update-specific options:
    -S [snapFilename]           - Deploy the specified Snap file
    -s edge|beta|stable         - Deploy the latest Snap on the specified Snap release channel
    -T [tarFilename]            - Deploy the specified release tarball
@@ -38,7 +39,7 @@ Operate a configured testnet
    Note: if RUST_LOG is set in the environment it will be propogated into the
          network nodes.
 
- sanity/start-specific options:
+ sanity/start/update-specific options:
    -o noLedgerVerify    - Skip ledger verification
    -o noValidatorSanity - Skip fullnode sanity
    -o rejectExtraNodes  - Require the exact number of nodes
@@ -57,6 +58,7 @@ deployMethod=local
 sanityExtraArgs=
 cargoFeatures=
 skipSetup=false
+updateNodes=false
 
 command=$1
 [[ -n $command ]] || usage
@@ -324,10 +326,17 @@ start() {
   esac
 
   echo "Deployment started at $(date)"
-  $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
+  if $updateNodes; then
+    $metricsWriteDatapoint "testnet-deploy net-update-begin=1"
+  else
+    $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
+  fi
 
   bootstrapLeader=true
   for ipAddress in "${fullnodeIpList[@]}"; do
+    if $updateNodes; then
+      stopNode "$ipAddress"
+    fi
     if $bootstrapLeader; then
       SECONDS=0
       declare bootstrapNodeDeployTime=
@@ -362,14 +371,24 @@ start() {
   $metricsWriteDatapoint "testnet-deploy net-fullnodes-started=1"
   additionalNodeDeployTime=$SECONDS
 
-  sanity
+  if ! $updateNodes; then
+    sanity
+  fi
 
   SECONDS=0
   for ipAddress in "${clientIpList[@]}"; do
+    if $updateNodes; then
+      stopNode "$ipAddress"
+    fi
     startClient "$ipAddress" "$netLogDir/client-$ipAddress.log"
   done
   clientDeployTime=$SECONDS
-  $metricsWriteDatapoint "testnet-deploy net-start-complete=1"
+
+  if $updateNodes; then
+    $metricsWriteDatapoint "testnet-deploy net-update-complete=1"
+  else
+    $metricsWriteDatapoint "testnet-deploy net-start-complete=1"
+  fi
 
   declare networkVersion=unknown
   case $deployMethod in
@@ -440,6 +459,15 @@ restart)
   start
   ;;
 start)
+  start
+  ;;
+update)
+  $leaderRotation || {
+    echo Warning: unable to update because leader rotation is disabled
+    exit 1
+  }
+  skipSetup=true
+  updateNodes=true
   start
   ;;
 sanity)
