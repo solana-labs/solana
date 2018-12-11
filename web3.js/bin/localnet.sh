@@ -112,7 +112,9 @@ up)
 down)
   (
     set -x
-    docker stop --time 0 solana-localnet
+    if [[ -n "$(docker ps --filter "name=^solana-localnet$" -q)" ]]; then
+      docker stop --time 0 solana-localnet
+    fi
   )
   ;;
 logs)
