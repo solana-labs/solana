@@ -585,7 +585,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT sum(\"count\") AS \" \" FROM \"$testnet\".\"autogen\".\"counter-replicate-vote_sent\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
+          "query": "SELECT sum(\"count\") AS \" \" FROM \"$testnet\".\"autogen\".\"counter-validator-vote_sent\" WHERE $timeFilter GROUP BY time($__interval) FILL(0)",
           "rawQuery": true,
           "refId": "B",
           "resultFormat": "time_series",
