@@ -21,19 +21,19 @@ Secure Enclaves (such as SGX) provide a layer of memory and computation protecti
 
 ## PoH Verification
 
-1. When the node votes on an en entry `X`, there's a lockout period `N`, for which it cannot vote on a branch that does not contain `X` in its history.
-2. Every time the node votes on the derivative of `X`, say `X+y`, the lockout period for `X` increases by a factor `F` (i.e. the duration node cannot vote on a branch that does not contain `X` increases).
+1. When the node votes on an en entry `X`, there's a lockout period `N`, for which it cannot vote on a fork that does not contain `X` in its history.
+2. Every time the node votes on the derivative of `X`, say `X+y`, the lockout period for `X` increases by a factor `F` (i.e. the duration node cannot vote on a fork that does not contain `X` increases).
     * The lockout period for `X+y` is still `N` until the node votes again.
 3. The lockout period increment is capped (e.g. factor `F` applies maximum 32 times).
 4. The signing enclave must not sign a vote that violates this policy. This means
     * Enclave is initialized with `N`, `F` and `Factor cap`
     * Enclave stores `Factor cap` number of entry IDs on which the node had previously voted
     * The sign request contains the entry ID for the new vote
-    * Enclave verifies that new vote's entry ID is on the correct branch (following the rules #1 and #2 above)
+    * Enclave verifies that new vote's entry ID is on the correct fork (following the rules #1 and #2 above)
 
 ## Ancestor Verification
 
-This is alternate, albeit, less certain approach to verifying voting branch.
+This is alternate, albeit, less certain approach to verifying voting fork.
 1. The validator maintains an active set of nodes in the network
 2. It observes the votes from the active set in the last voting period
 3. It stores the ancestor/last_tick at which each node voted
@@ -45,17 +45,17 @@ This is alternate, albeit, less certain approach to verifying voting branch.
 
 The premise is that the validator can be spoofed at most once to vote on incorrect data. If someone hijacks the validator and submits a vote request for bogus data, that vote will not be included in the PoH (as it'll be rejected by the network). The next time the validator sends a request to sign the vote, the signing service will detect that validator's last vote is missing (as part of #5 above).
 
-## Branch determination
+## Fork determination
 
-Due to the fact that the enclave cannot process PoH, it has no direct knowledge of branch history of a submitted validator vote. Each enclave should be initiated with the current *active set* of public keys. A validator should submit its current vote along with the votes of the active set (including itself) that it observed in the slot of its previous vote. In this way, the enclave can surmise the votes accompanying the validator's previous vote and thus the branch being voted on. This is not possible for the validator's initial submitted vote, as it will not have a 'previous' slot to reference. To account for this, a short voting freeze should apply until the second vote is submitted containing the votes within the active set, along with it's own vote, at the height of the initial vote.
+Due to the fact that the enclave cannot process PoH, it has no direct knowledge of fork history of a submitted validator vote. Each enclave should be initiated with the current *active set* of public keys. A validator should submit its current vote along with the votes of the active set (including itself) that it observed in the slot of its previous vote. In this way, the enclave can surmise the votes accompanying the validator's previous vote and thus the fork being voted on. This is not possible for the validator's initial submitted vote, as it will not have a 'previous' slot to reference. To account for this, a short voting freeze should apply until the second vote is submitted containing the votes within the active set, along with it's own vote, at the height of the initial vote.
 
 ## Enclave configuration
 
-A staking client should be configurable to prevent voting on inactive branches. This mechanism should use the client's known active set `N_active` along with a threshold vote `N_vote` and a threshold depth `N_depth` to determine whether or not to continue voting on a submitted branch. This configuration should take the form of a rule such that the client will only vote on a branch if it observes more than `N_vote` at `N_depth`. Practically, this represents the client from confirming that it has observed some probability of economic finality of the submitted branch at a depth where an additional vote would create a lockout for an undesirable amount of time if that branch turns out not to be live.
+A staking client should be configurable to prevent voting on inactive forks. This mechanism should use the client's known active set `N_active` along with a threshold vote `N_vote` and a threshold depth `N_depth` to determine whether or not to continue voting on a submitted fork. This configuration should take the form of a rule such that the client will only vote on a fork if it observes more than `N_vote` at `N_depth`. Practically, this represents the client from confirming that it has observed some probability of economic finality of the submitted fork at a depth where an additional vote would create a lockout for an undesirable amount of time if that fork turns out not to be live.
 
 ## Signing service
 
-The signing service consists of a a JSONRPC server, and a request processor. At startup, it starts the RPC server at a configured port and waits for client/validator requests. It expects the following type of requests.
+The signing service consists of a a JSON RPC server, and a request processor. At startup, it starts the RPC server at a configured port and waits for client/validator requests. It expects the following type of requests.
 1. Register a new validator node
     * The request contains validator's identity (public key)
     * The request is signed with validator's private key
