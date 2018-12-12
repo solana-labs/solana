@@ -10,7 +10,7 @@ use crate::ledger::Block;
 use crate::packet::{index_blobs, SharedBlobs};
 use crate::result::{Error, Result};
 use crate::service::Service;
-use crate::window::{SharedWindow, WindowIndex, WindowUtil};
+use crate::window::{SharedWindow, WindowIndex};
 use log::Level;
 use rayon::prelude::*;
 use solana_metrics::{influxdb, submit};
@@ -78,7 +78,7 @@ fn broadcast(
     let blobs_chunking = Instant::now();
     // We could receive more blobs than window slots so
     // break them up into window-sized chunks to process
-    let window_size = window.read().unwrap().window_size();
+    let window_size = window.read().unwrap().len() as u64;
     let blobs_chunked = blobs_vec.chunks(window_size as usize).map(|x| x.to_vec());
     let chunking_elapsed = duration_as_ms(&blobs_chunking.elapsed());
 

@@ -14,6 +14,7 @@ use crate::store_ledger_stage::StoreLedgerStage;
 use crate::streamer::BlobReceiver;
 use crate::thin_client::retry_get_balance;
 use crate::window;
+use crate::window::new_window;
 use crate::window_service::window_service;
 use rand::thread_rng;
 use rand::Rng;
@@ -172,6 +173,9 @@ impl Replicator {
         // todo: pull blobs off the retransmit_receiver and recycle them?
         let (retransmit_sender, retransmit_receiver) = channel();
 
+        let window = new_window(2 * 1024);
+        let shared_window = Arc::new(RwLock::new(window));
+
         let t_window = window_service(
             db_ledger,
             cluster_info.clone(),
@@ -185,6 +189,7 @@ impl Replicator {
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_pubkey,
             ))),
+            shared_window,
             done.clone(),
         );
 

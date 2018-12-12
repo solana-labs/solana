@@ -293,6 +293,7 @@ impl Fullnode {
                     .expect("Failed to clone retransmit socket"),
                 Some(ledger_path),
                 db_ledger.clone(),
+                shared_window.clone(),
             );
             let tpu_forwarder = TpuForwarder::new(
                 node.sockets
@@ -451,6 +452,7 @@ impl Fullnode {
                     .expect("Failed to clone retransmit socket"),
                 Some(&self.ledger_path),
                 self.db_ledger.clone(),
+                self.shared_window.clone(),
             );
             let tpu_forwarder = TpuForwarder::new(
                 self.tpu_sockets

@@ -9,6 +9,7 @@ use crate::entry::EntrySender;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::result::{Error, Result};
 use crate::streamer::{BlobReceiver, BlobSender};
+use crate::window::SharedWindow;
 use log::Level;
 use rand::{thread_rng, Rng};
 use solana_metrics::{influxdb, submit};
@@ -60,6 +61,7 @@ fn recv_window(
     r: &BlobReceiver,
     s: &EntrySender,
     retransmit: &BlobSender,
+    window: &SharedWindow,
     done: &Arc<AtomicBool>,
 ) -> Result<()> {
     let timer = Duration::from_millis(200);
@@ -76,6 +78,33 @@ fn recv_window(
             .add_field("count", influxdb::Value::Integer(dq.len() as i64))
             .to_owned(),
     );
+
+    let window_size = window.read().unwrap().len() as u64;
+
+    {
+        let mut win = window.write().unwrap();
+        for b in &dq {
+            let ix = b.read().unwrap().index().expect("blob index");
+            let pos = (ix % window_size) as usize;
+            if let Some(x) = win[pos].data.take() {
+                trace!(
+                    "{} popped {} at {}",
+                    id,
+                    x.read().unwrap().index().unwrap(),
+                    pos
+                );
+            }
+            if let Some(x) = win[pos].coding.take() {
+                trace!(
+                    "{} popped {} at {}",
+                    id,
+                    x.read().unwrap().index().unwrap(),
+                    pos
+                );
+            }
+            win[pos].data = Some(b.clone());
+        }
+    }
 
     retransmit_all_leader_blocks(&dq, leader_scheduler, retransmit)?;
 
@@ -137,6 +166,7 @@ pub fn window_service(
     retransmit: BlobSender,
     repair_socket: Arc<UdpSocket>,
     leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+    window: SharedWindow,
     done: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
     Builder::new()
@@ -157,6 +187,7 @@ pub fn window_service(
                     &r,
                     &s,
                     &retransmit,
+                    &window,
                     &done,
                 ) {
                     match e {
@@ -241,6 +272,7 @@ mod test {
     use crate::logger;
     use crate::packet::{make_consecutive_blobs, SharedBlob, PACKET_DATA_SIZE};
     use crate::streamer::{blob_receiver, responder};
+    use crate::window;
     use crate::window_service::{repair_backoff, window_service};
     use rocksdb::{Options, DB};
     use solana_sdk::hash::Hash;
@@ -285,6 +317,8 @@ mod test {
         let db_ledger = Arc::new(RwLock::new(
             DbLedger::open(&db_ledger_path).expect("Expected to be able to open database ledger"),
         ));
+        let window = window::new_window(2 * 1024);
+        let shared_window = Arc::new(RwLock::new(window));
         let t_window = window_service(
             db_ledger,
             subs,
@@ -296,6 +330,7 @@ mod test {
             s_retransmit,
             Arc::new(tn.sockets.repair),
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(me_id))),
+            shared_window,
             done,
         );
         let t_responder = {
@@ -355,6 +390,8 @@ mod test {
         let db_ledger = Arc::new(RwLock::new(
             DbLedger::open(&db_ledger_path).expect("Expected to be able to open database ledger"),
         ));
+        let window = window::new_window(2 * 1024);
+        let shared_window = Arc::new(RwLock::new(window));
         let t_window = window_service(
             db_ledger,
             subs.clone(),
@@ -366,6 +403,7 @@ mod test {
             s_retransmit,
             Arc::new(tn.sockets.repair),
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(me_id))),
+            shared_window,
             done,
         );
         let t_responder = {

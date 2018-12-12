@@ -23,6 +23,7 @@ use crate::replay_stage::{ReplayStage, ReplayStageReturnType};
 use crate::retransmit_stage::RetransmitStage;
 use crate::service::Service;
 use crate::storage_stage::StorageStage;
+use crate::window::SharedWindow;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Keypair;
 use std::net::UdpSocket;
@@ -71,6 +72,7 @@ impl Tvu {
         retransmit_socket: UdpSocket,
         ledger_path: Option<&str>,
         db_ledger: Arc<RwLock<DbLedger>>,
+        window: SharedWindow,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -93,6 +95,7 @@ impl Tvu {
             repair_socket,
             blob_fetch_receiver,
             bank.leader_scheduler.clone(),
+            &window,
         );
 
         let (replay_stage, ledger_entry_receiver) = ReplayStage::new(
@@ -269,6 +272,9 @@ pub mod tests {
         let db_ledger_path = get_tmp_ledger_path("test_replay");
         let db_ledger =
             DbLedger::open(&db_ledger_path).expect("Expected to successfully open ledger");
+        let window = window::new_window(2 * 1024);
+        let shared_window = Arc::new(RwLock::new(window));
+
         let tvu = Tvu::new(
             Arc::new(target1_keypair),
             vote_account_keypair,
@@ -281,6 +287,7 @@ pub mod tests {
             target1.sockets.retransmit,
             None,
             Arc::new(RwLock::new(db_ledger)),
+            shared_window,
         );
 
         let mut alice_ref_balance = starting_balance;
