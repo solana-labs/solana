@@ -16,10 +16,6 @@ name = "solana-bench-streamer"
 path = "src/bin/bench-streamer.rs"
 
 [[bin]]
-name = "solana-bench-tps"
-path = "src/bin/bench-tps.rs"
-
-[[bin]]
 required-features = ["chacha"]
 name = "solana-replicator"
 path = "src/bin/replicator.rs"

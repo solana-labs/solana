@@ -1,25 +1,13 @@
-#[macro_use]
-extern crate clap;
-
-#[macro_use]
-extern crate solana;
-
 use solana_metrics;
-
-use clap::{App, Arg};
 
 use rayon::prelude::*;
 use solana::client::mk_client;
-use solana::cluster_info::{ClusterInfo, NodeInfo};
-use solana::gossip_service::GossipService;
-use solana::logger;
-use solana::service::Service;
-use solana::signature::GenKeys;
-use solana::thin_client::{poll_gossip_for_leader, ThinClient};
-use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
+use solana::cluster_info::NodeInfo;
+use solana::thin_client::ThinClient;
+use solana_drone::drone::request_airdrop_transaction;
 use solana_metrics::influxdb;
 use solana_sdk::hash::Hash;
-use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::timestamp;
 use solana_sdk::timing::{duration_as_ms, duration_as_s};
@@ -31,16 +19,21 @@ use std::process::exit;
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
-use std::thread::Builder;
 use std::time::Duration;
 use std::time::Instant;
 
 pub struct NodeStats {
-    pub tps: f64, // Maximum TPS reported by this node
-    pub tx: u64,  // Total transactions reported by this node
+    /// Maximum TPS reported by this node
+    pub tps: f64,
+    /// Total transactions reported by this node
+    pub tx: u64,
 }
 
-fn metrics_submit_token_balance(token_balance: u64) {
+pub const MAX_SPENDS_PER_TX: usize = 4;
+
+pub type SharedTransactions = Arc<RwLock<VecDeque<Vec<(Transaction, u64)>>>>;
+
+pub fn metrics_submit_token_balance(token_balance: u64) {
     println!("Token balance: {}", token_balance);
     solana_metrics::submit(
         influxdb::Point::new("bench-tps")
@@ -50,7 +43,7 @@ fn metrics_submit_token_balance(token_balance: u64) {
     );
 }
 
-fn sample_tx_count(
+pub fn sample_tx_count(
     exit_signal: &Arc<AtomicBool>,
     maxes: &Arc<RwLock<Vec<(SocketAddr, NodeStats)>>>,
     first_tx_count: u64,
@@ -107,7 +100,7 @@ fn sample_tx_count(
 }
 
 /// Send loopback payment of 0 tokens and confirm the network processed it
-fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash, id: &Keypair) {
+pub fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash, id: &Keypair) {
     let transfer_start = Instant::now();
 
     let mut poll_count = 0;
@@ -174,8 +167,7 @@ fn send_barrier_transaction(barrier_client: &mut ThinClient, last_id: &mut Hash,
     }
 }
 
-type SharedTransactions = Arc<RwLock<VecDeque<Vec<(Transaction, u64)>>>>;
-fn generate_txs(
+pub fn generate_txs(
     shared_txs: &SharedTransactions,
     source: &[Keypair],
     dest: &[Keypair],
@@ -235,7 +227,7 @@ fn generate_txs(
     }
 }
 
-fn do_tx_transfers(
+pub fn do_tx_transfers(
     exit_signal: &Arc<AtomicBool>,
     shared_txs: &SharedTransactions,
     leader: &NodeInfo,
@@ -289,9 +281,7 @@ fn do_tx_transfers(
     }
 }
 
-const MAX_SPENDS_PER_TX: usize = 4;
-
-fn verify_funding_transfer(client: &mut ThinClient, tx: &Transaction, amount: u64) -> bool {
+pub fn verify_funding_transfer(client: &mut ThinClient, tx: &Transaction, amount: u64) -> bool {
     for a in &tx.account_keys[1..] {
         if client.get_balance(a).unwrap_or(0) >= amount {
             return true;
@@ -304,7 +294,7 @@ fn verify_funding_transfer(client: &mut ThinClient, tx: &Transaction, amount: u6
 /// fund the dests keys by spending all of the source keys into MAX_SPENDS_PER_TX
 /// on every iteration.  This allows us to replay the transfers because the source is either empty,
 /// or full
-fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], tokens: u64) {
+pub fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], tokens: u64) {
     let total = tokens * dests.len() as u64;
     let mut funded: Vec<(&Keypair, u64)> = vec![(source, total)];
     let mut notfunded: Vec<&Keypair> = dests.iter().collect();
@@ -397,7 +387,12 @@ fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], token
     }
 }
 
-fn airdrop_tokens(client: &mut ThinClient, drone_addr: &SocketAddr, id: &Keypair, tx_count: u64) {
+pub fn airdrop_tokens(
+    client: &mut ThinClient,
+    drone_addr: &SocketAddr,
+    id: &Keypair,
+    tx_count: u64,
+) {
     let starting_balance = client.poll_get_balance(&id.pubkey()).unwrap_or(0);
     metrics_submit_token_balance(starting_balance);
     println!("starting balance {}", starting_balance);
@@ -444,7 +439,7 @@ fn airdrop_tokens(client: &mut ThinClient, drone_addr: &SocketAddr, id: &Keypair
     }
 }
 
-fn compute_and_report_stats(
+pub fn compute_and_report_stats(
     maxes: &Arc<RwLock<Vec<(SocketAddr, NodeStats)>>>,
     sample_period: u64,
     tx_send_elapsed: &Duration,
@@ -511,371 +506,8 @@ fn compute_and_report_stats(
 // First transfer 3/4 of the tokens to the dest accounts
 // then ping-pong 1/4 of the tokens back to the other account
 // this leaves 1/4 token buffer in each account
-fn should_switch_directions(num_tokens_per_account: u64, i: u64) -> bool {
+pub fn should_switch_directions(num_tokens_per_account: u64, i: u64) -> bool {
     i % (num_tokens_per_account / 4) == 0 && (i >= (3 * num_tokens_per_account) / 4)
-}
-
-fn main() {
-    logger::setup();
-    solana_metrics::set_panic_hook("bench-tps");
-
-    let matches = App::new("solana-bench-tps")
-        .version(crate_version!())
-        .arg(
-            Arg::with_name("network")
-                .short("n")
-                .long("network")
-                .value_name("HOST:PORT")
-                .takes_value(true)
-                .help("Rendezvous with the network at this gossip entry point; defaults to 127.0.0.1:8001"),
-        )
-        .arg(
-            Arg::with_name("drone")
-                .short("d")
-                .long("drone")
-                .value_name("HOST:PORT")
-                .takes_value(true)
-                .help("Location of the drone; defaults to network:DRONE_PORT"),
-        )
-        .arg(
-            Arg::with_name("identity")
-                .short("i")
-                .long("identity")
-                .value_name("PATH")
-                .takes_value(true)
-                .help("File containing a client identity (keypair)"),
-        )
-        .arg(
-            Arg::with_name("num-nodes")
-                .short("N")
-                .long("num-nodes")
-                .value_name("NUM")
-                .takes_value(true)
-                .help("Wait for NUM nodes to converge"),
-        )
-        .arg(
-            Arg::with_name("reject-extra-nodes")
-                .long("reject-extra-nodes")
-                .help("Require exactly `num-nodes` on convergence. Appropriate only for internal networks"),
-        )
-        .arg(
-            Arg::with_name("threads")
-                .short("t")
-                .long("threads")
-                .value_name("NUM")
-                .takes_value(true)
-                .help("Number of threads"),
-        )
-        .arg(
-            Arg::with_name("duration")
-                .long("duration")
-                .value_name("SECS")
-                .takes_value(true)
-                .help("Seconds to run benchmark, then exit; default is forever"),
-        )
-        .arg(
-            Arg::with_name("converge-only")
-                .long("converge-only")
-                .help("Exit immediately after converging"),
-        )
-        .arg(
-            Arg::with_name("sustained")
-                .long("sustained")
-                .help("Use sustained performance mode vs. peak mode. This overlaps the tx generation with transfers."),
-        )
-        .arg(
-            Arg::with_name("tx_count")
-                .long("tx_count")
-                .value_name("NUM")
-                .takes_value(true)
-                .help("Number of transactions to send per batch")
-        )
-        .get_matches();
-
-    let network = if let Some(addr) = matches.value_of("network") {
-        addr.parse().unwrap_or_else(|e| {
-            eprintln!("failed to parse network: {}", e);
-            exit(1)
-        })
-    } else {
-        socketaddr!("127.0.0.1:8001")
-    };
-
-    let drone_addr = if let Some(addr) = matches.value_of("drone") {
-        addr.parse().unwrap_or_else(|e| {
-            eprintln!("failed to parse drone address: {}", e);
-            exit(1)
-        })
-    } else {
-        let mut addr = network;
-        addr.set_port(DRONE_PORT);
-        addr
-    };
-
-    let id = if matches.is_present("identity") {
-        read_keypair(matches.value_of("identity").unwrap()).expect("can't read client identity")
-    } else {
-        Keypair::new()
-    };
-
-    let threads = if let Some(t) = matches.value_of("threads") {
-        t.to_string().parse().expect("can't parse threads")
-    } else {
-        4usize
-    };
-
-    let num_nodes = if let Some(n) = matches.value_of("num-nodes") {
-        n.to_string().parse().expect("can't parse num-nodes")
-    } else {
-        1usize
-    };
-
-    let duration = if let Some(s) = matches.value_of("duration") {
-        Duration::new(s.to_string().parse().expect("can't parse duration"), 0)
-    } else {
-        Duration::new(std::u64::MAX, 0)
-    };
-
-    let tx_count = if let Some(s) = matches.value_of("tx_count") {
-        s.to_string().parse().expect("can't parse tx_count")
-    } else {
-        500_000
-    };
-
-    let sustained = matches.is_present("sustained");
-
-    println!("Looking for leader at {:?}", network);
-    let leader = poll_gossip_for_leader(network, None).expect("unable to find leader on network");
-
-    let exit_signal = Arc::new(AtomicBool::new(false));
-    let (nodes, leader, gossip_service) = converge(&leader, &exit_signal, num_nodes);
-
-    if nodes.len() < num_nodes {
-        println!(
-            "Error: Insufficient nodes discovered.  Expecting {} or more",
-            num_nodes
-        );
-        exit(1);
-    }
-    if matches.is_present("reject-extra-nodes") && nodes.len() > num_nodes {
-        println!(
-            "Error: Extra nodes discovered.  Expecting exactly {}",
-            num_nodes
-        );
-        exit(1);
-    }
-
-    if leader.is_none() {
-        println!("no leader");
-        exit(1);
-    }
-
-    if matches.is_present("converge-only") {
-        return;
-    }
-
-    let leader = leader.unwrap();
-
-    println!("leader RPC is at {} {}", leader.rpc, leader.id);
-    let mut client = mk_client(&leader);
-    let mut barrier_client = mk_client(&leader);
-
-    let mut seed = [0u8; 32];
-    seed.copy_from_slice(&id.public_key_bytes()[..32]);
-    let mut rnd = GenKeys::new(seed);
-
-    println!("Creating {} keypairs...", tx_count * 2);
-    let mut total_keys = 0;
-    let mut target = tx_count * 2;
-    while target > 0 {
-        total_keys += target;
-        target /= MAX_SPENDS_PER_TX;
-    }
-    let gen_keypairs = rnd.gen_n_keypairs(total_keys as u64);
-    let barrier_id = rnd.gen_n_keypairs(1).pop().unwrap();
-
-    println!("Get tokens...");
-    let num_tokens_per_account = 20;
-
-    // Sample the first keypair, see if it has tokens, if so then resume
-    // to avoid token loss
-    let keypair0_balance = client
-        .poll_get_balance(&gen_keypairs.last().unwrap().pubkey())
-        .unwrap_or(0);
-
-    if num_tokens_per_account > keypair0_balance {
-        let extra = num_tokens_per_account - keypair0_balance;
-        let total = extra * (gen_keypairs.len() as u64);
-        airdrop_tokens(&mut client, &drone_addr, &id, total);
-        println!("adding more tokens {}", extra);
-        fund_keys(&mut client, &id, &gen_keypairs, extra);
-    }
-    let start = gen_keypairs.len() - (tx_count * 2) as usize;
-    let keypairs = &gen_keypairs[start..];
-    airdrop_tokens(&mut barrier_client, &drone_addr, &barrier_id, 1);
-
-    println!("Get last ID...");
-    let mut last_id = client.get_last_id();
-    println!("Got last ID {:?}", last_id);
-
-    let first_tx_count = client.transaction_count();
-    println!("Initial transaction count {}", first_tx_count);
-
-    // Setup a thread per validator to sample every period
-    // collect the max transaction rate and total tx count seen
-    let maxes = Arc::new(RwLock::new(Vec::new()));
-    let sample_period = 1; // in seconds
-    println!("Sampling TPS every {} second...", sample_period);
-    let v_threads: Vec<_> = nodes
-        .into_iter()
-        .map(|v| {
-            let exit_signal = exit_signal.clone();
-            let maxes = maxes.clone();
-            Builder::new()
-                .name("solana-client-sample".to_string())
-                .spawn(move || {
-                    sample_tx_count(&exit_signal, &maxes, first_tx_count, &v, sample_period);
-                })
-                .unwrap()
-        })
-        .collect();
-
-    let shared_txs: SharedTransactions = Arc::new(RwLock::new(VecDeque::new()));
-
-    let shared_tx_active_thread_count = Arc::new(AtomicIsize::new(0));
-    let total_tx_sent_count = Arc::new(AtomicUsize::new(0));
-
-    let s_threads: Vec<_> = (0..threads)
-        .map(|_| {
-            let exit_signal = exit_signal.clone();
-            let shared_txs = shared_txs.clone();
-            let leader = leader.clone();
-            let shared_tx_active_thread_count = shared_tx_active_thread_count.clone();
-            let total_tx_sent_count = total_tx_sent_count.clone();
-            Builder::new()
-                .name("solana-client-sender".to_string())
-                .spawn(move || {
-                    do_tx_transfers(
-                        &exit_signal,
-                        &shared_txs,
-                        &leader,
-                        &shared_tx_active_thread_count,
-                        &total_tx_sent_count,
-                    );
-                })
-                .unwrap()
-        })
-        .collect();
-
-    // generate and send transactions for the specified duration
-    let start = Instant::now();
-    let mut reclaim_tokens_back_to_source_account = false;
-    let mut i = keypair0_balance;
-    while start.elapsed() < duration {
-        let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(0);
-        metrics_submit_token_balance(balance);
-
-        // ping-pong between source and destination accounts for each loop iteration
-        // this seems to be faster than trying to determine the balance of individual
-        // accounts
-        let len = tx_count as usize;
-        generate_txs(
-            &shared_txs,
-            &keypairs[..len],
-            &keypairs[len..],
-            threads,
-            reclaim_tokens_back_to_source_account,
-            &leader,
-        );
-        // In sustained mode overlap the transfers with generation
-        // this has higher average performance but lower peak performance
-        // in tested environments.
-        if !sustained {
-            while shared_tx_active_thread_count.load(Ordering::Relaxed) > 0 {
-                sleep(Duration::from_millis(100));
-            }
-        }
-        // It's not feasible (would take too much time) to confirm each of the `tx_count / 2`
-        // transactions sent by `generate_txs()` so instead send and confirm a single transaction
-        // to validate the network is still functional.
-        send_barrier_transaction(&mut barrier_client, &mut last_id, &barrier_id);
-
-        i += 1;
-        if should_switch_directions(num_tokens_per_account, i) {
-            reclaim_tokens_back_to_source_account = !reclaim_tokens_back_to_source_account;
-        }
-    }
-
-    // Stop the sampling threads so it will collect the stats
-    exit_signal.store(true, Ordering::Relaxed);
-
-    println!("Waiting for validator threads...");
-    for t in v_threads {
-        if let Err(err) = t.join() {
-            println!("  join() failed with: {:?}", err);
-        }
-    }
-
-    // join the tx send threads
-    println!("Waiting for transmit threads...");
-    for t in s_threads {
-        if let Err(err) = t.join() {
-            println!("  join() failed with: {:?}", err);
-        }
-    }
-
-    let balance = client.poll_get_balance(&id.pubkey()).unwrap_or(0);
-    metrics_submit_token_balance(balance);
-
-    compute_and_report_stats(
-        &maxes,
-        sample_period,
-        &start.elapsed(),
-        total_tx_sent_count.load(Ordering::Relaxed),
-    );
-
-    // join the cluster_info client threads
-    gossip_service.join().unwrap();
-}
-
-fn converge(
-    leader: &NodeInfo,
-    exit_signal: &Arc<AtomicBool>,
-    num_nodes: usize,
-) -> (Vec<NodeInfo>, Option<NodeInfo>, GossipService) {
-    //lets spy on the network
-    let (node, gossip_socket) = ClusterInfo::spy_node();
-    let mut spy_cluster_info = ClusterInfo::new(node);
-    spy_cluster_info.insert_info(leader.clone());
-    spy_cluster_info.set_leader(leader.id);
-    let spy_ref = Arc::new(RwLock::new(spy_cluster_info));
-    let gossip_service = GossipService::new(&spy_ref, None, gossip_socket, exit_signal.clone());
-    let mut v: Vec<NodeInfo> = vec![];
-    // wait for the network to converge, 30 seconds should be plenty
-    for _ in 0..30 {
-        {
-            let spy_ref = spy_ref.read().unwrap();
-
-            println!("{}", spy_ref.node_info_trace());
-
-            if spy_ref.leader_data().is_some() {
-                v = spy_ref.rpc_peers();
-                if v.len() >= num_nodes {
-                    println!("CONVERGED!");
-                    break;
-                } else {
-                    println!(
-                        "{} node(s) discovered (looking for {} or more)",
-                        v.len(),
-                        num_nodes
-                    );
-                }
-            }
-        }
-        sleep(Duration::new(1, 0));
-    }
-    let leader = spy_ref.read().unwrap().leader_data().cloned();
-    (v, leader, gossip_service)
 }
 
 #[cfg(test)]
