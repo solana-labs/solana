@@ -1,6 +1,6 @@
 # Fork Generation
 
-The goal of this RFC is to document how forks naturally occur as a consequence of [leader rotation](0004-leader-rotation.md).
+The chapter describes how forks naturally occur as a consequence of [leader rotation](leader-rotation.md).
 
 
 ## Overview
@@ -33,7 +33,7 @@ There are only two possible versions of the PoH during a voting slot: PoH with `
 
 Validators can ignore forks at other points (e.g. from the wrong leader), or slash the leader responsible for the fork.
 
-Validators vote based on a greedy choice to maximize their reward described in [forks selection](0008-fork-selection.md).
+Validators vote based on a greedy choice to maximize their reward described in [forks selection](fork-selection.md).
 
 ### Validator's View
 
@@ -41,20 +41,7 @@ Validators vote based on a greedy choice to maximize their reward described in [
 The diagram below represents a validator's view of the PoH stream with possible forks over time.  L1, L2, etc. are leader slot, and `E`s represent entries from that leader during that leader's slot.  The 'x's represent ticks only, and time flows downwards in the diagram.
 
 
-```
-                                                                validator action
-               +----+                                           ----------------
-         |     | L1 |                  E1
-         |     +----+            /             \                vote(E1)
-         |     | L2 |          E2                x
-         |     +----+        /    \           /     \           vote(E2)
-  time   |     | L3 |     E3        x        E3'      x
-         |     +----+    /  \     /   \     /  \     /  \       slash(E3)
-         |     | L4 |  x     x  E4     x   x    x   x    x
-         |     +----+  |     |  |      |   |    |   |    |      vote(E4)
-         v     | L5 |  xx   xx  xx    E5  xx   xx  xx   xx
-               +----+                                           hang on to E4 and E5 for more...
-```
+<img alt="Fork generation" src="img/fork-generation.svg" class="center"/>
 
 Note that an `E` appearing on 2 forks at the same slot is a slashable condition, so a validator observing `E3` and `E3'` can slash L3 and safely choose `x` for that slot.  Once a validator commits to a forks, other forks can be discarded below that tick count.  For any slot, validators need only consider a single "has entries" chain or a "ticks only" chain to be proposed by a leader.  But multiple virtual entries may overlap as they link back to the a previous slot.
 
