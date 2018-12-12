@@ -9,7 +9,9 @@ use ring::{rand, signature};
 use serde_json;
 use std::error;
 use std::fmt;
-use std::fs::File;
+use std::fs::{self, File};
+use std::io::Write;
+use std::path::Path;
 use untrusted::Input;
 
 pub type Keypair = Ed25519KeyPair;
@@ -93,4 +95,24 @@ pub fn read_keypair(path: &str) -> Result<Keypair, Box<error::Error>> {
     let pkcs8 = read_pkcs8(path)?;
     let keypair = Ed25519KeyPair::from_pkcs8(Input::from(&pkcs8))?;
     Ok(keypair)
+}
+
+pub fn gen_pkcs8() -> Result<Vec<u8>, Box<error::Error>> {
+    let rnd = rand::SystemRandom::new();
+    let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&rnd)?;
+    Ok(pkcs8_bytes.to_vec())
+}
+
+//pub fn gen_keypair_file(outfile: String) -> Result<String, Box<dyn error::Error>> {
+pub fn gen_keypair_file(outfile: String) -> Result<String, Box<error::Error>> {
+    let serialized = serde_json::to_string(&gen_pkcs8()?)?;
+
+    if outfile != "-" {
+        if let Some(outdir) = Path::new(&outfile).parent() {
+            fs::create_dir_all(outdir)?;
+        }
+        let mut f = File::create(outfile)?;
+        f.write_all(&serialized.clone().into_bytes())?;
+    }
+    Ok(serialized)
 }

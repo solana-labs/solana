@@ -6,8 +6,8 @@ extern crate solana;
 
 use clap::{App, Arg, ArgMatches, SubCommand};
 use solana::logger;
-use solana::wallet::{gen_keypair_file, parse_command, process_command, WalletConfig, WalletError};
-use solana_sdk::signature::{read_keypair, KeypairUtil};
+use solana::wallet::{parse_command, process_command, WalletConfig, WalletError};
+use solana_sdk::signature::{gen_keypair_file, read_keypair, KeypairUtil};
 use std::error;
 use std::net::SocketAddr;
 
