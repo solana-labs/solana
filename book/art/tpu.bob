@@ -6,7 +6,7 @@
              |                              |    v                  |
              |  .-------.  .-----------.  .-+-------.   .--------.  |  .------------.
  .---------. |  | Fetch |  | SigVerify |  | Banking |   | Ledger |  |  | Broadcast  |
- | Clients |--->| Stage |->| Stage     |->| Stage   |-->| Write  +---->| Stage      |
+ | Clients |--->| Stage |->| Stage     |->| Stage   |-->| Write  +---->| Service    |
  `---------` |  |       |  |           |  |         |   | Stage  |  |  |            |
              |  `-------`  `-----------`  `----+----`   `---+----`  |  `------------`
              |                                 |            |       |
