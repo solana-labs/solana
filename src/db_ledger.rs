@@ -7,11 +7,14 @@ use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
 use crate::result::{Error, Result};
 use bincode::{deserialize, serialize};
 use byteorder::{BigEndian, ByteOrder, ReadBytesExt};
-use rocksdb::{ColumnFamily, DBRawIterator, Options, WriteBatch, DB};
+use rocksdb::{
+    ColumnFamily, DBIterator, DBRawIterator, Direction, IteratorMode, Options, WriteBatch, DB,
+};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::borrow::Borrow;
+use std::cmp::max;
 use std::io;
 use std::path::Path;
 
@@ -80,7 +83,25 @@ pub trait LedgerColumnFamilyRaw {
     fn handle(&self, db: &DB) -> ColumnFamily;
 }
 
-#[derive(Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
+// The Meta column family
+pub struct LedgerMeta {
+    // The first slot that's still missing data
+    pub consumed_slot: u64,
+    // The index of the highest slot we've received data for
+    pub received_slot: u64,
+}
+
+impl LedgerMeta {
+    fn new() -> Self {
+        LedgerMeta {
+            consumed_slot: 0,
+            received_slot: 0,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 // The Meta column family
 pub struct SlotMeta {
     // The total number of consecutive blob starting from index 0
@@ -88,10 +109,10 @@ pub struct SlotMeta {
     pub consumed: u64,
     // The entry height of the highest blob received for this slot.
     pub received: u64,
-    // The slot the blob with index == "consumed" is in
-    pub consumed_slot: u64,
-    // The slot the blob with index == "received" is in
-    pub received_slot: u64,
+    // The tick height of the latest tick in this slot in the range [0..consumed]
+    pub consumed_tick_height: u64,
+    // The tick height that marks the end of this slot
+    pub max_tick_height: u64,
 }
 
 impl SlotMeta {
@@ -99,9 +120,13 @@ impl SlotMeta {
         SlotMeta {
             consumed: 0,
             received: 0,
-            consumed_slot: 0,
-            received_slot: 0,
+            consumed_tick_height: 0,
+            max_tick_height: 0,
         }
+    }
+
+    fn contains_everything(&self) -> bool {
+        self.consumed_tick_height == self.max_tick_height
     }
 }
 
@@ -113,6 +138,23 @@ impl MetaCf {
         let mut key = vec![0u8; 8];
         BigEndian::write_u64(&mut key[0..8], slot_height);
         key
+    }
+
+    pub fn get_slot_meta(&self, db: &DB, slot_height: u64) -> Result<Option<SlotMeta>> {
+        let key = Self::key(slot_height);
+        self.get(db, &key)
+    }
+
+    pub fn get_ledger_meta(&self, db: &DB) -> Result<Option<LedgerMeta>> {
+        let key = Self::key(LEDGER_META_SLOT_HEIGHT);
+        let data_bytes = db.get_cf(self.handle(db), &key)?;
+
+        if let Some(raw) = data_bytes {
+            let result: LedgerMeta = deserialize(&raw)?;
+            Ok(Some(result))
+        } else {
+            Ok(None)
+        }
     }
 }
 
@@ -167,6 +209,36 @@ impl DataCf {
         let mut rdr = io::Cursor::new(&key[8..16]);
         let index = rdr.read_u64::<BigEndian>()?;
         Ok(index)
+    }
+
+    pub fn get_slot_consecutive_blobs(
+        iterator: &mut DBIterator,
+        slot_height: u64,
+        start_index: u64,
+    ) -> Vec<Box<[u8]>> {
+        let key = Self::key(slot_height, start_index);
+        iterator.set_mode(IteratorMode::From(&key, Direction::Forward));
+        let mut expected_index = start_index;
+        let mut results = vec![];
+
+        for (key, value) in iterator.by_ref() {
+            let slot = Self::slot_height_from_key(&key)
+                .expect("Expect to be able to get slot height from key in database");
+            if slot != slot_height {
+                break;
+            }
+
+            let index = Self::index_from_key(&key)
+                .expect("Expect to be able to get index from key in database");
+            if index != expected_index {
+                break;
+            }
+
+            results.push(value);
+            expected_index += 1;
+        }
+
+        results
     }
 }
 
@@ -239,6 +311,7 @@ pub struct DbLedger {
 // slots, change functions where this is used to take slot height
 // as a variable argument
 pub const DEFAULT_SLOT_HEIGHT: u64 = 0;
+pub const LEDGER_META_SLOT_HEIGHT: u64 = std::u64::MAX;
 // Column family for metadata about a leader slot
 pub const META_CF: &str = "meta";
 // Column family for the data in a leader slot
@@ -329,86 +402,116 @@ impl DbLedger {
         self.write_shared_blobs(slot, shared_blobs)
     }
 
-    pub fn insert_data_blob(&self, key: &[u8], new_blob: &Blob) -> Result<Vec<Entry>> {
+    pub fn insert_data_blob(
+        &self,
+        key: &[u8],
+        new_blob: &Blob,
+        max_tick_height: u64,
+    ) -> Result<Vec<Entry>> {
         let slot_height = DataCf::slot_height_from_key(key)?;
-        let meta_key = MetaCf::key(DEFAULT_SLOT_HEIGHT);
 
-        let mut should_write_meta = false;
-
-        let mut meta = {
-            if let Some(meta) = self.db.get_cf(self.meta_cf.handle(&self.db), &meta_key)? {
-                deserialize(&meta)?
+        let (mut ledger_meta, old_ledger_meta) = {
+            if let Some(meta) = self.meta_cf.get_ledger_meta(&self.db)? {
+                (meta.clone(), Some(meta))
             } else {
-                should_write_meta = true;
-                SlotMeta::new()
+                (LedgerMeta::new(), None)
             }
         };
 
-        let mut index = DataCf::index_from_key(key)?;
+        let (mut slot_meta, old_slot_meta) = {
+            if let Some(meta) = self.meta_cf.get_slot_meta(&self.db, slot_height)? {
+                (meta.clone(), Some(meta))
+            } else {
+                let mut slot_meta = SlotMeta::new();
+                slot_meta.max_tick_height = max_tick_height;
+                (slot_meta, None)
+            }
+        };
+
+        let index = DataCf::index_from_key(key)?;
 
         // TODO: Handle if leader sends different blob for same index when the index > consumed
         // The old window implementation would just replace that index.
-        if index < meta.consumed {
+        if index < slot_meta.consumed {
             return Err(Error::DbLedgerError(DbLedgerError::BlobForIndexExists));
         }
 
         // Index is zero-indexed, while the "received" height starts from 1,
         // so received = index + 1 for the same blob.
-        if index >= meta.received {
-            meta.received = index + 1;
-            meta.received_slot = slot_height;
-            should_write_meta = true;
+        if index >= slot_meta.received {
+            slot_meta.received = index + 1;
+        }
+
+        if slot_height >= ledger_meta.received_slot {
+            ledger_meta.received_slot = slot_height;
         }
 
         let mut consumed_queue = vec![];
 
-        if meta.consumed == index {
+        if slot_meta.consumed == index {
             // Add the new blob to the consumed queue
             let serialized_entry_data =
                 &new_blob.data[BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + new_blob.size()?];
-            // Verify entries can actually be reconstructed
+            // Verify entry can actually be reconstructed
             let entry: Entry = deserialize(serialized_entry_data)
                 .expect("Blob made it past validation, so must be deserializable at this point");
-            should_write_meta = true;
-            meta.consumed += 1;
             consumed_queue.push(entry);
-            // Find the next consecutive block of blobs.
-            // TODO: account for consecutive blocks that
-            // span multiple slots
 
-            let mut current_slot = slot_height;
-            loop {
-                index += 1;
-                let key = DataCf::key(current_slot, index);
-                let blob_data = {
-                    if let Some(blob_data) = self.data_cf.get(&self.db, &key)? {
-                        blob_data
-                    } else if meta.consumed < meta.received {
-                        let key = DataCf::key(current_slot + 1, index);
-                        if let Some(blob_data) = self.data_cf.get(&self.db, &key)? {
-                            current_slot += 1;
-                            meta.consumed_slot = current_slot;
-                            blob_data
-                        } else {
-                            break;
-                        }
-                    } else {
+            // Find the next consecutive block of blobs.
+            let mut iter = self.db.iterator(IteratorMode::Start);
+            let consecutive_blobs =
+                DataCf::get_slot_consecutive_blobs(&mut iter, slot_height, index + 1);
+
+            // Increment consumed
+            slot_meta.consumed += consumed_queue.len() as u64;
+            let (entries, max_tick_height) = Self::deserialize_blobs(consecutive_blobs);
+            slot_meta.consumed_tick_height = max(slot_meta.consumed_tick_height, max_tick_height);
+            consumed_queue.extend(entries);
+
+            if slot_height == ledger_meta.consumed_slot {
+                let mut current_slot_index = slot_height;
+                let mut current_slot = slot_meta.clone();
+                loop {
+                    if !current_slot.contains_everything() {
                         break;
                     }
-                };
 
-                let serialized_entry_data = &blob_data[BLOB_HEADER_SIZE..];
-                let entry: Entry = deserialize(serialized_entry_data)
-                    .expect("Ledger should only contain well formed data");
-                consumed_queue.push(entry);
-                meta.consumed += 1;
+                    ledger_meta.consumed_slot += 1;
+
+                    if ledger_meta.consumed_slot == ledger_meta.received_slot {
+                        break;
+                    }
+
+                    current_slot_index = Self::find_next_slot(current_slot_index, &mut iter).expect("Just checked this was not the last slot, at least one more slot should exist");
+                    current_slot = self
+                        .meta_cf
+                        .get_slot_meta(&self.db, current_slot_index)?
+                        .expect("Just confirmed this slot existed in the line above!");
+                    let (entries, _) = Self::deserialize_blobs(DataCf::get_slot_consecutive_blobs(
+                        &mut iter,
+                        current_slot_index,
+                        0,
+                    ));
+                    consumed_queue.extend(entries);
+                }
             }
         }
 
         // Commit Step: Atomic write both the metadata and the data
         let mut batch = WriteBatch::default();
-        if should_write_meta {
-            batch.put_cf(self.meta_cf.handle(&self.db), &meta_key, &serialize(&meta)?)?;
+        if Some(&slot_meta) != old_slot_meta.as_ref() {
+            batch.put_cf(
+                self.meta_cf.handle(&self.db),
+                &MetaCf::key(slot_height),
+                &serialize(&slot_meta)?,
+            )?;
+        }
+        if Some(&ledger_meta) != old_ledger_meta.as_ref() {
+            batch.put_cf(
+                self.meta_cf.handle(&self.db),
+                &MetaCf::key(LEDGER_META_SLOT_HEIGHT),
+                &serialize(&ledger_meta)?,
+            )?;
         }
 
         let serialized_blob_data = &new_blob.data[..BLOB_HEADER_SIZE + new_blob.size()?];
@@ -486,6 +589,36 @@ impl DbLedger {
 
         db_iterator.seek_to_first();
         Ok(EntryIterator { db_iterator })
+    }
+
+    fn find_next_slot(slot_height: u64, iter: &mut DBIterator) -> Option<u64> {
+        let key = DataCf::key(slot_height + 1, 0);
+        iter.set_mode(IteratorMode::From(&key, Direction::Forward));
+        iter.next().map(|(key, _)| {
+            DataCf::slot_height_from_key(&key)
+                .expect("Expect to be able to parse slot height from key in database")
+        })
+    }
+
+    fn deserialize_blobs(blob_datas: Vec<Box<[u8]>>) -> (Vec<Entry>, u64) {
+        let mut max_tick_height = 0;
+        let entries = blob_datas
+            .iter()
+            .map(|blob_data| {
+                let serialized_entry_data = &blob_data[BLOB_HEADER_SIZE..];
+                let entry: Entry = deserialize(serialized_entry_data)
+                    .expect("Ledger should only contain well formed data");
+                if entry.is_tick() {
+                    // TODO figure out if we need to add one based on whether tick height
+                    // should be increased for tick entries
+                    max_tick_height = max(max_tick_height, entry.tick_height + 1);
+                }
+
+                entry
+            })
+            .collect();
+
+        (entries, max_tick_height)
     }
 }
 
