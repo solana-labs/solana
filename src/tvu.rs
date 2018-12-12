@@ -72,7 +72,7 @@ impl Tvu {
         retransmit_socket: UdpSocket,
         ledger_path: Option<&str>,
         db_ledger: Arc<RwLock<DbLedger>>,
-        window: SharedWindow,
+        window: &SharedWindow,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -95,7 +95,7 @@ impl Tvu {
             repair_socket,
             blob_fetch_receiver,
             bank.leader_scheduler.clone(),
-            &window,
+            window,
         );
 
         let (replay_stage, ledger_entry_receiver) = ReplayStage::new(
@@ -287,7 +287,7 @@ pub mod tests {
             target1.sockets.retransmit,
             None,
             Arc::new(RwLock::new(db_ledger)),
-            shared_window,
+            &shared_window,
         );
 
         let mut alice_ref_balance = starting_balance;
