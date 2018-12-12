@@ -21,7 +21,7 @@ pub enum FinalityError {
     NoValidSupermajority,
 }
 
-pub const COMPUTE_FINALITY_MS: u64 = 500;
+pub const COMPUTE_FINALITY_MS: u64 = 100;
 
 pub struct ComputeLeaderFinalityService {
     compute_finality_thread: JoinHandle<()>,

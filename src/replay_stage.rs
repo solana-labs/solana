@@ -25,7 +25,7 @@ use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
 
-pub const NUM_TICK_PER_VOTE: u64 = 8;
+pub const BLOCK_TICK_COUNT: u64 = 8;
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -126,7 +126,7 @@ impl ReplayStage {
                 break;
             }
 
-            if bank.tick_height() % NUM_TICK_PER_VOTE == 0 {
+            if bank.tick_height() % BLOCK_TICK_COUNT == 0 {
                 if let Some(sender) = vote_blob_sender {
                     send_validator_vote(bank, vote_account_keypair, &cluster_info, sender)?;
                 }
