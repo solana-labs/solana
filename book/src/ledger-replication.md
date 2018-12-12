@@ -15,7 +15,7 @@ proof and it also requires the validator to have the entirety of the encrypted
 data present for verification of every proof of every identity. So the space
 required to validate is `number_of_proofs * data_size`
 
-## Definitions
+## Terminology
 
 #### replicator
 
@@ -82,7 +82,7 @@ They have some stake that they have put up as collateral that ensures that
 their work is honest. If you can prove that a validator verified a fake PoRep,
 then the validators stake can be slashed.
 
-Replicators are specialized thin clients. They download a part of the ledger
+Replicators are specialized *light clients*. They download a part of the ledger
 and store it, and provide PoReps of storing the ledger. For each verified PoRep
 replicators earn a reward of sol from the mining pool.
 
