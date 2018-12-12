@@ -35,26 +35,34 @@ pub fn chacha_cbc_encrypt_file(
     in_path: &Path,
     out_path: &Path,
     ivec: &mut [u8; CHACHA_BLOCK_SIZE],
-) -> io::Result<()> {
+) -> io::Result<usize> {
     let mut in_file = BufReader::new(File::open(in_path).expect("Can't open ledger data file"));
     let mut out_file =
         BufWriter::new(File::create(out_path).expect("Can't open ledger encrypted data file"));
-    let mut buffer = [0; 4 * 1024];
-    let mut encrypted_buffer = [0; 4 * 1024];
+    const BUFFER_SIZE: usize = 4 * 1024;
+    let mut buffer = [0; BUFFER_SIZE];
+    let mut encrypted_buffer = [0; BUFFER_SIZE];
     let key = [0; CHACHA_KEY_SIZE];
+    let mut total_size = 0;
 
-    while let Ok(size) = in_file.read(&mut buffer) {
+    while let Ok(mut size) = in_file.read(&mut buffer) {
         debug!("read {} bytes", size);
         if size == 0 {
             break;
         }
+        if size < BUFFER_SIZE {
+            // We are on the last block, round to the nearest key_size
+            // boundary
+            size = (size + CHACHA_KEY_SIZE - 1) & !(CHACHA_KEY_SIZE - 1);
+        }
+        total_size += size;
         chacha_cbc_encrypt(&buffer[..size], &mut encrypted_buffer[..size], &key, ivec);
         if let Err(res) = out_file.write(&encrypted_buffer[..size]) {
             println!("Error writing file! {:?}", res);
             return Err(res);
         }
     }
-    Ok(())
+    Ok(total_size)
 }
 
 #[cfg(test)]
@@ -84,7 +92,10 @@ mod tests {
         let size = out_file.read_to_end(&mut buf).unwrap();
         assert_eq!(
             buf[..size],
-            [66, 54, 56, 212, 142, 110, 105, 158, 116, 82, 120, 53]
+            [
+                66, 54, 56, 212, 142, 110, 105, 158, 116, 82, 120, 53, 199, 78, 76, 95, 204, 148,
+                226, 94, 150, 182, 82, 197, 248, 146, 26, 24, 247, 117, 120, 197
+            ]
         );
         remove_file(in_path).unwrap();
         remove_file(out_path).unwrap();
