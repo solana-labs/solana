@@ -58,7 +58,7 @@ fn test_replicator_startup() {
         let validator = Fullnode::new(
             validator_node,
             &validator_ledger_path,
-            validator_keypair,
+            validator_keypair.clone(),
             vote_account_keypair,
             Some(leader_info.gossip),
             false,
@@ -70,9 +70,17 @@ fn test_replicator_startup() {
 
         let bob = Keypair::new();
 
+        for _ in 0..10 {
+            let last_id = leader_client.get_last_id();
+            leader_client
+                .transfer(1, &mint.keypair(), bob.pubkey(), &last_id)
+                .unwrap();
+            sleep(Duration::from_millis(200));
+        }
+
         let last_id = leader_client.get_last_id();
         leader_client
-            .transfer(1, &mint.keypair(), bob.pubkey(), &last_id)
+            .transfer(10, &mint.keypair(), validator_keypair.pubkey(), &last_id)
             .unwrap();
 
         let replicator_keypair = Keypair::new();
@@ -135,10 +143,14 @@ fn test_replicator_startup() {
         {
             use solana::rpc_request::{RpcClient, RpcRequest};
 
+            debug!(
+                "looking for pubkeys for entry: {}",
+                replicator.entry_height()
+            );
             let rpc_client = RpcClient::new_from_socket(validator_node_info.rpc);
             let mut non_zero_pubkeys = false;
             for _ in 0..30 {
-                let params = json!([0]);
+                let params = json!([replicator.entry_height()]);
                 let pubkeys = RpcRequest::GetStoragePubkeysForEntryHeight
                     .make_rpc_request(&rpc_client, 1, Some(params))
                     .unwrap();
