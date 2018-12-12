@@ -19,6 +19,10 @@
   - [Gossip Service](gossip.md)
   - [The Runtime](runtime.md)
 
+- [Proposed Architectural Changes](proposals.md)
+  - [Ledger Replication](ledger-replication.md)
+  - [Secure Enclave](enclave.md)
+
 ## Appendix
 
 - [Appendix](appendix.md)
