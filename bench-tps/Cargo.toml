@@ -2,19 +2,27 @@
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-bench-tps"
-version = "0.11.0"
+version = "0.1.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-homepage = "https://solana.com/"
+homepage = "http://solana.com/"
 
 [dependencies]
 clap = "2.32.0"
 rayon = "1.0.3"
-serde_json = "1.0.10"
-solana = { path = "..", version = "0.11.0" }
-solana-drone = { path = "../drone", version = "0.11.0" }
-solana-metrics = { path = "../metrics", version = "0.11.0" }
-solana-sdk = { path = "../sdk", version = "0.11.0" }
 
-[features]
-cuda = []
+[dependencies.solana]
+path = ".."
+version = "0.11.0"
+
+[dependencies.solana-sdk]
+path = "../sdk"
+version = "0.11.0"
+
+[dependencies.solana-metrics]
+path = "../metrics"
+version = "0.11.0"
+
+[dependencies.solana-drone]
+path = "../drone"
+version = "0.11.0"

@@ -41,12 +41,17 @@ if [[ -n $BUILDKITE_TAG && -n $TRIGGERED_BUILDKITE_TAG ]]; then
   fi
 fi
 
+<<<<<<< HEAD
 for crate in "${CRATES[@]}"; do
   if [[ ! -r $crate/Cargo.toml ]]; then
     echo "Error: $crate/Cargo.toml does not exist"
     exit 1
   fi
   echo "-- $crate"
+=======
+# shellcheck disable=2044 # Disable 'For loops over find output are fragile...'
+for Cargo_toml in {sdk,metrics,drone,bench-tps,programs/native/{budget,bpf_loader,lua_loader,native_loader,noop,system,vote},.}/Cargo.toml; do
+>>>>>>> Fix CI and related issues in bench-tps
   # TODO: Ensure the published version matches the contents of BUILDKITE_TAG
   (
     set -x
