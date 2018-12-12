@@ -22,7 +22,6 @@ use solana::poh_service::NUM_TICKS_PER_SECOND;
 use solana::result;
 use solana::service::Service;
 use solana::thin_client::{retry_get_balance, ThinClient};
-use solana::window::default_window;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
