@@ -10,7 +10,7 @@ use crate::ledger::Block;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
 use crate::service::Service;
-use crate::streamer::{responder, BlobSender};
+use crate::streamer::responder;
 use crate::vote_stage::send_validator_vote;
 use log::Level;
 use solana_metrics::{influxdb, submit};
@@ -60,8 +60,6 @@ impl ReplayStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window_receiver: &EntryReceiver,
         keypair: &Arc<Keypair>,
-        vote_account_keypair: &Arc<Keypair>,
-        vote_blob_sender: Option<&BlobSender>,
         ledger_entry_sender: &EntrySender,
         entry_height: &mut u64,
         last_entry_id: &mut Hash,
@@ -143,10 +141,6 @@ impl ReplayStage {
 
         *entry_height += entries_len;
         res?;
-        if let Some(sender) = vote_blob_sender {
-            send_validator_vote(bank, vote_account_keypair, &cluster_info, sender)?;
-        }
-
         Ok(())
     }
 
@@ -172,8 +166,7 @@ impl ReplayStage {
             .name("solana-replay-stage".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit);
-                let now = Instant::now();
-                let mut next_vote_secs = 1;
+                let mut last_vote = Instant::now();
                 let mut entry_height_ = entry_height;
                 let mut last_entry_id = last_entry_id;
                 loop {
@@ -193,21 +186,11 @@ impl ReplayStage {
                         ));
                     }
 
-                    // Only vote once a second.
-                    let vote_sender = if now.elapsed().as_secs() > next_vote_secs {
-                        next_vote_secs += 1;
-                        Some(&vote_blob_sender)
-                    } else {
-                        None
-                    };
-
                     match Self::process_entries(
                         &bank,
                         &cluster_info,
                         &window_receiver,
                         &keypair,
-                        &vote_account_keypair,
-                        vote_sender,
                         &ledger_entry_sender,
                         &mut entry_height_,
                         &mut last_entry_id,
@@ -215,7 +198,21 @@ impl ReplayStage {
                         Err(Error::RecvTimeoutError(RecvTimeoutError::Disconnected)) => break,
                         Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
                         Err(e) => error!("{:?}", e),
-                        Ok(()) => (),
+                        Ok(()) => {
+                            if duration_as_ms(&last_vote.elapsed()) < 1000 {
+                                continue;
+                            }
+                            last_vote = Instant::now();
+                            match send_validator_vote(
+                                &bank,
+                                &vote_account_keypair,
+                                &cluster_info,
+                                &vote_blob_sender,
+                            ) {
+                                Err(e) => error!("send_validator_vote failed {:?}", e),
+                                Ok(()) => (),
+                            }
+                        }
                     }
                 }
 
@@ -604,7 +601,6 @@ mod test {
         // Set up dummy node to host a ReplayStage
         let my_keypair = Keypair::new();
         let my_id = my_keypair.pubkey();
-        let vote_keypair = Keypair::new();
         let my_node = Node::new_localhost_with_pubkey(my_id);
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
@@ -639,8 +635,6 @@ mod test {
             &cluster_info_me,
             &entry_receiver,
             &Arc::new(my_keypair),
-            &Arc::new(vote_keypair),
-            None,
             &ledger_entry_sender,
             &mut entry_height,
             &mut last_entry_id,
@@ -665,8 +659,6 @@ mod test {
             &cluster_info_me,
             &entry_receiver,
             &Arc::new(Keypair::new()),
-            &Arc::new(Keypair::new()),
-            None,
             &ledger_entry_sender,
             &mut entry_height,
             &mut last_entry_id,
