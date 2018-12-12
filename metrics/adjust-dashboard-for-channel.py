@@ -67,7 +67,7 @@ else:
                                    {'allValue': None,
                                     'datasource': 'Solana Metrics (read-only)',
                                     'hide': 0,
-                                    'includeAll': False,
+                                    'includeAll': True,
                                     'label': 'HostID',
                                     'multi': False,
                                     'name': 'hostid',
