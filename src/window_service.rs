@@ -116,6 +116,8 @@ fn recv_window(
             let slot = b.read().unwrap().slot()?;
             let leader = leader_scheduler.get_leader_for_slot(slot);
             let mut pending_retransmits = false;
+            let mut consume_queue = consume_queue.clone();
+            let mut tick_height = tick_height.clone();
             if leader.is_some() {
                 window.write().unwrap().process_blob(
                     id,
@@ -123,21 +125,20 @@ fn recv_window(
                     pix,
                     &mut consume_queue,
                     &mut consumed,
-                    tick_height,
+                    &mut tick_height,
                     false,
                     &mut pending_retransmits,
                 );
             }
         }
 
-        let mut consume_q = consume_queue.clone();
         let _ = process_blob(
             leader_scheduler,
             db_ledger,
             &b,
             max_ix,
             pix,
-            &mut consume_q,
+            &mut consume_queue,
             tick_height,
             done,
         );
