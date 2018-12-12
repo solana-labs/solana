@@ -25,6 +25,9 @@ use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
 
+pub const NUM_TICK_PER_VOTE: u64 = 8;
+pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum ReplayStageReturnType {
     LeaderRotation(u64, u64, Hash),
@@ -71,6 +74,9 @@ impl ReplayStage {
         let mut entries = window_receiver.recv_timeout(timer)?;
         while let Ok(mut more) = window_receiver.try_recv() {
             entries.append(&mut more);
+            if entries.len() >= MAX_ENTRY_RECV_PER_ITER {
+                break;
+            }
         }
 
         submit(
@@ -119,6 +125,12 @@ impl ReplayStage {
                 // leader as the leader currently should not be publishing erroneous transactions
                 break;
             }
+
+            if bank.tick_height() % NUM_TICK_PER_VOTE == 0 {
+                if let Some(sender) = vote_blob_sender {
+                    send_validator_vote(bank, vote_account_keypair, &cluster_info, sender)?;
+                }
+            }
         }
 
         // If leader rotation happened, only write the entries up to leader rotation.
@@ -134,7 +146,6 @@ impl ReplayStage {
         );
 
         let entries_len = entries.len() as u64;
-        // TODO: move this to another stage?
         // TODO: In line with previous behavior, this will write all the entries even if
         // an error occurred processing one of the entries (causing the rest of the entries to
         // not be processed).
@@ -144,9 +155,10 @@ impl ReplayStage {
 
         *entry_height += entries_len;
         res?;
-        if let Some(sender) = vote_blob_sender {
-            send_validator_vote(bank, vote_account_keypair, &cluster_info, sender)?;
-        }
+        inc_new_counter_info!(
+            "replicate_stage-duration",
+            duration_as_ms(&now.elapsed()) as usize
+        );
 
         Ok(())
     }
@@ -173,8 +185,6 @@ impl ReplayStage {
             .name("solana-replay-stage".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit);
-                let now = Instant::now();
-                let mut next_vote_secs = 1;
                 let mut entry_height_ = entry_height;
                 let mut last_entry_id = last_entry_id;
                 loop {
@@ -194,21 +204,13 @@ impl ReplayStage {
                         ));
                     }
 
-                    // Only vote once a second.
-                    let vote_sender = if now.elapsed().as_secs() > next_vote_secs {
-                        next_vote_secs += 1;
-                        Some(&vote_blob_sender)
-                    } else {
-                        None
-                    };
-
                     match Self::process_entries(
                         &bank,
                         &cluster_info,
                         &window_receiver,
                         &keypair,
                         &vote_account_keypair,
-                        vote_sender,
+                        Some(&vote_blob_sender),
                         &ledger_entry_sender,
                         &mut entry_height_,
                         &mut last_entry_id,
