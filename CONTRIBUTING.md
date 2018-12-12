@@ -30,7 +30,7 @@ Rust coding conventions
 
 * For function and method names, use `<verb>_<subject>`. For unit tests, that verb should
   always be `test` and for benchmarks the verb should always be `bench`. Avoid namespacing
-  function names with some arbitrary word. Avoid abreviating words in function names.
+  function names with some arbitrary word. Avoid abbreviating words in function names.
 
 * As they say, "When in Rome, do as the Romans do." A good patch should acknowledge the coding
   conventions of the code that surrounds it, even in the case where that code has not yet been
@@ -43,31 +43,27 @@ Terminology
 Inventing new terms is allowed, but should only be done when the term is widely used and
 understood. Avoid introducing new 3-letter terms, which can be confused with 3-letter acronyms.
 
-Some terms we currently use regularly in the codebase:
-
-* fullnode: n. A fully participating network node.
-* hash: n. A SHA-256 Hash.
-* keypair: n. A Ed25519 key-pair, containing a public and private key.
-* pubkey: n. The public key of a Ed25519 key-pair.
-* sigverify: v. To verify a Ed25519 digital signature.
+[Terms currently in use](book/src/terminology.md)
 
 
 Proposing architectural changes
 ---
 
-Solana's architecture is described by a book generated from markdown files in the `src/` directory,
-currently maintained by @garious. To change the architecture, you'll need to at least propose a change
-with an RFC document, and create an issue to track its implementation. Here's the full process:
+Solana's architecture is described by a book generated from markdown files in
+the `book/src/` directory, maintained by an *editor* (currently @garious). To
+change the architecture, you'll need to at least propose a change the content
+under the [Proposed
+Changes](https://solana-labs.github.io/solana/proposals.html) chapter. Here's
+the full process:
 
-1. Propose to a change to the architecture by creating a PR that adds a markdown document called an RFC
-   (standing for "request for comments") to the directory `rfcs/`. Add at least the maintainer of the
-   markdown book as a reviewer.
-2. The PR being merged indicates your proposed change was accepted and that the Solana maintainers
-   support your plan of attack. Next, create an issue to track its implementation and create a PR
-   that updates the RFC with a link to the issue. This link allows anyone to quickly check the
-   implementation status of any RFC.
-3. Submit PRs that implement the RFC. Be sure to reference the issue created above in your PR description.
-   Feel free to update the RFC as the implementation reveals the need for tweaks to the architecture,
-   but if you do, be sure to add the maintainer of the markdown book as a reviewer to your PR.
-4. Once the implementation is complete, close the issue. Depending on the scope of the RFC, the maintainer
-   of markdown book may then create a separate ticket to integrate the RFC into the book.
+1. Propose to a change to the architecture by creating a PR that adds a
+   markdown document to the directory `book/src/` and references it from the
+   [table of contents](book/src/SUMMARY.md). Add the editor and any relevant
+   *maintainers* to the PR review.
+2. The PR being merged indicates your proposed change was accepted and that the
+   editor and maintainers support your plan of attack.
+3. Submit PRs that implement the proposal. When the implementation reveals the
+   need for tweaks to the architecture, be sure to update the proposal and have
+   that change reviewed by the same people as in step 1.
+4. Once the implementation is complete, the editor will then work to integrate
+   the document into the book.
