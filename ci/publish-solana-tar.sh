@@ -43,9 +43,8 @@ echo --- Creating tarball
     git rev-parse HEAD
   ) > solana-release/version.txt
 
-  cargo install --path drone --root solana-release
-  cargo install --path . --root solana-release
-  ./scripts/install-native-programs.sh solana-release/bin/deps/ release
+  scripts/cargo-install-all.sh --root solana-release
+  scripts/install-native-programs.sh solana-release/bin/deps/ release
 
   ./fetch-perf-libs.sh
   # shellcheck source=/dev/null
