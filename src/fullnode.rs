@@ -452,7 +452,6 @@ impl Fullnode {
             };
 
             let tvu = Tvu::new(
-                // self.keypair.clone(),
                 self.vote_account_keypair.clone(),
                 &self.bank,
                 entry_height,
