@@ -72,7 +72,7 @@ else:
                                     'multi': False,
                                     'name': 'hostid',
                                     'options': [],
-                                    'query': 'SELECT DISTINCT(\'host_id\') FROM \'$testnet\'.\'autogen\'.\'counter-bank-process_transactions-txs\' ',
+                                    'query': 'SELECT DISTINCT(\"host_id\") FROM \"$testnet\".\"autogen\".\"counter-bank-process_transactions-txs\" ',
                                     'refresh': 2,
                                     'regex': '',
                                     'sort': 1,
