@@ -6,8 +6,6 @@ use bincode::serialize;
 use bs58;
 use chrono::prelude::*;
 use clap::ArgMatches;
-use ring::rand::SystemRandom;
-use ring::signature::Ed25519KeyPair;
 use serde_json;
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
 use solana_sdk::bpf_loader;
@@ -19,10 +17,9 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
-use std::fs::{self, File};
-use std::io::{Read, Write};
+use std::fs::File;
+use std::io::Read;
 use std::net::{Ipv4Addr, SocketAddr};
-use std::path::Path;
 use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
@@ -662,21 +659,6 @@ pub fn read_leader(path: &str) -> Result<Config, WalletError> {
     })
 }
 
-pub fn gen_keypair_file(outfile: String) -> Result<String, Box<dyn error::Error>> {
-    let rnd = SystemRandom::new();
-    let pkcs8_bytes = Ed25519KeyPair::generate_pkcs8(&rnd)?;
-    let serialized = serde_json::to_string(&pkcs8_bytes.to_vec())?;
-
-    if outfile != "-" {
-        if let Some(outdir) = Path::new(&outfile).parent() {
-            fs::create_dir_all(outdir)?;
-        }
-        let mut f = File::create(outfile)?;
-        f.write_all(&serialized.clone().into_bytes())?;
-    }
-    Ok(serialized)
-}
-
 fn get_last_id(rpc_client: &RpcClient) -> Result<Hash, Box<dyn error::Error>> {
     let result = RpcRequest::GetLastId.make_rpc_request(rpc_client, 1, None)?;
     if result.as_str().is_none() {
@@ -833,8 +815,10 @@ mod tests {
     use clap::{App, Arg, SubCommand};
     use serde_json::Value;
     use solana_drone::drone::run_local_drone;
-    use solana_sdk::signature::{read_keypair, read_pkcs8, Keypair, KeypairUtil};
+    use solana_sdk::signature::{gen_keypair_file, read_keypair, read_pkcs8, Keypair, KeypairUtil};
+    use std::fs;
     use std::fs::remove_dir_all;
+    use std::path::Path;
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use std::thread::sleep;

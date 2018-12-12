@@ -5,13 +5,11 @@ use dirs;
 use serde_json;
 
 use clap::{App, Arg};
-use ring::rand::SystemRandom;
-use ring::signature::Ed25519KeyPair;
 use solana::cluster_info::FULLNODE_PORT_RANGE;
 use solana::fullnode::Config;
 use solana::logger;
 use solana::netutil::{get_ip_addr, get_public_ip_addr, parse_port_or_addr};
-use solana_sdk::signature::read_pkcs8;
+use solana_sdk::signature::{gen_pkcs8, read_pkcs8};
 use std::io;
 use std::net::SocketAddr;
 
@@ -73,12 +71,11 @@ fn main() {
     };
     let pkcs8 = read_pkcs8(id_path).expect("client keypair");
 
-    let rnd = SystemRandom::new();
-    let vote_account_pkcs8 = Ed25519KeyPair::generate_pkcs8(&rnd).unwrap();
+    let vote_account_pkcs8 = gen_pkcs8().unwrap();
 
     // we need all the receiving sockets to be bound within the expected
     // port range that we open on aws
-    let config = Config::new(&bind_addr, pkcs8, vote_account_pkcs8.to_vec());
+    let config = Config::new(&bind_addr, pkcs8, vote_account_pkcs8);
     let stdout = io::stdout();
     serde_json::to_writer(stdout, &config).expect("serialize");
 }

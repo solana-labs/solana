@@ -1,10 +1,9 @@
 //! The `mint` module is a library for generating the chain's genesis block.
 
 use crate::entry::Entry;
-use ring::rand::SystemRandom;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::signature::{gen_pkcs8, Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use untrusted::Input;
@@ -42,18 +41,12 @@ impl Mint {
         bootstrap_leader: Pubkey,
         bootstrap_leader_tokens: u64,
     ) -> Self {
-        let rnd = SystemRandom::new();
-        let pkcs8 = Keypair::generate_pkcs8(&rnd)
-            .expect("generate_pkcs8 in mint pub fn new")
-            .to_vec();
+        let pkcs8 = gen_pkcs8().expect("generate_pkcs8 in mint pub fn new");
         Self::new_with_pkcs8(tokens, pkcs8, bootstrap_leader, bootstrap_leader_tokens)
     }
 
     pub fn new(tokens: u64) -> Self {
-        let rnd = SystemRandom::new();
-        let pkcs8 = Keypair::generate_pkcs8(&rnd)
-            .expect("generate_pkcs8 in mint pub fn new")
-            .to_vec();
+        let pkcs8 = gen_pkcs8().expect("generate_pkcs8 in mint pub fn new");
         Self::new_with_pkcs8(tokens, pkcs8, Pubkey::default(), 0)
     }
 
