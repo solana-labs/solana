@@ -9,6 +9,7 @@ use crate::leader_scheduler::LeaderScheduler;
 use crate::packet::{SharedBlob, BLOB_HEADER_SIZE};
 use crate::result::Result;
 use crate::streamer::BlobSender;
+use crate::window::SharedWindow;
 use log::Level;
 use rocksdb::DBRawIterator;
 use solana_metrics::{influxdb, submit};

@@ -9,6 +9,8 @@ use crate::entry::EntrySender;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::result::{Error, Result};
 use crate::streamer::{BlobReceiver, BlobSender};
+use crate::window::WindowUtil;
+use crate::window::{new_window, SharedWindow};
 use log::Level;
 use rand::{thread_rng, Rng};
 use solana_metrics::{influxdb, submit};
@@ -61,6 +63,7 @@ fn recv_window(
     s: &EntrySender,
     retransmit: &BlobSender,
     done: &Arc<AtomicBool>,
+    window: SharedWindow,
 ) -> Result<()> {
     let timer = Duration::from_millis(200);
     let mut dq = r.recv_timeout(timer)?;
@@ -101,6 +104,31 @@ fn recv_window(
 
         trace!("{} window pix: {} size: {}", id, pix, meta_size);
 
+        let meta = {
+            db_ledger
+                .meta_cf
+                .get(&db_ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))
+        };
+
+        if let Ok(Some(meta)) = meta {
+            let received = meta.received;
+            let mut consumed = meta.consumed;
+            let slot = b.read().unwrap().slot()?;
+            let leader = leader_scheduler.get_leader_for_slot(slot);
+            let mut pending_retransmits = false;
+            if leader.is_some() {
+                window.write().unwrap().process_blob(
+                    id,
+                    b.clone(),
+                    pix,
+                    &mut consume_queue,
+                    &mut consumed,
+                    tick_height,
+                    false,
+                    &mut pending_retransmits,
+                );
+            }
+        }
         let _ = process_blob(
             leader_scheduler,
             db_ledger,
@@ -138,6 +166,7 @@ pub fn window_service(
     repair_socket: Arc<UdpSocket>,
     leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     done: Arc<AtomicBool>,
+    window: SharedWindow,
 ) -> JoinHandle<()> {
     Builder::new()
         .name("solana-window".to_string())
@@ -158,6 +187,7 @@ pub fn window_service(
                     &s,
                     &retransmit,
                     &done,
+                    window.clone(),
                 ) {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,

@@ -186,6 +186,7 @@ impl Replicator {
                 leader_pubkey,
             ))),
             done.clone(),
+            shared_window.clone(),
         );
 
         info!("window created, waiting for ledger download done");

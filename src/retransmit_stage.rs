@@ -9,6 +9,7 @@ use crate::leader_scheduler::LeaderScheduler;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::streamer::BlobReceiver;
+use crate::window::SharedWindow;
 use crate::window_service::window_service;
 use log::Level;
 use solana_metrics::{influxdb, submit};
@@ -91,6 +92,7 @@ impl RetransmitStage {
         repair_socket: Arc<UdpSocket>,
         fetch_stage_receiver: BlobReceiver,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+        window: SharedWindow,
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -110,6 +112,7 @@ impl RetransmitStage {
             repair_socket,
             leader_scheduler,
             done,
+            window.clone(),
         );
 
         let thread_hdls = vec![t_retransmit, t_window];
