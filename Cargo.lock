@@ -1763,6 +1763,7 @@ dependencies = [
  "solana-jsonrpc-macros 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-jsonrpc-pubsub 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-jsonrpc-ws-server 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-keygen 0.11.0",
  "solana-lualoader 0.11.0",
  "solana-metrics 0.11.0",
  "solana-native-loader 0.11.0",
@@ -1979,6 +1980,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-keygen"
+version = "0.11.0"
+dependencies = [
+ "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dirs 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-sdk 0.11.0",
+]
+
+[[package]]
 name = "solana-lualoader"
 version = "0.11.0"
 dependencies = [
@@ -2029,6 +2039,8 @@ dependencies = [
  "bs58 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dirs 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "generic-array 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "ring 0.13.5 (registry+https://github.com/rust-lang/crates.io-index)",

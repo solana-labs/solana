@@ -45,10 +45,6 @@ name = "solana-ledger-tool"
 path = "src/bin/ledger-tool.rs"
 
 [[bin]]
-name = "solana-keygen"
-path = "src/bin/keygen.rs"
-
-[[bin]]
 name = "solana-wallet"
 path = "src/bin/wallet.rs"
 
@@ -106,6 +102,7 @@ solana-jsonrpc-http-server = "0.4.0"
 solana-jsonrpc-macros = "0.4.0"
 solana-jsonrpc-pubsub = "0.4.0"
 solana-jsonrpc-ws-server = "0.4.0"
+solana-keygen = { path = "keygen", version = "0.11.0" }
 solana-lualoader = { path = "programs/native/lua_loader", version = "0.11.0" }
 solana-metrics = { path = "metrics", version = "0.11.0" }
 solana-native-loader = { path = "programs/native/native_loader", version = "0.11.0" }
@@ -145,6 +142,7 @@ name = "chacha"
 members = [
     ".",
     "drone",
+    "keygen",
     "metrics",
     "programs/bpf/rust/noop",
     "programs/native/bpf_loader",

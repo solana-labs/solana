@@ -12,6 +12,7 @@ cd "$(dirname "$0")/.."
 #
 CRATES=(
   sdk
+  keygen
   metrics
   drone
   programs/native/{budget,bpf_loader,lua_loader,native_loader,noop,system,vote}
