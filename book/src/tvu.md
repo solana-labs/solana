@@ -1,3 +1,64 @@
 # The Transaction Validation Unit
 
 <img alt="TVU Block Diagram" src="img/tvu.svg" class="center"/>
+
+## EntryTree
+
+A unified window and ledger allows a validator to record every blob it observes
+on the network, in any order, as long as the blob is consistent with the
+network's leader schedule.
+
+Blobs are moved to a fork-able key space the tuple of `leader slot` + `blob
+index` (within the slot).  This permits the skip-list structure of the Solana
+protocol to be stored in its entirety, without a-priori choosing which fork to
+follow, which Entries to persist or when to persist them.
+
+Repair requests for recent blobs are served out of RAM or recent files and out
+of deeper storage for less recent blobs, as implemented by the store backing
+EntryTree.
+
+### Functionalities of EntryTree
+
+1. Persistence: the EntryTree lives in the front of the nodes verification
+   pipeline, right behind network receive and signature verification.  If the
+   blob received is consistent with the leader schedule (i.e. was signed by the
+   leader for the indicated slot), it is immediately stored.
+2. Repair: repair is the same as window repair above, but able to serve any
+   blob that's been received. EntryTree stores blobs with signatures,
+   preserving the chain of origination.
+3. Forks: EntryTree supports random access of blobs, so can support a
+   validator's need to rollback and replay from a Bank checkpoint.
+4. Restart: with proper pruning/culling, the EntryTree can be replayed by
+   ordered enumeration of entries from slot 0.  The logic of the replay stage
+   (i.e. dealing with forks) will have to be used for the most recent entries in
+   the EntryTree.
+
+### Interfacing with Bank
+
+The bank exposes to replay stage:
+
+ 1. prev_id: which PoH chain it's working on as indicated by the id of the last
+    entry it processed
+ 2. tick_height: the ticks in the PoH chain currently being verified by this
+    bank
+ 3. votes: a stack of records that contain
+
+    1. prev_ids: what anything after this vote must chain to in PoH
+    2. tick height: the tick_height at which this vote was cast
+    3. lockout period: how long a chain must be observed to be in the ledger to
+       be able to be chained below this vote
+
+Replay stage uses EntryTree APIs to find the longest chain of entries it can
+hang off a previous vote.  If that chain of entries does not hang off the
+latest vote, the replay stage rolls back the bank to that vote and replays the
+chain from there.
+
+### Pruning EntryTree
+
+Once EntryTree entries are old enough, representing all the possible forks
+becomes less useful, perhaps even problematic for replay upon restart.  Once a
+validator's votes have reached max lockout, however, any EntryTree contents
+that are not on the PoH chain for that vote for can be pruned, expunged.
+
+Replicator nodes will be responsible for storing really old ledger contents,
+and validators need only persist their bank periodically.
