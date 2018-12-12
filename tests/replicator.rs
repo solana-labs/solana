@@ -19,7 +19,6 @@ use std::time::Duration;
 
 #[test]
 fn test_replicator_startup() {
-    logger::setup();
     info!("starting replicator test");
     let replicator_ledger_path = &get_tmp_ledger_path("replicator_test_replicator_ledger");
 
