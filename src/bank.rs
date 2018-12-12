@@ -197,7 +197,7 @@ pub struct Accounts {
     // TODO: implement values() or something? take this back to private
     //  from the voting/leader/finality code
     //  issue #1701
-    pub accounts: HashMap<Pubkey, Account>,
+    accounts: HashMap<Pubkey, Account>,
 
     /// The number of transactions the bank has processed without error since the
     /// start of the ledger.
@@ -208,6 +208,11 @@ pub struct Accounts {
 }
 
 impl Accounts {
+    /// Returns a read-only iterator over all known accounts
+    pub fn account_values(&self) -> std::collections::hash_map::Values<Pubkey, Account> {
+        self.accounts.values()
+    }
+
     fn load(&self, pubkey: &Pubkey) -> Option<&Account> {
         if let Some(account) = self.accounts.get(pubkey) {
             return Some(account);

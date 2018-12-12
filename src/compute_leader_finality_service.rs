@@ -43,8 +43,7 @@ impl ComputeLeaderFinalityService {
             // process_transaction(), case VoteInstruction::RegisterAccount), this will be more accurate.
             // See github issue 1654.
             bank_accounts
-                .accounts
-                .values()
+                .account_values()
                 .filter_map(|account| {
                     // Filter out any accounts that don't belong to the VoteProgram
                     // by returning None

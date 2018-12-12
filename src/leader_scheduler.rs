@@ -322,8 +322,7 @@ impl LeaderScheduler {
 
             // TODO: iterate through checkpoints, too
             accounts
-                .accounts
-                .values()
+                .account_values()
                 .filter_map(|account| {
                     if vote_program::check_id(&account.owner) {
                         if let Ok(vote_state) = VoteProgram::deserialize(&account.userdata) {
