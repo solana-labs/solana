@@ -794,50 +794,6 @@ mod tests {
     }
 
     #[test]
-    fn test_insert_data_blobs_slots() {
-        let num_blobs = 10;
-        let entries = make_tiny_test_entries(num_blobs);
-        let shared_blobs = entries.to_blobs();
-        let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
-        let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
-
-        let ledger_path = get_tmp_ledger_path("test_insert_data_blobs_slots");
-        let ledger = DbLedger::open(&ledger_path).unwrap();
-
-        // Insert last blob into next slot
-        let result = ledger
-            .insert_data_blob(
-                &DataCf::key(DEFAULT_SLOT_HEIGHT + 1, (num_blobs - 1) as u64),
-                blobs.last().unwrap(),
-            )
-            .unwrap();
-        assert_eq!(result.len(), 0);
-
-        // Insert blobs into first slot, check for consecutive blobs
-        for i in (0..num_blobs - 1).rev() {
-            let result = ledger
-                .insert_data_blob(&DataCf::key(DEFAULT_SLOT_HEIGHT, i as u64), blobs[i])
-                .unwrap();
-            let meta = ledger
-                .meta_cf
-                .get(&ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))
-                .unwrap()
-                .expect("Expected metadata object to exist");
-            if i != 0 {
-                assert_eq!(result.len(), 0);
-                assert!(meta.consumed == 0 && meta.received == num_blobs as u64);
-            } else {
-                assert_eq!(result, entries);
-                assert!(meta.consumed == num_blobs as u64 && meta.received == num_blobs as u64);
-            }
-        }
-
-        // Destroying database without closing it first is undefined behavior
-        drop(ledger);
-        DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
-    }
-
-    #[test]
     pub fn test_iteration_order() {
         let slot = 0;
         // Create RocksDb ledger

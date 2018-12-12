@@ -13,7 +13,6 @@ use crate::service::Service;
 use crate::store_ledger_stage::StoreLedgerStage;
 use crate::streamer::BlobReceiver;
 use crate::thin_client::retry_get_balance;
-use crate::window;
 use crate::window_service::window_service;
 use rand::thread_rng;
 use rand::Rng;
@@ -96,9 +95,6 @@ impl Replicator {
 
         let entry_height = 0;
         let max_entry_height = 1;
-
-        const REPLICATOR_WINDOW_SIZE: usize = 32 * 1024;
-        let window = window::new_window(REPLICATOR_WINDOW_SIZE);
 
         info!("Replicator: id: {}", keypair.pubkey());
         info!("Creating cluster info....");

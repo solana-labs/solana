@@ -20,7 +20,6 @@ use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
 use crate::crds_value::{CrdsValue, CrdsValueLabel, LeaderId};
 use crate::db_ledger::{DbLedger, LedgerColumnFamily, MetaCf, DEFAULT_SLOT_HEIGHT};
-use crate::ledger::LedgerWindow;
 use crate::netutil::{bind_in_range, bind_to, find_available_port_in_range, multi_bind_in_range};
 use crate::packet::{to_blob, Blob, SharedBlob, BLOB_SIZE};
 use crate::result::Result;
@@ -676,7 +675,6 @@ impl ClusterInfo {
         from_addr: &SocketAddr,
         db_ledger: Option<&Arc<RwLock<DbLedger>>>,
         me: &NodeInfo,
-        leader_id: Pubkey,
         ix: u64,
     ) -> Vec<SharedBlob> {
         if let Some(db_ledger) = db_ledger {
@@ -853,7 +851,6 @@ impl ClusterInfo {
         }
 
         me.write().unwrap().insert_info(from.clone());
-        let leader_id = me.read().unwrap().leader_id();
         let my_info = me.read().unwrap().my_data().clone();
         inc_new_counter_info!("cluster_info-window-request-recv", 1);
         trace!(
@@ -862,7 +859,7 @@ impl ClusterInfo {
             from.id,
             ix,
         );
-        let res = Self::run_window_request(&from, &from_addr, db_ledger, &my_info, leader_id, ix);
+        let res = Self::run_window_request(&from, &from_addr, db_ledger, &my_info, ix);
         report_time_spent(
             "RequestWindowIndex",
             &now.elapsed(),
@@ -1110,15 +1107,12 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 mod tests {
     use super::*;
     use crate::crds_value::CrdsValueLabel;
-    use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
-    use crate::entry::Entry;
-    use crate::ledger::{get_tmp_ledger_path, LedgerWindow, LedgerWriter};
+    use crate::db_ledger::DbLedger;
+    use crate::ledger::get_tmp_ledger_path;
     use crate::logger;
+    use crate::packet::BLOB_HEADER_SIZE;
     use crate::result::Error;
-    use packet::{Blob, BLOB_HEADER_SIZE};
-    use solana_sdk::hash::{hash, Hash};
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use std::fs::remove_dir_all;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::{Arc, RwLock};
 
@@ -1226,15 +1220,8 @@ mod tests {
                 socketaddr!("127.0.0.1:1239"),
                 0,
             );
-            let leader_id = me.id;
-            let rv = ClusterInfo::run_window_request(
-                &me,
-                &socketaddr_any!(),
-                Some(&db_ledger),
-                &me,
-                leader_id,
-                0,
-            );
+            let rv =
+                ClusterInfo::run_window_request(&me, &socketaddr_any!(), Some(&db_ledger), &me, 0);
             assert!(rv.is_empty());
             let data_size = 1;
             let blob = SharedBlob::default();
@@ -1253,14 +1240,8 @@ mod tests {
                     .expect("Expect successful ledger write");
             }
 
-            let rv = ClusterInfo::run_window_request(
-                &me,
-                &socketaddr_any!(),
-                Some(&db_ledger),
-                &me,
-                leader_id,
-                1,
-            );
+            let rv =
+                ClusterInfo::run_window_request(&me, &socketaddr_any!(), Some(&db_ledger), &me, 1);
             assert!(!rv.is_empty());
             let v = rv[0].clone();
             assert_eq!(v.read().unwrap().index().unwrap(), 1);
