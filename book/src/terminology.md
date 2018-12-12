@@ -19,8 +19,8 @@ A fraction of a [block](#block); the smallest unit sent between
 #### block
 
 A contiguous set of [entries](#entry) on the ledger covered by a [vote](#ledger-vote).
-The length of a block is network hyper parameter, specified in [ticks](#tick).
-Also called [voting period](#voting-period).
+The duration of a block is some number of [ticks](#tick), configured via the
+[control plane](#control-plane). Also called [voting period](#voting-period).
 
 #### bootstrap leader
 
@@ -226,9 +226,9 @@ The role of a [fullnode](#fullnode) when it is validating the
 
 #### vote
 
-See [ledger vote](#ledger-vote)
+See [ledger vote](#ledger-vote).
 
 #### voting period
 
-See [block](#block)
+The duration of a [block](#block).
 
