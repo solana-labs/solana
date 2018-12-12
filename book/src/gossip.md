@@ -37,14 +37,12 @@ Upon receiving a push message, a node examines the message for:
 1. Duplication: if the message has been seen before, the node responds with
    `PushMessagePrune` and drops the message
 
-2. New information: if the message is new the node
-
-   a. Stores the new information and updates its version
-
-   b. Stores the message in `pushed_once` (used for detecting duplicates,
-purged after `PUSH_MSG_TIMEOUT * 5` ms)
-
-   c. Retransmits the messages to its own push peers
+2. New data: if the message is new to the node
+   * Stores the new information with an updated version in its cluster info and
+     purges any previous older value
+   * Stores the message in `pushed_once` (used for detecting duplicates,
+     purged after `PUSH_MSG_TIMEOUT * 5` ms)
+   * Retransmits the messages to its own push peers
 
 3. Expiration: nodes drop push messages that are older than `PUSH_MSG_TIMEOUT`
 
@@ -66,6 +64,16 @@ that represents things it already has.  A node receiving a pull message
 iterates over its values and constructs a pull response of things that miss the
 filter and would fit in a message.
 
-A node constructs the pull Bloom filter by iterating over the values it
-currently has.
+A node constructs the pull Bloom filter by iterating over current values and
+recently purged values.
 
+A node handles items in a pull response the same way it handles new data in a
+push message.
+
+
+## Purging
+
+Nodes retain prior versions of values (those updated by a pull or push) and
+expired values (those older than `GOSSIP_PULL_CRDS_TIMEOUT_MS`) in
+`purged_values` (things I recently had).  Nodes purge `purged_values` that are
+older than `5 * GOSSIP_PULL_CRDS_TIMEOUT_MS`.
