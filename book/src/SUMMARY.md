@@ -5,6 +5,7 @@
 - [Terminology](terminology.md)
 
 - [Getting Started](getting-started.md)
+  - [Example: Web Wallet](webwallet.md)
 
 - [Programming Model](programs.md)
   - [Example: Tic-Tac-Toe](tictactoe.md)
