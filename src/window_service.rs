@@ -14,7 +14,7 @@ use rand::{thread_rng, Rng};
 use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::mpsc::RecvTimeoutError;
@@ -52,9 +52,9 @@ fn repair_backoff(last: &mut u64, times: &mut usize, consumed: u64) -> bool {
 
 #[allow(clippy::too_many_arguments)]
 fn recv_window(
-    db_ledger: &mut DbLedger,
+    db_ledger: &Arc<RwLock<DbLedger>>,
     id: &Pubkey,
-    leader_scheduler: &LeaderScheduler,
+    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     tick_height: &mut u64,
     max_ix: u64,
     r: &BlobReceiver,
@@ -149,9 +149,9 @@ pub fn window_service(
             trace!("{}: RECV_WINDOW started", id);
             loop {
                 if let Err(e) = recv_window(
-                    db_ledger.write().unwrap().borrow_mut(),
+                    &db_ledger,
                     &id,
-                    leader_scheduler.read().unwrap().borrow(),
+                    &leader_scheduler,
                     &mut tick_height_,
                     max_entry_height,
                     &r,
@@ -207,7 +207,6 @@ pub fn window_service(
                     trace!("{} let's repair! times = {}", id, times);
 
                     let reqs = repair(
-                        DEFAULT_SLOT_HEIGHT,
                         db_ledger.read().unwrap().borrow(),
                         &cluster_info,
                         &id,
