@@ -1,7 +1,7 @@
 # Signing using Secure Enclave
 
 This document defines the security mechanism of signing keys used by the
-network nodes. Every node contains an asymmetric key that's used for signing
+fullnodes. Every node contains an asymmetric key that's used for signing
 and verifying the votes. The node signs the vote transactions using its private
 key. Other entities can verify the signature using the node's public key.
 
@@ -57,7 +57,7 @@ means
 ## Ancestor Verification
 
 This is alternate, albeit, less certain approach to verifying voting fork.
-1. The validator maintains an active set of nodes in the network
+1. The validator maintains an active set of nodes in the cluster
 2. It observes the votes from the active set in the last voting period
 3. It stores the ancestor/last_tick at which each node voted
 4. It sends new vote request to vote-signing service
@@ -71,7 +71,7 @@ and the vote ancestor matches with majority of the nodes
 The premise is that the validator can be spoofed at most once to vote on
 incorrect data. If someone hijacks the validator and submits a vote request for
 bogus data, that vote will not be included in the PoH (as it'll be rejected by
-the network). The next time the validator sends a request to sign the vote, the
+the cluster). The next time the validator sends a request to sign the vote, the
 signing service will detect that validator's last vote is missing (as part of
 #5 above).
 
@@ -134,9 +134,9 @@ simply carry the keypair in the process memory.
 ## Validator voting
 
 A validator node, at startup, creates a new vote account and registers it with
-the network. This is done by submitting a new "vote register" transaction. The
+the cluster. This is done by submitting a new "vote register" transaction. The
 transaction contains validator's keypair, it's vote signing public key, and
-some additional information. The other nodes on the network process this
+some additional information. The other nodes on the cluster process this
 transaction and include the new validator in the active set.
 
 Subsequently, the validator submits a "new vote" transaction on a voting event.
@@ -155,11 +155,11 @@ The validator node will be configured with Signing service's network endpoint
 At startup, the validator will call Signing service using JSON RPC to register
 itself. The RPC call will return the voting public key for the validator node.
 The validator will create a new "vote register" transaction including this
-public key in it, and submit it to the network.
+public key in it, and submit it to the cluster.
 
 ### Collect votes for last period
 
-The validator will look up the votes submitted by all the nodes in the network
+The validator will look up the votes submitted by all the nodes in the cluster
 for the last voting period. This information will be submitted to signing
 service with new vote signing request.
 
