@@ -1,7 +1,7 @@
 Initial Proof of Stake (PoS) (i.e. using in-protocol asset, SOL, to provide secure consensus) design ideas outlined here. Solana will implement a proof of stake reward/security scheme for node validators on the network. The purpose is threefold:
 
 - Align validator incentives with that of the greater network through skin-in-the-game deposits at risk
-- Avoid 'nothing at stake' branch voting issues by implementing slashing rules aimed at promoting branch convergence
+- Avoid 'nothing at stake' fork voting issues by implementing slashing rules aimed at promoting fork convergence
 - Provide an avenue for validator rewards provided as a function of validator participation in the network.
 
 While many of the details of the specific implementation are currently under consideration and are expected to come into focus through specific modeling studies and parameter exploration on the Solana testnet, we outline here our current thinking on the main components of the PoS system. Much of this thinking is based on the current status of Casper FFG, with optimizations and specific attributes to be modified as is allowed by Solana's Proof of History (PoH) blockchain data structure.
@@ -43,7 +43,7 @@ I.e. Each vote has an associated lockout time (PoH duration) that represents a d
 
 Lockout<sub>i</sub>(PoH<sub>i</sub>, PoH<sub>j</sub>) = PoH<sub>j</sub> + K * exp((PoH<sub>j</sub> - PoH<sub>i</sub>) / K)
 
-Where PoH<sub>i</sub> is the height of the vote that the lockout is to be applied to and PoH<sub>j</sub> is the height of the current vote on the same branch. If the validator submits a vote on a different PoH branch on any PoH<sub>k</sub> where k > j > i and PoH<sub>k</sub> < Lockout(PoH<sub>i</sub>, PoH<sub>j</sub>), then a portion of that validator's stake is at risk of being slashed.
+Where PoH<sub>i</sub> is the height of the vote that the lockout is to be applied to and PoH<sub>j</sub> is the height of the current vote on the same fork. If the validator submits a vote on a different PoH fork on any PoH<sub>k</sub> where k > j > i and PoH<sub>k</sub> < Lockout(PoH<sub>i</sub>, PoH<sub>j</sub>), then a portion of that validator's stake is at risk of being slashed.
 
 In addition to the functional form lockout described above, early implementation may be a numerical approximation based on a First In, First Out (FIFO) data structure and the following logic:
 - FIFO queue holding 32 votes per active validator
@@ -56,7 +56,7 @@ In addition to the functional form lockout described above, early implementation
 It is likely that a reward will be offered as a % of the slashed amount to any node that submits proof of this slashing condition being violated to the PoH.
 
 #### Partial Slashing
-In the schema described so far, when a validator votes on a given PoH stream, they are committing themselves to that branch for a time determined by the vote lockout. An open question is whether validators will be hesitant to begin voting on an available branch if the penalties are perceived too harsh for an honest mistake or flipped bit.
+In the schema described so far, when a validator votes on a given PoH stream, they are committing themselves to that fork for a time determined by the vote lockout. An open question is whether validators will be hesitant to begin voting on an available fork if the penalties are perceived too harsh for an honest mistake or flipped bit.
 
 One way to address this concern would be a partial slashing design that results in a slashable amount as a function of either:
 
