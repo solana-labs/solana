@@ -1,4 +1,4 @@
-# The Gossip Service
+# Gossip Service
 
 The Gossip Service acts as a gateway to nodes in the control plane. Fullnodes
 use the service to ensure information is available to all other nodes in a cluster.
