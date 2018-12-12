@@ -95,7 +95,7 @@ impl Tvu {
             repair_socket,
             blob_fetch_receiver,
             bank.leader_scheduler.clone(),
-            window,
+            window.clone(),
         );
 
         let (replay_stage, ledger_entry_receiver) = ReplayStage::new(

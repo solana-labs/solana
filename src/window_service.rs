@@ -113,23 +113,19 @@ fn recv_window(
         if let Ok(Some(meta)) = meta {
             let received = meta.received;
             let mut consumed = meta.consumed;
-            let slot = b.read().unwrap().slot()?;
-            let leader = leader_scheduler.get_leader_for_slot(slot);
             let mut pending_retransmits = false;
             let mut consume_queue = consume_queue.clone();
             let mut tick_height = tick_height.clone();
-            if leader.is_some() {
-                window.write().unwrap().process_blob(
-                    id,
-                    b.clone(),
-                    pix,
-                    &mut consume_queue,
-                    &mut consumed,
-                    &mut tick_height,
-                    false,
-                    &mut pending_retransmits,
-                );
-            }
+            window.write().unwrap().process_blob(
+                id,
+                b.clone(),
+                pix,
+                &mut consume_queue,
+                &mut consumed,
+                &mut tick_height,
+                false,
+                &mut pending_retransmits,
+            );
         }
 
         let _ = process_blob(
