@@ -7,7 +7,6 @@ use solana::db_ledger::DbLedger;
 use solana::fullnode::Fullnode;
 use solana::leader_scheduler::LeaderScheduler;
 use solana::ledger::{create_tmp_genesis, get_tmp_ledger_path, read_ledger};
-use solana::logger;
 use solana::replicator::Replicator;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
