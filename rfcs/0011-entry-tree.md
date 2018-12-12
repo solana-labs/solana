@@ -1,7 +1,6 @@
-bg
 # Unified Window and Ledger
 
-This RFC describes a change to ledger and window to support Solana's [consensus](0002-consensus.md) algorithm.
+This RFC describes a change to ledger and window to support Solana's [fork generation](0002-fork-generation.md) behavior.
 
 ## Current Design
 
@@ -34,7 +33,7 @@ Because the blob signatures are stripped before being stored by the ledger, repa
 
 #### Rollback and checkpoint, switching forks, separate functions
 
-The window and the ledger can't handle replay of alternate forks.  Once a Blob has passed through the window, it's in the past.  The replicate stage of a validator will need to roll back to a previous checkpoint and decode an alternate set of Blobs to the Bank.  The separated and one-way nature of window and ledger makes this hard.
+The window and the ledger can't handle replay of alternate forks.  Once a Blob has passed through the window, it's in the past.  The replay stage of a validator will need to roll back to a previous checkpoint and decode an alternate set of Blobs to the Bank.  The separated and one-way nature of window and ledger makes this hard.
 
 ## New Design
 
@@ -51,20 +50,21 @@ Repair requests for recent blobs are served out of RAM or recent files and out o
 1. Persistence: the EntryTree lives in the front of the nodes verification pipeline, right behind network receive and signature verification.  If the blob received is consistent with the leader schedule (i.e. was signed by the leader for the indicated slot), it is immediately stored.
 2. Repair: repair is the same as window repair above, but able to serve any blob that's been received. EntryTree stores blobs with signatures, preserving the chain of origination.
 3. Forks: EntryTree supports random access of blobs, so can support a validator's need to rollback and replay from a Bank checkpoint.
-4. Restart: with proper pruning/culling, the EntryTree can be replayed by ordered enumeration of entries from slot 0.  The logic of the replicate_stage (i.e. dealing with branches) will have to be used for the most recent entries in the EntryTree.
+4. Restart: with proper pruning/culling, the EntryTree can be replayed by ordered enumeration of entries from slot 0.  The logic of the replay stage (i.e. dealing with forks) will have to be used for the most recent entries in the EntryTree.
 
 ### Interfacing with Bank
 
-The bank exposes to replicate_stage:
+The bank exposes to replay stage:
 
  1. prev_id: which PoH chain it's working on as indicated by the id of the last entry it processed
  2. tick_height: the ticks in the PoH chain currently being verified by this bank
  3. votes: a stack of records that contain
-     a. prev_ids: what anything after this vote must chain to in PoH
-     b. tick height: the tick_height at which this vote was cast
-     c. lockout period: how long a chain must be observed to be in the ledger to be able to be chained below this vote
+ 
+    1. prev_ids: what anything after this vote must chain to in PoH
+    2. tick height: the tick_height at which this vote was cast
+    3. lockout period: how long a chain must be observed to be in the ledger to be able to be chained below this vote
 
-Replicate_stage (TODO better name) uses EntryTreer APIs to find the longest chain of entries it can hang off a previous vote.  If that chain of entries does not hang off the latest vote, the replicate stage rolls back the bank to that vote and replays the chain from there.
+Replay stage uses EntryTree APIs to find the longest chain of entries it can hang off a previous vote.  If that chain of entries does not hang off the latest vote, the replay stage rolls back the bank to that vote and replays the chain from there.
 
 ### Pruning EntryTree
 
