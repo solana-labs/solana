@@ -7,4 +7,5 @@ cd "$(dirname "$0")/.."
 
 set -x
 cargo install --path drone "$@"
+cargo install --path keygen "$@"
 cargo install --path . "$@"

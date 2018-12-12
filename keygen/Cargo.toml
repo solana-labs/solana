@@ -1,0 +1,17 @@
+[package]
+name = "solana-keygen"
+version = "0.11.0"
+description = "Solana key generation utility"
+authors = ["Solana Maintainers <maintainers@solana.com>"]
+repository = "https://github.com/solana-labs/solana"
+license = "Apache-2.0"
+
+[dependencies]
+dirs = "1.0.2"
+clap = "2.31"
+solana-sdk = { path = "../sdk", version = "0.11.0" }
+
+[[bin]]
+name = "solana-keygen"
+path = "src/keygen.rs"
+

@@ -44,7 +44,7 @@ elif [[ -n $USE_SNAP ]]; then # Use the Linux Snap binaries
     declare program="$1"
     printf "solana.%s" "$program"
   }
-elif [[ -n $USE_INSTALL ]]; then # Assume |cargo install| was run
+elif [[ -n $USE_INSTALL ]]; then # Assume |./scripts/cargo-install-all.sh| was run
   solana_program() {
     declare program="$1"
     printf "solana-%s" "$program"
@@ -57,8 +57,9 @@ else
       program=${BASH_REMATCH[1]}
       features="--features=cuda"
     fi
-    if [[ "$program" = drone ]]; then
-      maybe_package="--package solana-drone"
+
+    if [[ -r "$(dirname "${BASH_SOURCE[0]}")"/../"$program"/Cargo.toml ]]; then
+      maybe_package="--package solana-$program"
     fi
     if [[ -n $NDEBUG ]]; then
       maybe_release=--release
