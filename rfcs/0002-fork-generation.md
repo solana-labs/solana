@@ -1,11 +1,11 @@
 # Fork Generation
 
-The goal of this RFC is to define how Solana generates forks.
+The goal of this RFC is to document how forks naturally occur as a consequence of [leader rotation](0004-leader-rotation.md).
 
 
-## Basic Design Idea
+## Overview
 
-Nodes take turns being leader and generating the PoH that encodes state changes.  The network can tolerate loss of connection to any leader by synthesizing what the leader ***would have generated*** had it been connected but not ingesting any state changes.  The possible number of forks is thereby limited to a "there/not-there" skip list of forks that may arise on leader rotation slot boundaries.  At any given slot, only a single leader's transactions will be accepted.
+Nodes take turns being leader and generating the PoH that encodes state changes.  The network can tolerate loss of connection to any leader by synthesizing what the leader ***would*** have generated had it been connected but not ingesting any state changes.  The possible number of forks is thereby limited to a "there/not-there" skip list of forks that may arise on leader rotation slot boundaries.  At any given slot, only a single leader's transactions will be accepted.
 
 ## Message Flow
 
@@ -14,14 +14,14 @@ Nodes take turns being leader and generating the PoH that encodes state changes.
 3. Leader executes valid transactions updating its state.
 4. Leader packages transactions into entries based off its current PoH slot.
 5. Leader transmits the entries to validator nodes (in signed blobs)
-    a. The PoH stream includes ticks; empty entries that indicate liveness of the leader and the passage of time on the network.
-    b. A leader's stream begins with the tick entries necessary complete the PoH back to the leaders most recently observed prior leader slot.
+   1. The PoH stream includes ticks; empty entries that indicate liveness of the leader and the passage of time on the network.
+   2. A leader's stream begins with the tick entries necessary complete the PoH back to the leaders most recently observed prior leader slot.
 6. Validators retransmit entries to peers in their set and to further downstream nodes.
 7. Validators validate the transactions and execute them on their state.
 8. Validators compute the hash of the state.
 9. At specific times, i.e. specific PoH tick counts, validators transmit votes to the leader.
-    a. Votes are signatures of the hash of the computed state at that PoH tick count
-    b. Votes are also propagated via gossip
+   1. Votes are signatures of the hash of the computed state at that PoH tick count
+   2. Votes are also propagated via gossip
 10. Leader executes the votes as any other transaction and broadcasts them to the network
 11. Validators observe their votes and all the votes from the network.
 
@@ -33,7 +33,7 @@ There are only two possible versions of the PoH during a voting slot: PoH with `
 
 Validators can ignore forks at other points (e.g. from the wrong leader), or slash the leader responsible for the fork.
 
-Validators vote based on a greedy choice to maximze their reward described in [forks selection](rfcs/0008-fork-selection.md).
+Validators vote based on a greedy choice to maximize their reward described in [forks selection](0008-fork-selection.md).
 
 ### Validator's View
 
