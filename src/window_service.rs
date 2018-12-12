@@ -116,12 +116,13 @@ fn recv_window(
             let slot = b.read().unwrap().slot()?;
             let leader = leader_scheduler.get_leader_for_slot(slot);
             let mut pending_retransmits = false;
+            let mut consume_q = consume_queue.clone();
             if leader.is_some() {
                 window.write().unwrap().process_blob(
                     id,
                     b.clone(),
                     pix,
-                    &mut consume_queue,
+                    &mut consume_q,
                     &mut consumed,
                     tick_height,
                     false,
