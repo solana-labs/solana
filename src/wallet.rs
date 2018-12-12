@@ -6,7 +6,6 @@ use bincode::serialize;
 use bs58;
 use chrono::prelude::*;
 use clap::ArgMatches;
-use elf;
 use ring::rand::SystemRandom;
 use ring::signature::Ed25519KeyPair;
 use serde_json;
@@ -21,7 +20,7 @@ use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use std::fs::{self, File};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::Path;
 use std::str::FromStr;
@@ -29,7 +28,6 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::{error, fmt, mem};
 
-const PLATFORM_SECTION_C: &str = ".text.entrypoint";
 const USERDATA_CHUNK_SIZE: usize = 256;
 
 #[derive(Debug, PartialEq)]
@@ -411,23 +409,22 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
             }
 
             let last_id = get_last_id(&rpc_client)?;
-            let program = Keypair::new();
-            let program_userdata = elf::File::open_path(program_location)
-                .map_err(|_| {
-                    WalletError::DynamicProgramError("Could not parse program file".to_string())
-                })?
-                .get_section(PLATFORM_SECTION_C)
-                .ok_or_else(|| {
-                    WalletError::DynamicProgramError(
-                        "Could not find entrypoint in program file".to_string(),
-                    )
-                })?
-                .data
-                .clone();
+            let program_id = Keypair::new();
+            let mut file = File::open(program_location).map_err(|err| {
+                WalletError::DynamicProgramError(
+                    format!("Unable to open program file: {}", err).to_string(),
+                )
+            })?;
+            let mut program_userdata = Vec::new();
+            file.read_to_end(&mut program_userdata).map_err(|err| {
+                WalletError::DynamicProgramError(
+                    format!("Unable to read program file: {}", err).to_string(),
+                )
+            })?;
 
             let mut tx = Transaction::system_create(
                 &config.id,
-                program.pubkey(),
+                program_id.pubkey(),
                 last_id,
                 1,
                 program_userdata.len() as u64,
@@ -441,14 +438,14 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
             let mut offset = 0;
             for chunk in program_userdata.chunks(USERDATA_CHUNK_SIZE) {
                 let mut tx = Transaction::loader_write(
-                    &program,
+                    &program_id,
                     bpf_loader::id(),
                     offset,
                     chunk.to_vec(),
                     last_id,
                     0,
                 );
-                send_and_confirm_tx(&rpc_client, &mut tx, &program).map_err(|_| {
+                send_and_confirm_tx(&rpc_client, &mut tx, &program_id).map_err(|_| {
                     WalletError::DynamicProgramError(format!(
                         "Program write failed at offset {:?}",
                         offset
@@ -458,18 +455,18 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
             }
 
             let last_id = get_last_id(&rpc_client)?;
-            let mut tx = Transaction::loader_finalize(&program, bpf_loader::id(), last_id, 0);
-            send_and_confirm_tx(&rpc_client, &mut tx, &program).map_err(|_| {
+            let mut tx = Transaction::loader_finalize(&program_id, bpf_loader::id(), last_id, 0);
+            send_and_confirm_tx(&rpc_client, &mut tx, &program_id).map_err(|_| {
                 WalletError::DynamicProgramError("Program finalize transaction failed".to_string())
             })?;
 
-            let mut tx = Transaction::system_spawn(&program, last_id, 0);
-            send_and_confirm_tx(&rpc_client, &mut tx, &program).map_err(|_| {
+            let mut tx = Transaction::system_spawn(&program_id, last_id, 0);
+            send_and_confirm_tx(&rpc_client, &mut tx, &program_id).map_err(|_| {
                 WalletError::DynamicProgramError("Program spawn failed".to_string())
             })?;
 
             Ok(json!({
-                "programId": format!("{}", program.pubkey()),
+                "programId": format!("{}", program_id.pubkey()),
             })
             .to_string())
         }
