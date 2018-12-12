@@ -194,9 +194,7 @@ impl Checkpoint for LastIds {
 
 #[derive(Default)]
 pub struct Accounts {
-    // TODO: implement values() or something? take this back to private
-    //  from the voting/leader/finality code
-    //  issue #1701
+    /// Mapping of known public keys/IDs to accounts
     accounts: HashMap<Pubkey, Account>,
 
     /// The number of transactions the bank has processed without error since the
