@@ -63,7 +63,24 @@ else:
                                    'tags': [],
                                    'tagsQuery': '',
                                    'type': 'query',
-                                   'useTags': False}]
+                                   'useTags': False},
+                                   {'allValue': None,
+                                    'datasource': 'Solana Metrics (read-only)',
+                                    'hide': 0,
+                                    'includeAll': False,
+                                    'label': 'HostID',
+                                    'multi': False,
+                                    'name': 'hostid',
+                                    'options': [],
+                                    'query': 'SELECT DISTINCT(\"host_id\") FROM \"$testnet\".\"autogen\".\"counter-bank-process_transactions-txs\" ',
+                                    'refresh': 2,
+                                    'regex': '',
+                                    'sort': 1,
+                                    'tagValuesQuery': '',
+                                    'tags': [],
+                                    'tagsQuery': '',
+                                    'type': 'query',
+                                    'useTags': False}]
 
 with open(dashboard_json, 'w') as write_file:
     json.dump(data, write_file, indent=2)
