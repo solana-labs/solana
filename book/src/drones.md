@@ -1,47 +1,20 @@
-# Drone 1.0: A Signing Service
+# Creating Signing Services with Drones
 
-The goal of this RFC is to define a microservice called a *drone*, which acts
-as custodian of a user's private key. In its simplest form, it can be used to
+This chapter defines an off-chain service called a *drone*, which acts as
+custodian of a user's private key. In its simplest form, it can be used to
 create *airdrop* transactions, a token transfer from the drone's account to a
 client's account.
 
-## Background
-
-At the time of this writing, Solana contains an undocumented microservice
-called a drone. A client sends that drone a request for tokens and it then
-interacts with the Solana cluster directly to put the airdrop transaction on
-the ledger.  Once confirmed, the drone returns its signature so that a client
-may also confirm the transaction.
-
-The intent of the current design was that it be used by clients wanting to
-test-drive the Solana testnet. We did not intend for it to be used in mainnet,
-but recently we found variations of it are generally useful and so offer an
-updated design. Specifically, we have found that program owners may want to
-publish a drone such that potential program users may instantiate their
-programs without first owning any tokens. The program owner can use the
-existing drone to enable these users, but the approach is unsatisfying for a
-number of reasons:
-
-1. Once the client has tokens to instantiate the program, the client may choose
-   to simply keep them.
-2. Instantiating a program requires two transaction fees - one for the airdrop
-   and one to instantiate the program.
-3. The drone uses its own resources to interact with the Solana cluster
-   directly.  This artificially limits the number of users it can serve and
-   opens the drone to DoS attacks.
-
-
 ## Signing Service
 
-To solve the problems described above, the drone shall be reduced to a simple
-signing service. It shall listen for requests to sign *transaction data*.  Once
-received, the drone should validate the request however it see fit. To
-implement the existing drone, for example, it may only accept transaction data
-with a `SystemProgram::Move` instruction transferring only up to a certain
-amount of tokens. If the drone accepts the transaction, it shall return an
-`Ok(Signature)` where `Signature` is a signature of the transaction data using
-the drone's private key. If it rejects the transaction data, it should return a
-`DroneError` describing why.
+A drone is a simple signing service. It listens for requests to sign
+*transaction data*.  Once received, the drone validates the request however it
+sees fit. It may, for example, only accept transaction data with a
+`SystemInstruction::Move` instruction transferring only up to a certain amount
+of tokens. If the drone accepts the transaction, it returns an `Ok(Signature)`
+where `Signature` is a signature of the transaction data using the drone's
+private key. If it rejects the transaction data, it returns a `DroneError`
+describing why.
 
 
 ## Examples
@@ -67,8 +40,8 @@ airdrop to distribute its tokens to millions of users over just a few seconds.
 That drone cannot spend resources interacting with the Solana cluster. Instead,
 the drone should only verify the client is unique and human, and then return
 the signature. It may also want to listen to the Solana cluster for recent
-entry IDs to support client retries and to ensure the airdrop is targeting
-the desired cluster.
+entry IDs to support client retries and to ensure the airdrop is targeting the
+desired cluster.
 
 
 ## Attack vectors
@@ -81,7 +54,7 @@ reference a recent one.
 
 Note: to listen for new entry IDs assumes the drone is either a fullnode or a
 *light* client. At the time of this writing, light clients have not been
-implemented and no Solana RFC describes them. This document assumes one of the
+implemented and no proposal describes them. This document assumes one of the
 following approaches be taken:
 
 1. Define and implement a light client
