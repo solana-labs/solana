@@ -74,7 +74,7 @@ returns are proportional to the inverse square root of the total deposits and
 initial annual rates are estimated as:
 
 | Deposit Size | Annual Validator Interest |
-|-------------=|--------------------------=|
+|-------------:|--------------------------:|
 | 2.5M ETH     | 10.12%                    |
 | 10M ETH      | 5.00%                     |
 | 20M ETH      | 3.52%                     |
