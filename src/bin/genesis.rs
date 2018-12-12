@@ -5,6 +5,7 @@ extern crate clap;
 use serde_json;
 
 use clap::{App, Arg};
+use solana::db_ledger::genesis;
 use solana::ledger::LedgerWriter;
 use solana::mint::Mint;
 use solana_sdk::signature::{read_keypair, KeypairUtil};
@@ -79,9 +80,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     );
 
     // Write the ledger entries
+    let entries = mint.create_entries();
+
     let ledger_path = matches.value_of("ledger").unwrap();
     let mut ledger_writer = LedgerWriter::open(&ledger_path, true)?;
-    ledger_writer.write_entries(&mint.create_entries())?;
+    ledger_writer.write_entries(&entries)?;
+
+    genesis(&ledger_path, &leader_keypair, &entries)?;
 
     Ok(())
 }

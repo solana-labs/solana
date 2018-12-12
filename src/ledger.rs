@@ -20,7 +20,6 @@ use std::fs::{copy, create_dir_all, remove_dir_all, File, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};
 use std::mem::size_of;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::Path;
 
 //
@@ -407,7 +406,7 @@ impl LedgerWriter {
         I: IntoIterator<Item = &'a Entry>,
     {
         for entry in entries {
-            self.write_entry_noflush(&entry)?;
+            self.write_entry_noflush(entry)?;
         }
         self.index.flush()?;
         self.data.flush()?;
@@ -452,7 +451,6 @@ pub trait Block {
     /// Verifies the hashes and counts of a slice of transactions are all consistent.
     fn verify(&self, start_hash: &Hash) -> bool;
     fn to_blobs(&self) -> Vec<SharedBlob>;
-    fn to_blobs_with_id(&self, id: Pubkey, start_id: u64, addr: &SocketAddr) -> Vec<SharedBlob>;
     fn votes(&self) -> Vec<(Pubkey, Vote, Hash)>;
 }
 
@@ -480,16 +478,8 @@ impl Block for [Entry] {
         })
     }
 
-    fn to_blobs_with_id(&self, id: Pubkey, start_idx: u64, addr: &SocketAddr) -> Vec<SharedBlob> {
-        self.iter()
-            .enumerate()
-            .map(|(i, entry)| entry.to_blob(Some(start_idx + i as u64), Some(id), Some(&addr)))
-            .collect()
-    }
-
     fn to_blobs(&self) -> Vec<SharedBlob> {
-        let default_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
-        self.to_blobs_with_id(Pubkey::default(), 0, &default_addr)
+        self.iter().map(|entry| entry.to_blob()).collect()
     }
 
     fn votes(&self) -> Vec<(Pubkey, Vote, Hash)> {
@@ -703,6 +693,28 @@ pub fn make_large_test_entries(num_entries: usize) -> Vec<Entry> {
     let txs = vec![tx; num_txs];
     let entry = next_entries(&one, 1, txs)[0].clone();
     vec![entry; num_entries]
+}
+
+#[cfg(test)]
+pub fn make_consecutive_blobs(
+    id: &Pubkey,
+    num_blobs_to_make: u64,
+    start_height: u64,
+    start_hash: Hash,
+    addr: &std::net::SocketAddr,
+) -> Vec<SharedBlob> {
+    let entries = create_ticks(num_blobs_to_make as usize, start_hash);
+
+    let blobs = entries.to_blobs();
+    let mut index = start_height;
+    for blob in &blobs {
+        let mut blob = blob.write().unwrap();
+        blob.set_index(index).unwrap();
+        blob.set_id(id).unwrap();
+        blob.meta.set_addr(addr);
+        index += 1;
+    }
+    blobs
 }
 
 #[cfg(test)]

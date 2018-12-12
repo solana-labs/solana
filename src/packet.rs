@@ -1,17 +1,11 @@
 //! The `packet` module defines data structures and methods to pull data from the network.
 use crate::counter::Counter;
-#[cfg(test)]
-use crate::entry::Entry;
-#[cfg(test)]
-use crate::ledger::Block;
 use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
 use crate::result::{Error, Result};
 use bincode::{deserialize, serialize};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use log::Level;
 use serde::Serialize;
-#[cfg(test)]
-use solana_sdk::hash::Hash;
 pub use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
 use std::borrow::Borrow;
@@ -457,27 +451,6 @@ where
 
         index += 1;
     }
-}
-
-#[cfg(test)]
-pub fn make_consecutive_blobs(
-    me_id: Pubkey,
-    num_blobs_to_make: u64,
-    start_height: u64,
-    start_hash: Hash,
-    addr: &SocketAddr,
-) -> SharedBlobs {
-    let mut last_hash = start_hash;
-    let num_hashes = 1;
-    let mut all_entries = Vec::with_capacity(num_blobs_to_make as usize);
-    for _ in 0..num_blobs_to_make {
-        let entry = Entry::new(&last_hash, 0, num_hashes, vec![]);
-        last_hash = entry.id;
-        all_entries.push(entry);
-    }
-    let mut new_blobs = all_entries.to_blobs_with_id(me_id, start_height, addr);
-    new_blobs.truncate(num_blobs_to_make as usize);
-    new_blobs
 }
 
 #[cfg(test)]

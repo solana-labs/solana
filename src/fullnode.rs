@@ -674,9 +674,9 @@ mod tests {
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
     use crate::ledger::{
-        create_tmp_genesis, create_tmp_sample_ledger, tmp_copy_ledger, LedgerWriter,
+        create_tmp_genesis, create_tmp_sample_ledger, make_consecutive_blobs, tmp_copy_ledger,
+        LedgerWriter,
     };
-    use crate::packet::make_consecutive_blobs;
     use crate::service::Service;
     use crate::streamer::responder;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -1050,7 +1050,7 @@ mod tests {
             let total_blobs_to_send = bootstrap_height + extra_blobs;
             let tvu_address = &validator_info.tvu;
             let msgs = make_consecutive_blobs(
-                leader_id,
+                &leader_id,
                 total_blobs_to_send,
                 ledger_initial_len,
                 last_id,
