@@ -133,6 +133,7 @@ members = [
     "keygen",
     "metrics",
     "fullnode",
+    "bench-tps",
     "programs/bpf/rust/noop",
     "programs/native/bpf_loader",
     "programs/native/budget",
