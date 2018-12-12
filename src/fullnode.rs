@@ -3,6 +3,7 @@
 use crate::bank::Bank;
 use crate::broadcast_service::BroadcastService;
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
+use crate::counter::Counter;
 use crate::db_ledger::{write_entries_to_ledger, DbLedger};
 use crate::gossip_service::GossipService;
 use crate::leader_scheduler::LeaderScheduler;
@@ -14,12 +15,13 @@ use crate::tpu::{Tpu, TpuReturnType};
 use crate::tpu_forwarder::TpuForwarder;
 use crate::tvu::{Tvu, TvuReturnType};
 use crate::window::{new_window, SharedWindow};
+use log::Level;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::Result;
 use untrusted::Input;
@@ -342,6 +344,8 @@ impl Fullnode {
             let leader_state = LeaderServices::new(tpu, broadcast_service);
             Some(NodeRole::Leader(leader_state))
         };
+
+        inc_new_counter_info!("fullnode-new", 1);
 
         Fullnode {
             keypair,
