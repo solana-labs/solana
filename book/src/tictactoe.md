@@ -11,9 +11,13 @@ move a player makes stores a transaction on the ledger.
 
 First fetch the latest release of the example code:
 
-```sh $ git clone https://github.com/solana-labs/example-tictactoe.git $ cd
-example-tictactoe $ TAG=$(git describe --tags $(git rev-list --tags
---max-count=1)) $ git checkout $TAG ```
+```sh
+$ git clone https://github.com/solana-labs/example-tictactoe.git
+$ cd example-tictactoe
+$ TAG=$(git describe --tags $(git rev-list --tags
+--max-count=1))
+$ git checkout $TAG
+```
 
 Next, follow the steps in the git repository's
 [README](https://github.com/solana-labs/example-tictactoe/blob/master/README.md).
