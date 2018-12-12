@@ -147,7 +147,6 @@ build() {
       set -ex
       export NDEBUG=1
       scripts/cargo-install-all.sh --features=$cargoFeatures --root farf
-      mkdir -p farf/bin/deps/
       scripts/install-native-programs.sh farf/bin/deps/ release
     "
   )

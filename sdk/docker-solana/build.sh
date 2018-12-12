@@ -21,9 +21,9 @@ rm -rf usr/
 ../../ci/docker-run.sh solanalabs/rust:1.31.0 bash -c "
   set -ex
   scripts/cargo-install-all.sh --root sdk/docker-solana/usr
+  scripts/install-native-programs.sh sdk/docker-solana/usr/bin/deps/ release
 "
 cp -f entrypoint.sh usr/bin/solana-entrypoint.sh
-../../scripts/install-native-programs.sh usr/bin/deps/ release
 
 docker build -t solanalabs/solana:$CHANNEL .
 
