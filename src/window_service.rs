@@ -236,9 +236,9 @@ mod test {
     use crate::db_ledger::DbLedger;
     use crate::entry::Entry;
     use crate::leader_scheduler::LeaderScheduler;
-    use crate::ledger::get_tmp_ledger_path;
+    use crate::ledger::{get_tmp_ledger_path, make_consecutive_blobs};
     use crate::logger;
-    use crate::packet::{make_consecutive_blobs, SharedBlob, PACKET_DATA_SIZE};
+    use crate::packet::{SharedBlob, PACKET_DATA_SIZE};
     use crate::streamer::{blob_receiver, responder};
     use crate::window_service::{repair_backoff, window_service};
     use rocksdb::{Options, DB};
@@ -306,7 +306,7 @@ mod test {
             let num_blobs_to_make = 10;
             let gossip_address = &tn.info.gossip;
             let msgs = make_consecutive_blobs(
-                me_id,
+                &me_id,
                 num_blobs_to_make,
                 0,
                 Hash::default(),

@@ -423,7 +423,7 @@ mod test {
     #[cfg(all(feature = "erasure", test))]
     use crate::erasure::{NUM_CODING, NUM_DATA};
     use crate::ledger::{get_tmp_ledger_path, make_tiny_test_entries, Block};
-    use crate::packet::{Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
+    use crate::packet::{index_blobs, Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
     use crate::streamer::{receiver, responder, PacketReceiver};
     use rocksdb::{Options, DB};
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -689,6 +689,13 @@ mod test {
         // Write entries
         let num_entries = 10;
         let shared_blobs = make_tiny_test_entries(num_entries).to_blobs();
+
+        index_blobs(
+            shared_blobs.iter().zip(vec![0u64; num_entries].into_iter()),
+            &Keypair::new().pubkey(),
+            0,
+        );
+
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
         db_ledger.write_blobs(slot, &blobs).unwrap();

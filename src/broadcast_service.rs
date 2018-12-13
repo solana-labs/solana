@@ -70,13 +70,12 @@ fn broadcast(
     // Generate the slot heights for all the entries inside ventries
     let slot_heights = generate_slots(&ventries, leader_scheduler);
 
-    let blobs_vec: Vec<_> = ventries
+    let blobs: Vec<_> = ventries
         .into_par_iter()
         .flat_map(|p| p.to_blobs())
         .collect();
 
-    let blobs_slot_heights: Vec<(SharedBlob, u64)> =
-        blobs_vec.into_iter().zip(slot_heights).collect();
+    let blobs_slot_heights: Vec<(SharedBlob, u64)> = blobs.into_iter().zip(slot_heights).collect();
 
     let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
 

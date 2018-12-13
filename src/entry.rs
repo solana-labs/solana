@@ -7,11 +7,9 @@ use crate::poh::Poh;
 use crate::result::Result;
 use bincode::{deserialize, serialize_into, serialized_size};
 use solana_sdk::hash::Hash;
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::Transaction;
 use std::io::Cursor;
 use std::mem::size_of;
-use std::net::SocketAddr;
 use std::sync::mpsc::{Receiver, Sender};
 
 pub type EntrySender = Sender<Vec<Entry>>;
@@ -106,12 +104,7 @@ impl Entry {
         entry
     }
 
-    pub fn to_blob(
-        &self,
-        idx: Option<u64>,
-        id: Option<Pubkey>,
-        addr: Option<&SocketAddr>,
-    ) -> SharedBlob {
+    pub fn to_blob(&self) -> SharedBlob {
         let blob = SharedBlob::default();
         {
             let mut blob_w = blob.write().unwrap();
@@ -121,17 +114,6 @@ impl Entry {
                 out.position() as usize
             };
             blob_w.set_size(pos);
-
-            if let Some(idx) = idx {
-                blob_w.set_index(idx).expect("set_index()");
-            }
-            if let Some(id) = id {
-                blob_w.set_id(&id).expect("set_id()");
-            }
-            if let Some(addr) = addr {
-                blob_w.meta.set_addr(addr);
-            }
-            blob_w.set_flags(0).unwrap();
         }
         blob
     }

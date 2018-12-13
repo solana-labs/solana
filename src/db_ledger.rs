@@ -320,10 +320,12 @@ impl DbLedger {
         I: IntoIterator,
         I::Item: Borrow<Entry>,
     {
-        let shared_blobs = entries
-            .into_iter()
-            .enumerate()
-            .map(|(idx, entry)| entry.borrow().to_blob(Some(idx as u64), None, None));
+        let shared_blobs = entries.into_iter().enumerate().map(|(idx, entry)| {
+            let b = entry.borrow().to_blob();
+            b.write().unwrap().set_index(idx as u64).unwrap();
+            b
+        });
+
         self.write_shared_blobs(slot, shared_blobs)
     }
 
@@ -534,19 +536,19 @@ where
     }
 }
 
-pub fn genesis<'a, I>(ledger_path: &str, keypair: Option<&Keypair>, entries: I) -> Result<()>
+pub fn genesis<'a, I>(ledger_path: &str, keypair: &Keypair, entries: I) -> Result<()>
 where
     I: IntoIterator<Item = &'a Entry>,
 {
     let mut db_ledger = DbLedger::open(ledger_path)?;
 
-    let pubkey = keypair.map(|k| k.pubkey());
-
     // TODO sign these blobs with keypair
-    let blobs = entries
-        .into_iter()
-        .enumerate()
-        .map(|(idx, entry)| entry.borrow().to_blob(Some(idx as u64), pubkey, None));
+    let blobs = entries.into_iter().enumerate().map(|(idx, entry)| {
+        let b = entry.borrow().to_blob();
+        b.write().unwrap().set_index(idx as u64).unwrap();
+        b.write().unwrap().set_id(&keypair.pubkey()).unwrap();
+        b
+    });
 
     db_ledger.write_shared_blobs(DEFAULT_SLOT_HEIGHT, blobs)?;
     Ok(())
@@ -556,6 +558,7 @@ where
 mod tests {
     use super::*;
     use crate::ledger::{get_tmp_ledger_path, make_tiny_test_entries, Block};
+    use crate::packet::index_blobs;
 
     #[test]
     fn test_put_get_simple() {
@@ -611,6 +614,12 @@ mod tests {
     #[test]
     fn test_get_blobs_bytes() {
         let shared_blobs = make_tiny_test_entries(10).to_blobs();
+        index_blobs(
+            shared_blobs.iter().zip(vec![0u64; 10].into_iter()),
+            &Keypair::new().pubkey(),
+            0,
+        );
+
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
         let slot = DEFAULT_SLOT_HEIGHT;
@@ -836,9 +845,9 @@ mod tests {
     pub fn test_genesis_and_entry_iterator() {
         // Create RocksDb ledger
         let entries = make_tiny_test_entries(100);
-        let ledger_path = get_tmp_ledger_path("test_entry_iterator");
+        let ledger_path = get_tmp_ledger_path("test_genesis_and_entry_iterator");
         {
-            assert!(genesis(&ledger_path, None, &entries).is_ok());
+            assert!(genesis(&ledger_path, &Keypair::new(), &entries).is_ok());
 
             let ledger = DbLedger::open(&ledger_path).expect("open failed");
 
