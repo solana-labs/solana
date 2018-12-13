@@ -32,9 +32,6 @@ pub type EntryReceiver = Receiver<Vec<Entry>>;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Entry {
-    /// The the previous Entry ID.
-    pub prev_id: Hash,
-
     /// tick height of the ledger, not including any tick implied by this Entry
     pub tick_height: u64,
 
@@ -61,7 +58,6 @@ impl Entry {
         let entry = {
             if num_hashes == 0 && transactions.is_empty() {
                 Entry {
-                    prev_id: *prev_id,
                     tick_height,
                     num_hashes: 0,
                     id: *prev_id,
@@ -72,7 +68,6 @@ impl Entry {
                 // next_hash will generate the next hash and set num_hashes == 1
                 let id = next_hash(prev_id, 1, &transactions);
                 Entry {
-                    prev_id: *prev_id,
                     tick_height,
                     num_hashes: 1,
                     id,
@@ -84,7 +79,6 @@ impl Entry {
                 // and transactions = empty
                 let id = next_hash(prev_id, num_hashes, &transactions);
                 Entry {
-                    prev_id: *prev_id,
                     tick_height,
                     num_hashes,
                     id,
@@ -122,9 +116,9 @@ impl Entry {
     pub fn serialized_size(transactions: &[Transaction]) -> u64 {
         let txs_size = serialized_size(transactions).unwrap();
 
-        // tick_height+num_hashes    +     id+prev_id  +        txs
+        // tick_height+num_hashes   +    id  +              txs
 
-        (2 * size_of::<u64>() + 2 * size_of::<Hash>()) as u64 + txs_size
+        (2 * size_of::<u64>() + size_of::<Hash>()) as u64 + txs_size
     }
 
     pub fn num_will_fit(transactions: &[Transaction]) -> usize {
@@ -180,19 +174,13 @@ impl Entry {
     /// since the previous transaction and that resulting `id`.
 
     #[cfg(test)]
-    pub fn new_tick(prev_id: &Hash, tick_height: u64, num_hashes: u64, id: &Hash) -> Self {
+    pub fn new_tick(tick_height: u64, num_hashes: u64, id: &Hash) -> Self {
         Entry {
-            prev_id: *prev_id,
             tick_height,
-
             num_hashes,
             id: *id,
             transactions: vec![],
         }
-    }
-
-    pub fn verify_self(&self) -> bool {
-        self.id == next_hash(&self.prev_id, self.num_hashes, &self.transactions)
     }
 
     /// Verifies self.id is the result of hashing a `start_hash` `self.num_hashes` times.
@@ -260,7 +248,6 @@ pub fn reconstruct_entries_from_blobs(blobs: Vec<SharedBlob>) -> Result<(Vec<Ent
 pub fn next_entry(prev_id: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Entry {
     assert!(num_hashes > 0 || transactions.is_empty());
     Entry {
-        prev_id: *prev_id,
         tick_height: 0,
         num_hashes,
         id: next_hash(prev_id, num_hashes, &transactions),
@@ -283,10 +270,9 @@ mod tests {
     fn test_entry_verify() {
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
-        assert!(Entry::new_tick(&zero, 0, 0, &zero).verify(&zero)); // base case, never used
-        assert!(!Entry::new_tick(&zero, 1, 0, &zero).verify(&one)); // base case, bad
+        assert!(Entry::new_tick(0, 0, &zero).verify(&zero)); // base case, never used
+        assert!(!Entry::new_tick(1, 0, &zero).verify(&one)); // base case, bad
         assert!(next_entry(&zero, 1, vec![]).verify(&zero)); // inductive step
-        assert!(next_entry(&zero, 1, vec![]).verify_self()); // also inductive step
         assert!(!next_entry(&zero, 1, vec![]).verify(&one)); // inductive step, bad
     }
 
