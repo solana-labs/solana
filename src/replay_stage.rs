@@ -100,22 +100,9 @@ impl ReplayStage {
         let (current_leader, _) = bank
             .get_current_leader()
             .expect("Scheduled leader should be calculated by this point");
+        let my_id = keypair.pubkey();
         for (i, entry) in entries.iter().enumerate() {
             res = bank.process_entry(&entry);
-            let my_id = keypair.pubkey();
-            let (scheduled_leader, _) = bank
-                .get_current_leader()
-                .expect("Scheduled leader should be calculated by this point");
-
-            // TODO: Remove this soon once we boot the leader from ClusterInfo
-            if scheduled_leader != current_leader {
-                cluster_info.write().unwrap().set_leader(scheduled_leader);
-            }
-            if my_id == scheduled_leader {
-                num_entries_to_write = i + 1;
-                break;
-            }
-
             if res.is_err() {
                 // TODO: This will return early from the first entry that has an erroneous
                 // transaction, instead of processing the rest of the entries in the vector
@@ -128,8 +115,22 @@ impl ReplayStage {
 
             if bank.tick_height() % BLOCK_TICK_COUNT == 0 {
                 if let Some(sender) = vote_blob_sender {
-                    send_validator_vote(bank, vote_account_keypair, &cluster_info, sender)?;
+                    send_validator_vote(bank, vote_account_keypair, &cluster_info, sender).unwrap();
                 }
+            }
+
+            let (scheduled_leader, _) = bank
+                .get_current_leader()
+                .expect("Scheduled leader should be calculated by this point");
+
+            // TODO: Remove this soon once we boot the leader from ClusterInfo
+            if scheduled_leader != current_leader {
+                cluster_info.write().unwrap().set_leader(scheduled_leader);
+            }
+
+            if my_id == scheduled_leader {
+                num_entries_to_write = i + 1;
+                break;
             }
         }
 
