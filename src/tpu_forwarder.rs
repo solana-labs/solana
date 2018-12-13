@@ -115,7 +115,6 @@ mod tests {
     use std::time::Duration;
 
     #[test]
-    #[ignore]
     pub fn test_tpu_forwarder() {
         let nodes: Vec<_> = (0..3)
             .map(|_| {

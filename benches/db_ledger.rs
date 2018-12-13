@@ -47,7 +47,7 @@ fn setup_read_bench(
 
     // Convert the entries to blobs, write the blobs to the ledger
     let shared_blobs = entries.to_blobs();
-    for b in shared_blobs {
+    for b in shared_blobs.iter() {
         b.write().unwrap().set_slot(slot).unwrap();
     }
     db_ledger
