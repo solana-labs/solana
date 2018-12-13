@@ -13,7 +13,7 @@ use crate::rpc_pubsub::PubSubService;
 use crate::service::Service;
 use crate::tpu::{Tpu, TpuReturnType};
 use crate::tpu_forwarder::TpuForwarder;
-use crate::tvu::{Tvu, TvuReturnType};
+use crate::tvu::{Sockets, Tvu, TvuReturnType};
 use crate::window::{new_window, SharedWindow};
 use log::Level;
 use solana_sdk::hash::Hash;
@@ -271,26 +271,33 @@ impl Fullnode {
 
         let node_role = if scheduled_leader != keypair.pubkey() {
             // Start in validator mode.
+            let sockets = Sockets {
+                repair: node
+                    .sockets
+                    .repair
+                    .try_clone()
+                    .expect("Failed to clone repair socket"),
+                retransmit: node
+                    .sockets
+                    .retransmit
+                    .try_clone()
+                    .expect("Failed to clone retransmit socket"),
+                fetch: node
+                    .sockets
+                    .tvu
+                    .iter()
+                    .map(|s| s.try_clone().expect("Failed to clone TVU Sockets"))
+                    .collect(),
+            };
+
             let tvu = Tvu::new(
-                keypair.clone(),
+                // keypair.clone(),
                 vote_account_keypair.clone(),
                 &bank,
                 entry_height,
                 *last_entry_id,
                 cluster_info.clone(),
-                node.sockets
-                    .tvu
-                    .iter()
-                    .map(|s| s.try_clone().expect("Failed to clone TVU sockets"))
-                    .collect(),
-                node.sockets
-                    .repair
-                    .try_clone()
-                    .expect("Failed to clone repair socket"),
-                node.sockets
-                    .retransmit
-                    .try_clone()
-                    .expect("Failed to clone retransmit socket"),
+                sockets,
                 Some(ledger_path),
                 db_ledger.clone(),
             );
@@ -432,23 +439,29 @@ impl Fullnode {
             self.validator_to_leader(tick_height, entry_height, last_entry_id);
             Ok(())
         } else {
+            let sockets = Sockets {
+                repair: self
+                    .repair_socket
+                    .try_clone()
+                    .expect("Failed to clone repair socket"),
+                retransmit: self
+                    .retransmit_socket
+                    .try_clone()
+                    .expect("Failed to clone retransmit socket"),
+                fetch: self
+                    .tvu_sockets
+                    .iter()
+                    .map(|s| s.try_clone().expect("Failed to clone TVU Sockets"))
+                    .collect(),
+            };
+
             let tvu = Tvu::new(
-                self.keypair.clone(),
                 self.vote_account_keypair.clone(),
                 &self.bank,
                 entry_height,
                 last_entry_id,
                 self.cluster_info.clone(),
-                self.tvu_sockets
-                    .iter()
-                    .map(|s| s.try_clone().expect("Failed to clone TVU sockets"))
-                    .collect(),
-                self.repair_socket
-                    .try_clone()
-                    .expect("Failed to clone repair socket"),
-                self.retransmit_socket
-                    .try_clone()
-                    .expect("Failed to clone retransmit socket"),
+                sockets,
                 Some(&self.ledger_path),
                 self.db_ledger.clone(),
             );

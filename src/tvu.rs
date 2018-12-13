@@ -44,35 +44,46 @@ pub struct Tvu {
     exit: Arc<AtomicBool>,
 }
 
+pub struct Sockets {
+    pub fetch: Vec<UdpSocket>,
+    pub repair: UdpSocket,
+    pub retransmit: UdpSocket,
+}
+
 impl Tvu {
     /// This service receives messages from a leader in the network and processes the transactions
     /// on the bank state.
     /// # Arguments
-    /// * `bank` - The bank state.
-    /// * `keypair` - Node's key pair for signing
     /// * `vote_account_keypair` - Vote key pair
+    /// * `bank` - The bank state.
     /// * `entry_height` - Initial ledger height
+    /// * `last_entry_id` - Hash of the last entry
     /// * `cluster_info` - The cluster_info state.
-    /// * `window` - The window state.
-    /// * `fetch_sockets` - my fetch sockets
-    /// * `repair_socket` - my repair socket
-    /// * `retransmit_socket` - my retransmit socket
+    /// * `sockets` - My fetch, repair, and restransmit sockets
     /// * `ledger_path` - path to the ledger file
-    #[allow(clippy::too_many_arguments)]
+    /// * `db_ledger` - the ledger itself
     pub fn new(
-        keypair: Arc<Keypair>,
         vote_account_keypair: Arc<Keypair>,
         bank: &Arc<Bank>,
         entry_height: u64,
         last_entry_id: Hash,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        fetch_sockets: Vec<UdpSocket>,
-        repair_socket: UdpSocket,
-        retransmit_socket: UdpSocket,
+        sockets: Sockets,
         ledger_path: Option<&str>,
         db_ledger: Arc<RwLock<DbLedger>>,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
+        let keypair: Arc<Keypair> = cluster_info
+            .read()
+            .expect("Unable to read from cluster_info during Tvu creation")
+            .keypair
+            .clone();
+
+        let Sockets {
+            repair: repair_socket,
+            fetch: fetch_sockets,
+            retransmit: retransmit_socket,
+        } = sockets;
 
         let repair_socket = Arc::new(repair_socket);
         let mut blob_sockets: Vec<Arc<UdpSocket>> =
@@ -179,7 +190,7 @@ pub mod tests {
     use crate::packet::SharedBlob;
     use crate::service::Service;
     use crate::streamer;
-    use crate::tvu::Tvu;
+    use crate::tvu::{Sockets, Tvu};
     use crate::window::{self, SharedWindow};
     use bincode::serialize;
     use rocksdb::{Options, DB};
@@ -270,15 +281,18 @@ pub mod tests {
         let db_ledger =
             DbLedger::open(&db_ledger_path).expect("Expected to successfully open ledger");
         let tvu = Tvu::new(
-            Arc::new(target1_keypair),
             vote_account_keypair,
             &bank,
             0,
             cur_hash,
             cref1,
-            target1.sockets.tvu,
-            target1.sockets.repair,
-            target1.sockets.retransmit,
+            {
+                Sockets {
+                    repair: target1.sockets.repair,
+                    retransmit: target1.sockets.retransmit,
+                    fetch: target1.sockets.tvu,
+                }
+            },
             None,
             Arc::new(RwLock::new(db_ledger)),
         );
