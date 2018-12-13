@@ -3,7 +3,6 @@
 use solana_sdk::hash::{hash, hashv, Hash};
 
 pub struct Poh {
-    prev_id: Hash,
     id: Hash,
     num_hashes: u64,
     pub tick_height: u64,
@@ -11,7 +10,6 @@ pub struct Poh {
 
 #[derive(Debug)]
 pub struct PohEntry {
-    pub prev_id: Hash,
     pub tick_height: u64,
     pub num_hashes: u64,
     pub id: Hash,
@@ -19,11 +17,10 @@ pub struct PohEntry {
 }
 
 impl Poh {
-    pub fn new(prev_id: Hash, tick_height: u64) -> Self {
+    pub fn new(id: Hash, tick_height: u64) -> Self {
         Poh {
-            prev_id,
             num_hashes: 0,
-            id: prev_id,
+            id,
             tick_height,
         }
     }
@@ -36,14 +33,10 @@ impl Poh {
     pub fn record(&mut self, mixin: Hash) -> PohEntry {
         self.id = hashv(&[&self.id.as_ref(), &mixin.as_ref()]);
 
-        let prev_id = self.prev_id;
-        self.prev_id = self.id;
-
         let num_hashes = self.num_hashes + 1;
         self.num_hashes = 0;
 
         PohEntry {
-            prev_id,
             tick_height: self.tick_height,
             num_hashes,
             id: self.id,
@@ -59,14 +52,10 @@ impl Poh {
         let num_hashes = self.num_hashes;
         self.num_hashes = 0;
 
-        let prev_id = self.prev_id;
-        self.prev_id = self.id;
-
         let tick_height = self.tick_height;
         self.tick_height += 1;
 
         PohEntry {
-            prev_id,
             tick_height,
             num_hashes,
             id: self.id,
@@ -77,20 +66,19 @@ impl Poh {
 
 #[cfg(test)]
 pub fn verify(initial: Hash, entries: &[PohEntry]) -> bool {
-    let mut prev_id = initial;
+    let mut id = initial;
 
     for entry in entries {
         assert!(entry.num_hashes != 0);
-        assert!(prev_id == entry.prev_id);
 
         for _ in 1..entry.num_hashes {
-            prev_id = hash(&prev_id.as_ref());
+            id = hash(&id.as_ref());
         }
-        prev_id = match entry.mixin {
-            Some(mixin) => hashv(&[&prev_id.as_ref(), &mixin.as_ref()]),
-            None => hash(&prev_id.as_ref()),
+        id = match entry.mixin {
+            Some(mixin) => hashv(&[&id.as_ref(), &mixin.as_ref()]),
+            None => hash(&id.as_ref()),
         };
-        if prev_id != entry.id {
+        if id != entry.id {
             return false;
         }
     }
@@ -109,7 +97,6 @@ mod tests {
         poh::verify(
             Hash::default(),
             &[PohEntry {
-                prev_id: Hash::default(),
                 tick_height: 0,
                 num_hashes: 0,
                 id: Hash::default(),
