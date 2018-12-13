@@ -95,11 +95,13 @@ reward should be generated for each successful dequeue.
 
 ### Economic Finality
 
-As votes get further and further buried, the lockout for older votes increases
-exponentially.  The cost of rollback can be calculated as the loss of all the
-rewards at the decendant fork, plus the oportunity cost of reward due to the
-exponential lockout.  The total reward loss plus the total oportunity cost from
-all the combined validators is the total economic finality of any given fork.
+Finality of *fork A* is defined as the cost in terms of lockout time to the
+validators to confirm any other fork that does not include *fork A* as an
+ancestor.
+
+Economic Finality of *fork A* can be calculatated as the loss of all the
+rewards from *fork A* and its decendants, plus the oportunity cost of reward
+due to the exponentially growing lockout.
 
 ### Thresholds
 
