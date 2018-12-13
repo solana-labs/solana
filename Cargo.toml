@@ -25,10 +25,6 @@ name = "solana-replicator"
 path = "src/bin/replicator.rs"
 
 [[bin]]
-name = "solana-fullnode"
-path = "src/bin/fullnode.rs"
-
-[[bin]]
 name = "solana-fullnode-config"
 path = "src/bin/fullnode-config.rs"
 
@@ -140,6 +136,7 @@ members = [
     "drone",
     "keygen",
     "metrics",
+    "fullnode",
     "programs/bpf/rust/noop",
     "programs/native/bpf_loader",
     "programs/native/budget",

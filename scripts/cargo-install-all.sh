@@ -9,3 +9,4 @@ set -x
 cargo install --path drone "$@"
 cargo install --path keygen "$@"
 cargo install --path . "$@"
+cargo install --path fullnode "$@"
