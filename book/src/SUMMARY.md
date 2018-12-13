@@ -26,6 +26,7 @@
   - [Ledger Replication](ledger-replication.md)
   - [Secure Enclave](enclave.md)
   - [Staking Rewards](staking-rewards.md)
+  - [Fork Selection](fork-selection.md)
 
 ## Appendix
 

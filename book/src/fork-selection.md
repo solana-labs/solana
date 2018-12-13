@@ -11,7 +11,7 @@
 
 For networks like Solana, time can be the PoH hash count, which is a VDF that provides a source of time before consensus. Other networks adopting this approach would need to consider a global source of time.
 
-For Solana, time uniquely identifies a specific leader for fork generation.  At any given time only 1 leader, which can be computed from the ledger itself, can propose a fork.  For more details, see [fork generation](0002-fork-generation.md) and [leader rotation](0004-leader-rotation.md).
+For Solana, time uniquely identifies a specific leader for fork generation.  At any given time only 1 leader, which can be computed from the ledger itself, can propose a fork.  For more details, see [fork generation](fork-generation.md) and [leader rotation](leader-rotation.md).
 
 ## Algorithm
 
@@ -93,7 +93,3 @@ In both cases, the nodes in the network have several forks to pick from concurre
 ### Greedy Choice for Concurrent Forks
 
 When evaluating multiple forks, each node should pick the fork that will maximize economic finality, or the latest fork if all are equal.  Economic finality can be measured in terms of lockout on a fork.
- 
-## Simulation
-
-Simulation can be found [here](../tests/fork-selection.rs).

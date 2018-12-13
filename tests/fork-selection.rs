@@ -1,5 +1,7 @@
 //! Fork Selection Simulation
 //!
+//! Description of the algorithm can be found in [book/src/fork-seleciton.md](book/src/fork-seleciton.md).
+//!
 //! A test library function exists for configuring networks.
 //! ```
 //!     /// * num_partitions - 1 to 100 partitions
