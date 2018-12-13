@@ -1844,6 +1844,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-fullnode"
+version = "0.1.0"
+dependencies = [
+ "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rayon 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.33 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana 0.11.0",
+ "solana-drone 0.11.0",
+ "solana-metrics 0.11.0",
+ "solana-sdk 0.11.0",
+]
+
+[[package]]
 name = "solana-jsonrpc-core"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
