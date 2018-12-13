@@ -60,7 +60,7 @@ fn broadcast(
     }
 
     if let Some(Some(last)) = ventries.last().map(|entries| entries.last()) {
-        contains_last_tick |= Some(last.tick_height + 1) == max_tick_height && last.is_tick();
+        contains_last_tick |= Some(last.tick_height) == max_tick_height;
     }
 
     inc_new_counter_info!("broadcast_service-entries_received", num_entries);
@@ -198,8 +198,13 @@ fn generate_slots(
             let slot_heights: Vec<u64> = p
                 .iter()
                 .map(|e| {
+                    let tick_height = if e.is_tick() {
+                        e.tick_height
+                    } else {
+                        e.tick_height + 1
+                    };
                     let (_, slot) = r_leader_scheduler
-                        .get_scheduled_leader(e.tick_height + 1)
+                        .get_scheduled_leader(tick_height)
                         .expect("Leader schedule should never be unknown while indexing blobs");
                     slot
                 })
@@ -449,7 +454,7 @@ mod test {
             );
             for (i, mut tick) in ticks.into_iter().enumerate() {
                 // Simulate the tick heights generated in poh.rs
-                tick.tick_height = start_tick_height + i as u64;
+                tick.tick_height = start_tick_height + i as u64 + 1;
                 broadcast_service
                     .entry_sender
                     .send(vec![tick])
