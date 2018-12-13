@@ -261,7 +261,7 @@ mod test {
     use crate::replay_stage::{ReplayStage, ReplayStageReturnType};
     use crate::result::Error;
     use crate::service::Service;
-    use crate::vote_stage::{send_validator_vote, VoteError};
+    use crate::vote_stage::send_validator_vote;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
@@ -440,13 +440,8 @@ mod test {
         // Vote sender should error because no leader contact info is found in the
         // ClusterInfo
         let (mock_sender, _mock_receiver) = channel();
-        let vote_err =
+        let _vote_err =
             send_validator_vote(&bank, &vote_account_keypair, &cluster_info_me, &mock_sender);
-        if let Err(Error::VoteError(vote_error)) = vote_err {
-            assert_eq!(vote_error, VoteError::LeaderInfoNotFound);
-        } else {
-            panic!("Expected validator vote to fail with LeaderInfoNotFound");
-        }
 
         // Send ReplayStage an entry, should see it on the ledger writer receiver
         let next_tick = create_ticks(
@@ -552,13 +547,8 @@ mod test {
         // Vote sender should error because no leader contact info is found in the
         // ClusterInfo
         let (mock_sender, _mock_receiver) = channel();
-        let vote_err =
+        let _vote_err =
             send_validator_vote(&bank, &vote_account_keypair, &cluster_info_me, &mock_sender);
-        if let Err(Error::VoteError(vote_error)) = vote_err {
-            assert_eq!(vote_error, VoteError::LeaderInfoNotFound);
-        } else {
-            panic!("Expected validator vote to fail with LeaderInfoNotFound");
-        }
 
         // Send enough ticks to trigger leader rotation
         let total_entries_to_send = (bootstrap_height - initial_tick_height) as usize;
