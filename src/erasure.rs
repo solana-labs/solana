@@ -634,7 +634,6 @@ pub mod test {
     pub fn generate_db_ledger_from_window(
         ledger_path: &str,
         window: &[WindowSlot],
-        slot_height: u64,
         use_random: bool,
     ) -> DbLedger {
         let mut db_ledger =
@@ -649,14 +648,14 @@ pub mod test {
                         .data_cf
                         .put_by_slot_index(
                             &db_ledger.db,
-                            slot_height,
+                            data_l.slot().unwrap(),
                             data_l.index().unwrap(),
                             &data_l.data[..data_l.data_size().unwrap() as usize],
                         )
                         .expect("Expected successful put into data column of ledger");
                 } else {
                     db_ledger
-                        .write_shared_blobs(slot_height, vec![data].into_iter())
+                        .write_shared_blobs(vec![data].into_iter())
                         .unwrap();
                 }
             }
@@ -670,13 +669,13 @@ pub mod test {
 
                 let data_size = coding_lock
                     .size()
-                    .expect("Expected coding blob to have valid ata size");
+                    .expect("Expected coding blob to have valid data size");
 
                 db_ledger
                     .erasure_cf
                     .put_by_slot_index(
                         &db_ledger.db,
-                        slot_height,
+                        coding_lock.slot().unwrap(),
                         index,
                         &coding_lock.data[..data_size as usize + BLOB_HEADER_SIZE],
                     )
@@ -792,8 +791,10 @@ pub mod test {
 
         {
             // Make some dummy slots
-            let slot_tick_heights: Vec<(&SharedBlob, u64)> =
-                blobs.iter().zip(vec![0; blobs.len()]).collect();
+            let slot_tick_heights: Vec<(&SharedBlob, u64)> = blobs
+                .iter()
+                .zip(vec![DEFAULT_SLOT_HEIGHT; blobs.len()])
+                .collect();
             index_blobs(slot_tick_heights, &Keypair::new().pubkey(), offset as u64);
         }
 
@@ -844,7 +845,6 @@ pub mod test {
         let db_ledger = Arc::new(RwLock::new(generate_db_ledger_from_window(
             &ledger_path,
             &window,
-            DEFAULT_SLOT_HEIGHT,
             true,
         )));
 
@@ -899,7 +899,6 @@ pub mod test {
         let db_ledger = Arc::new(RwLock::new(generate_db_ledger_from_window(
             &ledger_path,
             &window,
-            DEFAULT_SLOT_HEIGHT,
             true,
         )));
 

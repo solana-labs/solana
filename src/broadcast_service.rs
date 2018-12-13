@@ -122,7 +122,7 @@ fn broadcast(
 
                 trace!("{} null {}", id, pos);
             }
-            for (b, slot) in &blobs {
+            for (b, _) in &blobs {
                 {
                     let ix = b.read().unwrap().index().expect("blob index");
                     let pos = (ix % window_size) as usize;
@@ -130,10 +130,7 @@ fn broadcast(
                     assert!(win[pos].data.is_none());
                     win[pos].data = Some(b.clone());
                 }
-                db_ledger
-                    .write()
-                    .unwrap()
-                    .write_shared_blobs(*slot, vec![b])?;
+                db_ledger.write().unwrap().write_shared_blobs(vec![b])?;
             }
         }
 

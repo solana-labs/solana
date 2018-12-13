@@ -45,10 +45,13 @@ fn setup_read_bench(
     let mut entries = make_large_test_entries(num_large_blobs as usize);
     entries.extend(make_tiny_test_entries(num_small_blobs as usize));
 
-    // Convert the entries to blobs, wrsite the blobs to the ledger
+    // Convert the entries to blobs, write the blobs to the ledger
     let shared_blobs = entries.to_blobs();
+    for b in shared_blobs {
+        b.write().unwrap().set_slot(slot).unwrap();
+    }
     db_ledger
-        .write_shared_blobs(slot, &shared_blobs)
+        .write_shared_blobs(&shared_blobs)
         .expect("Expectd successful insertion of blobs into ledger");
 }
 

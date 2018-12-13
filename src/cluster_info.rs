@@ -1236,7 +1236,7 @@ mod tests {
             {
                 let mut w_ledger = db_ledger.write().unwrap();
                 w_ledger
-                    .write_shared_blobs(2, vec![&blob])
+                    .write_shared_blobs(vec![&blob])
                     .expect("Expect successful ledger write");
             }
 
