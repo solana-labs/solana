@@ -1,4 +1,5 @@
 use std::env;
+use std::path::Path;
 use std::process::Command;
 
 fn main() {
@@ -11,16 +12,25 @@ fn main() {
             + &env::var("PROFILE").unwrap()
             + &"/bpf".to_string();
 
-        println!("cargo:rerun-if-changed=../../../sdk/bpf/bpf.mk");
-        println!("cargo:rerun-if-changed=../../../sdk/bpf/inc/solana_sdk.h");
+        let rerun_if_changed_files = vec![
+            "../../../sdk/bpf/bpf.mk",
+            "../../../sdk/bpf/inc/solana_sdk.h",
+            "../../bpf/c/makefile",
+            "../../bpf/c/src/bench_alu.c",
+            "../../bpf/c/src/move_funds.c",
+            "../../bpf/c/src/noop++.cc",
+            "../../bpf/c/src/noop.c",
+            "../../bpf/c/src/struct_pass.c",
+            "../../bpf/c/src/struct_ret.c",
+        ];
 
-        println!("cargo:rerun-if-changed=../../bpf/c/makefile");
-        println!("cargo:rerun-if-changed=../../bpf/c/src/bench_alu.c");
-        println!("cargo:rerun-if-changed=../../bpf/c/src/move_funds.c");
-        println!("cargo:rerun-if-changed=../../bpf/c/src/noop.c");
-        println!("cargo:rerun-if-changed=../../bpf/c/src/noop++.c");
-        println!("cargo:rerun-if-changed=../../bpf/c/src/struct_pass.c");
-        println!("cargo:rerun-if-changed=../../bpf/c/src/struct_ret.c");
+        for file in rerun_if_changed_files {
+            if !Path::new(file).is_file() {
+                panic!("{} is not a file", file);
+            }
+            println!("cargo:rerun-if-changed={}", file);
+        }
+
         println!("cargo:warning=(not a warning) Compiling C-based BPF programs");
         let status = Command::new("make")
             .current_dir("../../bpf/c")

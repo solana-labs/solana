@@ -4,7 +4,7 @@ use crate::bank::Bank;
 use crate::broadcast_service::BroadcastService;
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
 use crate::counter::Counter;
-use crate::db_ledger::{write_entries_to_ledger, DbLedger};
+use crate::db_ledger::{write_entries_to_ledger, DbLedger, DEFAULT_SLOT_HEIGHT};
 use crate::gossip_service::GossipService;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::ledger::read_ledger;
@@ -260,7 +260,7 @@ impl Fullnode {
         }
 
         // Get the scheduled leader
-        let (scheduled_leader, leader_slot) = bank
+        let (scheduled_leader, _) = bank
             .get_current_leader()
             .expect("Leader not known after processing bank");
 
@@ -328,7 +328,8 @@ impl Fullnode {
                 scheduled_leader,
             );
 
-            let broadcast_service = BroadcastService::new(
+            let (broadcast_service, _) = BroadcastService::new(
+                db_ledger.clone(),
                 node.sockets
                     .broadcast
                     .try_clone()
@@ -336,10 +337,9 @@ impl Fullnode {
                 cluster_info.clone(),
                 shared_window.clone(),
                 entry_height,
-                leader_slot,
+                bank.leader_scheduler.clone(),
                 entry_receiver,
                 max_tick_height,
-                bank.tick_height(),
                 tpu_exit,
             );
             let leader_state = LeaderServices::new(tpu, broadcast_service);
@@ -402,7 +402,7 @@ impl Fullnode {
             let new_bank = Arc::new(new_bank);
             let (scheduled_leader, _) = new_bank
                 .get_current_leader()
-                .expect("Scheduled leader should exist after rebuilding bank");
+                .expect("Scheduled leader id should be calculated after rebuilding bank");
 
             (new_bank, scheduled_leader, entry_height, last_id)
         };
@@ -496,17 +496,17 @@ impl Fullnode {
             self.keypair.pubkey(),
         );
 
-        let broadcast_service = BroadcastService::new(
+        let (broadcast_service, _) = BroadcastService::new(
+            self.db_ledger.clone(),
             self.broadcast_socket
                 .try_clone()
                 .expect("Failed to clone broadcast socket"),
             self.cluster_info.clone(),
             self.shared_window.clone(),
             entry_height,
-            0, // TODO: get real leader slot from leader_scheduler
+            self.bank.leader_scheduler.clone(),
             blob_receiver,
             max_tick_height,
-            tick_height,
             tpu_exit,
         );
         let leader_state = LeaderServices::new(tpu, broadcast_service);
@@ -616,7 +616,7 @@ impl Fullnode {
             .expect("opening ledger")
             .map(|entry| entry.unwrap());
 
-        write_entries_to_ledger(&[ledger_path], ledger_entries);
+        write_entries_to_ledger(&[ledger_path], ledger_entries, DEFAULT_SLOT_HEIGHT);
         let db =
             DbLedger::open(ledger_path).expect("Expected to successfully open database ledger");
         Arc::new(RwLock::new(db))
@@ -940,8 +940,10 @@ mod tests {
                 }
             }
 
-            validator.close().expect("Expected node to close");
-            bootstrap_leader.close().expect("Expected node to close");
+            validator.close().expect("Expected leader node to close");
+            bootstrap_leader
+                .close()
+                .expect("Expected validator node to close");
         }
         for path in ledger_paths {
             DbLedger::destroy(&path).expect("Expected successful database destruction");

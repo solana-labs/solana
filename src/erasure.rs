@@ -351,7 +351,7 @@ pub fn generate_coding(
 // Recover the missing data and coding blobs from the input ledger. Returns a vector
 // of the recovered missing data blobs and a vector of the recovered coding blobs
 pub fn recover(
-    db_ledger: &mut DbLedger,
+    db_ledger: &Arc<RwLock<DbLedger>>,
     slot: u64,
     start_idx: u64,
 ) -> Result<(Vec<SharedBlob>, Vec<SharedBlob>)> {
@@ -367,11 +367,22 @@ pub fn recover(
         block_end_idx
     );
 
-    let data_missing =
-        find_missing_data_indexes(slot, db_ledger, block_start_idx, block_end_idx, NUM_DATA).len();
-    let coding_missing =
-        find_missing_coding_indexes(slot, db_ledger, coding_start_idx, block_end_idx, NUM_CODING)
-            .len();
+    let data_missing = find_missing_data_indexes(
+        slot,
+        &db_ledger.read().unwrap(),
+        block_start_idx,
+        block_end_idx,
+        NUM_DATA,
+    )
+    .len();
+    let coding_missing = find_missing_coding_indexes(
+        slot,
+        &db_ledger.read().unwrap(),
+        coding_start_idx,
+        block_end_idx,
+        NUM_CODING,
+    )
+    .len();
 
     // if we're not missing data, or if we have too much missing but have enough coding
     if data_missing == 0 {
@@ -405,9 +416,10 @@ pub fn recover(
 
     // Add the data blobs we have into the recovery vector, mark the missing ones
     for i in block_start_idx..block_end_idx {
-        let result = db_ledger
-            .data_cf
-            .get_by_slot_index(&db_ledger.db, slot, i)?;
+        let result = {
+            let r_db = db_ledger.read().unwrap();
+            r_db.data_cf.get_by_slot_index(&r_db.db, slot, i)?
+        };
 
         categorize_blob(
             &result,
@@ -420,9 +432,10 @@ pub fn recover(
 
     // Add the coding blobs we have into the recovery vector, mark the missing ones
     for i in coding_start_idx..block_end_idx {
-        let result = db_ledger
-            .erasure_cf
-            .get_by_slot_index(&db_ledger.db, slot, i)?;
+        let result = {
+            let r_db = db_ledger.read().unwrap();
+            r_db.erasure_cf.get_by_slot_index(&r_db.db, slot, i)?
+        };
 
         categorize_blob(
             &result,
@@ -515,9 +528,10 @@ pub fn recover(
         // Remove the corrupted coding blobs so there's no effort wasted in trying to reconstruct
         // the blobs again
         for i in coding_start_idx..block_end_idx {
-            db_ledger
-                .erasure_cf
-                .delete_by_slot_index(&db_ledger.db, slot, i)?;
+            {
+                let r_db = db_ledger.read().unwrap();
+                r_db.erasure_cf.delete_by_slot_index(&r_db.db, slot, i)?;
+            }
         }
         return Ok((vec![], vec![]));
     }
@@ -562,6 +576,7 @@ pub mod test {
     use rand::{thread_rng, Rng};
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use std::sync::{Arc, RwLock};
 
     #[test]
     pub fn test_coding() {
@@ -749,7 +764,12 @@ pub mod test {
             blobs.push(b_);
         }
 
-        index_blobs(&blobs, &Keypair::new().pubkey(), offset as u64, slot);
+        {
+            // Make some dummy slots
+            let slot_tick_heights: Vec<(&SharedBlob, u64)> =
+                blobs.iter().zip(vec![slot; blobs.len()]).collect();
+            index_blobs(slot_tick_heights, &Keypair::new().pubkey(), offset as u64);
+        }
         for b in blobs {
             let idx = b.read().unwrap().index().unwrap() as usize % WINDOW_SIZE;
 
@@ -770,7 +790,13 @@ pub mod test {
         let entries = make_tiny_test_entries(num_blobs);
         let blobs = entries.to_blobs();
 
-        index_blobs(&blobs, &Keypair::new().pubkey(), offset as u64, 13);
+        {
+            // Make some dummy slots
+            let slot_tick_heights: Vec<(&SharedBlob, u64)> =
+                blobs.iter().zip(vec![0; blobs.len()]).collect();
+            index_blobs(slot_tick_heights, &Keypair::new().pubkey(), offset as u64);
+        }
+
         for b in blobs.into_iter() {
             let idx = b.read().unwrap().index().unwrap() as usize % WINDOW_SIZE;
 
@@ -815,11 +841,15 @@ pub mod test {
 
         // Generate the db_ledger from the window
         let ledger_path = get_tmp_ledger_path("test_window_recover_basic");
-        let mut db_ledger =
-            generate_db_ledger_from_window(&ledger_path, &window, DEFAULT_SLOT_HEIGHT, true);
+        let db_ledger = Arc::new(RwLock::new(generate_db_ledger_from_window(
+            &ledger_path,
+            &window,
+            DEFAULT_SLOT_HEIGHT,
+            true,
+        )));
 
         // Recover it from coding
-        let (recovered_data, recovered_coding) = recover(&mut db_ledger, 0, offset as u64)
+        let (recovered_data, recovered_coding) = recover(&db_ledger, 0, offset as u64)
             .expect("Expected successful recovery of erased blobs");
 
         assert!(recovered_coding.is_empty());
@@ -866,11 +896,15 @@ pub mod test {
         window[erase_offset].data = None;
         window[erase_offset].coding = None;
         let ledger_path = get_tmp_ledger_path("test_window_recover_basic2");
-        let mut db_ledger =
-            generate_db_ledger_from_window(&ledger_path, &window, DEFAULT_SLOT_HEIGHT, true);
+        let db_ledger = Arc::new(RwLock::new(generate_db_ledger_from_window(
+            &ledger_path,
+            &window,
+            DEFAULT_SLOT_HEIGHT,
+            true,
+        )));
 
         // Recover it from coding
-        let (recovered_data, recovered_coding) = recover(&mut db_ledger, 0, offset as u64)
+        let (recovered_data, recovered_coding) = recover(&db_ledger, 0, offset as u64)
             .expect("Expected successful recovery of erased blobs");
 
         {

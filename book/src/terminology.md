@@ -1,9 +1,6 @@
 # Terminology
 
-## Teminology Currently in Use
-
-The following list contains words commonly used throughout the Solana
-architecture.
+The following terms are used throughout this book.
 
 #### account
 
@@ -14,11 +11,16 @@ A persistent file addressed by [public key](#public-key) and with
 
 A front-end application that interacts with a Solana cluster.
 
+#### blob
+
+A fraction of a [block](#block); the smallest unit sent between
+[fullnodes](#fullnode).
+
 #### block
 
 A contiguous set of [entries](#entry) on the ledger covered by a [vote](#ledger-vote).
-The length of a block is network hyper parameter, specified in [ticks](#tick).
-Also called [voting period](#voting-period).
+The duration of a block is some number of [ticks](#tick), configured via the
+[control plane](#control-plane). Also called [voting period](#voting-period).
 
 #### bootstrap leader
 
@@ -31,6 +33,12 @@ A [node](#node) that utilizes the [cluster](#cluster).
 #### cluster
 
 A set of [fullnodes](#fullnode) maintaining a single [ledger](#ledger).
+
+#### confirmation
+
+The wallclock duration between a [leader](#leader) creating a [tick
+entry](#tick) and recognizing a supermajority of [ledger votes](#ledger-vote)
+with a ledger interpretation that matches the leader's.
 
 #### control plane
 
@@ -51,11 +59,10 @@ typically serves to validate and sign transactions.
 An entry on the [ledger](#ledger) either a [tick](#tick) or a [transactions
 entry](#transactions-entry).
 
-#### confirmation
+#### epoch
 
-The wallclock duration between a [leader](#leader) creating a [tick
-entry](#tick) and recognizing a supermajority of [ledger votes](#ledger-vote)
-with a ledger interpretation that matches the leader's.
+The time, i.e. number of [slots](#slot), for which a [leader
+schedule](#leader-schedule) is valid.
 
 #### fork
 
@@ -96,8 +103,8 @@ A fractional [native token](#native-token) with the value of approximately
 
 #### loader
 
-A [program](#program) with the ability to interpret the binary encoding
-of other on-chain programs.
+A [program](#program) with the ability to interpret the binary encoding of
+other on-chain programs.
 
 #### leader
 
@@ -120,8 +127,14 @@ A list of [entries](#entry) containing [transactions](#transaction) signed by
 A [hash](#hash) of the [fullnode's state](#fullnode-state) at a given [tick
 height](#tick-height). It comprises a validator's affirmation that a
 [block](#block) it has received has been verified, as well as a promise not to
-vote for a conflicting [block](#block) (i.e. [fork](#fork)) for a specific amount
-of time, the [lockout](#lockout) period.
+vote for a conflicting [block](#block) (i.e. [fork](#fork)) for a specific
+amount of time, the [lockout](#lockout) period.
+
+#### light client
+
+A type of [client](#client) that can verify it's pointing to a valid
+[cluster](#cluster). It performs more ledger verification than a [thin
+client](#thin-client) and less than a [fullnode](#fullnode).
 
 #### lockout
 
@@ -176,6 +189,11 @@ by the company Solana.
 Tokens forfeit to the [cluster](#cluster) if malicious [fullnode](#fullnode)
 behavior can be proven.
 
+#### thin client
+
+A type of [client](#client) that trusts it is communicating with a valid
+[cluster](#cluster).
+
 #### tick
 
 A ledger [entry](#entry) that estimates wallclock duration.
@@ -208,41 +226,9 @@ The role of a [fullnode](#fullnode) when it is validating the
 
 #### vote
 
-See [ledger vote](#ledger-vote)
+See [ledger vote](#ledger-vote).
 
 #### voting period
 
-See [block](#block)
+The duration of a [block](#block).
 
-## Terminology Reserved for Future Use
-
-The following keywords do not have any functionality but are reserved by Solana
-for potential future use.
-
-#### blob
-
-A fraction of a [block](#block); the smallest unit sent between
-[fullnodes](#fullnode).
-
-#### curio
-
-A scarce, non-fungible member of a set of curios.
-
-#### epoch
-
-The time, i.e. number of [slots](#slot), for which a [leader
-schedule](#leader-schedule) is valid.
-
-#### light client
-
-A type of [client](#client) that can verify it's pointing to a valid
-[cluster](#cluster).
-
-#### mips
-
-Millions of [instructions](#instruction) per second.
-
-#### thin client
-
-A type of [client](#client) that trusts it is communicating with a valid
-[cluster](#cluster).

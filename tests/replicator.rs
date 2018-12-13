@@ -7,7 +7,6 @@ use solana::db_ledger::DbLedger;
 use solana::fullnode::Fullnode;
 use solana::leader_scheduler::LeaderScheduler;
 use solana::ledger::{create_tmp_genesis, get_tmp_ledger_path, read_ledger};
-use solana::logger;
 use solana::replicator::Replicator;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
@@ -19,7 +18,6 @@ use std::time::Duration;
 
 #[test]
 fn test_replicator_startup() {
-    logger::setup();
     info!("starting replicator test");
     let replicator_ledger_path = &get_tmp_ledger_path("replicator_test_replicator_ledger");
 
@@ -103,7 +101,7 @@ fn test_replicator_startup() {
         }
         assert!(num_entries > 0);
         replicator.close();
-        leader.exit();
+        leader.close().expect("Expected successful node closure");
     }
 
     DbLedger::destroy(&leader_ledger_path).expect("Expected successful database destuction");

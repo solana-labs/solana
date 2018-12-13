@@ -36,8 +36,8 @@ leaders will not be able to use censorship to influence the leader schedule.
 
 ## Appending Entries
 
-A leader schedule is split into *slots*, where each slot has a duration of `T`
-PoH ticks.
+The lifetime of a leader schedule is called an *epoch*. The epoch is split into
+*slots*, where each slot has a duration of `T` PoH ticks.
 
 A leader transmits entries during its slot.  After `T` ticks, all the
 validators switch to the next scheduled leader. Validators must ignore entries
@@ -45,9 +45,8 @@ sent outside a leader's assigned slot.
 
 All `T` ticks must be observed by the next leader for it to build its own
 entries on. If entries are not observed (leader is down) or entries are invalid
-(leader is buggy or malicious), the next leader must produce ticks to
-fill the previous leader's slot. Note that the next leader should do repair
-requests in parallel, and postpone sending ticks until it is confident other
-validators also failed to observe the previous leader's entries. If a leader
-incorrectly builds on its own ticks, the leader following it must replace all
-its ticks.
+(leader is buggy or malicious), the next leader must produce ticks to fill the
+previous leader's slot. Note that the next leader should do repair requests in
+parallel, and postpone sending ticks until it is confident other validators
+also failed to observe the previous leader's entries. If a leader incorrectly
+builds on its own ticks, the leader following it must replace all its ticks.

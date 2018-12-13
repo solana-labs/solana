@@ -1,4 +1,4 @@
-# Runtime
+# The Runtime
 
 The runtime is a concurrent transaction processor. Transactions specify their
 data dependencies upfront and dynamic memory allocation is explicit. By

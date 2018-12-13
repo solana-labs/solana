@@ -15,6 +15,7 @@ name = "solana-upload-perf"
 path = "src/bin/upload-perf.rs"
 
 [[bin]]
+required-features = ["bench_streamer"]
 name = "solana-bench-streamer"
 path = "src/bin/bench-streamer.rs"
 
@@ -62,9 +63,9 @@ erasure = []
 ipv6 = []
 test = []
 unstable = []
+bench_streamer = []
 
 [dependencies]
-atty = "0.2"
 bincode = "1.0.0"
 bs58 = "0.2.0"
 bv = { version = "0.10.0", features = ["serde"] }
@@ -73,10 +74,8 @@ bytes = "0.4"
 chrono = { version = "0.4.0", features = ["serde"] }
 clap = "2.31"
 dirs = "1.0.2"
-elf = "0.0.10"
 env_logger = "0.6.0"
 generic-array = { version = "0.12.0", default-features = false, features = ["serde"] }
-getopts = "0.2"
 hex-literal = "0.1.1"
 indexmap = "1.0"
 ipnetwork = "0.12.7"
@@ -116,7 +115,6 @@ solana-storage-program = { path = "programs/native/storage", version = "0.11.0" 
 solana-system-program = { path = "programs/native/system", version = "0.11.0" }
 solana-vote-program = { path = "programs/native/vote", version = "0.11.0" }
 solana-vote-signer = { path = "vote-signer", version = "0.0.1" }
-sys-info = "0.5.6"
 tokio = "0.1"
 tokio-codec = "0.1"
 untrusted = "0.6.2"

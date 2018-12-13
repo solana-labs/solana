@@ -90,15 +90,16 @@ impl ReplayStage {
             "replicate_stage-verify-duration",
             duration_as_ms(&now.elapsed()) as usize
         );
+
         let (current_leader, _) = bank
             .get_current_leader()
-            .expect("Scheduled leader id should never be unknown while processing entries");
+            .expect("Scheduled leader should be calculated by this point");
         for (i, entry) in entries.iter().enumerate() {
             res = bank.process_entry(&entry);
             let my_id = keypair.pubkey();
             let (scheduled_leader, _) = bank
                 .get_current_leader()
-                .expect("Scheduled leader id should never be unknown while processing entries");
+                .expect("Scheduled leader should be calculated by this point");
 
             // TODO: Remove this soon once we boot the leader from ClusterInfo
             if scheduled_leader != current_leader {
@@ -179,7 +180,7 @@ impl ReplayStage {
                 loop {
                     let (leader_id, _) = bank
                         .get_current_leader()
-                        .expect("Scheduled leader id should never be unknown at this point");
+                        .expect("Scheduled leader should be calculated by this point");
 
                     if leader_id == keypair.pubkey() {
                         return Some(ReplayStageReturnType::LeaderRotation(
