@@ -61,34 +61,6 @@ $ git clone https://github.com/solana-labs/solana.git
 $ cd solana
 ```
 
-Building the Solana book
----
-
-Install mdbook:
-
-```bash
-cargo install mdbook
-```
-
-Run any Rust tests in the markdown:
-
-```bash
-make -C book test
-```
-
-Render markdown as HTML:
-
-```bash
-make -C book build
-```
-
-Render and view the book:
-
-```bash
-make -C book open
-```
-
-
 Testing
 ---
 
