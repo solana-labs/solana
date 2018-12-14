@@ -21,7 +21,6 @@ erasure = []
 ipv6 = []
 test = []
 unstable = []
-bench_streamer = []
 
 [dependencies]
 bincode = "1.0.0"

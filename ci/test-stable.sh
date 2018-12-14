@@ -23,11 +23,7 @@ if [[ $(ulimit -n) -lt $maxOpenFds ]]; then
   }
 fi
 
-# bench_streamer is enabled by default to speed up dev builds, enable it
-# explicitly here to ensure it still compiles
-FEATURES=bench_streamer
-
-_ cargo build --all --verbose --features="$FEATURES"
+_ cargo build --all --verbose
 _ cargo test --verbose --lib -- --nocapture --test-threads=1
 
 # Run integration tests serially
