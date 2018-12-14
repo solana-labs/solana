@@ -1,10 +1,10 @@
 # Fork Selection
-This chapter defines Solana's *Nakomoto Fork Selection* algorithm based on time
+This article describes Solana's *Nakomoto Fork Selection* algorithm based on time
 locks. It satisfies the following properties:
 
 
 * A voter can eventually recover from voting on a fork that doesn't become the
-  fork with the desired finality.
+  fork with the desired network finality.
 * If the voters share a common ancestor then they will converge to a fork
   containing that ancestor no matter how they are partitioned, although it may
   not be the latest possible ancestor at the start of the fork.
@@ -49,34 +49,37 @@ doubled until the voter catches up to the rollback height of votes.
 For example, a vote stack with the following state:
 
 | vote | vote time | lockout | lock expiration time |
-|-----:|----------:|--------:|---------------------:| |    4 |         4 |
-2  |                    6 | |    3 |         3 |      4  |                    7
-| |    2 |         2 |      8  |                   10 | |    1 |         1 |
-16 |                   17 |
+|-----:|----------:|--------:|---------------------:|
+|    4 |         4 |      2  |                    6 |
+|    3 |         3 |      4  |                    7 |
+|    2 |         2 |      8  |                   10 |
+|    1 |         1 |      16 |                   17 |
 
 *Vote 5* is at time 9, and the resulting state is
 
 | vote | vote time | lockout | lock expiration time |
-|-----:|----------:|--------:|---------------------:| |    5 |         9 |
-2  |                   11 | |    2 |         2 |      8  |                   10
-| |    1 |         1 |      16 |                   17 |
+|-----:|----------:|--------:|---------------------:|
+|    5 |         9 |      2  |                   11 |
+|    2 |         2 |      8  |                   10 |
+|    1 |         1 |      16 |                   17 |
 
 *Vote 6* is at time 10
 
 | vote | vote time | lockout | lock expiration time |
-|-----:|----------:|--------:|---------------------:| |    6 |        10 |
-2 |                   12 | |    5 |         9 |       4 |                   13
-| |    2 |         2 |       8 |                   10 | |    1 |         1 |
-16 |                   17 |
+|-----:|----------:|--------:|---------------------:|
+|    6 |        10 |       2 |                   12 |
+|    5 |         9 |       4 |                   13 |
+|    2 |         2 |       8 |                   10 |
+|    1 |         1 |      16 |                   17 |
 
 At time 10 the new votes caught up to the previous votes.  But *vote 2* expires
 at 10, so the when *vote 7* at time 11 is applied the votes including and above
 *vote 2* will be popped.
 
 | vote | vote time | lockout | lock expiration time |
-|-----:|----------:|--------:|---------------------:| |    7 |        11 |
-2 |                   13 | |    1 |         1 |      16 |                   17
-|
+|-----:|----------:|--------:|---------------------:|
+|    7 |        11 |       2 |                   13 |
+|    1 |         1 |      16 |                   17 |
 
 The lockout for vote 1 will not increase from 16 until the stack contains 5
 votes.
@@ -143,5 +146,76 @@ concurrently, even though each fork represents a different height.
 ### Greedy Choice for Concurrent Forks
 
 When evaluating multiple forks, each node should pick the fork that will
-maximize economic finality, or the latest fork if all are equal.  Economic
-finality can be measured in terms of lockout on a fork.
+maximize economic finality for the network, or the latest fork if all are equal.
+
+## Simulation Results
+Source can be found here: https://github.com/solana-labs/solana/tests/fork-selection.rs
+
+A test library function exists for configuring networks.
+ ```
+     /// * num_partitions - 1 to 100 partitions
+     /// * fail_rate - 0 to 1.0 rate of packet receive failure
+     /// * delay_count - number of forks to observe before voting
+     /// * parasite_rate - number of parasite nodes that vote oposite the greedy choice
+     fn test_with_partitions(num_partitions: usize, fail_rate: f64, delay_count: usize, parasite_rate: f64);
+ ```
+ Modify the test function
+ ```
+ #[test]
+ #[ignore]
+ fn test_all_partitions() {
+     test_with_partitions(100, 0.0, 5, 0.25, false)
+ }
+ ```
+ Run with cargo
+
+ ```
+ cargo test all_partitions --release -- --nocapture --ignored
+ ```
+
+ The output will look like this
+ ```
+ time: 336, tip converged: 76, trunk id: 434, trunk time: 334, trunk converged 98, trunk depth 65
+ ```
+ * time - The current network time.  Each packet is transmitted to the network at a different time value.
+ * tip converged - How common is the tip of every voter in the network.
+ * trunk id - fork of every trunk.  Every transmission generates a new fork.  A trunk is the newest most common fork for the largest converged set of the network.
+ * trunk time - Time when the trunk fork was created.
+ * trunk converged - How many voters have converged on this common fork.
+ * trunk depth - How deep is this fork, or the height of this ledger.
+
+
+ ### Simulating Greedy Choice
+
+ Parasitic nodes reverse the weighted function and pick the fork that has the least amount of economic finality, but without fully committing to a dead fork.
+
+ ```
+ // Each run starts with 100 partitions, and it takes about 260 forks for a dominant trunk to emerge
+ // fully parasitic, 5 vote delay, 17% efficient
+ test_with_partitions(100, 0.0, 5, 1.0)
+ time: 1000, tip converged: 100, trunk id: 1095, trunk time: 995, trunk converged 100, trunk depth 125
+ // 50% parasitic, 5 vote delay, 30% efficient
+ test_with_partitions(100, 0.0, 5, 0.5)
+ time: 1000, tip converged: 51, trunk id: 1085, trunk time: 985, trunk converged 100, trunk depth 223
+ // 25%  parasitic, 5 vote delay, 49% efficient
+ test_with_partitions(100, 0.0, 5, 0.25)
+ time: 1000, tip converged: 79, trunk id: 1096, trunk time: 996, trunk converged 100, trunk depth 367
+ // 0%  parasitic, 5 vote delay, 62% efficient
+ test_with_partitions(100, 0.0, 5, 0.0)
+ time: 1000, tip converged: 100, trunk id: 1099, trunk time: 999, trunk converged 100, trunk depth 463
+ // 0%  parasitic, 0 vote delay, 100% efficient
+ test_with_partitions(100, 0.0, 0, 0.0)
+ time: 1000, tip converged: 100, trunk id: 1100, trunk time: 1000, trunk converged 100, trunk depth 740
+ ```
+
+ ### Impact of Receive Errors
+
+ * with 10% of packet drops, the depth of the trunk is about 77% of the max possible
+ ```
+ time: 4007, tip converged: 94, trunk id: 4005, trunk time: 4002, trunk converged 100, trunk depth 3121
+ ```
+ * with 90% of packet drops, the depth of the trunk is about 8.6% of the max possible
+ ```
+ time: 4007, tip converged: 10, trunk id: 3830, trunk time: 3827, trunk converged 100, trunk depth 348
+ ```
+
