@@ -2,20 +2,18 @@
 
 Fast, reliable synchronization is the biggest reason Solana is able to achieve
 such high throughput. Traditional blockchains synchronize on large chunks of
-transactions called blocks. By synchronizing on blocks, a transaction cannot
-be confirmed until a duration called "block time" has passed. In Proof of Work
+transactions called blocks. By synchronizing on blocks, a transaction cannot be
+processed until a duration called "block time" has passed. In Proof of Work
 consensus, these block times need to be very large (~10 minutes) to minimize
 the odds of multiple fullnodes producing a new valid block at the same time.
-
-Block times can be much shorter with Proof of Stake consensus, but without a
-reliable clock to synchronize on, a fullnode cannot distinguish an out-of-order
-block from an invalid block. Both will point to a previous block with a hash
-the validator hasn't seen. The popular workaround is to tag each block with a
-"median timestamp". All nodes share their wallclock times with each other and
-the median is what is used as the timestamp. If a node with substantial clock
-drift goes offline, the median timestamp will suddenly jump. To account for
-that, those systems require long block times such that a block doesn't include
-a timestamp before the previous block.
+There's no such constraint in Proof of Stake consensus, but without reliable
+timestamps, a fullnode cannot determine the order of incoming blocks.  The
+popular workaround is to tag each block with a [wallclock
+timestamp](https://en.bitcoin.it/wiki/Block_timestamp). Because of clock drift
+and variance in network latencies, the timestamp is only accurate within an
+hour or two. To workaround the workaround, these systems lengthen block times
+to provide reasonable certainty that the median timestamp on each block is
+always increasing.
 
 Solana takes a very different approach, which it calls *Proof of History* or
 *PoH*. Leader nodes "timestamp" blocks with cryptographic proofs that some
@@ -28,15 +26,23 @@ able to break blocks into smaller batches of transactions called *entries*.
 Entries are streamed to validators in realtime, before any notion of block
 consensus.
 
-Solana reserves the term *block* for a sequence of entries that fullnodes cast
-votes on to achieve *confirmation*. Because the entries are streamed to
-validators, transactions are processed long before it is time to vote. There is
-effectively no delay between the time the last entry is received and the time
-when the node can vote. And because of the timestamps, any time consensus is
-**not** achieved, a node simply rolls back its state. This optimisic processing
-technique was introduced in 1981 and called Optimistic Concurrency Control.
-[\[H.T.Kung, J.T.Robinson
-(1981)\]](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.65.4735)
+Solana technically never sends a *block*, but uses the term to describe the
+sequence of entries that fullnodes vote on to achieve *confirmation*. In that
+way, Solana's confirmation times can be compared apples to apples to
+block-based systems. The current implementation sets block time to 800ms.
+
+What's happening under the hood is that entries are streamed to validators as
+quickly as a leader node can batch a set of valid transactions into an entry.
+Validators process those entries long before it is time to vote on their
+validity. By processing the transactions optimistically, there is effectively
+no delay between the time the last entry is received and the time when the node
+can vote. In the event consensus is **not** achieved, a node simply rolls back
+its state. This optimisic processing technique was introduced in 1981 and
+called [Optimistic Concurrency
+Control](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.65.4735).  It
+can be applied to blockchain architecture where a cluster votes on a hash that
+represents the full ledger up to some *block height*. In Solana, it is
+implemented trivially using the last entry's PoH hash.
 
 ### Relationship to VDFs
 
@@ -79,4 +85,3 @@ the performance of the data plane and replication protocols.
 
 * [Proof of History
   overview](https://medium.com/solana-labs/proof-of-history-a-clock-for-blockchain-cf47a61a9274)
-
