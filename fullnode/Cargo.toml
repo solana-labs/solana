@@ -23,7 +23,3 @@ cuda = []
 erasure = []
 ipv6 = []
 unstable = []
-
-[[bin]]
-name = "solana-fullnode"
-path = "src/fullnode.rs"
