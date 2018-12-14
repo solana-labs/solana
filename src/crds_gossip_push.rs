@@ -16,13 +16,13 @@ use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
 use crate::packet::BLOB_DATA_SIZE;
 use bincode::serialized_size;
+use hashbrown::HashMap;
 use indexmap::map::IndexMap;
 use rand;
 use rand::seq::SliceRandom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
-use std::collections::HashMap;
 
 pub const CRDS_GOSSIP_NUM_ACTIVE: usize = 30;
 pub const CRDS_GOSSIP_PUSH_FANOUT: usize = 6;

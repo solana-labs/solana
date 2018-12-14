@@ -7,6 +7,7 @@ use crate::entry::Entry;
 use crate::ledger::create_ticks;
 use bincode::serialize;
 use byteorder::{LittleEndian, ReadBytesExt};
+use hashbrown::HashSet;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -14,7 +15,6 @@ use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, Vote, VoteProgram};
 use solana_sdk::vote_transaction::VoteTransaction;
-use std::collections::HashSet;
 use std::io::Cursor;
 
 pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = 1000;
@@ -519,13 +519,13 @@ mod tests {
         DEFAULT_LEADER_ROTATION_INTERVAL, DEFAULT_SEED_ROTATION_INTERVAL,
     };
     use crate::mint::Mint;
+    use hashbrown::HashSet;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
     use solana_sdk::vote_program::Vote;
     use solana_sdk::vote_transaction::VoteTransaction;
-    use std::collections::HashSet;
     use std::hash::Hash as StdHash;
     use std::iter::FromIterator;
 

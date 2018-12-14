@@ -16,6 +16,7 @@ use crate::runtime::{self, RuntimeError};
 use crate::storage_stage::StorageState;
 use bincode::deserialize;
 use bincode::serialize;
+use hashbrown::{HashMap, HashSet};
 use itertools::Itertools;
 use log::Level;
 use rayon::prelude::*;
@@ -38,7 +39,7 @@ use solana_sdk::token_program;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program;
 use std;
-use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, VecDeque};
 use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
@@ -207,7 +208,7 @@ pub struct Accounts {
 
 impl Accounts {
     /// Returns a read-only iterator over all known accounts
-    pub fn account_values(&self) -> std::collections::hash_map::Values<Pubkey, Account> {
+    pub fn account_values(&self) -> hashbrown::hash_map::Values<Pubkey, Account> {
         self.accounts.values()
     }
 
