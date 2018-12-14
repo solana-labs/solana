@@ -96,7 +96,6 @@ $ SOLANA_CUDA=1 ./multinode-demo/bootstrap-leader.sh
 $ SOLANA_CUDA=1 ./multinode-demo/fullnode-x.sh
 ```
 
-
 ### Testnet Client Demo
 
 Now that your singlenode or multinode testnet is up and running let's send it
@@ -117,6 +116,40 @@ demo completes after it has convinced itself the testnet won't process any addit
 transactions. You should see several TPS measurements printed to the screen. In the
 multinode variation, you'll see TPS measurements for each validator node as well.
 
+### Testnet Debugging
+
+There are some useful debug messages in the code, you can enable them on a per-module and per-level
+basis.  Before running a leader or validator set the normal RUST\_LOG environment variable.
+
+For example
+
+* To enable `info` everywhere and `debug` only in the solana::banking_stage module:
+
+  ```bash
+  $ export RUST_LOG=solana=info,solana::banking_stage=debug
+  ```
+
+* To enable BPF program logging:
+
+  ```bash
+  $ export RUST_LOG=solana_bpf_loader=trace
+  ```
+
+Generally we are using `debug` for infrequent debug messages, `trace` for potentially frequent
+messages and `info` for performance-related logging.
+
+You can also attach to a running process with GDB.  The leader's process is named
+_solana-fullnode_:
+
+```bash
+$ sudo gdb
+attach <PID>
+set logging on
+thread apply all bt
+```
+
+This will dump all the threads stack traces into gdb.txt
+
 ## Public Testnet
 
 In this example the client connects to our public testnet. To run validators on the testnet you would need to open udp ports `8000-10000`.
@@ -126,7 +159,6 @@ $ ./multinode-demo/client.sh --network $(dig +short testnet.solana.com):8001 --d
 ```
 
 You can observe the effects of your client's transactions on our [dashboard](https://metrics.solana.com:3000/d/testnet/testnet-hud?orgId=2&from=now-30m&to=now&refresh=5s&var-testnet=testnet)
-
 
 ## Linux Snap
 

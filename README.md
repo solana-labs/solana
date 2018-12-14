@@ -61,13 +61,19 @@ $ git clone https://github.com/solana-labs/solana.git
 $ cd solana
 ```
 
+Build
+
+```bash
+$ cargo build --all
+```
+
 Testing
 ---
 
 Run the test suite:
 
 ```bash
-$ cargo test
+$ cargo test --all
 ```
 
 To emulate all the tests that will run on a Pull Request, run:
@@ -76,43 +82,12 @@ To emulate all the tests that will run on a Pull Request, run:
 $ ./ci/run-local.sh
 ```
 
-Fullnode Debugging
+Local Testnet
 ---
 
-There are some useful debug messages in the code, you can enable them on a per-module and per-level
-basis.  Before running a leader or validator set the normal RUST\_LOG environment variable.
+Start your own testnet locally, instructions are in the book [Solana: Blockchain Rebuild for Scale: Getting Started](https://solana-labs.github.io/solana/getting-started.html).
 
-For example
-
-* To enable `info` everywhere and `debug` only in the solana::banking_stage module:
-
-  ```bash
-  $ export RUST_LOG=info,solana::banking_stage=debug
-  ```
-
-* To enable BPF program logging:
-
-  ```bash
-  $ export RUST_LOG=solana_bpf_loader
-  ```
-
-Generally we are using `debug` for infrequent debug messages, `trace` for potentially frequent
-messages and `info` for performance-related logging.
-
-You can also attach to a running process with GDB.  The leader's process is named
-_solana-fullnode_:
-
-```bash
-$ sudo gdb
-attach <PID>
-set logging on
-thread apply all bt
-```
-
-This will dump all the threads stack traces into gdb.txt
-
-
-Testnet Debugging
+Remote Testnets
 ---
 
 We maintain several testnets:
