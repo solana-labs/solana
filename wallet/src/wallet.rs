@@ -807,13 +807,13 @@ fn request_and_confirm_airdrop(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bank::Bank;
-    use crate::cluster_info::Node;
-    use crate::fullnode::Fullnode;
-    use crate::leader_scheduler::LeaderScheduler;
-    use crate::ledger::create_tmp_genesis;
     use clap::{App, Arg, SubCommand};
     use serde_json::Value;
+    use solana::bank::Bank;
+    use solana::cluster_info::Node;
+    use solana::fullnode::Fullnode;
+    use solana::leader_scheduler::LeaderScheduler;
+    use solana::ledger::create_tmp_genesis;
     use solana_drone::drone::run_local_drone;
     use solana_sdk::signature::{gen_keypair_file, read_keypair, read_pkcs8, Keypair, KeypairUtil};
     use std::fs;

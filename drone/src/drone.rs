@@ -294,27 +294,13 @@ pub fn run_local_drone(mint_keypair: Keypair, sender: Sender<SocketAddr>) {
 
 #[cfg(test)]
 mod tests {
-    use bank::Bank;
-    use cluster_info::Node;
-    use drone::{Drone, DroneRequest, REQUEST_CAP, TIME_SLICE};
-    use fullnode::Fullnode;
-    use leader_scheduler::LeaderScheduler;
-    use ledger::get_tmp_ledger_path;
-    use logger;
-    use mint::Mint;
-    use netutil::get_ip_addr;
+    use super::*;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use std::fs::remove_dir_all;
-    use std::net::{SocketAddr, UdpSocket};
-    use std::sync::{Arc, RwLock};
     use std::time::Duration;
-    use thin_client::ThinClient;
 
     #[test]
     fn test_check_request_limit() {
         let keypair = Keypair::new();
-        let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
-        addr.set_ip(get_ip_addr().unwrap());
         let mut drone = Drone::new(keypair, None, Some(3));
         assert!(drone.check_request_limit(1));
         drone.request_current = 3;
@@ -324,8 +310,6 @@ mod tests {
     #[test]
     fn test_clear_request_count() {
         let keypair = Keypair::new();
-        let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
-        addr.set_ip(get_ip_addr().unwrap());
         let mut drone = Drone::new(keypair, None, None);
         drone.request_current = drone.request_current + 256;
         assert_eq!(drone.request_current, 256);
@@ -336,8 +320,6 @@ mod tests {
     #[test]
     fn test_add_ip_to_cache() {
         let keypair = Keypair::new();
-        let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
-        addr.set_ip(get_ip_addr().unwrap());
         let mut drone = Drone::new(keypair, None, None);
         let ip = "127.0.0.1".parse().expect("create IpAddr from string");
         assert_eq!(drone.ip_cache.len(), 0);
@@ -349,8 +331,6 @@ mod tests {
     #[test]
     fn test_clear_ip_cache() {
         let keypair = Keypair::new();
-        let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
-        addr.set_ip(get_ip_addr().unwrap());
         let mut drone = Drone::new(keypair, None, None);
         let ip = "127.0.0.1".parse().expect("create IpAddr from string");
         assert_eq!(drone.ip_cache.len(), 0);
@@ -364,8 +344,6 @@ mod tests {
     #[test]
     fn test_drone_default_init() {
         let keypair = Keypair::new();
-        let mut addr: SocketAddr = "0.0.0.0:9900".parse().unwrap();
-        addr.set_ip(get_ip_addr().unwrap());
         let time_slice: Option<u64> = None;
         let request_cap: Option<u64> = None;
         let drone = Drone::new(keypair, time_slice, request_cap);
@@ -373,9 +351,23 @@ mod tests {
         assert_eq!(drone.request_cap, REQUEST_CAP);
     }
 
+    /*
     #[test]
     #[ignore]
     fn test_send_airdrop() {
+        use solana::bank::Bank;
+        use solana::cluster_info::Node;
+        use solana::fullnode::Fullnode;
+        use solana::leader_scheduler::LeaderScheduler;
+        use solana::ledger::get_tmp_ledger_path;
+        use solana::mint::Mint;
+        use solana::netutil::get_ip_addr;
+        use solana::thin_client::ThinClient;
+        use solana_logger;
+        use std::fs::remove_dir_all;
+        use std::net::UdpSocket;
+        use std::sync::{Arc, RwLock};
+
         const SMALL_BATCH: u64 = 50;
         const TPS_BATCH: u64 = 5_000_000;
 
@@ -471,4 +463,5 @@ mod tests {
         server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
     }
+    */
 }
