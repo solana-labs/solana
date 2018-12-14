@@ -747,9 +747,9 @@ fn request_and_confirm_airdrop(
     tokens: u64,
 ) -> Result<(), Box<dyn error::Error>> {
     let mut last_id = get_last_id(rpc_client)?;
-    let mut tx = request_airdrop_transaction(drone_addr, id, tokens, last_id)?;
     let mut send_retries = 3;
-    while send_retries > 0 {
+    loop {
+        let tx = request_airdrop_transaction(drone_addr, id, tokens, last_id)?;
         let mut status_retries = 4;
         let signature_str = send_tx(rpc_client, &tx)?;
         let status = loop {
@@ -766,25 +766,42 @@ fn request_and_confirm_airdrop(
         };
         match status {
             RpcSignatureStatus::AccountInUse => {
-                last_id = get_last_id(rpc_client)?;
-                tx = request_airdrop_transaction(drone_addr, id, tokens, last_id)?;
+                // Fetch a new last_id to prevent the retry from getting rejected as a
+                // DuplicateSignature
+                let mut next_last_id_retries = 3;
+                loop {
+                    let next_last_id = get_last_id(rpc_client)?;
+                    if next_last_id != last_id {
+                        last_id = next_last_id;
+                        break;
+                    }
+                    if next_last_id_retries == 0 {
+                        Err(WalletError::RpcRequestError(
+                            "Unable to fetch next last_id".to_string(),
+                        ))?;
+                    }
+                    next_last_id_retries -= 1;
+                    sleep(Duration::from_secs(1));
+                }
                 send_retries -= 1;
+                if send_retries == 0 {
+                    Err(WalletError::RpcRequestError(format!(
+                        "AccountInUse after 3 retries: {:?}",
+                        tx.account_keys[0]
+                    )))?
+                }
             }
             RpcSignatureStatus::Confirmed => {
                 return Ok(());
             }
             _ => {
-                return Err(WalletError::RpcRequestError(format!(
+                Err(WalletError::RpcRequestError(format!(
                     "Transaction {:?} failed: {:?}",
                     signature_str, status
                 )))?;
             }
         }
     }
-    Err(WalletError::RpcRequestError(format!(
-        "AccountInUse after 3 retries: {:?}",
-        tx.account_keys[0]
-    )))?
 }
 
 #[cfg(test)]
