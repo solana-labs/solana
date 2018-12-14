@@ -18,6 +18,9 @@ CRATES=(
   programs/native/{budget,bpf_loader,lua_loader,native_loader,noop,system,vote}
   .
   fullnode
+  genesis
+  ledger-tool
+  wallet
 )
 
 

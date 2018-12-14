@@ -5,8 +5,24 @@
 set -e
 cd "$(dirname "$0")/.."
 
-set -x
-cargo install --path drone "$@"
-cargo install --path keygen "$@"
-cargo install --path . "$@"
-cargo install --path fullnode "$@"
+SECONDS=0
+
+CRATES=(
+  drone
+  keygen
+  fullnode
+  bench-streamer
+  bench-tps
+  fullnode-config
+  genesis
+  ledger-tool
+  wallet
+)
+for crate in "${CRATES[@]}"; do
+  (
+    set -x
+    cargo install --path "$crate" "$@"
+  )
+done
+
+echo "Done after $SECONDS seconds"

@@ -1779,6 +1779,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-bench-streamer"
+version = "0.11.0"
+dependencies = [
+ "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana 0.11.0",
+]
+
+[[package]]
+name = "solana-bench-tps"
+version = "0.11.0"
+dependencies = [
+ "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rayon 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.33 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana 0.11.0",
+ "solana-drone 0.11.0",
+ "solana-metrics 0.11.0",
+ "solana-sdk 0.11.0",
+]
+
+[[package]]
 name = "solana-bpf-noop"
 version = "0.11.0"
 dependencies = [
@@ -1845,7 +1866,7 @@ dependencies = [
 
 [[package]]
 name = "solana-fullnode"
-version = "0.1.0"
+version = "0.11.0"
 dependencies = [
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1854,6 +1875,28 @@ dependencies = [
  "solana 0.11.0",
  "solana-drone 0.11.0",
  "solana-metrics 0.11.0",
+ "solana-sdk 0.11.0",
+]
+
+[[package]]
+name = "solana-fullnode-config"
+version = "0.11.0"
+dependencies = [
+ "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dirs 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.33 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana 0.11.0",
+ "solana-sdk 0.11.0",
+]
+
+[[package]]
+name = "solana-genesis"
+version = "0.11.0"
+dependencies = [
+ "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.33 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana 0.11.0",
  "solana-sdk 0.11.0",
 ]
 
@@ -2003,6 +2046,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-ledger-tool"
+version = "0.11.0"
+dependencies = [
+ "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.33 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana 0.11.0",
+]
+
+[[package]]
 name = "solana-lualoader"
 version = "0.11.0"
 dependencies = [
@@ -2042,6 +2094,17 @@ dependencies = [
 name = "solana-noop"
 version = "0.11.0"
 dependencies = [
+ "solana-sdk 0.11.0",
+]
+
+[[package]]
+name = "solana-replicator"
+version = "0.11.0"
+dependencies = [
+ "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dirs 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.33 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana 0.11.0",
  "solana-sdk 0.11.0",
 ]
 
@@ -2121,6 +2184,17 @@ dependencies = [
  "solana-jsonrpc-http-server 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-jsonrpc-macros 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-metrics 0.11.0",
+ "solana-sdk 0.11.0",
+]
+
+[[package]]
+name = "solana-wallet"
+version = "0.11.0"
+dependencies = [
+ "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "dirs 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.33 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana 0.11.0",
  "solana-sdk 0.11.0",
 ]
 
