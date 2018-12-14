@@ -18,9 +18,14 @@ A fraction of a [block](#block); the smallest unit sent between
 
 #### block
 
-A contiguous set of [entries](#entry) on the ledger covered by a [vote](#ledger-vote).
-The duration of a block is some number of [ticks](#tick), configured via the
-[control plane](#control-plane). Also called [voting period](#voting-period).
+A contiguous set of [entries](#entry) on the ledger covered by a
+[vote](#ledger-vote).  The duration of a block is some cluster-configured
+number of [ticks](#tick).  Also called [voting period](#voting-period).
+
+#### block height
+
+The number of [blocks](#block) beneath the current block plus one. The [genesis
+block](#genesis-block), for example, has block height 1.
 
 #### bootstrap leader
 
@@ -153,6 +158,10 @@ A computer particpating in a [cluster](#cluster).
 
 The number of [fullnodes](#fullnode) participating in a [cluster](#cluster).
 
+#### PoH
+
+See [Proof of History](#proof-of-history).
+
 #### program
 
 The code that interprets [instructions](#instruction).
@@ -160,6 +169,13 @@ The code that interprets [instructions](#instruction).
 #### program ID
 
 The public key of the [account](#account) containing a [program](#program).
+
+#### Proof of History
+
+A stack of proofs, each which proves that some data existed before the proof
+was created and that a precise duration of time passed before the previous
+proof. Like a [VDF](#verifiable-delay-function), a Proof of History can be
+verified in less time than it took to produce.
 
 #### public key
 
@@ -223,6 +239,15 @@ A set of [transactions](#transaction) that may be executed in parallel.
 
 The role of a [fullnode](#fullnode) when it is validating the
 [leader's](#leader) latest [entries](#entry).
+
+#### VDF
+
+See [verifiable delay function](#verifiable-delay-function).
+
+#### verifiable delay function
+
+A function that takes a fixed amount of time to execute that produces a proof
+that it ran, which can then be verified in less time than it took to produce.
 
 #### vote
 
