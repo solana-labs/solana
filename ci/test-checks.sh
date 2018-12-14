@@ -12,8 +12,8 @@ _() {
   "$@"
 }
 
-_ cargo fmt -- --check
-_ cargo clippy -- --version
-_ cargo clippy -- --deny=warnings
+_ cargo fmt --all -- --check
+_ cargo clippy --all -- --version
+_ cargo clippy --all -- --deny=warnings
 
 _ ci/audit.sh
