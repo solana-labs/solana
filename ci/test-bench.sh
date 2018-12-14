@@ -4,7 +4,7 @@ set -e
 cd "$(dirname "$0")/.."
 
 # shellcheck disable=SC1091
-source ci/upload_ci_artifact.sh
+source ci/upload-ci-artifact.sh
 
 eval "$(ci/channel-info.sh)"
 
@@ -42,4 +42,4 @@ _ cargo bench --features=unstable --verbose -- -Z unstable-options --format=json
 
 _ cargo run --release --package solana-upload-perf -- "$BENCH_FILE" "$TARGET_BRANCH" "$UPLOAD_METRICS" > "$BENCH_ARTIFACT"
 
-upload_ci_artifact "$BENCH_ARTIFACT"
+upload-ci-artifact "$BENCH_ARTIFACT"

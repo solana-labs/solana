@@ -2,7 +2,7 @@
 set -e
 
 cd "$(dirname "$0")/.."
-source ci/upload_ci_artifact.sh
+source ci/upload-ci-artifact.sh
 
 ci/version-check.sh nightly
 export RUST_BACKTRACE=1
@@ -46,17 +46,17 @@ _ genhtml -o target/cov/report-lcov --show-details --highlight --ignore-errors s
 
 # Upload to tarballs to buildkite.
 _ cd target/cov && tar -cjf cov-report.tar.bz2 report/* && cd -
-_ upload_ci_artifact "target/cov/cov-report.tar.bz2"
+_ upload-ci-artifact "target/cov/cov-report.tar.bz2"
 
 _ cd target/cov && tar -cjf lcov-report.tar.bz2 report-lcov/* && cd -
-_ upload_ci_artifact "target/cov/lcov-report.tar.bz2"
+_ upload-ci-artifact "target/cov/lcov-report.tar.bz2"
 
 # Upload coverage files to buildkite for grcov debugging
 _ cd target/cov/build && tar -cjf cov-gcda.tar.bz2 gcda/* && cd -
-_ upload_ci_artifact "target/cov/build/cov-gcda.tar.bz2"
+_ upload-ci-artifact "target/cov/build/cov-gcda.tar.bz2"
 
 _ cd target/cov/build && tar -cjf cov-gcno.tar.bz2 gcno/* && cd -
-_ upload_ci_artifact "target/cov/build/cov-gcno.tar.bz2"
+_ upload-ci-artifact "target/cov/build/cov-gcno.tar.bz2"
 
 if [[ -z "$CODECOV_TOKEN" ]]; then
   echo CODECOV_TOKEN undefined

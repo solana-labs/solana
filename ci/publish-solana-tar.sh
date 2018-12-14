@@ -59,8 +59,8 @@ echo --- Creating tarball
 )
 
 echo --- Saving build artifacts
-source ci/upload_ci_artifact.sh
-upload_ci_artifact solana-release.tar.bz2
+source ci/upload-ci-artifact.sh
+upload-ci-artifact solana-release.tar.bz2
 
 if [[ -z $DO_NOT_PUBLISH_TAR ]]; then
   echo --- AWS S3 Store

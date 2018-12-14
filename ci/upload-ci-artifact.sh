@@ -1,6 +1,6 @@
 # |source| me
 
-upload_ci_artifact() {
+upload-ci-artifact() {
   echo "--- artifact: $1"
   if [[ -r "$1" ]]; then
     ls -l "$1"
