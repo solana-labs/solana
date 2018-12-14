@@ -6,8 +6,8 @@ locks. It satisfies the following properties:
 * A voter can eventually recover from voting on a fork that doesn't become the
   fork with the desired network finality.
 * If the voters share a common ancestor then they will converge to a fork
-  containing that ancestor no matter how they are partitioned, although it may
-  not be the latest possible ancestor at the start of the fork.
+  containing that ancestor no matter how they are partitioned. The converged
+  ancestor may not be the latest possible ancestor at the start of the fork.
 * Rollback requires exponentially more time for older votes than for newer
   votes.
 * Voters have the freedom to set a minimum network confirmation threshold
