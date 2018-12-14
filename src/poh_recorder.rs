@@ -139,11 +139,11 @@ mod tests {
 
         assert!(poh_recorder.tick().is_ok());
         let e = entry_receiver.recv().unwrap();
-        assert_eq!(e[0].tick_height, 1);
+        assert_eq!(e[0].tick_height, 2);
 
         assert!(poh_recorder.tick().is_ok());
         let e = entry_receiver.recv().unwrap();
-        assert_eq!(e[0].tick_height, 2);
+        assert_eq!(e[0].tick_height, 3);
 
         // max tick height reached
         assert!(poh_recorder.tick().is_err());

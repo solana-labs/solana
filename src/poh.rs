@@ -51,12 +51,10 @@ impl Poh {
 
         let num_hashes = self.num_hashes;
         self.num_hashes = 0;
-
-        let tick_height = self.tick_height;
         self.tick_height += 1;
 
         PohEntry {
-            tick_height,
+            tick_height: self.tick_height,
             num_hashes,
             id: self.id,
             mixin: None,
