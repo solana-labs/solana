@@ -116,8 +116,7 @@ mod tests {
 
     #[test]
     fn test_encrypt_file_many_keys_single() {
-        use crate::logger;
-        logger::setup();
+        solana_logger::setup();
 
         let entries = make_tiny_test_entries(32);
         let ledger_dir = "test_encrypt_file_many_keys_single";
@@ -156,8 +155,7 @@ mod tests {
 
     #[test]
     fn test_encrypt_file_many_keys_multiple_keys() {
-        use crate::logger;
-        logger::setup();
+        solana_logger::setup();
 
         let entries = make_tiny_test_entries(32);
         let ledger_dir = "test_encrypt_file_many_keys_multiple";

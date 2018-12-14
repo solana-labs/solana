@@ -11,6 +11,7 @@ homepage = "https://solana.com/"
 clap = "2.32.0"
 serde_json = "1.0.10"
 solana = { path = "..", version = "0.11.0" }
+solana-logger = { path = "../logger", version = "0.11.0" }
 
 [features]
 cuda = []

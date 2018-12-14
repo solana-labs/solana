@@ -248,7 +248,8 @@ impl LockTower {
                 // hard coded to 100 nodes
                 assert!(v <= 100);
                 v > 50
-            }).unwrap_or(true)
+            })
+            .unwrap_or(true)
     }
     pub fn score(&self, vote: &Vote, fork_tree: &HashMap<usize, Fork>) -> usize {
         let st = self.rollback_count(vote.time);

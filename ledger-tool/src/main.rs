@@ -5,12 +5,12 @@ use serde_json;
 use clap::{App, Arg, SubCommand};
 use solana::bank::Bank;
 use solana::ledger::{read_ledger, verify_ledger};
-use solana::logger;
+
 use std::io::{stdout, Write};
 use std::process::exit;
 
 fn main() {
-    logger::setup();
+    solana_logger::setup();
     let matches = App::new("ledger-tool")
         .version(crate_version!())
         .arg(

@@ -301,7 +301,7 @@ impl Replicator {
 
 #[cfg(test)]
 mod tests {
-    use crate::logger;
+
     use crate::replicator::sample_file;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -327,7 +327,7 @@ mod tests {
 
     #[test]
     fn test_sample_file() {
-        logger::setup();
+        solana_logger::setup();
         let in_path = tmp_file_path("test_sample_file_input.txt");
         let num_strings = 4096;
         let string = "12foobar";

@@ -1,22 +1,16 @@
 //! Vote program
 //! Receive and processes votes from validators
 
-extern crate bincode;
-extern crate env_logger;
 #[macro_use]
 extern crate log;
-extern crate solana_metrics;
 #[macro_use]
 extern crate solana_sdk;
 
-use bincode::deserialize;
-use solana_metrics::{influxdb, submit};
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::vote_program::*;
 use std::collections::VecDeque;
-use std::sync::{Once, ONCE_INIT};
 
 solana_entrypoint!(entrypoint);
 fn entrypoint(
@@ -25,11 +19,7 @@ fn entrypoint(
     data: &[u8],
     _tick_height: u64,
 ) -> Result<(), ProgramError> {
-    static INIT: Once = ONCE_INIT;
-    INIT.call_once(|| {
-        // env_logger can only be initialized once
-        env_logger::init();
-    });
+    solana_logger::setup();
 
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
@@ -40,7 +30,7 @@ fn entrypoint(
         Err(ProgramError::InvalidArgument)?;
     }
 
-    match deserialize(data) {
+    match bincode::deserialize(data) {
         Ok(VoteInstruction::RegisterAccount) => {
             if !check_id(&keyed_accounts[1].account.owner) {
                 error!("account[1] is not assigned to the VOTE_PROGRAM");
@@ -64,9 +54,9 @@ fn entrypoint(
                 Err(ProgramError::InvalidArgument)?;
             }
             debug!("{:?} by {}", vote, keyed_accounts[0].signer_key().unwrap());
-            submit(
-                influxdb::Point::new("vote-native")
-                    .add_field("count", influxdb::Value::Integer(1))
+            solana_metrics::submit(
+                solana_metrics::influxdb::Point::new("vote-native")
+                    .add_field("count", solana_metrics::influxdb::Value::Integer(1))
                     .to_owned(),
             );
 

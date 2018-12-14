@@ -10,7 +10,7 @@ mod cli;
 use solana::client::mk_client;
 use solana::cluster_info::{ClusterInfo, NodeInfo};
 use solana::gossip_service::GossipService;
-use solana::logger;
+
 use solana::service::Service;
 use solana::signature::GenKeys;
 use solana::thin_client::poll_gossip_for_leader;
@@ -76,7 +76,7 @@ fn converge(
 }
 
 fn main() {
-    logger::setup();
+    solana_logger::setup();
     solana_metrics::set_panic_hook("bench-tps");
 
     let matches = cli::build_args().get_matches();

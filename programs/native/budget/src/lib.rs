@@ -1,6 +1,5 @@
 extern crate bincode;
 extern crate chrono;
-extern crate env_logger;
 #[macro_use]
 extern crate log;
 #[macro_use]
@@ -13,7 +12,6 @@ mod budget_program;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
-use std::sync::{Once, ONCE_INIT};
 
 use budget_program::process_instruction;
 
@@ -24,11 +22,7 @@ fn entrypoint(
     data: &[u8],
     _tick_height: u64,
 ) -> Result<(), ProgramError> {
-    static INIT: Once = ONCE_INIT;
-    INIT.call_once(|| {
-        // env_logger can only be initialized once
-        env_logger::init();
-    });
+    solana_logger::setup();
 
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);

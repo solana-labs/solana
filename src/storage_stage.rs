@@ -339,7 +339,7 @@ mod tests {
     use crate::entry::Entry;
     use crate::ledger::make_tiny_test_entries;
     use crate::ledger::{create_tmp_sample_ledger, LedgerWriter};
-    use crate::logger;
+
     use crate::service::Service;
     use crate::storage_stage::StorageState;
     use crate::storage_stage::NUM_IDENTITIES;
@@ -380,7 +380,7 @@ mod tests {
 
     #[test]
     fn test_storage_stage_process_entries() {
-        logger::setup();
+        solana_logger::setup();
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -445,7 +445,7 @@ mod tests {
 
     #[test]
     fn test_storage_stage_process_vote_entries() {
-        logger::setup();
+        solana_logger::setup();
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 

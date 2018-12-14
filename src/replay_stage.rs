@@ -256,7 +256,7 @@ mod test {
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
     use crate::ledger::{create_ticks, create_tmp_sample_ledger, LedgerWriter};
-    use crate::logger;
+
     use crate::packet::BlobError;
     use crate::replay_stage::{ReplayStage, ReplayStageReturnType};
     use crate::result::Error;
@@ -271,7 +271,7 @@ mod test {
 
     #[test]
     pub fn test_replay_stage_leader_rotation_exit() {
-        logger::setup();
+        solana_logger::setup();
 
         // Set up dummy node to host a ReplayStage
         let my_keypair = Keypair::new();

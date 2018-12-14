@@ -10,7 +10,7 @@ mod wallet;
 
 use crate::wallet::{parse_command, process_command, WalletConfig, WalletError};
 use clap::{App, Arg, ArgMatches, SubCommand};
-use solana::logger;
+
 use solana_sdk::signature::{gen_keypair_file, read_keypair, KeypairUtil};
 use std::error;
 use std::net::SocketAddr;
@@ -65,7 +65,7 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
-    logger::setup();
+    solana_logger::setup();
     let matches = App::new("solana-wallet")
         .version(crate_version!())
         .arg(

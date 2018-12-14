@@ -150,7 +150,7 @@ pub mod tests {
     use crate::bank::Bank;
     use crate::compute_leader_finality_service::ComputeLeaderFinalityService;
     use crate::create_vote_account::*;
-    use crate::logger;
+
     use crate::mint::Mint;
     use bincode::serialize;
     use solana_sdk::hash::hash;
@@ -164,7 +164,7 @@ pub mod tests {
 
     #[test]
     fn test_compute_finality() {
-        logger::setup();
+        solana_logger::setup();
 
         let mint = Mint::new(1234);
         let dummy_leader_id = Keypair::new().pubkey();

@@ -1,7 +1,6 @@
 //! The `erc20` library implements a generic erc20-like token
 
 extern crate bincode;
-extern crate env_logger;
 #[macro_use]
 extern crate log;
 extern crate serde;
@@ -13,7 +12,6 @@ extern crate solana_sdk;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
-use std::sync::{Once, ONCE_INIT};
 
 mod token_program;
 
@@ -24,9 +22,7 @@ fn entrypoint(
     input: &[u8],
     _tick_height: u64,
 ) -> Result<(), ProgramError> {
-    // env_logger can only be initialized once
-    static INIT: Once = ONCE_INIT;
-    INIT.call_once(env_logger::init);
+    solana_logger::setup();
 
     token_program::TokenProgram::process(program_id, info, input).map_err(|err| {
         error!("error: {:?}", err);
