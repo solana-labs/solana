@@ -126,13 +126,13 @@ For example
 * To enable `info` everywhere and `debug` only in the solana::banking_stage module:
 
   ```bash
-  $ export RUST_LOG=info,solana::banking_stage=debug
+  $ export RUST_LOG=solana=info,solana::banking_stage=debug
   ```
 
 * To enable BPF program logging:
 
   ```bash
-  $ export RUST_LOG=solana_bpf_loader
+  $ export RUST_LOG=solana_bpf_loader=trace
   ```
 
 Generally we are using `debug` for infrequent debug messages, `trace` for potentially frequent
