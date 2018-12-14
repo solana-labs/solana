@@ -33,7 +33,7 @@ votes on to achieve *confirmation*. Because the entries are streamed to
 validators, transactions are processed long before it is time to vote. There is
 effectively no delay between the time the last entry is received and the time
 when the node can vote. And because of the timestamps, any time consensus is
-**not** achieved, a node simply roll back its state. This optimisic processing
+**not** achieved, a node simply rolls back its state. This optimisic processing
 technique was introduced in 1981 and called Optimistic Concurrency Control.
 [\[H.T.Kung, J.T.Robinson
 (1981)\]](http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.65.4735)
