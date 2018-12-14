@@ -24,7 +24,7 @@ if [[ $(ulimit -n) -lt $maxOpenFds ]]; then
 fi
 
 _ cargo build --all --verbose
-_ cargo test --verbose --lib -- --nocapture --test-threads=1
+_ cargo test --all --verbose --lib -- --nocapture --test-threads=1
 
 # Run integration tests serially
 for test in tests/*.rs; do
