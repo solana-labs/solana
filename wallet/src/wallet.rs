@@ -1,12 +1,11 @@
-use crate::fullnode::Config;
-use crate::rpc::RpcSignatureStatus;
-use crate::rpc_request::{get_rpc_request_str, RpcClient, RpcRequest};
-use crate::thin_client::poll_gossip_for_leader;
 use bincode::serialize;
 use bs58;
 use chrono::prelude::*;
 use clap::ArgMatches;
 use serde_json;
+use solana::rpc::RpcSignatureStatus;
+use solana::rpc_request::{get_rpc_request_str, RpcClient, RpcRequest};
+use solana::thin_client::poll_gossip_for_leader;
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
 use solana_sdk::bpf_loader;
 use solana_sdk::budget_program;
@@ -641,22 +640,6 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
             Ok(signature_str.to_string())
         }
     }
-}
-
-pub fn read_leader(path: &str) -> Result<Config, WalletError> {
-    let file = File::open(path.to_string()).or_else(|err| {
-        Err(WalletError::BadParameter(format!(
-            "{}: Unable to open leader file: {}",
-            err, path
-        )))
-    })?;
-
-    serde_json::from_reader(file).or_else(|err| {
-        Err(WalletError::BadParameter(format!(
-            "{}: Failed to parse leader file: {}",
-            err, path
-        )))
-    })
 }
 
 fn get_last_id(rpc_client: &RpcClient) -> Result<Hash, Box<dyn error::Error>> {
