@@ -13,7 +13,7 @@ _() {
 }
 
 # Uncomment this to run nightly test suit
-# _ cargo test --verbose --features=unstable -- --test-threads=1
+# _ cargo test --all --verbose --features=unstable -- --test-threads=1
 
 cargo_install_unless() {
   declare crate=$1
