@@ -9,7 +9,7 @@ if [[ -z $USE_PREBUILT_CHANNEL_TARBALL ]]; then
 fi
 
 # shellcheck disable=SC1091
-source ci/upload_ci_artifact.sh
+source ci/upload-ci-artifact.sh
 
 [[ -n $ITERATION_WAIT ]] || ITERATION_WAIT=300
 [[ -n $NUMBER_OF_NODES ]] || NUMBER_OF_NODES="10 25 50 100"
@@ -76,7 +76,7 @@ launchTestnet() {
     --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_finality;$q_max_finality;$q_99th_finality" |
     python ci/testnet-automation-json-parser.py >>TPS"$nodeCount".log
 
-  upload_ci_artifact TPS"$nodeCount".log
+  upload-ci-artifact TPS"$nodeCount".log
 }
 
 # This is needed, because buildkite doesn't let us define an array of numbers.

@@ -6,7 +6,7 @@ set -e
 #
 
 cd "$(dirname "$0")"/..
-source ci/upload_ci_artifact.sh
+source ci/upload-ci-artifact.sh
 source scripts/configure-metrics.sh
 
 multinode-demo/setup.sh
@@ -51,7 +51,7 @@ shutdown() {
   echo "--- Upload artifacts"
   for cmd in $backgroundCommands; do
     declare logfile=log-$cmd.txt
-    upload_ci_artifact "$logfile"
+    upload-ci-artifact "$logfile"
     tail "$logfile"
   done
 
