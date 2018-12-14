@@ -5,7 +5,7 @@ name = "solana-fullnode"
 version = "0.1.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-homepage = "http://solana.com/"
+homepage = "https://solana.com/"
 
 [dependencies]
 clap = "2.32.0"
