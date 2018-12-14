@@ -481,8 +481,7 @@ mod tests {
 
     #[test]
     fn test_verify_multi_sig() {
-        use crate::logger;
-        logger::setup();
+        solana_logger::setup();
         let keypair0 = Keypair::new();
         let keypair1 = Keypair::new();
         let keypairs = vec![&keypair0, &keypair1];

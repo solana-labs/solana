@@ -1,19 +1,15 @@
-extern crate bincode;
-extern crate env_logger;
 #[macro_use]
 extern crate log;
 extern crate rlua;
 #[macro_use]
 extern crate solana_sdk;
 
-use bincode::deserialize;
 use rlua::{Lua, Table};
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use std::str;
-use std::sync::{Once, ONCE_INIT};
 
 /// Make KeyAccount values available to Lua.
 fn set_accounts(lua: &Lua, name: &str, keyed_accounts: &[KeyedAccount]) -> rlua::Result<()> {
@@ -68,11 +64,7 @@ fn entrypoint(
     tx_data: &[u8],
     _tick_height: u64,
 ) -> Result<(), ProgramError> {
-    static INIT: Once = ONCE_INIT;
-    INIT.call_once(|| {
-        // env_logger can only be initialized once
-        env_logger::init();
-    });
+    solana_logger::setup();
 
     if keyed_accounts[0].account.executable {
         let code = keyed_accounts[0].account.userdata.clone();
@@ -86,7 +78,7 @@ fn entrypoint(
                 return Err(ProgramError::GenericError);
             }
         }
-    } else if let Ok(instruction) = deserialize(tx_data) {
+    } else if let Ok(instruction) = bincode::deserialize(tx_data) {
         if keyed_accounts[0].signer_key().is_none() {
             warn!("key[0] did not sign the transaction");
             return Err(ProgramError::GenericError);

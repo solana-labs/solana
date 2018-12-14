@@ -237,7 +237,7 @@ mod test {
     use crate::entry::Entry;
     use crate::leader_scheduler::LeaderScheduler;
     use crate::ledger::{get_tmp_ledger_path, make_consecutive_blobs};
-    use crate::logger;
+
     use crate::packet::{SharedBlob, PACKET_DATA_SIZE};
     use crate::streamer::{blob_receiver, responder};
     use crate::window_service::{repair_backoff, window_service};
@@ -267,7 +267,7 @@ mod test {
 
     #[test]
     pub fn window_send_test() {
-        logger::setup();
+        solana_logger::setup();
         let tn = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
         let mut cluster_info_me = ClusterInfo::new(tn.info.clone());
@@ -338,7 +338,7 @@ mod test {
 
     #[test]
     pub fn window_send_leader_test2() {
-        logger::setup();
+        solana_logger::setup();
         let tn = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
         let cluster_info_me = ClusterInfo::new(tn.info.clone());

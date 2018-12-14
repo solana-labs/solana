@@ -2,7 +2,7 @@ use solana;
 use solana_native_loader;
 
 use solana::bank::Bank;
-use solana::logger;
+
 use solana::mint::Mint;
 #[cfg(feature = "bpf_c")]
 use solana_sdk::bpf_loader;
@@ -177,7 +177,7 @@ impl Program {
 
 #[test]
 fn test_program_native_noop() {
-    logger::setup();
+    solana_logger::setup();
 
     let loader = Loader::new_native();
     let name = String::from("noop");
@@ -202,7 +202,7 @@ fn test_program_native_noop() {
 
 #[test]
 fn test_program_lua_move_funds() {
-    logger::setup();
+    solana_logger::setup();
 
     let loader = Loader::new_dynamic("solana_lua_loader");
     let userdata = r#"
@@ -269,7 +269,7 @@ fn test_program_lua_move_funds() {
 #[cfg(feature = "bpf_c")]
 #[test]
 fn test_program_builtin_bpf_noop() {
-    logger::setup();
+    solana_logger::setup();
 
     let mut file = File::open(create_bpf_path("noop")).expect("file open failed");
     let mut elf = Vec::new();
@@ -297,7 +297,7 @@ fn test_program_builtin_bpf_noop() {
 #[cfg(feature = "bpf_c")]
 #[test]
 fn test_program_bpf_c() {
-    logger::setup();
+    solana_logger::setup();
 
     let programs = [
         "noop",

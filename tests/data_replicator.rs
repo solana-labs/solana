@@ -4,7 +4,7 @@ extern crate log;
 use rayon::iter::*;
 use solana::cluster_info::{ClusterInfo, Node};
 use solana::gossip_service::GossipService;
-use solana::logger;
+
 use solana::packet::{Blob, SharedBlob};
 use solana::result;
 use solana::service::Service;
@@ -61,7 +61,7 @@ where
 /// ring a -> b -> c -> d -> e -> a
 #[test]
 fn gossip_ring() -> result::Result<()> {
-    logger::setup();
+    solana_logger::setup();
     run_gossip_topo(50, |listen| {
         let num = listen.len();
         for n in 0..num {
@@ -82,7 +82,7 @@ fn gossip_ring() -> result::Result<()> {
 #[test]
 #[ignore]
 fn gossip_ring_large() -> result::Result<()> {
-    logger::setup();
+    solana_logger::setup();
     run_gossip_topo(600, |listen| {
         let num = listen.len();
         for n in 0..num {
@@ -101,7 +101,7 @@ fn gossip_ring_large() -> result::Result<()> {
 /// star a -> (b,c,d,e)
 #[test]
 fn gossip_star() {
-    logger::setup();
+    solana_logger::setup();
     run_gossip_topo(50, |listen| {
         let num = listen.len();
         for n in 0..(num - 1) {
@@ -120,7 +120,7 @@ fn gossip_star() {
 /// rstar a <- (b,c,d,e)
 #[test]
 fn gossip_rstar() {
-    logger::setup();
+    solana_logger::setup();
     run_gossip_topo(50, |listen| {
         let num = listen.len();
         let xd = {
@@ -139,7 +139,7 @@ fn gossip_rstar() {
 
 #[test]
 pub fn cluster_info_retransmit() -> result::Result<()> {
-    logger::setup();
+    solana_logger::setup();
     let exit = Arc::new(AtomicBool::new(false));
     trace!("c1:");
     let (c1, dr1, tn1) = test_node(exit.clone());

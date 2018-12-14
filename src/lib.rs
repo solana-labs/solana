@@ -42,7 +42,6 @@ pub mod gossip_service;
 pub mod leader_scheduler;
 pub mod ledger;
 pub mod ledger_write_stage;
-pub mod logger;
 pub mod mint;
 pub mod netutil;
 pub mod packet;

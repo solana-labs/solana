@@ -1,8 +1,6 @@
 pub mod bpf_verifier;
 
-extern crate bincode;
 extern crate byteorder;
-extern crate env_logger;
 #[macro_use]
 extern crate log;
 extern crate libc;
@@ -10,7 +8,6 @@ extern crate solana_rbpf;
 #[macro_use]
 extern crate solana_sdk;
 
-use bincode::deserialize;
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use libc::c_char;
 use solana_rbpf::EbpfVmRaw;
@@ -22,7 +19,6 @@ use std::ffi::CStr;
 use std::io::prelude::*;
 use std::io::{Error, ErrorKind};
 use std::mem;
-use std::sync::{Once, ONCE_INIT};
 
 // TODO use rbpf's disassemble
 #[allow(dead_code)]
@@ -153,11 +149,7 @@ fn entrypoint(
     tx_data: &[u8],
     tick_height: u64,
 ) -> Result<(), ProgramError> {
-    static INIT: Once = ONCE_INIT;
-    INIT.call_once(|| {
-        // env_logger can only be initialized once
-        env_logger::init();
-    });
+    solana_logger::setup();
 
     if keyed_accounts[0].account.executable {
         let prog = keyed_accounts[0].account.userdata.clone();
@@ -188,7 +180,7 @@ fn entrypoint(
             "BPF program executed {} instructions",
             vm.get_last_instruction_count()
         );
-    } else if let Ok(instruction) = deserialize(tx_data) {
+    } else if let Ok(instruction) = bincode::deserialize(tx_data) {
         if keyed_accounts[0].signer_key().is_none() {
             warn!("key[0] did not sign the transaction");
             return Err(ProgramError::GenericError);

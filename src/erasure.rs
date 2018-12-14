@@ -570,7 +570,7 @@ pub mod test {
     use super::*;
     use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
     use crate::ledger::{get_tmp_ledger_path, make_tiny_test_entries, Block};
-    use crate::logger;
+
     use crate::packet::{index_blobs, SharedBlob, BLOB_DATA_SIZE, BLOB_SIZE};
     use crate::window::WindowSlot;
     use rand::{thread_rng, Rng};
@@ -824,7 +824,7 @@ pub mod test {
     // Remove a data block, test for successful recovery
     #[test]
     pub fn test_window_recover_basic() {
-        logger::setup();
+        solana_logger::setup();
 
         // Setup the window
         let offset = 0;
@@ -878,7 +878,7 @@ pub mod test {
     // Remove a data and coding block, test for successful recovery
     #[test]
     pub fn test_window_recover_basic2() {
-        logger::setup();
+        solana_logger::setup();
 
         // Setup the window
         let offset = 0;
@@ -951,7 +951,7 @@ pub mod test {
     //    #[test]
     //    #[ignore]
     //    pub fn test_window_recover() {
-    //        logger::setup();
+    //        solana_logger::setup();
     //        let offset = 4;
     //        let data_len = 16;
     //        let num_blobs = NUM_DATA + 2;

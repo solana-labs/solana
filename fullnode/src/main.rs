@@ -13,7 +13,7 @@ use solana::client::mk_client;
 use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
 use solana::fullnode::{Config, Fullnode, FullnodeReturnType};
 use solana::leader_scheduler::LeaderScheduler;
-use solana::logger;
+
 use solana::netutil::find_available_port_in_range;
 use solana::thin_client::poll_gossip_for_leader;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -27,7 +27,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 fn main() {
-    logger::setup();
+    solana_logger::setup();
     solana_metrics::set_panic_hook("fullnode");
     let matches = App::new("fullnode")
         .version(crate_version!())

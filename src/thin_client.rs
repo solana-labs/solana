@@ -430,7 +430,7 @@ mod tests {
     use crate::fullnode::Fullnode;
     use crate::leader_scheduler::LeaderScheduler;
     use crate::ledger::create_tmp_ledger_with_mint;
-    use crate::logger;
+
     use crate::mint::Mint;
     use bincode::deserialize;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -441,7 +441,7 @@ mod tests {
 
     #[test]
     fn test_thin_client() {
-        logger::setup();
+        solana_logger::setup();
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
@@ -495,7 +495,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_bad_sig() {
-        logger::setup();
+        solana_logger::setup();
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let alice = Mint::new(10_000);
@@ -552,7 +552,7 @@ mod tests {
 
     #[test]
     fn test_client_check_signature() {
-        logger::setup();
+        solana_logger::setup();
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let alice = Mint::new(10_000);
@@ -597,7 +597,7 @@ mod tests {
 
     #[test]
     fn test_register_vote_account() {
-        logger::setup();
+        solana_logger::setup();
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let mint = Mint::new(10_000);
@@ -680,7 +680,7 @@ mod tests {
     #[test]
     fn test_transaction_count() {
         // set a bogus address, see that we don't hang
-        logger::setup();
+        solana_logger::setup();
         let addr = "0.0.0.0:1234".parse().unwrap();
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut client =
@@ -690,7 +690,7 @@ mod tests {
 
     #[test]
     fn test_zero_balance_after_nonzero() {
-        logger::setup();
+        solana_logger::setup();
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let alice = Mint::new(10_000);

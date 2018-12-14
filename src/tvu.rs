@@ -185,7 +185,7 @@ pub mod tests {
     use crate::gossip_service::GossipService;
     use crate::leader_scheduler::LeaderScheduler;
     use crate::ledger::get_tmp_ledger_path;
-    use crate::logger;
+
     use crate::mint::Mint;
     use crate::packet::SharedBlob;
     use crate::service::Service;
@@ -219,7 +219,7 @@ pub mod tests {
     #[test]
     #[ignore]
     fn test_replay() {
-        logger::setup();
+        solana_logger::setup();
         let leader = Node::new_localhost();
         let target1_keypair = Keypair::new();
         let target1 = Node::new_localhost_with_pubkey(target1_keypair.pubkey());

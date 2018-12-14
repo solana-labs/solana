@@ -203,14 +203,14 @@ pub fn find_available_port_in_range(range: (u16, u16)) -> io::Result<u16> {
 
 #[cfg(test)]
 mod tests {
-    use crate::logger;
+
     use crate::netutil::*;
     use ipnetwork::IpNetwork;
     use pnet_datalink as datalink;
 
     #[test]
     fn test_find_eth0ish_ip_addr() {
-        logger::setup();
+        solana_logger::setup();
 
         macro_rules! mock_interface {
             ($name:ident, $ip_mask:expr) => {

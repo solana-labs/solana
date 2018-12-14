@@ -8,7 +8,7 @@ extern crate solana;
 use clap::{App, Arg};
 use solana::cluster_info::{Node, NodeInfo};
 use solana::fullnode::Config;
-use solana::logger;
+
 use solana::replicator::Replicator;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::fs::File;
@@ -16,7 +16,7 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::process::exit;
 
 fn main() {
-    logger::setup();
+    solana_logger::setup();
 
     let matches = App::new("replicator")
         .version(crate_version!())

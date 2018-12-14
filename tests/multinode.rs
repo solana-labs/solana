@@ -15,7 +15,7 @@ use solana::ledger::{
     create_tmp_genesis, create_tmp_sample_ledger, read_ledger, tmp_copy_ledger, LedgerWindow,
     LedgerWriter,
 };
-use solana::logger;
+
 use solana::mint::Mint;
 use solana::packet::SharedBlob;
 use solana::poh_service::NUM_TICKS_PER_SECOND;
@@ -116,7 +116,7 @@ fn make_tiny_test_entries(start_hash: Hash, num: usize) -> Vec<Entry> {
 
 #[test]
 fn test_multi_node_ledger_window() -> result::Result<()> {
-    logger::setup();
+    solana_logger::setup();
 
     let leader_keypair = Arc::new(Keypair::new());
     let leader_pubkey = leader_keypair.pubkey().clone();
@@ -212,7 +212,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
 #[test]
 #[ignore]
 fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
-    logger::setup();
+    solana_logger::setup();
     const N: usize = 5;
     trace!("test_multi_node_validator_catchup_from_zero");
     let leader_keypair = Arc::new(Keypair::new());
@@ -358,7 +358,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
 #[test]
 #[ignore]
 fn test_multi_node_basic() {
-    logger::setup();
+    solana_logger::setup();
     const N: usize = 5;
     trace!("test_multi_node_basic");
     let leader_keypair = Arc::new(Keypair::new());
@@ -439,7 +439,7 @@ fn test_multi_node_basic() {
 #[test]
 #[ignore]
 fn test_boot_validator_from_file() -> result::Result<()> {
-    logger::setup();
+    solana_logger::setup();
     let leader_keypair = Arc::new(Keypair::new());
     let leader_pubkey = leader_keypair.pubkey();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
@@ -517,7 +517,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
     // this test verifies that a freshly started leader makes his ledger available
     //    in the repair window to validators that are started with an older
     //    ledger (currently up to WINDOW_SIZE entries)
-    logger::setup();
+    solana_logger::setup();
 
     let leader_keypair = Arc::new(Keypair::new());
     let initial_leader_balance = 500;
@@ -604,7 +604,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
 #[test]
 #[ignore]
 fn test_multi_node_dynamic_network() {
-    logger::setup();
+    solana_logger::setup();
     assert!(cfg!(feature = "test"));
     let key = "SOLANA_DYNAMIC_NODES";
     let num_nodes: usize = match env::var(key) {
@@ -801,7 +801,7 @@ fn test_multi_node_dynamic_network() {
 
 #[test]
 fn test_leader_to_validator_transition() {
-    logger::setup();
+    solana_logger::setup();
     let leader_rotation_interval = 20;
 
     // Make a dummy validator id to be the next leader
@@ -929,7 +929,7 @@ fn test_leader_to_validator_transition() {
 
 #[test]
 fn test_leader_validator_basic() {
-    logger::setup();
+    solana_logger::setup();
     let leader_rotation_interval = 10;
 
     // Account that will be the sink for all the test's transactions
@@ -1109,11 +1109,11 @@ fn run_node(
 #[test]
 #[ignore]
 fn test_dropped_handoff_recovery() {
-    logger::setup();
+    solana_logger::setup();
     // The number of validators
     const N: usize = 3;
     assert!(N > 1);
-    logger::setup();
+    solana_logger::setup();
 
     // Create the bootstrap leader node information
     let bootstrap_leader_keypair = Arc::new(Keypair::new());
@@ -1257,10 +1257,10 @@ fn test_dropped_handoff_recovery() {
 #[ignore]
 //TODO: Ignore for now due to bug exposed by the test "test_dropped_handoff_recovery"
 fn test_full_leader_validator_network() {
-    logger::setup();
+    solana_logger::setup();
     // The number of validators
     const N: usize = 5;
-    logger::setup();
+    solana_logger::setup();
 
     // Create the bootstrap leader node information
     let bootstrap_leader_keypair = Keypair::new();
@@ -1509,10 +1509,10 @@ fn test_full_leader_validator_network() {
 
 #[test]
 fn test_broadcast_last_tick() {
-    logger::setup();
+    solana_logger::setup();
     // The number of validators
     const N: usize = 5;
-    logger::setup();
+    solana_logger::setup();
 
     // Create the bootstrap leader node information
     let bootstrap_leader_keypair = Keypair::new();

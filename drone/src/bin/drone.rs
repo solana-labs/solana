@@ -1,4 +1,3 @@
-extern crate bincode;
 extern crate byteorder;
 extern crate bytes;
 #[macro_use]
@@ -11,12 +10,10 @@ extern crate solana_sdk;
 extern crate tokio;
 extern crate tokio_codec;
 
-use bincode::{deserialize, serialize};
 use byteorder::{ByteOrder, LittleEndian};
 use bytes::Bytes;
 use clap::{App, Arg};
 use solana_drone::drone::{Drone, DroneRequest, DRONE_PORT};
-//use solana::logger;
 use solana_sdk::signature::read_keypair;
 use std::error;
 use std::io;
@@ -100,7 +97,7 @@ fn main() -> Result<(), Box<error::Error>> {
             let (writer, reader) = framed.split();
 
             let processor = reader.and_then(move |bytes| {
-                let req: DroneRequest = deserialize(&bytes).or_else(|err| {
+                let req: DroneRequest = bincode::deserialize(&bytes).or_else(|err| {
                     Err(io::Error::new(
                         io::ErrorKind::Other,
                         format!("deserialize packet in drone: {:?}", err),
@@ -112,7 +109,7 @@ fn main() -> Result<(), Box<error::Error>> {
                 let res = drone2.lock().unwrap().build_airdrop_transaction(req);
                 match res {
                     Ok(tx) => {
-                        let response_vec = serialize(&tx).or_else(|err| {
+                        let response_vec = bincode::serialize(&tx).or_else(|err| {
                             Err(io::Error::new(
                                 io::ErrorKind::Other,
                                 format!("deserialize packet in drone: {:?}", err),

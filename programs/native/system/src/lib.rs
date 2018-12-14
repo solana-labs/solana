@@ -1,10 +1,8 @@
-extern crate bincode;
 #[macro_use]
 extern crate log;
 #[macro_use]
 extern crate solana_sdk;
 
-use bincode::deserialize;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
@@ -18,7 +16,7 @@ pub fn entrypoint(
     data: &[u8],
     _tick_height: u64,
 ) -> Result<(), ProgramError> {
-    if let Ok(syscall) = deserialize(data) {
+    if let Ok(syscall) = bincode::deserialize(data) {
         trace!("process_instruction: {:?}", syscall);
         trace!("keyed_accounts: {:?}", keyed_accounts);
         let from = 0;

@@ -379,7 +379,7 @@ mod tests {
         const SMALL_BATCH: u64 = 50;
         const TPS_BATCH: u64 = 5_000_000;
 
-        logger::setup();
+        solana_logger::setup();
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 

@@ -491,32 +491,28 @@ mod test {
     #[test]
     #[ignore]
     fn test_star_network_large_pull() {
-        use crate::logger;
-        logger::setup();
+        solana_logger::setup();
         let mut network = star_network_create(2000);
         network_simulator_pull_only(&mut network);
     }
     #[test]
     #[ignore]
     fn test_rstar_network_large_push() {
-        use crate::logger;
-        logger::setup();
+        solana_logger::setup();
         let mut network = rstar_network_create(4000);
         network_simulator(&mut network);
     }
     #[test]
     #[ignore]
     fn test_ring_network_large_push() {
-        use crate::logger;
-        logger::setup();
+        solana_logger::setup();
         let mut network = ring_network_create(4001);
         network_simulator(&mut network);
     }
     #[test]
     #[ignore]
     fn test_star_network_large_push() {
-        use crate::logger;
-        logger::setup();
+        solana_logger::setup();
         let mut network = star_network_create(4002);
         network_simulator(&mut network);
     }

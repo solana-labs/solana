@@ -1109,7 +1109,7 @@ mod tests {
     use crate::crds_value::CrdsValueLabel;
     use crate::db_ledger::DbLedger;
     use crate::ledger::get_tmp_ledger_path;
-    use crate::logger;
+
     use crate::packet::BLOB_HEADER_SIZE;
     use crate::result::Error;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -1206,7 +1206,7 @@ mod tests {
     /// test window requests respond with the right blob, and do not overrun
     #[test]
     fn run_window_request() {
-        logger::setup();
+        solana_logger::setup();
         let ledger_path = get_tmp_ledger_path("run_window_request");
         {
             let db_ledger = Arc::new(RwLock::new(DbLedger::open(&ledger_path).unwrap()));
@@ -1254,7 +1254,7 @@ mod tests {
 
     #[test]
     fn test_default_leader() {
-        logger::setup();
+        solana_logger::setup();
         let node_info = NodeInfo::new_localhost(Keypair::new().pubkey(), 0);
         let mut cluster_info = ClusterInfo::new(node_info);
         let network_entry_point = NodeInfo::new_entry_point(&socketaddr!("127.0.0.1:1239"));

@@ -731,8 +731,7 @@ mod tests {
 
     #[test]
     fn test_verify_slice() {
-        use crate::logger;
-        logger::setup();
+        solana_logger::setup();
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
         assert!(vec![][..].verify(&zero)); // base case
@@ -775,8 +774,7 @@ mod tests {
 
     #[test]
     fn test_entries_to_blobs() {
-        use crate::logger;
-        logger::setup();
+        solana_logger::setup();
         let entries = make_test_entries();
 
         let blob_q = entries.to_blobs();
@@ -786,8 +784,7 @@ mod tests {
 
     #[test]
     fn test_bad_blobs_attack() {
-        use crate::logger;
-        logger::setup();
+        solana_logger::setup();
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 8000);
         let blobs_q = to_blobs(vec![(0, addr)]).unwrap(); // <-- attack!
         assert!(reconstruct_entries_from_blobs(blobs_q).is_err());
@@ -795,8 +792,7 @@ mod tests {
 
     #[test]
     fn test_next_entries() {
-        use crate::logger;
-        logger::setup();
+        solana_logger::setup();
         let id = Hash::default();
         let next_id = hash(&id.as_ref());
         let keypair = Keypair::new();
@@ -844,8 +840,7 @@ mod tests {
 
     #[test]
     fn test_ledger_reader_writer() {
-        use crate::logger;
-        logger::setup();
+        solana_logger::setup();
         let ledger_path = get_tmp_ledger_path("test_ledger_reader_writer");
         let entries = make_tiny_test_entries(10);
 
@@ -922,8 +917,7 @@ mod tests {
 
     #[test]
     fn test_recover_ledger() {
-        use crate::logger;
-        logger::setup();
+        solana_logger::setup();
 
         let entries = make_tiny_test_entries(10);
         let ledger_path = get_tmp_ledger_path("test_recover_ledger");
@@ -973,8 +967,7 @@ mod tests {
 
     #[test]
     fn test_verify_ledger() {
-        use crate::logger;
-        logger::setup();
+        solana_logger::setup();
 
         let entries = make_tiny_test_entries(10);
         let ledger_path = get_tmp_ledger_path("test_verify_ledger");
@@ -991,8 +984,7 @@ mod tests {
 
     #[test]
     fn test_get_entries_bytes() {
-        use crate::logger;
-        logger::setup();
+        solana_logger::setup();
         let entries = make_tiny_test_entries(10);
         let ledger_path = get_tmp_ledger_path("test_raw_entries");
         {

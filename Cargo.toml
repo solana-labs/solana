@@ -31,7 +31,6 @@ bytes = "0.4"
 chrono = { version = "0.4.0", features = ["serde"] }
 clap = "2.31"
 dirs = "1.0.2"
-env_logger = "0.6.0"
 generic-array = { version = "0.12.0", default-features = false, features = ["serde"] }
 hex-literal = "0.1.1"
 indexmap = "1.0"
@@ -64,6 +63,7 @@ solana-jsonrpc-macros = "0.4.0"
 solana-jsonrpc-pubsub = "0.4.0"
 solana-jsonrpc-ws-server = "0.4.0"
 solana-keygen = { path = "keygen", version = "0.11.0" }
+solana-logger = { path = "logger", version = "0.11.0" }
 solana-lualoader = { path = "programs/native/lua_loader", version = "0.11.0" }
 solana-metrics = { path = "metrics", version = "0.11.0" }
 solana-native-loader = { path = "programs/native/native_loader", version = "0.11.0" }
@@ -110,6 +110,7 @@ members = [
     "genesis",
     "keygen",
     "ledger-tool",
+    "logger",
     "metrics",
     "programs/bpf/rust/noop",
     "programs/native/bpf_loader",

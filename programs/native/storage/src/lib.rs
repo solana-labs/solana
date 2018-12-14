@@ -2,14 +2,11 @@
 //!  Receive mining proofs from miners, validate the answers
 //!  and give reward for good proofs.
 
-extern crate bincode;
-extern crate env_logger;
 #[macro_use]
 extern crate log;
 #[macro_use]
 extern crate solana_sdk;
 
-use bincode::deserialize;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
@@ -22,13 +19,15 @@ fn entrypoint(
     data: &[u8],
     _tick_height: u64,
 ) -> Result<(), ProgramError> {
+    solana_logger::setup();
+
     // accounts_keys[0] must be signed
     if keyed_accounts[0].signer_key().is_none() {
         info!("account[0] is unsigned");
         Err(ProgramError::InvalidArgument)?;
     }
 
-    if let Ok(syscall) = deserialize(data) {
+    if let Ok(syscall) = bincode::deserialize(data) {
         match syscall {
             StorageProgram::SubmitMiningProof {
                 sha_state,

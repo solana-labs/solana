@@ -342,8 +342,7 @@ mod test {
     }
     #[test]
     fn test_refresh_active_set() {
-        use crate::logger;
-        logger::setup();
+        solana_logger::setup();
         let mut crds = Crds::default();
         let mut push = CrdsGossipPush::default();
         let value1 = CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0));
