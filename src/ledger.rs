@@ -457,7 +457,6 @@ pub trait Block {
 impl Block for [Entry] {
     fn verify(&self, start_hash: &Hash) -> bool {
         let genesis = [Entry {
-            prev_id: *start_hash,
             tick_height: 0,
             num_hashes: 0,
             id: *start_hash,
@@ -737,8 +736,8 @@ mod tests {
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
         assert!(vec![][..].verify(&zero)); // base case
-        assert!(vec![Entry::new_tick(&zero, 0, 0, &zero)][..].verify(&zero)); // singleton case 1
-        assert!(!vec![Entry::new_tick(&zero, 0, 0, &zero)][..].verify(&one)); // singleton case 2, bad
+        assert!(vec![Entry::new_tick(0, 0, &zero)][..].verify(&zero)); // singleton case 1
+        assert!(!vec![Entry::new_tick(0, 0, &zero)][..].verify(&one)); // singleton case 2, bad
         assert!(vec![next_entry(&zero, 0, vec![]); 2][..].verify(&zero)); // inductive step
 
         let mut bad_ticks = vec![next_entry(&zero, 0, vec![]); 2];
@@ -808,7 +807,6 @@ mod tests {
         let tx_small_size = serialized_size(&tx_small).unwrap() as usize;
         let tx_large_size = serialized_size(&tx_large).unwrap() as usize;
         let entry_size = serialized_size(&Entry {
-            prev_id: Hash::default(),
             tick_height: 0,
             num_hashes: 0,
             id: Hash::default(),

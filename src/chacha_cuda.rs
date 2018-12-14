@@ -7,7 +7,7 @@ use solana_sdk::hash::Hash;
 use std::io;
 use std::mem::size_of;
 
-use crate::storage_stage::ENTRIES_PER_SLICE;
+use crate::storage_stage::ENTRIES_PER_SEGMENT;
 
 // Encrypt a file with multiple starting IV states, determined by ivecs.len()
 //
@@ -44,8 +44,11 @@ pub fn chacha_cbc_encrypt_file_many_keys(
         chacha_init_sha_state(int_sha_states.as_mut_ptr(), num_keys as u32);
     }
     loop {
-        match ledger_window.get_entries_bytes(entry, ENTRIES_PER_SLICE - total_entries, &mut buffer)
-        {
+        match ledger_window.get_entries_bytes(
+            entry,
+            ENTRIES_PER_SEGMENT - total_entries,
+            &mut buffer,
+        ) {
             Ok((num_entries, entry_len)) => {
                 info!(
                     "encrypting slice: {} num_entries: {} entry_len: {}",
@@ -72,9 +75,9 @@ pub fn chacha_cbc_encrypt_file_many_keys(
                 entry += num_entries;
                 debug!(
                     "total entries: {} entry: {} slice: {} entries_per_slice: {}",
-                    total_entries, entry, slice, ENTRIES_PER_SLICE
+                    total_entries, entry, slice, ENTRIES_PER_SEGMENT
                 );
-                if (entry - slice) >= ENTRIES_PER_SLICE {
+                if (entry - slice) >= ENTRIES_PER_SEGMENT {
                     break;
                 }
             }

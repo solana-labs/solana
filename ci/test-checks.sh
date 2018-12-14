@@ -12,12 +12,8 @@ _() {
   "$@"
 }
 
-# bench_streamer is disabled by default to speed up dev builds, enable it
-# explicitly here to ensure it still passes clippy
-FEATURES=bench_streamer
-
-_ cargo fmt -- --check
-_ cargo clippy -- --version
-_ cargo clippy --features="$FEATURES" -- --deny=warnings
+_ cargo fmt --all -- --check
+_ cargo clippy --all -- --version
+_ cargo clippy --all -- --deny=warnings
 
 _ ci/audit.sh

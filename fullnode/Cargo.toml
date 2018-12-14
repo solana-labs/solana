@@ -2,10 +2,10 @@
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-fullnode"
-version = "0.1.0"
+version = "0.11.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
-homepage = "http://solana.com/"
+homepage = "https://solana.com/"
 
 [dependencies]
 clap = "2.32.0"
@@ -17,6 +17,9 @@ solana-drone = { path = "../drone", version = "0.11.0" }
 solana-metrics = { path = "../metrics", version = "0.11.0" }
 solana-sdk = { path = "../sdk", version = "0.11.0" }
 
-[[bin]]
-name = "solana-fullnode"
-path = "src/fullnode.rs"
+[features]
+chacha = []
+cuda = ["solana/cuda"]
+erasure = []
+ipv6 = []
+unstable = []

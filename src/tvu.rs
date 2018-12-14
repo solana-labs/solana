@@ -67,7 +67,7 @@ impl Tvu {
         bank: &Arc<Bank>,
         entry_height: u64,
         last_entry_id: Hash,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
         sockets: Sockets,
         ledger_path: Option<&str>,
         db_ledger: Arc<RwLock<DbLedger>>,
@@ -110,7 +110,7 @@ impl Tvu {
             keypair.clone(),
             vote_account_keypair,
             bank.clone(),
-            cluster_info,
+            cluster_info.clone(),
             blob_window_receiver,
             exit.clone(),
             entry_height,
@@ -285,7 +285,7 @@ pub mod tests {
             &bank,
             0,
             cur_hash,
-            cref1,
+            &cref1,
             {
                 Sockets {
                     repair: target1.sockets.repair,

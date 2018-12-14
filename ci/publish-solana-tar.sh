@@ -49,15 +49,18 @@ echo --- Creating tarball
   ./fetch-perf-libs.sh
   # shellcheck source=/dev/null
   source ./target/perf-libs/env.sh
-  cargo install --path . --features=cuda --root solana-release-cuda
+  (
+    cd fullnode
+    cargo install --path . --features=cuda --root ../solana-release-cuda
+  )
   cp solana-release-cuda/bin/solana-fullnode solana-release/bin/solana-fullnode-cuda
 
   tar jvcf solana-release.tar.bz2 solana-release/
 )
 
 echo --- Saving build artifacts
-source ci/upload_ci_artifact.sh
-upload_ci_artifact solana-release.tar.bz2
+source ci/upload-ci-artifact.sh
+upload-ci-artifact solana-release.tar.bz2
 
 if [[ -z $DO_NOT_PUBLISH_TAR ]]; then
   echo --- AWS S3 Store

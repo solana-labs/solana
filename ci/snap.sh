@@ -64,8 +64,8 @@ fi
 echo --- build: $CHANNEL channel
 snapcraft
 
-source ci/upload_ci_artifact.sh
-upload_ci_artifact solana_*.snap
+source ci/upload-ci-artifact.sh
+upload-ci-artifact solana_*.snap
 
 if [[ -z $DO_NOT_PUBLISH_SNAP ]]; then
   echo --- publish: $CHANNEL channel

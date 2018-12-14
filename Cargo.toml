@@ -3,42 +3,12 @@ name = "solana"
 description = "Blockchain, Rebuilt for Scale"
 version = "0.11.0"
 documentation = "https://docs.rs/solana"
-homepage = "http://solana.com/"
+homepage = "https://solana.com/"
 readme = "README.md"
 repository = "https://github.com/solana-labs/solana"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 license = "Apache-2.0"
 edition = "2018"
-
-[[bin]]
-required-features = ["bench_streamer"]
-name = "solana-bench-streamer"
-path = "src/bin/bench-streamer.rs"
-
-[[bin]]
-name = "solana-bench-tps"
-path = "src/bin/bench-tps.rs"
-
-[[bin]]
-required-features = ["chacha"]
-name = "solana-replicator"
-path = "src/bin/replicator.rs"
-
-[[bin]]
-name = "solana-fullnode-config"
-path = "src/bin/fullnode-config.rs"
-
-[[bin]]
-name = "solana-genesis"
-path = "src/bin/genesis.rs"
-
-[[bin]]
-name = "solana-ledger-tool"
-path = "src/bin/ledger-tool.rs"
-
-[[bin]]
-name = "solana-wallet"
-path = "src/bin/wallet.rs"
 
 [badges]
 codecov = { repository = "solana-labs/solana", branch = "master", service = "github" }
@@ -51,7 +21,6 @@ erasure = []
 ipv6 = []
 test = []
 unstable = []
-bench_streamer = []
 
 [dependencies]
 bincode = "1.0.0"
@@ -133,10 +102,15 @@ name = "chacha"
 [workspace]
 members = [
     ".",
+    "bench-streamer",
+    "bench-tps",
     "drone",
-    "keygen",
-    "metrics",
     "fullnode",
+    "fullnode-config",
+    "genesis",
+    "keygen",
+    "ledger-tool",
+    "metrics",
     "programs/bpf/rust/noop",
     "programs/native/bpf_loader",
     "programs/native/budget",
@@ -145,7 +119,9 @@ members = [
     "programs/native/native_loader",
     "programs/native/noop",
     "programs/native/vote",
+    "replicator",
     "sdk",
     "upload-perf",
     "vote-signer",
+    "wallet",
 ]

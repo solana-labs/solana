@@ -27,6 +27,7 @@
   - [Secure Enclave](enclave.md)
   - [Staking Rewards](staking-rewards.md)
   - [Fork Selection](fork-selection.md)
+  - [Entry Tree](entry-tree.md)
 
 ## Appendix
 
