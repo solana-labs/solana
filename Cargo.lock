@@ -655,6 +655,15 @@ version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "hashbrown"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "byteorder 1.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
+ "scopeguard 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "hex-literal"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1732,6 +1741,7 @@ dependencies = [
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "dirs 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "generic-array 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hashbrown 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "indexmap 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "ipnetwork 0.12.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2798,6 +2808,7 @@ dependencies = [
 "checksum globset 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "4743617a7464bbda3c8aec8558ff2f9429047e025771037df561d383337ff865"
 "checksum h2 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)" = "7dd33bafe2e6370e6c8eb0cf1b8c5f93390b90acde7e9b03723f166b28b648ed"
 "checksum half 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9353c2a89d550b58fa0061d8ed8d002a7d8cdf2494eb0e432859bd3a9e543836"
+"checksum hashbrown 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)" = "64b7d419d0622ae02fe5da6b9a5e1964b610a65bb37923b976aeebb6dbb8f86e"
 "checksum hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "4da5f0e01bd8a71a224a4eedecaacfcabda388dbb7a80faf04d3514287572d95"
 "checksum hex-literal-impl 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "1d340b6514f232f6db1bd16db65302a5278a04fef9ce867cb932e7e5fa21130a"
 "checksum http 0.1.14 (registry+https://github.com/rust-lang/crates.io-index)" = "02096a6d2c55e63f7fcb800690e4f889a25f6ec342e3adb4594e293b625215ab"

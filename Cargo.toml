@@ -76,6 +76,7 @@ solana-vote-signer = { path = "vote-signer", version = "0.0.1" }
 tokio = "0.1"
 tokio-codec = "0.1"
 untrusted = "0.6.2"
+hashbrown = "0.1.7"
 
 [[bench]]
 name = "bank"
