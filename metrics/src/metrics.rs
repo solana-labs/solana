@@ -267,8 +267,9 @@ pub fn set_panic_hook(program: &'static str) {
 
 #[cfg(test)]
 mod test {
+    extern crate rand;
+
     use super::*;
-    use rand::random;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     struct MockMetricsWriter {
@@ -371,11 +372,11 @@ mod test {
             .add_tag("test", influxdb::Value::Boolean(true))
             .add_field(
                 "random_bool",
-                influxdb::Value::Boolean(random::<u8>() < 128),
+                influxdb::Value::Boolean(rand::random::<u8>() < 128),
             )
             .add_field(
                 "random_int",
-                influxdb::Value::Integer(random::<u8>() as i64),
+                influxdb::Value::Integer(rand::random::<u8>() as i64),
             )
             .to_owned();
         agent.submit(point);

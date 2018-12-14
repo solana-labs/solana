@@ -15,5 +15,8 @@ lazy_static = "1.2.0"
 sys-info = "0.5.6"
 solana-sdk = { path = "../sdk", version = "0.11.0" }
 
+[dev-dependencies]
+rand = "0.6.1"
+
 [lib]
 name = "solana_metrics"
