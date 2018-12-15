@@ -287,6 +287,7 @@ mod tests {
         let signature = Signature::default();
         let last_id = Default::default();
         let mut last_ids = LastIds::default();
+        last_ids.register_tick(&last_id);
         last_ids
             .reserve_signature_with_last_id(&last_id, &signature)
             .unwrap();
@@ -302,6 +303,7 @@ mod tests {
         let signature = Signature::default();
         let last_id = Default::default();
         let mut last_ids = LastIds::default();
+        last_ids.register_tick(&last_id);
         last_ids
             .reserve_signature_with_last_id(&last_id, &signature)
             .unwrap();
@@ -318,6 +320,7 @@ mod tests {
         let signature = Signature::default();
         let last_id = Default::default();
         let mut last_ids = LastIds::default();
+        last_ids.register_tick(&last_id);
         last_ids
             .reserve_signature_with_last_id(&last_id, &signature)
             .expect("reserve signature");
@@ -328,10 +331,27 @@ mod tests {
     }
 
     #[test]
+    fn test_register_tick() {
+        let signature = Signature::default();
+        let last_id = Default::default();
+        let mut last_ids = LastIds::default();
+        assert_eq!(
+            last_ids.reserve_signature_with_last_id(&last_id, &signature),
+            Err(BankError::LastIdNotFound)
+        );
+        last_ids.register_tick(&last_id);
+        assert_eq!(
+            last_ids.reserve_signature_with_last_id(&last_id, &signature),
+            Ok(())
+        );
+    }
+
+    #[test]
     fn test_has_signature() {
         let signature = Signature::default();
         let last_id = Default::default();
         let mut last_ids = LastIds::default();
+        last_ids.register_tick(&last_id);
         last_ids
             .reserve_signature_with_last_id(&last_id, &signature)
             .expect("reserve signature");
