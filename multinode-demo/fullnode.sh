@@ -167,7 +167,7 @@ rsync_url() { # adds the 'rsync://` prefix to URLs that need it
 
 rsync_leader_url=$(rsync_url "$leader")
 
-tune_networking
+tune_system
 
 set -ex
 $rsync -vPr "$rsync_leader_url"/config/ "$ledger_config_dir"
