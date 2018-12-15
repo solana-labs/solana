@@ -79,7 +79,6 @@ fn recv_window(
 
     retransmit_all_leader_blocks(&dq, leader_scheduler, retransmit)?;
 
-    let mut pixs = Vec::new();
     //send a contiguous set of blocks
     let mut consume_queue = Vec::new();
 
@@ -97,8 +96,6 @@ fn recv_window(
                 .to_owned(),
         );
 
-        pixs.push(pix);
-
         trace!("{} window pix: {} size: {}", id, pix, meta_size);
 
         let _ = process_blob(
@@ -106,7 +103,6 @@ fn recv_window(
             db_ledger,
             &b,
             max_ix,
-            pix,
             &mut consume_queue,
             tick_height,
             done,
