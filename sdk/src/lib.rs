@@ -23,16 +23,5 @@ pub mod transaction;
 pub mod vote_program;
 pub mod vote_transaction;
 
-extern crate bincode;
-extern crate bs58;
-extern crate byteorder;
-extern crate chrono;
-extern crate generic_array;
-extern crate log;
-extern crate ring;
-extern crate serde;
 #[macro_use]
 extern crate serde_derive;
-extern crate serde_json;
-extern crate sha2;
-extern crate untrusted;

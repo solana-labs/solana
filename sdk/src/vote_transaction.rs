@@ -1,13 +1,13 @@
 //! The `vote_transaction` module provides functionality for creating vote transactions.
 
+use crate::hash::Hash;
+use crate::pubkey::Pubkey;
+use crate::signature::Keypair;
+use crate::system_instruction::SystemInstruction;
+use crate::system_program;
+use crate::transaction::{Instruction, Transaction};
+use crate::vote_program::{self, Vote, VoteInstruction};
 use bincode::deserialize;
-use hash::Hash;
-use pubkey::Pubkey;
-use signature::Keypair;
-use system_instruction::SystemInstruction;
-use system_program;
-use transaction::{Instruction, Transaction};
-use vote_program::{self, Vote, VoteInstruction};
 
 pub trait VoteTransaction {
     fn vote_new(vote_account: &Keypair, vote: Vote, last_id: Hash, fee: u64) -> Self;

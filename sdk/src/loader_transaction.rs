@@ -1,10 +1,10 @@
 //! The `loader_transaction` module provides functionality for loading and calling a program
 
-use hash::Hash;
-use loader_instruction::LoaderInstruction;
-use pubkey::Pubkey;
-use signature::Keypair;
-use transaction::Transaction;
+use crate::hash::Hash;
+use crate::loader_instruction::LoaderInstruction;
+use crate::pubkey::Pubkey;
+use crate::signature::Keypair;
+use crate::transaction::Transaction;
 
 pub trait LoaderTransaction {
     fn loader_write(

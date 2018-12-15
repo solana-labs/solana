@@ -1,9 +1,9 @@
 //! The `signature` module provides functionality for public, and private keys.
 
+use crate::pubkey::Pubkey;
 use bs58;
 use generic_array::typenum::U64;
 use generic_array::GenericArray;
-use pubkey::Pubkey;
 use ring::signature::Ed25519KeyPair;
 use ring::{rand, signature};
 use serde_json;

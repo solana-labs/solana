@@ -1,4 +1,4 @@
-use pubkey::Pubkey;
+use crate::pubkey::Pubkey;
 
 pub const SYSTEM_PROGRAM_ID: [u8; 32] = [0u8; 32];
 

@@ -1,11 +1,6 @@
-#[macro_use]
-extern crate clap;
-use serde_json;
-
-use clap::{App, Arg, SubCommand};
+use clap::{crate_version, App, Arg, SubCommand};
 use solana::bank::Bank;
 use solana::ledger::{read_ledger, verify_ledger};
-
 use std::io::{stdout, Write};
 use std::process::exit;
 

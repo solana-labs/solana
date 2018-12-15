@@ -1,19 +1,11 @@
-extern crate bincode;
-extern crate chrono;
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate solana_sdk;
-
 mod budget_program;
 
+use crate::budget_program::process_instruction;
+use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
-
-use budget_program::process_instruction;
+use solana_sdk::solana_entrypoint;
 
 solana_entrypoint!(entrypoint);
 fn entrypoint(

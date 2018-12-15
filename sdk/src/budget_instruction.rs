@@ -1,4 +1,4 @@
-use budget_expr::BudgetExpr;
+use crate::budget_expr::BudgetExpr;
 use chrono::prelude::{DateTime, Utc};
 
 /// A smart contract.

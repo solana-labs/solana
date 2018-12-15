@@ -1,4 +1,4 @@
-use pubkey::Pubkey;
+use crate::pubkey::Pubkey;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum SystemInstruction {

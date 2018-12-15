@@ -1,8 +1,6 @@
 use serde_json;
-
-use solana_metrics;
-
 use serde_json::Value;
+use solana_metrics;
 use solana_metrics::influxdb;
 use std::collections::HashMap;
 use std::env;

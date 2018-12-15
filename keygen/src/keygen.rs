@@ -1,9 +1,4 @@
-#[macro_use]
-extern crate clap;
-extern crate dirs;
-extern crate solana_sdk;
-
-use clap::{App, Arg};
+use clap::{crate_version, App, Arg};
 use solana_sdk::signature::gen_keypair_file;
 use std::error;
 

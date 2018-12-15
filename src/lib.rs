@@ -76,7 +76,6 @@ pub mod window_service;
 #[cfg(any(feature = "chacha", feature = "cuda"))]
 #[macro_use]
 extern crate hex_literal;
-extern crate hashbrown;
 
 #[macro_use]
 extern crate log;

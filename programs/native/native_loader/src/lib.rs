@@ -1,16 +1,10 @@
 //! Native loader
-extern crate bincode;
-extern crate libc;
-extern crate libloading;
-#[macro_use]
-extern crate log;
-extern crate solana_sdk;
-
 use bincode::deserialize;
 #[cfg(unix)]
 use libloading::os::unix::*;
 #[cfg(windows)]
 use libloading::os::windows::*;
+use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::loader_instruction::LoaderInstruction;
 pub use solana_sdk::native_loader::*;

@@ -1,8 +1,8 @@
 //! The `metrics` module enables sending measurements to an InfluxDB instance
 
-extern crate reqwest;
-
 use influx_db_client as influxdb;
+use lazy_static::lazy_static;
+use log::*;
 use solana_sdk::hash::hash;
 use solana_sdk::timing;
 use std::env;
@@ -267,8 +267,6 @@ pub fn set_panic_hook(program: &'static str) {
 
 #[cfg(test)]
 mod test {
-    extern crate rand;
-
     use super::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
 

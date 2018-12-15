@@ -1,17 +1,10 @@
 //! The `erc20` library implements a generic erc20-like token
 
-extern crate bincode;
-#[macro_use]
-extern crate log;
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
-#[macro_use]
-extern crate solana_sdk;
-
+use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::solana_entrypoint;
 
 mod token_program;
 

@@ -1,4 +1,4 @@
-use pubkey::Pubkey;
+use crate::pubkey::Pubkey;
 
 /// An Account with userdata that is stored on chain
 #[repr(C)]

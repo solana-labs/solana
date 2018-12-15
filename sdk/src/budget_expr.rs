@@ -3,9 +3,9 @@
 //! which it uses to reduce the payment plan. When the budget is reduced to a
 //! `Payment`, the payment is executed.
 
+use crate::payment_plan::{Payment, Witness};
+use crate::pubkey::Pubkey;
 use chrono::prelude::*;
-use payment_plan::{Payment, Witness};
-use pubkey::Pubkey;
 use std::mem;
 
 /// A data type representing a `Witness` that the payment plan is waiting on.
@@ -141,7 +141,7 @@ impl BudgetExpr {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signature::{Keypair, KeypairUtil};
+    use crate::signature::{Keypair, KeypairUtil};
 
     #[test]
     fn test_signature_satisfied() {

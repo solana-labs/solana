@@ -1,9 +1,7 @@
-#[macro_use]
-extern crate solana_sdk;
-
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::solana_entrypoint;
 
 solana_entrypoint!(entrypoint);
 fn entrypoint(

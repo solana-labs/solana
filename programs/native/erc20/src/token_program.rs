@@ -1,7 +1,8 @@
 //! ERC20-like Token
 
 use bincode;
-
+use log::*;
+use serde_derive::{Deserialize, Serialize};
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::pubkey::Pubkey;
 use std;
