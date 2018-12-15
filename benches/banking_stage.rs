@@ -4,9 +4,10 @@ extern crate test;
 
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
-use solana::bank::{Bank, MAX_ENTRY_IDS};
+use solana::bank::Bank;
 use solana::banking_stage::{BankingStage, NUM_THREADS};
 use solana::entry::Entry;
+use solana::last_ids::MAX_ENTRY_IDS;
 use solana::mint::Mint;
 use solana::packet::to_packets_chunked;
 use solana_sdk::hash::hash;
