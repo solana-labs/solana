@@ -27,17 +27,12 @@ bincode = "1.0.0"
 bs58 = "0.2.0"
 bv = { version = "0.10.0", features = ["serde"] }
 byteorder = "1.2.1"
-bytes = "0.4"
 chrono = { version = "0.4.0", features = ["serde"] }
-clap = "2.31"
-dirs = "1.0.2"
-generic-array = { version = "0.12.0", default-features = false, features = ["serde"] }
-hex-literal = "0.1.1"
+hashbrown = "0.1.7"
 indexmap = "1.0"
 itertools = "0.8.0"
 libc = "0.2.45"
 log = "0.4.2"
-matches = "0.1.6"
 nix = "0.12.0"
 rand = "0.6.1"
 rand_chacha = "0.1.0"
@@ -48,33 +43,26 @@ rocksdb = "0.10.1"
 serde = "1.0.82"
 serde_derive = "1.0.82"
 serde_json = "1.0.10"
-sha2 = "0.8.0"
-socket2 = "0.3.8"
 solana-bpfloader = { path = "programs/native/bpf_loader", version = "0.11.0" }
-solana-budget-program = { path = "programs/native/budget", version = "0.11.0" }
 solana-drone = { path = "drone", version = "0.11.0" }
-solana-erc20 = { path = "programs/native/erc20", version = "0.11.0" }
 solana-jsonrpc-core = "0.4.0"
 solana-jsonrpc-http-server = "0.4.0"
 solana-jsonrpc-macros = "0.4.0"
 solana-jsonrpc-pubsub = "0.4.0"
 solana-jsonrpc-ws-server = "0.4.0"
-solana-keygen = { path = "keygen", version = "0.11.0" }
 solana-logger = { path = "logger", version = "0.11.0" }
-solana-lualoader = { path = "programs/native/lua_loader", version = "0.11.0" }
 solana-metrics = { path = "metrics", version = "0.11.0" }
 solana-native-loader = { path = "programs/native/native_loader", version = "0.11.0" }
 solana-netutil = { path = "netutil", version = "0.11.0" }
-solana-noop = { path = "programs/native/noop", version = "0.11.0" }
 solana-sdk = { path = "sdk", version = "0.11.0" }
-solana-storage-program = { path = "programs/native/storage", version = "0.11.0" }
 solana-system-program = { path = "programs/native/system", version = "0.11.0" }
-solana-vote-program = { path = "programs/native/vote", version = "0.11.0" }
-solana-vote-signer = { path = "vote-signer", version = "0.0.1" }
 tokio = "0.1"
 tokio-codec = "0.1"
 untrusted = "0.6.2"
-hashbrown = "0.1.7"
+
+[dev-dependencies]
+hex-literal = "0.1.1"
+matches = "0.1.6"
 
 [[bench]]
 name = "bank"
@@ -118,6 +106,8 @@ members = [
     "programs/native/lua_loader",
     "programs/native/native_loader",
     "programs/native/noop",
+    "programs/native/storage",
+    "programs/native/system",
     "programs/native/vote",
     "replicator",
     "sdk",
