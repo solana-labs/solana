@@ -1,4 +1,4 @@
-use crate::bank_error::{BankError, Result};
+use crate::bank::{BankError, Result};
 use crate::checkpoint::Checkpoint;
 use crate::poh_service::NUM_TICKS_PER_SECOND;
 use hashbrown::HashMap;

@@ -1,6 +1,6 @@
 //! The `result` module exposes a Result type that propagates one of many different Error types.
 
-use crate::bank_error;
+use crate::bank;
 use crate::cluster_info;
 use crate::db_ledger;
 #[cfg(feature = "erasure")]
@@ -23,7 +23,7 @@ pub enum Error {
     RecvError(std::sync::mpsc::RecvError),
     RecvTimeoutError(std::sync::mpsc::RecvTimeoutError),
     Serialize(std::boxed::Box<bincode::ErrorKind>),
-    BankError(bank_error::BankError),
+    BankError(bank::BankError),
     ClusterInfoError(cluster_info::ClusterInfoError),
     BlobError(packet::BlobError),
     #[cfg(feature = "erasure")]
@@ -55,8 +55,8 @@ impl std::convert::From<std::sync::mpsc::RecvTimeoutError> for Error {
         Error::RecvTimeoutError(e)
     }
 }
-impl std::convert::From<bank_error::BankError> for Error {
-    fn from(e: bank_error::BankError) -> Error {
+impl std::convert::From<bank::BankError> for Error {
+    fn from(e: bank::BankError) -> Error {
         Error::BankError(e)
     }
 }

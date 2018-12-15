@@ -10,7 +10,6 @@
 #[macro_use]
 pub mod counter;
 pub mod bank;
-pub mod bank_error;
 pub mod banking_stage;
 pub mod blob_fetch_stage;
 pub mod bloom;
