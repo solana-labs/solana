@@ -1057,7 +1057,7 @@ impl Bank {
     }
 
     pub fn has_signature(&self, signature: &Signature) -> bool {
-        self.get_signature_status(signature) != Err(BankError::SignatureNotFound)
+        self.last_ids.read().unwrap().has_signature(signature)
     }
 
     pub fn get_signature(&self, last_id: &Hash, signature: &Signature) -> Option<Result<()>> {
@@ -1205,6 +1205,7 @@ mod tests {
     use crate::signature::GenKeys;
     use bincode::serialize;
     use solana_sdk::hash::hash;
+    use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::Keypair;
     use solana_sdk::signature::KeypairUtil;
     use solana_sdk::system_transaction::SystemTransaction;

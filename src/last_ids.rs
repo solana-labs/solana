@@ -215,6 +215,10 @@ impl LastIds {
         }
         Err(BankError::SignatureNotFound)
     }
+    pub fn has_signature(&self, signature: &Signature) -> bool {
+        self.get_signature_status(signature) != Err(BankError::SignatureNotFound)
+    }
+
     pub fn get_signature(&self, last_id: &Hash, signature: &Signature) -> Option<Result<()>> {
         self.entries
             .get(last_id)
@@ -224,18 +228,20 @@ impl LastIds {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bincode::serialize;
+    use solana_sdk::hash::hash;
     #[test]
     fn test_duplicate_transaction_signature() {
         let sig = Default::default();
         let last_id = Default::default();
         let mut last_ids = LastIds::default();
-        last_ids.register_tick(last_id);
+        last_ids.register_tick(&last_id);
         assert_eq!(
-            last_ids.reserve_signature_with_last_id(last_id, sig),
+            last_ids.reserve_signature_with_last_id(&last_id, &sig),
             Ok(())
         );
         assert_eq!(
-            last_ids.reserve_signature_with_last_id(last_id, sig),
+            last_ids.reserve_signature_with_last_id(&last_id, &sig),
             Err(BankError::DuplicateSignature)
         );
     }
@@ -245,21 +251,23 @@ mod tests {
         let sig = Default::default();
         let last_id = Default::default();
         let mut last_ids = LastIds::default();
-        last_ids.register_tick(last_id);
+        last_ids.register_tick(&last_id);
         assert_eq!(
-            last_ids.reserve_signature_with_last_id(last_id, sig),
+            last_ids.reserve_signature_with_last_id(&last_id, &sig),
             Ok(())
         );
         last_ids.checkpoint();
         assert_eq!(
-            last_ids.reserve_signature_with_last_id(last_id, sig),
+            last_ids.reserve_signature_with_last_id(&last_id, &sig),
             Err(BankError::DuplicateSignature)
         );
     }
 
     #[test]
     fn test_count_valid_ids() {
+        let first_id = Default::default();
         let mut last_ids = LastIds::default();
+        last_ids.register_tick(&first_id);
         let ids: Vec<_> = (0..MAX_ENTRY_IDS)
             .map(|i| {
                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
@@ -268,7 +276,7 @@ mod tests {
             })
             .collect();
         assert_eq!(last_ids.count_valid_ids(&[]).len(), 0);
-        assert_eq!(last_ids.count_valid_ids(&[mint.last_id()]).len(), 0);
+        assert_eq!(last_ids.count_valid_ids(&[first_id]).len(), 0);
         for (i, id) in last_ids.count_valid_ids(&ids).iter().enumerate() {
             assert_eq!(id.0, i);
         }
@@ -280,11 +288,11 @@ mod tests {
         let last_id = Default::default();
         let mut last_ids = LastIds::default();
         last_ids
-            .reserve_signature_with_last_id_test(&signature, last_id)
+            .reserve_signature_with_last_id(&last_id, &signature)
             .unwrap();
         last_ids.clear_signatures();
         assert_eq!(
-            last_ids.reserve_signature_with_last_id_test(&signature, last_id),
+            last_ids.reserve_signature_with_last_id(&last_id, &signature),
             Ok(())
         );
     }
@@ -295,12 +303,12 @@ mod tests {
         let last_id = Default::default();
         let mut last_ids = LastIds::default();
         last_ids
-            .reserve_signature_with_last_id_test(&signature, last_id)
+            .reserve_signature_with_last_id(&last_id, &signature)
             .unwrap();
         last_ids.checkpoint();
         last_ids.clear_signatures();
         assert_eq!(
-            last_ids.reserve_signature_with_last_id_test(&signature, last_id),
+            last_ids.reserve_signature_with_last_id(&last_id, &signature),
             Ok(())
         );
     }
@@ -311,7 +319,7 @@ mod tests {
         let last_id = Default::default();
         let mut last_ids = LastIds::default();
         last_ids
-            .reserve_signature_with_last_id_test(&signature, &last_id)
+            .reserve_signature_with_last_id(&last_id, &signature)
             .expect("reserve signature");
         assert_eq!(
             last_ids.get_signature_status(&signature),
@@ -325,7 +333,7 @@ mod tests {
         let last_id = Default::default();
         let mut last_ids = LastIds::default();
         last_ids
-            .reserve_signature_with_last_id_test(&signature, &last_id)
+            .reserve_signature_with_last_id(&last_id, &signature)
             .expect("reserve signature");
         assert!(last_ids.has_signature(&signature));
     }
@@ -341,7 +349,7 @@ mod tests {
         }
         // Assert we're no longer able to use the oldest entry ID.
         assert_eq!(
-            last_ids.reserve_signature_with_last_id_test(&signature, &last_id),
+            last_ids.reserve_signature_with_last_id(&last_id, &signature),
             Err(BankError::LastIdNotFound)
         );
     }

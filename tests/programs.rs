@@ -36,7 +36,7 @@ fn create_bpf_path(name: &str) -> PathBuf {
     pathbuf
 }
 
-fn check_tx_results(bank: &Bank, tx: &Transaction, result: Vec<solana::bank::Result<()>>) {
+fn check_tx_results(bank: &Bank, tx: &Transaction, result: Vec<solana::bank_error::Result<()>>) {
     assert_eq!(result.len(), 1);
     assert_eq!(result[0], Ok(()));
     assert_eq!(
