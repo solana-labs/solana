@@ -12,16 +12,7 @@ _() {
   "$@"
 }
 
-maxOpenFds=65000
-if [[ $(uname) = Darwin ]]; then
-  maxOpenFds=24576 # Appears to be the max permitted on macOS...
-fi
-if [[ $(ulimit -n) -lt $maxOpenFds ]]; then
-  ulimit -n $maxOpenFds|| {
-    echo 'Error: nofiles too small, run "ulimit -n 65000" to continue';
-    exit 1
-  }
-fi
+_ scripts/ulimit-n.sh
 
 _ cargo build --all --verbose
 _ cargo test --all --verbose --lib -- --nocapture --test-threads=1

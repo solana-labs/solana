@@ -95,9 +95,12 @@ export RUST_BACKTRACE=1
 # shellcheck source=scripts/configure-metrics.sh
 source "$(dirname "${BASH_SOURCE[0]}")"/../scripts/configure-metrics.sh
 
-tune_networking() {
+tune_system() {
   # Skip in CI
   [[ -z $CI ]] || return 0
+
+  # shellcheck source=scripts/ulimit-n.sh
+  source "$(dirname "${BASH_SOURCE[0]}")"/../scripts/ulimit-n.sh
 
   # Reference: https://medium.com/@CameronSparr/increase-os-udp-buffers-to-improve-performance-51d167bb1360
   if [[ $(uname) = Linux ]]; then

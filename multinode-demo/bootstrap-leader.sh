@@ -46,7 +46,7 @@ if [[ -d $SNAP ]]; then
   fi
 fi
 
-tune_networking
+tune_system
 
 trap 'kill "$pid" && wait "$pid"' INT TERM
 $program \
