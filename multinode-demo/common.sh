@@ -131,6 +131,10 @@ tune_networking() {
   fi
 }
 
+tune_filesystem() {
+  ulimit -n 65535
+}
+
 # The directory on the bootstrap leader that is rsynced by other full nodes as
 # they boot (TODO: Eventually this should go away)
 SOLANA_RSYNC_CONFIG_DIR=${SNAP_DATA:-$PWD}/config

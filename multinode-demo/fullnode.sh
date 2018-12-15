@@ -167,6 +167,7 @@ rsync_url() { # adds the 'rsync://` prefix to URLs that need it
 
 rsync_leader_url=$(rsync_url "$leader")
 
+tune_filesystem
 tune_networking
 
 set -ex

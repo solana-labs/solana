@@ -46,6 +46,7 @@ if [[ -d $SNAP ]]; then
   fi
 fi
 
+tune_filesystem
 tune_networking
 
 trap 'kill "$pid" && wait "$pid"' INT TERM
