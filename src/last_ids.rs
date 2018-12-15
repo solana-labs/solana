@@ -207,16 +207,16 @@ impl LastIds {
         }
         ret
     }
-    pub fn get_signature_status(&self, signature: &Signature) -> Result<()> {
+    pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
         for entry in self.entries.values() {
             if let Some(res) = entry.signature_status.get(signature) {
-                return res.clone();
+                return Some(res.clone());
             }
         }
-        Err(BankError::SignatureNotFound)
+        None
     }
     pub fn has_signature(&self, signature: &Signature) -> bool {
-        self.get_signature_status(signature) != Err(BankError::SignatureNotFound)
+        self.get_signature_status(signature).is_some()
     }
 
     pub fn get_signature(&self, last_id: &Hash, signature: &Signature) -> Option<Result<()>> {
@@ -326,7 +326,7 @@ mod tests {
             .expect("reserve signature");
         assert_eq!(
             last_ids.get_signature_status(&signature),
-            Err(BankError::SignatureReserved)
+            Some(Err(BankError::SignatureReserved))
         );
     }
 

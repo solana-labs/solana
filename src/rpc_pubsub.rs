@@ -209,7 +209,12 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             .unwrap()
             .insert(sub_id.clone(), (bank_sub_id, signature));
 
-        match self.request_processor.get_signature_status(signature) {
+        let status = self.request_processor.get_signature_status(signature);
+        if status.is_none() {
+            return;
+        }
+
+        match status.unwrap() {
             Ok(_) => {
                 sink.notify(Ok(RpcSignatureStatus::Confirmed))
                     .wait()

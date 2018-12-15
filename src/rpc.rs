@@ -195,21 +195,24 @@ impl RpcSol for RpcSolImpl {
     fn get_signature_status(&self, meta: Self::Metadata, id: String) -> Result<RpcSignatureStatus> {
         info!("get_signature_status rpc request received: {:?}", id);
         let signature = verify_signature(&id)?;
-        Ok(
-            match meta.request_processor.get_signature_status(signature) {
-                Ok(_) => RpcSignatureStatus::Confirmed,
-                Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
-                Err(BankError::ProgramError(_, _)) => RpcSignatureStatus::ProgramRuntimeError,
-                // Report SignatureReserved as SignatureNotFound as SignatureReserved is
-                // transitory while the bank processes the associated transaction.
-                Err(BankError::SignatureReserved) => RpcSignatureStatus::SignatureNotFound,
-                Err(BankError::SignatureNotFound) => RpcSignatureStatus::SignatureNotFound,
-                Err(err) => {
-                    trace!("mapping {:?} to GenericFailure", err);
-                    RpcSignatureStatus::GenericFailure
-                }
-            },
-        )
+        let res = meta.request_processor.get_signature_status(signature);
+        if res.is_none() {
+            return Ok(RpcSignatureStatus::SignatureNotFound);
+        }
+
+        let status = match res.unwrap() {
+            Ok(_) => RpcSignatureStatus::Confirmed,
+            Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
+            Err(BankError::ProgramError(_, _)) => RpcSignatureStatus::ProgramRuntimeError,
+            // Report SignatureReserved as SignatureNotFound as SignatureReserved is
+            // transitory while the bank processes the associated transaction.
+            Err(BankError::SignatureReserved) => RpcSignatureStatus::SignatureNotFound,
+            Err(err) => {
+                trace!("mapping {:?} to GenericFailure", err);
+                RpcSignatureStatus::GenericFailure
+            }
+        };
+        Ok(status)
     }
     fn get_transaction_count(&self, meta: Self::Metadata) -> Result<u64> {
         info!("get_transaction_count rpc request received");
@@ -248,7 +251,7 @@ impl RpcSol for RpcSolImpl {
         loop {
             signature_status = meta.request_processor.get_signature_status(signature);
 
-            if signature_status.is_ok() {
+            if signature_status == Some(Ok(())) {
                 info!("airdrop signature ok");
                 return Ok(bs58::encode(signature).into_string());
             } else if now.elapsed().as_secs() > 5 {
@@ -329,7 +332,10 @@ impl JsonRpcRequestProcessor {
         let id = self.bank.last_id();
         Ok(bs58::encode(id).into_string())
     }
-    pub fn get_signature_status(&self, signature: Signature) -> result::Result<(), BankError> {
+    pub fn get_signature_status(
+        &self,
+        signature: Signature,
+    ) -> Option<result::Result<(), BankError>> {
         self.bank.get_signature_status(&signature)
     }
     fn get_transaction_count(&self) -> Result<u64> {

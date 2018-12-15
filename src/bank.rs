@@ -68,10 +68,6 @@ pub enum BankError {
     /// the `last_id` has been discarded.
     LastIdNotFound,
 
-    /// The bank has not seen a transaction with the given `Signature` or the transaction is
-    /// too old and has been discarded.
-    SignatureNotFound,
-
     /// A transaction with this signature has been received but not yet executed
     SignatureReserved,
 
@@ -419,16 +415,14 @@ impl Bank {
         let mut last_ids = self.last_ids.write().unwrap();
         for (i, tx) in txs.iter().enumerate() {
             last_ids.update_signature_status_with_last_id(&tx.signatures[0], &res[i], &tx.last_id);
-            if res[i] != Err(BankError::SignatureNotFound) {
-                let status = match res[i] {
-                    Ok(_) => RpcSignatureStatus::Confirmed,
-                    Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
-                    Err(BankError::ProgramError(_, _)) => RpcSignatureStatus::ProgramRuntimeError,
-                    Err(_) => RpcSignatureStatus::GenericFailure,
-                };
-                if status != RpcSignatureStatus::SignatureNotFound {
-                    self.check_signature_subscriptions(&tx.signatures[0], status);
-                }
+            let status = match res[i] {
+                Ok(_) => RpcSignatureStatus::Confirmed,
+                Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
+                Err(BankError::ProgramError(_, _)) => RpcSignatureStatus::ProgramRuntimeError,
+                Err(_) => RpcSignatureStatus::GenericFailure,
+            };
+            if status != RpcSignatureStatus::SignatureNotFound {
+                self.check_signature_subscriptions(&tx.signatures[0], status);
             }
         }
     }
@@ -1096,7 +1090,7 @@ impl Bank {
         self.accounts.read().unwrap().transaction_count()
     }
 
-    pub fn get_signature_status(&self, signature: &Signature) -> Result<()> {
+    pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
         self.last_ids
             .read()
             .unwrap()
@@ -1422,10 +1416,10 @@ mod tests {
         assert!(bank.has_signature(&signature));
         assert_matches!(
             bank.get_signature_status(&signature),
-            Err(BankError::ProgramError(
+            Some(Err(BankError::ProgramError(
                 0,
                 ProgramError::ResultWithNegativeTokens
-            ))
+            )))
         );
 
         // The tokens didn't move, but the from address paid the transaction fee.
