@@ -147,8 +147,11 @@ pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
         args.num_nodes = n.to_string().parse().expect("can't parse num-nodes");
     }
 
-    if let Some(s) = matches.value_of("s") {
-        args.duration = Duration::new(s.to_string().parse().expect("can't parse duration"), 0);
+    if let Some(duration) = matches.value_of("duration") {
+        args.duration = Duration::new(
+            duration.to_string().parse().expect("can't parse duration"),
+            0,
+        );
     }
 
     if let Some(s) = matches.value_of("tx_count") {
