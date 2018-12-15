@@ -12,6 +12,7 @@ cd "$(dirname "$0")/.."
 #
 CRATES=(
   logger
+  netutil
   sdk
   keygen
   metrics

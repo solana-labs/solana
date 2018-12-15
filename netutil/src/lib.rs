@@ -1,5 +1,5 @@
 //! The `netutil` module assists with networking
-
+use log::trace;
 use nix::sys::socket::setsockopt;
 use nix::sys::socket::sockopt::{ReuseAddr, ReusePort};
 use pnet_datalink as datalink;
@@ -203,10 +203,8 @@ pub fn find_available_port_in_range(range: (u16, u16)) -> io::Result<u16> {
 
 #[cfg(test)]
 mod tests {
-
-    use crate::netutil::*;
+    use super::*;
     use ipnetwork::IpNetwork;
-    use pnet_datalink as datalink;
 
     #[test]
     fn test_find_eth0ish_ip_addr() {

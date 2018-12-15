@@ -107,7 +107,7 @@ mod tests {
     use super::*;
     use crate::cluster_info::ClusterInfo;
     use crate::contact_info::ContactInfo;
-    use crate::netutil::bind_in_range;
+    use solana_netutil::bind_in_range;
     use solana_sdk::pubkey::Pubkey;
     use std::net::UdpSocket;
     use std::net::{Ipv4Addr, SocketAddr};
