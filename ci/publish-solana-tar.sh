@@ -62,23 +62,23 @@ echo --- Saving build artifacts
 source ci/upload-ci-artifact.sh
 upload-ci-artifact solana-release.tar.bz2
 
-if [[ -z $DO_NOT_PUBLISH_TAR ]]; then
-  echo --- AWS S3 Store
-  if [[ -z $DRYRUN ]]; then
-    (
-      set -x
-      if [[ ! -r s3cmd-2.0.1/s3cmd ]]; then
-        rm -rf s3cmd-2.0.1.tar.gz s3cmd-2.0.1
-        $DRYRUN wget https://github.com/s3tools/s3cmd/releases/download/v2.0.1/s3cmd-2.0.1.tar.gz
-        $DRYRUN tar zxf s3cmd-2.0.1.tar.gz
-      fi
-
-      $DRYRUN python ./s3cmd-2.0.1/s3cmd --acl-public put solana-release.tar.bz2 \
-        s3://solana-release/"$CHANNEL_OR_TAG"/solana-release.tar.bz2
-    )
-  else
-    echo Skipped due to DRYRUN
-  fi
+if [[ -n $DO_NOT_PUBLISH_TAR ]]; then
+  echo Skipped due to DO_NOT_PUBLISH_TAR
+  exit 0
 fi
-exit 0
 
+echo --- AWS S3 Store
+(
+  set -x
+  if [[ ! -r s3cmd-2.0.1/s3cmd ]]; then
+    rm -rf s3cmd-2.0.1.tar.gz s3cmd-2.0.1
+    $DRYRUN wget https://github.com/s3tools/s3cmd/releases/download/v2.0.1/s3cmd-2.0.1.tar.gz
+    $DRYRUN tar zxf s3cmd-2.0.1.tar.gz
+  fi
+
+  $DRYRUN python ./s3cmd-2.0.1/s3cmd --acl-public put solana-release.tar.bz2 \
+    s3://solana-release/"$CHANNEL_OR_TAG"/solana-release.tar.bz2
+
+  echo Published to:
+  $DRYRUN ci/format-url.sh http://solana-release.s3.amazonaws.com/"$CHANNEL_OR_TAG"/solana-release.tar.bz2
+)
