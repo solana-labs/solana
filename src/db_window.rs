@@ -323,7 +323,7 @@ pub fn process_blob(
         // If write_shared_blobs() of these recovered blobs fails fails, don't return
         // because consumed_entries might be nonempty from earlier, and tick height needs to
         // be updated. Hopefully we can recover these blobs next time successfully.
-        if let Err(e) = try_erasure(db_ledger, consume_queue) {
+        if let Err(e) = try_erasure(db_ledger, &mut consumed_entries) {
             trace!(
                 "erasure::recover failed to write recovered coding blobs. Err: {:?}",
                 e
