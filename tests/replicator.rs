@@ -136,7 +136,7 @@ fn test_replicator_startup() {
             use solana::rpc_request::{RpcClient, RpcRequest};
 
             let rpc_client = RpcClient::new_from_socket(validator_node_info.rpc);
-            //let mut non_zero_pubkeys = false;
+            let mut non_zero_pubkeys = false;
             for _ in 0..30 {
                 let params = json!([0]);
                 let pubkeys = RpcRequest::GetStoragePubkeysForEntryHeight
@@ -144,15 +144,12 @@ fn test_replicator_startup() {
                     .unwrap();
                 info!("pubkeys: {:?}", pubkeys);
                 if pubkeys.as_array().unwrap().len() != 0 {
-                    //non_zero_pubkeys = true;
+                    non_zero_pubkeys = true;
                     break;
                 }
                 sleep(Duration::from_secs(1));
             }
-            // this seems to assert when erasure is on,
-            // entries may not be processed correctly
-            // TODO: turn it back on
-            //assert!(non_zero_pubkeys);
+            assert!(non_zero_pubkeys);
         }
 
         // Check that some ledger was downloaded
