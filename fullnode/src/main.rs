@@ -1,20 +1,10 @@
-#[macro_use]
-extern crate clap;
-
-#[macro_use]
-extern crate log;
-use serde_json;
-#[macro_use]
-extern crate solana;
-use solana_metrics;
-
-use clap::{App, Arg};
+use clap::{crate_version, App, Arg};
+use log::*;
 use solana::client::mk_client;
-use solana::cluster_info::{Node, FULLNODE_PORT_RANGE};
-use solana::fullnode::{Config, Fullnode, FullnodeReturnType};
+use solana::cluster_info::{Node, NodeInfo, FULLNODE_PORT_RANGE};
+use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::leader_scheduler::LeaderScheduler;
-
-use solana::netutil::find_available_port_in_range;
+use solana::socketaddr;
 use solana::thin_client::poll_gossip_for_leader;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::vote_program::VoteProgram;
@@ -82,12 +72,20 @@ fn main() {
     let (keypair, vote_account_keypair, gossip) = if let Some(i) = matches.value_of("identity") {
         let path = i.to_string();
         if let Ok(file) = File::open(path.clone()) {
-            let parse: serde_json::Result<Config> = serde_json::from_reader(file);
-            if let Ok(data) = parse {
+            let parse: serde_json::Result<solana_fullnode_config::Config> =
+                serde_json::from_reader(file);
+
+            if let Ok(config_data) = parse {
+                let keypair = config_data.keypair();
+                let node_info = NodeInfo::new_with_pubkey_socketaddr(
+                    keypair.pubkey(),
+                    &config_data.bind_addr(FULLNODE_PORT_RANGE.0),
+                );
+
                 (
-                    data.keypair(),
-                    data.vote_account_keypair(),
-                    data.node_info.gossip,
+                    keypair,
+                    config_data.vote_account_keypair(),
+                    node_info.gossip,
                 )
             } else {
                 eprintln!("failed to parse {}", path);
@@ -131,7 +129,7 @@ fn main() {
         }
         Some(port_number)
     } else {
-        match find_available_port_in_range(FULLNODE_PORT_RANGE) {
+        match solana_netutil::find_available_port_in_range(FULLNODE_PORT_RANGE) {
             Ok(port) => Some(port),
             Err(_) => None,
         }
