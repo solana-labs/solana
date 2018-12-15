@@ -24,7 +24,6 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::Result;
-use untrusted::Input;
 
 pub enum NodeRole {
     Leader(LeaderServices),
@@ -110,37 +109,6 @@ pub struct Fullnode {
     rpc_addr: SocketAddr,
     rpc_pubsub_addr: SocketAddr,
     db_ledger: Arc<RwLock<DbLedger>>,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "PascalCase")]
-/// Fullnode configuration to be stored in file
-pub struct Config {
-    pub node_info: NodeInfo,
-    pkcs8: Vec<u8>,
-    vote_account_pkcs8: Vec<u8>,
-}
-
-impl Config {
-    pub fn new(bind_addr: &SocketAddr, pkcs8: Vec<u8>, vote_account_pkcs8: Vec<u8>) -> Self {
-        let keypair =
-            Keypair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in fullnode::Config new");
-        let pubkey = keypair.pubkey();
-        let node_info = NodeInfo::new_with_pubkey_socketaddr(pubkey, bind_addr);
-        Config {
-            node_info,
-            pkcs8,
-            vote_account_pkcs8,
-        }
-    }
-    pub fn keypair(&self) -> Keypair {
-        Keypair::from_pkcs8(Input::from(&self.pkcs8))
-            .expect("from_pkcs8 in fullnode::Config keypair")
-    }
-    pub fn vote_account_keypair(&self) -> Keypair {
-        Keypair::from_pkcs8(Input::from(&self.vote_account_pkcs8))
-            .expect("from_pkcs8 in fullnode::Config vote_account_keypair")
-    }
 }
 
 impl Fullnode {

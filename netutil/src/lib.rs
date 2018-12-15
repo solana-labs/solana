@@ -30,7 +30,7 @@ pub fn get_public_ip_addr() -> Result<IpAddr, String> {
     }
 }
 
-pub fn parse_port_or_addr(optstr: Option<&str>, default_port: u16) -> SocketAddr {
+pub fn parse_port_or_addr(optstr: &Option<String>, default_port: u16) -> SocketAddr {
     let daddr = SocketAddr::from(([0, 0, 0, 0], default_port));
 
     if let Some(addrstr) = optstr {
@@ -280,13 +280,13 @@ mod tests {
 
     #[test]
     fn test_parse_port_or_addr() {
-        let p1 = parse_port_or_addr(Some("9000"), 1);
+        let p1 = parse_port_or_addr(&Some("9000".to_string()), 1);
         assert_eq!(p1.port(), 9000);
-        let p2 = parse_port_or_addr(Some("127.0.0.1:7000"), 1);
+        let p2 = parse_port_or_addr(&Some("127.0.0.1:7000".to_string()), 1);
         assert_eq!(p2.port(), 7000);
-        let p2 = parse_port_or_addr(Some("hi there"), 1);
+        let p2 = parse_port_or_addr(&Some("hi there".to_string()), 1);
         assert_eq!(p2.port(), 1);
-        let p3 = parse_port_or_addr(None, 1);
+        let p3 = parse_port_or_addr(&None, 1);
         assert_eq!(p3.port(), 1);
     }
 

@@ -1,15 +1,8 @@
-#[macro_use]
-extern crate clap;
-
+use clap::{crate_version, App, Arg};
 use serde_json;
-#[macro_use]
-extern crate solana;
-
-use clap::{App, Arg};
-use solana::cluster_info::{Node, NodeInfo};
-use solana::fullnode::Config;
-
+use solana::cluster_info::{Node, NodeInfo, FULLNODE_PORT_RANGE};
 use solana::replicator::Replicator;
+use solana::socketaddr;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -52,9 +45,15 @@ fn main() {
     let (keypair, gossip) = if let Some(i) = matches.value_of("identity") {
         let path = i.to_string();
         if let Ok(file) = File::open(path.clone()) {
-            let parse: serde_json::Result<Config> = serde_json::from_reader(file);
-            if let Ok(data) = parse {
-                (data.keypair(), data.node_info.gossip)
+            let parse: serde_json::Result<solana_fullnode_config::Config> =
+                serde_json::from_reader(file);
+            if let Ok(config_data) = parse {
+                let keypair = config_data.keypair();
+                let node_info = NodeInfo::new_with_pubkey_socketaddr(
+                    keypair.pubkey(),
+                    &config_data.bind_addr(FULLNODE_PORT_RANGE.0),
+                );
+                (keypair, node_info.gossip)
             } else {
                 eprintln!("failed to parse {}", path);
                 exit(1);
