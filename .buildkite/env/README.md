@@ -19,12 +19,13 @@ eval $(ejson2env secrets.ejson)
 #### Managing secrets.ejson
 To decrypt `secrets.ejson` for modification, run:
 ```bash
-$ ejson decrypt secrets.ejson
+$ ejson decrypt secrets.ejson -o secrets_unencrypted.ejson
 ```
 
 Edit, then run the following to re-encrypt the file **BEFORE COMMITING YOUR
 CHANGES**:
 ```bash
-$ ejson encrypt secrets.ejson
+$ ejson encrypt secrets_unencrypted.ejson
+$ mv secrets_unencrypted.ejson secrets.ejson
 ```
 
