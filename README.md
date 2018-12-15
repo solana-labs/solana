@@ -1,6 +1,6 @@
 [![Solana crate](https://img.shields.io/crates/v/solana.svg)](https://crates.io/crates/solana)
 [![Solana documentation](https://docs.rs/solana/badge.svg)](https://docs.rs/solana)
-[![Build status](https://badge.buildkite.com/d4c4d7da9154e3a8fb7199325f430ccdb05be5fc1e92777e51.svg?branch=master)](https://solana-ci-gate.herokuapp.com/buildkite_public_log?https://buildkite.com/solana-labs/solana/builds/latest/master)
+[![Build status](https://badge.buildkite.com/8cc350de251d61483db98bdfc895b9ea0ac8ffa4a32ee850ed.svg?branch=master)](https://buildkite.com/solana-labs/solana/builds?branch=master)
 [![codecov](https://codecov.io/gh/solana-labs/solana/branch/master/graph/badge.svg)](https://codecov.io/gh/solana-labs/solana)
 
 Blockchain Rebuilt for Scale
