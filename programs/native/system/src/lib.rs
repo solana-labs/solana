@@ -1,11 +1,8 @@
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate solana_sdk;
-
+use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::solana_entrypoint;
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::system_program;
 

@@ -1,16 +1,8 @@
-#[macro_use]
-extern crate clap;
-use dirs;
-#[macro_use]
-extern crate solana;
-#[macro_use]
-extern crate serde_json;
-
 mod wallet;
 
 use crate::wallet::{parse_command, process_command, WalletConfig, WalletError};
-use clap::{App, Arg, ArgMatches, SubCommand};
-
+use clap::{crate_version, App, Arg, ArgMatches, SubCommand};
+use solana::socketaddr;
 use solana_sdk::signature::{gen_keypair_file, read_keypair, KeypairUtil};
 use std::error;
 use std::net::SocketAddr;

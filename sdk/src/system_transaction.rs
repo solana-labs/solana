@@ -1,11 +1,11 @@
 //! The `system_transaction` module provides functionality for creating system transactions.
 
-use hash::Hash;
-use pubkey::Pubkey;
-use signature::Keypair;
-use system_instruction::SystemInstruction;
-use system_program;
-use transaction::{Instruction, Transaction};
+use crate::hash::Hash;
+use crate::pubkey::Pubkey;
+use crate::signature::Keypair;
+use crate::system_instruction::SystemInstruction;
+use crate::system_program;
+use crate::transaction::{Instruction, Transaction};
 
 pub trait SystemTransaction {
     fn system_create(
@@ -137,7 +137,7 @@ impl SystemTransaction for Transaction {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use signature::KeypairUtil;
+    use crate::signature::KeypairUtil;
 
     #[test]
     fn test_move_many() {

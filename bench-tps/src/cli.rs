@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use std::process::exit;
 use std::time::Duration;
 
-use clap::{App, Arg, ArgMatches};
+use clap::{crate_version, App, Arg, ArgMatches};
 use solana_drone::drone::DRONE_PORT;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 

@@ -3,8 +3,8 @@
 //! which it uses to reduce the payment plan. When the plan is reduced to a
 //! `Payment`, the payment is executed.
 
+use crate::pubkey::Pubkey;
 use chrono::prelude::*;
-use pubkey::Pubkey;
 
 /// The types of events a payment plan can process.
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]

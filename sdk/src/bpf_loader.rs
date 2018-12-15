@@ -1,4 +1,4 @@
-use pubkey::Pubkey;
+use crate::pubkey::Pubkey;
 
 pub const BPF_LOADER_PROGRAM_ID: [u8; 32] = [
     128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,

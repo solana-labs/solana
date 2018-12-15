@@ -1,10 +1,10 @@
 //! Vote program
 //! Receive and processes votes from validators
 
+use crate::native_program::ProgramError;
+use crate::pubkey::Pubkey;
 use bincode::{deserialize, serialize};
 use byteorder::{ByteOrder, LittleEndian};
-use native_program::ProgramError;
-use pubkey::Pubkey;
 use std::collections::VecDeque;
 use std::mem;
 

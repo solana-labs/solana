@@ -1,5 +1,5 @@
-use account::KeyedAccount;
-use pubkey::Pubkey;
+use crate::account::KeyedAccount;
+use crate::pubkey::Pubkey;
 use std;
 
 /// Reasons a program might have rejected an instruction.

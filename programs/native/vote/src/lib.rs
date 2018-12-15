@@ -1,14 +1,11 @@
 //! Vote program
 //! Receive and processes votes from validators
 
-#[macro_use]
-extern crate log;
-#[macro_use]
-extern crate solana_sdk;
-
+use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::solana_entrypoint;
 use solana_sdk::vote_program::*;
 use std::collections::VecDeque;
 
@@ -39,7 +36,7 @@ fn entrypoint(
 
             // TODO: a single validator could register multiple "vote accounts"
             // which would clutter the "accounts" structure. See github issue 1654.
-            let mut vote_state = VoteProgram {
+            let vote_state = VoteProgram {
                 votes: VecDeque::new(),
                 node_id: *keyed_accounts[0].signer_key().unwrap(),
             };

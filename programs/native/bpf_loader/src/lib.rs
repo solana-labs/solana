@@ -1,20 +1,14 @@
 pub mod bpf_verifier;
 
-extern crate byteorder;
-#[macro_use]
-extern crate log;
-extern crate libc;
-extern crate solana_rbpf;
-#[macro_use]
-extern crate solana_sdk;
-
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use libc::c_char;
+use log::*;
 use solana_rbpf::EbpfVmRaw;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::solana_entrypoint;
 use std::ffi::CStr;
 use std::io::prelude::*;
 use std::io::{Error, ErrorKind};

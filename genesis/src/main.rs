@@ -1,10 +1,7 @@
 //! A command-line executable for generating the chain's genesis block.
 
-#[macro_use]
-extern crate clap;
+use clap::{crate_version, value_t_or_exit, App, Arg};
 use serde_json;
-
-use clap::{App, Arg};
 use solana::db_ledger::genesis;
 use solana::ledger::LedgerWriter;
 use solana::mint::Mint;

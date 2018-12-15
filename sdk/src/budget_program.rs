@@ -1,4 +1,4 @@
-use pubkey::Pubkey;
+use crate::pubkey::Pubkey;
 
 pub const BUDGET_PROGRAM_ID: [u8; 32] = [
     129, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,

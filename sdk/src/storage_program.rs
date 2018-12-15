@@ -1,7 +1,7 @@
-use hash::Hash;
-use pubkey::Pubkey;
-use signature::{Keypair, KeypairUtil};
-use transaction::Transaction;
+use crate::hash::Hash;
+use crate::pubkey::Pubkey;
+use crate::signature::{Keypair, KeypairUtil};
+use crate::transaction::Transaction;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum StorageProgram {

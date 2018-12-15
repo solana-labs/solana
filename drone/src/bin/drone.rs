@@ -1,19 +1,8 @@
-extern crate byteorder;
-extern crate bytes;
-#[macro_use]
-extern crate clap;
-extern crate log;
-#[macro_use]
-extern crate solana_drone;
-extern crate solana_metrics;
-extern crate solana_sdk;
-extern crate tokio;
-extern crate tokio_codec;
-
 use byteorder::{ByteOrder, LittleEndian};
 use bytes::Bytes;
-use clap::{App, Arg};
+use clap::{crate_version, App, Arg};
 use solana_drone::drone::{Drone, DroneRequest, DRONE_PORT};
+use solana_drone::socketaddr;
 use solana_sdk::signature::read_keypair;
 use std::error;
 use std::io;
@@ -25,7 +14,6 @@ use tokio::prelude::*;
 use tokio_codec::{BytesCodec, Decoder};
 
 fn main() -> Result<(), Box<error::Error>> {
-    //logger::setup();
     solana_metrics::set_panic_hook("drone");
     let matches = App::new("drone")
         .version(crate_version!())

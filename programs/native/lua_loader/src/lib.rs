@@ -1,14 +1,10 @@
-#[macro_use]
-extern crate log;
-extern crate rlua;
-#[macro_use]
-extern crate solana_sdk;
-
+use log::*;
 use rlua::{Lua, Table};
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::solana_entrypoint;
 use std::str;
 
 /// Make KeyAccount values available to Lua.
@@ -116,10 +112,8 @@ fn entrypoint(
 
 #[cfg(test)]
 mod tests {
-    extern crate bincode;
-
-    use self::bincode::serialize;
     use super::*;
+    use bincode::serialize;
     use solana_sdk::account::{create_keyed_accounts, Account};
     use solana_sdk::pubkey::Pubkey;
     use std::fs::File;

@@ -1778,6 +1778,7 @@ dependencies = [
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana 0.11.0",
  "solana-logger 0.11.0",
+ "solana-netutil 0.11.0",
 ]
 
 [[package]]

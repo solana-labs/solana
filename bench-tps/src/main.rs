@@ -1,9 +1,3 @@
-#[macro_use]
-extern crate clap;
-
-extern crate solana;
-extern crate solana_sdk;
-
 mod bench;
 mod cli;
 
