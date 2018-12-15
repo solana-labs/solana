@@ -1,6 +1,7 @@
 //! The `rpc` module implements the Solana RPC interface.
 
-use crate::bank::{Bank, BankError};
+use crate::bank::Bank;
+use crate::bank_error::BankError;
 use crate::cluster_info::ClusterInfo;
 use crate::jsonrpc_core::*;
 use crate::jsonrpc_http_server::*;

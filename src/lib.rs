@@ -10,6 +10,7 @@
 #[macro_use]
 pub mod counter;
 pub mod bank;
+pub mod bank_error;
 pub mod banking_stage;
 pub mod blob_fetch_stage;
 pub mod bloom;
@@ -18,6 +19,7 @@ pub mod broadcast_service;
 pub mod chacha;
 #[cfg(all(feature = "chacha", feature = "cuda"))]
 pub mod chacha_cuda;
+pub mod checkpoint;
 pub mod client;
 pub mod crds;
 pub mod crds_gossip;
@@ -27,6 +29,7 @@ pub mod crds_gossip_push;
 pub mod crds_traits_impls;
 pub mod crds_value;
 pub mod create_vote_account;
+pub mod last_ids;
 #[macro_use]
 pub mod contact_info;
 pub mod cluster_info;
