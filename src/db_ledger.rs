@@ -285,7 +285,7 @@ impl DbLedger {
         Ok(())
     }
 
-    pub fn write_shared_blobs<I>(&mut self, slot: u64, shared_blobs: I) -> Result<Vec<Entry>>
+    pub fn write_shared_blobs<I>(&mut self, shared_blobs: I) -> Result<Vec<Entry>>
     where
         I: IntoIterator,
         I::Item: Borrow<SharedBlob>,
@@ -294,6 +294,7 @@ impl DbLedger {
         for b in shared_blobs {
             let bl = b.borrow().read().unwrap();
             let index = bl.index()?;
+            let slot = bl.slot()?;
             let key = DataCf::key(slot, index);
             let new_entries = self.insert_data_blob(&key, &*bl)?;
             entries.extend(new_entries);
@@ -301,14 +302,14 @@ impl DbLedger {
         Ok(entries)
     }
 
-    pub fn write_blobs<'a, I>(&mut self, slot: u64, blobs: I) -> Result<Vec<Entry>>
+    pub fn write_blobs<'a, I>(&mut self, blobs: I) -> Result<Vec<Entry>>
     where
         I: IntoIterator<Item = &'a &'a Blob>,
     {
         let mut entries = vec![];
         for blob in blobs.into_iter() {
             let index = blob.index()?;
-            let key = DataCf::key(slot, index);
+            let key = DataCf::key(blob.slot()?, index);
             let new_entries = self.insert_data_blob(&key, blob)?;
             entries.extend(new_entries);
         }
@@ -322,11 +323,15 @@ impl DbLedger {
     {
         let shared_blobs = entries.into_iter().enumerate().map(|(idx, entry)| {
             let b = entry.borrow().to_blob();
-            b.write().unwrap().set_index(idx as u64).unwrap();
+            {
+                let mut w_b = b.write().unwrap();
+                w_b.set_index(idx as u64).unwrap();
+                w_b.set_slot(slot).unwrap();
+            }
             b
         });
 
-        self.write_shared_blobs(slot, shared_blobs)
+        self.write_shared_blobs(shared_blobs)
     }
 
     pub fn insert_data_blob(&self, key: &[u8], new_blob: &Blob) -> Result<Vec<Entry>> {
@@ -547,10 +552,11 @@ where
         let b = entry.borrow().to_blob();
         b.write().unwrap().set_index(idx as u64).unwrap();
         b.write().unwrap().set_id(&keypair.pubkey()).unwrap();
+        b.write().unwrap().set_slot(DEFAULT_SLOT_HEIGHT).unwrap();
         b
     });
 
-    db_ledger.write_shared_blobs(DEFAULT_SLOT_HEIGHT, blobs)?;
+    db_ledger.write_shared_blobs(blobs)?;
     Ok(())
 }
 
@@ -614,19 +620,19 @@ mod tests {
     #[test]
     fn test_get_blobs_bytes() {
         let shared_blobs = make_tiny_test_entries(10).to_blobs();
+        let slot = DEFAULT_SLOT_HEIGHT;
         index_blobs(
-            shared_blobs.iter().zip(vec![0u64; 10].into_iter()),
+            shared_blobs.iter().zip(vec![slot; 10].into_iter()),
             &Keypair::new().pubkey(),
             0,
         );
 
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
-        let slot = DEFAULT_SLOT_HEIGHT;
 
         let ledger_path = get_tmp_ledger_path("test_get_blobs_bytes");
         let mut ledger = DbLedger::open(&ledger_path).unwrap();
-        ledger.write_blobs(slot, &blobs).unwrap();
+        ledger.write_blobs(&blobs).unwrap();
 
         let mut buf = [0; 1024];
         let (num_blobs, bytes) = ledger.get_blob_bytes(0, 1, &mut buf, slot).unwrap();
@@ -815,11 +821,13 @@ mod tests {
             let shared_blobs = make_tiny_test_entries(num_entries).to_blobs();
 
             for (i, b) in shared_blobs.iter().enumerate() {
-                b.write().unwrap().set_index(1 << (i * 8)).unwrap();
+                let mut w_b = b.write().unwrap();
+                w_b.set_index(1 << (i * 8)).unwrap();
+                w_b.set_slot(DEFAULT_SLOT_HEIGHT).unwrap();
             }
 
             db_ledger
-                .write_shared_blobs(DEFAULT_SLOT_HEIGHT, &shared_blobs)
+                .write_shared_blobs(&shared_blobs)
                 .expect("Expected successful write of blobs");
             let mut db_iterator = db_ledger
                 .db

@@ -404,10 +404,7 @@ fn try_erasure(db_ledger: &Arc<RwLock<DbLedger>>, consume_queue: &mut Vec<Entry>
                 .put(&r_db.db, &erasure_key, &cl.data[..BLOB_HEADER_SIZE + size])?;
         }
 
-        let entries = db_ledger
-            .write()
-            .unwrap()
-            .write_shared_blobs(meta.consumed_slot, data)?;
+        let entries = db_ledger.write().unwrap().write_shared_blobs(data)?;
         consume_queue.extend(entries);
     }
 
@@ -546,7 +543,7 @@ mod test {
 
     #[test]
     pub fn test_find_missing_data_indexes_sanity() {
-        let slot = 0;
+        let slot = DEFAULT_SLOT_HEIGHT;
 
         // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes_sanity");
@@ -564,11 +561,12 @@ mod test {
         {
             let mut bl = shared_blob.write().unwrap();
             bl.set_index(10).unwrap();
+            bl.set_slot(slot).unwrap();
         }
 
         // Insert one blob at index = first_index
         db_ledger
-            .write_blobs(slot, &vec![&*shared_blob.read().unwrap()])
+            .write_blobs(&vec![&*shared_blob.read().unwrap()])
             .unwrap();
 
         // The first blob has index = first_index. Thus, for i < first_index,
@@ -594,7 +592,7 @@ mod test {
 
     #[test]
     pub fn test_find_missing_data_indexes() {
-        let slot = 0;
+        let slot = DEFAULT_SLOT_HEIGHT;
         // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes");
         let mut db_ledger = DbLedger::open(&db_ledger_path).unwrap();
@@ -605,11 +603,13 @@ mod test {
         let num_entries = 10;
         let shared_blobs = make_tiny_test_entries(num_entries).to_blobs();
         for (i, b) in shared_blobs.iter().enumerate() {
-            b.write().unwrap().set_index(i as u64 * gap).unwrap();
+            let mut w_b = b.write().unwrap();
+            w_b.set_index(i as u64 * gap).unwrap();
+            w_b.set_slot(slot).unwrap();
         }
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
-        db_ledger.write_blobs(slot, &blobs).unwrap();
+        db_ledger.write_blobs(&blobs).unwrap();
 
         // Index of the first blob is 0
         // Index of the second blob is "gap"
@@ -682,7 +682,7 @@ mod test {
 
     #[test]
     pub fn test_no_missing_blob_indexes() {
-        let slot = 0;
+        let slot = DEFAULT_SLOT_HEIGHT;
         // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes");
         let mut db_ledger = DbLedger::open(&db_ledger_path).unwrap();
@@ -692,14 +692,14 @@ mod test {
         let shared_blobs = make_tiny_test_entries(num_entries).to_blobs();
 
         index_blobs(
-            shared_blobs.iter().zip(vec![0u64; num_entries].into_iter()),
+            shared_blobs.iter().zip(vec![slot; num_entries].into_iter()),
             &Keypair::new().pubkey(),
             0,
         );
 
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
-        db_ledger.write_blobs(slot, &blobs).unwrap();
+        db_ledger.write_blobs(&blobs).unwrap();
 
         let empty: Vec<u64> = vec![];
         for i in 0..num_entries as u64 {
@@ -742,7 +742,6 @@ mod test {
         let db_ledger = Arc::new(RwLock::new(generate_db_ledger_from_window(
             &ledger_path,
             &window,
-            slot_height,
             false,
         )));
 
