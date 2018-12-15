@@ -56,18 +56,9 @@ pub const MAX_ENTRY_IDS: usize = NUM_TICKS_PER_SECOND * 120;
 
 pub const VERIFY_BLOCK_SIZE: usize = 16;
 
-/// Reasons a transaction might be rejected.
+/// Reasons a transaction might be rejected prior to executation.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum BankError {
-    /// This Pubkey is being processed in another transaction
-    AccountInUse,
-
-    /// Attempt to debit from `Pubkey`, but no found no record of a prior credit.
-    AccountNotFound,
-
-    /// The from `Pubkey` does not have sufficient balance to pay the fee to schedule the transaction
-    InsufficientFundsForFee,
-
+pub enum LastIdsError {
     /// The bank has seen `Signature` before. This can occur under normal operation
     /// when a UDP packet is duplicated, as a user error from a client not updating
     /// its `last_id`, or as a double-spend attack.
@@ -83,12 +74,28 @@ pub enum BankError {
 
     /// A transaction with this signature has been received but not yet executed
     SignatureReserved,
+}
+
+/// Reasons a transaction might be rejected.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum BankError {
+    /// This Pubkey is being processed in another transaction
+    AccountInUse,
+
+    /// Attempt to debit from `Pubkey`, but no found no record of a prior credit.
+    AccountNotFound,
+
+    /// The from `Pubkey` does not have sufficient balance to pay the fee to schedule the transaction
+    InsufficientFundsForFee,
 
     /// Proof of History verification failed.
     LedgerVerificationFailed,
 
     /// The program returned an error
     ProgramError(u8, ProgramError),
+
+    /// The program returned an error
+    LastIdsError(LastIdsError),
 
     /// Recoding into PoH failed
     RecordFailure,
@@ -495,9 +502,12 @@ impl Bank {
     /// Store the given signature. The bank will reject any transaction with the same signature.
     fn reserve_signature(signatures: &mut SignatureStatusMap, signature: &Signature) -> Result<()> {
         if let Some(_result) = signatures.get(signature) {
-            return Err(BankError::DuplicateSignature);
+            return Err(BankError::LastIdsError(LastIdsError::DuplicateSignature));
         }
-        signatures.insert(*signature, Err(BankError::SignatureReserved));
+        signatures.insert(
+            *signature,
+            Err(BankError::LastIdsError(LastIdsError::SignatureReserved)),
+        );
         Ok(())
     }
 
@@ -529,7 +539,7 @@ impl Bank {
                 return Self::reserve_signature(&mut entry.signature_status, sig);
             }
         }
-        Err(BankError::LastIdNotFound)
+        Err(BankError::LastIdsError(LastIdsError::LastIdNotFound))
     }
 
     #[cfg(test)]
@@ -558,7 +568,7 @@ impl Bank {
                 &res[i],
                 &tx.last_id,
             );
-            if res[i] != Err(BankError::SignatureNotFound) {
+            if res[i] != Err(BankError::LastIdsError(LastIdsError::SignatureNotFound)) {
                 let status = match res[i] {
                     Ok(_) => RpcSignatureStatus::Confirmed,
                     Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
@@ -716,16 +726,16 @@ impl Bank {
         } else {
             if !Self::check_entry_id_age(&last_ids, tx.last_id, max_age) {
                 error_counters.last_id_not_found += 1;
-                return Err(BankError::LastIdNotFound);
+                return Err(BankError::LastIdsError(LastIdsError::LastIdNotFound));
             }
 
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
             let err =
                 Self::reserve_signature_with_last_id(last_ids, &tx.last_id, &tx.signatures[0]);
-            if let Err(BankError::LastIdNotFound) = err {
+            if let Err(BankError::LastIdsError(LastIdsError::LastIdNotFound)) = err {
                 error_counters.reserve_last_id += 1;
-            } else if let Err(BankError::DuplicateSignature) = err {
+            } else if let Err(BankError::LastIdsError(LastIdsError::DuplicateSignature)) = err {
                 error_counters.duplicate_signature += 1;
             }
             err?;
@@ -1295,11 +1305,12 @@ impl Bank {
                 return res.clone();
             }
         }
-        Err(BankError::SignatureNotFound)
+        Err(BankError::LastIdsError(LastIdsError::SignatureNotFound))
     }
 
     pub fn has_signature(&self, signature: &Signature) -> bool {
-        self.get_signature_status(signature) != Err(BankError::SignatureNotFound)
+        self.get_signature_status(signature)
+            != Err(BankError::LastIdsError(LastIdsError::SignatureNotFound))
     }
 
     pub fn get_signature(&self, last_id: &Hash, signature: &Signature) -> Option<Result<()>> {
@@ -1687,7 +1698,7 @@ mod tests {
         );
         assert_eq!(
             bank.reserve_signature_with_last_id_test(&signature, &mint.last_id()),
-            Err(BankError::DuplicateSignature)
+            Err(BankError::LastIdsError(LastIdsError::DuplicateSignature))
         );
     }
 
@@ -1714,7 +1725,7 @@ mod tests {
             .expect("reserve signature");
         assert_eq!(
             bank.get_signature_status(&signature),
-            Err(BankError::SignatureReserved)
+            Err(BankError::LastIdsError(LastIdsError::SignatureReserved))
         );
     }
 
@@ -1740,7 +1751,7 @@ mod tests {
         // Assert we're no longer able to use the oldest entry ID.
         assert_eq!(
             bank.reserve_signature_with_last_id_test(&signature, &mint.last_id()),
-            Err(BankError::LastIdNotFound)
+            Err(BankError::LastIdsError(LastIdsError::LastIdNotFound))
         );
     }
 
@@ -1788,7 +1799,7 @@ mod tests {
         // First, ensure the TX is rejected because of the unregistered last ID
         assert_eq!(
             bank.process_transaction(&tx),
-            Err(BankError::LastIdNotFound)
+            Err(BankError::LastIdsError(LastIdsError::LastIdNotFound))
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
@@ -2060,13 +2071,16 @@ mod tests {
     fn test_first_err() {
         assert_eq!(Bank::first_err(&[Ok(())]), Ok(()));
         assert_eq!(
-            Bank::first_err(&[Ok(()), Err(BankError::DuplicateSignature)]),
-            Err(BankError::DuplicateSignature)
+            Bank::first_err(&[
+                Ok(()),
+                Err(BankError::LastIdsError(LastIdsError::DuplicateSignature))
+            ]),
+            Err(BankError::LastIdsError(LastIdsError::DuplicateSignature))
         );
         assert_eq!(
             Bank::first_err(&[
                 Ok(()),
-                Err(BankError::DuplicateSignature),
+                Err(BankError::LastIdsError(LastIdsError::DuplicateSignature)),
                 Err(BankError::AccountInUse)
             ]),
             Err(BankError::DuplicateSignature)
@@ -2075,7 +2089,7 @@ mod tests {
             Bank::first_err(&[
                 Ok(()),
                 Err(BankError::AccountInUse),
-                Err(BankError::DuplicateSignature)
+                Err(BankError::LastIdsError(LastIdsError::DuplicateSignature))
             ]),
             Err(BankError::AccountInUse)
         );
@@ -2083,7 +2097,7 @@ mod tests {
             Bank::first_err(&[
                 Err(BankError::AccountInUse),
                 Ok(()),
-                Err(BankError::DuplicateSignature)
+                Err(BankError::LastIdsError(LastIdsError::DuplicateSignature))
             ]),
             Err(BankError::AccountInUse)
         );
@@ -2373,7 +2387,7 @@ mod tests {
         assert_eq!(bank.tick_height(), MAX_ENTRY_IDS as u64 + 2);
         assert_eq!(
             bank.reserve_signature_with_last_id_test(&signature, &alice.last_id()),
-            Err(BankError::LastIdNotFound)
+            Err(BankError::LastIdsError(LastIdsError::LastIdNotFound))
         );
         bank.rollback();
         assert_eq!(bank.tick_height(), 1);
@@ -2384,7 +2398,7 @@ mod tests {
         bank.checkpoint();
         assert_eq!(
             bank.reserve_signature_with_last_id_test(&signature, &alice.last_id()),
-            Err(BankError::DuplicateSignature)
+            Err(BankError::LastIdsError(LastIdsError::DuplicateSignature))
         );
     }
 
