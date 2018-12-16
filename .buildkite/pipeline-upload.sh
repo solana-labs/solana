@@ -4,7 +4,7 @@
 # in the buildkite UI should simply be:
 #
 #   steps:
-#    - command: "ci/buildkite-pipeline-upload.sh"
+#    - command: ".buildkite/pipeline-upload.sh"
 #
 
 set -e
