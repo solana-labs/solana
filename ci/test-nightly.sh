@@ -39,7 +39,7 @@ if [[ ! -f ./grcov ]]; then
   fi
   uname_m=$(uname -m | tr '[:upper:]' '[:lower:]')
   name=grcov-${uname}-${uname_m}.tar.bz2
-  _ wget "https://github.com/mozilla/grcov/releases/download/v0.2.3/${name}"
+  _ wget "https://github.com/mozilla/grcov/releases/download/v0.3.2/${name}"
   _ tar -xjf "${name}"
 fi
 _ ./grcov . -t lcov > lcov.info
