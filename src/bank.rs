@@ -7,13 +7,13 @@ use crate::checkpoint::Checkpoint;
 use crate::counter::Counter;
 use crate::entry::Entry;
 use crate::jsonrpc_macros::pubsub::Sink;
-use crate::last_ids::{LastIds, LastIdsError, SignatureStatus, MAX_ENTRY_IDS};
 use crate::leader_scheduler::LeaderScheduler;
 use crate::ledger::Block;
 use crate::mint::Mint;
 use crate::poh_recorder::PohRecorder;
 use crate::rpc::RpcSignatureStatus;
 use crate::runtime::{self, RuntimeError};
+use crate::status_deque::{Status, StatusDeque, StatusDequeError, MAX_ENTRY_IDS};
 use crate::storage_stage::StorageState;
 use bincode::deserialize;
 use bincode::serialize;
@@ -194,7 +194,7 @@ pub struct Bank {
     pub accounts: RwLock<Accounts>,
 
     /// FIFO queue of `last_id` items
-    last_ids: RwLock<LastIds<Result<()>>>,
+    last_ids: RwLock<StatusDeque<Result<()>>>,
 
     /// set of accounts which are currently in the pipeline
     account_locks: Mutex<HashSet<Pubkey>>,
@@ -219,7 +219,7 @@ impl Default for Bank {
     fn default() -> Self {
         Bank {
             accounts: RwLock::new(Accounts::default()),
-            last_ids: RwLock::new(LastIds::default()),
+            last_ids: RwLock::new(StatusDeque::default()),
             account_locks: Mutex::new(HashSet::new()),
             finality_time: AtomicUsize::new(std::usize::MAX),
             account_subscriptions: RwLock::new(HashMap::new()),
@@ -494,7 +494,7 @@ impl Bank {
         &self,
         tx: &Transaction,
         accounts: &Accounts,
-        last_ids: &mut LastIds<Result<()>>,
+        last_ids: &mut StatusDeque<Result<()>>,
         max_age: usize,
         error_counters: &mut ErrorCounters,
     ) -> Result<Vec<Account>> {
@@ -518,11 +518,11 @@ impl Bank {
             last_ids
                 .reserve_signature_with_last_id(&tx.last_id, &tx.signatures[0])
                 .map_err(|err| match err {
-                    LastIdsError::LastIdNotFound => {
+                    StatusDequeError::LastIdNotFound => {
                         error_counters.reserve_last_id += 1;
                         BankError::LastIdNotFound
                     }
-                    LastIdsError::DuplicateSignature => {
+                    StatusDequeError::DuplicateSignature => {
                         error_counters.duplicate_signature += 1;
                         BankError::DuplicateSignature
                     }
@@ -1086,10 +1086,7 @@ impl Bank {
         self.accounts.read().unwrap().transaction_count()
     }
 
-    pub fn get_signature_status(
-        &self,
-        signature: &Signature,
-    ) -> Option<SignatureStatus<Result<()>>> {
+    pub fn get_signature_status(&self, signature: &Signature) -> Option<Status<Result<()>>> {
         self.last_ids
             .read()
             .unwrap()
@@ -1104,7 +1101,7 @@ impl Bank {
         &self,
         last_id: &Hash,
         signature: &Signature,
-    ) -> Option<SignatureStatus<Result<()>>> {
+    ) -> Option<Status<Result<()>>> {
         self.last_ids
             .read()
             .unwrap()
@@ -1245,9 +1242,9 @@ mod tests {
     use crate::entry::next_entry;
     use crate::entry::Entry;
     use crate::jsonrpc_macros::pubsub::{Subscriber, SubscriptionId};
-    use crate::last_ids;
     use crate::ledger;
     use crate::signature::GenKeys;
+    use crate::status_deque;
     use bincode::serialize;
     use solana_sdk::hash::hash;
     use solana_sdk::native_program::ProgramError;
@@ -1311,12 +1308,12 @@ mod tests {
         assert_eq!(bank.get_balance(&key2), 0);
         assert_eq!(
             bank.get_signature(&t1.last_id, &t1.signatures[0]),
-            Some(SignatureStatus::Complete(Ok(())))
+            Some(Status::Complete(Ok(())))
         );
         // TODO: Transactions that fail to pay a fee could be dropped silently
         assert_eq!(
             bank.get_signature(&t2.last_id, &t2.signatures[0]),
-            Some(SignatureStatus::Complete(Err(BankError::AccountInUse)))
+            Some(Status::Complete(Err(BankError::AccountInUse)))
         );
     }
 
@@ -1362,7 +1359,7 @@ mod tests {
         assert_eq!(bank.get_balance(&key2), 0);
         assert_eq!(
             bank.get_signature(&t1.last_id, &t1.signatures[0]),
-            Some(SignatureStatus::Complete(Err(BankError::ProgramError(
+            Some(Status::Complete(Err(BankError::ProgramError(
                 1,
                 ProgramError::ResultWithNegativeTokens
             ))))
@@ -1389,7 +1386,7 @@ mod tests {
         assert_eq!(bank.get_balance(&key2), 1);
         assert_eq!(
             bank.get_signature(&t1.last_id, &t1.signatures[0]),
-            Some(SignatureStatus::Complete(Ok(())))
+            Some(Status::Complete(Ok(())))
         );
     }
 
@@ -1420,7 +1417,7 @@ mod tests {
         assert!(bank.has_signature(&signature));
         assert_matches!(
             bank.get_signature_status(&signature),
-            Some(SignatureStatus::Complete(Err(BankError::ProgramError(
+            Some(Status::Complete(Err(BankError::ProgramError(
                 0,
                 ProgramError::ResultWithNegativeTokens
             ))))
@@ -2047,7 +2044,7 @@ mod tests {
         bank: &Bank,
         sig: &Signature,
         last_id: &Hash,
-    ) -> last_ids::Result<()> {
+    ) -> status_deque::Result<()> {
         let mut last_ids = bank.last_ids.write().unwrap();
         last_ids.reserve_signature_with_last_id(last_id, sig)
     }
@@ -2098,7 +2095,7 @@ mod tests {
         assert_eq!(bank.tick_height(), MAX_ENTRY_IDS as u64 + 2);
         assert_eq!(
             reserve_signature_with_last_id_test(&bank, &signature, &alice.last_id()),
-            Err(LastIdsError::LastIdNotFound)
+            Err(StatusDequeError::LastIdNotFound)
         );
         bank.rollback();
         assert_eq!(bank.tick_height(), 1);
@@ -2109,7 +2106,7 @@ mod tests {
         bank.checkpoint();
         assert_eq!(
             reserve_signature_with_last_id_test(&bank, &signature, &alice.last_id()),
-            Err(LastIdsError::DuplicateSignature)
+            Err(StatusDequeError::DuplicateSignature)
         );
     }
 

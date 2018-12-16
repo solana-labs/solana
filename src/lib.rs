@@ -28,7 +28,6 @@ pub mod crds_gossip_push;
 pub mod crds_traits_impls;
 pub mod crds_value;
 pub mod create_vote_account;
-pub mod last_ids;
 #[macro_use]
 pub mod contact_info;
 pub mod cluster_info;
@@ -62,6 +61,7 @@ pub mod service;
 pub mod signature;
 pub mod sigverify;
 pub mod sigverify_stage;
+pub mod status_deque;
 pub mod storage_stage;
 pub mod store_ledger_stage;
 pub mod streamer;

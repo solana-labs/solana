@@ -3,8 +3,8 @@
 extern crate test;
 
 use solana::bank::*;
-use solana::last_ids::MAX_ENTRY_IDS;
 use solana::mint::Mint;
+use solana::status_deque::MAX_ENTRY_IDS;
 use solana_sdk::hash::hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
