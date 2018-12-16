@@ -1,6 +1,6 @@
 //! The `rpc` module implements the Solana RPC interface.
 
-use crate::bank::{Bank, BankError};
+use crate::bank::{self, Bank, BankError};
 use crate::cluster_info::ClusterInfo;
 use crate::jsonrpc_core::*;
 use crate::jsonrpc_http_server::*;
@@ -336,7 +336,10 @@ impl JsonRpcRequestProcessor {
         let id = self.bank.last_id();
         Ok(bs58::encode(id).into_string())
     }
-    pub fn get_signature_status(&self, signature: Signature) -> Option<SignatureStatus> {
+    pub fn get_signature_status(
+        &self,
+        signature: Signature,
+    ) -> Option<SignatureStatus<bank::Result<()>>> {
         self.bank.get_signature_status(&signature)
     }
     fn get_transaction_count(&self) -> Result<u64> {

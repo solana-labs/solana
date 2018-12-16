@@ -194,7 +194,7 @@ pub struct Bank {
     pub accounts: RwLock<Accounts>,
 
     /// FIFO queue of `last_id` items
-    last_ids: RwLock<LastIds>,
+    last_ids: RwLock<LastIds<Result<()>>>,
 
     /// set of accounts which are currently in the pipeline
     account_locks: Mutex<HashSet<Pubkey>>,
@@ -494,7 +494,7 @@ impl Bank {
         &self,
         tx: &Transaction,
         accounts: &Accounts,
-        last_ids: &mut LastIds,
+        last_ids: &mut LastIds<Result<()>>,
         max_age: usize,
         error_counters: &mut ErrorCounters,
     ) -> Result<Vec<Account>> {
@@ -1086,7 +1086,10 @@ impl Bank {
         self.accounts.read().unwrap().transaction_count()
     }
 
-    pub fn get_signature_status(&self, signature: &Signature) -> Option<SignatureStatus> {
+    pub fn get_signature_status(
+        &self,
+        signature: &Signature,
+    ) -> Option<SignatureStatus<Result<()>>> {
         self.last_ids
             .read()
             .unwrap()
@@ -1097,7 +1100,11 @@ impl Bank {
         self.last_ids.read().unwrap().has_signature(signature)
     }
 
-    pub fn get_signature(&self, last_id: &Hash, signature: &Signature) -> Option<SignatureStatus> {
+    pub fn get_signature(
+        &self,
+        last_id: &Hash,
+        signature: &Signature,
+    ) -> Option<SignatureStatus<Result<()>>> {
         self.last_ids
             .read()
             .unwrap()

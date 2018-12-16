@@ -1,4 +1,3 @@
-use crate::bank;
 use crate::checkpoint::Checkpoint;
 use crate::poh_service::NUM_TICKS_PER_SECOND;
 use hashbrown::HashMap;
@@ -17,12 +16,12 @@ use std::result;
 pub const MAX_ENTRY_IDS: usize = NUM_TICKS_PER_SECOND * 120;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum SignatureStatus {
+pub enum SignatureStatus<T> {
     Reserved,
-    Complete(bank::Result<()>),
+    Complete(T),
 }
 
-type SignatureStatusMap = HashMap<Signature, SignatureStatus>;
+type SignatureStatusMap<T> = HashMap<Signature, SignatureStatus<T>>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LastIdsError {
@@ -40,7 +39,7 @@ pub type Result<T> = result::Result<T, LastIdsError>;
 
 /// a record of a tick, from register_tick
 #[derive(Clone)]
-pub struct LastIdEntry {
+pub struct LastIdEntry<T> {
     /// when the id was registered, according to network time
     tick_height: u64,
 
@@ -48,10 +47,10 @@ pub struct LastIdEntry {
     timestamp: u64,
 
     /// a map of signature status, used for duplicate detection
-    signature_status: SignatureStatusMap,
+    signature_status: SignatureStatusMap<T>,
 }
 
-pub struct LastIds {
+pub struct LastIds<T> {
     /// A FIFO queue of `last_id` items, where each item is a set of signatures
     /// that have been processed using that `last_id`. Rejected `last_id`
     /// values are so old that the `last_id` has been pulled out of the queue.
@@ -66,12 +65,12 @@ pub struct LastIds {
     /// was when the id was added. The bank uses this data to
     /// reject transactions with signatures it's seen before and to reject
     /// transactions that are too old (nth is too small)
-    entries: HashMap<Hash, LastIdEntry>,
+    entries: HashMap<Hash, LastIdEntry<T>>,
 
-    checkpoints: VecDeque<(u64, Option<Hash>, HashMap<Hash, LastIdEntry>)>,
+    checkpoints: VecDeque<(u64, Option<Hash>, HashMap<Hash, LastIdEntry<T>>)>,
 }
 
-impl Default for LastIds {
+impl<T> Default for LastIds<T> {
     fn default() -> Self {
         LastIds {
             tick_height: 0,
@@ -82,7 +81,7 @@ impl Default for LastIds {
     }
 }
 
-impl Checkpoint for LastIds {
+impl<T: Clone> Checkpoint for LastIds<T> {
     fn checkpoint(&mut self) {
         self.checkpoints
             .push_front((self.tick_height, self.last_id, self.entries.clone()));
@@ -103,11 +102,11 @@ impl Checkpoint for LastIds {
     }
 }
 
-impl LastIds {
+impl<T: Clone> LastIds<T> {
     pub fn update_signature_status_with_last_id(
         &mut self,
         signature: &Signature,
-        result: &bank::Result<()>,
+        result: &T,
         last_id: &Hash,
     ) {
         if let Some(entry) = self.entries.get_mut(last_id) {
@@ -130,7 +129,10 @@ impl LastIds {
     }
 
     /// Store the given signature. The bank will reject any transaction with the same signature.
-    fn reserve_signature(signatures: &mut SignatureStatusMap, signature: &Signature) -> Result<()> {
+    fn reserve_signature(
+        signatures: &mut SignatureStatusMap<T>,
+        signature: &Signature,
+    ) -> Result<()> {
         if let Some(_result) = signatures.get(signature) {
             return Err(LastIdsError::DuplicateSignature);
         }
@@ -230,7 +232,7 @@ impl LastIds {
         }
         ret
     }
-    pub fn get_signature_status(&self, signature: &Signature) -> Option<SignatureStatus> {
+    pub fn get_signature_status(&self, signature: &Signature) -> Option<SignatureStatus<T>> {
         for entry in self.entries.values() {
             if let Some(res) = entry.signature_status.get(signature) {
                 return Some(res.clone());
@@ -242,7 +244,11 @@ impl LastIds {
         self.get_signature_status(signature).is_some()
     }
 
-    pub fn get_signature(&self, last_id: &Hash, signature: &Signature) -> Option<SignatureStatus> {
+    pub fn get_signature(
+        &self,
+        last_id: &Hash,
+        signature: &Signature,
+    ) -> Option<SignatureStatus<T>> {
         self.entries
             .get(last_id)
             .and_then(|entry| entry.signature_status.get(signature).cloned())
@@ -257,7 +263,7 @@ mod tests {
     fn test_duplicate_transaction_signature() {
         let sig = Default::default();
         let last_id = Default::default();
-        let mut last_ids = LastIds::default();
+        let mut last_ids: LastIds<()> = LastIds::default();
         last_ids.register_tick(&last_id);
         assert_eq!(
             last_ids.reserve_signature_with_last_id(&last_id, &sig),
@@ -273,7 +279,7 @@ mod tests {
     fn test_duplicate_transaction_signature_checkpoint() {
         let sig = Default::default();
         let last_id = Default::default();
-        let mut last_ids = LastIds::default();
+        let mut last_ids: LastIds<()> = LastIds::default();
         last_ids.register_tick(&last_id);
         assert_eq!(
             last_ids.reserve_signature_with_last_id(&last_id, &sig),
@@ -289,7 +295,7 @@ mod tests {
     #[test]
     fn test_count_valid_ids() {
         let first_id = Default::default();
-        let mut last_ids = LastIds::default();
+        let mut last_ids: LastIds<()> = LastIds::default();
         last_ids.register_tick(&first_id);
         let ids: Vec<_> = (0..MAX_ENTRY_IDS)
             .map(|i| {
@@ -309,7 +315,7 @@ mod tests {
     fn test_clear_signatures() {
         let signature = Signature::default();
         let last_id = Default::default();
-        let mut last_ids = LastIds::default();
+        let mut last_ids: LastIds<()> = LastIds::default();
         last_ids.register_tick(&last_id);
         last_ids
             .reserve_signature_with_last_id(&last_id, &signature)
@@ -325,7 +331,7 @@ mod tests {
     fn test_clear_signatures_checkpoint() {
         let signature = Signature::default();
         let last_id = Default::default();
-        let mut last_ids = LastIds::default();
+        let mut last_ids: LastIds<()> = LastIds::default();
         last_ids.register_tick(&last_id);
         last_ids
             .reserve_signature_with_last_id(&last_id, &signature)
@@ -342,7 +348,7 @@ mod tests {
     fn test_get_signature_status() {
         let signature = Signature::default();
         let last_id = Default::default();
-        let mut last_ids = LastIds::default();
+        let mut last_ids: LastIds<()> = LastIds::default();
         last_ids.register_tick(&last_id);
         last_ids
             .reserve_signature_with_last_id(&last_id, &signature)
@@ -357,7 +363,7 @@ mod tests {
     fn test_register_tick() {
         let signature = Signature::default();
         let last_id = Default::default();
-        let mut last_ids = LastIds::default();
+        let mut last_ids: LastIds<()> = LastIds::default();
         assert_eq!(
             last_ids.reserve_signature_with_last_id(&last_id, &signature),
             Err(LastIdsError::LastIdNotFound)
@@ -373,7 +379,7 @@ mod tests {
     fn test_has_signature() {
         let signature = Signature::default();
         let last_id = Default::default();
-        let mut last_ids = LastIds::default();
+        let mut last_ids: LastIds<()> = LastIds::default();
         last_ids.register_tick(&last_id);
         last_ids
             .reserve_signature_with_last_id(&last_id, &signature)
@@ -385,7 +391,7 @@ mod tests {
     fn test_reject_old_last_id() {
         let signature = Signature::default();
         let last_id = Default::default();
-        let mut last_ids = LastIds::default();
+        let mut last_ids: LastIds<()> = LastIds::default();
         for i in 0..MAX_ENTRY_IDS {
             let last_id = hash(&serialize(&i).unwrap()); // Unique hash
             last_ids.register_tick(&last_id);
