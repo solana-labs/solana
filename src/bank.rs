@@ -7,7 +7,7 @@ use crate::checkpoint::Checkpoint;
 use crate::counter::Counter;
 use crate::entry::Entry;
 use crate::jsonrpc_macros::pubsub::Sink;
-use crate::last_ids::{LastIds, MAX_ENTRY_IDS};
+use crate::last_ids::{LastIds, LastIdsError, MAX_ENTRY_IDS};
 use crate::leader_scheduler::LeaderScheduler;
 use crate::ledger::Block;
 use crate::mint::Mint;
@@ -405,12 +405,6 @@ impl Bank {
         self.last_ids.write().unwrap().clear_signatures();
     }
 
-    #[cfg(test)]
-    fn reserve_signature_with_last_id_test(&self, sig: &Signature, last_id: &Hash) -> Result<()> {
-        let mut last_ids = self.last_ids.write().unwrap();
-        last_ids.reserve_signature_with_last_id(last_id, sig)
-    }
-
     fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
         let mut last_ids = self.last_ids.write().unwrap();
         for (i, tx) in txs.iter().enumerate() {
@@ -524,13 +518,18 @@ impl Bank {
 
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
-            let err = last_ids.reserve_signature_with_last_id(&tx.last_id, &tx.signatures[0]);
-            if let Err(BankError::LastIdNotFound) = err {
-                error_counters.reserve_last_id += 1;
-            } else if let Err(BankError::DuplicateSignature) = err {
-                error_counters.duplicate_signature += 1;
-            }
-            err?;
+            last_ids
+                .reserve_signature_with_last_id(&tx.last_id, &tx.signatures[0])
+                .map_err(|err| match err {
+                    LastIdsError::LastIdNotFound => {
+                        error_counters.reserve_last_id += 1;
+                        BankError::LastIdNotFound
+                    }
+                    LastIdsError::DuplicateSignature => {
+                        error_counters.duplicate_signature += 1;
+                        BankError::DuplicateSignature
+                    }
+                })?;
 
             let mut called_accounts: Vec<Account> = tx
                 .account_keys
@@ -1242,6 +1241,7 @@ mod tests {
     use crate::entry::next_entry;
     use crate::entry::Entry;
     use crate::jsonrpc_macros::pubsub::{Subscriber, SubscriptionId};
+    use crate::last_ids;
     use crate::ledger;
     use crate::signature::GenKeys;
     use bincode::serialize;
@@ -2039,6 +2039,15 @@ mod tests {
         assert_eq!(account.loader, default_account.loader);
     }
 
+    fn reserve_signature_with_last_id_test(
+        bank: &Bank,
+        sig: &Signature,
+        last_id: &Hash,
+    ) -> last_ids::Result<()> {
+        let mut last_ids = bank.last_ids.write().unwrap();
+        last_ids.reserve_signature_with_last_id(last_id, sig)
+    }
+
     #[test]
     fn test_bank_checkpoint_rollback() {
         let alice = Mint::new(10_000);
@@ -2084,19 +2093,19 @@ mod tests {
         }
         assert_eq!(bank.tick_height(), MAX_ENTRY_IDS as u64 + 2);
         assert_eq!(
-            bank.reserve_signature_with_last_id_test(&signature, &alice.last_id()),
-            Err(BankError::LastIdNotFound)
+            reserve_signature_with_last_id_test(&bank, &signature, &alice.last_id()),
+            Err(LastIdsError::LastIdNotFound)
         );
         bank.rollback();
         assert_eq!(bank.tick_height(), 1);
         assert_eq!(
-            bank.reserve_signature_with_last_id_test(&signature, &alice.last_id()),
+            reserve_signature_with_last_id_test(&bank, &signature, &alice.last_id()),
             Ok(())
         );
         bank.checkpoint();
         assert_eq!(
-            bank.reserve_signature_with_last_id_test(&signature, &alice.last_id()),
-            Err(BankError::DuplicateSignature)
+            reserve_signature_with_last_id_test(&bank, &signature, &alice.last_id()),
+            Err(LastIdsError::DuplicateSignature)
         );
     }
 

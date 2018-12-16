@@ -1,4 +1,4 @@
-use crate::bank::{BankError, Result};
+use crate::bank;
 use crate::checkpoint::Checkpoint;
 use crate::poh_service::NUM_TICKS_PER_SECOND;
 use hashbrown::HashMap;
@@ -6,6 +6,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::signature::Signature;
 use solana_sdk::timing::timestamp;
 use std::collections::VecDeque;
+use std::result;
 
 /// The number of most recent `last_id` values that the bank will track the signatures
 /// of. Once the bank discards a `last_id`, it will reject any transactions that use
@@ -15,7 +16,21 @@ use std::collections::VecDeque;
 /// not be processed by the network.
 pub const MAX_ENTRY_IDS: usize = NUM_TICKS_PER_SECOND * 120;
 
-type SignatureStatusMap = HashMap<Signature, Result<()>>;
+type SignatureStatusMap = HashMap<Signature, bank::Result<()>>;
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum LastIdsError {
+    /// The `Signature` has been seen before. This can occur under normal operation
+    /// when a UDP packet is duplicated, as a user error from a client not updating
+    /// its `last_id`, or as a double-spend attack.
+    DuplicateSignature,
+
+    /// The bank has not seen the given `last_id` or the transaction is too old and
+    /// the `last_id` has been discarded.
+    LastIdNotFound,
+}
+
+pub type Result<T> = result::Result<T, LastIdsError>;
 
 /// a record of a tick, from register_tick
 #[derive(Clone)]
@@ -86,7 +101,7 @@ impl LastIds {
     pub fn update_signature_status_with_last_id(
         &mut self,
         signature: &Signature,
-        result: &Result<()>,
+        result: &bank::Result<()>,
         last_id: &Hash,
     ) {
         if let Some(entry) = self.entries.get_mut(last_id) {
@@ -103,15 +118,15 @@ impl LastIds {
                 return Self::reserve_signature(&mut entry.signature_status, sig);
             }
         }
-        Err(BankError::LastIdNotFound)
+        Err(LastIdsError::LastIdNotFound)
     }
 
     /// Store the given signature. The bank will reject any transaction with the same signature.
     fn reserve_signature(signatures: &mut SignatureStatusMap, signature: &Signature) -> Result<()> {
         if let Some(_result) = signatures.get(signature) {
-            return Err(BankError::DuplicateSignature);
+            return Err(LastIdsError::DuplicateSignature);
         }
-        signatures.insert(*signature, Err(BankError::SignatureReserved));
+        signatures.insert(*signature, Err(bank::BankError::SignatureReserved));
         Ok(())
     }
 
@@ -207,7 +222,7 @@ impl LastIds {
         }
         ret
     }
-    pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
+    pub fn get_signature_status(&self, signature: &Signature) -> Option<bank::Result<()>> {
         for entry in self.entries.values() {
             if let Some(res) = entry.signature_status.get(signature) {
                 return Some(res.clone());
@@ -219,7 +234,7 @@ impl LastIds {
         self.get_signature_status(signature).is_some()
     }
 
-    pub fn get_signature(&self, last_id: &Hash, signature: &Signature) -> Option<Result<()>> {
+    pub fn get_signature(&self, last_id: &Hash, signature: &Signature) -> Option<bank::Result<()>> {
         self.entries
             .get(last_id)
             .and_then(|entry| entry.signature_status.get(signature).cloned())
@@ -242,7 +257,7 @@ mod tests {
         );
         assert_eq!(
             last_ids.reserve_signature_with_last_id(&last_id, &sig),
-            Err(BankError::DuplicateSignature)
+            Err(LastIdsError::DuplicateSignature)
         );
     }
 
@@ -259,7 +274,7 @@ mod tests {
         last_ids.checkpoint();
         assert_eq!(
             last_ids.reserve_signature_with_last_id(&last_id, &sig),
-            Err(BankError::DuplicateSignature)
+            Err(LastIdsError::DuplicateSignature)
         );
     }
 
@@ -326,7 +341,7 @@ mod tests {
             .expect("reserve signature");
         assert_eq!(
             last_ids.get_signature_status(&signature),
-            Some(Err(BankError::SignatureReserved))
+            Some(Err(bank::BankError::SignatureReserved))
         );
     }
 
@@ -337,7 +352,7 @@ mod tests {
         let mut last_ids = LastIds::default();
         assert_eq!(
             last_ids.reserve_signature_with_last_id(&last_id, &signature),
-            Err(BankError::LastIdNotFound)
+            Err(LastIdsError::LastIdNotFound)
         );
         last_ids.register_tick(&last_id);
         assert_eq!(
@@ -370,7 +385,7 @@ mod tests {
         // Assert we're no longer able to use the oldest entry ID.
         assert_eq!(
             last_ids.reserve_signature_with_last_id(&last_id, &signature),
-            Err(BankError::LastIdNotFound)
+            Err(LastIdsError::LastIdNotFound)
         );
     }
 }
