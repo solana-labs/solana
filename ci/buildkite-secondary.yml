@@ -1,13 +1,13 @@
 steps:
   #- command: "ci/snap.sh"
   #  timeout_in_minutes: 40
-  #  name: "snap [public]"
+  #  name: "snap"
   - command: "sdk/docker-solana/build.sh"
     timeout_in_minutes: 20
     name: "docker-solana"
   - command: "ci/publish-crate.sh"
     timeout_in_minutes: 20
-    name: "publish crate [public]"
+    name: "publish crate"
     branches: "!master"
   - command: "ci/publish-bpf-sdk.sh"
     timeout_in_minutes: 5
