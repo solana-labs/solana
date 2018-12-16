@@ -6,6 +6,7 @@ use crate::jsonrpc_core::*;
 use crate::jsonrpc_macros::pubsub;
 use crate::jsonrpc_pubsub::{PubSubHandler, Session, SubscriptionId};
 use crate::jsonrpc_ws_server::{RequestContext, Sender, ServerBuilder};
+use crate::last_ids::SignatureStatus;
 use crate::rpc::{JsonRpcRequestProcessor, RpcSignatureStatus};
 use crate::service::Service;
 use bs58;
@@ -215,7 +216,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         }
 
         match status.unwrap() {
-            Ok(_) => {
+            SignatureStatus::Complete(Ok(_)) => {
                 sink.notify(Ok(RpcSignatureStatus::Confirmed))
                     .wait()
                     .unwrap();
@@ -224,7 +225,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                     .unwrap()
                     .remove(&sub_id);
             }
-            Err(_) => {
+            _ => {
                 self.bank
                     .add_signature_subscription(bank_sub_id, signature, sink);
             }

@@ -4,6 +4,7 @@ use crate::bank::{Bank, BankError};
 use crate::cluster_info::ClusterInfo;
 use crate::jsonrpc_core::*;
 use crate::jsonrpc_http_server::*;
+use crate::last_ids::SignatureStatus;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::service::Service;
 use bincode::{deserialize, serialize};
@@ -15,7 +16,6 @@ use solana_sdk::signature::Signature;
 use solana_sdk::transaction::Transaction;
 use std::mem;
 use std::net::{SocketAddr, UdpSocket};
-use std::result;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -201,16 +201,20 @@ impl RpcSol for RpcSolImpl {
         }
 
         let status = match res.unwrap() {
-            Ok(_) => RpcSignatureStatus::Confirmed,
-            Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
-            Err(BankError::ProgramError(_, _)) => RpcSignatureStatus::ProgramRuntimeError,
-            // Report SignatureReserved as SignatureNotFound as SignatureReserved is
-            // transitory while the bank processes the associated transaction.
-            Err(BankError::SignatureReserved) => RpcSignatureStatus::SignatureNotFound,
-            Err(err) => {
-                trace!("mapping {:?} to GenericFailure", err);
-                RpcSignatureStatus::GenericFailure
+            SignatureStatus::Reserved => {
+                // Report SignatureReserved as SignatureNotFound as SignatureReserved is
+                // transitory while the bank processes the associated transaction.
+                RpcSignatureStatus::SignatureNotFound
             }
+            SignatureStatus::Complete(res) => match res {
+                Ok(_) => RpcSignatureStatus::Confirmed,
+                Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
+                Err(BankError::ProgramError(_, _)) => RpcSignatureStatus::ProgramRuntimeError,
+                Err(err) => {
+                    trace!("mapping {:?} to GenericFailure", err);
+                    RpcSignatureStatus::GenericFailure
+                }
+            },
         };
         Ok(status)
     }
@@ -251,7 +255,7 @@ impl RpcSol for RpcSolImpl {
         loop {
             signature_status = meta.request_processor.get_signature_status(signature);
 
-            if signature_status == Some(Ok(())) {
+            if signature_status == Some(SignatureStatus::Complete(Ok(()))) {
                 info!("airdrop signature ok");
                 return Ok(bs58::encode(signature).into_string());
             } else if now.elapsed().as_secs() > 5 {
@@ -332,10 +336,7 @@ impl JsonRpcRequestProcessor {
         let id = self.bank.last_id();
         Ok(bs58::encode(id).into_string())
     }
-    pub fn get_signature_status(
-        &self,
-        signature: Signature,
-    ) -> Option<result::Result<(), BankError>> {
+    pub fn get_signature_status(&self, signature: Signature) -> Option<SignatureStatus> {
         self.bank.get_signature_status(&signature)
     }
     fn get_transaction_count(&self) -> Result<u64> {

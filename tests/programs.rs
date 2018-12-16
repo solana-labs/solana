@@ -2,7 +2,7 @@ use solana;
 use solana_native_loader;
 
 use solana::bank::Bank;
-
+use solana::last_ids::SignatureStatus;
 use solana::mint::Mint;
 #[cfg(feature = "bpf_c")]
 use solana_sdk::bpf_loader;
@@ -41,7 +41,7 @@ fn check_tx_results(bank: &Bank, tx: &Transaction, result: Vec<solana::bank::Res
     assert_eq!(result[0], Ok(()));
     assert_eq!(
         bank.get_signature(&tx.last_id, &tx.signatures[0]),
-        Some(Ok(()))
+        Some(SignatureStatus::Complete(Ok(())))
     );
 }
 

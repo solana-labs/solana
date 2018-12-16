@@ -7,7 +7,7 @@ use crate::checkpoint::Checkpoint;
 use crate::counter::Counter;
 use crate::entry::Entry;
 use crate::jsonrpc_macros::pubsub::Sink;
-use crate::last_ids::{LastIds, LastIdsError, MAX_ENTRY_IDS};
+use crate::last_ids::{LastIds, LastIdsError, SignatureStatus, MAX_ENTRY_IDS};
 use crate::leader_scheduler::LeaderScheduler;
 use crate::ledger::Block;
 use crate::mint::Mint;
@@ -67,9 +67,6 @@ pub enum BankError {
     /// The bank has not seen the given `last_id` or the transaction is too old and
     /// the `last_id` has been discarded.
     LastIdNotFound,
-
-    /// A transaction with this signature has been received but not yet executed
-    SignatureReserved,
 
     /// Proof of History verification failed.
     LedgerVerificationFailed,
@@ -1089,7 +1086,7 @@ impl Bank {
         self.accounts.read().unwrap().transaction_count()
     }
 
-    pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
+    pub fn get_signature_status(&self, signature: &Signature) -> Option<SignatureStatus> {
         self.last_ids
             .read()
             .unwrap()
@@ -1100,7 +1097,7 @@ impl Bank {
         self.last_ids.read().unwrap().has_signature(signature)
     }
 
-    pub fn get_signature(&self, last_id: &Hash, signature: &Signature) -> Option<Result<()>> {
+    pub fn get_signature(&self, last_id: &Hash, signature: &Signature) -> Option<SignatureStatus> {
         self.last_ids
             .read()
             .unwrap()
@@ -1307,12 +1304,12 @@ mod tests {
         assert_eq!(bank.get_balance(&key2), 0);
         assert_eq!(
             bank.get_signature(&t1.last_id, &t1.signatures[0]),
-            Some(Ok(()))
+            Some(SignatureStatus::Complete(Ok(())))
         );
         // TODO: Transactions that fail to pay a fee could be dropped silently
         assert_eq!(
             bank.get_signature(&t2.last_id, &t2.signatures[0]),
-            Some(Err(BankError::AccountInUse))
+            Some(SignatureStatus::Complete(Err(BankError::AccountInUse)))
         );
     }
 
@@ -1358,10 +1355,10 @@ mod tests {
         assert_eq!(bank.get_balance(&key2), 0);
         assert_eq!(
             bank.get_signature(&t1.last_id, &t1.signatures[0]),
-            Some(Err(BankError::ProgramError(
+            Some(SignatureStatus::Complete(Err(BankError::ProgramError(
                 1,
                 ProgramError::ResultWithNegativeTokens
-            )))
+            ))))
         );
     }
 
@@ -1385,7 +1382,7 @@ mod tests {
         assert_eq!(bank.get_balance(&key2), 1);
         assert_eq!(
             bank.get_signature(&t1.last_id, &t1.signatures[0]),
-            Some(Ok(()))
+            Some(SignatureStatus::Complete(Ok(())))
         );
     }
 
@@ -1416,10 +1413,10 @@ mod tests {
         assert!(bank.has_signature(&signature));
         assert_matches!(
             bank.get_signature_status(&signature),
-            Some(Err(BankError::ProgramError(
+            Some(SignatureStatus::Complete(Err(BankError::ProgramError(
                 0,
                 ProgramError::ResultWithNegativeTokens
-            )))
+            ))))
         );
 
         // The tokens didn't move, but the from address paid the transaction fee.

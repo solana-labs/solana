@@ -16,7 +16,13 @@ use std::result;
 /// not be processed by the network.
 pub const MAX_ENTRY_IDS: usize = NUM_TICKS_PER_SECOND * 120;
 
-type SignatureStatusMap = HashMap<Signature, bank::Result<()>>;
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum SignatureStatus {
+    Reserved,
+    Complete(bank::Result<()>),
+}
+
+type SignatureStatusMap = HashMap<Signature, SignatureStatus>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum LastIdsError {
@@ -105,7 +111,9 @@ impl LastIds {
         last_id: &Hash,
     ) {
         if let Some(entry) = self.entries.get_mut(last_id) {
-            entry.signature_status.insert(*signature, result.clone());
+            entry
+                .signature_status
+                .insert(*signature, SignatureStatus::Complete(result.clone()));
         }
     }
     pub fn reserve_signature_with_last_id(
@@ -126,7 +134,7 @@ impl LastIds {
         if let Some(_result) = signatures.get(signature) {
             return Err(LastIdsError::DuplicateSignature);
         }
-        signatures.insert(*signature, Err(bank::BankError::SignatureReserved));
+        signatures.insert(*signature, SignatureStatus::Reserved);
         Ok(())
     }
 
@@ -222,7 +230,7 @@ impl LastIds {
         }
         ret
     }
-    pub fn get_signature_status(&self, signature: &Signature) -> Option<bank::Result<()>> {
+    pub fn get_signature_status(&self, signature: &Signature) -> Option<SignatureStatus> {
         for entry in self.entries.values() {
             if let Some(res) = entry.signature_status.get(signature) {
                 return Some(res.clone());
@@ -234,7 +242,7 @@ impl LastIds {
         self.get_signature_status(signature).is_some()
     }
 
-    pub fn get_signature(&self, last_id: &Hash, signature: &Signature) -> Option<bank::Result<()>> {
+    pub fn get_signature(&self, last_id: &Hash, signature: &Signature) -> Option<SignatureStatus> {
         self.entries
             .get(last_id)
             .and_then(|entry| entry.signature_status.get(signature).cloned())
@@ -341,7 +349,7 @@ mod tests {
             .expect("reserve signature");
         assert_eq!(
             last_ids.get_signature_status(&signature),
-            Some(Err(bank::BankError::SignatureReserved))
+            Some(SignatureStatus::Reserved)
         );
     }
 
