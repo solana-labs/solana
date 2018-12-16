@@ -22,6 +22,7 @@ pub enum Status<T> {
 }
 
 type StatusMap<T> = HashMap<Signature, Status<T>>;
+type StatusEntryMap<T> = HashMap<Hash, StatusEntry<T>>;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum StatusDequeError {
@@ -65,9 +66,9 @@ pub struct StatusDeque<T> {
     /// was when the id was added. The bank uses this data to
     /// reject transactions with signatures it's seen before and to reject
     /// transactions that are too old (nth is too small)
-    entries: HashMap<Hash, StatusEntry<T>>,
+    entries: StatusEntryMap<T>,
 
-    checkpoints: VecDeque<(u64, Option<Hash>, HashMap<Hash, StatusEntry<T>>)>,
+    checkpoints: VecDeque<(u64, Option<Hash>, StatusEntryMap<T>)>,
 }
 
 impl<T> Default for StatusDeque<T> {
