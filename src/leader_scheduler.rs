@@ -683,7 +683,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_active_set() {
         let leader_id = Keypair::new().pubkey();
         let active_window_length = 1000;
@@ -904,7 +903,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_scheduler() {
         // Test when the number of validators equals
         // seed_rotation_interval / leader_rotation_interval, so each validator
@@ -963,7 +961,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_scheduler_active_window() {
         let num_validators = 10;
         let num_vote_account_tokens = 1;
@@ -1047,7 +1044,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_multiple_vote() {
         let leader_keypair = Keypair::new();
         let leader_id = leader_keypair.pubkey();
@@ -1275,7 +1271,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_avoid_consecutive_leaders() {
         // Test when there is both a leader + validator in the active set
         run_consecutive_leader_test(1, true);
@@ -1289,7 +1284,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_max_height_for_leader() {
         let bootstrap_leader_keypair = Keypair::new();
         let bootstrap_leader_id = bootstrap_leader_keypair.pubkey();
