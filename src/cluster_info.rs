@@ -1053,7 +1053,9 @@ impl Node {
         let (gossip_port, gossip) = if gossip_addr.port() != 0 {
             (
                 gossip_addr.port(),
-                bind_to(gossip_addr.port(), false).expect("gossip_addr bind"),
+                bind_to(gossip_addr.port(), false).unwrap_or_else(|e| {
+                    panic!("gossip_addr bind_to port {}: {}", gossip_addr.port(), e)
+                }),
             )
         } else {
             bind()
