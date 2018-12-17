@@ -270,6 +270,7 @@ mod test {
     use std::sync::{Arc, RwLock};
 
     #[test]
+    #[ignore]
     pub fn test_replay_stage_leader_rotation_exit() {
         solana_logger::setup();
 
@@ -467,6 +468,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn test_vote_error_replay_stage_leader_rotation() {
         // Set up dummy node to host a ReplayStage
         let my_keypair = Keypair::new();
