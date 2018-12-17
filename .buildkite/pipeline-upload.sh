@@ -14,7 +14,7 @@ buildkite-agent pipeline upload ci/buildkite.yml
 
 if [[ $BUILDKITE_BRANCH =~ ^pull ]]; then
   # Add helpful link back to the corresponding Github Pull Request
-  buildkite-agent annotate --style "info" \
+  buildkite-agent annotate --style info --context pr-backlink \
     "Github Pull Request: https://github.com/solana-labs/solana/$BUILDKITE_BRANCH"
 fi
 
