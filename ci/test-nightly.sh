@@ -30,18 +30,7 @@ _ cargo cov clean
 _ cargo cov build --all
 _ cargo cov test --lib
 _ cargo cov report
-
-# Generate a coverage report with grcov via lcov.
-if [[ ! -f ./grcov ]]; then
-  uname=$(uname | tr '[:upper:]' '[:lower:]')
-  if [[ ${uname} = "darwin" ]]; then
-    uname="osx"
-  fi
-  uname_m=$(uname -m | tr '[:upper:]' '[:lower:]')
-  name=grcov-${uname}-${uname_m}.tar.bz2
-  _ wget "https://github.com/mozilla/grcov/releases/download/v0.3.2/${name}"
-  _ tar -xjf "${name}"
-fi
+_ ./scripts/fetch-grcov.sh
 _ ./grcov . -t lcov > lcov.info
 _ genhtml -o target/cov/report-lcov --show-details --highlight --ignore-errors source --legend lcov.info
 
