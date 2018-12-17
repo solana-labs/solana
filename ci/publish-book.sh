@@ -8,18 +8,6 @@ _() {
   "$@"
 }
 
-maybe_install() {
-  for cmd in "$@"; do
-    set +e
-    "$cmd" --help > /dev/null 2>&1
-    declare exitcode=$?
-    set -e
-    if [[ $exitcode -ne 0 ]]; then
-      _ cargo install "$cmd"
-    fi
-  done
-}
-
 book/build.sh
 
 echo --- create book repo
