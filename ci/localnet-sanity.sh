@@ -71,7 +71,7 @@ flag_error() {
 echo "--- Wallet sanity"
 (
   set -x
-  scripts/wallet-sanity.sh
+  timeout 60s scripts/wallet-sanity.sh
 ) || flag_error
 
 echo "--- Node count"
