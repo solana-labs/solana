@@ -166,21 +166,12 @@ The release process for this project is described [here](RELEASE.md).
 Code coverage
 ---
 
-To generate code coverage statistics, install cargo-cov. Note: the tool currently only works
-in Rust nightly.
+To generate code coverage statistics:
 
 ```bash
-$ cargo +nightly install cargo-cov
+$ scripts/coverage.sh
+$ open target/cov/lcov-local/index.html
 ```
-
-Run cargo-cov and generate a report:
-
-```bash
-$ cargo +nightly cov test
-$ cargo +nightly cov report --open
-```
-
-The coverage report will be written to `./target/cov/report/index.html`
 
 
 Why coverage? While most see coverage as a code quality metric, we see it primarily as a developer
