@@ -37,13 +37,14 @@ impl ComputeLeaderFinalityService {
         let mut total_stake = 0;
 
         let mut ticks_and_stakes: Vec<(u64, u64)> = {
-            let bank_accounts = bank.accounts.read().unwrap();
+            let bank_accounts = bank.accounts.accounts_db.read().unwrap();
             // TODO: Doesn't account for duplicates since a single validator could potentially register
             // multiple vote accounts. Once that is no longer possible (see the TODO in vote_program.rs,
             // process_transaction(), case VoteInstruction::RegisterAccount), this will be more accurate.
             // See github issue 1654.
             bank_accounts
-                .account_values()
+                .accounts
+                .values()
                 .filter_map(|account| {
                     // Filter out any accounts that don't belong to the VoteProgram
                     // by returning None

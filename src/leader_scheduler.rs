@@ -318,11 +318,12 @@ impl LeaderScheduler {
         let lower_bound = height.saturating_sub(self.active_window_length);
 
         {
-            let accounts = bank.accounts.read().unwrap();
+            let accounts = bank.accounts.accounts_db.read().unwrap();
 
             // TODO: iterate through checkpoints, too
             accounts
-                .account_values()
+                .accounts
+                .values()
                 .filter_map(|account| {
                     if vote_program::check_id(&account.owner) {
                         if let Ok(vote_state) = VoteProgram::deserialize(&account.userdata) {
