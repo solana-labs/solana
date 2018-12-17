@@ -3,6 +3,7 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 
+use crate::checkpoint::Checkpoint;
 use crate::counter::Counter;
 use crate::entry::Entry;
 use crate::jsonrpc_macros::pubsub::Sink;
@@ -10,9 +11,9 @@ use crate::leader_scheduler::LeaderScheduler;
 use crate::ledger::Block;
 use crate::mint::Mint;
 use crate::poh_recorder::PohRecorder;
-use crate::poh_service::NUM_TICKS_PER_SECOND;
 use crate::rpc::RpcSignatureStatus;
 use crate::runtime::{self, RuntimeError};
+use crate::status_deque::{Status, StatusDeque, StatusDequeError, MAX_ENTRY_IDS};
 use crate::storage_stage::StorageState;
 use bincode::deserialize;
 use bincode::serialize;
@@ -34,7 +35,7 @@ use solana_sdk::storage_program;
 use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::system_program;
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::timing::{duration_as_us, timestamp};
+use solana_sdk::timing::duration_as_us;
 use solana_sdk::token_program;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program;
@@ -45,16 +46,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Instant;
 use tokio::prelude::Future;
-
-/// The number of most recent `last_id` values that the bank will track the signatures
-/// of. Once the bank discards a `last_id`, it will reject any transactions that use
-/// that `last_id` in a transaction. Lowering this value reduces memory consumption,
-/// but requires clients to update its `last_id` more frequently. Raising the value
-/// lengthens the time a client must wait to be certain a missing transaction will
-/// not be processed by the network.
-pub const MAX_ENTRY_IDS: usize = NUM_TICKS_PER_SECOND * 120;
-
-pub const VERIFY_BLOCK_SIZE: usize = 16;
 
 /// Reasons a transaction might be rejected.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -77,13 +68,6 @@ pub enum BankError {
     /// the `last_id` has been discarded.
     LastIdNotFound,
 
-    /// The bank has not seen a transaction with the given `Signature` or the transaction is
-    /// too old and has been discarded.
-    SignatureNotFound,
-
-    /// A transaction with this signature has been received but not yet executed
-    SignatureReserved,
-
     /// Proof of History verification failed.
     LedgerVerificationFailed,
 
@@ -101,7 +85,8 @@ pub enum BankError {
 }
 
 pub type Result<T> = result::Result<T, BankError>;
-type SignatureStatusMap = HashMap<Signature, Result<()>>;
+
+pub const VERIFY_BLOCK_SIZE: usize = 16;
 
 #[derive(Default)]
 struct ErrorCounters {
@@ -111,86 +96,6 @@ struct ErrorCounters {
     reserve_last_id: usize,
     insufficient_funds: usize,
     duplicate_signature: usize,
-}
-
-pub trait Checkpoint {
-    /// add a checkpoint to this data at current state
-    fn checkpoint(&mut self);
-
-    /// rollback to previous state, panics if no prior checkpoint
-    fn rollback(&mut self);
-
-    /// cull checkpoints to depth, that is depth of zero means
-    ///  no checkpoints, only current state
-    fn purge(&mut self, depth: usize);
-
-    /// returns the number of checkpoints
-    fn depth(&self) -> usize;
-}
-
-/// a record of a tick, from register_tick
-#[derive(Clone)]
-pub struct LastIdEntry {
-    /// when the id was registered, according to network time
-    tick_height: u64,
-
-    /// timestamp when this id was registered, used for stats/finality
-    timestamp: u64,
-
-    /// a map of signature status, used for duplicate detection
-    signature_status: SignatureStatusMap,
-}
-
-pub struct LastIds {
-    /// A FIFO queue of `last_id` items, where each item is a set of signatures
-    /// that have been processed using that `last_id`. Rejected `last_id`
-    /// values are so old that the `last_id` has been pulled out of the queue.
-
-    /// updated whenever an id is registered, at each tick ;)
-    tick_height: u64,
-
-    /// last tick to be registered
-    last_id: Option<Hash>,
-
-    /// Mapping of hashes to signature sets along with timestamp and what tick_height
-    /// was when the id was added. The bank uses this data to
-    /// reject transactions with signatures it's seen before and to reject
-    /// transactions that are too old (nth is too small)
-    entries: HashMap<Hash, LastIdEntry>,
-
-    checkpoints: VecDeque<(u64, Option<Hash>, HashMap<Hash, LastIdEntry>)>,
-}
-
-impl Default for LastIds {
-    fn default() -> Self {
-        LastIds {
-            tick_height: 0,
-            last_id: None,
-            entries: HashMap::new(),
-            checkpoints: VecDeque::new(),
-        }
-    }
-}
-
-impl Checkpoint for LastIds {
-    fn checkpoint(&mut self) {
-        self.checkpoints
-            .push_front((self.tick_height, self.last_id, self.entries.clone()));
-    }
-    fn rollback(&mut self) {
-        let (tick_height, last_id, entries) = self.checkpoints.pop_front().unwrap();
-        self.tick_height = tick_height;
-        self.last_id = last_id;
-        self.entries = entries;
-    }
-    fn purge(&mut self, depth: usize) {
-        while self.depth() > depth {
-            self.checkpoints.pop_back().unwrap();
-        }
-    }
-    fn depth(&self) -> usize {
-        self.checkpoints.len()
-    }
 }
 
 #[derive(Default)]
@@ -289,7 +194,7 @@ pub struct Bank {
     pub accounts: RwLock<Accounts>,
 
     /// FIFO queue of `last_id` items
-    last_ids: RwLock<LastIds>,
+    last_ids: RwLock<StatusDeque<Result<()>>>,
 
     /// set of accounts which are currently in the pipeline
     account_locks: Mutex<HashSet<Pubkey>>,
@@ -314,7 +219,7 @@ impl Default for Bank {
     fn default() -> Self {
         Bank {
             accounts: RwLock::new(Accounts::default()),
-            last_ids: RwLock::new(LastIds::default()),
+            last_ids: RwLock::new(StatusDeque::default()),
             account_locks: Mutex::new(HashSet::new()),
             finality_time: AtomicUsize::new(std::usize::MAX),
             account_subscriptions: RwLock::new(HashMap::new()),
@@ -492,94 +397,25 @@ impl Bank {
             .get_pubkeys_for_entry_height(entry_height)
     }
 
-    /// Store the given signature. The bank will reject any transaction with the same signature.
-    fn reserve_signature(signatures: &mut SignatureStatusMap, signature: &Signature) -> Result<()> {
-        if let Some(_result) = signatures.get(signature) {
-            return Err(BankError::DuplicateSignature);
-        }
-        signatures.insert(*signature, Err(BankError::SignatureReserved));
-        Ok(())
-    }
-
     /// Forget all signatures. Useful for benchmarking.
     pub fn clear_signatures(&self) {
-        for entry in &mut self.last_ids.write().unwrap().entries.values_mut() {
-            entry.signature_status.clear();
-        }
-    }
-
-    /// Check if the age of the entry_id is within the max_age
-    /// return false for any entries with an age equal to or above max_age
-    fn check_entry_id_age(last_ids: &LastIds, entry_id: Hash, max_age: usize) -> bool {
-        let entry = last_ids.entries.get(&entry_id);
-
-        match entry {
-            Some(entry) => last_ids.tick_height - entry.tick_height < max_age as u64,
-            _ => false,
-        }
-    }
-
-    fn reserve_signature_with_last_id(
-        last_ids: &mut LastIds,
-        last_id: &Hash,
-        sig: &Signature,
-    ) -> Result<()> {
-        if let Some(entry) = last_ids.entries.get_mut(last_id) {
-            if last_ids.tick_height - entry.tick_height < MAX_ENTRY_IDS as u64 {
-                return Self::reserve_signature(&mut entry.signature_status, sig);
-            }
-        }
-        Err(BankError::LastIdNotFound)
-    }
-
-    #[cfg(test)]
-    fn reserve_signature_with_last_id_test(&self, sig: &Signature, last_id: &Hash) -> Result<()> {
-        let mut last_ids = self.last_ids.write().unwrap();
-        Self::reserve_signature_with_last_id(&mut last_ids, last_id, sig)
-    }
-
-    fn update_signature_status_with_last_id(
-        last_ids_sigs: &mut HashMap<Hash, LastIdEntry>,
-        signature: &Signature,
-        result: &Result<()>,
-        last_id: &Hash,
-    ) {
-        if let Some(entry) = last_ids_sigs.get_mut(last_id) {
-            entry.signature_status.insert(*signature, result.clone());
-        }
+        self.last_ids.write().unwrap().clear_signatures();
     }
 
     fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
         let mut last_ids = self.last_ids.write().unwrap();
         for (i, tx) in txs.iter().enumerate() {
-            Self::update_signature_status_with_last_id(
-                &mut last_ids.entries,
-                &tx.signatures[0],
-                &res[i],
-                &tx.last_id,
-            );
-            if res[i] != Err(BankError::SignatureNotFound) {
-                let status = match res[i] {
-                    Ok(_) => RpcSignatureStatus::Confirmed,
-                    Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
-                    Err(BankError::ProgramError(_, _)) => RpcSignatureStatus::ProgramRuntimeError,
-                    Err(_) => RpcSignatureStatus::GenericFailure,
-                };
-                if status != RpcSignatureStatus::SignatureNotFound {
-                    self.check_signature_subscriptions(&tx.signatures[0], status);
-                }
+            last_ids.update_signature_status_with_last_id(&tx.signatures[0], &res[i], &tx.last_id);
+            let status = match res[i] {
+                Ok(_) => RpcSignatureStatus::Confirmed,
+                Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
+                Err(BankError::ProgramError(_, _)) => RpcSignatureStatus::ProgramRuntimeError,
+                Err(_) => RpcSignatureStatus::GenericFailure,
+            };
+            if status != RpcSignatureStatus::SignatureNotFound {
+                self.check_signature_subscriptions(&tx.signatures[0], status);
             }
         }
-    }
-
-    /// Maps a tick height to a timestamp
-    fn tick_height_to_timestamp(last_ids: &LastIds, tick_height: u64) -> Option<u64> {
-        for entry in last_ids.entries.values() {
-            if entry.tick_height == tick_height {
-                return Some(entry.timestamp);
-            }
-        }
-        None
     }
 
     /// Look through the last_ids and find all the valid ids
@@ -589,15 +425,7 @@ impl Bank {
     /// index is into the passed ids slice to avoid copying hashes
     pub fn count_valid_ids(&self, ids: &[Hash]) -> Vec<(usize, u64)> {
         let last_ids = self.last_ids.read().unwrap();
-        let mut ret = Vec::new();
-        for (i, id) in ids.iter().enumerate() {
-            if let Some(entry) = last_ids.entries.get(id) {
-                if last_ids.tick_height - entry.tick_height < MAX_ENTRY_IDS as u64 {
-                    ret.push((i, entry.timestamp));
-                }
-            }
-        }
-        ret
+        last_ids.count_valid_ids(ids)
     }
 
     /// Looks through a list of tick heights and stakes, and finds the latest
@@ -607,20 +435,8 @@ impl Bank {
         ticks_and_stakes: &mut [(u64, u64)],
         supermajority_stake: u64,
     ) -> Option<u64> {
-        // Sort by tick height
-        ticks_and_stakes.sort_by(|a, b| a.0.cmp(&b.0));
         let last_ids = self.last_ids.read().unwrap();
-        let current_tick_height = last_ids.tick_height;
-        let mut total = 0;
-        for (tick_height, stake) in ticks_and_stakes.iter() {
-            if ((current_tick_height - tick_height) as usize) < MAX_ENTRY_IDS {
-                total += stake;
-                if total > supermajority_stake {
-                    return Self::tick_height_to_timestamp(&last_ids, *tick_height);
-                }
-            }
-        }
-        None
+        last_ids.get_finality_timestamp(ticks_and_stakes, supermajority_stake)
     }
 
     /// Tell the bank which Entry IDs exist on the ledger. This function
@@ -629,30 +445,8 @@ impl Bank {
     /// bank will reject transactions using that `last_id`.
     pub fn register_tick(&self, last_id: &Hash) {
         let mut last_ids = self.last_ids.write().unwrap();
-
-        last_ids.tick_height += 1;
-        let tick_height = last_ids.tick_height;
-
-        // this clean up can be deferred until sigs gets larger
-        //  because we verify entry.nth every place we check for validity
-        if last_ids.entries.len() >= MAX_ENTRY_IDS as usize {
-            last_ids
-                .entries
-                .retain(|_, entry| tick_height - entry.tick_height <= MAX_ENTRY_IDS as u64);
-        }
-
-        last_ids.entries.insert(
-            *last_id,
-            LastIdEntry {
-                tick_height,
-                timestamp: timestamp(),
-                signature_status: HashMap::new(),
-            },
-        );
-
-        last_ids.last_id = Some(*last_id);
-
         inc_new_counter_info!("bank-register_tick-registered", 1);
+        last_ids.register_tick(last_id)
     }
 
     /// Process a Transaction. This is used for unit tests and simply calls the vector Bank::process_transactions method.
@@ -700,7 +494,7 @@ impl Bank {
         &self,
         tx: &Transaction,
         accounts: &Accounts,
-        last_ids: &mut LastIds,
+        last_ids: &mut StatusDeque<Result<()>>,
         max_age: usize,
         error_counters: &mut ErrorCounters,
     ) -> Result<Vec<Account>> {
@@ -714,21 +508,25 @@ impl Bank {
             error_counters.insufficient_funds += 1;
             Err(BankError::InsufficientFundsForFee)
         } else {
-            if !Self::check_entry_id_age(&last_ids, tx.last_id, max_age) {
+            if !last_ids.check_entry_id_age(tx.last_id, max_age) {
                 error_counters.last_id_not_found += 1;
                 return Err(BankError::LastIdNotFound);
             }
 
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
-            let err =
-                Self::reserve_signature_with_last_id(last_ids, &tx.last_id, &tx.signatures[0]);
-            if let Err(BankError::LastIdNotFound) = err {
-                error_counters.reserve_last_id += 1;
-            } else if let Err(BankError::DuplicateSignature) = err {
-                error_counters.duplicate_signature += 1;
-            }
-            err?;
+            last_ids
+                .reserve_signature_with_last_id(&tx.last_id, &tx.signatures[0])
+                .map_err(|err| match err {
+                    StatusDequeError::LastIdNotFound => {
+                        error_counters.reserve_last_id += 1;
+                        BankError::LastIdNotFound
+                    }
+                    StatusDequeError::DuplicateSignature => {
+                        error_counters.duplicate_signature += 1;
+                        BankError::DuplicateSignature
+                    }
+                })?;
 
             let mut called_accounts: Vec<Account> = tx
                 .account_keys
@@ -1288,27 +1086,26 @@ impl Bank {
         self.accounts.read().unwrap().transaction_count()
     }
 
-    pub fn get_signature_status(&self, signature: &Signature) -> Result<()> {
-        let last_ids = self.last_ids.read().unwrap();
-        for entry in last_ids.entries.values() {
-            if let Some(res) = entry.signature_status.get(signature) {
-                return res.clone();
-            }
-        }
-        Err(BankError::SignatureNotFound)
-    }
-
-    pub fn has_signature(&self, signature: &Signature) -> bool {
-        self.get_signature_status(signature) != Err(BankError::SignatureNotFound)
-    }
-
-    pub fn get_signature(&self, last_id: &Hash, signature: &Signature) -> Option<Result<()>> {
+    pub fn get_signature_status(&self, signature: &Signature) -> Option<Status<Result<()>>> {
         self.last_ids
             .read()
             .unwrap()
-            .entries
-            .get(last_id)
-            .and_then(|entry| entry.signature_status.get(signature).cloned())
+            .get_signature_status(signature)
+    }
+
+    pub fn has_signature(&self, signature: &Signature) -> bool {
+        self.last_ids.read().unwrap().has_signature(signature)
+    }
+
+    pub fn get_signature(
+        &self,
+        last_id: &Hash,
+        signature: &Signature,
+    ) -> Option<Status<Result<()>>> {
+        self.last_ids
+            .read()
+            .unwrap()
+            .get_signature(last_id, signature)
     }
 
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
@@ -1447,8 +1244,10 @@ mod tests {
     use crate::jsonrpc_macros::pubsub::{Subscriber, SubscriptionId};
     use crate::ledger;
     use crate::signature::GenKeys;
+    use crate::status_deque;
     use bincode::serialize;
     use solana_sdk::hash::hash;
+    use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::Keypair;
     use solana_sdk::signature::KeypairUtil;
     use solana_sdk::system_transaction::SystemTransaction;
@@ -1509,12 +1308,12 @@ mod tests {
         assert_eq!(bank.get_balance(&key2), 0);
         assert_eq!(
             bank.get_signature(&t1.last_id, &t1.signatures[0]),
-            Some(Ok(()))
+            Some(Status::Complete(Ok(())))
         );
         // TODO: Transactions that fail to pay a fee could be dropped silently
         assert_eq!(
             bank.get_signature(&t2.last_id, &t2.signatures[0]),
-            Some(Err(BankError::AccountInUse))
+            Some(Status::Complete(Err(BankError::AccountInUse)))
         );
     }
 
@@ -1560,10 +1359,10 @@ mod tests {
         assert_eq!(bank.get_balance(&key2), 0);
         assert_eq!(
             bank.get_signature(&t1.last_id, &t1.signatures[0]),
-            Some(Err(BankError::ProgramError(
+            Some(Status::Complete(Err(BankError::ProgramError(
                 1,
                 ProgramError::ResultWithNegativeTokens
-            )))
+            ))))
         );
     }
 
@@ -1587,7 +1386,7 @@ mod tests {
         assert_eq!(bank.get_balance(&key2), 1);
         assert_eq!(
             bank.get_signature(&t1.last_id, &t1.signatures[0]),
-            Some(Ok(()))
+            Some(Status::Complete(Ok(())))
         );
     }
 
@@ -1618,10 +1417,10 @@ mod tests {
         assert!(bank.has_signature(&signature));
         assert_matches!(
             bank.get_signature_status(&signature),
-            Err(BankError::ProgramError(
+            Some(Status::Complete(Err(BankError::ProgramError(
                 0,
                 ProgramError::ResultWithNegativeTokens
-            ))
+            ))))
         );
 
         // The tokens didn't move, but the from address paid the transaction fee.
@@ -1674,92 +1473,6 @@ mod tests {
         bank.transfer(500, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
         assert_eq!(bank.get_balance(&pubkey), 500);
-    }
-
-    #[test]
-    fn test_duplicate_transaction_signature() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
-        let signature = Signature::default();
-        assert_eq!(
-            bank.reserve_signature_with_last_id_test(&signature, &mint.last_id()),
-            Ok(())
-        );
-        assert_eq!(
-            bank.reserve_signature_with_last_id_test(&signature, &mint.last_id()),
-            Err(BankError::DuplicateSignature)
-        );
-    }
-
-    #[test]
-    fn test_clear_signatures() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
-        let signature = Signature::default();
-        bank.reserve_signature_with_last_id_test(&signature, &mint.last_id())
-            .unwrap();
-        bank.clear_signatures();
-        assert_eq!(
-            bank.reserve_signature_with_last_id_test(&signature, &mint.last_id()),
-            Ok(())
-        );
-    }
-
-    #[test]
-    fn test_get_signature_status() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
-        let signature = Signature::default();
-        bank.reserve_signature_with_last_id_test(&signature, &mint.last_id())
-            .expect("reserve signature");
-        assert_eq!(
-            bank.get_signature_status(&signature),
-            Err(BankError::SignatureReserved)
-        );
-    }
-
-    #[test]
-    fn test_has_signature() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
-        let signature = Signature::default();
-        bank.reserve_signature_with_last_id_test(&signature, &mint.last_id())
-            .expect("reserve signature");
-        assert!(bank.has_signature(&signature));
-    }
-
-    #[test]
-    fn test_reject_old_last_id() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
-        let signature = Signature::default();
-        for i in 0..MAX_ENTRY_IDS {
-            let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-            bank.register_tick(&last_id);
-        }
-        // Assert we're no longer able to use the oldest entry ID.
-        assert_eq!(
-            bank.reserve_signature_with_last_id_test(&signature, &mint.last_id()),
-            Err(BankError::LastIdNotFound)
-        );
-    }
-
-    #[test]
-    fn test_count_valid_ids() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
-        let ids: Vec<_> = (0..MAX_ENTRY_IDS)
-            .map(|i| {
-                let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-                bank.register_tick(&last_id);
-                last_id
-            })
-            .collect();
-        assert_eq!(bank.count_valid_ids(&[]).len(), 0);
-        assert_eq!(bank.count_valid_ids(&[mint.last_id()]).len(), 0);
-        for (i, id) in bank.count_valid_ids(&ids).iter().enumerate() {
-            assert_eq!(id.0, i);
-        }
     }
 
     #[test]
@@ -2327,6 +2040,15 @@ mod tests {
         assert_eq!(account.loader, default_account.loader);
     }
 
+    fn reserve_signature_with_last_id_test(
+        bank: &Bank,
+        sig: &Signature,
+        last_id: &Hash,
+    ) -> status_deque::Result<()> {
+        let mut last_ids = bank.last_ids.write().unwrap();
+        last_ids.reserve_signature_with_last_id(last_id, sig)
+    }
+
     #[test]
     fn test_bank_checkpoint_rollback() {
         let alice = Mint::new(10_000);
@@ -2372,19 +2094,19 @@ mod tests {
         }
         assert_eq!(bank.tick_height(), MAX_ENTRY_IDS as u64 + 2);
         assert_eq!(
-            bank.reserve_signature_with_last_id_test(&signature, &alice.last_id()),
-            Err(BankError::LastIdNotFound)
+            reserve_signature_with_last_id_test(&bank, &signature, &alice.last_id()),
+            Err(StatusDequeError::LastIdNotFound)
         );
         bank.rollback();
         assert_eq!(bank.tick_height(), 1);
         assert_eq!(
-            bank.reserve_signature_with_last_id_test(&signature, &alice.last_id()),
+            reserve_signature_with_last_id_test(&bank, &signature, &alice.last_id()),
             Ok(())
         );
         bank.checkpoint();
         assert_eq!(
-            bank.reserve_signature_with_last_id_test(&signature, &alice.last_id()),
-            Err(BankError::DuplicateSignature)
+            reserve_signature_with_last_id_test(&bank, &signature, &alice.last_id()),
+            Err(StatusDequeError::DuplicateSignature)
         );
     }
 

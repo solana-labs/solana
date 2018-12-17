@@ -18,6 +18,7 @@ pub mod broadcast_service;
 pub mod chacha;
 #[cfg(all(feature = "chacha", feature = "cuda"))]
 pub mod chacha_cuda;
+pub mod checkpoint;
 pub mod client;
 pub mod crds;
 pub mod crds_gossip;
@@ -60,6 +61,7 @@ pub mod service;
 pub mod signature;
 pub mod sigverify;
 pub mod sigverify_stage;
+pub mod status_deque;
 pub mod storage_stage;
 pub mod store_ledger_stage;
 pub mod streamer;

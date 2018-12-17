@@ -596,6 +596,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_register_vote_account() {
         solana_logger::setup();
         let leader_keypair = Arc::new(Keypair::new());

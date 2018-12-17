@@ -163,6 +163,7 @@ pub mod tests {
     use std::time::Duration;
 
     #[test]
+    #[ignore]
     fn test_compute_finality() {
         solana_logger::setup();
 
