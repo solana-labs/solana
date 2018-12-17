@@ -35,12 +35,14 @@ echo --- create book repo
 
 echo --- publish
 if [[ $BUILDKITE_BRANCH = master ]]; then
-  (
-    set -x
-    cd book/html/
-    git remote add origin git@github.com:solana-labs/solana.git
+  cd book/html/
+  git remote add origin git@github.com:solana-labs/solana.git
+  git fetch origin gh-pages
+  if ! git diff HEAD origin/gh-pages --quiet; then
     git push -f origin HEAD:gh-pages
-  )
+  else
+    echo "Content unchanged, publish skipped"
+  fi
 else
   echo "Publish skipped"
 fi
