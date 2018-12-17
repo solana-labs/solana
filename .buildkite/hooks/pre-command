@@ -11,8 +11,9 @@ export PS4="++"
 #
 # Restore target/ from the previous CI build on this machine
 #
-[[ -n "$CARGO_TARGET_CACHE_NAME" ]] || (
-  d=$HOME/cargo-target-cache/"$CARGO_TARGET_CACHE_NAME"
+(
+  set -x
+  d=$HOME/cargo-target-cache/"$BUILDKITE_LABEL"
 
   if [[ -d $d ]]; then
     du -hs "$d"
@@ -24,6 +25,5 @@ export PS4="++"
   fi
 
   mkdir -p "$d"/target
-  set -x
   rsync -a --delete --link-dest="$d" "$d"/target .
 )

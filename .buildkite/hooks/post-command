@@ -3,15 +3,14 @@
 #
 # Save target/ for the next CI build on this machine
 #
-if [[ -n $CARGO_TARGET_CACHE_NAME ]]; then
-  (
-    d=$HOME/cargo-target-cache/"$CARGO_TARGET_CACHE_NAME"
-    mkdir -p "$d"
-    set -x
-    rsync -a --delete --link-dest="$PWD" target "$d"
-    du -hs "$d"
-  )
-fi
+(
+  set -x
+  d=$HOME/cargo-target-cache/"$BUILDKITE_LABEL"
+  mkdir -p "$d"
+  set -x
+  rsync -a --delete --link-dest="$PWD" target "$d"
+  du -hs "$d"
+)
 
 #
 # Add job_stats data point
