@@ -10,6 +10,8 @@ edition = "2018"
 
 [dependencies]
 solana-sdk = { path = "../../../sdk", version = "0.11.0" }
+solana-logger = { path = "../../../logger", version = "0.11.0" }
+log = "0.4.2"
 
 [lib]
 name = "noop"
