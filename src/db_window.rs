@@ -276,7 +276,6 @@ pub fn process_blob(
     db_ledger: &Arc<RwLock<DbLedger>>,
     blob: &SharedBlob,
     max_ix: u64,
-    pix: u64,
     consume_queue: &mut Vec<Entry>,
     tick_height: &mut u64,
     done: &Arc<AtomicBool>,
@@ -287,7 +286,10 @@ pub fn process_blob(
     // TODO: Need to update slot in broadcast, otherwise this check will fail with
     // leader rotation enabled
     // Github issue: https://github.com/solana-labs/solana/issues/1899.
-    let slot = blob.read().unwrap().slot()?;
+    let (slot, pix) = {
+        let r_blob = blob.read().unwrap();
+        (r_blob.slot()?, r_blob.index()?)
+    };
     let leader = leader_scheduler.read().unwrap().get_leader_for_slot(slot);
 
     // TODO: Once the original leader signature is added to the blob, make sure that
@@ -323,7 +325,7 @@ pub fn process_blob(
         // If write_shared_blobs() of these recovered blobs fails fails, don't return
         // because consumed_entries might be nonempty from earlier, and tick height needs to
         // be updated. Hopefully we can recover these blobs next time successfully.
-        if let Err(e) = try_erasure(db_ledger, consume_queue) {
+        if let Err(e) = try_erasure(db_ledger, &mut consumed_entries) {
             trace!(
                 "erasure::recover failed to write recovered coding blobs. Err: {:?}",
                 e
@@ -766,5 +768,56 @@ mod test {
                 .unwrap()[BLOB_HEADER_SIZE..],
             &erased_coding_l.data()[..erased_coding_l.size().unwrap() as usize],
         );
+    }
+
+    #[test]
+    fn test_process_blob() {
+        // Create the leader scheduler
+        let leader_keypair = Keypair::new();
+        let mut leader_scheduler = LeaderScheduler::from_bootstrap_leader(leader_keypair.pubkey());
+
+        // Create RocksDb ledger
+        let db_ledger_path = get_tmp_ledger_path("test_process_blob");
+        let db_ledger = Arc::new(RwLock::new(DbLedger::open(&db_ledger_path).unwrap()));
+
+        // Mock the tick height to look like the tick height right after a leader transition
+        leader_scheduler.last_seed_height = None;
+        leader_scheduler.use_only_bootstrap_leader = false;
+
+        let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
+        let num_entries = 10;
+        let original_entries = make_tiny_test_entries(num_entries);
+        let shared_blobs = original_entries.clone().to_blobs();
+
+        index_blobs(
+            shared_blobs
+                .iter()
+                .zip(vec![DEFAULT_SLOT_HEIGHT; num_entries].into_iter()),
+            &Keypair::new().pubkey(),
+            0,
+        );
+
+        let mut consume_queue = vec![];
+        let mut tick_height = 2;
+        let done = Arc::new(AtomicBool::new(false));
+
+        for blob in shared_blobs.iter().rev() {
+            process_blob(
+                &leader_scheduler,
+                &db_ledger,
+                blob,
+                0,
+                &mut consume_queue,
+                &mut tick_height,
+                &done,
+            )
+            .expect("Expect successful processing of blob");
+        }
+
+        assert_eq!(consume_queue, original_entries);
+
+        drop(db_ledger);
+        DB::destroy(&Options::default(), &db_ledger_path)
+            .expect("Expected successful database destruction");
     }
 }
