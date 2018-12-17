@@ -2104,6 +2104,8 @@ dependencies = [
 name = "solana-noop"
 version = "0.11.0"
 dependencies = [
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-logger 0.11.0",
  "solana-sdk 0.11.0",
 ]
 

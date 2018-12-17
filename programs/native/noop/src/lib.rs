@@ -1,3 +1,4 @@
+use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
@@ -10,9 +11,10 @@ fn entrypoint(
     data: &[u8],
     tick_height: u64,
 ) -> Result<(), ProgramError> {
-    println!("noop: program_id: {:?}", program_id);
-    println!("noop: keyed_accounts: {:#?}", keyed_accounts);
-    println!("noop: data: {:?}", data);
-    println!("noop: tick_height: {:?}", tick_height);
+    solana_logger::setup();
+    info!("noop: program_id: {:?}", program_id);
+    info!("noop: keyed_accounts: {:#?}", keyed_accounts);
+    info!("noop: data: {:?}", data);
+    info!("noop: tick_height: {:?}", tick_height);
     Ok(())
 }
