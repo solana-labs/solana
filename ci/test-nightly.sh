@@ -27,6 +27,7 @@ cargo_install_unless cargo-cov cargo cov --help
 
 # Generate coverage data and report via unit-test suite.
 _ cargo cov clean
+_ cargo cov build --all
 _ cargo cov test --lib
 _ cargo cov report
 
