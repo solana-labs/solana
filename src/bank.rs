@@ -485,7 +485,7 @@ impl Bank {
         let mut error_counters = ErrorCounters::default();
         let now = Instant::now();
         let mut loaded_accounts =
-            self.load_accounts(txs, locked_accounts.clone(), max_age, &mut error_counters);
+            self.load_accounts(txs, locked_accounts, max_age, &mut error_counters);
         let tick_height = self.tick_height();
 
         let load_elapsed = now.elapsed();
