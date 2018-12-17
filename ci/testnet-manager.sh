@@ -203,7 +203,6 @@ start() {
       export NO_VALIDATOR_SANITY=1
       ci/testnet-deploy.sh edge-testnet-solana-com ec2 us-west-1a \
         -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a eipalloc-0ccd4f2239886fa94 \
-        -b \
         ${maybeDelete:+-d}
     )
     ;;
