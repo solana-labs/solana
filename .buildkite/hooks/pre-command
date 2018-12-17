@@ -18,7 +18,7 @@ export PS4="++"
   if [[ -d $d ]]; then
     du -hs "$d"
     read -r cacheSizeInGB _ < <(du -s --block-size=1000000000 "$d")
-    if [[ $cacheSizeInGB -gt 5 ]]; then
+    if [[ $cacheSizeInGB -gt 10 ]]; then
       echo "$d has gotten too large, removing it"
       rm -rf "$d"
     fi
