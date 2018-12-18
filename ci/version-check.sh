@@ -4,8 +4,9 @@ set -e
 require() {
   declare expectedProgram="$1"
   declare expectedVersion="$2"
+  shift 2
 
-  read -r program version _ < <($expectedProgram -V)
+  read -r program version _ < <($expectedProgram "$@" -V)
 
   declare ok=true
   [[ $program = "$expectedProgram" ]] || ok=false
@@ -20,8 +21,8 @@ require() {
 
 case ${1:-stable} in
 nightly)
-  require rustc 1.32.[0-9]+-nightly
-  require cargo 1.32.[0-9]+-nightly
+  require rustc 1.32.[0-9]+-nightly +nightly
+  require cargo 1.32.[0-9]+-nightly +nightly
   ;;
 stable)
   require rustc 1.31.[0-9]+
