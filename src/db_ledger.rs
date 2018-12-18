@@ -7,7 +7,7 @@ use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
 use crate::result::{Error, Result};
 use bincode::{deserialize, serialize};
 use byteorder::{BigEndian, ByteOrder, ReadBytesExt};
-use rocksdb::{ColumnFamily, DBRawIterator, Options, WriteBatch, DB};
+use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, DBRawIterator, Options, WriteBatch, DB};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -16,6 +16,8 @@ use std::io;
 use std::path::Path;
 
 pub const DB_LEDGER_DIRECTORY: &str = "rocksdb";
+// A good value for this is the number of cores on the machine
+pub const TOTAL_THREADS: i32 = 16;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum DbLedgerError {
@@ -252,15 +254,20 @@ impl DbLedger {
         let ledger_path = Path::new(ledger_path).join(DB_LEDGER_DIRECTORY);
 
         // Use default database options
-        let mut options = Options::default();
-        options.create_if_missing(true);
-        options.create_missing_column_families(true);
+        let db_options = Self::get_db_options();
 
         // Column family names
-        let cfs = vec![META_CF, DATA_CF, ERASURE_CF];
+        let meta_cf_descriptor = ColumnFamilyDescriptor::new(META_CF, Self::get_cf_options());
+        let data_cf_descriptor = ColumnFamilyDescriptor::new(DATA_CF, Self::get_cf_options());
+        let erasure_cf_descriptor = ColumnFamilyDescriptor::new(ERASURE_CF, Self::get_cf_options());
+        let cfs = vec![
+            meta_cf_descriptor,
+            data_cf_descriptor,
+            erasure_cf_descriptor,
+        ];
 
         // Open the database
-        let db = DB::open_cf(&options, ledger_path, &cfs)?;
+        let db = DB::open_cf_descriptors(&db_options, ledger_path, cfs)?;
 
         // Create the metadata column family
         let meta_cf = MetaCf::default();
@@ -491,6 +498,25 @@ impl DbLedger {
 
         db_iterator.seek_to_first();
         Ok(EntryIterator { db_iterator })
+    }
+
+    fn get_cf_options() -> Options {
+        let mut options = Options::default();
+        options.set_max_write_buffer_number(32);
+        options.set_write_buffer_size(512 * 1024 * 1024);
+        options
+    }
+
+    fn get_db_options() -> Options {
+        let mut options = Options::default();
+        options.create_if_missing(true);
+        options.create_missing_column_families(true);
+        options.increase_parallelism(TOTAL_THREADS);
+        options.set_max_background_flushes(16);
+        options.set_max_background_compactions(8);
+        options.set_max_write_buffer_number(32);
+        options.set_write_buffer_size(512 * 1024 * 1024);
+        options
     }
 }
 
