@@ -29,7 +29,6 @@ export RUST_BACKTRACE=1
 echo "--- remove old coverage results"
 if [[ -d target/cov ]]; then
   find target/cov -name \*.gcda -print0 | xargs -0 rm -f
-  find target/cov -name \*.gcno -print0 | xargs -0 rm -f
 fi
 rm -rf target/cov/$reportName
 
