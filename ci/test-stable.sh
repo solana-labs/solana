@@ -8,14 +8,10 @@ cd "$(dirname "$0")/.."
 # Clear cached json keypair files
 rm -rf "$HOME/.config/solana"
 
+source ci/_
 ci/version-check-with-upgrade.sh stable
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
-
-_() {
-  echo "--- $*"
-  "$@"
-}
 
 _ scripts/ulimit-n.sh
 _ cargo build --all --verbose --features="$FEATURES"

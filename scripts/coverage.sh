@@ -7,11 +7,7 @@
 
 set -e
 cd "$(dirname "$0")/.."
-
-_() {
-  echo "--- $*"
-  "$@"
-}
+source ci/_
 
 : "${BUILDKITE_COMMIT:=local}"
 reportName="lcov-${BUILDKITE_COMMIT:0:9}"

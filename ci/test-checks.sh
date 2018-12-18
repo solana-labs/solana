@@ -3,14 +3,11 @@ set -e
 
 cd "$(dirname "$0")/.."
 
+source ci/_
 ci/version-check.sh stable
+
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
-
-_() {
-  echo "--- $*"
-  "$@"
-}
 
 _ cargo fmt --all -- --check
 _ cargo clippy --all -- --version

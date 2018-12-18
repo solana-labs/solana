@@ -3,11 +3,6 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-_() {
-  echo "--- $*"
-  "$@"
-}
-
 book/build.sh
 
 echo --- create book repo

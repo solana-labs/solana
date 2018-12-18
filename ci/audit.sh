@@ -5,15 +5,7 @@
 set -e
 
 cd "$(dirname "$0")/.."
-
-export RUST_BACKTRACE=1
-rustc --version
-cargo --version
-
-_() {
-  echo "--- $*"
-  "$@"
-}
+source ci/_
 
 cargo_install_unless() {
   declare crate=$1

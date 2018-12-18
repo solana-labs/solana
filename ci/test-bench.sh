@@ -3,16 +3,11 @@ set -e
 
 cd "$(dirname "$0")/.."
 
-# shellcheck disable=SC1091
+source ci/_
 source ci/upload-ci-artifact.sh
 
 eval "$(ci/channel-info.sh)"
 ci/version-check-with-upgrade.sh nightly
-
-_() {
-  echo "--- $*"
-  "$@"
-}
 
 set -o pipefail
 export RUST_BACKTRACE=1
