@@ -10,8 +10,7 @@ fi
 
 if [[ $(ulimit -n) -lt $maxOpenFds ]]; then
   ulimit -n $maxOpenFds || {
-    echo "Error: nofiles too small: $(ulimit -n). Run \"ulimit -n $maxOpenFds\" to continue";
-    exit 1
+    echo "Error: nofiles too small: $(ulimit -n). Failed to run \"ulimit -n $maxOpenFds\"";
   }
 fi
 
