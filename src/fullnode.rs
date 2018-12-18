@@ -977,7 +977,7 @@ mod tests {
         let ledger_initial_len = genesis_entries.len() as u64 + active_set_entries_len;
 
         // Set the leader scheduler for the validator
-        let leader_rotation_interval = 10;
+        let leader_rotation_interval = 16;
         let num_bootstrap_slots = 2;
         let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
 

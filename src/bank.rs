@@ -638,6 +638,10 @@ impl Bank {
                 // if its a tick, execute the group and register the tick
                 self.par_execute_entries(&mt_group)?;
                 self.register_tick(&entry.id);
+                self.leader_scheduler
+                    .write()
+                    .unwrap()
+                    .update_height(self.tick_height(), self);
                 mt_group = vec![];
                 continue;
             }
@@ -649,15 +653,7 @@ impl Bank {
                 self.par_execute_entries(&mt_group)?;
                 mt_group = vec![];
                 //reset the lock and push the entry
-                locked
-                    .iter()
-                    .zip(entry.transactions.iter())
-                    .for_each(|(result, tx)| {
-                        if result.is_ok() {
-                            println!("Unlocking accounts for tx");
-                            self.unlock_accounts(&[tx.clone()], &[result.clone()]);
-                        }
-                    });
+                self.unlock_accounts(&entry.transactions, &locked);
                 let locked = self.lock_accounts(&entry.transactions);
                 mt_group.push((entry, locked));
             } else {

@@ -103,26 +103,22 @@ impl ReplayStage {
         let my_id = keypair.pubkey();
 
         // Next vote tick is ceiling of (current tick/ticks per block)
-        let mut next_vote_tick =
-            (bank.tick_height() / BLOCK_TICK_COUNT) * BLOCK_TICK_COUNT + BLOCK_TICK_COUNT;
+        let mut num_ticks_to_next_vote = BLOCK_TICK_COUNT - (bank.tick_height() % BLOCK_TICK_COUNT);
         let mut start_entry_index = 0;
         for (i, entry) in entries.iter().enumerate() {
             inc_new_counter_info!("replicate-stage_bank-tick", bank.tick_height() as usize);
-            inc_new_counter_info!("replicate-stage_entry-tick", entry.tick_height as usize);
-            inc_new_counter_info!("replicate-stage_vote-tick", next_vote_tick as usize);
-
+            if entry.is_tick() {
+                num_ticks_to_next_vote -= 1;
+            }
+            inc_new_counter_info!(
+                "replicate-stage_tick-to-vote",
+                num_ticks_to_next_vote as usize
+            );
             // If it's the last entry in the vector, i will be vec len - 1.
             // If we don't process the entry now, the for loop will exit and the entry
             // will be dropped.
-            if entry.tick_height > next_vote_tick || (i + 1) == entries.len() {
-                let end_index = if (i + 1) == entries.len() {
-                    // If last entry, include it
-                    entries.len()
-                } else {
-                    i
-                };
-
-                res = bank.process_entries(&entries[start_entry_index..end_index]);
+            if 0 == num_ticks_to_next_vote || (i + 1) == entries.len() {
+                res = bank.process_entries(&entries[start_entry_index..=i]);
 
                 if res.is_err() {
                     // TODO: This will return early from the first entry that has an erroneous
@@ -133,14 +129,17 @@ impl ReplayStage {
                     // leader as the leader currently should not be publishing erroneous transactions
                     inc_new_counter_info!(
                         "replicate-stage_failed_process_entries",
-                        (end_index - start_entry_index)
+                        (i - start_entry_index)
                     );
 
                     break;
                 }
 
-                if let Some(sender) = vote_blob_sender {
-                    send_validator_vote(bank, vote_account_keypair, &cluster_info, sender).unwrap();
+                if 0 == num_ticks_to_next_vote {
+                    if let Some(sender) = vote_blob_sender {
+                        send_validator_vote(bank, vote_account_keypair, &cluster_info, sender)
+                            .unwrap();
+                    }
                 }
                 let (scheduled_leader, _) = bank
                     .get_current_leader()
@@ -155,9 +154,8 @@ impl ReplayStage {
                     num_entries_to_write = i + 1;
                     break;
                 }
-                start_entry_index = end_index;
-                next_vote_tick =
-                    (bank.tick_height() / BLOCK_TICK_COUNT) * BLOCK_TICK_COUNT + BLOCK_TICK_COUNT;
+                start_entry_index = i + 1;
+                num_ticks_to_next_vote = BLOCK_TICK_COUNT;
             }
         }
 
@@ -341,7 +339,7 @@ mod test {
 
         // Set up the LeaderScheduler so that this this node becomes the leader at
         // bootstrap_height = num_bootstrap_slots * leader_rotation_interval
-        let leader_rotation_interval = 10;
+        let leader_rotation_interval = 16;
         let num_bootstrap_slots = 2;
         let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
         let leader_scheduler_config = LeaderSchedulerConfig::new(
