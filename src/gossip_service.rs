@@ -18,7 +18,7 @@ pub struct GossipService {
 impl GossipService {
     pub fn new(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        db_ledger: Option<Arc<RwLock<DbLedger>>>,
+        db_ledger: Option<Arc<DbLedger>>,
         gossip_socket: UdpSocket,
         exit: Arc<AtomicBool>,
     ) -> Self {

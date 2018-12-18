@@ -83,7 +83,7 @@ pub struct RetransmitStage {
 impl RetransmitStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
-        db_ledger: Arc<RwLock<DbLedger>>,
+        db_ledger: Arc<DbLedger>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         tick_height: u64,
         entry_height: u64,

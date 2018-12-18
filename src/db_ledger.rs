@@ -285,7 +285,7 @@ impl DbLedger {
         Ok(())
     }
 
-    pub fn write_shared_blobs<I>(&mut self, shared_blobs: I) -> Result<Vec<Entry>>
+    pub fn write_shared_blobs<I>(&self, shared_blobs: I) -> Result<Vec<Entry>>
     where
         I: IntoIterator,
         I::Item: Borrow<SharedBlob>,
@@ -302,7 +302,7 @@ impl DbLedger {
         Ok(entries)
     }
 
-    pub fn write_blobs<'a, I>(&mut self, blobs: I) -> Result<Vec<Entry>>
+    pub fn write_blobs<'a, I>(&self, blobs: I) -> Result<Vec<Entry>>
     where
         I: IntoIterator<Item = &'a &'a Blob>,
     {
@@ -316,7 +316,7 @@ impl DbLedger {
         Ok(entries)
     }
 
-    pub fn write_entries<I>(&mut self, slot: u64, entries: I) -> Result<Vec<Entry>>
+    pub fn write_entries<I>(&self, slot: u64, entries: I) -> Result<Vec<Entry>>
     where
         I: IntoIterator,
         I::Item: Borrow<Entry>,
@@ -427,7 +427,7 @@ impl DbLedger {
     //
     // Return tuple of (number of blob read, total size of blobs read)
     pub fn get_blob_bytes(
-        &mut self,
+        &self,
         start_index: u64,
         num_blobs: u64,
         buf: &mut [u8],
@@ -533,7 +533,7 @@ where
 {
     let mut entries = entries.into_iter();
     for ledger_path in ledger_paths {
-        let mut db_ledger =
+        let db_ledger =
             DbLedger::open(ledger_path).expect("Expected to be able to open database ledger");
         db_ledger
             .write_entries(slot_height, entries.by_ref())
@@ -545,7 +545,7 @@ pub fn genesis<'a, I>(ledger_path: &str, keypair: &Keypair, entries: I) -> Resul
 where
     I: IntoIterator<Item = &'a Entry>,
 {
-    let mut db_ledger = DbLedger::open(ledger_path)?;
+    let db_ledger = DbLedger::open(ledger_path)?;
 
     // TODO sign these blobs with keypair
     let blobs = entries.into_iter().enumerate().map(|(idx, entry)| {
@@ -631,7 +631,7 @@ mod tests {
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
 
         let ledger_path = get_tmp_ledger_path("test_get_blobs_bytes");
-        let mut ledger = DbLedger::open(&ledger_path).unwrap();
+        let ledger = DbLedger::open(&ledger_path).unwrap();
         ledger.write_blobs(&blobs).unwrap();
 
         let mut buf = [0; 1024];
@@ -814,7 +814,7 @@ mod tests {
         // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_iteration_order");
         {
-            let mut db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+            let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
 
             // Write entries
             let num_entries = 8;

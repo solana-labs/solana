@@ -273,7 +273,7 @@ pub fn add_blob_to_retransmit_queue(
 /// range of blobs to a queue to be sent on to the next stage.
 pub fn process_blob(
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-    db_ledger: &Arc<RwLock<DbLedger>>,
+    db_ledger: &Arc<DbLedger>,
     blob: &SharedBlob,
     max_ix: u64,
     consume_queue: &mut Vec<Entry>,
@@ -303,21 +303,15 @@ pub fn process_blob(
         let erasure_key = ErasureCf::key(slot, pix);
         let rblob = &blob.read().unwrap();
         let size = rblob.size()?;
-        {
-            let w_db = db_ledger.write().unwrap();
-            w_db.erasure_cf.put(
-                &w_db.db,
-                &erasure_key,
-                &rblob.data[..BLOB_HEADER_SIZE + size],
-            )?;
-        }
+        db_ledger.erasure_cf.put(
+            &db_ledger.db,
+            &erasure_key,
+            &rblob.data[..BLOB_HEADER_SIZE + size],
+        )?;
         vec![]
     } else {
         let data_key = DataCf::key(slot, pix);
-        db_ledger
-            .write()
-            .unwrap()
-            .insert_data_blob(&data_key, &blob.read().unwrap())?
+        db_ledger.insert_data_blob(&data_key, &blob.read().unwrap())?
     };
 
     #[cfg(feature = "erasure")]
@@ -341,12 +335,10 @@ pub fn process_blob(
     // we only want up to a certain index
     // then stop
     if max_ix != 0 && !consumed_entries.is_empty() {
-        let meta = {
-            let r_db = db_ledger.read().unwrap();
-            r_db.meta_cf
-                .get(&r_db.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))?
-                .expect("Expect metadata to exist if consumed entries is nonzero")
-        };
+        let meta = db_ledger
+            .meta_cf
+            .get(&db_ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))?
+            .expect("Expect metadata to exist if consumed entries is nonzero");
 
         let consumed = meta.consumed;
 
@@ -385,12 +377,10 @@ pub fn calculate_max_repair_entry_height(
 }
 
 #[cfg(feature = "erasure")]
-fn try_erasure(db_ledger: &Arc<RwLock<DbLedger>>, consume_queue: &mut Vec<Entry>) -> Result<()> {
-    let meta = {
-        let r_db = db_ledger.read().unwrap();
-        r_db.meta_cf
-            .get(&r_db.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))?
-    };
+fn try_erasure(db_ledger: &Arc<DbLedger>, consume_queue: &mut Vec<Entry>) -> Result<()> {
+    let meta = db_ledger
+        .meta_cf
+        .get(&db_ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))?;
 
     if let Some(meta) = meta {
         let (data, coding) = erasure::recover(db_ledger, meta.consumed_slot, meta.consumed)?;
@@ -401,12 +391,14 @@ fn try_erasure(db_ledger: &Arc<RwLock<DbLedger>>, consume_queue: &mut Vec<Entry>
                 cl.index().expect("Recovered blob must set index"),
             );
             let size = cl.size().expect("Recovered blob must set size");
-            let r_db = db_ledger.read().unwrap();
-            r_db.erasure_cf
-                .put(&r_db.db, &erasure_key, &cl.data[..BLOB_HEADER_SIZE + size])?;
+            db_ledger.erasure_cf.put(
+                &db_ledger.db,
+                &erasure_key,
+                &cl.data[..BLOB_HEADER_SIZE + size],
+            )?;
         }
 
-        let entries = db_ledger.write().unwrap().write_shared_blobs(data)?;
+        let entries = db_ledger.write_shared_blobs(data)?;
         consume_queue.extend(entries);
     }
 
@@ -549,7 +541,7 @@ mod test {
 
         // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes_sanity");
-        let mut db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+        let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
 
         // Early exit conditions
         let empty: Vec<u64> = vec![];
@@ -597,7 +589,7 @@ mod test {
         let slot = DEFAULT_SLOT_HEIGHT;
         // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes");
-        let mut db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+        let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
 
         // Write entries
         let gap = 10;
@@ -687,7 +679,7 @@ mod test {
         let slot = DEFAULT_SLOT_HEIGHT;
         // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes");
-        let mut db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+        let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
 
         // Write entries
         let num_entries = 10;
@@ -741,11 +733,7 @@ mod test {
 
         // Generate the db_ledger from the window
         let ledger_path = get_tmp_ledger_path("test_try_erasure");
-        let db_ledger = Arc::new(RwLock::new(generate_db_ledger_from_window(
-            &ledger_path,
-            &window,
-            false,
-        )));
+        let db_ledger = Arc::new(generate_db_ledger_from_window(&ledger_path, &window, false));
 
         let mut consume_queue = vec![];
         try_erasure(&db_ledger, &mut consume_queue).expect("Expected successful erasure attempt");
@@ -759,11 +747,10 @@ mod test {
         assert_eq!(consume_queue, expected);
 
         let erased_coding_l = erased_coding.read().unwrap();
-        let r_db = db_ledger.read().unwrap();
         assert_eq!(
-            &r_db
+            &db_ledger
                 .erasure_cf
-                .get_by_slot_index(&r_db.db, slot_height, erase_offset as u64)
+                .get_by_slot_index(&db_ledger.db, slot_height, erase_offset as u64)
                 .unwrap()
                 .unwrap()[BLOB_HEADER_SIZE..],
             &erased_coding_l.data()[..erased_coding_l.size().unwrap() as usize],
@@ -778,7 +765,7 @@ mod test {
 
         // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_process_blob");
-        let db_ledger = Arc::new(RwLock::new(DbLedger::open(&db_ledger_path).unwrap()));
+        let db_ledger = Arc::new(DbLedger::open(&db_ledger_path).unwrap());
 
         // Mock the tick height to look like the tick height right after a leader transition
         leader_scheduler.last_seed_height = None;
