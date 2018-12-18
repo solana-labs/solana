@@ -7,9 +7,6 @@ cd "$(dirname "$0")/.."
 source ci/upload-ci-artifact.sh
 
 eval "$(ci/channel-info.sh)"
-
-# This job doesn't run within a container, try once to upgrade tooling on a
-# version check failure
 ci/version-check-with-upgrade.sh nightly
 
 _() {
@@ -30,16 +27,19 @@ fi
 
 BENCH_FILE=bench_output.log
 BENCH_ARTIFACT=current_bench_results.log
-_ cargo bench --features=unstable --verbose -- -Z unstable-options --format=json | tee "$BENCH_FILE"
+_ cargo +nightly bench --features=unstable --verbose \
+  -- -Z unstable-options --format=json | tee "$BENCH_FILE"
 
 # Run bpf_loader bench with bpf_c feature enabled
+echo --- program/native/bpf_loader bench --features=bpf_c
 (
   set -x
-  cd "programs/native/bpf_loader"
-  echo --- program/native/bpf_loader bench --features=bpf_c
-  cargo bench --verbose --features="bpf_c" -- -Z unstable-options --format=json --nocapture | tee -a ../../../"$BENCH_FILE"
+  cd programs/native/bpf_loader
+  cargo +nightly bench --verbose --features="bpf_c" \
+    -- -Z unstable-options --format=json --nocapture | tee -a ../../../"$BENCH_FILE"
 )
 
-_ cargo run --release --package solana-upload-perf -- "$BENCH_FILE" "$TARGET_BRANCH" "$UPLOAD_METRICS" > "$BENCH_ARTIFACT"
+_ cargo +nightly run --release --package solana-upload-perf \
+  -- "$BENCH_FILE" "$TARGET_BRANCH" "$UPLOAD_METRICS" > "$BENCH_ARTIFACT"
 
 upload-ci-artifact "$BENCH_ARTIFACT"
