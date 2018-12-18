@@ -108,22 +108,6 @@ testnets use a release tarball while the non`-perf` builds use the snap build
 (we've observed that the snap build runs slower than a tarball but this has yet
 to be root caused).
 
-## Where are the testnet logs?
-**TODO: This section is out of date and needs updating**
-
-Attach to the testnet first by running one of:
-```bash
-$ net/gce.sh config testnet-solana-com
-$ net/gce.sh config master-testnet-solana-com
-$ net/gce.sh config perf-testnet-solana-com
-```
-
-Then run:
-```bash
-$ net/ssh.sh
-```
-for log location details
-
 ## How do I reset the testnet?
 Manually trigger the [testnet-management](https://buildkite.com/solana-labs/testnet-management) pipeline
 and when prompted select the desired testnet
