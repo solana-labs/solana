@@ -378,11 +378,9 @@ pub fn calculate_max_repair_entry_height(
 
 #[cfg(feature = "erasure")]
 fn try_erasure(db_ledger: &Arc<DbLedger>, consume_queue: &mut Vec<Entry>) -> Result<()> {
-    let meta = {
-        let r_db = db_ledger.read().unwrap();
-        r_db.meta_cf
-            .get(&r_db.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))?
-    };
+    let meta = db_ledger
+        .meta_cf
+        .get(&db_ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))?;
 
     if let Some(meta) = meta {
         let (data, coding) = erasure::recover(db_ledger, meta.consumed_slot, meta.consumed)?;
@@ -393,12 +391,14 @@ fn try_erasure(db_ledger: &Arc<DbLedger>, consume_queue: &mut Vec<Entry>) -> Res
                 cl.index().expect("Recovered blob must set index"),
             );
             let size = cl.size().expect("Recovered blob must set size");
-            let r_db = db_ledger.read().unwrap();
-            r_db.erasure_cf
-                .put(&r_db.db, &erasure_key, &cl.data[..BLOB_HEADER_SIZE + size])?;
+            db_ledger.erasure_cf.put(
+                &db_ledger.db,
+                &erasure_key,
+                &cl.data[..BLOB_HEADER_SIZE + size],
+            )?;
         }
 
-        let entries = db_ledger.write().unwrap().write_shared_blobs(data)?;
+        let entries = db_ledger.write_shared_blobs(data)?;
         consume_queue.extend(entries);
     }
 
@@ -733,11 +733,7 @@ mod test {
 
         // Generate the db_ledger from the window
         let ledger_path = get_tmp_ledger_path("test_try_erasure");
-        let db_ledger = Arc::new(RwLock::new(generate_db_ledger_from_window(
-            &ledger_path,
-            &window,
-            false,
-        )));
+        let db_ledger = Arc::new(generate_db_ledger_from_window(&ledger_path, &window, false));
 
         let mut consume_queue = vec![];
         try_erasure(&db_ledger, &mut consume_queue).expect("Expected successful erasure attempt");
@@ -751,11 +747,10 @@ mod test {
         assert_eq!(consume_queue, expected);
 
         let erased_coding_l = erased_coding.read().unwrap();
-        let r_db = db_ledger.read().unwrap();
         assert_eq!(
-            &r_db
+            &db_ledger
                 .erasure_cf
-                .get_by_slot_index(&r_db.db, slot_height, erase_offset as u64)
+                .get_by_slot_index(&db_ledger.db, slot_height, erase_offset as u64)
                 .unwrap()
                 .unwrap()[BLOB_HEADER_SIZE..],
             &erased_coding_l.data()[..erased_coding_l.size().unwrap() as usize],
