@@ -16,20 +16,20 @@ _() {
 : "${BUILDKITE_COMMIT:=local}"
 reportName="lcov-${BUILDKITE_COMMIT:0:9}"
 
-export RUSTFLAGS="
-  -Zprofile
-  -Zno-landing-pads
-  -Ccodegen-units=1
-  -Cinline-threshold=0
-  -Coverflow-checks=off
-"
+coverageFlags=(-Zprofile)                # Enable coverage
+coverageFlags+=("-Clink-dead-code")      # Dead code should appear red in the report
+coverageFlags+=("-Ccodegen-units=1")     # Disable ThinLTO which corrupts debuginfo (see [rustc issue #45511]).
+coverageFlags+=("-Cinline-threshold=0")  # Disable inlining, which complicates control flow.
+coverageFlags+=("-Coverflow-checks=off") # Disable overflow checks, which create unnecessary branches.
+
+export RUSTFLAGS="${coverageFlags[*]}"
 export CARGO_INCREMENTAL=0
 export RUST_BACKTRACE=1
 
 echo "--- remove old coverage results"
-
 if [[ -d target/cov ]]; then
   find target/cov -name \*.gcda -print0 | xargs -0 rm -f
+  find target/cov -name \*.gcno -print0 | xargs -0 rm -f
 fi
 rm -rf target/cov/$reportName
 
@@ -38,10 +38,13 @@ _ cargo +nightly test --target-dir target/cov --lib --all
 
 _ scripts/fetch-grcov.sh
 echo "--- grcov"
-./grcov target/cov/debug/deps/ > target/cov/lcov_full.info
+./grcov target/cov/debug/deps/ > target/cov/lcov-full.info
 
-echo "--- filter_non_local_files_from_lcov"
-filter_non_local_files_from_lcov() {
+echo "--- filter-non-local-files-from-lcov"
+# TODO: The grcov `-s` option could be used to replace this function once grcov
+# doesn't panic on files with the same name in different directories of a
+# repository
+filter-non-local-files-from-lcov() {
   declare skip=false
   while read -r line; do
     if [[ $line =~ ^SF:/ ]]; then
@@ -59,7 +62,7 @@ filter_non_local_files_from_lcov() {
   done
 }
 
-filter_non_local_files_from_lcov < target/cov/lcov_full.info > target/cov/lcov.info
+filter-non-local-files-from-lcov < target/cov/lcov-full.info > target/cov/lcov.info
 
 echo "--- html report"
 # ProTip: genhtml comes from |brew install lcov| or |apt-get install lcov|
