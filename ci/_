@@ -1,0 +1,11 @@
+# Buildkite log management helper
+#
+# See https://buildkite.com/docs/pipelines/managing-log-output
+#
+# |source| me
+#
+
+_() {
+  echo "--- $*"
+  "$@"
+}
