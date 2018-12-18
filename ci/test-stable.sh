@@ -13,7 +13,6 @@ _() {
 }
 
 _ scripts/ulimit-n.sh
-
 _ cargo build --all --verbose
 _ cargo test --all --verbose --lib -- --nocapture --test-threads=1
 
@@ -33,8 +32,6 @@ for program in programs/native/*; do
     cargo test --verbose -- --nocapture
   )
 done
-
-book/build.sh
 
 echo --- ci/localnet-sanity.sh
 (
