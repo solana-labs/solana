@@ -931,17 +931,25 @@ mod tests {
             }
 
             assert_eq!(
-                db_ledger.write_shared_blobs(shared_blobs.iter().skip(1).step_by(2)).unwrap(),
+                db_ledger
+                    .write_shared_blobs(shared_blobs.iter().skip(1).step_by(2))
+                    .unwrap(),
                 vec![]
             );
 
             assert_eq!(
-                db_ledger.write_shared_blobs(shared_blobs.iter().step_by(2)).unwrap(),
+                db_ledger
+                    .write_shared_blobs(shared_blobs.iter().step_by(2))
+                    .unwrap(),
                 original_entries
             );
 
             let meta_key = MetaCf::key(DEFAULT_SLOT_HEIGHT);
-            let meta = db_ledger.meta_cf.get(&db_ledger.db, &meta_key).unwrap().unwrap();
+            let meta = db_ledger
+                .meta_cf
+                .get(&db_ledger.db, &meta_key)
+                .unwrap()
+                .unwrap();
             assert_eq!(meta.consumed, num_entries);
             assert_eq!(meta.received, num_entries);
             assert_eq!(meta.consumed_slot, num_entries - 1);

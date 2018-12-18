@@ -310,8 +310,7 @@ pub fn process_blob(
         )?;
         vec![]
     } else {
-        db_ledger
-            .insert_data_blobs(vec![&*blob.read().unwrap()])?
+        db_ledger.insert_data_blobs(vec![&*blob.read().unwrap()])?
     };
 
     #[cfg(feature = "erasure")]
