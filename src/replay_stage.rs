@@ -101,36 +101,63 @@ impl ReplayStage {
             .get_current_leader()
             .expect("Scheduled leader should be calculated by this point");
         let my_id = keypair.pubkey();
-        for (i, entry) in entries.iter().enumerate() {
-            res = bank.process_entry(&entry);
-            if res.is_err() {
-                // TODO: This will return early from the first entry that has an erroneous
-                // transaction, instead of processing the rest of the entries in the vector
-                // of received entries. This is in line with previous behavior when
-                // bank.process_entries() was used to process the entries, but doesn't solve the
-                // issue that the bank state was still changed, leading to inconsistencies with the
-                // leader as the leader currently should not be publishing erroneous transactions
-                break;
-            }
 
-            if bank.tick_height() % BLOCK_TICK_COUNT == 0 {
+        // Next vote tick is ceiling of (current tick/ticks per block)
+        let mut next_vote_tick =
+            (bank.tick_height() / BLOCK_TICK_COUNT) * BLOCK_TICK_COUNT + BLOCK_TICK_COUNT;
+        let mut start_entry_index = 0;
+        for (i, entry) in entries.iter().enumerate() {
+            inc_new_counter_info!("replicate-stage_bank-tick", bank.tick_height() as usize);
+            inc_new_counter_info!("replicate-stage_entry-tick", entry.tick_height as usize);
+            inc_new_counter_info!("replicate-stage_vote-tick", next_vote_tick as usize);
+
+            // If it's the last entry in the vector, i will be vec len - 1.
+            // If we don't process the entry now, the for loop will exit and the entry
+            // will be dropped.
+            if entry.tick_height > next_vote_tick || (i + 1) == entries.len() {
+                let end_index = if (i + 1) == entries.len() {
+                    // If last entry, include it
+                    entries.len()
+                } else {
+                    i
+                };
+
+                res = bank.process_entries(&entries[start_entry_index..end_index]);
+
+                if res.is_err() {
+                    // TODO: This will return early from the first entry that has an erroneous
+                    // transaction, instead of processing the rest of the entries in the vector
+                    // of received entries. This is in line with previous behavior when
+                    // bank.process_entries() was used to process the entries, but doesn't solve the
+                    // issue that the bank state was still changed, leading to inconsistencies with the
+                    // leader as the leader currently should not be publishing erroneous transactions
+                    inc_new_counter_info!(
+                        "replicate-stage_failed_process_entries",
+                        (end_index - start_entry_index)
+                    );
+
+                    break;
+                }
+
                 if let Some(sender) = vote_blob_sender {
                     send_validator_vote(bank, vote_account_keypair, &cluster_info, sender).unwrap();
                 }
-            }
+                let (scheduled_leader, _) = bank
+                    .get_current_leader()
+                    .expect("Scheduled leader should be calculated by this point");
 
-            let (scheduled_leader, _) = bank
-                .get_current_leader()
-                .expect("Scheduled leader should be calculated by this point");
+                // TODO: Remove this soon once we boot the leader from ClusterInfo
+                if scheduled_leader != current_leader {
+                    cluster_info.write().unwrap().set_leader(scheduled_leader);
+                }
 
-            // TODO: Remove this soon once we boot the leader from ClusterInfo
-            if scheduled_leader != current_leader {
-                cluster_info.write().unwrap().set_leader(scheduled_leader);
-            }
-
-            if my_id == scheduled_leader {
-                num_entries_to_write = i + 1;
-                break;
+                if my_id == scheduled_leader {
+                    num_entries_to_write = i + 1;
+                    break;
+                }
+                start_entry_index = end_index;
+                next_vote_tick =
+                    (bank.tick_height() / BLOCK_TICK_COUNT) * BLOCK_TICK_COUNT + BLOCK_TICK_COUNT;
             }
         }
 
