@@ -273,7 +273,7 @@ pub fn add_blob_to_retransmit_queue(
 /// range of blobs to a queue to be sent on to the next stage.
 pub fn process_blob(
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-    db_ledger: &Arc<RwLock<DbLedger>>,
+    db_ledger: &Arc<DbLedger>,
     blob: &SharedBlob,
     max_ix: u64,
     consume_queue: &mut Vec<Entry>,
@@ -303,21 +303,15 @@ pub fn process_blob(
         let erasure_key = ErasureCf::key(slot, pix);
         let rblob = &blob.read().unwrap();
         let size = rblob.size()?;
-        {
-            let w_db = db_ledger.write().unwrap();
-            w_db.erasure_cf.put(
-                &w_db.db,
-                &erasure_key,
-                &rblob.data[..BLOB_HEADER_SIZE + size],
-            )?;
-        }
+        db_ledger.erasure_cf.put(
+            &db_ledger.db,
+            &erasure_key,
+            &rblob.data[..BLOB_HEADER_SIZE + size],
+        )?;
         vec![]
     } else {
         let data_key = DataCf::key(slot, pix);
-        db_ledger
-            .write()
-            .unwrap()
-            .insert_data_blob(&data_key, &blob.read().unwrap())?
+        db_ledger.insert_data_blob(&data_key, &blob.read().unwrap())?
     };
 
     #[cfg(feature = "erasure")]
@@ -341,12 +335,10 @@ pub fn process_blob(
     // we only want up to a certain index
     // then stop
     if max_ix != 0 && !consumed_entries.is_empty() {
-        let meta = {
-            let r_db = db_ledger.read().unwrap();
-            r_db.meta_cf
-                .get(&r_db.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))?
-                .expect("Expect metadata to exist if consumed entries is nonzero")
-        };
+        let meta = db_ledger
+            .meta_cf
+            .get(&db_ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))?
+            .expect("Expect metadata to exist if consumed entries is nonzero");
 
         let consumed = meta.consumed;
 
@@ -385,7 +377,7 @@ pub fn calculate_max_repair_entry_height(
 }
 
 #[cfg(feature = "erasure")]
-fn try_erasure(db_ledger: &Arc<RwLock<DbLedger>>, consume_queue: &mut Vec<Entry>) -> Result<()> {
+fn try_erasure(db_ledger: &Arc<DbLedger>, consume_queue: &mut Vec<Entry>) -> Result<()> {
     let meta = {
         let r_db = db_ledger.read().unwrap();
         r_db.meta_cf
@@ -549,7 +541,7 @@ mod test {
 
         // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes_sanity");
-        let mut db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+        let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
 
         // Early exit conditions
         let empty: Vec<u64> = vec![];
@@ -597,7 +589,7 @@ mod test {
         let slot = DEFAULT_SLOT_HEIGHT;
         // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes");
-        let mut db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+        let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
 
         // Write entries
         let gap = 10;
@@ -687,7 +679,7 @@ mod test {
         let slot = DEFAULT_SLOT_HEIGHT;
         // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes");
-        let mut db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+        let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
 
         // Write entries
         let num_entries = 10;
@@ -778,7 +770,7 @@ mod test {
 
         // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_process_blob");
-        let db_ledger = Arc::new(RwLock::new(DbLedger::open(&db_ledger_path).unwrap()));
+        let db_ledger = Arc::new(DbLedger::open(&db_ledger_path).unwrap());
 
         // Mock the tick height to look like the tick height right after a leader transition
         leader_scheduler.last_seed_height = None;

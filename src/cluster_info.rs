@@ -673,26 +673,20 @@ impl ClusterInfo {
     fn run_window_request(
         from: &NodeInfo,
         from_addr: &SocketAddr,
-        db_ledger: Option<&Arc<RwLock<DbLedger>>>,
+        db_ledger: Option<&Arc<DbLedger>>,
         me: &NodeInfo,
         ix: u64,
     ) -> Vec<SharedBlob> {
         if let Some(db_ledger) = db_ledger {
-            let meta = {
-                let r_db = db_ledger.read().unwrap();
-
-                r_db.meta_cf
-                    .get(&r_db.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))
-            };
+            let meta = db_ledger
+                .meta_cf
+                .get(&db_ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT));
 
             if let Ok(Some(meta)) = meta {
                 let max_slot = meta.received_slot;
                 // Try to find the requested index in one of the slots
                 for i in 0..=max_slot {
-                    let get_result = {
-                        let r_db = db_ledger.read().unwrap();
-                        r_db.data_cf.get_by_slot_index(&r_db.db, i, ix)
-                    };
+                    let get_result = db_ledger.data_cf.get_by_slot_index(&db_ledger.db, i, ix);
 
                     if let Ok(Some(blob_data)) = get_result {
                         inc_new_counter_info!("cluster_info-window-request-ledger", 1);
@@ -716,7 +710,7 @@ impl ClusterInfo {
     //TODO we should first coalesce all the requests
     fn handle_blob(
         obj: &Arc<RwLock<Self>>,
-        db_ledger: Option<&Arc<RwLock<DbLedger>>>,
+        db_ledger: Option<&Arc<DbLedger>>,
         blob: &Blob,
     ) -> Vec<SharedBlob> {
         deserialize(&blob.data[..blob.meta.size])
@@ -830,7 +824,7 @@ impl ClusterInfo {
     fn handle_request_window_index(
         me: &Arc<RwLock<Self>>,
         from: &ContactInfo,
-        db_ledger: Option<&Arc<RwLock<DbLedger>>>,
+        db_ledger: Option<&Arc<DbLedger>>,
         ix: u64,
         from_addr: &SocketAddr,
     ) -> Vec<SharedBlob> {
@@ -870,7 +864,7 @@ impl ClusterInfo {
     fn handle_protocol(
         me: &Arc<RwLock<Self>>,
         from_addr: &SocketAddr,
-        db_ledger: Option<&Arc<RwLock<DbLedger>>>,
+        db_ledger: Option<&Arc<DbLedger>>,
         request: Protocol,
     ) -> Vec<SharedBlob> {
         match request {
@@ -934,7 +928,7 @@ impl ClusterInfo {
     /// Process messages from the network
     fn run_listen(
         obj: &Arc<RwLock<Self>>,
-        db_ledger: Option<&Arc<RwLock<DbLedger>>>,
+        db_ledger: Option<&Arc<DbLedger>>,
         requests_receiver: &BlobReceiver,
         response_sender: &BlobSender,
     ) -> Result<()> {
@@ -954,7 +948,7 @@ impl ClusterInfo {
     }
     pub fn listen(
         me: Arc<RwLock<Self>>,
-        db_ledger: Option<Arc<RwLock<DbLedger>>>,
+        db_ledger: Option<Arc<DbLedger>>,
         requests_receiver: BlobReceiver,
         response_sender: BlobSender,
         exit: Arc<AtomicBool>,
@@ -1225,7 +1219,7 @@ mod tests {
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path("run_window_request");
         {
-            let db_ledger = Arc::new(RwLock::new(DbLedger::open(&ledger_path).unwrap()));
+            let db_ledger = Arc::new(DbLedger::open(&ledger_path).unwrap());
             let me = NodeInfo::new(
                 Keypair::new().pubkey(),
                 socketaddr!("127.0.0.1:1234"),
@@ -1249,12 +1243,9 @@ mod tests {
                 w_blob.meta.size = data_size + BLOB_HEADER_SIZE;
             }
 
-            {
-                let mut w_ledger = db_ledger.write().unwrap();
-                w_ledger
-                    .write_shared_blobs(vec![&blob])
-                    .expect("Expect successful ledger write");
-            }
+            db_ledger
+                .write_shared_blobs(vec![&blob])
+                .expect("Expect successful ledger write");
 
             let rv =
                 ClusterInfo::run_window_request(&me, &socketaddr_any!(), Some(&db_ledger), &me, 1);

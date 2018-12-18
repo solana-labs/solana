@@ -351,7 +351,7 @@ pub fn generate_coding(
 // Recover the missing data and coding blobs from the input ledger. Returns a vector
 // of the recovered missing data blobs and a vector of the recovered coding blobs
 pub fn recover(
-    db_ledger: &Arc<RwLock<DbLedger>>,
+    db_ledger: &Arc<DbLedger>,
     slot: u64,
     start_idx: u64,
 ) -> Result<(Vec<SharedBlob>, Vec<SharedBlob>)> {

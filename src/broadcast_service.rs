@@ -33,7 +33,7 @@ pub enum BroadcastServiceReturnType {
 
 #[allow(clippy::too_many_arguments)]
 fn broadcast(
-    db_ledger: &Arc<RwLock<DbLedger>>,
+    db_ledger: &Arc<DbLedger>,
     max_tick_height: Option<u64>,
     leader_id: Pubkey,
     node_info: &NodeInfo,
@@ -130,7 +130,7 @@ fn broadcast(
                     assert!(win[pos].data.is_none());
                     win[pos].data = Some(b.clone());
                 }
-                db_ledger.write().unwrap().write_shared_blobs(vec![b])?;
+                db_ledger.write_shared_blobs(vec![b])?;
             }
         }
 
@@ -236,7 +236,7 @@ pub struct BroadcastService {
 
 impl BroadcastService {
     fn run(
-        db_ledger: &Arc<RwLock<DbLedger>>,
+        db_ledger: &Arc<DbLedger>,
         sock: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window: &SharedWindow,
@@ -304,7 +304,7 @@ impl BroadcastService {
     /// completing the cycle.
     #[allow(clippy::too_many_arguments, clippy::new_ret_no_self)]
     pub fn new(
-        db_ledger: Arc<RwLock<DbLedger>>,
+        db_ledger: Arc<DbLedger>,
         sock: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window: SharedWindow,
@@ -365,7 +365,7 @@ mod test {
     use std::time::Duration;
 
     struct DummyBroadcastService {
-        db_ledger: Arc<RwLock<DbLedger>>,
+        db_ledger: Arc<DbLedger>,
         broadcast_service: BroadcastService,
         entry_sender: Sender<Vec<Entry>>,
         exit_signal: Arc<AtomicBool>,
@@ -379,7 +379,7 @@ mod test {
         max_tick_height: u64,
     ) -> DummyBroadcastService {
         // Make the database ledger
-        let db_ledger = Arc::new(RwLock::new(DbLedger::open(ledger_path).unwrap()));
+        let db_ledger = Arc::new(DbLedger::open(ledger_path).unwrap());
 
         // Make the leader node and scheduler
         let leader_info = Node::new_localhost_with_pubkey(leader_pubkey);
@@ -459,16 +459,16 @@ mod test {
             }
 
             sleep(Duration::from_millis(2000));
-            let r_db = broadcast_service.db_ledger.read().unwrap();
+            let db_ledger = broadcast_service.db_ledger;
             for i in 0..max_tick_height - start_tick_height {
                 let (_, slot) = leader_scheduler
                     .read()
                     .unwrap()
                     .get_scheduled_leader(start_tick_height + i + 1)
                     .expect("Leader should exist");
-                let result = r_db
+                let result = db_ledger
                     .data_cf
-                    .get_by_slot_index(&r_db.db, slot, entry_height + i)
+                    .get_by_slot_index(&db_ledger.db, slot, entry_height + i)
                     .unwrap();
 
                 assert!(result.is_some());

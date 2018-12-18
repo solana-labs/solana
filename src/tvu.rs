@@ -70,7 +70,7 @@ impl Tvu {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sockets: Sockets,
         ledger_path: Option<&str>,
-        db_ledger: Arc<RwLock<DbLedger>>,
+        db_ledger: Arc<DbLedger>,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
         let keypair: Arc<Keypair> = cluster_info
@@ -294,7 +294,7 @@ pub mod tests {
                 }
             },
             None,
-            Arc::new(RwLock::new(db_ledger)),
+            Arc::new(db_ledger),
         );
 
         let mut alice_ref_balance = starting_balance;

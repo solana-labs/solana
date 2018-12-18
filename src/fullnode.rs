@@ -108,7 +108,7 @@ pub struct Fullnode {
     broadcast_socket: UdpSocket,
     rpc_addr: SocketAddr,
     rpc_pubsub_addr: SocketAddr,
-    db_ledger: Arc<RwLock<DbLedger>>,
+    db_ledger: Arc<DbLedger>,
 }
 
 impl Fullnode {
@@ -587,7 +587,7 @@ impl Fullnode {
         )
     }
 
-    fn make_db_ledger(ledger_path: &str) -> Arc<RwLock<DbLedger>> {
+    fn make_db_ledger(ledger_path: &str) -> Arc<DbLedger> {
         // Destroy any existing instances of the RocksDb ledger
         DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
         let ledger_entries = read_ledger(ledger_path, true)
@@ -597,7 +597,7 @@ impl Fullnode {
         write_entries_to_ledger(&[ledger_path], ledger_entries, DEFAULT_SLOT_HEIGHT);
         let db =
             DbLedger::open(ledger_path).expect("Expected to successfully open database ledger");
-        Arc::new(RwLock::new(db))
+        Arc::new(db)
     }
 }
 

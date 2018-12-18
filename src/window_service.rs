@@ -14,7 +14,6 @@ use rand::{thread_rng, Rng};
 use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
-use std::borrow::Borrow;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::mpsc::RecvTimeoutError;
@@ -52,7 +51,7 @@ fn repair_backoff(last: &mut u64, times: &mut usize, consumed: u64) -> bool {
 
 #[allow(clippy::too_many_arguments)]
 fn recv_window(
-    db_ledger: &Arc<RwLock<DbLedger>>,
+    db_ledger: &Arc<DbLedger>,
     id: &Pubkey,
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     tick_height: &mut u64,
@@ -123,7 +122,7 @@ fn recv_window(
 
 #[allow(clippy::too_many_arguments)]
 pub fn window_service(
-    db_ledger: Arc<RwLock<DbLedger>>,
+    db_ledger: Arc<DbLedger>,
     cluster_info: Arc<RwLock<ClusterInfo>>,
     tick_height: u64,
     entry_height: u64,
@@ -165,13 +164,9 @@ pub fn window_service(
                     }
                 }
 
-                let meta = {
-                    let rlock = db_ledger.read().unwrap();
-
-                    rlock
-                        .meta_cf
-                        .get(&rlock.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))
-                };
+                let meta = db_ledger
+                    .meta_cf
+                    .get(&db_ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT));
 
                 if let Ok(Some(meta)) = meta {
                     let received = meta.received;
@@ -203,7 +198,7 @@ pub fn window_service(
                     trace!("{} let's repair! times = {}", id, times);
 
                     let reqs = repair(
-                        db_ledger.read().unwrap().borrow(),
+                        &db_ledger,
                         &cluster_info,
                         &id,
                         times,
@@ -277,9 +272,9 @@ mod test {
         let (s_retransmit, r_retransmit) = channel();
         let done = Arc::new(AtomicBool::new(false));
         let db_ledger_path = get_tmp_ledger_path("window_send_test");
-        let db_ledger = Arc::new(RwLock::new(
+        let db_ledger = Arc::new(
             DbLedger::open(&db_ledger_path).expect("Expected to be able to open database ledger"),
-        ));
+        );
         let t_window = window_service(
             db_ledger,
             subs,
@@ -347,9 +342,9 @@ mod test {
         let (s_retransmit, r_retransmit) = channel();
         let done = Arc::new(AtomicBool::new(false));
         let db_ledger_path = get_tmp_ledger_path("window_send_late_leader_test");
-        let db_ledger = Arc::new(RwLock::new(
+        let db_ledger = Arc::new(
             DbLedger::open(&db_ledger_path).expect("Expected to be able to open database ledger"),
-        ));
+        );
         let t_window = window_service(
             db_ledger,
             subs.clone(),
