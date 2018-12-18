@@ -310,8 +310,8 @@ pub fn process_blob(
         )?;
         vec![]
     } else {
-        let data_key = DataCf::key(slot, pix);
-        db_ledger.insert_data_blob(&data_key, &blob.read().unwrap())?
+        db_ledger
+            .insert_data_blobs(vec![&*blob.read().unwrap()])?
     };
 
     #[cfg(feature = "erasure")]
