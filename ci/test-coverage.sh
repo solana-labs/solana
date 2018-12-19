@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -e
-
 cd "$(dirname "$0")/.."
 
 annotate() {
@@ -10,11 +9,11 @@ annotate() {
 }
 
 ci/affects-files.sh \
-  .rs: \
-  ci/test-coverage.sh: \
-  scripts/coverage.sh: \
+  .rs$ \
+  ci/test-coverage.sh \
+  scripts/coverage.sh \
 || {
-  annotate --style info --context coverage-info \
+  annotate --style info --context test-coverage \
     "Coverage skipped as no .rs files were modified"
   exit 0
 }

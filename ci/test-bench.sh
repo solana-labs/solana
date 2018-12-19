@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 set -e
-
 cd "$(dirname "$0")/.."
 
 annotate() {
@@ -10,10 +9,10 @@ annotate() {
 }
 
 ci/affects-files.sh \
-  .rs: \
-  ci/test-bench.sh: \
+  .rs$ \
+  ci/test-bench.sh \
 || {
-  annotate --style info --context coverage-info \
+  annotate --style info --context test-bench \
     "Bench skipped as no .rs files were modified"
   exit 0
 }
