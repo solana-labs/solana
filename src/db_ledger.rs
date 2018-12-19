@@ -18,7 +18,7 @@ use std::path::Path;
 
 pub const DB_LEDGER_DIRECTORY: &str = "rocksdb";
 // A good value for this is the number of cores on the machine
-pub const TOTAL_THREADS: i32 = 4;
+pub const TOTAL_THREADS: i32 = 8;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum DbLedgerError {
@@ -583,8 +583,8 @@ impl DbLedger {
         options.create_if_missing(true);
         options.create_missing_column_families(true);
         options.increase_parallelism(TOTAL_THREADS);
-        options.set_max_background_flushes(2);
-        options.set_max_background_compactions(2);
+        options.set_max_background_flushes(4);
+        options.set_max_background_compactions(4);
         options.set_max_write_buffer_number(32);
         options.set_write_buffer_size(512 * 1024 * 1024);
         options
