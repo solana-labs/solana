@@ -69,13 +69,13 @@ fi
 echo --- AWS S3 Store
 (
   set -x
-  if [[ ! -r s3cmd-2.0.1/s3cmd ]]; then
-    rm -rf s3cmd-2.0.1.tar.gz s3cmd-2.0.1
-    $DRYRUN wget https://github.com/s3tools/s3cmd/releases/download/v2.0.1/s3cmd-2.0.1.tar.gz
-    $DRYRUN tar zxf s3cmd-2.0.1.tar.gz
-  fi
-
-  $DRYRUN python ./s3cmd-2.0.1/s3cmd --acl-public put solana-release.tar.bz2 \
+  $DRYRUN docker run \
+    --rm \
+    --env AWS_ACCESS_KEY_ID \
+    --env AWS_SECRET_ACCESS_KEY \
+    --volume "$PWD:/solana" \
+    eremite/aws-cli:2018.12.18 \
+    /usr/bin/s3cmd --acl-public put /solana/solana-release.tar.bz2 \
     s3://solana-release/"$CHANNEL_OR_TAG"/solana-release.tar.bz2
 
   echo Published to:

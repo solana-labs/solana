@@ -25,13 +25,13 @@ if [[ -z $CHANNEL ]]; then
 else
   (
     set -x
-    if [[ ! -r s3cmd-2.0.1/s3cmd ]]; then
-      rm -rf s3cmd-2.0.1.tar.gz s3cmd-2.0.1
-      wget https://github.com/s3tools/s3cmd/releases/download/v2.0.1/s3cmd-2.0.1.tar.gz
-      tar zxf s3cmd-2.0.1.tar.gz
-    fi
-
-    python ./s3cmd-2.0.1/s3cmd --acl-public put bpf-sdk.tar.bz2 \
+    docker run \
+      --rm \
+      --env AWS_ACCESS_KEY_ID \
+      --env AWS_SECRET_ACCESS_KEY \
+      --volume "$PWD:/solana" \
+      eremite/aws-cli:2018.12.18 \
+      /usr/bin/s3cmd --acl-public put /solana/bpf-sdk.tar.bz2 \
       s3://solana-sdk/"$CHANNEL"/bpf-sdk.tar.bz2
   )
 fi
