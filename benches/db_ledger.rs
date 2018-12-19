@@ -154,15 +154,17 @@ fn bench_insert_data_blob_small(bench: &mut Bencher) {
         DbLedger::open(&ledger_path).expect("Expected to be able to open database ledger");
     let num_entries = 32 * 1024;
     let entries = make_tiny_test_entries(num_entries);
-    let shared_blobs = entries.to_blobs();
-    let mut blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.write().unwrap()).collect();
-    let mut blobs: Vec<&mut Blob> = blob_locks.iter_mut().map(|b| &mut **b).collect();
-    blobs.shuffle(&mut thread_rng());
+    let mut shared_blobs = entries.to_blobs();
+    shared_blobs.shuffle(&mut thread_rng());
 
     bench.iter(move || {
-        for blob in blobs.iter_mut() {
-            db_ledger.insert_data_blobs(vec![blob]).unwrap();
-            blob.set_index(index + num_entries as u64).unwrap();
+        for blob in shared_blobs.iter_mut() {
+            let index = blob.read().unwrap().index().unwrap();
+            db_ledger.write_shared_blobs(vec![blob.clone()]).unwrap();
+            blob.write()
+                .unwrap()
+                .set_index(index + num_entries as u64)
+                .unwrap();
         }
     });
 
@@ -178,15 +180,17 @@ fn bench_insert_data_blob_big(bench: &mut Bencher) {
         DbLedger::open(&ledger_path).expect("Expected to be able to open database ledger");
     let num_entries = 32 * 1024;
     let entries = make_large_test_entries(num_entries);
-    let shared_blobs = entries.to_blobs();
-    let mut blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.write().unwrap()).collect();
-    let mut blobs: Vec<&mut Blob> = blob_locks.iter_mut().map(|b| &mut **b).collect();
-    blobs.shuffle(&mut thread_rng());
+    let mut shared_blobs = entries.to_blobs();
+    shared_blobs.shuffle(&mut thread_rng());
 
     bench.iter(move || {
-        for blob in blobs.iter_mut() {
-            db_ledger.insert_data_blobs(vec![blob]).unwrap();
-            blob.set_index(index + num_entries as u64).unwrap();
+        for blob in shared_blobs.iter_mut() {
+            let index = blob.read().unwrap().index().unwrap();
+            db_ledger.write_shared_blobs(vec![blob.clone()]).unwrap();
+            blob.write()
+                .unwrap()
+                .set_index(index + num_entries as u64)
+                .unwrap();
         }
     });
 
