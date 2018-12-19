@@ -54,21 +54,33 @@ Images.
 
 ### Buildkite Azure Setup
 
-Create a new Azure-based "ci-default" agent by running the following command:
+Create a new Azure-based "queue=default" agent by running the following command:
 ```
 $ az vm create \
    --resource-group ci \
    --name XXX \
    --image boilerplate \
-   --admin-username mvines \
+   --admin-username $(whoami) \
    --ssh-key-value ~/.ssh/id_rsa.pub
 ```
 
 The "boilerplate" image contains all the required packages pre-installed so the
 new machine should immediately show up in the Buildkite agent list once it has
-been provisioned.
+been provisioned and be ready for service.
 
-There is no image for the "ci-cuda" queue currently.
+Creating a "queue=cuda" agent follows the same process but additionally:
+1. Resize the image from the Azure port to include a GPU
+2. Edit the tags field in /etc/buildkite-agent/buildkite-agent.cfg to `tags="queue=cuda,queue=default"`
+   and decrease the value of the priority field by one.
+
+#### Updating the CI Disk Image
+
+1. Create a new VM Instance using the disk image and modify as desired.
+1. Run `sudo waagent -deprovision+user` on the instance
+1. Run `az vm deallocate --resource-group ci --name XXX`
+1. Run `az vm generalize --resource-group ci --name XXX`
+1. Run `az image create --resource-group ci --source XXX --name boilerplate`
+1. Delete the VM instance
 
 ## Reference
 
