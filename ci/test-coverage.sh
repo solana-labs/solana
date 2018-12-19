@@ -9,15 +9,15 @@ annotate() {
   }
 }
 
-if ci/is-pr.sh; then
-  affectedFiles="$(buildkite-agent meta-data get affected_files)"
-  echo "Affected files in this PR: $affectedFiles"
-  if [[ ! ":$affectedFiles:" =~ \.rs: ]]; then
-    annotate --style info --context coverage-info \
-      "Coverage skipped as no .rs files were modified"
-    exit 0
-  fi
-fi
+ci/affects-files.sh \
+  .rs: \
+  ci/test-coverage.sh: \
+  scripts/coverage.sh: \
+|| {
+  annotate --style info --context coverage-info \
+    "Coverage skipped as no .rs files were modified"
+  exit 0
+}
 
 source ci/upload-ci-artifact.sh
 ci/version-check-with-upgrade.sh nightly
