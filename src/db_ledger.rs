@@ -22,7 +22,7 @@ use std::time::Instant;
 
 pub const DB_LEDGER_DIRECTORY: &str = "rocksdb";
 // A good value for this is the number of cores on the machine
-pub const TOTAL_THREADS: i32 = 16;
+pub const TOTAL_THREADS: i32 = 4;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum DbLedgerError {
@@ -353,6 +353,7 @@ impl DbLedger {
             return Ok(vec![]);
         }
 
+        let new_blobs_len = new_blobs.len();
         let sort_start = Instant::now();
         new_blobs.sort_unstable_by(|b1, b2| {
             b1.borrow()
@@ -361,11 +362,12 @@ impl DbLedger {
                 .cmp(&b2.borrow().index().unwrap())
         });
         let duration = duration_as_ms(&sort_start.elapsed()) as usize;
-        println!(
-            "Sort {} blobs in db_ledger, elapsed: {}",
-            new_blobs.len(),
-            duration
-        );
+        if new_blobs_len > 100 {
+            println!(
+                "Sort {} blobs in db_ledger, elapsed: {}",
+                new_blobs_len, duration
+            );
+        }
 
         let meta_key = MetaCf::key(DEFAULT_SLOT_HEIGHT);
 
@@ -400,8 +402,6 @@ impl DbLedger {
 
         let mut consumed_queue = vec![];
 
-        println!("consumed: {}, index: {}", meta.consumed, lowest_index);
-
         let loop_start = Instant::now();
         if meta.consumed == lowest_index {
             // Find the next consecutive block of blobs.
@@ -434,7 +434,6 @@ impl DbLedger {
                         )
                     } else {
                         let key = DataCf::key(current_slot, current_index);
-                        println!("CHECKING INDEX: {}, slot: {}", current_index, current_slot);
                         let blob_data = {
                             if let Some(blob_data) = self.data_cf.get(&self.db, &key)? {
                                 blob_data
@@ -463,8 +462,9 @@ impl DbLedger {
         }
 
         let duration = duration_as_ms(&loop_start.elapsed()) as usize;
-        println!("Loop blobs in db_ledger, elapsed: {}", duration);
-
+        if new_blobs_len > 100 {
+            println!("Loop blobs in db_ledger, elapsed: {}", duration);
+        }
         let put_cf = Instant::now();
         // Commit Step: Atomic write both the metadata and the data
         let mut batch = WriteBatch::default();
@@ -473,9 +473,10 @@ impl DbLedger {
         }
 
         let duration = duration_as_ms(&put_cf.elapsed()) as usize;
-        println!("Put_Cf blobs in db_ledger, elapsed: {}", duration);
+        if new_blobs_len > 100 {
+            println!("Put_Cf blobs in db_ledger, elapsed: {}", duration);
+        }
 
-        let len = new_blobs.len();
         for blob in new_blobs {
             let blob = blob.borrow();
             let key = DataCf::key(blob.slot()?, blob.index()?);
@@ -489,7 +490,12 @@ impl DbLedger {
         write_options.disable_wal(true);
         self.db.write_opt(batch, &write_options)?;
         let duration = duration_as_ms(&db_start.elapsed()) as usize;
-        println!("Writing {} blobs in db_ledger, elapsed: {}", len, duration);
+        if new_blobs_len > 100 {
+            println!(
+                "Writing {} blobs in db_ledger, elapsed: {}",
+                new_blobs_len, duration
+            );
+        }
         Ok(consumed_queue)
     }
 
@@ -568,7 +574,6 @@ impl DbLedger {
         let mut options = Options::default();
         options.set_max_write_buffer_number(32);
         options.set_write_buffer_size(512 * 1024 * 1024);
-        options.set_compaction_style(DBCompactionStyle::Universal);
         options
     }
 
@@ -577,11 +582,10 @@ impl DbLedger {
         options.create_if_missing(true);
         options.create_missing_column_families(true);
         options.increase_parallelism(TOTAL_THREADS);
-        options.set_max_background_flushes(4);
-        options.set_max_background_compactions(4);
+        options.set_max_background_flushes(2);
+        options.set_max_background_compactions(2);
         options.set_max_write_buffer_number(32);
         options.set_write_buffer_size(512 * 1024 * 1024);
-        options.set_compaction_style(DBCompactionStyle::Universal);
         options
     }
 }

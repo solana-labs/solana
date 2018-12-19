@@ -135,7 +135,9 @@ fn broadcast(
             }
 
             let write_start = Instant::now();
-            db_ledger.write_shared_blobs(&blobs).expect("Unrecoverable failure to write to database");
+            db_ledger
+                .write_shared_blobs(&blobs)
+                .expect("Unrecoverable failure to write to database");
             let duration = duration_as_ms(&write_start.elapsed()) as usize;
             println!(
                 "Writing {} blobs in broadcast, elapsed: {}",
