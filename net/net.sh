@@ -145,9 +145,7 @@ build() {
     fi
     $MAYBE_DOCKER bash -c "
       set -ex
-      export NDEBUG=1
-      scripts/cargo-install-all.sh --features=$cargoFeatures --root farf
-      scripts/install-native-programs.sh farf/bin/deps/ release
+      scripts/cargo-install-all.sh farf \"$cargoFeatures\"
     "
   )
   echo "Build took $SECONDS seconds"

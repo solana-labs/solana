@@ -18,11 +18,9 @@ if [[ -z $CHANNEL ]]; then
 fi
 
 rm -rf usr/
-../../ci/docker-run.sh solanalabs/rust:1.31.0 bash -c "
-  set -ex
-  scripts/cargo-install-all.sh --root sdk/docker-solana/usr
-  scripts/install-native-programs.sh sdk/docker-solana/usr/bin/deps/ release
-"
+../../ci/docker-run.sh solanalabs/rust:1.31.0 \
+  scripts/cargo-install-all.sh sdk/docker-solana/usr
+
 cp -f entrypoint.sh usr/bin/solana-entrypoint.sh
 
 docker build -t solanalabs/solana:$CHANNEL .
