@@ -15,4 +15,4 @@ find . -name "*.sh" \
   | xargs -0 \
       ci/docker-run.sh koalaman/shellcheck --color=always --external-sources --shell=bash
 
-exit 0
+echo --- ok
