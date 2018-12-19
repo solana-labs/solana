@@ -14,3 +14,5 @@ _ cargo clippy --all -- --version
 _ cargo clippy --all -- --deny=warnings
 _ ci/audit.sh
 _ book/build.sh
+
+echo --- ok
