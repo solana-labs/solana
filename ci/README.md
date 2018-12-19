@@ -50,8 +50,25 @@ newly created Disk image.
 instances to 0 and wait for them all to terminate, (b) Update the Instance
 template and restore the number of instances to the original value.
 8. Clean up the previous version by deleting it from Instance Templates and
-Images. 
+Images.
 
+### Buildkite Azure Setup
+
+Create a new Azure-based "ci-default" agent by running the following command:
+```
+$ az vm create \
+   --resource-group ci \
+   --name XXX \
+   --image boilerplate \
+   --admin-username mvines \
+   --ssh-key-value ~/.ssh/id_rsa.pub
+```
+
+The "boilerplate" image contains all the required packages pre-installed so the
+new machine should immediately show up in the Buildkite agent list once it has
+been provisioned.
+
+There is no image for the "ci-cuda" queue currently.
 
 ## Reference
 
