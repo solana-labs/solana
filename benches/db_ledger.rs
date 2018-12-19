@@ -158,13 +158,10 @@ fn bench_insert_data_blob_small(bench: &mut Bencher) {
     let mut blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.write().unwrap()).collect();
     let mut blobs: Vec<&mut Blob> = blob_locks.iter_mut().map(|b| &mut **b).collect();
     blobs.shuffle(&mut thread_rng());
-    let slot = 0;
 
     bench.iter(move || {
         for blob in blobs.iter_mut() {
-            let index = blob.index().unwrap();
-            let key = DataCf::key(slot, index);
-            db_ledger.insert_data_blob(&key, blob).unwrap();
+            db_ledger.insert_data_blobs(vec![blob]).unwrap();
             blob.set_index(index + num_entries as u64).unwrap();
         }
     });
@@ -185,13 +182,10 @@ fn bench_insert_data_blob_big(bench: &mut Bencher) {
     let mut blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.write().unwrap()).collect();
     let mut blobs: Vec<&mut Blob> = blob_locks.iter_mut().map(|b| &mut **b).collect();
     blobs.shuffle(&mut thread_rng());
-    let slot = 0;
 
     bench.iter(move || {
         for blob in blobs.iter_mut() {
-            let index = blob.index().unwrap();
-            let key = DataCf::key(slot, index);
-            db_ledger.insert_data_blob(&key, blob).unwrap();
+            db_ledger.insert_data_blobs(vec![blob]).unwrap();
             blob.set_index(index + num_entries as u64).unwrap();
         }
     });

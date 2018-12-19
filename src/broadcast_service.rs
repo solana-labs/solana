@@ -125,7 +125,6 @@ fn broadcast(
             }
             for b in &blobs {
                 {
-                    println!("blob size: {}", b.read().unwrap().data_size()?);
                     let ix = b.read().unwrap().index().expect("blob index");
                     let pos = (ix % window_size) as usize;
                     trace!("{} caching {} at {}", id, ix, pos);
@@ -134,16 +133,9 @@ fn broadcast(
                 }
             }
 
-            let write_start = Instant::now();
             db_ledger
                 .write_consecutive_blobs(&blobs)
                 .expect("Unrecoverable failure to write to database");
-            let duration = duration_as_ms(&write_start.elapsed()) as usize;
-            println!(
-                "Writing {} blobs in broadcast, elapsed: {}",
-                blobs.len(),
-                duration
-            );
         }
 
         // Fill in the coding blob data from the window data blobs
