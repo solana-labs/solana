@@ -638,6 +638,10 @@ impl Bank {
                 // if its a tick, execute the group and register the tick
                 self.par_execute_entries(&mt_group)?;
                 self.register_tick(&entry.id);
+                self.leader_scheduler
+                    .write()
+                    .unwrap()
+                    .update_height(self.tick_height(), self);
                 mt_group = vec![];
                 continue;
             }
@@ -649,6 +653,7 @@ impl Bank {
                 self.par_execute_entries(&mt_group)?;
                 mt_group = vec![];
                 //reset the lock and push the entry
+                self.unlock_accounts(&entry.transactions, &locked);
                 let locked = self.lock_accounts(&entry.transactions);
                 mt_group.push((entry, locked));
             } else {
@@ -1582,6 +1587,58 @@ mod tests {
         assert_eq!(bank.get_balance(&keypair1.pubkey()), 2);
         assert_eq!(bank.get_balance(&keypair2.pubkey()), 2);
         assert_eq!(bank.last_id(), last_id);
+    }
+    #[test]
+    fn test_par_process_entries_2_txes_collision() {
+        let mint = Mint::new(1000);
+        let bank = Bank::new(&mint);
+        let keypair1 = Keypair::new();
+        let keypair2 = Keypair::new();
+        let keypair3 = Keypair::new();
+        println!("KP1 {:?}", keypair1.pubkey());
+        println!("KP2 {:?}", keypair2.pubkey());
+        println!("KP3 {:?}", keypair3.pubkey());
+        println!("Mint {:?}", mint.keypair().pubkey());
+
+        // fund: put 4 in each of 1 and 2
+        assert_matches!(
+            bank.transfer(4, &mint.keypair(), keypair1.pubkey(), bank.last_id()),
+            Ok(_)
+        );
+        assert_matches!(
+            bank.transfer(4, &mint.keypair(), keypair2.pubkey(), bank.last_id()),
+            Ok(_)
+        );
+
+        // construct an Entry whose 2nd transaction would cause a lock conflict with previous entry
+        let entry_1_to_mint = next_entry(
+            &bank.last_id(),
+            1,
+            vec![Transaction::system_new(
+                &keypair1,
+                mint.keypair().pubkey(),
+                1,
+                bank.last_id(),
+            )],
+        );
+
+        let entry_2_to_3_mint_to_1 = next_entry(
+            &entry_1_to_mint.id,
+            1,
+            vec![
+                Transaction::system_new(&keypair2, keypair3.pubkey(), 2, bank.last_id()), // should be fine
+                Transaction::system_new(&keypair1, mint.keypair().pubkey(), 2, bank.last_id()), // will collide
+            ],
+        );
+
+        assert_eq!(
+            bank.par_process_entries(&[entry_1_to_mint, entry_2_to_3_mint_to_1]),
+            Ok(())
+        );
+
+        assert_eq!(bank.get_balance(&keypair1.pubkey()), 1);
+        assert_eq!(bank.get_balance(&keypair2.pubkey()), 2);
+        assert_eq!(bank.get_balance(&keypair3.pubkey()), 2);
     }
     #[test]
     fn test_par_process_entries_2_entries_par() {
