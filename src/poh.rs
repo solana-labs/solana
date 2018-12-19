@@ -87,7 +87,85 @@ pub fn verify(initial: Hash, entries: &[PohEntry]) -> bool {
 #[cfg(test)]
 mod tests {
     use crate::poh::{self, PohEntry};
-    use solana_sdk::hash::Hash;
+    use solana_sdk::hash::{hash, hashv, Hash};
+    #[test]
+    fn test_poh_verify() {
+        let zero = Hash::default();
+        let one = hash(&zero.as_ref());
+        let two = hash(&one.as_ref());
+        let one_with_zero = hashv(&[&zero.as_ref(), &zero.as_ref()]);
+
+        assert_eq!(
+            poh::verify(
+                zero,
+                &[PohEntry {
+                    tick_height: 0,
+                    num_hashes: 1,
+                    id: one,
+                    mixin: None,
+                }],
+            ),
+            true
+        );
+        assert_eq!(
+            poh::verify(
+                zero,
+                &[PohEntry {
+                    tick_height: 0,
+                    num_hashes: 2,
+                    id: two,
+                    mixin: None,
+                }]
+            ),
+            true
+        );
+
+        assert_eq!(
+            poh::verify(
+                zero,
+                &[PohEntry {
+                    tick_height: 0,
+                    num_hashes: 1,
+                    id: one_with_zero,
+                    mixin: Some(zero),
+                }]
+            ),
+            true
+        );
+        assert_eq!(
+            poh::verify(
+                zero,
+                &[PohEntry {
+                    tick_height: 0,
+                    num_hashes: 1,
+                    id: zero,
+                    mixin: None
+                }]
+            ),
+            false
+        );
+
+        assert_eq!(
+            poh::verify(
+                zero,
+                &[
+                    PohEntry {
+                        tick_height: 0,
+                        num_hashes: 1,
+                        id: one_with_zero,
+                        mixin: Some(zero),
+                    },
+                    PohEntry {
+                        tick_height: 0,
+                        num_hashes: 1,
+                        id: hash(&one_with_zero.as_ref()),
+                        mixin: None
+                    },
+                ]
+            ),
+            true
+        );
+    }
 
     #[test]
     #[should_panic]
