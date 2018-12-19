@@ -81,3 +81,5 @@ echo --- AWS S3 Store
   echo Published to:
   $DRYRUN ci/format-url.sh http://solana-release.s3.amazonaws.com/"$CHANNEL_OR_TAG"/solana-release.tar.bz2
 )
+
+echo --- ok
