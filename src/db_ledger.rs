@@ -7,15 +7,13 @@ use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
 use crate::result::{Error, Result};
 use bincode::{deserialize, serialize};
 use byteorder::{BigEndian, ByteOrder, ReadBytesExt};
-use rocksdb::{
-    ColumnFamily, ColumnFamilyDescriptor, DBCompactionStyle, DBRawIterator, Options, WriteBatch,
-    WriteOptions, DB,
-};
+use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, DBRawIterator, Options, WriteBatch, DB};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::duration_as_ms;
 use std::borrow::Borrow;
+use std::cmp::max;
 use std::io;
 use std::path::Path;
 use std::time::Instant;
@@ -485,10 +483,7 @@ impl DbLedger {
         }
 
         let db_start = Instant::now();
-        let mut write_options = WriteOptions::default();
-        write_options.set_sync(false);
-        write_options.disable_wal(true);
-        self.db.write_opt(batch, &write_options)?;
+        self.db.write(batch)?;
         let duration = duration_as_ms(&db_start.elapsed()) as usize;
         if new_blobs_len > 100 {
             println!(
@@ -497,6 +492,42 @@ impl DbLedger {
             );
         }
         Ok(consumed_queue)
+    }
+
+    // Writes a list of sorted, consecutive broadcast blobs to the db_ledger
+    pub fn write_consecutive_blobs(&self, blobs: &[SharedBlob]) -> Result<()> {
+        assert!(blobs.len() > 0);
+
+        let meta_key = MetaCf::key(DEFAULT_SLOT_HEIGHT);
+
+        let mut meta = {
+            if let Some(meta) = self.meta_cf.get(&self.db, &meta_key)? {
+                let first = blobs[0].read().unwrap();
+                assert_eq!(meta.consumed, first.index()?);
+                meta
+            } else {
+                SlotMeta::new()
+            }
+        };
+
+        {
+            let last = blobs.last().unwrap().read().unwrap();
+            meta.consumed = last.index()? + 1;
+            meta.consumed_slot = last.slot()?;
+            meta.received = max(meta.received, last.index()? + 1);
+            meta.received_slot = max(meta.received_slot, last.index()?);
+        }
+
+        let mut batch = WriteBatch::default();
+        batch.put_cf(self.meta_cf.handle(&self.db), &meta_key, &serialize(&meta)?)?;
+        for blob in blobs {
+            let blob = blob.read().unwrap();
+            let key = DataCf::key(blob.slot()?, blob.index()?);
+            let serialized_blob_datas = &blob.data[..BLOB_HEADER_SIZE + blob.size()?];
+            batch.put_cf(self.data_cf.handle(&self.db), &key, serialized_blob_datas)?;
+        }
+        self.db.write(batch)?;
+        Ok(())
     }
 
     // Fill 'buf' with num_blobs or most number of consecutive
@@ -953,7 +984,7 @@ mod tests {
         // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_insert_data_blobs_bulk");
         {
-            let mut db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+            let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
 
             // Write entries
             let num_entries = 20 as u64;
@@ -989,6 +1020,61 @@ mod tests {
             assert_eq!(meta.received, num_entries);
             assert_eq!(meta.consumed_slot, num_entries - 1);
             assert_eq!(meta.received_slot, num_entries - 1);
+        }
+        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    pub fn test_write_consecutive_blobs() {
+        // Create RocksDb ledger
+        let db_ledger_path = get_tmp_ledger_path("test_write_consecutive_blobs");
+        {
+            let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+
+            // Write entries
+            let num_entries = 20 as u64;
+            let original_entries = make_tiny_test_entries(num_entries as usize);
+            let shared_blobs = original_entries.to_blobs();
+            for (i, b) in shared_blobs.iter().enumerate() {
+                let mut w_b = b.write().unwrap();
+                w_b.set_index(i as u64).unwrap();
+                w_b.set_slot(i as u64).unwrap();
+            }
+
+            db_ledger
+                .write_consecutive_blobs(&shared_blobs)
+                .expect("Expect successful blob writes");
+
+            let meta_key = MetaCf::key(DEFAULT_SLOT_HEIGHT);
+            let meta = db_ledger
+                .meta_cf
+                .get(&db_ledger.db, &meta_key)
+                .unwrap()
+                .unwrap();
+            assert_eq!(meta.consumed, num_entries);
+            assert_eq!(meta.received, num_entries);
+            assert_eq!(meta.consumed_slot, num_entries - 1);
+            assert_eq!(meta.received_slot, num_entries - 1);
+
+            for (i, b) in shared_blobs.iter().enumerate() {
+                let mut w_b = b.write().unwrap();
+                w_b.set_index(num_entries + i as u64).unwrap();
+                w_b.set_slot(num_entries + i as u64).unwrap();
+            }
+
+            db_ledger
+                .write_consecutive_blobs(&shared_blobs)
+                .expect("Expect successful blob writes");
+
+            let meta = db_ledger
+                .meta_cf
+                .get(&db_ledger.db, &meta_key)
+                .unwrap()
+                .unwrap();
+            assert_eq!(meta.consumed, 2 * num_entries);
+            assert_eq!(meta.received, 2 * num_entries);
+            assert_eq!(meta.consumed_slot, 2 * num_entries - 1);
+            assert_eq!(meta.received_slot, 2 * num_entries - 1);
         }
         DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
     }
