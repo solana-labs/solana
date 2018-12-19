@@ -184,15 +184,29 @@ $rsync -vPr "$rsync_leader_url"/config/ "$ledger_config_dir"
   exit 1
 }
 
+$solana_wallet --keypair "$fullnode_id_path" address
+
 # A fullnode requires 3 tokens to function:
 # - one token to create an instance of the vote_program with
 # - one token for the transaction fee
 # - one token to keep the node identity public key valid.
-$solana_wallet --keypair "$fullnode_id_path" address
-$solana_wallet \
-  --keypair "$fullnode_id_path" \
-  --network "$leader_address" \
-  airdrop 3
+retries=5
+while true; do
+  $solana_wallet \
+    --keypair "$fullnode_id_path" \
+    --network "$leader_address" \
+    airdrop 3 \
+  && break
+
+  # TODO: Consider moving this retry logic into `solana-wallet airdrop` itself,
+  #       currently it does not retry on "Connection refused" errors.
+  retries=$((retries - 1))
+  if [[ $retries -le 0 ]]; then
+    exit 1
+  fi
+  echo "Airdrop failed. Remaining retries: $retries"
+  sleep 1
+done
 
 trap 'kill "$pid" && wait "$pid"' INT TERM
 $program \
