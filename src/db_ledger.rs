@@ -8,14 +8,17 @@ use crate::result::{Error, Result};
 use bincode::{deserialize, serialize};
 use byteorder::{BigEndian, ByteOrder, ReadBytesExt};
 use rocksdb::{
-    ColumnFamily, ColumnFamilyDescriptor, DBCompactionStyle, DBRawIterator, Options, WriteBatch, DB,
+    ColumnFamily, ColumnFamilyDescriptor, DBCompactionStyle, DBRawIterator, Options, WriteBatch,
+    WriteOptions, DB,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::timing::duration_as_ms;
 use std::borrow::Borrow;
 use std::io;
 use std::path::Path;
+use std::time::Instant;
 
 pub const DB_LEDGER_DIRECTORY: &str = "rocksdb";
 // A good value for this is the number of cores on the machine
@@ -350,12 +353,20 @@ impl DbLedger {
             return Ok(vec![]);
         }
 
+        let sort_start = Instant::now();
         new_blobs.sort_unstable_by(|b1, b2| {
             b1.borrow()
                 .index()
                 .unwrap()
                 .cmp(&b2.borrow().index().unwrap())
         });
+        let duration = duration_as_ms(&sort_start.elapsed()) as usize;
+        println!(
+            "Sort {} blobs in db_ledger, elapsed: {}",
+            new_blobs.len(),
+            duration
+        );
+
         let meta_key = MetaCf::key(DEFAULT_SLOT_HEIGHT);
 
         let mut should_write_meta = false;
@@ -390,6 +401,8 @@ impl DbLedger {
         let mut consumed_queue = vec![];
 
         println!("consumed: {}, index: {}", meta.consumed, lowest_index);
+
+        let loop_start = Instant::now();
         if meta.consumed == lowest_index {
             // Find the next consecutive block of blobs.
             // TODO: account for consecutive blocks that
@@ -449,12 +462,20 @@ impl DbLedger {
             }
         }
 
+        let duration = duration_as_ms(&loop_start.elapsed()) as usize;
+        println!("Loop blobs in db_ledger, elapsed: {}", duration);
+
+        let put_cf = Instant::now();
         // Commit Step: Atomic write both the metadata and the data
         let mut batch = WriteBatch::default();
         if should_write_meta {
             batch.put_cf(self.meta_cf.handle(&self.db), &meta_key, &serialize(&meta)?)?;
         }
 
+        let duration = duration_as_ms(&put_cf.elapsed()) as usize;
+        println!("Put_Cf blobs in db_ledger, elapsed: {}", duration);
+
+        let len = new_blobs.len();
         for blob in new_blobs {
             let blob = blob.borrow();
             let key = DataCf::key(blob.slot()?, blob.index()?);
@@ -462,7 +483,10 @@ impl DbLedger {
             batch.put_cf(self.data_cf.handle(&self.db), &key, serialized_blob_datas)?;
         }
 
+        let db_start = Instant::now();
         self.db.write(batch)?;
+        let duration = duration_as_ms(&db_start.elapsed()) as usize;
+        println!("Writing {} blobs in db_ledger, elapsed: {}", len, duration);
         Ok(consumed_queue)
     }
 
