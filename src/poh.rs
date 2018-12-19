@@ -86,8 +86,9 @@ pub fn verify(initial: Hash, entries: &[PohEntry]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use crate::poh::{self, PohEntry};
+    use crate::poh::{verify, Poh, PohEntry};
     use solana_sdk::hash::{hash, hashv, Hash};
+
     #[test]
     fn test_poh_verify() {
         let zero = Hash::default();
@@ -95,8 +96,17 @@ mod tests {
         let two = hash(&one.as_ref());
         let one_with_zero = hashv(&[&zero.as_ref(), &zero.as_ref()]);
 
+        let mut poh = Poh::new(zero, 0);
         assert_eq!(
-            poh::verify(
+            verify(
+                zero,
+                &[poh.tick(), poh.record(zero), poh.record(zero), poh.tick(),],
+            ),
+            true
+        );
+
+        assert_eq!(
+            verify(
                 zero,
                 &[PohEntry {
                     tick_height: 0,
@@ -108,7 +118,7 @@ mod tests {
             true
         );
         assert_eq!(
-            poh::verify(
+            verify(
                 zero,
                 &[PohEntry {
                     tick_height: 0,
@@ -121,7 +131,7 @@ mod tests {
         );
 
         assert_eq!(
-            poh::verify(
+            verify(
                 zero,
                 &[PohEntry {
                     tick_height: 0,
@@ -133,7 +143,7 @@ mod tests {
             true
         );
         assert_eq!(
-            poh::verify(
+            verify(
                 zero,
                 &[PohEntry {
                     tick_height: 0,
@@ -146,7 +156,7 @@ mod tests {
         );
 
         assert_eq!(
-            poh::verify(
+            verify(
                 zero,
                 &[
                     PohEntry {
@@ -170,7 +180,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_poh_verify_assert() {
-        poh::verify(
+        verify(
             Hash::default(),
             &[PohEntry {
                 tick_height: 0,
