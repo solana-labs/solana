@@ -484,7 +484,10 @@ impl DbLedger {
         }
 
         let db_start = Instant::now();
-        self.db.write(batch)?;
+        let mut write_options = WriteOptions::default();
+        write_options.set_sync(false);
+        write_options.disable_wal(true);
+        self.db.write_opt(batch, &write_options)?;
         let duration = duration_as_ms(&db_start.elapsed()) as usize;
         println!("Writing {} blobs in db_ledger, elapsed: {}", len, duration);
         Ok(consumed_queue)
