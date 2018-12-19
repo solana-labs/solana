@@ -14,6 +14,72 @@ products over to a GPU instance for testing.
 
 ## Buildkite Agent Management
 
+### Buildkite Azure Setup
+
+Create a new Azure-based "queue=default" agent by running the following command:
+```
+$ az vm create \
+   --resource-group ci \
+   --name XXX \
+   --image boilerplate \
+   --admin-username $(whoami) \
+   --ssh-key-value ~/.ssh/id_rsa.pub
+```
+
+The "boilerplate" image contains all the required packages pre-installed so the
+new machine should immediately show up in the Buildkite agent list once it has
+been provisioned and be ready for service.
+
+Creating a "queue=cuda" agent follows the same process but additionally:
+1. Resize the image from the Azure port to include a GPU
+2. Edit the tags field in /etc/buildkite-agent/buildkite-agent.cfg to `tags="queue=cuda,queue=default"`
+   and decrease the value of the priority field by one.
+
+#### Updating the CI Disk Image
+
+1. Create a new VM Instance using the disk image and modify as desired.
+1. Run `sudo waagent -deprovision+user` on the instance
+1. Run `az vm deallocate --resource-group ci --name XXX`
+1. Run `az vm generalize --resource-group ci --name XXX`
+1. Run `az image create --resource-group ci --source XXX --name boilerplate`
+1. Delete the VM instance
+
+## Reference
+
+This section contains details regarding previous CI setups that have been used,
+and that we may return to one day.
+
+### Buildkite AWS CloudFormation Setup
+
+**AWS CloudFormation is currently inactive, although it may be restored in the
+future**
+
+AWS CloudFormation can be used to scale machines up and down based on the
+current CI load.  If no machine is currently running it can take up to 60
+seconds to spin up a new instance, please remain calm during this time.
+
+#### AMI
+We use a custom AWS AMI built via https://github.com/solana-labs/elastic-ci-stack-for-aws/tree/solana/cuda.
+
+Use the following process to update this AMI as dependencies change:
+```bash
+$ export AWS_ACCESS_KEY_ID=my_access_key
+$ export AWS_SECRET_ACCESS_KEY=my_secret_access_key
+$ git clone https://github.com/solana-labs/elastic-ci-stack-for-aws.git -b solana/cuda
+$ cd elastic-ci-stack-for-aws/
+$ make build
+$ make build-ami
+```
+
+Watch for the *"amazon-ebs: AMI:"* log message to extract the name of the new
+AMI.  For example:
+```
+amazon-ebs: AMI: ami-07118545e8b4ce6dc
+```
+The new AMI should also now be visible in your EC2 Dashboard.  Go to the desired
+AWS CloudFormation stack, update the **ImageId** field to the new AMI id, and
+*apply* the stack changes.
+
 ### Buildkite GCP Setup
 
 CI runs on Google Cloud Platform via two Compute Engine Instance groups:
@@ -51,68 +117,5 @@ instances to 0 and wait for them all to terminate, (b) Update the Instance
 template and restore the number of instances to the original value.
 8. Clean up the previous version by deleting it from Instance Templates and
 Images.
-
-### Buildkite Azure Setup
-
-Create a new Azure-based "queue=default" agent by running the following command:
-```
-$ az vm create \
-   --resource-group ci \
-   --name XXX \
-   --image boilerplate \
-   --admin-username $(whoami) \
-   --ssh-key-value ~/.ssh/id_rsa.pub
-```
-
-The "boilerplate" image contains all the required packages pre-installed so the
-new machine should immediately show up in the Buildkite agent list once it has
-been provisioned and be ready for service.
-
-Creating a "queue=cuda" agent follows the same process but additionally:
-1. Resize the image from the Azure port to include a GPU
-2. Edit the tags field in /etc/buildkite-agent/buildkite-agent.cfg to `tags="queue=cuda,queue=default"`
-   and decrease the value of the priority field by one.
-
-#### Updating the CI Disk Image
-
-1. Create a new VM Instance using the disk image and modify as desired.
-1. Run `sudo waagent -deprovision+user` on the instance
-1. Run `az vm deallocate --resource-group ci --name XXX`
-1. Run `az vm generalize --resource-group ci --name XXX`
-1. Run `az image create --resource-group ci --source XXX --name boilerplate`
-1. Delete the VM instance
-
-## Reference
-
-### Buildkite AWS CloudFormation Setup
-
-**AWS CloudFormation is currently inactive, although it may be restored in the
-future**
-
-AWS CloudFormation can be used to scale machines up and down based on the
-current CI load.  If no machine is currently running it can take up to 60
-seconds to spin up a new instance, please remain calm during this time.
-
-#### AMI
-We use a custom AWS AMI built via https://github.com/solana-labs/elastic-ci-stack-for-aws/tree/solana/cuda.
-
-Use the following process to update this AMI as dependencies change:
-```bash
-$ export AWS_ACCESS_KEY_ID=my_access_key
-$ export AWS_SECRET_ACCESS_KEY=my_secret_access_key
-$ git clone https://github.com/solana-labs/elastic-ci-stack-for-aws.git -b solana/cuda
-$ cd elastic-ci-stack-for-aws/
-$ make build
-$ make build-ami
-```
-
-Watch for the *"amazon-ebs: AMI:"* log message to extract the name of the new
-AMI.  For example:
-```
-amazon-ebs: AMI: ami-07118545e8b4ce6dc
-```
-The new AMI should also now be visible in your EC2 Dashboard.  Go to the desired
-AWS CloudFormation stack, update the **ImageId** field to the new AMI id, and
-*apply* the stack changes.
 
 
