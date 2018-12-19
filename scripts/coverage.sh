@@ -29,7 +29,7 @@ fi
 rm -rf target/cov/$reportName
 
 _ cargo +nightly build --target-dir target/cov --all
-_ cargo +nightly test --target-dir target/cov --lib --all
+_ cargo +nightly test --target-dir target/cov --lib --all -- --test-threads=1
 
 _ scripts/fetch-grcov.sh
 echo "--- grcov"
