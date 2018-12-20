@@ -18,7 +18,7 @@ bpf_c = ["solana-bpfloader/bpf_c"]
 chacha = []
 cuda = []
 erasure = []
-ipv6 = []
+ipv6 = ["solana-netutil/ipv6"]
 test = []
 unstable = []
 

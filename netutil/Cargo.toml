@@ -8,6 +8,9 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 edition = "2018"
 
+[features]
+ipv6 = []
+
 [dependencies]
 log = "0.4.2"
 ipnetwork = "0.12.7"
