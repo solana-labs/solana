@@ -25,7 +25,7 @@ use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
 
-pub const BLOCK_TICK_COUNT: u64 = 8;
+pub const BLOCK_TICK_COUNT: u64 = 4;
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
