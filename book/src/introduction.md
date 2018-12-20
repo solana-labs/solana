@@ -1,20 +1,20 @@
 # What is Solana?
 
-Solana is the name of an open source project that is implementing a new
+Solana is the name of an open source project that is implementing a new,
 high-performance, permissionless blockchain. Solana is also the name of a
 company headquartered in San Francisco that maintains the open source project.
 
 # About this Book
 
 This book describes the Solana open source project, a blockchain built from the
-ground up for scale. The book covers why to use it, how to use it, how it
+ground up for scale. The book covers why it's useful, how to use it, how it
 works, and why it will continue to work long after the company Solana closes
 its doors. The goal of the Solana architecture is to demonstrate there exists a
 set of software algorithms that when used in combination to implement a
 blockchain, removes software as a performance bottleneck, allowing transaction
 throughput to scale proportionally with network bandwidth. The architecture
-goes on to satisfy all three desirable properties of a proper blockchain: that
-it not only be scalable, but that it is also secure and decentralized.
+goes on to satisfy all three desirable properties of a proper blockchain: 
+it is scalable, secure and decentralized.
 
 The architecture describes a theoretical upper bound of 710 thousand
 transactions per second (tps) on a standard gigabit network and 28.4 million
@@ -32,7 +32,7 @@ solicitation for investment.
 
 # History of the Solana Codebase
 
-In November of 2017 Anatoly Yakovenko published a whitepaper describing Proof
+In November of 2017, Anatoly Yakovenko published a whitepaper describing Proof
 of History, a technique for keeping time between computers that do not trust
 one another. From Anatoly's previous experience designing distributed systems
 at Qualcomm, Mesosphere and Dropbox, he knew that a reliable clock makes
@@ -41,19 +41,19 @@ resulting network can be blazing fast, bound only by network bandwidth.
 
 Anatoly watched as blockchain systems without clocks, such as Bitcoin and
 Ethereum, struggled to scale beyond 15 transactions per second worldwide when
-centralized payment systems such as Visa required peaks of 65,000. Without a
+centralized payment systems such as Visa required peaks of 65,000 tps. Without a
 clock, it was clear they'd never graduate to being the global payment system or
-global supercomputer they had dreamed to be. When Anatoly solved the problem of
+global supercomputer most had dreamed them to be. When Anatoly solved the problem of
 getting computers that don’t trust each other to agree on time, he knew he had
 the key to bring 40 years of distributed systems research to the world of
 blockchain. The resulting cluster wouldn't be just 10 times faster, or a 100
-times, or a 1,000 times, but 10,000 times faster right out of the gate!
+times, or a 1,000 times, but 10,000 times faster, right out of the gate!
 
 Anatoly's implementation began in a private codebase and was implemented in the
 C programming language. Greg Fitzgerald, who had previously worked with Anatoly
 at semiconductor giant Qualcomm Incorporated, encouraged him to reimplement the
 project in the Rust programming language. Greg had worked on the LLVM compiler
-infrastructure, which underlies both the Clang C/C++ compiler as well as the
+infrastructure, which underlies both the C lang C/C++ compiler as well as the
 Rust compiler. Greg claimed that the language's safety guarantees would improve
 software productivity and that its lack of a garbage collector would allow
 programs to perform as well as those written in C.  Anatoly gave it a shot and
@@ -72,7 +72,7 @@ Anatoly recruited Greg, Stephen and three others to co-found a company, then
 called Loom.
 
 Around the same time, Ethereum-based project Loom Network sprung up and many
-people were confused if they were the same project. The Loom team decided it
+people were confused about whether they were the same project. The Loom team decided it
 would rebrand. They chose the name Solana, a nod to a small beach town North of
 San Diego called Solana Beach, where Anatoly, Greg and Stephen lived and surfed
 for three years when they worked for Qualcomm. On March 28th, the team created
@@ -81,13 +81,13 @@ Solana.
 
 In June of 2018, the team scaled up the technology to run on cloud-based
 networks and on July 19th, published a 50-node, permissioned, public testnet
-consistently supporting bursts of 250,000 transactions per second. In the most
-recent release, v0.10 Pillbox, the team published a permissioned testnet
+consistently supporting bursts of 250,000 transactions per second. In a later release in 
+December, called v0.10 Pillbox, the team published a permissioned testnet
 running 150 nodes on a gigabit network and demonstrated soak tests processing
 an *average* of 200 thousand transactions per second with bursts over 500
 thousand. The project was also extended to support on-chain programs written in
 the C programming language and run concurrently in a safe execution environment
-called BPF. Next step: going permissionless.
+called BPF. 
 
 # What is a Solana Cluster?
 
@@ -110,7 +110,7 @@ organization that launched it.
 A sol is the name of Solana's native token, which can be passed to nodes in a
 Solana cluster in exchange for running an on-chain program or validating its
 output. The Solana protocol defines that only 1 billion sols will ever exist,
-but that the system may perform micropayments of fractional sols and that a sol
+but that the system may perform micropayments of fractional sols, and that a sol
 may be split as many as 34 times. The fractional sol is called a *lamport*. It
 is named in honor of Solana's biggest technical influence, [Leslie
 Lamport](https://en.wikipedia.org/wiki/Leslie_Lamport). A lamport has a value
