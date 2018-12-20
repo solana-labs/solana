@@ -876,7 +876,8 @@ impl Bank {
     }
 
     pub fn set_confirmation(&self, confirmation: usize) {
-        self.confirmation_time.store(confirmation, Ordering::Relaxed);
+        self.confirmation_time
+            .store(confirmation, Ordering::Relaxed);
     }
 
     fn send_account_notifications(

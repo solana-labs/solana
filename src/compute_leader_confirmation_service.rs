@@ -110,7 +110,10 @@ impl ComputeLeaderConfirmationService {
 
             submit(
                 influxdb::Point::new(&"leader-confirmation")
-                    .add_field("duration_ms", influxdb::Value::Integer(confirmation_ms as i64))
+                    .add_field(
+                        "duration_ms",
+                        influxdb::Value::Integer(confirmation_ms as i64),
+                    )
                     .to_owned(),
             );
         }
@@ -126,7 +129,11 @@ impl ComputeLeaderConfirmationService {
                     if exit.load(Ordering::Relaxed) {
                         break;
                     }
-                    Self::compute_confirmation(&bank, leader_id, &mut last_valid_validator_timestamp);
+                    Self::compute_confirmation(
+                        &bank,
+                        leader_id,
+                        &mut last_valid_validator_timestamp,
+                    );
                     sleep(Duration::from_millis(COMPUTE_CONFIRMATION_MS));
                 }
             })
