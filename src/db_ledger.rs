@@ -18,7 +18,8 @@ use std::path::Path;
 
 pub const DB_LEDGER_DIRECTORY: &str = "rocksdb";
 // A good value for this is the number of cores on the machine
-pub const TOTAL_THREADS: i32 = 8;
+const TOTAL_THREADS: i32 = 8;
+const MAX_WRITE_BUFFER_SIZE: usize = 512 * 1024 * 1024;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum DbLedgerError {
@@ -586,7 +587,8 @@ impl DbLedger {
     fn get_cf_options() -> Options {
         let mut options = Options::default();
         options.set_max_write_buffer_number(32);
-        options.set_write_buffer_size(512 * 1024 * 1024);
+        options.set_write_buffer_size(MAX_WRITE_BUFFER_SIZE);
+        options.set_max_bytes_for_level_base(MAX_WRITE_BUFFER_SIZE as u64);
         options
     }
 
@@ -598,7 +600,8 @@ impl DbLedger {
         options.set_max_background_flushes(4);
         options.set_max_background_compactions(4);
         options.set_max_write_buffer_number(32);
-        options.set_write_buffer_size(512 * 1024 * 1024);
+        options.set_write_buffer_size(MAX_WRITE_BUFFER_SIZE);
+        options.set_max_bytes_for_level_base(MAX_WRITE_BUFFER_SIZE as u64);
         options
     }
 }
