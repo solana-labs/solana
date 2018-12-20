@@ -450,6 +450,7 @@ mod tests {
         let mut bank = Bank::new(&alice);
         let bob_pubkey = Keypair::new().pubkey();
         let ledger_path = create_tmp_ledger_with_mint("thin_client", &alice);
+        let entry_height = alice.create_entries().len() as u64;
 
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
@@ -461,7 +462,7 @@ mod tests {
             leader_keypair,
             vote_account_keypair,
             bank,
-            0,
+            entry_height,
             &last_id,
             leader,
             None,

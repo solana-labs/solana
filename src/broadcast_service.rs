@@ -100,7 +100,8 @@ fn broadcast(
         {
             let mut win = window.write().unwrap();
             assert!(blobs.len() <= win.len());
-            for (b, _) in &blobs {
+            let blobs: Vec<_> = blobs.into_iter().map(|(b, _)| b).collect();
+            for b in &blobs {
                 let ix = b.read().unwrap().index().expect("blob index");
                 let pos = (ix % window_size) as usize;
                 if let Some(x) = win[pos].data.take() {
@@ -122,7 +123,7 @@ fn broadcast(
 
                 trace!("{} null {}", id, pos);
             }
-            for (b, _) in &blobs {
+            for b in &blobs {
                 {
                     let ix = b.read().unwrap().index().expect("blob index");
                     let pos = (ix % window_size) as usize;
@@ -130,8 +131,11 @@ fn broadcast(
                     assert!(win[pos].data.is_none());
                     win[pos].data = Some(b.clone());
                 }
-                db_ledger.write_shared_blobs(vec![b])?;
             }
+
+            db_ledger
+                .write_consecutive_blobs(&blobs)
+                .expect("Unrecoverable failure to write to database");
         }
 
         // Fill in the coding blob data from the window data blobs
