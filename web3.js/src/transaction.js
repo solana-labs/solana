@@ -168,11 +168,13 @@ export class Transaction {
         programIds.push(programId);
       }
 
-      instruction.keys.map(key => key.toString()).forEach(key => {
-        if (!keys.includes(key)) {
-          keys.push(key);
-        }
-      });
+      instruction.keys
+        .map(key => key.toString())
+        .forEach(key => {
+          if (!keys.includes(key)) {
+            keys.push(key);
+          }
+        });
     });
 
     const instructions = this.instructions.map(instruction => {

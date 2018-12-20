@@ -10,7 +10,7 @@ channel=$(
     } catch (err) {
       p = require("../package.json");
     }
-    p["solana-channel"]
+    p["testnetDefaultChannel"]
   '
 )
 
