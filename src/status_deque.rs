@@ -44,7 +44,7 @@ struct StatusEntry<T> {
     /// when the id was registered, according to network time
     tick_height: u64,
 
-    /// timestamp when this id was registered, used for stats/finality
+    /// timestamp when this id was registered, used for stats/confirmation
     timestamp: u64,
 
     /// a map of signature status, used for duplicate detection
@@ -183,8 +183,8 @@ impl<T: Clone> StatusDeque<T> {
     }
 
     /// Looks through a list of tick heights and stakes, and finds the latest
-    /// tick that has achieved finality
-    pub fn get_finality_timestamp(
+    /// tick that has achieved confirmation
+    pub fn get_confirmation_timestamp(
         &self,
         ticks_and_stakes: &mut [(u64, u64)],
         supermajority_stake: u64,
