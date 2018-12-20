@@ -193,7 +193,6 @@ pub mod tests {
     use crate::tvu::{Sockets, Tvu};
     use crate::window::{self, SharedWindow};
     use bincode::serialize;
-    use rocksdb::{Options, DB};
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
@@ -367,8 +366,7 @@ pub mod tests {
         dr_1.0.join().expect("join");
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
-        DB::destroy(&Options::default(), &db_ledger_path)
-            .expect("Expected successful database destuction");
+        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
         let _ignored = remove_dir_all(&db_ledger_path);
     }
 }

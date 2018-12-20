@@ -184,7 +184,7 @@ impl Fullnode {
         sigverify_disabled: bool,
         rpc_port: Option<u16>,
     ) -> Self {
-        // Create the RocksDb ledger
+        // Create the Dbledger
         let db_ledger = Self::make_db_ledger(ledger_path);
 
         let mut rpc_addr = node.info.rpc;
@@ -588,7 +588,7 @@ impl Fullnode {
     }
 
     fn make_db_ledger(ledger_path: &str) -> Arc<DbLedger> {
-        // Destroy any existing instances of the RocksDb ledger
+        // Destroy any existing instances of the Dbledger
         DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
         let ledger_entries = read_ledger(ledger_path, true)
             .expect("opening ledger")

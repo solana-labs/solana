@@ -5,7 +5,6 @@ extern crate test;
 
 use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};
-use rocksdb::{Options, DB};
 use solana::db_ledger::{DataCf, DbLedger, LedgerColumnFamilyRaw};
 use solana::ledger::{get_tmp_ledger_path, make_large_test_entries, make_tiny_test_entries, Block};
 use solana::packet::{Blob, BLOB_HEADER_SIZE};
@@ -30,8 +29,7 @@ fn bench_write_blobs(bench: &mut Bencher, blobs: &mut [&mut Blob], ledger_path: 
         }
     });
 
-    DB::destroy(&Options::default(), &ledger_path)
-        .expect("Expected successful database destruction");
+    DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
 }
 
 // Insert some blobs into the ledger in preparation for read benchmarks
@@ -108,8 +106,7 @@ fn bench_read_sequential(bench: &mut Bencher) {
         }
     });
 
-    DB::destroy(&Options::default(), &ledger_path)
-        .expect("Expected successful database destruction");
+    DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
 }
 
 #[bench]
@@ -142,8 +139,7 @@ fn bench_read_random(bench: &mut Bencher) {
         }
     });
 
-    DB::destroy(&Options::default(), &ledger_path)
-        .expect("Expected successful database destruction");
+    DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
 }
 
 #[bench]
@@ -168,8 +164,7 @@ fn bench_insert_data_blob_small(bench: &mut Bencher) {
         }
     });
 
-    DB::destroy(&Options::default(), &ledger_path)
-        .expect("Expected successful database destruction");
+    DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
 }
 
 #[bench]
@@ -194,6 +189,5 @@ fn bench_insert_data_blob_big(bench: &mut Bencher) {
         }
     });
 
-    DB::destroy(&Options::default(), &ledger_path)
-        .expect("Expected successful database destruction");
+    DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
 }

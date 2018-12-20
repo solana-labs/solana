@@ -232,7 +232,6 @@ mod test {
     use crate::packet::{SharedBlob, PACKET_DATA_SIZE};
     use crate::streamer::{blob_receiver, responder};
     use crate::window_service::{repair_backoff, window_service};
-    use rocksdb::{Options, DB};
     use solana_sdk::hash::Hash;
     use std::fs::remove_dir_all;
     use std::net::UdpSocket;
@@ -322,8 +321,7 @@ mod test {
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
         t_window.join().expect("join");
-        DB::destroy(&Options::default(), &db_ledger_path)
-            .expect("Expected successful database destuction");
+        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
         let _ignored = remove_dir_all(&db_ledger_path);
     }
 
@@ -406,8 +404,7 @@ mod test {
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
         t_window.join().expect("join");
-        DB::destroy(&Options::default(), &db_ledger_path)
-            .expect("Expected successful database destuction");
+        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
         let _ignored = remove_dir_all(&db_ledger_path);
     }
 

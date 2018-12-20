@@ -108,9 +108,9 @@ impl Replicator {
         let (entry_window_sender, entry_window_receiver) = channel();
         let store_ledger_stage = StoreLedgerStage::new(entry_window_receiver, ledger_path);
 
-        // Create the RocksDb ledger, eventually will simply repurpose the input
-        // ledger path as the RocksDb ledger path once we replace the ledger with
-        // RocksDb. Note for now, this ledger will not contain any of the existing entries
+        // Create DbLedger, eventually will simply repurpose the input
+        // ledger path as the DbLedger path once we replace the ledger with
+        // DbLedger. Note for now, this ledger will not contain any of the existing entries
         // in the ledger located at ledger_path, and will only append on newly received
         // entries after being passed to window_service
         let db_ledger = Arc::new(

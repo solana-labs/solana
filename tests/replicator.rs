@@ -160,8 +160,8 @@ fn test_replicator_startup() {
         leader.close().expect("Expected successful node closure");
     }
 
-    DbLedger::destroy(&leader_ledger_path).expect("Expected successful database destuction");
-    DbLedger::destroy(&replicator_ledger_path).expect("Expected successful database destuction");
+    DbLedger::destroy(&leader_ledger_path).expect("Expected successful database destruction");
+    DbLedger::destroy(&replicator_ledger_path).expect("Expected successful database destruction");
     let _ignored = remove_dir_all(&leader_ledger_path);
     let _ignored = remove_dir_all(&replicator_ledger_path);
 }
