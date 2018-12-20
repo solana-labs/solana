@@ -262,4 +262,7 @@ declare module '@solana/web3.js' {
     connection: Connection,
     wireTransaction: Buffer,
   ): Promise<TransactionSignature>;
+
+  // === src/util/testnet.js ===
+  declare export function testnetChannelEndpoint(channel?: string): string;
 }

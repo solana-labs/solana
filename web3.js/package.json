@@ -24,7 +24,7 @@
   "bin": {
     "solana-localnet": "bin/localnet.sh"
   },
-  "solana-channel": "beta",
+  "testnetDefaultChannel": "beta",
   "files": [
     "/bin",
     "/doc",
@@ -37,7 +37,7 @@
   "scripts": {
     "bpf-sdk:install": "set -ex; npm run bpf-sdk:fetch; npm run bpf-sdk:extract",
     "bpf-sdk:extract": "test -d bpf-sdk || tar jxvf bpf-sdk.tar.bz2",
-    "bpf-sdk:fetch": "test -f bpf-sdk.tar.bz2 || curl http://solana-sdk.s3.amazonaws.com/$npm_package_solana_channel/bpf-sdk.tar.bz2 -o bpf-sdk.tar.bz2",
+    "bpf-sdk:fetch": "test -f bpf-sdk.tar.bz2 || curl http://solana-sdk.s3.amazonaws.com/$npm_package_testnetDefaultChannel/bpf-sdk.tar.bz2 -o bpf-sdk.tar.bz2",
     "bpf-sdk:remove-symlinks": "find bpf-sdk -type l -print -exec cp {} {}.tmp \\; -exec mv {}.tmp {} \\;",
     "build": "cross-env NODE_ENV=production rollup -c",
     "clean": "rimraf ./coverage ./lib",
@@ -55,8 +55,8 @@
     "lint:watch": "watch 'npm run lint:fix' . --wait=1 --ignoreDirectoryPattern=/doc/",
     "localnet:down": "bin/localnet.sh down",
     "localnet:logs": "bin/localnet.sh logs -f",
-    "localnet:up": "bin/localnet.sh up $npm_package_solana_channel",
-    "localnet:update": "bin/localnet.sh update $npm_package_solana_channel",
+    "localnet:up": "bin/localnet.sh up $npm_package_testnetDefaultChannel",
+    "localnet:update": "bin/localnet.sh update $npm_package_testnetDefaultChannel",
     "ok": "set -ex; npm run lint; npm run flow; npm run test; npm run doc",
     "prepare": "set -ex; npm run clean; npm run bpf-sdk:install; npm run build; rm -rf bpf-sdk; npm rum bpf-sdk:extract; npm run bpf-sdk:remove-symlinks",
     "pretty": "prettier --write '{,{examples,src,test}/**/}*.js'",

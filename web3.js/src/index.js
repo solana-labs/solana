@@ -13,3 +13,4 @@ export {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
 export {
   sendAndConfirmRawTransaction,
 } from './util/send-and-confirm-raw-transaction';
+export {testnetChannelEndpoint} from './util/testnet';
