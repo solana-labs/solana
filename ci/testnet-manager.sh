@@ -83,10 +83,11 @@ testnet-beta|testnet-beta-perf)
 testnet|testnet-perf)
   if [[ -n $BETA_CHANNEL_LATEST_TAG ]]; then
     CHANNEL_OR_TAG=$BETA_CHANNEL_LATEST_TAG
+    CHANNEL_BRANCH=$BETA_CHANNEL
   else
     CHANNEL_OR_TAG=$STABLE_CHANNEL_LATEST_TAG
+    CHANNEL_BRANCH=$STABLE_CHANNEL
   fi
-  CHANNEL_BRANCH=$BETA_CHANNEL
   ;;
 *)
   echo "Error: Invalid TESTNET=$TESTNET"
