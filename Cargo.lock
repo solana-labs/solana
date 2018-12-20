@@ -1715,7 +1715,7 @@ dependencies = [
 
 [[package]]
 name = "solana"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "bincode 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "bs58 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1739,19 +1739,19 @@ dependencies = [
  "serde 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.33 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-bpfloader 0.11.0",
- "solana-drone 0.11.0",
+ "solana-bpfloader 0.12.0",
+ "solana-drone 0.12.0",
  "solana-jsonrpc-core 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-jsonrpc-http-server 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-jsonrpc-macros 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-jsonrpc-pubsub 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-jsonrpc-ws-server 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-logger 0.11.0",
- "solana-metrics 0.11.0",
- "solana-native-loader 0.11.0",
- "solana-netutil 0.11.0",
- "solana-sdk 0.11.0",
- "solana-system-program 0.11.0",
+ "solana-logger 0.12.0",
+ "solana-metrics 0.12.0",
+ "solana-native-loader 0.12.0",
+ "solana-netutil 0.12.0",
+ "solana-sdk 0.12.0",
+ "solana-system-program 0.12.0",
  "tokio 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-codec 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "untrusted 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1759,39 +1759,39 @@ dependencies = [
 
 [[package]]
 name = "solana-bench-streamer"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana 0.11.0",
- "solana-logger 0.11.0",
- "solana-netutil 0.11.0",
+ "solana 0.12.0",
+ "solana-logger 0.12.0",
+ "solana-netutil 0.12.0",
 ]
 
 [[package]]
 name = "solana-bench-tps"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rayon 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.33 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana 0.11.0",
- "solana-drone 0.11.0",
- "solana-logger 0.11.0",
- "solana-metrics 0.11.0",
- "solana-sdk 0.11.0",
+ "solana 0.12.0",
+ "solana-drone 0.12.0",
+ "solana-logger 0.12.0",
+ "solana-metrics 0.12.0",
+ "solana-sdk 0.12.0",
 ]
 
 [[package]]
 name = "solana-bpf-noop"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "rbpf 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-sdk 0.11.0",
+ "solana-sdk 0.12.0",
 ]
 
 [[package]]
 name = "solana-bpfloader"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "bincode 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1799,27 +1799,27 @@ dependencies = [
  "libc 0.2.45 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-logger 0.11.0",
- "solana-sdk 0.11.0",
+ "solana-logger 0.12.0",
+ "solana-sdk 0.12.0",
  "solana_rbpf 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "solana-budget-program"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "bincode 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-logger 0.11.0",
- "solana-sdk 0.11.0",
+ "solana-logger 0.12.0",
+ "solana-sdk 0.12.0",
 ]
 
 [[package]]
 name = "solana-drone"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "bincode 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1828,43 +1828,43 @@ dependencies = [
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-metrics 0.11.0",
- "solana-sdk 0.11.0",
+ "solana-metrics 0.12.0",
+ "solana-sdk 0.12.0",
  "tokio 0.1.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-codec 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "solana-erc20"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "bincode 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-logger 0.11.0",
- "solana-sdk 0.11.0",
+ "solana-logger 0.12.0",
+ "solana-sdk 0.12.0",
 ]
 
 [[package]]
 name = "solana-fullnode"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.33 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana 0.11.0",
- "solana-drone 0.11.0",
- "solana-fullnode-config 0.11.0",
- "solana-logger 0.11.0",
- "solana-metrics 0.11.0",
- "solana-netutil 0.11.0",
- "solana-sdk 0.11.0",
+ "solana 0.12.0",
+ "solana-drone 0.12.0",
+ "solana-fullnode-config 0.12.0",
+ "solana-logger 0.12.0",
+ "solana-metrics 0.12.0",
+ "solana-netutil 0.12.0",
+ "solana-sdk 0.12.0",
 ]
 
 [[package]]
 name = "solana-fullnode-config"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "dirs 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1872,19 +1872,19 @@ dependencies = [
  "serde 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.33 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-netutil 0.11.0",
- "solana-sdk 0.11.0",
+ "solana-netutil 0.12.0",
+ "solana-sdk 0.12.0",
  "untrusted 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "solana-genesis"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.33 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana 0.11.0",
- "solana-sdk 0.11.0",
+ "solana 0.12.0",
+ "solana-sdk 0.12.0",
 ]
 
 [[package]]
@@ -2025,70 +2025,70 @@ dependencies = [
 
 [[package]]
 name = "solana-keygen"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "dirs 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-sdk 0.11.0",
+ "solana-sdk 0.12.0",
 ]
 
 [[package]]
 name = "solana-ledger-tool"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.33 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana 0.11.0",
- "solana-logger 0.11.0",
+ "solana 0.12.0",
+ "solana-logger 0.12.0",
 ]
 
 [[package]]
 name = "solana-logger"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "env_logger 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "solana-lualoader"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "bincode 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "rlua 0.15.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-logger 0.11.0",
- "solana-sdk 0.11.0",
+ "solana-logger 0.12.0",
+ "solana-sdk 0.12.0",
 ]
 
 [[package]]
 name = "solana-metrics"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "influx_db_client 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "reqwest 0.9.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-sdk 0.11.0",
+ "solana-sdk 0.12.0",
  "sys-info 0.5.6 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "solana-native-loader"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "bincode 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.45 (registry+https://github.com/rust-lang/crates.io-index)",
  "libloading 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-sdk 0.11.0",
+ "solana-sdk 0.12.0",
 ]
 
 [[package]]
 name = "solana-netutil"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "ipnetwork 0.12.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2097,33 +2097,33 @@ dependencies = [
  "rand 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "reqwest 0.9.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "socket2 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-logger 0.11.0",
+ "solana-logger 0.12.0",
 ]
 
 [[package]]
 name = "solana-noop"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-logger 0.11.0",
- "solana-sdk 0.11.0",
+ "solana-logger 0.12.0",
+ "solana-sdk 0.12.0",
 ]
 
 [[package]]
 name = "solana-replicator"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.33 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana 0.11.0",
- "solana-fullnode-config 0.11.0",
- "solana-logger 0.11.0",
- "solana-sdk 0.11.0",
+ "solana 0.12.0",
+ "solana-fullnode-config 0.12.0",
+ "solana-logger 0.12.0",
+ "solana-sdk 0.12.0",
 ]
 
 [[package]]
 name = "solana-sdk"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "bincode 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "bs58 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2141,50 +2141,50 @@ dependencies = [
 
 [[package]]
 name = "solana-storage-program"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "bincode 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-logger 0.11.0",
- "solana-sdk 0.11.0",
+ "solana-logger 0.12.0",
+ "solana-sdk 0.12.0",
 ]
 
 [[package]]
 name = "solana-system-program"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "bincode 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-sdk 0.11.0",
+ "solana-sdk 0.12.0",
 ]
 
 [[package]]
 name = "solana-upload-perf"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "serde_json 1.0.33 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-metrics 0.11.0",
+ "solana-metrics 0.12.0",
 ]
 
 [[package]]
 name = "solana-vote-program"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "bincode 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.82 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-logger 0.11.0",
- "solana-metrics 0.11.0",
- "solana-sdk 0.11.0",
+ "solana-logger 0.12.0",
+ "solana-metrics 0.12.0",
+ "solana-sdk 0.12.0",
 ]
 
 [[package]]
 name = "solana-vote-signer"
-version = "0.0.1"
+version = "0.12.0"
 dependencies = [
  "bs58 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2193,13 +2193,13 @@ dependencies = [
  "solana-jsonrpc-core 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-jsonrpc-http-server 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-jsonrpc-macros 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-metrics 0.11.0",
- "solana-sdk 0.11.0",
+ "solana-metrics 0.12.0",
+ "solana-sdk 0.12.0",
 ]
 
 [[package]]
 name = "solana-wallet"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "bincode 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "bs58 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2207,10 +2207,10 @@ dependencies = [
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "dirs 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.33 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana 0.11.0",
- "solana-drone 0.11.0",
- "solana-logger 0.11.0",
- "solana-sdk 0.11.0",
+ "solana 0.12.0",
+ "solana-drone 0.12.0",
+ "solana-logger 0.12.0",
+ "solana-sdk 0.12.0",
 ]
 
 [[package]]
