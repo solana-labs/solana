@@ -33,16 +33,20 @@ been provisioned and be ready for service.
 Creating a "queue=cuda" agent follows the same process but additionally:
 1. Resize the image from the Azure port to include a GPU
 2. Edit the tags field in /etc/buildkite-agent/buildkite-agent.cfg to `tags="queue=cuda,queue=default"`
-   and decrease the value of the priority field by one.
+   and decrease the value of the priority field by one
 
 #### Updating the CI Disk Image
 
-1. Create a new VM Instance using the disk image and modify as desired.
-1. Run `sudo waagent -deprovision+user` on the instance
+1. Create a new VM Instance as described above
+1. Modify it as required
+1. When ready, ssh into the instance and start a root shell with `sudo -i`.  Then
+   prepare it for deallocation by running:
+   `waagent -deprovision+user; cd /etc; ln -s ../run/systemd/resolve/stub-resolv.conf resolv.conf`
 1. Run `az vm deallocate --resource-group ci --name XXX`
 1. Run `az vm generalize --resource-group ci --name XXX`
 1. Run `az image create --resource-group ci --source XXX --name boilerplate`
-1. Delete the VM instance
+1. Goto the `ci` resource group in the Azure portal and remove all resources
+   with the XXX name in them
 
 ## Reference
 
