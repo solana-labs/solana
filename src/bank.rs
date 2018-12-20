@@ -94,8 +94,8 @@ pub struct Bank {
     /// FIFO queue of `last_id` items
     last_ids: RwLock<StatusDeque<Result<()>>>,
 
-    // The latest finality time for the network
-    finality_time: AtomicUsize,
+    // The latest confirmation time for the network
+    confirmation_time: AtomicUsize,
 
     // Mapping of account ids to Subscriber ids and sinks to notify on userdata update
     account_subscriptions: RwLock<HashMap<Pubkey, HashMap<Pubkey, Sink<Account>>>>,
@@ -115,7 +115,7 @@ impl Default for Bank {
         Bank {
             accounts: Accounts::default(),
             last_ids: RwLock::new(StatusDeque::default()),
-            finality_time: AtomicUsize::new(std::usize::MAX),
+            confirmation_time: AtomicUsize::new(std::usize::MAX),
             account_subscriptions: RwLock::new(HashMap::new()),
             signature_subscriptions: RwLock::new(HashMap::new()),
             leader_scheduler: Arc::new(RwLock::new(LeaderScheduler::default())),
@@ -316,14 +316,14 @@ impl Bank {
     }
 
     /// Looks through a list of tick heights and stakes, and finds the latest
-    /// tick that has achieved finality
-    pub fn get_finality_timestamp(
+    /// tick that has achieved confirmation
+    pub fn get_confirmation_timestamp(
         &self,
         ticks_and_stakes: &mut [(u64, u64)],
         supermajority_stake: u64,
     ) -> Option<u64> {
         let last_ids = self.last_ids.read().unwrap();
-        last_ids.get_finality_timestamp(ticks_and_stakes, supermajority_stake)
+        last_ids.get_confirmation_timestamp(ticks_and_stakes, supermajority_stake)
     }
 
     /// Tell the bank which Entry IDs exist on the ledger. This function
@@ -871,12 +871,12 @@ impl Bank {
         self.accounts.hash_internal_state()
     }
 
-    pub fn finality(&self) -> usize {
-        self.finality_time.load(Ordering::Relaxed)
+    pub fn confirmation(&self) -> usize {
+        self.confirmation_time.load(Ordering::Relaxed)
     }
 
-    pub fn set_finality(&self, finality: usize) {
-        self.finality_time.store(finality, Ordering::Relaxed);
+    pub fn set_confirmation(&self, confirmation: usize) {
+        self.confirmation_time.store(confirmation, Ordering::Relaxed);
     }
 
     fn send_account_notifications(
@@ -1403,11 +1403,11 @@ mod tests {
         assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
     }
     #[test]
-    fn test_finality() {
+    fn test_confirmation() {
         let def_bank = Bank::default();
-        assert_eq!(def_bank.finality(), std::usize::MAX);
-        def_bank.set_finality(90);
-        assert_eq!(def_bank.finality(), 90);
+        assert_eq!(def_bank.confirmation(), std::usize::MAX);
+        def_bank.set_confirmation(90);
+        assert_eq!(def_bank.confirmation(), 90);
     }
     #[test]
     fn test_interleaving_locks() {

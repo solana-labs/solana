@@ -714,8 +714,8 @@ fn test_multi_node_dynamic_network() {
     let mut validators: Vec<_> = t2.into_iter().map(|t| t.join().unwrap()).collect();
 
     let mut client = mk_client(&leader_data);
-    let mut last_finality = client.get_finality();
-    info!("Last finality {}", last_finality);
+    let mut last_confirmation = client.get_confirmation();
+    info!("Last confirmation {}", last_confirmation);
     let start = Instant::now();
     let mut consecutive_success = 0;
     let mut expected_balance = leader_balance;
@@ -738,28 +738,28 @@ fn test_multi_node_dynamic_network() {
         assert!(e.is_ok(), "err: {:?}", e);
 
         let now = Instant::now();
-        let mut finality = client.get_finality();
+        let mut confirmation = client.get_confirmation();
 
-        // Need this to make sure the finality is updated
+        // Need this to make sure the confirmation is updated
         // (i.e. the node is not returning stale value)
-        while last_finality == finality {
-            finality = client.get_finality();
+        while last_confirmation == confirmation {
+            confirmation = client.get_confirmation();
         }
 
-        while duration_as_ms(&now.elapsed()) < finality as u64 {
+        while duration_as_ms(&now.elapsed()) < confirmation as u64 {
             sleep(Duration::from_millis(100));
-            finality = client.get_finality()
+            confirmation = client.get_confirmation()
         }
 
-        last_finality = finality;
+        last_confirmation = confirmation;
 
         let balance = retry_get_balance(&mut client, &bob_pubkey, Some(expected_balance));
         assert_eq!(balance, Some(expected_balance));
         consecutive_success += 1;
 
         info!(
-            "SUCCESS[{}] balance: {}, finality: {} ms",
-            i, expected_balance, last_finality,
+            "SUCCESS[{}] balance: {}, confirmation: {} ms",
+            i, expected_balance, last_confirmation,
         );
 
         if consecutive_success == 10 {
