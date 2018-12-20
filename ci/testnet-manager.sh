@@ -272,6 +272,7 @@ start() {
         -G "n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" \
         -t "$CHANNEL_OR_TAG" -c 2 \
         -b \
+        -d pd-ssd \
         ${maybeDelete:+-d}
       #ci/testnet-deploy.sh perf-testnet-solana-com ec2 us-east-1a \
       #  -g \
