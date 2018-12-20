@@ -24,7 +24,7 @@
   "bin": {
     "solana-localnet": "bin/localnet.sh"
   },
-  "solana-channel": "edge",
+  "solana-channel": "beta",
   "files": [
     "/bin",
     "/doc",
