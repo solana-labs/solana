@@ -10,7 +10,6 @@ use crate::packet::{SharedBlob, BLOB_HEADER_SIZE};
 use crate::result::Result;
 use crate::streamer::BlobSender;
 use log::Level;
-use rocksdb::DBRawIterator;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;

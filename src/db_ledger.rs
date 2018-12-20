@@ -7,7 +7,7 @@ use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
 use crate::result::{Error, Result};
 use bincode::{deserialize, serialize};
 use byteorder::{BigEndian, ByteOrder, ReadBytesExt};
-use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, DBRawIterator, Options, WriteBatch, DB};
+use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -15,6 +15,9 @@ use std::borrow::Borrow;
 use std::cmp::max;
 use std::io;
 use std::path::Path;
+
+// Re-export rocksdb::DBRawIterator until it can be encapsulated
+pub use rocksdb::DBRawIterator;
 
 pub const DB_LEDGER_DIRECTORY: &str = "rocksdb";
 // A good value for this is the number of cores on the machine
