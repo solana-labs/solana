@@ -1,5 +1,5 @@
-//! The `compute_leader_finality_service` module implements the tools necessary
-//! to generate a thread which regularly calculates the last finality times
+//! The `compute_leader_confirmation_service` module implements the tools necessary
+//! to generate a thread which regularly calculates the last confirmation times
 //! observed by the leader
 
 use crate::bank::Bank;
@@ -17,23 +17,23 @@ use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum FinalityError {
+pub enum ConfirmationError {
     NoValidSupermajority,
 }
 
-pub const COMPUTE_FINALITY_MS: u64 = 100;
+pub const COMPUTE_CONFIRMATION_MS: u64 = 100;
 
-pub struct ComputeLeaderFinalityService {
-    compute_finality_thread: JoinHandle<()>,
+pub struct ComputeLeaderConfirmationService {
+    compute_confirmation_thread: JoinHandle<()>,
 }
 
-impl ComputeLeaderFinalityService {
+impl ComputeLeaderConfirmationService {
     fn get_last_supermajority_timestamp(
         bank: &Arc<Bank>,
         leader_id: Pubkey,
         now: u64,
         last_valid_validator_timestamp: u64,
-    ) -> result::Result<u64, FinalityError> {
+    ) -> result::Result<u64, ConfirmationError> {
         let mut total_stake = 0;
 
         let mut ticks_and_stakes: Vec<(u64, u64)> = {
@@ -72,14 +72,14 @@ impl ComputeLeaderFinalityService {
         let super_majority_stake = (2 * total_stake) / 3;
 
         if let Some(last_valid_validator_timestamp) =
-            bank.get_finality_timestamp(&mut ticks_and_stakes, super_majority_stake)
+            bank.get_confirmation_timestamp(&mut ticks_and_stakes, super_majority_stake)
         {
             return Ok(last_valid_validator_timestamp);
         }
 
         if last_valid_validator_timestamp != 0 {
             submit(
-                influxdb::Point::new(&"leader-finality")
+                influxdb::Point::new(&"leader-confirmation")
                     .add_field(
                         "duration_ms",
                         influxdb::Value::Integer((now - last_valid_validator_timestamp) as i64),
@@ -88,10 +88,10 @@ impl ComputeLeaderFinalityService {
             );
         }
 
-        Err(FinalityError::NoValidSupermajority)
+        Err(ConfirmationError::NoValidSupermajority)
     }
 
-    pub fn compute_finality(
+    pub fn compute_confirmation(
         bank: &Arc<Bank>,
         leader_id: Pubkey,
         last_valid_validator_timestamp: &mut u64,
@@ -103,53 +103,60 @@ impl ComputeLeaderFinalityService {
             now,
             *last_valid_validator_timestamp,
         ) {
-            let finality_ms = now - super_majority_timestamp;
+            let confirmation_ms = now - super_majority_timestamp;
 
             *last_valid_validator_timestamp = super_majority_timestamp;
-            bank.set_finality((now - *last_valid_validator_timestamp) as usize);
+            bank.set_confirmation((now - *last_valid_validator_timestamp) as usize);
 
             submit(
-                influxdb::Point::new(&"leader-finality")
-                    .add_field("duration_ms", influxdb::Value::Integer(finality_ms as i64))
+                influxdb::Point::new(&"leader-confirmation")
+                    .add_field(
+                        "duration_ms",
+                        influxdb::Value::Integer(confirmation_ms as i64),
+                    )
                     .to_owned(),
             );
         }
     }
 
-    /// Create a new ComputeLeaderFinalityService for computing finality.
+    /// Create a new ComputeLeaderConfirmationService for computing confirmation.
     pub fn new(bank: Arc<Bank>, leader_id: Pubkey, exit: Arc<AtomicBool>) -> Self {
-        let compute_finality_thread = Builder::new()
-            .name("solana-leader-finality-stage".to_string())
+        let compute_confirmation_thread = Builder::new()
+            .name("solana-leader-confirmation-stage".to_string())
             .spawn(move || {
                 let mut last_valid_validator_timestamp = 0;
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
                     }
-                    Self::compute_finality(&bank, leader_id, &mut last_valid_validator_timestamp);
-                    sleep(Duration::from_millis(COMPUTE_FINALITY_MS));
+                    Self::compute_confirmation(
+                        &bank,
+                        leader_id,
+                        &mut last_valid_validator_timestamp,
+                    );
+                    sleep(Duration::from_millis(COMPUTE_CONFIRMATION_MS));
                 }
             })
             .unwrap();
 
-        (ComputeLeaderFinalityService {
-            compute_finality_thread,
+        (ComputeLeaderConfirmationService {
+            compute_confirmation_thread,
         })
     }
 }
 
-impl Service for ComputeLeaderFinalityService {
+impl Service for ComputeLeaderConfirmationService {
     type JoinReturnType = ();
 
     fn join(self) -> thread::Result<()> {
-        self.compute_finality_thread.join()
+        self.compute_confirmation_thread.join()
     }
 }
 
 #[cfg(test)]
 pub mod tests {
     use crate::bank::Bank;
-    use crate::compute_leader_finality_service::ComputeLeaderFinalityService;
+    use crate::compute_leader_confirmation_service::ComputeLeaderConfirmationService;
     use crate::create_vote_account::*;
 
     use crate::mint::Mint;
@@ -164,7 +171,7 @@ pub mod tests {
     use std::time::Duration;
 
     #[test]
-    fn test_compute_finality() {
+    fn test_compute_confirmation() {
         solana_logger::setup();
 
         let mint = Mint::new(1234);
@@ -206,14 +213,14 @@ pub mod tests {
             })
             .collect();
 
-        // There isn't 2/3 consensus, so the bank's finality value should be the default
-        let mut last_finality_time = 0;
-        ComputeLeaderFinalityService::compute_finality(
+        // There isn't 2/3 consensus, so the bank's confirmation value should be the default
+        let mut last_confirmation_time = 0;
+        ComputeLeaderConfirmationService::compute_confirmation(
             &bank,
             dummy_leader_id,
-            &mut last_finality_time,
+            &mut last_confirmation_time,
         );
-        assert_eq!(bank.finality(), std::usize::MAX);
+        assert_eq!(bank.confirmation(), std::usize::MAX);
 
         // Get another validator to vote, so we now have 2/3 consensus
         let vote_account = &vote_accounts[7];
@@ -221,12 +228,12 @@ pub mod tests {
         let vote_tx = Transaction::vote_new(&vote_account, vote, ids[6], 0);
         bank.process_transaction(&vote_tx).unwrap();
 
-        ComputeLeaderFinalityService::compute_finality(
+        ComputeLeaderConfirmationService::compute_confirmation(
             &bank,
             dummy_leader_id,
-            &mut last_finality_time,
+            &mut last_confirmation_time,
         );
-        assert!(bank.finality() != std::usize::MAX);
-        assert!(last_finality_time > 0);
+        assert!(bank.confirmation() != std::usize::MAX);
+        assert!(last_confirmation_time > 0);
     }
 }

@@ -3,7 +3,7 @@
 //! can do its processing in parallel with signature verification on the GPU.
 
 use crate::bank::Bank;
-use crate::compute_leader_finality_service::ComputeLeaderFinalityService;
+use crate::compute_leader_confirmation_service::ComputeLeaderConfirmationService;
 use crate::counter::Counter;
 use crate::entry::Entry;
 use crate::packet::Packets;
@@ -40,7 +40,7 @@ pub struct BankingStage {
     /// Handle to the stage's thread.
     bank_thread_hdls: Vec<JoinHandle<Option<BankingStageReturnType>>>,
     poh_service: PohService,
-    compute_finality_service: ComputeLeaderFinalityService,
+    compute_confirmation_service: ComputeLeaderConfirmationService,
 }
 
 impl BankingStage {
@@ -64,8 +64,8 @@ impl BankingStage {
         // Once an entry has been recorded, its last_id is registered with the bank.
         let poh_service = PohService::new(poh_recorder.clone(), config);
 
-        // Single thread to compute finality
-        let compute_finality_service = ComputeLeaderFinalityService::new(
+        // Single thread to compute confirmation
+        let compute_confirmation_service = ComputeLeaderConfirmationService::new(
             bank.clone(),
             leader_id,
             poh_service.poh_exit.clone(),
@@ -120,7 +120,7 @@ impl BankingStage {
             Self {
                 bank_thread_hdls,
                 poh_service,
-                compute_finality_service,
+                compute_confirmation_service,
             },
             entry_receiver,
         )
@@ -239,7 +239,7 @@ impl Service for BankingStage {
             }
         }
 
-        self.compute_finality_service.join()?;
+        self.compute_confirmation_service.join()?;
 
         let poh_return_value = self.poh_service.join()?;
         match poh_return_value {

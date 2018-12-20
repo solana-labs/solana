@@ -722,7 +722,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT mean(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"leader-finality\" WHERE $timeFilter \n\n\n",
+          "query": "SELECT mean(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"leader-confirmation\" WHERE $timeFilter \n\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -744,7 +744,7 @@
         }
       ],
       "thresholds": "",
-      "title": "Mean Finality",
+      "title": "Mean Confirmation",
       "type": "singlestat",
       "valueFontSize": "70%",
       "valueMaps": [
@@ -833,7 +833,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT median(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"leader-finality\" WHERE $timeFilter \n\n\n",
+          "query": "SELECT median(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"leader-confirmation\" WHERE $timeFilter \n\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -855,7 +855,7 @@
         }
       ],
       "thresholds": "",
-      "title": "Median Finality",
+      "title": "Median Confirmation",
       "type": "singlestat",
       "valueFontSize": "70%",
       "valueMaps": [
@@ -944,7 +944,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT min(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"leader-finality\" WHERE $timeFilter \n\n\n",
+          "query": "SELECT min(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"leader-confirmation\" WHERE $timeFilter \n\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -966,7 +966,7 @@
         }
       ],
       "thresholds": "",
-      "title": "Min Finality",
+      "title": "Min Confirmation",
       "type": "singlestat",
       "valueFontSize": "70%",
       "valueMaps": [
@@ -1055,7 +1055,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT max(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"leader-finality\" WHERE $timeFilter \n\n\n",
+          "query": "SELECT max(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"leader-confirmation\" WHERE $timeFilter \n\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -1077,7 +1077,7 @@
         }
       ],
       "thresholds": "",
-      "title": "Max Finality",
+      "title": "Max Confirmation",
       "type": "singlestat",
       "valueFontSize": "70%",
       "valueMaps": [
@@ -1166,7 +1166,7 @@
           ],
           "orderByTime": "ASC",
           "policy": "default",
-          "query": "SELECT percentile(\"duration_ms\", 99) FROM \"$testnet\".\"autogen\".\"leader-finality\" WHERE $timeFilter \n\n\n",
+          "query": "SELECT percentile(\"duration_ms\", 99) FROM \"$testnet\".\"autogen\".\"leader-confirmation\" WHERE $timeFilter \n\n\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -1188,7 +1188,7 @@
         }
       ],
       "thresholds": "",
-      "title": "Finality (99th percentile)",
+      "title": "Confirmation (99th percentile)",
       "type": "singlestat",
       "valueFontSize": "70%",
       "valueMaps": [
@@ -1651,7 +1651,7 @@
           "measurement": "counter-cluster_info-vote-count",
           "orderByTime": "ASC",
           "policy": "autogen",
-          "query": "SELECT mean(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"leader-finality\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n",
+          "query": "SELECT mean(\"duration_ms\") FROM \"$testnet\".\"autogen\".\"leader-confirmation\" WHERE $timeFilter GROUP BY time(1s) FILL(0)\n",
           "rawQuery": true,
           "refId": "A",
           "resultFormat": "time_series",
@@ -1675,7 +1675,7 @@
       "thresholds": [],
       "timeFrom": null,
       "timeShift": null,
-      "title": "Finality",
+      "title": "Time since last Confirmation",
       "tooltip": {
         "shared": true,
         "sort": 0,

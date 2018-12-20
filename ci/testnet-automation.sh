@@ -56,24 +56,24 @@ launchTestnet() {
         WHERE time > now() - 300s GROUP BY time(1s)
     )'
 
-  declare q_mean_finality='
-    SELECT round(mean("duration_ms")) as "mean_finality"
-      FROM "testnet-automation"."autogen"."leader-finality"
+  declare q_mean_confirmation='
+    SELECT round(mean("duration_ms")) as "mean_confirmation"
+      FROM "testnet-automation"."autogen"."leader-confirmation"
       WHERE time > now() - 300s'
 
-  declare q_max_finality='
-    SELECT round(max("duration_ms")) as "max_finality"
-      FROM "testnet-automation"."autogen"."leader-finality"
+  declare q_max_confirmation='
+    SELECT round(max("duration_ms")) as "max_confirmation"
+      FROM "testnet-automation"."autogen"."leader-confirmation"
       WHERE time > now() - 300s'
 
-  declare q_99th_finality='
-    SELECT round(percentile("duration_ms", 99)) as "99th_finality"
-      FROM "testnet-automation"."autogen"."leader-finality"
+  declare q_99th_confirmation='
+    SELECT round(percentile("duration_ms", 99)) as "99th_confirmation"
+      FROM "testnet-automation"."autogen"."leader-confirmation"
       WHERE time > now() - 300s'
 
   curl -G "https://metrics.solana.com:8086/query?u=${INFLUX_USERNAME}&p=${INFLUX_PASSWORD}" \
     --data-urlencode "db=$INFLUX_DATABASE" \
-    --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_finality;$q_max_finality;$q_99th_finality" |
+    --data-urlencode "q=$q_mean_tps;$q_max_tps;$q_mean_confirmation;$q_max_confirmation;$q_99th_confirmation" |
     python ci/testnet-automation-json-parser.py >>TPS"$nodeCount".log
 
   upload-ci-artifact TPS"$nodeCount".log

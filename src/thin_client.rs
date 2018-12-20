@@ -41,7 +41,7 @@ pub struct ThinClient {
     transaction_count: u64,
     balances: HashMap<Pubkey, Account>,
     signature_status: bool,
-    finality: Option<usize>,
+    confirmation: Option<usize>,
 
     rpc_client: RpcClient,
 }
@@ -87,7 +87,7 @@ impl ThinClient {
             transaction_count: 0,
             balances: HashMap::new(),
             signature_status: false,
-            finality: None,
+            confirmation: None,
         }
     }
 
@@ -187,23 +187,23 @@ impl ThinClient {
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "AccountNotFound"))
     }
 
-    /// Request the finality from the leader node
-    pub fn get_finality(&mut self) -> usize {
-        trace!("get_finality");
+    /// Request the confirmation from the leader node
+    pub fn get_confirmation(&mut self) -> usize {
+        trace!("get_confirmation");
         let mut done = false;
         while !done {
-            debug!("get_finality send_to {}", &self.rpc_addr);
-            let resp = RpcRequest::GetFinality.make_rpc_request(&self.rpc_client, 1, None);
+            debug!("get_confirmation send_to {}", &self.rpc_addr);
+            let resp = RpcRequest::GetConfirmation.make_rpc_request(&self.rpc_client, 1, None);
 
             if let Ok(value) = resp {
                 done = true;
-                let finality = value.as_u64().unwrap() as usize;
-                self.finality = Some(finality);
+                let confirmation = value.as_u64().unwrap() as usize;
+                self.confirmation = Some(confirmation);
             } else {
-                debug!("thin_client get_finality error: {:?}", resp);
+                debug!("thin_client get_confirmation error: {:?}", resp);
             }
         }
-        self.finality.expect("some finality")
+        self.confirmation.expect("some confirmation")
     }
 
     /// Request the transaction count.  If the response packet is dropped by the network,
@@ -477,8 +477,8 @@ mod tests {
         let mut client = ThinClient::new(leader_data.rpc, leader_data.tpu, transactions_socket);
         let transaction_count = client.transaction_count();
         assert_eq!(transaction_count, 0);
-        let finality = client.get_finality();
-        assert_eq!(finality, 18446744073709551615);
+        let confirmation = client.get_confirmation();
+        assert_eq!(confirmation, 18446744073709551615);
         let last_id = client.get_last_id();
         let signature = client
             .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
