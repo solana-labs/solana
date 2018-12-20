@@ -320,14 +320,21 @@ SOL_FN_PREFIX void sol_log_params(
   const uint8_t *data,
   uint64_t data_len
 ) {
+  sol_log("- Number of KeyedAccounts");
   sol_log_64(0, 0, 0, 0, ka_len);
   for (int i = 0; i < ka_len; i++) {
+    sol_log("- Is signer");
     sol_log_64(0, 0, 0, 0, ka[i].is_signer);
+    sol_log("- Key");
     sol_log_key(ka[i].key);
+    sol_log("- Tokens");
     sol_log_64(0, 0, 0, 0, *ka[i].tokens);
+    sol_log("- Userdata");
     sol_log_array(ka[i].userdata, ka[i].userdata_len);
+    sol_log("- Owner");
     sol_log_key(ka[i].owner);
   }
+  sol_log("- Instruction data\0");
   sol_log_array(data, data_len);
 }
 

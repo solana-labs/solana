@@ -15,6 +15,7 @@ codecov = { repository = "solana-labs/solana", branch = "master", service = "git
 
 [features]
 bpf_c = ["solana-bpfloader/bpf_c"]
+bpf_rust = ["solana-bpfloader/bpf_rust"]
 chacha = []
 cuda = []
 erasure = []
@@ -100,7 +101,6 @@ members = [
     "ledger-tool",
     "logger",
     "metrics",
-    "programs/bpf/rust/noop",
     "programs/native/bpf_loader",
     "programs/native/budget",
     "programs/native/erc20",
@@ -116,3 +116,4 @@ members = [
     "vote-signer",
     "wallet",
 ]
+exclude = ["programs/bpf/rust/noop"]
