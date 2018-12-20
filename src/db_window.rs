@@ -416,7 +416,6 @@ mod test {
     use crate::ledger::{get_tmp_ledger_path, make_tiny_test_entries, Block};
     use crate::packet::{index_blobs, Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
     use crate::streamer::{receiver, responder, PacketReceiver};
-    use rocksdb::{Options, DB};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::io;
     use std::io::Write;
@@ -538,7 +537,6 @@ mod test {
     pub fn test_find_missing_data_indexes_sanity() {
         let slot = DEFAULT_SLOT_HEIGHT;
 
-        // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes_sanity");
         let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
 
@@ -579,14 +577,12 @@ mod test {
         }
 
         drop(db_ledger);
-        DB::destroy(&Options::default(), &db_ledger_path)
-            .expect("Expected successful database destruction");
+        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_find_missing_data_indexes() {
         let slot = DEFAULT_SLOT_HEIGHT;
-        // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes");
         let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
 
@@ -669,14 +665,12 @@ mod test {
         }
 
         drop(db_ledger);
-        DB::destroy(&Options::default(), &db_ledger_path)
-            .expect("Expected successful database destruction");
+        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_no_missing_blob_indexes() {
         let slot = DEFAULT_SLOT_HEIGHT;
-        // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes");
         let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
 
@@ -705,8 +699,7 @@ mod test {
         }
 
         drop(db_ledger);
-        DB::destroy(&Options::default(), &db_ledger_path)
-            .expect("Expected successful database destruction");
+        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
     }
 
     #[cfg(all(feature = "erasure", test))]
@@ -762,7 +755,6 @@ mod test {
         let leader_keypair = Keypair::new();
         let mut leader_scheduler = LeaderScheduler::from_bootstrap_leader(leader_keypair.pubkey());
 
-        // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_process_blob");
         let db_ledger = Arc::new(DbLedger::open(&db_ledger_path).unwrap());
 
@@ -803,7 +795,6 @@ mod test {
         assert_eq!(consume_queue, original_entries);
 
         drop(db_ledger);
-        DB::destroy(&Options::default(), &db_ledger_path)
-            .expect("Expected successful database destruction");
+        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
     }
 }

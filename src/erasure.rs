@@ -620,7 +620,7 @@ pub mod test {
 
     // TODO: Temprorary function used in tests to generate a database ledger
     // from the window (which is used to generate the erasure coding)
-    // until we also transition generate_coding() and BroadcastStage to use RocksDb.
+    // until we also transition generate_coding() and BroadcastStage to use DbLedger
     // Github issue: https://github.com/solana-labs/solana/issues/1899.
     pub fn generate_db_ledger_from_window(
         ledger_path: &str,
