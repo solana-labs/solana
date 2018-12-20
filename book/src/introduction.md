@@ -53,7 +53,7 @@ Anatoly's implementation began in a private codebase and was implemented in the
 C programming language. Greg Fitzgerald, who had previously worked with Anatoly
 at semiconductor giant Qualcomm Incorporated, encouraged him to reimplement the
 project in the Rust programming language. Greg had worked on the LLVM compiler
-infrastructure, which underlies both the C lang C/C++ compiler as well as the
+infrastructure, which underlies both the Clang C/C++ compiler as well as the
 Rust compiler. Greg claimed that the language's safety guarantees would improve
 software productivity and that its lack of a garbage collector would allow
 programs to perform as well as those written in C.  Anatoly gave it a shot and
