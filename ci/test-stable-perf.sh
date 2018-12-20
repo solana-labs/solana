@@ -18,10 +18,14 @@ ci/affects-files.sh \
   exit 0
 }
 
+FEATURES=bpf_c,erasure,chacha
+if [[ $(uname) = Darwin ]]; then
+  ./build-perf-libs.sh
+else
+  ./fetch-perf-libs.sh
+  # shellcheck source=/dev/null
+  source ./target/perf-libs/env.sh
+  FEATURES=$FEATURES,cuda
+fi
 
-./fetch-perf-libs.sh
-# shellcheck source=/dev/null
-source ./target/perf-libs/env.sh
-
-FEATURES=bpf_c,cuda,erasure,chacha
 exec ci/test-stable.sh "$FEATURES"

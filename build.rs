@@ -38,8 +38,22 @@ fn main() {
         println!("cargo:rustc-link-lib=dylib=cudadevrt");
     }
     if erasure {
-        println!("cargo:rerun-if-changed=target/perf-libs/libgf_complete.so");
-        println!("cargo:rerun-if-changed=target/perf-libs/libJerasure.so");
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        {
+            println!("cargo:rerun-if-changed=target/perf-libs/libgf_complete.dylib");
+            println!("cargo:rerun-if-changed=target/perf-libs/libJerasure.dylib");
+        }
+        #[cfg(all(unix, not(any(target_os = "macos", target_os = "ios"))))]
+        {
+            println!("cargo:rerun-if-changed=target/perf-libs/libgf_complete.so");
+            println!("cargo:rerun-if-changed=target/perf-libs/libJerasure.so");
+        }
+        #[cfg(windows)]
+        {
+            println!("cargo:rerun-if-changed=target/perf-libs/libgf_complete.dll");
+            println!("cargo:rerun-if-changed=target/perf-libs/libJerasure.dll");
+        }
+
         println!("cargo:rustc-link-lib=dylib=Jerasure");
         println!("cargo:rustc-link-lib=dylib=gf_complete");
     }
