@@ -190,7 +190,7 @@ impl<T: Clone> StatusDeque<T> {
         supermajority_stake: u64,
     ) -> Option<u64> {
         // Sort by tick height
-        ticks_and_stakes.sort_by(|a, b| a.0.cmp(&b.0));
+        ticks_and_stakes.sort_by(|a, b| b.0.cmp(&a.0));
         let current_tick_height = self.tick_height;
         let mut total = 0;
         for (tick_height, stake) in ticks_and_stakes.iter() {
