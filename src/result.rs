@@ -9,7 +9,6 @@ use crate::packet;
 use crate::poh_recorder;
 use crate::vote_stage;
 use bincode;
-use rocksdb;
 use serde_json;
 use std;
 use std::any::Any;
@@ -31,7 +30,6 @@ pub enum Error {
     SendError,
     PohRecorderError(poh_recorder::PohRecorderError),
     VoteError(vote_stage::VoteError),
-    RocksDb(rocksdb::Error),
     DbLedgerError(db_ledger::DbLedgerError),
 }
 
@@ -109,11 +107,6 @@ impl std::convert::From<poh_recorder::PohRecorderError> for Error {
 impl std::convert::From<vote_stage::VoteError> for Error {
     fn from(e: vote_stage::VoteError) -> Error {
         Error::VoteError(e)
-    }
-}
-impl std::convert::From<rocksdb::Error> for Error {
-    fn from(e: rocksdb::Error) -> Error {
-        Error::RocksDb(e)
     }
 }
 impl std::convert::From<db_ledger::DbLedgerError> for Error {

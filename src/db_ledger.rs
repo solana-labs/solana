@@ -20,10 +20,17 @@ pub const DB_LEDGER_DIRECTORY: &str = "rocksdb";
 // A good value for this is the number of cores on the machine
 pub const TOTAL_THREADS: i32 = 8;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum DbLedgerError {
     BlobForIndexExists,
     InvalidBlobData,
+    RocksDb(rocksdb::Error),
+}
+
+impl std::convert::From<rocksdb::Error> for Error {
+    fn from(e: rocksdb::Error) -> Error {
+        Error::DbLedgerError(DbLedgerError::RocksDb(e))
+    }
 }
 
 pub trait LedgerColumnFamily {
