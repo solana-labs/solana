@@ -90,6 +90,41 @@ preserving the chain of origination.
 (i.e. dealing with forks) will have to be used for the most recent entries in
 the EntryTree.
 
+### EntryTree Design
+
+1. Entries in the EntryTree are stored as key-value pairs, where the key is the concatenated
+slot index and blob index for an entry, and the value is the entry data. Note blob indexes are zero-based for each slot (i.e. they're slot-relative).
+
+2. The EntryTree maintains metadata for each slot, containing:
+      a. `slot_index` - The index of this slot
+      b. `num_blocks` - The number of blocks in the slot (used for chaining to a previous slot)
+      c. `consumed` - The highest blob index `n`, such that for all `m < n`, there exists a blob in this slot with blob index equal to `n` (i.e. the highest consecutive blob index).
+      d. `received` - The highest received blob index for the slot
+      e. `next_slots` - A list of future slots this slot could chain to. Used when rebuilding
+      the ledger to find possible fork points.
+      f. `previous_slot` - The previous slot index that this slot chains to, used to identify
+      whether the entries in this slot are of interest to any subscriptions
+      g. `highest_tick` - Tick height of the highest received blob (used to identify when a slot is full)
+
+3. Chaining - When a blob for a new slot `x` arrives, we check the number of blocks (`num_blocks`) for that new slot (this information is encoded in the blob). We then know that this new slot chains to slot `x - num_blocks`.
+
+4. Subscriptions - The EntryTree records a set of slots that have been "subscribed" to. This means entries that chain to these slots will be sent on the EntryTree channel for consumption by the ReplayStage. See the `EntryTree APIs` for details.
+
+### EntryTree APIs
+
+The EntryTree offers a subscription based API that ReplayStage uses to ask for entries it's interested in. The entries will be sent on a channel exposed by the EntryTree. These subscription API's are as follows:
+   1. `fn subscribe(slot_index: u64) -> ()`: Let `s` be the slot such that `s.slot_index == slot_index`. This `subscribe(slot_index)` function call, tells the EntryTree to return all entries `e` such that:
+   
+   `(slot(e).slot_index \in slot.next_slots) && (e.blob_index <= slot(e).consumed)`
+
+   where `slot(e)` is the slot that contains `e`.
+
+   As new entries are receieved and added to the EntryTree, they will also be continually sent to the ReplayStage as long as they satisfy the above condition. This means that for every newly received entry `e`, if 'e.blob_index' causes `slot(e)` to increment `slot(e).consumed` (i.e. a new consecutive chain of entries is formed due to inserting `e` and plugging the hole in the slot at `e.blob_index`), then the EntryTree will iterate over all slots in the `subscriptions` set and check if `slot(e)` chains to any of those slots. If so,it will send the next consecutive chain of entries to the ReplayStage.
+
+   2. `fn unsubscribe(slot_index: u64) -> ()`: Unsubscribe from a slot.
+
+Note: Cumulatively, this means that the ReplayStage will now have to know when a slot is finished, and subscribe to the next slot it's interested in to get the next set of entries. Previously, the burden of chaining slots fell on the EntryTree.
+
 ### Interfacing with Bank
 
 The bank exposes to replay stage:
