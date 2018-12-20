@@ -1088,11 +1088,7 @@ mod tests {
             );
 
             let meta_key = MetaCf::key(DEFAULT_SLOT_HEIGHT);
-            let meta = db_ledger
-                .meta_cf
-                .get(&db_ledger.db, &meta_key)
-                .unwrap()
-                .unwrap();
+            let meta = db_ledger.meta_cf.get(&meta_key).unwrap().unwrap();
             assert_eq!(meta.consumed, num_entries);
             assert_eq!(meta.received, num_entries);
             assert_eq!(meta.consumed_slot, num_entries - 1);
