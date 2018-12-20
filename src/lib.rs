@@ -32,7 +32,7 @@ pub mod create_vote_account;
 #[macro_use]
 pub mod contact_info;
 pub mod cluster_info;
-pub mod compute_leader_finality_service;
+pub mod compute_leader_confirmation_service;
 pub mod db_ledger;
 pub mod db_window;
 pub mod entry;
