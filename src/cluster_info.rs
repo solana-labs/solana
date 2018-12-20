@@ -678,15 +678,13 @@ impl ClusterInfo {
         ix: u64,
     ) -> Vec<SharedBlob> {
         if let Some(db_ledger) = db_ledger {
-            let meta = db_ledger
-                .meta_cf
-                .get(&db_ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT));
+            let meta = db_ledger.meta_cf.get(&MetaCf::key(DEFAULT_SLOT_HEIGHT));
 
             if let Ok(Some(meta)) = meta {
                 let max_slot = meta.received_slot;
                 // Try to find the requested index in one of the slots
                 for i in 0..=max_slot {
-                    let get_result = db_ledger.data_cf.get_by_slot_index(&db_ledger.db, i, ix);
+                    let get_result = db_ledger.data_cf.get_by_slot_index(i, ix);
 
                     if let Ok(Some(blob_data)) = get_result {
                         inc_new_counter_info!("cluster_info-window-request-ledger", 1);

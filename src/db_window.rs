@@ -31,9 +31,7 @@ pub fn repair(
 ) -> Result<Vec<(SocketAddr, Vec<u8>)>> {
     let rcluster_info = cluster_info.read().unwrap();
     let mut is_next_leader = false;
-    let meta = db_ledger
-        .meta_cf
-        .get(&db_ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))?;
+    let meta = db_ledger.meta_cf.get(&MetaCf::key(DEFAULT_SLOT_HEIGHT))?;
     if meta.is_none() {
         return Ok(vec![]);
     }
@@ -121,7 +119,7 @@ pub fn repair(
 // Given a start and end entry index, find all the missing
 // indexes in the ledger in the range [start_index, end_index)
 pub fn find_missing_indexes(
-    db_iterator: &mut DBRawIterator,
+    db_iterator: &mut DbLedgerRawIterator,
     slot: u64,
     start_index: u64,
     end_index: u64,
@@ -178,10 +176,7 @@ pub fn find_missing_data_indexes(
     end_index: u64,
     max_missing: usize,
 ) -> Vec<u64> {
-    let mut db_iterator = db_ledger
-        .db
-        .raw_iterator_cf(db_ledger.data_cf.handle(&db_ledger.db))
-        .expect("Expected to be able to open database iterator");
+    let mut db_iterator = db_ledger.data_cf.raw_iterator();
 
     find_missing_indexes(
         &mut db_iterator,
@@ -201,10 +196,7 @@ pub fn find_missing_coding_indexes(
     end_index: u64,
     max_missing: usize,
 ) -> Vec<u64> {
-    let mut db_iterator = db_ledger
-        .db
-        .raw_iterator_cf(db_ledger.erasure_cf.handle(&db_ledger.db))
-        .expect("Expected to be able to open database iterator");
+    let mut db_iterator = db_ledger.erasure_cf.raw_iterator();
 
     find_missing_indexes(
         &mut db_iterator,
@@ -302,11 +294,9 @@ pub fn process_blob(
         let erasure_key = ErasureCf::key(slot, pix);
         let rblob = &blob.read().unwrap();
         let size = rblob.size()?;
-        db_ledger.erasure_cf.put(
-            &db_ledger.db,
-            &erasure_key,
-            &rblob.data[..BLOB_HEADER_SIZE + size],
-        )?;
+        db_ledger
+            .erasure_cf
+            .put(&erasure_key, &rblob.data[..BLOB_HEADER_SIZE + size])?;
         vec![]
     } else {
         db_ledger.insert_data_blobs(vec![&*blob.read().unwrap()])?
@@ -335,7 +325,7 @@ pub fn process_blob(
     if max_ix != 0 && !consumed_entries.is_empty() {
         let meta = db_ledger
             .meta_cf
-            .get(&db_ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))?
+            .get(&MetaCf::key(DEFAULT_SLOT_HEIGHT))?
             .expect("Expect metadata to exist if consumed entries is nonzero");
 
         let consumed = meta.consumed;
@@ -376,9 +366,7 @@ pub fn calculate_max_repair_entry_height(
 
 #[cfg(feature = "erasure")]
 fn try_erasure(db_ledger: &Arc<DbLedger>, consume_queue: &mut Vec<Entry>) -> Result<()> {
-    let meta = db_ledger
-        .meta_cf
-        .get(&db_ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))?;
+    let meta = db_ledger.meta_cf.get(&MetaCf::key(DEFAULT_SLOT_HEIGHT))?;
 
     if let Some(meta) = meta {
         let (data, coding) = erasure::recover(db_ledger, meta.consumed_slot, meta.consumed)?;
@@ -389,11 +377,9 @@ fn try_erasure(db_ledger: &Arc<DbLedger>, consume_queue: &mut Vec<Entry>) -> Res
                 cl.index().expect("Recovered blob must set index"),
             );
             let size = cl.size().expect("Recovered blob must set size");
-            db_ledger.erasure_cf.put(
-                &db_ledger.db,
-                &erasure_key,
-                &cl.data[..BLOB_HEADER_SIZE + size],
-            )?;
+            db_ledger
+                .erasure_cf
+                .put(&erasure_key, &cl.data[..BLOB_HEADER_SIZE + size])?;
         }
 
         let entries = db_ledger.write_shared_blobs(data)?;
@@ -741,7 +727,7 @@ mod test {
         assert_eq!(
             &db_ledger
                 .erasure_cf
-                .get_by_slot_index(&db_ledger.db, slot_height, erase_offset as u64)
+                .get_by_slot_index(slot_height, erase_offset as u64)
                 .unwrap()
                 .unwrap()[BLOB_HEADER_SIZE..],
             &erased_coding_l.data()[..erased_coding_l.size().unwrap() as usize],

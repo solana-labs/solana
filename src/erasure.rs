@@ -410,9 +410,7 @@ pub fn recover(
 
     // Add the data blobs we have into the recovery vector, mark the missing ones
     for i in block_start_idx..block_end_idx {
-        let result = db_ledger
-            .data_cf
-            .get_by_slot_index(&db_ledger.db, slot, i)?;
+        let result = db_ledger.data_cf.get_by_slot_index(slot, i)?;
 
         categorize_blob(
             &result,
@@ -425,9 +423,7 @@ pub fn recover(
 
     // Add the coding blobs we have into the recovery vector, mark the missing ones
     for i in coding_start_idx..block_end_idx {
-        let result = db_ledger
-            .erasure_cf
-            .get_by_slot_index(&db_ledger.db, slot, i)?;
+        let result = db_ledger.erasure_cf.get_by_slot_index(slot, i)?;
 
         categorize_blob(
             &result,
@@ -520,9 +516,7 @@ pub fn recover(
         // Remove the corrupted coding blobs so there's no effort wasted in trying to reconstruct
         // the blobs again
         for i in coding_start_idx..block_end_idx {
-            db_ledger
-                .erasure_cf
-                .delete_by_slot_index(&db_ledger.db, slot, i)?;
+            db_ledger.erasure_cf.delete_by_slot_index(slot, i)?;
         }
         return Ok((vec![], vec![]));
     }
@@ -638,7 +632,6 @@ pub mod test {
                     db_ledger
                         .data_cf
                         .put_by_slot_index(
-                            &db_ledger.db,
                             data_l.slot().unwrap(),
                             data_l.index().unwrap(),
                             &data_l.data[..data_l.data_size().unwrap() as usize],
@@ -665,7 +658,6 @@ pub mod test {
                 db_ledger
                     .erasure_cf
                     .put_by_slot_index(
-                        &db_ledger.db,
                         coding_lock.slot().unwrap(),
                         index,
                         &coding_lock.data[..data_size as usize + BLOB_HEADER_SIZE],
