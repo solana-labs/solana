@@ -164,9 +164,7 @@ pub fn window_service(
                     }
                 }
 
-                let meta = db_ledger
-                    .meta_cf
-                    .get(&db_ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT));
+                let meta = db_ledger.meta_cf.get(&MetaCf::key(DEFAULT_SLOT_HEIGHT));
 
                 if let Ok(Some(meta)) = meta {
                     let received = meta.received;

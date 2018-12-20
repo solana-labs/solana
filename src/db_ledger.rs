@@ -7,7 +7,7 @@ use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
 use crate::result::{Error, Result};
 use bincode::{deserialize, serialize};
 use byteorder::{BigEndian, ByteOrder, ReadBytesExt};
-use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, Options, WriteBatch, DB};
+use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, DBRawIterator, Options, WriteBatch, DB};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -15,9 +15,9 @@ use std::borrow::Borrow;
 use std::cmp::max;
 use std::io;
 use std::path::Path;
+use std::sync::Arc;
 
-// Re-export rocksdb::DBRawIterator until it can be encapsulated
-pub use rocksdb::DBRawIterator;
+pub type DbLedgerRawIterator = rocksdb::DBRawIterator;
 
 pub const DB_LEDGER_DIRECTORY: &str = "rocksdb";
 // A good value for this is the number of cores on the machine
@@ -40,8 +40,9 @@ impl std::convert::From<rocksdb::Error> for Error {
 pub trait LedgerColumnFamily {
     type ValueType: DeserializeOwned + Serialize;
 
-    fn get(&self, db: &DB, key: &[u8]) -> Result<Option<Self::ValueType>> {
-        let data_bytes = db.get_cf(self.handle(db), key)?;
+    fn get(&self, key: &[u8]) -> Result<Option<Self::ValueType>> {
+        let db = self.db();
+        let data_bytes = db.get_cf(self.handle(), key)?;
 
         if let Some(raw) = data_bytes {
             let result: Self::ValueType = deserialize(&raw)?;
@@ -51,47 +52,62 @@ pub trait LedgerColumnFamily {
         }
     }
 
-    fn get_bytes(&self, db: &DB, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let data_bytes = db.get_cf(self.handle(db), key)?;
+    fn get_bytes(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        let db = self.db();
+        let data_bytes = db.get_cf(self.handle(), key)?;
         Ok(data_bytes.map(|x| x.to_vec()))
     }
 
-    fn put_bytes(&self, db: &DB, key: &[u8], serialized_value: &[u8]) -> Result<()> {
-        db.put_cf(self.handle(db), &key, &serialized_value)?;
+    fn put_bytes(&self, key: &[u8], serialized_value: &[u8]) -> Result<()> {
+        let db = self.db();
+        db.put_cf(self.handle(), &key, &serialized_value)?;
         Ok(())
     }
 
-    fn put(&self, db: &DB, key: &[u8], value: &Self::ValueType) -> Result<()> {
+    fn put(&self, key: &[u8], value: &Self::ValueType) -> Result<()> {
+        let db = self.db();
         let serialized = serialize(value)?;
-        db.put_cf(self.handle(db), &key, &serialized)?;
+        db.put_cf(self.handle(), &key, &serialized)?;
         Ok(())
     }
 
-    fn delete(&self, db: &DB, key: &[u8]) -> Result<()> {
-        db.delete_cf(self.handle(db), &key)?;
+    fn delete(&self, key: &[u8]) -> Result<()> {
+        let db = self.db();
+        db.delete_cf(self.handle(), &key)?;
         Ok(())
     }
 
-    fn handle(&self, db: &DB) -> ColumnFamily;
+    fn db(&self) -> &Arc<DB>;
+    fn handle(&self) -> ColumnFamily;
 }
 
 pub trait LedgerColumnFamilyRaw {
-    fn get(&self, db: &DB, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        let data_bytes = db.get_cf(self.handle(db), key)?;
+    fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+        let db = self.db();
+        let data_bytes = db.get_cf(self.handle(), key)?;
         Ok(data_bytes.map(|x| x.to_vec()))
     }
 
-    fn put(&self, db: &DB, key: &[u8], serialized_value: &[u8]) -> Result<()> {
-        db.put_cf(self.handle(db), &key, &serialized_value)?;
+    fn put(&self, key: &[u8], serialized_value: &[u8]) -> Result<()> {
+        let db = self.db();
+        db.put_cf(self.handle(), &key, &serialized_value)?;
         Ok(())
     }
 
-    fn delete(&self, db: &DB, key: &[u8]) -> Result<()> {
-        db.delete_cf(self.handle(db), &key)?;
+    fn delete(&self, key: &[u8]) -> Result<()> {
+        let db = self.db();
+        db.delete_cf(self.handle(), &key)?;
         Ok(())
     }
 
-    fn handle(&self, db: &DB) -> ColumnFamily;
+    fn raw_iterator(&self) -> DbLedgerRawIterator {
+        let db = self.db();
+        db.raw_iterator_cf(self.handle())
+            .expect("Expected to be able to open database iterator")
+    }
+
+    fn handle(&self) -> ColumnFamily;
+    fn db(&self) -> &Arc<DB>;
 }
 
 #[derive(Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
@@ -119,10 +135,15 @@ impl SlotMeta {
     }
 }
 
-#[derive(Default)]
-pub struct MetaCf {}
+pub struct MetaCf {
+    db: Arc<DB>,
+}
 
 impl MetaCf {
+    pub fn new(db: Arc<DB>) -> Self {
+        MetaCf { db }
+    }
+
     pub fn key(slot_height: u64) -> Vec<u8> {
         let mut key = vec![0u8; 8];
         BigEndian::write_u64(&mut key[0..8], slot_height);
@@ -133,35 +154,38 @@ impl MetaCf {
 impl LedgerColumnFamily for MetaCf {
     type ValueType = SlotMeta;
 
-    fn handle(&self, db: &DB) -> ColumnFamily {
-        db.cf_handle(META_CF).unwrap()
+    fn db(&self) -> &Arc<DB> {
+        &self.db
+    }
+
+    fn handle(&self) -> ColumnFamily {
+        self.db.cf_handle(META_CF).unwrap()
     }
 }
 
 // The data column family
-#[derive(Default)]
-pub struct DataCf {}
+pub struct DataCf {
+    db: Arc<DB>,
+}
 
 impl DataCf {
-    pub fn get_by_slot_index(
-        &self,
-        db: &DB,
-        slot_height: u64,
-        index: u64,
-    ) -> Result<Option<Vec<u8>>> {
+    pub fn new(db: Arc<DB>) -> Self {
+        DataCf { db }
+    }
+
+    pub fn get_by_slot_index(&self, slot_height: u64, index: u64) -> Result<Option<Vec<u8>>> {
         let key = Self::key(slot_height, index);
-        self.get(db, &key)
+        self.get(&key)
     }
 
     pub fn put_by_slot_index(
         &self,
-        db: &DB,
         slot_height: u64,
         index: u64,
         serialized_value: &[u8],
     ) -> Result<()> {
         let key = Self::key(slot_height, index);
-        self.put(db, &key, serialized_value)
+        self.put(&key, serialized_value)
     }
 
     pub fn key(slot_height: u64, index: u64) -> Vec<u8> {
@@ -185,40 +209,42 @@ impl DataCf {
 }
 
 impl LedgerColumnFamilyRaw for DataCf {
-    fn handle(&self, db: &DB) -> ColumnFamily {
-        db.cf_handle(DATA_CF).unwrap()
+    fn db(&self) -> &Arc<DB> {
+        &self.db
+    }
+
+    fn handle(&self) -> ColumnFamily {
+        self.db.cf_handle(DATA_CF).unwrap()
     }
 }
 
 // The erasure column family
-#[derive(Default)]
-pub struct ErasureCf {}
+pub struct ErasureCf {
+    db: Arc<DB>,
+}
 
 impl ErasureCf {
-    pub fn delete_by_slot_index(&self, db: &DB, slot_height: u64, index: u64) -> Result<()> {
+    pub fn new(db: Arc<DB>) -> Self {
+        ErasureCf { db }
+    }
+    pub fn delete_by_slot_index(&self, slot_height: u64, index: u64) -> Result<()> {
         let key = Self::key(slot_height, index);
-        self.delete(db, &key)
+        self.delete(&key)
     }
 
-    pub fn get_by_slot_index(
-        &self,
-        db: &DB,
-        slot_height: u64,
-        index: u64,
-    ) -> Result<Option<Vec<u8>>> {
+    pub fn get_by_slot_index(&self, slot_height: u64, index: u64) -> Result<Option<Vec<u8>>> {
         let key = Self::key(slot_height, index);
-        self.get(db, &key)
+        self.get(&key)
     }
 
     pub fn put_by_slot_index(
         &self,
-        db: &DB,
         slot_height: u64,
         index: u64,
         serialized_value: &[u8],
     ) -> Result<()> {
         let key = Self::key(slot_height, index);
-        self.put(db, &key, serialized_value)
+        self.put(&key, serialized_value)
     }
 
     pub fn key(slot_height: u64, index: u64) -> Vec<u8> {
@@ -235,15 +261,19 @@ impl ErasureCf {
 }
 
 impl LedgerColumnFamilyRaw for ErasureCf {
-    fn handle(&self, db: &DB) -> ColumnFamily {
-        db.cf_handle(ERASURE_CF).unwrap()
+    fn db(&self) -> &Arc<DB> {
+        &self.db
+    }
+
+    fn handle(&self) -> ColumnFamily {
+        self.db.cf_handle(ERASURE_CF).unwrap()
     }
 }
 
 // ledger window
 pub struct DbLedger {
     // Underlying database is automatically closed in the Drop implementation of DB
-    pub db: DB,
+    db: Arc<DB>,
     pub meta_cf: MetaCf,
     pub data_cf: DataCf,
     pub erasure_cf: ErasureCf,
@@ -279,16 +309,16 @@ impl DbLedger {
         ];
 
         // Open the database
-        let db = DB::open_cf_descriptors(&db_options, ledger_path, cfs)?;
+        let db = Arc::new(DB::open_cf_descriptors(&db_options, ledger_path, cfs)?);
 
         // Create the metadata column family
-        let meta_cf = MetaCf::default();
+        let meta_cf = MetaCf::new(db.clone());
 
         // Create the data column family
-        let data_cf = DataCf::default();
+        let data_cf = DataCf::new(db.clone());
 
         // Create the erasure column family
-        let erasure_cf = ErasureCf::default();
+        let erasure_cf = ErasureCf::new(db.clone());
 
         Ok(DbLedger {
             db,
@@ -372,7 +402,7 @@ impl DbLedger {
         let mut should_write_meta = false;
 
         let mut meta = {
-            if let Some(meta) = self.db.get_cf(self.meta_cf.handle(&self.db), &meta_key)? {
+            if let Some(meta) = self.db.get_cf(self.meta_cf.handle(), &meta_key)? {
                 deserialize(&meta)?
             } else {
                 should_write_meta = true;
@@ -444,11 +474,11 @@ impl DbLedger {
                     } else {
                         let key = DataCf::key(current_slot, current_index);
                         let blob_data = {
-                            if let Some(blob_data) = self.data_cf.get(&self.db, &key)? {
+                            if let Some(blob_data) = self.data_cf.get(&key)? {
                                 blob_data
                             } else if meta.consumed < meta.received {
                                 let key = DataCf::key(current_slot + 1, current_index);
-                                if let Some(blob_data) = self.data_cf.get(&self.db, &key)? {
+                                if let Some(blob_data) = self.data_cf.get(&key)? {
                                     current_slot += 1;
                                     blob_data
                                 } else {
@@ -473,14 +503,14 @@ impl DbLedger {
         // Commit Step: Atomic write both the metadata and the data
         let mut batch = WriteBatch::default();
         if should_write_meta {
-            batch.put_cf(self.meta_cf.handle(&self.db), &meta_key, &serialize(&meta)?)?;
+            batch.put_cf(self.meta_cf.handle(), &meta_key, &serialize(&meta)?)?;
         }
 
         for blob in new_blobs {
             let blob = blob.borrow();
             let key = DataCf::key(blob.slot()?, blob.index()?);
             let serialized_blob_datas = &blob.data[..BLOB_HEADER_SIZE + blob.size()?];
-            batch.put_cf(self.data_cf.handle(&self.db), &key, serialized_blob_datas)?;
+            batch.put_cf(self.data_cf.handle(), &key, serialized_blob_datas)?;
         }
 
         self.db.write(batch)?;
@@ -494,7 +524,7 @@ impl DbLedger {
         let meta_key = MetaCf::key(DEFAULT_SLOT_HEIGHT);
 
         let mut meta = {
-            if let Some(meta) = self.meta_cf.get(&self.db, &meta_key)? {
+            if let Some(meta) = self.meta_cf.get(&meta_key)? {
                 let first = blobs[0].read().unwrap();
                 assert_eq!(meta.consumed, first.index()?);
                 meta
@@ -512,12 +542,12 @@ impl DbLedger {
         }
 
         let mut batch = WriteBatch::default();
-        batch.put_cf(self.meta_cf.handle(&self.db), &meta_key, &serialize(&meta)?)?;
+        batch.put_cf(self.meta_cf.handle(), &meta_key, &serialize(&meta)?)?;
         for blob in blobs {
             let blob = blob.read().unwrap();
             let key = DataCf::key(blob.slot()?, blob.index()?);
             let serialized_blob_datas = &blob.data[..BLOB_HEADER_SIZE + blob.size()?];
-            batch.put_cf(self.data_cf.handle(&self.db), &key, serialized_blob_datas)?;
+            batch.put_cf(self.data_cf.handle(), &key, serialized_blob_datas)?;
         }
         self.db.write(batch)?;
         Ok(())
@@ -535,7 +565,7 @@ impl DbLedger {
         slot_height: u64,
     ) -> Result<(u64, u64)> {
         let start_key = DataCf::key(slot_height, start_index);
-        let mut db_iterator = self.db.raw_iterator_cf(self.data_cf.handle(&self.db))?;
+        let mut db_iterator = self.db.raw_iterator_cf(self.data_cf.handle())?;
         db_iterator.seek(&start_key);
         let mut total_blobs = 0;
         let mut total_current_size = 0;
@@ -588,7 +618,7 @@ impl DbLedger {
 
     /// Return an iterator for all the entries in the given file.
     pub fn read_ledger(&self) -> Result<impl Iterator<Item = Entry>> {
-        let mut db_iterator = self.db.raw_iterator_cf(self.data_cf.handle(&self.db))?;
+        let mut db_iterator = self.db.raw_iterator_cf(self.data_cf.handle())?;
 
         db_iterator.seek_to_first();
         Ok(EntryIterator { db_iterator })
@@ -696,10 +726,10 @@ mod tests {
         // Test meta column family
         let meta = SlotMeta::new();
         let meta_key = MetaCf::key(DEFAULT_SLOT_HEIGHT);
-        ledger.meta_cf.put(&ledger.db, &meta_key, &meta).unwrap();
+        ledger.meta_cf.put(&meta_key, &meta).unwrap();
         let result = ledger
             .meta_cf
-            .get(&ledger.db, &meta_key)
+            .get(&meta_key)
             .unwrap()
             .expect("Expected meta object to exist");
 
@@ -708,14 +738,11 @@ mod tests {
         // Test erasure column family
         let erasure = vec![1u8; 16];
         let erasure_key = ErasureCf::key(DEFAULT_SLOT_HEIGHT, 0);
-        ledger
-            .erasure_cf
-            .put(&ledger.db, &erasure_key, &erasure)
-            .unwrap();
+        ledger.erasure_cf.put(&erasure_key, &erasure).unwrap();
 
         let result = ledger
             .erasure_cf
-            .get(&ledger.db, &erasure_key)
+            .get(&erasure_key)
             .unwrap()
             .expect("Expected erasure object to exist");
 
@@ -724,11 +751,11 @@ mod tests {
         // Test data column family
         let data = vec![2u8; 16];
         let data_key = DataCf::key(DEFAULT_SLOT_HEIGHT, 0);
-        ledger.data_cf.put(&ledger.db, &data_key, &data).unwrap();
+        ledger.data_cf.put(&data_key, &data).unwrap();
 
         let result = ledger
             .data_cf
-            .get(&ledger.db, &data_key)
+            .get(&data_key)
             .unwrap()
             .expect("Expected data object to exist");
 
@@ -829,7 +856,7 @@ mod tests {
         assert!(result.len() == 0);
         let meta = ledger
             .meta_cf
-            .get(&ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))
+            .get(&MetaCf::key(DEFAULT_SLOT_HEIGHT))
             .unwrap()
             .expect("Expected new metadata object to be created");
         assert!(meta.consumed == 0 && meta.received == 2);
@@ -841,7 +868,7 @@ mod tests {
 
         let meta = ledger
             .meta_cf
-            .get(&ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))
+            .get(&MetaCf::key(DEFAULT_SLOT_HEIGHT))
             .unwrap()
             .expect("Expected new metadata object to exist");
         assert!(meta.consumed == 2 && meta.received == 2);
@@ -871,7 +898,7 @@ mod tests {
 
             let meta = ledger
                 .meta_cf
-                .get(&ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))
+                .get(&MetaCf::key(DEFAULT_SLOT_HEIGHT))
                 .unwrap()
                 .expect("Expected metadata object to exist");
             if i != 0 {
@@ -913,7 +940,7 @@ mod tests {
             let result = ledger.insert_data_blobs(vec![blobs[i]]).unwrap();
             let meta = ledger
                 .meta_cf
-                .get(&ledger.db, &MetaCf::key(DEFAULT_SLOT_HEIGHT))
+                .get(&MetaCf::key(DEFAULT_SLOT_HEIGHT))
                 .unwrap()
                 .expect("Expected metadata object to exist");
             if i != 0 {
@@ -933,7 +960,6 @@ mod tests {
     #[test]
     pub fn test_iteration_order() {
         let slot = 0;
-        // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_iteration_order");
         {
             let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
@@ -956,7 +982,7 @@ mod tests {
             );
             let mut db_iterator = db_ledger
                 .db
-                .raw_iterator_cf(db_ledger.data_cf.handle(&db_ledger.db))
+                .raw_iterator_cf(db_ledger.data_cf.handle())
                 .expect("Expected to be able to open database iterator");
 
             db_iterator.seek(&DataCf::key(slot, 1));
@@ -976,7 +1002,6 @@ mod tests {
 
     #[test]
     pub fn test_insert_data_blobs_bulk() {
-        // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_insert_data_blobs_bulk");
         {
             let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
@@ -1006,11 +1031,7 @@ mod tests {
             );
 
             let meta_key = MetaCf::key(DEFAULT_SLOT_HEIGHT);
-            let meta = db_ledger
-                .meta_cf
-                .get(&db_ledger.db, &meta_key)
-                .unwrap()
-                .unwrap();
+            let meta = db_ledger.meta_cf.get(&meta_key).unwrap().unwrap();
             assert_eq!(meta.consumed, num_entries);
             assert_eq!(meta.received, num_entries);
             assert_eq!(meta.consumed_slot, num_entries - 1);
@@ -1082,7 +1103,6 @@ mod tests {
 
     #[test]
     pub fn test_write_consecutive_blobs() {
-        // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_write_consecutive_blobs");
         {
             let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
@@ -1102,11 +1122,7 @@ mod tests {
                 .expect("Expect successful blob writes");
 
             let meta_key = MetaCf::key(DEFAULT_SLOT_HEIGHT);
-            let meta = db_ledger
-                .meta_cf
-                .get(&db_ledger.db, &meta_key)
-                .unwrap()
-                .unwrap();
+            let meta = db_ledger.meta_cf.get(&meta_key).unwrap().unwrap();
             assert_eq!(meta.consumed, num_entries);
             assert_eq!(meta.received, num_entries);
             assert_eq!(meta.consumed_slot, num_entries - 1);
@@ -1122,11 +1138,7 @@ mod tests {
                 .write_consecutive_blobs(&shared_blobs)
                 .expect("Expect successful blob writes");
 
-            let meta = db_ledger
-                .meta_cf
-                .get(&db_ledger.db, &meta_key)
-                .unwrap()
-                .unwrap();
+            let meta = db_ledger.meta_cf.get(&meta_key).unwrap().unwrap();
             assert_eq!(meta.consumed, 2 * num_entries);
             assert_eq!(meta.received, 2 * num_entries);
             assert_eq!(meta.consumed_slot, 2 * num_entries - 1);
@@ -1137,7 +1149,6 @@ mod tests {
 
     #[test]
     pub fn test_genesis_and_entry_iterator() {
-        // Create RocksDb ledger
         let entries = make_tiny_test_entries(100);
         let ledger_path = get_tmp_ledger_path("test_genesis_and_entry_iterator");
         {

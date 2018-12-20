@@ -23,7 +23,7 @@ fn bench_write_blobs(bench: &mut Bencher, blobs: &mut [&mut Blob], ledger_path: 
             let size = blob.size().unwrap();
             db_ledger
                 .data_cf
-                .put(&db_ledger.db, &key, &blob.data[..BLOB_HEADER_SIZE + size])
+                .put(&key, &blob.data[..BLOB_HEADER_SIZE + size])
                 .unwrap();
             blob.set_index(index + num_blobs as u64).unwrap();
         }
@@ -99,10 +99,9 @@ fn bench_read_sequential(bench: &mut Bencher) {
         // Generate random starting point in the range [0, total_blobs - 1], read num_reads blobs sequentially
         let start_index = rng.gen_range(0, num_small_blobs + num_large_blobs);
         for i in start_index..start_index + num_reads {
-            let _ =
-                db_ledger
-                    .data_cf
-                    .get_by_slot_index(&db_ledger.db, slot, i as u64 % total_blobs);
+            let _ = db_ledger
+                .data_cf
+                .get_by_slot_index(slot, i as u64 % total_blobs);
         }
     });
 
@@ -133,9 +132,7 @@ fn bench_read_random(bench: &mut Bencher) {
         .collect();
     bench.iter(move || {
         for i in indexes.iter() {
-            let _ = db_ledger
-                .data_cf
-                .get_by_slot_index(&db_ledger.db, slot, *i as u64);
+            let _ = db_ledger.data_cf.get_by_slot_index(slot, *i as u64);
         }
     });
 

@@ -472,7 +472,7 @@ mod test {
                     .expect("Leader should exist");
                 let result = db_ledger
                     .data_cf
-                    .get_by_slot_index(&db_ledger.db, slot, entry_height + i)
+                    .get_by_slot_index(slot, entry_height + i)
                     .unwrap();
 
                 assert!(result.is_some());
