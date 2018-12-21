@@ -96,15 +96,15 @@ the EntryTree.
 slot index and blob index for an entry, and the value is the entry data. Note blob indexes are zero-based for each slot (i.e. they're slot-relative).
 
 2. The EntryTree maintains metadata for each slot, containing:
-      a. `slot_index` - The index of this slot
-      b. `num_blocks` - The number of blocks in the slot (used for chaining to a previous slot)
-      c. `consumed` - The highest blob index `n`, such that for all `m < n`, there exists a blob in this slot with blob index equal to `n` (i.e. the highest consecutive blob index).
-      d. `received` - The highest received blob index for the slot
-      e. `next_slots` - A list of future slots this slot could chain to. Used when rebuilding
+      1. `slot_index` - The index of this slot
+      2. `num_blocks` - The number of blocks in the slot (used for chaining to a previous slot)
+      3. `consumed` - The highest blob index `n`, such that for all `m < n`, there exists a blob in this slot with blob index equal to `n` (i.e. the highest consecutive blob index).
+      4. `received` - The highest received blob index for the slot
+      5. `next_slots` - A list of future slots this slot could chain to. Used when rebuilding
       the ledger to find possible fork points.
-      f. `previous_slot` - The previous slot index that this slot chains to, used to identify
+      6. `previous_slot` - The previous slot index that this slot chains to, used to identify
       whether the entries in this slot are of interest to any subscriptions
-      g. `highest_tick` - Tick height of the highest received blob (used to identify when a slot is full)
+      7. `highest_tick` - Tick height of the highest received blob (used to identify when a slot is full)
 
 3. Chaining - When a blob for a new slot `x` arrives, we check the number of blocks (`num_blocks`) for that new slot (this information is encoded in the blob). We then know that this new slot chains to slot `x - num_blocks`.
 
