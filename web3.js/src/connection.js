@@ -130,9 +130,9 @@ const GetTransactionCountRpcResult = jsonRpcResult('number');
 const GetLastId = jsonRpcResult('string');
 
 /**
- * Expected JSON RPC response for the "getFinality" message
+ * Expected JSON RPC response for the "getConfirmationTime" message
  */
-const GetFinalityRpcResult = jsonRpcResult('number');
+const GetConfirmationTimeRpcResult = jsonRpcResult('number');
 
 /**
  * Expected JSON RPC response for the "requestAirdrop" message
@@ -333,11 +333,11 @@ export class Connection {
   }
 
   /**
-   * Return the current network finality time in millliseconds
+   * Return the current cluster confirmation time in millliseconds
    */
-  async getFinality(): Promise<number> {
-    const unsafeRes = await this._rpcRequest('getFinality', []);
-    const res = GetFinalityRpcResult(unsafeRes);
+  async getConfirmationTime(): Promise<number> {
+    const unsafeRes = await this._rpcRequest('getConfirmationTime', []);
+    const res = GetConfirmationTimeRpcResult(unsafeRes);
     if (res.error) {
       throw new Error(res.error.message);
     }
