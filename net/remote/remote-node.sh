@@ -144,13 +144,16 @@ local|tar)
     maybeNoLeaderRotation="--no-leader-rotation"
   fi
 
-
-  case $nodeType in
-  bootstrap-leader)
-    if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-fullnode-cuda ]]; then
+  if [[ -x ~/.cargo/bin/solana-fullnode-cuda ]]; then
+    nvidia-smi
+    if [[ -e /dev/nvidia0 ]]; then
       echo Selecting solana-fullnode-cuda
       export SOLANA_CUDA=1
     fi
+  fi
+
+  case $nodeType in
+  bootstrap-leader)
     if [[ $skipSetup != true ]]; then
       ./multinode-demo/setup.sh -t bootstrap-leader $setupArgs
     fi
@@ -160,11 +163,6 @@ local|tar)
     ;;
   fullnode)
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
-
-    if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-fullnode-cuda ]]; then
-      echo Selecting solana-fullnode-cuda
-      export SOLANA_CUDA=1
-    fi
 
     if [[ $skipSetup != true ]]; then
       ./multinode-demo/setup.sh -t fullnode $setupArgs
