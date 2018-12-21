@@ -135,8 +135,8 @@ build_rpc_trait! {
         #[rpc(meta, name = "getBalance")]
         fn get_balance(&self, Self::Metadata, String) -> Result<u64>;
 
-        #[rpc(meta, name = "getConfirmation")]
-        fn get_confirmation(&self, Self::Metadata) -> Result<usize>;
+        #[rpc(meta, name = "getConfirmationTime")]
+        fn get_confirmation_time(&self, Self::Metadata) -> Result<usize>;
 
         #[rpc(meta, name = "getLastId")]
         fn get_last_id(&self, Self::Metadata) -> Result<String>;
@@ -184,9 +184,9 @@ impl RpcSol for RpcSolImpl {
         let pubkey = verify_pubkey(id)?;
         meta.request_processor.get_balance(pubkey)
     }
-    fn get_confirmation(&self, meta: Self::Metadata) -> Result<usize> {
-        info!("get_confirmation rpc request received");
-        meta.request_processor.get_confirmation()
+    fn get_confirmation_time(&self, meta: Self::Metadata) -> Result<usize> {
+        info!("get_confirmation_time rpc request received");
+        meta.request_processor.get_confirmation_time()
     }
     fn get_last_id(&self, meta: Self::Metadata) -> Result<String> {
         info!("get_last_id rpc request received");
@@ -329,8 +329,8 @@ impl JsonRpcRequestProcessor {
         let val = self.bank.get_balance(&pubkey);
         Ok(val)
     }
-    fn get_confirmation(&self) -> Result<usize> {
-        Ok(self.bank.confirmation())
+    fn get_confirmation_time(&self) -> Result<usize> {
+        Ok(self.bank.confirmation_time())
     }
     fn get_last_id(&self) -> Result<String> {
         let id = self.bank.last_id();
@@ -616,7 +616,7 @@ mod tests {
         let bob_pubkey = Keypair::new().pubkey();
         let (io, meta, _last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
 
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmation"}}"#);
+        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmationTime"}}"#);
         let res = io.handle_request_sync(&req, meta);
         let expected = format!(r#"{{"jsonrpc":"2.0","result":18446744073709551615,"id":1}}"#);
         let expected: Response =
