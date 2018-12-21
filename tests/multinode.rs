@@ -714,7 +714,7 @@ fn test_multi_node_dynamic_network() {
     let mut validators: Vec<_> = t2.into_iter().map(|t| t.join().unwrap()).collect();
 
     let mut client = mk_client(&leader_data);
-    let mut last_confirmation = client.get_confirmation();
+    let mut last_confirmation = client.get_confirmation_time();
     info!("Last confirmation {}", last_confirmation);
     let start = Instant::now();
     let mut consecutive_success = 0;
@@ -738,17 +738,17 @@ fn test_multi_node_dynamic_network() {
         assert!(e.is_ok(), "err: {:?}", e);
 
         let now = Instant::now();
-        let mut confirmation = client.get_confirmation();
+        let mut confirmation = client.get_confirmation_time();
 
         // Need this to make sure the confirmation is updated
         // (i.e. the node is not returning stale value)
         while last_confirmation == confirmation {
-            confirmation = client.get_confirmation();
+            confirmation = client.get_confirmation_time();
         }
 
         while duration_as_ms(&now.elapsed()) < confirmation as u64 {
             sleep(Duration::from_millis(100));
-            confirmation = client.get_confirmation()
+            confirmation = client.get_confirmation_time()
         }
 
         last_confirmation = confirmation;
