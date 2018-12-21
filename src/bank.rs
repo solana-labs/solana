@@ -898,11 +898,11 @@ impl Bank {
         self.accounts.hash_internal_state()
     }
 
-    pub fn confirmation(&self) -> usize {
+    pub fn confirmation_time(&self) -> usize {
         self.confirmation_time.load(Ordering::Relaxed)
     }
 
-    pub fn set_confirmation(&self, confirmation: usize) {
+    pub fn set_confirmation_time(&self, confirmation: usize) {
         self.confirmation_time
             .store(confirmation, Ordering::Relaxed);
     }
@@ -1432,11 +1432,11 @@ mod tests {
         assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
     }
     #[test]
-    fn test_confirmation() {
+    fn test_confirmation_time() {
         let def_bank = Bank::default();
-        assert_eq!(def_bank.confirmation(), std::usize::MAX);
-        def_bank.set_confirmation(90);
-        assert_eq!(def_bank.confirmation(), 90);
+        assert_eq!(def_bank.confirmation_time(), std::usize::MAX);
+        def_bank.set_confirmation_time(90);
+        assert_eq!(def_bank.confirmation_time(), 90);
     }
     #[test]
     fn test_interleaving_locks() {
