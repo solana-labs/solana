@@ -123,13 +123,13 @@ test('get last Id', async () => {
   expect(lastId.length).toBeGreaterThanOrEqual(43);
 });
 
-test('get finality', async () => {
+test('get confirmation time', async () => {
   const connection = new Connection(url);
 
   mockRpc.push([
     url,
     {
-      method: 'getFinality',
+      method: 'getConfirmationTime',
       params: [],
     },
     {
@@ -138,7 +138,7 @@ test('get finality', async () => {
     },
   ]);
 
-  const finality = await connection.getFinality();
+  const finality = await connection.getConfirmationTime();
   expect(finality).toBeGreaterThanOrEqual(0);
 });
 
