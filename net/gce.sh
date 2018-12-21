@@ -430,6 +430,10 @@ $(
     network-config.sh \
     remove-docker-interface.sh \
 
+    if "$enableGpu"; then
+      cat enable-nvidia-persistence-mode.sh
+    fi
+
 )
 
 cat > /etc/motd <<EOM
