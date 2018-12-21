@@ -26,7 +26,6 @@ endif
 ifdef LLVM_DIR
 CC := $(LLVM_DIR)/bin/clang
 CXX := $(LLVM_DIR)/bin/clang++
-LLC := $(LLVM_DIR)/bin/llc
 LLD := $(LLVM_DIR)/bin/ld.lld
 OBJ_DUMP := $(LLVM_DIR)/bin/llvm-objdump
 endif
@@ -49,25 +48,17 @@ CXX_FLAGS := \
 
 BPF_C_FLAGS := \
   $(C_FLAGS) \
-  -S \
-  -emit-llvm \
   -target bpf \
   -fPIC \
 
 BPF_CXX_FLAGS := \
   $(CXX_FLAGS) \
-  -S \
-  -emit-llvm \
   -target bpf \
   -fPIC \
   -fomit-frame-pointer \
   -fno-exceptions \
   -fno-asynchronous-unwind-tables \
   -fno-unwind-tables \
-
-BPF_LLC_FLAGS := \
-  -march=bpf \
-  -filetype=obj \
 
 BPF_LLD_FLAGS := \
   -z notext \
@@ -158,21 +149,16 @@ help:
 $(INSTALL_SH):
 	$(INSTALL_SH)
 
-.PRECIOUS: $(OUT_DIR)/%.ll
-$(OUT_DIR)/%.ll: $(SRC_DIR)/%.c $(INSTALL_SH)
+.PRECIOUS: $(OUT_DIR)/%.o
+$(OUT_DIR)/%.o: $(SRC_DIR)/%.c $(INSTALL_SH)
 	@echo "[cc] $@ ($<)"
 	$(_@)mkdir -p $(OUT_DIR)
-	$(_@)$(CC) $(BPF_C_FLAGS) -o $@ -c $< -MD -MF $(@:.ll=.d)
+	$(_@)$(CC) $(BPF_C_FLAGS) -o $@ -c $< -MD -MF $(@:.o=.d)
 
-$(OUT_DIR)/%.ll: $(SRC_DIR)/%.cc $(INSTALL_SH)
+$(OUT_DIR)/%.o: $(SRC_DIR)/%.cc $(INSTALL_SH)
 	@echo "[cxx] $@ ($<)"
 	$(_@)mkdir -p $(OUT_DIR)
-	$(_@)$(CXX) $(BPF_CXX_FLAGS) -o $@ -c $< -MD -MF $(@:.ll=.d)
-
-.PRECIOUS: $(OUT_DIR)/%.o
-$(OUT_DIR)/%.o: $(OUT_DIR)/%.ll $(INSTALL_SH)
-	@echo "[llc] $@ ($<)"
-	$(_@)$(LLC) $(BPF_LLC_FLAGS) -o $@ $<
+	$(_@)$(CXX) $(BPF_CXX_FLAGS) -o $@ -c $< -MD -MF $(@:.o=.d)
 
 .PRECIOUS: $(OUT_DIR)/%.so
 $(OUT_DIR)/%.so: $(OUT_DIR)/%.o $(INSTALL_SH)
