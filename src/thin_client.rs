@@ -187,20 +187,20 @@ impl ThinClient {
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "AccountNotFound"))
     }
 
-    /// Request the confirmation from the leader node
-    pub fn get_confirmation(&mut self) -> usize {
-        trace!("get_confirmation");
+    /// Request the confirmation time from the leader node
+    pub fn get_confirmation_time(&mut self) -> usize {
+        trace!("get_confirmation_time");
         let mut done = false;
         while !done {
-            debug!("get_confirmation send_to {}", &self.rpc_addr);
-            let resp = RpcRequest::GetConfirmation.make_rpc_request(&self.rpc_client, 1, None);
+            debug!("get_confirmation_time send_to {}", &self.rpc_addr);
+            let resp = RpcRequest::GetConfirmationTime.make_rpc_request(&self.rpc_client, 1, None);
 
             if let Ok(value) = resp {
                 done = true;
                 let confirmation = value.as_u64().unwrap() as usize;
                 self.confirmation = Some(confirmation);
             } else {
-                debug!("thin_client get_confirmation error: {:?}", resp);
+                debug!("thin_client get_confirmation_time error: {:?}", resp);
             }
         }
         self.confirmation.expect("some confirmation")
@@ -477,7 +477,7 @@ mod tests {
         let mut client = ThinClient::new(leader_data.rpc, leader_data.tpu, transactions_socket);
         let transaction_count = client.transaction_count();
         assert_eq!(transaction_count, 0);
-        let confirmation = client.get_confirmation();
+        let confirmation = client.get_confirmation_time();
         assert_eq!(confirmation, 18446744073709551615);
         let last_id = client.get_last_id();
         let signature = client
