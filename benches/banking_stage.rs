@@ -5,7 +5,7 @@ extern crate test;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana::bank::Bank;
-use solana::banking_stage::{BankingStage, NUM_THREADS};
+use solana::banking_stage::BankingStage;
 use solana::entry::Entry;
 use solana::mint::Mint;
 use solana::packet::to_packets_chunked;
@@ -41,7 +41,8 @@ fn check_txs(receiver: &Receiver<Vec<Entry>>, ref_tx_count: usize) {
 
 #[bench]
 fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
-    let txes = 1000 * NUM_THREADS;
+    let num_threads = BankingStage::num_threads() as usize;
+    let txes = 1000 * num_threads;
     let mint_total = 1_000_000_000_000;
     let mint = Mint::new(mint_total);
 
@@ -119,7 +120,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         if bank.count_valid_ids(&[mint.last_id()]).len() == 0 {
             bank.register_tick(&mint.last_id());
         }
-        for v in verified.chunks(verified.len() / NUM_THREADS) {
+        for v in verified.chunks(verified.len() / num_threads) {
             verified_sender.send(v.to_vec()).unwrap();
         }
         check_txs(&signal_receiver, txes);
@@ -130,7 +131,8 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 #[bench]
 fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     let progs = 4;
-    let txes = 1000 * NUM_THREADS;
+    let num_threads = BankingStage::num_threads() as usize;
+    let txes = 1000 * num_threads;
     let mint_total = 1_000_000_000_000;
     let mint = Mint::new(mint_total);
 
@@ -223,7 +225,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         if bank.count_valid_ids(&[mint.last_id()]).len() == 0 {
             bank.register_tick(&mint.last_id());
         }
-        for v in verified.chunks(verified.len() / NUM_THREADS) {
+        for v in verified.chunks(verified.len() / num_threads) {
             verified_sender.send(v.to_vec()).unwrap();
         }
         check_txs(&signal_receiver, txes);
