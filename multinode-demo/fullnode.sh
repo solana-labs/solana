@@ -192,11 +192,9 @@ $solana_wallet --keypair "$fullnode_id_path" address
 # - one token to keep the node identity public key valid.
 retries=5
 while true; do
-  $solana_wallet \
-    --keypair "$fullnode_id_path" \
-    --network "$leader_address" \
-    airdrop 3 \
-  && break
+  if $solana_wallet --keypair "$fullnode_id_path" --network "$leader_address" airdrop 3; then
+    break
+  fi
 
   # TODO: Consider moving this retry logic into `solana-wallet airdrop` itself,
   #       currently it does not retry on "Connection refused" errors.
