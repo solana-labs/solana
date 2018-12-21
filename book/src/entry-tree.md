@@ -11,7 +11,7 @@ The basic responsibilities of the window and the ledger in a Solana fullnode
 are:
 
  1. Window: serve as a temporary, RAM-backed store of blobs of the PoH chain
-    for re-ordering and assembly into contiguous blocks to be sent to the bank
+    for reordering and assembly into contiguous blocks to be sent to the bank
     for verification.
  2. Window: serve as a RAM-backed repair facility for other validator nodes,
     which may query the network for as-yet unreceived blobs.
@@ -96,15 +96,15 @@ the EntryTree.
 slot index and blob index for an entry, and the value is the entry data. Note blob indexes are zero-based for each slot (i.e. they're slot-relative).
 
 2. The EntryTree maintains metadata for each slot, containing:
-      1. `slot_index` - The index of this slot
-      2. `num_blocks` - The number of blocks in the slot (used for chaining to a previous slot)
-      3. `consumed` - The highest blob index `n`, such that for all `m < n`, there exists a blob in this slot with blob index equal to `n` (i.e. the highest consecutive blob index).
-      4. `received` - The highest received blob index for the slot
-      5. `next_slots` - A list of future slots this slot could chain to. Used when rebuilding
+      * `slot_index` - The index of this slot
+      * `num_blocks` - The number of blocks in the slot (used for chaining to a previous slot)
+      * `consumed` - The highest blob index `n`, such that for all `m < n`, there exists a blob in this slot with blob index equal to `n` (i.e. the highest consecutive blob index).
+      * `received` - The highest received blob index for the slot
+      * `next_slots` - A list of future slots this slot could chain to. Used when rebuilding
       the ledger to find possible fork points.
-      6. `previous_slot` - The previous slot index that this slot chains to, used to identify
+      * `previous_slot` - The previous slot index that this slot chains to, used to identify
       whether the entries in this slot are of interest to any subscriptions
-      7. `highest_tick` - Tick height of the highest received blob (used to identify when a slot is full)
+      * `highest_tick` - Tick height of the highest received blob (used to identify when a slot is full)
 
 3. Chaining - When a blob for a new slot `x` arrives, we check the number of blocks (`num_blocks`) for that new slot (this information is encoded in the blob). We then know that this new slot chains to slot `x - num_blocks`.
 
@@ -119,25 +119,25 @@ The EntryTree offers a subscription based API that ReplayStage uses to ask for e
 
    where `slot(e)` is the slot that contains `e`.
 
-   As new entries are receieved and added to the EntryTree, they will also be continually sent to the ReplayStage as long as they satisfy the above condition. This means that for every newly received entry `e`, if 'e.blob_index' causes `slot(e)` to increment `slot(e).consumed` (i.e. a new consecutive chain of entries is formed due to inserting `e` and plugging the hole in the slot at `e.blob_index`), then the EntryTree will iterate over all slots in the `subscriptions` set and check if `slot(e)` chains to any of those slots. If so,it will send the next consecutive chain of entries to the ReplayStage.
+   As new entries are receieved and added to the EntryTree, they will also be continually sent to the replay stage as long as they satisfy the above condition. This means that for every newly received entry `e`, if `e.blob_index` causes `slot(e)` to increment `slot(e).consumed` (i.e. a new consecutive chain of entries is formed due to inserting `e` and plugging the hole in the slot at `e.blob_index`), then the EntryTree will iterate over all slots in the `subscriptions` set and check if `slot(e)` chains to any of those slots. If so, it will send the next consecutive chain of entries to the replay stage.
 
    2. `fn unsubscribe(slot_index: u64) -> ()`: Unsubscribe from a slot.
 
-Note: Cumulatively, this means that the ReplayStage will now have to know when a slot is finished, and subscribe to the next slot it's interested in to get the next set of entries. Previously, the burden of chaining slots fell on the EntryTree.
+Note: Cumulatively, this means that the replay stage will now have to know when a slot is finished, and subscribe to the next slot it's interested in to get the next set of entries. Previously, the burden of chaining slots fell on the EntryTree.
 
 ### Interfacing with Bank
 
 The bank exposes to replay stage:
 
- 1. prev_id: which PoH chain it's working on as indicated by the id of the last
+ 1. `prev_id`: which PoH chain it's working on as indicated by the id of the last
     entry it processed
- 2. tick_height: the ticks in the PoH chain currently being verified by this
+ 2. `tick_height`: the ticks in the PoH chain currently being verified by this
     bank
- 3. votes: a stack of records that contain
+ 3. `votes`: a stack of records that contain:
 
-    1. prev_ids: what anything after this vote must chain to in PoH
-    2. tick height: the tick_height at which this vote was cast
-    3. lockout period: how long a chain must be observed to be in the ledger to
+    1. `prev_ids`: what anything after this vote must chain to in PoH
+    2. `tick_height`: the tick height at which this vote was cast
+    3. `lockout period`: how long a chain must be observed to be in the ledger to
        be able to be chained below this vote
 
 Replay stage uses EntryTree APIs to find the longest chain of entries it can
