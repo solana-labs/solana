@@ -25,6 +25,7 @@ launchTestnet() {
   echo --- setup "$nodeCount" node test
   net/gce.sh create \
     -b \
+    -d pd-ssd \
     -n "$nodeCount" -c "$CLIENT_COUNT" \
     -G "$LEADER_CPU_MACHINE_TYPE" \
     -p "$TESTNET_TAG" -z "$TESTNET_ZONE"
