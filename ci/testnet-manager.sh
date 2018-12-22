@@ -114,68 +114,56 @@ sanity() {
   echo "--- sanity $TESTNET"
   case $TESTNET in
   testnet-edge)
-    # shellcheck disable=2030
-    # shellcheck disable=2031
     (
-      set -ex
-      export NO_LEDGER_VERIFY=1
-      export NO_VALIDATOR_SANITY=1
-      ci/testnet-sanity.sh edge-testnet-solana-com ec2 us-west-1a
+      set -x
+      NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-sanity.sh edge-testnet-solana-com ec2 us-west-1a
     )
     ;;
   testnet-edge-perf)
-    # shellcheck disable=2030
-    # shellcheck disable=2031
     (
-      set -ex
-      export REJECT_EXTRA_NODES=1
-      export NO_LEDGER_VERIFY=1
-      export NO_VALIDATOR_SANITY=1
-      ci/testnet-sanity.sh edge-perf-testnet-solana-com ec2 us-west-2b
+      set -x
+      REJECT_EXTRA_NODES=1 \
+      NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-sanity.sh edge-perf-testnet-solana-com ec2 us-west-2b
     )
     ;;
   testnet-beta)
-    # shellcheck disable=2030
-    # shellcheck disable=2031
     (
-      set -ex
-      export NO_LEDGER_VERIFY=1
-      export NO_VALIDATOR_SANITY=1
-      ci/testnet-sanity.sh beta-testnet-solana-com ec2 us-west-1a
+      set -x
+      NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-sanity.sh beta-testnet-solana-com ec2 us-west-1a
     )
     ;;
   testnet-beta-perf)
-    # shellcheck disable=2030
-    # shellcheck disable=2031
     (
-      set -ex
-      export REJECT_EXTRA_NODES=1
-      export NO_LEDGER_VERIFY=1
-      export NO_VALIDATOR_SANITY=1
-      ci/testnet-sanity.sh beta-perf-testnet-solana-com ec2 us-west-2b
+      set -x
+      REJECT_EXTRA_NODES=1 \
+      NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-sanity.sh beta-perf-testnet-solana-com ec2 us-west-2b
     )
     ;;
   testnet)
-    # shellcheck disable=2030
-    # shellcheck disable=2031
     (
-      set -ex
-      export NO_LEDGER_VERIFY=1
-      export NO_VALIDATOR_SANITY=1
+      set -x
+      NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-sanity.sh testnet-solana-com ec2 us-west-1a
       #ci/testnet-sanity.sh testnet-solana-com gce us-east1-c
-      ci/testnet-sanity.sh testnet-solana-com ec2 us-west-1a
     )
     ;;
   testnet-perf)
-    # shellcheck disable=2030
-    # shellcheck disable=2031
     (
-      set -ex
-      export REJECT_EXTRA_NODES=1
-      export NO_LEDGER_VERIFY=1
-      export NO_VALIDATOR_SANITY=1
+      set -x
+      REJECT_EXTRA_NODES=1 \
+      NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-sanity.sh perf-testnet-solana-com gce us-west1-b
       #ci/testnet-sanity.sh perf-testnet-solana-com ec2 us-east-1a
-      ci/testnet-sanity.sh perf-testnet-solana-com gce us-west1-b
     )
     ;;
   *)
@@ -196,89 +184,77 @@ start() {
 
   case $TESTNET in
   testnet-edge)
-    # shellcheck disable=2030
-    # shellcheck disable=2031
     (
-      set -ex
-      export NO_LEDGER_VERIFY=1
-      export NO_VALIDATOR_SANITY=1
-      ci/testnet-deploy.sh edge-testnet-solana-com ec2 us-west-1a \
-        -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a eipalloc-0ccd4f2239886fa94 \
-        ${maybeDelete:+-d}
+      set -x
+      NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-deploy.sh edge-testnet-solana-com ec2 us-west-1a \
+          -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a eipalloc-0ccd4f2239886fa94 \
+          ${maybeDelete:+-d}
     )
     ;;
   testnet-edge-perf)
-    # shellcheck disable=2030
-    # shellcheck disable=2031
     (
-      set -ex
-      export NO_LEDGER_VERIFY=1
-      export NO_VALIDATOR_SANITY=1
-      ci/testnet-deploy.sh edge-perf-testnet-solana-com ec2 us-west-2b \
-        -g -t "$CHANNEL_OR_TAG" -c 2 \
-        -b \
-        ${maybeDelete:+-d}
+      set -x
+      NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-deploy.sh edge-perf-testnet-solana-com ec2 us-west-2b \
+          -g -t "$CHANNEL_OR_TAG" -c 2 \
+          -b \
+          ${maybeDelete:+-d}
     )
     ;;
   testnet-beta)
-    # shellcheck disable=2030
-    # shellcheck disable=2031
     (
-      set -ex
-      export NO_LEDGER_VERIFY=1
-      export NO_VALIDATOR_SANITY=1
-      ci/testnet-deploy.sh beta-testnet-solana-com ec2 us-west-1a \
-        -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a eipalloc-0f286cf8a0771ce35 \
-        -b \
-        ${maybeDelete:+-d}
+      set -x
+      NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-deploy.sh beta-testnet-solana-com ec2 us-west-1a \
+          -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a eipalloc-0f286cf8a0771ce35 \
+          -b \
+          ${maybeDelete:+-d}
     )
     ;;
   testnet-beta-perf)
-    # shellcheck disable=2030
-    # shellcheck disable=2031
     (
-      set -ex
-      export NO_LEDGER_VERIFY=1
-      export NO_VALIDATOR_SANITY=1
-      ci/testnet-deploy.sh beta-perf-testnet-solana-com ec2 us-west-2b \
-        -g -t "$CHANNEL_OR_TAG" -c 2 \
-        -b \
-        ${maybeDelete:+-d}
+      set -x
+      NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-deploy.sh beta-perf-testnet-solana-com ec2 us-west-2b \
+          -g -t "$CHANNEL_OR_TAG" -c 2 \
+          -b \
+          ${maybeDelete:+-d}
     )
     ;;
   testnet)
-    # shellcheck disable=2030
-    # shellcheck disable=2031
     (
-      set -ex
-      export NO_LEDGER_VERIFY=1
-      export NO_VALIDATOR_SANITY=1
-      #ci/testnet-deploy.sh testnet-solana-com gce us-east1-c \
-      #  -s "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a testnet-solana-com  \
-      #  ${maybeDelete:+-d}
-      ci/testnet-deploy.sh testnet-solana-com ec2 us-west-1a \
-        -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a eipalloc-0fa502bf95f6f18b2 \
-        -b \
-        ${maybeDelete:+-d}
+      set -x
+      NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-deploy.sh testnet-solana-com ec2 us-west-1a \
+          -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a eipalloc-0fa502bf95f6f18b2 \
+          -b \
+          ${maybeDelete:+-d}
+        #ci/testnet-deploy.sh testnet-solana-com gce us-east1-c \
+        #  -s "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a testnet-solana-com  \
+        #  ${maybeDelete:+-d}
     )
     ;;
   testnet-perf)
-    # shellcheck disable=2030
-    # shellcheck disable=2031
     (
-      set -ex
-      export NO_LEDGER_VERIFY=1
-      export NO_VALIDATOR_SANITY=1
-      ci/testnet-deploy.sh perf-testnet-solana-com gce us-west1-b \
-        -G "n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" \
-        -t "$CHANNEL_OR_TAG" -c 2 \
-        -b \
-        -d pd-ssd \
-        ${maybeDelete:+-d}
-      #ci/testnet-deploy.sh perf-testnet-solana-com ec2 us-east-1a \
-      #  -g \
-      #  -t "$CHANNEL_OR_TAG" -c 2 \
-      #  ${maybeDelete:+-d}
+      set -x
+      NO_LEDGER_VERIFY=1 \
+      NO_VALIDATOR_SANITY=1 \
+        ci/testnet-deploy.sh perf-testnet-solana-com gce us-west1-b \
+          -G "n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" \
+          -t "$CHANNEL_OR_TAG" -c 2 \
+          -b \
+          -d pd-ssd \
+          ${maybeDelete:+-d}
+        #ci/testnet-deploy.sh perf-testnet-solana-com ec2 us-east-1a \
+        #  -g \
+        #  -t "$CHANNEL_OR_TAG" -c 2 \
+        #  ${maybeDelete:+-d}
     )
     ;;
   *)
