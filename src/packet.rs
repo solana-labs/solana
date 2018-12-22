@@ -232,24 +232,34 @@ pub fn to_packets<T: Serialize>(xs: &[T]) -> Vec<SharedPackets> {
     to_packets_chunked(xs, NUM_PACKETS)
 }
 
-pub fn to_blob<T: Serialize>(resp: T, rsp_addr: SocketAddr) -> Result<SharedBlob> {
-    let blob = SharedBlob::default();
-    {
-        let mut b = blob.write().unwrap();
-        let v = serialize(&resp)?;
-        let len = v.len();
-        assert!(len <= BLOB_SIZE);
-        b.data[..len].copy_from_slice(&v);
-        b.meta.size = len;
-        b.meta.set_addr(&rsp_addr);
-    }
-    Ok(blob)
+pub fn to_blob<T: Serialize>(resp: T, rsp_addr: SocketAddr) -> Result<Blob> {
+    let mut b = Blob::default();
+    let v = serialize(&resp)?;
+    let len = v.len();
+    assert!(len <= BLOB_SIZE);
+    b.data[..len].copy_from_slice(&v);
+    b.meta.size = len;
+    b.meta.set_addr(&rsp_addr);
+    Ok(b)
 }
 
-pub fn to_blobs<T: Serialize>(rsps: Vec<(T, SocketAddr)>) -> Result<SharedBlobs> {
+pub fn to_blobs<T: Serialize>(rsps: Vec<(T, SocketAddr)>) -> Result<Vec<Blob>> {
     let mut blobs = Vec::new();
     for (resp, rsp_addr) in rsps {
         blobs.push(to_blob(resp, rsp_addr)?);
+    }
+    Ok(blobs)
+}
+
+pub fn to_shared_blob<T: Serialize>(resp: T, rsp_addr: SocketAddr) -> Result<SharedBlob> {
+    let blob = Arc::new(RwLock::new(to_blob(resp, rsp_addr)?));
+    Ok(blob)
+}
+
+pub fn to_shared_blobs<T: Serialize>(rsps: Vec<(T, SocketAddr)>) -> Result<SharedBlobs> {
+    let mut blobs = Vec::new();
+    for (resp, rsp_addr) in rsps {
+        blobs.push(to_shared_blob(resp, rsp_addr)?);
     }
     Ok(blobs)
 }
@@ -302,7 +312,7 @@ impl Blob {
         Ok(())
     }
     /// sender id, we use this for identifying if its a blob from the leader that we should
-    /// retransmit.  eventually blobs should have a signature that we can use ffor spam filtering
+    /// retransmit.  eventually blobs should have a signature that we can use for spam filtering
     pub fn id(&self) -> Result<Pubkey> {
         let e = deserialize(&self.data[BLOB_INDEX_END..BLOB_ID_END])?;
         Ok(e)

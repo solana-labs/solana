@@ -2,15 +2,17 @@
 //! unique ID that is the hash of the Entry before it, plus the hash of the
 //! transactions within it. Entries cannot be reordered, and its field `num_hashes`
 //! represents an approximate amount of time since the last Entry was created.
-use crate::packet::{SharedBlob, BLOB_DATA_SIZE};
+use crate::packet::{Blob, SharedBlob, BLOB_DATA_SIZE};
 use crate::poh::Poh;
 use crate::result::Result;
 use bincode::{deserialize, serialize_into, serialized_size};
 use solana_sdk::hash::Hash;
 use solana_sdk::transaction::Transaction;
+use std::borrow::Borrow;
 use std::io::Cursor;
 use std::mem::size_of;
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::{Arc, RwLock};
 
 pub type EntrySender = Sender<Vec<Entry>>;
 pub type EntryReceiver = Receiver<Vec<Entry>>;
@@ -98,17 +100,19 @@ impl Entry {
         entry
     }
 
-    pub fn to_blob(&self) -> SharedBlob {
-        let blob = SharedBlob::default();
-        {
-            let mut blob_w = blob.write().unwrap();
-            let pos = {
-                let mut out = Cursor::new(blob_w.data_mut());
-                serialize_into(&mut out, &self).expect("failed to serialize output");
-                out.position() as usize
-            };
-            blob_w.set_size(pos);
-        }
+    pub fn to_shared_blob(&self) -> SharedBlob {
+        let blob = self.to_blob();
+        Arc::new(RwLock::new(blob))
+    }
+
+    pub fn to_blob(&self) -> Blob {
+        let mut blob = Blob::default();
+        let pos = {
+            let mut out = Cursor::new(blob.data_mut());
+            serialize_into(&mut out, &self).expect("failed to serialize output");
+            out.position() as usize
+        };
+        blob.set_size(pos);
         blob
     }
 
@@ -224,15 +228,18 @@ fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction]) -
     }
 }
 
-pub fn reconstruct_entries_from_blobs(blobs: Vec<SharedBlob>) -> Result<(Vec<Entry>, u64)> {
-    let mut entries: Vec<Entry> = Vec::with_capacity(blobs.len());
+pub fn reconstruct_entries_from_blobs<I>(blobs: I) -> Result<(Vec<Entry>, u64)>
+where
+    I: IntoIterator,
+    I::Item: Borrow<Blob>,
+{
+    let mut entries: Vec<Entry> = vec![];
     let mut num_ticks = 0;
 
-    for blob in blobs {
+    for blob in blobs.into_iter() {
         let entry: Entry = {
-            let msg = blob.read().unwrap();
-            let msg_size = msg.size()?;
-            deserialize(&msg.data()[..msg_size]).expect("Error reconstructing entry")
+            let msg_size = blob.borrow().size()?;
+            deserialize(&blob.borrow().data()[..msg_size])?
         };
 
         if entry.is_tick() {

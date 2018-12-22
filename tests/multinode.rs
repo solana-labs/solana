@@ -1609,9 +1609,10 @@ fn test_broadcast_last_tick() {
                 break;
             }
         }
-        let actual_last_tick = &reconstruct_entries_from_blobs(vec![last_tick_blob])
-            .expect("Expected to be able to reconstruct entries from blob")
-            .0[0];
+        let actual_last_tick =
+            &reconstruct_entries_from_blobs(vec![&*last_tick_blob.read().unwrap()])
+                .expect("Expected to be able to reconstruct entries from blob")
+                .0[0];
         assert_eq!(actual_last_tick, &expected_last_tick);
     }
 

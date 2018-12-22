@@ -354,9 +354,10 @@ impl DbLedger {
 
     pub fn write_blobs<'a, I>(&self, blobs: I) -> Result<Vec<Entry>>
     where
-        I: IntoIterator<Item = &'a &'a Blob>,
+        I: IntoIterator,
+        I::Item: Borrow<&'a Blob>,
     {
-        let blobs = blobs.into_iter().cloned();
+        let blobs = blobs.into_iter().map(|b| *b.borrow());
         let new_entries = self.insert_data_blobs(blobs)?;
         Ok(new_entries)
     }
@@ -366,17 +367,18 @@ impl DbLedger {
         I: IntoIterator,
         I::Item: Borrow<Entry>,
     {
-        let shared_blobs = entries.into_iter().enumerate().map(|(idx, entry)| {
-            let b = entry.borrow().to_blob();
-            {
-                let mut w_b = b.write().unwrap();
-                w_b.set_index(idx as u64).unwrap();
-                w_b.set_slot(slot).unwrap();
-            }
-            b
-        });
+        let blobs: Vec<_> = entries
+            .into_iter()
+            .enumerate()
+            .map(|(idx, entry)| {
+                let mut b = entry.borrow().to_blob();
+                b.set_index(idx as u64).unwrap();
+                b.set_slot(slot).unwrap();
+                b
+            })
+            .collect();
 
-        self.write_shared_blobs(shared_blobs)
+        self.write_blobs(&blobs)
     }
 
     pub fn insert_data_blobs<I>(&self, new_blobs: I) -> Result<Vec<Entry>>
@@ -700,15 +702,19 @@ where
     let db_ledger = DbLedger::open(ledger_path)?;
 
     // TODO sign these blobs with keypair
-    let blobs = entries.into_iter().enumerate().map(|(idx, entry)| {
-        let b = entry.borrow().to_blob();
-        b.write().unwrap().set_index(idx as u64).unwrap();
-        b.write().unwrap().set_id(&keypair.pubkey()).unwrap();
-        b.write().unwrap().set_slot(DEFAULT_SLOT_HEIGHT).unwrap();
-        b
-    });
+    let blobs: Vec<_> = entries
+        .into_iter()
+        .enumerate()
+        .map(|(idx, entry)| {
+            let mut b = entry.borrow().to_blob();
+            b.set_index(idx as u64).unwrap();
+            b.set_id(&keypair.pubkey()).unwrap();
+            b.set_slot(DEFAULT_SLOT_HEIGHT).unwrap();
+            b
+        })
+        .collect();
 
-    db_ledger.write_shared_blobs(blobs)?;
+    db_ledger.write_blobs(&blobs[..])?;
     Ok(())
 }
 
@@ -768,7 +774,7 @@ mod tests {
 
     #[test]
     fn test_get_blobs_bytes() {
-        let shared_blobs = make_tiny_test_entries(10).to_blobs();
+        let shared_blobs = make_tiny_test_entries(10).to_shared_blobs();
         let slot = DEFAULT_SLOT_HEIGHT;
         index_blobs(
             shared_blobs.iter().zip(vec![slot; 10].into_iter()),
@@ -838,7 +844,7 @@ mod tests {
     #[test]
     fn test_insert_data_blobs_basic() {
         let entries = make_tiny_test_entries(2);
-        let shared_blobs = entries.to_blobs();
+        let shared_blobs = entries.to_shared_blobs();
 
         for (i, b) in shared_blobs.iter().enumerate() {
             b.write().unwrap().set_index(i as u64).unwrap();
@@ -882,7 +888,7 @@ mod tests {
     fn test_insert_data_blobs_multiple() {
         let num_blobs = 10;
         let entries = make_tiny_test_entries(num_blobs);
-        let shared_blobs = entries.to_blobs();
+        let shared_blobs = entries.to_shared_blobs();
         for (i, b) in shared_blobs.iter().enumerate() {
             b.write().unwrap().set_index(i as u64).unwrap();
         }
@@ -919,7 +925,7 @@ mod tests {
     fn test_insert_data_blobs_slots() {
         let num_blobs = 10;
         let entries = make_tiny_test_entries(num_blobs);
-        let shared_blobs = entries.to_blobs();
+        let shared_blobs = entries.to_shared_blobs();
         for (i, b) in shared_blobs.iter().enumerate() {
             b.write().unwrap().set_index(i as u64).unwrap();
         }
@@ -966,7 +972,7 @@ mod tests {
 
             // Write entries
             let num_entries = 8;
-            let shared_blobs = make_tiny_test_entries(num_entries).to_blobs();
+            let shared_blobs = make_tiny_test_entries(num_entries).to_shared_blobs();
 
             for (i, b) in shared_blobs.iter().enumerate() {
                 let mut w_b = b.write().unwrap();
@@ -1009,7 +1015,7 @@ mod tests {
             // Write entries
             let num_entries = 20 as u64;
             let original_entries = make_tiny_test_entries(num_entries as usize);
-            let shared_blobs = original_entries.clone().to_blobs();
+            let shared_blobs = original_entries.clone().to_shared_blobs();
             for (i, b) in shared_blobs.iter().enumerate() {
                 let mut w_b = b.write().unwrap();
                 w_b.set_index(i as u64).unwrap();
@@ -1055,7 +1061,7 @@ mod tests {
                 .flat_map(|e| vec![e; num_duplicates])
                 .collect();
 
-            let shared_blobs = original_entries.clone().to_blobs();
+            let shared_blobs = original_entries.clone().to_shared_blobs();
             for (i, b) in shared_blobs.iter().enumerate() {
                 let index = (i / 2) as u64;
                 let mut w_b = b.write().unwrap();
@@ -1106,7 +1112,7 @@ mod tests {
             // Write entries
             let num_entries = 20 as u64;
             let original_entries = make_tiny_test_entries(num_entries as usize);
-            let shared_blobs = original_entries.to_blobs();
+            let shared_blobs = original_entries.to_shared_blobs();
             for (i, b) in shared_blobs.iter().enumerate() {
                 let mut w_b = b.write().unwrap();
                 w_b.set_index(i as u64).unwrap();

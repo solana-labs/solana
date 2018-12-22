@@ -12,6 +12,7 @@ use crate::streamer::BlobSender;
 use log::Level;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
+use std::borrow::Borrow;
 use std::cmp;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
@@ -299,7 +300,7 @@ pub fn process_blob(
             .put(&erasure_key, &rblob.data[..BLOB_HEADER_SIZE + size])?;
         vec![]
     } else {
-        db_ledger.insert_data_blobs(vec![&*blob.read().unwrap()])?
+        db_ledger.insert_data_blobs(vec![(*blob.read().unwrap()).borrow()])?
     };
 
     #[cfg(feature = "erasure")]
@@ -402,6 +403,7 @@ mod test {
     use crate::packet::{index_blobs, Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
     use crate::streamer::{receiver, responder, PacketReceiver};
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use std::borrow::Borrow;
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;
@@ -532,7 +534,7 @@ mod test {
         assert_eq!(find_missing_data_indexes(slot, &db_ledger, 4, 3, 1), empty);
         assert_eq!(find_missing_data_indexes(slot, &db_ledger, 1, 2, 0), empty);
 
-        let shared_blob = &make_tiny_test_entries(1).to_blobs()[0];
+        let shared_blob = &make_tiny_test_entries(1).to_shared_blobs()[0];
         let first_index = 10;
         {
             let mut bl = shared_blob.write().unwrap();
@@ -542,7 +544,7 @@ mod test {
 
         // Insert one blob at index = first_index
         db_ledger
-            .write_blobs(&vec![&*shared_blob.read().unwrap()])
+            .write_blobs(&vec![(*shared_blob.read().unwrap()).borrow()])
             .unwrap();
 
         // The first blob has index = first_index. Thus, for i < first_index,
@@ -575,14 +577,11 @@ mod test {
         let gap = 10;
         assert!(gap > 3);
         let num_entries = 10;
-        let shared_blobs = make_tiny_test_entries(num_entries).to_blobs();
-        for (i, b) in shared_blobs.iter().enumerate() {
-            let mut w_b = b.write().unwrap();
-            w_b.set_index(i as u64 * gap).unwrap();
-            w_b.set_slot(slot).unwrap();
+        let mut blobs = make_tiny_test_entries(num_entries).to_blobs();
+        for (i, b) in blobs.iter_mut().enumerate() {
+            b.set_index(i as u64 * gap).unwrap();
+            b.set_slot(slot).unwrap();
         }
-        let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
-        let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
         db_ledger.write_blobs(&blobs).unwrap();
 
         // Index of the first blob is 0
@@ -661,7 +660,7 @@ mod test {
 
         // Write entries
         let num_entries = 10;
-        let shared_blobs = make_tiny_test_entries(num_entries).to_blobs();
+        let shared_blobs = make_tiny_test_entries(num_entries).to_shared_blobs();
 
         index_blobs(
             shared_blobs.iter().zip(vec![slot; num_entries].into_iter()),
@@ -716,12 +715,19 @@ mod test {
         try_erasure(&db_ledger, &mut consume_queue).expect("Expected successful erasure attempt");
         window[erase_offset].data = erased_data;
 
-        let data_blobs: Vec<_> = window[erase_offset..end_index]
-            .iter()
-            .map(|slot| slot.data.clone().unwrap())
-            .collect();
-        let (expected, _) = reconstruct_entries_from_blobs(data_blobs).unwrap();
-        assert_eq!(consume_queue, expected);
+        {
+            let data_blobs: Vec<_> = window[erase_offset..end_index]
+                .iter()
+                .map(|slot| slot.data.clone().unwrap())
+                .collect();
+
+            let locks: Vec<_> = data_blobs.iter().map(|blob| blob.read().unwrap()).collect();
+
+            let locked_data: Vec<&Blob> = locks.iter().map(|lock| &**lock).collect();
+
+            let (expected, _) = reconstruct_entries_from_blobs(locked_data).unwrap();
+            assert_eq!(consume_queue, expected);
+        }
 
         let erased_coding_l = erased_coding.read().unwrap();
         assert_eq!(
@@ -750,7 +756,7 @@ mod test {
         let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
         let num_entries = 10;
         let original_entries = make_tiny_test_entries(num_entries);
-        let shared_blobs = original_entries.clone().to_blobs();
+        let shared_blobs = original_entries.clone().to_shared_blobs();
 
         index_blobs(
             shared_blobs
