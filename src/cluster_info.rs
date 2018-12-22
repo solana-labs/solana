@@ -835,34 +835,38 @@ impl ClusterInfo {
             })
             .unwrap()
     }
+
+    // TODO: To support repairing multiple slots, broadcast needs to reset
+    // blob index for every slot, and window requests should be by slot + index.
+    // Issue: https://github.com/solana-labs/solana/issues/2440
     fn run_window_request(
         from: &NodeInfo,
         from_addr: &SocketAddr,
         db_ledger: Option<&Arc<DbLedger>>,
         me: &NodeInfo,
-        ix: u64,
+        slot_index: u64,
+        blob_index: u64,
     ) -> Vec<SharedBlob> {
         if let Some(db_ledger) = db_ledger {
-            let meta = db_ledger.meta();
+            // Try to find the requested index in one of the slots
+            let blob = db_ledger.get_data_blob(slot_index, blob_index);
 
-            if let Ok(Some(meta)) = meta {
-                let max_slot = meta.received_slot;
-                // Try to find the requested index in one of the slots
-                for i in 0..=max_slot {
-                    let blob = db_ledger.get_data_blob(i, ix);
+            if let Ok(Some(mut blob)) = blob {
+                inc_new_counter_info!("cluster_info-window-request-ledger", 1);
+                blob.meta.set_addr(from_addr);
 
-                    if let Ok(Some(mut blob)) = blob {
-                        inc_new_counter_info!("cluster_info-window-request-ledger", 1);
-                        blob.meta.set_addr(from_addr);
-
-                        return vec![Arc::new(RwLock::new(blob))];
-                    }
-                }
+                return vec![Arc::new(RwLock::new(blob))];
             }
         }
 
         inc_new_counter_info!("cluster_info-window-request-fail", 1);
-        trace!("{}: failed RequestWindowIndex {} {}", me.id, from.id, ix,);
+        trace!(
+            "{}: failed RequestWindowIndex {} {} {}",
+            me.id,
+            from.id,
+            slot_index,
+            blob_index,
+        );
 
         vec![]
     }
@@ -1015,7 +1019,7 @@ impl ClusterInfo {
             from.id,
             ix,
         );
-        let res = Self::run_window_request(&from, &from_addr, db_ledger, &my_info, ix);
+        let res = Self::run_window_request(&from, &from_addr, db_ledger, &my_info, 0, ix);
         report_time_spent(
             "RequestWindowIndex",
             &now.elapsed(),
@@ -1393,8 +1397,14 @@ mod tests {
                 socketaddr!("127.0.0.1:1239"),
                 0,
             );
-            let rv =
-                ClusterInfo::run_window_request(&me, &socketaddr_any!(), Some(&db_ledger), &me, 0);
+            let rv = ClusterInfo::run_window_request(
+                &me,
+                &socketaddr_any!(),
+                Some(&db_ledger),
+                &me,
+                0,
+                0,
+            );
             assert!(rv.is_empty());
             let data_size = 1;
             let blob = SharedBlob::default();
@@ -1410,8 +1420,14 @@ mod tests {
                 .write_shared_blobs(vec![&blob])
                 .expect("Expect successful ledger write");
 
-            let rv =
-                ClusterInfo::run_window_request(&me, &socketaddr_any!(), Some(&db_ledger), &me, 1);
+            let rv = ClusterInfo::run_window_request(
+                &me,
+                &socketaddr_any!(),
+                Some(&db_ledger),
+                &me,
+                2,
+                1,
+            );
             assert!(!rv.is_empty());
             let v = rv[0].clone();
             assert_eq!(v.read().unwrap().index(), 1);
