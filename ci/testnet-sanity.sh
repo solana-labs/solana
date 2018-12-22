@@ -2,6 +2,7 @@
 set -e
 
 cd "$(dirname "$0")/.."
+source ci/upload-ci-artifact.sh
 
 usage() {
   exitcode=0
@@ -35,7 +36,6 @@ shutdown() {
   exitcode=$?
 
   set +e
-  echo "--- Upload artifacts"
   for logfile in net/log/*; do
     if [[ -f $logfile ]]; then
       upload-ci-artifact "$logfile"
