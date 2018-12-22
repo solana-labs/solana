@@ -31,6 +31,23 @@ zone=$3
 [[ -n $cloudProvider ]] || usage "Cloud provider not specified"
 [[ -n $zone ]] || usage "Zone not specified"
 
+shutdown() {
+  exitcode=$?
+
+  set +e
+  echo "--- Upload artifacts"
+  for logfile in net/log/*; do
+    if [[ -f $logfile ]]; then
+      upload-ci-artifact "$logfile"
+      tail "$logfile"
+    fi
+  done
+
+  exit $exitcode
+}
+
+trap shutdown EXIT INT
+
 set -x
 echo "--- $cloudProvider.sh config"
 timeout 5m net/"$cloudProvider".sh config -p "$netName" -z "$zone"

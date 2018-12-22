@@ -143,6 +143,23 @@ if $publicNetwork; then
   create_args+=(-P)
 fi
 
+shutdown() {
+  exitcode=$?
+
+  set +e
+  echo "--- Upload artifacts"
+  for logfile in net/log/*; do
+    if [[ -f $logfile ]]; then
+      upload-ci-artifact "$logfile"
+      tail "$logfile"
+    fi
+  done
+
+  exit $exitcode
+}
+
+trap shutdown EXIT INT
+
 set -x
 
 echo "--- $cloudProvider.sh delete"
