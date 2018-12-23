@@ -23,6 +23,7 @@ Operate a configured testnet
  stop     - Stop the network
  restart  - Shortcut for stop then start
  update   - Live update all network nodes
+ logs     - Fetch remote logs from each network node
 
  start/update-specific options:
    -S [snapFilename]           - Deploy the specified Snap file
@@ -45,6 +46,9 @@ Operate a configured testnet
    -o rejectExtraNodes  - Require the exact number of nodes
 
  stop-specific options:
+   none
+
+ logs-specific options:
    none
 
 EOF
@@ -472,6 +476,26 @@ sanity)
 stop)
   stop
   ;;
+logs)
+  fetchRemoteLog() {
+    declare ipAddress=$1
+    declare log=$2
+    echo "--- fetching $log from $ipAddress"
+    (
+      set -x
+      timeout 30s scp "${sshOptions[@]}" \
+        "$ipAddress":solana/"$log".log log/remote-"$log"-"$ipAddress".log
+    ) || echo "failed to fetch log"
+  }
+  fetchRemoteLog "${fullnodeIpList[0]}" drone
+  for ipAddress in "${fullnodeIpList[@]}"; do
+    fetchRemoteLog "$ipAddress" fullnode
+  done
+  for ipAddress in "${clientIpList[@]}"; do
+    fetchRemoteLog "$ipAddress" client
+  done
+  ;;
+
 *)
   echo "Internal error: Unknown command: $command"
   exit 1
