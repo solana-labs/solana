@@ -127,7 +127,6 @@ impl Tvu {
             keypair,
             exit.clone(),
             entry_height,
-            &cluster_info,
         );
 
         Tvu {
