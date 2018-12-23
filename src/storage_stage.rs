@@ -4,24 +4,21 @@
 
 #[cfg(all(feature = "chacha", feature = "cuda"))]
 use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
-use crate::client::mk_client;
-use crate::cluster_info::ClusterInfo;
 use crate::entry::EntryReceiver;
 use crate::result::{Error, Result};
 use crate::service::Service;
-use crate::thin_client::ThinClient;
 use bincode::deserialize;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::Keypair;
 use solana_sdk::signature::Signature;
-use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::storage_program;
-use solana_sdk::storage_program::{get_segment_from_entry, StorageProgram, StorageTransaction};
-use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::transaction::Transaction;
+use solana_sdk::storage_program::StorageProgram;
+use solana_sdk::vote_program;
 use std::collections::HashSet;
+use std::mem::size_of;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, RwLock};
@@ -37,8 +34,10 @@ type ReplicatorMap = Vec<HashSet<Pubkey>>;
 #[derive(Default)]
 pub struct StorageStateInner {
     storage_results: StorageResults,
-    pub storage_keys: StorageKeys,
+    storage_keys: StorageKeys,
     replicator_map: ReplicatorMap,
+    storage_last_id: Hash,
+    entry_height: u64,
 }
 
 #[derive(Default)]
@@ -56,11 +55,16 @@ macro_rules! cross_boundary {
     };
 }
 
-const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = 32;
+const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = 1024;
 // TODO: some way to dynamically size NUM_IDENTITIES
 const NUM_IDENTITIES: usize = 1024;
-pub const NUM_STORAGE_SAMPLES: usize = 4;
+const NUM_SAMPLES: usize = 4;
+pub const ENTRIES_PER_SEGMENT: u64 = 16;
 const KEY_SIZE: usize = 64;
+
+pub fn get_segment_from_entry(entry_height: u64) -> u64 {
+    entry_height / ENTRIES_PER_SEGMENT
+}
 
 fn get_identity_index_from_signature(key: &Signature) -> usize {
     let rkey = key.as_ref();
@@ -82,6 +86,8 @@ impl StorageState {
             storage_keys,
             storage_results,
             replicator_map,
+            entry_height: 0,
+            storage_last_id: Hash::default(),
         };
 
         StorageState {
@@ -89,17 +95,29 @@ impl StorageState {
         }
     }
 
+    pub fn get_mining_key(&self, key: &Signature) -> Vec<u8> {
+        let idx = get_identity_index_from_signature(key);
+        self.state.read().unwrap().storage_keys[idx..idx + KEY_SIZE].to_vec()
+    }
+
     pub fn get_mining_result(&self, key: &Signature) -> Hash {
         let idx = get_identity_index_from_signature(key);
         self.state.read().unwrap().storage_results[idx]
     }
 
+    pub fn get_last_id(&self) -> Hash {
+        self.state.read().unwrap().storage_last_id
+    }
+
+    pub fn get_entry_height(&self) -> u64 {
+        self.state.read().unwrap().entry_height
+    }
+
     pub fn get_pubkeys_for_entry_height(&self, entry_height: u64) -> Vec<Pubkey> {
         // TODO: keep track of age?
         const MAX_PUBKEYS_TO_RETURN: usize = 5;
-        let index = get_segment_from_entry(entry_height);
+        let index = (entry_height / ENTRIES_PER_SEGMENT) as usize;
         let replicator_map = &self.state.read().unwrap().replicator_map;
-        info!("replicator_map: {:?}", replicator_map);
         if index < replicator_map.len() {
             replicator_map[index]
                 .iter()
@@ -120,17 +138,17 @@ impl StorageStage {
         keypair: Arc<Keypair>,
         exit: Arc<AtomicBool>,
         entry_height: u64,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) -> Self {
         debug!("storage_stage::new: entry_height: {}", entry_height);
+        storage_state.state.write().unwrap().entry_height = entry_height;
         let storage_state_inner = storage_state.state.clone();
         let ledger_path = ledger_path.map(String::from);
-        let cluster_info = cluster_info.clone();
         let t_storage_mining_verifier = Builder::new()
             .name("solana-storage-mining-verify-stage".to_string())
             .spawn(move || {
                 let exit = exit.clone();
                 let mut poh_height = 0;
+                let mut current_key = 0;
                 let mut entry_height = entry_height;
                 loop {
                     if let Some(ref ledger_path_str) = ledger_path {
@@ -141,7 +159,7 @@ impl StorageStage {
                             ledger_path_str,
                             &mut poh_height,
                             &mut entry_height,
-                            &cluster_info,
+                            &mut current_key,
                         ) {
                             match e {
                                 Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
@@ -162,53 +180,12 @@ impl StorageStage {
         }
     }
 
-    fn create_storage_accounts(keypair: &Keypair, leader_client: &mut ThinClient) {
-        let last_id = leader_client.get_last_id();
-        match leader_client.get_account_userdata(&storage_program::system_id()) {
-            Ok(_) => {}
-            Err(e) => {
-                debug!("error storage userdata: {:?}", e);
-
-                let mut tx = Transaction::system_create(
-                    keypair,
-                    storage_program::system_id(),
-                    last_id,
-                    1,
-                    16 * 1024,
-                    storage_program::id(),
-                    1,
-                );
-                if let Err(e) = leader_client.retry_transfer(keypair, &mut tx, 5) {
-                    info!("Couldn't create storage account error: {}", e);
-                }
-            }
-        }
-        if leader_client
-            .get_account_userdata(&keypair.pubkey())
-            .is_err()
-        {
-            let mut tx = Transaction::system_create(
-                keypair,
-                keypair.pubkey(),
-                last_id,
-                1,
-                0,
-                storage_program::id(),
-                1,
-            );
-            if let Err(e) = leader_client.retry_transfer(keypair, &mut tx, 5) {
-                info!("Couldn't create storage account error: {}", e);
-            }
-        }
-    }
-
     pub fn process_entry_crossing(
-        _state: &Arc<RwLock<StorageStateInner>>,
+        state: &Arc<RwLock<StorageStateInner>>,
         keypair: &Arc<Keypair>,
         _ledger_path: &str,
         entry_id: Hash,
         entry_height: u64,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) -> Result<()> {
         let mut seed = [0u8; 32];
         let signature = keypair.sign(&entry_id.as_ref());
@@ -217,33 +194,10 @@ impl StorageStage {
 
         let mut rng = ChaChaRng::from_seed(seed);
 
-        if let Some(leader_data) = cluster_info.read().unwrap().leader_data() {
-            let mut leader_client = mk_client(leader_data);
-
-            Self::create_storage_accounts(keypair, &mut leader_client);
-
-            let last_id = leader_client.get_last_id();
-
-            debug!(
-                "advertising new storage last id entry_height: {}!",
-                entry_height
-            );
-            let mut tx = Transaction::storage_new_advertise_last_id(
-                keypair,
-                entry_id,
-                last_id,
-                entry_height,
-            );
-            if let Err(e) = leader_client.retry_transfer(keypair, &mut tx, 5) {
-                info!(
-                    "Couldn't advertise my storage last id to the network! error: {}",
-                    e
-                );
-            }
-        }
+        state.write().unwrap().entry_height = entry_height;
 
         // Regenerate the answers
-        let num_segments = get_segment_from_entry(entry_height);
+        let num_segments = (entry_height / ENTRIES_PER_SEGMENT) as usize;
         if num_segments == 0 {
             info!("Ledger has 0 segments!");
             return Ok(());
@@ -257,7 +211,7 @@ impl StorageStage {
         );
 
         let mut samples = vec![];
-        for _ in 0..NUM_STORAGE_SAMPLES {
+        for _ in 0..NUM_SAMPLES {
             samples.push(rng.gen_range(0, 10));
         }
         debug!("generated samples: {:?}", samples);
@@ -271,7 +225,7 @@ impl StorageStage {
             // Should be overwritten by the vote signatures which replace the
             // key values by the time it runs again.
 
-            let mut statew = _state.write().unwrap();
+            let mut statew = state.write().unwrap();
 
             match chacha_cbc_encrypt_file_many_keys(
                 _ledger_path,
@@ -294,46 +248,6 @@ impl StorageStage {
         Ok(())
     }
 
-    fn process_storage_program(
-        instruction_idx: usize,
-        storage_state: &Arc<RwLock<StorageStateInner>>,
-        entry_height: u64,
-        tx: &Transaction,
-    ) {
-        match deserialize(&tx.instructions[instruction_idx].userdata) {
-            Ok(StorageProgram::SubmitMiningProof {
-                entry_height: proof_entry_height,
-                ..
-            }) => {
-                if proof_entry_height < entry_height {
-                    let mut statew = storage_state.write().unwrap();
-                    let max_segment_index = get_segment_from_entry(entry_height);
-                    if statew.replicator_map.len() < max_segment_index {
-                        statew
-                            .replicator_map
-                            .resize(max_segment_index, HashSet::new());
-                    }
-                    let proof_segment_index = get_segment_from_entry(proof_entry_height);
-                    if proof_segment_index < statew.replicator_map.len() {
-                        statew.replicator_map[proof_segment_index].insert(tx.account_keys[0]);
-                    }
-                }
-                debug!(
-                    "storage proof: max entry_height: {} proof height: {}",
-                    entry_height, proof_entry_height
-                );
-            }
-            Ok(StorageProgram::AdvertiseStorageLastId { id, .. }) => {
-                debug!("id: {}", id);
-            }
-            Ok(StorageProgram::ClaimStorageReward { .. }) => {}
-            Ok(StorageProgram::ProofValidation { .. }) => {}
-            Err(e) => {
-                info!("error: {:?}", e);
-            }
-        }
-    }
-
     pub fn process_entries(
         keypair: &Arc<Keypair>,
         storage_state: &Arc<RwLock<StorageStateInner>>,
@@ -341,24 +255,54 @@ impl StorageStage {
         ledger_path: &str,
         poh_height: &mut u64,
         entry_height: &mut u64,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        current_key_idx: &mut usize,
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
         let entries = entry_receiver.recv_timeout(timeout)?;
-        info!(
-            "processing: {} entries height: {} poh_height: {}",
-            entries.len(),
-            entry_height,
-            poh_height
-        );
 
         for entry in entries {
             // Go through the transactions, find votes, and use them to update
             // the storage_keys with their signatures.
             for tx in entry.transactions {
                 for (i, program_id) in tx.program_ids.iter().enumerate() {
-                    if storage_program::check_id(&program_id) {
-                        Self::process_storage_program(i, storage_state, *entry_height, &tx);
+                    if vote_program::check_id(&program_id) {
+                        debug!(
+                            "generating storage_keys from votes current_key_idx: {}",
+                            *current_key_idx
+                        );
+                        let storage_keys = &mut storage_state.write().unwrap().storage_keys;
+                        storage_keys[*current_key_idx..*current_key_idx + size_of::<Signature>()]
+                            .copy_from_slice(tx.signatures[0].as_ref());
+                        *current_key_idx += size_of::<Signature>();
+                        *current_key_idx %= storage_keys.len();
+                    } else if storage_program::check_id(&program_id) {
+                        match deserialize(&tx.instructions[i].userdata) {
+                            Ok(StorageProgram::SubmitMiningProof {
+                                entry_height: proof_entry_height,
+                                ..
+                            }) => {
+                                if proof_entry_height < *entry_height {
+                                    let mut statew = storage_state.write().unwrap();
+                                    let max_segment_index =
+                                        (*entry_height / ENTRIES_PER_SEGMENT) as usize;
+                                    if statew.replicator_map.len() <= max_segment_index {
+                                        statew
+                                            .replicator_map
+                                            .resize(max_segment_index, HashSet::new());
+                                    }
+                                    let proof_segment_index =
+                                        (proof_entry_height / ENTRIES_PER_SEGMENT) as usize;
+                                    if proof_segment_index < statew.replicator_map.len() {
+                                        statew.replicator_map[proof_segment_index]
+                                            .insert(tx.account_keys[0]);
+                                    }
+                                }
+                                debug!("storage proof: entry_height: {}", entry_height);
+                            }
+                            Err(e) => {
+                                info!("error: {:?}", e);
+                            }
+                        }
                     }
                 }
             }
@@ -373,7 +317,6 @@ impl StorageStage {
                     &ledger_path,
                     entry.id,
                     *entry_height,
-                    cluster_info,
                 )?;
             }
             *entry_height += 1;
@@ -393,8 +336,6 @@ impl Service for StorageStage {
 
 #[cfg(test)]
 mod tests {
-    use crate::cluster_info::ClusterInfo;
-    use crate::cluster_info::NodeInfo;
     use crate::entry::Entry;
     use crate::ledger::make_tiny_test_entries;
     use crate::ledger::{create_tmp_sample_ledger, LedgerWriter};
@@ -406,23 +347,17 @@ mod tests {
     use rayon::prelude::*;
     use solana_sdk::hash::Hash;
     use solana_sdk::hash::Hasher;
-    use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-    use solana_sdk::storage_program::{StorageTransaction, ENTRIES_PER_SEGMENT};
     use solana_sdk::transaction::Transaction;
+    use solana_sdk::vote_program::Vote;
+    use solana_sdk::vote_transaction::VoteTransaction;
     use std::cmp::{max, min};
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::mpsc::channel;
-    use std::sync::{Arc, RwLock};
+    use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;
-
-    fn test_cluster_info(id: Pubkey) -> Arc<RwLock<ClusterInfo>> {
-        let node_info = NodeInfo::new_localhost(id, 0);
-        let cluster_info = ClusterInfo::new(node_info);
-        Arc::new(RwLock::new(cluster_info))
-    }
 
     #[test]
     fn test_storage_stage_none_ledger() {
@@ -431,9 +366,6 @@ mod tests {
 
         let (_storage_entry_sender, storage_entry_receiver) = channel();
         let storage_state = StorageState::new();
-
-        let cluster_info = test_cluster_info(keypair.pubkey());
-
         let storage_stage = StorageStage::new(
             &storage_state,
             storage_entry_receiver,
@@ -441,7 +373,6 @@ mod tests {
             keypair,
             exit.clone(),
             0,
-            &cluster_info,
         );
         exit.store(true, Ordering::Relaxed);
         storage_stage.join().unwrap();
@@ -470,9 +401,6 @@ mod tests {
 
         let (storage_entry_sender, storage_entry_receiver) = channel();
         let storage_state = StorageState::new();
-
-        let cluster_info = test_cluster_info(keypair.pubkey());
-
         let storage_stage = StorageStage::new(
             &storage_state,
             storage_entry_receiver,
@@ -480,7 +408,6 @@ mod tests {
             keypair,
             exit.clone(),
             0,
-            &cluster_info,
         );
         storage_entry_sender.send(entries.clone()).unwrap();
 
@@ -517,7 +444,7 @@ mod tests {
     }
 
     #[test]
-    fn test_storage_stage_process_mining_proof_entries() {
+    fn test_storage_stage_process_vote_entries() {
         solana_logger::setup();
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
@@ -530,14 +457,12 @@ mod tests {
             1,
         );
 
-        let entries = make_tiny_test_entries(ENTRIES_PER_SEGMENT as usize + 2);
+        let entries = make_tiny_test_entries(128);
         {
             let mut writer = LedgerWriter::open(&ledger_path, true).unwrap();
             writer.write_entries(&entries.clone()).unwrap();
             // drops writer, flushes buffers
         }
-
-        let cluster_info = test_cluster_info(keypair.pubkey());
 
         let (storage_entry_sender, storage_entry_receiver) = channel();
         let storage_state = StorageState::new();
@@ -548,41 +473,44 @@ mod tests {
             keypair,
             exit.clone(),
             0,
-            &cluster_info,
         );
         storage_entry_sender.send(entries.clone()).unwrap();
 
+        let mut reference_keys;
+        {
+            let keys = &storage_state.state.read().unwrap().storage_keys;
+            reference_keys = vec![0; keys.len()];
+            reference_keys.copy_from_slice(keys);
+        }
+        let mut vote_txs: Vec<Transaction> = Vec::new();
+        let vote = Vote {
+            tick_height: 123456,
+        };
         let keypair = Keypair::new();
-        let last_id = Hash::default();
-        let signature = Signature::new(keypair.sign(&last_id.as_ref()).as_ref());
-        let storage_tx = Transaction::storage_new_mining_proof(
-            &keypair,
-            Hash::default(),
-            Hash::default(),
-            0,
-            signature,
-        );
-        let txs = vec![storage_tx];
-        let storage_entries = vec![Entry::new(&Hash::default(), 0, 1, txs)];
-        storage_entry_sender.send(storage_entries).unwrap();
+        let vote_tx = VoteTransaction::vote_new(&keypair, vote, Hash::default(), 1);
+        vote_txs.push(vote_tx);
+        let vote_entries = vec![Entry::new(&Hash::default(), 0, 1, vote_txs)];
+        storage_entry_sender.send(vote_entries).unwrap();
 
         for _ in 0..5 {
-            if storage_state.get_pubkeys_for_entry_height(0).len() != 0 {
-                break;
+            {
+                let keys = &storage_state.state.read().unwrap().storage_keys;
+                if keys[..] != *reference_keys.as_slice() {
+                    break;
+                }
             }
 
             sleep(Duration::new(1, 0));
-            info!("pubkeys are empty");
         }
 
-        info!("joining..?");
+        debug!("joining..?");
         exit.store(true, Ordering::Relaxed);
         storage_stage.join().unwrap();
 
-        assert_eq!(
-            storage_state.get_pubkeys_for_entry_height(0)[0],
-            keypair.pubkey()
-        );
+        {
+            let keys = &storage_state.state.read().unwrap().storage_keys;
+            assert_ne!(keys[..], *reference_keys);
+        }
 
         remove_dir_all(ledger_path).unwrap();
     }
