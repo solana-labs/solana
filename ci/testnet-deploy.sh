@@ -148,16 +148,18 @@ shutdown() {
   exitcode=$?
 
   set +e
-  for logfile in net/log/*; do
-    if [[ -f $logfile ]]; then
-      upload-ci-artifact "$logfile"
-      tail "$logfile"
-    fi
-  done
-
+  if [[ -d net/log ]]; then
+    mv net/log net/log-deploy
+    for logfile in net/log-deploy/*; do
+      if [[ -f $logfile ]]; then
+        upload-ci-artifact "$logfile"
+        tail "$logfile"
+      fi
+    done
+  fi
   exit $exitcode
 }
-
+rm -rf net/{log,-deploy}
 trap shutdown EXIT INT
 
 set -x
@@ -185,10 +187,16 @@ maybeNoLedgerVerify=
 if [[ -n $NO_LEDGER_VERIFY ]]; then
   maybeNoLedgerVerify="-o noLedgerVerify"
 fi
-# shellcheck disable=SC2086 # Don't want to double quote maybeRejectExtraNodes
-if $useTarReleaseChannel; then
-  time net/net.sh start -t "$tarChannelOrTag" $maybeRejectExtraNodes $maybeNoValidatorSanity $maybeNoLedgerVerify
-else
-  time net/net.sh start -s "$snapChannel" $maybeRejectExtraNodes $maybeNoValidatorSanity $maybeNoLedgerVerify
-fi
-exit 0
+
+ok=true
+(
+  # shellcheck disable=SC2086 # Don't want to double quote maybeRejectExtraNodes
+  if $useTarReleaseChannel; then
+    time net/net.sh start -t "$tarChannelOrTag" $maybeRejectExtraNodes $maybeNoValidatorSanity $maybeNoLedgerVerify
+  else
+    time net/net.sh start -s "$snapChannel" $maybeRejectExtraNodes $maybeNoValidatorSanity $maybeNoLedgerVerify
+  fi
+) || ok=false
+
+net/net.sh logs
+$ok
