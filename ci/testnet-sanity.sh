@@ -36,16 +36,18 @@ shutdown() {
   exitcode=$?
 
   set +e
-  for logfile in net/log/*; do
-    if [[ -f $logfile ]]; then
-      upload-ci-artifact "$logfile"
-      tail "$logfile"
-    fi
-  done
-
+  if [[ -d net/log ]]; then
+    mv net/log net/log-sanity
+    for logfile in net/log-sanity/*; do
+      if [[ -f $logfile ]]; then
+        upload-ci-artifact "$logfile"
+        tail "$logfile"
+      fi
+    done
+  fi
   exit $exitcode
 }
-
+rm -rf net/{log,-sanity}
 trap shutdown EXIT INT
 
 set -x
@@ -53,9 +55,11 @@ echo "--- $cloudProvider.sh config"
 timeout 5m net/"$cloudProvider".sh config -p "$netName" -z "$zone"
 net/init-metrics.sh -e
 echo --- net.sh sanity
-timeout 5m net/net.sh sanity \
+ok=true
+timeout 1s net/net.sh sanity \
   ${NO_LEDGER_VERIFY:+-o noLedgerVerify} \
   ${NO_VALIDATOR_SANITY:+-o noValidatorSanity} \
-  ${REJECT_EXTRA_NODES:+-o rejectExtraNodes} \
+  ${REJECT_EXTRA_NODES:+-o rejectExtraNodes} || ok=false
 
-exit 0
+net/net.sh logs
+$ok
