@@ -484,7 +484,7 @@ logs)
     (
       set -x
       timeout 30s scp "${sshOptions[@]}" \
-        "$ipAddress":solana/"$log".log log/remote-"$log"-"$ipAddress".log
+        "$ipAddress":solana/"$log".log "$netLogDir"/remote-"$log"-"$ipAddress".log
     ) || echo "failed to fetch log"
   }
   fetchRemoteLog "${fullnodeIpList[0]}" drone
