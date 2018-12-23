@@ -4,7 +4,7 @@
 
 use crate::entry::Entry;
 use crate::mint::Mint;
-use crate::packet::{SharedBlob, BLOB_DATA_SIZE};
+use crate::packet::{Blob, SharedBlob, BLOB_DATA_SIZE};
 use bincode::{self, deserialize_from, serialize_into, serialized_size};
 use chrono::prelude::Utc;
 use log::Level::Trace;
@@ -450,7 +450,8 @@ pub fn read_ledger(
 pub trait Block {
     /// Verifies the hashes and counts of a slice of transactions are all consistent.
     fn verify(&self, start_hash: &Hash) -> bool;
-    fn to_blobs(&self) -> Vec<SharedBlob>;
+    fn to_shared_blobs(&self) -> Vec<SharedBlob>;
+    fn to_blobs(&self) -> Vec<Blob>;
     fn votes(&self) -> Vec<(Pubkey, Vote, Hash)>;
 }
 
@@ -477,8 +478,12 @@ impl Block for [Entry] {
         })
     }
 
-    fn to_blobs(&self) -> Vec<SharedBlob> {
+    fn to_blobs(&self) -> Vec<Blob> {
         self.iter().map(|entry| entry.to_blob()).collect()
+    }
+
+    fn to_shared_blobs(&self) -> Vec<SharedBlob> {
+        self.iter().map(|entry| entry.to_shared_blob()).collect()
     }
 
     fn votes(&self) -> Vec<(Pubkey, Vote, Hash)> {
@@ -704,7 +709,7 @@ pub fn make_consecutive_blobs(
 ) -> Vec<SharedBlob> {
     let entries = create_ticks(num_blobs_to_make as usize, start_hash);
 
-    let blobs = entries.to_blobs();
+    let blobs = entries.to_shared_blobs();
     let mut index = start_height;
     for blob in &blobs {
         let mut blob = blob.write().unwrap();
@@ -773,7 +778,7 @@ mod tests {
     }
 
     #[test]
-    fn test_entries_to_blobs() {
+    fn test_entries_to_shared_blobs() {
         solana_logger::setup();
         let entries = make_test_entries();
 

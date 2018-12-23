@@ -770,7 +770,7 @@ pub mod test {
             WINDOW_SIZE
         ];
         let entries = make_tiny_test_entries(num_blobs);
-        let blobs = entries.to_blobs();
+        let blobs = entries.to_shared_blobs();
 
         {
             // Make some dummy slots

@@ -44,7 +44,7 @@ fn setup_read_bench(
     entries.extend(make_tiny_test_entries(num_small_blobs as usize));
 
     // Convert the entries to blobs, write the blobs to the ledger
-    let shared_blobs = entries.to_blobs();
+    let shared_blobs = entries.to_shared_blobs();
     for b in shared_blobs.iter() {
         b.write().unwrap().set_slot(slot).unwrap();
     }
@@ -60,7 +60,7 @@ fn bench_write_small(bench: &mut Bencher) {
     let ledger_path = get_tmp_ledger_path("bench_write_small");
     let num_entries = 32 * 1024;
     let entries = make_tiny_test_entries(num_entries);
-    let shared_blobs = entries.to_blobs();
+    let shared_blobs = entries.to_shared_blobs();
     let mut blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.write().unwrap()).collect();
     let mut blobs: Vec<&mut Blob> = blob_locks.iter_mut().map(|b| &mut **b).collect();
     bench_write_blobs(bench, &mut blobs, &ledger_path);
@@ -73,7 +73,7 @@ fn bench_write_big(bench: &mut Bencher) {
     let ledger_path = get_tmp_ledger_path("bench_write_big");
     let num_entries = 32 * 1024;
     let entries = make_tiny_test_entries(num_entries);
-    let shared_blobs = entries.to_blobs();
+    let shared_blobs = entries.to_shared_blobs();
     let mut blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.write().unwrap()).collect();
     let mut blobs: Vec<&mut Blob> = blob_locks.iter_mut().map(|b| &mut **b).collect();
     bench_write_blobs(bench, &mut blobs, &ledger_path);
@@ -147,7 +147,7 @@ fn bench_insert_data_blob_small(bench: &mut Bencher) {
         DbLedger::open(&ledger_path).expect("Expected to be able to open database ledger");
     let num_entries = 32 * 1024;
     let entries = make_tiny_test_entries(num_entries);
-    let mut shared_blobs = entries.to_blobs();
+    let mut shared_blobs = entries.to_shared_blobs();
     shared_blobs.shuffle(&mut thread_rng());
 
     bench.iter(move || {
@@ -172,7 +172,7 @@ fn bench_insert_data_blob_big(bench: &mut Bencher) {
         DbLedger::open(&ledger_path).expect("Expected to be able to open database ledger");
     let num_entries = 32 * 1024;
     let entries = make_large_test_entries(num_entries);
-    let mut shared_blobs = entries.to_blobs();
+    let mut shared_blobs = entries.to_shared_blobs();
     shared_blobs.shuffle(&mut thread_rng());
 
     bench.iter(move || {

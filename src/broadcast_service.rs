@@ -72,7 +72,7 @@ fn broadcast(
 
     let blobs: Vec<_> = ventries
         .into_par_iter()
-        .flat_map(|p| p.to_blobs())
+        .flat_map(|p| p.to_shared_blobs())
         .collect();
 
     let blobs_slot_heights: Vec<(SharedBlob, u64)> = blobs.into_iter().zip(slot_heights).collect();

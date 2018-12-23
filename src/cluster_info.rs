@@ -20,7 +20,7 @@ use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
 use crate::crds_value::{CrdsValue, CrdsValueLabel, LeaderId};
 use crate::db_ledger::{DbLedger, LedgerColumnFamily, MetaCf, DEFAULT_SLOT_HEIGHT};
-use crate::packet::{to_blob, Blob, SharedBlob, BLOB_SIZE};
+use crate::packet::{to_shared_blob, Blob, SharedBlob, BLOB_SIZE};
 use crate::result::Result;
 use crate::rpc::RPC_PORT;
 use crate::streamer::{BlobReceiver, BlobSender};
@@ -602,7 +602,7 @@ impl ClusterInfo {
         let reqs = obj.write().unwrap().gossip_request();
         let blobs = reqs
             .into_iter()
-            .filter_map(|(remote_gossip_addr, req)| to_blob(req, remote_gossip_addr).ok())
+            .filter_map(|(remote_gossip_addr, req)| to_shared_blob(req, remote_gossip_addr).ok())
             .collect();
         blob_sender.send(blobs)?;
         Ok(())
@@ -760,7 +760,7 @@ impl ClusterInfo {
                 from.gossip = *from_addr;
             }
             inc_new_counter_info!("cluster_info-pull_request-rsp", len);
-            to_blob(rsp, from.gossip).ok().into_iter().collect()
+            to_shared_blob(rsp, from.gossip).ok().into_iter().collect()
         }
     }
     fn handle_pull_response(me: &Arc<RwLock<Self>>, from: Pubkey, data: Vec<CrdsValue>) {
@@ -805,13 +805,15 @@ impl ClusterInfo {
                     };
                     prune_msg.sign(&me.read().unwrap().keypair);
                     let rsp = Protocol::PruneMessage(self_id, prune_msg);
-                    to_blob(rsp, ci.gossip).ok()
+                    to_shared_blob(rsp, ci.gossip).ok()
                 })
                 .into_iter()
                 .collect();
             let mut blobs: Vec<_> = pushes
                 .into_iter()
-                .filter_map(|(remote_gossip_addr, req)| to_blob(req, remote_gossip_addr).ok())
+                .filter_map(|(remote_gossip_addr, req)| {
+                    to_shared_blob(req, remote_gossip_addr).ok()
+                })
                 .collect();
             rsp.append(&mut blobs);
             rsp

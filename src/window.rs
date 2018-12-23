@@ -2,14 +2,11 @@
 //!
 use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
-use crate::entry::reconstruct_entries_from_blobs;
-use crate::entry::Entry;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::packet::SharedBlob;
 use log::Level;
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
-use std::mem;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
@@ -62,18 +59,6 @@ pub trait WindowUtil {
     ) -> Vec<(SocketAddr, Vec<u8>)>;
 
     fn print(&self, id: &Pubkey, consumed: u64) -> String;
-
-    fn process_blob(
-        &mut self,
-        id: &Pubkey,
-        blob: SharedBlob,
-        pix: u64,
-        consume_queue: &mut Vec<Entry>,
-        consumed: &mut u64,
-        tick_height: &mut u64,
-        leader_unknown: bool,
-        pending_retransmits: &mut bool,
-    );
 
     fn blob_idx_in_window(&self, id: &Pubkey, pix: u64, consumed: u64, received: &mut u64) -> bool;
 }
@@ -255,110 +240,6 @@ impl WindowUtil for Window {
             consumed,
             buf.join("")
         )
-    }
-
-    /// process a blob: Add blob to the window. If a continuous set of blobs
-    ///      starting from consumed is thereby formed, add that continuous
-    ///      range of blobs to a queue to be sent on to the next stage.
-    ///
-    /// * `self` - the window we're operating on
-    /// * `id` - this node's id
-    /// * `blob` -  the blob to be processed into the window and rebroadcast
-    /// * `pix` -  the index of the blob, corresponds to
-    ///            the entry height of this blob
-    /// * `consume_queue` - output, blobs to be rebroadcast are placed here
-    /// * `consumed` - input/output, the entry-height to which this
-    ///                 node has populated and rebroadcast entries
-    fn process_blob(
-        &mut self,
-        id: &Pubkey,
-        blob: SharedBlob,
-        pix: u64,
-        consume_queue: &mut Vec<Entry>,
-        consumed: &mut u64,
-        tick_height: &mut u64,
-        leader_unknown: bool,
-        pending_retransmits: &mut bool,
-    ) {
-        let w = (pix % self.window_size()) as usize;
-
-        let is_coding = blob.read().unwrap().is_coding();
-
-        // insert a newly received blob into a window slot, clearing out and recycling any previous
-        //  blob unless the incoming blob is a duplicate (based on idx)
-        // returns whether the incoming is a duplicate blob
-        fn insert_blob_is_dup(
-            id: &Pubkey,
-            blob: SharedBlob,
-            pix: u64,
-            window_slot: &mut Option<SharedBlob>,
-            c_or_d: &str,
-        ) -> bool {
-            if let Some(old) = mem::replace(window_slot, Some(blob)) {
-                let is_dup = old.read().unwrap().index().unwrap() == pix;
-                trace!(
-                    "{}: occupied {} window slot {:}, is_dup: {}",
-                    id,
-                    c_or_d,
-                    pix,
-                    is_dup
-                );
-                is_dup
-            } else {
-                trace!("{}: empty {} window slot {:}", id, c_or_d, pix);
-                false
-            }
-        }
-
-        // insert the new blob into the window, overwrite and recycle old (or duplicate) entry
-        let is_duplicate = if is_coding {
-            insert_blob_is_dup(id, blob, pix, &mut self[w].coding, "coding")
-        } else {
-            insert_blob_is_dup(id, blob, pix, &mut self[w].data, "data")
-        };
-
-        if is_duplicate {
-            return;
-        }
-
-        self[w].leader_unknown = leader_unknown;
-        *pending_retransmits = true;
-
-        // push all contiguous blobs into consumed queue, increment consumed
-        loop {
-            let k = (*consumed % self.window_size()) as usize;
-            trace!("{}: k: {} consumed: {}", id, k, *consumed,);
-
-            let k_data_blob;
-            let k_data_slot = &mut self[k].data;
-            if let Some(blob) = k_data_slot {
-                if blob.read().unwrap().index().unwrap() < *consumed {
-                    // window wrap-around, end of received
-                    break;
-                }
-                k_data_blob = (*blob).clone();
-            } else {
-                // self[k].data is None, end of received
-                break;
-            }
-
-            // Check that we can get the entries from this blob
-            match reconstruct_entries_from_blobs(vec![k_data_blob]) {
-                Ok((entries, num_ticks)) => {
-                    consume_queue.extend(entries);
-                    *tick_height += num_ticks;
-                }
-                Err(_) => {
-                    // If the blob can't be deserialized, then remove it from the
-                    // window and exit. *k_data_slot cannot be None at this point,
-                    // so it's safe to unwrap.
-                    k_data_slot.take();
-                    break;
-                }
-            }
-
-            *consumed += 1;
-        }
     }
 }
 
