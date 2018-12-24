@@ -282,8 +282,7 @@ sanity-or-restart)
   if sanity; then
     echo Pass
   else
-    echo "Sanity failed, restarting the network"
-    echo "^^^ +++"
+    echo "+++ Sanity failed, restarting the network"
     start
   fi
   ;;
