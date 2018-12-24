@@ -3,7 +3,7 @@ use bincode::serialize;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::timing::timestamp;
-use std::cmp::{Ordering, Ord, PartialEq, PartialOrd};
+use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 /// Structure representing a node on the network
@@ -46,7 +46,7 @@ impl PartialEq for ContactInfo {
     }
 }
 
-impl Eq for ContactInfo { }
+impl Eq for ContactInfo {}
 
 #[macro_export]
 macro_rules! socketaddr {
