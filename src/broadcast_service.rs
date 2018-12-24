@@ -240,6 +240,7 @@ pub struct BroadcastService {
 }
 
 impl BroadcastService {
+    #[allow(clippy::too_many_arguments)]
     fn run(
         db_ledger: &Arc<DbLedger>,
         bank: &Arc<Bank>,

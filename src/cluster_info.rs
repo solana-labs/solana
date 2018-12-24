@@ -319,7 +319,7 @@ impl ClusterInfo {
             .collect()
     }
 
-    fn sort_by_stake(peers: Vec<NodeInfo>, bank: &Arc<Bank>) -> Vec<(u64, NodeInfo)> {
+    fn sort_by_stake(peers: &[NodeInfo], bank: &Arc<Bank>) -> Vec<(u64, NodeInfo)> {
         let mut peers_with_stakes: Vec<_> = peers
             .iter()
             .map(|c| (bank.get_stake(&c.id), c.clone()))
@@ -330,7 +330,7 @@ impl ClusterInfo {
 
     pub fn sorted_retransmit_peers(&self, bank: &Arc<Bank>) -> Vec<NodeInfo> {
         let peers = self.retransmit_peers();
-        let peers_with_stakes: Vec<_> = ClusterInfo::sort_by_stake(peers, bank);
+        let peers_with_stakes: Vec<_> = ClusterInfo::sort_by_stake(&peers, bank);
         peers_with_stakes
             .iter()
             .map(|(_, peer)| (*peer).clone())
@@ -339,7 +339,7 @@ impl ClusterInfo {
 
     pub fn sorted_tvu_peers(&self, bank: &Arc<Bank>) -> Vec<NodeInfo> {
         let peers = self.tvu_peers();
-        let peers_with_stakes: Vec<_> = ClusterInfo::sort_by_stake(peers, bank);
+        let peers_with_stakes: Vec<_> = ClusterInfo::sort_by_stake(&peers, bank);
         peers_with_stakes
             .iter()
             .map(|(_, peer)| (*peer).clone())
