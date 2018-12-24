@@ -90,10 +90,19 @@ local|tar)
 esac
 
 
+echo "--- RPC API: getTransactionCount"
+(
+  set -x
+  curl -X POST \
+    -H 'Content-Type: application/json' \
+    -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' \
+    http://"$entrypointIp":8899
+)
+
 echo "--- $entrypointIp: wallet sanity"
 (
   set -x
-  scripts/wallet-sanity.sh "$entrypointIp:8001"
+  scripts/wallet-sanity.sh "$entrypointIp":8001
 )
 
 echo "+++ $entrypointIp: node count ($numNodes expected)"
