@@ -56,7 +56,7 @@ timeout 5m net/"$cloudProvider".sh config -p "$netName" -z "$zone"
 net/init-metrics.sh -e
 echo --- net.sh sanity
 ok=true
-timeout 1s net/net.sh sanity \
+timeout 5m net/net.sh sanity \
   ${NO_LEDGER_VERIFY:+-o noLedgerVerify} \
   ${NO_VALIDATOR_SANITY:+-o noValidatorSanity} \
   ${REJECT_EXTRA_NODES:+-o rejectExtraNodes} || ok=false
