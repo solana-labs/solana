@@ -1302,12 +1302,10 @@ mod tests {
     use crate::crds_value::CrdsValueLabel;
     use crate::db_ledger::DbLedger;
     use crate::ledger::get_tmp_ledger_path;
-
     use crate::packet::BLOB_HEADER_SIZE;
     use crate::result::Error;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::collections::HashSet;
-    use std::fs::remove_dir_all;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::{Arc, RwLock};
 
