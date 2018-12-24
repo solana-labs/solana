@@ -136,7 +136,9 @@ local|tar)
   # shellcheck source=/dev/null
   source ./target/perf-libs/env.sh
 
-  scripts/oom-monitor.sh  > oom-monitor.log 2>&1 &
+  (
+    sudo scripts/oom-monitor.sh
+  ) > oom-monitor.log 2>&1 &
   scripts/net-stats.sh  > net-stats.log 2>&1 &
 
   maybeNoLeaderRotation=
