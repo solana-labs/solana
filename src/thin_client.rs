@@ -462,6 +462,7 @@ pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, 
     let node = Fullnode::new(
         node,
         &node_keypair,
+        None,
         &ledger_path,
         voting_keypair,
         None,

@@ -184,6 +184,12 @@ impl MetaCf {
         let key = Self::key(slot_height);
         self.put(&key, slot_meta)
     }
+
+    pub fn index_from_key(key: &[u8]) -> Result<u64> {
+        let mut rdr = io::Cursor::new(&key[..]);
+        let index = rdr.read_u64::<BigEndian>()?;
+        Ok(index)
+    }
 }
 
 impl LedgerColumnFamily for MetaCf {
@@ -305,15 +311,32 @@ impl LedgerColumnFamilyRaw for ErasureCf {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub struct DbLedgerConfig {
+    pub ticks_per_block: u64,
+}
+
+impl DbLedgerConfig {
+    pub fn new(ticks_per_block: u64) -> Self {
+        DbLedgerConfig { ticks_per_block }
+    }
+}
+
+impl Default for DbLedgerConfig {
+    fn default() -> Self {
+        Self::new(DEFAULT_TICKS_PER_SLOT)
+    }
+}
+
 // ledger window
 pub struct DbLedger {
     // Underlying database is automatically closed in the Drop implementation of DB
     db: Arc<DB>,
-    pub meta_cf: MetaCf,
-    pub data_cf: DataCf,
-    pub erasure_cf: ErasureCf,
-    pub new_blobs_signals: Vec<SyncSender<bool>>,
-    pub ticks_per_block: u64,
+    meta_cf: MetaCf,
+    data_cf: DataCf,
+    erasure_cf: ErasureCf,
+    new_blobs_signals: Vec<SyncSender<bool>>,
+    ticks_per_block: u64,
 }
 
 // TODO: Once we support a window that knows about different leader
@@ -379,6 +402,24 @@ impl DbLedger {
         Ok((db_ledger, signal_sender, signal_receiver))
     }
 
+    pub fn open_config(ledger_path: &str, config: &DbLedgerConfig) -> Result<Self> {
+        let mut db_ledger = Self::open(ledger_path)?;
+        db_ledger.ticks_per_block = config.ticks_per_block;
+        Ok(db_ledger)
+    }
+
+    pub fn open_with_config_signal(
+        ledger_path: &str,
+        config: &DbLedgerConfig,
+    ) -> Result<(Self, SyncSender<bool>, Receiver<bool>)> {
+        let mut db_ledger = Self::open(ledger_path)?;
+        let (signal_sender, signal_receiver) = sync_channel(1);
+        db_ledger.new_blobs_signals = vec![signal_sender.clone()];
+        db_ledger.ticks_per_block = config.ticks_per_block;
+
+        Ok((db_ledger, signal_sender, signal_receiver))
+    }
+
     pub fn meta(&self, slot_index: u64) -> Result<Option<SlotMeta>> {
         self.meta_cf.get(&MetaCf::key(slot_index))
     }
@@ -389,6 +430,17 @@ impl DbLedger {
         let ledger_path = Path::new(ledger_path).join(DB_LEDGER_DIRECTORY);
         DB::destroy(&Options::default(), &ledger_path)?;
         Ok(())
+    }
+
+    pub fn get_next_slot(&self, slot_height: u64) -> Result<Option<u64>> {
+        let mut db_iterator = self.db.raw_iterator_cf(self.meta_cf.handle())?;
+        db_iterator.seek(&MetaCf::key(slot_height + 1));
+        if !db_iterator.valid() {
+            Ok(None)
+        } else {
+            let key = &db_iterator.key().expect("Expected valid key");
+            Ok(Some(MetaCf::index_from_key(&key)?))
+        }
     }
 
     pub fn write_shared_blobs<I>(&self, shared_blobs: I) -> Result<Vec<Entry>>
@@ -485,6 +537,18 @@ impl DbLedger {
             });
 
             let slot_meta = &mut entry.0.borrow_mut();
+
+            // This slot is full, skip the bogus blob
+            if slot_meta.contains_all_ticks(self.ticks_per_block) {
+                println!(
+                    "cat: bs: {}, bi: {}, ct: {}",
+                    blob_slot,
+                    blob.index(),
+                    slot_meta.consumed_ticks
+                );
+                continue;
+            }
+
             let entries = self.insert_data_blob(
                 blob,
                 &mut prev_inserted_blob_datas,
@@ -1097,6 +1161,38 @@ impl DbLedger {
 
         Ok(blobs)
     }
+
+    // Handle special case of writing genesis blobs. For instance, the first two entries
+    // don't count as ticks, even if they're empty entries
+    fn write_genesis_blobs(&self, blobs: &[Blob]) -> Result<()> {
+        // TODO: change bootstrap height to number of slots
+        let meta_key = MetaCf::key(DEFAULT_SLOT_HEIGHT);
+        let mut bootstrap_meta = SlotMeta::new(0, 1);
+        let last = blobs.last().unwrap();
+        let num_ending_ticks = blobs.iter().skip(2).fold(0, |tick_count, blob| {
+            let entry: Entry = deserialize(&blob.data[BLOB_HEADER_SIZE..])
+                .expect("Blob has to be deseriablizable");
+            tick_count + entry.is_tick() as u64
+        });
+        bootstrap_meta.consumed = last.index() + 1;
+        bootstrap_meta.received = last.index() + 1;
+        bootstrap_meta.is_trunk = true;
+        bootstrap_meta.consumed_ticks = num_ending_ticks;
+
+        let mut batch = WriteBatch::default();
+        batch.put_cf(
+            self.meta_cf.handle(),
+            &meta_key,
+            &serialize(&bootstrap_meta)?,
+        )?;
+        for blob in blobs {
+            let key = DataCf::key(blob.slot(), blob.index());
+            let serialized_blob_datas = &blob.data[..BLOB_HEADER_SIZE + blob.size()];
+            batch.put_cf(self.data_cf.handle(), &key, serialized_blob_datas)?;
+        }
+        self.db.write(batch)?;
+        Ok(())
+    }
 }
 
 // TODO: all this goes away with Blocktree
@@ -1169,7 +1265,7 @@ where
         })
         .collect();
 
-    db_ledger.write_blobs(&blobs[..])?;
+    db_ledger.write_genesis_blobs(&blobs[..])?;
     Ok(())
 }
 
@@ -1722,11 +1818,10 @@ mod tests {
     pub fn test_new_blobs_signal() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path("test_new_blobs_signal");
-        let (mut ledger, _, recvr) = DbLedger::open_with_signal(&ledger_path).unwrap();
         let ticks_per_block = 10;
-        let blocks_per_slot = 1;
-        let config = DbLedgerConfig::new(ticks_per_block, blocks_per_slot);
-        let ledger = Arc::new(DbLedger::open_config(&ledger_path, &config).unwrap());
+        let config = DbLedgerConfig::new(ticks_per_block);
+        let (ledger, _, recvr) = DbLedger::open_with_config_signal(&ledger_path, &config).unwrap();
+        let ledger = Arc::new(ledger);
 
         // Create ticks for slot 0
         let entries = create_ticks(ticks_per_block, Hash::default());
@@ -1812,6 +1907,7 @@ mod tests {
         // Fill in the holes for each of the remaining slots, we should get a single update
         // for each
         for slot_index in num_slots / 2..num_slots {
+            println!("slot_index: {}", slot_index);
             let entries = make_tiny_test_entries(1);
             let mut blob = entries[0].to_blob();
             blob.set_index(slot_index as u64 - 1);
@@ -1830,8 +1926,8 @@ mod tests {
     pub fn test_handle_chaining_basic() {
         let db_ledger_path = get_tmp_ledger_path("test_handle_chaining_basic");
         {
-            let mut db_ledger = DbLedger::open(&db_ledger_path).unwrap();
-            db_ledger.ticks_per_block = 1;
+            let config = DbLedgerConfig::new(1);
+            let db_ledger = DbLedger::open_config(&db_ledger_path, &config).unwrap();
 
             let entries = create_ticks(3, Hash::default());
             let mut blobs = entries.to_blobs();

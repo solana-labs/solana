@@ -495,6 +495,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_rpc_new() {
         let (genesis_block, alice) =
             GenesisBlock::new(10_000 + crate::genesis_block::BOOTSTRAP_LEADER_TOKENS);

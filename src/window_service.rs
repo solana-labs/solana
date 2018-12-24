@@ -4,7 +4,6 @@ use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
 use crate::db_ledger::DbLedger;
 use crate::db_window::*;
-
 use crate::leader_scheduler::LeaderScheduler;
 use crate::result::{Error, Result};
 use crate::streamer::{BlobReceiver, BlobSender};

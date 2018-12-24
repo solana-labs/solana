@@ -3,7 +3,7 @@
 use crate::bank::Bank;
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
 use crate::counter::Counter;
-use crate::db_ledger::DbLedger;
+use crate::db_ledger::{DbLedger, DbLedgerConfig};
 use crate::genesis_block::GenesisBlock;
 use crate::gossip_service::GossipService;
 use crate::leader_scheduler::LeaderSchedulerConfig;
@@ -102,11 +102,20 @@ impl Fullnode {
     pub fn new(
         mut node: Node,
         keypair: &Arc<Keypair>,
+        ledger_config: Option<DbLedgerConfig>,
         ledger_path: &str,
         voting_keypair: VotingKeypair,
         entrypoint_info_option: Option<&NodeInfo>,
         config: &FullnodeConfig,
     ) -> Self {
+        let ledger_config = if ledger_config.is_none() {
+            Some(DbLedgerConfig::default())
+        } else {
+            ledger_config
+        };
+
+        info!("creating bank...");
+
         let id = keypair.pubkey();
         assert_eq!(id, node.info.id);
 
@@ -117,7 +126,7 @@ impl Fullnode {
             db_ledger,
             ledger_signal_sender,
             ledger_signal_receiver,
-        ) = new_bank_from_ledger(ledger_path, &config.leader_scheduler_config);
+        ) = new_bank_from_ledger(ledger_path, &ledger_config, &config.leader_scheduler_config);
 
         info!("node info: {:?}", node.info);
         info!("node entrypoint_info: {:?}", entrypoint_info_option);
@@ -184,7 +193,7 @@ impl Fullnode {
         }
 
         // Get the scheduled leader
-        let (scheduled_leader, slot_index, max_tpu_tick_height) = {
+        let (scheduled_leader, slot_height, max_tpu_tick_height) = {
             let tick_height = bank.tick_height();
 
             let leader_scheduler = bank.leader_scheduler.read().unwrap();
@@ -236,11 +245,12 @@ impl Fullnode {
         let (to_leader_sender, to_leader_receiver) = channel();
         let (to_validator_sender, to_validator_receiver) = channel();
 
-        let blob_index = Self::get_consumed_for_slot(&db_ledger, slot_index);
+        let blob_index = Self::get_consumed_for_slot(&db_ledger, slot_height);
 
         let (tvu, blob_sender) = Tvu::new(
             voting_keypair_option,
             &bank,
+            blob_index,
             entry_height,
             last_entry_id,
             &cluster_info,
@@ -266,7 +276,7 @@ impl Fullnode {
                 .try_clone()
                 .expect("Failed to clone broadcast socket"),
             cluster_info.clone(),
-            slot_index,
+            slot_height,
             blob_index,
             config.sigverify_disabled,
             max_tpu_tick_height,
@@ -322,7 +332,7 @@ impl Fullnode {
 
         if scheduled_leader == self.id {
             debug!("node is still the leader");
-            let (last_entry_id, _) = self.node_services.tvu.get_state();
+            let last_entry_id = self.node_services.tvu.get_state();
             self.validator_to_leader(tick_height, last_entry_id);
             FullnodeReturnType::LeaderToLeaderRotation
         } else {
@@ -346,7 +356,7 @@ impl Fullnode {
             last_entry_id,
         );
 
-        let (scheduled_leader, slot_index, max_tick_height) = {
+        let (scheduled_leader, slot_height, max_tick_height) = {
             let mut leader_scheduler = self.bank.leader_scheduler.write().unwrap();
 
             // A transition is only permitted on the final tick of a slot
@@ -386,7 +396,7 @@ impl Fullnode {
             self.cluster_info.clone(),
             self.sigverify_disabled,
             max_tick_height,
-            slot_index,
+            slot_height,
             0,
             &last_entry_id,
             self.id,
@@ -414,8 +424,8 @@ impl Fullnode {
             } else {
                 let should_be_leader = self.to_leader_receiver.recv_timeout(timeout);
                 match should_be_leader {
-                    Ok(TvuReturnType::LeaderRotation(tick_height, entry_height, last_entry_id)) => {
-                        self.validator_to_leader(tick_height, entry_height, last_entry_id);
+                    Ok(TvuReturnType::LeaderRotation(tick_height, last_entry_id)) => {
+                        self.validator_to_leader(tick_height, last_entry_id);
                         return Some((
                             FullnodeReturnType::ValidatorToLeaderRotation,
                             tick_height + 1,
@@ -476,15 +486,31 @@ impl Fullnode {
         self.exit();
         self.join()
     }
+
+    fn get_consumed_for_slot(db_ledger: &DbLedger, slot_index: u64) -> u64 {
+        let meta = db_ledger.meta(slot_index).expect("Database error");
+        if let Some(meta) = meta {
+            meta.consumed
+        } else {
+            0
+        }
+    }
 }
 
 pub fn new_bank_from_ledger(
     ledger_path: &str,
+    ledger_config: &Option<DbLedgerConfig>,
     leader_scheduler_config: &LeaderSchedulerConfig,
 ) -> (Bank, u64, Hash, DbLedger, SyncSender<bool>, Receiver<bool>) {
-    let (db_ledger, ledger_signal_sender, ledger_signal_receiver) =
-        DbLedger::open_with_signal(ledger_path)
-            .expect("Expected to successfully open database ledger");
+    let (db_ledger, ledger_signal_sender, ledger_signal_receiver) = {
+        if let Some(ledger_config) = ledger_config {
+            DbLedger::open_with_config_signal(ledger_path, &ledger_config)
+                .expect("Expected to successfully open database ledger")
+        } else {
+            DbLedger::open_with_signal(ledger_path)
+                .expect("Expected to successfully open database ledger")
+        }
+    };
     let genesis_block =
         GenesisBlock::load(ledger_path).expect("Expected to successfully open genesis block");
     let mut bank = Bank::new_with_leader_scheduler_config(&genesis_block, leader_scheduler_config);
@@ -508,15 +534,6 @@ pub fn new_bank_from_ledger(
         ledger_signal_sender,
         ledger_signal_receiver,
     )
-}
-
-fn get_consumed_for_slot(db_ledger: &DbLedger, slot_index: u64) -> u64 {
-    let meta = db_ledger.meta(slot_index).expect("Database error");
-    if let Some(meta) = meta {
-        meta.consumed
-    } else {
-        0
-    }
 }
 
 impl Service for Fullnode {
@@ -558,6 +575,7 @@ mod tests {
         let validator = Fullnode::new(
             validator_node,
             &Arc::new(validator_keypair),
+            None,
             &validator_ledger_path,
             VotingKeypair::new(),
             Some(&leader_node.info),
@@ -588,6 +606,7 @@ mod tests {
                 Fullnode::new(
                     validator_node,
                     &Arc::new(validator_keypair),
+                    None,
                     &validator_ledger_path,
                     VotingKeypair::new(),
                     Some(&leader_node.info),
@@ -641,9 +660,11 @@ mod tests {
         // Start the bootstrap leader
         let mut fullnode_config = FullnodeConfig::default();
         fullnode_config.leader_scheduler_config = leader_scheduler_config;
+        let db_ledger_config = DbLedgerConfig::new(ticks_per_slot);
         let bootstrap_leader = Fullnode::new(
             bootstrap_leader_node,
             &bootstrap_leader_keypair,
+            Some(db_ledger_config),
             &bootstrap_leader_ledger_path,
             voting_keypair,
             None,
@@ -698,11 +719,13 @@ mod tests {
             validator_ledger_path.clone(),
         ];
 
+        let db_ledger_config = DbLedgerConfig::new(ticks_per_slot);
         {
             // Test that a node knows to transition to a validator based on parsing the ledger
             let bootstrap_leader = Fullnode::new(
                 bootstrap_leader_node,
                 &bootstrap_leader_keypair,
+                Some(db_ledger_config),
                 &bootstrap_leader_ledger_path,
                 VotingKeypair::new(),
                 Some(&bootstrap_leader_info),
@@ -715,6 +738,7 @@ mod tests {
             let validator = Fullnode::new(
                 validator_node,
                 &validator_keypair,
+                Some(db_ledger_config),
                 &validator_ledger_path,
                 VotingKeypair::new(),
                 Some(&bootstrap_leader_info),
@@ -769,10 +793,14 @@ mod tests {
         );
 
         let voting_keypair = VotingKeypair::new_local(&validator_keypair);
+
+        let db_ledger_config = DbLedgerConfig::default();
+
         // Start the validator
         let validator = Fullnode::new(
             validator_node,
             &validator_keypair,
+            Some(db_ledger_config),
             &validator_ledger_path,
             voting_keypair,
             Some(&leader_node.info),
@@ -819,8 +847,11 @@ mod tests {
 
         // Close the validator so that rocksdb has locks available
         validator_exit();
-        let (bank, entry_height, _, _, _, _) =
-            new_bank_from_ledger(&validator_ledger_path, &LeaderSchedulerConfig::default());
+        let (bank, entry_height, _, _, _, _) = new_bank_from_ledger(
+            &validator_ledger_path,
+            &None,
+            &LeaderSchedulerConfig::default(),
+        );
 
         assert!(bank.tick_height() >= bank.leader_scheduler.read().unwrap().ticks_per_epoch);
 
@@ -862,10 +893,12 @@ mod tests {
         );
 
         let voting_keypair = VotingKeypair::new_local(&leader_keypair);
+        let db_ledger_config = DbLedgerConfig::new(ticks_per_slot);
         info!("Start the bootstrap leader");
         let mut leader = Fullnode::new(
             leader_node,
             &leader_keypair,
+            Some(db_ledger_config),
             &leader_ledger_path,
             voting_keypair,
             Some(&leader_node_info),
