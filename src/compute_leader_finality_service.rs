@@ -37,15 +37,16 @@ impl ComputeLeaderFinalityService {
         let mut total_stake = 0;
 
         let mut ticks_and_stakes: Vec<(u64, u64)> = {
-            let bank_accounts = bank.accounts.accounts_db.read().unwrap();
             // TODO: Doesn't account for duplicates since a single validator could potentially register
             // multiple vote accounts. Once that is no longer possible (see the TODO in vote_program.rs,
             // process_transaction(), case VoteInstruction::RegisterAccount), this will be more accurate.
             // See github issue 1654.
-            bank_accounts
+            let state = bank.trunk_fork();
+            let accounts = state.head().accounts.accounts_db.read().unwrap();
+            accounts
                 .accounts
-                .values()
-                .filter_map(|account| {
+                .iter()
+                .flat_map(|(_, account)| {
                     // Filter out any accounts that don't belong to the VoteProgram
                     // by returning None
                     if vote_program::check_id(&account.owner) {
@@ -63,7 +64,6 @@ impl ComputeLeaderFinalityService {
                                 .map(|vote| (vote.tick_height, validator_stake));
                         }
                     }
-
                     None
                 })
                 .collect()
@@ -174,7 +174,7 @@ pub mod tests {
         let ids: Vec<_> = (0..10)
             .map(|i| {
                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-                bank.register_tick(&last_id);
+                bank.tpu_register_tick(&last_id);
                 // sleep to get a different timestamp in the bank
                 sleep(Duration::from_millis(1));
                 last_id

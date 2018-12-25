@@ -196,7 +196,6 @@ impl Entry {
         }
         true
     }
-
     pub fn is_tick(&self) -> bool {
         self.transactions.is_empty()
     }

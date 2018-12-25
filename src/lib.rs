@@ -11,6 +11,7 @@
 pub mod counter;
 pub mod accounts;
 pub mod bank;
+pub mod bank_state;
 pub mod banking_stage;
 pub mod blob_fetch_stage;
 pub mod bloom;
@@ -19,7 +20,7 @@ pub mod broadcast_service;
 pub mod chacha;
 #[cfg(all(feature = "chacha", feature = "cuda"))]
 pub mod chacha_cuda;
-pub mod checkpoint;
+pub mod checkpoints;
 pub mod client;
 pub mod crds;
 pub mod crds_gossip;
@@ -29,6 +30,9 @@ pub mod crds_gossip_push;
 pub mod crds_traits_impls;
 pub mod crds_value;
 pub mod create_vote_account;
+pub mod entry_queue;
+pub mod forks;
+pub mod subscriptions;
 #[macro_use]
 pub mod contact_info;
 pub mod cluster_info;
@@ -62,7 +66,7 @@ pub mod service;
 pub mod signature;
 pub mod sigverify;
 pub mod sigverify_stage;
-pub mod status_deque;
+pub mod status_cache;
 pub mod storage_stage;
 pub mod store_ledger_stage;
 pub mod streamer;

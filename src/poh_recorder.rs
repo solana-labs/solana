@@ -106,7 +106,7 @@ impl PohRecorder {
             id: tick.id,
             transactions: vec![],
         };
-        self.bank.register_tick(&tick.id);
+        self.bank.tpu_register_tick(&tick.id);
         self.sender.send(vec![tick])?;
         Ok(())
     }

@@ -8,7 +8,6 @@ use crate::jsonrpc_pubsub::{PubSubHandler, Session, SubscriptionId};
 use crate::jsonrpc_ws_server::{RequestContext, Sender, ServerBuilder};
 use crate::rpc::{JsonRpcRequestProcessor, RpcSignatureStatus};
 use crate::service::Service;
-use crate::status_deque::Status;
 use bs58;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
@@ -216,7 +215,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         }
 
         match status.unwrap() {
-            Status::Complete(Ok(_)) => {
+            Ok(_) => {
                 sink.notify(Ok(RpcSignatureStatus::Confirmed))
                     .wait()
                     .unwrap();
