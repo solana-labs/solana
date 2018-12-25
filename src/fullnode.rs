@@ -65,6 +65,7 @@ pub struct FullnodeConfig {
     pub storage_rotate_count: u64,
     pub leader_scheduler_config: LeaderSchedulerConfig,
     pub tick_config: PohServiceConfig,
+    pub account_paths: String,
 }
 impl Default for FullnodeConfig {
     fn default() -> Self {
@@ -79,6 +80,7 @@ impl Default for FullnodeConfig {
             storage_rotate_count: NUM_HASHES_FOR_STORAGE_ROTATE,
             leader_scheduler_config: LeaderSchedulerConfig::default(),
             tick_config: PohServiceConfig::default(),
+            account_paths: "0,1,2,3".to_string(),
         }
     }
 }
@@ -126,7 +128,7 @@ impl Fullnode {
             &config.leader_scheduler_config,
         )));
         let (bank_forks, bank_forks_info, blocktree, ledger_signal_receiver) =
-            new_banks_from_blocktree(ledger_path, config.ticks_per_slot(), &leader_scheduler);
+            new_banks_from_blocktree(ledger_path, &config.account_paths, config.ticks_per_slot(), &leader_scheduler);
 
         info!("node info: {:?}", node.info);
         info!("node entrypoint_info: {:?}", entrypoint_info_option);
@@ -366,6 +368,7 @@ impl Fullnode {
 
 pub fn new_banks_from_blocktree(
     blocktree_path: &str,
+    account_paths: &str,
     ticks_per_slot: u64,
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
 ) -> (BankForks, Vec<BankForksInfo>, Blocktree, Receiver<bool>) {
@@ -703,6 +706,7 @@ mod tests {
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
         let (bank_forks, bank_forks_info, _, _) = new_banks_from_blocktree(
             &validator_ledger_path,
+            "accounts",
             DEFAULT_TICKS_PER_SLOT,
             &leader_scheduler,
         );
