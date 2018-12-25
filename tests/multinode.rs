@@ -911,7 +911,7 @@ fn test_leader_to_validator_transition() {
     leader_exit();
 
     info!("Check the ledger to make sure it's the right height...");
-    let bank_forks = new_banks_from_blocktree(&leader_ledger_path).0;
+    let bank_forks = new_banks_from_blocktree(&leader_ledger_path, "").0;
     let _bank = bank_forks.working_bank();
 
     remove_dir_all(leader_ledger_path).unwrap();

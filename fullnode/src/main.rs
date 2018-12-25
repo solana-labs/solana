@@ -200,6 +200,14 @@ fn main() {
                 .takes_value(true)
                 .help("Rendezvous with the vote signer at this RPC end point"),
         )
+        .arg(
+            Arg::with_name("accounts")
+                .short("a")
+                .long("accounts")
+                .value_name("PATHS")
+                .takes_value(true)
+                .help("Comma separated persistent accounts location"),
+        )
         .get_matches();
 
     let mut fullnode_config = FullnodeConfig::default();
@@ -209,6 +217,9 @@ fn main() {
     let use_only_bootstrap_leader = matches.is_present("no_leader_rotation");
     let (keypair, gossip) = parse_identity(&matches);
     let ledger_path = matches.value_of("ledger").unwrap();
+    if let Some(paths) = matches.value_of("accounts") {
+        fullnode_config.account_paths = paths.to_string();
+    }
     let cluster_entrypoint = matches
         .value_of("network")
         .map(|network| network.parse().expect("failed to parse network address"));
