@@ -945,6 +945,7 @@ fn test_leader_to_validator_transition() {
     info!("Check the ledger to make sure it's the right height...");
     let bank_forks = new_banks_from_blocktree(
         &leader_ledger_path,
+        "",
         DEFAULT_TICKS_PER_SLOT,
         &Arc::new(RwLock::new(LeaderScheduler::default())),
     )

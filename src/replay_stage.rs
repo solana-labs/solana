@@ -560,7 +560,7 @@ mod test {
         {
             // Set up the bank
             let (bank_forks, bank_forks_info, blocktree, ledger_signal_receiver) =
-                new_banks_from_blocktree(&my_ledger_path, ticks_per_slot, &leader_scheduler);
+                new_banks_from_blocktree(&my_ledger_path, "", ticks_per_slot, &leader_scheduler);
 
             // Set up the replay stage
             let (rotation_sender, rotation_receiver) = channel();
@@ -659,6 +659,7 @@ mod test {
             let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
             let (bank_forks, bank_forks_info, blocktree, l_receiver) = new_banks_from_blocktree(
                 &my_ledger_path,
+                "",
                 DEFAULT_TICKS_PER_SLOT,
                 &leader_scheduler,
             );
@@ -767,7 +768,7 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         {
             let (bank_forks, bank_forks_info, blocktree, l_receiver) =
-                new_banks_from_blocktree(&my_ledger_path, ticks_per_slot, &leader_scheduler);
+                new_banks_from_blocktree(&my_ledger_path, "", ticks_per_slot, &leader_scheduler);
             let bank = bank_forks.working_bank();
             let meta = blocktree
                 .meta(0)
