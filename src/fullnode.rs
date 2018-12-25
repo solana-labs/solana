@@ -67,6 +67,7 @@ pub struct FullnodeConfig {
     pub storage_rotate_count: u64,
     pub leader_scheduler_config: LeaderSchedulerConfig,
     pub tick_config: PohServiceConfig,
+    pub account_paths: String,
 }
 impl Default for FullnodeConfig {
     fn default() -> Self {
@@ -81,6 +82,7 @@ impl Default for FullnodeConfig {
             storage_rotate_count: NUM_HASHES_FOR_STORAGE_ROTATE,
             leader_scheduler_config: LeaderSchedulerConfig::default(),
             tick_config: PohServiceConfig::default(),
+            account_paths: "0,1,2,3".to_string(),
         }
     }
 }
@@ -127,7 +129,12 @@ impl Fullnode {
             &config.leader_scheduler_config,
         )));
         let (bank, entry_height, last_entry_id, blocktree, ledger_signal_receiver) =
-            new_bank_from_ledger(ledger_path, &config.ledger_config(), &leader_scheduler);
+            new_bank_from_ledger(
+                ledger_path,
+                &config.account_paths,
+                &config.ledger_config(),
+                &leader_scheduler,
+            );
 
         info!("node info: {:?}", node.info);
         info!("node entrypoint_info: {:?}", entrypoint_info_option);
@@ -451,6 +458,7 @@ impl Fullnode {
 #[allow(clippy::trivially_copy_pass_by_ref)]
 fn new_banks_from_blocktree(
     blocktree_path: &str,
+    account_paths: &str,
     blocktree_config: &BlocktreeConfig,
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
 ) -> (Arc<Bank>, u64, Hash, Blocktree, Receiver<bool>) {
@@ -480,11 +488,12 @@ fn new_banks_from_blocktree(
 #[allow(clippy::trivially_copy_pass_by_ref)]
 pub fn new_bank_from_ledger(
     ledger_path: &str,
+    account_paths: &str,
     ledger_config: &BlocktreeConfig,
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
 ) -> (Arc<Bank>, u64, Hash, Blocktree, Receiver<bool>) {
     let (working_bank, entry_height, last_entry_id, blocktree, ledger_signal_receiver) =
-        new_banks_from_blocktree(ledger_path, ledger_config, leader_scheduler);
+        new_banks_from_blocktree(ledger_path, account_paths, ledger_config, leader_scheduler);
     (
         working_bank,
         entry_height,
@@ -827,6 +836,7 @@ mod tests {
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
         let (bank, entry_height, _, _, _) = new_bank_from_ledger(
             &validator_ledger_path,
+            "accounts",
             &BlocktreeConfig::default(),
             &leader_scheduler,
         );

@@ -1009,6 +1009,7 @@ fn test_leader_to_validator_transition() {
     info!("Check the ledger to make sure it's the right height...");
     let bank = new_bank_from_ledger(
         &leader_ledger_path,
+        "",
         &BlocktreeConfig::default(),
         &Arc::new(RwLock::new(LeaderScheduler::default())),
     )

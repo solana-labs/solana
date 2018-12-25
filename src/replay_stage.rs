@@ -441,7 +441,7 @@ mod test {
             // Set up the bank
             let blocktree_config = BlocktreeConfig::new(ticks_per_slot);
             let (bank, _entry_height, last_entry_id, blocktree, l_receiver) =
-                new_bank_from_ledger(&my_ledger_path, &blocktree_config, &leader_scheduler);
+                new_bank_from_ledger(&my_ledger_path, "", &blocktree_config, &leader_scheduler);
 
             // Set up the replay stage
             let (rotation_sender, rotation_receiver) = channel();
@@ -547,6 +547,7 @@ mod test {
             let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
             let (bank, entry_height, last_entry_id, blocktree, l_receiver) = new_bank_from_ledger(
                 &my_ledger_path,
+                "",
                 &BlocktreeConfig::default(),
                 &leader_scheduler,
             );
@@ -669,7 +670,7 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         {
             let (bank, _entry_height, last_entry_id, blocktree, l_receiver) =
-                new_bank_from_ledger(&my_ledger_path, &blocktree_config, &leader_scheduler);
+                new_bank_from_ledger(&my_ledger_path, "", &blocktree_config, &leader_scheduler);
 
             let meta = blocktree
                 .meta(0)
