@@ -569,7 +569,7 @@ impl Fullnode {
         db_ledger: &DbLedger,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> (Bank, u64, Hash) {
-        let mut bank = Bank::new_with_builtin_programs();
+        let mut bank = Bank::default();
         bank.leader_scheduler = leader_scheduler;
 
         let now = Instant::now();

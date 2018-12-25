@@ -38,11 +38,10 @@ impl ComputeLeaderConfirmationService {
 
         // Hold an accounts_db read lock as briefly as possible, just long enough to collect all
         // the vote states
-        let vote_states: Vec<VoteProgram> = bank
-            .accounts
-            .accounts_db
-            .read()
-            .unwrap()
+        // TODO: do we use trunk or live fork here?
+        let state = bank.trunk_fork();
+        let accounts = state.head().accounts.accounts_db.read().unwrap();
+        let vote_states: Vec<VoteProgram> = accounts
             .accounts
             .values()
             .filter_map(|account| {
@@ -181,7 +180,7 @@ pub mod tests {
         let ids: Vec<_> = (0..10)
             .map(|i| {
                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-                bank.register_tick(&last_id);
+                bank.tpu_register_tick(&last_id);
                 // sleep to get a different timestamp in the bank
                 sleep(Duration::from_millis(1));
                 last_id

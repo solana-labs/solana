@@ -300,7 +300,8 @@ pub mod tests {
         for i in 0..num_transfers {
             let entry0 = Entry::new(&cur_hash, 0, i, vec![]);
             cur_hash = entry0.id;
-            bank.register_tick(&cur_hash);
+            //TODO: fix these
+            bank.tpu_register_tick(&cur_hash);
             let entry_tick0 = Entry::new(&cur_hash, 0, i + 1, vec![]);
             cur_hash = entry_tick0.id;
 
@@ -310,11 +311,11 @@ pub mod tests {
                 transfer_amount,
                 cur_hash,
             );
-            bank.register_tick(&cur_hash);
+            bank.tpu_register_tick(&cur_hash);
             let entry_tick1 = Entry::new(&cur_hash, 0, i + 1, vec![]);
             cur_hash = entry_tick1.id;
             let entry1 = Entry::new(&cur_hash, 0, i + num_transfers, vec![tx0]);
-            bank.register_tick(&entry1.id);
+            bank.tpu_register_tick(&entry1.id);
             let entry_tick2 = Entry::new(&entry1.id, 0, i + 1, vec![]);
             cur_hash = entry_tick2.id;
 

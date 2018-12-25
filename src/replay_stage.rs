@@ -3,6 +3,7 @@
 use crate::bank::Bank;
 use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
+use crate::entry::Entry;
 use crate::entry::{EntryReceiver, EntrySender};
 use solana_sdk::hash::Hash;
 
@@ -13,6 +14,7 @@ use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::streamer::{responder, BlobSender};
 use crate::vote_signer_proxy::VoteSignerProxy;
+//use crate::vote_stage::send_validator_vote;
 use log::Level;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -57,13 +59,35 @@ pub struct ReplayStage {
 }
 
 impl ReplayStage {
+    //TODO: This should  be handled by the ledger, and this implementaiton is intentionally stupid.
+    //returns a vec of blocks where a block contains
+    //* entries
+    //* current block index
+    //* base block index
+    //The entries are at most to the block height
+    fn entries_to_blocks(entries: Vec<Entry>) -> Vec<(Vec<Entry>, u64, u64)> {
+        let mut blocks = vec![];
+        for e in entries {
+            let current = e.tick_height / TICKS_PER_BLOCK;
+            let prev = current - 1;
+            if blocks.is_empty() {
+                blocks.push((vec![], current, prev));
+            }
+            if blocks.last().unwrap().1 != current {
+                blocks.push((vec![], current, prev));
+            }
+            blocks.last_mut().unwrap().0.push(e);
+        }
+        blocks
+    }
+
     /// Process entry blobs, already in order
     #[allow(clippy::too_many_arguments)]
     fn process_entries(
         bank: &Arc<Bank>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window_receiver: &EntryReceiver,
-        keypair: &Arc<Keypair>,
+        _keypair: &Arc<Keypair>,
         vote_signer: Option<&Arc<VoteSignerProxy>>,
         vote_blob_sender: Option<&BlobSender>,
         ledger_entry_sender: &EntrySender,
@@ -86,8 +110,6 @@ impl ReplayStage {
                 .to_owned(),
         );
 
-        let mut res = Ok(());
-        let mut num_entries_to_write = entries.len();
         let now = Instant::now();
         if !entries.as_slice().verify(last_entry_id) {
             inc_new_counter_info!("replicate_stage-verify-fail", entries.len());
@@ -101,90 +123,90 @@ impl ReplayStage {
         let (current_leader, _) = bank
             .get_current_leader()
             .expect("Scheduled leader should be calculated by this point");
-        let my_id = keypair.pubkey();
 
         // Next vote tick is ceiling of (current tick/ticks per block)
-        let mut num_ticks_to_next_vote = TICKS_PER_BLOCK - (bank.tick_height() % TICKS_PER_BLOCK);
-        let mut start_entry_index = 0;
-        for (i, entry) in entries.iter().enumerate() {
-            inc_new_counter_info!("replicate-stage_bank-tick", bank.tick_height() as usize);
-            if entry.is_tick() {
-                num_ticks_to_next_vote -= 1;
+        let start_block = bank.tick_height() / TICKS_PER_BLOCK;
+        let blocks = Self::entries_to_blocks(entries);
+        for (entries, current_slot, base_slot) in blocks {
+            let now = Instant::now();
+            //TODO: skip forks that cannot be voted on due to lockouts
+            if !entries.as_slice().verify(last_entry_id) {
+                inc_new_counter_info!("replicate_stage-verify-fail", entries.len());
+                return Err(Error::BlobError(BlobError::VerificationFailed));
             }
             inc_new_counter_info!(
-                "replicate-stage_tick-to-vote",
-                num_ticks_to_next_vote as usize
+                "replicate_stage-verify-duration",
+                duration_as_ms(&now.elapsed()) as usize
             );
-            // If it's the last entry in the vector, i will be vec len - 1.
-            // If we don't process the entry now, the for loop will exit and the entry
-            // will be dropped.
-            if 0 == num_ticks_to_next_vote || (i + 1) == entries.len() {
-                res = bank.process_entries(&entries[start_entry_index..=i]);
+            if bank.bank_state(current_slot).is_none() {
+                let tick = &entries[0];
+                bank.init_fork(current_slot, &tick.id, base_slot)
+                    .expect("init_checkpoint");
+            }
+            let res = bank.process_fork_entries(current_slot, &entries);
+            if res.is_err() {
+                inc_new_counter_info!("replicate-stage_failed_process_entries", 1);
+            }
+            inc_new_counter_info!(
+                "replicate-transactions",
+                entries.iter().map(|x| x.transactions.len()).sum()
+            );
+            let entries_len = entries.len() as u64;
+            if entries_len != 0 {
+                ledger_entry_sender.send(entries)?;
+            }
+            *entry_height += entries_len;
+        }
+        // do this at the trunk crossover
+        bank.leader_scheduler
+            .write()
+            .unwrap()
+            .update_height(bank.tick_height(), bank);
+        let now = Instant::now();
+        let end_block = bank.tick_height() / TICKS_PER_BLOCK;
+        // TODO: make this work
+        // let options = vec![];
+        // for c in bank.live_forks() {
+        //     let state = bank.bank_state(c);
+        //     if is_valid_vote(state.entry_height()) {
+        //         options.push(state);
+        //     }
+        // }
+        // options.sort_by(|o| o.compute_network_lockout());
+        // if options.last().is_none() {
+        //     return;
+        // }
+        // let new_leaf = options.last().unwrap();
+        // let new_trunk = bank.merge_trunk(old_trunk, new_leaf);
+        // if old_trunk < new_leader_scheduler && new_trunk >= new_leader_scheduler {
+        //     // If the schedule is computed every 100 periods
+        //     // this computes the schedule when trunk is >= 100
+        //     // this schedule is active at 200
+        //     leader_scheduler
+        //         .write()
+        //         .unwrap()
+        //         .generate_future_schedule(new_trunk);
+        // }
+        // vote(options.last());
 
-                if res.is_err() {
-                    // TODO: This will return early from the first entry that has an erroneous
-                    // transaction, instead of processing the rest of the entries in the vector
-                    // of received entries. This is in line with previous behavior when
-                    // bank.process_entries() was used to process the entries, but doesn't solve the
-                    // issue that the bank state was still changed, leading to inconsistencies with the
-                    // leader as the leader currently should not be publishing erroneous transactions
-                    inc_new_counter_info!(
-                        "replicate-stage_failed_process_entries",
-                        (i - start_entry_index)
-                    );
-
-                    break;
-                }
-
-                if 0 == num_ticks_to_next_vote {
-                    if let Some(signer) = vote_signer {
+        if end_block != start_block {
+                     if let Some(signer) = vote_signer {
                         if let Some(sender) = vote_blob_sender {
                             signer
                                 .send_validator_vote(bank, &cluster_info, sender)
                                 .unwrap();
                         }
-                    }
-                }
-                let (scheduled_leader, _) = bank
-                    .get_current_leader()
-                    .expect("Scheduled leader should be calculated by this point");
+                    } 
+        }
+        let (scheduled_leader, _) = bank
+            .get_current_leader()
+            .expect("Scheduled leader should be calculated by this point");
 
-                // TODO: Remove this soon once we boot the leader from ClusterInfo
-                if scheduled_leader != current_leader {
-                    cluster_info.write().unwrap().set_leader(scheduled_leader);
-                }
-
-                if my_id == scheduled_leader {
-                    num_entries_to_write = i + 1;
-                    break;
-                }
-                start_entry_index = i + 1;
-                num_ticks_to_next_vote = TICKS_PER_BLOCK;
-            }
+        // TODO: Remove this soon once we boot the leader from ClusterInfo
+        if scheduled_leader != current_leader {
+            cluster_info.write().unwrap().set_leader(scheduled_leader);
         }
 
-        // If leader rotation happened, only write the entries up to leader rotation.
-        entries.truncate(num_entries_to_write);
-        *last_entry_id = entries
-            .last()
-            .expect("Entries cannot be empty at this point")
-            .id;
-
-        inc_new_counter_info!(
-            "replicate-transactions",
-            entries.iter().map(|x| x.transactions.len()).sum()
-        );
-
-        let entries_len = entries.len() as u64;
-        // TODO: In line with previous behavior, this will write all the entries even if
-        // an error occurred processing one of the entries (causing the rest of the entries to
-        // not be processed).
-        if entries_len != 0 {
-            ledger_entry_sender.send(entries)?;
-        }
-
-        *entry_height += entries_len;
-        res?;
         inc_new_counter_info!(
             "replicate_stage-duration",
             duration_as_ms(&now.elapsed()) as usize
@@ -290,13 +312,13 @@ mod test {
     use crate::leader_scheduler::{
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
+    use solana_sdk::hash::Hash;
 
     use crate::packet::BlobError;
     use crate::replay_stage::{ReplayStage, ReplayStageReturnType};
     use crate::result::Error;
     use crate::service::Service;
     use crate::vote_signer_proxy::VoteSignerProxy;
-    use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_vote_signer::rpc::LocalVoteSigner;
     use std::fs::remove_dir_all;

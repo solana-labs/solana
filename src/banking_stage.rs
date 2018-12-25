@@ -155,7 +155,7 @@ impl BankingStage {
         while chunk_start != transactions.len() {
             let chunk_end = chunk_start + Entry::num_will_fit(&transactions[chunk_start..]);
 
-            bank.process_and_record_transactions(&transactions[chunk_start..chunk_end], poh)?;
+            bank.process_and_record_transactions(&transactions[chunk_start..chunk_end], Some(poh))?;
 
             chunk_start = chunk_end;
         }
