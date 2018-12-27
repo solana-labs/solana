@@ -8,15 +8,15 @@ annotate() {
   }
 }
 
-# ci/affects-files.sh \
-#   .rs$ \
-#   ci/test-stable-perf.sh \
-#   ci/test-stable.sh \
-# || {
-#   annotate --style info --context test-stable-perf \
-#     "Stable Perf skipped as no .rs files were modified"
-#   exit 0
-# }
+ci/affects-files.sh \
+  .rs$ \
+  ci/test-stable-perf.sh \
+  ci/test-stable.sh \
+|| {
+  annotate --style info --context test-stable-perf \
+    "Stable Perf skipped as no .rs files were modified"
+  exit 0
+}
 
 # Must be built out of band
 make -C programs/bpf/rust/noop/ all
