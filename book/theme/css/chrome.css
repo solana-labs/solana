@@ -318,7 +318,7 @@ ul#searchresults span.teaser em {
 .sidebar img {
     display: block;
     max-width: 70%;
-    margin: 0 auto;
+    margin: 20px auto;
 }
 .js .sidebar {
     transition: transform 0.3s; /* Animation: slide away */
@@ -474,7 +474,7 @@ ul#searchresults span.teaser em {
 }
 
 .content h3 {
-    font-size: 15px;
+    font-size: 20px;
     margin-top: 2.5em;
     margin-bottom: 0.8em;
     padding: 0 28px;
