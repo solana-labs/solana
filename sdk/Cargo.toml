@@ -17,7 +17,7 @@ generic-array = { version = "0.12.0", default-features = false, features = ["ser
 log = "0.4.2"
 ring = "0.13.2"
 sha2 = "0.8.0"
-serde = "1.0.82"
+serde = "1.0.84"
 serde_derive = "1.0.82"
 serde_json = "1.0.34"
 untrusted = "0.6.2"
