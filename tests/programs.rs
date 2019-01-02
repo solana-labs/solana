@@ -11,20 +11,20 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
-#[cfg(feature = "bpf_c")]
+#[cfg(any(feature = "bpf_c", feature = "bpf_rust"))]
 use std::env;
-#[cfg(feature = "bpf_c")]
+#[cfg(any(feature = "bpf_c", feature = "bpf_rust"))]
 use std::fs::File;
-#[cfg(feature = "bpf_c")]
+#[cfg(any(feature = "bpf_c", feature = "bpf_rust"))]
 use std::io::Read;
-#[cfg(feature = "bpf_c")]
+#[cfg(any(feature = "bpf_c", feature = "bpf_rust"))]
 use std::path::PathBuf;
 
 /// BPF program file extension
-#[cfg(feature = "bpf_c")]
+#[cfg(any(feature = "bpf_c", feature = "bpf_rust"))]
 const PLATFORM_FILE_EXTENSION_BPF: &str = "so";
 /// Create a BPF program file name
-#[cfg(feature = "bpf_c")]
+#[cfg(any(feature = "bpf_c", feature = "bpf_rust"))]
 fn create_bpf_path(name: &str) -> PathBuf {
     let mut pathbuf = {
         let current_exe = env::current_exe().unwrap();
@@ -306,6 +306,42 @@ fn test_program_bpf_c() {
         "struct_ret",
         "multiple_static",
     ];
+    for program in programs.iter() {
+        println!("Test program: {:?}", program);
+        let mut file = File::open(create_bpf_path(program)).expect("file open failed");
+        let mut elf = Vec::new();
+        file.read_to_end(&mut elf).unwrap();
+
+        let loader = Loader::new_dynamic("solana_bpf_loader");
+        let program = Program::new(&loader, &elf);
+
+        // Call user program
+        let tx = Transaction::new(
+            &loader.mint.keypair(),
+            &[],
+            program.program.pubkey(),
+            &vec![1u8],
+            loader.mint.last_id(),
+            0,
+        );
+        check_tx_results(
+            &loader.bank,
+            &tx,
+            loader.bank.process_transactions(&vec![tx.clone()]),
+        );
+    }
+}
+
+// Cannot currently build the Rust BPF program as part
+// of the rest of the build due to recursive `cargo build` causing
+// a build deadlock.  Therefore you must build the Rust programs
+// yourself first by calling `make all` in the Rust BPF program's directory
+#[cfg(feature = "bpf_rust")]
+#[test]
+fn test_program_bpf_rust() {
+    solana_logger::setup();
+
+    let programs = ["solana_bpf_rust_noop"];
     for program in programs.iter() {
         println!("Test program: {:?}", program);
         let mut file = File::open(create_bpf_path(program)).expect("file open failed");

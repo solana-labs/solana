@@ -18,7 +18,10 @@ ci/affects-files.sh \
   exit 0
 }
 
-FEATURES=bpf_c,erasure,chacha
+# Must be built out of band
+make -C programs/bpf/rust/noop/ all
+
+FEATURES=bpf_c,bpf_rust,erasure,chacha
 if [[ $(uname) = Darwin ]]; then
   ./build-perf-libs.sh
 else

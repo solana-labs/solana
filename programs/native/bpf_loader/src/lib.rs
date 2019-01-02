@@ -85,7 +85,9 @@ pub fn create_vm(prog: &[u8]) -> Result<EbpfVmRaw, Error> {
     vm.set_max_instruction_count(36000)?; // 36000 is a wag, need to tune
     vm.set_elf(&prog)?;
     vm.register_helper_ex("sol_log", Some(helper_sol_log_verify), helper_sol_log)?;
+    vm.register_helper_ex("sol_log_", Some(helper_sol_log_verify), helper_sol_log)?;
     vm.register_helper_ex("sol_log_64", None, helper_sol_log_u64)?;
+    vm.register_helper_ex("sol_log_64_", None, helper_sol_log_u64)?;
     Ok(vm)
 }
 

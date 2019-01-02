@@ -1,15 +1,22 @@
-extern crate rbpf;
+//! @brief Example Rust-based BPF program that prints out the parameters passed to it
 
-use std::mem::transmute;
+#![cfg(not(test))]
+#![no_std]
 
-#[no_mangle]
-#[link_section = ".text,entrypoint"] // TODO platform independent needed
-pub extern "C" fn entrypoint(_raw: *mut u8) {
-    let bpf_func_trace_printk = unsafe {
-        transmute::<u64, extern "C" fn(u64, u64, u64, u64, u64)>(u64::from(
-            rbpf::helpers::BPF_TRACE_PRINTK_IDX,
-        ))
-    };
+mod solana_sdk;
 
-    bpf_func_trace_printk(0, 0, 1, 2, 3);
+use solana_sdk::*;
+
+fn process(ka: &mut [SolKeyedAccount], data: &[u8], info: &SolClusterInfo) -> bool {
+    sol_log("Tick height:");
+    sol_log_64(info.tick_height, 0, 0, 0, 0);
+    sol_log("Program identifier:");
+    sol_log_key(&info.program_id);
+
+    // Log the provided account keys and instruction input data.  In the case of
+    // the no-op program, no account keys or input data are expected but real
+    // programs will have specific requirements so they can do their work.
+    sol_log("Account keys and instruction input data:");
+    sol_log_params(ka, data);
+    true
 }
