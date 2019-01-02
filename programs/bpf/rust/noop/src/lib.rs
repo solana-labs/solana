@@ -1,8 +1,7 @@
 //! @brief Example Rust-based BPF program that prints out the parameters passed to it
 
+#![cfg(not(test))]
 #![no_std]
-
-extern crate heapless;
 
 mod solana_sdk;
 

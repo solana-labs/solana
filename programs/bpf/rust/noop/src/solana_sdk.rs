@@ -1,9 +1,14 @@
 //! @brief Solana Rust-based BPF program utility functions and types
 
+extern crate heapless;
+
+use self::heapless::consts::*;
+use self::heapless::String; // fixed capacity `std::Vec` // type level integer used to specify capacity
+#[cfg(test)]
+use self::tests::process;
 use core::mem::size_of;
 use core::slice::from_raw_parts;
-use heapless::consts::*;
-use heapless::String; // fixed capacity `std::Vec` // type level integer used to specify capacity
+#[cfg(not(test))]
 use process;
 
 extern "C" {
@@ -12,7 +17,7 @@ extern "C" {
 /// Helper function that prints a string to stdout
 pub fn sol_log(message: &str) {
     let mut c_string: String<U256> = String::new();
-    if message.len() < 256 - 1 {
+    if message.len() < 256 {
         if c_string.push_str(message).is_err() {
             c_string
                 .push_str("Attempted to log a malformed string\0")
@@ -45,6 +50,7 @@ pub fn sol_log_64(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) {
 /// Prints the hexadecimal representation of a public key
 ///
 /// @param key The public key to print
+#[allow(dead_code)]
 pub fn sol_log_key(key: &SolPubkey) {
     for (i, k) in key.key.iter().enumerate() {
         sol_log_64(0, 0, 0, i as u64, u64::from(*k));
@@ -54,6 +60,7 @@ pub fn sol_log_key(key: &SolPubkey) {
 /// Prints the hexadecimal representation of a slice
 ///
 /// @param slice The array to print
+#[allow(dead_code)]
 pub fn sol_log_slice(slice: &[u8]) {
     for (i, s) in slice.iter().enumerate() {
         sol_log_64(0, 0, 0, i as u64, u64::from(*s));
@@ -64,6 +71,7 @@ pub fn sol_log_slice(slice: &[u8]) {
 ///
 /// @param ka A pointer to an array of SolKeyedAccount to print
 /// @param data A pointer to the instruction data to print
+#[allow(dead_code)]
 pub fn sol_log_params(ka: &[SolKeyedAccount], data: &[u8]) {
     sol_log("- Number of KeyedAccounts");
     sol_log_64(0, 0, 0, 0, ka.len() as u64);
@@ -208,4 +216,166 @@ pub extern "C" fn entrypoint(input: *mut u8) -> bool {
 
     // Call user implementable function
     process(&mut ka, &data, &info)
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate std;
+
+    use self::std::ffi::CStr;
+    use self::std::println;
+    use self::std::string::String;
+    use super::*;
+
+    static mut _LOG_SCENARIO: u64 = 0;
+    fn get_log_scenario() -> u64 {
+        unsafe { _LOG_SCENARIO }
+    }
+    fn set_log_scenario(test: u64) {
+        unsafe { _LOG_SCENARIO = test };
+    }
+
+    #[no_mangle]
+    fn sol_log_(message: *const u8) {
+        let scenario = get_log_scenario();
+        let c_str = unsafe { CStr::from_ptr(message as *const i8) };
+        let string = c_str.to_str().unwrap();
+        match scenario {
+            1 => assert_eq!(string, "This is a test message"),
+            2 => assert_eq!(string, "Attempted to log a string that is too long"),
+            3 => {
+                let s: String = ['a'; 255].iter().collect();
+                assert_eq!(string, s);
+            }
+            4 => println!("{:?}", string),
+            _ => panic!("Unkown sol_log test"),
+        }
+    }
+
+    static mut _LOG_64_SCENARIO: u64 = 0;
+    fn get_log_64_scenario() -> u64 {
+        unsafe { _LOG_64_SCENARIO }
+    }
+    fn set_log_64_scenario(test: u64) {
+        unsafe { _LOG_64_SCENARIO = test };
+    }
+
+    #[no_mangle]
+    fn sol_log_64_(arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) {
+        let scenario = get_log_64_scenario();
+        match scenario {
+            1 => {
+                assert_eq!(1, arg1);
+                assert_eq!(2, arg2);
+                assert_eq!(3, arg3);
+                assert_eq!(4, arg4);
+                assert_eq!(5, arg5);
+            }
+            2 => {
+                assert_eq!(0, arg1);
+                assert_eq!(0, arg2);
+                assert_eq!(0, arg3);
+                assert_eq!(arg4 + 1, arg5);
+            }
+            3 => {
+                assert_eq!(0, arg1);
+                assert_eq!(0, arg2);
+                assert_eq!(0, arg3);
+                assert_eq!(arg4 + 1, arg5);
+            }
+            4 => println!("{:?} {:?} {:?} {:?} {:?}", arg1, arg2, arg3, arg4, arg5),
+            _ => panic!("Unknown sol_log_64 test"),
+        }
+    }
+
+    #[test]
+    fn test_sol_log() {
+        set_log_scenario(1);
+        sol_log("This is a test message");
+    }
+
+    #[test]
+    fn test_sol_log_long() {
+        set_log_scenario(2);
+        let s: String = ['a'; 256].iter().collect();
+        sol_log(&s);
+    }
+
+    #[test]
+    fn test_sol_log_max_length() {
+        set_log_scenario(3);
+        let s: String = ['a'; 255].iter().collect();
+        sol_log(&s);
+    }
+
+    #[test]
+    fn test_sol_log_64() {
+        set_log_64_scenario(1);
+        sol_log_64(1, 2, 3, 4, 5);
+    }
+
+    #[test]
+    fn test_sol_log_key() {
+        set_log_64_scenario(2);
+        let key_array = [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+            25, 26, 27, 28, 29, 30, 31, 32,
+        ];
+        let key = SolPubkey { key: &key_array };
+        sol_log_key(&key);
+    }
+
+    #[test]
+    fn test_sol_log_slice() {
+        set_log_64_scenario(3);
+        let array = [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+            25, 26, 27, 28, 29, 30, 31, 32,
+        ];
+        sol_log_slice(&array);
+    }
+
+    pub fn process(ka: &mut [SolKeyedAccount], data: &[u8], info: &SolClusterInfo) -> bool {
+        assert_eq!(1, ka.len());
+        assert_eq!(1, ka[0].is_signer);
+        let key = [
+            151, 116, 3, 85, 181, 39, 151, 99, 155, 29, 208, 191, 255, 191, 11, 161, 4, 43, 104,
+            189, 202, 240, 231, 111, 146, 255, 199, 71, 67, 34, 254, 68,
+        ];
+        assert_eq!(SIZE_PUBKEY, ka[0].key.key.len());
+        assert_eq!(key, ka[0].key.key);
+        assert_eq!(48, ka[0].tokens);
+        assert_eq!(1, ka[0].userdata.len());
+        let owner = [0; 32];
+        assert_eq!(SIZE_PUBKEY, ka[0].owner.key.len());
+        assert_eq!(owner, ka[0].owner.key);
+        let d = [1, 0, 0, 0, 0, 0, 0, 0, 1];
+        assert_eq!(9, data.len());
+        assert_eq!(d, data);
+        assert_eq!(1, info.tick_height);
+        let program_id = [
+            190, 103, 191, 69, 193, 202, 38, 193, 95, 62, 131, 135, 105, 13, 142, 240, 155, 120,
+            177, 90, 212, 54, 10, 118, 40, 33, 192, 8, 54, 141, 187, 63,
+        ];
+        assert_eq!(program_id, info.program_id.key);
+
+        true
+    }
+
+    #[test]
+    fn test_entrypoint() {
+        set_log_scenario(4);
+        set_log_64_scenario(4);
+        let mut input: [u8; 154] = [
+            1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 151, 116, 3, 85, 181, 39, 151, 99, 155,
+            29, 208, 191, 255, 191, 11, 161, 4, 43, 104, 189, 202, 240, 231, 111, 146, 255, 199,
+            71, 67, 34, 254, 68, 48, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 255, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9,
+            0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 190, 103, 191,
+            69, 193, 202, 38, 193, 95, 62, 131, 135, 105, 13, 142, 240, 155, 120, 177, 90, 212, 54,
+            10, 118, 40, 33, 192, 8, 54, 141, 187, 63,
+        ];
+
+        entrypoint(&mut input[0] as *mut u8);
+    }
 }

@@ -137,6 +137,9 @@ dump: $(OUT_DIR)/$(TARGET_NAME).so
 	$(_@)greadelf -aW $(OUT_DIR)/$(TARGET_NAME).so | rustfilt
 	$(_@)$(OBJ_DUMP) -disassemble -source $(OUT_DIR)/$(TARGET_NAME).so | rustfilt
 
+test:
+	cargo test -- --test-threads 1
+
 clean:
 	$(_@)rm -rf $(OUT_DIR)
 	cargo clean
