@@ -56,12 +56,13 @@ macro_rules! cross_boundary {
     };
 }
 
-const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = 1024;
+const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = 128;
 // TODO: some way to dynamically size NUM_IDENTITIES
 const NUM_IDENTITIES: usize = 1024;
 const NUM_SAMPLES: usize = 4;
 pub const ENTRIES_PER_SEGMENT: u64 = 16;
 const KEY_SIZE: usize = 64;
+pub const NUM_STORAGE_SAMPLES: u64 = 4;
 
 pub fn get_segment_from_entry(entry_height: u64) -> u64 {
     entry_height / ENTRIES_PER_SEGMENT
@@ -392,7 +393,7 @@ mod tests {
             1,
         );
 
-        let entries = make_tiny_test_entries(128);
+        let entries = make_tiny_test_entries(64);
         let db_ledger = DbLedger::open(&ledger_path).unwrap();
         db_ledger
             .write_entries(DEFAULT_SLOT_HEIGHT, genesis_entries.len() as u64, &entries)

@@ -24,6 +24,7 @@ use std::fs::remove_dir_all;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::Arc;
+use std::thread::sleep;
 use std::time::Duration;
 
 #[test]
@@ -59,6 +60,15 @@ fn test_replicator_startup() {
         );
 
         let validator_keypair = Arc::new(Keypair::new());
+
+        let mut leader_client = mk_client(&leader_info);
+
+        let last_id = leader_client.get_last_id();
+        let mut leader_client = mk_client(&leader_info);
+        leader_client
+            .transfer(10, &mint.keypair(), validator_keypair.pubkey(), &last_id)
+            .unwrap();
+
         let signer_proxy =
             VoteSignerProxy::new(&validator_keypair, Box::new(LocalVoteSigner::default()));
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
@@ -76,17 +86,23 @@ fn test_replicator_startup() {
             None,
         );
 
-        let mut leader_client = mk_client(&leader_info);
-
         let bob = Keypair::new();
 
-        let last_id = leader_client.get_last_id();
-        leader_client
-            .transfer(1, &mint.keypair(), bob.pubkey(), &last_id)
-            .unwrap();
+        info!("starting transfers..");
+
+        for _ in 0..128 {
+            let last_id = leader_client.get_last_id();
+            leader_client
+                .transfer(1, &mint.keypair(), bob.pubkey(), &last_id)
+                .unwrap();
+            sleep(Duration::from_millis(200));
+        }
 
         let replicator_keypair = Keypair::new();
 
+        info!("giving replicator tokens..");
+
+        let last_id = leader_client.get_last_id();
         // Give the replicator some tokens
         let amount = 1;
         let mut tx = Transaction::system_new(
@@ -113,11 +129,13 @@ fn test_replicator_startup() {
         )
         .unwrap();
 
+        info!("started replicator..");
+
         // Create a client which downloads from the replicator and see that it
         // can respond with blobs.
         let tn = Node::new_localhost();
         let cluster_info = ClusterInfo::new(tn.info.clone());
-        let repair_index = 1;
+        let repair_index = replicator.entry_height();
         let req = cluster_info
             .window_index_request_bytes(repair_index)
             .unwrap();
@@ -159,10 +177,14 @@ fn test_replicator_startup() {
             use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
             use std::thread::sleep;
 
+            info!(
+                "looking for pubkeys for entry: {}",
+                replicator.entry_height()
+            );
             let rpc_client = RpcClient::new_from_socket(validator_node_info.rpc);
             let mut non_zero_pubkeys = false;
             for _ in 0..30 {
-                let params = json!([0]);
+                let params = json!([replicator.entry_height()]);
                 let pubkeys = rpc_client
                     .make_rpc_request(1, RpcRequest::GetStoragePubkeysForEntryHeight, Some(params))
                     .unwrap();
