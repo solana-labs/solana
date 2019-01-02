@@ -441,6 +441,7 @@ mod tests {
     use crate::fullnode::Fullnode;
     use crate::leader_scheduler::LeaderScheduler;
     use crate::mint::Mint;
+    use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
     use crate::vote_signer_proxy::VoteSignerProxy;
     use bincode::deserialize;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -483,6 +484,7 @@ mod tests {
             &ledger_path,
             false,
             None,
+            STORAGE_ROTATE_TEST_COUNT,
         );
         sleep(Duration::from_millis(900));
 
@@ -539,6 +541,7 @@ mod tests {
             &ledger_path,
             false,
             None,
+            STORAGE_ROTATE_TEST_COUNT,
         );
         //TODO: remove this sleep, or add a retry so CI is stable
         sleep(Duration::from_millis(300));
@@ -600,6 +603,7 @@ mod tests {
             &ledger_path,
             false,
             None,
+            STORAGE_ROTATE_TEST_COUNT,
         );
         sleep(Duration::from_millis(300));
 
@@ -650,6 +654,7 @@ mod tests {
             &ledger_path,
             false,
             None,
+            STORAGE_ROTATE_TEST_COUNT,
         );
         sleep(Duration::from_millis(300));
 
@@ -746,6 +751,7 @@ mod tests {
             &ledger_path,
             false,
             None,
+            STORAGE_ROTATE_TEST_COUNT,
         );
         sleep(Duration::from_millis(900));
 

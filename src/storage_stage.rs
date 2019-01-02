@@ -56,10 +56,10 @@ macro_rules! cross_boundary {
     };
 }
 
-const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = 1024;
+pub const STORAGE_ROTATE_TEST_COUNT: u64 = 128;
 // TODO: some way to dynamically size NUM_IDENTITIES
 const NUM_IDENTITIES: usize = 1024;
-const NUM_SAMPLES: usize = 4;
+pub const NUM_STORAGE_SAMPLES: usize = 4;
 pub const ENTRIES_PER_SEGMENT: u64 = 16;
 const KEY_SIZE: usize = 64;
 
@@ -139,6 +139,7 @@ impl StorageStage {
         keypair: Arc<Keypair>,
         exit: Arc<AtomicBool>,
         entry_height: u64,
+        storage_rotate_count: u64,
     ) -> Self {
         debug!("storage_stage::new: entry_height: {}", entry_height);
         storage_state.state.write().unwrap().entry_height = entry_height;
@@ -160,6 +161,7 @@ impl StorageStage {
                             &mut poh_height,
                             &mut entry_height,
                             &mut current_key,
+                            storage_rotate_count,
                         ) {
                             match e {
                                 Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
@@ -211,7 +213,7 @@ impl StorageStage {
         );
 
         let mut samples = vec![];
-        for _ in 0..NUM_SAMPLES {
+        for _ in 0..NUM_STORAGE_SAMPLES {
             samples.push(rng.gen_range(0, 10));
         }
         debug!("generated samples: {:?}", samples);
@@ -256,6 +258,7 @@ impl StorageStage {
         poh_height: &mut u64,
         entry_height: &mut u64,
         current_key_idx: &mut usize,
+        storage_rotate_count: u64,
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
         let entries = entry_receiver.recv_timeout(timeout)?;
@@ -306,7 +309,7 @@ impl StorageStage {
                     }
                 }
             }
-            if cross_boundary!(*poh_height, entry.num_hashes, NUM_HASHES_FOR_STORAGE_ROTATE) {
+            if cross_boundary!(*poh_height, entry.num_hashes, storage_rotate_count) {
                 info!(
                     "crosses sending at poh_height: {} entry_height: {}! hashes: {}",
                     *poh_height, entry_height, entry.num_hashes
@@ -343,7 +346,9 @@ mod tests {
     use crate::service::Service;
     use crate::storage_stage::StorageState;
     use crate::storage_stage::NUM_IDENTITIES;
-    use crate::storage_stage::{get_identity_index_from_signature, StorageStage};
+    use crate::storage_stage::{
+        get_identity_index_from_signature, StorageStage, STORAGE_ROTATE_TEST_COUNT,
+    };
     use rayon::prelude::*;
     use solana_sdk::hash::Hash;
     use solana_sdk::hash::Hasher;
@@ -373,6 +378,7 @@ mod tests {
             keypair,
             exit.clone(),
             0,
+            STORAGE_ROTATE_TEST_COUNT,
         );
         exit.store(true, Ordering::Relaxed);
         storage_stage.join().unwrap();
@@ -392,7 +398,7 @@ mod tests {
             1,
         );
 
-        let entries = make_tiny_test_entries(128);
+        let entries = make_tiny_test_entries(64);
         let db_ledger = DbLedger::open(&ledger_path).unwrap();
         db_ledger
             .write_entries(DEFAULT_SLOT_HEIGHT, genesis_entries.len() as u64, &entries)
@@ -407,6 +413,7 @@ mod tests {
             keypair,
             exit.clone(),
             0,
+            STORAGE_ROTATE_TEST_COUNT,
         );
         storage_entry_sender.send(entries.clone()).unwrap();
 
@@ -471,6 +478,7 @@ mod tests {
             keypair,
             exit.clone(),
             0,
+            STORAGE_ROTATE_TEST_COUNT,
         );
         storage_entry_sender.send(entries.clone()).unwrap();
 

@@ -14,8 +14,10 @@ use solana::entry::Entry;
 use solana::fullnode::Fullnode;
 use solana::leader_scheduler::LeaderScheduler;
 use solana::replicator::Replicator;
+use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana::streamer::blob_receiver;
 use solana::vote_signer_proxy::VoteSignerProxy;
+use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
@@ -24,6 +26,7 @@ use std::fs::remove_dir_all;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::Arc;
+use std::thread::sleep;
 use std::time::Duration;
 
 #[test]
@@ -38,7 +41,8 @@ fn test_replicator_startup() {
     let leader_info = leader_node.info.clone();
 
     let leader_ledger_path = "replicator_test_leader_ledger";
-    let (mint, leader_ledger_path) = create_tmp_genesis(leader_ledger_path, 100, leader_info.id, 1);
+    let (mint, leader_ledger_path) =
+        create_tmp_genesis(leader_ledger_path, 1_000_000_000, leader_info.id, 1);
 
     let validator_ledger_path =
         tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");
@@ -47,7 +51,7 @@ fn test_replicator_startup() {
         let signer_proxy =
             VoteSignerProxy::new(&leader_keypair, Box::new(LocalVoteSigner::default()));
 
-        let leader = Fullnode::new(
+        let leader = Fullnode::new_with_storage_rotate(
             leader_node,
             &leader_ledger_path,
             leader_keypair,
@@ -56,16 +60,27 @@ fn test_replicator_startup() {
             false,
             LeaderScheduler::from_bootstrap_leader(leader_info.id.clone()),
             None,
+            STORAGE_ROTATE_TEST_COUNT,
         );
 
         let validator_keypair = Arc::new(Keypair::new());
         let signer_proxy =
             VoteSignerProxy::new(&validator_keypair, Box::new(LocalVoteSigner::default()));
+
+        let mut leader_client = mk_client(&leader_info);
+
+        let last_id = leader_client.get_last_id();
+        let mut leader_client = mk_client(&leader_info);
+
+        leader_client
+            .transfer(10, &mint.keypair(), validator_keypair.pubkey(), &last_id)
+            .unwrap();
+
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
         #[cfg(feature = "chacha")]
         let validator_node_info = validator_node.info.clone();
 
-        let validator = Fullnode::new(
+        let validator = Fullnode::new_with_storage_rotate(
             validator_node,
             &validator_ledger_path,
             validator_keypair,
@@ -74,19 +89,26 @@ fn test_replicator_startup() {
             false,
             LeaderScheduler::from_bootstrap_leader(leader_info.id),
             None,
+            STORAGE_ROTATE_TEST_COUNT,
         );
-
-        let mut leader_client = mk_client(&leader_info);
 
         let bob = Keypair::new();
 
-        let last_id = leader_client.get_last_id();
-        leader_client
-            .transfer(1, &mint.keypair(), bob.pubkey(), &last_id)
-            .unwrap();
+        info!("starting transfers..");
+
+        for _ in 0..64 {
+            let last_id = leader_client.get_last_id();
+            leader_client
+                .transfer(1, &mint.keypair(), bob.pubkey(), &last_id)
+                .unwrap();
+            sleep(Duration::from_millis(200));
+        }
 
         let replicator_keypair = Keypair::new();
 
+        info!("giving replicator tokens..");
+
+        let last_id = leader_client.get_last_id();
         // Give the replicator some tokens
         let amount = 1;
         let mut tx = Transaction::system_new(
@@ -113,11 +135,13 @@ fn test_replicator_startup() {
         )
         .unwrap();
 
+        info!("started replicator..");
+
         // Create a client which downloads from the replicator and see that it
         // can respond with blobs.
         let tn = Node::new_localhost();
         let cluster_info = ClusterInfo::new(tn.info.clone());
-        let repair_index = 1;
+        let repair_index = replicator.entry_height();
         let req = cluster_info
             .window_index_request_bytes(repair_index)
             .unwrap();
@@ -132,7 +156,7 @@ fn test_replicator_startup() {
             tn.info.id, replicator_info.gossip
         );
 
-        let mut num_txs = 0;
+        let mut received_blob = false;
         for _ in 0..5 {
             repair_socket.send_to(&req, replicator_info.gossip).unwrap();
 
@@ -144,13 +168,16 @@ fn test_replicator_startup() {
                     assert!(br.index().unwrap() == repair_index);
                     let entry: Entry = deserialize(&br.data()[..br.meta.size]).unwrap();
                     info!("entry: {:?}", entry);
-                    num_txs = entry.transactions.len();
+                    assert_ne!(entry.id, Hash::default());
+                    received_blob = true;
                 }
                 break;
             }
         }
         exit.store(true, Ordering::Relaxed);
         t_receiver.join().unwrap();
+
+        assert!(received_blob);
 
         // The replicator will not submit storage proofs if
         // chacha is not enabled
@@ -159,10 +186,14 @@ fn test_replicator_startup() {
             use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
             use std::thread::sleep;
 
+            info!(
+                "looking for pubkeys for entry: {}",
+                replicator.entry_height()
+            );
             let rpc_client = RpcClient::new_from_socket(validator_node_info.rpc);
             let mut non_zero_pubkeys = false;
-            for _ in 0..30 {
-                let params = json!([0]);
+            for _ in 0..60 {
+                let params = json!([replicator.entry_height()]);
                 let pubkeys = rpc_client
                     .make_rpc_request(1, RpcRequest::GetStoragePubkeysForEntryHeight, Some(params))
                     .unwrap();
@@ -175,9 +206,6 @@ fn test_replicator_startup() {
             }
             assert!(non_zero_pubkeys);
         }
-
-        // Check that some ledger was downloaded
-        assert!(num_txs != 0);
 
         replicator.close();
         validator.exit();

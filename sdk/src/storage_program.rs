@@ -1,11 +1,15 @@
 use crate::hash::Hash;
 use crate::pubkey::Pubkey;
-use crate::signature::{Keypair, KeypairUtil};
+use crate::signature::{Keypair, KeypairUtil, Signature};
 use crate::transaction::Transaction;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum StorageProgram {
-    SubmitMiningProof { sha_state: Hash, entry_height: u64 },
+    SubmitMiningProof {
+        sha_state: Hash,
+        entry_height: u64,
+        signature: Signature,
+    },
 }
 
 pub const STORAGE_PROGRAM_ID: [u8; 32] = [
@@ -27,6 +31,7 @@ pub trait StorageTransaction {
         sha_state: Hash,
         last_id: Hash,
         entry_height: u64,
+        signature: Signature,
     ) -> Self;
 }
 
@@ -36,10 +41,12 @@ impl StorageTransaction for Transaction {
         sha_state: Hash,
         last_id: Hash,
         entry_height: u64,
+        signature: Signature,
     ) -> Self {
         let program = StorageProgram::SubmitMiningProof {
             sha_state,
             entry_height,
+            signature,
         };
         Transaction::new(
             from_keypair,

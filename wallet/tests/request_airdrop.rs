@@ -6,6 +6,7 @@ use solana::fullnode::Fullnode;
 use solana::leader_scheduler::LeaderScheduler;
 use solana::mint::Mint;
 use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
+use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana::vote_signer_proxy::VoteSignerProxy;
 use solana_drone::drone::run_local_drone;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -48,6 +49,7 @@ fn test_wallet_request_airdrop() {
         &ledger_path,
         false,
         None,
+        STORAGE_ROTATE_TEST_COUNT,
     );
     sleep(Duration::from_millis(900));
 
