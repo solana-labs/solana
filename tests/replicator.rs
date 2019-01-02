@@ -24,6 +24,7 @@ use std::fs::remove_dir_all;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::Arc;
+use std::thread::sleep;
 use std::time::Duration;
 
 #[test]
@@ -68,7 +69,7 @@ fn test_replicator_startup() {
         let validator = Fullnode::new(
             validator_node,
             &validator_ledger_path,
-            validator_keypair,
+            validator_keypair.clone(),
             Arc::new(signer_proxy),
             Some(leader_info.gossip),
             false,
@@ -80,9 +81,17 @@ fn test_replicator_startup() {
 
         let bob = Keypair::new();
 
+        for _ in 0..10 {
+            let last_id = leader_client.get_last_id();
+            leader_client
+                .transfer(1, &mint.keypair(), bob.pubkey(), &last_id)
+                .unwrap();
+            sleep(Duration::from_millis(200));
+        }
+
         let last_id = leader_client.get_last_id();
         leader_client
-            .transfer(1, &mint.keypair(), bob.pubkey(), &last_id)
+            .transfer(10, &mint.keypair(), validator_keypair.pubkey(), &last_id)
             .unwrap();
 
         let replicator_keypair = Keypair::new();
@@ -159,10 +168,14 @@ fn test_replicator_startup() {
             use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
             use std::thread::sleep;
 
+            debug!(
+                "looking for pubkeys for entry: {}",
+                replicator.entry_height()
+            );
             let rpc_client = RpcClient::new_from_socket(validator_node_info.rpc);
             let mut non_zero_pubkeys = false;
             for _ in 0..30 {
-                let params = json!([0]);
+                let params = json!([replicator.entry_height()]);
                 let pubkeys = rpc_client
                     .make_rpc_request(1, RpcRequest::GetStoragePubkeysForEntryHeight, Some(params))
                     .unwrap();

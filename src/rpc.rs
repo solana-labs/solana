@@ -341,11 +341,11 @@ impl JsonRpcRequestProcessor {
         Ok(self.bank.transaction_count() as u64)
     }
     fn get_storage_mining_last_id(&self) -> Result<String> {
-        let id = self.bank.storage_state.get_last_id();
+        let id = self.bank.get_storage_last_id();
         Ok(bs58::encode(id).into_string())
     }
     fn get_storage_mining_entry_height(&self) -> Result<u64> {
-        let entry_height = self.bank.storage_state.get_entry_height();
+        let entry_height = self.bank.get_storage_entry_height();
         Ok(entry_height)
     }
     fn get_storage_pubkeys_for_entry_height(&self, entry_height: u64) -> Result<Vec<Pubkey>> {

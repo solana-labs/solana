@@ -5,7 +5,7 @@ use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::storage_stage::ENTRIES_PER_SEGMENT;
+use solana_sdk::storage_program::ENTRIES_PER_SEGMENT;
 
 pub const CHACHA_BLOCK_SIZE: usize = 64;
 pub const CHACHA_KEY_SIZE: usize = 32;
@@ -38,13 +38,15 @@ pub fn chacha_cbc_encrypt_ledger(
     slice: u64,
     out_path: &Path,
     ivec: &mut [u8; CHACHA_BLOCK_SIZE],
-) -> io::Result<()> {
+) -> io::Result<usize> {
     let mut out_file =
         BufWriter::new(File::create(out_path).expect("Can't open ledger encrypted data file"));
-    let mut buffer = [0; 8 * 1024];
-    let mut encrypted_buffer = [0; 8 * 1024];
+    const BUFFER_SIZE: usize = 8 * 1024;
+    let mut buffer = [0; BUFFER_SIZE];
+    let mut encrypted_buffer = [0; BUFFER_SIZE];
     let key = [0; CHACHA_KEY_SIZE];
     let mut total_entries = 0;
+    let mut total_size = 0;
     let mut entry = slice;
 
     loop {
@@ -60,10 +62,18 @@ pub fn chacha_cbc_encrypt_ledger(
                     slice, num_entries, entry_len
                 );
                 debug!("read {} bytes", entry_len);
-                let size = entry_len as usize;
+                let mut size = entry_len as usize;
                 if size == 0 {
                     break;
                 }
+
+                if size < BUFFER_SIZE {
+                    // We are on the last block, round to the nearest key_size
+                    // boundary
+                    size = (size + CHACHA_KEY_SIZE - 1) & !(CHACHA_KEY_SIZE - 1);
+                }
+                total_size += size;
+
                 chacha_cbc_encrypt(&buffer[..size], &mut encrypted_buffer[..size], &key, ivec);
                 if let Err(res) = out_file.write(&encrypted_buffer[..size]) {
                     println!("Error writing file! {:?}", res);
@@ -79,7 +89,7 @@ pub fn chacha_cbc_encrypt_ledger(
             }
         }
     }
-    Ok(())
+    Ok(total_size)
 }
 
 #[cfg(test)]

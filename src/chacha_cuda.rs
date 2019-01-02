@@ -1,3 +1,6 @@
+// Module used by validators to approve storage mining proofs
+// in parallel using the GPU
+
 use crate::chacha::{CHACHA_BLOCK_SIZE, CHACHA_KEY_SIZE};
 use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
 use crate::sigverify::{
@@ -8,7 +11,7 @@ use std::io;
 use std::mem::size_of;
 use std::sync::Arc;
 
-use crate::storage_stage::ENTRIES_PER_SEGMENT;
+use solana_sdk::storage_program::ENTRIES_PER_SEGMENT;
 
 // Encrypt a file with multiple starting IV states, determined by ivecs.len()
 //
@@ -16,7 +19,7 @@ use crate::storage_stage::ENTRIES_PER_SEGMENT;
 // and return the vec of sha states
 pub fn chacha_cbc_encrypt_file_many_keys(
     db_ledger: &Arc<DbLedger>,
-    slice: u64,
+    segment: u64,
     ivecs: &mut [u8],
     samples: &[u64],
 ) -> io::Result<Vec<Hash>> {
@@ -36,7 +39,7 @@ pub fn chacha_cbc_encrypt_file_many_keys(
     let mut sha_states = vec![0; num_keys * size_of::<Hash>()];
     let mut int_sha_states = vec![0; num_keys * 112];
     let keys: Vec<u8> = vec![0; num_keys * CHACHA_KEY_SIZE]; // keys not used ATM, uniqueness comes from IV
-    let mut entry = slice;
+    let mut entry = segment;
     let mut total_entries = 0;
     let mut total_entry_len = 0;
     let mut time: f32 = 0.0;
@@ -51,9 +54,9 @@ pub fn chacha_cbc_encrypt_file_many_keys(
             DEFAULT_SLOT_HEIGHT,
         ) {
             Ok((num_entries, entry_len)) => {
-                debug!(
-                    "chacha_cuda: encrypting slice: {} num_entries: {} entry_len: {}",
-                    slice, num_entries, entry_len
+                info!(
+                    "chacha_cuda: encrypting segment: {} num_entries: {} entry_len: {}",
+                    segment, num_entries, entry_len
                 );
                 let entry_len_usz = entry_len as usize;
                 unsafe {
@@ -75,10 +78,10 @@ pub fn chacha_cbc_encrypt_file_many_keys(
                 total_entries += num_entries;
                 entry += num_entries;
                 debug!(
-                    "total entries: {} entry: {} slice: {} entries_per_slice: {}",
-                    total_entries, entry, slice, ENTRIES_PER_SEGMENT
+                    "total entries: {} entry: {} segment: {} entries_per_segment: {}",
+                    total_entries, entry, segment, ENTRIES_PER_SEGMENT
                 );
-                if (entry - slice) >= ENTRIES_PER_SEGMENT {
+                if (entry - segment) >= ENTRIES_PER_SEGMENT {
                     break;
                 }
             }
