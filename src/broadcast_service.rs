@@ -1,6 +1,7 @@
 //! The `broadcast_service` broadcasts data from a leader node to validators
 //!
-use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
+use crate::bank::Bank;
+use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo, DATA_PLANE_FANOUT};
 use crate::counter::Counter;
 use crate::db_ledger::DbLedger;
 use crate::entry::Entry;
@@ -239,8 +240,10 @@ pub struct BroadcastService {
 }
 
 impl BroadcastService {
+    #[allow(clippy::too_many_arguments)]
     fn run(
         db_ledger: &Arc<DbLedger>,
+        bank: &Arc<Bank>,
         sock: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window: &SharedWindow,
@@ -260,7 +263,9 @@ impl BroadcastService {
             if exit_signal.load(Ordering::Relaxed) {
                 return BroadcastServiceReturnType::ExitSignal;
             }
-            let broadcast_table = cluster_info.read().unwrap().tvu_peers();
+            let mut broadcast_table = cluster_info.read().unwrap().sorted_tvu_peers(&bank);
+            // Layer 1 nodes are limited to the fanout size.
+            broadcast_table.truncate(DATA_PLANE_FANOUT);
             inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
             let leader_id = cluster_info.read().unwrap().leader_id();
             if let Err(e) = broadcast(
@@ -309,6 +314,7 @@ impl BroadcastService {
     #[allow(clippy::too_many_arguments, clippy::new_ret_no_self)]
     pub fn new(
         db_ledger: Arc<DbLedger>,
+        bank: Arc<Bank>,
         sock: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window: SharedWindow,
@@ -326,6 +332,7 @@ impl BroadcastService {
                 let _exit = Finalizer::new(exit_sender);
                 Self::run(
                     &db_ledger,
+                    &bank,
                     &sock,
                     &cluster_info,
                     &window,
@@ -401,10 +408,12 @@ mod test {
         let shared_window = Arc::new(RwLock::new(window));
         let (entry_sender, entry_receiver) = channel();
         let exit_sender = Arc::new(AtomicBool::new(false));
+        let bank = Arc::new(Bank::default());
 
         // Start up the broadcast stage
         let (broadcast_service, exit_signal) = BroadcastService::new(
             db_ledger.clone(),
+            bank.clone(),
             leader_info.sockets.broadcast,
             cluster_info,
             shared_window,

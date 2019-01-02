@@ -3,10 +3,11 @@ use bincode::serialize;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::timing::timestamp;
+use std::cmp::{Ord, Ordering, PartialEq, PartialOrd};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 /// Structure representing a node on the network
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ContactInfo {
     pub id: Pubkey,
     /// signature of this ContactInfo
@@ -26,6 +27,26 @@ pub struct ContactInfo {
     /// latest wallclock picked
     pub wallclock: u64,
 }
+
+impl Ord for ContactInfo {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.id.cmp(&other.id)
+    }
+}
+
+impl PartialOrd for ContactInfo {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for ContactInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for ContactInfo {}
 
 #[macro_export]
 macro_rules! socketaddr {

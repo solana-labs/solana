@@ -96,6 +96,7 @@ impl Tvu {
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
         //then sent to the window, which does the erasure coding reconstruction
         let (retransmit_stage, blob_window_receiver) = RetransmitStage::new(
+            bank,
             db_ledger,
             &cluster_info,
             bank.tick_height(),
