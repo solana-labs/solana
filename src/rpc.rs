@@ -454,6 +454,7 @@ mod tests {
     use crate::leader_scheduler::LeaderScheduler;
     use crate::mint::Mint;
     use crate::rpc_request::get_rpc_request_str;
+    use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
     use crate::vote_signer_proxy::VoteSignerProxy;
     use bincode::serialize;
     use reqwest;
@@ -744,6 +745,7 @@ mod tests {
             &ledger_path,
             false,
             None,
+            STORAGE_ROTATE_TEST_COUNT,
         );
         sleep(Duration::from_millis(900));
 

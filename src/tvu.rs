@@ -65,6 +65,7 @@ impl Tvu {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sockets: Sockets,
         db_ledger: Arc<DbLedger>,
+        storage_rotate_count: u64,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
         let keypair: Arc<Keypair> = cluster_info
@@ -119,6 +120,7 @@ impl Tvu {
             keypair,
             exit.clone(),
             entry_height,
+            storage_rotate_count,
         );
 
         Tvu {
@@ -179,6 +181,7 @@ pub mod tests {
     use crate::mint::Mint;
     use crate::packet::SharedBlob;
     use crate::service::Service;
+    use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
     use crate::streamer;
     use crate::tvu::{Sockets, Tvu};
     use crate::vote_signer_proxy::VoteSignerProxy;
@@ -284,6 +287,7 @@ pub mod tests {
                 }
             },
             Arc::new(db_ledger),
+            STORAGE_ROTATE_TEST_COUNT,
         );
 
         let mut alice_ref_balance = starting_balance;

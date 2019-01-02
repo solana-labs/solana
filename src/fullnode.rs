@@ -10,6 +10,7 @@ use crate::leader_scheduler::LeaderScheduler;
 use crate::rpc::JsonRpcService;
 use crate::rpc_pubsub::PubSubService;
 use crate::service::Service;
+use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use crate::tpu::{Tpu, TpuReturnType};
 use crate::tpu_forwarder::TpuForwarder;
 use crate::tvu::{Sockets, Tvu, TvuReturnType};
@@ -119,6 +120,34 @@ impl Fullnode {
         leader_scheduler: LeaderScheduler,
         rpc_port: Option<u16>,
     ) -> Self {
+        // TODO: remove this, temporary parameter to configure
+        // storage amount differently for test configurations
+        // so tests don't take forever to run.
+        const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = 1024;
+        Self::new_with_storage_rotate(
+            node,
+            ledger_path,
+            keypair,
+            vote_signer,
+            leader_addr,
+            sigverify_disabled,
+            leader_scheduler,
+            rpc_port,
+            NUM_HASHES_FOR_STORAGE_ROTATE,
+        )
+    }
+
+    pub fn new_with_storage_rotate(
+        node: Node,
+        ledger_path: &str,
+        keypair: Arc<Keypair>,
+        vote_signer: Arc<VoteSignerProxy>,
+        leader_addr: Option<SocketAddr>,
+        sigverify_disabled: bool,
+        leader_scheduler: LeaderScheduler,
+        rpc_port: Option<u16>,
+        storage_rotate_count: u64,
+    ) -> Self {
         let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
 
         info!("creating bank...");
@@ -152,6 +181,7 @@ impl Fullnode {
             ledger_path,
             sigverify_disabled,
             rpc_port,
+            storage_rotate_count,
         );
 
         match leader_addr {
@@ -183,6 +213,7 @@ impl Fullnode {
         ledger_path: &str,
         sigverify_disabled: bool,
         rpc_port: Option<u16>,
+        storage_rotate_count: u64,
     ) -> Self {
         let mut rpc_addr = node.info.rpc;
         let mut rpc_pubsub_addr = node.info.rpc_pubsub;
@@ -283,6 +314,7 @@ impl Fullnode {
                 &cluster_info,
                 sockets,
                 db_ledger.clone(),
+                storage_rotate_count,
             );
             let tpu_forwarder = TpuForwarder::new(
                 node.sockets
@@ -444,6 +476,7 @@ impl Fullnode {
                 &self.cluster_info,
                 sockets,
                 self.db_ledger.clone(),
+                STORAGE_ROTATE_TEST_COUNT,
             );
             let tpu_forwarder = TpuForwarder::new(
                 self.tpu_sockets
@@ -638,6 +671,7 @@ mod tests {
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
     use crate::service::Service;
+    use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
     use crate::streamer::responder;
     use crate::vote_signer_proxy::VoteSignerProxy;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -679,6 +713,7 @@ mod tests {
             &validator_ledger_path,
             false,
             None,
+            STORAGE_ROTATE_TEST_COUNT,
         );
         v.close().unwrap();
         remove_dir_all(validator_ledger_path).unwrap();
@@ -722,6 +757,7 @@ mod tests {
                     &validator_ledger_path,
                     false,
                     None,
+                    STORAGE_ROTATE_TEST_COUNT,
                 )
             })
             .collect();

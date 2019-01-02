@@ -29,6 +29,7 @@ fn entrypoint(
             StorageProgram::SubmitMiningProof {
                 sha_state,
                 entry_height,
+                ..
             } => {
                 info!(
                     "Mining proof submitted with state {:?} entry_height: {}",
