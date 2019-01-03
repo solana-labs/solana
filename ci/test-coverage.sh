@@ -10,6 +10,8 @@ annotate() {
 
 ci/affects-files.sh \
   .rs$ \
+  Cargo.lock$ \
+  Cargo.toml$ \
   ci/test-coverage.sh \
   scripts/coverage.sh \
 || {
