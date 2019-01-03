@@ -370,10 +370,12 @@ impl Bank {
                 return Err(BankError::AccountNotFound);
             }
 
-            // add loader to chain
-            accounts.insert(0, (program_id, program.clone()));
+            let loader = program.loader;
 
-            program_id = program.loader;
+            // add loader to chain
+            accounts.insert(0, (program_id, program));
+
+            program_id = loader;
         }
         Ok(accounts)
     }
