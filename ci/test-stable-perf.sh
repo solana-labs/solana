@@ -10,6 +10,8 @@ annotate() {
 
 ci/affects-files.sh \
   .rs$ \
+  Cargo.lock$ \
+  Cargo.toml$ \
   ci/test-stable-perf.sh \
   ci/test-stable.sh \
 || {

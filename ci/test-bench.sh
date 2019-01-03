@@ -10,6 +10,8 @@ annotate() {
 
 ci/affects-files.sh \
   .rs$ \
+  Cargo.lock$ \
+  Cargo.toml$ \
   ci/test-bench.sh \
 || {
   annotate --style info --context test-bench \
