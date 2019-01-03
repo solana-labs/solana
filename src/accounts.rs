@@ -215,13 +215,13 @@ impl Accounts {
     pub fn store_slow(&self, pubkey: &Pubkey, account: &Account) {
         self.accounts_db.write().unwrap().store(pubkey, account)
     }
-
+    
     fn lock_account(
         account_locks: &mut HashSet<Pubkey>,
         keys: &[Pubkey],
         error_counters: &mut ErrorCounters,
     ) -> Result<()> {
-        // Copy all the accounts
+        // Bail if any of the accounts are already locked
         for k in keys {
             if account_locks.contains(k) {
                 error_counters.account_in_use += 1;
@@ -366,7 +366,7 @@ impl Checkpoint for AccountsDB {
             merge(&mut self.accounts, &mut purge);
         }
     }
-
+    
     fn depth(&self) -> usize {
         self.checkpoints.len()
     }

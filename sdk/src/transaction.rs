@@ -9,16 +9,14 @@ use std::mem::size_of;
 
 pub const SIG_OFFSET: usize = size_of::<u64>();
 
-/// An instruction to execute a program under the `program_id` of `program_ids_index` with the
-/// specified accounts and userdata
+/// An instruction to execute a program
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Instruction {
-    /// The program code that executes this transaction is identified by the program_id.
-    /// this is an offset into the Transaction::program_ids field
-    pub program_ids_index: u8,
-    /// Indices into the keys array of which accounts to load
+    /// Index into the transaction program ids array indicating the program account that executes this transaction
+    pub program: u8,
+    /// Ordered indices into the transaction keys array indicating which accounts to pass to the program
     pub accounts: Vec<u8>,
-    /// Userdata to be stored in the account
+    /// The program input data
     pub userdata: Vec<u8>,
 }
 
@@ -36,26 +34,18 @@ impl Instruction {
 /// An atomic transaction
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
-    /// A set of digital signature of `account_keys`, `program_ids`, `last_id`, `fee` and `instructions`, signed by the first
+    /// A set of digital signatures of `account_keys`, `program_keys`, `last_id`, `fee` and `instructions`, signed by the first
     /// signatures.len() keys of account_keys
     pub signatures: Vec<Signature>,
-
-    /// The `Pubkeys` that are executing this transaction userdata.  The meaning of each key is
-    /// program-specific.
-    /// * account_keys[0] - Typically this is the `caller` public key.  `signature` is verified with account_keys[0].
-    /// In the future which key pays the fee and which keys have signatures would be configurable.
-    /// * account_keys[1] - Typically this is the program context or the recipient of the tokens
+    /// All the account keys used by this transaction
     pub account_keys: Vec<Pubkey>,
-
     /// The ID of a recent ledger entry.
     pub last_id: Hash,
-
     /// The number of tokens paid for processing and storage of this transaction.
     pub fee: u64,
-
-    /// Keys identifying programs in the instructions vector.
-    pub program_ids: Vec<Pubkey>,
-    /// Programs that will be executed in sequence and commited in one atomic transaction if all
+    /// All the program account keys used to execute this transaction's instructions
+    pub program_keys: Vec<Pubkey>,
+    /// Programs that will be executed in sequence and committed in one atomic transaction if all
     /// succeed.
     pub instructions: Vec<Instruction>,
 }
