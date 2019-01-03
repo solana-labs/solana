@@ -89,12 +89,6 @@ fn recv_window(
             (p.index()?, p.meta.size)
         };
 
-        submit(
-            influxdb::Point::new("window-service")
-                .add_field("last-recv", influxdb::Value::Integer(pix as i64))
-                .to_owned(),
-        );
-
         trace!("{} window pix: {} size: {}", id, pix, meta_size);
 
         let _ = process_blob(
@@ -171,12 +165,6 @@ pub fn window_service(
                 if let Ok(Some(meta)) = meta {
                     let received = meta.received;
                     let consumed = meta.consumed;
-
-                    submit(
-                        influxdb::Point::new("window-stage")
-                            .add_field("consumed", influxdb::Value::Integer(consumed as i64))
-                            .to_owned(),
-                    );
 
                     // Consumed should never be bigger than received
                     assert!(consumed <= received);
