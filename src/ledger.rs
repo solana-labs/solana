@@ -21,6 +21,8 @@ use std::io::prelude::*;
 use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};
 use std::mem::size_of;
 use std::path::Path;
+use std::thread;
+use std::time;
 
 //
 // A persistent ledger is 2 files:
@@ -89,9 +91,17 @@ fn entry_at<A: Read + Seek>(file: &mut A, at: u64) -> io::Result<Entry> {
     read_entry(file, len)
 }
 
-fn next_entry<A: Read>(file: &mut A) -> io::Result<Entry> {
+fn next_entry<A: Read>(file: &mut A, cur_pos: &mut usize) -> io::Result<Entry> {
     let len = deserialize_from(file.take(SIZEOF_U64)).map_err(err_bincode_to_io)?;
-    read_entry(file, len)
+    let result : io::Result<Entry> = read_entry(file, len);
+
+    match result {
+        Ok(entry) => {
+            *cur_pos = (((*cur_pos) as u64) + SIZEOF_U64 + len) as usize;
+            Ok(entry)
+        },
+        Err(_err) => Err(_err)
+    }
 }
 
 fn u64_at<A: Read + Seek>(file: &mut A, at: u64) -> io::Result<u64> {
@@ -417,33 +427,94 @@ impl LedgerWriter {
 #[derive(Debug)]
 pub struct LedgerReader {
     data: BufReader<File>,
+    file_name: String,
+    tailing: bool,
+    pub cur_pos: usize,
+    pub last_len: usize,
 }
 
 impl Iterator for LedgerReader {
     type Item = io::Result<Entry>;
 
     fn next(&mut self) -> Option<io::Result<Entry>> {
-        match next_entry(&mut self.data) {
-            Ok(entry) => Some(Ok(entry)),
-            Err(_) => None,
+        if !self.tailing {
+            return match next_entry(&mut self.data, &mut self.cur_pos) {
+                Ok(entry) => Some(Ok(entry)),
+                Err(_) => None,
+            }
         }
+
+        let entry_result;
+
+        loop {
+            if self.cur_pos < self.last_len {
+                match next_entry(&mut self.data, &mut self.cur_pos) {
+                    Err(_err) => panic!("Cannot read next entry :{}", _err),
+                    Ok(entry) => {
+                        entry_result = Some(Ok(entry));
+                        break;
+                    }
+                }
+            } else {
+                let file = match File::open(&self.file_name) {
+                    Err(_err) => panic!("Cannot read ledger file :{}", _err),
+                    Ok(a_file) => a_file,
+                };
+                let f_metadata = match file.metadata() {
+                    Err(_err) => panic!("Cannot read file metadata :{}", _err),
+                    Ok(data) => data
+                };
+
+                self.last_len = f_metadata.len() as usize;
+                thread::sleep(time::Duration::from_millis(200));
+                continue;
+            }
+        }
+
+       return entry_result
     }
 }
 
-/// Return an iterator for all the entries in the given file.
+/// Return an iterator for all the entries in the given file
 pub fn read_ledger(
     ledger_path: &str,
     recover: bool,
+) -> io::Result<impl Iterator<Item = io::Result<Entry>>> {
+    read_ledger_impl(ledger_path, recover, false)
+}
+
+/// Return an iterator for all the entries in the given file (poll file at end)
+pub fn tail_ledger(
+    ledger_path: &str,
+    recover: bool,
+) -> io::Result<impl Iterator<Item = io::Result<Entry>>> {
+    read_ledger_impl(ledger_path, recover, true)
+}
+
+/// Return an iterator for all the entries in the given file.
+fn read_ledger_impl(
+    ledger_path: &str,
+    recover: bool,
+    tailing: bool,
 ) -> io::Result<impl Iterator<Item = io::Result<Entry>>> {
     if recover {
         recover_ledger(ledger_path)?;
     }
 
     let ledger_path = Path::new(&ledger_path);
-    let data = File::open(ledger_path.join(LEDGER_DATA_FILE))?;
-    let data = BufReader::new(data);
+    let path_buf = ledger_path.join(LEDGER_DATA_FILE);
+    let file_name = match path_buf.to_str() {
+        None => panic!("No file name? that's weird"),
+        Some(value) => value
+    };
+    let file = File::open(file_name)?;
+    let f_metadata = match file.metadata(){
+        Ok(data) => data,
+        Err(_err) => panic!("Cannot read file metadata :{}", _err)
+    };
+    let data = BufReader::new(file);
 
-    Ok(LedgerReader { data })
+    Ok(LedgerReader{ data, file_name: file_name.to_string(), tailing, cur_pos: 0, last_len: f_metadata.len() as usize})
 }
 
 // a Block is a slice of Entries

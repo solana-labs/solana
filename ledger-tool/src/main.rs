@@ -1,6 +1,6 @@
 use clap::{crate_version, App, Arg, SubCommand};
 use solana::bank::Bank;
-use solana::ledger::{read_ledger, verify_ledger};
+use solana::ledger::{read_ledger, tail_ledger, verify_ledger};
 use std::io::{stdout, Write};
 use std::process::exit;
 
@@ -39,6 +39,7 @@ fn main() {
         )
         .subcommand(SubCommand::with_name("print").about("Print the ledger"))
         .subcommand(SubCommand::with_name("json").about("Print the ledger in JSON format"))
+        .subcommand(SubCommand::with_name("json-tail").about("Print the ledger in JSON format a la \"tail follow\""))
         .subcommand(SubCommand::with_name("verify").about("Verify the ledger's PoH"))
         .get_matches();
 
@@ -66,13 +67,6 @@ fn main() {
 
     match matches.subcommand() {
         ("print", _) => {
-            let entries = match read_ledger(ledger_path, true) {
-                Ok(entries) => entries,
-                Err(err) => {
-                    eprintln!("Failed to open ledger at {}: {}", ledger_path, err);
-                    exit(1);
-                }
-            };
             for (i, entry) in entries.enumerate() {
                 if i >= head {
                     break;
@@ -92,6 +86,23 @@ fn main() {
                 stdout().write_all(b",\n").expect("newline");
             }
             stdout().write_all(b"\n]}\n").expect("close array");
+        }
+        ("json-tail", _) => {
+            let entries = match tail_ledger(ledger_path, true) {
+                Ok(entries) => entries,
+                Err(err) => {
+                    eprintln!("Failed to open ledger at {}: {}", ledger_path, err);
+                    exit(1);
+                }
+            };
+            for (i, entry) in entries.enumerate() {
+                if i >= head {
+                    break;
+                }
+                let entry = entry.unwrap();
+                serde_json::to_writer(stdout(), &entry).expect("serialize");
+                stdout().write_all(b"\n").expect("newline");
+            }
         }
         ("verify", _) => {
             const NUM_GENESIS_ENTRIES: usize = 3;
