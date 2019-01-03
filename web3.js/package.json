@@ -104,7 +104,7 @@
     "eslint-plugin-prettier": "^3.0.0",
     "flow-bin": "0.89.0",
     "flow-typed": "2.5.1",
-    "fs-file-tree": "1.0.6",
+    "fs-file-tree": "1.0.7",
     "jest": "23.6.0",
     "marked": "^0.5.1",
     "prettier": "^1.14.3",
