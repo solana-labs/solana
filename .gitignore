@@ -1,4 +1,5 @@
 /target/
+/wallet/target/
 /book/html/
 /book/src/img/
 /book/src/tests.ok
