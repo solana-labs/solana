@@ -93,14 +93,14 @@ fn entry_at<A: Read + Seek>(file: &mut A, at: u64) -> io::Result<Entry> {
 
 fn next_entry<A: Read>(file: &mut A, cur_pos: &mut usize) -> io::Result<Entry> {
     let len = deserialize_from(file.take(SIZEOF_U64)).map_err(err_bincode_to_io)?;
-    let result : io::Result<Entry> = read_entry(file, len);
+    let result: io::Result<Entry> = read_entry(file, len);
 
     match result {
         Ok(entry) => {
             *cur_pos = (((*cur_pos) as u64) + SIZEOF_U64 + len) as usize;
             Ok(entry)
-        },
-        Err(_err) => Err(_err)
+        }
+        Err(_err) => Err(_err),
     }
 }
 
@@ -441,7 +441,7 @@ impl Iterator for LedgerReader {
             return match next_entry(&mut self.data, &mut self.cur_pos) {
                 Ok(entry) => Some(Ok(entry)),
                 Err(_) => None,
-            }
+            };
         }
 
         let entry_result;
@@ -462,7 +462,7 @@ impl Iterator for LedgerReader {
                 };
                 let f_metadata = match file.metadata() {
                     Err(_err) => panic!("Cannot read file metadata :{}", _err),
-                    Ok(data) => data
+                    Ok(data) => data,
                 };
 
                 self.last_len = f_metadata.len() as usize;
@@ -471,7 +471,7 @@ impl Iterator for LedgerReader {
             }
         }
 
-       return entry_result
+        entry_result
     }
 }
 
@@ -505,16 +505,22 @@ fn read_ledger_impl(
     let path_buf = ledger_path.join(LEDGER_DATA_FILE);
     let file_name = match path_buf.to_str() {
         None => panic!("No file name? that's weird"),
-        Some(value) => value
+        Some(value) => value,
     };
     let file = File::open(file_name)?;
-    let f_metadata = match file.metadata(){
+    let f_metadata = match file.metadata() {
         Ok(data) => data,
-        Err(_err) => panic!("Cannot read file metadata :{}", _err)
+        Err(_err) => panic!("Cannot read file metadata :{}", _err),
     };
     let data = BufReader::new(file);
 
-    Ok(LedgerReader{ data, file_name: file_name.to_string(), tailing, cur_pos: 0, last_len: f_metadata.len() as usize})
+    Ok(LedgerReader {
+        data,
+        file_name: file_name.to_string(),
+        tailing,
+        cur_pos: 0,
+        last_len: f_metadata.len() as usize,
+    })
 }
 
 // a Block is a slice of Entries
