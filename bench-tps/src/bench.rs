@@ -238,7 +238,7 @@ pub fn do_tx_transfers(
     let client = mk_client(&leader);
     loop {
         if thread_batch_sleep_ms > 0 {
-            sleep(Duration::new(0, thread_batch_sleep_ms as u32 * 1_000_000));
+            sleep(Duration::from_millis(thread_batch_sleep_ms as u64));
         }
         let txs;
         {
