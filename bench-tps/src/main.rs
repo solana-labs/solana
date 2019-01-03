@@ -82,6 +82,7 @@ fn main() {
         drone_addr,
         id,
         threads,
+        thread_batch_sleep_ms,
         num_nodes,
         duration,
         tx_count,
@@ -207,6 +208,7 @@ fn main() {
                         &leader,
                         &shared_tx_active_thread_count,
                         &total_tx_sent_count,
+                        thread_batch_sleep_ms,
                     );
                 })
                 .unwrap()

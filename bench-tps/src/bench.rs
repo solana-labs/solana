@@ -233,9 +233,13 @@ pub fn do_tx_transfers(
     leader: &NodeInfo,
     shared_tx_thread_count: &Arc<AtomicIsize>,
     total_tx_sent_count: &Arc<AtomicUsize>,
+    thread_batch_sleep_ms: usize,
 ) {
     let client = mk_client(&leader);
     loop {
+        if thread_batch_sleep_ms > 0 {
+            sleep(Duration::new(0, thread_batch_sleep_ms as u32 * 1_000_000));
+        }
         let txs;
         {
             let mut shared_txs_wl = shared_txs.write().unwrap();

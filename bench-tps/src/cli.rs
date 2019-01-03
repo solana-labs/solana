@@ -15,6 +15,7 @@ pub struct Config {
     pub num_nodes: usize,
     pub duration: Duration,
     pub tx_count: usize,
+    pub thread_batch_sleep_ms: usize,
     pub sustained: bool,
     pub reject_extra_nodes: bool,
     pub converge_only: bool,
@@ -30,6 +31,7 @@ impl Default for Config {
             num_nodes: 1,
             duration: Duration::new(std::u64::MAX, 0),
             tx_count: 500_000,
+            thread_batch_sleep_ms: 0,
             sustained: false,
             reject_extra_nodes: false,
             converge_only: false,
@@ -110,6 +112,14 @@ pub fn build_args<'a, 'b>() -> App<'a, 'b> {
                 .takes_value(true)
                 .help("Number of transactions to send per batch")
         )
+        .arg(
+            Arg::with_name("thread-batch-sleep-ms")
+                .short("z")
+                .long("thread-batch-sleep-ms")
+                .value_name("NUM")
+                .takes_value(true)
+                .help("Per-thread-per-iteration sleep in ms"),
+        )
 }
 
 /// Parses a clap `ArgMatches` structure into a `Config`
@@ -156,6 +166,10 @@ pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
 
     if let Some(s) = matches.value_of("tx_count") {
         args.tx_count = s.to_string().parse().expect("can't parse tx_account");
+    }
+
+    if let Some(t) = matches.value_of("thread-batch-sleep-ms") {
+        args.thread_batch_sleep_ms = t.to_string().parse().expect("can't parse thread-batch-sleep-ms");
     }
 
     args.sustained = matches.is_present("sustained");
