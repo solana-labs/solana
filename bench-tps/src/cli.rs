@@ -169,7 +169,10 @@ pub fn extract_args<'a>(matches: &ArgMatches<'a>) -> Config {
     }
 
     if let Some(t) = matches.value_of("thread-batch-sleep-ms") {
-        args.thread_batch_sleep_ms = t.to_string().parse().expect("can't parse thread-batch-sleep-ms");
+        args.thread_batch_sleep_ms = t
+            .to_string()
+            .parse()
+            .expect("can't parse thread-batch-sleep-ms");
     }
 
     args.sustained = matches.is_present("sustained");
