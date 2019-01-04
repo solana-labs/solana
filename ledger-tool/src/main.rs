@@ -1,6 +1,6 @@
 use clap::{crate_version, App, Arg, SubCommand};
 use solana::bank::Bank;
-use solana::ledger::{read_ledger, verify_ledger};
+use solana::db_ledger::DbLedger;
 use std::io::{stdout, Write};
 use std::process::exit;
 
@@ -34,12 +34,6 @@ fn main() {
                 .help("Skip entries with fewer than NUM hashes\n  (only applies to print and json commands)"),
         )
         .arg(
-            Arg::with_name("precheck")
-                .short("p")
-                .long("precheck")
-                .help("Use ledger_verify() to check internal ledger consistency before proceeding"),
-        )
-        .arg(
             Arg::with_name("continue")
                 .short("c")
                 .long("continue")
@@ -52,17 +46,18 @@ fn main() {
 
     let ledger_path = matches.value_of("ledger").unwrap();
 
-    if matches.is_present("precheck") {
-        if let Err(e) = verify_ledger(&ledger_path) {
-            eprintln!("ledger precheck failed, error: {:?} ", e);
-            exit(1);
-        }
-    }
-
-    let entries = match read_ledger(ledger_path, true) {
-        Ok(entries) => entries,
+    let db_ledger = match DbLedger::open(ledger_path) {
+        Ok(db_ledger) => db_ledger,
         Err(err) => {
             eprintln!("Failed to open ledger at {}: {}", ledger_path, err);
+            exit(1);
+        }
+    };
+
+    let mut entries = match db_ledger.read_ledger() {
+        Ok(entries) => entries,
+        Err(err) => {
+            eprintln!("Failed to read ledger at {}: {}", ledger_path, err);
             exit(1);
         }
     };
@@ -81,18 +76,11 @@ fn main() {
 
     match matches.subcommand() {
         ("print", _) => {
-            let entries = match read_ledger(ledger_path, true) {
-                Ok(entries) => entries,
-                Err(err) => {
-                    eprintln!("Failed to open ledger at {}: {}", ledger_path, err);
-                    exit(1);
-                }
-            };
             for (i, entry) in entries.enumerate() {
                 if i >= head {
                     break;
                 }
-                let entry = entry.unwrap();
+
                 if entry.num_hashes < min_hashes {
                     continue;
                 }
@@ -105,7 +93,7 @@ fn main() {
                 if i >= head {
                     break;
                 }
-                let entry = entry.unwrap();
+
                 if entry.num_hashes < min_hashes {
                     continue;
                 }
@@ -125,15 +113,7 @@ fn main() {
             }
             let bank = Bank::new_with_builtin_programs();
             {
-                let genesis = match read_ledger(ledger_path, true) {
-                    Ok(entries) => entries,
-                    Err(err) => {
-                        eprintln!("Failed to open ledger at {}: {}", ledger_path, err);
-                        exit(1);
-                    }
-                };
-
-                let genesis = genesis.take(NUM_GENESIS_ENTRIES).map(|e| e.unwrap());
+                let genesis = entries.by_ref().take(NUM_GENESIS_ENTRIES);
                 if let Err(e) = bank.process_ledger(genesis) {
                     eprintln!("verify failed at genesis err: {:?}", e);
                     if !matches.is_present("continue") {
@@ -141,13 +121,11 @@ fn main() {
                     }
                 }
             }
-            let entries = entries.map(|e| e.unwrap());
-
             let head = head - NUM_GENESIS_ENTRIES;
 
             let mut last_id = bank.last_id();
 
-            for (i, entry) in entries.skip(NUM_GENESIS_ENTRIES).enumerate() {
+            for (i, entry) in entries.enumerate() {
                 if i >= head {
                     break;
                 }

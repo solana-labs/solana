@@ -4,6 +4,7 @@
 
 #[cfg(all(feature = "chacha", feature = "cuda"))]
 use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
+use crate::db_ledger::DbLedger;
 use crate::entry::EntryReceiver;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -134,7 +135,7 @@ impl StorageStage {
     pub fn new(
         storage_state: &StorageState,
         storage_entry_receiver: EntryReceiver,
-        ledger_path: Option<&str>,
+        db_ledger: Option<Arc<DbLedger>>,
         keypair: Arc<Keypair>,
         exit: Arc<AtomicBool>,
         entry_height: u64,
@@ -142,7 +143,6 @@ impl StorageStage {
         debug!("storage_stage::new: entry_height: {}", entry_height);
         storage_state.state.write().unwrap().entry_height = entry_height;
         let storage_state_inner = storage_state.state.clone();
-        let ledger_path = ledger_path.map(String::from);
         let t_storage_mining_verifier = Builder::new()
             .name("solana-storage-mining-verify-stage".to_string())
             .spawn(move || {
@@ -151,12 +151,12 @@ impl StorageStage {
                 let mut current_key = 0;
                 let mut entry_height = entry_height;
                 loop {
-                    if let Some(ref ledger_path_str) = ledger_path {
+                    if let Some(ref some_db_ledger) = db_ledger {
                         if let Err(e) = Self::process_entries(
                             &keypair,
                             &storage_state_inner,
                             &storage_entry_receiver,
-                            ledger_path_str,
+                            &some_db_ledger,
                             &mut poh_height,
                             &mut entry_height,
                             &mut current_key,
@@ -183,7 +183,7 @@ impl StorageStage {
     pub fn process_entry_crossing(
         state: &Arc<RwLock<StorageStateInner>>,
         keypair: &Arc<Keypair>,
-        _ledger_path: &str,
+        _db_ledger: &Arc<DbLedger>,
         entry_id: Hash,
         entry_height: u64,
     ) -> Result<()> {
@@ -228,7 +228,7 @@ impl StorageStage {
             let mut statew = state.write().unwrap();
 
             match chacha_cbc_encrypt_file_many_keys(
-                _ledger_path,
+                _db_ledger,
                 segment as u64,
                 &mut statew.storage_keys,
                 &samples,
@@ -252,7 +252,7 @@ impl StorageStage {
         keypair: &Arc<Keypair>,
         storage_state: &Arc<RwLock<StorageStateInner>>,
         entry_receiver: &EntryReceiver,
-        ledger_path: &str,
+        db_ledger: &Arc<DbLedger>,
         poh_height: &mut u64,
         entry_height: &mut u64,
         current_key_idx: &mut usize,
@@ -314,7 +314,7 @@ impl StorageStage {
                 Self::process_entry_crossing(
                     &storage_state,
                     &keypair,
-                    &ledger_path,
+                    &db_ledger,
                     entry.id,
                     *entry_height,
                 )?;
@@ -336,9 +336,9 @@ impl Service for StorageStage {
 
 #[cfg(test)]
 mod tests {
+    use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
     use crate::entry::Entry;
-    use crate::ledger::make_tiny_test_entries;
-    use crate::ledger::{create_tmp_sample_ledger, LedgerWriter};
+    use crate::ledger::{create_tmp_sample_ledger, make_tiny_test_entries};
 
     use crate::service::Service;
     use crate::storage_stage::StorageState;
@@ -384,7 +384,7 @@ mod tests {
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
-        let (_mint, ledger_path, _genesis) = create_tmp_sample_ledger(
+        let (_mint, ledger_path, genesis_entries) = create_tmp_sample_ledger(
             "storage_stage_process_entries",
             1000,
             1,
@@ -393,18 +393,17 @@ mod tests {
         );
 
         let entries = make_tiny_test_entries(128);
-        {
-            let mut writer = LedgerWriter::open(&ledger_path, true).unwrap();
-            writer.write_entries(&entries.clone()).unwrap();
-            // drops writer, flushes buffers
-        }
+        let db_ledger = DbLedger::open(&ledger_path).unwrap();
+        db_ledger
+            .write_entries(DEFAULT_SLOT_HEIGHT, genesis_entries.len() as u64, &entries)
+            .unwrap();
 
         let (storage_entry_sender, storage_entry_receiver) = channel();
         let storage_state = StorageState::new();
         let storage_stage = StorageStage::new(
             &storage_state,
             storage_entry_receiver,
-            Some(&ledger_path),
+            Some(Arc::new(db_ledger)),
             keypair,
             exit.clone(),
             0,
@@ -449,7 +448,7 @@ mod tests {
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
-        let (_mint, ledger_path, _genesis) = create_tmp_sample_ledger(
+        let (_mint, ledger_path, genesis_entries) = create_tmp_sample_ledger(
             "storage_stage_process_entries",
             1000,
             1,
@@ -458,18 +457,17 @@ mod tests {
         );
 
         let entries = make_tiny_test_entries(128);
-        {
-            let mut writer = LedgerWriter::open(&ledger_path, true).unwrap();
-            writer.write_entries(&entries.clone()).unwrap();
-            // drops writer, flushes buffers
-        }
+        let db_ledger = DbLedger::open(&ledger_path).unwrap();
+        db_ledger
+            .write_entries(DEFAULT_SLOT_HEIGHT, genesis_entries.len() as u64, &entries)
+            .unwrap();
 
         let (storage_entry_sender, storage_entry_receiver) = channel();
         let storage_state = StorageState::new();
         let storage_stage = StorageStage::new(
             &storage_state,
             storage_entry_receiver,
-            Some(&ledger_path),
+            Some(Arc::new(db_ledger)),
             keypair,
             exit.clone(),
             0,

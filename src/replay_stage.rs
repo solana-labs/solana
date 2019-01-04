@@ -275,13 +275,13 @@ impl Service for ReplayStage {
 mod test {
     use crate::bank::Bank;
     use crate::cluster_info::{ClusterInfo, Node};
+    use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
     use crate::entry::Entry;
     use crate::fullnode::Fullnode;
     use crate::leader_scheduler::{
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
-    use crate::ledger::{create_ticks, create_tmp_sample_ledger, LedgerWriter};
-
+    use crate::ledger::{create_ticks, create_tmp_sample_ledger};
     use crate::packet::BlobError;
     use crate::replay_stage::{ReplayStage, ReplayStageReturnType};
     use crate::result::Error;
@@ -324,7 +324,6 @@ mod test {
         // Write two entries to the ledger so that the validator is in the active set:
         // 1) Give the validator a nonzero number of tokens 2) A vote from the validator .
         // This will cause leader rotation after the bootstrap height
-        let mut ledger_writer = LedgerWriter::open(&my_ledger_path, false).unwrap();
         let (active_set_entries, vote_account_keypair) =
             make_active_set_entries(&my_keypair, &mint.keypair(), &last_id, &last_id, 0);
         last_id = active_set_entries.last().unwrap().id;
@@ -335,7 +334,17 @@ mod test {
         let active_set_entries_len = active_set_entries.len() as u64;
         let initial_non_tick_height = genesis_entries.len() as u64 - initial_tick_height;
         let initial_entry_len = genesis_entries.len() as u64 + active_set_entries_len;
-        ledger_writer.write_entries(&active_set_entries).unwrap();
+
+        {
+            let db_ledger = DbLedger::open(&my_ledger_path).unwrap();
+            db_ledger
+                .write_entries(
+                    DEFAULT_SLOT_HEIGHT,
+                    genesis_entries.len() as u64,
+                    &active_set_entries,
+                )
+                .unwrap();
+        }
 
         // Set up the LeaderScheduler so that this this node becomes the leader at
         // bootstrap_height = num_bootstrap_slots * leader_rotation_interval
@@ -518,7 +527,6 @@ mod test {
         // Write two entries to the ledger so that the validator is in the active set:
         // 1) Give the validator a nonzero number of tokens 2) A vote from the validator.
         // This will cause leader rotation after the bootstrap height
-        let mut ledger_writer = LedgerWriter::open(&my_ledger_path, false).unwrap();
         let (active_set_entries, vote_account_keypair) =
             make_active_set_entries(&my_keypair, &mint.keypair(), &last_id, &last_id, 0);
         last_id = active_set_entries.last().unwrap().id;
@@ -529,7 +537,17 @@ mod test {
         let active_set_entries_len = active_set_entries.len() as u64;
         let initial_non_tick_height = genesis_entries.len() as u64 - initial_tick_height;
         let initial_entry_len = genesis_entries.len() as u64 + active_set_entries_len;
-        ledger_writer.write_entries(&active_set_entries).unwrap();
+
+        {
+            let db_ledger = DbLedger::open(&my_ledger_path).unwrap();
+            db_ledger
+                .write_entries(
+                    DEFAULT_SLOT_HEIGHT,
+                    genesis_entries.len() as u64,
+                    &active_set_entries,
+                )
+                .unwrap();
+        }
 
         // Set up the LeaderScheduler so that this this node becomes the leader at
         // bootstrap_height = num_bootstrap_slots * leader_rotation_interval

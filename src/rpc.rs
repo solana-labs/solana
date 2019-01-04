@@ -687,6 +687,7 @@ mod tests {
             leader_keypair,
             vote_account_keypair,
             bank,
+            None,
             entry_height,
             &last_id,
             leader,

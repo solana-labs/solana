@@ -3,7 +3,6 @@
 use clap::{crate_version, value_t_or_exit, App, Arg};
 use serde_json;
 use solana::db_ledger::genesis;
-use solana::ledger::LedgerWriter;
 use solana::mint::Mint;
 use solana_sdk::signature::{read_keypair, KeypairUtil};
 use std::error;
@@ -80,9 +79,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let entries = mint.create_entries();
 
     let ledger_path = matches.value_of("ledger").unwrap();
-    let mut ledger_writer = LedgerWriter::open(&ledger_path, true)?;
-    ledger_writer.write_entries(&entries)?;
-
     genesis(&ledger_path, &leader_keypair, &entries)?;
 
     Ok(())

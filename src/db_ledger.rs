@@ -13,6 +13,7 @@ use serde::Serialize;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::borrow::Borrow;
 use std::cmp::max;
+use std::fs::create_dir_all;
 use std::io;
 use std::path::Path;
 use std::sync::Arc;
@@ -293,6 +294,7 @@ pub const ERASURE_CF: &str = "erasure";
 impl DbLedger {
     // Opens a Ledger in directory, provides "infinite" window of blobs
     pub fn open(ledger_path: &str) -> Result<Self> {
+        create_dir_all(&ledger_path)?;
         let ledger_path = Path::new(ledger_path).join(DB_LEDGER_DIRECTORY);
 
         // Use default database options
@@ -329,6 +331,8 @@ impl DbLedger {
     }
 
     pub fn destroy(ledger_path: &str) -> Result<()> {
+        // DB::destroy() fails if `ledger_path` doesn't exist
+        create_dir_all(&ledger_path)?;
         let ledger_path = Path::new(ledger_path).join(DB_LEDGER_DIRECTORY);
         DB::destroy(&Options::default(), &ledger_path)?;
         Ok(())
@@ -362,7 +366,7 @@ impl DbLedger {
         Ok(new_entries)
     }
 
-    pub fn write_entries<I>(&self, slot: u64, entries: I) -> Result<Vec<Entry>>
+    pub fn write_entries<I>(&self, slot: u64, index: u64, entries: I) -> Result<Vec<Entry>>
     where
         I: IntoIterator,
         I::Item: Borrow<Entry>,
@@ -372,7 +376,7 @@ impl DbLedger {
             .enumerate()
             .map(|(idx, entry)| {
                 let mut b = entry.borrow().to_blob();
-                b.set_index(idx as u64).unwrap();
+                b.set_index(idx as u64 + index).unwrap();
                 b.set_slot(slot).unwrap();
                 b
             })
@@ -626,6 +630,15 @@ impl DbLedger {
         Ok(EntryIterator { db_iterator })
     }
 
+    pub fn get_entries_bytes(
+        &self,
+        _start_index: u64,
+        _num_entries: u64,
+        _buf: &mut [u8],
+    ) -> io::Result<(u64, u64)> {
+        Err(io::Error::new(io::ErrorKind::Other, "TODO"))
+    }
+
     fn get_cf_options() -> Options {
         let mut options = Options::default();
         options.set_max_write_buffer_number(32);
@@ -677,21 +690,6 @@ impl Iterator for EntryIterator {
         } else {
             None
         }
-    }
-}
-
-pub fn write_entries_to_ledger<I>(ledger_paths: &[&str], entries: I, slot_height: u64)
-where
-    I: IntoIterator,
-    I::Item: Borrow<Entry>,
-{
-    let mut entries = entries.into_iter();
-    for ledger_path in ledger_paths {
-        let db_ledger =
-            DbLedger::open(ledger_path).expect("Expected to be able to open database ledger");
-        db_ledger
-            .write_entries(slot_height, entries.by_ref())
-            .expect("Expected successful write of genesis entries");
     }
 }
 
