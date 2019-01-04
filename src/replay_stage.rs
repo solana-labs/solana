@@ -60,6 +60,7 @@ pub struct ReplayStage {
 
 impl ReplayStage {
     /// Process entry blobs, already in order
+    #[allow(clippy::too_many_arguments)]
     fn process_entries(
         bank: &Arc<Bank>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -142,6 +143,7 @@ impl ReplayStage {
                     if let Some(sender) = vote_blob_sender {
                         send_validator_vote(
                             bank,
+                            &keypair,
                             &vote_account_id,
                             vote_signer_rpc,
                             &cluster_info,
@@ -300,7 +302,7 @@ mod test {
     use crate::result::Error;
     use crate::rpc_request::RpcClient;
     use crate::service::Service;
-    use crate::vote_stage::{send_validator_vote, VoteError};
+    use crate::vote_stage::send_validator_vote;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
@@ -471,13 +473,15 @@ mod test {
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
 
-        // Set up the replicate stage
+        // Set up the replay stage
         let vote_account_id = Keypair::new().pubkey();
         let bank = Arc::new(bank);
         let (entry_sender, entry_receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         let signer = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
-        let (replicate_stage, ledger_writer_recv) = ReplicateStage::new(
+        let my_keypair = Arc::new(my_keypair);
+        let (replay_stage, ledger_writer_recv) = ReplayStage::new(
+            my_keypair.clone(),
             &vote_account_id,
             &signer,
             bank.clone(),
@@ -493,6 +497,7 @@ mod test {
         let (mock_sender, _mock_receiver) = channel();
         let _vote_err = send_validator_vote(
             &bank,
+            &my_keypair,
             &vote_account_id,
             &RpcClient::new_from_socket(signer),
             &cluster_info_me,
@@ -600,7 +605,7 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let signer = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let my_keypair = Arc::new(my_keypair);
-        let (replicate_stage, ledger_writer_recv) = ReplicateStage::new(
+        let (replay_stage, ledger_writer_recv) = ReplayStage::new(
             my_keypair.clone(),
             &vote_account_id,
             &signer,
@@ -617,6 +622,7 @@ mod test {
         let (mock_sender, _mock_receiver) = channel();
         let _vote_err = send_validator_vote(
             &bank,
+            &my_keypair,
             &vote_account_id,
             &RpcClient::new_from_socket(signer),
             &cluster_info_me,

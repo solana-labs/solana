@@ -112,37 +112,6 @@ pub struct Fullnode {
     db_ledger: Arc<DbLedger>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(rename_all = "PascalCase")]
-/// Fullnode configuration to be stored in file
-pub struct Config {
-    pub node_info: NodeInfo,
-    pkcs8: Vec<u8>,
-    vote_account_pkcs8: Vec<u8>,
-}
-
-impl Config {
-    pub fn new(bind_addr: &SocketAddr, pkcs8: Vec<u8>, vote_account_pkcs8: Vec<u8>) -> Self {
-        let keypair =
-            Keypair::from_pkcs8(Input::from(&pkcs8)).expect("from_pkcs8 in fullnode::Config new");
-        let pubkey = keypair.pubkey();
-        let node_info = NodeInfo::new_with_pubkey_socketaddr(pubkey, bind_addr);
-        Config {
-            node_info,
-            pkcs8,
-            vote_account_pkcs8,
-        }
-    }
-    pub fn keypair(&self) -> Keypair {
-        Keypair::from_pkcs8(Input::from(&self.pkcs8))
-            .expect("from_pkcs8 in fullnode::Config keypair")
-    }
-    pub fn vote_account_keypair(&self) -> Keypair {
-        Keypair::from_pkcs8(Input::from(&self.vote_account_pkcs8))
-            .expect("from_pkcs8 in fullnode::Config vote_account_keypair")
-    }
-}
-
 impl Fullnode {
     pub fn new(
         node: Node,
@@ -302,7 +271,8 @@ impl Fullnode {
             };
 
             let tvu = Tvu::new(
-                vote_account_keypair.clone(),
+                vote_account_id,
+                vote_signer_addr,
                 &bank,
                 entry_height,
                 *last_entry_id,
@@ -467,7 +437,6 @@ impl Fullnode {
             };
 
             let tvu = Tvu::new(
-                self.keypair.clone(),
                 &self.vote_account_id,
                 &self.vote_signer_addr,
                 &self.bank,

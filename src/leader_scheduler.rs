@@ -536,9 +536,6 @@ mod tests {
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::transaction::Transaction;
-    use solana_sdk::vote_program::Vote;
-    use solana_sdk::vote_transaction::VoteTransaction;
     use std::hash::Hash as StdHash;
     use std::iter::FromIterator;
     use std::sync::Arc;
