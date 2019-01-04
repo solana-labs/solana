@@ -148,18 +148,18 @@ fn entrypoint(
     solana_logger::setup();
 
     if keyed_accounts[0].account.executable {
-        let prog = keyed_accounts[0].account.userdata.clone();
+        let (progs, params) = keyed_accounts.split_at_mut(1);
+        let prog = &progs[0].account.userdata;
         info!("Call BPF program");
-        //dump_program(keyed_accounts[0].key, &prog);
-        let mut vm = match create_vm(&prog) {
+        //dump_program(keyed_accounts[0].key, prog);
+        let mut vm = match create_vm(prog) {
             Ok(vm) => vm,
             Err(e) => {
                 warn!("create_vm failed: {}", e);
                 return Err(ProgramError::GenericError);
             }
         };
-        let mut v =
-            serialize_parameters(program_id, &mut keyed_accounts[1..], &tx_data, tick_height);
+        let mut v = serialize_parameters(program_id, params, &tx_data, tick_height);
         match vm.execute_program(v.as_mut_slice()) {
             Ok(status) => {
                 if 0 == status {
@@ -171,7 +171,7 @@ fn entrypoint(
                 return Err(ProgramError::GenericError);
             }
         }
-        deserialize_parameters(&mut keyed_accounts[1..], &v);
+        deserialize_parameters(params, &v);
         info!(
             "BPF program executed {} instructions",
             vm.get_last_instruction_count()

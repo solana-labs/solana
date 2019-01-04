@@ -63,9 +63,10 @@ fn entrypoint(
     solana_logger::setup();
 
     if keyed_accounts[0].account.executable {
-        let code = keyed_accounts[0].account.userdata.clone();
-        let code = str::from_utf8(&code).unwrap();
-        match run_lua(&mut keyed_accounts[1..], &code, tx_data) {
+        let (codes, params) = keyed_accounts.split_at_mut(1);
+        let code = &codes[0].account.userdata;
+        let code = str::from_utf8(code).unwrap();
+        match run_lua(params, &code, tx_data) {
             Ok(()) => {
                 trace!("Lua success");
             }
