@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate serde_json;
+
 use clap::{crate_version, App, Arg};
 use log::*;
 
@@ -6,8 +9,6 @@ use solana::cluster_info::{Node, NodeInfo, FULLNODE_PORT_RANGE};
 use solana::create_vote_account;
 use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::leader_scheduler::LeaderScheduler;
-use solana::logger;
-use solana::netutil::find_available_port_in_range;
 use solana::rpc_request::{RpcClient, RpcRequest};
 use solana::socketaddr;
 use solana::thin_client::poll_gossip_for_leader;
