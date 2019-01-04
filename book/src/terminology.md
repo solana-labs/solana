@@ -99,7 +99,7 @@ in a [transaction](#instruction).
 
 #### keypair
 
-A [public key](#public-key) and coesponding [secret key](#secret-key).
+A [public key](#public-key) and corresponding [secret key](#secret-key).
 
 #### lamport
 
