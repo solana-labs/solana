@@ -145,7 +145,7 @@ fn main() {
     let msg = "Registering a new node";
     let sig = Signature::new(&keypair.sign(msg.as_bytes()).as_ref());
 
-    let params = json!([keypair.pubkey().to_string(), sig, msg.as_bytes()]);
+    let params = json!([keypair.pubkey(), sig, msg.as_bytes()]);
     let resp = RpcRequest::RegisterNode
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap();
