@@ -113,22 +113,22 @@ impl AccountsDB {
         &mut self,
         txs: &[Transaction],
         res: &[Result<()>],
-        loaded: &[Result<Vec<Account>>],
+        loaded: &[Result<(Vec<Account>, Vec<Vec<(Pubkey, Account)>>)>],
     ) {
-        for (i, racc) in loaded.iter().enumerate() {
-            if res[i].is_err() || racc.is_err() {
+        for (i, raccs) in loaded.iter().enumerate() {
+            if res[i].is_err() || raccs.is_err() {
                 continue;
             }
 
             let tx = &txs[i];
-            let acc = racc.as_ref().unwrap();
-            for (key, account) in tx.account_keys.iter().zip(acc.iter()) {
+            let accs = raccs.as_ref().unwrap();
+            for (key, account) in tx.account_keys.iter().zip(accs.0.iter()) {
                 self.store(key, account);
             }
         }
     }
 
-    fn load_account(
+    fn load_tx_accounts(
         &self,
         tx: &Transaction,
         last_ids: &mut StatusDeque<Result<()>>,
@@ -175,18 +175,67 @@ impl AccountsDB {
         }
     }
 
+    fn load_executable_accounts(&self, mut program_id: Pubkey) -> Result<Vec<(Pubkey, Account)>> {
+        let mut accounts = Vec::new();
+        let mut depth = 0;
+        loop {
+            if solana_native_loader::check_id(&program_id) {
+                // at the root of the chain, ready to dispatch
+                break;
+            }
+
+            if depth >= 5 {
+                return Err(BankError::CallChainTooDeep);
+            }
+            depth += 1;
+
+            let program = match self.load(&program_id) {
+                Some(program) => program,
+                None => return Err(BankError::AccountNotFound),
+            };
+            if !program.executable || program.loader == Pubkey::default() {
+                return Err(BankError::AccountNotFound);
+            }
+
+            // add loader to chain
+            accounts.insert(0, (program_id, program.clone()));
+
+            program_id = program.loader;
+        }
+        Ok(accounts)
+    }
+
+    /// For each program_id in the transaction, load its loaders.
+    fn load_loaders(&self, tx: &Transaction) -> Result<Vec<Vec<(Pubkey, Account)>>> {
+        tx.instructions
+            .iter()
+            .map(|ix| {
+                let program_id = tx.program_ids[ix.program_ids_index as usize];
+                self.load_executable_accounts(program_id)
+            })
+            .collect()
+    }
+
     fn load_accounts(
         &self,
         txs: &[Transaction],
         last_ids: &mut StatusDeque<Result<()>>,
-        results: Vec<Result<()>>,
+        lock_results: Vec<Result<()>>,
         max_age: usize,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<(Result<Vec<Account>>)> {
+    ) -> Vec<Result<(Vec<Account>, Vec<Vec<(Pubkey, Account)>>)>> {
         txs.iter()
-            .zip(results.into_iter())
+            .zip(lock_results.into_iter())
             .map(|etx| match etx {
-                (tx, Ok(())) => self.load_account(tx, last_ids, max_age, error_counters),
+                (tx, Ok(())) => {
+                    match self.load_tx_accounts(tx, last_ids, max_age, error_counters) {
+                        Ok(accounts) => match self.load_loaders(tx) {
+                            Ok(loaders) => Ok((accounts, loaders)),
+                            Err(e) => Err(e),
+                        },
+                        Err(e) => Err(e),
+                    }
+                }
                 (_, Err(e)) => Err(e),
             })
             .collect()
@@ -215,13 +264,13 @@ impl Accounts {
     pub fn store_slow(&self, pubkey: &Pubkey, account: &Account) {
         self.accounts_db.write().unwrap().store(pubkey, account)
     }
-    
+
     fn lock_account(
         account_locks: &mut HashSet<Pubkey>,
         keys: &[Pubkey],
         error_counters: &mut ErrorCounters,
     ) -> Result<()> {
-        // Bail if any of the accounts are already locked
+        // Copy all the accounts
         for k in keys {
             if account_locks.contains(k) {
                 error_counters.account_in_use += 1;
@@ -281,14 +330,14 @@ impl Accounts {
         &self,
         txs: &[Transaction],
         last_ids: &mut StatusDeque<Result<()>>,
-        results: Vec<Result<()>>,
+        lock_results: Vec<Result<()>>,
         max_age: usize,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<(Result<Vec<Account>>)> {
+    ) -> Vec<Result<(Vec<Account>, Vec<Vec<(Pubkey, Account)>>)>> {
         self.accounts_db.read().unwrap().load_accounts(
             txs,
             last_ids,
-            results,
+            lock_results,
             max_age,
             error_counters,
         )
@@ -298,7 +347,7 @@ impl Accounts {
         &self,
         txs: &[Transaction],
         res: &[Result<()>],
-        loaded: &[Result<Vec<Account>>],
+        loaded: &[Result<(Vec<Account>, Vec<Vec<(Pubkey, Account)>>)>],
     ) {
         self.accounts_db
             .write()
@@ -366,7 +415,7 @@ impl Checkpoint for AccountsDB {
             merge(&mut self.accounts, &mut purge);
         }
     }
-    
+
     fn depth(&self) -> usize {
         self.checkpoints.len()
     }

@@ -810,6 +810,7 @@ fn test_multi_node_dynamic_network() {
 }
 
 #[test]
+#[ignore]
 fn test_leader_to_validator_transition() {
     solana_logger::setup();
     let leader_rotation_interval = 20;
@@ -946,6 +947,7 @@ fn test_leader_to_validator_transition() {
 }
 
 #[test]
+#[ignore]
 fn test_leader_validator_basic() {
     solana_logger::setup();
     let leader_rotation_interval = 10;
