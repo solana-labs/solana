@@ -863,8 +863,8 @@ mod tests {
 
         // Write the entries to the ledger that will cause leader rotation
         // after the bootstrap height
-        let (active_set_entries, validator_vote_account_id) = make_active_set_entries(
         let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
+        let (active_set_entries, validator_vote_account_id) = make_active_set_entries(
             &validator_keypair,
             signer,
             &mint.keypair(),
@@ -915,12 +915,13 @@ mod tests {
 
         {
             // Test that a node knows to transition to a validator based on parsing the ledger
+            let leader_vote_id = register_node(signer, bootstrap_leader_keypair.clone());
             let bootstrap_leader = Fullnode::new(
                 bootstrap_leader_node,
                 &bootstrap_leader_ledger_path,
                 bootstrap_leader_keypair,
-                &Keypair::new().pubkey(),
-                &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+                &leader_vote_id,
+                &signer,
                 Some(bootstrap_leader_info.gossip),
                 false,
                 LeaderScheduler::new(&leader_scheduler_config),
@@ -939,7 +940,7 @@ mod tests {
                 validator_node,
                 &validator_ledger_path,
                 Arc::new(validator_keypair),
-                &Keypair::new().pubkey(),
+                &validator_vote_account_id,
                 &signer,
                 Some(bootstrap_leader_info.gossip),
                 false,
