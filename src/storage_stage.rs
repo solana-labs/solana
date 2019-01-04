@@ -57,7 +57,7 @@ macro_rules! cross_boundary {
     };
 }
 
-const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = 32;
+const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = 1024;
 // TODO: some way to dynamically size NUM_IDENTITIES
 const NUM_IDENTITIES: usize = 1024;
 pub const NUM_STORAGE_SAMPLES: usize = 4;
@@ -345,7 +345,7 @@ impl StorageStage {
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
         let entries = entry_receiver.recv_timeout(timeout)?;
-        info!(
+        debug!(
             "processing: {} entries height: {} poh_height: {}",
             entries.len(),
             entry_height,
@@ -363,7 +363,7 @@ impl StorageStage {
                 }
             }
             if cross_boundary!(*poh_height, entry.num_hashes, NUM_HASHES_FOR_STORAGE_ROTATE) {
-                info!(
+                debug!(
                     "crosses sending at poh_height: {} entry_height: {}! hashes: {}",
                     *poh_height, entry_height, entry.num_hashes
                 );
