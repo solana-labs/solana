@@ -101,8 +101,9 @@ impl Default for WalletConfig {
 }
 
 impl WalletConfig {
-    pub fn drone_addr(&self, tpu_addr: SocketAddr) -> SocketAddr {
-        let mut drone_addr = tpu_addr;
+    pub fn drone_addr(&self) -> SocketAddr {
+        // Assume drone is running on the provided network entrypoint
+        let mut drone_addr = self.network;
         drone_addr.set_port(self.drone_port.unwrap_or(DRONE_PORT));
         drone_addr
     }
@@ -311,8 +312,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
     }
 
     let leader = poll_gossip_for_leader(config.network, config.timeout)?;
-    let tpu_addr = leader.tpu;
-    let drone_addr = config.drone_addr(tpu_addr);
+    let drone_addr = config.drone_addr();
     let rpc_addr = config.rpc_addr(leader.rpc);
     let rpc_client = RpcClient::new(rpc_addr);
 
