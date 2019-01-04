@@ -6,6 +6,7 @@
 Blockchain Rebuilt for Scale
 ===
 
+
 Solana&trade; is a new blockchain architecture built from the ground up for scale. The architecture supports
 up to 710 thousand transactions per second on a gigabit network.
 
