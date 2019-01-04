@@ -2,6 +2,7 @@
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
 
+use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
 use crate::entry::Entry;
 use crate::mint::Mint;
 use crate::packet::{Blob, SharedBlob, BLOB_DATA_SIZE};
@@ -16,7 +17,7 @@ use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::Vote;
 use solana_sdk::vote_transaction::VoteTransaction;
-use std::fs::{copy, create_dir_all, remove_dir_all, File, OpenOptions};
+use std::fs::{create_dir_all, remove_dir_all, File, OpenOptions};
 use std::io::prelude::*;
 use std::io::{self, BufReader, BufWriter, Seek, SeekFrom};
 use std::mem::size_of;
@@ -63,7 +64,7 @@ use std::path::Path;
 
 // ledger window
 #[derive(Debug)]
-pub struct LedgerWindow {
+struct LedgerWindow {
     index: BufReader<File>,
     data: BufReader<File>,
 }
@@ -99,10 +100,11 @@ fn u64_at<A: Read + Seek>(file: &mut A, at: u64) -> io::Result<u64> {
     deserialize_from(file.take(SIZEOF_U64)).map_err(err_bincode_to_io)
 }
 
+#[allow(dead_code)]
 impl LedgerWindow {
     // opens a Ledger in directory, provides "infinite" window
     //
-    pub fn open(ledger_path: &str) -> io::Result<Self> {
+    fn open(ledger_path: &str) -> io::Result<Self> {
         let ledger_path = Path::new(&ledger_path);
 
         let index = File::open(ledger_path.join(LEDGER_INDEX_FILE))?;
@@ -113,7 +115,7 @@ impl LedgerWindow {
         Ok(LedgerWindow { index, data })
     }
 
-    pub fn get_entry(&mut self, index: u64) -> io::Result<Entry> {
+    fn get_entry(&mut self, index: u64) -> io::Result<Entry> {
         let offset = self.get_entry_offset(index)?;
         entry_at(&mut self.data, offset)
     }
@@ -121,7 +123,7 @@ impl LedgerWindow {
     // Fill 'buf' with num_entries or most number of whole entries that fit into buf.len()
     //
     // Return tuple of (number of entries read, total size of entries read)
-    pub fn get_entries_bytes(
+    fn get_entries_bytes(
         &mut self,
         start_index: u64,
         num_entries: u64,
@@ -588,9 +590,11 @@ pub fn get_tmp_ledger_path(name: &str) -> String {
 
 pub fn create_tmp_ledger_with_mint(name: &str, mint: &Mint) -> String {
     let path = get_tmp_ledger_path(name);
-
-    let mut writer = LedgerWriter::open(&path, true).unwrap();
-    writer.write_entries(&mint.create_entries()).unwrap();
+    DbLedger::destroy(&path).expect("Expected successful database destruction");
+    let db_ledger = DbLedger::open(&path).unwrap();
+    db_ledger
+        .write_entries(DEFAULT_SLOT_HEIGHT, 0, &mint.create_entries())
+        .unwrap();
 
     path
 }
@@ -633,8 +637,11 @@ pub fn create_tmp_sample_ledger(
     let ticks = create_ticks(num_ending_ticks, mint.last_id());
     genesis.extend(ticks);
 
-    let mut writer = LedgerWriter::open(&path, true).unwrap();
-    writer.write_entries(&genesis.clone()).unwrap();
+    DbLedger::destroy(&path).expect("Expected successful database destruction");
+    let db_ledger = DbLedger::open(&path).unwrap();
+    db_ledger
+        .write_entries(DEFAULT_SLOT_HEIGHT, 0, &genesis)
+        .unwrap();
 
     (mint, path, genesis)
 }
@@ -642,15 +649,14 @@ pub fn create_tmp_sample_ledger(
 pub fn tmp_copy_ledger(from: &str, name: &str) -> String {
     let tostr = get_tmp_ledger_path(name);
 
-    {
-        let to = Path::new(&tostr);
-        let from = Path::new(&from);
+    let db_ledger = DbLedger::open(from).unwrap();
+    let ledger_entries = db_ledger.read_ledger().unwrap();
 
-        create_dir_all(to).unwrap();
-
-        copy(from.join("data"), to.join("data")).unwrap();
-        copy(from.join("index"), to.join("index")).unwrap();
-    }
+    DbLedger::destroy(&tostr).expect("Expected successful database destruction");
+    let db_ledger = DbLedger::open(&tostr).unwrap();
+    db_ledger
+        .write_entries(DEFAULT_SLOT_HEIGHT, 0, ledger_entries)
+        .unwrap();
 
     tostr
 }

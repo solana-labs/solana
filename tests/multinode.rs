@@ -6,15 +6,12 @@ use solana;
 use solana::blob_fetch_stage::BlobFetchStage;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
 use solana::contact_info::ContactInfo;
-use solana::db_ledger::DbLedger;
+use solana::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
 use solana::entry::{reconstruct_entries_from_blobs, Entry};
 use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::gossip_service::GossipService;
 use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
-use solana::ledger::{
-    create_tmp_genesis, create_tmp_sample_ledger, read_ledger, tmp_copy_ledger, LedgerWindow,
-    LedgerWriter,
-};
+use solana::ledger::{create_tmp_genesis, create_tmp_sample_ledger, tmp_copy_ledger};
 
 use solana::mint::Mint;
 use solana::packet::SharedBlob;
@@ -36,6 +33,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
 use std::time::{Duration, Instant};
+
+fn read_ledger(ledger_path: &str) -> Vec<Entry> {
+    let ledger = DbLedger::open(&ledger_path).expect("Unable to open ledger");
+    ledger
+        .read_ledger()
+        .expect("Unable to read ledger")
+        .collect()
+}
 
 fn make_spy_node(leader: &NodeInfo) -> (GossipService, Arc<RwLock<ClusterInfo>>, Pubkey) {
     let keypair = Keypair::new();
@@ -133,13 +138,18 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     let zero_ledger_path = tmp_copy_ledger(&leader_ledger_path, "multi_node_ledger_window");
     ledger_paths.push(zero_ledger_path.clone());
 
-    // write a bunch more ledger into leader's ledger, this should populate his window
-    // and force him to respond to repair from the ledger window
+    // write a bunch more ledger into leader's ledger, this should populate the leader's window
+    // and force it to respond to repair from the ledger window
     {
         let entries = make_tiny_test_entries(alice.last_id(), 100);
-        let mut writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
-
-        writer.write_entries(&entries).unwrap();
+        let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
+        db_ledger
+            .write_entries(
+                DEFAULT_SLOT_HEIGHT,
+                solana::mint::NUM_GENESIS_ENTRIES as u64,
+                &entries,
+            )
+            .unwrap();
     }
 
     let leader = Fullnode::new(
@@ -830,10 +840,18 @@ fn test_leader_to_validator_transition() {
 
     // Write the bootstrap entries to the ledger that will cause leader rotation
     // after the bootstrap height
-    let mut ledger_writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
     let (bootstrap_entries, _) =
         make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id, 0);
-    ledger_writer.write_entries(&bootstrap_entries).unwrap();
+    {
+        let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
+        db_ledger
+            .write_entries(
+                DEFAULT_SLOT_HEIGHT,
+                genesis_entries.len() as u64,
+                &bootstrap_entries,
+            )
+            .unwrap();
+    }
 
     // Start the leader node
     let bootstrap_height = leader_rotation_interval;
@@ -912,6 +930,10 @@ fn test_leader_to_validator_transition() {
         assert!(bal <= i);
     }
 
+    // Shut down
+    gossip_service.close().unwrap();
+    leader.close().unwrap();
+
     // Check the ledger to make sure it's the right height, we should've
     // transitioned after tick_height == bootstrap_height
     let (bank, _, _) = Fullnode::new_bank_from_ledger(
@@ -920,10 +942,6 @@ fn test_leader_to_validator_transition() {
     );
 
     assert_eq!(bank.tick_height(), bootstrap_height);
-
-    // Shut down
-    gossip_service.close().unwrap();
-    leader.close().unwrap();
     remove_dir_all(leader_ledger_path).unwrap();
 }
 
@@ -968,10 +986,18 @@ fn test_leader_validator_basic() {
 
     // Write the bootstrap entries to the ledger that will cause leader rotation
     // after the bootstrap height
-    let mut ledger_writer = LedgerWriter::open(&leader_ledger_path, false).unwrap();
     let (active_set_entries, vote_account_keypair) =
         make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id, 0);
-    ledger_writer.write_entries(&active_set_entries).unwrap();
+    {
+        let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
+        db_ledger
+            .write_entries(
+                DEFAULT_SLOT_HEIGHT,
+                genesis_entries.len() as u64,
+                &active_set_entries,
+            )
+            .unwrap();
+    }
 
     // Create the leader scheduler config
     let num_bootstrap_slots = 2;
@@ -1059,21 +1085,16 @@ fn test_leader_validator_basic() {
     // Check the ledger of the validator to make sure the entry height is correct
     // and that the old leader and the new leader's ledgers agree up to the point
     // of leader rotation
-    let validator_entries =
-        read_ledger(&validator_ledger_path, true).expect("Expected parsing of validator ledger");
-    let leader_entries =
-        read_ledger(&leader_ledger_path, true).expect("Expected parsing of leader ledger");
+    let validator_entries: Vec<Entry> = read_ledger(&validator_ledger_path);
 
-    let mut min_len = 0;
-    for (v, l) in validator_entries.zip(leader_entries) {
-        min_len += 1;
-        assert_eq!(
-            v.expect("expected valid validator entry"),
-            l.expect("expected valid leader entry")
-        );
+    let leader_entries = read_ledger(&leader_ledger_path);
+
+    assert_eq!(leader_entries.len(), validator_entries.len());
+    assert!(leader_entries.len() as u64 >= bootstrap_height);
+
+    for (v, l) in validator_entries.iter().zip(leader_entries) {
+        assert_eq!(*v, l);
     }
-
-    assert!(min_len >= bootstrap_height);
 
     for path in ledger_paths {
         DbLedger::destroy(&path).expect("Expected successful database destruction");
@@ -1150,8 +1171,16 @@ fn test_dropped_handoff_recovery() {
         make_active_set_entries(&next_leader_keypair, &mint.keypair(), &last_id, &last_id, 0);
 
     // Write the entries
-    let mut ledger_writer = LedgerWriter::open(&bootstrap_leader_ledger_path, false).unwrap();
-    ledger_writer.write_entries(&active_set_entries).unwrap();
+    {
+        let db_ledger = DbLedger::open(&bootstrap_leader_ledger_path).unwrap();
+        db_ledger
+            .write_entries(
+                DEFAULT_SLOT_HEIGHT,
+                genesis_entries.len() as u64,
+                &active_set_entries,
+            )
+            .unwrap();
+    }
 
     let next_leader_ledger_path = tmp_copy_ledger(
         &bootstrap_leader_ledger_path,
@@ -1319,12 +1348,20 @@ fn test_full_leader_validator_network() {
         vote_account_keypairs.push_back(vote_account_keypair);
 
         // Write the entries
-        let mut ledger_writer = LedgerWriter::open(&bootstrap_leader_ledger_path, false).unwrap();
         last_entry_id = bootstrap_entries
             .last()
             .expect("expected at least one genesis entry")
             .id;
-        ledger_writer.write_entries(&bootstrap_entries).unwrap();
+        {
+            let db_ledger = DbLedger::open(&bootstrap_leader_ledger_path).unwrap();
+            db_ledger
+                .write_entries(
+                    DEFAULT_SLOT_HEIGHT,
+                    genesis_entries.len() as u64,
+                    &bootstrap_entries,
+                )
+                .unwrap();
+        }
     }
 
     // Create the common leader scheduling configuration
@@ -1450,8 +1487,8 @@ fn test_full_leader_validator_network() {
     let mut node_entries = vec![];
     // Check that all the ledgers match
     for ledger_path in ledger_paths.iter() {
-        let entries = read_ledger(ledger_path, true).expect("Expected parsing of node ledger");
-        node_entries.push(entries);
+        let entries = read_ledger(ledger_path);
+        node_entries.push(entries.into_iter());
     }
 
     let mut shortest = None;
@@ -1460,11 +1497,7 @@ fn test_full_leader_validator_network() {
         let mut expected_entry_option = None;
         let mut empty_iterators = HashSet::new();
         for (i, entries_for_specific_node) in node_entries.iter_mut().enumerate() {
-            if let Some(next_entry_option) = entries_for_specific_node.next() {
-                // If this ledger iterator has another entry, make sure that the
-                // ledger reader parsed it correctly
-                let next_entry = next_entry_option.expect("expected valid ledger entry");
-
+            if let Some(next_entry) = entries_for_specific_node.next() {
                 // Check if another earlier ledger iterator had another entry. If so, make
                 // sure they match
                 if let Some(ref expected_entry) = expected_entry_option {
@@ -1588,14 +1621,9 @@ fn test_broadcast_last_tick() {
     bootstrap_leader.close().unwrap();
 
     let last_tick_entry_height = genesis_ledger_len as u64 + bootstrap_height;
-    let mut ledger_window = LedgerWindow::open(&bootstrap_leader_ledger_path)
-        .expect("Expected to be able to open ledger");
-
-    // get_entry() expects the index of the entry, so we have to subtract one from the actual entry height
-    let expected_last_tick = ledger_window
-        .get_entry(last_tick_entry_height - 1)
-        .expect("Expected last tick entry to exist");
-
+    let entries = read_ledger(&bootstrap_leader_ledger_path);
+    assert!(entries.len() >= last_tick_entry_height as usize);
+    let expected_last_tick = &entries[last_tick_entry_height as usize - 1];
     // Check that the nodes got the last broadcasted blob
     for (_, receiver) in blob_fetch_stages.iter() {
         let mut last_tick_blob: SharedBlob = SharedBlob::default();
@@ -1613,7 +1641,7 @@ fn test_broadcast_last_tick() {
             &reconstruct_entries_from_blobs(vec![&*last_tick_blob.read().unwrap()])
                 .expect("Expected to be able to reconstruct entries from blob")
                 .0[0];
-        assert_eq!(actual_last_tick, &expected_last_tick);
+        assert_eq!(actual_last_tick, expected_last_tick);
     }
 
     // Shut down blob fetch stages

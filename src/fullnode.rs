@@ -4,10 +4,9 @@ use crate::bank::Bank;
 use crate::broadcast_service::BroadcastService;
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
 use crate::counter::Counter;
-use crate::db_ledger::{write_entries_to_ledger, DbLedger, DEFAULT_SLOT_HEIGHT};
+use crate::db_ledger::DbLedger;
 use crate::gossip_service::GossipService;
 use crate::leader_scheduler::LeaderScheduler;
-use crate::ledger::read_ledger;
 use crate::rpc::JsonRpcService;
 use crate::rpc_pubsub::PubSubService;
 use crate::service::Service;
@@ -98,7 +97,6 @@ pub struct Fullnode {
     gossip_service: GossipService,
     bank: Arc<Bank>,
     cluster_info: Arc<RwLock<ClusterInfo>>,
-    ledger_path: String,
     sigverify_disabled: bool,
     shared_window: SharedWindow,
     tvu_sockets: Vec<UdpSocket>,
@@ -126,8 +124,9 @@ impl Fullnode {
 
         info!("creating bank...");
 
+        let db_ledger = Self::make_db_ledger(ledger_path);
         let (bank, entry_height, last_entry_id) =
-            Self::new_bank_from_ledger(ledger_path, leader_scheduler);
+            Self::new_bank_from_db_ledger(&db_ledger, leader_scheduler);
 
         info!("creating networking stack...");
         let local_gossip_addr = node.sockets.gossip.local_addr().unwrap();
@@ -146,6 +145,7 @@ impl Fullnode {
             keypair,
             vote_account_keypair,
             bank,
+            Some(db_ledger),
             entry_height,
             &last_entry_id,
             node,
@@ -176,6 +176,7 @@ impl Fullnode {
         keypair: Arc<Keypair>,
         vote_account_keypair: Arc<Keypair>,
         bank: Bank,
+        db_ledger: Option<Arc<DbLedger>>,
         entry_height: u64,
         last_entry_id: &Hash,
         mut node: Node,
@@ -184,9 +185,6 @@ impl Fullnode {
         sigverify_disabled: bool,
         rpc_port: Option<u16>,
     ) -> Self {
-        // Create the Dbledger
-        let db_ledger = Self::make_db_ledger(ledger_path);
-
         let mut rpc_addr = node.info.rpc;
         let mut rpc_pubsub_addr = node.info.rpc_pubsub;
         // Use custom RPC port, if provided (`Some(port)`)
@@ -201,6 +199,8 @@ impl Fullnode {
 
         let exit = Arc::new(AtomicBool::new(false));
         let bank = Arc::new(bank);
+
+        let db_ledger = db_ledger.unwrap_or_else(|| Self::make_db_ledger(ledger_path));
 
         let window = new_window(32 * 1024);
         let shared_window = Arc::new(RwLock::new(window));
@@ -258,14 +258,12 @@ impl Fullnode {
             };
 
             let tvu = Tvu::new(
-                // keypair.clone(),
                 vote_account_keypair.clone(),
                 &bank,
                 entry_height,
                 *last_entry_id,
                 &cluster_info,
                 sockets,
-                Some(ledger_path),
                 db_ledger.clone(),
             );
             let tpu_forwarder = TpuForwarder::new(
@@ -294,7 +292,6 @@ impl Fullnode {
                     .iter()
                     .map(|s| s.try_clone().expect("Failed to clone TPU sockets"))
                     .collect(),
-                ledger_path,
                 sigverify_disabled,
                 max_tick_height,
                 last_entry_id,
@@ -333,7 +330,6 @@ impl Fullnode {
             rpc_service: Some(rpc_service),
             rpc_pubsub_service: Some(rpc_pubsub_service),
             node_role,
-            ledger_path: ledger_path.to_owned(),
             exit,
             tvu_sockets: node.sockets.tvu,
             repair_socket: node.sockets.repair,
@@ -368,8 +364,8 @@ impl Fullnode {
         let (new_bank, scheduled_leader, entry_height, last_entry_id) = {
             // TODO: We can avoid building the bank again once RecordStage is
             // integrated with BankingStage
-            let (new_bank, entry_height, last_id) = Self::new_bank_from_ledger(
-                &self.ledger_path,
+            let (new_bank, entry_height, last_id) = Self::new_bank_from_db_ledger(
+                &self.db_ledger,
                 Arc::new(RwLock::new(new_leader_scheduler)),
             );
 
@@ -430,7 +426,6 @@ impl Fullnode {
                 last_entry_id,
                 &self.cluster_info,
                 sockets,
-                Some(&self.ledger_path),
                 self.db_ledger.clone(),
             );
             let tpu_forwarder = TpuForwarder::new(
@@ -465,7 +460,6 @@ impl Fullnode {
                 .iter()
                 .map(|s| s.try_clone().expect("Failed to clone TPU sockets"))
                 .collect(),
-            &self.ledger_path,
             self.sigverify_disabled,
             max_tick_height,
             // We pass the last_entry_id from the replay stage because we can't trust that
@@ -544,15 +538,14 @@ impl Fullnode {
         self.join()
     }
 
-    pub fn new_bank_from_ledger(
-        ledger_path: &str,
+    pub fn new_bank_from_db_ledger(
+        db_ledger: &DbLedger,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> (Bank, u64, Hash) {
         let mut bank = Bank::new_with_builtin_programs();
         bank.leader_scheduler = leader_scheduler;
-        let entries = read_ledger(ledger_path, true).expect("opening ledger");
-        let entries = entries
-            .map(|e| e.unwrap_or_else(|err| panic!("failed to parse entry. error: {}", err)));
+
+        let entries = db_ledger.read_ledger().expect("opening ledger");
         info!("processing ledger...");
 
         let (entry_height, last_entry_id) = bank.process_ledger(entries).expect("process_ledger");
@@ -560,6 +553,14 @@ impl Fullnode {
         //  initialize it from the input ledger
         info!("processed {} ledger...", entry_height);
         (bank, entry_height, last_entry_id)
+    }
+
+    pub fn new_bank_from_ledger(
+        ledger_path: &str,
+        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+    ) -> (Bank, u64, Hash) {
+        let db_ledger = Self::make_db_ledger(ledger_path);
+        Self::new_bank_from_db_ledger(&db_ledger, leader_scheduler)
     }
 
     pub fn get_leader_scheduler(&self) -> &Arc<RwLock<LeaderScheduler>> {
@@ -590,16 +591,9 @@ impl Fullnode {
     }
 
     fn make_db_ledger(ledger_path: &str) -> Arc<DbLedger> {
-        // Destroy any existing instances of the Dbledger
-        DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
-        let ledger_entries = read_ledger(ledger_path, true)
-            .expect("opening ledger")
-            .map(|entry| entry.unwrap());
-
-        write_entries_to_ledger(&[ledger_path], ledger_entries, DEFAULT_SLOT_HEIGHT);
-        let db =
-            DbLedger::open(ledger_path).expect("Expected to successfully open database ledger");
-        Arc::new(db)
+        Arc::new(
+            DbLedger::open(ledger_path).expect("Expected to successfully open database ledger"),
+        )
     }
 }
 
@@ -645,7 +639,6 @@ mod tests {
     };
     use crate::ledger::{
         create_tmp_genesis, create_tmp_sample_ledger, make_consecutive_blobs, tmp_copy_ledger,
-        LedgerWriter,
     };
     use crate::service::Service;
     use crate::streamer::responder;
@@ -677,6 +670,7 @@ mod tests {
             Arc::new(keypair),
             Arc::new(Keypair::new()),
             bank,
+            None,
             entry_height,
             &last_id,
             tn,
@@ -717,6 +711,7 @@ mod tests {
                     Arc::new(keypair),
                     Arc::new(Keypair::new()),
                     bank,
+                    None,
                     entry_height,
                     &last_id,
                     tn,
@@ -841,7 +836,6 @@ mod tests {
 
         // Write the entries to the ledger that will cause leader rotation
         // after the bootstrap height
-        let mut ledger_writer = LedgerWriter::open(&bootstrap_leader_ledger_path, false).unwrap();
         let (active_set_entries, validator_vote_account_keypair) = make_active_set_entries(
             &validator_keypair,
             &mint.keypair(),
@@ -855,7 +849,17 @@ mod tests {
             .skip(2)
             .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64)
             + num_ending_ticks as u64;
-        ledger_writer.write_entries(&active_set_entries).unwrap();
+
+        {
+            let db_ledger = DbLedger::open(&bootstrap_leader_ledger_path).unwrap();
+            db_ledger
+                .write_entries(
+                    DEFAULT_SLOT_HEIGHT,
+                    genesis_entries.len() as u64,
+                    &active_set_entries,
+                )
+                .unwrap();
+        }
 
         let validator_ledger_path =
             tmp_copy_ledger(&bootstrap_leader_ledger_path, "test_wrong_role_transition");
@@ -916,7 +920,7 @@ mod tests {
             match validator.node_role {
                 Some(NodeRole::Leader(_)) => (),
                 _ => {
-                    panic!("Expected node to be the leader");
+                    panic!("Expected validator node to be the leader");
                 }
             }
 
@@ -965,7 +969,6 @@ mod tests {
         // after the bootstrap height
         //
         // 2) A vote from the validator
-        let mut ledger_writer = LedgerWriter::open(&validator_ledger_path, false).unwrap();
         let (active_set_entries, validator_vote_account_keypair) =
             make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id, 0);
         let initial_tick_height = genesis_entries
@@ -975,7 +978,18 @@ mod tests {
         let initial_non_tick_height = genesis_entries.len() as u64 - initial_tick_height;
         let active_set_entries_len = active_set_entries.len() as u64;
         last_id = active_set_entries.last().unwrap().id;
-        ledger_writer.write_entries(&active_set_entries).unwrap();
+
+        {
+            let db_ledger = DbLedger::open(&validator_ledger_path).unwrap();
+            db_ledger
+                .write_entries(
+                    DEFAULT_SLOT_HEIGHT,
+                    genesis_entries.len() as u64,
+                    &active_set_entries,
+                )
+                .unwrap();
+        }
+
         let ledger_initial_len = genesis_entries.len() as u64 + active_set_entries_len;
 
         // Set the leader scheduler for the validator
@@ -1051,17 +1065,16 @@ mod tests {
 
         // Check the validator ledger for the correct entry + tick heights, we should've
         // transitioned after tick_height = bootstrap_height.
-        let (bank, entry_height, _) = Fullnode::new_bank_from_ledger(
-            &validator_ledger_path,
+        let (bank, entry_height, _) = Fullnode::new_bank_from_db_ledger(
+            &validator.db_ledger,
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         );
 
-        assert_eq!(bank.tick_height(), bootstrap_height);
-        assert_eq!(
-            entry_height,
-            // Only the first genesis entry has num_hashes = 0, every other entry
-            // had num_hashes = 1
-            bootstrap_height + active_set_entries_len + initial_non_tick_height,
+        assert!(bank.tick_height() >= bootstrap_height);
+        // Only the first genesis entry has num_hashes = 0, every other entry
+        // had num_hashes = 1
+        assert!(
+            entry_height >= bootstrap_height + active_set_entries_len + initial_non_tick_height
         );
 
         // Shut down

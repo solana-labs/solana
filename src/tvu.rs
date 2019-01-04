@@ -1,5 +1,5 @@
 //! The `tvu` module implements the Transaction Validation Unit, a
-//! 5-stage transaction validation pipeline in software.
+//! 4-stage transaction validation pipeline in software.
 //!
 //! 1. BlobFetchStage
 //! - Incoming blobs are picked up from the TVU sockets and repair socket.
@@ -9,16 +9,13 @@
 //! 3. ReplayStage
 //! - Transactions in blobs are processed and applied to the bank.
 //! - TODO We need to verify the signatures in the blobs.
-//! 4. LedgerWriteStage
-//! - Write the replayed ledger to disk.
-//! 5. StorageStage
+//! 4. StorageStage
 //! - Generating the keys used to encrypt the ledger and sample it for storage mining.
 
 use crate::bank::Bank;
 use crate::blob_fetch_stage::BlobFetchStage;
 use crate::cluster_info::ClusterInfo;
 use crate::db_ledger::DbLedger;
-use crate::ledger_write_stage::LedgerWriteStage;
 use crate::replay_stage::{ReplayStage, ReplayStageReturnType};
 use crate::retransmit_stage::RetransmitStage;
 use crate::service::Service;
@@ -39,7 +36,6 @@ pub struct Tvu {
     fetch_stage: BlobFetchStage,
     retransmit_stage: RetransmitStage,
     replay_stage: ReplayStage,
-    ledger_write_stage: LedgerWriteStage,
     storage_stage: StorageStage,
     exit: Arc<AtomicBool>,
 }
@@ -60,7 +56,6 @@ impl Tvu {
     /// * `last_entry_id` - Hash of the last entry
     /// * `cluster_info` - The cluster_info state.
     /// * `sockets` - My fetch, repair, and restransmit sockets
-    /// * `ledger_path` - path to the ledger file
     /// * `db_ledger` - the ledger itself
     pub fn new(
         vote_account_keypair: Arc<Keypair>,
@@ -69,7 +64,6 @@ impl Tvu {
         last_entry_id: Hash,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sockets: Sockets,
-        ledger_path: Option<&str>,
         db_ledger: Arc<DbLedger>,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
@@ -97,7 +91,7 @@ impl Tvu {
         //then sent to the window, which does the erasure coding reconstruction
         let (retransmit_stage, blob_window_receiver) = RetransmitStage::new(
             bank,
-            db_ledger,
+            db_ledger.clone(),
             &cluster_info,
             bank.tick_height(),
             entry_height,
@@ -118,13 +112,10 @@ impl Tvu {
             last_entry_id,
         );
 
-        let (ledger_write_stage, storage_entry_receiver) =
-            LedgerWriteStage::new(ledger_path, ledger_entry_receiver);
-
         let storage_stage = StorageStage::new(
             &bank.storage_state,
-            storage_entry_receiver,
-            ledger_path,
+            ledger_entry_receiver,
+            Some(db_ledger),
             keypair,
             exit.clone(),
             entry_height,
@@ -134,7 +125,6 @@ impl Tvu {
             fetch_stage,
             retransmit_stage,
             replay_stage,
-            ledger_write_stage,
             storage_stage,
             exit,
         }
@@ -160,7 +150,6 @@ impl Service for Tvu {
     fn join(self) -> thread::Result<Option<TvuReturnType>> {
         self.retransmit_stage.join()?;
         self.fetch_stage.join()?;
-        self.ledger_write_stage.join()?;
         self.storage_stage.join()?;
         match self.replay_stage.join()? {
             Some(ReplayStageReturnType::LeaderRotation(
@@ -293,7 +282,6 @@ pub mod tests {
                     fetch: target1.sockets.tvu,
                 }
             },
-            None,
             Arc::new(db_ledger),
         );
 

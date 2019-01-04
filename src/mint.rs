@@ -17,6 +17,8 @@ pub struct Mint {
     pub bootstrap_leader_tokens: u64,
 }
 
+pub const NUM_GENESIS_ENTRIES: usize = 3;
+
 impl Mint {
     pub fn new_with_pkcs8(
         tokens: u64,
@@ -92,7 +94,9 @@ impl Mint {
         let e0 = Entry::new(&self.seed(), 0, 0, vec![]);
         let e1 = Entry::new(&e0.id, 0, 1, self.create_transaction());
         let e2 = Entry::new(&e1.id, 0, 1, vec![]); // include a tick
-        vec![e0, e1, e2]
+        let genesis = vec![e0, e1, e2];
+        assert_eq!(NUM_GENESIS_ENTRIES, genesis.len());
+        genesis
     }
 }
 

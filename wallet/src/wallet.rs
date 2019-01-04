@@ -829,32 +829,21 @@ mod tests {
     #[test]
     fn test_resign_tx() {
         let leader_keypair = Arc::new(Keypair::new());
+        let leader_pubkey = leader_keypair.pubkey().clone();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
-        let (alice, ledger_path) =
+        let (_alice, ledger_path) =
             create_tmp_genesis("wallet_request_airdrop", 10_000_000, leader_data.id, 1000);
-        let mut bank = Bank::new(&alice);
-
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_data.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
-        let vote_account_keypair = Arc::new(Keypair::new());
-        let last_id = bank.last_id();
-        let entry_height = alice.create_entries().len() as u64;
-        let _server = Fullnode::new_with_bank(
-            leader_keypair,
-            vote_account_keypair,
-            bank,
-            entry_height,
-            &last_id,
+        let _server = Fullnode::new(
             leader,
-            None,
             &ledger_path,
+            leader_keypair,
+            Arc::new(Keypair::new()),
+            None,
             false,
+            LeaderScheduler::from_bootstrap_leader(leader_pubkey),
             None,
         );
-        sleep(Duration::from_millis(900));
 
         let rpc_client = RpcClient::new_from_socket(leader_data.rpc);
 
@@ -1207,32 +1196,21 @@ mod tests {
         let bob_pubkey = Keypair::new().pubkey();
 
         let leader_keypair = Arc::new(Keypair::new());
+        let leader_pubkey = leader_keypair.pubkey().clone();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
         let (alice, ledger_path) =
             create_tmp_genesis("wallet_process_command", 10_000_000, leader_data.id, 1000);
-        let mut bank = Bank::new(&alice);
-
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_data.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
-        let vote_account_keypair = Arc::new(Keypair::new());
-        let last_id = bank.last_id();
-
-        let server = Fullnode::new_with_bank(
-            leader_keypair,
-            vote_account_keypair,
-            bank,
-            0,
-            &last_id,
+        let server = Fullnode::new(
             leader,
-            None,
             &ledger_path,
+            leader_keypair,
+            Arc::new(Keypair::new()),
+            None,
             false,
+            LeaderScheduler::from_bootstrap_leader(leader_pubkey),
             None,
         );
-        sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
         run_local_drone(alice.keypair(), sender);
@@ -1278,32 +1256,21 @@ mod tests {
     #[test]
     fn test_wallet_request_airdrop() {
         let leader_keypair = Arc::new(Keypair::new());
+        let leader_pubkey = leader_keypair.pubkey().clone();
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
         let (alice, ledger_path) =
             create_tmp_genesis("wallet_request_airdrop", 10_000_000, leader_data.id, 1000);
-        let mut bank = Bank::new(&alice);
-
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_data.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
-        let vote_account_keypair = Arc::new(Keypair::new());
-        let last_id = bank.last_id();
-        let entry_height = alice.create_entries().len() as u64;
-        let server = Fullnode::new_with_bank(
-            leader_keypair,
-            vote_account_keypair,
-            bank,
-            entry_height,
-            &last_id,
+        let server = Fullnode::new(
             leader,
-            None,
             &ledger_path,
+            leader_keypair,
+            Arc::new(Keypair::new()),
+            None,
             false,
+            LeaderScheduler::from_bootstrap_leader(leader_pubkey),
             None,
         );
-        sleep(Duration::from_millis(900));
 
         let (sender, receiver) = channel();
         run_local_drone(alice.keypair(), sender);
@@ -1376,6 +1343,7 @@ mod tests {
             leader_keypair,
             vote_account_keypair,
             bank,
+            None,
             0,
             &last_id,
             leader,
@@ -1501,6 +1469,7 @@ mod tests {
             leader_keypair,
             vote_account_keypair,
             bank,
+            None,
             0,
             &last_id,
             leader,
@@ -1615,6 +1584,7 @@ mod tests {
             leader_keypair,
             vote_account_keypair,
             bank,
+            None,
             0,
             &last_id,
             leader,
