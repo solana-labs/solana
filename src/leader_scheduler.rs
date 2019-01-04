@@ -5,6 +5,7 @@ use crate::bank::Bank;
 
 use crate::entry::Entry;
 use crate::ledger::create_ticks;
+use crate::rpc_request::{RpcClient, RpcRequest};
 use bincode::serialize;
 use byteorder::{LittleEndian, ReadBytesExt};
 use hashbrown::HashSet;
@@ -16,6 +17,7 @@ use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, Vote, VoteProgram};
 use solana_sdk::vote_transaction::VoteTransaction;
 use std::io::Cursor;
+use std::net::SocketAddr;
 
 pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = 1000;
 pub const DEFAULT_LEADER_ROTATION_INTERVAL: u64 = 100;
@@ -480,6 +482,7 @@ impl Default for LeaderScheduler {
 // 2) A vote from the validator
 pub fn make_active_set_entries(
     active_keypair: &Keypair,
+    signer: SocketAddr,
     token_source: &Keypair,
     last_entry_id: &Hash,
     last_tick_id: &Hash,
@@ -492,15 +495,25 @@ pub fn make_active_set_entries(
     let mut last_entry_id = transfer_entry.id;
 
     // 2) Create and register the vote account
-    let vote_account = Keypair::new();
+    let rpc_client = RpcClient::new_from_socket(signer);
+
+    let msg = "Registering a new node";
+    let sig = Signature::new(&active_keypair.sign(msg.as_bytes()).as_ref());
+
+    let params = json!([active_keypair.pubkey(), sig, msg.as_bytes()]);
+    let resp = RpcRequest::RegisterNode
+        .make_rpc_request(&rpc_client, 1, Some(params))
+        .unwrap();
+    let vote_account_id: Pubkey = serde_json::from_value(resp).unwrap();
+
     let new_vote_account_tx =
-        Transaction::vote_account_new(active_keypair, vote_account.pubkey(), *last_tick_id, 1, 1);
+        Transaction::vote_account_new(active_keypair, vote_account_id, *last_tick_id, 1, 1);
     let new_vote_account_entry = Entry::new(&last_entry_id, 0, 1, vec![new_vote_account_tx]);
     last_entry_id = new_vote_account_entry.id;
 
     // 3) Create vote entry
     let vote = Vote { tick_height: 1 };
-    let tx = Transaction::vote_new(&vote_account.pubkey(), vote, *last_tick_id, 0);
+    let tx = Transaction::vote_new(&vote_account_id, vote, *last_tick_id, 0);
     let msg = tx.get_sign_data();
     let sig = Signature::new(&active_keypair.sign(&msg).as_ref());
     let vote_tx = Transaction {
@@ -518,7 +531,7 @@ pub fn make_active_set_entries(
     let mut txs = vec![transfer_entry, new_vote_account_entry, vote_entry];
     let empty_ticks = create_ticks(num_ending_ticks, last_entry_id);
     txs.extend(empty_ticks);
-    (txs, vote_account.pubkey())
+    (txs, vote_account_id)
 }
 
 #[cfg(test)]

@@ -914,8 +914,15 @@ fn test_leader_to_validator_transition() {
 
     // Write the bootstrap entries to the ledger that will cause leader rotation
     // after the bootstrap height
-    let (bootstrap_entries, _) =
-        make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id, 0);
+    let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
+    let (bootstrap_entries, _) = make_active_set_entries(
+        &validator_keypair,
+        signer,
+        &mint.keypair(),
+        &last_id,
+        &last_id,
+        0,
+    );
     {
         let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
         db_ledger
@@ -936,7 +943,6 @@ fn test_leader_to_validator_transition() {
         Some(bootstrap_height),
     );
 
-    let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
     let vote_id = register_node(signer, leader_keypair.clone());
     let mut leader = Fullnode::new(
         leader_node,
@@ -1064,8 +1070,15 @@ fn test_leader_validator_basic() {
 
     // Write the bootstrap entries to the ledger that will cause leader rotation
     // after the bootstrap height
-    let (active_set_entries, vote_account_keypair) =
-        make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id, 0);
+    let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
+    let (active_set_entries, _vote_account_keypair) = make_active_set_entries(
+        &validator_keypair,
+        signer,
+        &mint.keypair(),
+        &last_id,
+        &last_id,
+        0,
+    );
     {
         let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
         db_ledger
@@ -1088,7 +1101,6 @@ fn test_leader_validator_basic() {
     );
 
     // Start the validator node
-    let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
     let vote_id = register_node(signer, validator_keypair.clone());
     let mut validator = Fullnode::new(
         validator_node,
@@ -1251,8 +1263,15 @@ fn test_dropped_handoff_recovery() {
 
     // Make the entries to give the next_leader validator some stake so that they will be in
     // leader election active set
-    let (active_set_entries, _vote_account_keypair) =
-        make_active_set_entries(&next_leader_keypair, &mint.keypair(), &last_id, &last_id, 0);
+    let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
+    let (active_set_entries, _vote_account_keypair) = make_active_set_entries(
+        &next_leader_keypair,
+        signer,
+        &mint.keypair(),
+        &last_id,
+        &last_id,
+        0,
+    );
 
     // Write the entries
     {
@@ -1288,7 +1307,6 @@ fn test_dropped_handoff_recovery() {
         Some(leader_rotation_interval),
     );
 
-    let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
     let vote_id = register_node(signer, bootstrap_leader_keypair.clone());
     // Start up the bootstrap leader fullnode
     let bootstrap_leader = Fullnode::new(
@@ -1425,12 +1443,14 @@ fn test_full_leader_validator_network() {
     let mut ledger_paths = Vec::new();
     ledger_paths.push(bootstrap_leader_ledger_path.clone());
 
+    let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
     let mut vote_account_keypairs = VecDeque::new();
     for node_keypair in node_keypairs.iter() {
         // Make entries to give each node some stake so that they will be in the
         // leader election active set
         let (bootstrap_entries, vote_account_keypair) = make_active_set_entries(
             node_keypair,
+            signer,
             &mint.keypair(),
             &last_entry_id,
             &last_tick_id,
@@ -1481,7 +1501,6 @@ fn test_full_leader_validator_network() {
     let mut nodes: Vec<Arc<RwLock<Fullnode>>> = vec![];
     let mut t_nodes = vec![];
 
-    let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
     // Start up the validators
     for kp in node_keypairs.into_iter() {
         let validator_ledger_path = tmp_copy_ledger(

@@ -297,6 +297,8 @@ mod test {
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
     use crate::ledger::{create_ticks, create_tmp_sample_ledger};
+
+    use crate::create_vote_account::*;
     use crate::packet::BlobError;
     use crate::replay_stage::{ReplayStage, ReplayStageReturnType};
     use crate::result::Error;
@@ -341,8 +343,9 @@ mod test {
         // Write two entries to the ledger so that the validator is in the active set:
         // 1) Give the validator a nonzero number of tokens 2) A vote from the validator .
         // This will cause leader rotation after the bootstrap height
+        let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
         let (active_set_entries, vote_account_id) =
-            make_active_set_entries(&my_keypair, &mint.keypair(), &last_id, &last_id, 0);
+            make_active_set_entries(&my_keypair, signer, &mint.keypair(), &last_id, &last_id, 0);
         last_id = active_set_entries.last().unwrap().id;
         let initial_tick_height = genesis_entries
             .iter()
@@ -388,7 +391,7 @@ mod test {
         let (replay_stage, ledger_writer_recv) = ReplayStage::new(
             Arc::new(my_keypair),
             &vote_account_id,
-            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            &signer,
             Arc::new(bank),
             Arc::new(RwLock::new(cluster_info_me)),
             entry_receiver,
@@ -438,6 +441,8 @@ mod test {
             &received_ticks[..],
             &entries_to_send[..leader_rotation_index + 1]
         );
+
+        stop_local_vote_signer_service(t_signer, &signer_exit);
 
         assert_eq!(exit.load(Ordering::Relaxed), true);
 
@@ -554,8 +559,9 @@ mod test {
         // Write two entries to the ledger so that the validator is in the active set:
         // 1) Give the validator a nonzero number of tokens 2) A vote from the validator.
         // This will cause leader rotation after the bootstrap height
+        let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
         let (active_set_entries, vote_account_id) =
-            make_active_set_entries(&my_keypair, &mint.keypair(), &last_id, &last_id, 0);
+            make_active_set_entries(&my_keypair, signer, &mint.keypair(), &last_id, &last_id, 0);
         last_id = active_set_entries.last().unwrap().id;
         let initial_tick_height = genesis_entries
             .iter()
@@ -603,7 +609,6 @@ mod test {
         let bank = Arc::new(bank);
         let (entry_sender, entry_receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
-        let signer = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let my_keypair = Arc::new(my_keypair);
         let (replay_stage, ledger_writer_recv) = ReplayStage::new(
             my_keypair.clone(),
@@ -667,7 +672,7 @@ mod test {
             )),
             replay_stage.join().expect("replay stage join")
         );
-
+        stop_local_vote_signer_service(t_signer, &signer_exit);
         assert_eq!(exit.load(Ordering::Relaxed), true);
         let _ignored = remove_dir_all(&my_ledger_path);
     }
