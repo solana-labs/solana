@@ -133,11 +133,13 @@ else
   mkdir -p "$SOLANA_CONFIG_DIR"
   fullnode_json_path=$SOLANA_CONFIG_DIR/fullnode-x$$.json
 
+  echo "Finding a port.."
   # Find an available port in the range 9100-9899
   (( port = 9100 + ($$ % 800) ))
   while true; do
     (( port = port >= 9900 ? 9100 : ++port ))
-    if ! nc -z 127.0.0.1 $port; then
+    echo "Testing $port"
+    if ! nc -w 10 -z 127.0.0.1 $port; then
       echo "Selected port $port"
       break;
     fi
