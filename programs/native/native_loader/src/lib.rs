@@ -60,8 +60,9 @@ pub fn entrypoint(
 ) -> Result<(), ProgramError> {
     if keyed_accounts[0].account.executable {
         // dispatch it
-        let name = keyed_accounts[0].account.userdata.clone();
-        let name = match str::from_utf8(&name) {
+        let (names, params) = keyed_accounts.split_at_mut(1);
+        let name = &names[0].account.userdata;
+        let name = match str::from_utf8(name) {
             Ok(v) => v,
             Err(e) => {
                 warn!("Invalid UTF-8 sequence: {}", e);
@@ -85,12 +86,7 @@ pub fn entrypoint(
                             return Err(ProgramError::GenericError);
                         }
                     };
-                return entrypoint(
-                    program_id,
-                    &mut keyed_accounts[1..],
-                    ix_userdata,
-                    tick_height,
-                );
+                return entrypoint(program_id, params, ix_userdata, tick_height);
             },
             Err(e) => {
                 warn!("Unable to load: {:?}", e);
