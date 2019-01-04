@@ -1698,7 +1698,7 @@ fn test_broadcast_last_tick() {
     // Start up the bootstrap leader fullnode
     let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
     let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
-    let vote_id = register_node(signer, bootstrap_leader_keypair.clone());
+    let vote_id = bootstrap_leader_keypair.pubkey();
     let mut bootstrap_leader = Fullnode::new(
         bootstrap_leader_node,
         &bootstrap_leader_ledger_path,
