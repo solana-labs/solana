@@ -394,7 +394,7 @@ impl Bank {
     fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         self.accounts.lock_accounts(txs)
     }
-    
+
     fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
         self.accounts.unlock_accounts(txs, results)
     }
@@ -903,7 +903,7 @@ impl Bank {
             }
         }
     }
-    
+
     pub fn add_account_subscription(
         &self,
         bank_sub_id: Pubkey,

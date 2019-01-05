@@ -12,7 +12,7 @@ pub const SIG_OFFSET: usize = size_of::<u64>();
 /// An instruction to execute a program
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Instruction {
-    /// Index into the transaction program ids array indicating the program account that executes this transaction
+    /// Index into the transaction program ids array indicating the program account that executes this instruction
     pub program_ids_index: u8,
     /// Ordered indices into the transaction keys array indicating which accounts to pass to the program
     pub accounts: Vec<u8>,
@@ -39,11 +39,11 @@ pub struct Transaction {
     pub signatures: Vec<Signature>,
     /// All the account keys used by this transaction
     pub account_keys: Vec<Pubkey>,
-    /// The ID of a recent ledger entry.
+    /// The id of a recent ledger entry.
     pub last_id: Hash,
-    /// The number of tokens paid for processing and storage of this transaction.
+    /// The number of tokens paid for processing and storing of this transaction.
     pub fee: u64,
-    /// All the program account keys used to execute this transaction's instructions
+    /// All the program id keys used to execute this transaction's instructions
     pub program_ids: Vec<Pubkey>,
     /// Programs that will be executed in sequence and committed in one atomic transaction if all
     /// succeed.

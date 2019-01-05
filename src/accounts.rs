@@ -127,7 +127,7 @@ impl AccountsDB {
             }
         }
     }
-    
+
     fn load_account(
         &self,
         tx: &Transaction,
@@ -174,7 +174,7 @@ impl AccountsDB {
             Ok(called_accounts)
         }
     }
-    
+
     fn load_accounts(
         &self,
         txs: &[Transaction],
