@@ -9,7 +9,7 @@ use crate::service::Service;
 use crate::status_deque::Status;
 use bincode::{deserialize, serialize};
 use bs58;
-use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
+use solana_drone::drone::request_airdrop_transaction;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
@@ -35,6 +35,7 @@ impl JsonRpcService {
         bank: &Arc<Bank>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         rpc_addr: SocketAddr,
+        drone_addr: SocketAddr,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
         let request_processor = JsonRpcRequestProcessor::new(bank.clone());
@@ -52,6 +53,7 @@ impl JsonRpcService {
                     ServerBuilder::with_meta_extractor(io, move |_req: &hyper::Request<hyper::Body>| Meta {
                         request_processor: request_processor.clone(),
                         cluster_info: info.clone(),
+                        drone_addr,
                         rpc_addr,
                         exit: exit_pubsub.clone(),
                     }).threads(4)
@@ -95,6 +97,7 @@ pub struct Meta {
     pub request_processor: JsonRpcRequestProcessor,
     pub cluster_info: Arc<RwLock<ClusterInfo>>,
     pub rpc_addr: SocketAddr,
+    pub drone_addr: SocketAddr,
     pub exit: Arc<AtomicBool>,
 }
 impl Metadata for Meta {}
@@ -226,14 +229,12 @@ impl RpcSol for RpcSolImpl {
         trace!("request_airdrop id={} tokens={}", id, tokens);
         let pubkey = verify_pubkey(id)?;
 
-        let mut drone_addr = get_leader_addr(&meta.cluster_info)?;
-        drone_addr.set_port(DRONE_PORT);
         let last_id = meta.request_processor.bank.last_id();
-        let transaction = request_airdrop_transaction(&drone_addr, &pubkey, tokens, last_id)
+        let transaction = request_airdrop_transaction(&meta.drone_addr, &pubkey, tokens, last_id)
             .map_err(|err| {
-                info!("request_airdrop_transaction failed: {:?}", err);
-                Error::internal_error()
-            })?;;
+            info!("request_airdrop_transaction failed: {:?}", err);
+            Error::internal_error()
+        })?;;
 
         let data = serialize(&transaction).map_err(|err| {
             info!("request_airdrop: serialize error: {:?}", err);
@@ -435,6 +436,7 @@ mod tests {
         cluster_info.write().unwrap().insert_info(leader.clone());
         cluster_info.write().unwrap().set_leader(leader.id);
         let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
+        let drone_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let exit = Arc::new(AtomicBool::new(false));
 
         let mut io = MetaIoHandler::default();
@@ -443,6 +445,7 @@ mod tests {
         let meta = Meta {
             request_processor,
             cluster_info,
+            drone_addr,
             rpc_addr,
             exit,
         };
@@ -456,7 +459,8 @@ mod tests {
         let bank = Bank::new(&alice);
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default())));
         let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 24680);
-        let rpc_service = JsonRpcService::new(&Arc::new(bank), &cluster_info, rpc_addr);
+        let drone_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 24681);
+        let rpc_service = JsonRpcService::new(&Arc::new(bank), &cluster_info, rpc_addr, drone_addr);
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-jsonrpc");
 
@@ -751,6 +755,7 @@ mod tests {
         let meta = Meta {
             request_processor: JsonRpcRequestProcessor::new(Arc::new(bank)),
             cluster_info: Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default()))),
+            drone_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             rpc_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             exit: Arc::new(AtomicBool::new(false)),
         };
