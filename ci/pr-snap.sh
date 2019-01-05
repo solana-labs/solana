@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Only run snap.sh for pull requests that modify files under /snap
+# Only run publish-snap.sh for pull requests that modify files under /snap
 #
 set -e
 cd "$(dirname "$0")"/..
@@ -10,4 +10,4 @@ ci/affects-files.sh ^snap/ || {
   exit 0
 }
 
-exec ci/snap.sh
+exec ci/publish-snap.sh
