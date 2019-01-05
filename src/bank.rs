@@ -394,6 +394,7 @@ impl Bank {
     fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         self.accounts.lock_accounts(txs)
     }
+    
     fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
         self.accounts.unlock_accounts(txs, results)
     }
@@ -410,7 +411,7 @@ impl Bank {
         let lock_time = now.elapsed();
         let now = Instant::now();
         // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
-        // the likelyhood of any single thread getting starved and processing old ids.
+        // the likelihood of any single thread getting starved and processing old ids.
         // TODO: Banking stage threads should be prioritized to complete faster then this queue
         // expires.
         let results =
@@ -463,6 +464,7 @@ impl Bank {
         }
         Ok(())
     }
+
     fn load_accounts(
         &self,
         txs: &[Transaction],
@@ -507,6 +509,7 @@ impl Bank {
                 }
             })
             .collect();
+
         let execution_elapsed = now.elapsed();
         let now = Instant::now();
         self.accounts
@@ -900,6 +903,7 @@ impl Bank {
             }
         }
     }
+    
     pub fn add_account_subscription(
         &self,
         bank_sub_id: Pubkey,
@@ -1432,7 +1436,7 @@ mod tests {
             bank.transfer(1, &mint.keypair(), bob.pubkey(), mint.last_id()),
             Err(BankError::AccountInUse)
         );
-        // the second time shoudl fail as well
+        // the second time should fail as well
         // this verifies that `unlock_accounts` doesn't unlock `AccountInUse` accounts
         assert_eq!(
             bank.transfer(1, &mint.keypair(), bob.pubkey(), mint.last_id()),

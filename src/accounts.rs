@@ -94,6 +94,7 @@ impl AccountsDB {
         }
         None
     }
+
     pub fn store(&mut self, pubkey: &Pubkey, account: &Account) {
         if account.tokens == 0 {
             if self.checkpoints.is_empty() {
@@ -107,6 +108,7 @@ impl AccountsDB {
             self.accounts.insert(pubkey.clone(), account.clone());
         }
     }
+
     pub fn store_accounts(
         &mut self,
         txs: &[Transaction],
@@ -125,6 +127,7 @@ impl AccountsDB {
             }
         }
     }
+    
     fn load_account(
         &self,
         tx: &Transaction,
@@ -171,6 +174,7 @@ impl AccountsDB {
             Ok(called_accounts)
         }
     }
+    
     fn load_accounts(
         &self,
         txs: &[Transaction],
@@ -187,9 +191,11 @@ impl AccountsDB {
             })
             .collect()
     }
+
     pub fn increment_transaction_count(&mut self, tx_count: usize) {
         self.transaction_count += tx_count as u64
     }
+
     pub fn transaction_count(&self) -> u64 {
         self.transaction_count
     }
@@ -200,14 +206,16 @@ impl Accounts {
         self.accounts_db.read().unwrap().keys()
     }
 
-    /// Slow because lock is held for 1 operation insted of many
+    /// Slow because lock is held for 1 operation instead of many
     pub fn load_slow(&self, pubkey: &Pubkey) -> Option<Account> {
         self.accounts_db.read().unwrap().load(pubkey).cloned()
     }
-    /// Slow because lock is held for 1 operation insted of many
+
+    /// Slow because lock is held for 1 operation instead of many
     pub fn store_slow(&self, pubkey: &Pubkey, account: &Account) {
         self.accounts_db.write().unwrap().store(pubkey, account)
     }
+
     fn lock_account(
         account_locks: &mut HashSet<Pubkey>,
         keys: &[Pubkey],
@@ -236,6 +244,7 @@ impl Accounts {
             }
         }
     }
+
     pub fn hash_internal_state(&self) -> Hash {
         self.accounts_db.read().unwrap().hash_internal_state()
     }
@@ -303,18 +312,23 @@ impl Accounts {
             .unwrap()
             .increment_transaction_count(tx_count)
     }
+
     pub fn transaction_count(&self) -> u64 {
         self.accounts_db.read().unwrap().transaction_count()
     }
+
     pub fn checkpoint(&self) {
         self.accounts_db.write().unwrap().checkpoint()
     }
+
     pub fn rollback(&self) {
         self.accounts_db.write().unwrap().rollback()
     }
+
     pub fn purge(&self, depth: usize) {
         self.accounts_db.write().unwrap().purge(depth)
     }
+
     pub fn depth(&self) -> usize {
         self.accounts_db.read().unwrap().depth()
     }
@@ -328,6 +342,7 @@ impl Checkpoint for AccountsDB {
         self.checkpoints
             .push_front((accounts, self.transaction_count()));
     }
+
     fn rollback(&mut self) {
         let (accounts, transaction_count) = self.checkpoints.pop_front().unwrap();
         self.accounts = accounts;
@@ -351,6 +366,7 @@ impl Checkpoint for AccountsDB {
             merge(&mut self.accounts, &mut purge);
         }
     }
+
     fn depth(&self) -> usize {
         self.checkpoints.len()
     }
