@@ -231,13 +231,9 @@ impl AccountsDB {
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
                 (tx, Ok(())) => {
-                    match self.load_tx_accounts(tx, last_ids, max_age, error_counters) {
-                        Ok(accounts) => match self.load_loaders(tx) {
-                            Ok(loaders) => Ok((accounts, loaders)),
-                            Err(e) => Err(e),
-                        },
-                        Err(e) => Err(e),
-                    }
+                    let accounts = self.load_tx_accounts(tx, last_ids, max_age, error_counters)?;
+                    let loaders = self.load_loaders(tx)?;
+                    Ok((accounts, loaders))
                 }
                 (_, Err(e)) => Err(e),
             })
