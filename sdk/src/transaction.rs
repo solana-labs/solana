@@ -34,7 +34,7 @@ impl Instruction {
 /// An atomic transaction
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
-    /// A set of digital signatures of `account_keys`, `program_keys`, `last_id`, `fee` and `instructions`, signed by the first
+    /// A set of digital signatures of `account_keys`, `program_ids`, `last_id`, `fee` and `instructions`, signed by the first
     /// signatures.len() keys of account_keys
     pub signatures: Vec<Signature>,
     /// All the account keys used by this transaction
