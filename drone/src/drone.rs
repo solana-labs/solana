@@ -175,6 +175,10 @@ pub fn request_airdrop_transaction(
     tokens: u64,
     last_id: Hash,
 ) -> Result<Transaction, Error> {
+    info!(
+        "request_airdrop_transaction: drone_addr={} id={} tokens={} last_id={}",
+        drone_addr, id, tokens, last_id
+    );
     // TODO: make this async tokio client
     let mut stream = TcpStream::connect_timeout(drone_addr, Duration::new(3, 0))?;
     stream.set_read_timeout(Some(Duration::new(10, 0)))?;

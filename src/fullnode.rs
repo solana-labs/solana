@@ -106,6 +106,7 @@ pub struct Fullnode {
     broadcast_socket: UdpSocket,
     rpc_addr: SocketAddr,
     rpc_pubsub_addr: SocketAddr,
+    drone_addr: SocketAddr,
     db_ledger: Arc<DbLedger>,
 }
 
@@ -210,8 +211,15 @@ impl Fullnode {
             keypair.clone(),
         )));
 
+        // Assume there's a drone running on the bootstrap leader
+        let mut drone_addr = match bootstrap_leader_info_option {
+            Some(bootstrap_leader_info) => bootstrap_leader_info.rpc,
+            None => rpc_addr,
+        };
+        drone_addr.set_port(solana_drone::drone::DRONE_PORT);
+
         let (rpc_service, rpc_pubsub_service) =
-            Self::startup_rpc_services(rpc_addr, rpc_pubsub_addr, &bank, &cluster_info);
+            Self::startup_rpc_services(rpc_addr, rpc_pubsub_addr, drone_addr, &bank, &cluster_info);
 
         let gossip_service = GossipService::new(
             &cluster_info,
@@ -338,6 +346,7 @@ impl Fullnode {
             broadcast_socket: node.sockets.broadcast,
             rpc_addr,
             rpc_pubsub_addr,
+            drone_addr,
             db_ledger,
         }
     }
@@ -387,6 +396,7 @@ impl Fullnode {
         let (rpc_service, rpc_pubsub_service) = Self::startup_rpc_services(
             self.rpc_addr,
             self.rpc_pubsub_addr,
+            self.drone_addr,
             &new_bank,
             &self.cluster_info,
         );
@@ -570,6 +580,7 @@ impl Fullnode {
     fn startup_rpc_services(
         rpc_addr: SocketAddr,
         rpc_pubsub_addr: SocketAddr,
+        drone_addr: SocketAddr,
         bank: &Arc<Bank>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) -> (JsonRpcService, PubSubService) {
@@ -582,6 +593,7 @@ impl Fullnode {
                 bank,
                 cluster_info,
                 SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_port),
+                drone_addr,
             ),
             PubSubService::new(
                 bank,
