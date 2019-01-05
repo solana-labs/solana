@@ -15,6 +15,9 @@ use std::collections::VecDeque;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Mutex, RwLock};
 
+pub type InstructionAccounts = Vec<Account>;
+pub type InstructionLoaders = Vec<Vec<(Pubkey, Account)>>;
+
 #[derive(Default)]
 pub struct ErrorCounters {
     pub account_not_found: usize,
@@ -113,7 +116,7 @@ impl AccountsDB {
         &mut self,
         txs: &[Transaction],
         res: &[Result<()>],
-        loaded: &[Result<(Vec<Account>, Vec<Vec<(Pubkey, Account)>>)>],
+        loaded: &[Result<(InstructionAccounts, InstructionLoaders)>],
     ) {
         for (i, raccs) in loaded.iter().enumerate() {
             if res[i].is_err() || raccs.is_err() {
@@ -223,7 +226,7 @@ impl AccountsDB {
         lock_results: Vec<Result<()>>,
         max_age: usize,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(Vec<Account>, Vec<Vec<(Pubkey, Account)>>)>> {
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
         txs.iter()
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
@@ -333,7 +336,7 @@ impl Accounts {
         lock_results: Vec<Result<()>>,
         max_age: usize,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(Vec<Account>, Vec<Vec<(Pubkey, Account)>>)>> {
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
         self.accounts_db.read().unwrap().load_accounts(
             txs,
             last_ids,
@@ -347,7 +350,7 @@ impl Accounts {
         &self,
         txs: &[Transaction],
         res: &[Result<()>],
-        loaded: &[Result<(Vec<Account>, Vec<Vec<(Pubkey, Account)>>)>],
+        loaded: &[Result<(InstructionAccounts, InstructionLoaders)>],
     ) {
         self.accounts_db
             .write()

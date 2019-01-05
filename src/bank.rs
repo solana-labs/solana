@@ -3,7 +3,7 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 
-use crate::accounts::{Accounts, ErrorCounters};
+use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::checkpoint::Checkpoint;
 use crate::counter::Counter;
 use crate::entry::Entry;
@@ -428,7 +428,7 @@ impl Bank {
         lock_results: Vec<Result<()>>,
         max_age: usize,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(Vec<Account>, Vec<Vec<(Pubkey, Account)>>)>> {
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
         let mut last_ids = self.last_ids.write().unwrap();
         self.accounts
             .load_accounts(txs, &mut last_ids, lock_results, max_age, error_counters)
@@ -845,7 +845,7 @@ impl Bank {
         &self,
         txs: &[Transaction],
         res: &[Result<()>],
-        loaded: &[Result<(Vec<Account>, Vec<Vec<(Pubkey, Account)>>)>],
+        loaded: &[Result<(InstructionAccounts, InstructionLoaders)>],
     ) {
         for (i, raccs) in loaded.iter().enumerate() {
             if res[i].is_err() || raccs.is_err() {
