@@ -353,7 +353,7 @@ impl Fullnode {
             rpc_addr,
             rpc_pubsub_addr,
             drone_addr,
-            vote_signer_addr,
+            vote_signer_addr: *vote_signer_addr,
             db_ledger,
         }
     }
@@ -1015,7 +1015,6 @@ mod tests {
         // after the bootstrap height
         //
         // 2) A vote from the validator
-        let (active_set_entries, validator_vote_account_id) =
         let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
         let (active_set_entries, _validator_vote_account_id) = make_active_set_entries(
             &validator_keypair,
