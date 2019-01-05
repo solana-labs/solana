@@ -64,6 +64,7 @@ fi
 
 export SOLANA_METRICS_CONFIG="db=$TESTNET,$SOLANA_METRICS_PARTIAL_CONFIG"
 echo "SOLANA_METRICS_CONFIG: $SOLANA_METRICS_CONFIG"
+source scripts/configure-metrics.sh
 
 ci/channel-info.sh
 eval "$(ci/channel-info.sh)"
@@ -277,6 +278,7 @@ sanity-or-restart)
     echo Pass
   else
     echo "+++ Sanity failed, restarting the network"
+    $metricsWriteDatapoint "testnet-manager sanity-failure=1"
     start
   fi
   ;;
