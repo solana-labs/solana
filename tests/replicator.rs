@@ -1,18 +1,20 @@
 #[macro_use]
 extern crate log;
 
-#[cfg(feature = "chacha")]
 #[macro_use]
 extern crate serde_json;
 
 use solana::client::mk_client;
 use solana::cluster_info::{Node, NodeInfo};
+use solana::create_vote_account::*;
 use solana::db_ledger::DbLedger;
 use solana::fullnode::Fullnode;
 use solana::leader_scheduler::LeaderScheduler;
 use solana::ledger::{create_tmp_genesis, get_tmp_ledger_path, read_ledger, tmp_copy_ledger};
 use solana::replicator::Replicator;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana::rpc_request::{RpcClient, RpcRequest};
+use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use std::fs::remove_dir_all;
@@ -29,7 +31,6 @@ fn test_replicator_startup() {
     let leader_keypair = Arc::new(Keypair::new());
     let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_info = leader_node.info.clone();
-    let vote_account_keypair = Arc::new(Keypair::new());
 
     let leader_ledger_path = "replicator_test_leader_ledger";
     let (mint, leader_ledger_path) = create_tmp_genesis(leader_ledger_path, 100, leader_info.id, 1);
@@ -38,11 +39,24 @@ fn test_replicator_startup() {
         tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");
 
     {
+        let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
+        let rpc_client = RpcClient::new_from_socket(signer);
+
+        let msg = "Registering a new node";
+        let sig = Signature::new(&leader_keypair.sign(msg.as_bytes()).as_ref());
+
+        let params = json!([leader_keypair.pubkey(), sig, msg.as_bytes()]);
+        let resp = RpcRequest::RegisterNode
+            .make_rpc_request(&rpc_client, 1, Some(params))
+            .unwrap();
+        let vote_account_id: Pubkey = serde_json::from_value(resp).unwrap();
+
         let leader = Fullnode::new(
             leader_node,
             &leader_ledger_path,
             leader_keypair,
-            vote_account_keypair.clone(),
+            &vote_account_id,
+            &signer,
             None,
             false,
             LeaderScheduler::from_bootstrap_leader(leader_info.id.clone()),
@@ -52,6 +66,15 @@ fn test_replicator_startup() {
         let validator_keypair = Arc::new(Keypair::new());
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
+        let msg = "Registering a new node";
+        let sig = Signature::new(&validator_keypair.sign(msg.as_bytes()).as_ref());
+
+        let params = json!([validator_keypair.pubkey(), sig, msg.as_bytes()]);
+        let resp = RpcRequest::RegisterNode
+            .make_rpc_request(&rpc_client, 1, Some(params))
+            .unwrap();
+        let vote_account_id: Pubkey = serde_json::from_value(resp).unwrap();
+
         #[cfg(feature = "chacha")]
         let validator_node_info = validator_node.info.clone();
 
@@ -59,7 +82,8 @@ fn test_replicator_startup() {
             validator_node,
             &validator_ledger_path,
             validator_keypair,
-            vote_account_keypair,
+            &vote_account_id,
+            &signer,
             Some(leader_info.gossip),
             false,
             LeaderScheduler::from_bootstrap_leader(leader_info.id),
@@ -154,6 +178,7 @@ fn test_replicator_startup() {
 
         // Check that some ledger was downloaded
         assert!(num_entries > 0);
+        stop_local_vote_signer_service(t_signer, &signer_exit);
 
         replicator.close();
         validator.exit();

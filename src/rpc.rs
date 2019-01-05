@@ -689,7 +689,8 @@ mod tests {
         let entry_height = alice.create_entries().len() as u64;
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            vote_account_keypair,
+            &vote_account_keypair.pubkey(),
+            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             bank,
             None,
             entry_height,

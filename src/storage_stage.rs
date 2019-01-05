@@ -485,7 +485,17 @@ mod tests {
             tick_height: 123456,
         };
         let keypair = Keypair::new();
-        let vote_tx = VoteTransaction::vote_new(&keypair, vote, Hash::default(), 1);
+        let tx = Transaction::vote_new(&keypair.pubkey(), vote, Hash::default(), 1);
+        let msg = tx.get_sign_data();
+        let sig = Signature::new(&keypair.sign(&msg).as_ref());
+        let vote_tx = Transaction {
+            signatures: vec![sig],
+            account_keys: tx.account_keys,
+            last_id: tx.last_id,
+            fee: tx.fee,
+            program_ids: tx.program_ids,
+            instructions: tx.instructions,
+        };
         vote_txs.push(vote_tx);
         let vote_entries = vec![Entry::new(&Hash::default(), 0, 1, vote_txs)];
         storage_entry_sender.send(vote_entries).unwrap();

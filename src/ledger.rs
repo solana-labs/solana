@@ -734,7 +734,7 @@ mod tests {
     use crate::packet::{to_blobs, BLOB_DATA_SIZE, PACKET_DATA_SIZE};
     use bincode::{deserialize, serialized_size};
     use solana_sdk::hash::hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
     use solana_sdk::transaction::Transaction;
     use solana_sdk::vote_program::Vote;
     use std;
@@ -760,7 +760,17 @@ mod tests {
         let one = hash(&zero.as_ref());
         let keypair = Keypair::new();
         let vote_account = Keypair::new();
-        let tx0 = Transaction::vote_new(&vote_account, Vote { tick_height: 1 }, one, 1);
+        let tx = Transaction::vote_new(&vote_account.pubkey(), Vote { tick_height: 1 }, one, 1);
+        let msg = tx.get_sign_data();
+        let sig = Signature::new(&vote_account.sign(&msg).as_ref());
+        let tx0 = Transaction {
+            signatures: vec![sig],
+            account_keys: tx.account_keys,
+            last_id: tx.last_id,
+            fee: tx.fee,
+            program_ids: tx.program_ids,
+            instructions: tx.instructions,
+        };
         let tx1 = Transaction::budget_new_timestamp(
             &keypair,
             keypair.pubkey(),
@@ -808,7 +818,17 @@ mod tests {
         let next_id = hash(&id.as_ref());
         let keypair = Keypair::new();
         let vote_account = Keypair::new();
-        let tx_small = Transaction::vote_new(&vote_account, Vote { tick_height: 1 }, next_id, 2);
+        let tx = Transaction::vote_new(&vote_account.pubkey(), Vote { tick_height: 1 }, next_id, 2);
+        let msg = tx.get_sign_data();
+        let sig = Signature::new(&vote_account.sign(&msg).as_ref());
+        let tx_small = Transaction {
+            signatures: vec![sig],
+            account_keys: tx.account_keys,
+            last_id: tx.last_id,
+            fee: tx.fee,
+            program_ids: tx.program_ids,
+            instructions: tx.instructions,
+        };
         let tx_large = Transaction::budget_new(&keypair, keypair.pubkey(), 1, next_id);
 
         let tx_small_size = serialized_size(&tx_small).unwrap() as usize;

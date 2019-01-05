@@ -71,6 +71,21 @@ impl Transaction {
             instructions,
         )
     }
+    pub fn new_unsigned<T: Serialize>(
+        from_pubkey: &Pubkey,
+        transaction_keys: &[Pubkey],
+        program_id: Pubkey,
+        userdata: &T,
+        last_id: Hash,
+        fee: u64,
+    ) -> Self {
+        let program_ids = vec![program_id];
+        let accounts = (0..=transaction_keys.len() as u8).collect();
+        let instructions = vec![Instruction::new(0, userdata, accounts)];
+        let mut keys = vec![*from_pubkey];
+        keys.extend_from_slice(transaction_keys);
+        Self::new_with_instructions(&[], &keys[..], last_id, fee, program_ids, instructions)
+    }
     /// Create a signed transaction
     /// * `from_keypair` - The key used to sign the transaction.  This key is stored as keys[0]
     /// * `account_keys` - The keys for the transaction.  These are the program state
