@@ -1,0 +1,14 @@
+{
+  "name": "ledger_bridge",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "babel-cli": "^6.26.0",
+    "babel-preset-env": "^1.7.0",
+    "pubnub": "^4.21.6"
+  },
+  "scripts": {
+    "start": "./run.sh"
+  }
+}
