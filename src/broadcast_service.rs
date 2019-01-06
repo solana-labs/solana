@@ -25,6 +25,27 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 
+pub struct StreamTap {
+    socket: Arc<UdpSocket>,
+}
+
+impl StreamTap {
+    pub fn log(&self, entry: &Entry) {
+        let result = serde_json::to_string(&entry).unwrap();
+        self.socket
+            .send_to(result.as_bytes(), "127.0.0.1:7654")
+            .unwrap();
+    }
+}
+
+impl Default for StreamTap {
+    fn default() -> Self {
+        StreamTap {
+            socket: Arc::new(UdpSocket::bind("0.0.0.0:0").unwrap()),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BroadcastServiceReturnType {
     LeaderRotation,
@@ -58,6 +79,14 @@ fn broadcast(
     while let Ok(entries) = receiver.try_recv() {
         num_entries += entries.len();
         ventries.push(entries);
+    }
+
+    let stream_tap: StreamTap = Default::default();
+
+    for entries in &ventries {
+        for entry in entries {
+            stream_tap.log(entry);
+        }
     }
 
     if let Some(Some(last)) = ventries.last().map(|entries| entries.last()) {
