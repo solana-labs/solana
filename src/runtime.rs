@@ -5,8 +5,6 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::system_program;
 use solana_sdk::transaction::Transaction;
 use solana_system_program;
-use std::collections::HashSet;
-use std::iter::FromIterator;
 
 /// Reasons the runtime might have rejected a transaction.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -118,9 +116,16 @@ fn execute_instruction(
 }
 
 /// Return true if the slice has any duplicate elements
-fn has_duplicates<T: Eq + std::hash::Hash>(xs: &[T]) -> bool {
-    let xs_set: HashSet<&T> = HashSet::from_iter(xs.iter());
-    xs.len() != xs_set.len()
+pub fn has_duplicates<T: PartialEq>(xs: &[T]) -> bool {
+    // Note: This is an O(n^2) algorithm, but requires no heap allocations. The benchmark
+    // `bench_has_duplicates` in benches/runtime.rs shows that this implementation is
+    // ~50 times faster than using HashSet for very short slices.
+    for i in 1..xs.len() {
+        if xs[i..].contains(&xs[i - 1]) {
+            return true;
+        }
+    }
+    false
 }
 
 /// Get mut references to a subset of elements.
