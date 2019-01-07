@@ -155,8 +155,6 @@ fn main() {
     let pubkey = keypair.pubkey();
 
     let mut leader_scheduler = LeaderScheduler::default();
-
-    // Remove this line to enable leader rotation
     leader_scheduler.use_only_bootstrap_leader = use_only_bootstrap_leader;
 
     let rpc_port = if let Some(port) = matches.value_of("rpc") {
