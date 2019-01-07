@@ -114,6 +114,7 @@ mod tests {
     use std::sync::Arc;
 
     #[test]
+    #[ignore]
     fn test_encrypt_file_many_keys_single() {
         solana_logger::setup();
 
@@ -158,6 +159,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_encrypt_file_many_keys_multiple_keys() {
         solana_logger::setup();
 
