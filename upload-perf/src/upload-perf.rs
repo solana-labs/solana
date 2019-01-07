@@ -59,10 +59,9 @@ fn main() {
             if v["type"] == "bench" {
                 let name = v["name"].as_str().unwrap().trim_matches('\"').to_string();
 
-                last_commit = match get_last_metrics(&"commit".to_string(), &db, &name, &branch) {
-                    Result::Ok(v) => Some(v),
-                    Result::Err(_) => None,
-                };
+                if last_commit.is_none() {
+                    last_commit = get_last_metrics(&"commit".to_string(), &db, &name, &branch).ok();
+                }
 
                 let median = v["median"].to_string().parse().unwrap();
                 let deviation = v["deviation"].to_string().parse().unwrap();
@@ -99,12 +98,12 @@ fn main() {
         println!("bench_name, median, last_median, deviation, last_deviation");
         for (entry, values) in results {
             println!(
-                "{:#10?}, {:#10?}, {:#10?}, {:#10?}, {}",
+                "{}, {:#10?}, {:#10?}, {:#10?}, {:#10?}",
+                entry,
                 values.0,
                 values.2.parse::<i32>().unwrap(),
                 values.1,
                 values.3.parse::<i32>().unwrap(),
-                entry,
             );
         }
     } else {
@@ -112,7 +111,7 @@ fn main() {
         println!("hash: {}", trimmed_hash);
         println!("bench_name, median, deviation");
         for (entry, values) in results {
-            println!("{:10?}, {:10?}, {}", values.0, values.1, entry);
+            println!("{}, {:10?}, {:10?}", entry, values.0, values.1);
         }
     }
     solana_metrics::flush();
