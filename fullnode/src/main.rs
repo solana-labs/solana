@@ -141,15 +141,15 @@ fn main() {
     let mut node_info = node.info.clone();
 
     let rpc_client = RpcClient::new_from_socket(signer);
-
     let msg = "Registering a new node";
     let sig = Signature::new(&keypair.sign(msg.as_bytes()).as_ref());
 
     let params = json!([keypair.pubkey(), sig, msg.as_bytes()]);
     let resp = RpcRequest::RegisterNode
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap();
-    let vote_account_id: Pubkey = serde_json::from_value(resp).unwrap();
+        .retry_make_rpc_request(&rpc_client, 1, Some(params), 5)
+        .expect("Failed to register node");
+    let vote_account_id: Pubkey =
+        serde_json::from_value(resp).expect("Invalid register node response");
     info!("New vote account ID is {:?}", vote_account_id);
     let keypair = Arc::new(keypair);
     let pubkey = keypair.pubkey();
