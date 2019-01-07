@@ -60,11 +60,7 @@ fn main() {
                 let name = v["name"].as_str().unwrap().trim_matches('\"').to_string();
 
                 if last_commit.is_none() {
-                    last_commit = match get_last_metrics(&"commit".to_string(), &db, &name, &branch)
-                    {
-                        Result::Ok(v) => Some(v),
-                        Result::Err(_) => None,
-                    };
+                    last_commit = get_last_metrics(&"commit".to_string(), &db, &name, &branch).ok();
                 }
 
                 let median = v["median"].to_string().parse().unwrap();
