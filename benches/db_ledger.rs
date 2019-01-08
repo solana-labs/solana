@@ -5,26 +5,30 @@ extern crate test;
 
 use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};
-use solana::db_ledger::{DataCf, DbLedger, LedgerColumnFamilyRaw};
+use solana::db_ledger::DbLedger;
 use solana::ledger::{get_tmp_ledger_path, make_large_test_entries, make_tiny_test_entries, Block};
 use solana::packet::{Blob, BLOB_HEADER_SIZE};
 use test::Bencher;
 
 // Given some blobs and a ledger at ledger_path, benchmark writing the blobs to the ledger
-fn bench_write_blobs(bench: &mut Bencher, blobs: &mut [&mut Blob], ledger_path: &str) {
+fn bench_write_blobs(bench: &mut Bencher, blobs: &mut Vec<Blob>, ledger_path: &str) {
     let db_ledger =
         DbLedger::open(&ledger_path).expect("Expected to be able to open database ledger");
-    let slot = 0;
+
     let num_blobs = blobs.len();
+
     bench.iter(move || {
         for blob in blobs.iter_mut() {
             let index = blob.index().unwrap();
-            let key = DataCf::key(slot, index);
-            let size = blob.size().unwrap();
+
             db_ledger
-                .data_cf
-                .put(&key, &blob.data[..BLOB_HEADER_SIZE + size])
+                .put_data_blob_bytes(
+                    blob.slot().unwrap(),
+                    index,
+                    &blob.data[..BLOB_HEADER_SIZE + blob.size().unwrap()],
+                )
                 .unwrap();
+
             blob.set_index(index + num_blobs as u64).unwrap();
         }
     });
@@ -44,12 +48,13 @@ fn setup_read_bench(
     entries.extend(make_tiny_test_entries(num_small_blobs as usize));
 
     // Convert the entries to blobs, write the blobs to the ledger
-    let shared_blobs = entries.to_shared_blobs();
-    for b in shared_blobs.iter() {
-        b.write().unwrap().set_slot(slot).unwrap();
+    let mut blobs = entries.to_blobs();
+    for (index, b) in blobs.iter_mut().enumerate() {
+        b.set_index(index as u64).unwrap();
+        b.set_slot(slot).unwrap();
     }
     db_ledger
-        .write_shared_blobs(&shared_blobs)
+        .write_blobs(&blobs)
         .expect("Expectd successful insertion of blobs into ledger");
 }
 
@@ -60,9 +65,10 @@ fn bench_write_small(bench: &mut Bencher) {
     let ledger_path = get_tmp_ledger_path("bench_write_small");
     let num_entries = 32 * 1024;
     let entries = make_tiny_test_entries(num_entries);
-    let shared_blobs = entries.to_shared_blobs();
-    let mut blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.write().unwrap()).collect();
-    let mut blobs: Vec<&mut Blob> = blob_locks.iter_mut().map(|b| &mut **b).collect();
+    let mut blobs = entries.to_blobs();
+    for (index, b) in blobs.iter_mut().enumerate() {
+        b.set_index(index as u64).unwrap();
+    }
     bench_write_blobs(bench, &mut blobs, &ledger_path);
 }
 
@@ -72,10 +78,12 @@ fn bench_write_small(bench: &mut Bencher) {
 fn bench_write_big(bench: &mut Bencher) {
     let ledger_path = get_tmp_ledger_path("bench_write_big");
     let num_entries = 32 * 1024;
-    let entries = make_tiny_test_entries(num_entries);
-    let shared_blobs = entries.to_shared_blobs();
-    let mut blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.write().unwrap()).collect();
-    let mut blobs: Vec<&mut Blob> = blob_locks.iter_mut().map(|b| &mut **b).collect();
+    let entries = make_large_test_entries(num_entries);
+    let mut blobs = entries.to_blobs();
+    for (index, b) in blobs.iter_mut().enumerate() {
+        b.set_index(index as u64).unwrap();
+    }
+
     bench_write_blobs(bench, &mut blobs, &ledger_path);
 }
 
@@ -99,9 +107,7 @@ fn bench_read_sequential(bench: &mut Bencher) {
         // Generate random starting point in the range [0, total_blobs - 1], read num_reads blobs sequentially
         let start_index = rng.gen_range(0, num_small_blobs + num_large_blobs);
         for i in start_index..start_index + num_reads {
-            let _ = db_ledger
-                .data_cf
-                .get_by_slot_index(slot, i as u64 % total_blobs);
+            let _ = db_ledger.get_data_blob(slot, i as u64 % total_blobs);
         }
     });
 
@@ -132,7 +138,7 @@ fn bench_read_random(bench: &mut Bencher) {
         .collect();
     bench.iter(move || {
         for i in indexes.iter() {
-            let _ = db_ledger.data_cf.get_by_slot_index(slot, *i as u64);
+            let _ = db_ledger.get_data_blob(slot, *i as u64);
         }
     });
 
@@ -147,18 +153,16 @@ fn bench_insert_data_blob_small(bench: &mut Bencher) {
         DbLedger::open(&ledger_path).expect("Expected to be able to open database ledger");
     let num_entries = 32 * 1024;
     let entries = make_tiny_test_entries(num_entries);
-    let mut shared_blobs = entries.to_shared_blobs();
-    shared_blobs.shuffle(&mut thread_rng());
+    let mut blobs = entries.to_blobs();
+
+    blobs.shuffle(&mut thread_rng());
 
     bench.iter(move || {
-        for blob in shared_blobs.iter_mut() {
-            let index = blob.read().unwrap().index().unwrap();
-            db_ledger.write_shared_blobs(vec![blob.clone()]).unwrap();
-            blob.write()
-                .unwrap()
-                .set_index(index + num_entries as u64)
-                .unwrap();
+        for blob in blobs.iter_mut() {
+            let index = blob.index().unwrap();
+            blob.set_index(index + num_entries as u64).unwrap();
         }
+        db_ledger.write_blobs(&blobs).unwrap();
     });
 
     DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");

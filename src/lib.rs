@@ -93,7 +93,7 @@ use solana_jsonrpc_http_server as jsonrpc_http_server;
 extern crate solana_jsonrpc_macros as jsonrpc_macros;
 use solana_jsonrpc_pubsub as jsonrpc_pubsub;
 use solana_jsonrpc_ws_server as jsonrpc_ws_server;
-use solana_vote_signer;
+//use solana_vote_signer;
 
 #[cfg(test)]
 #[macro_use]

@@ -634,10 +634,19 @@ impl DbLedger {
         Ok(EntryIterator { db_iterator })
     }
 
+    pub fn get_coding_blob_bytes(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
+        self.erasure_cf.get_by_slot_index(slot, index)
+    }
+    pub fn delete_coding_blob(&self, slot: u64, index: u64) -> Result<()> {
+        self.erasure_cf.delete_by_slot_index(slot, index)
+    }
     pub fn get_data_blob_bytes(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
         self.data_cf.get_by_slot_index(slot, index)
     }
-    #[cfg(test)]
+    pub fn put_coding_blob_bytes(&self, slot: u64, index: u64, bytes: &[u8]) -> Result<()> {
+        self.erasure_cf.put_by_slot_index(slot, index, bytes)
+    }
+
     pub fn put_data_blob_bytes(&self, slot: u64, index: u64, bytes: &[u8]) -> Result<()> {
         self.data_cf.put_by_slot_index(slot, index, bytes)
     }
