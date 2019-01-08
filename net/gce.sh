@@ -63,12 +63,12 @@ Manage testnet instances
  common options:
    -p [prefix]      - Optional common prefix for instance names to avoid
                       collisions (default: $prefix)
+   -z [zone]        - Zone for the nodes (default: $zone)
 
  create-specific options:
    -n [number]      - Number of additional fullnodes (default: $additionalFullNodeCount)
    -c [number]      - Number of client nodes (default: $clientNodeCount)
    -P               - Use public network IP addresses (default: $publicNetwork)
-   -z [zone]        - Zone for the nodes (default: $zone)
    -g               - Enable GPU (default: $enableGpu)
    -G               - Enable GPU, and set count/type of GPUs to use (e.g $cpuBootstrapLeaderMachineType --accelerator count=4,type=nvidia-tesla-k80)
    -a [address]     - Set the bootstreap fullnode's external IP address to this value.
