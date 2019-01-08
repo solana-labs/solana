@@ -51,8 +51,8 @@ pub fn chacha_cbc_encrypt_file_many_keys(
             DEFAULT_SLOT_HEIGHT,
         ) {
             Ok((num_entries, entry_len)) => {
-                info!(
-                    "encrypting slice: {} num_entries: {} entry_len: {}",
+                debug!(
+                    "chacha_cuda: encrypting slice: {} num_entries: {} entry_len: {}",
                     slice, num_entries, entry_len
                 );
                 let entry_len_usz = entry_len as usize;
@@ -155,7 +155,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_encrypt_file_many_keys_multiple_keys() {
         solana_logger::setup();
 
@@ -203,14 +202,13 @@ mod tests {
         let _ignored = remove_file(out_path);
     }
 
-    /*
     #[test]
     fn test_encrypt_file_many_keys_bad_key_length() {
         let mut keys = hex!("abc123");
         let ledger_dir = "test_encrypt_file_many_keys_bad_key_length";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
         let samples = [0];
-        assert!(chacha_cbc_encrypt_file_many_keys(&ledger_path, 0, &mut keys, &samples,).is_err());
+        let db_ledger = Arc::new(DbLedger::open(&ledger_path).unwrap());
+        assert!(chacha_cbc_encrypt_file_many_keys(&db_ledger, 0, &mut keys, &samples,).is_err());
     }
-    */
 }

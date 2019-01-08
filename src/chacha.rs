@@ -41,8 +41,8 @@ pub fn chacha_cbc_encrypt_ledger(
 ) -> io::Result<()> {
     let mut out_file =
         BufWriter::new(File::create(out_path).expect("Can't open ledger encrypted data file"));
-    let mut buffer = [0; 4 * 1024];
-    let mut encrypted_buffer = [0; 4 * 1024];
+    let mut buffer = [0; 8 * 1024];
+    let mut encrypted_buffer = [0; 8 * 1024];
     let key = [0; CHACHA_KEY_SIZE];
     let mut total_entries = 0;
     let mut entry = slice;
@@ -55,6 +55,10 @@ pub fn chacha_cbc_encrypt_ledger(
             DEFAULT_SLOT_HEIGHT,
         ) {
             Ok((num_entries, entry_len)) => {
+                debug!(
+                    "chacha: encrypting slice: {} num_entries: {} entry_len: {}",
+                    slice, num_entries, entry_len
+                );
                 debug!("read {} bytes", entry_len);
                 let size = entry_len as usize;
                 if size == 0 {
@@ -152,7 +156,7 @@ mod tests {
         assert_eq!(
             hasher.result(),
             Hash::new(&hex!(
-                "58433c941060af56b72bfeaca161f19ed6df531efb28961dc6b83f53fbf66ffe"
+                "1ef70b5491a5f2b05ebeb0f92a03c131a7a78622f3643064d6d3c52a0c083175"
             )),
         );
         remove_file(out_path).unwrap();
