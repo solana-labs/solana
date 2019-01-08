@@ -1,12 +1,11 @@
 use crate::blob_fetch_stage::BlobFetchStage;
 #[cfg(feature = "chacha")]
-use crate::chacha::{chacha_cbc_encrypt_file, CHACHA_BLOCK_SIZE};
+use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
 use crate::client::mk_client;
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
 use crate::db_ledger::DbLedger;
 use crate::gossip_service::GossipService;
 use crate::leader_scheduler::LeaderScheduler;
-use crate::ledger::LEDGER_DATA_FILE;
 use crate::result::Result;
 use crate::rpc_request::{RpcClient, RpcRequest};
 use crate::service::Service;
@@ -185,7 +184,7 @@ impl Replicator {
         let (retransmit_sender, retransmit_receiver) = channel();
 
         let t_window = window_service(
-            db_ledger,
+            db_ledger.clone(),
             cluster_info.clone(),
             0,
             entry_height,
@@ -243,14 +242,18 @@ impl Replicator {
         info!("Done downloading ledger at {}", ledger_path.unwrap());
 
         let ledger_path = Path::new(ledger_path.unwrap());
-        let ledger_data_file_encrypted = ledger_path.join(format!("{}.enc", LEDGER_DATA_FILE));
+        let ledger_data_file_encrypted = ledger_path.join("ledger.enc");
         #[cfg(feature = "chacha")]
         {
-            let ledger_data_file = ledger_path.join(LEDGER_DATA_FILE);
             let mut ivec = [0u8; CHACHA_BLOCK_SIZE];
             ivec[0..4].copy_from_slice(&[2, 3, 4, 5]);
 
-            chacha_cbc_encrypt_file(&ledger_data_file, &ledger_data_file_encrypted, &mut ivec)?;
+            chacha_cbc_encrypt_ledger(
+                &db_ledger,
+                entry_height,
+                &ledger_data_file_encrypted,
+                &mut ivec,
+            )?;
         }
 
         info!("Done encrypting the ledger");

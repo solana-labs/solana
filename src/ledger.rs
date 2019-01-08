@@ -69,7 +69,7 @@ struct LedgerWindow {
     data: BufReader<File>,
 }
 
-pub const LEDGER_DATA_FILE: &str = "data";
+const LEDGER_DATA_FILE: &str = "data";
 const LEDGER_INDEX_FILE: &str = "index";
 
 // use a CONST because there's a cast, and we don't want "sizeof::<u64> as u64"...

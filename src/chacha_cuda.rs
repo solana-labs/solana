@@ -1,5 +1,5 @@
 use crate::chacha::{CHACHA_BLOCK_SIZE, CHACHA_KEY_SIZE};
-use crate::db_ledger::DbLedger;
+use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
 use crate::sigverify::{
     chacha_cbc_encrypt_many_sample, chacha_end_sha_state, chacha_init_sha_state,
 };
@@ -44,7 +44,12 @@ pub fn chacha_cbc_encrypt_file_many_keys(
         chacha_init_sha_state(int_sha_states.as_mut_ptr(), num_keys as u32);
     }
     loop {
-        match db_ledger.get_entries_bytes(entry, ENTRIES_PER_SEGMENT - total_entries, &mut buffer) {
+        match db_ledger.get_blob_bytes(
+            entry,
+            ENTRIES_PER_SEGMENT - total_entries,
+            &mut buffer,
+            DEFAULT_SLOT_HEIGHT,
+        ) {
             Ok((num_entries, entry_len)) => {
                 info!(
                     "encrypting slice: {} num_entries: {} entry_len: {}",
@@ -101,12 +106,10 @@ pub fn chacha_cbc_encrypt_file_many_keys(
 
 #[cfg(test)]
 mod tests {
-    use crate::chacha::chacha_cbc_encrypt_file;
+    use crate::chacha::chacha_cbc_encrypt_ledger;
     use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
     use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
-    use crate::ledger::{
-        get_tmp_ledger_path, make_tiny_test_entries, LedgerWriter, LEDGER_DATA_FILE,
-    };
+    use crate::ledger::{get_tmp_ledger_path, make_tiny_test_entries, LedgerWriter};
     use crate::replicator::sample_file;
     use solana_sdk::hash::Hash;
     use std::fs::{remove_dir_all, remove_file};
@@ -114,7 +117,6 @@ mod tests {
     use std::sync::Arc;
 
     #[test]
-    #[ignore]
     fn test_encrypt_file_many_keys_single() {
         solana_logger::setup();
 
@@ -125,7 +127,7 @@ mod tests {
             let mut writer = LedgerWriter::open(&ledger_path, true).unwrap();
             writer.write_entries(&entries).unwrap();
         }
-        let db_ledger = DbLedger::open(&ledger_path).unwrap();
+        let db_ledger = Arc::new(DbLedger::open(&ledger_path).unwrap());
         db_ledger
             .write_entries(DEFAULT_SLOT_HEIGHT, 0, &entries)
             .unwrap();
@@ -139,18 +141,12 @@ mod tests {
         );
 
         let mut cpu_iv = ivecs.clone();
-        assert!(chacha_cbc_encrypt_file(
-            &Path::new(&ledger_path).join(LEDGER_DATA_FILE),
-            out_path,
-            &mut cpu_iv,
-        )
-        .is_ok());
+        assert!(chacha_cbc_encrypt_ledger(&db_ledger, 0, out_path, &mut cpu_iv,).is_ok());
 
         let ref_hash = sample_file(&out_path, &samples).unwrap();
 
         let hashes =
-            chacha_cbc_encrypt_file_many_keys(&Arc::new(db_ledger), 0, &mut ivecs, &samples)
-                .unwrap();
+            chacha_cbc_encrypt_file_many_keys(&db_ledger, 0, &mut ivecs, &samples).unwrap();
 
         assert_eq!(hashes[0], ref_hash);
 
@@ -170,7 +166,7 @@ mod tests {
             let mut writer = LedgerWriter::open(&ledger_path, true).unwrap();
             writer.write_entries(&entries).unwrap();
         }
-        let db_ledger = DbLedger::open(&ledger_path).unwrap();
+        let db_ledger = Arc::new(DbLedger::open(&ledger_path).unwrap());
         db_ledger
             .write_entries(DEFAULT_SLOT_HEIGHT, 0, &entries)
             .unwrap();
@@ -187,12 +183,7 @@ mod tests {
             );
             ivec[0] = i;
             ivecs.extend(ivec.clone().iter());
-            assert!(chacha_cbc_encrypt_file(
-                &Path::new(&ledger_path).join(LEDGER_DATA_FILE),
-                out_path,
-                &mut ivec,
-            )
-            .is_ok());
+            assert!(chacha_cbc_encrypt_ledger(&db_ledger.clone(), 0, out_path, &mut ivec,).is_ok());
 
             ref_hashes.push(sample_file(&out_path, &samples).unwrap());
             info!(
@@ -204,8 +195,7 @@ mod tests {
         }
 
         let hashes =
-            chacha_cbc_encrypt_file_many_keys(&Arc::new(db_ledger), 0, &mut ivecs, &samples)
-                .unwrap();
+            chacha_cbc_encrypt_file_many_keys(&db_ledger, 0, &mut ivecs, &samples).unwrap();
 
         assert_eq!(hashes, ref_hashes);
 
