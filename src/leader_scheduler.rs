@@ -502,7 +502,7 @@ pub fn make_active_set_entries(
 
     let params = json!([active_keypair.pubkey(), sig, msg.as_bytes()]);
     let resp = RpcRequest::RegisterNode
-        .make_rpc_request(&rpc_client, 1, Some(params))
+        .retry_make_rpc_request(&rpc_client, 1, Some(params), 5)
         .unwrap();
     let vote_account_id: Pubkey = serde_json::from_value(resp).unwrap();
 
