@@ -184,7 +184,6 @@ pub mod tests {
     use crate::service::Service;
     use crate::streamer;
     use crate::tvu::{Sockets, Tvu};
-    use crate::window::{self, SharedWindow};
     use bincode::serialize;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -198,14 +197,12 @@ pub mod tests {
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
 
-    fn new_ncp(
+    fn new_gossip(
         cluster_info: Arc<RwLock<ClusterInfo>>,
         gossip: UdpSocket,
         exit: Arc<AtomicBool>,
-    ) -> (GossipService, SharedWindow) {
-        let window = Arc::new(RwLock::new(window::default_window()));
-        let gossip_service = GossipService::new(&cluster_info, None, gossip, exit);
-        (gossip_service, window)
+    ) -> GossipService {
+        GossipService::new(&cluster_info, None, gossip, exit)
     }
 
     /// Test that message sent from leader to target1 and replayed to target2
@@ -224,7 +221,7 @@ pub mod tests {
         cluster_info_l.set_leader(leader.info.id);
 
         let cref_l = Arc::new(RwLock::new(cluster_info_l));
-        let dr_l = new_ncp(cref_l, leader.sockets.gossip, exit.clone());
+        let dr_l = new_gossip(cref_l, leader.sockets.gossip, exit.clone());
 
         //start cluster_info2
         let mut cluster_info2 = ClusterInfo::new(target2.info.clone());
@@ -232,7 +229,7 @@ pub mod tests {
         cluster_info2.set_leader(leader.info.id);
         let leader_id = leader.info.id;
         let cref2 = Arc::new(RwLock::new(cluster_info2));
-        let dr_2 = new_ncp(cref2, target2.sockets.gossip, exit.clone());
+        let dr_2 = new_gossip(cref2, target2.sockets.gossip, exit.clone());
 
         // setup some blob services to send blobs into the socket
         // to simulate the source peer and get blobs out of the socket to
@@ -266,7 +263,7 @@ pub mod tests {
         cluster_info1.insert_info(leader.info.clone());
         cluster_info1.set_leader(leader.info.id);
         let cref1 = Arc::new(RwLock::new(cluster_info1));
-        let dr_1 = new_ncp(cref1.clone(), target1.sockets.gossip, exit.clone());
+        let dr_1 = new_gossip(cref1.clone(), target1.sockets.gossip, exit.clone());
 
         let vote_account_id = Keypair::new().pubkey();
         let mut cur_hash = Hash::default();
@@ -355,9 +352,9 @@ pub mod tests {
 
         tvu.close().expect("close");
         exit.store(true, Ordering::Relaxed);
-        dr_l.0.join().expect("join");
-        dr_2.0.join().expect("join");
-        dr_1.0.join().expect("join");
+        dr_l.join().expect("join");
+        dr_2.join().expect("join");
+        dr_1.join().expect("join");
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
         DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
