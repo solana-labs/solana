@@ -2,6 +2,7 @@
 authors = ["Solana Maintainers <maintainers@solana.com>"]
 edition = "2018"
 name = "solana-fullnode-config"
+description = "Blockchain, Rebuilt for Scale"
 version = "0.11.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
