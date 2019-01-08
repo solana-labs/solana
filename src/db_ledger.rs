@@ -567,7 +567,7 @@ impl DbLedger {
     // whole blobs that fit into buf.len()
     //
     // Return tuple of (number of blob read, total size of blobs read)
-    pub fn get_blob_bytes(
+    pub fn read_blobs_bytes(
         &self,
         start_index: u64,
         num_blobs: u64,
@@ -895,7 +895,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_blobs_bytes() {
+    fn test_read_blobs_bytes() {
         let shared_blobs = make_tiny_test_entries(10).to_shared_blobs();
         let slot = DEFAULT_SLOT_HEIGHT;
         index_blobs(
@@ -907,12 +907,12 @@ mod tests {
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
 
-        let ledger_path = get_tmp_ledger_path("test_get_blobs_bytes");
+        let ledger_path = get_tmp_ledger_path("test_read_blobs_bytes");
         let ledger = DbLedger::open(&ledger_path).unwrap();
         ledger.write_blobs(&blobs).unwrap();
 
         let mut buf = [0; 1024];
-        let (num_blobs, bytes) = ledger.get_blob_bytes(0, 1, &mut buf, slot).unwrap();
+        let (num_blobs, bytes) = ledger.read_blobs_bytes(0, 1, &mut buf, slot).unwrap();
         let bytes = bytes as usize;
         assert_eq!(num_blobs, 1);
         {
@@ -920,7 +920,7 @@ mod tests {
             assert_eq!(blob_data, &blobs[0].data[..bytes]);
         }
 
-        let (num_blobs, bytes2) = ledger.get_blob_bytes(0, 2, &mut buf, slot).unwrap();
+        let (num_blobs, bytes2) = ledger.read_blobs_bytes(0, 2, &mut buf, slot).unwrap();
         let bytes2 = bytes2 as usize;
         assert_eq!(num_blobs, 2);
         assert!(bytes2 > bytes);
@@ -934,19 +934,19 @@ mod tests {
 
         // buf size part-way into blob[1], should just return blob[0]
         let mut buf = vec![0; bytes + 1];
-        let (num_blobs, bytes3) = ledger.get_blob_bytes(0, 2, &mut buf, slot).unwrap();
+        let (num_blobs, bytes3) = ledger.read_blobs_bytes(0, 2, &mut buf, slot).unwrap();
         assert_eq!(num_blobs, 1);
         let bytes3 = bytes3 as usize;
         assert_eq!(bytes3, bytes);
 
         let mut buf = vec![0; bytes2 - 1];
-        let (num_blobs, bytes4) = ledger.get_blob_bytes(0, 2, &mut buf, slot).unwrap();
+        let (num_blobs, bytes4) = ledger.read_blobs_bytes(0, 2, &mut buf, slot).unwrap();
         assert_eq!(num_blobs, 1);
         let bytes4 = bytes4 as usize;
         assert_eq!(bytes4, bytes);
 
         let mut buf = vec![0; bytes * 2];
-        let (num_blobs, bytes6) = ledger.get_blob_bytes(9, 1, &mut buf, slot).unwrap();
+        let (num_blobs, bytes6) = ledger.read_blobs_bytes(9, 1, &mut buf, slot).unwrap();
         assert_eq!(num_blobs, 1);
         let bytes6 = bytes6 as usize;
 
@@ -956,7 +956,7 @@ mod tests {
         }
 
         // Read out of range
-        assert!(ledger.get_blob_bytes(20, 2, &mut buf, slot).is_err());
+        assert!(ledger.read_blobs_bytes(20, 2, &mut buf, slot).is_err());
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
