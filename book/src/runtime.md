@@ -57,8 +57,8 @@ encodes.
 * `CreateAccount` - This allows the user to create and assign an account to a
   Program.
 * `Assign` - allows the user to assign an existing account to a program.
-* `Move`  - moves tokens between account's that are associated with
-* `Spawn` - spawn a new program from an account
+* `Move`  - moves tokens between accounts.
+* `Spawn` - spawns a new program from an account.
 
 ## Notes
 
@@ -81,4 +81,3 @@ a transaction is committed.
 
 * [Continuations and Signals for long running
   Transactions](https://github.com/solana-labs/solana/issues/1485)
-

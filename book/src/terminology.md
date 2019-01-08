@@ -80,7 +80,7 @@ A full participant in the [cluster](#cluster) either a [leader](#leader) or
 
 #### fullnode state
 
-The result of interpreting all programs on the ledger a given [tick
+The result of interpreting all programs on the ledger at a given [tick
 height](#tick-height). It includes at least the set of all [accounts](#account)
 holding nonzero [native tokens](#native-tokens).
 
@@ -256,4 +256,3 @@ See [ledger vote](#ledger-vote).
 #### voting period
 
 The duration of a [block](#block).
-
