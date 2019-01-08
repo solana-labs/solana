@@ -20,7 +20,7 @@ use crate::crds_gossip::CrdsGossip;
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
 use crate::crds_value::{CrdsValue, CrdsValueLabel, LeaderId};
-use crate::db_ledger::{DbLedger, LedgerColumnFamily, MetaCf, DEFAULT_SLOT_HEIGHT};
+use crate::db_ledger::DbLedger;
 use crate::packet::{to_shared_blob, Blob, SharedBlob, BLOB_SIZE};
 use crate::result::Result;
 use crate::rpc::RPC_PORT;
@@ -871,7 +871,7 @@ impl ClusterInfo {
         ix: u64,
     ) -> Vec<SharedBlob> {
         if let Some(db_ledger) = db_ledger {
-            let meta = db_ledger.meta_cf.get(&MetaCf::key(DEFAULT_SLOT_HEIGHT));
+            let meta = db_ledger.meta();
 
             if let Ok(Some(meta)) = meta {
                 let max_slot = meta.received_slot;
