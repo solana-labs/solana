@@ -479,10 +479,7 @@ mod test {
                     .unwrap()
                     .get_scheduled_leader(start_tick_height + i + 1)
                     .expect("Leader should exist");
-                let result = db_ledger
-                    .data_cf
-                    .get_by_slot_index(slot, entry_height + i)
-                    .unwrap();
+                let result = db_ledger.get_data_blob(slot, entry_height + i).unwrap();
 
                 assert!(result.is_some());
             }
