@@ -1,5 +1,5 @@
 //! The `tvu` module implements the Transaction Validation Unit, a
-//! 4-stage transaction validation pipeline in software.
+//! multi-stage transaction validation pipeline in software.
 //!
 //! 1. BlobFetchStage
 //! - Incoming blobs are picked up from the TVU sockets and repair socket.

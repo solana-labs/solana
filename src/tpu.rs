@@ -1,5 +1,5 @@
 //! The `tpu` module implements the Transaction Processing Unit, a
-//! 5-stage transaction processing pipeline in software.
+//! multi-stage transaction processing pipeline in software.
 
 use crate::bank::Bank;
 use crate::banking_stage::{BankingStage, BankingStageReturnType};
