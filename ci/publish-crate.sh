@@ -50,7 +50,10 @@ for crate in "${CRATES[@]}"; do
   # TODO: Ensure the published version matches the contents of BUILDKITE_TAG
   (
     set -x
-    ci/docker-run.sh rust bash -exc "cd $crate; $cargoCommand"
+    # TODO: the rocksdb package does not build with the stock rust docker image,
+    # so use the solana rust docker image until this is resolved upstream
+    ci/docker-run.sh solanalabs/rust:1.31.0 bash -exc "cd $crate; $cargoCommand"
+    #ci/docker-run.sh rust bash -exc "cd $crate; $cargoCommand"
   )
 done
 
