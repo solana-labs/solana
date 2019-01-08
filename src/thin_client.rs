@@ -344,7 +344,7 @@ impl Drop for ThinClient {
     }
 }
 
-pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> Result<NodeInfo> {
+pub fn poll_gossip_for_leader(leader_gossip: SocketAddr, timeout: Option<u64>) -> Result<NodeInfo> {
     let exit = Arc::new(AtomicBool::new(false));
     let (node, gossip_socket) = ClusterInfo::spy_node();
     let my_addr = gossip_socket.local_addr().unwrap();
@@ -352,7 +352,7 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
     let gossip_service =
         GossipService::new(&cluster_info.clone(), None, gossip_socket, exit.clone());
 
-    let leader_entry_point = NodeInfo::new_entry_point(&leader_ncp);
+    let leader_entry_point = NodeInfo::new_entry_point(&leader_gossip);
     cluster_info
         .write()
         .unwrap()
@@ -369,7 +369,7 @@ pub fn poll_gossip_for_leader(leader_ncp: SocketAddr, timeout: Option<u64>) -> R
     let leader;
 
     loop {
-        trace!("polling {:?} for leader from {:?}", leader_ncp, my_addr);
+        trace!("polling {:?} for leader from {:?}", leader_gossip, my_addr);
 
         if let Some(l) = cluster_info.read().unwrap().get_gossip_top_leader() {
             leader = Some(l.clone());
