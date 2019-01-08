@@ -10,6 +10,7 @@ bootstrapFullNodeMachineType=
 clientNodeCount=0
 additionalFullNodeCount=10
 publicNetwork=false
+skipSetup=false
 snapChannel=edge
 tarChannelOrTag=edge
 delete=false
@@ -47,6 +48,9 @@ Deploys a CD testnet
    -b                   - Disable leader rotation
    -a [address]         - Set the bootstrap fullnode's external IP address to this GCE address
    -d                   - Delete the network
+   -r                   - Reuse existing node/ledger configuration from a
+                          previous |start| (ie, don't run ./mulitnode-demo/setup.sh).
+
 
    Note: the SOLANA_METRICS_CONFIG environment variable is used to configure
          metrics
@@ -62,7 +66,7 @@ zone=$3
 [[ -n $zone ]] || usage "Zone not specified"
 shift 3
 
-while getopts "h?p:Pn:c:s:t:gG:a:db" opt; do
+while getopts "h?p:Pn:c:s:t:gG:a:dbr" opt; do
   case $opt in
   h | \?)
     usage
@@ -113,36 +117,14 @@ while getopts "h?p:Pn:c:s:t:gG:a:db" opt; do
   d)
     delete=true
     ;;
+  r)
+    skipSetup=true
+    ;;
   *)
     usage "Error: unhandled option: $opt"
     ;;
   esac
 done
-
-
-create_args=(
-  -a "$bootstrapFullNodeAddress"
-  -c "$clientNodeCount"
-  -n "$additionalFullNodeCount"
-  -p "$netName"
-  -z "$zone"
-)
-
-if $enableGpu; then
-  if [[ -z $bootstrapFullNodeMachineType ]]; then
-    create_args+=(-g)
-  else
-    create_args+=(-G "$bootstrapFullNodeMachineType")
-  fi
-fi
-
-if ! $leaderRotation; then
-  create_args+=(-b)
-fi
-
-if $publicNetwork; then
-  create_args+=(-P)
-fi
 
 shutdown() {
   exitcode=$?
@@ -164,14 +146,50 @@ trap shutdown EXIT INT
 
 set -x
 
-echo "--- $cloudProvider.sh delete"
-time net/"$cloudProvider".sh delete -z "$zone" -p "$netName"
-if $delete; then
-  exit 0
-fi
+if ! $skipSetup; then
+  echo "--- $cloudProvider.sh delete"
+  time net/"$cloudProvider".sh delete -z "$zone" -p "$netName"
+  if $delete; then
+    exit 0
+  fi
 
-echo "--- $cloudProvider.sh create"
-time net/"$cloudProvider".sh create "${create_args[@]}"
+  echo "--- $cloudProvider.sh create"
+  create_args=(
+    -p "$netName"
+    -z "$zone"
+    -a "$bootstrapFullNodeAddress"
+    -c "$clientNodeCount"
+    -n "$additionalFullNodeCount"
+  )
+  if $enableGpu; then
+    if [[ -z $bootstrapFullNodeMachineType ]]; then
+      create_args+=(-g)
+    else
+      create_args+=(-G "$bootstrapFullNodeMachineType")
+    fi
+  fi
+
+  if ! $leaderRotation; then
+    create_args+=(-b)
+  fi
+
+  if $publicNetwork; then
+    create_args+=(-P)
+  fi
+
+  time net/"$cloudProvider".sh create "${create_args[@]}"
+else
+  echo "--- $cloudProvider.sh config"
+  config_args=(
+    -p "$netName"
+    -z "$zone"
+  )
+  if $publicNetwork; then
+    config_args+=(-P)
+  fi
+
+  time net/"$cloudProvider".sh config "${config_args[@]}"
+fi
 net/init-metrics.sh -e
 
 echo --- net.sh start
@@ -188,14 +206,28 @@ if [[ -n $NO_LEDGER_VERIFY ]]; then
   maybeNoLedgerVerify="-o noLedgerVerify"
 fi
 
+maybeSkipSetup=
+if $skipSetup; then
+  maybeSkipSetup="-r"
+fi
+
 ok=true
 (
-  # shellcheck disable=SC2086 # Don't want to double quote maybeRejectExtraNodes
+  op=start
+  # TODO: Enable rolling updates
+  #if $skipSetup; then
+  #  op=update
+  #fi
+
   if $useTarReleaseChannel; then
-    time net/net.sh start -t "$tarChannelOrTag" $maybeRejectExtraNodes $maybeNoValidatorSanity $maybeNoLedgerVerify
+    deploySource="-t $tarChannelOrTag"
   else
-    time net/net.sh start -s "$snapChannel" $maybeRejectExtraNodes $maybeNoValidatorSanity $maybeNoLedgerVerify
+    deploySource="-s $snapChannel"
   fi
+
+  # shellcheck disable=SC2086 # Don't want to double quote maybeRejectExtraNodes
+  time net/net.sh $op $deploySource \
+    $maybeSkipSetup $maybeRejectExtraNodes $maybeNoValidatorSanity $maybeNoLedgerVerify
 ) || ok=false
 
 net/net.sh logs
