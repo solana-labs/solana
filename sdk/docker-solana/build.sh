@@ -14,7 +14,8 @@ fi
 
 if [[ -z $CHANNEL ]]; then
   echo Unable to determine channel to publish into, exiting.
-  exit 1
+  echo "^^^ +++"
+  exit 0
 fi
 
 rm -rf usr/
