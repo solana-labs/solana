@@ -18,7 +18,7 @@ use std::sync::{Mutex, RwLock};
 pub type InstructionAccounts = Vec<Account>;
 pub type InstructionLoaders = Vec<Vec<(Pubkey, Account)>>;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct ErrorCounters {
     pub account_not_found: usize,
     pub account_in_use: usize,
@@ -26,6 +26,8 @@ pub struct ErrorCounters {
     pub reserve_last_id: usize,
     pub insufficient_funds: usize,
     pub duplicate_signature: usize,
+    pub call_chain_too_deep: usize,
+    pub missing_signature_for_fee: usize,
 }
 
 /// This structure handles the load/store of the accounts
@@ -141,7 +143,7 @@ impl AccountsDB {
         // Copy all the accounts
         if tx.signatures.is_empty() && tx.fee != 0 {
             Err(BankError::MissingSignatureForFee)
-        } else if self.load(&tx.account_keys[0]).is_none() {
+        } else if tx.account_keys.is_empty() || self.load(&tx.account_keys[0]).is_none() {
             error_counters.account_not_found += 1;
             Err(BankError::AccountNotFound)
         } else if self.load(&tx.account_keys[0]).unwrap().tokens < tx.fee {
@@ -178,7 +180,11 @@ impl AccountsDB {
         }
     }
 
-    fn load_executable_accounts(&self, mut program_id: Pubkey) -> Result<Vec<(Pubkey, Account)>> {
+    fn load_executable_accounts(
+        &self,
+        mut program_id: Pubkey,
+        error_counters: &mut ErrorCounters,
+    ) -> Result<Vec<(Pubkey, Account)>> {
         let mut accounts = Vec::new();
         let mut depth = 0;
         loop {
@@ -188,15 +194,20 @@ impl AccountsDB {
             }
 
             if depth >= 5 {
+                error_counters.call_chain_too_deep += 1;
                 return Err(BankError::CallChainTooDeep);
             }
             depth += 1;
 
             let program = match self.load(&program_id) {
                 Some(program) => program,
-                None => return Err(BankError::AccountNotFound),
+                None => {
+                    error_counters.account_not_found += 1;
+                    return Err(BankError::AccountNotFound);
+                }
             };
             if !program.executable || program.loader == Pubkey::default() {
+                error_counters.account_not_found += 1;
                 return Err(BankError::AccountNotFound);
             }
 
@@ -209,12 +220,20 @@ impl AccountsDB {
     }
 
     /// For each program_id in the transaction, load its loaders.
-    fn load_loaders(&self, tx: &Transaction) -> Result<Vec<Vec<(Pubkey, Account)>>> {
+    fn load_loaders(
+        &self,
+        tx: &Transaction,
+        error_counters: &mut ErrorCounters,
+    ) -> Result<Vec<Vec<(Pubkey, Account)>>> {
         tx.instructions
             .iter()
             .map(|ix| {
+                if tx.program_ids.len() <= ix.program_ids_index as usize {
+                    error_counters.account_not_found += 1;
+                    return Err(BankError::AccountNotFound);
+                }
                 let program_id = tx.program_ids[ix.program_ids_index as usize];
-                self.load_executable_accounts(program_id)
+                self.load_executable_accounts(program_id, error_counters)
             })
             .collect()
     }
@@ -232,7 +251,7 @@ impl AccountsDB {
             .map(|etx| match etx {
                 (tx, Ok(())) => {
                     let accounts = self.load_tx_accounts(tx, last_ids, max_age, error_counters)?;
-                    let loaders = self.load_loaders(tx)?;
+                    let loaders = self.load_loaders(tx, error_counters)?;
                     Ok((accounts, loaders))
                 }
                 (_, Err(e)) => Err(e),
@@ -423,4 +442,442 @@ impl Checkpoint for AccountsDB {
 #[cfg(test)]
 mod tests {
     // TODO: all the bank tests are bank specific, issue: 2194
+
+    use super::*;
+    use solana_sdk::account::Account;
+    use solana_sdk::hash::Hash;
+    use solana_sdk::signature::Keypair;
+    use solana_sdk::signature::KeypairUtil;
+    use solana_sdk::transaction::Instruction;
+    use solana_sdk::transaction::Transaction;
+
+    fn load_accounts(
+        tx: Transaction,
+        ka: &Vec<(Pubkey, Account)>,
+        error_counters: &mut ErrorCounters,
+        max_age: usize,
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
+        let accounts = Accounts::default();
+        for ka in ka.iter() {
+            accounts.store_slow(&ka.0, &ka.1);
+        }
+
+        let id = Default::default();
+        let mut last_ids: StatusDeque<Result<()>> = StatusDeque::default();
+        last_ids.register_tick(&id);
+
+        accounts.load_accounts(&[tx], &mut last_ids, vec![Ok(())], max_age, error_counters)
+    }
+
+    fn assert_counters(error_counters: &ErrorCounters, expected: [usize; 8]) {
+        assert_eq!(error_counters.account_not_found, expected[0]);
+        assert_eq!(error_counters.account_in_use, expected[1]);
+        assert_eq!(error_counters.last_id_not_found, expected[2]);
+        assert_eq!(error_counters.reserve_last_id, expected[3]);
+        assert_eq!(error_counters.insufficient_funds, expected[4]);
+        assert_eq!(error_counters.duplicate_signature, expected[5]);
+        assert_eq!(error_counters.call_chain_too_deep, expected[6]);
+        assert_eq!(error_counters.missing_signature_for_fee, expected[7]);
+    }
+
+    #[test]
+    fn test_load_accounts_index_out_of_bounds() {
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
+        let mut error_counters = ErrorCounters::default();
+
+        let keypair = Keypair::new();
+        let key0 = keypair.pubkey();
+
+        let account = Account::new(1, 1, Pubkey::default());
+        accounts.push((key0, account));
+
+        let instructions = vec![Instruction::new(1, &(), vec![0, 1])];
+        let tx = Transaction::new_with_instructions(
+            &[&keypair],
+            &[], // TODO this should contain a key, should fail
+            Hash::default(),
+            0,
+            vec![solana_native_loader::id()],
+            instructions,
+        );
+
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 10);
+
+        assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(loaded_accounts.len(), 1);
+        assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
+    }
+
+    #[test]
+    fn test_load_accounts_no_key() {
+        let accounts: Vec<(Pubkey, Account)> = Vec::new();
+        let mut error_counters = ErrorCounters::default();
+
+        let instructions = vec![Instruction::new(1, &(), vec![0])];
+        let tx = Transaction::new_with_instructions(
+            &[],
+            &[],
+            Hash::default(),
+            0,
+            vec![solana_native_loader::id()],
+            instructions,
+        );
+
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 10);
+
+        assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(loaded_accounts.len(), 1);
+        assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
+    }
+
+    #[test]
+    fn test_load_accounts_no_account_0_exists() {
+        let accounts: Vec<(Pubkey, Account)> = Vec::new();
+        let mut error_counters = ErrorCounters::default();
+
+        let keypair = Keypair::new();
+
+        let instructions = vec![Instruction::new(1, &(), vec![0])];
+        let tx = Transaction::new_with_instructions(
+            &[&keypair],
+            &[],
+            Hash::default(),
+            0,
+            vec![solana_native_loader::id()],
+            instructions,
+        );
+
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 10);
+
+        assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(loaded_accounts.len(), 1);
+        assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
+    }
+
+    #[test]
+    fn test_load_accounts_unknown_program_id() {
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
+        let mut error_counters = ErrorCounters::default();
+
+        let keypair = Keypair::new();
+        let key0 = keypair.pubkey();
+        let key1 = Pubkey::new(&[5u8; 32]);
+
+        let account = Account::new(1, 1, Pubkey::default());
+        accounts.push((key0, account));
+
+        let account = Account::new(2, 1, Pubkey::default());
+        accounts.push((key1, account));
+
+        let instructions = vec![Instruction::new(1, &(), vec![0])];
+        let tx = Transaction::new_with_instructions(
+            &[&keypair],
+            &[],
+            Hash::default(),
+            0,
+            vec![Pubkey::default()],
+            instructions,
+        );
+
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 10);
+
+        assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(loaded_accounts.len(), 1);
+        assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
+    }
+
+    #[test]
+    fn test_load_accounts_max_age() {
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
+        let mut error_counters = ErrorCounters::default();
+
+        let keypair = Keypair::new();
+        let key0 = keypair.pubkey();
+        let key1 = Pubkey::new(&[5u8; 32]);
+
+        let account = Account::new(1, 1, Pubkey::default());
+        accounts.push((key0, account));
+
+        let account = Account::new(2, 1, Pubkey::default());
+        accounts.push((key1, account));
+
+        let instructions = vec![Instruction::new(1, &(), vec![0])];
+        let tx = Transaction::new_with_instructions(
+            &[&keypair],
+            &[],
+            Hash::default(),
+            0,
+            vec![solana_native_loader::id()],
+            instructions,
+        );
+
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 0);
+
+        assert_counters(&error_counters, [0, 0, 1, 0, 0, 0, 0, 0]);
+        assert_eq!(loaded_accounts.len(), 1);
+        assert_eq!(loaded_accounts[0], Err(BankError::LastIdNotFound));
+    }
+
+    #[test]
+    fn test_load_accounts_insufficient_funds() {
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
+        let mut error_counters = ErrorCounters::default();
+
+        let keypair = Keypair::new();
+        let key0 = keypair.pubkey();
+
+        let account = Account::new(1, 1, Pubkey::default());
+        accounts.push((key0, account));
+
+        let instructions = vec![Instruction::new(1, &(), vec![0])];
+        let tx = Transaction::new_with_instructions(
+            &[&keypair],
+            &[],
+            Hash::default(),
+            10,
+            vec![solana_native_loader::id()],
+            instructions,
+        );
+
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 10);
+
+        assert_counters(&error_counters, [0, 0, 0, 0, 1, 0, 0, 0]);
+        assert_eq!(loaded_accounts.len(), 1);
+        assert_eq!(loaded_accounts[0], Err(BankError::InsufficientFundsForFee));
+    }
+
+    #[test]
+    fn test_load_accounts_no_loaders() {
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
+        let mut error_counters = ErrorCounters::default();
+
+        let keypair = Keypair::new();
+        let key0 = keypair.pubkey();
+        let key1 = Pubkey::new(&[5u8; 32]);
+
+        let account = Account::new(1, 1, Pubkey::default());
+        accounts.push((key0, account));
+
+        let account = Account::new(2, 1, Pubkey::default());
+        accounts.push((key1, account));
+
+        let instructions = vec![Instruction::new(0, &(), vec![0, 1])];
+        let tx = Transaction::new_with_instructions(
+            &[&keypair],
+            &[key1],
+            Hash::default(),
+            0,
+            vec![solana_native_loader::id()],
+            instructions,
+        );
+
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 10);
+
+        assert_counters(&error_counters, [0, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(loaded_accounts.len(), 1);
+        match &loaded_accounts[0] {
+            Ok((a, l)) => {
+                assert_eq!(a.len(), 2);
+                assert_eq!(a[0], accounts[0].1);
+                assert_eq!(l.len(), 1);
+                assert_eq!(l[0].len(), 0);
+            }
+            Err(e) => Err(e).unwrap(),
+        }
+    }
+
+    #[test]
+    fn test_load_accounts_max_call_depth() {
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
+        let mut error_counters = ErrorCounters::default();
+
+        let keypair = Keypair::new();
+        let key0 = keypair.pubkey();
+        let key1 = Pubkey::new(&[5u8; 32]);
+        let key2 = Pubkey::new(&[6u8; 32]);
+        let key3 = Pubkey::new(&[7u8; 32]);
+        let key4 = Pubkey::new(&[8u8; 32]);
+        let key5 = Pubkey::new(&[9u8; 32]);
+        let key6 = Pubkey::new(&[10u8; 32]);
+
+        let account = Account::new(1, 1, Pubkey::default());
+        accounts.push((key0, account));
+
+        let mut account = Account::new(40, 1, Pubkey::default());
+        account.executable = true;
+        account.loader = solana_native_loader::id();
+        accounts.push((key1, account));
+
+        let mut account = Account::new(41, 1, Pubkey::default());
+        account.executable = true;
+        account.loader = key1;
+        accounts.push((key2, account));
+
+        let mut account = Account::new(42, 1, Pubkey::default());
+        account.executable = true;
+        account.loader = key2;
+        accounts.push((key3, account));
+
+        let mut account = Account::new(43, 1, Pubkey::default());
+        account.executable = true;
+        account.loader = key3;
+        accounts.push((key4, account));
+
+        let mut account = Account::new(44, 1, Pubkey::default());
+        account.executable = true;
+        account.loader = key4;
+        accounts.push((key5, account));
+
+        let mut account = Account::new(45, 1, Pubkey::default());
+        account.executable = true;
+        account.loader = key5;
+        accounts.push((key6, account));
+
+        let instructions = vec![Instruction::new(0, &(), vec![0])];
+        let tx = Transaction::new_with_instructions(
+            &[&keypair],
+            &[],
+            Hash::default(),
+            0,
+            vec![key6],
+            instructions,
+        );
+
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 10);
+
+        assert_counters(&error_counters, [0, 0, 0, 0, 0, 0, 1, 0]);
+        assert_eq!(loaded_accounts.len(), 1);
+        assert_eq!(loaded_accounts[0], Err(BankError::CallChainTooDeep));
+    }
+
+    #[test]
+    fn test_load_accounts_bad_program_id() {
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
+        let mut error_counters = ErrorCounters::default();
+
+        let keypair = Keypair::new();
+        let key0 = keypair.pubkey();
+        let key1 = Pubkey::new(&[5u8; 32]);
+
+        let account = Account::new(1, 1, Pubkey::default());
+        accounts.push((key0, account));
+
+        let mut account = Account::new(40, 1, Pubkey::default());
+        account.executable = true;
+        account.loader = Pubkey::default();
+        accounts.push((key1, account));
+
+        let instructions = vec![Instruction::new(0, &(), vec![0])];
+        let tx = Transaction::new_with_instructions(
+            &[&keypair],
+            &[],
+            Hash::default(),
+            0,
+            vec![key1],
+            instructions,
+        );
+
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 10);
+
+        assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(loaded_accounts.len(), 1);
+        assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
+    }
+
+    #[test]
+    fn test_load_accounts_not_executable() {
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
+        let mut error_counters = ErrorCounters::default();
+
+        let keypair = Keypair::new();
+        let key0 = keypair.pubkey();
+        let key1 = Pubkey::new(&[5u8; 32]);
+
+        let account = Account::new(1, 1, Pubkey::default());
+        accounts.push((key0, account));
+
+        let mut account = Account::new(40, 1, Pubkey::default());
+        account.loader = solana_native_loader::id();
+        accounts.push((key1, account));
+
+        let instructions = vec![Instruction::new(0, &(), vec![0])];
+        let tx = Transaction::new_with_instructions(
+            &[&keypair],
+            &[],
+            Hash::default(),
+            0,
+            vec![key1],
+            instructions,
+        );
+
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 10);
+
+        assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(loaded_accounts.len(), 1);
+        assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
+    }
+
+    #[test]
+    fn test_load_accounts_multiple_loaders() {
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
+        let mut error_counters = ErrorCounters::default();
+
+        let keypair = Keypair::new();
+        let key0 = keypair.pubkey();
+        let key1 = Pubkey::new(&[5u8; 32]);
+        let key2 = Pubkey::new(&[6u8; 32]);
+        let key3 = Pubkey::new(&[7u8; 32]);
+
+        let account = Account::new(1, 1, Pubkey::default());
+        accounts.push((key0, account));
+
+        let mut account = Account::new(40, 1, Pubkey::default());
+        account.executable = true;
+        account.loader = solana_native_loader::id();
+        accounts.push((key1, account));
+
+        let mut account = Account::new(41, 1, Pubkey::default());
+        account.executable = true;
+        account.loader = key1;
+        accounts.push((key2, account));
+
+        let mut account = Account::new(42, 1, Pubkey::default());
+        account.executable = true;
+        account.loader = key2;
+        accounts.push((key3, account));
+
+        let instructions = vec![
+            Instruction::new(0, &(), vec![0]),
+            Instruction::new(1, &(), vec![0]),
+        ];
+        let tx = Transaction::new_with_instructions(
+            &[&keypair],
+            &[],
+            Hash::default(),
+            0,
+            vec![key1, key2],
+            instructions,
+        );
+
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 10);
+
+        assert_counters(&error_counters, [0, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(loaded_accounts.len(), 1);
+        match &loaded_accounts[0] {
+            Ok((a, l)) => {
+                assert_eq!(a.len(), 1);
+                assert_eq!(a[0], accounts[0].1);
+                assert_eq!(l.len(), 2);
+                assert_eq!(l[0].len(), 1);
+                assert_eq!(l[1].len(), 2);
+                for instruction_loaders in l.iter() {
+                    for (i, a) in instruction_loaders.iter().enumerate() {
+                        // +1 to skip first not loader account
+                        assert_eq![a.1, accounts[i + 1].1];
+                    }
+                }
+            }
+            Err(e) => Err(e).unwrap(),
+        }
+    }
 }

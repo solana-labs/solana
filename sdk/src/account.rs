@@ -2,7 +2,7 @@ use crate::pubkey::Pubkey;
 
 /// An Account with userdata that is stored on chain
 #[repr(C)]
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, Eq, PartialEq)]
 pub struct Account {
     /// tokens in the account
     pub tokens: u64,
