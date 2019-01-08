@@ -85,8 +85,8 @@ echo "--- Node count"
 echo "--- RPC API: getTransactionCount"
 (
   set -x
-  curl -X POST \
-    -H 'Content-Type: application/json' \
+  curl --retry 5 --retry-delay 2 --retry-connrefused \
+    -X POST -H 'Content-Type: application/json' \
     -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' \
     http://localhost:8899
 ) || flag_error
