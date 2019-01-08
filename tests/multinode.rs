@@ -135,7 +135,7 @@ fn register_node(signer: SocketAddr, keypair: Arc<Keypair>) -> Pubkey {
 
     let params = json!([keypair.pubkey(), sig, msg.as_bytes()]);
     let resp = RpcRequest::RegisterNode
-        .make_rpc_request(&rpc_client, 1, Some(params))
+        .retry_make_rpc_request(&rpc_client, 1, Some(params), 5)
         .unwrap();
     let vote_account_id: Pubkey = serde_json::from_value(resp).unwrap();
     vote_account_id
