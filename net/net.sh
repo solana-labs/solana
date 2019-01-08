@@ -371,15 +371,15 @@ start() {
   $metricsWriteDatapoint "testnet-deploy net-fullnodes-started=1"
   additionalNodeDeployTime=$SECONDS
 
-  if ! $updateNodes; then
-    sanity
+  if $updateNodes; then
+    for ipAddress in "${clientIpList[@]}"; do
+      stopNode "$ipAddress"
+    done
   fi
+  sanity
 
   SECONDS=0
   for ipAddress in "${clientIpList[@]}"; do
-    if $updateNodes; then
-      stopNode "$ipAddress"
-    fi
     startClient "$ipAddress" "$netLogDir/client-$ipAddress.log"
   done
   clientDeployTime=$SECONDS
