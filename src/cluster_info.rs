@@ -877,13 +877,10 @@ impl ClusterInfo {
                 let max_slot = meta.received_slot;
                 // Try to find the requested index in one of the slots
                 for i in 0..=max_slot {
-                    let get_result = db_ledger.data_cf.get_by_slot_index(i, ix);
+                    let blob = db_ledger.get_data_blob(i, ix);
 
-                    if let Ok(Some(blob_data)) = get_result {
+                    if let Ok(Some(mut blob)) = blob {
                         inc_new_counter_info!("cluster_info-window-request-ledger", 1);
-                        let mut blob = Blob::new(&blob_data);
-                        blob.set_index(ix).expect("set_index()");
-                        blob.set_id(&me.id).expect("set_id()"); // causes retransmission if I'm the leader
                         blob.meta.set_addr(from_addr);
 
                         return vec![Arc::new(RwLock::new(blob))];

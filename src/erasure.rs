@@ -1,6 +1,5 @@
 // Support erasure coding
 use crate::db_ledger::DbLedger;
-use crate::db_window::{find_missing_coding_indexes, find_missing_data_indexes};
 use crate::packet::{Blob, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE, BLOB_SIZE};
 use crate::result::{Error, Result};
 use crate::window::WindowSlot;
@@ -367,16 +366,12 @@ pub fn recover(
         block_end_idx
     );
 
-    let data_missing =
-        find_missing_data_indexes(slot, &db_ledger, block_start_idx, block_end_idx, NUM_DATA).len();
-    let coding_missing = find_missing_coding_indexes(
-        slot,
-        &db_ledger,
-        coding_start_idx,
-        block_end_idx,
-        NUM_CODING,
-    )
-    .len();
+    let data_missing = db_ledger
+        .find_missing_data_indexes(slot, block_start_idx, block_end_idx, NUM_DATA)
+        .len();
+    let coding_missing = db_ledger
+        .find_missing_coding_indexes(slot, coding_start_idx, block_end_idx, NUM_CODING)
+        .len();
 
     // if we're not missing data, or if we have too much missing but have enough coding
     if data_missing == 0 {
@@ -410,7 +405,7 @@ pub fn recover(
 
     // Add the data blobs we have into the recovery vector, mark the missing ones
     for i in block_start_idx..block_end_idx {
-        let result = db_ledger.data_cf.get_by_slot_index(slot, i)?;
+        let result = db_ledger.get_data_blob_bytes(slot, i)?;
 
         categorize_blob(
             &result,
@@ -628,13 +623,12 @@ pub mod test {
                 // If we're using gibberish blobs, skip validation checks and insert
                 // directly into the ledger
                 if use_random {
-                    let data_l = data.read().unwrap();
+                    let data = data.read().unwrap();
                     db_ledger
-                        .data_cf
-                        .put_by_slot_index(
-                            data_l.slot().unwrap(),
-                            data_l.index().unwrap(),
-                            &data_l.data[..data_l.data_size().unwrap() as usize],
+                        .put_data_blob_bytes(
+                            data.slot().unwrap(),
+                            data.index().unwrap(),
+                            &data.data[..data.data_size().unwrap() as usize],
                         )
                         .expect("Expected successful put into data column of ledger");
                 } else {

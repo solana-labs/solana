@@ -82,9 +82,8 @@ pub fn repair(
         max_entry_height + 2
     };
 
-    let idxs = find_missing_data_indexes(
+    let idxs = db_ledger.find_missing_data_indexes(
         DEFAULT_SLOT_HEIGHT,
-        db_ledger,
         consumed,
         max_repair_entry_height - 1,
         MAX_REPAIR_LENGTH,
@@ -115,99 +114,6 @@ pub fn repair(
     }
 
     Ok(reqs)
-}
-
-// Given a start and end entry index, find all the missing
-// indexes in the ledger in the range [start_index, end_index)
-pub fn find_missing_indexes(
-    db_iterator: &mut DbLedgerRawIterator,
-    slot: u64,
-    start_index: u64,
-    end_index: u64,
-    key: &dyn Fn(u64, u64) -> Vec<u8>,
-    index_from_key: &dyn Fn(&[u8]) -> Result<u64>,
-    max_missing: usize,
-) -> Vec<u64> {
-    if start_index >= end_index || max_missing == 0 {
-        return vec![];
-    }
-
-    let mut missing_indexes = vec![];
-
-    // Seek to the first blob with index >= start_index
-    db_iterator.seek(&key(slot, start_index));
-
-    // The index of the first missing blob in the slot
-    let mut prev_index = start_index;
-    'outer: loop {
-        if !db_iterator.valid() {
-            for i in prev_index..end_index {
-                missing_indexes.push(i);
-                if missing_indexes.len() == max_missing {
-                    break;
-                }
-            }
-            break;
-        }
-        let current_key = db_iterator.key().expect("Expect a valid key");
-        let current_index =
-            index_from_key(&current_key).expect("Expect to be able to parse index from valid key");
-        let upper_index = cmp::min(current_index, end_index);
-        for i in prev_index..upper_index {
-            missing_indexes.push(i);
-            if missing_indexes.len() == max_missing {
-                break 'outer;
-            }
-        }
-        if current_index >= end_index {
-            break;
-        }
-
-        prev_index = current_index + 1;
-        db_iterator.next();
-    }
-
-    missing_indexes
-}
-
-pub fn find_missing_data_indexes(
-    slot: u64,
-    db_ledger: &DbLedger,
-    start_index: u64,
-    end_index: u64,
-    max_missing: usize,
-) -> Vec<u64> {
-    let mut db_iterator = db_ledger.data_cf.raw_iterator();
-
-    find_missing_indexes(
-        &mut db_iterator,
-        slot,
-        start_index,
-        end_index,
-        &DataCf::key,
-        &DataCf::index_from_key,
-        max_missing,
-    )
-}
-
-pub fn find_missing_coding_indexes(
-    slot: u64,
-    db_ledger: &DbLedger,
-    start_index: u64,
-    end_index: u64,
-    max_missing: usize,
-) -> Vec<u64> {
-    let mut db_iterator = db_ledger.erasure_cf.raw_iterator();
-
-    find_missing_indexes(
-        &mut db_iterator,
-        slot,
-        start_index,
-        end_index,
-        &ErasureCf::key,
-        &ErasureCf::index_from_key,
-        max_missing,
-    )
 }
 
 pub fn retransmit_all_leader_blocks(
@@ -402,7 +308,6 @@ mod test {
     use crate::packet::{index_blobs, Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
     use crate::streamer::{receiver, responder, PacketReceiver};
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use std::borrow::Borrow;
     use std::io;
     use std::io::Write;
     use std::net::UdpSocket;
@@ -528,37 +433,35 @@ mod test {
 
         // Early exit conditions
         let empty: Vec<u64> = vec![];
-        assert_eq!(find_missing_data_indexes(slot, &db_ledger, 0, 0, 1), empty);
-        assert_eq!(find_missing_data_indexes(slot, &db_ledger, 5, 5, 1), empty);
-        assert_eq!(find_missing_data_indexes(slot, &db_ledger, 4, 3, 1), empty);
-        assert_eq!(find_missing_data_indexes(slot, &db_ledger, 1, 2, 0), empty);
+        assert_eq!(db_ledger.find_missing_data_indexes(slot, 0, 0, 1), empty);
+        assert_eq!(db_ledger.find_missing_data_indexes(slot, 5, 5, 1), empty);
+        assert_eq!(db_ledger.find_missing_data_indexes(slot, 4, 3, 1), empty);
+        assert_eq!(db_ledger.find_missing_data_indexes(slot, 1, 2, 0), empty);
 
-        let shared_blob = &make_tiny_test_entries(1).to_shared_blobs()[0];
-        let first_index = 10;
-        {
-            let mut bl = shared_blob.write().unwrap();
-            bl.set_index(10).unwrap();
-            bl.set_slot(slot).unwrap();
-        }
+        let mut blobs = make_tiny_test_entries(2).to_blobs();
+
+        const ONE: u64 = 1;
+        const OTHER: u64 = 4;
+
+        blobs[0].set_index(ONE).unwrap();
+        blobs[1].set_index(OTHER).unwrap();
 
         // Insert one blob at index = first_index
-        db_ledger
-            .write_blobs(&vec![(*shared_blob.read().unwrap()).borrow()])
-            .unwrap();
+        db_ledger.write_blobs(&blobs).unwrap();
 
+        const STARTS: u64 = OTHER * 2;
+        const END: u64 = OTHER * 3;
+        const MAX: usize = 10;
         // The first blob has index = first_index. Thus, for i < first_index,
         // given the input range of [i, first_index], the missing indexes should be
         // [i, first_index - 1]
-        for i in 0..first_index {
-            let result = find_missing_data_indexes(
-                slot,
-                &db_ledger,
-                i,
-                first_index,
-                (first_index - i) as usize,
+        for start in 0..STARTS {
+            let result = db_ledger.find_missing_data_indexes(
+                slot, start, // start
+                END,   //end
+                MAX,   //max
             );
-            let expected: Vec<u64> = (i..first_index).collect();
-
+            let expected: Vec<u64> = (start..END).filter(|i| *i != ONE && *i != OTHER).collect();
             assert_eq!(result, expected);
         }
 
@@ -589,27 +492,27 @@ mod test {
         // range of [0, gap)
         let expected: Vec<u64> = (1..gap).collect();
         assert_eq!(
-            find_missing_data_indexes(slot, &db_ledger, 0, gap, gap as usize),
+            db_ledger.find_missing_data_indexes(slot, 0, gap, gap as usize),
             expected
         );
         assert_eq!(
-            find_missing_data_indexes(slot, &db_ledger, 1, gap, (gap - 1) as usize),
+            db_ledger.find_missing_data_indexes(slot, 1, gap, (gap - 1) as usize),
             expected,
         );
         assert_eq!(
-            find_missing_data_indexes(slot, &db_ledger, 0, gap - 1, (gap - 1) as usize),
+            db_ledger.find_missing_data_indexes(slot, 0, gap - 1, (gap - 1) as usize),
             &expected[..expected.len() - 1],
         );
         assert_eq!(
-            find_missing_data_indexes(slot, &db_ledger, gap - 2, gap, gap as usize),
+            db_ledger.find_missing_data_indexes(slot, gap - 2, gap, gap as usize),
             vec![gap - 2, gap - 1],
         );
         assert_eq!(
-            find_missing_data_indexes(slot, &db_ledger, gap - 2, gap, 1),
+            db_ledger.find_missing_data_indexes(slot, gap - 2, gap, 1),
             vec![gap - 2],
         );
         assert_eq!(
-            find_missing_data_indexes(slot, &db_ledger, 0, gap, 1),
+            db_ledger.find_missing_data_indexes(slot, 0, gap, 1),
             vec![1],
         );
 
@@ -617,11 +520,11 @@ mod test {
         let mut expected: Vec<u64> = (1..gap).collect();
         expected.push(gap + 1);
         assert_eq!(
-            find_missing_data_indexes(slot, &db_ledger, 0, gap + 2, (gap + 2) as usize),
+            db_ledger.find_missing_data_indexes(slot, 0, gap + 2, (gap + 2) as usize),
             expected,
         );
         assert_eq!(
-            find_missing_data_indexes(slot, &db_ledger, 0, gap + 2, (gap - 1) as usize),
+            db_ledger.find_missing_data_indexes(slot, 0, gap + 2, (gap - 1) as usize),
             &expected[..expected.len() - 1],
         );
 
@@ -635,9 +538,8 @@ mod test {
                     })
                     .collect();
                 assert_eq!(
-                    find_missing_data_indexes(
+                    db_ledger.find_missing_data_indexes(
                         slot,
-                        &db_ledger,
                         j * gap,
                         i * gap,
                         ((i - j) * gap) as usize
@@ -675,7 +577,7 @@ mod test {
         for i in 0..num_entries as u64 {
             for j in 0..i {
                 assert_eq!(
-                    find_missing_data_indexes(slot, &db_ledger, j, i, (i - j) as usize),
+                    db_ledger.find_missing_data_indexes(slot, j, i, (i - j) as usize),
                     empty
                 );
             }
