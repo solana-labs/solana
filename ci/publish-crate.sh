@@ -30,7 +30,7 @@ maybePackage="echo Package skipped"
 maybePublish="echo Publish skipped"
 
 # Only package/publish if this is a tagged release
-if [[ -n $BUILDKITE_TAG && -n $TRIGGERED_BUILDKITE_TAG ]]; then
+if [[ -n $TRIGGERED_BUILDKITE_TAG ]]; then
   maybePackage="cargo package"
 
   # Only publish if there's no human around
