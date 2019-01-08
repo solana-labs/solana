@@ -32,7 +32,7 @@ pub fn repair(
 ) -> Result<Vec<(SocketAddr, Vec<u8>)>> {
     let rcluster_info = cluster_info.read().unwrap();
     let mut is_next_leader = false;
-    let meta = db_ledger.meta_cf.get(&MetaCf::key(DEFAULT_SLOT_HEIGHT))?;
+    let meta = db_ledger.meta()?;
     if meta.is_none() {
         return Ok(vec![]);
     }
@@ -325,8 +325,7 @@ pub fn process_blob(
     // then stop
     if max_ix != 0 && !consumed_entries.is_empty() {
         let meta = db_ledger
-            .meta_cf
-            .get(&MetaCf::key(DEFAULT_SLOT_HEIGHT))?
+            .meta()?
             .expect("Expect metadata to exist if consumed entries is nonzero");
 
         let consumed = meta.consumed;
@@ -367,7 +366,7 @@ pub fn calculate_max_repair_entry_height(
 
 #[cfg(feature = "erasure")]
 fn try_erasure(db_ledger: &Arc<DbLedger>, consume_queue: &mut Vec<Entry>) -> Result<()> {
-    let meta = db_ledger.meta_cf.get(&MetaCf::key(DEFAULT_SLOT_HEIGHT))?;
+    let meta = db_ledger.meta()?;
 
     if let Some(meta) = meta {
         let (data, coding) = erasure::recover(db_ledger, meta.consumed_slot, meta.consumed)?;

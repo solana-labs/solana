@@ -2,7 +2,7 @@
 //!
 use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
-use crate::db_ledger::{DbLedger, LedgerColumnFamily, MetaCf, DEFAULT_SLOT_HEIGHT};
+use crate::db_ledger::DbLedger;
 use crate::db_window::*;
 use crate::entry::EntrySender;
 
@@ -158,7 +158,7 @@ pub fn window_service(
                     }
                 }
 
-                let meta = db_ledger.meta_cf.get(&MetaCf::key(DEFAULT_SLOT_HEIGHT));
+                let meta = db_ledger.meta();
 
                 if let Ok(Some(meta)) = meta {
                     let received = meta.received;

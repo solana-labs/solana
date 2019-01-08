@@ -275,7 +275,7 @@ impl LedgerColumnFamilyRaw for ErasureCf {
 pub struct DbLedger {
     // Underlying database is automatically closed in the Drop implementation of DB
     db: Arc<DB>,
-    pub meta_cf: MetaCf,
+    meta_cf: MetaCf,
     pub data_cf: DataCf,
     pub erasure_cf: ErasureCf,
 }
@@ -328,6 +328,10 @@ impl DbLedger {
             data_cf,
             erasure_cf,
         })
+    }
+
+    pub fn meta(&self) -> Result<Option<SlotMeta>> {
+        self.meta_cf.get(&MetaCf::key(DEFAULT_SLOT_HEIGHT))
     }
 
     pub fn destroy(ledger_path: &str) -> Result<()> {
