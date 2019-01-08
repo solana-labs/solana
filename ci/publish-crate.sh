@@ -26,16 +26,14 @@ CRATES=(
 )
 
 
-maybePackage="echo Package skipped"
-maybePublish="echo Publish skipped"
+cargoCommand="cargo package"
 
 # Only package/publish if this is a tagged release
 if [[ -n $TRIGGERED_BUILDKITE_TAG ]]; then
-  maybePackage="cargo package"
 
   # Only publish if there's no human around
   if [[ -n $CI ]]; then
-    maybePublish="cargo publish --token $CRATES_IO_TOKEN"
+    cargoCommand="cargo publish --token $CRATES_IO_TOKEN"
     if [[ -z "$CRATES_IO_TOKEN" ]]; then
       echo CRATES_IO_TOKEN undefined
       exit 1
@@ -52,7 +50,7 @@ for crate in "${CRATES[@]}"; do
   # TODO: Ensure the published version matches the contents of BUILDKITE_TAG
   (
     set -x
-    ci/docker-run.sh rust bash -exc "cd $crate; $maybePackage; $maybePublish"
+    ci/docker-run.sh rust bash -exc "cd $crate; $cargoCommand"
   )
 done
 
