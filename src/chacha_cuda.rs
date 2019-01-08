@@ -44,7 +44,7 @@ pub fn chacha_cbc_encrypt_file_many_keys(
         chacha_init_sha_state(int_sha_states.as_mut_ptr(), num_keys as u32);
     }
     loop {
-        match db_ledger.get_blob_bytes(
+        match db_ledger.read_blobs_bytes(
             entry,
             ENTRIES_PER_SEGMENT - total_entries,
             &mut buffer,

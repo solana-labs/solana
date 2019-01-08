@@ -48,7 +48,7 @@ pub fn chacha_cbc_encrypt_ledger(
     let mut entry = slice;
 
     loop {
-        match db_ledger.get_blob_bytes(
+        match db_ledger.read_blobs_bytes(
             entry,
             ENTRIES_PER_SEGMENT - total_entries,
             &mut buffer,
