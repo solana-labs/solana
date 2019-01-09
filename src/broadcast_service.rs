@@ -153,17 +153,18 @@ fn broadcast(
 
         *receive_index += blobs_len as u64;
 
-        // Send blobs out from the window
-        ClusterInfo::broadcast(
-            contains_last_tick,
-            leader_id,
-            &node_info,
-            &broadcast_table,
-            &window,
-            &sock,
-            transmit_index,
-            *receive_index,
-        )?;
+        //TODO: Why can I comment this out and no tests fail?
+        //// Send blobs out from the window
+        //ClusterInfo::broadcast(
+        //    contains_last_tick,
+        //    leader_id,
+        //    &node_info,
+        //    &broadcast_table,
+        //    &window,
+        //    &sock,
+        //    transmit_index,
+        //    *receive_index,
+        //)?;
     }
     let broadcast_elapsed = duration_as_ms(&broadcast_start.elapsed());
 
