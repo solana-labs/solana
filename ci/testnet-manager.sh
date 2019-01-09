@@ -190,7 +190,7 @@ start() {
         ci/testnet-deploy.sh edge-testnet-solana-com ec2 us-west-1a \
           -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a eipalloc-0ccd4f2239886fa94 \
           ${maybeReuseLedger:+-r} \
-          ${maybeDelete:+-d}
+          ${maybeDelete:+-D}
     )
     ;;
   testnet-edge-perf)
@@ -202,7 +202,7 @@ start() {
           -g -t "$CHANNEL_OR_TAG" -c 2 \
           -b \
           ${maybeReuseLedger:+-r} \
-          ${maybeDelete:+-d}
+          ${maybeDelete:+-D}
     )
     ;;
   testnet-beta)
@@ -215,7 +215,7 @@ start() {
           -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a eipalloc-0f286cf8a0771ce35 \
           -b \
           ${maybeReuseLedger:+-r} \
-          ${maybeDelete:+-d}
+          ${maybeDelete:+-D}
     )
     ;;
   testnet-beta-perf)
@@ -227,7 +227,7 @@ start() {
           -g -t "$CHANNEL_OR_TAG" -c 2 \
           -b \
           ${maybeReuseLedger:+-r} \
-          ${maybeDelete:+-d}
+          ${maybeDelete:+-D}
     )
     ;;
   testnet)
@@ -240,11 +240,11 @@ start() {
           -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a eipalloc-0fa502bf95f6f18b2 \
           -b \
           ${maybeReuseLedger:+-r} \
-          ${maybeDelete:+-d}
+          ${maybeDelete:+-D}
         #ci/testnet-deploy.sh testnet-solana-com gce us-east1-c \
         #  -s "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a testnet-solana-com  \
         #  ${maybeReuseLedger:+-r} \
-        #  ${maybeDelete:+-d}
+        #  ${maybeDelete:+-D}
     )
     ;;
   testnet-perf)
@@ -258,12 +258,12 @@ start() {
           -b \
           -d pd-ssd \
           ${maybeReuseLedger:+-r} \
-          ${maybeDelete:+-d}
+          ${maybeDelete:+-D}
         #ci/testnet-deploy.sh perf-testnet-solana-com ec2 us-east-1a \
         #  -g \
         #  -t "$CHANNEL_OR_TAG" -c 2 \
         #  ${maybeReuseLedger:+-r} \
-        #  ${maybeDelete:+-d}
+        #  ${maybeDelete:+-D}
     )
     ;;
   *)
