@@ -301,7 +301,7 @@ mod test {
     use crate::erasure::test::{generate_db_ledger_from_window, setup_window_ledger};
     #[cfg(all(feature = "erasure", test))]
     use crate::erasure::{NUM_CODING, NUM_DATA};
-    use crate::ledger::{get_tmp_ledger_path, make_tiny_test_entries, Block};
+    use crate::ledger::{get_tmp_ledger_path, make_tiny_test_entries, EntrySlice};
     use crate::packet::{index_blobs, Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
     use crate::streamer::{receiver, responder, PacketReceiver};
     use solana_sdk::signature::{Keypair, KeypairUtil};

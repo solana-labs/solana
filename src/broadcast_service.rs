@@ -8,7 +8,7 @@ use crate::entry::Entry;
 #[cfg(feature = "erasure")]
 use crate::erasure;
 use crate::leader_scheduler::LeaderScheduler;
-use crate::ledger::Block;
+use crate::ledger::EntrySlice;
 use crate::packet::{index_blobs, SharedBlob};
 use crate::result::{Error, Result};
 use crate::service::Service;
