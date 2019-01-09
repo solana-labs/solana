@@ -57,7 +57,7 @@ fn recv_window(
     tick_height: &mut u64,
     max_ix: u64,
     r: &BlobReceiver,
-    s: &EntrySender,
+    entry_sender: &Option<EntrySender>,
     retransmit: &BlobSender,
     done: &Arc<AtomicBool>,
 ) -> Result<()> {
@@ -109,7 +109,9 @@ fn recv_window(
 
     if !consume_queue.is_empty() {
         inc_new_counter_info!("streamer-recv_window-consume", consume_queue.len());
-        s.send(consume_queue)?;
+        if let Some(entry_sender) = entry_sender {
+            entry_sender.send(consume_queue)?;
+        }
     }
     Ok(())
 }
@@ -122,7 +124,7 @@ pub fn window_service(
     entry_height: u64,
     max_entry_height: u64,
     r: BlobReceiver,
-    s: EntrySender,
+    entry_sender: Option<EntrySender>,
     retransmit: BlobSender,
     repair_socket: Arc<UdpSocket>,
     leader_scheduler: Arc<RwLock<LeaderScheduler>>,
@@ -144,7 +146,7 @@ pub fn window_service(
                     &mut tick_height_,
                     max_entry_height,
                     &r,
-                    &s,
+                    &entry_sender,
                     &retransmit,
                     &done,
                 ) {
@@ -267,7 +269,7 @@ mod test {
             0,
             0,
             r_reader,
-            s_window,
+            Some(s_window),
             s_retransmit,
             Arc::new(tn.sockets.repair),
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(me_id))),
@@ -336,7 +338,7 @@ mod test {
             0,
             0,
             r_reader,
-            s_window,
+            Some(s_window),
             s_retransmit,
             Arc::new(tn.sockets.repair),
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(me_id))),

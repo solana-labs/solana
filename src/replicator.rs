@@ -102,8 +102,6 @@ impl Replicator {
             cluster_info_w.set_leader(leader_info.id);
         }
 
-        let (entry_window_sender, _entry_window_receiver) = channel();
-
         // Create DbLedger, eventually will simply repurpose the input
         // ledger path as the DbLedger path once we replace the ledger with
         // DbLedger. Note for now, this ledger will not contain any of the existing entries
@@ -187,7 +185,7 @@ impl Replicator {
             entry_height,
             max_entry_height,
             blob_fetch_receiver,
-            entry_window_sender,
+            None,
             retransmit_sender,
             repair_socket,
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
