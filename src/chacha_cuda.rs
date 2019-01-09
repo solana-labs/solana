@@ -109,7 +109,7 @@ mod tests {
     use crate::chacha::chacha_cbc_encrypt_ledger;
     use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
     use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
-    use crate::ledger::{get_tmp_ledger_path, make_tiny_test_entries, LedgerWriter};
+    use crate::ledger::{get_tmp_ledger_path, make_tiny_test_entries};
     use crate::replicator::sample_file;
     use solana_sdk::hash::Hash;
     use std::fs::{remove_dir_all, remove_file};
@@ -123,10 +123,6 @@ mod tests {
         let entries = make_tiny_test_entries(32);
         let ledger_dir = "test_encrypt_file_many_keys_single";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
-        {
-            let mut writer = LedgerWriter::open(&ledger_path, true).unwrap();
-            writer.write_entries(&entries).unwrap();
-        }
         let db_ledger = Arc::new(DbLedger::open(&ledger_path).unwrap());
         db_ledger
             .write_entries(DEFAULT_SLOT_HEIGHT, 0, &entries)
@@ -161,10 +157,6 @@ mod tests {
         let entries = make_tiny_test_entries(32);
         let ledger_dir = "test_encrypt_file_many_keys_multiple";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
-        {
-            let mut writer = LedgerWriter::open(&ledger_path, true).unwrap();
-            writer.write_entries(&entries).unwrap();
-        }
         let db_ledger = Arc::new(DbLedger::open(&ledger_path).unwrap());
         db_ledger
             .write_entries(DEFAULT_SLOT_HEIGHT, 0, &entries)
