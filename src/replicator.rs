@@ -10,7 +10,6 @@ use crate::result::Result;
 use crate::rpc_request::{RpcClient, RpcRequest};
 use crate::service::Service;
 use crate::storage_stage::ENTRIES_PER_SEGMENT;
-use crate::store_ledger_stage::StoreLedgerStage;
 use crate::streamer::BlobReceiver;
 use crate::thin_client::retry_get_balance;
 use crate::window_service::window_service;
@@ -41,7 +40,6 @@ use std::time::Duration;
 pub struct Replicator {
     gossip_service: GossipService,
     fetch_stage: BlobFetchStage,
-    store_ledger_stage: StoreLedgerStage,
     t_window: JoinHandle<()>,
     pub retransmit_receiver: BlobReceiver,
     exit: Arc<AtomicBool>,
@@ -104,8 +102,7 @@ impl Replicator {
             cluster_info_w.set_leader(leader_info.id);
         }
 
-        let (entry_window_sender, entry_window_receiver) = channel();
-        let store_ledger_stage = StoreLedgerStage::new(entry_window_receiver, ledger_path);
+        let (entry_window_sender, _entry_window_receiver) = channel();
 
         // Create DbLedger, eventually will simply repurpose the input
         // ledger path as the DbLedger path once we replace the ledger with
@@ -274,7 +271,6 @@ impl Replicator {
         Ok(Self {
             gossip_service,
             fetch_stage,
-            store_ledger_stage,
             t_window,
             retransmit_receiver,
             exit,
@@ -290,7 +286,6 @@ impl Replicator {
         self.gossip_service.join().unwrap();
         self.fetch_stage.join().unwrap();
         self.t_window.join().unwrap();
-        self.store_ledger_stage.join().unwrap();
 
         // Drain the queue here to prevent self.retransmit_receiver from being dropped
         // before the window_service thread is joined
