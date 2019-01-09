@@ -913,40 +913,4 @@ pub mod test {
         DbLedger::destroy(&ledger_path)
             .expect("Expected successful destruction of database ledger");
     }
-
-    //    //TODO This needs to be reworked
-    //    #[test]
-    //    #[ignore]
-    //    pub fn test_window_recover() {
-    //        solana_logger::setup();
-    //        let offset = 4;
-    //        let data_len = 16;
-    //        let num_blobs = NUM_DATA + 2;
-    //        let (mut window, blobs_len) = generate_window(data_len, offset, num_blobs);
-    //        println!("** after-gen:");
-    //        print_window(&window);
-    //        assert!(generate_coding(&mut window, offset, blobs_len).is_ok());
-    //        println!("** after-coding:");
-    //        print_window(&window);
-    //        let refwindow = window[offset + 1].clone();
-    //        window[offset + 1] = None;
-    //        window[offset + 2] = None;
-    //        window[offset + SET_SIZE + 3] = None;
-    //        window[offset + (2 * SET_SIZE) + 0] = None;
-    //        window[offset + (2 * SET_SIZE) + 1] = None;
-    //        window[offset + (2 * SET_SIZE) + 2] = None;
-    //        let window_l0 = &(window[offset + (3 * SET_SIZE)]).clone().unwrap();
-    //        window_l0.write().unwrap().data[0] = 55;
-    //        println!("** after-nulling:");
-    //        print_window(&window);
-    //        assert!(recover(&mut window, offset, offset + blobs_len).is_ok());
-    //        println!("** after-restore:");
-    //        print_window(&window);
-    //        let window_l = window[offset + 1].clone().unwrap();
-    //        let ref_l = refwindow.clone().unwrap();
-    //        assert_eq!(
-    //            window_l.read().unwrap().data()[..data_len],
-    //            ref_l.read().unwrap().data()[..data_len]
-    //        );
-    //    }
 }
