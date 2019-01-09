@@ -158,7 +158,23 @@ build() {
 startCommon() {
   declare ipAddress=$1
   test -d "$SOLANA_ROOT"
-  ssh "${sshOptions[@]}" "$ipAddress" "mkdir -p ~/solana ~/.cargo/bin; rm -rf ~/solana/"
+  if $skipSetup; then
+    ssh "${sshOptions[@]}" "$ipAddress" "
+      set -x;
+      mkdir -p ~/solana/config{,-local}
+      rm -rf ~/config{,-local};
+      mv ~/solana/config{,-local} ~;
+      rm -rf ~/solana;
+      mkdir -p ~/solana ~/.cargo/bin;
+      mv ~/config{,-local} ~/solana/
+    "
+  else
+    ssh "${sshOptions[@]}" "$ipAddress" "
+      set -x;
+      rm -rf ~/solana;
+      mkdir -p ~/.cargo/bin
+    "
+  fi
   rsync -vPrc -e "ssh ${sshOptions[*]}" \
     "$SOLANA_ROOT"/{fetch-perf-libs.sh,scripts,net,multinode-demo} \
     "$ipAddress":~/solana/
