@@ -2,7 +2,9 @@
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
 
+use crate::entry::create_ticks;
 use crate::entry::Entry;
+use crate::mint::Mint;
 use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
 use crate::result::{Error, Result};
 use bincode::{deserialize, serialize};
@@ -10,10 +12,11 @@ use byteorder::{BigEndian, ByteOrder, ReadBytesExt};
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, DBRawIterator, Options, WriteBatch, DB};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::borrow::Borrow;
 use std::cmp;
-use std::fs::create_dir_all;
+use std::fs::{create_dir_all, remove_dir_all};
 use std::io;
 use std::path::Path;
 use std::sync::Arc;
@@ -840,10 +843,85 @@ where
     Ok(())
 }
 
+pub fn get_tmp_ledger_path(name: &str) -> String {
+    use std::env;
+    let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
+    let keypair = Keypair::new();
+
+    let path = format!("{}/tmp/ledger-{}-{}", out_dir, name, keypair.pubkey());
+
+    // whack any possible collision
+    let _ignored = remove_dir_all(&path);
+
+    path
+}
+
+pub fn create_tmp_ledger_with_mint(name: &str, mint: &Mint) -> String {
+    let path = get_tmp_ledger_path(name);
+    DbLedger::destroy(&path).expect("Expected successful database destruction");
+    let db_ledger = DbLedger::open(&path).unwrap();
+    db_ledger
+        .write_entries(DEFAULT_SLOT_HEIGHT, 0, &mint.create_entries())
+        .unwrap();
+
+    path
+}
+
+pub fn create_tmp_genesis(
+    name: &str,
+    num: u64,
+    bootstrap_leader_id: Pubkey,
+    bootstrap_leader_tokens: u64,
+) -> (Mint, String) {
+    let mint = Mint::new_with_leader(num, bootstrap_leader_id, bootstrap_leader_tokens);
+    let path = create_tmp_ledger_with_mint(name, &mint);
+
+    (mint, path)
+}
+
+pub fn create_tmp_sample_ledger(
+    name: &str,
+    num_tokens: u64,
+    num_ending_ticks: usize,
+    bootstrap_leader_id: Pubkey,
+    bootstrap_leader_tokens: u64,
+) -> (Mint, String, Vec<Entry>) {
+    let mint = Mint::new_with_leader(num_tokens, bootstrap_leader_id, bootstrap_leader_tokens);
+    let path = get_tmp_ledger_path(name);
+
+    // Create the entries
+    let mut genesis = mint.create_entries();
+    let ticks = create_ticks(num_ending_ticks, mint.last_id());
+    genesis.extend(ticks);
+
+    DbLedger::destroy(&path).expect("Expected successful database destruction");
+    let db_ledger = DbLedger::open(&path).unwrap();
+    db_ledger
+        .write_entries(DEFAULT_SLOT_HEIGHT, 0, &genesis)
+        .unwrap();
+
+    (mint, path, genesis)
+}
+
+pub fn tmp_copy_ledger(from: &str, name: &str) -> String {
+    let tostr = get_tmp_ledger_path(name);
+
+    let db_ledger = DbLedger::open(from).unwrap();
+    let ledger_entries = db_ledger.read_ledger().unwrap();
+
+    DbLedger::destroy(&tostr).expect("Expected successful database destruction");
+    let db_ledger = DbLedger::open(&tostr).unwrap();
+    db_ledger
+        .write_entries(DEFAULT_SLOT_HEIGHT, 0, ledger_entries)
+        .unwrap();
+
+    tostr
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ledger::{get_tmp_ledger_path, make_tiny_test_entries, EntrySlice};
+    use crate::entry::{make_tiny_test_entries, EntrySlice};
     use crate::packet::index_blobs;
 
     #[test]

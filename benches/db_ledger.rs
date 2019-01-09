@@ -5,10 +5,8 @@ extern crate test;
 
 use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};
-use solana::db_ledger::DbLedger;
-use solana::ledger::{
-    get_tmp_ledger_path, make_large_test_entries, make_tiny_test_entries, EntrySlice,
-};
+use solana::db_ledger::{get_tmp_ledger_path, DbLedger};
+use solana::entry::{make_large_test_entries, make_tiny_test_entries, EntrySlice};
 use solana::packet::{Blob, BLOB_HEADER_SIZE};
 use test::Bencher;
 

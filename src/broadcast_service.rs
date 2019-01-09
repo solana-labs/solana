@@ -5,10 +5,10 @@ use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo, DATA_PLANE_FA
 use crate::counter::Counter;
 use crate::db_ledger::DbLedger;
 use crate::entry::Entry;
+use crate::entry::EntrySlice;
 #[cfg(feature = "erasure")]
 use crate::erasure;
 use crate::leader_scheduler::LeaderScheduler;
-use crate::ledger::EntrySlice;
 use crate::packet::{index_blobs, SharedBlob};
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -360,9 +360,9 @@ impl Service for BroadcastService {
 mod test {
     use super::*;
     use crate::cluster_info::{ClusterInfo, Node};
+    use crate::db_ledger::get_tmp_ledger_path;
     use crate::db_ledger::DbLedger;
-    use crate::ledger::create_ticks;
-    use crate::ledger::get_tmp_ledger_path;
+    use crate::entry::create_ticks;
     use crate::service::Service;
     use crate::window::new_window;
     use solana_sdk::hash::Hash;

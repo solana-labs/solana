@@ -3,8 +3,7 @@
 
 use crate::bank::Bank;
 
-use crate::entry::Entry;
-use crate::ledger::create_ticks;
+use crate::entry::{create_ticks, Entry};
 use crate::rpc_request::{RpcClient, RpcRequest};
 use bincode::serialize;
 use byteorder::{LittleEndian, ReadBytesExt};

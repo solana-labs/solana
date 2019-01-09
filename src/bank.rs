@@ -7,9 +7,9 @@ use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionL
 use crate::checkpoint::Checkpoint;
 use crate::counter::Counter;
 use crate::entry::Entry;
+use crate::entry::EntrySlice;
 use crate::jsonrpc_macros::pubsub::Sink;
 use crate::leader_scheduler::LeaderScheduler;
-use crate::ledger::EntrySlice;
 use crate::mint::Mint;
 use crate::poh_recorder::PohRecorder;
 use crate::rpc::RpcSignatureStatus;
@@ -958,10 +958,8 @@ impl Bank {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entry::next_entry;
-    use crate::entry::Entry;
+    use crate::entry::{next_entries, next_entry, Entry};
     use crate::jsonrpc_macros::pubsub::{Subscriber, SubscriptionId};
-    use crate::ledger;
     use crate::signature::GenKeys;
     use crate::status_deque;
     use crate::status_deque::StatusDequeError;
@@ -1261,7 +1259,7 @@ mod tests {
                 1,
                 last_id,
             )];
-            let mut e = ledger::next_entries(&hash, 0, txs);
+            let mut e = next_entries(&hash, 0, txs);
             entries.append(&mut e);
             hash = entries.last().unwrap().id;
             let tick = Entry::new(&hash, 0, num_hashes, vec![]);

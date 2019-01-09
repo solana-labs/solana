@@ -548,8 +548,9 @@ fn categorize_blob(
 #[cfg(test)]
 pub mod test {
     use super::*;
+    use crate::db_ledger::get_tmp_ledger_path;
     use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
-    use crate::ledger::{get_tmp_ledger_path, make_tiny_test_entries, EntrySlice};
+    use crate::entry::{make_tiny_test_entries, EntrySlice};
 
     use crate::packet::{index_blobs, SharedBlob, BLOB_DATA_SIZE, BLOB_SIZE};
     use crate::window::WindowSlot;
