@@ -213,11 +213,13 @@ fi
 
 ok=true
 (
-  op=start
-  # TODO: Enable rolling updates
-  #if $skipSetup; then
-  #  op=update
-  #fi
+  if $skipSetup; then
+    # TODO: Enable rolling updates
+    #op=update
+    op=restart
+  else
+    op=start
+  fi
 
   if $useTarReleaseChannel; then
     deploySource="-t $tarChannelOrTag"
