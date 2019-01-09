@@ -62,12 +62,6 @@ flag_error() {
   exit 1
 }
 
-echo "--- Wallet sanity"
-(
-  set -x
-  timeout 60s scripts/wallet-sanity.sh
-) || flag_error
-
 echo "--- Node count"
 (
   source multinode-demo/common.sh
@@ -89,6 +83,12 @@ echo "--- RPC API: getTransactionCount"
     -X POST -H 'Content-Type: application/json' \
     -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' \
     http://localhost:8899
+) || flag_error
+
+echo "--- Wallet sanity"
+(
+  set -x
+  timeout 60s scripts/wallet-sanity.sh
 ) || flag_error
 
 killBackgroundCommands

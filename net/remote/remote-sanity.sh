@@ -89,22 +89,6 @@ local|tar)
   exit 1
 esac
 
-
-echo "--- RPC API: getTransactionCount"
-(
-  set -x
-  curl --retry 5 --retry-delay 2 --retry-connrefused \
-    -X POST -H 'Content-Type: application/json' \
-    -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' \
-    http://"$entrypointIp":8899
-)
-
-echo "--- $entrypointIp: wallet sanity"
-(
-  set -x
-  scripts/wallet-sanity.sh "$entrypointIp":8001
-)
-
 echo "+++ $entrypointIp: node count ($numNodes expected)"
 (
   set -x
@@ -122,6 +106,21 @@ echo "+++ $entrypointIp: node count ($numNodes expected)"
     --num-nodes "$numNodes" \
     $maybeRejectExtraNodes \
     --converge-only
+)
+
+echo "--- RPC API: getTransactionCount"
+(
+  set -x
+  curl --retry 5 --retry-delay 2 --retry-connrefused \
+    -X POST -H 'Content-Type: application/json' \
+    -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' \
+    http://"$entrypointIp":8899
+)
+
+echo "--- $entrypointIp: wallet sanity"
+(
+  set -x
+  scripts/wallet-sanity.sh "$entrypointIp":8001
 )
 
 echo "--- $entrypointIp: verify ledger"
