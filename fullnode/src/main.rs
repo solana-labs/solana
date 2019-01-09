@@ -85,7 +85,7 @@ fn main() {
     let nosigverify = matches.is_present("nosigverify");
     let use_only_bootstrap_leader = matches.is_present("no-leader-rotation");
 
-    let (keypair, _vote_account_keypair, gossip) = if let Some(i) = matches.value_of("identity") {
+    let (keypair, gossip) = if let Some(i) = matches.value_of("identity") {
         let path = i.to_string();
         if let Ok(file) = File::open(path.clone()) {
             let parse: serde_json::Result<solana_fullnode_config::Config> =
@@ -98,11 +98,7 @@ fn main() {
                     &config_data.bind_addr(FULLNODE_PORT_RANGE.0),
                 );
 
-                (
-                    keypair,
-                    config_data.vote_account_keypair(),
-                    node_info.gossip,
-                )
+                (keypair, node_info.gossip)
             } else {
                 eprintln!("failed to parse {}", path);
                 exit(1);
@@ -112,7 +108,7 @@ fn main() {
             exit(1);
         }
     } else {
-        (Keypair::new(), Keypair::new(), socketaddr!(0, 8000))
+        (Keypair::new(), socketaddr!(0, 8000))
     };
 
     let ledger_path = matches.value_of("ledger").unwrap();
@@ -150,7 +146,7 @@ fn main() {
         .expect("Failed to register node");
     let vote_account_id: Pubkey =
         serde_json::from_value(resp).expect("Invalid register node response");
-    info!("New vote account ID is {:?}", vote_account_id);
+    info!("Vote account ID is {:?}", vote_account_id);
     let keypair = Arc::new(keypair);
     let pubkey = keypair.pubkey();
 

@@ -1,4 +1,4 @@
-use solana_sdk::signature::{gen_pkcs8, read_pkcs8};
+use solana_sdk::signature::read_pkcs8;
 use std::io;
 
 fn main() {
@@ -49,7 +49,6 @@ fn main() {
         use_local_address: matches.is_present("local"),
         use_public_address: matches.is_present("public"),
         identity_pkcs8: read_pkcs8(id_path).expect("invalid keypair"),
-        vote_account_pkcs8: gen_pkcs8().unwrap(),
     };
 
     let stdout = io::stdout();
