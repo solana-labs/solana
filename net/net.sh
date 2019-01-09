@@ -450,7 +450,11 @@ stopNode() {
         sudo snap set solana mode=
       fi
       ! tmux list-sessions || tmux kill-session
-      for pattern in solana- remote- oom-monitor net-stats; do
+      for pid in solana/{net-stats,oom-monitor}.pid; do
+        pgid=\$(ps opgid= \$(cat \$pid) | tr -d '[:space:]')
+        sudo kill -- -\$pgid
+      done
+      for pattern in solana- remote-; do
         pkill -9 \$pattern
       done
     "

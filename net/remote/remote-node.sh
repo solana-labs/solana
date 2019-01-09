@@ -139,7 +139,9 @@ local|tar)
   (
     sudo scripts/oom-monitor.sh
   ) > oom-monitor.log 2>&1 &
+  echo $! > oom-monitor.pid
   scripts/net-stats.sh  > net-stats.log 2>&1 &
+  echo $! > net-stats.pid
 
   maybeNoLeaderRotation=
   if ! $leaderRotation; then
