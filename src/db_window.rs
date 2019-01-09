@@ -198,12 +198,12 @@ pub fn process_blob(
 
     // Insert the new blob into the window
     let mut consumed_entries = if is_coding {
-        let erasure_key = ErasureCf::key(slot, pix);
-        let rblob = &blob.read().unwrap();
-        let size = rblob.size()?;
-        db_ledger
-            .erasure_cf
-            .put(&erasure_key, &rblob.data[..BLOB_HEADER_SIZE + size])?;
+        let blob = &blob.read().unwrap();
+        db_ledger.put_coding_blob_bytes(
+            slot,
+            pix,
+            &blob.data[..BLOB_HEADER_SIZE + blob.size().unwrap()],
+        )?;
         vec![]
     } else {
         db_ledger.insert_data_blobs(vec![(*blob.read().unwrap()).borrow()])?
@@ -277,15 +277,12 @@ fn try_erasure(db_ledger: &Arc<DbLedger>, consume_queue: &mut Vec<Entry>) -> Res
     if let Some(meta) = meta {
         let (data, coding) = erasure::recover(db_ledger, meta.consumed_slot, meta.consumed)?;
         for c in coding {
-            let cl = c.read().unwrap();
-            let erasure_key = ErasureCf::key(
+            let c = c.read().unwrap();
+            db_ledger.put_coding_blob_bytes(
                 meta.consumed_slot,
-                cl.index().expect("Recovered blob must set index"),
-            );
-            let size = cl.size().expect("Recovered blob must set size");
-            db_ledger
-                .erasure_cf
-                .put(&erasure_key, &cl.data[..BLOB_HEADER_SIZE + size])?;
+                c.index().unwrap(),
+                &c.data[..BLOB_HEADER_SIZE + c.size().unwrap()],
+            )?;
         }
 
         let entries = db_ledger.write_shared_blobs(data)?;
@@ -600,13 +597,13 @@ mod test {
         // Test erasing a data block and an erasure block
         let coding_start = offset - (offset % NUM_DATA) + (NUM_DATA - NUM_CODING);
 
-        let erase_offset = coding_start % window.len();
+        let erased_index = coding_start % window.len();
 
         // Create a hole in the window
-        let erased_data = window[erase_offset].data.clone();
-        let erased_coding = window[erase_offset].coding.clone().unwrap();
-        window[erase_offset].data = None;
-        window[erase_offset].coding = None;
+        let erased_data = window[erased_index].data.clone();
+        let erased_coding = window[erased_index].coding.clone().unwrap();
+        window[erased_index].data = None;
+        window[erased_index].coding = None;
 
         // Generate the db_ledger from the window
         let ledger_path = get_tmp_ledger_path("test_try_erasure");
@@ -614,10 +611,10 @@ mod test {
 
         let mut consume_queue = vec![];
         try_erasure(&db_ledger, &mut consume_queue).expect("Expected successful erasure attempt");
-        window[erase_offset].data = erased_data;
+        window[erased_index].data = erased_data;
 
         {
-            let data_blobs: Vec<_> = window[erase_offset..end_index]
+            let data_blobs: Vec<_> = window[erased_index..end_index]
                 .iter()
                 .map(|slot| slot.data.clone().unwrap())
                 .collect();
@@ -633,8 +630,7 @@ mod test {
         let erased_coding_l = erased_coding.read().unwrap();
         assert_eq!(
             &db_ledger
-                .erasure_cf
-                .get_by_slot_index(slot_height, erase_offset as u64)
+                .get_coding_blob_bytes(slot_height, erased_index as u64)
                 .unwrap()
                 .unwrap()[BLOB_HEADER_SIZE..],
             &erased_coding_l.data()[..erased_coding_l.size().unwrap() as usize],
