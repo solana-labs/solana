@@ -37,9 +37,6 @@ Operate a configured testnet
    -r                          - Reuse existing node/ledger configuration from a
                                  previous |start| (ie, don't run ./mulitnode-demo/setup.sh).
 
-   Note: if RUST_LOG is set in the environment it will be propogated into the
-         network nodes.
-
  sanity/start/update-specific options:
    -o noLedgerVerify    - Skip ledger verification
    -o noValidatorSanity - Skip fullnode sanity
@@ -51,6 +48,8 @@ Operate a configured testnet
  logs-specific options:
    none
 
+Note: if RUST_LOG is set in the environment it will be propogated into the
+      network nodes.
 EOF
   exit $exitcode
 }
@@ -278,7 +277,7 @@ sanity() {
     set -x
     # shellcheck disable=SC2029 # remote-client.sh args are expanded on client side intentionally
     ssh "${sshOptions[@]}" "$host" \
-      "./solana/net/remote/remote-sanity.sh $sanityExtraArgs"
+      "./solana/net/remote/remote-sanity.sh $sanityExtraArgs \"$RUST_LOG\""
   ) || ok=false
 
   $metricsWriteDatapoint "testnet-deploy net-sanity-complete=1"
