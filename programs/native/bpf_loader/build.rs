@@ -1,6 +1,30 @@
+extern crate walkdir;
+
 use std::env;
 use std::path::Path;
 use std::process::Command;
+use walkdir::WalkDir;
+
+fn rerun_if_changed(files: &[&str], directories: &[&str]) {
+    let mut all_files: Vec<_> = files.iter().map(|f| f.to_string()).collect();
+
+    for directory in directories {
+        let files_in_directory: Vec<_> = WalkDir::new(directory)
+            .into_iter()
+            .map(|entry| entry.unwrap())
+            .filter(|entry| entry.file_type().is_file())
+            .map(|f| f.path().to_str().unwrap().to_owned())
+            .collect();
+        all_files.extend_from_slice(&files_in_directory[..]);
+    }
+
+    for file in all_files {
+        if !Path::new(&file).is_file() {
+            panic!("{} is not a file", file);
+        }
+        println!("cargo:rerun-if-changed={}", file);
+    }
+}
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
@@ -11,24 +35,18 @@ fn main() {
             + &env::var("PROFILE").unwrap()
             + &"/bpf".to_string();
 
-        let rerun_if_changed_files = vec![
-            "../../../sdk/bpf/bpf.mk",
-            "../../../sdk/bpf/inc/solana_sdk.h",
-            "../../bpf/c/makefile",
-            "../../bpf/c/src/bench_alu.c",
-            "../../bpf/c/src/move_funds.c",
-            "../../bpf/c/src/noop++.cc",
-            "../../bpf/c/src/noop.c",
-            "../../bpf/c/src/struct_pass.c",
-            "../../bpf/c/src/struct_ret.c",
-        ];
-
-        for file in rerun_if_changed_files {
-            if !Path::new(file).is_file() {
-                panic!("{} is not a file", file);
-            }
-            println!("cargo:rerun-if-changed={}", file);
-        }
+        rerun_if_changed(
+            &[
+                "../../../sdk/bpf/bpf.ld",
+                "../../../sdk/bpf/bpf.mk",
+                "../../bpf/c/makefile",
+            ],
+            &[
+                "../../../sdk/bpf/inc",
+                "../../../sdk/bpf/scripts",
+                "../../bpf/c/src",
+            ],
+        );
 
         println!("cargo:warning=(not a warning) Compiling C-based BPF programs");
         let status = Command::new("make")
@@ -56,18 +74,14 @@ fn main() {
             );
         }
 
-        let rerun_if_changed_files = vec![
-            "../../bpf/rust/noop/bpf.ld",
-            "../../bpf/rust/noop/makefile",
-            "../../bpf/rust/noop/out/solana_bpf_rust_noop.so",
-        ];
-
-        for file in rerun_if_changed_files {
-            if !Path::new(file).is_file() {
-                panic!("{} is not a file", file);
-            }
-            println!("cargo:rerun-if-changed={}", file);
-        }
+        rerun_if_changed(
+            &[
+                "../../bpf/rust/noop/bpf.ld",
+                "../../bpf/rust/noop/makefile",
+                "../../bpf/rust/noop/out/solana_bpf_rust_noop.so",
+            ],
+            &[],
+        );
 
         println!(
             "cargo:warning=(not a warning) Installing Rust-based BPF program: solana_bpf_rust_noop"

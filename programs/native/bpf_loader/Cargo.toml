@@ -23,6 +23,9 @@ serde = "1.0.84"
 solana-logger = { path = "../../../logger", version = "0.12.0" }
 solana-sdk = { path = "../../../sdk", version = "0.12.0" }
 
+[build-dependencies]
+walkdir = "2"
+
 [lib]
 name = "solana_bpf_loader"
 crate-type = ["lib", "cdylib"]
