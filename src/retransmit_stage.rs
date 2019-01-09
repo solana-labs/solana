@@ -152,7 +152,7 @@ impl RetransmitStage {
             entry_height,
             0,
             fetch_stage_receiver,
-            entry_sender,
+            Some(entry_sender),
             retransmit_sender,
             repair_socket,
             leader_scheduler,
