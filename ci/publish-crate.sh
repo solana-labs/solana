@@ -27,20 +27,18 @@ CRATES=(
 )
 
 
-cargoCommand="cargo package"
-
 # Only package/publish if this is a tagged release
-if [[ -n $TRIGGERED_BUILDKITE_TAG ]]; then
+[[ -n $TRIGGERED_BUILDKITE_TAG ]] || {
+  echo TRIGGERED_BUILDKITE_TAG unset, skipped
+  exit 0
+}
 
-  # Only publish if there's no human around
-  if [[ -n $CI ]]; then
-    cargoCommand="cargo publish --token $CRATES_IO_TOKEN"
-    if [[ -z "$CRATES_IO_TOKEN" ]]; then
-      echo CRATES_IO_TOKEN undefined
-      exit 1
-    fi
-  fi
-fi
+[[ -n "$CRATES_IO_TOKEN" ]] || {
+  echo CRATES_IO_TOKEN undefined
+  exit 1
+}
+
+cargoCommand="cargo publish --token $CRATES_IO_TOKEN"
 
 for crate in "${CRATES[@]}"; do
   if [[ ! -r $crate/Cargo.toml ]]; then
@@ -48,7 +46,8 @@ for crate in "${CRATES[@]}"; do
     exit 1
   fi
   echo "-- $crate"
-  # TODO: Ensure the published version matches the contents of BUILDKITE_TAG
+  # TODO: Ensure the published version matches the contents of
+  # TRIGGERED_BUILDKITE_TAG
   (
     set -x
     # TODO: the rocksdb package does not build with the stock rust docker image,
