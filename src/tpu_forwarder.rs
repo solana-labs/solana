@@ -43,7 +43,7 @@ impl TpuForwarder {
                 .expect("cluster_info.read() in TpuForwarder::forward()")
                 .leader_data()
                 .cloned();
-            if TpuForwarder::update_addrs(leader_data, &my_id, msgs.clone()) {
+            if TpuForwarder::update_addrs(leader_data, &my_id, &msgs.clone()) {
                 msgs.read().unwrap().send_to(&socket)?
             }
             continue;
@@ -53,7 +53,7 @@ impl TpuForwarder {
     fn update_addrs(
         leader_data: Option<ContactInfo>,
         my_id: &Pubkey,
-        msgs: Arc<RwLock<Packets>>,
+        msgs: &Arc<RwLock<Packets>>,
     ) -> bool {
         match leader_data {
             Some(leader_data) => {
@@ -134,20 +134,20 @@ mod tests {
         assert!(!TpuForwarder::update_addrs(
             None,
             &my_id,
-            Arc::new(RwLock::new(Packets::default()))
+            &Arc::new(RwLock::new(Packets::default()))
         ));
         // test with no tvu
         assert!(!TpuForwarder::update_addrs(
             Some(ContactInfo::default()),
             &my_id,
-            Arc::new(RwLock::new(Packets::default()))
+            &Arc::new(RwLock::new(Packets::default()))
         ));
         // test with my pubkey
         let leader_data = ContactInfo::new_localhost(my_id, 0);
         assert!(!TpuForwarder::update_addrs(
             Some(leader_data),
             &my_id,
-            Arc::new(RwLock::new(Packets::default()))
+            &Arc::new(RwLock::new(Packets::default()))
         ));
         // test that the address is actually being updated
         let (port, _) = bind_in_range((8000, 10000)).unwrap();
@@ -160,7 +160,7 @@ mod tests {
         assert!(TpuForwarder::update_addrs(
             Some(leader_data.clone()),
             &my_id,
-            msgs.clone()
+            &msgs.clone()
         ));
         assert_eq!(
             SocketAddr::from(msgs.read().unwrap().packets[0].meta.addr()),
