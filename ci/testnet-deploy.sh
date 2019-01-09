@@ -15,6 +15,7 @@ snapChannel=edge
 tarChannelOrTag=edge
 delete=false
 enableGpu=false
+bootDiskType=""
 leaderRotation=true
 useTarReleaseChannel=false
 
@@ -47,10 +48,10 @@ Deploys a CD testnet
    -g                   - Enable GPU (default: $enableGpu)
    -b                   - Disable leader rotation
    -a [address]         - Set the bootstrap fullnode's external IP address to this GCE address
-   -d                   - Delete the network
+   -d [disk-type]       - Specify a boot disk type (default None) Use pd-ssd to get ssd on GCE.
+   -D                   - Delete the network
    -r                   - Reuse existing node/ledger configuration from a
                           previous |start| (ie, don't run ./mulitnode-demo/setup.sh).
-
 
    Note: the SOLANA_METRICS_CONFIG environment variable is used to configure
          metrics
@@ -66,7 +67,7 @@ zone=$3
 [[ -n $zone ]] || usage "Zone not specified"
 shift 3
 
-while getopts "h?p:Pn:c:s:t:gG:a:dbr" opt; do
+while getopts "h?p:Pn:c:s:t:gG:a:Dbd:r" opt; do
   case $opt in
   h | \?)
     usage
@@ -115,6 +116,9 @@ while getopts "h?p:Pn:c:s:t:gG:a:dbr" opt; do
     bootstrapFullNodeAddress=$OPTARG
     ;;
   d)
+    bootDiskType=$OPTARG
+    ;;
+  D)
     delete=true
     ;;
   r)
@@ -161,6 +165,11 @@ if ! $skipSetup; then
     -c "$clientNodeCount"
     -n "$additionalFullNodeCount"
   )
+
+  if [[ -n $bootDiskType ]]; then
+    create_args+=(-d "$bootDiskType")
+  fi
+
   if $enableGpu; then
     if [[ -z $bootstrapFullNodeMachineType ]]; then
       create_args+=(-g)
