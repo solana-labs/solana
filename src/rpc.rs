@@ -405,10 +405,10 @@ mod tests {
     use super::*;
     use crate::bank::Bank;
     use crate::cluster_info::{Node, NodeInfo};
+    use crate::db_ledger::create_tmp_ledger_with_mint;
     use crate::fullnode::Fullnode;
     use crate::jsonrpc_core::Response;
     use crate::leader_scheduler::LeaderScheduler;
-    use crate::ledger::create_tmp_ledger_with_mint;
     use crate::mint::Mint;
     use crate::rpc_request::get_rpc_request_str;
     use bincode::serialize;

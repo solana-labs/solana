@@ -295,13 +295,14 @@ fn try_erasure(db_ledger: &Arc<DbLedger>, consume_queue: &mut Vec<Entry>) -> Res
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::db_ledger::get_tmp_ledger_path;
     #[cfg(all(feature = "erasure", test))]
     use crate::entry::reconstruct_entries_from_blobs;
+    use crate::entry::{make_tiny_test_entries, EntrySlice};
     #[cfg(all(feature = "erasure", test))]
     use crate::erasure::test::{generate_db_ledger_from_window, setup_window_ledger};
     #[cfg(all(feature = "erasure", test))]
     use crate::erasure::{NUM_CODING, NUM_DATA};
-    use crate::ledger::{get_tmp_ledger_path, make_tiny_test_entries, EntrySlice};
     use crate::packet::{index_blobs, Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
     use crate::streamer::{receiver, responder, PacketReceiver};
     use solana_sdk::signature::{Keypair, KeypairUtil};

@@ -336,9 +336,9 @@ impl Service for StorageStage {
 
 #[cfg(test)]
 mod tests {
+    use crate::db_ledger::create_tmp_sample_ledger;
     use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
-    use crate::entry::Entry;
-    use crate::ledger::{create_tmp_sample_ledger, make_tiny_test_entries};
+    use crate::entry::{make_tiny_test_entries, Entry};
 
     use crate::service::Service;
     use crate::storage_stage::StorageState;

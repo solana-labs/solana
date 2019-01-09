@@ -2,8 +2,7 @@
 
 extern crate test;
 
-use solana::entry::reconstruct_entries_from_blobs;
-use solana::ledger::{next_entries, EntrySlice};
+use solana::entry::{next_entries, reconstruct_entries_from_blobs, EntrySlice};
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;

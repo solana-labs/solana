@@ -103,7 +103,7 @@ impl Mint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ledger::EntrySlice;
+    use crate::entry::EntrySlice;
     use bincode::deserialize;
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_program;

@@ -210,10 +210,10 @@ pub fn window_service(
 #[cfg(test)]
 mod test {
     use crate::cluster_info::{ClusterInfo, Node};
+    use crate::db_ledger::get_tmp_ledger_path;
     use crate::db_ledger::DbLedger;
-    use crate::entry::Entry;
+    use crate::entry::{make_consecutive_blobs, Entry};
     use crate::leader_scheduler::LeaderScheduler;
-    use crate::ledger::{get_tmp_ledger_path, make_consecutive_blobs};
 
     use crate::packet::{SharedBlob, PACKET_DATA_SIZE};
     use crate::streamer::{blob_receiver, responder};

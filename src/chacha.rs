@@ -85,9 +85,9 @@ pub fn chacha_cbc_encrypt_ledger(
 #[cfg(test)]
 mod tests {
     use crate::chacha::chacha_cbc_encrypt_ledger;
+    use crate::db_ledger::get_tmp_ledger_path;
     use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
     use crate::entry::Entry;
-    use crate::ledger::get_tmp_ledger_path;
     use ring::signature::Ed25519KeyPair;
     use solana_sdk::budget_transaction::BudgetTransaction;
     use solana_sdk::hash::{hash, Hash, Hasher};

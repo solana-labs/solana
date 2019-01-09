@@ -6,7 +6,7 @@ use crate::counter::Counter;
 use crate::entry::{EntryReceiver, EntrySender};
 use solana_sdk::hash::Hash;
 
-use crate::ledger::EntrySlice;
+use crate::entry::EntrySlice;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
 use crate::rpc_request::RpcClient;
@@ -290,13 +290,14 @@ impl Service for ReplayStage {
 mod test {
     use crate::bank::Bank;
     use crate::cluster_info::{ClusterInfo, Node};
+    use crate::db_ledger::create_tmp_sample_ledger;
     use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
+    use crate::entry::create_ticks;
     use crate::entry::Entry;
     use crate::fullnode::Fullnode;
     use crate::leader_scheduler::{
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
-    use crate::ledger::{create_ticks, create_tmp_sample_ledger};
 
     use crate::create_vote_account::*;
     use crate::packet::BlobError;

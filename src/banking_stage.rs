@@ -268,7 +268,7 @@ mod tests {
     use super::*;
     use crate::bank::Bank;
     use crate::banking_stage::BankingStageReturnType;
-    use crate::ledger::EntrySlice;
+    use crate::entry::EntrySlice;
     use crate::mint::Mint;
     use crate::packet::to_packets;
     use solana_sdk::signature::{Keypair, KeypairUtil};

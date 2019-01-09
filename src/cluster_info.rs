@@ -1312,8 +1312,8 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 mod tests {
     use super::*;
     use crate::crds_value::CrdsValueLabel;
+    use crate::db_ledger::get_tmp_ledger_path;
     use crate::db_ledger::DbLedger;
-    use crate::ledger::get_tmp_ledger_path;
     use crate::packet::BLOB_HEADER_SIZE;
     use crate::result::Error;
     use solana_sdk::signature::{Keypair, KeypairUtil};

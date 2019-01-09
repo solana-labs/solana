@@ -12,12 +12,12 @@ use solana::blob_fetch_stage::BlobFetchStage;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
 use solana::contact_info::ContactInfo;
 use solana::create_vote_account::*;
+use solana::db_ledger::{create_tmp_genesis, create_tmp_sample_ledger, tmp_copy_ledger};
 use solana::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
 use solana::entry::{reconstruct_entries_from_blobs, Entry};
 use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::gossip_service::GossipService;
 use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
-use solana::ledger::{create_tmp_genesis, create_tmp_sample_ledger, tmp_copy_ledger};
 
 use solana::mint::Mint;
 use solana::packet::SharedBlob;

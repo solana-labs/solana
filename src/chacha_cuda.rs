@@ -108,8 +108,9 @@ pub fn chacha_cbc_encrypt_file_many_keys(
 mod tests {
     use crate::chacha::chacha_cbc_encrypt_ledger;
     use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
+    use crate::db_ledger::get_tmp_ledger_path;
     use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
-    use crate::ledger::{get_tmp_ledger_path, make_tiny_test_entries};
+    use crate::entry::make_tiny_test_entries;
     use crate::replicator::sample_file;
     use solana_sdk::hash::Hash;
     use std::fs::{remove_dir_all, remove_file};

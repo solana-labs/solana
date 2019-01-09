@@ -654,12 +654,10 @@ mod tests {
     use crate::cluster_info::Node;
     use crate::create_vote_account::*;
     use crate::db_ledger::*;
+    use crate::entry::make_consecutive_blobs;
     use crate::fullnode::{Fullnode, FullnodeReturnType, NodeRole, TvuReturnType};
     use crate::leader_scheduler::{
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
-    };
-    use crate::ledger::{
-        create_tmp_genesis, create_tmp_sample_ledger, make_consecutive_blobs, tmp_copy_ledger,
     };
     use crate::rpc_request::{RpcClient, RpcRequest};
     use crate::service::Service;
