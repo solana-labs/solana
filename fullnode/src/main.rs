@@ -202,7 +202,7 @@ fn main() {
     let balance = client.poll_get_balance(&pubkey).unwrap_or(0);
     info!("balance is {}", balance);
     if balance < 1 {
-        error!("insufficient tokens");
+        error!("insufficient tokens, one token required");
         if let Some(t) = t_signer {
             if let Some(exit) = signer_exit {
                 create_vote_account::stop_local_vote_signer_service(t, &exit);
@@ -215,7 +215,7 @@ fn main() {
     if client.poll_get_balance(&vote_account_id).unwrap_or(0) == 0 {
         // Need at least two tokens as one token will be spent on a vote_account_new() transaction
         if balance < 2 {
-            error!("insufficient tokens");
+            error!("insufficient tokens, two tokens required");
             if let Some(t) = t_signer {
                 if let Some(exit) = signer_exit {
                     create_vote_account::stop_local_vote_signer_service(t, &exit);
