@@ -157,11 +157,12 @@ impl Service for ComputeLeaderConfirmationService {
 pub mod tests {
     use crate::bank::Bank;
     use crate::compute_leader_confirmation_service::ComputeLeaderConfirmationService;
-    use crate::create_vote_account::*;
+    use crate::vote_signer_proxy::*;
 
+    use crate::local_vote_signer_service::*;
     use crate::mint::Mint;
     use crate::rpc_request::RpcClient;
-    use crate::vote_stage::create_new_signed_vote_transaction;
+    use crate::vote_signer_proxy::*;
     use bincode::serialize;
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -187,8 +188,7 @@ pub mod tests {
             })
             .collect();
 
-        let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
-        let rpc_client = RpcClient::new_from_socket(signer);
+        let (signer_service, addr) = LocalVoteSignerService::new();
         // Create a total of 10 vote accounts, each will have a balance of 1 (after giving 1 to
         // their vote account), for a total staking pool of 10 tokens.
         let vote_accounts: Vec<_> = (0..10)
@@ -196,26 +196,21 @@ pub mod tests {
                 // Create new validator to vote
                 let validator_keypair = Keypair::new();
                 let last_id = ids[i];
+                let vote_signer = VoteSignerProxy::new(&Arc::new(validator_keypair), addr.clone());
 
                 // Give the validator some tokens
                 bank.transfer(2, &mint.keypair(), validator_keypair.pubkey(), last_id)
                     .unwrap();
-                let vote_account =
-                    create_vote_account(&validator_keypair, &bank, 1, last_id, &rpc_client)
-                        .expect("Expected successful creation of account");
+                vote_signer
+                    .new_vote_account(&bank, 1, last_id)
+                    .expect("Expected successful creation of account");
 
                 let validator_keypair = Arc::new(validator_keypair);
                 if i < 6 {
-                    let vote_tx = create_new_signed_vote_transaction(
-                        &last_id,
-                        &validator_keypair,
-                        (i + 1) as u64,
-                        &vote_account,
-                        &rpc_client,
-                    );
+                    let vote_tx = vote_signer.new_signed_vote_transaction(&last_id, (i + 1) as u64);
                     bank.process_transaction(&vote_tx).unwrap();
                 }
-                (vote_account, validator_keypair)
+                (vote_signer, validator_keypair)
             })
             .collect();
 
@@ -229,14 +224,8 @@ pub mod tests {
         assert_eq!(bank.confirmation_time(), std::usize::MAX);
 
         // Get another validator to vote, so we now have 2/3 consensus
-        let vote_account = &vote_accounts[7].0;
-        let vote_tx = create_new_signed_vote_transaction(
-            &ids[6],
-            &vote_accounts[7].1,
-            7,
-            &vote_account,
-            &rpc_client,
-        );
+        let vote_signer = &vote_accounts[7].0;
+        let vote_tx = vote_signer.new_signed_vote_transaction(&ids[6], 7);
         bank.process_transaction(&vote_tx).unwrap();
 
         ComputeLeaderConfirmationService::compute_confirmation(
@@ -246,6 +235,6 @@ pub mod tests {
         );
         assert!(bank.confirmation_time() != std::usize::MAX);
         assert!(last_confirmation_time > 0);
-        stop_local_vote_signer_service(t_signer, &signer_exit);
+        signer_service.join().unwrap();
     }
 }

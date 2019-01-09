@@ -7,7 +7,7 @@ use crate::db_ledger;
 use crate::erasure;
 use crate::packet;
 use crate::poh_recorder;
-use crate::vote_stage;
+use crate::vote_signer_proxy;
 use bincode;
 use serde_json;
 use std;
@@ -29,7 +29,7 @@ pub enum Error {
     ErasureError(erasure::ErasureError),
     SendError,
     PohRecorderError(poh_recorder::PohRecorderError),
-    VoteError(vote_stage::VoteError),
+    VoteError(vote_signer_proxy::VoteError),
     DbLedgerError(db_ledger::DbLedgerError),
 }
 
@@ -104,8 +104,8 @@ impl std::convert::From<poh_recorder::PohRecorderError> for Error {
         Error::PohRecorderError(e)
     }
 }
-impl std::convert::From<vote_stage::VoteError> for Error {
-    fn from(e: vote_stage::VoteError) -> Error {
+impl std::convert::From<vote_signer_proxy::VoteError> for Error {
+    fn from(e: vote_signer_proxy::VoteError) -> Error {
         Error::VoteError(e)
     }
 }

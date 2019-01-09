@@ -28,7 +28,6 @@ pub mod crds_gossip_pull;
 pub mod crds_gossip_push;
 pub mod crds_traits_impls;
 pub mod crds_value;
-pub mod create_vote_account;
 #[macro_use]
 pub mod contact_info;
 pub mod cluster_info;
@@ -42,6 +41,7 @@ pub mod fetch_stage;
 pub mod fullnode;
 pub mod gossip_service;
 pub mod leader_scheduler;
+pub mod local_vote_signer_service;
 pub mod mint;
 pub mod packet;
 pub mod poh;
@@ -68,7 +68,7 @@ pub mod thin_client;
 pub mod tpu;
 pub mod tpu_forwarder;
 pub mod tvu;
-pub mod vote_stage;
+pub mod vote_signer_proxy;
 pub mod window;
 pub mod window_service;
 

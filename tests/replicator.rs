@@ -7,7 +7,6 @@ extern crate serde_json;
 use bincode::deserialize;
 use solana::client::mk_client;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
-use solana::create_vote_account::*;
 use solana::db_ledger::DbLedger;
 use solana::db_ledger::{create_tmp_genesis, get_tmp_ledger_path, tmp_copy_ledger};
 use solana::entry::Entry;

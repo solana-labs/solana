@@ -536,14 +536,14 @@ pub fn make_active_set_entries(
 #[cfg(test)]
 mod tests {
     use crate::bank::Bank;
-    use crate::create_vote_account::*;
     use crate::leader_scheduler::{
         LeaderScheduler, LeaderSchedulerConfig, DEFAULT_BOOTSTRAP_HEIGHT,
         DEFAULT_LEADER_ROTATION_INTERVAL, DEFAULT_SEED_ROTATION_INTERVAL,
     };
+    use crate::local_vote_signer_service::*;
     use crate::mint::Mint;
     use crate::rpc_request::RpcClient;
-    use crate::vote_stage::create_new_signed_vote_transaction;
+    use crate::vote_signer_proxy::*;
     use hashbrown::HashSet;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
@@ -559,16 +559,8 @@ mod tests {
         HashSet::from_iter(slice.iter().cloned())
     }
 
-    fn push_vote(
-        keypair: &Arc<Keypair>,
-        vote_account: &Pubkey,
-        bank: &Bank,
-        height: u64,
-        last_id: Hash,
-        rpc_client: &RpcClient,
-    ) {
-        let new_vote_tx =
-            create_new_signed_vote_transaction(&last_id, keypair, height, vote_account, rpc_client);
+    fn push_vote(vote_signer: &VoteSignerProxy, bank: &Bank, height: u64, last_id: Hash) {
+        let new_vote_tx = vote_signer.new_signed_vote_transaction(&last_id, height);
 
         bank.process_transaction(&new_vote_tx).unwrap();
     }
@@ -607,11 +599,11 @@ mod tests {
             .last()
             .expect("Mint should not create empty genesis entries")
             .id;
-        let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
-        let rpc_client = RpcClient::new_from_socket(signer);
+        let (signer_service, signer) = LocalVoteSignerService::new();
         for i in 0..num_validators {
             let new_validator = Keypair::new();
             let new_pubkey = new_validator.pubkey();
+            let vote_signer = VoteSignerProxy::new(&Arc::new(new_validator), signer.clone());
             validators.push(new_pubkey);
             // Give the validator some tokens
             bank.transfer(
@@ -623,24 +615,12 @@ mod tests {
             .unwrap();
 
             // Create a vote account
-            let new_vote_account = create_vote_account(
-                &new_validator,
-                &bank,
-                num_vote_account_tokens as u64,
-                mint.last_id(),
-                &rpc_client,
-            )
-            .unwrap();
+            vote_signer
+                .new_vote_account(&bank, num_vote_account_tokens as u64, mint.last_id())
+                .unwrap();
             // Vote to make the validator part of the active set for the entire test
             // (we made the active_window_length large enough at the beginning of the test)
-            push_vote(
-                &Arc::new(new_validator),
-                &new_vote_account,
-                &bank,
-                1,
-                mint.last_id(),
-                &rpc_client,
-            );
+            push_vote(&vote_signer, &bank, 1, mint.last_id());
         }
 
         // The scheduled leader during the bootstrapping period (assuming a seed + schedule
@@ -717,7 +697,7 @@ mod tests {
                 Some((current_leader, slot))
             );
         }
-        stop_local_vote_signer_service(t_signer, &signer_exit);
+        signer_service.join().unwrap();
     }
 
     #[test]

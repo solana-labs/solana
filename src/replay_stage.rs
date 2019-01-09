@@ -9,10 +9,9 @@ use solana_sdk::hash::Hash;
 use crate::entry::EntrySlice;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
-use crate::rpc_request::RpcClient;
 use crate::service::Service;
 use crate::streamer::{responder, BlobSender};
-use crate::vote_stage::send_validator_vote;
+use crate::vote_signer_proxy::*;
 use log::Level;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
@@ -66,8 +65,8 @@ impl ReplayStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window_receiver: &EntryReceiver,
         keypair: &Arc<Keypair>,
-        vote_account_id: &Pubkey,
-        vote_signer_rpc: &RpcClient,
+        _vote_account_id: &Pubkey,
+        vote_signer: &VoteSignerProxy,
         vote_blob_sender: Option<&BlobSender>,
         ledger_entry_sender: &EntrySender,
         entry_height: &mut u64,
@@ -141,15 +140,9 @@ impl ReplayStage {
 
                 if 0 == num_ticks_to_next_vote {
                     if let Some(sender) = vote_blob_sender {
-                        send_validator_vote(
-                            bank,
-                            &keypair,
-                            &vote_account_id,
-                            vote_signer_rpc,
-                            &cluster_info,
-                            sender,
-                        )
-                        .unwrap();
+                        vote_signer
+                            .send_validator_vote(bank, &cluster_info, sender)
+                            .unwrap();
                     }
                 }
                 let (scheduled_leader, _) = bank
@@ -219,14 +212,14 @@ impl ReplayStage {
 
         let keypair = Arc::new(keypair);
         let vote_account_id = *vote_account_id;
-
-        let rpc_client = RpcClient::new_from_socket(*vote_signer_addr);
+        let vote_signer_addr = vote_signer_addr.clone();
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit);
                 let mut entry_height_ = entry_height;
                 let mut last_entry_id = last_entry_id;
+                let vote_signer = VoteSignerProxy::new(&keypair, vote_signer_addr);
                 loop {
                     let (leader_id, _) = bank
                         .get_current_leader()
@@ -250,7 +243,7 @@ impl ReplayStage {
                         &window_receiver,
                         &keypair,
                         &vote_account_id,
-                        &rpc_client,
+                        &vote_signer,
                         Some(&vote_blob_sender),
                         &ledger_entry_sender,
                         &mut entry_height_,
@@ -299,13 +292,12 @@ mod test {
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
 
-    use crate::create_vote_account::*;
     use crate::packet::BlobError;
     use crate::replay_stage::{ReplayStage, ReplayStageReturnType};
     use crate::result::Error;
     use crate::rpc_request::RpcClient;
     use crate::service::Service;
-    use crate::vote_stage::send_validator_vote;
+    use crate::vote_signer_proxy::send_validator_vote;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
@@ -714,7 +706,7 @@ mod test {
             .expect("Expected to err out");
 
         let signer = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
-        let rpc_client = RpcClient::new_from_socket(signer);
+        let vote_signer = VoteSignerProxy::new(&my_keypair, signer);
         let my_keypair = Arc::new(my_keypair);
         let res = ReplayStage::process_entries(
             &Arc::new(Bank::default()),
@@ -722,7 +714,7 @@ mod test {
             &entry_receiver,
             &my_keypair,
             &vote_keypair.pubkey(),
-            &rpc_client,
+            &vote_signer,
             None,
             &ledger_entry_sender,
             &mut entry_height,
@@ -749,7 +741,7 @@ mod test {
             &entry_receiver,
             &Arc::new(Keypair::new()),
             &Keypair::new().pubkey(),
-            &rpc_client,
+            &vote_signer,
             None,
             &ledger_entry_sender,
             &mut entry_height,

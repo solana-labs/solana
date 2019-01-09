@@ -652,7 +652,6 @@ impl Service for Fullnode {
 mod tests {
     use crate::bank::Bank;
     use crate::cluster_info::Node;
-    use crate::create_vote_account::*;
     use crate::db_ledger::*;
     use crate::entry::make_consecutive_blobs;
     use crate::fullnode::{Fullnode, FullnodeReturnType, NodeRole, TvuReturnType};
