@@ -153,6 +153,7 @@ local|tar)
       echo Selecting solana-fullnode-cuda
       export SOLANA_CUDA=1
     fi
+    set -x
     if [[ $skipSetup != true ]]; then
       ./multinode-demo/setup.sh -t bootstrap-leader $setupArgs
     fi
@@ -168,6 +169,7 @@ local|tar)
       export SOLANA_CUDA=1
     fi
 
+    set -x
     if [[ $skipSetup != true ]]; then
       ./multinode-demo/setup.sh -t fullnode $setupArgs
     fi
