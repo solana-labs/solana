@@ -104,7 +104,6 @@ pub struct Fullnode {
     repair_socket: UdpSocket,
     retransmit_socket: UdpSocket,
     tpu_sockets: Vec<UdpSocket>,
-    broadcast_socket: UdpSocket,
     rpc_addr: SocketAddr,
     rpc_pubsub_addr: SocketAddr,
     drone_addr: SocketAddr,
@@ -314,17 +313,11 @@ impl Fullnode {
 
             let broadcast_service = BroadcastService::new(
                 db_ledger.clone(),
-                bank.clone(),
-                node.sockets
-                    .broadcast
-                    .try_clone()
-                    .expect("Failed to clone broadcast socket"),
                 cluster_info.clone(),
                 shared_window.clone(),
                 entry_height,
                 bank.leader_scheduler.clone(),
                 entry_receiver,
-                max_tick_height,
                 tpu_exit,
             );
             let leader_state = LeaderServices::new(tpu, broadcast_service);
@@ -349,7 +342,6 @@ impl Fullnode {
             repair_socket: node.sockets.repair,
             retransmit_socket: node.sockets.retransmit,
             tpu_sockets: node.sockets.tpu,
-            broadcast_socket: node.sockets.broadcast,
             rpc_addr,
             rpc_pubsub_addr,
             drone_addr,
@@ -489,16 +481,11 @@ impl Fullnode {
 
         let broadcast_service = BroadcastService::new(
             self.db_ledger.clone(),
-            self.bank.clone(),
-            self.broadcast_socket
-                .try_clone()
-                .expect("Failed to clone broadcast socket"),
             self.cluster_info.clone(),
             self.shared_window.clone(),
             entry_height,
             self.bank.leader_scheduler.clone(),
             blob_receiver,
-            max_tick_height,
             tpu_exit,
         );
         let leader_state = LeaderServices::new(tpu, broadcast_service);

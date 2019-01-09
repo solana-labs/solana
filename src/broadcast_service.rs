@@ -1,7 +1,6 @@
 //! The `broadcast_service` broadcasts data from a leader node to validators
 //!
-use crate::bank::Bank;
-use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo, DATA_PLANE_FANOUT};
+use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
 use crate::counter::Counter;
 use crate::db_ledger::DbLedger;
 use crate::entry::Entry;
@@ -16,9 +15,7 @@ use crate::window::{SharedWindow, WindowIndex, WindowUtil};
 use log::Level;
 use rayon::prelude::*;
 use solana_metrics::{influxdb, submit};
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
-use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::sync::{Arc, RwLock};
@@ -35,13 +32,9 @@ pub enum BroadcastServiceReturnType {
 #[allow(clippy::too_many_arguments)]
 fn broadcast(
     db_ledger: &Arc<DbLedger>,
-    max_tick_height: Option<u64>,
-    leader_id: Pubkey,
     node_info: &NodeInfo,
-    broadcast_table: &[NodeInfo],
     window: &SharedWindow,
     receiver: &Receiver<Vec<Entry>>,
-    sock: &UdpSocket,
     transmit_index: &mut WindowIndex,
     receive_index: &mut u64,
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
@@ -54,14 +47,9 @@ fn broadcast(
     let mut ventries = Vec::new();
     ventries.push(entries);
 
-    let mut contains_last_tick = false;
     while let Ok(entries) = receiver.try_recv() {
         num_entries += entries.len();
         ventries.push(entries);
-    }
-
-    if let Some(Some(last)) = ventries.last().map(|entries| entries.last()) {
-        contains_last_tick |= Some(last.tick_height) == max_tick_height;
     }
 
     inc_new_counter_info!("broadcast_service-entries_received", num_entries);
@@ -152,19 +140,6 @@ fn broadcast(
         }
 
         *receive_index += blobs_len as u64;
-
-        //TODO: Why can I comment this out and no tests fail?
-        //// Send blobs out from the window
-        //ClusterInfo::broadcast(
-        //    contains_last_tick,
-        //    leader_id,
-        //    &node_info,
-        //    &broadcast_table,
-        //    &window,
-        //    &sock,
-        //    transmit_index,
-        //    *receive_index,
-        //)?;
     }
     let broadcast_elapsed = duration_as_ms(&broadcast_start.elapsed());
 
@@ -244,14 +219,11 @@ impl BroadcastService {
     #[allow(clippy::too_many_arguments)]
     fn run(
         db_ledger: &Arc<DbLedger>,
-        bank: &Arc<Bank>,
-        sock: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window: &SharedWindow,
         entry_height: u64,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
         receiver: &Receiver<Vec<Entry>>,
-        max_tick_height: Option<u64>,
         exit_signal: &Arc<AtomicBool>,
     ) -> BroadcastServiceReturnType {
         let mut transmit_index = WindowIndex {
@@ -264,20 +236,11 @@ impl BroadcastService {
             if exit_signal.load(Ordering::Relaxed) {
                 return BroadcastServiceReturnType::ExitSignal;
             }
-            let mut broadcast_table = cluster_info.read().unwrap().sorted_tvu_peers(&bank);
-            // Layer 1 nodes are limited to the fanout size.
-            broadcast_table.truncate(DATA_PLANE_FANOUT);
-            inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
-            let leader_id = cluster_info.read().unwrap().leader_id();
             if let Err(e) = broadcast(
                 db_ledger,
-                max_tick_height,
-                leader_id,
                 &me,
-                &broadcast_table,
                 &window,
                 &receiver,
-                &sock,
                 &mut transmit_index,
                 &mut receive_index,
                 leader_scheduler,
@@ -300,7 +263,6 @@ impl BroadcastService {
     /// Service to broadcast messages from the leader to layer 1 nodes.
     /// See `cluster_info` for network layer definitions.
     /// # Arguments
-    /// * `sock` - Socket to send from.
     /// * `exit` - Boolean to signal system exit.
     /// * `cluster_info` - ClusterInfo structure
     /// * `window` - Cache of blobs that we have broadcast
@@ -315,14 +277,11 @@ impl BroadcastService {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         db_ledger: Arc<DbLedger>,
-        bank: Arc<Bank>,
-        sock: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window: SharedWindow,
         entry_height: u64,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         receiver: Receiver<Vec<Entry>>,
-        max_tick_height: Option<u64>,
         exit_sender: Arc<AtomicBool>,
     ) -> Self {
         let exit_signal = Arc::new(AtomicBool::new(false));
@@ -332,14 +291,11 @@ impl BroadcastService {
                 let _exit = Finalizer::new(exit_sender);
                 Self::run(
                     &db_ledger,
-                    &bank,
-                    &sock,
                     &cluster_info,
                     &window,
                     entry_height,
                     &leader_scheduler,
                     &receiver,
-                    max_tick_height,
                     &exit_signal,
                 )
             })
@@ -367,6 +323,7 @@ mod test {
     use crate::service::Service;
     use crate::window::new_window;
     use solana_sdk::hash::Hash;
+    use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::channel;
@@ -385,7 +342,6 @@ mod test {
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         entry_receiver: Receiver<Vec<Entry>>,
         entry_height: u64,
-        max_tick_height: u64,
     ) -> MockBroadcastService {
         // Make the database ledger
         let db_ledger = Arc::new(DbLedger::open(ledger_path).unwrap());
@@ -405,19 +361,15 @@ mod test {
         let window = new_window(32 * 1024);
         let shared_window = Arc::new(RwLock::new(window));
         let exit_sender = Arc::new(AtomicBool::new(false));
-        let bank = Arc::new(Bank::default());
 
         // Start up the broadcast stage
         let broadcast_service = BroadcastService::new(
             db_ledger.clone(),
-            bank.clone(),
-            leader_info.sockets.broadcast,
             cluster_info,
             shared_window,
             entry_height,
             leader_scheduler,
             entry_receiver,
-            Some(max_tick_height),
             exit_sender,
         );
 
@@ -452,7 +404,6 @@ mod test {
                 leader_scheduler.clone(),
                 entry_receiver,
                 entry_height,
-                max_tick_height,
             );
 
             let ticks = create_ticks(
