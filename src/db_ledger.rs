@@ -277,7 +277,7 @@ pub struct DbLedger {
     db: Arc<DB>,
     meta_cf: MetaCf,
     data_cf: DataCf,
-    pub erasure_cf: ErasureCf,
+    erasure_cf: ErasureCf,
 }
 
 // TODO: Once we support a window that knows about different leader
