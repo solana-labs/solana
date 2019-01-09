@@ -843,7 +843,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ledger::{get_tmp_ledger_path, make_tiny_test_entries, Block};
+    use crate::ledger::{get_tmp_ledger_path, make_tiny_test_entries, EntrySlice};
     use crate::packet::index_blobs;
 
     #[test]

@@ -9,7 +9,7 @@ use crate::counter::Counter;
 use crate::entry::Entry;
 use crate::jsonrpc_macros::pubsub::Sink;
 use crate::leader_scheduler::LeaderScheduler;
-use crate::ledger::Block;
+use crate::ledger::EntrySlice;
 use crate::mint::Mint;
 use crate::poh_recorder::PohRecorder;
 use crate::rpc::RpcSignatureStatus;

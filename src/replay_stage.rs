@@ -6,7 +6,7 @@ use crate::counter::Counter;
 use crate::entry::{EntryReceiver, EntrySender};
 use solana_sdk::hash::Hash;
 
-use crate::ledger::Block;
+use crate::ledger::EntrySlice;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
 use crate::rpc_request::RpcClient;

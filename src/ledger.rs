@@ -18,8 +18,8 @@ use solana_sdk::vote_program::Vote;
 use solana_sdk::vote_transaction::VoteTransaction;
 use std::fs::remove_dir_all;
 
-// a Block is a slice of Entries
-pub trait Block {
+// an EntrySlice is a slice of Entries
+pub trait EntrySlice {
     /// Verifies the hashes and counts of a slice of transactions are all consistent.
     fn verify(&self, start_hash: &Hash) -> bool;
     fn to_shared_blobs(&self) -> Vec<SharedBlob>;
@@ -27,7 +27,7 @@ pub trait Block {
     fn votes(&self) -> Vec<(Pubkey, Vote, Hash)>;
 }
 
-impl Block for [Entry] {
+impl EntrySlice for [Entry] {
     fn verify(&self, start_hash: &Hash) -> bool {
         let genesis = [Entry {
             tick_height: 0,
