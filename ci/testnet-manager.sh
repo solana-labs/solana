@@ -204,7 +204,7 @@ start() {
       export NO_VALIDATOR_SANITY=1
       ci/testnet-deploy.sh edge-testnet-solana-com ec2 us-west-1a \
         -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a eipalloc-0ccd4f2239886fa94 \
-        ${maybeDelete:+-d}
+        ${maybeDelete:+-D}
     )
     ;;
   testnet-edge-perf)
@@ -217,7 +217,7 @@ start() {
       ci/testnet-deploy.sh edge-perf-testnet-solana-com ec2 us-west-2b \
         -g -t "$CHANNEL_OR_TAG" -c 2 \
         -b \
-        ${maybeDelete:+-d}
+        ${maybeDelete:+-D}
     )
     ;;
   testnet-beta)
@@ -230,7 +230,7 @@ start() {
       ci/testnet-deploy.sh beta-testnet-solana-com ec2 us-west-1a \
         -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a eipalloc-0f286cf8a0771ce35 \
         -b \
-        ${maybeDelete:+-d}
+        ${maybeDelete:+-D}
     )
     ;;
   testnet-beta-perf)
@@ -243,7 +243,7 @@ start() {
       ci/testnet-deploy.sh beta-perf-testnet-solana-com ec2 us-west-2b \
         -g -t "$CHANNEL_OR_TAG" -c 2 \
         -b \
-        ${maybeDelete:+-d}
+        ${maybeDelete:+-D}
     )
     ;;
   testnet)
@@ -255,11 +255,11 @@ start() {
       export NO_VALIDATOR_SANITY=1
       #ci/testnet-deploy.sh testnet-solana-com gce us-east1-c \
       #  -s "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a testnet-solana-com  \
-      #  ${maybeDelete:+-d}
+      #  ${maybeDelete:+-D}
       ci/testnet-deploy.sh testnet-solana-com ec2 us-west-1a \
         -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a eipalloc-0fa502bf95f6f18b2 \
         -b \
-        ${maybeDelete:+-d}
+        ${maybeDelete:+-D}
     )
     ;;
   testnet-perf)
@@ -274,11 +274,11 @@ start() {
         -t "$CHANNEL_OR_TAG" -c 2 \
         -b \
         -d pd-ssd \
-        ${maybeDelete:+-d}
+        ${maybeDelete:+-D}
       #ci/testnet-deploy.sh perf-testnet-solana-com ec2 us-east-1a \
       #  -g \
       #  -t "$CHANNEL_OR_TAG" -c 2 \
-      #  ${maybeDelete:+-d}
+      #  ${maybeDelete:+-D}
     )
     ;;
   *)
