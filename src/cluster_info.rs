@@ -725,6 +725,12 @@ impl ClusterInfo {
         orders
     }
 
+    pub fn window_index_request_bytes(&self, ix: u64) -> Result<Vec<u8>> {
+        let req = Protocol::RequestWindowIndex(self.my_data().clone(), ix);
+        let out = serialize(&req)?;
+        Ok(out)
+    }
+
     pub fn window_index_request(&self, ix: u64) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication, as indicated
         //  by a valid tvu port location
@@ -734,8 +740,7 @@ impl ClusterInfo {
         }
         let n = thread_rng().gen::<usize>() % valid.len();
         let addr = valid[n].gossip; // send the request to the peer's gossip port
-        let req = Protocol::RequestWindowIndex(self.my_data().clone(), ix);
-        let out = serialize(&req)?;
+        let out = self.window_index_request_bytes(ix)?;
 
         submit(
             influxdb::Point::new("cluster-info")
@@ -1038,7 +1043,7 @@ impl ClusterInfo {
         let my_info = me.read().unwrap().my_data().clone();
         inc_new_counter_info!("cluster_info-window-request-recv", 1);
         trace!(
-            "{}: received RequestWindowIndex {} {} ",
+            "{}: received RequestWindowIndex from: {} index: {} ",
             self_id,
             from.id,
             ix,
