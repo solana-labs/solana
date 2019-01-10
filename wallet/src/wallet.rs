@@ -813,9 +813,9 @@ mod tests {
     use serde_json::Value;
     use solana::bank::Bank;
     use solana::cluster_info::Node;
+    use solana::db_ledger::create_tmp_genesis;
     use solana::fullnode::Fullnode;
     use solana::leader_scheduler::LeaderScheduler;
-    use solana::ledger::create_tmp_genesis;
     use solana_drone::drone::run_local_drone;
     use solana_sdk::signature::{gen_keypair_file, read_keypair, read_pkcs8, Keypair, KeypairUtil};
     use std::fs;
