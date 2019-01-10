@@ -7,7 +7,7 @@ use crate::db_ledger::DbLedger;
 use crate::gossip_service::GossipService;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::result::Result;
-use crate::rpc_request::{RpcClient, RpcRequest};
+use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
 use crate::service::Service;
 use crate::storage_stage::ENTRIES_PER_SEGMENT;
 use crate::streamer::BlobReceiver;

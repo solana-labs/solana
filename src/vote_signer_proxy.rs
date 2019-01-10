@@ -6,7 +6,7 @@ use crate::counter::Counter;
 use crate::jsonrpc_core;
 use crate::packet::SharedBlob;
 use crate::result::{Error, Result};
-use crate::rpc_request::{RpcClient, RpcRequest};
+use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
 use crate::streamer::BlobSender;
 use bincode::serialize;
 use log::Level;

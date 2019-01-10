@@ -53,6 +53,7 @@ pub mod replicator;
 pub mod result;
 pub mod retransmit_stage;
 pub mod rpc;
+pub mod rpc_mock;
 pub mod rpc_pubsub;
 pub mod rpc_request;
 pub mod runtime;

@@ -156,7 +156,7 @@ fn test_replicator_startup() {
         // chacha is not enabled
         #[cfg(feature = "chacha")]
         {
-            use solana::rpc_request::{RpcClient, RpcRequest};
+            use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
             use std::thread::sleep;
 
             let rpc_client = RpcClient::new_from_socket(validator_node_info.rpc);

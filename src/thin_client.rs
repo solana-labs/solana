@@ -8,7 +8,7 @@ use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
 use crate::gossip_service::GossipService;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::result::{Error, Result};
-use crate::rpc_request::{RpcClient, RpcRequest};
+use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
 use bincode::serialize;
 use bs58;
 use hashbrown::HashMap;

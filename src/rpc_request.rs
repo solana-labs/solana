@@ -6,6 +6,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::{error, fmt};
 
+#[derive(Clone)]
 pub struct RpcClient {
     pub client: reqwest::Client,
     pub addr: String,
@@ -41,6 +42,15 @@ pub fn get_rpc_request_str(rpc_addr: SocketAddr) -> String {
     format!("http://{}", rpc_addr)
 }
 
+pub trait RpcRequestHandler {
+    fn make_rpc_request(
+        &self,
+        client: &RpcClient,
+        id: u64,
+        params: Option<Value>,
+    ) -> Result<Value, Box<dyn error::Error>>;
+}
+
 pub enum RpcRequest {
     ConfirmTransaction,
     GetAccountInfo,
@@ -59,8 +69,8 @@ pub enum RpcRequest {
     GetStoragePubkeysForEntryHeight,
 }
 
-impl RpcRequest {
-    pub fn make_rpc_request(
+impl RpcRequestHandler for RpcRequest {
+    fn make_rpc_request(
         &self,
         client: &RpcClient,
         id: u64,
@@ -68,7 +78,9 @@ impl RpcRequest {
     ) -> Result<Value, Box<dyn error::Error>> {
         self.retry_make_rpc_request(client, id, params, 0)
     }
+}
 
+impl RpcRequest {
     pub fn retry_make_rpc_request(
         &self,
         client: &RpcClient,
