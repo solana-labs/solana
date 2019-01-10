@@ -108,6 +108,28 @@ impl RpcRequestHandler for MockRpcRequest {
             "bad_sig_status" => {
                 Ok(Value::String("Nonexistant".to_string()))
             }
+            "account_in_use" => {
+                match self {
+                    MockRpcRequest::GetLastId => {
+                        Ok(Value::String(
+                            "7RoSF9fUmdphVCpabEoefH81WwrW7orsWonXWqTXkKV8".to_string(),
+                        ))
+                    }
+                    MockRpcRequest::GetSignatureStatus => {
+                        Ok(Value::String(
+                            "AccountInUse".to_string(),
+                        ))
+                    }
+                    MockRpcRequest::SendTransaction => {
+                        Ok(Value::String(
+                            "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8".to_string(),
+                        ))
+                    }
+                    _ => {
+                        Ok(Value::Null)
+                    }
+                }
+            }
             _ => {
                 Ok(Value::Null)
             }

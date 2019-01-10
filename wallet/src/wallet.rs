@@ -1243,6 +1243,9 @@ mod tests {
         assert_eq!(signature.unwrap(), "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8".to_string());
 
         // Need airdrop cases
+        config.command = WalletCommand::Airdrop(50);
+        assert!(process_command(&config).is_err());
+
         config.rpc_client = Some(RpcClient::new("airdrop".to_string()));
         config.command = WalletCommand::TimeElapsed(bob_pubkey, process_id, dt);
         let signature = process_command(&config);
@@ -1393,6 +1396,10 @@ mod tests {
         let result = send_and_confirm_tx(&rpc_client, &mut tx, &signer);
         assert!(result.is_ok());
 
+        let rpc_client = RpcClient::new("account_in_use".to_string());
+        let result = send_and_confirm_tx(&rpc_client, &mut tx, &signer);
+        assert!(result.is_err());
+
         let rpc_client = RpcClient::new("fails".to_string());
         let result = send_and_confirm_tx(&rpc_client, &mut tx, &signer);
         assert!(result.is_err());
@@ -1431,6 +1438,9 @@ mod tests {
             request_and_confirm_airdrop(&rpc_client, &drone_addr, &id, tokens).unwrap(),
             ()
         );
+
+        let rpc_client = RpcClient::new("account_in_use".to_string());
+        assert!(request_and_confirm_airdrop(&rpc_client, &drone_addr, &id, tokens).is_err());
 
         let tokens = 0;
         assert!(request_and_confirm_airdrop(&rpc_client, &drone_addr, &id, tokens).is_err());
