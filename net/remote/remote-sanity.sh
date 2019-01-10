@@ -102,7 +102,7 @@ echo "+++ $entrypointIp: node count ($numNodes expected)"
     maybeRejectExtraNodes="--reject-extra-nodes"
   fi
 
-  $solana_bench_tps \
+  timeout 2m $solana_bench_tps \
     --network "$entrypointIp:8001" \
     --drone "$entrypointIp:9900" \
     --identity "$client_id" \
