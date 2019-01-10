@@ -540,10 +540,10 @@ mod tests {
         LeaderScheduler, LeaderSchedulerConfig, DEFAULT_BOOTSTRAP_HEIGHT,
         DEFAULT_LEADER_ROTATION_INTERVAL, DEFAULT_SEED_ROTATION_INTERVAL,
     };
-    use crate::local_vote_signer_service::*;
+    use crate::local_vote_signer_service::LocalVoteSignerService;
     use crate::mint::Mint;
     use crate::service::Service;
-    use crate::vote_signer_proxy::*;
+    use crate::vote_signer_proxy::VoteSignerProxy;
     use hashbrown::HashSet;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;

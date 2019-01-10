@@ -11,7 +11,7 @@ use crate::packet::BlobError;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::streamer::{responder, BlobSender};
-use crate::vote_signer_proxy::*;
+use crate::vote_signer_proxy::VoteSignerProxy;
 use log::Level;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
@@ -292,12 +292,12 @@ mod test {
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
 
-    use crate::local_vote_signer_service::*;
+    use crate::local_vote_signer_service::LocalVoteSignerService;
     use crate::packet::BlobError;
     use crate::replay_stage::{ReplayStage, ReplayStageReturnType};
     use crate::result::Error;
     use crate::service::Service;
-    use crate::vote_signer_proxy::*;
+    use crate::vote_signer_proxy::VoteSignerProxy;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;

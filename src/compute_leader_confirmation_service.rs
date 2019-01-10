@@ -157,9 +157,9 @@ impl Service for ComputeLeaderConfirmationService {
 pub mod tests {
     use crate::bank::Bank;
     use crate::compute_leader_confirmation_service::ComputeLeaderConfirmationService;
-    use crate::vote_signer_proxy::*;
+    use crate::vote_signer_proxy::VoteSignerProxy;
 
-    use crate::local_vote_signer_service::*;
+    use crate::local_vote_signer_service::LocalVoteSignerService;
     use crate::mint::Mint;
     use crate::service::Service;
     use bincode::serialize;

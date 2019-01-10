@@ -658,10 +658,10 @@ mod tests {
     use crate::leader_scheduler::{
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
-    use crate::local_vote_signer_service::*;
+    use crate::local_vote_signer_service::LocalVoteSignerService;
     use crate::service::Service;
     use crate::streamer::responder;
-    use crate::vote_signer_proxy::*;
+    use crate::vote_signer_proxy::VoteSignerProxy;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::cmp;
     use std::fs::remove_dir_all;

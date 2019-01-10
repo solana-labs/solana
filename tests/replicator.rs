@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate log;
 
+#[cfg(feature = "chacha")]
+#[macro_use]
 extern crate serde_json;
 
 use bincode::deserialize;
@@ -11,11 +13,11 @@ use solana::db_ledger::{create_tmp_genesis, get_tmp_ledger_path, tmp_copy_ledger
 use solana::entry::Entry;
 use solana::fullnode::Fullnode;
 use solana::leader_scheduler::LeaderScheduler;
-use solana::local_vote_signer_service::*;
+use solana::local_vote_signer_service::LocalVoteSignerService;
 use solana::replicator::Replicator;
 use solana::service::Service;
 use solana::streamer::blob_receiver;
-use solana::vote_signer_proxy::*;
+use solana::vote_signer_proxy::VoteSignerProxy;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
@@ -158,9 +160,6 @@ fn test_replicator_startup() {
         // chacha is not enabled
         #[cfg(feature = "chacha")]
         {
-            #[macro_use]
-            extern crate serde_json;
-
             use solana::rpc_request::{RpcClient, RpcRequest};
             use std::thread::sleep;
 
