@@ -11,7 +11,9 @@ use crate::service::Service;
 use crate::streamer::{self, PacketReceiver};
 use log::Level;
 use solana_sdk::pubkey::Pubkey;
+use std::error::Error;
 use std::net::UdpSocket;
+use std::result;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
@@ -43,10 +45,10 @@ impl TpuForwarder {
                 .expect("cluster_info.read() in TpuForwarder::forward()")
                 .leader_data()
                 .cloned();
-            if TpuForwarder::update_addrs(leader_data, &my_id, &msgs.clone()) {
-                msgs.read().unwrap().send_to(&socket)?
+            match TpuForwarder::update_addrs(leader_data, &my_id, &msgs.clone()) {
+                Ok(_) => msgs.read().unwrap().send_to(&socket)?,
+                Err(_) => continue,
             }
-            continue;
         }
     }
 
@@ -54,21 +56,21 @@ impl TpuForwarder {
         leader_data: Option<ContactInfo>,
         my_id: &Pubkey,
         msgs: &Arc<RwLock<Packets>>,
-    ) -> bool {
+    ) -> result::Result<(), Box<dyn Error>> {
         match leader_data {
             Some(leader_data) => {
                 if leader_data.id == *my_id || !ContactInfo::is_valid_address(&leader_data.tpu) {
                     // weird cases, but we don't want to broadcast, send to ANY, or
                     // induce an infinite loop, but this shouldn't happen, or shouldn't be true for long...
-                    return false;
+                    return Err("Invalid leader addr")?;
                 }
 
                 for m in msgs.write().unwrap().packets.iter_mut() {
                     m.meta.set_addr(&leader_data.tpu);
                 }
-                true
+                Ok(())
             }
-            _ => false,
+            _ => Err("No leader contact data")?,
         }
     }
 
@@ -135,20 +137,23 @@ mod tests {
             None,
             &my_id,
             &Arc::new(RwLock::new(Packets::default()))
-        ));
-        // test with no tvu
+        )
+        .is_ok());
+        // test with no tpu
         assert!(!TpuForwarder::update_addrs(
             Some(ContactInfo::default()),
             &my_id,
             &Arc::new(RwLock::new(Packets::default()))
-        ));
+        )
+        .is_ok());
         // test with my pubkey
         let leader_data = ContactInfo::new_localhost(my_id, 0);
         assert!(!TpuForwarder::update_addrs(
             Some(leader_data),
             &my_id,
             &Arc::new(RwLock::new(Packets::default()))
-        ));
+        )
+        .is_ok());
         // test that the address is actually being updated
         let (port, _) = bind_in_range((8000, 10000)).unwrap();
         let leader_data = ContactInfo::new_with_socketaddr(&socketaddr!([127, 0, 0, 1], port));
@@ -157,11 +162,9 @@ mod tests {
             packets: vec![packet],
         };
         let msgs = Arc::new(RwLock::new(p));
-        assert!(TpuForwarder::update_addrs(
-            Some(leader_data.clone()),
-            &my_id,
-            &msgs.clone()
-        ));
+        assert!(
+            TpuForwarder::update_addrs(Some(leader_data.clone()), &my_id, &msgs.clone()).is_ok()
+        );
         assert_eq!(
             SocketAddr::from(msgs.read().unwrap().packets[0].meta.addr()),
             leader_data.tpu
