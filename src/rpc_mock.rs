@@ -90,6 +90,11 @@ impl RpcRequestHandler for MockRpcRequest {
                             "7RoSF9fUmdphVCpabEoefH81WwrW7orsWonXWqTXkKV8".to_string(),
                         ))
                     }
+                    MockRpcRequest::GetSignatureStatus => {
+                        Ok(Value::String(
+                            "Confirmed".to_string(),
+                        ))
+                    }
                     MockRpcRequest::SendTransaction => {
                         Ok(Value::String(
                             "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8".to_string(),
