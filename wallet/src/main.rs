@@ -1,9 +1,7 @@
-mod wallet;
-
-use crate::wallet::{parse_command, process_command, WalletConfig, WalletError};
 use clap::{crate_version, App, Arg, ArgMatches, SubCommand};
 use solana::socketaddr;
 use solana_sdk::signature::{gen_keypair_file, read_keypair, KeypairUtil};
+use solana_wallet::wallet::{parse_command, process_command, WalletConfig, WalletError};
 use std::error;
 use std::net::SocketAddr;
 
@@ -53,6 +51,7 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
         timeout,
         proxy,
         drone_port: None,
+        rpc_client: None,
     })
 }
 
