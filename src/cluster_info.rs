@@ -598,8 +598,8 @@ impl ClusterInfo {
     /// # Remarks
     /// We need to avoid having obj locked while doing any io, such as the `send_to`
     pub fn retransmit(obj: &Arc<RwLock<Self>>, blob: &SharedBlob, s: &UdpSocket) -> Result<()> {
-        let me = obj.read().unwrap();
-        ClusterInfo::retransmit_to(obj, &me.retransmit_peers(), blob, s)
+        let peers = obj.read().unwrap().retransmit_peers();
+        ClusterInfo::retransmit_to(obj, &peers, blob, s)
     }
 
     fn send_orders(
