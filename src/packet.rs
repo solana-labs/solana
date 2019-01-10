@@ -117,6 +117,14 @@ impl Default for Packets {
     }
 }
 
+impl Packets {
+    pub fn set_addr(&mut self, addr: &SocketAddr) {
+        for m in self.packets.iter_mut() {
+            m.meta.set_addr(&addr);
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Blob {
     pub data: [u8; BLOB_SIZE],
@@ -475,7 +483,17 @@ mod tests {
     use solana_sdk::transaction::Transaction;
     use std::io;
     use std::io::Write;
-    use std::net::UdpSocket;
+    use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
+
+    #[test]
+    fn test_packets_set_addr() {
+        // test that the address is actually being updated
+        let send_addr = socketaddr!([127, 0, 0, 1], 123);
+        let packets = vec![Packet::default()];
+        let mut msgs = Packets { packets };
+        msgs.set_addr(&send_addr);
+        assert_eq!(SocketAddr::from(msgs.packets[0].meta.addr()), send_addr);
+    }
 
     #[test]
     pub fn packet_send_recv() {
