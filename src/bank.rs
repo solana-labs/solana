@@ -305,16 +305,6 @@ impl Bank {
         }
     }
 
-    /// Look through the last_ids and find all the valid ids
-    /// This is batched to avoid holding the lock for a significant amount of time
-    ///
-    /// Return a vec of tuple of (valid index, timestamp)
-    /// index is into the passed ids slice to avoid copying hashes
-    pub fn count_valid_ids(&self, ids: &[Hash]) -> Vec<(usize, u64)> {
-        let last_ids = self.last_ids.read().unwrap();
-        last_ids.count_valid_ids(ids)
-    }
-
     /// Looks through a list of tick heights and stakes, and finds the latest
     /// tick that has achieved confirmation
     pub fn get_confirmation_timestamp(
