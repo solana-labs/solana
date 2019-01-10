@@ -444,6 +444,7 @@ stopNode() {
   (
     set -x
     ssh "${sshOptions[@]}" "$ipAddress" "
+      PS4=\"$PS4\"
       set -x
       if snap list solana; then
         sudo snap set solana mode=
