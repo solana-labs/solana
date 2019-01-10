@@ -1,7 +1,6 @@
 #[macro_use]
 extern crate log;
 
-#[macro_use]
 extern crate serde_json;
 
 use bincode::deserialize;
@@ -159,6 +158,9 @@ fn test_replicator_startup() {
         // chacha is not enabled
         #[cfg(feature = "chacha")]
         {
+            #[macro_use]
+            extern crate serde_json;
+
             use solana::rpc_request::{RpcClient, RpcRequest};
             use std::thread::sleep;
 
