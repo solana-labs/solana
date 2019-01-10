@@ -511,7 +511,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
                 let budget_program_id = budget_program::id();
 
                 // Create account for contract funds
-                let tx = Transaction::system_create(
+                let mut tx = Transaction::system_create(
                     &config.id,
                     contract_funds.pubkey(),
                     last_id,
@@ -520,10 +520,10 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
                     budget_program_id,
                     0,
                 );
-                let _signature_str = send_tx(&rpc_client, &tx)?;
+                send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
 
                 // Create account for contract state
-                let tx = Transaction::system_create(
+                let mut tx = Transaction::system_create(
                     &config.id,
                     contract_state.pubkey(),
                     last_id,
@@ -532,10 +532,10 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
                     budget_program_id,
                     0,
                 );
-                let _signature_str = send_tx(&rpc_client, &tx)?;
+                send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
 
                 // Initializing contract
-                let tx = Transaction::budget_new_on_date(
+                let mut tx = Transaction::budget_new_on_date(
                     &contract_funds,
                     to,
                     contract_state.pubkey(),
@@ -545,11 +545,11 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
                     tokens,
                     last_id,
                 );
-                let signature_str = send_tx(&rpc_client, &tx)?;
+                let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
 
                 Ok(json!({
                     "signature": signature_str,
-                    "processId": format!("{}", contract_funds.pubkey()),
+                    "processId": format!("{}", contract_state.pubkey()),
                 })
                 .to_string())
             } else if timestamp == None {
@@ -614,15 +614,13 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
         }
         // Apply time elapsed to contract
         WalletCommand::TimeElapsed(to, pubkey, dt) => {
-            let params = json!(format!("{}", config.id.pubkey()));
+            let params = json!([format!("{}", config.id.pubkey())]);
             let balance = RpcRequest::GetBalance
                 .make_rpc_request(&rpc_client, 1, Some(params))?
                 .as_u64();
 
             if let Some(0) = balance {
-                let params = json!([format!("{}", config.id.pubkey()), 1]);
-                RpcRequest::RequestAirdrop
-                    .make_rpc_request(&rpc_client, 1, Some(params))
+                request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id.pubkey(), 1)
                     .unwrap();
             }
 
@@ -648,8 +646,8 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
             }
 
             let last_id = get_last_id(&rpc_client)?;
-            let tx = Transaction::budget_new_signature(&config.id, pubkey, to, last_id);
-            let signature_str = send_tx(&rpc_client, &tx)?;
+            let mut tx = Transaction::budget_new_signature(&config.id, pubkey, to, last_id);
+            let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
 
             Ok(signature_str.to_string())
         }
@@ -705,7 +703,7 @@ fn send_and_confirm_tx(
     rpc_client: &RpcClient,
     tx: &mut Transaction,
     signer: &Keypair,
-) -> Result<(), Box<dyn error::Error>> {
+) -> Result<String, Box<dyn error::Error>> {
     let mut send_retries = 3;
     while send_retries > 0 {
         let mut status_retries = 4;
@@ -728,7 +726,7 @@ fn send_and_confirm_tx(
                 send_retries -= 1;
             }
             RpcSignatureStatus::Confirmed => {
-                return Ok(());
+                return Ok(signature_str);
             }
             _ => {
                 return Err(WalletError::RpcRequestError(format!(
