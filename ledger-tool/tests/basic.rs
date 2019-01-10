@@ -1,4 +1,4 @@
-use solana::ledger::create_tmp_sample_ledger;
+use solana::db_ledger::create_tmp_sample_ledger;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 
 use assert_cmd::prelude::*;
