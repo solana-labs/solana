@@ -14,6 +14,7 @@ pub mod bank;
 pub mod banking_stage;
 pub mod blob_fetch_stage;
 pub mod bloom;
+pub mod bloom_hash_index;
 pub mod broadcast_service;
 #[cfg(feature = "chacha")]
 pub mod chacha;
@@ -26,7 +27,6 @@ pub mod crds_gossip;
 pub mod crds_gossip_error;
 pub mod crds_gossip_pull;
 pub mod crds_gossip_push;
-pub mod crds_traits_impls;
 pub mod crds_value;
 #[macro_use]
 pub mod contact_info;

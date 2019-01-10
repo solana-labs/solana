@@ -1,4 +1,3 @@
-use crate::bloom::BloomHashIndex;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 
@@ -11,6 +10,12 @@ fn slice_hash(slice: &[u8], hash_index: u64) -> u64 {
         rv |= u64::from(slice[pos as usize % len]) << i;
     }
     rv
+}
+
+/// Generate a stable hash of `self` for each `hash_index`
+/// Best effort can be made for uniqueness of each hash.
+pub trait BloomHashIndex {
+    fn hash(&self, hash_index: u64) -> u64;
 }
 
 impl BloomHashIndex for Pubkey {
