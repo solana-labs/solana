@@ -443,6 +443,7 @@ stopNode() {
   echo "--- Stopping node: $ipAddress"
   (
     set -x
+    # shellcheck disable=SC2029 # It's desired that PS4 be expanded on the client side
     ssh "${sshOptions[@]}" "$ipAddress" "
       PS4=\"$PS4\"
       set -x
