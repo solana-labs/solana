@@ -212,7 +212,7 @@ impl ReplayStage {
 
         let keypair = Arc::new(keypair);
         let vote_account_id = *vote_account_id;
-        let vote_signer_addr = vote_signer_addr.clone();
+        let vote_signer_addr = *vote_signer_addr;
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {

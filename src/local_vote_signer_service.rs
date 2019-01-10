@@ -23,12 +23,11 @@ impl Service for LocalVoteSignerService {
 }
 
 impl LocalVoteSignerService {
+    #[allow(clippy::new_ret_no_self)]
     pub fn new() -> (Self, SocketAddr) {
         let addr = match solana_netutil::find_available_port_in_range(FULLNODE_PORT_RANGE) {
             Ok(port) => SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port),
-            Err(_) => {
-                panic!("Failed to find an available port for local vote signer service");
-            }
+            Err(_e) => panic!("Failed to find an available port for local vote signer service"),
         };
         let exit = Arc::new(AtomicBool::new(false));
         let thread_exit = exit.clone();
