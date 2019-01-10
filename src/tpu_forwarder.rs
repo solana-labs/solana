@@ -28,10 +28,7 @@ impl TpuForwarder {
     fn forward(receiver: &PacketReceiver, cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<()> {
         let socket = UdpSocket::bind("0.0.0.0:0")?;
 
-        let my_id = cluster_info
-            .read()
-            .expect("cluster_info.read() in TpuForwarder::forward()")
-            .id();
+        let my_id = cluster_info.read().unwrap().id();
 
         loop {
             let msgs = receiver.recv()?;
@@ -40,11 +37,7 @@ impl TpuForwarder {
                 "tpu_forwarder-msgs_received",
                 msgs.read().unwrap().packets.len()
             );
-            let leader_data = cluster_info
-                .read()
-                .expect("cluster_info.read() in TpuForwarder::forward()")
-                .leader_data()
-                .cloned();
+            let leader_data = cluster_info.read().unwrap().leader_data().cloned();
             match TpuForwarder::update_addrs(leader_data, &my_id, &msgs.clone()) {
                 Ok(_) => msgs.read().unwrap().send_to(&socket)?,
                 Err(_) => continue,
