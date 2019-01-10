@@ -17,10 +17,7 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 
 fn get_forwarding_addr(leader_data: Option<&ContactInfo>, my_id: &Pubkey) -> Option<SocketAddr> {
-    if leader_data.is_none() {
-        return None;
-    }
-    let leader_data = leader_data.unwrap();
+    let leader_data = leader_data?;
     if leader_data.id == *my_id || !ContactInfo::is_valid_address(&leader_data.tpu) {
         // weird cases, but we don't want to broadcast, send to ANY, or
         // induce an infinite loop, but this shouldn't happen, or shouldn't be true for long...
