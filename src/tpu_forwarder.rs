@@ -38,7 +38,7 @@ impl TpuForwarder {
                 msgs.read().unwrap().packets.len()
             );
             let leader_data = cluster_info.read().unwrap().leader_data().cloned();
-            match TpuForwarder::update_addrs(leader_data, &my_id, &msgs.clone()) {
+            match TpuForwarder::update_addrs(leader_data, &my_id, &msgs) {
                 Ok(_) => msgs.read().unwrap().send_to(&socket)?,
                 Err(_) => continue,
             }
