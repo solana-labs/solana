@@ -1,4 +1,3 @@
-#[macro_use]
 extern crate serde_json;
 
 use clap::{crate_version, App, Arg};
@@ -6,14 +5,14 @@ use log::*;
 
 use solana::client::mk_client;
 use solana::cluster_info::{Node, NodeInfo, FULLNODE_PORT_RANGE};
-use solana::create_vote_account;
 use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::leader_scheduler::LeaderScheduler;
-use solana::rpc_request::{RpcClient, RpcRequest};
+use solana::local_vote_signer_service::LocalVoteSignerService;
+use solana::service::Service;
 use solana::socketaddr;
 use solana::thin_client::poll_gossip_for_leader;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+use solana::vote_signer_proxy::VoteSignerProxy;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::vote_program::VoteProgram;
 use solana_sdk::vote_transaction::VoteTransaction;
 use std::fs::File;
@@ -118,35 +117,11 @@ fn main() {
         .value_of("network")
         .map(|network| network.parse().expect("failed to parse network address"));
 
-    let (signer, t_signer, signer_exit) = if let Some(signer_addr) = matches.value_of("signer") {
-        (
-            signer_addr.to_string().parse().expect("Signer IP Address"),
-            None,
-            None,
-        )
-    } else {
-        // If a remote vote-signer service is not provided, run a local instance
-        let (signer, t_signer, signer_exit) = create_vote_account::local_vote_signer_service()
-            .expect("Failed to start vote signer service");
-        (signer, Some(t_signer), Some(signer_exit))
-    };
-
     let node = Node::new_with_external_ip(keypair.pubkey(), &gossip);
 
     // save off some stuff for airdrop
     let mut node_info = node.info.clone();
 
-    let rpc_client = RpcClient::new_from_socket(signer);
-    let msg = "Registering a new node";
-    let sig = Signature::new(&keypair.sign(msg.as_bytes()).as_ref());
-
-    let params = json!([keypair.pubkey(), sig, msg.as_bytes()]);
-    let resp = RpcRequest::RegisterNode
-        .retry_make_rpc_request(&rpc_client, 1, Some(params), 5)
-        .expect("Failed to register node");
-    let vote_account_id: Pubkey =
-        serde_json::from_value(resp).expect("Invalid register node response");
-    info!("Vote account ID is {:?}", vote_account_id);
     let keypair = Arc::new(keypair);
     let pubkey = keypair.pubkey();
 
@@ -157,11 +132,6 @@ fn main() {
         let port_number = port.to_string().parse().expect("integer");
         if port_number == 0 {
             eprintln!("Invalid RPC port requested: {:?}", port);
-            if let Some(t) = t_signer {
-                if let Some(exit) = signer_exit {
-                    create_vote_account::stop_local_vote_signer_service(t, &exit);
-                }
-            }
             exit(1);
         }
         Some(port_number)
@@ -186,53 +156,74 @@ fn main() {
         }
     };
 
+    let (signer_service, signer) = if let Some(signer_addr) = matches.value_of("signer") {
+        (
+            None,
+            signer_addr.to_string().parse().expect("Signer IP Address"),
+        )
+    } else {
+        // If a remote vote-signer service is not provided, run a local instance
+        let (signer_service, addr) = LocalVoteSignerService::new();
+        (Some(signer_service), addr)
+    };
+
+    let mut client = mk_client(&leader);
+    let vote_signer = VoteSignerProxy::new(&keypair, signer);
+    info!("New vote account ID is {:?}", vote_signer.vote_account);
+
     let mut fullnode = Fullnode::new(
         node,
         ledger_path,
         keypair.clone(),
-        &vote_account_id,
+        &vote_signer.vote_account,
         &signer,
         network,
         nosigverify,
         leader_scheduler,
         rpc_port,
     );
-    let mut client = mk_client(&leader);
 
     let balance = client.poll_get_balance(&pubkey).unwrap_or(0);
     info!("balance is {}", balance);
     if balance < 1 {
         error!("insufficient tokens, one token required");
-        if let Some(t) = t_signer {
-            if let Some(exit) = signer_exit {
-                create_vote_account::stop_local_vote_signer_service(t, &exit);
-            }
+        if let Some(signer_service) = signer_service {
+            signer_service.join().unwrap();
         }
         exit(1);
     }
 
     // Create the vote account if necessary
-    if client.poll_get_balance(&vote_account_id).unwrap_or(0) == 0 {
+    if client
+        .poll_get_balance(&vote_signer.vote_account)
+        .unwrap_or(0)
+        == 0
+    {
         // Need at least two tokens as one token will be spent on a vote_account_new() transaction
         if balance < 2 {
             error!("insufficient tokens, two tokens required");
-            if let Some(t) = t_signer {
-                if let Some(exit) = signer_exit {
-                    create_vote_account::stop_local_vote_signer_service(t, &exit);
-                }
+            if let Some(signer_service) = signer_service {
+                signer_service.join().unwrap();
             }
             exit(1);
         }
         loop {
             let last_id = client.get_last_id();
-            let transaction =
-                VoteTransaction::vote_account_new(&keypair, vote_account_id, last_id, 1, 1);
+            let transaction = VoteTransaction::vote_account_new(
+                &keypair,
+                vote_signer.vote_account,
+                last_id,
+                1,
+                1,
+            );
             if client.transfer_signed(&transaction).is_err() {
                 sleep(Duration::from_secs(2));
                 continue;
             }
 
-            let balance = client.poll_get_balance(&vote_account_id).unwrap_or(0);
+            let balance = client
+                .poll_get_balance(&vote_signer.vote_account)
+                .unwrap_or(0);
             if balance > 0 {
                 break;
             }
@@ -241,7 +232,7 @@ fn main() {
     }
 
     loop {
-        let vote_account_user_data = client.get_account_userdata(&vote_account_id);
+        let vote_account_user_data = client.get_account_userdata(&vote_signer.vote_account);
         if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
             if let Ok(vote_state) = VoteProgram::deserialize(&vote_account_user_data) {
                 if vote_state.node_id == pubkey {
@@ -260,10 +251,8 @@ fn main() {
             _ => {
                 // Fullnode tpu/tvu exited for some unexpected
                 // reason, so exit
-                if let Some(t) = t_signer {
-                    if let Some(exit) = signer_exit {
-                        create_vote_account::stop_local_vote_signer_service(t, &exit);
-                    }
+                if let Some(signer_service) = signer_service {
+                    signer_service.join().unwrap();
                 }
                 exit(1);
             }

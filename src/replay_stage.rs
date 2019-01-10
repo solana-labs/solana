@@ -9,10 +9,9 @@ use solana_sdk::hash::Hash;
 use crate::entry::EntrySlice;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
-use crate::rpc_request::RpcClient;
 use crate::service::Service;
 use crate::streamer::{responder, BlobSender};
-use crate::vote_stage::send_validator_vote;
+use crate::vote_signer_proxy::VoteSignerProxy;
 use log::Level;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
@@ -66,8 +65,8 @@ impl ReplayStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window_receiver: &EntryReceiver,
         keypair: &Arc<Keypair>,
-        vote_account_id: &Pubkey,
-        vote_signer_rpc: &RpcClient,
+        _vote_account_id: &Pubkey,
+        vote_signer: &VoteSignerProxy,
         vote_blob_sender: Option<&BlobSender>,
         ledger_entry_sender: &EntrySender,
         entry_height: &mut u64,
@@ -141,15 +140,9 @@ impl ReplayStage {
 
                 if 0 == num_ticks_to_next_vote {
                     if let Some(sender) = vote_blob_sender {
-                        send_validator_vote(
-                            bank,
-                            &keypair,
-                            &vote_account_id,
-                            vote_signer_rpc,
-                            &cluster_info,
-                            sender,
-                        )
-                        .unwrap();
+                        vote_signer
+                            .send_validator_vote(bank, &cluster_info, sender)
+                            .unwrap();
                     }
                 }
                 let (scheduled_leader, _) = bank
@@ -219,14 +212,14 @@ impl ReplayStage {
 
         let keypair = Arc::new(keypair);
         let vote_account_id = *vote_account_id;
-
-        let rpc_client = RpcClient::new_from_socket(*vote_signer_addr);
+        let vote_signer_addr = *vote_signer_addr;
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit);
                 let mut entry_height_ = entry_height;
                 let mut last_entry_id = last_entry_id;
+                let vote_signer = VoteSignerProxy::new(&keypair, vote_signer_addr);
                 loop {
                     let (leader_id, _) = bank
                         .get_current_leader()
@@ -250,7 +243,7 @@ impl ReplayStage {
                         &window_receiver,
                         &keypair,
                         &vote_account_id,
-                        &rpc_client,
+                        &vote_signer,
                         Some(&vote_blob_sender),
                         &ledger_entry_sender,
                         &mut entry_height_,
@@ -299,17 +292,15 @@ mod test {
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
 
-    use crate::create_vote_account::*;
+    use crate::local_vote_signer_service::LocalVoteSignerService;
     use crate::packet::BlobError;
     use crate::replay_stage::{ReplayStage, ReplayStageReturnType};
     use crate::result::Error;
-    use crate::rpc_request::RpcClient;
     use crate::service::Service;
-    use crate::vote_stage::send_validator_vote;
+    use crate::vote_signer_proxy::VoteSignerProxy;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
@@ -344,7 +335,7 @@ mod test {
         // Write two entries to the ledger so that the validator is in the active set:
         // 1) Give the validator a nonzero number of tokens 2) A vote from the validator .
         // This will cause leader rotation after the bootstrap height
-        let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
+        let (signer_service, signer) = LocalVoteSignerService::new();
         let (active_set_entries, vote_account_id) =
             make_active_set_entries(&my_keypair, signer, &mint.keypair(), &last_id, &last_id, 0);
         last_id = active_set_entries.last().unwrap().id;
@@ -443,7 +434,7 @@ mod test {
             &entries_to_send[..leader_rotation_index + 1]
         );
 
-        stop_local_vote_signer_service(t_signer, &signer_exit);
+        signer_service.join().unwrap();
 
         assert_eq!(exit.load(Ordering::Relaxed), true);
 
@@ -480,12 +471,13 @@ mod test {
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
 
         // Set up the replay stage
-        let vote_account_id = Keypair::new().pubkey();
+        let (signer_service, signer) = LocalVoteSignerService::new();
         let bank = Arc::new(bank);
         let (entry_sender, entry_receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
-        let signer = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let my_keypair = Arc::new(my_keypair);
+        let vote_signer = VoteSignerProxy::new(&my_keypair, signer);
+        let vote_account_id = vote_signer.vote_account.clone();
         let (replay_stage, ledger_writer_recv) = ReplayStage::new(
             my_keypair.clone(),
             &vote_account_id,
@@ -501,14 +493,7 @@ mod test {
         // Vote sender should error because no leader contact info is found in the
         // ClusterInfo
         let (mock_sender, _mock_receiver) = channel();
-        let _vote_err = send_validator_vote(
-            &bank,
-            &my_keypair,
-            &vote_account_id,
-            &RpcClient::new_from_socket(signer),
-            &cluster_info_me,
-            &mock_sender,
-        );
+        let _vote_err = vote_signer.send_validator_vote(&bank, &cluster_info_me, &mock_sender);
 
         // Send ReplayStage an entry, should see it on the ledger writer receiver
         let next_tick = create_ticks(
@@ -527,6 +512,7 @@ mod test {
 
         assert_eq!(next_tick, received_tick);
         drop(entry_sender);
+        signer_service.join().unwrap();
         replay_stage
             .join()
             .expect("Expect successful ReplayStage exit");
@@ -560,7 +546,7 @@ mod test {
         // Write two entries to the ledger so that the validator is in the active set:
         // 1) Give the validator a nonzero number of tokens 2) A vote from the validator.
         // This will cause leader rotation after the bootstrap height
-        let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
+        let (signer_service, signer) = LocalVoteSignerService::new();
         let (active_set_entries, vote_account_id) =
             make_active_set_entries(&my_keypair, signer, &mint.keypair(), &last_id, &last_id, 0);
         last_id = active_set_entries.last().unwrap().id;
@@ -606,11 +592,12 @@ mod test {
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
 
         // Set up the replay stage
+        let my_keypair = Arc::new(my_keypair);
+        let signer_proxy = VoteSignerProxy::new(&my_keypair, signer);
         let vote_account_id = Arc::new(vote_account_id);
         let bank = Arc::new(bank);
         let (entry_sender, entry_receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
-        let my_keypair = Arc::new(my_keypair);
         let (replay_stage, ledger_writer_recv) = ReplayStage::new(
             my_keypair.clone(),
             &vote_account_id,
@@ -626,14 +613,7 @@ mod test {
         // Vote sender should error because no leader contact info is found in the
         // ClusterInfo
         let (mock_sender, _mock_receiver) = channel();
-        let _vote_err = send_validator_vote(
-            &bank,
-            &my_keypair,
-            &vote_account_id,
-            &RpcClient::new_from_socket(signer),
-            &cluster_info_me,
-            &mock_sender,
-        );
+        let _vote_err = signer_proxy.send_validator_vote(&bank, &cluster_info_me, &mock_sender);
 
         // Send enough ticks to trigger leader rotation
         let total_entries_to_send = (bootstrap_height - initial_tick_height) as usize;
@@ -673,7 +653,7 @@ mod test {
             )),
             replay_stage.join().expect("replay stage join")
         );
-        stop_local_vote_signer_service(t_signer, &signer_exit);
+        signer_service.join().unwrap();
         assert_eq!(exit.load(Ordering::Relaxed), true);
         let _ignored = remove_dir_all(&my_ledger_path);
     }
@@ -713,16 +693,16 @@ mod test {
             .send(entries.clone())
             .expect("Expected to err out");
 
-        let signer = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
-        let rpc_client = RpcClient::new_from_socket(signer);
         let my_keypair = Arc::new(my_keypair);
+        let (signer_service, signer) = LocalVoteSignerService::new();
+        let vote_signer = VoteSignerProxy::new(&my_keypair, signer);
         let res = ReplayStage::process_entries(
             &Arc::new(Bank::default()),
             &cluster_info_me,
             &entry_receiver,
             &my_keypair,
             &vote_keypair.pubkey(),
-            &rpc_client,
+            &vote_signer,
             None,
             &ledger_entry_sender,
             &mut entry_height,
@@ -749,7 +729,7 @@ mod test {
             &entry_receiver,
             &Arc::new(Keypair::new()),
             &Keypair::new().pubkey(),
-            &rpc_client,
+            &vote_signer,
             None,
             &ledger_entry_sender,
             &mut entry_height,
@@ -765,7 +745,7 @@ mod test {
                 e
             ),
         }
-
+        signer_service.join().unwrap();
         let _ignored = remove_dir_all(&my_ledger_path);
     }
 }

@@ -536,14 +536,14 @@ pub fn make_active_set_entries(
 #[cfg(test)]
 mod tests {
     use crate::bank::Bank;
-    use crate::create_vote_account::*;
     use crate::leader_scheduler::{
         LeaderScheduler, LeaderSchedulerConfig, DEFAULT_BOOTSTRAP_HEIGHT,
         DEFAULT_LEADER_ROTATION_INTERVAL, DEFAULT_SEED_ROTATION_INTERVAL,
     };
+    use crate::local_vote_signer_service::LocalVoteSignerService;
     use crate::mint::Mint;
-    use crate::rpc_request::RpcClient;
-    use crate::vote_stage::create_new_signed_vote_transaction;
+    use crate::service::Service;
+    use crate::vote_signer_proxy::VoteSignerProxy;
     use hashbrown::HashSet;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
@@ -559,16 +559,8 @@ mod tests {
         HashSet::from_iter(slice.iter().cloned())
     }
 
-    fn push_vote(
-        keypair: &Arc<Keypair>,
-        vote_account: &Pubkey,
-        bank: &Bank,
-        height: u64,
-        last_id: Hash,
-        rpc_client: &RpcClient,
-    ) {
-        let new_vote_tx =
-            create_new_signed_vote_transaction(&last_id, keypair, height, vote_account, rpc_client);
+    fn push_vote(vote_signer: &VoteSignerProxy, bank: &Bank, height: u64, last_id: Hash) {
+        let new_vote_tx = vote_signer.new_signed_vote_transaction(&last_id, height);
 
         bank.process_transaction(&new_vote_tx).unwrap();
     }
@@ -607,11 +599,11 @@ mod tests {
             .last()
             .expect("Mint should not create empty genesis entries")
             .id;
-        let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
-        let rpc_client = RpcClient::new_from_socket(signer);
+        let (signer_service, signer) = LocalVoteSignerService::new();
         for i in 0..num_validators {
             let new_validator = Keypair::new();
             let new_pubkey = new_validator.pubkey();
+            let vote_signer = VoteSignerProxy::new(&Arc::new(new_validator), signer.clone());
             validators.push(new_pubkey);
             // Give the validator some tokens
             bank.transfer(
@@ -623,24 +615,12 @@ mod tests {
             .unwrap();
 
             // Create a vote account
-            let new_vote_account = create_vote_account(
-                &new_validator,
-                &bank,
-                num_vote_account_tokens as u64,
-                mint.last_id(),
-                &rpc_client,
-            )
-            .unwrap();
+            vote_signer
+                .new_vote_account(&bank, num_vote_account_tokens as u64, mint.last_id())
+                .unwrap();
             // Vote to make the validator part of the active set for the entire test
             // (we made the active_window_length large enough at the beginning of the test)
-            push_vote(
-                &Arc::new(new_validator),
-                &new_vote_account,
-                &bank,
-                1,
-                mint.last_id(),
-                &rpc_client,
-            );
+            push_vote(&vote_signer, &bank, 1, mint.last_id());
         }
 
         // The scheduled leader during the bootstrapping period (assuming a seed + schedule
@@ -717,7 +697,7 @@ mod tests {
                 Some((current_leader, slot))
             );
         }
-        stop_local_vote_signer_service(t_signer, &signer_exit);
+        signer_service.join().unwrap();
     }
 
     #[test]
@@ -737,8 +717,7 @@ mod tests {
         let start_height = 3;
         let num_old_ids = 20;
         let mut old_ids = HashSet::new();
-        let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
-        let rpc_client = RpcClient::new_from_socket(signer);
+        let (signer_service, signer) = LocalVoteSignerService::new();
         for _ in 0..num_old_ids {
             let new_keypair = Keypair::new();
             let pk = new_keypair.pubkey();
@@ -749,18 +728,13 @@ mod tests {
                 .unwrap();
 
             // Create a vote account
-            let new_vote_account =
-                create_vote_account(&new_keypair, &bank, 1, mint.last_id(), &rpc_client).unwrap();
+            let vote_signer = VoteSignerProxy::new(&Arc::new(new_keypair), signer);
+            vote_signer
+                .new_vote_account(&bank, 1 as u64, mint.last_id())
+                .unwrap();
 
             // Push a vote for the account
-            push_vote(
-                &Arc::new(new_keypair),
-                &new_vote_account,
-                &bank,
-                start_height,
-                mint.last_id(),
-                &rpc_client,
-            );
+            push_vote(&vote_signer, &bank, start_height, mint.last_id());
         }
 
         // Insert a bunch of votes at height "start_height + active_window_length"
@@ -775,16 +749,16 @@ mod tests {
                 .unwrap();
 
             // Create a vote account
-            let new_vote_account =
-                create_vote_account(&new_keypair, &bank, 1, mint.last_id(), &rpc_client).unwrap();
+            let vote_signer = VoteSignerProxy::new(&Arc::new(new_keypair), signer);
+            vote_signer
+                .new_vote_account(&bank, 1 as u64, mint.last_id())
+                .unwrap();
 
             push_vote(
-                &Arc::new(new_keypair),
-                &new_vote_account,
+                &vote_signer,
                 &bank,
                 start_height + active_window_length,
                 mint.last_id(),
-                &rpc_client,
             );
         }
 
@@ -803,7 +777,7 @@ mod tests {
         let result =
             leader_scheduler.get_active_set(2 * active_window_length + start_height, &bank);
         assert!(result.is_empty());
-        stop_local_vote_signer_service(t_signer, &signer_exit);
+        signer_service.join().unwrap();
     }
 
     #[test]
@@ -1046,11 +1020,11 @@ mod tests {
             .last()
             .expect("Mint should not create empty genesis entries")
             .id;
-        let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
-        let rpc_client = RpcClient::new_from_socket(signer);
+        let (signer_service, signer) = LocalVoteSignerService::new();
         for i in 0..num_validators {
             let new_validator = Keypair::new();
             let new_pubkey = new_validator.pubkey();
+            let vote_signer = VoteSignerProxy::new(&Arc::new(new_validator), signer);
             validators.push(new_pubkey);
             // Give the validator some tokens
             bank.transfer(
@@ -1062,23 +1036,16 @@ mod tests {
             .unwrap();
 
             // Create a vote account
-            let new_vote_account = create_vote_account(
-                &new_validator,
-                &bank,
-                num_vote_account_tokens as u64,
-                mint.last_id(),
-                &rpc_client,
-            )
-            .unwrap();
+            vote_signer
+                .new_vote_account(&bank, num_vote_account_tokens as u64, mint.last_id())
+                .unwrap();
 
             // Vote at height i * active_window_length for validator i
             push_vote(
-                &Arc::new(new_validator),
-                &new_vote_account,
+                &vote_signer,
                 &bank,
                 i * active_window_length + bootstrap_height,
                 mint.last_id(),
-                &rpc_client,
             );
         }
 
@@ -1096,7 +1063,7 @@ mod tests {
 
             assert_eq!(vec![expected], *result);
         }
-        stop_local_vote_signer_service(t_signer, &signer_exit);
+        signer_service.join().unwrap();
     }
 
     #[test]
@@ -1117,29 +1084,16 @@ mod tests {
         // window
         let initial_vote_height = 1;
 
-        let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
-        let rpc_client = RpcClient::new_from_socket(signer);
+        let (signer_service, signer) = LocalVoteSignerService::new();
+        let vote_signer = VoteSignerProxy::new(&Arc::new(leader_keypair), signer);
         // Create a vote account
-        let new_vote_account =
-            create_vote_account(&leader_keypair, &bank, 1, mint.last_id(), &rpc_client).unwrap();
-        let leader_keypair = Arc::new(leader_keypair);
+        vote_signer
+            .new_vote_account(&bank, 1 as u64, mint.last_id())
+            .unwrap();
+
         // Vote twice
-        push_vote(
-            &leader_keypair,
-            &new_vote_account,
-            &bank,
-            initial_vote_height,
-            mint.last_id(),
-            &rpc_client,
-        );
-        push_vote(
-            &leader_keypair,
-            &new_vote_account,
-            &bank,
-            initial_vote_height + 1,
-            mint.last_id(),
-            &rpc_client,
-        );
+        push_vote(&vote_signer, &bank, initial_vote_height, mint.last_id());
+        push_vote(&vote_signer, &bank, initial_vote_height + 1, mint.last_id());
 
         let result =
             leader_scheduler.get_active_set(initial_vote_height + active_window_length, &bank);
@@ -1147,7 +1101,7 @@ mod tests {
         let result =
             leader_scheduler.get_active_set(initial_vote_height + active_window_length + 1, &bank);
         assert!(result.is_empty());
-        stop_local_vote_signer_service(t_signer, &signer_exit);
+        signer_service.join().unwrap();
     }
 
     #[test]
@@ -1268,23 +1222,17 @@ mod tests {
         // Create and add validator to the active set
         let validator_keypair = Keypair::new();
         let validator_id = validator_keypair.pubkey();
-        let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
-        let rpc_client = RpcClient::new_from_socket(signer);
+        let (signer_service, signer) = LocalVoteSignerService::new();
         if add_validator {
             bank.transfer(5, &mint.keypair(), validator_id, last_id)
                 .unwrap();
             // Create a vote account
-            let new_vote_account =
-                create_vote_account(&validator_keypair, &bank, 1, mint.last_id(), &rpc_client)
-                    .unwrap();
-            push_vote(
-                &Arc::new(validator_keypair),
-                &new_vote_account,
-                &bank,
-                initial_vote_height,
-                mint.last_id(),
-                &rpc_client,
-            );
+            let vote_signer = VoteSignerProxy::new(&Arc::new(validator_keypair), signer);
+            vote_signer
+                .new_vote_account(&bank, 1 as u64, mint.last_id())
+                .unwrap();
+
+            push_vote(&vote_signer, &bank, initial_vote_height, mint.last_id());
         }
 
         // Make sure the bootstrap leader, not the validator, is picked again on next slot
@@ -1311,24 +1259,13 @@ mod tests {
         .unwrap();
 
         // Create a vote account
-        let new_vote_account = create_vote_account(
-            &bootstrap_leader_keypair,
-            &bank,
-            vote_account_tokens,
-            mint.last_id(),
-            &rpc_client,
-        )
-        .unwrap();
+        let vote_signer = VoteSignerProxy::new(&Arc::new(bootstrap_leader_keypair), signer);
+        vote_signer
+            .new_vote_account(&bank, vote_account_tokens as u64, mint.last_id())
+            .unwrap();
 
         // Add leader to the active set
-        push_vote(
-            &Arc::new(bootstrap_leader_keypair),
-            &new_vote_account,
-            &bank,
-            initial_vote_height,
-            mint.last_id(),
-            &rpc_client,
-        );
+        push_vote(&vote_signer, &bank, initial_vote_height, mint.last_id());
 
         leader_scheduler.generate_schedule(bootstrap_height, &bank);
 
@@ -1339,7 +1276,7 @@ mod tests {
         } else {
             assert!(leader_scheduler.leader_schedule[0] == bootstrap_leader_id);
         }
-        stop_local_vote_signer_service(t_signer, &signer_exit);
+        signer_service.join().unwrap();
     }
 
     #[test]
@@ -1444,40 +1381,23 @@ mod tests {
         // Create a vote account for the validator
         bank.transfer(5, &mint.keypair(), validator_id, last_id)
             .unwrap();
-        let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
-        let rpc_client = RpcClient::new_from_socket(signer);
-        let new_validator_vote_account =
-            create_vote_account(&validator_keypair, &bank, 1, mint.last_id(), &rpc_client).unwrap();
-        push_vote(
-            &Arc::new(validator_keypair),
-            &new_validator_vote_account,
-            &bank,
-            initial_vote_height,
-            mint.last_id(),
-            &rpc_client,
-        );
+        let (signer_service, signer) = LocalVoteSignerService::new();
+        let vote_signer = VoteSignerProxy::new(&Arc::new(validator_keypair), signer);
+        vote_signer
+            .new_vote_account(&bank, 1 as u64, mint.last_id())
+            .unwrap();
+        push_vote(&vote_signer, &bank, initial_vote_height, mint.last_id());
 
         // Create a vote account for the leader
         bank.transfer(5, &mint.keypair(), bootstrap_leader_id, last_id)
             .unwrap();
-        let new_leader_vote_account = create_vote_account(
-            &bootstrap_leader_keypair,
-            &bank,
-            1,
-            mint.last_id(),
-            &rpc_client,
-        )
-        .unwrap();
+        let vote_signer = VoteSignerProxy::new(&Arc::new(bootstrap_leader_keypair), signer);
+        vote_signer
+            .new_vote_account(&bank, 1 as u64, mint.last_id())
+            .unwrap();
 
         // Add leader to the active set
-        push_vote(
-            &Arc::new(bootstrap_leader_keypair),
-            &new_leader_vote_account,
-            &bank,
-            initial_vote_height,
-            mint.last_id(),
-            &rpc_client,
-        );
+        push_vote(&vote_signer, &bank, initial_vote_height, mint.last_id());
 
         // Generate the schedule
         leader_scheduler.generate_schedule(bootstrap_height, &bank);
@@ -1535,6 +1455,6 @@ mod tests {
                 .max_height_for_leader(bootstrap_height + 2 * seed_rotation_interval + 1),
             None
         );
-        stop_local_vote_signer_service(t_signer, &signer_exit);
+        signer_service.join().unwrap();
     }
 }
