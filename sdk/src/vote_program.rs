@@ -3,10 +3,9 @@
 
 use crate::native_program::ProgramError;
 use crate::pubkey::Pubkey;
-use bincode::{deserialize, serialize};
+use bincode::{deserialize, serialize, serialized_size};
 use byteorder::{ByteOrder, LittleEndian};
 use std::collections::VecDeque;
-use std::mem;
 
 pub const VOTE_PROGRAM_ID: [u8; 32] = [
     132, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -50,12 +49,11 @@ pub struct VoteProgram {
 
 pub fn get_max_size() -> usize {
     // Upper limit on the size of the Vote State. Equal to
-    // sizeof(VoteProgram) + MAX_VOTE_HISTORY * sizeof(Vote) +
-    // 32 (the size of the Pubkey) + 2 (2 bytes for the size)
-    mem::size_of::<VoteProgram>()
-        + MAX_VOTE_HISTORY * mem::size_of::<Vote>()
-        + mem::size_of::<Pubkey>()
-        + mem::size_of::<u16>()
+    // sizeof(VoteProgram) when votes.len() is MAX_VOTE_HISTORY
+    // + 2 (2 bytes for the size)
+    let mut vote_program = VoteProgram::default();
+    vote_program.votes = VecDeque::from(vec![Vote::default(); MAX_VOTE_HISTORY]);
+    serialized_size(&vote_program).unwrap() as usize + 2
 }
 
 impl VoteProgram {
