@@ -161,8 +161,7 @@ pub mod tests {
 
     use crate::local_vote_signer_service::*;
     use crate::mint::Mint;
-    use crate::rpc_request::RpcClient;
-    use crate::vote_signer_proxy::*;
+    use crate::service::Service;
     use bincode::serialize;
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -194,9 +193,9 @@ pub mod tests {
         let vote_accounts: Vec<_> = (0..10)
             .map(|i| {
                 // Create new validator to vote
-                let validator_keypair = Keypair::new();
+                let validator_keypair = Arc::new(Keypair::new());
                 let last_id = ids[i];
-                let vote_signer = VoteSignerProxy::new(&Arc::new(validator_keypair), addr.clone());
+                let vote_signer = VoteSignerProxy::new(&validator_keypair, addr.clone());
 
                 // Give the validator some tokens
                 bank.transfer(2, &mint.keypair(), validator_keypair.pubkey(), last_id)
@@ -205,7 +204,6 @@ pub mod tests {
                     .new_vote_account(&bank, 1, last_id)
                     .expect("Expected successful creation of account");
 
-                let validator_keypair = Arc::new(validator_keypair);
                 if i < 6 {
                     let vote_tx = vote_signer.new_signed_vote_transaction(&last_id, (i + 1) as u64);
                     bank.process_transaction(&vote_tx).unwrap();

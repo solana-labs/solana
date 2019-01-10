@@ -658,11 +658,11 @@ mod tests {
     use crate::leader_scheduler::{
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
-    use crate::rpc_request::{RpcClient, RpcRequest};
+    use crate::local_vote_signer_service::*;
     use crate::service::Service;
     use crate::streamer::responder;
-    use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+    use crate::vote_signer_proxy::*;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::cmp;
     use std::fs::remove_dir_all;
     use std::net::UdpSocket;
@@ -860,7 +860,7 @@ mod tests {
 
         // Write the entries to the ledger that will cause leader rotation
         // after the bootstrap height
-        let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
+        let (signer_service, signer) = LocalVoteSignerService::new();
         let (active_set_entries, validator_vote_account_id) = make_active_set_entries(
             &validator_keypair,
             signer,
@@ -912,7 +912,8 @@ mod tests {
 
         {
             // Test that a node knows to transition to a validator based on parsing the ledger
-            let leader_vote_id = register_node(signer, bootstrap_leader_keypair.clone());
+            let vote_signer = VoteSignerProxy::new(&bootstrap_leader_keypair, signer);
+            let leader_vote_id = vote_signer.vote_account.clone();
             let bootstrap_leader = Fullnode::new(
                 bootstrap_leader_node,
                 &bootstrap_leader_ledger_path,
@@ -961,21 +962,7 @@ mod tests {
             DbLedger::destroy(&path).expect("Expected successful database destruction");
             let _ignored = remove_dir_all(&path);
         }
-        stop_local_vote_signer_service(t_signer, &signer_exit);
-    }
-
-    fn register_node(signer: SocketAddr, keypair: Arc<Keypair>) -> Pubkey {
-        let rpc_client = RpcClient::new_from_socket(signer);
-
-        let msg = "Registering a new node";
-        let sig = Signature::new(&keypair.sign(msg.as_bytes()).as_ref());
-
-        let params = json!([keypair.pubkey(), sig, msg.as_bytes()]);
-        let resp = RpcRequest::RegisterNode
-            .make_rpc_request(&rpc_client, 1, Some(params))
-            .unwrap();
-        let vote_account_id: Pubkey = serde_json::from_value(resp).unwrap();
-        vote_account_id
+        signer_service.join().unwrap();
     }
 
     #[test]
@@ -1012,7 +999,7 @@ mod tests {
         // after the bootstrap height
         //
         // 2) A vote from the validator
-        let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
+        let (signer_service, signer) = LocalVoteSignerService::new();
         let (active_set_entries, _validator_vote_account_id) = make_active_set_entries(
             &validator_keypair,
             signer,
@@ -1055,7 +1042,8 @@ mod tests {
         );
 
         let validator_keypair = Arc::new(validator_keypair);
-        let vote_id = register_node(signer, validator_keypair.clone());
+        let vote_signer = VoteSignerProxy::new(&validator_keypair, signer);
+        let vote_id = vote_signer.vote_account.clone();
         // Start the validator
         let mut validator = Fullnode::new(
             validator_node,
@@ -1131,7 +1119,7 @@ mod tests {
         );
 
         // Shut down
-        stop_local_vote_signer_service(t_signer, &signer_exit);
+        signer_service.join().unwrap();
         t_responder.join().expect("responder thread join");
         validator.close().unwrap();
         DbLedger::destroy(&validator_ledger_path)

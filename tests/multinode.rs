@@ -2,7 +2,6 @@
 extern crate log;
 extern crate bincode;
 extern crate chrono;
-#[macro_use]
 extern crate serde_json;
 extern crate solana;
 extern crate solana_sdk;
@@ -17,17 +16,17 @@ use solana::entry::{reconstruct_entries_from_blobs, Entry};
 use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::gossip_service::GossipService;
 use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
-
+use solana::local_vote_signer_service::*;
 use solana::mint::Mint;
 use solana::packet::SharedBlob;
 use solana::poh_service::NUM_TICKS_PER_SECOND;
 use solana::result;
-use solana::rpc_request::{RpcClient, RpcRequest};
 use solana::service::Service;
 use solana::thin_client::{retry_get_balance, ThinClient};
+use solana::vote_signer_proxy::*;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::{duration_as_ms, duration_as_s};
 use solana_sdk::transaction::Transaction;
@@ -126,20 +125,6 @@ fn make_tiny_test_entries(start_hash: Hash, num: usize) -> Vec<Entry> {
         .collect()
 }
 
-fn register_node(signer: SocketAddr, keypair: Arc<Keypair>) -> Pubkey {
-    let rpc_client = RpcClient::new_from_socket(signer);
-
-    let msg = "Registering a new node";
-    let sig = Signature::new(&keypair.sign(msg.as_bytes()).as_ref());
-
-    let params = json!([keypair.pubkey(), sig, msg.as_bytes()]);
-    let resp = RpcRequest::RegisterNode
-        .retry_make_rpc_request(&rpc_client, 1, Some(params), 5)
-        .unwrap();
-    let vote_account_id: Pubkey = serde_json::from_value(resp).unwrap();
-    vote_account_id
-}
-
 #[test]
 fn test_multi_node_ledger_window() -> result::Result<()> {
     solana_logger::setup();
@@ -173,8 +158,9 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
             .unwrap();
     }
 
-    let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
-    let vote_id = register_node(signer, leader_keypair.clone());
+    let (signer_service, signer) = LocalVoteSignerService::new();
+    let signer_proxy = VoteSignerProxy::new(&leader_keypair, signer);
+    let vote_id = signer_proxy.vote_account.clone();
     let leader = Fullnode::new(
         leader,
         &leader_ledger_path,
@@ -193,7 +179,8 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     let validator_pubkey = keypair.pubkey().clone();
     let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
     let validator_data = validator.info.clone();
-    let validator_vote_id = register_node(signer, keypair.clone());
+    let signer_proxy = VoteSignerProxy::new(&keypair, signer);
+    let validator_vote_id = signer_proxy.vote_account.clone();
     let validator = Fullnode::new(
         validator,
         &zero_ledger_path,
@@ -238,7 +225,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     validator.close()?;
     leader.close()?;
 
-    stop_local_vote_signer_service(t_signer, &signer_exit);
+    signer_service.join().unwrap();
 
     for path in ledger_paths {
         remove_dir_all(path).unwrap();
@@ -274,8 +261,9 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     );
     ledger_paths.push(zero_ledger_path.clone());
 
-    let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
-    let vote_id = register_node(signer, leader_keypair.clone());
+    let (signer_service, signer) = LocalVoteSignerService::new();
+    let signer_proxy = VoteSignerProxy::new(&leader_keypair, signer);
+    let vote_id = signer_proxy.vote_account.clone();
     let server = Fullnode::new(
         leader,
         &leader_ledger_path,
@@ -305,7 +293,8 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
                 .unwrap();
         info!("validator balance {}", validator_balance);
 
-        let vote_id = register_node(signer, keypair.clone());
+        let signer_proxy = VoteSignerProxy::new(&keypair, signer);
+        let vote_id = signer_proxy.vote_account.clone();
         let val = Fullnode::new(
             validator,
             &ledger_path,
@@ -345,7 +334,8 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     // balances
     let keypair = Arc::new(Keypair::new());
     let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
-    let vote_id = register_node(signer, keypair.clone());
+    let signer_proxy = VoteSignerProxy::new(&keypair, signer);
+    let vote_id = signer_proxy.vote_account.clone();
     let val = Fullnode::new(
         validator,
         &zero_ledger_path,
@@ -394,7 +384,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
         node.close()?;
     }
 
-    stop_local_vote_signer_service(t_signer, &signer_exit);
+    signer_service.join().unwrap();
 
     for path in ledger_paths {
         remove_dir_all(path).unwrap();
@@ -419,8 +409,9 @@ fn test_multi_node_basic() {
     let (alice, leader_ledger_path) =
         create_tmp_genesis("multi_node_basic", 10_000, leader_data.id, 500);
     ledger_paths.push(leader_ledger_path.clone());
-    let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
-    let vote_id = register_node(signer, leader_keypair.clone());
+    let (signer_service, signer) = LocalVoteSignerService::new();
+    let signer_proxy = VoteSignerProxy::new(&leader_keypair, signer);
+    let vote_id = signer_proxy.vote_account.clone();
     let server = Fullnode::new(
         leader,
         &leader_ledger_path,
@@ -446,7 +437,8 @@ fn test_multi_node_basic() {
             send_tx_and_retry_get_balance(&leader_data, &alice, &validator_pubkey, 500, None)
                 .unwrap();
         info!("validator balance {}", validator_balance);
-        let vote_id = register_node(signer, keypair.clone());
+        let signer_proxy = VoteSignerProxy::new(&keypair, signer);
+        let vote_id = signer_proxy.vote_account.clone();
         let val = Fullnode::new(
             validator,
             &ledger_path,
@@ -483,7 +475,7 @@ fn test_multi_node_basic() {
     for node in nodes {
         node.close().unwrap();
     }
-    stop_local_vote_signer_service(t_signer, &signer_exit);
+    signer_service.join().unwrap();
 
     for path in ledger_paths {
         remove_dir_all(path).unwrap();
@@ -504,8 +496,9 @@ fn test_boot_validator_from_file() -> result::Result<()> {
     ledger_paths.push(leader_ledger_path.clone());
 
     let leader_data = leader.info.clone();
-    let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
-    let vote_id = register_node(signer, leader_keypair.clone());
+    let (signer_service, signer) = LocalVoteSignerService::new();
+    let signer_proxy = VoteSignerProxy::new(&leader_keypair, signer);
+    let vote_id = signer_proxy.vote_account.clone();
     let leader_fullnode = Fullnode::new(
         leader,
         &leader_ledger_path,
@@ -529,7 +522,8 @@ fn test_boot_validator_from_file() -> result::Result<()> {
     let validator_data = validator.info.clone();
     let ledger_path = tmp_copy_ledger(&leader_ledger_path, "boot_validator_from_file");
     ledger_paths.push(ledger_path.clone());
-    let vote_id = register_node(signer, keypair.clone());
+    let signer_proxy = VoteSignerProxy::new(&keypair, signer);
+    let vote_id = signer_proxy.vote_account.clone();
     let val_fullnode = Fullnode::new(
         validator,
         &ledger_path,
@@ -547,7 +541,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
 
     val_fullnode.close()?;
     leader_fullnode.close()?;
-    stop_local_vote_signer_service(t_signer, &signer_exit);
+    signer_service.join().unwrap();
 
     for path in ledger_paths {
         remove_dir_all(path)?;
@@ -596,8 +590,9 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
     );
     let bob_pubkey = Keypair::new().pubkey();
 
-    let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
-    let vote_id = register_node(signer, leader_keypair.clone());
+    let (signer_service, signer) = LocalVoteSignerService::new();
+    let signer_proxy = VoteSignerProxy::new(&leader_keypair, signer);
+    let vote_id = signer_proxy.vote_account.clone();
     let (leader_data, leader_fullnode) =
         create_leader(&ledger_path, leader_keypair.clone(), &vote_id, &signer);
 
@@ -632,7 +627,8 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
     let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
     let validator_data = validator.info.clone();
 
-    let vote_id = register_node(signer, keypair.clone());
+    let signer_proxy = VoteSignerProxy::new(&keypair, signer);
+    let vote_id = signer_proxy.vote_account.clone();
     let val_fullnode = Fullnode::new(
         validator,
         &stale_ledger_path,
@@ -668,7 +664,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
 
     val_fullnode.close()?;
     leader_fullnode.close()?;
-    stop_local_vote_signer_service(t_signer, &signer_exit);
+    signer_service.join().unwrap();
     remove_dir_all(ledger_path)?;
     remove_dir_all(stale_ledger_path)?;
 
@@ -702,8 +698,9 @@ fn test_multi_node_dynamic_network() {
     let alice_arc = Arc::new(RwLock::new(alice));
     let leader_data = leader.info.clone();
 
-    let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
-    let vote_id = register_node(signer, leader_keypair.clone());
+    let (signer_service, signer) = LocalVoteSignerService::new();
+    let signer_proxy = VoteSignerProxy::new(&leader_keypair, signer);
+    let vote_id = signer_proxy.vote_account.clone();
     let server = Fullnode::new(
         leader,
         &leader_ledger_path,
@@ -774,7 +771,8 @@ fn test_multi_node_dynamic_network() {
                     let rd = validator.info.clone();
                     info!("starting {} {}", keypair.pubkey(), rd.id);
                     let keypair = Arc::new(keypair);
-                    let vote_id = register_node(signer, keypair.clone());
+                    let signer_proxy = VoteSignerProxy::new(&keypair, signer);
+                    let vote_id = signer_proxy.vote_account.clone();
                     let val = Fullnode::new(
                         validator,
                         &ledger_path,
@@ -865,7 +863,7 @@ fn test_multi_node_dynamic_network() {
         }
     }
 
-    stop_local_vote_signer_service(t_signer, &signer_exit);
+    signer_service.join().unwrap();
     assert_eq!(consecutive_success, 10);
     for (_, node) in &validators {
         node.exit();
@@ -912,7 +910,7 @@ fn test_leader_to_validator_transition() {
 
     // Write the bootstrap entries to the ledger that will cause leader rotation
     // after the bootstrap height
-    let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
+    let (signer_service, signer) = LocalVoteSignerService::new();
     let (bootstrap_entries, _) = make_active_set_entries(
         &validator_keypair,
         signer,
@@ -941,7 +939,8 @@ fn test_leader_to_validator_transition() {
         Some(bootstrap_height),
     );
 
-    let vote_id = register_node(signer, leader_keypair.clone());
+    let signer_proxy = VoteSignerProxy::new(&leader_keypair, signer);
+    let vote_id = signer_proxy.vote_account.clone();
     let mut leader = Fullnode::new(
         leader_node,
         &leader_ledger_path,
@@ -1023,7 +1022,7 @@ fn test_leader_to_validator_transition() {
     );
 
     assert_eq!(bank.tick_height(), bootstrap_height);
-    stop_local_vote_signer_service(t_signer, &signer_exit);
+    signer_service.join().unwrap();
     remove_dir_all(leader_ledger_path).unwrap();
 }
 
@@ -1068,7 +1067,7 @@ fn test_leader_validator_basic() {
 
     // Write the bootstrap entries to the ledger that will cause leader rotation
     // after the bootstrap height
-    let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
+    let (signer_service, signer) = LocalVoteSignerService::new();
     let (active_set_entries, _vote_account_keypair) = make_active_set_entries(
         &validator_keypair,
         signer,
@@ -1099,7 +1098,8 @@ fn test_leader_validator_basic() {
     );
 
     // Start the validator node
-    let vote_id = register_node(signer, validator_keypair.clone());
+    let signer_proxy = VoteSignerProxy::new(&validator_keypair, signer);
+    let vote_id = signer_proxy.vote_account.clone();
     let mut validator = Fullnode::new(
         validator_node,
         &validator_ledger_path,
@@ -1113,7 +1113,8 @@ fn test_leader_validator_basic() {
     );
 
     // Start the leader fullnode
-    let vote_id = register_node(signer, leader_keypair.clone());
+    let signer_proxy = VoteSignerProxy::new(&leader_keypair, signer);
+    let vote_id = signer_proxy.vote_account.clone();
     let mut leader = Fullnode::new(
         leader_node,
         &leader_ledger_path,
@@ -1188,7 +1189,7 @@ fn test_leader_validator_basic() {
     for (v, l) in validator_entries.iter().zip(leader_entries) {
         assert_eq!(*v, l);
     }
-    stop_local_vote_signer_service(t_signer, &signer_exit);
+    signer_service.join().unwrap();
 
     for path in ledger_paths {
         DbLedger::destroy(&path).expect("Expected successful database destruction");
@@ -1261,7 +1262,7 @@ fn test_dropped_handoff_recovery() {
 
     // Make the entries to give the next_leader validator some stake so that they will be in
     // leader election active set
-    let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
+    let (signer_service, signer) = LocalVoteSignerService::new();
     let (active_set_entries, _vote_account_keypair) = make_active_set_entries(
         &next_leader_keypair,
         signer,
@@ -1305,7 +1306,8 @@ fn test_dropped_handoff_recovery() {
         Some(leader_rotation_interval),
     );
 
-    let vote_id = register_node(signer, bootstrap_leader_keypair.clone());
+    let signer_proxy = VoteSignerProxy::new(&bootstrap_leader_keypair, signer);
+    let vote_id = signer_proxy.vote_account.clone();
     // Start up the bootstrap leader fullnode
     let bootstrap_leader = Fullnode::new(
         bootstrap_leader_node,
@@ -1331,7 +1333,8 @@ fn test_dropped_handoff_recovery() {
         ledger_paths.push(validator_ledger_path.clone());
         let validator_id = kp.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(validator_id);
-        let vote_id = register_node(signer, kp.clone());
+        let signer_proxy = VoteSignerProxy::new(&kp, signer);
+        let vote_id = signer_proxy.vote_account.clone();
         let validator = Fullnode::new(
             validator_node,
             &validator_ledger_path,
@@ -1359,7 +1362,8 @@ fn test_dropped_handoff_recovery() {
 
     // Now start up the "next leader" node
     let next_leader_node = Node::new_localhost_with_pubkey(next_leader_keypair.pubkey());
-    let vote_id = register_node(signer, next_leader_keypair.clone());
+    let signer_proxy = VoteSignerProxy::new(&next_leader_keypair, signer);
+    let vote_id = signer_proxy.vote_account.clone();
     let mut next_leader = Fullnode::new(
         next_leader_node,
         &next_leader_ledger_path,
@@ -1380,7 +1384,7 @@ fn test_dropped_handoff_recovery() {
 
     nodes.push(next_leader);
 
-    stop_local_vote_signer_service(t_signer, &signer_exit);
+    signer_service.join().unwrap();
     for node in nodes {
         node.close().unwrap();
     }
@@ -1441,7 +1445,7 @@ fn test_full_leader_validator_network() {
     let mut ledger_paths = Vec::new();
     ledger_paths.push(bootstrap_leader_ledger_path.clone());
 
-    let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
+    let (signer_service, signer) = LocalVoteSignerService::new();
     let mut vote_account_keypairs = VecDeque::new();
     for node_keypair in node_keypairs.iter() {
         // Make entries to give each node some stake so that they will be in the
@@ -1511,7 +1515,8 @@ fn test_full_leader_validator_network() {
         let validator_id = kp.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(validator_id);
         let kp = Arc::new(kp);
-        let vote_id = register_node(signer, kp.clone());
+        let signer_proxy = VoteSignerProxy::new(&kp, signer);
+        let vote_id = signer_proxy.vote_account.clone();
         let validator = Arc::new(RwLock::new(Fullnode::new(
             validator_node,
             &validator_ledger_path,
@@ -1530,7 +1535,8 @@ fn test_full_leader_validator_network() {
 
     // Start up the bootstrap leader
     let leader_keypair = Arc::new(leader_keypair);
-    let vote_id = register_node(signer, leader_keypair.clone());
+    let signer_proxy = VoteSignerProxy::new(&leader_keypair, signer);
+    let vote_id = signer_proxy.vote_account.clone();
     let bootstrap_leader = Arc::new(RwLock::new(Fullnode::new(
         bootstrap_leader_node,
         &bootstrap_leader_ledger_path,
@@ -1650,7 +1656,7 @@ fn test_full_leader_validator_network() {
 
     assert!(shortest.unwrap() >= target_height);
 
-    stop_local_vote_signer_service(t_signer, &signer_exit);
+    signer_service.join().unwrap();
     for path in ledger_paths {
         DbLedger::destroy(&path).expect("Expected successful database destruction");
         remove_dir_all(path).unwrap();
@@ -1713,9 +1719,10 @@ fn test_broadcast_last_tick() {
     );
 
     // Start up the bootstrap leader fullnode
-    let (signer, t_signer, signer_exit) = local_vote_signer_service().unwrap();
     let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
-    let vote_id = bootstrap_leader_keypair.pubkey();
+    let (signer_service, signer) = LocalVoteSignerService::new();
+    let signer_proxy = VoteSignerProxy::new(&bootstrap_leader_keypair, signer);
+    let vote_id = signer_proxy.vote_account.clone();
     let mut bootstrap_leader = Fullnode::new(
         bootstrap_leader_node,
         &bootstrap_leader_ledger_path,
@@ -1771,7 +1778,7 @@ fn test_broadcast_last_tick() {
         bf.join().unwrap();
     }
 
-    stop_local_vote_signer_service(t_signer, &signer_exit);
+    signer_service.join().unwrap();
     // Shut down the listeners
     for node in listening_nodes {
         node.0.close().unwrap();
