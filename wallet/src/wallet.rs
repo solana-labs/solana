@@ -380,9 +380,9 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
         // Cancel a contract by contract Pubkey
         WalletCommand::Cancel(pubkey) => {
             let last_id = get_last_id(&rpc_client)?;
-            let tx =
+            let mut tx =
                 Transaction::budget_new_signature(&config.id, pubkey, config.id.pubkey(), last_id);
-            let signature_str = send_tx(&rpc_client, &tx)?;
+            let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
             Ok(signature_str.to_string())
         }
         // Confirm the last client transaction by signature
@@ -819,22 +819,11 @@ mod tests {
     use super::*;
     use clap::{App, Arg, SubCommand};
     use serde_json::Value;
-    use solana::bank::Bank;
-    use solana::cluster_info::Node;
-    use solana::db_ledger::create_tmp_genesis;
-    use solana::fullnode::Fullnode;
-    use solana::leader_scheduler::LeaderScheduler;
-    use solana::vote_signer_proxy::VoteSignerProxy;
-    use solana_drone::drone::run_local_drone;
     use solana_sdk::signature::{gen_keypair_file, read_keypair, read_pkcs8, Keypair, KeypairUtil};
     use solana_vote_signer::rpc::LocalVoteSigner;
     use std::fs;
-    use std::fs::remove_dir_all;
+    use std::net::{Ipv4Addr, SocketAddr};
     use std::path::Path;
-    use std::sync::mpsc::channel;
-    use std::sync::{Arc, RwLock};
-    use std::thread::sleep;
-    use std::time::Duration;
 
     #[test]
     fn test_wallet_config_drone_addr() {
@@ -1212,9 +1201,36 @@ mod tests {
         assert!(signature.is_ok());
         assert_eq!(signature.unwrap(), "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8".to_string());
 
-        let process_id = Keypair::new().pubkey();
         let date_string = "\"2018-09-19T17:30:59Z\"";
         let dt: DateTime<Utc> = serde_json::from_str(&date_string).unwrap();
+        config.command = WalletCommand::Pay(
+            10,
+            bob_pubkey,
+            Some(dt),
+            Some(config.id.pubkey()),
+            None,
+            None,
+        );
+        let result = process_command(&config);
+        assert!(result.is_ok());
+        let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
+        assert_eq!(json.as_object().unwrap().get("signature").unwrap().as_str().unwrap(), "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8".to_string());
+
+        let witness = Keypair::new().pubkey();
+        config.command = WalletCommand::Pay(
+            10,
+            bob_pubkey,
+            None,
+            None,
+            Some(vec![witness]),
+            Some(config.id.pubkey()),
+        );
+        let result = process_command(&config);
+        assert!(result.is_ok());
+        let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
+        assert_eq!(json.as_object().unwrap().get("signature").unwrap().as_str().unwrap(), "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8".to_string());
+
+        let process_id = Keypair::new().pubkey();
         config.command = WalletCommand::TimeElapsed(bob_pubkey, process_id, dt);
         let signature = process_command(&config);
         assert!(signature.is_ok());
@@ -1256,6 +1272,26 @@ mod tests {
         assert!(process_command(&config).is_err());
 
         config.command = WalletCommand::Pay(10, bob_pubkey, None, None, None, None);
+        assert!(process_command(&config).is_err());
+
+        config.command = WalletCommand::Pay(
+            10,
+            bob_pubkey,
+            Some(dt),
+            Some(config.id.pubkey()),
+            None,
+            None,
+        );
+        assert!(process_command(&config).is_err());
+
+        config.command = WalletCommand::Pay(
+            10,
+            bob_pubkey,
+            None,
+            None,
+            Some(vec![witness]),
+            Some(config.id.pubkey()),
+        );
         assert!(process_command(&config).is_err());
 
         config.command = WalletCommand::TimeElapsed(bob_pubkey, process_id, dt);
@@ -1398,131 +1434,5 @@ mod tests {
 
         let tokens = 0;
         assert!(request_and_confirm_airdrop(&rpc_client, &drone_addr, &id, tokens).is_err());
-    }
-
-    #[test]
-    #[ignore]
-    fn test_wallet_cancel_tx() {
-        let bob_pubkey = Keypair::new().pubkey();
-        let leader_keypair = Arc::new(Keypair::new());
-        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let leader_data = leader.info.clone();
-
-        let (alice, ledger_path) =
-            create_tmp_genesis("wallet_cancel_tx", 10_000_000, leader_data.id, 1000);
-        let mut bank = Bank::new(&alice);
-
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_data.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
-        let vote_account_keypair = Arc::new(Keypair::new());
-        let last_id = bank.last_id();
-        let signer =
-            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
-        let server = Fullnode::new_with_bank(
-            leader_keypair,
-            Arc::new(signer),
-            bank,
-            None,
-            0,
-            &last_id,
-            leader,
-            None,
-            &ledger_path,
-            false,
-            None,
-        );
-        sleep(Duration::from_millis(900));
-
-        let (sender, receiver) = channel();
-        run_local_drone(alice.keypair(), sender);
-        let drone_addr = receiver.recv().unwrap();
-
-        let rpc_client = RpcClient::new_from_socket(leader_data.rpc);
-
-        let mut config_payer = WalletConfig::default();
-        config_payer.network = leader_data.gossip;
-        config_payer.drone_port = Some(drone_addr.port());
-
-        let mut config_witness = WalletConfig::default();
-        config_witness.network = leader_data.gossip;
-        config_witness.drone_port = Some(drone_addr.port());
-
-        assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
-
-        request_and_confirm_airdrop(&rpc_client, &drone_addr, &config_payer.id.pubkey(), 50)
-            .unwrap();
-
-        // Make transaction (from config_payer to bob_pubkey) requiring witness signature from config_witness
-        config_payer.command = WalletCommand::Pay(
-            10,
-            bob_pubkey,
-            None,
-            None,
-            Some(vec![config_witness.id.pubkey()]),
-            Some(config_payer.id.pubkey()),
-        );
-        let sig_response = process_command(&config_payer);
-        assert!(sig_response.is_ok());
-
-        let object: Value = serde_json::from_str(&sig_response.unwrap()).unwrap();
-        let process_id_str = object.get("processId").unwrap().as_str().unwrap();
-        let process_id_vec = bs58::decode(process_id_str)
-            .into_vec()
-            .expect("base58-encoded public key");
-        let process_id = Pubkey::new(&process_id_vec);
-
-        let params = json!([format!("{}", config_payer.id.pubkey())]);
-        let config_payer_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_client, 1, Some(params))
-            .unwrap()
-            .as_u64()
-            .unwrap();
-        assert_eq!(config_payer_balance, 39);
-        let params = json!([format!("{}", process_id)]);
-        let contract_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_client, 1, Some(params))
-            .unwrap()
-            .as_u64()
-            .unwrap();
-        assert_eq!(contract_balance, 11);
-        let params = json!([format!("{}", bob_pubkey)]);
-        let recipient_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_client, 1, Some(params))
-            .unwrap()
-            .as_u64()
-            .unwrap();
-        assert_eq!(recipient_balance, 0);
-
-        // Sign transaction by config_witness
-        config_payer.command = WalletCommand::Cancel(process_id);
-        let sig_response = process_command(&config_payer);
-        assert!(sig_response.is_ok());
-
-        let params = json!([format!("{}", config_payer.id.pubkey())]);
-        let config_payer_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_client, 1, Some(params))
-            .unwrap()
-            .as_u64()
-            .unwrap();
-        assert_eq!(config_payer_balance, 49);
-        let params = json!([format!("{}", process_id)]);
-        let contract_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_client, 1, Some(params))
-            .unwrap()
-            .as_u64()
-            .unwrap();
-        assert_eq!(contract_balance, 1);
-        let params = json!([format!("{}", bob_pubkey)]);
-        let recipient_balance = RpcRequest::GetBalance
-            .make_rpc_request(&rpc_client, 1, Some(params))
-            .unwrap()
-            .as_u64()
-            .unwrap();
-        assert_eq!(recipient_balance, 0);
-
-        server.close().unwrap();
-        remove_dir_all(ledger_path).unwrap();
     }
 }
