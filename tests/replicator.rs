@@ -13,14 +13,13 @@ use solana::db_ledger::{create_tmp_genesis, get_tmp_ledger_path, tmp_copy_ledger
 use solana::entry::Entry;
 use solana::fullnode::Fullnode;
 use solana::leader_scheduler::LeaderScheduler;
-use solana::local_vote_signer_service::LocalVoteSignerService;
 use solana::replicator::Replicator;
-use solana::service::Service;
 use solana::streamer::blob_receiver;
 use solana::vote_signer_proxy::VoteSignerProxy;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
+use solana_vote_signer::rpc::LocalVoteSigner;
 use std::fs::remove_dir_all;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
@@ -45,16 +44,14 @@ fn test_replicator_startup() {
         tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");
 
     {
-        let (signer_service, signer) = LocalVoteSignerService::new();
-        let signer_proxy = VoteSignerProxy::new(&leader_keypair, signer);
-        let vote_account_id = signer_proxy.vote_account.clone();
+        let signer_proxy =
+            VoteSignerProxy::new(&leader_keypair, Box::new(LocalVoteSigner::default()));
 
         let leader = Fullnode::new(
             leader_node,
             &leader_ledger_path,
             leader_keypair,
-            &vote_account_id,
-            &signer,
+            Arc::new(signer_proxy),
             None,
             false,
             LeaderScheduler::from_bootstrap_leader(leader_info.id.clone()),
@@ -62,8 +59,8 @@ fn test_replicator_startup() {
         );
 
         let validator_keypair = Arc::new(Keypair::new());
-        let signer_proxy = VoteSignerProxy::new(&validator_keypair, signer);
-        let vote_account_id = signer_proxy.vote_account.clone();
+        let signer_proxy =
+            VoteSignerProxy::new(&validator_keypair, Box::new(LocalVoteSigner::default()));
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
         #[cfg(feature = "chacha")]
         let validator_node_info = validator_node.info.clone();
@@ -72,8 +69,7 @@ fn test_replicator_startup() {
             validator_node,
             &validator_ledger_path,
             validator_keypair,
-            &vote_account_id,
-            &signer,
+            Arc::new(signer_proxy),
             Some(leader_info.gossip),
             false,
             LeaderScheduler::from_bootstrap_leader(leader_info.id),
@@ -182,7 +178,6 @@ fn test_replicator_startup() {
 
         // Check that some ledger was downloaded
         assert!(num_txs != 0);
-        signer_service.join().unwrap();
 
         replicator.close();
         validator.exit();

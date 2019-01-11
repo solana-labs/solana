@@ -14,10 +14,9 @@ use crate::streamer::{responder, BlobSender};
 use crate::vote_signer_proxy::VoteSignerProxy;
 use log::Level;
 use solana_metrics::{influxdb, submit};
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::duration_as_ms;
-use std::net::{SocketAddr, UdpSocket};
+use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::mpsc::RecvTimeoutError;
@@ -65,8 +64,7 @@ impl ReplayStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window_receiver: &EntryReceiver,
         keypair: &Arc<Keypair>,
-        _vote_account_id: &Pubkey,
-        vote_signer: &VoteSignerProxy,
+        vote_signer: &Arc<VoteSignerProxy>,
         vote_blob_sender: Option<&BlobSender>,
         ledger_entry_sender: &EntrySender,
         entry_height: &mut u64,
@@ -196,8 +194,7 @@ impl ReplayStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         keypair: Arc<Keypair>,
-        vote_account_id: &Pubkey,
-        vote_signer_addr: &SocketAddr,
+        vote_signer: Arc<VoteSignerProxy>,
         bank: Arc<Bank>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window_receiver: EntryReceiver,
@@ -211,15 +208,12 @@ impl ReplayStage {
         let t_responder = responder("replay_stage", Arc::new(send), vote_blob_receiver);
 
         let keypair = Arc::new(keypair);
-        let vote_account_id = *vote_account_id;
-        let vote_signer_addr = *vote_signer_addr;
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit);
                 let mut entry_height_ = entry_height;
                 let mut last_entry_id = last_entry_id;
-                let vote_signer = VoteSignerProxy::new(&keypair, vote_signer_addr);
                 loop {
                     let (leader_id, _) = bank
                         .get_current_leader()
@@ -242,7 +236,6 @@ impl ReplayStage {
                         &cluster_info,
                         &window_receiver,
                         &keypair,
-                        &vote_account_id,
                         &vote_signer,
                         Some(&vote_blob_sender),
                         &ledger_entry_sender,
@@ -292,7 +285,6 @@ mod test {
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
 
-    use crate::local_vote_signer_service::LocalVoteSignerService;
     use crate::packet::BlobError;
     use crate::replay_stage::{ReplayStage, ReplayStageReturnType};
     use crate::result::Error;
@@ -300,6 +292,7 @@ mod test {
     use crate::vote_signer_proxy::VoteSignerProxy;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_vote_signer::rpc::LocalVoteSigner;
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
@@ -332,12 +325,12 @@ mod test {
             .expect("expected at least one genesis entry")
             .id;
 
+        let my_keypair = Arc::new(my_keypair);
         // Write two entries to the ledger so that the validator is in the active set:
         // 1) Give the validator a nonzero number of tokens 2) A vote from the validator .
         // This will cause leader rotation after the bootstrap height
-        let (signer_service, signer) = LocalVoteSignerService::new();
         let (active_set_entries, vote_account_id) =
-            make_active_set_entries(&my_keypair, signer, &mint.keypair(), &last_id, &last_id, 0);
+            make_active_set_entries(&my_keypair, &mint.keypair(), &last_id, &last_id, 0);
         last_id = active_set_entries.last().unwrap().id;
         let initial_tick_height = genesis_entries
             .iter()
@@ -381,9 +374,8 @@ mod test {
         let (entry_sender, entry_receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         let (replay_stage, ledger_writer_recv) = ReplayStage::new(
-            Arc::new(my_keypair),
-            &vote_account_id,
-            &signer,
+            my_keypair,
+            Arc::new(vote_account_id),
             Arc::new(bank),
             Arc::new(RwLock::new(cluster_info_me)),
             entry_receiver,
@@ -434,8 +426,6 @@ mod test {
             &entries_to_send[..leader_rotation_index + 1]
         );
 
-        signer_service.join().unwrap();
-
         assert_eq!(exit.load(Ordering::Relaxed), true);
 
         let _ignored = remove_dir_all(&my_ledger_path);
@@ -471,17 +461,17 @@ mod test {
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
 
         // Set up the replay stage
-        let (signer_service, signer) = LocalVoteSignerService::new();
         let bank = Arc::new(bank);
         let (entry_sender, entry_receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         let my_keypair = Arc::new(my_keypair);
-        let vote_signer = VoteSignerProxy::new(&my_keypair, signer);
-        let vote_account_id = vote_signer.vote_account.clone();
+        let vote_signer = Arc::new(VoteSignerProxy::new(
+            &my_keypair,
+            Box::new(LocalVoteSigner::default()),
+        ));
         let (replay_stage, ledger_writer_recv) = ReplayStage::new(
             my_keypair.clone(),
-            &vote_account_id,
-            &signer,
+            vote_signer.clone(),
             bank.clone(),
             cluster_info_me.clone(),
             entry_receiver,
@@ -512,7 +502,6 @@ mod test {
 
         assert_eq!(next_tick, received_tick);
         drop(entry_sender);
-        signer_service.join().unwrap();
         replay_stage
             .join()
             .expect("Expect successful ReplayStage exit");
@@ -543,12 +532,12 @@ mod test {
             .expect("expected at least one genesis entry")
             .id;
 
+        let my_keypair = Arc::new(my_keypair);
         // Write two entries to the ledger so that the validator is in the active set:
         // 1) Give the validator a nonzero number of tokens 2) A vote from the validator.
         // This will cause leader rotation after the bootstrap height
-        let (signer_service, signer) = LocalVoteSignerService::new();
         let (active_set_entries, vote_account_id) =
-            make_active_set_entries(&my_keypair, signer, &mint.keypair(), &last_id, &last_id, 0);
+            make_active_set_entries(&my_keypair, &mint.keypair(), &last_id, &last_id, 0);
         last_id = active_set_entries.last().unwrap().id;
         let initial_tick_height = genesis_entries
             .iter()
@@ -592,16 +581,13 @@ mod test {
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
 
         // Set up the replay stage
-        let my_keypair = Arc::new(my_keypair);
-        let signer_proxy = VoteSignerProxy::new(&my_keypair, signer);
-        let vote_account_id = Arc::new(vote_account_id);
+        let signer_proxy = Arc::new(vote_account_id);
         let bank = Arc::new(bank);
         let (entry_sender, entry_receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         let (replay_stage, ledger_writer_recv) = ReplayStage::new(
             my_keypair.clone(),
-            &vote_account_id,
-            &signer,
+            signer_proxy.clone(),
             bank.clone(),
             cluster_info_me.clone(),
             entry_receiver,
@@ -653,7 +639,6 @@ mod test {
             )),
             replay_stage.join().expect("replay stage join")
         );
-        signer_service.join().unwrap();
         assert_eq!(exit.load(Ordering::Relaxed), true);
         let _ignored = remove_dir_all(&my_ledger_path);
     }
@@ -663,7 +648,6 @@ mod test {
         // Set up dummy node to host a ReplayStage
         let my_keypair = Keypair::new();
         let my_id = my_keypair.pubkey();
-        let vote_keypair = Keypair::new();
         let my_node = Node::new_localhost_with_pubkey(my_id);
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
@@ -694,14 +678,15 @@ mod test {
             .expect("Expected to err out");
 
         let my_keypair = Arc::new(my_keypair);
-        let (signer_service, signer) = LocalVoteSignerService::new();
-        let vote_signer = VoteSignerProxy::new(&my_keypair, signer);
+        let vote_signer = Arc::new(VoteSignerProxy::new(
+            &my_keypair,
+            Box::new(LocalVoteSigner::default()),
+        ));
         let res = ReplayStage::process_entries(
             &Arc::new(Bank::default()),
             &cluster_info_me,
             &entry_receiver,
             &my_keypair,
-            &vote_keypair.pubkey(),
             &vote_signer,
             None,
             &ledger_entry_sender,
@@ -728,7 +713,6 @@ mod test {
             &cluster_info_me,
             &entry_receiver,
             &Arc::new(Keypair::new()),
-            &Keypair::new().pubkey(),
             &vote_signer,
             None,
             &ledger_entry_sender,
@@ -745,7 +729,6 @@ mod test {
                 e
             ),
         }
-        signer_service.join().unwrap();
         let _ignored = remove_dir_all(&my_ledger_path);
     }
 }

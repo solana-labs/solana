@@ -430,15 +430,15 @@ mod tests {
     use crate::db_ledger::create_tmp_ledger_with_mint;
     use crate::fullnode::Fullnode;
     use crate::leader_scheduler::LeaderScheduler;
-
     use crate::mint::Mint;
+    use crate::vote_signer_proxy::VoteSignerProxy;
     use bincode::deserialize;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::vote_program::VoteProgram;
     use solana_sdk::vote_transaction::VoteTransaction;
+    use solana_vote_signer::rpc::LocalVoteSigner;
     use std::fs::remove_dir_all;
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     #[test]
     fn test_thin_client() {
@@ -458,11 +458,12 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
+        let vote_signer =
+            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
         let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            &vote_account_keypair.pubkey(),
-            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            Arc::new(vote_signer),
             bank,
             None,
             entry_height,
@@ -513,11 +514,12 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
+        let vote_signer =
+            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
         let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            &vote_account_keypair.pubkey(),
-            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            Arc::new(vote_signer),
             bank,
             None,
             0,
@@ -572,12 +574,13 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
+        let vote_signer =
+            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
         let entry_height = alice.create_entries().len() as u64;
         let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            &vote_account_keypair.pubkey(),
-            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            Arc::new(vote_signer),
             bank,
             None,
             entry_height,
@@ -621,10 +624,13 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
         let leader_vote_account_keypair = Arc::new(Keypair::new());
+        let vote_signer = VoteSignerProxy::new(
+            &leader_vote_account_keypair,
+            Box::new(LocalVoteSigner::default()),
+        );
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            &leader_vote_account_keypair.pubkey(),
-            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            Arc::new(vote_signer),
             bank,
             None,
             entry_height,
@@ -714,12 +720,13 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
+        let vote_signer =
+            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
         let last_id = bank.last_id();
         let entry_height = alice.create_entries().len() as u64;
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            &vote_account_keypair.pubkey(),
-            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            Arc::new(vote_signer),
             bank,
             None,
             entry_height,

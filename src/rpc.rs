@@ -411,6 +411,7 @@ mod tests {
     use crate::leader_scheduler::LeaderScheduler;
     use crate::mint::Mint;
     use crate::rpc_request::get_rpc_request_str;
+    use crate::vote_signer_proxy::VoteSignerProxy;
     use bincode::serialize;
     use reqwest;
     use reqwest::header::CONTENT_TYPE;
@@ -418,6 +419,7 @@ mod tests {
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Transaction;
+    use solana_vote_signer::rpc::LocalVoteSigner;
     use std::fs::remove_dir_all;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
@@ -686,11 +688,12 @@ mod tests {
         bank.leader_scheduler = leader_scheduler;
 
         let vote_account_keypair = Arc::new(Keypair::new());
+        let vote_signer =
+            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
         let entry_height = alice.create_entries().len() as u64;
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            &vote_account_keypair.pubkey(),
-            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            Arc::new(vote_signer),
             bank,
             None,
             entry_height,

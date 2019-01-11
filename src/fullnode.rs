@@ -13,10 +13,10 @@ use crate::service::Service;
 use crate::tpu::{Tpu, TpuReturnType};
 use crate::tpu_forwarder::TpuForwarder;
 use crate::tvu::{Sockets, Tvu, TvuReturnType};
+use crate::vote_signer_proxy::VoteSignerProxy;
 use crate::window::{new_window, SharedWindow};
 use log::Level;
 use solana_sdk::hash::Hash;
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
@@ -91,7 +91,6 @@ pub enum FullnodeReturnType {
 pub struct Fullnode {
     pub node_role: Option<NodeRole>,
     keypair: Arc<Keypair>,
-    vote_account_id: Pubkey,
     exit: Arc<AtomicBool>,
     rpc_service: Option<JsonRpcService>,
     rpc_pubsub_service: Option<PubSubService>,
@@ -108,8 +107,8 @@ pub struct Fullnode {
     rpc_addr: SocketAddr,
     rpc_pubsub_addr: SocketAddr,
     drone_addr: SocketAddr,
-    vote_signer_addr: SocketAddr,
     db_ledger: Arc<DbLedger>,
+    vote_signer: Arc<VoteSignerProxy>,
 }
 
 impl Fullnode {
@@ -117,8 +116,7 @@ impl Fullnode {
         node: Node,
         ledger_path: &str,
         keypair: Arc<Keypair>,
-        vote_account_id: &Pubkey,
-        vote_signer_addr: &SocketAddr,
+        vote_signer: Arc<VoteSignerProxy>,
         leader_addr: Option<SocketAddr>,
         sigverify_disabled: bool,
         leader_scheduler: LeaderScheduler,
@@ -147,8 +145,7 @@ impl Fullnode {
         let leader_info = leader_addr.map(|i| NodeInfo::new_entry_point(&i));
         let server = Self::new_with_bank(
             keypair,
-            vote_account_id,
-            vote_signer_addr,
+            vote_signer,
             bank,
             Some(db_ledger),
             entry_height,
@@ -179,8 +176,7 @@ impl Fullnode {
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_bank(
         keypair: Arc<Keypair>,
-        vote_account_id: &Pubkey,
-        vote_signer_addr: &SocketAddr,
+        vote_signer: Arc<VoteSignerProxy>,
         bank: Bank,
         db_ledger: Option<Arc<DbLedger>>,
         entry_height: u64,
@@ -271,8 +267,7 @@ impl Fullnode {
             };
 
             let tvu = Tvu::new(
-                vote_account_id,
-                vote_signer_addr,
+                &vote_signer,
                 &bank,
                 entry_height,
                 *last_entry_id,
@@ -335,7 +330,6 @@ impl Fullnode {
 
         Fullnode {
             keypair,
-            vote_account_id: *vote_account_id,
             cluster_info,
             shared_window,
             bank,
@@ -353,8 +347,8 @@ impl Fullnode {
             rpc_addr,
             rpc_pubsub_addr,
             drone_addr,
-            vote_signer_addr: *vote_signer_addr,
             db_ledger,
+            vote_signer,
         }
     }
 
@@ -437,8 +431,7 @@ impl Fullnode {
             };
 
             let tvu = Tvu::new(
-                &self.vote_account_id,
-                &self.vote_signer_addr,
+                &self.vote_signer,
                 &self.bank,
                 entry_height,
                 last_entry_id,
@@ -658,15 +651,14 @@ mod tests {
     use crate::leader_scheduler::{
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
-    use crate::local_vote_signer_service::LocalVoteSignerService;
     use crate::service::Service;
     use crate::streamer::responder;
     use crate::vote_signer_proxy::VoteSignerProxy;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_vote_signer::rpc::LocalVoteSigner;
     use std::cmp;
     use std::fs::remove_dir_all;
     use std::net::UdpSocket;
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
 
@@ -687,10 +679,11 @@ mod tests {
         bank.leader_scheduler = leader_scheduler;
 
         let last_id = bank.last_id();
+        let keypair = Arc::new(keypair);
+        let signer = VoteSignerProxy::new(&keypair, Box::new(LocalVoteSigner::default()));
         let v = Fullnode::new_with_bank(
-            Arc::new(keypair),
-            &Keypair::new().pubkey(),
-            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            keypair,
+            Arc::new(signer),
             bank,
             None,
             entry_height,
@@ -729,10 +722,11 @@ mod tests {
 
                 let entry_height = mint.create_entries().len() as u64;
                 let last_id = bank.last_id();
+                let keypair = Arc::new(keypair);
+                let signer = VoteSignerProxy::new(&keypair, Box::new(LocalVoteSigner::default()));
                 Fullnode::new_with_bank(
-                    Arc::new(keypair),
-                    &Keypair::new().pubkey(),
-                    &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+                    keypair,
+                    Arc::new(signer),
                     bank,
                     None,
                     entry_height,
@@ -801,13 +795,17 @@ mod tests {
             Some(active_window_length),
         );
 
+        let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
+        let signer = VoteSignerProxy::new(
+            &bootstrap_leader_keypair,
+            Box::new(LocalVoteSigner::default()),
+        );
         // Start up the leader
         let mut bootstrap_leader = Fullnode::new(
             bootstrap_leader_node,
             &bootstrap_leader_ledger_path,
-            Arc::new(bootstrap_leader_keypair),
-            &Keypair::new().pubkey(),
-            &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+            bootstrap_leader_keypair,
+            Arc::new(signer),
             Some(bootstrap_leader_info.gossip),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
@@ -860,10 +858,9 @@ mod tests {
 
         // Write the entries to the ledger that will cause leader rotation
         // after the bootstrap height
-        let (signer_service, signer) = LocalVoteSignerService::new();
+        let validator_keypair = Arc::new(validator_keypair);
         let (active_set_entries, validator_vote_account_id) = make_active_set_entries(
             &validator_keypair,
-            signer,
             &mint.keypair(),
             &last_id,
             &last_id,
@@ -912,14 +909,15 @@ mod tests {
 
         {
             // Test that a node knows to transition to a validator based on parsing the ledger
-            let vote_signer = VoteSignerProxy::new(&bootstrap_leader_keypair, signer);
-            let leader_vote_id = vote_signer.vote_account.clone();
+            let vote_signer = VoteSignerProxy::new(
+                &bootstrap_leader_keypair,
+                Box::new(LocalVoteSigner::default()),
+            );
             let bootstrap_leader = Fullnode::new(
                 bootstrap_leader_node,
                 &bootstrap_leader_ledger_path,
                 bootstrap_leader_keypair,
-                &leader_vote_id,
-                &signer,
+                Arc::new(vote_signer),
                 Some(bootstrap_leader_info.gossip),
                 false,
                 LeaderScheduler::new(&leader_scheduler_config),
@@ -937,9 +935,8 @@ mod tests {
             let validator = Fullnode::new(
                 validator_node,
                 &validator_ledger_path,
-                Arc::new(validator_keypair),
-                &validator_vote_account_id,
-                &signer,
+                validator_keypair,
+                Arc::new(validator_vote_account_id),
                 Some(bootstrap_leader_info.gossip),
                 false,
                 LeaderScheduler::new(&leader_scheduler_config),
@@ -962,7 +959,6 @@ mod tests {
             DbLedger::destroy(&path).expect("Expected successful database destruction");
             let _ignored = remove_dir_all(&path);
         }
-        signer_service.join().unwrap();
     }
 
     #[test]
@@ -992,6 +988,7 @@ mod tests {
             .expect("expected at least one genesis entry")
             .id;
 
+        let validator_keypair = Arc::new(validator_keypair);
         // Write two entries so that the validator is in the active set:
         //
         // 1) Give the validator a nonzero number of tokens
@@ -999,15 +996,8 @@ mod tests {
         // after the bootstrap height
         //
         // 2) A vote from the validator
-        let (signer_service, signer) = LocalVoteSignerService::new();
-        let (active_set_entries, _validator_vote_account_id) = make_active_set_entries(
-            &validator_keypair,
-            signer,
-            &mint.keypair(),
-            &last_id,
-            &last_id,
-            0,
-        );
+        let (active_set_entries, _validator_vote_account_id) =
+            make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id, 0);
         let initial_tick_height = genesis_entries
             .iter()
             .skip(2)
@@ -1041,16 +1031,14 @@ mod tests {
             Some(bootstrap_height),
         );
 
-        let validator_keypair = Arc::new(validator_keypair);
-        let vote_signer = VoteSignerProxy::new(&validator_keypair, signer);
-        let vote_id = vote_signer.vote_account.clone();
+        let vote_signer =
+            VoteSignerProxy::new(&validator_keypair, Box::new(LocalVoteSigner::default()));
         // Start the validator
         let mut validator = Fullnode::new(
             validator_node,
             &validator_ledger_path,
             validator_keypair,
-            &vote_id,
-            &signer,
+            Arc::new(vote_signer),
             Some(leader_gossip),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
@@ -1119,7 +1107,6 @@ mod tests {
         );
 
         // Shut down
-        signer_service.join().unwrap();
         t_responder.join().expect("responder thread join");
         validator.close().unwrap();
         DbLedger::destroy(&validator_ledger_path)
