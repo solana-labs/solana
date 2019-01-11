@@ -6,7 +6,7 @@ use crate::counter::Counter;
 use crate::jsonrpc_core;
 use crate::packet::SharedBlob;
 use crate::result::{Error, Result};
-use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler, Rpu};
+use crate::rpc_request::{RpcClient, RpcRequest};
 use crate::streamer::BlobSender;
 use bincode::serialize;
 use log::Level;
@@ -57,7 +57,7 @@ impl VoteSigner for RemoteVoteSigner {
     fn sign(&self, pubkey: Pubkey, sig: &Signature, msg: &[u8]) -> jsonrpc_core::Result<Signature> {
         let params = json!([pubkey, sig, msg]);
         let resp = RpcRequest::SignVote
-            .make_rpc_request(&self.rpc_client, 1, Some(params))
+            .retry_make_rpc_request(&self.rpc_client, 1, Some(params), 0)
             .unwrap();
         let vote_signature: Signature = serde_json::from_value(resp).unwrap();
         Ok(vote_signature)

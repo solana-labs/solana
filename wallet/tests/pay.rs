@@ -7,24 +7,21 @@ use solana::fullnode::Fullnode;
 use solana::leader_scheduler::LeaderScheduler;
 use solana::mint::Mint;
 use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler, Rpu};
+use solana::vote_signer_proxy::VoteSignerProxy;
 use solana_drone::drone::run_local_drone;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_vote_signer::rpc::LocalVoteSigner;
 use solana_wallet::wallet::{
     process_command, request_and_confirm_airdrop, WalletCommand, WalletConfig,
 };
 use std::fs::remove_dir_all;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::Duration;
 
-fn check_balance(
-    expected_balance: u64,
-    client: &RpcClient,
-    params: Value,
-) {
+fn check_balance(expected_balance: u64, client: &RpcClient, params: Value) {
     let balance = Rpu::make_rpc_request(client, 1, RpcRequest::GetBalance, Some(params))
         .unwrap()
         .as_u64()
@@ -49,11 +46,12 @@ fn test_wallet_timestamp_tx() {
     )));
     bank.leader_scheduler = leader_scheduler;
     let vote_account_keypair = Arc::new(Keypair::new());
+    let vote_signer =
+        VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
     let last_id = bank.last_id();
     let server = Fullnode::new_with_bank(
         leader_keypair,
-        &vote_account_keypair.pubkey(),
-        &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+        Arc::new(vote_signer),
         bank,
         None,
         entry_height,
@@ -147,11 +145,12 @@ fn test_wallet_witness_tx() {
     )));
     bank.leader_scheduler = leader_scheduler;
     let vote_account_keypair = Arc::new(Keypair::new());
+    let vote_signer =
+        VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
     let last_id = bank.last_id();
     let server = Fullnode::new_with_bank(
         leader_keypair,
-        &vote_account_keypair.pubkey(),
-        &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+        Arc::new(vote_signer),
         bank,
         None,
         entry_height,
@@ -241,11 +240,12 @@ fn test_wallet_cancel_tx() {
     )));
     bank.leader_scheduler = leader_scheduler;
     let vote_account_keypair = Arc::new(Keypair::new());
+    let vote_signer =
+        VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
     let last_id = bank.last_id();
     let server = Fullnode::new_with_bank(
         leader_keypair,
-        &vote_account_keypair.pubkey(),
-        &SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
+        Arc::new(vote_signer),
         bank,
         None,
         entry_height,

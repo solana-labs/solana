@@ -149,8 +149,12 @@ impl ThinClient {
 
     pub fn get_account_userdata(&mut self, pubkey: &Pubkey) -> io::Result<Option<Vec<u8>>> {
         let params = json!([format!("{}", pubkey)]);
-        let resp =
-            Rpu::make_rpc_request(&self.rpc_client, 1, RpcRequest::GetAccountInfo, Some(params));
+        let resp = Rpu::make_rpc_request(
+            &self.rpc_client,
+            1,
+            RpcRequest::GetAccountInfo,
+            Some(params),
+        );
         if let Ok(account_json) = resp {
             let account: Account =
                 serde_json::from_value(account_json).expect("deserialize account");
@@ -168,8 +172,12 @@ impl ThinClient {
     pub fn get_balance(&mut self, pubkey: &Pubkey) -> io::Result<u64> {
         trace!("get_balance sending request to {}", self.rpc_addr);
         let params = json!([format!("{}", pubkey)]);
-        let resp =
-            Rpu::make_rpc_request(&self.rpc_client, 1, RpcRequest::GetAccountInfo, Some(params));
+        let resp = Rpu::make_rpc_request(
+            &self.rpc_client,
+            1,
+            RpcRequest::GetAccountInfo,
+            Some(params),
+        );
         if let Ok(account_json) = resp {
             let account: Account =
                 serde_json::from_value(account_json).expect("deserialize account");

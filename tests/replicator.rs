@@ -163,8 +163,13 @@ fn test_replicator_startup() {
             let mut non_zero_pubkeys = false;
             for _ in 0..30 {
                 let params = json!([0]);
-                let pubkeys = Rpu::make_rpc_request(&rpc_client, 1, RpcRequest::GetStoragePubkeysForEntryHeight, Some(params))
-                    .unwrap();
+                let pubkeys = Rpu::make_rpc_request(
+                    &rpc_client,
+                    1,
+                    RpcRequest::GetStoragePubkeysForEntryHeight,
+                    Some(params),
+                )
+                .unwrap();
                 info!("pubkeys: {:?}", pubkeys);
                 if pubkeys.as_array().unwrap().len() != 0 {
                     non_zero_pubkeys = true;

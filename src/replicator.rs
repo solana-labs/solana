@@ -144,13 +144,19 @@ impl Replicator {
                 RpcClient::new_from_socket(rpc_peers[node_idx].rpc)
             };
 
-            storage_last_id = Rpu::make_rpc_request(&rpc_client, 2, RpcRequest::GetStorageMiningLastId, None)
-                .expect("rpc request")
-                .to_string();
-            storage_entry_height = Rpu::make_rpc_request(&rpc_client, 2, RpcRequest::GetStorageMiningEntryHeight, None)
-                .expect("rpc request")
-                .as_u64()
-                .unwrap();
+            storage_last_id =
+                Rpu::make_rpc_request(&rpc_client, 2, RpcRequest::GetStorageMiningLastId, None)
+                    .expect("rpc request")
+                    .to_string();
+            storage_entry_height = Rpu::make_rpc_request(
+                &rpc_client,
+                2,
+                RpcRequest::GetStorageMiningEntryHeight,
+                None,
+            )
+            .expect("rpc request")
+            .as_u64()
+            .unwrap();
             if storage_entry_height != 0 {
                 break;
             }

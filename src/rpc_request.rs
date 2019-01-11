@@ -283,8 +283,12 @@ mod tests {
         );
 
         // Send erroneous parameter
-        let last_id =
-            Rpu::make_rpc_request(&rpc_client, 3, RpcRequest::GetLastId, Some(json!("paramter")));
+        let last_id = Rpu::make_rpc_request(
+            &rpc_client,
+            3,
+            RpcRequest::GetLastId,
+            Some(json!("paramter")),
+        );
         assert_eq!(last_id.is_err(), true);
     }
 
