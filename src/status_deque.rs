@@ -214,22 +214,6 @@ impl<T: Clone> StatusDeque<T> {
         None
     }
 
-    /// Look through the last_ids and find all the valid ids
-    /// This is batched to avoid holding the lock for a significant amount of time
-    ///
-    /// Return a vec of tuple of (valid index, timestamp)
-    /// index is into the passed ids slice to avoid copying hashes
-    pub fn count_valid_ids(&self, ids: &[Hash]) -> Vec<(usize, u64)> {
-        let mut ret = Vec::new();
-        for (i, id) in ids.iter().enumerate() {
-            if let Some(entry) = self.entries.get(id) {
-                if self.tick_height - entry.tick_height < MAX_ENTRY_IDS as u64 {
-                    ret.push((i, entry.timestamp));
-                }
-            }
-        }
-        ret
-    }
     pub fn get_signature_status(&self, signature: &Signature) -> Option<Status<T>> {
         for entry in self.entries.values() {
             if let Some(res) = entry.statuses.get(signature) {
@@ -284,25 +268,6 @@ mod tests {
             status_deque.reserve_signature_with_last_id(&last_id, &sig),
             Err(StatusDequeError::DuplicateSignature)
         );
-    }
-
-    #[test]
-    fn test_count_valid_ids() {
-        let first_id = Default::default();
-        let mut status_deque: StatusDeque<()> = StatusDeque::default();
-        status_deque.register_tick(&first_id);
-        let ids: Vec<_> = (0..MAX_ENTRY_IDS)
-            .map(|i| {
-                let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-                status_deque.register_tick(&last_id);
-                last_id
-            })
-            .collect();
-        assert_eq!(status_deque.count_valid_ids(&[]).len(), 0);
-        assert_eq!(status_deque.count_valid_ids(&[first_id]).len(), 0);
-        for (i, id) in status_deque.count_valid_ids(&ids).iter().enumerate() {
-            assert_eq!(id.0, i);
-        }
     }
 
     #[test]
