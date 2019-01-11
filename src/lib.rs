@@ -70,6 +70,7 @@ pub mod tpu;
 pub mod tpu_forwarder;
 pub mod tvu;
 pub mod vote_signer_proxy;
+#[cfg(test)]
 pub mod window;
 pub mod window_service;
 
