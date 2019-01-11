@@ -28,3 +28,4 @@ extern bool entrypoint(const uint8_t *input) {
   sol_log_params(ka, ka_len, data, data_len);
   return true;
 }
+
