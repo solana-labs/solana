@@ -145,42 +145,56 @@ help:
 	@echo '    - make dump_foo'
 	@echo ''
 
+define C_RULE
+$1: $2
+	@echo "[cc] $1 ($2)"
+	$(_@)mkdir -p $(dir $1)
+	$(_@)$(CC) $(BPF_C_FLAGS) -o $1 -c $2 -MD -MF $(1:.ll=.d)
+endef
+
+define CC_RULE
+$1: $2 
+	@echo "[cxx] $1 ($2)"
+	$(_@)mkdir -p $(dir $1)
+	$(_@)$(CXX) $(BPF_CXX_FLAGS) -o $1 -c $2 -MD -MF $(1:.ll=.d)
+endef
+
+define O_RULE
+$1: $2
+	@echo "[llc] $1 ($2)"
+	$(_@)mkdir -p $(dir $1)
+	$(_@)$(LLC) $(BPF_LLC_FLAGS) -o $1 $2
+endef
+
+define SO_RULE
+$1: $2
+	@echo "[lld] $1 ($2)"
+	$(_@)mkdir -p $(dir $1)
+	$(_@)$(LLD) $(BPF_LLD_FLAGS) --entry entrypoint -o $1 $2
+endef
+
+define TEST_C_RULE
+$1: $2
+	@echo "[test cc] $1 ($2)"
+	$(_@)mkdir -p $(dir $1)
+	$(_@)$(CC) $(TEST_C_FLAGS) -o $1 $2 -MD -MF $(1:.o=.d)
+	$(_@)$(MACOS_ADJUST_TEST_DYLIB) $1
+endef
+
+define TEST_CC_RULE
+$1: $2
+	@echo "[test cxx] $1 ($2)"
+	$(_@)mkdir -p $(dir $1)
+	$(_@)$(CXX) $(TEST_CXX_FLAGS) -o $1 $2 -MD -MF $(1:.o=.d)
+	$(_@)$(MACOS_ADJUST_TEST_DYLIB) $1
+endef
+
 .PHONY: $(INSTALL_SH)
 $(INSTALL_SH):
-	$(INSTALL_SH)
+	$(_@)$(INSTALL_SH)
 
-.PRECIOUS: $(OUT_DIR)/%.o
-$(OUT_DIR)/%.o: $(SRC_DIR)/%.c $(INSTALL_SH)
-	@echo "[cc] $@ ($<)"
-	$(_@)mkdir -p $(OUT_DIR)
-	$(_@)$(CC) $(BPF_C_FLAGS) -o $@ -c $< -MD -MF $(@:.o=.d)
-
-$(OUT_DIR)/%.o: $(SRC_DIR)/%.cc $(INSTALL_SH)
-	@echo "[cxx] $@ ($<)"
-	$(_@)mkdir -p $(OUT_DIR)
-	$(_@)$(CXX) $(BPF_CXX_FLAGS) -o $@ -c $< -MD -MF $(@:.o=.d)
-
-.PRECIOUS: $(OUT_DIR)/%.so
-$(OUT_DIR)/%.so: $(OUT_DIR)/%.o $(INSTALL_SH)
-	@echo "[lld] $@ ($<)"
-	$(_@)$(LLD) $(BPF_LLD_FLAGS) -o $@ $<
-
-$(OUT_DIR)/test_%: $(TEST_DIR)/%.c $(INSTALL_SH)
-	@echo "[test cc] $@ ($<)"
-	$(_@)mkdir -p $(OUT_DIR)
-	$(_@)$(CC) $(TEST_C_FLAGS) -o $@ $< -MD -MF $(@:=.d)
-	$(_@)$(MACOS_ADJUST_TEST_DYLIB) $@
-
-$(OUT_DIR)/test_%: $(TEST_DIR)/%.cc $(INSTALL_SH)
-	@echo "[test cxx] $@ ($<)"
-	$(_@)mkdir -p $(OUT_DIR)
-	$(_@)$(CXX) $(TEST_CXX_FLAGS) -o $@ $< -MD -MF $(@:=.d)
-	$(_@)$(MACOS_ADJUST_TEST_DYLIB) $@
-
--include $(wildcard $(OUT_DIR)/*.d)
-
-PROGRAM_NAMES := $(notdir $(basename $(wildcard $(SRC_DIR)/*.c $(SRC_DIR)/*.cc)))
-TEST_NAMES := $(addprefix test_,$(notdir $(basename $(wildcard $(TEST_DIR)/*.c))))
+PROGRAM_NAMES := $(notdir $(basename $(wildcard $(SRC_DIR)/*)))
+# TEST_NAMES := $(addprefix test_,$(notdir $(basename $(wildcard $(TEST_DIR)/*.c))))
 
 define \n
 
@@ -189,11 +203,44 @@ endef
 
 all: $(PROGRAM_NAMES)
 
-test: $(TEST_NAMES)
-	$(foreach test, $(TEST_NAMES), $(OUT_DIR)/$(test)$(\n))
+.PHONY: $(PROGRAM_NAMES)
+$(PROGRAM_NAMES): $(INSTALL_SH)
+$(PROGRAM_NAMES): %: $(addprefix $(OUT_DIR)/, %.so)
 
-$(PROGRAM_NAMES): %: $(addprefix $(OUT_DIR)/, %.so) ;
-$(TEST_NAMES): %: $(addprefix $(OUT_DIR)/, %) ;
+$(foreach PROGRAM, $(PROGRAM_NAMES), \
+  $(eval -include $(wildcard $(OUT_DIR)/$(PROGRAM)/*.d)) \
+  \
+  $(eval $(PROGRAM)_SRCS := \
+    $(addprefix $(SRC_DIR)/$(PROGRAM)/, \
+    $(filter-out test_%,$(notdir $(wildcard $(SRC_DIR)/$(PROGRAM)/*.c $(SRC_DIR)/$(PROGRAM)/*.cc))))) \
+  $(eval $(PROGRAM)_OBJS := $(subst $(SRC_DIR), $(OUT_DIR), \
+    $(patsubst %.c,%.o, \
+    $(patsubst %.cc,%.o,$($(PROGRAM)_SRCS))))) \
+  $(eval $(call SO_RULE,$(OUT_DIR)/$(PROGRAM).so,$($(PROGRAM)_OBJS))) \
+  $(foreach _,$(filter %.c,$($(PROGRAM)_SRCS)), \
+    $(eval $(call C_RULE,$(subst $(SRC_DIR),$(OUT_DIR),$(_:%.c=%.o)),$_))) \
+  $(foreach _,$(filter %.cc,$($(PROGRAM)_SRCS)), \
+    $(eval $(call CC_RULE,$(subst $(SRC_DIR),$(OUT_DIR),$(_:%.cc=%.o)),$_))) \
+  \
+  $(eval TESTS := $(notdir $(basename $(wildcard $(SRC_DIR)/$(PROGRAM)/test_*.c)))) \
+  $(eval $(TESTS): %: $(addprefix $(OUT_DIR)/$(PROGRAM)/, %)) \
+  $(eval TEST_NAMES := $(TEST_NAMES) $(TESTS)) \
+  $(foreach TEST, $(TESTS), \
+    $(eval $(TEST)_SRCS := \
+      $(addprefix $(SRC_DIR)/$(PROGRAM)/, \
+      $(notdir $(wildcard $(SRC_DIR)/$(PROGRAM)/test_*.c $(SRC_DIR)/$(PROGRAM)/test_*.cc)))) \
+    $(foreach _,$(filter %.c,$($(TEST)_SRCS)), \
+      $(eval $(call TEST_C_RULE,$(subst $(SRC_DIR),$(OUT_DIR),$(_:%.c=%)),$_))) \
+    $(foreach _,$(filter %.cc, $($(TEST)_SRCS)), \
+      $(eval $(call TEST_CC_RULE,$(subst $(SRC_DIR),$(OUT_DIR),$(_:%.cc=%)),$_))) \
+   ) \
+)
+
+test: $(TEST_NAMES)
+	$(foreach test, $(TEST_NAMES), $(OUT_DIR)/bench_alu/$(test)$(\n))
+
+.PHONY: $(TEST_NAMES)
+$(TEST_NAMES): $(INSTALL_SH)
 
 dump_%: %
 	$(_@)$(OBJ_DUMP) $(OBJ_DUMP_FLAGS) $(addprefix $(OUT_DIR)/, $(addsuffix .so, $<))
