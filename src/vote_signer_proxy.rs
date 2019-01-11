@@ -3,6 +3,7 @@
 use crate::bank::Bank;
 use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
+use crate::jsonrpc_core;
 use crate::packet::SharedBlob;
 use crate::result::{Error, Result};
 use crate::rpc_request::{RpcClient, RpcRequest};
@@ -15,6 +16,7 @@ use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::Vote;
 use solana_sdk::vote_transaction::VoteTransaction;
+use solana_vote_signer::rpc::VoteSignerInterface;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
@@ -26,27 +28,65 @@ pub enum VoteError {
     LeaderInfoNotFound,
 }
 
-pub struct VoteSignerProxy {
+pub struct VoteSignerForwarder {
     rpc_client: RpcClient,
+}
+
+impl VoteSignerForwarder {
+    pub fn new(signer: SocketAddr) -> Self {
+        Self {
+            rpc_client: RpcClient::new_from_socket(signer),
+        }
+    }
+}
+
+impl VoteSignerInterface for VoteSignerForwarder {
+    fn register(
+        &self,
+        pubkey: Pubkey,
+        sig: &Signature,
+        msg: &[u8],
+    ) -> jsonrpc_core::Result<Pubkey> {
+        let params = json!([pubkey, sig, msg]);
+        let resp = RpcRequest::RegisterNode
+            .retry_make_rpc_request(&self.rpc_client, 1, Some(params), 5)
+            .unwrap();
+        let vote_account: Pubkey = serde_json::from_value(resp).unwrap();
+        Ok(vote_account)
+    }
+    fn sign(&self, pubkey: Pubkey, sig: &Signature, msg: &[u8]) -> jsonrpc_core::Result<Signature> {
+        let params = json!([pubkey, sig, msg]);
+        let resp = RpcRequest::SignVote
+            .make_rpc_request(&self.rpc_client, 1, Some(params))
+            .unwrap();
+        let vote_signature: Signature = serde_json::from_value(resp).unwrap();
+        Ok(vote_signature)
+    }
+    fn deregister(&self, pubkey: Pubkey, sig: &Signature, msg: &[u8]) -> jsonrpc_core::Result<()> {
+        let params = json!([pubkey, sig, msg]);
+        let _resp = RpcRequest::DeregisterNode
+            .retry_make_rpc_request(&self.rpc_client, 1, Some(params), 5)
+            .unwrap();
+        Ok(())
+    }
+}
+
+pub struct VoteSignerProxy {
     keypair: Arc<Keypair>,
+    signer: Box<VoteSignerInterface + Send + Sync>,
     pub vote_account: Pubkey,
 }
 
 impl VoteSignerProxy {
-    pub fn new(keypair: &Arc<Keypair>, signer: SocketAddr) -> Self {
-        let rpc_client = RpcClient::new_from_socket(signer);
-
+    pub fn new(keypair: &Arc<Keypair>, signer: Box<VoteSignerInterface + Send + Sync>) -> Self {
         let msg = "Registering a new node";
         let sig = Signature::new(&keypair.sign(msg.as_bytes()).as_ref());
-        let params = json!([keypair.pubkey(), sig, msg.as_bytes()]);
-        let resp = RpcRequest::RegisterNode
-            .retry_make_rpc_request(&rpc_client, 1, Some(params), 5)
+        let vote_account = signer
+            .register(keypair.pubkey(), &sig, msg.as_bytes())
             .unwrap();
-        let vote_account: Pubkey = serde_json::from_value(resp).unwrap();
-
         Self {
-            rpc_client,
             keypair: keypair.clone(),
+            signer,
             vote_account,
         }
     }
@@ -83,12 +123,7 @@ impl VoteSignerProxy {
         let sig = Signature::new(&self.keypair.sign(&msg).as_ref());
 
         let keypair = self.keypair.clone();
-        let params = json!([keypair.pubkey(), sig, &msg]);
-        let resp = RpcRequest::SignVote
-            .make_rpc_request(&self.rpc_client, 1, Some(params))
-            .unwrap();
-        let vote_signature: Signature = serde_json::from_value(resp).unwrap();
-
+        let vote_signature = self.signer.sign(keypair.pubkey(), &sig, &msg).unwrap();
         Transaction {
             signatures: vec![vote_signature],
             account_keys: tx.account_keys,

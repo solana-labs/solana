@@ -2003,18 +2003,6 @@ dependencies = [
 
 [[package]]
 name = "solana-jsonrpc-core"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.84 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.84 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_json 1.0.34 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "solana-jsonrpc-core"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
@@ -2023,19 +2011,6 @@ dependencies = [
  "serde 1.0.84 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.84 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.34 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "solana-jsonrpc-http-server"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "hyper 0.12.20 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "net2 0.2.33 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-jsonrpc-core 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-jsonrpc-server-utils 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "unicase 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2053,16 +2028,6 @@ dependencies = [
 
 [[package]]
 name = "solana-jsonrpc-macros"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "serde 1.0.84 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-jsonrpc-core 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-jsonrpc-pubsub 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "solana-jsonrpc-macros"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
@@ -2073,38 +2038,12 @@ dependencies = [
 
 [[package]]
 name = "solana-jsonrpc-pubsub"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-jsonrpc-core 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "solana-jsonrpc-pubsub"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-jsonrpc-core 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "solana-jsonrpc-server-utils"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "bytes 0.4.11 (registry+https://github.com/rust-lang/crates.io-index)",
- "globset 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "lazy_static 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "num_cpus 1.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-jsonrpc-core 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "tokio 0.1.14 (registry+https://github.com/rust-lang/crates.io-index)",
- "tokio-codec 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "unicase 2.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2306,9 +2245,9 @@ dependencies = [
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.34 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-jsonrpc-core 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-jsonrpc-http-server 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-jsonrpc-macros 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-jsonrpc-core 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-jsonrpc-http-server 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-jsonrpc-macros 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-metrics 0.12.0",
  "solana-sdk 0.12.0",
 ]
@@ -2327,6 +2266,7 @@ dependencies = [
  "solana-drone 0.12.0",
  "solana-logger 0.12.0",
  "solana-sdk 0.12.0",
+ "solana-vote-signer 0.12.0",
 ]
 
 [[package]]
@@ -3122,15 +3062,10 @@ dependencies = [
 "checksum slab 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "5f9776d6b986f77b35c6cf846c11ad986ff128fe0b2b63a3628e3755e8d3102d"
 "checksum smallvec 0.6.7 (registry+https://github.com/rust-lang/crates.io-index)" = "b73ea3738b47563803ef814925e69be00799a8c07420be8b996f8e98fb2336db"
 "checksum socket2 0.3.8 (registry+https://github.com/rust-lang/crates.io-index)" = "c4d11a52082057d87cb5caa31ad812f4504b97ab44732cd8359df2e9ff9f48e7"
-"checksum solana-jsonrpc-core 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "247e9ed914dc7ce8c58bc7c9bb48a771d8a116f0609051a3dc1a600224ab4aa5"
 "checksum solana-jsonrpc-core 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3aef27e39614157ee2cc67296cba379b6209de8c82a3598f870f55577559979b"
-"checksum solana-jsonrpc-http-server 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ee59f62767d9711e86951a8a1a98771d6d710f620892aa26d425e0f39fbe2a5b"
 "checksum solana-jsonrpc-http-server 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e46cbb534bfac8c38e3e6e41133310819652b185367c8c530a63513aae8dbc6a"
-"checksum solana-jsonrpc-macros 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "98ae0adfbe6fa32b77221a41a8ee069291b89d9589563d925e79db144cd8a511"
 "checksum solana-jsonrpc-macros 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "df31df489ec11f5fab95423dc58b581fdc8363ebee781c89aa50722437f7c9bb"
-"checksum solana-jsonrpc-pubsub 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "70944e2d62a6af2b10ec7a99f2756f8002764fe9112d8292f1094b444e8a6e6a"
 "checksum solana-jsonrpc-pubsub 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "a06b40e7885b7f8c21685e9dafe8c4da3276db20344eb4a50623f16e99853933"
-"checksum solana-jsonrpc-server-utils 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "025a89986a6b9e633e0a837e667479a88fa085f413d2ce36ac970339defc9583"
 "checksum solana-jsonrpc-server-utils 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "6acfebc12e709d8525f039e7135b922fb7efaf49cd536ad97bbedd0391dcf989"
 "checksum solana-jsonrpc-ws-server 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5a21f3c0cd97c2673854b1e4558cea4dba59fce27ec9f0e130f847da9e10355c"
 "checksum solana-ws 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "de774a72a468e65a10791246f0335869a19bed7d85ba3c05381c4bb6247acb7f"

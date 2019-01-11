@@ -159,12 +159,11 @@ pub mod tests {
     use crate::compute_leader_confirmation_service::ComputeLeaderConfirmationService;
     use crate::vote_signer_proxy::VoteSignerProxy;
 
-    use crate::local_vote_signer_service::LocalVoteSignerService;
     use crate::mint::Mint;
-    use crate::service::Service;
     use bincode::serialize;
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_vote_signer::rpc::VoteSignRequestProcessor;
     use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;
@@ -187,7 +186,6 @@ pub mod tests {
             })
             .collect();
 
-        let (signer_service, addr) = LocalVoteSignerService::new();
         // Create a total of 10 vote accounts, each will have a balance of 1 (after giving 1 to
         // their vote account), for a total staking pool of 10 tokens.
         let vote_accounts: Vec<_> = (0..10)
@@ -195,7 +193,10 @@ pub mod tests {
                 // Create new validator to vote
                 let validator_keypair = Arc::new(Keypair::new());
                 let last_id = ids[i];
-                let vote_signer = VoteSignerProxy::new(&validator_keypair, addr.clone());
+                let vote_signer = VoteSignerProxy::new(
+                    &validator_keypair,
+                    Box::new(VoteSignRequestProcessor::default()),
+                );
 
                 // Give the validator some tokens
                 bank.transfer(2, &mint.keypair(), validator_keypair.pubkey(), last_id)
@@ -233,6 +234,5 @@ pub mod tests {
         );
         assert!(bank.confirmation_time() != std::usize::MAX);
         assert!(last_confirmation_time > 0);
-        signer_service.join().unwrap();
     }
 }

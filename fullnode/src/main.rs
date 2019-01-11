@@ -11,7 +11,7 @@ use solana::local_vote_signer_service::LocalVoteSignerService;
 use solana::service::Service;
 use solana::socketaddr;
 use solana::thin_client::poll_gossip_for_leader;
-use solana::vote_signer_proxy::VoteSignerProxy;
+use solana::vote_signer_proxy::{VoteSignerForwarder, VoteSignerProxy};
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::vote_program::VoteProgram;
 use solana_sdk::vote_transaction::VoteTransaction;
@@ -168,15 +168,15 @@ fn main() {
     };
 
     let mut client = mk_client(&leader);
-    let vote_signer = VoteSignerProxy::new(&keypair, signer);
-    info!("New vote account ID is {:?}", vote_signer.vote_account);
+    let vote_signer = VoteSignerProxy::new(&keypair, Box::new(VoteSignerForwarder::new(signer)));
+    let vote_account = vote_signer.vote_account.clone();
+    info!("New vote account ID is {:?}", vote_account);
 
     let mut fullnode = Fullnode::new(
         node,
         ledger_path,
         keypair.clone(),
-        &vote_signer.vote_account,
-        &signer,
+        Arc::new(vote_signer),
         network,
         nosigverify,
         leader_scheduler,
@@ -194,11 +194,7 @@ fn main() {
     }
 
     // Create the vote account if necessary
-    if client
-        .poll_get_balance(&vote_signer.vote_account)
-        .unwrap_or(0)
-        == 0
-    {
+    if client.poll_get_balance(&vote_account).unwrap_or(0) == 0 {
         // Need at least two tokens as one token will be spent on a vote_account_new() transaction
         if balance < 2 {
             error!("insufficient tokens, two tokens required");
@@ -209,21 +205,14 @@ fn main() {
         }
         loop {
             let last_id = client.get_last_id();
-            let transaction = VoteTransaction::vote_account_new(
-                &keypair,
-                vote_signer.vote_account,
-                last_id,
-                1,
-                1,
-            );
+            let transaction =
+                VoteTransaction::vote_account_new(&keypair, vote_account, last_id, 1, 1);
             if client.transfer_signed(&transaction).is_err() {
                 sleep(Duration::from_secs(2));
                 continue;
             }
 
-            let balance = client
-                .poll_get_balance(&vote_signer.vote_account)
-                .unwrap_or(0);
+            let balance = client.poll_get_balance(&vote_account).unwrap_or(0);
             if balance > 0 {
                 break;
             }
@@ -232,7 +221,7 @@ fn main() {
     }
 
     loop {
-        let vote_account_user_data = client.get_account_userdata(&vote_signer.vote_account);
+        let vote_account_user_data = client.get_account_userdata(&vote_account);
         if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
             if let Ok(vote_state) = VoteProgram::deserialize(&vote_account_user_data) {
                 if vote_state.node_id == pubkey {

@@ -4,7 +4,7 @@
 use crate::bank::Bank;
 
 use crate::entry::{create_ticks, Entry};
-use crate::rpc_request::{RpcClient, RpcRequest};
+use crate::vote_signer_proxy::VoteSignerProxy;
 use bincode::serialize;
 use byteorder::{LittleEndian, ReadBytesExt};
 use hashbrown::HashSet;
@@ -15,8 +15,9 @@ use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, Vote, VoteProgram};
 use solana_sdk::vote_transaction::VoteTransaction;
+use solana_vote_signer::rpc::VoteSignRequestProcessor;
 use std::io::Cursor;
-use std::net::SocketAddr;
+use std::sync::Arc;
 
 pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = 1000;
 pub const DEFAULT_LEADER_ROTATION_INTERVAL: u64 = 100;
@@ -480,13 +481,12 @@ impl Default for LeaderScheduler {
 // 1) Give the node a nonzero number of tokens,
 // 2) A vote from the validator
 pub fn make_active_set_entries(
-    active_keypair: &Keypair,
-    signer: SocketAddr,
+    active_keypair: &Arc<Keypair>,
     token_source: &Keypair,
     last_entry_id: &Hash,
     last_tick_id: &Hash,
     num_ending_ticks: usize,
-) -> (Vec<Entry>, Pubkey) {
+) -> (Vec<Entry>, VoteSignerProxy) {
     // 1) Create transfer token entry
     let transfer_tx =
         Transaction::system_new(&token_source, active_keypair.pubkey(), 3, *last_tick_id);
@@ -494,16 +494,11 @@ pub fn make_active_set_entries(
     let mut last_entry_id = transfer_entry.id;
 
     // 2) Create and register the vote account
-    let rpc_client = RpcClient::new_from_socket(signer);
-
-    let msg = "Registering a new node";
-    let sig = Signature::new(&active_keypair.sign(msg.as_bytes()).as_ref());
-
-    let params = json!([active_keypair.pubkey(), sig, msg.as_bytes()]);
-    let resp = RpcRequest::RegisterNode
-        .retry_make_rpc_request(&rpc_client, 1, Some(params), 5)
-        .unwrap();
-    let vote_account_id: Pubkey = serde_json::from_value(resp).unwrap();
+    let vote_signer = VoteSignerProxy::new(
+        active_keypair,
+        Box::new(VoteSignRequestProcessor::default()),
+    );
+    let vote_account_id: Pubkey = vote_signer.vote_account.clone();
 
     let new_vote_account_tx =
         Transaction::vote_account_new(active_keypair, vote_account_id, *last_tick_id, 1, 1);
@@ -530,7 +525,7 @@ pub fn make_active_set_entries(
     let mut txs = vec![transfer_entry, new_vote_account_entry, vote_entry];
     let empty_ticks = create_ticks(num_ending_ticks, last_entry_id);
     txs.extend(empty_ticks);
-    (txs, vote_account_id)
+    (txs, vote_signer)
 }
 
 #[cfg(test)]
@@ -540,14 +535,13 @@ mod tests {
         LeaderScheduler, LeaderSchedulerConfig, DEFAULT_BOOTSTRAP_HEIGHT,
         DEFAULT_LEADER_ROTATION_INTERVAL, DEFAULT_SEED_ROTATION_INTERVAL,
     };
-    use crate::local_vote_signer_service::LocalVoteSignerService;
     use crate::mint::Mint;
-    use crate::service::Service;
     use crate::vote_signer_proxy::VoteSignerProxy;
     use hashbrown::HashSet;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_vote_signer::rpc::VoteSignRequestProcessor;
     use std::hash::Hash as StdHash;
     use std::iter::FromIterator;
     use std::sync::Arc;
@@ -599,11 +593,13 @@ mod tests {
             .last()
             .expect("Mint should not create empty genesis entries")
             .id;
-        let (signer_service, signer) = LocalVoteSignerService::new();
         for i in 0..num_validators {
             let new_validator = Keypair::new();
             let new_pubkey = new_validator.pubkey();
-            let vote_signer = VoteSignerProxy::new(&Arc::new(new_validator), signer.clone());
+            let vote_signer = VoteSignerProxy::new(
+                &Arc::new(new_validator),
+                Box::new(VoteSignRequestProcessor::default()),
+            );
             validators.push(new_pubkey);
             // Give the validator some tokens
             bank.transfer(
@@ -697,7 +693,6 @@ mod tests {
                 Some((current_leader, slot))
             );
         }
-        signer_service.join().unwrap();
     }
 
     #[test]
@@ -717,7 +712,6 @@ mod tests {
         let start_height = 3;
         let num_old_ids = 20;
         let mut old_ids = HashSet::new();
-        let (signer_service, signer) = LocalVoteSignerService::new();
         for _ in 0..num_old_ids {
             let new_keypair = Keypair::new();
             let pk = new_keypair.pubkey();
@@ -728,7 +722,10 @@ mod tests {
                 .unwrap();
 
             // Create a vote account
-            let vote_signer = VoteSignerProxy::new(&Arc::new(new_keypair), signer);
+            let vote_signer = VoteSignerProxy::new(
+                &Arc::new(new_keypair),
+                Box::new(VoteSignRequestProcessor::default()),
+            );
             vote_signer
                 .new_vote_account(&bank, 1 as u64, mint.last_id())
                 .unwrap();
@@ -749,7 +746,10 @@ mod tests {
                 .unwrap();
 
             // Create a vote account
-            let vote_signer = VoteSignerProxy::new(&Arc::new(new_keypair), signer);
+            let vote_signer = VoteSignerProxy::new(
+                &Arc::new(new_keypair),
+                Box::new(VoteSignRequestProcessor::default()),
+            );
             vote_signer
                 .new_vote_account(&bank, 1 as u64, mint.last_id())
                 .unwrap();
@@ -777,7 +777,6 @@ mod tests {
         let result =
             leader_scheduler.get_active_set(2 * active_window_length + start_height, &bank);
         assert!(result.is_empty());
-        signer_service.join().unwrap();
     }
 
     #[test]
@@ -1020,11 +1019,13 @@ mod tests {
             .last()
             .expect("Mint should not create empty genesis entries")
             .id;
-        let (signer_service, signer) = LocalVoteSignerService::new();
         for i in 0..num_validators {
             let new_validator = Keypair::new();
             let new_pubkey = new_validator.pubkey();
-            let vote_signer = VoteSignerProxy::new(&Arc::new(new_validator), signer);
+            let vote_signer = VoteSignerProxy::new(
+                &Arc::new(new_validator),
+                Box::new(VoteSignRequestProcessor::default()),
+            );
             validators.push(new_pubkey);
             // Give the validator some tokens
             bank.transfer(
@@ -1063,7 +1064,6 @@ mod tests {
 
             assert_eq!(vec![expected], *result);
         }
-        signer_service.join().unwrap();
     }
 
     #[test]
@@ -1084,8 +1084,10 @@ mod tests {
         // window
         let initial_vote_height = 1;
 
-        let (signer_service, signer) = LocalVoteSignerService::new();
-        let vote_signer = VoteSignerProxy::new(&Arc::new(leader_keypair), signer);
+        let vote_signer = VoteSignerProxy::new(
+            &Arc::new(leader_keypair),
+            Box::new(VoteSignRequestProcessor::default()),
+        );
         // Create a vote account
         vote_signer
             .new_vote_account(&bank, 1 as u64, mint.last_id())
@@ -1101,7 +1103,6 @@ mod tests {
         let result =
             leader_scheduler.get_active_set(initial_vote_height + active_window_length + 1, &bank);
         assert!(result.is_empty());
-        signer_service.join().unwrap();
     }
 
     #[test]
@@ -1222,12 +1223,14 @@ mod tests {
         // Create and add validator to the active set
         let validator_keypair = Keypair::new();
         let validator_id = validator_keypair.pubkey();
-        let (signer_service, signer) = LocalVoteSignerService::new();
         if add_validator {
             bank.transfer(5, &mint.keypair(), validator_id, last_id)
                 .unwrap();
             // Create a vote account
-            let vote_signer = VoteSignerProxy::new(&Arc::new(validator_keypair), signer);
+            let vote_signer = VoteSignerProxy::new(
+                &Arc::new(validator_keypair),
+                Box::new(VoteSignRequestProcessor::default()),
+            );
             vote_signer
                 .new_vote_account(&bank, 1 as u64, mint.last_id())
                 .unwrap();
@@ -1259,7 +1262,10 @@ mod tests {
         .unwrap();
 
         // Create a vote account
-        let vote_signer = VoteSignerProxy::new(&Arc::new(bootstrap_leader_keypair), signer);
+        let vote_signer = VoteSignerProxy::new(
+            &Arc::new(bootstrap_leader_keypair),
+            Box::new(VoteSignRequestProcessor::default()),
+        );
         vote_signer
             .new_vote_account(&bank, vote_account_tokens as u64, mint.last_id())
             .unwrap();
@@ -1276,7 +1282,6 @@ mod tests {
         } else {
             assert!(leader_scheduler.leader_schedule[0] == bootstrap_leader_id);
         }
-        signer_service.join().unwrap();
     }
 
     #[test]
@@ -1381,8 +1386,10 @@ mod tests {
         // Create a vote account for the validator
         bank.transfer(5, &mint.keypair(), validator_id, last_id)
             .unwrap();
-        let (signer_service, signer) = LocalVoteSignerService::new();
-        let vote_signer = VoteSignerProxy::new(&Arc::new(validator_keypair), signer);
+        let vote_signer = VoteSignerProxy::new(
+            &Arc::new(validator_keypair),
+            Box::new(VoteSignRequestProcessor::default()),
+        );
         vote_signer
             .new_vote_account(&bank, 1 as u64, mint.last_id())
             .unwrap();
@@ -1391,7 +1398,10 @@ mod tests {
         // Create a vote account for the leader
         bank.transfer(5, &mint.keypair(), bootstrap_leader_id, last_id)
             .unwrap();
-        let vote_signer = VoteSignerProxy::new(&Arc::new(bootstrap_leader_keypair), signer);
+        let vote_signer = VoteSignerProxy::new(
+            &Arc::new(bootstrap_leader_keypair),
+            Box::new(VoteSignRequestProcessor::default()),
+        );
         vote_signer
             .new_vote_account(&bank, 1 as u64, mint.last_id())
             .unwrap();
@@ -1455,6 +1465,5 @@ mod tests {
                 .max_height_for_leader(bootstrap_height + 2 * seed_rotation_interval + 1),
             None
         );
-        signer_service.join().unwrap();
     }
 }
