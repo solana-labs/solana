@@ -419,7 +419,7 @@ mod tests {
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Transaction;
-    use solana_vote_signer::rpc::VoteSignRequestProcessor;
+    use solana_vote_signer::rpc::LocalVoteSigner;
     use std::fs::remove_dir_all;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
@@ -688,10 +688,8 @@ mod tests {
         bank.leader_scheduler = leader_scheduler;
 
         let vote_account_keypair = Arc::new(Keypair::new());
-        let vote_signer = VoteSignerProxy::new(
-            &vote_account_keypair,
-            Box::new(VoteSignRequestProcessor::default()),
-        );
+        let vote_signer =
+            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
         let entry_height = alice.create_entries().len() as u64;
         let server = Fullnode::new_with_bank(
             leader_keypair,

@@ -18,7 +18,7 @@ pub struct VoteSignerRpcService {
 
 impl VoteSignerRpcService {
     pub fn new(rpc_addr: SocketAddr, exit: Arc<AtomicBool>) -> Self {
-        let request_processor = VoteSignRequestProcessor::default();
+        let request_processor = LocalVoteSigner::default();
         let exit_ = exit.clone();
         let thread_hdl = Builder::new()
             .name("solana-vote-signer-jsonrpc".to_string())
@@ -64,7 +64,7 @@ impl VoteSignerRpcService {
 
 #[derive(Clone)]
 pub struct Meta {
-    pub request_processor: VoteSignRequestProcessor,
+    pub request_processor: LocalVoteSigner,
 }
 impl Metadata for Meta {}
 
@@ -129,17 +129,17 @@ fn verify_signature(sig: &Signature, pubkey: &Pubkey, msg: &[u8]) -> Result<()> 
     }
 }
 
-pub trait VoteSignerInterface {
+pub trait VoteSigner {
     fn register(&self, pubkey: Pubkey, sig: &Signature, signed_msg: &[u8]) -> Result<Pubkey>;
     fn sign(&self, pubkey: Pubkey, sig: &Signature, msg: &[u8]) -> Result<Signature>;
     fn deregister(&self, pubkey: Pubkey, sig: &Signature, msg: &[u8]) -> Result<()>;
 }
 
 #[derive(Clone)]
-pub struct VoteSignRequestProcessor {
+pub struct LocalVoteSigner {
     nodes: Arc<RwLock<HashMap<Pubkey, Keypair>>>,
 }
-impl VoteSignerInterface for VoteSignRequestProcessor {
+impl VoteSigner for LocalVoteSigner {
     /// Process JSON-RPC request items sent via JSON-RPC.
     fn register(&self, pubkey: Pubkey, sig: &Signature, msg: &[u8]) -> Result<Pubkey> {
         verify_signature(&sig, &pubkey, &msg)?;
@@ -170,9 +170,9 @@ impl VoteSignerInterface for VoteSignRequestProcessor {
     }
 }
 
-impl Default for VoteSignRequestProcessor {
+impl Default for LocalVoteSigner {
     fn default() -> Self {
-        VoteSignRequestProcessor {
+        LocalVoteSigner {
             nodes: Arc::new(RwLock::new(HashMap::new())),
         }
     }
@@ -186,7 +186,7 @@ mod tests {
     use std::mem;
 
     fn start_rpc_handler() -> (MetaIoHandler<Meta>, Meta) {
-        let request_processor = VoteSignRequestProcessor::default();
+        let request_processor = LocalVoteSigner::default();
         let mut io = MetaIoHandler::default();
         let rpc = VoteSignerRpcImpl;
         io.extend_with(rpc.to_delegate());

@@ -437,7 +437,7 @@ mod tests {
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::vote_program::VoteProgram;
     use solana_sdk::vote_transaction::VoteTransaction;
-    use solana_vote_signer::rpc::VoteSignRequestProcessor;
+    use solana_vote_signer::rpc::LocalVoteSigner;
     use std::fs::remove_dir_all;
 
     #[test]
@@ -458,10 +458,8 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
-        let vote_signer = VoteSignerProxy::new(
-            &vote_account_keypair,
-            Box::new(VoteSignRequestProcessor::default()),
-        );
+        let vote_signer =
+            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
         let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
@@ -516,10 +514,8 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
-        let vote_signer = VoteSignerProxy::new(
-            &vote_account_keypair,
-            Box::new(VoteSignRequestProcessor::default()),
-        );
+        let vote_signer =
+            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
         let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
@@ -578,10 +574,8 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
-        let vote_signer = VoteSignerProxy::new(
-            &vote_account_keypair,
-            Box::new(VoteSignRequestProcessor::default()),
-        );
+        let vote_signer =
+            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
         let entry_height = alice.create_entries().len() as u64;
         let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
@@ -632,7 +626,7 @@ mod tests {
         let leader_vote_account_keypair = Arc::new(Keypair::new());
         let vote_signer = VoteSignerProxy::new(
             &leader_vote_account_keypair,
-            Box::new(VoteSignRequestProcessor::default()),
+            Box::new(LocalVoteSigner::default()),
         );
         let server = Fullnode::new_with_bank(
             leader_keypair,
@@ -726,10 +720,8 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
-        let vote_signer = VoteSignerProxy::new(
-            &vote_account_keypair,
-            Box::new(VoteSignRequestProcessor::default()),
-        );
+        let vote_signer =
+            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
         let last_id = bank.last_id();
         let entry_height = alice.create_entries().len() as u64;
         let server = Fullnode::new_with_bank(

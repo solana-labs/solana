@@ -655,7 +655,7 @@ mod tests {
     use crate::streamer::responder;
     use crate::vote_signer_proxy::VoteSignerProxy;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_vote_signer::rpc::VoteSignRequestProcessor;
+    use solana_vote_signer::rpc::LocalVoteSigner;
     use std::cmp;
     use std::fs::remove_dir_all;
     use std::net::UdpSocket;
@@ -680,7 +680,7 @@ mod tests {
 
         let last_id = bank.last_id();
         let keypair = Arc::new(keypair);
-        let signer = VoteSignerProxy::new(&keypair, Box::new(VoteSignRequestProcessor::default()));
+        let signer = VoteSignerProxy::new(&keypair, Box::new(LocalVoteSigner::default()));
         let v = Fullnode::new_with_bank(
             keypair,
             Arc::new(signer),
@@ -723,8 +723,7 @@ mod tests {
                 let entry_height = mint.create_entries().len() as u64;
                 let last_id = bank.last_id();
                 let keypair = Arc::new(keypair);
-                let signer =
-                    VoteSignerProxy::new(&keypair, Box::new(VoteSignRequestProcessor::default()));
+                let signer = VoteSignerProxy::new(&keypair, Box::new(LocalVoteSigner::default()));
                 Fullnode::new_with_bank(
                     keypair,
                     Arc::new(signer),
@@ -799,7 +798,7 @@ mod tests {
         let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
         let signer = VoteSignerProxy::new(
             &bootstrap_leader_keypair,
-            Box::new(VoteSignRequestProcessor::default()),
+            Box::new(LocalVoteSigner::default()),
         );
         // Start up the leader
         let mut bootstrap_leader = Fullnode::new(
@@ -912,7 +911,7 @@ mod tests {
             // Test that a node knows to transition to a validator based on parsing the ledger
             let vote_signer = VoteSignerProxy::new(
                 &bootstrap_leader_keypair,
-                Box::new(VoteSignRequestProcessor::default()),
+                Box::new(LocalVoteSigner::default()),
             );
             let bootstrap_leader = Fullnode::new(
                 bootstrap_leader_node,
@@ -1032,10 +1031,8 @@ mod tests {
             Some(bootstrap_height),
         );
 
-        let vote_signer = VoteSignerProxy::new(
-            &validator_keypair,
-            Box::new(VoteSignRequestProcessor::default()),
-        );
+        let vote_signer =
+            VoteSignerProxy::new(&validator_keypair, Box::new(LocalVoteSigner::default()));
         // Start the validator
         let mut validator = Fullnode::new(
             validator_node,

@@ -11,7 +11,7 @@ use solana::local_vote_signer_service::LocalVoteSignerService;
 use solana::service::Service;
 use solana::socketaddr;
 use solana::thin_client::poll_gossip_for_leader;
-use solana::vote_signer_proxy::{VoteSignerForwarder, VoteSignerProxy};
+use solana::vote_signer_proxy::{RemoteVoteSigner, VoteSignerProxy};
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::vote_program::VoteProgram;
 use solana_sdk::vote_transaction::VoteTransaction;
@@ -168,7 +168,7 @@ fn main() {
     };
 
     let mut client = mk_client(&leader);
-    let vote_signer = VoteSignerProxy::new(&keypair, Box::new(VoteSignerForwarder::new(signer)));
+    let vote_signer = VoteSignerProxy::new(&keypair, Box::new(RemoteVoteSigner::new(signer)));
     let vote_account = vote_signer.vote_account;
     info!("New vote account ID is {:?}", vote_account);
 

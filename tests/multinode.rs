@@ -29,7 +29,7 @@ use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::{duration_as_ms, duration_as_s};
 use solana_sdk::transaction::Transaction;
-use solana_vote_signer::rpc::VoteSignRequestProcessor;
+use solana_vote_signer::rpc::LocalVoteSigner;
 use std::collections::{HashSet, VecDeque};
 use std::env;
 use std::fs::remove_dir_all;
@@ -157,10 +157,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
             .unwrap();
     }
 
-    let signer_proxy = VoteSignerProxy::new(
-        &leader_keypair,
-        Box::new(VoteSignRequestProcessor::default()),
-    );
+    let signer_proxy = VoteSignerProxy::new(&leader_keypair, Box::new(LocalVoteSigner::default()));
     let leader = Fullnode::new(
         leader,
         &leader_ledger_path,
@@ -178,8 +175,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     let validator_pubkey = keypair.pubkey().clone();
     let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
     let validator_data = validator.info.clone();
-    let signer_proxy =
-        VoteSignerProxy::new(&keypair, Box::new(VoteSignRequestProcessor::default()));
+    let signer_proxy = VoteSignerProxy::new(&keypair, Box::new(LocalVoteSigner::default()));
     let validator = Fullnode::new(
         validator,
         &zero_ledger_path,
@@ -257,10 +253,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     );
     ledger_paths.push(zero_ledger_path.clone());
 
-    let signer_proxy = VoteSignerProxy::new(
-        &leader_keypair,
-        Box::new(VoteSignRequestProcessor::default()),
-    );
+    let signer_proxy = VoteSignerProxy::new(&leader_keypair, Box::new(LocalVoteSigner::default()));
     let server = Fullnode::new(
         leader,
         &leader_ledger_path,
@@ -289,8 +282,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
                 .unwrap();
         info!("validator balance {}", validator_balance);
 
-        let signer_proxy =
-            VoteSignerProxy::new(&keypair, Box::new(VoteSignRequestProcessor::default()));
+        let signer_proxy = VoteSignerProxy::new(&keypair, Box::new(LocalVoteSigner::default()));
         let val = Fullnode::new(
             validator,
             &ledger_path,
@@ -329,8 +321,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     // balances
     let keypair = Arc::new(Keypair::new());
     let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
-    let signer_proxy =
-        VoteSignerProxy::new(&keypair, Box::new(VoteSignRequestProcessor::default()));
+    let signer_proxy = VoteSignerProxy::new(&keypair, Box::new(LocalVoteSigner::default()));
     let val = Fullnode::new(
         validator,
         &zero_ledger_path,
@@ -401,10 +392,7 @@ fn test_multi_node_basic() {
     let (alice, leader_ledger_path) =
         create_tmp_genesis("multi_node_basic", 10_000, leader_data.id, 500);
     ledger_paths.push(leader_ledger_path.clone());
-    let signer_proxy = VoteSignerProxy::new(
-        &leader_keypair,
-        Box::new(VoteSignRequestProcessor::default()),
-    );
+    let signer_proxy = VoteSignerProxy::new(&leader_keypair, Box::new(LocalVoteSigner::default()));
     let server = Fullnode::new(
         leader,
         &leader_ledger_path,
@@ -429,8 +417,7 @@ fn test_multi_node_basic() {
             send_tx_and_retry_get_balance(&leader_data, &alice, &validator_pubkey, 500, None)
                 .unwrap();
         info!("validator balance {}", validator_balance);
-        let signer_proxy =
-            VoteSignerProxy::new(&keypair, Box::new(VoteSignRequestProcessor::default()));
+        let signer_proxy = VoteSignerProxy::new(&keypair, Box::new(LocalVoteSigner::default()));
         let val = Fullnode::new(
             validator,
             &ledger_path,
@@ -486,10 +473,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
     ledger_paths.push(leader_ledger_path.clone());
 
     let leader_data = leader.info.clone();
-    let signer_proxy = VoteSignerProxy::new(
-        &leader_keypair,
-        Box::new(VoteSignRequestProcessor::default()),
-    );
+    let signer_proxy = VoteSignerProxy::new(&leader_keypair, Box::new(LocalVoteSigner::default()));
     let leader_fullnode = Fullnode::new(
         leader,
         &leader_ledger_path,
@@ -512,8 +496,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
     let validator_data = validator.info.clone();
     let ledger_path = tmp_copy_ledger(&leader_ledger_path, "boot_validator_from_file");
     ledger_paths.push(ledger_path.clone());
-    let signer_proxy =
-        VoteSignerProxy::new(&keypair, Box::new(VoteSignRequestProcessor::default()));
+    let signer_proxy = VoteSignerProxy::new(&keypair, Box::new(LocalVoteSigner::default()));
     let val_fullnode = Fullnode::new(
         validator,
         &ledger_path,
@@ -578,7 +561,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
 
     let signer_proxy = Arc::new(VoteSignerProxy::new(
         &leader_keypair,
-        Box::new(VoteSignRequestProcessor::default()),
+        Box::new(LocalVoteSigner::default()),
     ));
     let (leader_data, leader_fullnode) =
         create_leader(&ledger_path, leader_keypair.clone(), signer_proxy.clone());
@@ -614,8 +597,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
     let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
     let validator_data = validator.info.clone();
 
-    let signer_proxy =
-        VoteSignerProxy::new(&keypair, Box::new(VoteSignRequestProcessor::default()));
+    let signer_proxy = VoteSignerProxy::new(&keypair, Box::new(LocalVoteSigner::default()));
     let val_fullnode = Fullnode::new(
         validator,
         &stale_ledger_path,
@@ -683,10 +665,7 @@ fn test_multi_node_dynamic_network() {
     let alice_arc = Arc::new(RwLock::new(alice));
     let leader_data = leader.info.clone();
 
-    let signer_proxy = VoteSignerProxy::new(
-        &leader_keypair,
-        Box::new(VoteSignRequestProcessor::default()),
-    );
+    let signer_proxy = VoteSignerProxy::new(&leader_keypair, Box::new(LocalVoteSigner::default()));
     let server = Fullnode::new(
         leader,
         &leader_ledger_path,
@@ -756,10 +735,8 @@ fn test_multi_node_dynamic_network() {
                     let rd = validator.info.clone();
                     info!("starting {} {}", keypair.pubkey(), rd.id);
                     let keypair = Arc::new(keypair);
-                    let signer_proxy = VoteSignerProxy::new(
-                        &keypair,
-                        Box::new(VoteSignRequestProcessor::default()),
-                    );
+                    let signer_proxy =
+                        VoteSignerProxy::new(&keypair, Box::new(LocalVoteSigner::default()));
                     let val = Fullnode::new(
                         validator,
                         &ledger_path,
@@ -917,10 +894,7 @@ fn test_leader_to_validator_transition() {
         Some(bootstrap_height),
     );
 
-    let signer_proxy = VoteSignerProxy::new(
-        &leader_keypair,
-        Box::new(VoteSignRequestProcessor::default()),
-    );
+    let signer_proxy = VoteSignerProxy::new(&leader_keypair, Box::new(LocalVoteSigner::default()));
     let mut leader = Fullnode::new(
         leader_node,
         &leader_ledger_path,
@@ -1069,10 +1043,8 @@ fn test_leader_validator_basic() {
     );
 
     // Start the validator node
-    let signer_proxy = VoteSignerProxy::new(
-        &validator_keypair,
-        Box::new(VoteSignRequestProcessor::default()),
-    );
+    let signer_proxy =
+        VoteSignerProxy::new(&validator_keypair, Box::new(LocalVoteSigner::default()));
     let mut validator = Fullnode::new(
         validator_node,
         &validator_ledger_path,
@@ -1085,10 +1057,7 @@ fn test_leader_validator_basic() {
     );
 
     // Start the leader fullnode
-    let signer_proxy = VoteSignerProxy::new(
-        &leader_keypair,
-        Box::new(VoteSignRequestProcessor::default()),
-    );
+    let signer_proxy = VoteSignerProxy::new(&leader_keypair, Box::new(LocalVoteSigner::default()));
     let mut leader = Fullnode::new(
         leader_node,
         &leader_ledger_path,
@@ -1273,7 +1242,7 @@ fn test_dropped_handoff_recovery() {
 
     let signer_proxy = VoteSignerProxy::new(
         &bootstrap_leader_keypair,
-        Box::new(VoteSignRequestProcessor::default()),
+        Box::new(LocalVoteSigner::default()),
     );
     // Start up the bootstrap leader fullnode
     let bootstrap_leader = Fullnode::new(
@@ -1299,7 +1268,7 @@ fn test_dropped_handoff_recovery() {
         ledger_paths.push(validator_ledger_path.clone());
         let validator_id = kp.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(validator_id);
-        let signer_proxy = VoteSignerProxy::new(&kp, Box::new(VoteSignRequestProcessor::default()));
+        let signer_proxy = VoteSignerProxy::new(&kp, Box::new(LocalVoteSigner::default()));
         let validator = Fullnode::new(
             validator_node,
             &validator_ledger_path,
@@ -1326,10 +1295,8 @@ fn test_dropped_handoff_recovery() {
 
     // Now start up the "next leader" node
     let next_leader_node = Node::new_localhost_with_pubkey(next_leader_keypair.pubkey());
-    let signer_proxy = VoteSignerProxy::new(
-        &next_leader_keypair,
-        Box::new(VoteSignRequestProcessor::default()),
-    );
+    let signer_proxy =
+        VoteSignerProxy::new(&next_leader_keypair, Box::new(LocalVoteSigner::default()));
     let mut next_leader = Fullnode::new(
         next_leader_node,
         &next_leader_ledger_path,
@@ -1476,7 +1443,7 @@ fn test_full_leader_validator_network() {
 
         let validator_id = kp.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(validator_id);
-        let signer_proxy = VoteSignerProxy::new(&kp, Box::new(VoteSignRequestProcessor::default()));
+        let signer_proxy = VoteSignerProxy::new(&kp, Box::new(LocalVoteSigner::default()));
         let validator = Arc::new(RwLock::new(Fullnode::new(
             validator_node,
             &validator_ledger_path,
@@ -1493,10 +1460,7 @@ fn test_full_leader_validator_network() {
     }
 
     // Start up the bootstrap leader
-    let signer_proxy = VoteSignerProxy::new(
-        &leader_keypair,
-        Box::new(VoteSignRequestProcessor::default()),
-    );
+    let signer_proxy = VoteSignerProxy::new(&leader_keypair, Box::new(LocalVoteSigner::default()));
     let bootstrap_leader = Arc::new(RwLock::new(Fullnode::new(
         bootstrap_leader_node,
         &bootstrap_leader_ledger_path,
@@ -1680,7 +1644,7 @@ fn test_broadcast_last_tick() {
     let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
     let signer_proxy = VoteSignerProxy::new(
         &bootstrap_leader_keypair,
-        Box::new(VoteSignRequestProcessor::default()),
+        Box::new(LocalVoteSigner::default()),
     );
     let mut bootstrap_leader = Fullnode::new(
         bootstrap_leader_node,

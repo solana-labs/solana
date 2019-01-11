@@ -16,7 +16,7 @@ use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::Vote;
 use solana_sdk::vote_transaction::VoteTransaction;
-use solana_vote_signer::rpc::VoteSignerInterface;
+use solana_vote_signer::rpc::VoteSigner;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
@@ -28,11 +28,11 @@ pub enum VoteError {
     LeaderInfoNotFound,
 }
 
-pub struct VoteSignerForwarder {
+pub struct RemoteVoteSigner {
     rpc_client: RpcClient,
 }
 
-impl VoteSignerForwarder {
+impl RemoteVoteSigner {
     pub fn new(signer: SocketAddr) -> Self {
         Self {
             rpc_client: RpcClient::new_from_socket(signer),
@@ -40,7 +40,7 @@ impl VoteSignerForwarder {
     }
 }
 
-impl VoteSignerInterface for VoteSignerForwarder {
+impl VoteSigner for RemoteVoteSigner {
     fn register(
         &self,
         pubkey: Pubkey,
@@ -73,12 +73,12 @@ impl VoteSignerInterface for VoteSignerForwarder {
 
 pub struct VoteSignerProxy {
     keypair: Arc<Keypair>,
-    signer: Box<VoteSignerInterface + Send + Sync>,
+    signer: Box<VoteSigner + Send + Sync>,
     pub vote_account: Pubkey,
 }
 
 impl VoteSignerProxy {
-    pub fn new(keypair: &Arc<Keypair>, signer: Box<VoteSignerInterface + Send + Sync>) -> Self {
+    pub fn new(keypair: &Arc<Keypair>, signer: Box<VoteSigner + Send + Sync>) -> Self {
         let msg = "Registering a new node";
         let sig = Signature::new(&keypair.sign(msg.as_bytes()).as_ref());
         let vote_account = signer

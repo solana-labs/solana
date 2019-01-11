@@ -163,7 +163,7 @@ pub mod tests {
     use bincode::serialize;
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_vote_signer::rpc::VoteSignRequestProcessor;
+    use solana_vote_signer::rpc::LocalVoteSigner;
     use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;
@@ -193,10 +193,8 @@ pub mod tests {
                 // Create new validator to vote
                 let validator_keypair = Arc::new(Keypair::new());
                 let last_id = ids[i];
-                let vote_signer = VoteSignerProxy::new(
-                    &validator_keypair,
-                    Box::new(VoteSignRequestProcessor::default()),
-                );
+                let vote_signer =
+                    VoteSignerProxy::new(&validator_keypair, Box::new(LocalVoteSigner::default()));
 
                 // Give the validator some tokens
                 bank.transfer(2, &mint.keypair(), validator_keypair.pubkey(), last_id)

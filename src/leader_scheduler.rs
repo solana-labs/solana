@@ -15,7 +15,7 @@ use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, Vote, VoteProgram};
 use solana_sdk::vote_transaction::VoteTransaction;
-use solana_vote_signer::rpc::VoteSignRequestProcessor;
+use solana_vote_signer::rpc::LocalVoteSigner;
 use std::io::Cursor;
 use std::sync::Arc;
 
@@ -494,10 +494,7 @@ pub fn make_active_set_entries(
     let mut last_entry_id = transfer_entry.id;
 
     // 2) Create and register the vote account
-    let vote_signer = VoteSignerProxy::new(
-        active_keypair,
-        Box::new(VoteSignRequestProcessor::default()),
-    );
+    let vote_signer = VoteSignerProxy::new(active_keypair, Box::new(LocalVoteSigner::default()));
     let vote_account_id: Pubkey = vote_signer.vote_account;
 
     let new_vote_account_tx =
@@ -541,7 +538,7 @@ mod tests {
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_vote_signer::rpc::VoteSignRequestProcessor;
+    use solana_vote_signer::rpc::LocalVoteSigner;
     use std::hash::Hash as StdHash;
     use std::iter::FromIterator;
     use std::sync::Arc;
@@ -598,7 +595,7 @@ mod tests {
             let new_pubkey = new_validator.pubkey();
             let vote_signer = VoteSignerProxy::new(
                 &Arc::new(new_validator),
-                Box::new(VoteSignRequestProcessor::default()),
+                Box::new(LocalVoteSigner::default()),
             );
             validators.push(new_pubkey);
             // Give the validator some tokens
@@ -722,10 +719,8 @@ mod tests {
                 .unwrap();
 
             // Create a vote account
-            let vote_signer = VoteSignerProxy::new(
-                &Arc::new(new_keypair),
-                Box::new(VoteSignRequestProcessor::default()),
-            );
+            let vote_signer =
+                VoteSignerProxy::new(&Arc::new(new_keypair), Box::new(LocalVoteSigner::default()));
             vote_signer
                 .new_vote_account(&bank, 1 as u64, mint.last_id())
                 .unwrap();
@@ -746,10 +741,8 @@ mod tests {
                 .unwrap();
 
             // Create a vote account
-            let vote_signer = VoteSignerProxy::new(
-                &Arc::new(new_keypair),
-                Box::new(VoteSignRequestProcessor::default()),
-            );
+            let vote_signer =
+                VoteSignerProxy::new(&Arc::new(new_keypair), Box::new(LocalVoteSigner::default()));
             vote_signer
                 .new_vote_account(&bank, 1 as u64, mint.last_id())
                 .unwrap();
@@ -1024,7 +1017,7 @@ mod tests {
             let new_pubkey = new_validator.pubkey();
             let vote_signer = VoteSignerProxy::new(
                 &Arc::new(new_validator),
-                Box::new(VoteSignRequestProcessor::default()),
+                Box::new(LocalVoteSigner::default()),
             );
             validators.push(new_pubkey);
             // Give the validator some tokens
@@ -1086,7 +1079,7 @@ mod tests {
 
         let vote_signer = VoteSignerProxy::new(
             &Arc::new(leader_keypair),
-            Box::new(VoteSignRequestProcessor::default()),
+            Box::new(LocalVoteSigner::default()),
         );
         // Create a vote account
         vote_signer
@@ -1229,7 +1222,7 @@ mod tests {
             // Create a vote account
             let vote_signer = VoteSignerProxy::new(
                 &Arc::new(validator_keypair),
-                Box::new(VoteSignRequestProcessor::default()),
+                Box::new(LocalVoteSigner::default()),
             );
             vote_signer
                 .new_vote_account(&bank, 1 as u64, mint.last_id())
@@ -1264,7 +1257,7 @@ mod tests {
         // Create a vote account
         let vote_signer = VoteSignerProxy::new(
             &Arc::new(bootstrap_leader_keypair),
-            Box::new(VoteSignRequestProcessor::default()),
+            Box::new(LocalVoteSigner::default()),
         );
         vote_signer
             .new_vote_account(&bank, vote_account_tokens as u64, mint.last_id())
@@ -1388,7 +1381,7 @@ mod tests {
             .unwrap();
         let vote_signer = VoteSignerProxy::new(
             &Arc::new(validator_keypair),
-            Box::new(VoteSignRequestProcessor::default()),
+            Box::new(LocalVoteSigner::default()),
         );
         vote_signer
             .new_vote_account(&bank, 1 as u64, mint.last_id())
@@ -1400,7 +1393,7 @@ mod tests {
             .unwrap();
         let vote_signer = VoteSignerProxy::new(
             &Arc::new(bootstrap_leader_keypair),
-            Box::new(VoteSignRequestProcessor::default()),
+            Box::new(LocalVoteSigner::default()),
         );
         vote_signer
             .new_vote_account(&bank, 1 as u64, mint.last_id())

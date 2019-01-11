@@ -19,7 +19,7 @@ use solana::vote_signer_proxy::VoteSignerProxy;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
-use solana_vote_signer::rpc::VoteSignRequestProcessor;
+use solana_vote_signer::rpc::LocalVoteSigner;
 use std::fs::remove_dir_all;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
@@ -44,10 +44,8 @@ fn test_replicator_startup() {
         tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");
 
     {
-        let signer_proxy = VoteSignerProxy::new(
-            &leader_keypair,
-            Box::new(VoteSignRequestProcessor::default()),
-        );
+        let signer_proxy =
+            VoteSignerProxy::new(&leader_keypair, Box::new(LocalVoteSigner::default()));
 
         let leader = Fullnode::new(
             leader_node,
@@ -61,10 +59,8 @@ fn test_replicator_startup() {
         );
 
         let validator_keypair = Arc::new(Keypair::new());
-        let signer_proxy = VoteSignerProxy::new(
-            &validator_keypair,
-            Box::new(VoteSignRequestProcessor::default()),
-        );
+        let signer_proxy =
+            VoteSignerProxy::new(&validator_keypair, Box::new(LocalVoteSigner::default()));
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
         #[cfg(feature = "chacha")]
         let validator_node_info = validator_node.info.clone();

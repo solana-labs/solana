@@ -819,7 +819,7 @@ mod tests {
     use solana::vote_signer_proxy::VoteSignerProxy;
     use solana_drone::drone::run_local_drone;
     use solana_sdk::signature::{gen_keypair_file, read_keypair, read_pkcs8, Keypair, KeypairUtil};
-    use solana_vote_signer::rpc::VoteSignRequestProcessor;
+    use solana_vote_signer::rpc::LocalVoteSigner;
     use std::fs;
     use std::fs::remove_dir_all;
     use std::path::Path;
@@ -836,10 +836,7 @@ mod tests {
         let leader_data = leader.info.clone();
         let (_alice, ledger_path) =
             create_tmp_genesis("wallet_request_airdrop", 10_000_000, leader_data.id, 1000);
-        let signer = VoteSignerProxy::new(
-            &leader_keypair,
-            Box::new(VoteSignRequestProcessor::default()),
-        );
+        let signer = VoteSignerProxy::new(&leader_keypair, Box::new(LocalVoteSigner::default()));
         let _server = Fullnode::new(
             leader,
             &ledger_path,
@@ -1207,10 +1204,7 @@ mod tests {
         let leader_data = leader.info.clone();
         let (alice, ledger_path) =
             create_tmp_genesis("wallet_process_command", 10_000_000, leader_data.id, 1000);
-        let signer = VoteSignerProxy::new(
-            &leader_keypair,
-            Box::new(VoteSignRequestProcessor::default()),
-        );
+        let signer = VoteSignerProxy::new(&leader_keypair, Box::new(LocalVoteSigner::default()));
         let server = Fullnode::new(
             leader,
             &ledger_path,
@@ -1271,10 +1265,7 @@ mod tests {
         let leader_data = leader.info.clone();
         let (alice, ledger_path) =
             create_tmp_genesis("wallet_request_airdrop", 10_000_000, leader_data.id, 1000);
-        let signer = VoteSignerProxy::new(
-            &leader_keypair,
-            Box::new(VoteSignRequestProcessor::default()),
-        );
+        let signer = VoteSignerProxy::new(&leader_keypair, Box::new(LocalVoteSigner::default()));
         let server = Fullnode::new(
             leader,
             &ledger_path,
@@ -1353,10 +1344,8 @@ mod tests {
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
         let last_id = bank.last_id();
-        let signer = VoteSignerProxy::new(
-            &vote_account_keypair,
-            Box::new(VoteSignRequestProcessor::default()),
-        );
+        let signer =
+            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
         let server = Fullnode::new_with_bank(
             leader_keypair,
             Arc::new(signer),
@@ -1483,10 +1472,8 @@ mod tests {
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
         let last_id = bank.last_id();
-        let signer = VoteSignerProxy::new(
-            &vote_account_keypair,
-            Box::new(VoteSignRequestProcessor::default()),
-        );
+        let signer =
+            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
         let server = Fullnode::new_with_bank(
             leader_keypair,
             Arc::new(signer),
@@ -1602,10 +1589,8 @@ mod tests {
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
         let last_id = bank.last_id();
-        let signer = VoteSignerProxy::new(
-            &vote_account_keypair,
-            Box::new(VoteSignRequestProcessor::default()),
-        );
+        let signer =
+            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
         let server = Fullnode::new_with_bank(
             leader_keypair,
             Arc::new(signer),

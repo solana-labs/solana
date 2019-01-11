@@ -292,7 +292,7 @@ mod test {
     use crate::vote_signer_proxy::VoteSignerProxy;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_vote_signer::rpc::VoteSignRequestProcessor;
+    use solana_vote_signer::rpc::LocalVoteSigner;
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
@@ -467,7 +467,7 @@ mod test {
         let my_keypair = Arc::new(my_keypair);
         let vote_signer = Arc::new(VoteSignerProxy::new(
             &my_keypair,
-            Box::new(VoteSignRequestProcessor::default()),
+            Box::new(LocalVoteSigner::default()),
         ));
         let (replay_stage, ledger_writer_recv) = ReplayStage::new(
             my_keypair.clone(),
@@ -680,7 +680,7 @@ mod test {
         let my_keypair = Arc::new(my_keypair);
         let vote_signer = Arc::new(VoteSignerProxy::new(
             &my_keypair,
-            Box::new(VoteSignRequestProcessor::default()),
+            Box::new(LocalVoteSigner::default()),
         ));
         let res = ReplayStage::process_entries(
             &Arc::new(Bank::default()),
