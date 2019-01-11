@@ -76,3 +76,9 @@ that'd be the current account value instead of the account value of the most
 recently finalized bank state. The bank currently doesn't offer a means to
 reference accounts from particular points in time.
 
+### Voting Implications on Previous Blocks
+
+Does a vote on one height imply a vote on all blocks of lower heights of
+that fork? If it does, we'll need a way to lookup the accounts of all
+blocks that haven't yet reached supermajority. If not, the validator could
+send votes to all blocks explicitly to get the block rewards.
