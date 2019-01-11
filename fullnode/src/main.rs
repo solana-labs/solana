@@ -55,7 +55,7 @@ fn parse_identity(matches: &ArgMatches<'_>) -> (Keypair, SocketAddr) {
 fn create_and_fund_vote_account(
     client: &mut ThinClient,
     vote_account: Pubkey,
-    node_keypair: Arc<Keypair>,
+    node_keypair: &Arc<Keypair>,
 ) -> Result<()> {
     let pubkey = node_keypair.pubkey();
     let balance = client.poll_get_balance(&pubkey).unwrap_or(0);
@@ -81,7 +81,7 @@ fn create_and_fund_vote_account(
         loop {
             let last_id = client.get_last_id();
             let transaction =
-                VoteTransaction::vote_account_new(&node_keypair, vote_account, last_id, 1, 1);
+                VoteTransaction::vote_account_new(node_keypair, vote_account, last_id, 1, 1);
             if client.transfer_signed(&transaction).is_err() {
                 sleep(Duration::from_secs(2));
                 continue;
@@ -265,7 +265,7 @@ fn main() {
         rpc_port,
     );
 
-    if create_and_fund_vote_account(&mut client, vote_account.clone(), keypair).is_err() {
+    if create_and_fund_vote_account(&mut client, vote_account, &keypair).is_err() {
         if let Some(signer_service) = signer_service {
             signer_service.join().unwrap();
         }
