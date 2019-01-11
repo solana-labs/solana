@@ -7,7 +7,7 @@ use crate::db_ledger::DbLedger;
 use crate::gossip_service::GossipService;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::result::Result;
-use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
+use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler, Rpu};
 use crate::service::Service;
 use crate::storage_stage::ENTRIES_PER_SEGMENT;
 use crate::streamer::BlobReceiver;
@@ -144,11 +144,11 @@ impl Replicator {
                 RpcClient::new_from_socket(rpc_peers[node_idx].rpc)
             };
 
-            storage_last_id = RpcRequest::GetStorageMiningLastId
+            storage_last_id = Rpu(RpcRequest::GetStorageMiningLastId)
                 .make_rpc_request(&rpc_client, 2, None)
                 .expect("rpc request")
                 .to_string();
-            storage_entry_height = RpcRequest::GetStorageMiningEntryHeight
+            storage_entry_height = Rpu(RpcRequest::GetStorageMiningEntryHeight)
                 .make_rpc_request(&rpc_client, 2, None)
                 .expect("rpc request")
                 .as_u64()

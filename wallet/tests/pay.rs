@@ -6,7 +6,7 @@ use solana::db_ledger::create_tmp_ledger_with_mint;
 use solana::fullnode::Fullnode;
 use solana::leader_scheduler::LeaderScheduler;
 use solana::mint::Mint;
-use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
+use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler, Rpu};
 use solana_drone::drone::run_local_drone;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -72,7 +72,7 @@ fn test_wallet_timestamp_tx() {
 
     request_and_confirm_airdrop(&rpc_client, &drone_addr, &config_payer.id.pubkey(), 50).unwrap();
     let params = json!([format!("{}", config_payer.id.pubkey())]);
-    let config_payer_balance = RpcRequest::GetBalance
+    let config_payer_balance = Rpu(RpcRequest::GetBalance)
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap()
         .as_u64()
@@ -101,21 +101,21 @@ fn test_wallet_timestamp_tx() {
     let process_id = Pubkey::new(&process_id_vec);
 
     let params = json!([format!("{}", config_payer.id.pubkey())]);
-    let config_payer_balance = RpcRequest::GetBalance
+    let config_payer_balance = Rpu(RpcRequest::GetBalance)
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap()
         .as_u64()
         .unwrap();
     assert_eq!(config_payer_balance, 39);
     let params = json!([format!("{}", process_id)]);
-    let contract_balance = RpcRequest::GetBalance
+    let contract_balance = Rpu(RpcRequest::GetBalance)
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap()
         .as_u64()
         .unwrap();
     assert_eq!(contract_balance, 11);
     let params = json!([format!("{}", bob_pubkey)]);
-    let recipient_balance = RpcRequest::GetBalance
+    let recipient_balance = Rpu(RpcRequest::GetBalance)
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap()
         .as_u64()
@@ -128,21 +128,21 @@ fn test_wallet_timestamp_tx() {
     assert!(sig_response.is_ok());
 
     let params = json!([format!("{}", config_payer.id.pubkey())]);
-    let config_payer_balance = RpcRequest::GetBalance
+    let config_payer_balance = Rpu(RpcRequest::GetBalance)
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap()
         .as_u64()
         .unwrap();
     assert_eq!(config_payer_balance, 39);
     let params = json!([format!("{}", process_id)]);
-    let contract_balance = RpcRequest::GetBalance
+    let contract_balance = Rpu(RpcRequest::GetBalance)
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap()
         .as_u64()
         .unwrap();
     assert_eq!(contract_balance, 1);
     let params = json!([format!("{}", bob_pubkey)]);
-    let recipient_balance = RpcRequest::GetBalance
+    let recipient_balance = Rpu(RpcRequest::GetBalance)
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap()
         .as_u64()
@@ -225,21 +225,21 @@ fn test_wallet_witness_tx() {
     let process_id = Pubkey::new(&process_id_vec);
 
     let params = json!([format!("{}", config_payer.id.pubkey())]);
-    let config_payer_balance = RpcRequest::GetBalance
+    let config_payer_balance = Rpu(RpcRequest::GetBalance)
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap()
         .as_u64()
         .unwrap();
     assert_eq!(config_payer_balance, 39);
     let params = json!([format!("{}", process_id)]);
-    let contract_balance = RpcRequest::GetBalance
+    let contract_balance = Rpu(RpcRequest::GetBalance)
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap()
         .as_u64()
         .unwrap();
     assert_eq!(contract_balance, 11);
     let params = json!([format!("{}", bob_pubkey)]);
-    let recipient_balance = RpcRequest::GetBalance
+    let recipient_balance = Rpu(RpcRequest::GetBalance)
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap()
         .as_u64()
@@ -252,21 +252,21 @@ fn test_wallet_witness_tx() {
     assert!(sig_response.is_ok());
 
     let params = json!([format!("{}", config_payer.id.pubkey())]);
-    let config_payer_balance = RpcRequest::GetBalance
+    let config_payer_balance = Rpu(RpcRequest::GetBalance)
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap()
         .as_u64()
         .unwrap();
     assert_eq!(config_payer_balance, 39);
     let params = json!([format!("{}", process_id)]);
-    let contract_balance = RpcRequest::GetBalance
+    let contract_balance = Rpu(RpcRequest::GetBalance)
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap()
         .as_u64()
         .unwrap();
     assert_eq!(contract_balance, 1);
     let params = json!([format!("{}", bob_pubkey)]);
-    let recipient_balance = RpcRequest::GetBalance
+    let recipient_balance = Rpu(RpcRequest::GetBalance)
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap()
         .as_u64()
@@ -349,21 +349,21 @@ fn test_wallet_cancel_tx() {
     let process_id = Pubkey::new(&process_id_vec);
 
     let params = json!([format!("{}", config_payer.id.pubkey())]);
-    let config_payer_balance = RpcRequest::GetBalance
+    let config_payer_balance = Rpu(RpcRequest::GetBalance)
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap()
         .as_u64()
         .unwrap();
     assert_eq!(config_payer_balance, 39);
     let params = json!([format!("{}", process_id)]);
-    let contract_balance = RpcRequest::GetBalance
+    let contract_balance = Rpu(RpcRequest::GetBalance)
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap()
         .as_u64()
         .unwrap();
     assert_eq!(contract_balance, 11);
     let params = json!([format!("{}", bob_pubkey)]);
-    let recipient_balance = RpcRequest::GetBalance
+    let recipient_balance = Rpu(RpcRequest::GetBalance)
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap()
         .as_u64()
@@ -376,21 +376,21 @@ fn test_wallet_cancel_tx() {
     assert!(sig_response.is_ok());
 
     let params = json!([format!("{}", config_payer.id.pubkey())]);
-    let config_payer_balance = RpcRequest::GetBalance
+    let config_payer_balance = Rpu(RpcRequest::GetBalance)
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap()
         .as_u64()
         .unwrap();
     assert_eq!(config_payer_balance, 49);
     let params = json!([format!("{}", process_id)]);
-    let contract_balance = RpcRequest::GetBalance
+    let contract_balance = Rpu(RpcRequest::GetBalance)
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap()
         .as_u64()
         .unwrap();
     assert_eq!(contract_balance, 1);
     let params = json!([format!("{}", bob_pubkey)]);
-    let recipient_balance = RpcRequest::GetBalance
+    let recipient_balance = Rpu(RpcRequest::GetBalance)
         .make_rpc_request(&rpc_client, 1, Some(params))
         .unwrap()
         .as_u64()

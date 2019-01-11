@@ -51,6 +51,9 @@ pub trait RpcRequestHandler {
     ) -> Result<Value, Box<dyn error::Error>>;
 }
 
+pub struct Rpu(pub RpcRequest);
+
+#[derive(Debug, PartialEq)]
 pub enum RpcRequest {
     ConfirmTransaction,
     GetAccountInfo,
@@ -69,7 +72,7 @@ pub enum RpcRequest {
     GetStoragePubkeysForEntryHeight,
 }
 
-impl RpcRequestHandler for RpcRequest {
+impl RpcRequestHandler for Rpu {
     fn make_rpc_request(
         &self,
         client: &RpcClient,
@@ -80,7 +83,7 @@ impl RpcRequestHandler for RpcRequest {
     }
 }
 
-impl RpcRequest {
+impl Rpu {
     pub fn retry_make_rpc_request(
         &self,
         client: &RpcClient,
@@ -126,7 +129,7 @@ impl RpcRequest {
 
     fn build_request_json(&self, id: u64, params: Option<Value>) -> Value {
         let jsonrpc = "2.0";
-        let method = match self {
+        let method = match self.0 {
             RpcRequest::ConfirmTransaction => "confirmTransaction",
             RpcRequest::GetAccountInfo => "getAccountInfo",
             RpcRequest::GetBalance => "getBalance",
@@ -189,7 +192,7 @@ mod tests {
 
     #[test]
     fn test_build_request_json() {
-        let test_request = RpcRequest::GetAccountInfo;
+        let test_request = Rpu(RpcRequest::GetAccountInfo);
         let request = test_request.build_request_json(
             1,
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])),
@@ -200,31 +203,31 @@ mod tests {
             json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])
         );
 
-        let test_request = RpcRequest::GetBalance;
+        let test_request = Rpu(RpcRequest::GetBalance);
         let request = test_request.build_request_json(
             1,
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])),
         );
         assert_eq!(request["method"], "getBalance");
 
-        let test_request = RpcRequest::GetConfirmationTime;
+        let test_request = Rpu(RpcRequest::GetConfirmationTime);
         let request = test_request.build_request_json(1, None);
         assert_eq!(request["method"], "getConfirmationTime");
         assert_eq!(request["params"], json!(null));
 
-        let test_request = RpcRequest::GetLastId;
+        let test_request = Rpu(RpcRequest::GetLastId);
         let request = test_request.build_request_json(1, None);
         assert_eq!(request["method"], "getLastId");
 
-        let test_request = RpcRequest::GetTransactionCount;
+        let test_request = Rpu(RpcRequest::GetTransactionCount);
         let request = test_request.build_request_json(1, None);
         assert_eq!(request["method"], "getTransactionCount");
 
-        let test_request = RpcRequest::RequestAirdrop;
+        let test_request = Rpu(RpcRequest::RequestAirdrop);
         let request = test_request.build_request_json(1, None);
         assert_eq!(request["method"], "requestAirdrop");
 
-        let test_request = RpcRequest::SendTransaction;
+        let test_request = Rpu(RpcRequest::SendTransaction);
         let request = test_request.build_request_json(1, None);
         assert_eq!(request["method"], "sendTransaction");
     }
@@ -263,7 +266,7 @@ mod tests {
         let rpc_addr = receiver.recv().unwrap();
         let rpc_client = RpcClient::new_from_socket(rpc_addr);
 
-        let balance = RpcRequest::GetBalance.make_rpc_request(
+        let balance = Rpu(RpcRequest::GetBalance).make_rpc_request(
             &rpc_client,
             1,
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])),
@@ -271,7 +274,7 @@ mod tests {
         assert!(balance.is_ok());
         assert_eq!(balance.unwrap().as_u64().unwrap(), 50);
 
-        let last_id = RpcRequest::GetLastId.make_rpc_request(&rpc_client, 2, None);
+        let last_id = Rpu(RpcRequest::GetLastId).make_rpc_request(&rpc_client, 2, None);
         assert!(last_id.is_ok());
         assert_eq!(
             last_id.unwrap().as_str().unwrap(),
@@ -280,7 +283,7 @@ mod tests {
 
         // Send erroneous parameter
         let last_id =
-            RpcRequest::GetLastId.make_rpc_request(&rpc_client, 3, Some(json!("paramter")));
+            Rpu(RpcRequest::GetLastId).make_rpc_request(&rpc_client, 3, Some(json!("paramter")));
         assert_eq!(last_id.is_err(), true);
     }
 
@@ -314,7 +317,7 @@ mod tests {
         let rpc_addr = receiver.recv().unwrap();
         let rpc_client = RpcClient::new_from_socket(rpc_addr);
 
-        let balance = RpcRequest::GetBalance.retry_make_rpc_request(
+        let balance = Rpu(RpcRequest::GetBalance).retry_make_rpc_request(
             &rpc_client,
             1,
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhw"])),

@@ -6,10 +6,10 @@ use serde_json;
 use serde_json::json;
 use solana::rpc::RpcSignatureStatus;
 #[cfg(test)]
-use solana::rpc_mock::{request_airdrop_transaction, MockRpcRequest as RpcRequest};
+use solana::rpc_mock::{request_airdrop_transaction, MockRpu as Rpu};
 #[cfg(not(test))]
-use solana::rpc_request::RpcRequest;
-use solana::rpc_request::{get_rpc_request_str, RpcClient, RpcRequestHandler};
+use solana::rpc_request::Rpu;
+use solana::rpc_request::{get_rpc_request_str, RpcClient, RpcRequest, RpcRequestHandler};
 use solana::socketaddr;
 use solana::thin_client::poll_gossip_for_leader;
 #[cfg(not(test))]
@@ -339,7 +339,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
                 tokens, drone_addr
             );
             let params = json!([format!("{}", config.id.pubkey())]);
-            let previous_balance = match RpcRequest::GetBalance
+            let previous_balance = match Rpu(RpcRequest::GetBalance)
                 .make_rpc_request(&rpc_client, 1, Some(params))?
                 .as_u64()
             {
@@ -353,7 +353,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
                 .unwrap();
 
             let params = json!([format!("{}", config.id.pubkey())]);
-            let current_balance = RpcRequest::GetBalance
+            let current_balance = Rpu(RpcRequest::GetBalance)
                 .make_rpc_request(&rpc_client, 1, Some(params))?
                 .as_u64()
                 .unwrap_or(previous_balance);
@@ -366,7 +366,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
         // Check client balance
         WalletCommand::Balance => {
             let params = json!([format!("{}", config.id.pubkey())]);
-            let balance = RpcRequest::GetBalance
+            let balance = Rpu(RpcRequest::GetBalance)
                 .make_rpc_request(&rpc_client, 1, Some(params))?
                 .as_u64();
             match balance {
@@ -388,7 +388,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
         // Confirm the last client transaction by signature
         WalletCommand::Confirm(signature) => {
             let params = json!([format!("{}", signature)]);
-            let confirmation = RpcRequest::ConfirmTransaction
+            let confirmation = Rpu(RpcRequest::ConfirmTransaction)
                 .make_rpc_request(&rpc_client, 1, Some(params))?
                 .as_bool();
             match confirmation {
@@ -407,7 +407,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
         // Deploy a custom program to the chain
         WalletCommand::Deploy(ref program_location) => {
             let params = json!([format!("{}", config.id.pubkey())]);
-            let balance = RpcRequest::GetBalance
+            let balance = Rpu(RpcRequest::GetBalance)
                 .make_rpc_request(&rpc_client, 1, Some(params))?
                 .as_u64();
             if let Some(tokens) = balance {
@@ -481,7 +481,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
             .to_string())
         }
         WalletCommand::GetTransactionCount => {
-            let transaction_count = RpcRequest::GetTransactionCount
+            let transaction_count = Rpu(RpcRequest::GetTransactionCount)
                 .make_rpc_request(&rpc_client, 1, None)?
                 .as_u64();
             match transaction_count {
@@ -615,7 +615,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
         // Apply time elapsed to contract
         WalletCommand::TimeElapsed(to, pubkey, dt) => {
             let params = json!([format!("{}", config.id.pubkey())]);
-            let balance = RpcRequest::GetBalance
+            let balance = Rpu(RpcRequest::GetBalance)
                 .make_rpc_request(&rpc_client, 1, Some(params))?
                 .as_u64();
 
@@ -634,7 +634,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
         // Apply witness signature to contract
         WalletCommand::Witness(to, pubkey) => {
             let params = json!([format!("{}", config.id.pubkey())]);
-            let balance = RpcRequest::GetBalance
+            let balance = Rpu(RpcRequest::GetBalance)
                 .make_rpc_request(&rpc_client, 1, Some(params))?
                 .as_u64();
 
@@ -653,7 +653,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
 }
 
 fn get_last_id(rpc_client: &RpcClient) -> Result<Hash, Box<dyn error::Error>> {
-    let result = RpcRequest::GetLastId.make_rpc_request(rpc_client, 1, None)?;
+    let result = Rpu(RpcRequest::GetLastId).make_rpc_request(rpc_client, 1, None)?;
     if result.as_str().is_none() {
         Err(WalletError::RpcRequestError(
             "Received bad last_id".to_string(),
@@ -669,7 +669,8 @@ fn get_last_id(rpc_client: &RpcClient) -> Result<Hash, Box<dyn error::Error>> {
 fn send_tx(rpc_client: &RpcClient, tx: &Transaction) -> Result<String, Box<dyn error::Error>> {
     let serialized = serialize(tx).unwrap();
     let params = json!([serialized]);
-    let signature = RpcRequest::SendTransaction.make_rpc_request(rpc_client, 2, Some(params))?;
+    let signature =
+        Rpu(RpcRequest::SendTransaction).make_rpc_request(rpc_client, 2, Some(params))?;
     if signature.as_str().is_none() {
         Err(WalletError::RpcRequestError(
             "Received result of an unexpected type".to_string(),
@@ -684,7 +685,7 @@ fn confirm_tx(
 ) -> Result<RpcSignatureStatus, Box<dyn error::Error>> {
     let params = json!([signature.to_string()]);
     let signature_status =
-        RpcRequest::GetSignatureStatus.make_rpc_request(rpc_client, 1, Some(params))?;
+        Rpu(RpcRequest::GetSignatureStatus).make_rpc_request(rpc_client, 1, Some(params))?;
     if let Some(status) = signature_status.as_str() {
         let rpc_status = RpcSignatureStatus::from_str(status).map_err(|_| {
             WalletError::RpcRequestError("Unable to parse signature status".to_string())
