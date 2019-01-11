@@ -58,6 +58,7 @@ fn test_wallet_request_airdrop() {
     let mut bob_config = WalletConfig::default();
     bob_config.network = leader_data.gossip;
     bob_config.drone_port = Some(drone_addr.port());
+    bob_config.rpc_port = Some(leader_data.rpc.port());
     bob_config.command = WalletCommand::Airdrop(50);
 
     let sig_response = process_command(&bob_config);

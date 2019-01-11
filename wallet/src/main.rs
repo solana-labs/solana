@@ -52,6 +52,7 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
         proxy,
         drone_port: None,
         rpc_client: None,
+        rpc_port: None,
     })
 }
 

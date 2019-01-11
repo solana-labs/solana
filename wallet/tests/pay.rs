@@ -74,10 +74,12 @@ fn test_wallet_timestamp_tx() {
     let mut config_payer = WalletConfig::default();
     config_payer.network = leader_data.gossip;
     config_payer.drone_port = Some(drone_addr.port());
+    config_payer.rpc_port = Some(leader_data.rpc.port());
 
     let mut config_witness = WalletConfig::default();
     config_witness.network = leader_data.gossip;
     config_witness.drone_port = Some(drone_addr.port());
+    config_witness.rpc_port = Some(leader_data.rpc.port());
 
     assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
@@ -173,10 +175,12 @@ fn test_wallet_witness_tx() {
     let mut config_payer = WalletConfig::default();
     config_payer.network = leader_data.gossip;
     config_payer.drone_port = Some(drone_addr.port());
+    config_payer.rpc_port = Some(leader_data.rpc.port());
 
     let mut config_witness = WalletConfig::default();
     config_witness.network = leader_data.gossip;
     config_witness.drone_port = Some(drone_addr.port());
+    config_witness.rpc_port = Some(leader_data.rpc.port());
 
     assert_ne!(config_payer.id.pubkey(), config_witness.id.pubkey());
 
@@ -268,6 +272,7 @@ fn test_wallet_cancel_tx() {
     let mut config_payer = WalletConfig::default();
     config_payer.network = leader_data.gossip;
     config_payer.drone_port = Some(drone_addr.port());
+    config_payer.rpc_port = Some(leader_data.rpc.port());
 
     let mut config_witness = WalletConfig::default();
     config_witness.network = leader_data.gossip;

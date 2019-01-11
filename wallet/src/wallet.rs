@@ -4,14 +4,13 @@ use chrono::prelude::*;
 use clap::ArgMatches;
 use serde_json;
 use serde_json::json;
-use solana::rpc::RpcSignatureStatus;
+use solana::rpc::{RpcSignatureStatus, RPC_PORT};
 #[cfg(test)]
 use solana::rpc_mock::{request_airdrop_transaction, MockRpcClient as RpcClient};
 #[cfg(not(test))]
 use solana::rpc_request::RpcClient;
 use solana::rpc_request::{get_rpc_request_str, RpcRequest, RpcRequestHandler};
 use solana::socketaddr;
-use solana::thin_client::poll_gossip_for_leader;
 #[cfg(not(test))]
 use solana_drone::drone::request_airdrop_transaction;
 use solana_drone::drone::DRONE_PORT;
@@ -91,6 +90,7 @@ pub struct WalletConfig {
     pub proxy: Option<String>,
     pub drone_port: Option<u16>,
     pub rpc_client: Option<RpcClient>,
+    pub rpc_port: Option<u16>,
 }
 
 impl Default for WalletConfig {
@@ -104,6 +104,7 @@ impl Default for WalletConfig {
             proxy: None,
             drone_port: None,
             rpc_client: None,
+            rpc_port: None,
         }
     }
 }
@@ -116,7 +117,9 @@ impl WalletConfig {
         drone_addr
     }
 
-    pub fn rpc_addr(&self, rpc_addr: SocketAddr) -> String {
+    pub fn rpc_addr(&self) -> String {
+        let mut rpc_addr = self.network;
+        rpc_addr.set_port(self.rpc_port.unwrap_or(RPC_PORT));
         let rpc_addr_str = get_rpc_request_str(rpc_addr);
         self.proxy.clone().unwrap_or(rpc_addr_str)
     }
@@ -321,8 +324,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
 
     let drone_addr = config.drone_addr();
     let rpc_client = if config.rpc_client.is_none() {
-        let leader = poll_gossip_for_leader(config.network, config.timeout)?;
-        let rpc_addr = config.rpc_addr(leader.rpc);
+        let rpc_addr = config.rpc_addr();
         RpcClient::new(rpc_addr)
     } else {
         // Primarily for testing
@@ -839,8 +841,10 @@ mod tests {
         config.drone_port = Some(1234);
         assert_eq!(config.drone_addr(), socketaddr!(0, 1234));
 
-        let rpc_addr = config.rpc_addr(socketaddr!(0, 9876));
-        assert_eq!(rpc_addr, "http://0.0.0.0:9876");
+        assert_eq!(config.rpc_addr(), "http://0.0.0.0:8899");
+
+        config.rpc_port = Some(1234);
+        assert_eq!(config.rpc_addr(), "http://0.0.0.0:1234");
     }
 
     #[test]
