@@ -15,42 +15,42 @@ pub const PUBKEY: &str = "7RoSF9fUmdphVCpabEoefH81WwrW7orsWonXWqTXkKV8";
 pub const SIGNATURE: &str =
     "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8";
 
-pub struct MockRpu(pub RpcRequest);
+pub struct MockRpu {}
 
 impl RpcRequestHandler for MockRpu {
     fn make_rpc_request(
-        &self,
         client: &RpcClient,
         _id: u64,
+        request: RpcRequest,
         params: Option<Value>,
     ) -> Result<Value, Box<dyn error::Error>> {
         if &client.addr == "fails" {
             return Ok(Value::Null);
         }
-        if self.0 == RpcRequest::ConfirmTransaction {
+        if request == RpcRequest::ConfirmTransaction {
             if let Some(Value::Array(param_array)) = params {
                 if let Value::String(param_string) = &param_array[0] {
                     return Ok(Value::Bool(param_string == SIGNATURE));
                 }
                 Err(RpcError::RpcRequestError("Missing parameter".to_string()))?
             }
-        } else if self.0 == RpcRequest::GetBalance {
+        } else if request == RpcRequest::GetBalance {
             if &client.addr == "airdrop" {
                 return Ok(Value::Number(Number::from(0)));
             }
             return Ok(Value::Number(Number::from(50)));
-        } else if self.0 == RpcRequest::GetLastId {
+        } else if request == RpcRequest::GetLastId {
             return Ok(Value::String(PUBKEY.to_string()));
-        } else if self.0 == RpcRequest::GetSignatureStatus {
+        } else if request == RpcRequest::GetSignatureStatus {
             if &client.addr == "account_in_use" {
                 return Ok(Value::String("AccountInUse".to_string()));
             } else if &client.addr == "bad_sig_status" {
                 return Ok(Value::String("Nonexistant".to_string()));
             }
             return Ok(Value::String("Confirmed".to_string()));
-        } else if self.0 == RpcRequest::GetTransactionCount {
+        } else if request == RpcRequest::GetTransactionCount {
             return Ok(Value::Number(Number::from(1234)));
-        } else if self.0 == RpcRequest::SendTransaction {
+        } else if request == RpcRequest::SendTransaction {
             return Ok(Value::String(SIGNATURE.to_string()));
         }
         Ok(Value::Null)

@@ -20,6 +20,18 @@ use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::Duration;
 
+fn check_balance(
+    expected_balance: u64,
+    client: &RpcClient,
+    params: Value,
+) {
+    let balance = Rpu::make_rpc_request(client, 1, RpcRequest::GetBalance, Some(params))
+        .unwrap()
+        .as_u64()
+        .unwrap();
+    assert_eq!(balance, expected_balance);
+}
+
 #[test]
 fn test_wallet_timestamp_tx() {
     let leader_keypair = Arc::new(Keypair::new());
@@ -72,12 +84,7 @@ fn test_wallet_timestamp_tx() {
 
     request_and_confirm_airdrop(&rpc_client, &drone_addr, &config_payer.id.pubkey(), 50).unwrap();
     let params = json!([format!("{}", config_payer.id.pubkey())]);
-    let config_payer_balance = Rpu(RpcRequest::GetBalance)
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap()
-        .as_u64()
-        .unwrap();
-    assert_eq!(config_payer_balance, 50);
+    check_balance(50, &rpc_client, params);
 
     // Make transaction (from config_payer to bob_pubkey) requiring timestamp from config_witness
     let date_string = "\"2018-09-19T17:30:59Z\"";
@@ -101,26 +108,11 @@ fn test_wallet_timestamp_tx() {
     let process_id = Pubkey::new(&process_id_vec);
 
     let params = json!([format!("{}", config_payer.id.pubkey())]);
-    let config_payer_balance = Rpu(RpcRequest::GetBalance)
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap()
-        .as_u64()
-        .unwrap();
-    assert_eq!(config_payer_balance, 39);
+    check_balance(39, &rpc_client, params); // config_payer balance
     let params = json!([format!("{}", process_id)]);
-    let contract_balance = Rpu(RpcRequest::GetBalance)
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap()
-        .as_u64()
-        .unwrap();
-    assert_eq!(contract_balance, 11);
+    check_balance(11, &rpc_client, params); // contract balance
     let params = json!([format!("{}", bob_pubkey)]);
-    let recipient_balance = Rpu(RpcRequest::GetBalance)
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap()
-        .as_u64()
-        .unwrap();
-    assert_eq!(recipient_balance, 0);
+    check_balance(0, &rpc_client, params); // recipient balance
 
     // Sign transaction by config_witness
     config_witness.command = WalletCommand::TimeElapsed(bob_pubkey, process_id, dt);
@@ -128,26 +120,11 @@ fn test_wallet_timestamp_tx() {
     assert!(sig_response.is_ok());
 
     let params = json!([format!("{}", config_payer.id.pubkey())]);
-    let config_payer_balance = Rpu(RpcRequest::GetBalance)
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap()
-        .as_u64()
-        .unwrap();
-    assert_eq!(config_payer_balance, 39);
+    check_balance(39, &rpc_client, params); // config_payer balance
     let params = json!([format!("{}", process_id)]);
-    let contract_balance = Rpu(RpcRequest::GetBalance)
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap()
-        .as_u64()
-        .unwrap();
-    assert_eq!(contract_balance, 1);
+    check_balance(1, &rpc_client, params); // contract balance
     let params = json!([format!("{}", bob_pubkey)]);
-    let recipient_balance = Rpu(RpcRequest::GetBalance)
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap()
-        .as_u64()
-        .unwrap();
-    assert_eq!(recipient_balance, 10);
+    check_balance(10, &rpc_client, params); // recipient balance
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
@@ -225,26 +202,11 @@ fn test_wallet_witness_tx() {
     let process_id = Pubkey::new(&process_id_vec);
 
     let params = json!([format!("{}", config_payer.id.pubkey())]);
-    let config_payer_balance = Rpu(RpcRequest::GetBalance)
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap()
-        .as_u64()
-        .unwrap();
-    assert_eq!(config_payer_balance, 39);
+    check_balance(39, &rpc_client, params); // config_payer balance
     let params = json!([format!("{}", process_id)]);
-    let contract_balance = Rpu(RpcRequest::GetBalance)
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap()
-        .as_u64()
-        .unwrap();
-    assert_eq!(contract_balance, 11);
+    check_balance(11, &rpc_client, params); // contract balance
     let params = json!([format!("{}", bob_pubkey)]);
-    let recipient_balance = Rpu(RpcRequest::GetBalance)
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap()
-        .as_u64()
-        .unwrap();
-    assert_eq!(recipient_balance, 0);
+    check_balance(0, &rpc_client, params); // recipient balance
 
     // Sign transaction by config_witness
     config_witness.command = WalletCommand::Witness(bob_pubkey, process_id);
@@ -252,26 +214,11 @@ fn test_wallet_witness_tx() {
     assert!(sig_response.is_ok());
 
     let params = json!([format!("{}", config_payer.id.pubkey())]);
-    let config_payer_balance = Rpu(RpcRequest::GetBalance)
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap()
-        .as_u64()
-        .unwrap();
-    assert_eq!(config_payer_balance, 39);
+    check_balance(39, &rpc_client, params); // config_payer balance
     let params = json!([format!("{}", process_id)]);
-    let contract_balance = Rpu(RpcRequest::GetBalance)
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap()
-        .as_u64()
-        .unwrap();
-    assert_eq!(contract_balance, 1);
+    check_balance(1, &rpc_client, params); // contract balance
     let params = json!([format!("{}", bob_pubkey)]);
-    let recipient_balance = Rpu(RpcRequest::GetBalance)
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap()
-        .as_u64()
-        .unwrap();
-    assert_eq!(recipient_balance, 10);
+    check_balance(10, &rpc_client, params); // recipient balance
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();
@@ -349,26 +296,11 @@ fn test_wallet_cancel_tx() {
     let process_id = Pubkey::new(&process_id_vec);
 
     let params = json!([format!("{}", config_payer.id.pubkey())]);
-    let config_payer_balance = Rpu(RpcRequest::GetBalance)
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap()
-        .as_u64()
-        .unwrap();
-    assert_eq!(config_payer_balance, 39);
+    check_balance(39, &rpc_client, params); // config_payer balance
     let params = json!([format!("{}", process_id)]);
-    let contract_balance = Rpu(RpcRequest::GetBalance)
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap()
-        .as_u64()
-        .unwrap();
-    assert_eq!(contract_balance, 11);
+    check_balance(11, &rpc_client, params); // contract balance
     let params = json!([format!("{}", bob_pubkey)]);
-    let recipient_balance = Rpu(RpcRequest::GetBalance)
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap()
-        .as_u64()
-        .unwrap();
-    assert_eq!(recipient_balance, 0);
+    check_balance(0, &rpc_client, params); // recipient balance
 
     // Sign transaction by config_witness
     config_payer.command = WalletCommand::Cancel(process_id);
@@ -376,26 +308,11 @@ fn test_wallet_cancel_tx() {
     assert!(sig_response.is_ok());
 
     let params = json!([format!("{}", config_payer.id.pubkey())]);
-    let config_payer_balance = Rpu(RpcRequest::GetBalance)
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap()
-        .as_u64()
-        .unwrap();
-    assert_eq!(config_payer_balance, 49);
+    check_balance(49, &rpc_client, params); // config_payer balance
     let params = json!([format!("{}", process_id)]);
-    let contract_balance = Rpu(RpcRequest::GetBalance)
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap()
-        .as_u64()
-        .unwrap();
-    assert_eq!(contract_balance, 1);
+    check_balance(1, &rpc_client, params); // contract balance
     let params = json!([format!("{}", bob_pubkey)]);
-    let recipient_balance = Rpu(RpcRequest::GetBalance)
-        .make_rpc_request(&rpc_client, 1, Some(params))
-        .unwrap()
-        .as_u64()
-        .unwrap();
-    assert_eq!(recipient_balance, 0);
+    check_balance(0, &rpc_client, params); // recipient balance
 
     server.close().unwrap();
     remove_dir_all(ledger_path).unwrap();

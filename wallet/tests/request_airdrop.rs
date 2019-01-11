@@ -1,9 +1,9 @@
 use serde_json::json;
 use solana::bank::Bank;
 use solana::cluster_info::Node;
-use solana::db_ledger::create_tmp_ledger_with_mint;
 use solana::fullnode::Fullnode;
 use solana::leader_scheduler::LeaderScheduler;
+use solana::db_ledger::create_tmp_ledger_with_mint;
 use solana::mint::Mint;
 use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler, Rpu};
 use solana_drone::drone::run_local_drone;
@@ -64,8 +64,7 @@ fn test_wallet_request_airdrop() {
     let rpc_client = RpcClient::new_from_socket(leader_data.rpc);
 
     let params = json!([format!("{}", bob_config.id.pubkey())]);
-    let balance = Rpu(RpcRequest::GetBalance)
-        .make_rpc_request(&rpc_client, 1, Some(params))
+    let balance = Rpu::make_rpc_request(&rpc_client, 1, RpcRequest::GetBalance, Some(params))
         .unwrap()
         .as_u64()
         .unwrap();
