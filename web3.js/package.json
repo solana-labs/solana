@@ -106,7 +106,7 @@
     "flow-typed": "2.5.1",
     "fs-file-tree": "1.0.7",
     "jest": "23.6.0",
-    "marked": "^0.5.1",
+    "marked": "^0.6.0",
     "prettier": "^1.14.3",
     "rimraf": "2.6.3",
     "rollup": "1.0.2",
