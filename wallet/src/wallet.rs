@@ -716,7 +716,9 @@ fn send_and_confirm_tx(
             } else {
                 break status;
             }
-            sleep(Duration::from_secs(1));
+            if cfg!(not(test)) {
+                sleep(Duration::from_secs(1));
+            }
         };
         match status {
             RpcSignatureStatus::AccountInUse => {
@@ -772,7 +774,9 @@ pub fn request_and_confirm_airdrop(
             } else {
                 break status;
             }
-            sleep(Duration::from_secs(1));
+            if cfg!(not(test)) {
+                sleep(Duration::from_secs(1));
+            }
         };
         match status {
             RpcSignatureStatus::AccountInUse => {
@@ -791,7 +795,9 @@ pub fn request_and_confirm_airdrop(
                         ))?;
                     }
                     next_last_id_retries -= 1;
-                    sleep(Duration::from_secs(1));
+                    if cfg!(not(test)) {
+                        sleep(Duration::from_secs(1));
+                    }
                 }
                 send_retries -= 1;
                 if send_retries == 0 {
