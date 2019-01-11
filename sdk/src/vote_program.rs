@@ -3,8 +3,7 @@
 
 use crate::native_program::ProgramError;
 use crate::pubkey::Pubkey;
-use bincode::{deserialize, serialize, serialized_size};
-use byteorder::{ByteOrder, LittleEndian};
+use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
 use std::collections::VecDeque;
 
 pub const VOTE_PROGRAM_ID: [u8; 32] = [
@@ -50,34 +49,21 @@ pub struct VoteProgram {
 pub fn get_max_size() -> usize {
     // Upper limit on the size of the Vote State. Equal to
     // sizeof(VoteProgram) when votes.len() is MAX_VOTE_HISTORY
-    // + 2 (2 bytes for the size)
     let mut vote_program = VoteProgram::default();
     vote_program.votes = VecDeque::from(vec![Vote::default(); MAX_VOTE_HISTORY]);
-    serialized_size(&vote_program).unwrap() as usize + 2
+    serialized_size(&vote_program).unwrap() as usize
 }
 
 impl VoteProgram {
     pub fn deserialize(input: &[u8]) -> Result<VoteProgram, ProgramError> {
-        let len = LittleEndian::read_u16(&input[0..2]) as usize;
-
-        if len == 0 || input.len() < len + 2 {
-            Err(ProgramError::InvalidUserdata)
-        } else {
-            deserialize(&input[2..=len + 1]).map_err(|_| ProgramError::InvalidUserdata)
-        }
+        deserialize(input).map_err(|_| ProgramError::InvalidUserdata)
     }
 
     pub fn serialize(self: &VoteProgram, output: &mut [u8]) -> Result<(), ProgramError> {
-        let self_serialized = serialize(self).unwrap();
-
-        if output.len() + 2 < self_serialized.len() {
-            return Err(ProgramError::UserdataTooSmall);
-        }
-
-        let serialized_len = self_serialized.len() as u16;
-        LittleEndian::write_u16(&mut output[0..2], serialized_len);
-        output[2..=serialized_len as usize + 1].clone_from_slice(&self_serialized);
-        Ok(())
+        serialize_into(output, self).map_err(|err| match *err {
+            ErrorKind::SizeLimit => ProgramError::UserdataTooSmall,
+            _ => ProgramError::GenericError,
+        })
     }
 }
 
