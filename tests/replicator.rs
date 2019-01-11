@@ -16,7 +16,9 @@ use solana::leader_scheduler::LeaderScheduler;
 use solana::replicator::Replicator;
 use solana::streamer::blob_receiver;
 use solana::vote_signer_proxy::VoteSignerProxy;
+use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::storage_program::StorageTransaction;
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use solana_vote_signer::rpc::LocalVoteSigner;
@@ -39,7 +41,8 @@ fn test_replicator_startup() {
     let leader_info = leader_node.info.clone();
 
     let leader_ledger_path = "replicator_test_leader_ledger";
-    let (mint, leader_ledger_path) = create_tmp_genesis(leader_ledger_path, 100, leader_info.id, 1);
+    let (mint, leader_ledger_path) =
+        create_tmp_genesis(leader_ledger_path, 1_000_000_000, leader_info.id, 10);
 
     let validator_ledger_path =
         tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");
@@ -81,12 +84,29 @@ fn test_replicator_startup() {
 
         let bob = Keypair::new();
 
-        for _ in 0..10 {
+        // Set storage_rotate value to a low-ish number so we don't need to create
+        // so much ledger for the first segment to be created.
+        const STORAGE_ROTATE: u64 = 128;
+        let last_id = leader_client.get_last_id();
+        let tx = Transaction::storage_new_set_hash_rotate_count(
+            &mint.keypair(),
+            last_id,
+            STORAGE_ROTATE,
+        );
+        let signature = leader_client.transfer_signed(&tx).unwrap();
+        leader_client.poll_for_signature(&signature).unwrap();
+
+        info!("Sending txs..");
+        // Create enough entries to roll over the hashes
+        for i in 0..STORAGE_ROTATE {
             let last_id = leader_client.get_last_id();
             leader_client
                 .transfer(1, &mint.keypair(), bob.pubkey(), &last_id)
                 .unwrap();
-            sleep(Duration::from_millis(200));
+            sleep(Duration::from_millis(100));
+            if i % 32 == 0 {
+                info!("Sent {} txs", i);
+            }
         }
 
         let last_id = leader_client.get_last_id();
@@ -122,11 +142,13 @@ fn test_replicator_startup() {
         )
         .unwrap();
 
+        info!("started replicator..");
+
         // Create a client which downloads from the replicator and see that it
         // can respond with blobs.
         let tn = Node::new_localhost();
         let cluster_info = ClusterInfo::new(tn.info.clone());
-        let repair_index = 1;
+        let repair_index = replicator.entry_height();
         let req = cluster_info
             .window_index_request_bytes(repair_index)
             .unwrap();
@@ -141,7 +163,6 @@ fn test_replicator_startup() {
             tn.info.id, replicator_info.gossip
         );
 
-        let mut num_txs = 0;
         for _ in 0..5 {
             repair_socket.send_to(&req, replicator_info.gossip).unwrap();
 
@@ -153,7 +174,7 @@ fn test_replicator_startup() {
                     assert!(br.index().unwrap() == repair_index);
                     let entry: Entry = deserialize(&br.data()[..br.meta.size]).unwrap();
                     info!("entry: {:?}", entry);
-                    num_txs = entry.transactions.len();
+                    assert_ne!(entry.id, Hash::default());
                 }
                 break;
             }
@@ -168,7 +189,7 @@ fn test_replicator_startup() {
             use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
             use std::thread::sleep;
 
-            debug!(
+            info!(
                 "looking for pubkeys for entry: {}",
                 replicator.entry_height()
             );
@@ -188,9 +209,6 @@ fn test_replicator_startup() {
             }
             assert!(non_zero_pubkeys);
         }
-
-        // Check that some ledger was downloaded
-        assert!(num_txs != 0);
 
         replicator.close();
         validator.exit();

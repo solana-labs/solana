@@ -188,13 +188,15 @@ $rsync -vPr "$rsync_leader_url"/config/ "$ledger_config_dir"
 
 $solana_wallet --keypair "$fullnode_id_path" address
 
-# A fullnode requires 3 tokens to function:
+# A fullnode requires 5 tokens to function:
 # - one token to create an instance of the vote_program with
 # - one token for the transaction fee
 # - one token to keep the node identity public key valid.
+# - one token to create the system storage account if needed
+# - one token to create its storage account if needed
 retries=5
 while true; do
-  if $solana_wallet --keypair "$fullnode_id_path" --network "$leader_address" airdrop 3; then
+  if $solana_wallet --keypair "$fullnode_id_path" --network "$leader_address" airdrop 5; then
     break
   fi
 

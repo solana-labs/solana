@@ -113,6 +113,15 @@ impl StorageState {
     }
 }
 
+pub struct StorageLocalState {
+    pub poh_height: u64,
+    pub entry_height: u64,
+    pub rotate_count: u64,
+    pub tried_to_set_hash_rate: bool,
+    pub my_storage_account_created: bool,
+    pub system_storage_account_created: bool,
+}
+
 impl StorageStage {
     pub fn new(
         storage_state: &StorageState,
@@ -123,15 +132,22 @@ impl StorageStage {
         entry_height: u64,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) -> Self {
-        debug!("storage_stage::new: entry_height: {}", entry_height);
+        info!("storage_stage::new: entry_height: {}", entry_height);
         let storage_state_inner = storage_state.state.clone();
         let cluster_info = cluster_info.clone();
+
         let t_storage_mining_verifier = Builder::new()
             .name("solana-storage-mining-verify-stage".to_string())
             .spawn(move || {
                 let exit = exit.clone();
-                let mut poh_height = 0;
-                let mut entry_height = entry_height;
+                let mut local_state = StorageLocalState {
+                    poh_height: 0,
+                    entry_height,
+                    my_storage_account_created: false,
+                    system_storage_account_created: false,
+                    rotate_count: 0,
+                    tried_to_set_hash_rate: false,
+                };
                 loop {
                     if let Some(ref some_db_ledger) = db_ledger {
                         if let Err(e) = Self::process_entries(
@@ -139,13 +155,14 @@ impl StorageStage {
                             &storage_state_inner,
                             &storage_entry_receiver,
                             &some_db_ledger,
-                            &mut poh_height,
-                            &mut entry_height,
                             &cluster_info,
+                            &mut local_state,
                         ) {
                             match e {
                                 Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                                Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                                Error::RecvTimeoutError(RecvTimeoutError::Timeout) => {
+                                    debug!("storage timeout")
+                                }
                                 _ => info!("Error from process_entries: {:?}", e),
                             }
                         }
@@ -162,42 +179,64 @@ impl StorageStage {
         }
     }
 
-    fn create_storage_accounts(keypair: &Keypair, leader_client: &mut ThinClient) {
-        let last_id = leader_client.get_last_id();
-        match leader_client.get_account_userdata(&storage_program::system_id()) {
-            Ok(_) => {}
-            Err(e) => {
-                debug!("error storage userdata: {:?}", e);
+    fn create_storage_accounts(
+        local_state: &mut StorageLocalState,
+        keypair: &Keypair,
+        leader_client: &mut ThinClient,
+    ) {
+        if !local_state.system_storage_account_created {
+            info!("Creating storage accounts");
+            let last_id = leader_client.get_last_id();
+            match leader_client.get_account_userdata(&storage_program::system_id()) {
+                Ok(_) => {
+                    info!("storage account already created");
+                    local_state.system_storage_account_created = true;
+                }
+                Err(e) => {
+                    debug!("error storage userdata: {:?}", e);
 
-                let mut tx = Transaction::system_create(
-                    keypair,
-                    storage_program::system_id(),
-                    last_id,
-                    1,
-                    16 * 1024,
-                    storage_program::id(),
-                    1,
-                );
-                if let Err(e) = leader_client.retry_transfer(keypair, &mut tx, 5) {
-                    info!("Couldn't create storage account error: {}", e);
+                    let mut tx = Transaction::system_create(
+                        keypair,
+                        storage_program::system_id(),
+                        last_id,
+                        1,
+                        16 * 1024,
+                        storage_program::id(),
+                        1,
+                    );
+                    if let Err(e) = leader_client.retry_transfer(keypair, &mut tx, 5) {
+                        info!("Couldn't create storage account error: {}", e);
+                    } else {
+                        local_state.system_storage_account_created = true;
+                    }
                 }
             }
         }
-        if leader_client
-            .get_account_userdata(&keypair.pubkey())
-            .is_err()
-        {
-            let mut tx = Transaction::system_create(
-                keypair,
-                keypair.pubkey(),
-                last_id,
-                1,
-                0,
-                storage_program::id(),
-                1,
-            );
-            if let Err(e) = leader_client.retry_transfer(keypair, &mut tx, 5) {
-                info!("Couldn't create storage account error: {}", e);
+        if !local_state.my_storage_account_created {
+            info!("Creating my storage account");
+            let last_id = leader_client.get_last_id();
+            match leader_client.get_account_userdata(&keypair.pubkey()) {
+                Ok(_) => {
+                    info!("My account already created");
+                    local_state.my_storage_account_created = true;
+                }
+                Err(e) => {
+                    debug!("error storage userdata: {:?}", e);
+                    let mut tx = Transaction::system_create(
+                        keypair,
+                        keypair.pubkey(),
+                        last_id,
+                        1,
+                        0,
+                        storage_program::id(),
+                        1,
+                    );
+                    if let Err(e) = leader_client.retry_transfer(keypair, &mut tx, 1) {
+                        info!("Couldn't create storage account error: {}", e);
+                    } else {
+                        local_state.my_storage_account_created = true;
+                    }
+                }
             }
         }
     }
@@ -207,8 +246,8 @@ impl StorageStage {
         keypair: &Arc<Keypair>,
         _db_ledger: &Arc<DbLedger>,
         entry_id: Hash,
-        entry_height: u64,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
+        local_state: &mut StorageLocalState,
     ) -> Result<()> {
         let mut seed = [0u8; 32];
         let signature = keypair.sign(&entry_id.as_ref());
@@ -220,21 +259,21 @@ impl StorageStage {
         if let Some(leader_data) = cluster_info.read().unwrap().leader_data() {
             let mut leader_client = mk_client(leader_data);
 
-            Self::create_storage_accounts(keypair, &mut leader_client);
+            Self::create_storage_accounts(local_state, keypair, &mut leader_client);
 
             let last_id = leader_client.get_last_id();
 
-            debug!(
+            info!(
                 "advertising new storage last id entry_height: {}!",
-                entry_height
+                local_state.entry_height
             );
             let mut tx = Transaction::storage_new_advertise_last_id(
                 keypair,
                 entry_id,
                 last_id,
-                entry_height,
+                local_state.entry_height,
             );
-            if let Err(e) = leader_client.retry_transfer(keypair, &mut tx, 5) {
+            if let Err(e) = leader_client.retry_transfer(keypair, &mut tx, 1) {
                 info!(
                     "Couldn't advertise my storage last id to the network! error: {}",
                     e
@@ -243,7 +282,7 @@ impl StorageStage {
         }
 
         // Regenerate the answers
-        let num_segments = get_segment_from_entry(entry_height);
+        let num_segments = get_segment_from_entry(local_state.entry_height);
         if num_segments == 0 {
             info!("Ledger has 0 segments!");
             return Ok(());
@@ -297,17 +336,17 @@ impl StorageStage {
     fn process_storage_program(
         instruction_idx: usize,
         storage_state: &Arc<RwLock<StorageStateInner>>,
-        entry_height: u64,
         tx: &Transaction,
+        local_state: &mut StorageLocalState,
     ) {
         match deserialize(&tx.instructions[instruction_idx].userdata) {
             Ok(StorageProgram::SubmitMiningProof {
                 entry_height: proof_entry_height,
                 ..
             }) => {
-                if proof_entry_height < entry_height {
+                if proof_entry_height < local_state.entry_height {
                     let mut statew = storage_state.write().unwrap();
-                    let max_segment_index = get_segment_from_entry(entry_height);
+                    let max_segment_index = get_segment_from_entry(local_state.entry_height);
                     if statew.replicator_map.len() < max_segment_index {
                         statew
                             .replicator_map
@@ -320,16 +359,51 @@ impl StorageStage {
                 }
                 debug!(
                     "storage proof: max entry_height: {} proof height: {}",
-                    entry_height, proof_entry_height
+                    local_state.entry_height, proof_entry_height
                 );
             }
             Ok(StorageProgram::AdvertiseStorageLastId { id, .. }) => {
-                debug!("id: {}", id);
+                debug!("advertised storage last id: {}", id);
             }
             Ok(StorageProgram::ClaimStorageReward { .. }) => {}
             Ok(StorageProgram::ProofValidation { .. }) => {}
+            Ok(StorageProgram::SetRotateHashCount { rotate_count }) => {
+                // TODO: should just check storage program state
+                if local_state.rotate_count == 0 && rotate_count > 0 && rotate_count % 2 == 0 {
+                    local_state.rotate_count = rotate_count;
+                }
+            }
             Err(e) => {
                 info!("error: {:?}", e);
+            }
+        }
+    }
+
+    fn set_hash_rate(
+        keypair: &Arc<Keypair>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        local_state: &mut StorageLocalState,
+    ) {
+        // Try to set the storage hash rate once, if it was already set then
+        // this shouldn't do anything.
+        if !local_state.tried_to_set_hash_rate {
+            if let Some(leader_data) = cluster_info.read().unwrap().leader_data() {
+                let mut leader_client = mk_client(leader_data);
+                let last_id = leader_client.get_last_id();
+
+                let mut tx = Transaction::storage_new_set_hash_rotate_count(
+                    &keypair,
+                    last_id,
+                    NUM_HASHES_FOR_STORAGE_ROTATE,
+                );
+                if let Err(e) = leader_client.retry_transfer(&keypair, &mut tx, 1) {
+                    debug!("Couldn't set storage hash rate error: {}", e);
+                } else {
+                    info!("set the rotate count");
+                }
+                local_state.tried_to_set_hash_rate = true;
+            } else {
+                info!("no leader yet..");
             }
         }
     }
@@ -339,45 +413,51 @@ impl StorageStage {
         storage_state: &Arc<RwLock<StorageStateInner>>,
         entry_receiver: &EntryReceiver,
         db_ledger: &Arc<DbLedger>,
-        poh_height: &mut u64,
-        entry_height: &mut u64,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
+        local_state: &mut StorageLocalState,
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
         let entries = entry_receiver.recv_timeout(timeout)?;
-        debug!(
-            "processing: {} entries height: {} poh_height: {}",
-            entries.len(),
-            entry_height,
-            poh_height
-        );
+        if local_state.entry_height % 512 == 0 {
+            debug!(
+                "processing: {} entries height: {} poh_height: {}",
+                entries.len(),
+                local_state.entry_height,
+                local_state.poh_height
+            );
+        }
+
+        Self::set_hash_rate(keypair, cluster_info, local_state);
 
         for entry in entries {
-            // Go through the transactions, find votes, and use them to update
-            // the storage_keys with their signatures.
+            // Go through the transactions, look for storage mining proofs to
+            // update the replicator map to see who is storing the ledger.
             for tx in entry.transactions {
                 for (i, program_id) in tx.program_ids.iter().enumerate() {
                     if storage_program::check_id(&program_id) {
-                        Self::process_storage_program(i, storage_state, *entry_height, &tx);
+                        Self::process_storage_program(i, storage_state, &tx, local_state);
                     }
                 }
             }
-            if cross_boundary!(*poh_height, entry.num_hashes, NUM_HASHES_FOR_STORAGE_ROTATE) {
+            let rotate_count = local_state.rotate_count;
+            if rotate_count != 0
+                && cross_boundary!(local_state.poh_height, entry.num_hashes, rotate_count)
+            {
                 debug!(
                     "crosses sending at poh_height: {} entry_height: {}! hashes: {}",
-                    *poh_height, entry_height, entry.num_hashes
+                    local_state.poh_height, local_state.entry_height, entry.num_hashes
                 );
                 Self::process_entry_crossing(
                     &storage_state,
                     &keypair,
                     &db_ledger,
                     entry.id,
-                    *entry_height,
                     cluster_info,
+                    local_state,
                 )?;
             }
-            *entry_height += 1;
-            *poh_height += entry.num_hashes;
+            local_state.entry_height += 1;
+            local_state.poh_height += entry.num_hashes;
         }
         Ok(())
     }
@@ -461,7 +541,19 @@ mod tests {
             1,
         );
 
-        let entries = make_tiny_test_entries(128);
+        let mut entries = make_tiny_test_entries(128);
+        let mut entry_id = Hash::default();
+        let id = Hash::default();
+        let mut num_hashes = 1;
+        let entry = Entry::new_mut(
+            &mut entry_id,
+            &mut num_hashes,
+            vec![Transaction::storage_new_set_hash_rotate_count(
+                &keypair, id, 16,
+            )],
+        );
+        entries.push(entry);
+
         let db_ledger = DbLedger::open(&ledger_path).unwrap();
         db_ledger
             .write_entries(DEFAULT_SLOT_HEIGHT, genesis_entries.len() as u64, &entries)

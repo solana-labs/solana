@@ -138,12 +138,12 @@ impl Replicator {
         );
 
         info!("polling for leader");
-        let leader = Self::poll_for_leader(&cluster_info);
+        let leader = Self::poll_for_leader(&cluster_info)?;
 
         info!("Got leader: {:?}", leader);
 
         let (storage_last_id, storage_entry_height) =
-            Self::poll_for_last_id_and_entry_height(&cluster_info);
+            Self::poll_for_last_id_and_entry_height(&cluster_info)?;
 
         let signature = keypair.sign(storage_last_id.as_ref());
         let (entry_height, max_entry_height) =
@@ -279,19 +279,22 @@ impl Replicator {
         self.entry_height
     }
 
-    fn poll_for_leader(cluster_info: &Arc<RwLock<ClusterInfo>>) -> NodeInfo {
-        loop {
+    fn poll_for_leader(cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<NodeInfo> {
+        for _ in 0..30 {
             if let Some(l) = cluster_info.read().unwrap().get_gossip_top_leader() {
-                return l.clone();
+                return Ok(l.clone());
             }
 
             sleep(Duration::from_millis(900));
             info!("{}", cluster_info.read().unwrap().node_info_trace());
         }
+        Err(Error::new(ErrorKind::Other, "Couldn't find leader"))?
     }
 
-    fn poll_for_last_id_and_entry_height(cluster_info: &Arc<RwLock<ClusterInfo>>) -> (String, u64) {
-        loop {
+    fn poll_for_last_id_and_entry_height(
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+    ) -> Result<(String, u64)> {
+        for _ in 0..10 {
             let rpc_client = {
                 let cluster_info = cluster_info.read().unwrap();
                 let rpc_peers = cluster_info.rpc_peers();
@@ -310,11 +313,15 @@ impl Replicator {
                 .as_u64()
                 .unwrap();
             if storage_entry_height != 0 {
-                return (storage_last_id, storage_entry_height);
+                return Ok((storage_last_id, storage_entry_height));
             }
             info!("max entry_height: {}", storage_entry_height);
             sleep(Duration::from_secs(3));
         }
+        Err(Error::new(
+            ErrorKind::Other,
+            "Couldn't get last_id or entry_height",
+        ))?
     }
 
     fn get_airdrop_tokens(client: &mut ThinClient, keypair: &Keypair, leader_info: &NodeInfo) {

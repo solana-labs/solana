@@ -40,6 +40,8 @@ pub struct StorageProgramState {
 
     pub lockout_validations: Vec<Vec<ValidationInfo>>,
     pub reward_validations: Vec<Vec<ValidationInfo>>,
+
+    pub rotate_count: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -59,6 +61,9 @@ pub enum StorageProgram {
     ProofValidation {
         entry_height: u64,
         proof_mask: Vec<ProofStatus>,
+    },
+    SetRotateHashCount {
+        rotate_count: u64,
     },
 }
 
@@ -109,6 +114,12 @@ pub trait StorageTransaction {
     ) -> Self;
 
     fn storage_new_reward_claim(from_keypair: &Keypair, last_id: Hash, entry_height: u64) -> Self;
+
+    fn storage_new_set_hash_rotate_count(
+        from_keypair: &Keypair,
+        last_id: Hash,
+        rotate_count: u64,
+    ) -> Self;
 }
 
 impl StorageTransaction for Transaction {
@@ -176,6 +187,22 @@ impl StorageTransaction for Transaction {
 
     fn storage_new_reward_claim(from_keypair: &Keypair, last_id: Hash, entry_height: u64) -> Self {
         let program = StorageProgram::ClaimStorageReward { entry_height };
+        Transaction::new(
+            from_keypair,
+            &[Pubkey::new(&STORAGE_SYSTEM_ACCOUNT_ID)],
+            id(),
+            &program,
+            last_id,
+            0,
+        )
+    }
+
+    fn storage_new_set_hash_rotate_count(
+        from_keypair: &Keypair,
+        last_id: Hash,
+        rotate_count: u64,
+    ) -> Self {
+        let program = StorageProgram::SetRotateHashCount { rotate_count };
         Transaction::new(
             from_keypair,
             &[Pubkey::new(&STORAGE_SYSTEM_ACCOUNT_ID)],

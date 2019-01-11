@@ -27,6 +27,7 @@ fn main() {
                 .long("network")
                 .value_name("HOST:PORT")
                 .takes_value(true)
+                .required(true)
                 .help("Rendezvous with the network at this gossip entry point"),
         )
         .arg(

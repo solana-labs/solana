@@ -165,6 +165,15 @@ fn entrypoint(
                         (TOTAL_VALIDATOR_REWARDS * num_validations) / total_validations;
                 }
             }
+            StorageProgram::SetRotateHashCount { rotate_count } => {
+                info!("rotate count: {}", rotate_count);
+                if storage_account_state.rotate_count == 0
+                    && rotate_count != 0
+                    && rotate_count % 2 == 0
+                {
+                    storage_account_state.rotate_count = rotate_count;
+                }
+            }
         }
 
         keyed_accounts[1].account.userdata.clear();
