@@ -22,7 +22,6 @@ use std::sync::Arc;
 use std::thread::sleep;
 use std::time::Duration;
 
-#[allow(clippy::cyclomatic_complexity)]
 fn main() {
     solana_logger::setup();
     solana_metrics::set_panic_hook("fullnode");
