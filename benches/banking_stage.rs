@@ -117,9 +117,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 
     bencher.iter(move || {
         // make sure the tx last id is still registered
-        if bank.count_valid_ids(&[mint.last_id()]).len() == 0 {
-            bank.register_tick(&mint.last_id());
-        }
+        bank.register_tick(&mint.last_id());
         for v in verified.chunks(verified.len() / num_threads) {
             verified_sender.send(v.to_vec()).unwrap();
         }
@@ -222,9 +220,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
 
     bencher.iter(move || {
         // make sure the transactions are still valid
-        if bank.count_valid_ids(&[mint.last_id()]).len() == 0 {
-            bank.register_tick(&mint.last_id());
-        }
+        bank.register_tick(&mint.last_id());
         for v in verified.chunks(verified.len() / num_threads) {
             verified_sender.send(v.to_vec()).unwrap();
         }
