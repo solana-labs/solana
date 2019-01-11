@@ -300,11 +300,11 @@ fn test_program_bpf_c() {
     solana_logger::setup();
 
     let programs = [
-         "multiple_static",
-         "noop",
-         "noop++",
-         "struct_pass",
-         "struct_ret",
+        "multiple_static",
+        "noop",
+        "noop++",
+        "struct_pass",
+        "struct_ret",
     ];
     for program in programs.iter() {
         println!("Test program: {:?}", program);
