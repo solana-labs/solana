@@ -169,7 +169,7 @@ fn main() {
 
     let mut client = mk_client(&leader);
     let vote_signer = VoteSignerProxy::new(&keypair, Box::new(VoteSignerForwarder::new(signer)));
-    let vote_account = vote_signer.vote_account.clone();
+    let vote_account = vote_signer.vote_account;
     info!("New vote account ID is {:?}", vote_account);
 
     let mut fullnode = Fullnode::new(

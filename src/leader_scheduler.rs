@@ -498,7 +498,7 @@ pub fn make_active_set_entries(
         active_keypair,
         Box::new(VoteSignRequestProcessor::default()),
     );
-    let vote_account_id: Pubkey = vote_signer.vote_account.clone();
+    let vote_account_id: Pubkey = vote_signer.vote_account;
 
     let new_vote_account_tx =
         Transaction::vote_account_new(active_keypair, vote_account_id, *last_tick_id, 1, 1);
