@@ -819,6 +819,7 @@ mod tests {
     use super::*;
     use clap::{App, Arg, SubCommand};
     use serde_json::Value;
+    use solana::rpc_mock::{PUBKEY, SIGNATURE};
     use solana_sdk::signature::{gen_keypair_file, read_keypair, read_pkcs8, Keypair, KeypairUtil};
     use solana_vote_signer::rpc::LocalVoteSigner;
     use std::fs;
@@ -1183,9 +1184,9 @@ mod tests {
 
         let process_id = Keypair::new().pubkey();
         config.command = WalletCommand::Cancel(process_id);
-        assert_eq!(process_command(&config).unwrap(), "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8");
+        assert_eq!(process_command(&config).unwrap(), SIGNATURE);
 
-        let good_signature = Signature::new(&bs58::decode("43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8").into_vec().unwrap());
+        let good_signature = Signature::new(&bs58::decode(SIGNATURE).into_vec().unwrap());
         config.command = WalletCommand::Confirm(good_signature);
         assert_eq!(process_command(&config).unwrap(), "Confirmed");
         let missing_signature = Signature::new(&bs58::decode("5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW").into_vec().unwrap());
@@ -1199,7 +1200,7 @@ mod tests {
         config.command = WalletCommand::Pay(10, bob_pubkey, None, None, None, None);
         let signature = process_command(&config);
         assert!(signature.is_ok());
-        assert_eq!(signature.unwrap(), "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8".to_string());
+        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let date_string = "\"2018-09-19T17:30:59Z\"";
         let dt: DateTime<Utc> = serde_json::from_str(&date_string).unwrap();
@@ -1214,7 +1215,15 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
         let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
-        assert_eq!(json.as_object().unwrap().get("signature").unwrap().as_str().unwrap(), "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8".to_string());
+        assert_eq!(
+            json.as_object()
+                .unwrap()
+                .get("signature")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            SIGNATURE.to_string()
+        );
 
         let witness = Keypair::new().pubkey();
         config.command = WalletCommand::Pay(
@@ -1228,19 +1237,27 @@ mod tests {
         let result = process_command(&config);
         assert!(result.is_ok());
         let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
-        assert_eq!(json.as_object().unwrap().get("signature").unwrap().as_str().unwrap(), "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8".to_string());
+        assert_eq!(
+            json.as_object()
+                .unwrap()
+                .get("signature")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            SIGNATURE.to_string()
+        );
 
         let process_id = Keypair::new().pubkey();
         config.command = WalletCommand::TimeElapsed(bob_pubkey, process_id, dt);
         let signature = process_command(&config);
         assert!(signature.is_ok());
-        assert_eq!(signature.unwrap(), "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8".to_string());
+        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let witness = Keypair::new().pubkey();
         config.command = WalletCommand::Witness(bob_pubkey, witness);
         let signature = process_command(&config);
         assert!(signature.is_ok());
-        assert_eq!(signature.unwrap(), "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8".to_string());
+        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         // Need airdrop cases
         config.command = WalletCommand::Airdrop(50);
@@ -1250,13 +1267,13 @@ mod tests {
         config.command = WalletCommand::TimeElapsed(bob_pubkey, process_id, dt);
         let signature = process_command(&config);
         assert!(signature.is_ok());
-        assert_eq!(signature.unwrap(), "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8".to_string());
+        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let witness = Keypair::new().pubkey();
         config.command = WalletCommand::Witness(bob_pubkey, witness);
         let signature = process_command(&config);
         assert!(signature.is_ok());
-        assert_eq!(signature.unwrap(), "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8".to_string());
+        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         // Failture cases
         config.rpc_client = Some(RpcClient::new("fails".to_string()));
@@ -1267,7 +1284,7 @@ mod tests {
         config.command = WalletCommand::Balance;
         assert!(process_command(&config).is_err());
 
-        let any_signature = Signature::new(&bs58::decode("43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8").into_vec().unwrap());
+        let any_signature = Signature::new(&bs58::decode(SIGNATURE).into_vec().unwrap());
         config.command = WalletCommand::Confirm(any_signature);
         assert!(process_command(&config).is_err());
 
@@ -1329,9 +1346,7 @@ mod tests {
     fn test_wallet_get_last_id() {
         let rpc_client = RpcClient::new("succeeds".to_string());
 
-        let vec = bs58::decode("7RoSF9fUmdphVCpabEoefH81WwrW7orsWonXWqTXkKV8")
-            .into_vec()
-            .unwrap();
+        let vec = bs58::decode(PUBKEY).into_vec().unwrap();
         let expected_last_id = Hash::new(&vec);
 
         let last_id = get_last_id(&rpc_client);
@@ -1355,7 +1370,7 @@ mod tests {
 
         let signature = send_tx(&rpc_client, &tx);
         assert!(signature.is_ok());
-        assert_eq!(signature.unwrap(), "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8".to_string());
+        assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let rpc_client = RpcClient::new("fails".to_string());
 
