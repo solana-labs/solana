@@ -177,6 +177,79 @@ pub fn decode_blocks(
     Ok(())
 }
 
+fn decode_blobs(
+    blobs: &[SharedBlob],
+    erasures: &[i32],
+    size: usize,
+    block_start_idx: u64,
+    slot: u64,
+) -> Result<bool> {
+    let mut locks = Vec::with_capacity(NUM_DATA + NUM_CODING);
+    let mut coding_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_CODING);
+    let mut data_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_DATA);
+
+    assert!(blobs.len() == NUM_DATA + NUM_CODING);
+    for b in blobs {
+        locks.push(b.write().unwrap());
+    }
+
+    for (i, l) in locks.iter_mut().enumerate() {
+        if i < NUM_DATA {
+            data_ptrs.push(&mut l.data[..size]);
+        } else {
+            coding_ptrs.push(&mut l.data_mut()[..size]);
+        }
+    }
+
+    // Decode the blocks
+    decode_blocks(
+        data_ptrs.as_mut_slice(),
+        coding_ptrs.as_mut_slice(),
+        &erasures,
+    )?;
+
+    // Create the missing blobs from the reconstructed data
+    let mut corrupt = false;
+
+    for i in &erasures[..erasures.len() - 1] {
+        let n = *i as usize;
+        let mut idx = n as u64 + block_start_idx;
+
+        let mut data_size;
+        if n < NUM_DATA {
+            data_size = locks[n].data_size().unwrap() as usize;
+            data_size -= BLOB_HEADER_SIZE;
+            if data_size > BLOB_DATA_SIZE {
+                error!("corrupt data blob[{}] data_size: {}", idx, data_size);
+                corrupt = true;
+                break;
+            }
+        } else {
+            data_size = size;
+            idx -= NUM_CODING as u64;
+            locks[n].set_slot(slot).unwrap();
+            locks[n].set_index(idx).unwrap();
+
+            if data_size - BLOB_HEADER_SIZE > BLOB_DATA_SIZE {
+                error!("corrupt coding blob[{}] data_size: {}", idx, data_size);
+                corrupt = true;
+                break;
+            }
+        }
+
+        locks[n].set_size(data_size);
+        trace!(
+            "erasures[{}] ({}) size: {} data[0]: {}",
+            *i,
+            idx,
+            data_size,
+            locks[n].data()[0]
+        );
+    }
+
+    Ok(corrupt)
+}
+
 // Generate coding blocks in window starting from start_idx,
 //   for num_blobs..  For each block place the coding blobs
 //   at the end of the block like so:
@@ -214,6 +287,82 @@ pub fn decode_blocks(
 //
 //
 //
+pub struct CodingGenerator {
+    leftover: Vec<SharedBlob>, // SharedBlobs that couldn't be used in last call to next()
+}
+
+impl CodingGenerator {
+    pub fn new() -> Self {
+        Self {
+            leftover: Vec::with_capacity(NUM_DATA),
+        }
+    }
+
+    // must be called with consecutive data blobs from previous invocation
+    pub fn next(&mut self, next_data: &[SharedBlob]) -> Result<Vec<SharedBlob>> {
+        let mut next_coding =
+            Vec::with_capacity((self.leftover.len() + next_data.len()) / NUM_DATA * NUM_CODING);
+
+        let next_data: Vec<_> = self.leftover.iter().chain(next_data).cloned().collect();
+
+        for data_blobs in next_data.chunks(NUM_DATA) {
+            if data_blobs.len() < NUM_DATA {
+                self.leftover = data_blobs.to_vec();
+                break;
+            }
+            self.leftover.clear();
+
+            // find max_data_size for the chunk
+            let max_data_size = align!(
+                data_blobs
+                    .iter()
+                    .fold(0, |max, blob| cmp::max(blob.read().unwrap().meta.size, max)),
+                JERASURE_ALIGN
+            );
+
+            let data_locks: Vec<_> = data_blobs.iter().map(|b| b.read().unwrap()).collect();
+            let data_ptrs: Vec<_> = data_locks
+                .iter()
+                .map(|l| &l.data[..max_data_size])
+                .collect();
+
+            let mut coding_blobs = Vec::with_capacity(NUM_CODING);
+
+            for data_blob in &data_locks[NUM_DATA - NUM_CODING..NUM_DATA] {
+                let index = data_blob.index().unwrap();
+                let slot = data_blob.slot().unwrap();
+                let id = data_blob.id().unwrap();
+
+                let coding_blob = SharedBlob::default();
+                {
+                    let mut coding_blob = coding_blob.write().unwrap();
+                    coding_blob.set_index(index).unwrap();
+                    coding_blob.set_slot(slot).unwrap();
+                    coding_blob.set_id(&id).unwrap();
+                    coding_blob.set_size(max_data_size);
+                    coding_blob.set_coding().unwrap();
+                }
+                coding_blobs.push(coding_blob);
+            }
+
+            {
+                let mut coding_locks: Vec<_> =
+                    coding_blobs.iter().map(|b| b.write().unwrap()).collect();
+
+                let mut coding_ptrs: Vec<_> = coding_locks
+                    .iter_mut()
+                    .map(|l| &mut l.data_mut()[..max_data_size])
+                    .collect();
+
+                generate_coding_blocks(coding_ptrs.as_mut_slice(), &data_ptrs)?;
+            }
+            next_coding.append(&mut coding_blobs);
+        }
+
+        Ok(next_coding)
+    }
+}
+
 pub fn generate_coding(
     id: &Pubkey,
     window: &mut [WindowSlot],
@@ -401,7 +550,6 @@ pub fn recover(
 
     let mut missing_data: Vec<SharedBlob> = vec![];
     let mut missing_coding: Vec<SharedBlob> = vec![];
-    let mut size = None;
 
     // Add the data blobs we have into the recovery vector, mark the missing ones
     for i in block_start_idx..block_end_idx {
@@ -416,6 +564,7 @@ pub fn recover(
         )?;
     }
 
+    let mut size = None;
     // Add the coding blobs we have into the recovery vector, mark the missing ones
     for i in coding_start_idx..block_end_idx {
         let result = db_ledger.get_coding_blob_bytes(slot, i)?;
@@ -434,78 +583,17 @@ pub fn recover(
             }
         }
     }
-
-    // Due to check (data_missing + coding_missing) > NUM_CODING from earlier in this function,
-    // we know at least one coding block must exist, so "size" will not remain None after the
-    // below processing.
+    // Due to checks above verifying that (data_missing + coding_missing) <= NUM_CODING and
+    //  data_missing > 0, we know at least one coding block must exist, so "size" can
+    //  not remain None after the above processing.
     let size = size.unwrap();
+
     // marks end of erasures
     erasures.push(-1);
+
     trace!("erasures[]:{:?} data_size: {}", erasures, size,);
 
-    let mut locks = Vec::with_capacity(NUM_DATA + NUM_CODING);
-    {
-        let mut coding_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_CODING);
-        let mut data_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_DATA);
-
-        for b in &blobs {
-            locks.push(b.write().unwrap());
-        }
-
-        for (i, l) in locks.iter_mut().enumerate() {
-            if i < NUM_DATA {
-                data_ptrs.push(&mut l.data[..size]);
-            } else {
-                coding_ptrs.push(&mut l.data_mut()[..size]);
-            }
-        }
-
-        // Decode the blocks
-        decode_blocks(
-            data_ptrs.as_mut_slice(),
-            coding_ptrs.as_mut_slice(),
-            &erasures,
-        )?;
-    }
-
-    // Create the missing blobs from the reconstructed data
-    let mut corrupt = false;
-
-    for i in &erasures[..erasures.len() - 1] {
-        let n = *i as usize;
-        let mut idx = n as u64 + block_start_idx;
-
-        let mut data_size;
-        if n < NUM_DATA {
-            data_size = locks[n].data_size().unwrap() as usize;
-            data_size -= BLOB_HEADER_SIZE;
-            if data_size > BLOB_DATA_SIZE {
-                error!("corrupt data blob[{}] data_size: {}", idx, data_size);
-                corrupt = true;
-                break;
-            }
-        } else {
-            data_size = size;
-            idx -= NUM_CODING as u64;
-            locks[n].set_slot(slot).unwrap();
-            locks[n].set_index(idx).unwrap();
-
-            if data_size - BLOB_HEADER_SIZE > BLOB_DATA_SIZE {
-                error!("corrupt coding blob[{}] data_size: {}", idx, data_size);
-                corrupt = true;
-                break;
-            }
-        }
-
-        locks[n].set_size(data_size);
-        trace!(
-            "erasures[{}] ({}) size: {} data[0]: {}",
-            *i,
-            idx,
-            data_size,
-            locks[n].data()[0]
-        );
-    }
+    let corrupt = decode_blobs(&blobs, &erasures, size, block_start_idx, slot)?;
 
     if corrupt {
         // Remove the corrupted coding blobs so there's no effort wasted in trying to
@@ -560,7 +648,7 @@ pub mod test {
     use std::sync::Arc;
 
     #[test]
-    pub fn test_coding() {
+    fn test_coding() {
         let zero_vec = vec![0; 16];
         let mut vs: Vec<Vec<u8>> = (0..4).map(|i| (i..(16 + i)).collect()).collect();
         let v_orig: Vec<u8> = vs[0].clone();
@@ -606,6 +694,75 @@ pub mod test {
             trace!("{:?}", v);
         }
         assert_eq!(v_orig, vs[0]);
+    }
+
+    #[test]
+    fn test_erasure_generate_coding() {
+        solana_logger::setup();
+
+        // trivial case
+        let mut coding_generator = CodingGenerator::new();
+        let blobs = Vec::new();
+        for _ in 0..NUM_DATA * 2 {
+            let coding = coding_generator.next(&blobs).unwrap();
+            assert_eq!(coding.len(), 0);
+        }
+
+        // test coding by iterating one blob at a time
+        let data_blobs = generate_test_blobs(0, NUM_DATA * 2);
+
+        for (i, blob) in data_blobs.iter().cloned().enumerate() {
+            let coding = coding_generator.next(&[blob]).unwrap();
+
+            if !coding.is_empty() {
+                assert_eq!(i % NUM_DATA, NUM_DATA - 1);
+                assert_eq!(coding.len(), NUM_CODING);
+
+                let size = coding[0].read().unwrap().size().unwrap();
+
+                // toss one data and one coding
+                let erasures: Vec<i32> = vec![0, NUM_DATA as i32, -1];
+
+                let block_start_idx = i - (i % NUM_DATA);
+                let mut blobs: Vec<SharedBlob> = Vec::with_capacity(NUM_DATA + NUM_CODING);
+
+                blobs.push(SharedBlob::default()); // empty data, erasure at zero
+                for blob in &data_blobs[block_start_idx + 1..block_start_idx + NUM_DATA] {
+                    // skip first blob
+                    blobs.push(blob.clone());
+                }
+                blobs.push(SharedBlob::default()); // empty coding, erasure at NUM_DATA
+                for blob in &coding[1..NUM_CODING] {
+                    blobs.push(blob.clone());
+                }
+
+                let corrupt =
+                    decode_blobs(&blobs, &erasures, size, block_start_idx as u64, 0).unwrap();
+
+                assert!(!corrupt);
+
+                assert_eq!(
+                    blobs[1].read().unwrap().meta,
+                    data_blobs[block_start_idx + 1].read().unwrap().meta
+                );
+                assert_eq!(
+                    blobs[1].read().unwrap().data(),
+                    data_blobs[block_start_idx + 1].read().unwrap().data()
+                );
+                assert_eq!(
+                    blobs[0].read().unwrap().meta,
+                    data_blobs[block_start_idx].read().unwrap().meta
+                );
+                assert_eq!(
+                    blobs[0].read().unwrap().data(),
+                    data_blobs[block_start_idx].read().unwrap().data()
+                );
+                assert_eq!(
+                    blobs[NUM_DATA].read().unwrap().data(),
+                    coding[0].read().unwrap().data()
+                );
+            }
+        }
     }
 
     // TODO: Temprorary function used in tests to generate a database ledger
@@ -740,18 +897,32 @@ pub mod test {
             blobs.push(b_);
         }
 
-        {
-            // Make some dummy slots
-            let slot_tick_heights: Vec<(&SharedBlob, u64)> =
-                blobs.iter().zip(vec![slot; blobs.len()]).collect();
-            index_blobs(slot_tick_heights, &Keypair::new().pubkey(), offset as u64);
-        }
+        // Make some dummy slots
+        index_blobs(
+            &blobs,
+            &Keypair::new().pubkey(),
+            offset as u64,
+            &vec![slot; blobs.len()],
+        );
+
         for b in blobs {
             let idx = b.read().unwrap().index().unwrap() as usize % WINDOW_SIZE;
 
             window[idx].data = Some(b);
         }
         window
+    }
+
+    fn generate_test_blobs(offset: usize, num_blobs: usize) -> Vec<SharedBlob> {
+        let blobs = make_tiny_test_entries(num_blobs).to_shared_blobs();
+
+        index_blobs(
+            &blobs,
+            &Keypair::new().pubkey(),
+            offset as u64,
+            &vec![DEFAULT_SLOT_HEIGHT; blobs.len()],
+        );
+        blobs
     }
 
     fn generate_entry_window(offset: usize, num_blobs: usize) -> Vec<WindowSlot> {
@@ -763,17 +934,8 @@ pub mod test {
             };
             WINDOW_SIZE
         ];
-        let entries = make_tiny_test_entries(num_blobs);
-        let blobs = entries.to_shared_blobs();
 
-        {
-            // Make some dummy slots
-            let slot_tick_heights: Vec<(&SharedBlob, u64)> = blobs
-                .iter()
-                .zip(vec![DEFAULT_SLOT_HEIGHT; blobs.len()])
-                .collect();
-            index_blobs(slot_tick_heights, &Keypair::new().pubkey(), offset as u64);
-        }
+        let blobs = generate_test_blobs(offset, num_blobs);
 
         for b in blobs.into_iter() {
             let idx = b.read().unwrap().index().unwrap() as usize % WINDOW_SIZE;

@@ -8,7 +8,6 @@ use log::Level;
 use serde::Serialize;
 pub use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
-use std::borrow::Borrow;
 use std::cmp;
 use std::fmt;
 use std::io;
@@ -451,21 +450,14 @@ impl Blob {
     }
 }
 
-pub fn index_blobs<I, J, K>(blobs: I, id: &Pubkey, mut index: u64)
-where
-    I: IntoIterator<Item = J>,
-    J: Borrow<(K, u64)>,
-    K: Borrow<SharedBlob>,
-{
+pub fn index_blobs(blobs: &[SharedBlob], id: &Pubkey, mut index: u64, slots: &[u64]) {
     // enumerate all the blobs, those are the indices
-    for b in blobs {
-        let (b, slot) = b.borrow();
-        let mut blob = b.borrow().write().unwrap();
+    for (blob, slot) in blobs.iter().zip(slots) {
+        let mut blob = blob.write().unwrap();
 
         blob.set_index(index).expect("set_index");
         blob.set_slot(*slot).expect("set_slot");
         blob.set_id(id).expect("set_id");
-        blob.set_flags(0).unwrap();
 
         index += 1;
     }
