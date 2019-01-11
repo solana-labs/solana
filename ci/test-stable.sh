@@ -28,10 +28,10 @@ for program in programs/native/*; do
 done
 
 # Run integration tests serially
-for test in tests/*.rs; do
+for test in tests/*.rs wallet/tests/*.rs; do
   test=${test##*/} # basename x
   test=${test%.rs} # basename x .rs
-  _ cargo test --verbose --features="$FEATURES" --test="$test" -- --test-threads=1 --nocapture
+  _ cargo test --all --verbose --features="$FEATURES" --test="$test" -- --test-threads=1 --nocapture
 done
 
 echo --- ci/localnet-sanity.sh
