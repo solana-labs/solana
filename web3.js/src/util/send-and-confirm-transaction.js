@@ -31,26 +31,29 @@ export async function sendAndConfirmTransaction(
         break;
       }
 
-      await sleep(500);
       if (--statusRetries <= 0) {
-        const duration = (Date.now() - start) / 1000;
-        throw new Error(
-          `Transaction '${signature}' was not confirmed in ${duration.toFixed(
-            2,
-          )} seconds (${status})`,
-        );
+        break;
       }
+      await sleep(500);
     }
 
     if (status === 'Confirmed') {
       break;
     }
+    if (--sendRetries <= 0) {
+      const duration = (Date.now() - start) / 1000;
+      throw new Error(
+        `Transaction '${signature}' was not confirmed in ${duration.toFixed(
+          2,
+        )} seconds (${status})`,
+      );
+    }
 
-    if (status !== 'AccountInUse' || --sendRetries <= 0) {
+    if (status !== 'AccountInUse' && status !== 'SignatureNotFound') {
       throw new Error(`Transaction ${signature} failed (${status})`);
     }
 
-    // Retry in 0..100ms to try to avoid another collision
+    // Retry in 0..100ms to try to avoid another AccountInUse collision
     await sleep(Math.random() * 100);
   }
 
