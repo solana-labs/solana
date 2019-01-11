@@ -20,10 +20,10 @@ height of the block it is voting on. The account stores the 32 highest heights.
   be baked into the fullnode code. The fullnode code queries the bank for all
   accounts owned by the vote program.
 
-* Voting ballets do not contain a PoH hash. The validator is only voting that
+* Voting ballots do not contain a PoH hash. The validator is only voting that
   it has observed an arbitrary block at some height.
 
-* Voting ballets do not contain a hash of the bank state. Without that hash,
+* Voting ballots do not contain a hash of the bank state. Without that hash,
   there is no evidence that the validator executed the transactions and
   verified there were no double spends.
 
@@ -53,9 +53,9 @@ log the time since the NewBlock transaction was submitted.
 Locktower is the proposed [fork selection](fork-selection.md) algorithm. It
 proposes that payment to miners be postponed until the *stack* of validator
 votes reaches a certain depth, at which point rollback is not economically
-feasible. As it affects this proposal, it means that the vote program would
-likely implement locktower. Vote instructions would need to reference a global
-locktower account so that it can track cross-block state.
+feasible. The vote program may therefore implement locktower. Vote instructions
+would need to reference a global locktower account so that it can track
+cross-block state.
 
 ## Challenges
 
@@ -74,5 +74,5 @@ we don't, then we have the option to allow stakes to float until a vote is
 submitted. A validator could conceivably reference its own staking account, but
 that'd be the current account value instead of the account value of the most
 recently finalized bank state. The bank currently doesn't offer a means to
-referencing accounts from particular points in time.
+reference accounts from particular points in time.
 
