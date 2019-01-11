@@ -2,8 +2,6 @@
 use crate::db_ledger::DbLedger;
 use crate::packet::{Blob, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE, BLOB_SIZE};
 use crate::result::{Error, Result};
-use crate::window::WindowSlot;
-use solana_sdk::pubkey::Pubkey;
 use std::cmp;
 use std::sync::{Arc, RwLock};
 
@@ -363,139 +361,6 @@ impl CodingGenerator {
     }
 }
 
-pub fn generate_coding(
-    id: &Pubkey,
-    window: &mut [WindowSlot],
-    receive_index: u64,
-    num_blobs: usize,
-    transmit_index_coding: &mut u64,
-) -> Result<()> {
-    // beginning of the coding blobs of the block that receive_index points into
-    let coding_index_start =
-        receive_index - (receive_index % NUM_DATA as u64) + (NUM_DATA - NUM_CODING) as u64;
-
-    let start_idx = receive_index as usize % window.len();
-    let mut block_start = start_idx - (start_idx % NUM_DATA);
-
-    loop {
-        let block_end = block_start + NUM_DATA;
-        if block_end > (start_idx + num_blobs) {
-            break;
-        }
-        info!(
-            "generate_coding {} start: {} end: {} start_idx: {} num_blobs: {}",
-            id, block_start, block_end, start_idx, num_blobs
-        );
-
-        let mut max_data_size = 0;
-
-        // find max_data_size, maybe bail if not all the data is here
-        for i in block_start..block_end {
-            let n = i % window.len();
-            trace!("{} window[{}] = {:?}", id, n, window[n].data);
-
-            if let Some(b) = &window[n].data {
-                max_data_size = cmp::max(b.read().unwrap().meta.size, max_data_size);
-            } else {
-                trace!("{} data block is null @ {}", id, n);
-                return Ok(());
-            }
-        }
-
-        // round up to the nearest jerasure alignment
-        max_data_size = align!(max_data_size, JERASURE_ALIGN);
-
-        let mut data_blobs = Vec::with_capacity(NUM_DATA);
-        for i in block_start..block_end {
-            let n = i % window.len();
-
-            if let Some(b) = &window[n].data {
-                // make sure extra bytes in each blob are zero-d out for generation of
-                //  coding blobs
-                let mut b_wl = b.write().unwrap();
-                for i in b_wl.meta.size..max_data_size {
-                    b_wl.data[i] = 0;
-                }
-                data_blobs.push(b);
-            }
-        }
-
-        // getting ready to do erasure coding, means that we're potentially
-        // going back in time, tell our caller we've inserted coding blocks
-        // starting at coding_index_start
-        *transmit_index_coding = cmp::min(*transmit_index_coding, coding_index_start);
-
-        let mut coding_blobs = Vec::with_capacity(NUM_CODING);
-        let coding_start = block_end - NUM_CODING;
-        for i in coding_start..block_end {
-            let n = i % window.len();
-            assert!(window[n].coding.is_none());
-
-            window[n].coding = Some(SharedBlob::default());
-
-            let coding = window[n].coding.clone().unwrap();
-            let mut coding_wl = coding.write().unwrap();
-            for i in 0..max_data_size {
-                coding_wl.data[i] = 0;
-            }
-            // copy index and id from the data blob
-            if let Some(data) = &window[n].data {
-                let data_rl = data.read().unwrap();
-
-                let index = data_rl.index().unwrap();
-                let slot = data_rl.slot().unwrap();
-                let id = data_rl.id().unwrap();
-
-                trace!(
-                    "{} copying index {} id {:?} from data to coding",
-                    id,
-                    index,
-                    id
-                );
-                coding_wl.set_index(index).unwrap();
-                coding_wl.set_slot(slot).unwrap();
-                coding_wl.set_id(&id).unwrap();
-            }
-            coding_wl.set_size(max_data_size);
-            if coding_wl.set_coding().is_err() {
-                return Err(Error::ErasureError(ErasureError::EncodeError));
-            }
-
-            coding_blobs.push(coding.clone());
-        }
-
-        let data_locks: Vec<_> = data_blobs.iter().map(|b| b.read().unwrap()).collect();
-
-        let data_ptrs: Vec<_> = data_locks
-            .iter()
-            .enumerate()
-            .map(|(i, l)| {
-                trace!("{} i: {} data: {}", id, i, l.data[0]);
-                &l.data[..max_data_size]
-            })
-            .collect();
-
-        let mut coding_locks: Vec<_> = coding_blobs.iter().map(|b| b.write().unwrap()).collect();
-
-        let mut coding_ptrs: Vec<_> = coding_locks
-            .iter_mut()
-            .enumerate()
-            .map(|(i, l)| {
-                trace!("{} i: {} coding: {}", id, i, l.data[0],);
-                &mut l.data_mut()[..max_data_size]
-            })
-            .collect();
-
-        generate_coding_blocks(coding_ptrs.as_mut_slice(), &data_ptrs)?;
-        debug!(
-            "{} start_idx: {} data: {}:{} coding: {}:{}",
-            id, start_idx, block_start, block_end, coding_start, block_end
-        );
-        block_start = block_end;
-    }
-    Ok(())
-}
-
 // Recover the missing data and coding blobs from the input ledger. Returns a vector
 // of the recovered missing data blobs and a vector of the recovered coding blobs
 pub fn recover(
@@ -818,6 +683,140 @@ pub mod test {
         }
 
         db_ledger
+    }
+
+    fn generate_coding(
+        id: &Pubkey,
+        window: &mut [WindowSlot],
+        receive_index: u64,
+        num_blobs: usize,
+        transmit_index_coding: &mut u64,
+    ) -> Result<()> {
+        // beginning of the coding blobs of the block that receive_index points into
+        let coding_index_start =
+            receive_index - (receive_index % NUM_DATA as u64) + (NUM_DATA - NUM_CODING) as u64;
+
+        let start_idx = receive_index as usize % window.len();
+        let mut block_start = start_idx - (start_idx % NUM_DATA);
+
+        loop {
+            let block_end = block_start + NUM_DATA;
+            if block_end > (start_idx + num_blobs) {
+                break;
+            }
+            info!(
+                "generate_coding {} start: {} end: {} start_idx: {} num_blobs: {}",
+                id, block_start, block_end, start_idx, num_blobs
+            );
+
+            let mut max_data_size = 0;
+
+            // find max_data_size, maybe bail if not all the data is here
+            for i in block_start..block_end {
+                let n = i % window.len();
+                trace!("{} window[{}] = {:?}", id, n, window[n].data);
+
+                if let Some(b) = &window[n].data {
+                    max_data_size = cmp::max(b.read().unwrap().meta.size, max_data_size);
+                } else {
+                    trace!("{} data block is null @ {}", id, n);
+                    return Ok(());
+                }
+            }
+
+            // round up to the nearest jerasure alignment
+            max_data_size = align!(max_data_size, JERASURE_ALIGN);
+
+            let mut data_blobs = Vec::with_capacity(NUM_DATA);
+            for i in block_start..block_end {
+                let n = i % window.len();
+
+                if let Some(b) = &window[n].data {
+                    // make sure extra bytes in each blob are zero-d out for generation of
+                    //  coding blobs
+                    let mut b_wl = b.write().unwrap();
+                    for i in b_wl.meta.size..max_data_size {
+                        b_wl.data[i] = 0;
+                    }
+                    data_blobs.push(b);
+                }
+            }
+
+            // getting ready to do erasure coding, means that we're potentially
+            // going back in time, tell our caller we've inserted coding blocks
+            // starting at coding_index_start
+            *transmit_index_coding = cmp::min(*transmit_index_coding, coding_index_start);
+
+            let mut coding_blobs = Vec::with_capacity(NUM_CODING);
+            let coding_start = block_end - NUM_CODING;
+            for i in coding_start..block_end {
+                let n = i % window.len();
+                assert!(window[n].coding.is_none());
+
+                window[n].coding = Some(SharedBlob::default());
+
+                let coding = window[n].coding.clone().unwrap();
+                let mut coding_wl = coding.write().unwrap();
+                for i in 0..max_data_size {
+                    coding_wl.data[i] = 0;
+                }
+                // copy index and id from the data blob
+                if let Some(data) = &window[n].data {
+                    let data_rl = data.read().unwrap();
+
+                    let index = data_rl.index().unwrap();
+                    let slot = data_rl.slot().unwrap();
+                    let id = data_rl.id().unwrap();
+
+                    trace!(
+                        "{} copying index {} id {:?} from data to coding",
+                        id,
+                        index,
+                        id
+                    );
+                    coding_wl.set_index(index).unwrap();
+                    coding_wl.set_slot(slot).unwrap();
+                    coding_wl.set_id(&id).unwrap();
+                }
+                coding_wl.set_size(max_data_size);
+                if coding_wl.set_coding().is_err() {
+                    return Err(Error::ErasureError(ErasureError::EncodeError));
+                }
+
+                coding_blobs.push(coding.clone());
+            }
+
+            let data_locks: Vec<_> = data_blobs.iter().map(|b| b.read().unwrap()).collect();
+
+            let data_ptrs: Vec<_> = data_locks
+                .iter()
+                .enumerate()
+                .map(|(i, l)| {
+                    trace!("{} i: {} data: {}", id, i, l.data[0]);
+                    &l.data[..max_data_size]
+                })
+                .collect();
+
+            let mut coding_locks: Vec<_> =
+                coding_blobs.iter().map(|b| b.write().unwrap()).collect();
+
+            let mut coding_ptrs: Vec<_> = coding_locks
+                .iter_mut()
+                .enumerate()
+                .map(|(i, l)| {
+                    trace!("{} i: {} coding: {}", id, i, l.data[0],);
+                    &mut l.data_mut()[..max_data_size]
+                })
+                .collect();
+
+            generate_coding_blocks(coding_ptrs.as_mut_slice(), &data_ptrs)?;
+            debug!(
+                "{} start_idx: {} data: {}:{} coding: {}:{}",
+                id, start_idx, block_start, block_end, coding_start, block_end
+            );
+            block_start = block_end;
+        }
+        Ok(())
     }
 
     pub fn setup_window_ledger(
