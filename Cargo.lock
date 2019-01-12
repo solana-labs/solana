@@ -1914,7 +1914,7 @@ dependencies = [
  "serde 1.0.84 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-logger 0.12.0",
  "solana-sdk 0.12.0",
- "solana_rbpf 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana_rbpf 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "walkdir 2.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -2287,7 +2287,7 @@ dependencies = [
 
 [[package]]
 name = "solana_rbpf"
-version = "0.1.6"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "byteorder 1.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3068,7 +3068,7 @@ dependencies = [
 "checksum solana-jsonrpc-server-utils 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "6acfebc12e709d8525f039e7135b922fb7efaf49cd536ad97bbedd0391dcf989"
 "checksum solana-jsonrpc-ws-server 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5a21f3c0cd97c2673854b1e4558cea4dba59fce27ec9f0e130f847da9e10355c"
 "checksum solana-ws 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "de774a72a468e65a10791246f0335869a19bed7d85ba3c05381c4bb6247acb7f"
-"checksum solana_rbpf 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "15165ac3f27bf3a967e37059d932f074cfafc35756c98e9b477610f831f8536a"
+"checksum solana_rbpf 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)" = "780f9aea6cd05d94f23ebc4454979424f179ab2c4e420b195deb2865f1752e57"
 "checksum stable_deref_trait 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "dba1a27d3efae4351c8051072d619e3ade2820635c3958d826bfea39d59b54c8"
 "checksum string 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "98998cced76115b1da46f63388b909d118a37ae0be0f82ad35773d4a4bc9d18d"
 "checksum strsim 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "bb4f380125926a99e52bc279241539c018323fab05ad6368b56f93d9369ff550"
