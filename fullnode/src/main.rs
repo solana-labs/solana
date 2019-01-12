@@ -201,9 +201,6 @@ fn main() {
 
     let node = Node::new_with_external_ip(keypair.pubkey(), &gossip);
 
-    // save off some stuff for airdrop
-    let mut node_info = node.info.clone();
-
     let keypair = Arc::new(keypair);
     let pubkey = keypair.pubkey();
 
@@ -230,6 +227,7 @@ fn main() {
         }
         None => {
             //self = leader
+            let mut node_info = node.info.clone();
             if rpc_port.is_some() {
                 node_info.rpc.set_port(rpc_port.unwrap());
                 node_info.rpc_pubsub.set_port(rpc_port.unwrap() + 1);
