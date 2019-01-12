@@ -59,7 +59,7 @@ cross-block state.
 
 ## Challenges
 
-### On-chain governance
+### On-chain voting
 
 Using programs and accounts to implement this is a bit tedious. The hardest
 part is figuring out how much space to allocate in NewBlock. The two variables
