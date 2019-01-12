@@ -40,8 +40,7 @@ pub fn helper_sol_log_verify(
     unused7: &[RegionPtrs],
 ) -> Result<(()), Error> {
     for region in ro_regions.iter() {
-        if region.bot <= addr && addr as u64 <= region.top
-        {
+        if region.bot <= addr && addr as u64 <= region.top {
             let c_buf: *const c_char = addr as *const c_char;
             let max_size = region.top - addr;
             unsafe {
