@@ -16,18 +16,29 @@ echo --- create book repo
   git commit -m "${BUILDKITE_COMMIT:-local}"
 )
 
-echo --- publish
-if [[ $BUILDKITE_BRANCH = master ]]; then
-  cd book/html/
-  git remote add origin git@github.com:solana-labs/solana.git
-  git fetch origin gh-pages
-  if ! git diff HEAD origin/gh-pages --quiet; then
-    git push -f origin HEAD:gh-pages
-  else
-    echo "Content unchanged, publish skipped"
-  fi
+eval "$(ci/channel-info.sh)"
+# Only publish the book from the edge and beta channels for now.
+case $CHANNEL in
+edge)
+  repo=git@github.com:solana-labs/book-edge.git
+  ;;
+beta)
+  repo=git@github.com:solana-labs/book.git
+  ;;
+*)
+ echo "--- publish skipped"
+ exit 0
+ ;;
+esac
+
+echo "--- publish $CHANNEL"
+cd book/html/
+git remote add origin $repo
+git fetch origin master
+if ! git diff HEAD origin/master --quiet; then
+  git push -f origin HEAD:master
 else
-  echo "Publish skipped"
+  echo "Content unchanged, publish skipped"
 fi
 
 exit 0
