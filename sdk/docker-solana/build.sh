@@ -4,14 +4,6 @@ set -ex
 cd "$(dirname "$0")"
 eval "$(../../ci/channel-info.sh)"
 
-if [[ $BUILDKITE_BRANCH = "$STABLE_CHANNEL" ]]; then
-  CHANNEL=stable
-elif [[ $BUILDKITE_BRANCH = "$EDGE_CHANNEL" ]]; then
-  CHANNEL=edge
-elif [[ $BUILDKITE_BRANCH = "$BETA_CHANNEL" ]]; then
-  CHANNEL=beta
-fi
-
 if [[ -z $CHANNEL ]]; then
   echo Unable to determine channel to publish into, exiting.
   echo "^^^ +++"
@@ -24,7 +16,7 @@ rm -rf usr/
 
 cp -f entrypoint.sh usr/bin/solana-entrypoint.sh
 
-docker build -t solanalabs/solana:$CHANNEL .
+docker build -t solanalabs/solana:"$CHANNEL" .
 
 maybeEcho=
 if [[ -z $CI ]]; then
@@ -38,4 +30,4 @@ else
     fi
   )
 fi
-$maybeEcho docker push solanalabs/solana:$CHANNEL
+$maybeEcho docker push solanalabs/solana:"$CHANNEL"

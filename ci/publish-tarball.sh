@@ -11,14 +11,6 @@ fi
 
 eval "$(ci/channel-info.sh)"
 
-if [[ $BUILDKITE_BRANCH = "$STABLE_CHANNEL" ]]; then
-  CHANNEL=stable
-elif [[ $BUILDKITE_BRANCH = "$EDGE_CHANNEL" ]]; then
-  CHANNEL=edge
-elif [[ $BUILDKITE_BRANCH = "$BETA_CHANNEL" ]]; then
-  CHANNEL=beta
-fi
-
 if [[ -n "$BUILDKITE_TAG" ]]; then
   CHANNEL_OR_TAG=$BUILDKITE_TAG
 elif [[ -n "$TRIGGERED_BUILDKITE_TAG" ]]; then

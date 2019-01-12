@@ -82,10 +82,26 @@ for tag in "${tags[@]}"; do
   fi
 done
 
-echo EDGE_CHANNEL=master
-echo BETA_CHANNEL="${beta:+v$beta}"
-echo STABLE_CHANNEL="${stable:+v$stable}"
-echo BETA_CHANNEL_LATEST_TAG="${beta_tag:+v$beta_tag}"
-echo STABLE_CHANNEL_LATEST_TAG="${stable_tag:+v$stable_tag}"
+EDGE_CHANNEL=master
+BETA_CHANNEL=${beta:+v$beta}
+STABLE_CHANNEL=${stable:+v$stable}
+BETA_CHANNEL_LATEST_TAG=${beta_tag:+v$beta_tag}
+STABLE_CHANNEL_LATEST_TAG=${stable_tag:+v$stable_tag}
+
+
+if [[ $BUILDKITE_BRANCH = "$STABLE_CHANNEL" ]]; then
+  CHANNEL=stable
+elif [[ $BUILDKITE_BRANCH = "$EDGE_CHANNEL" ]]; then
+  CHANNEL=edge
+elif [[ $BUILDKITE_BRANCH = "$BETA_CHANNEL" ]]; then
+  CHANNEL=beta
+fi
+
+echo EDGE_CHANNEL="$EDGE_CHANNEL"
+echo BETA_CHANNEL="$BETA_CHANNEL"
+echo BETA_CHANNEL_LATEST_TAG="$BETA_CHANNEL_LATEST_TAG"
+echo STABLE_CHANNEL="$STABLE_CHANNEL"
+echo STABLE_CHANNEL_LATEST_TAG="$STABLE_CHANNEL_LATEST_TAG"
+echo CHANNEL="$CHANNEL"
 
 exit 0
