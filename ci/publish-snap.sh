@@ -19,14 +19,6 @@ fi
 
 eval "$(ci/channel-info.sh)"
 
-if [[ $BUILDKITE_BRANCH = "$STABLE_CHANNEL" ]]; then
-  CHANNEL=stable
-elif [[ $BUILDKITE_BRANCH = "$EDGE_CHANNEL" ]]; then
-  CHANNEL=edge
-elif [[ $BUILDKITE_BRANCH = "$BETA_CHANNEL" ]]; then
-  CHANNEL=beta
-fi
-
 if [[ -z $CHANNEL ]]; then
   echo Unable to determine channel to publish into, exiting.
   exit 1
@@ -61,13 +53,13 @@ if [[ ! -x /usr/bin/multilog ]]; then
   sudo apt-get install -y daemontools
 fi
 
-echo --- build: $CHANNEL channel
+echo "--- build: $CHANNEL channel"
 snapcraft
 
 source ci/upload-ci-artifact.sh
 upload-ci-artifact solana_*.snap
 
 if [[ -z $DO_NOT_PUBLISH_SNAP ]]; then
-  echo --- publish: $CHANNEL channel
-  $DRYRUN snapcraft push solana_*.snap --release $CHANNEL
+  echo "--- publish: $CHANNEL channel"
+  $DRYRUN snapcraft push solana_*.snap --release "$CHANNEL"
 fi
