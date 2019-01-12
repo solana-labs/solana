@@ -26,7 +26,9 @@ Furthermore, and much to our surprise, it can be implemented using a mechanism t
 Architecture
 ===
 
-Before you jump into the code, review the online book [Solana: Blockchain Rebuilt for Scale](https://solana-labs.github.io/solana/).
+Before you jump into the code, review the online book [Solana: Blockchain Rebuilt for Scale](https://solana-labs.github.io/book/).
+
+(The _latest_ development version of the online book is also [available here](https://solana-labs.github.io/book-edge/).)
 
 Developing
 ===
