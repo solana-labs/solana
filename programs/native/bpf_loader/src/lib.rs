@@ -3,7 +3,7 @@ pub mod bpf_verifier;
 use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use libc::c_char;
 use log::*;
-use solana_rbpf::EbpfVmRaw;
+use solana_rbpf::{EbpfVmRaw, RegionPtrs};
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::loader_instruction::LoaderInstruction;
 use solana_sdk::native_program::ProgramError;
@@ -36,15 +36,13 @@ pub fn helper_sol_log_verify(
     unused3: u64,
     unused4: u64,
     unused5: u64,
-    ro_regions: &[&[u8]],
-    unused7: &[&[u8]],
+    ro_regions: &[RegionPtrs],
+    unused7: &[RegionPtrs],
 ) -> Result<(()), Error> {
     for region in ro_regions.iter() {
-        if region.as_ptr() as u64 <= addr
-            && addr as u64 <= region.as_ptr() as u64 + region.len() as u64
-        {
+        if region.bot <= addr && addr as u64 <= region.top {
             let c_buf: *const c_char = addr as *const c_char;
-            let max_size = (region.as_ptr() as u64 + region.len() as u64) - addr;
+            let max_size = region.top - addr;
             unsafe {
                 for i in 0..max_size {
                     if std::ptr::read(c_buf.offset(i as isize)) == 0 {

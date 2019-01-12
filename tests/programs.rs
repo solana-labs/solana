@@ -300,9 +300,11 @@ fn test_program_bpf_c() {
     solana_logger::setup();
 
     let programs = [
+        "bpf_to_bpf",
         "multiple_static",
         "noop",
         "noop++",
+        "relative_call",
         "struct_pass",
         "struct_ret",
     ];
