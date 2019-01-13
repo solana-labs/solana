@@ -36,69 +36,22 @@ impl RpcClient {
             addr,
         }
     }
-}
 
-pub fn get_rpc_request_str(rpc_addr: SocketAddr) -> String {
-    format!("http://{}", rpc_addr)
-}
-
-pub trait RpcRequestHandler {
-    fn make_rpc_request(
-        client: &RpcClient,
-        id: u64,
-        request: RpcRequest,
-        params: Option<Value>,
-    ) -> Result<Value, Box<dyn error::Error>>;
-}
-
-pub struct Rpu {}
-
-impl RpcRequestHandler for Rpu {
-    fn make_rpc_request(
-        client: &RpcClient,
-        id: u64,
-        request: RpcRequest,
-        params: Option<Value>,
-    ) -> Result<Value, Box<dyn error::Error>> {
-        request.retry_make_rpc_request(client, id, params, 0)
-    }
-}
-
-#[derive(Debug, PartialEq)]
-pub enum RpcRequest {
-    ConfirmTransaction,
-    GetAccountInfo,
-    GetBalance,
-    GetConfirmationTime,
-    GetLastId,
-    GetSignatureStatus,
-    GetTransactionCount,
-    RequestAirdrop,
-    SendTransaction,
-    RegisterNode,
-    SignVote,
-    DeregisterNode,
-    GetStorageMiningLastId,
-    GetStorageMiningEntryHeight,
-    GetStoragePubkeysForEntryHeight,
-}
-
-impl RpcRequest {
     pub fn retry_make_rpc_request(
         &self,
-        client: &RpcClient,
         id: u64,
+        request: &RpcRequest,
         params: Option<Value>,
         mut retries: usize,
     ) -> Result<Value, Box<dyn error::Error>> {
-        let request = self.build_request_json(id, params);
+        let request_json = request.build_request_json(id, params);
 
         loop {
-            match client
+            match self
                 .client
-                .post(&client.addr)
+                .post(&self.addr)
                 .header(CONTENT_TYPE, "application/json")
-                .body(request.to_string())
+                .body(request_json.to_string())
                 .send()
             {
                 Ok(mut response) => {
@@ -126,7 +79,52 @@ impl RpcRequest {
             }
         }
     }
+}
 
+pub fn get_rpc_request_str(rpc_addr: SocketAddr) -> String {
+    format!("http://{}", rpc_addr)
+}
+
+pub trait RpcRequestHandler {
+    fn make_rpc_request(
+        &self,
+        id: u64,
+        request: RpcRequest,
+        params: Option<Value>,
+    ) -> Result<Value, Box<dyn error::Error>>;
+}
+
+impl RpcRequestHandler for RpcClient {
+    fn make_rpc_request(
+        &self,
+        id: u64,
+        request: RpcRequest,
+        params: Option<Value>,
+    ) -> Result<Value, Box<dyn error::Error>> {
+        self.retry_make_rpc_request(id, &request, params, 0)
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum RpcRequest {
+    ConfirmTransaction,
+    GetAccountInfo,
+    GetBalance,
+    GetConfirmationTime,
+    GetLastId,
+    GetSignatureStatus,
+    GetTransactionCount,
+    RequestAirdrop,
+    SendTransaction,
+    RegisterNode,
+    SignVote,
+    DeregisterNode,
+    GetStorageMiningLastId,
+    GetStorageMiningEntryHeight,
+    GetStoragePubkeysForEntryHeight,
+}
+
+impl RpcRequest {
     fn build_request_json(&self, id: u64, params: Option<Value>) -> Value {
         let jsonrpc = "2.0";
         let method = match self {
@@ -266,8 +264,7 @@ mod tests {
         let rpc_addr = receiver.recv().unwrap();
         let rpc_client = RpcClient::new_from_socket(rpc_addr);
 
-        let balance = Rpu::make_rpc_request(
-            &rpc_client,
+        let balance = rpc_client.make_rpc_request(
             1,
             RpcRequest::GetBalance,
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])),
@@ -275,7 +272,7 @@ mod tests {
         assert!(balance.is_ok());
         assert_eq!(balance.unwrap().as_u64().unwrap(), 50);
 
-        let last_id = Rpu::make_rpc_request(&rpc_client, 2, RpcRequest::GetLastId, None);
+        let last_id = rpc_client.make_rpc_request(2, RpcRequest::GetLastId, None);
         assert!(last_id.is_ok());
         assert_eq!(
             last_id.unwrap().as_str().unwrap(),
@@ -283,12 +280,8 @@ mod tests {
         );
 
         // Send erroneous parameter
-        let last_id = Rpu::make_rpc_request(
-            &rpc_client,
-            3,
-            RpcRequest::GetLastId,
-            Some(json!("paramter")),
-        );
+        let last_id =
+            rpc_client.make_rpc_request(3, RpcRequest::GetLastId, Some(json!("paramter")));
         assert_eq!(last_id.is_err(), true);
     }
 
@@ -322,9 +315,9 @@ mod tests {
         let rpc_addr = receiver.recv().unwrap();
         let rpc_client = RpcClient::new_from_socket(rpc_addr);
 
-        let balance = RpcRequest::GetBalance.retry_make_rpc_request(
-            &rpc_client,
+        let balance = rpc_client.retry_make_rpc_request(
             1,
+            &RpcRequest::GetBalance,
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhw"])),
             10,
         );

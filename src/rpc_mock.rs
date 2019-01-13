@@ -1,6 +1,6 @@
 // Implementation of RpcRequestHandler trait for testing Rpc requests without i/o
 
-use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
+use crate::rpc_request::{RpcRequest, RpcRequestHandler};
 use serde_json::{self, Number, Value};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -15,16 +15,25 @@ pub const PUBKEY: &str = "7RoSF9fUmdphVCpabEoefH81WwrW7orsWonXWqTXkKV8";
 pub const SIGNATURE: &str =
     "43yNSFC6fYTuPgTNFFhF4axw7AfWxB2BPdurme8yrsWEYwm8299xh8n6TAHjGymiSub1XtyxTNyd9GBfY2hxoBw8";
 
-pub struct MockRpu {}
+#[derive(Clone)]
+pub struct MockRpcClient {
+    pub addr: String,
+}
 
-impl RpcRequestHandler for MockRpu {
+impl MockRpcClient {
+    pub fn new(addr: String) -> Self {
+        MockRpcClient { addr }
+    }
+}
+
+impl RpcRequestHandler for MockRpcClient {
     fn make_rpc_request(
-        client: &RpcClient,
+        &self,
         _id: u64,
         request: RpcRequest,
         params: Option<Value>,
     ) -> Result<Value, Box<dyn error::Error>> {
-        if &client.addr == "fails" {
+        if self.addr == "fails" {
             return Ok(Value::Null);
         }
         let val = match request {
@@ -40,14 +49,14 @@ impl RpcRequestHandler for MockRpu {
                 }
             }
             RpcRequest::GetBalance => {
-                let n = if &client.addr == "airdrop" { 0 } else { 50 };
+                let n = if self.addr == "airdrop" { 0 } else { 50 };
                 Value::Number(Number::from(n))
             }
             RpcRequest::GetLastId => Value::String(PUBKEY.to_string()),
             RpcRequest::GetSignatureStatus => {
-                let str = if &client.addr == "account_in_use" {
+                let str = if self.addr == "account_in_use" {
                     "AccountInUse"
-                } else if &client.addr == "bad_sig_status" {
+                } else if self.addr == "bad_sig_status" {
                     "Nonexistent"
                 } else {
                     "Confirmed"

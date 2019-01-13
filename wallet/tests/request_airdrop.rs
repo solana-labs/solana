@@ -5,7 +5,7 @@ use solana::db_ledger::create_tmp_ledger_with_mint;
 use solana::fullnode::Fullnode;
 use solana::leader_scheduler::LeaderScheduler;
 use solana::mint::Mint;
-use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler, Rpu};
+use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
 use solana::vote_signer_proxy::VoteSignerProxy;
 use solana_drone::drone::run_local_drone;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -66,7 +66,8 @@ fn test_wallet_request_airdrop() {
     let rpc_client = RpcClient::new_from_socket(leader_data.rpc);
 
     let params = json!([format!("{}", bob_config.id.pubkey())]);
-    let balance = Rpu::make_rpc_request(&rpc_client, 1, RpcRequest::GetBalance, Some(params))
+    let balance = rpc_client
+        .make_rpc_request(1, RpcRequest::GetBalance, Some(params))
         .unwrap()
         .as_u64()
         .unwrap();

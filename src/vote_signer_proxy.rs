@@ -48,24 +48,27 @@ impl VoteSigner for RemoteVoteSigner {
         msg: &[u8],
     ) -> jsonrpc_core::Result<Pubkey> {
         let params = json!([pubkey, sig, msg]);
-        let resp = RpcRequest::RegisterNode
-            .retry_make_rpc_request(&self.rpc_client, 1, Some(params), 5)
+        let resp = self
+            .rpc_client
+            .retry_make_rpc_request(1, &RpcRequest::RegisterNode, Some(params), 5)
             .unwrap();
         let vote_account: Pubkey = serde_json::from_value(resp).unwrap();
         Ok(vote_account)
     }
     fn sign(&self, pubkey: Pubkey, sig: &Signature, msg: &[u8]) -> jsonrpc_core::Result<Signature> {
         let params = json!([pubkey, sig, msg]);
-        let resp = RpcRequest::SignVote
-            .retry_make_rpc_request(&self.rpc_client, 1, Some(params), 0)
+        let resp = self
+            .rpc_client
+            .retry_make_rpc_request(1, &RpcRequest::SignVote, Some(params), 0)
             .unwrap();
         let vote_signature: Signature = serde_json::from_value(resp).unwrap();
         Ok(vote_signature)
     }
     fn deregister(&self, pubkey: Pubkey, sig: &Signature, msg: &[u8]) -> jsonrpc_core::Result<()> {
         let params = json!([pubkey, sig, msg]);
-        let _resp = RpcRequest::DeregisterNode
-            .retry_make_rpc_request(&self.rpc_client, 1, Some(params), 5)
+        let _resp = self
+            .rpc_client
+            .retry_make_rpc_request(1, &RpcRequest::DeregisterNode, Some(params), 5)
             .unwrap();
         Ok(())
     }

@@ -156,20 +156,16 @@ fn test_replicator_startup() {
         // chacha is not enabled
         #[cfg(feature = "chacha")]
         {
-            use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler, Rpu};
+            use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
             use std::thread::sleep;
 
             let rpc_client = RpcClient::new_from_socket(validator_node_info.rpc);
             let mut non_zero_pubkeys = false;
             for _ in 0..30 {
                 let params = json!([0]);
-                let pubkeys = Rpu::make_rpc_request(
-                    &rpc_client,
-                    1,
-                    RpcRequest::GetStoragePubkeysForEntryHeight,
-                    Some(params),
-                )
-                .unwrap();
+                let pubkeys = rpc_client
+                    .make_rpc_request(1, RpcRequest::GetStoragePubkeysForEntryHeight, Some(params))
+                    .unwrap();
                 info!("pubkeys: {:?}", pubkeys);
                 if pubkeys.as_array().unwrap().len() != 0 {
                     non_zero_pubkeys = true;

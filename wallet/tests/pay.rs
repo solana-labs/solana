@@ -6,7 +6,7 @@ use solana::db_ledger::create_tmp_ledger_with_mint;
 use solana::fullnode::Fullnode;
 use solana::leader_scheduler::LeaderScheduler;
 use solana::mint::Mint;
-use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler, Rpu};
+use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
 use solana::vote_signer_proxy::VoteSignerProxy;
 use solana_drone::drone::run_local_drone;
 use solana_sdk::pubkey::Pubkey;
@@ -22,7 +22,8 @@ use std::thread::sleep;
 use std::time::Duration;
 
 fn check_balance(expected_balance: u64, client: &RpcClient, params: Value) {
-    let balance = Rpu::make_rpc_request(client, 1, RpcRequest::GetBalance, Some(params))
+    let balance = client
+        .make_rpc_request(1, RpcRequest::GetBalance, Some(params))
         .unwrap()
         .as_u64()
         .unwrap();
