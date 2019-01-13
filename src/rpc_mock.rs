@@ -1,6 +1,6 @@
 // Implementation of RpcRequestHandler trait for testing Rpc requests without i/o
 
-use crate::rpc_request::{RpcClient, RpcError, RpcRequest, RpcRequestHandler};
+use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
 use serde_json::{self, Number, Value};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -27,33 +27,38 @@ impl RpcRequestHandler for MockRpu {
         if &client.addr == "fails" {
             return Ok(Value::Null);
         }
-        if request == RpcRequest::ConfirmTransaction {
-            if let Some(Value::Array(param_array)) = params {
-                if let Value::String(param_string) = &param_array[0] {
-                    return Ok(Value::Bool(param_string == SIGNATURE));
+        let val = match request {
+            RpcRequest::ConfirmTransaction => {
+                if let Some(Value::Array(param_array)) = params {
+                    if let Value::String(param_string) = &param_array[0] {
+                        Value::Bool(param_string == SIGNATURE)
+                    } else {
+                        Value::Null
+                    }
+                } else {
+                    Value::Null
                 }
-                Err(RpcError::RpcRequestError("Missing parameter".to_string()))?
             }
-        } else if request == RpcRequest::GetBalance {
-            if &client.addr == "airdrop" {
-                return Ok(Value::Number(Number::from(0)));
+            RpcRequest::GetBalance => {
+                let n = if &client.addr == "airdrop" { 0 } else { 50 };
+                Value::Number(Number::from(n))
             }
-            return Ok(Value::Number(Number::from(50)));
-        } else if request == RpcRequest::GetLastId {
-            return Ok(Value::String(PUBKEY.to_string()));
-        } else if request == RpcRequest::GetSignatureStatus {
-            if &client.addr == "account_in_use" {
-                return Ok(Value::String("AccountInUse".to_string()));
-            } else if &client.addr == "bad_sig_status" {
-                return Ok(Value::String("Nonexistant".to_string()));
+            RpcRequest::GetLastId => Value::String(PUBKEY.to_string()),
+            RpcRequest::GetSignatureStatus => {
+                let str = if &client.addr == "account_in_use" {
+                    "AccountInUse"
+                } else if &client.addr == "bad_sig_status" {
+                    "Nonexistent"
+                } else {
+                    "Confirmed"
+                };
+                Value::String(str.to_string())
             }
-            return Ok(Value::String("Confirmed".to_string()));
-        } else if request == RpcRequest::GetTransactionCount {
-            return Ok(Value::Number(Number::from(1234)));
-        } else if request == RpcRequest::SendTransaction {
-            return Ok(Value::String(SIGNATURE.to_string()));
-        }
-        Ok(Value::Null)
+            RpcRequest::GetTransactionCount => Value::Number(Number::from(1234)),
+            RpcRequest::SendTransaction => Value::String(SIGNATURE.to_string()),
+            _ => Value::Null,
+        };
+        Ok(val)
     }
 }
 
