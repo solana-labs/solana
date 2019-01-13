@@ -36,38 +36,40 @@ impl ComputeLeaderConfirmationService {
     ) -> result::Result<u64, ConfirmationError> {
         let mut total_stake = 0;
 
-        let mut ticks_and_stakes: Vec<(u64, u64)> = {
-            let bank_accounts = bank.accounts.accounts_db.read().unwrap();
-            // TODO: Doesn't account for duplicates since a single validator could potentially register
-            // multiple vote accounts. Once that is no longer possible (see the TODO in vote_program.rs,
-            // process_transaction(), case VoteInstruction::RegisterAccount), this will be more accurate.
-            // See github issue 1654.
-            bank_accounts
-                .accounts
-                .values()
-                .filter_map(|account| {
-                    // Filter out any accounts that don't belong to the VoteProgram
-                    // by returning None
-                    if vote_program::check_id(&account.owner) {
-                        if let Ok(vote_state) = VoteProgram::deserialize(&account.userdata) {
-                            if leader_id == vote_state.node_id {
-                                return None;
-                            }
-                            let validator_stake = bank.get_stake(&vote_state.node_id);
-                            total_stake += validator_stake;
-                            // Filter out any validators that don't have at least one vote
-                            // by returning None
-                            return vote_state
-                                .votes
-                                .back()
-                                .map(|vote| (vote.tick_height, validator_stake));
+        // Hold an accounts_db read lock as briefly as possible, just long enough to collect all
+        // the vote states
+        let vote_states: Vec<VoteProgram> = bank
+            .accounts
+            .accounts_db
+            .read()
+            .unwrap()
+            .accounts
+            .values()
+            .filter_map(|account| {
+                if vote_program::check_id(&account.owner) {
+                    if let Ok(vote_state) = VoteProgram::deserialize(&account.userdata) {
+                        if leader_id != vote_state.node_id {
+                            return Some(vote_state);
                         }
                     }
+                }
+                None
+            })
+            .collect();
 
-                    None
-                })
-                .collect()
-        };
+        let mut ticks_and_stakes: Vec<(u64, u64)> = vote_states
+            .iter()
+            .filter_map(|vote_state| {
+                let validator_stake = bank.get_stake(&vote_state.node_id);
+                total_stake += validator_stake;
+                // Filter out any validators that don't have at least one vote
+                // by returning None
+                vote_state
+                    .votes
+                    .back()
+                    .map(|vote| (vote.tick_height, validator_stake))
+            })
+            .collect();
 
         let super_majority_stake = (2 * total_stake) / 3;
 
