@@ -412,6 +412,23 @@ impl Bank {
         Ok(())
     }
 
+    fn program_id_to_string(id: &Pubkey) -> String {
+        lazy_static! {
+            static ref PROGRAMS: HashMap<Pubkey, &'static str> = {
+                let mut map = HashMap::new();
+                map.insert(system_program::id(), "system_program");
+                map.insert(solana_native_loader::id(), "solana_native_loader");
+                map.insert(bpf_loader::id(), "bpf_loader");
+                map.insert(budget_program::id(), "budget_program");
+                map.insert(storage_program::id(), "storage_program");
+                map.insert(token_program::id(), "token_program");
+                map.insert(vote_program::id(), "vote_program");
+                map
+            };
+        }
+        PROGRAMS.get(id).unwrap_or(&"unknown program").to_string()
+    }
+
     fn load_accounts(
         &self,
         txs: &[Transaction],
@@ -482,6 +499,11 @@ impl Bank {
             } else {
                 if err_count == 0 {
                     info!("tx error: {:?} {:?}", r, tx);
+                    if log_enabled!(Level::Trace) {
+                        for (i, id) in tx.program_ids.iter().enumerate() {
+                            trace!("program[{}]: {}", i, Self::program_id_to_string(id));
+                        }
+                    }
                 }
                 err_count += 1;
             }

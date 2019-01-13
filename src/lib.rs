@@ -78,6 +78,9 @@ pub mod window_service;
 extern crate hex_literal;
 
 #[macro_use]
+extern crate lazy_static;
+
+#[macro_use]
 extern crate log;
 
 #[macro_use]
