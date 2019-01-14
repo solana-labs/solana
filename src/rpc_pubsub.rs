@@ -6,7 +6,7 @@ use crate::jsonrpc_core::*;
 use crate::jsonrpc_macros::pubsub;
 use crate::jsonrpc_pubsub::{PubSubHandler, Session, SubscriptionId};
 use crate::jsonrpc_ws_server::{RequestContext, Sender, ServerBuilder};
-use crate::rpc::{JsonRpcRequestProcessor, RpcSignatureStatus};
+use crate::rpc::RpcSignatureStatus;
 use crate::service::Service;
 use crate::status_deque::Status;
 use bs58;
@@ -41,7 +41,7 @@ impl Service for PubSubService {
 
 impl PubSubService {
     pub fn new(bank: &Arc<Bank>, pubsub_addr: SocketAddr) -> Self {
-        let rpc = RpcSolPubSubImpl::new(JsonRpcRequestProcessor::new(bank.clone()), bank.clone());
+        let rpc = RpcSolPubSubImpl::new(bank.clone());
         let exit = Arc::new(AtomicBool::new(false));
         let exit_ = exit.clone();
         let thread_hdl = Builder::new()
@@ -112,17 +112,15 @@ build_rpc_trait! {
 
 struct RpcSolPubSubImpl {
     uid: Arc<atomic::AtomicUsize>,
-    request_processor: JsonRpcRequestProcessor,
     bank: Arc<Bank>,
     account_subscriptions: Arc<RwLock<HashMap<SubscriptionId, (Pubkey, Pubkey)>>>,
     signature_subscriptions: Arc<RwLock<HashMap<SubscriptionId, (Pubkey, Signature)>>>,
 }
 
 impl RpcSolPubSubImpl {
-    fn new(request_processor: JsonRpcRequestProcessor, bank: Arc<Bank>) -> Self {
+    fn new(bank: Arc<Bank>) -> Self {
         RpcSolPubSubImpl {
             uid: Default::default(),
-            request_processor,
             bank,
             account_subscriptions: Default::default(),
             signature_subscriptions: Default::default(),
@@ -210,7 +208,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             .unwrap()
             .insert(sub_id.clone(), (bank_sub_id, signature));
 
-        let status = self.request_processor.get_signature_status(signature);
+        let status = self.bank.get_signature_status(&signature);
         if status.is_none() {
             return;
         }
@@ -287,10 +285,7 @@ mod tests {
         let session = Arc::new(Session::new(sender));
 
         let mut io = PubSubHandler::default();
-        let rpc = RpcSolPubSubImpl::new(
-            JsonRpcRequestProcessor::new(arc_bank.clone()),
-            arc_bank.clone(),
-        );
+        let rpc = RpcSolPubSubImpl::new(arc_bank.clone());
         io.extend_with(rpc.to_delegate());
 
         // Test signature subscription
@@ -363,10 +358,7 @@ mod tests {
         let session = Arc::new(Session::new(sender));
 
         let mut io = PubSubHandler::default();
-        let rpc = RpcSolPubSubImpl::new(
-            JsonRpcRequestProcessor::new(arc_bank.clone()),
-            arc_bank.clone(),
-        );
+        let rpc = RpcSolPubSubImpl::new(arc_bank.clone());
         io.extend_with(rpc.to_delegate());
 
         let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 20, last_id, 0);
@@ -420,10 +412,7 @@ mod tests {
         let session = Arc::new(Session::new(sender));
 
         let mut io = PubSubHandler::default();
-        let rpc = RpcSolPubSubImpl::new(
-            JsonRpcRequestProcessor::new(arc_bank.clone()),
-            arc_bank.clone(),
-        );
+        let rpc = RpcSolPubSubImpl::new(arc_bank.clone());
         io.extend_with(rpc.to_delegate());
 
         let req = format!(
@@ -601,10 +590,7 @@ mod tests {
         let session = Arc::new(Session::new(sender));
 
         let mut io = PubSubHandler::default();
-        let rpc = RpcSolPubSubImpl::new(
-            JsonRpcRequestProcessor::new(arc_bank.clone()),
-            arc_bank.clone(),
-        );
+        let rpc = RpcSolPubSubImpl::new(arc_bank.clone());
 
         io.extend_with(rpc.to_delegate());
 
