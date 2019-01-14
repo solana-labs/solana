@@ -36,7 +36,9 @@ At any given point in time, this interest rate is pegged to a defined value give
 
 Over time, the interest rate, at any network staked percentage, will drop as described by an algorithmic schedule. Validation-client interest rates are designed to be higher in the early days of the network to incentivize participation and jumpstart the network economy. This mining-pool provided interest rate will reduce over time until a network-chosen baseline value is reached. This is a fixed, long-term, interest rate to be provided to validator-clients. This value does not represent the total interest available to validator-clients as transaction fees for both state-validation and ledger storage replication (PoReps) are not accounted for here. A validation-client interest rate schedule as a function of % network staked and time is shown in** Figure 2**.
 
-![image alt text](img/image_1.png)
+<!-- ![== Validation Client Interest Rates Figure ==](validation_client_interest_rates.png =250x) -->
+
+<p style="text-align:center;"><img src="validation_client_interest_rates.png" alt="drawing" width="800"/></p>
 
 **Figure 2:** In this example schedule, the annual interest rate [%] reduces at around 16.7% per year, until it reaches the long-term, fixed, 4% rate.
 

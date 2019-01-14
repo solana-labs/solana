@@ -37,7 +37,7 @@
       - [Validation Stake Delegation](ed_vce_validation_stake_delegation.md)
   - [Replication-client Economics](ed_replication_client_economics.md)
       - [Storage-replication Rewards](ed_rce_storage_replication_rewards.md)
-	    - [Replication-client Reward Auto-delegation](ed_rce_replication_client_reward_auto_delegation.md)
+      - [Replication-client Reward Auto-delegation](ed_rce_replication_client_reward_auto_delegation.md)
   - [Economic Sustainability](ed_economic_sustainability.md)
   - [Attack Vectors](ed_attack_vectors.md)
   - [References](ed_references.md)
