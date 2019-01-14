@@ -8,7 +8,7 @@ use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
 use crate::gossip_service::GossipService;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::result::{Error, Result};
-use crate::rpc_request::{RpcClient, RpcRequest};
+use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
 use bincode::serialize;
 use bs58;
 use hashbrown::HashMap;
@@ -149,7 +149,9 @@ impl ThinClient {
 
     pub fn get_account_userdata(&mut self, pubkey: &Pubkey) -> io::Result<Option<Vec<u8>>> {
         let params = json!([format!("{}", pubkey)]);
-        let resp = RpcRequest::GetAccountInfo.make_rpc_request(&self.rpc_client, 1, Some(params));
+        let resp = self
+            .rpc_client
+            .make_rpc_request(1, RpcRequest::GetAccountInfo, Some(params));
         if let Ok(account_json) = resp {
             let account: Account =
                 serde_json::from_value(account_json).expect("deserialize account");
@@ -167,7 +169,9 @@ impl ThinClient {
     pub fn get_balance(&mut self, pubkey: &Pubkey) -> io::Result<u64> {
         trace!("get_balance sending request to {}", self.rpc_addr);
         let params = json!([format!("{}", pubkey)]);
-        let resp = RpcRequest::GetAccountInfo.make_rpc_request(&self.rpc_client, 1, Some(params));
+        let resp = self
+            .rpc_client
+            .make_rpc_request(1, RpcRequest::GetAccountInfo, Some(params));
         if let Ok(account_json) = resp {
             let account: Account =
                 serde_json::from_value(account_json).expect("deserialize account");
@@ -193,7 +197,9 @@ impl ThinClient {
         let mut done = false;
         while !done {
             debug!("get_confirmation_time send_to {}", &self.rpc_addr);
-            let resp = RpcRequest::GetConfirmationTime.make_rpc_request(&self.rpc_client, 1, None);
+            let resp = self
+                .rpc_client
+                .make_rpc_request(1, RpcRequest::GetConfirmationTime, None);
 
             if let Ok(value) = resp {
                 done = true;
@@ -212,7 +218,9 @@ impl ThinClient {
         debug!("transaction_count");
         let mut tries_left = 5;
         while tries_left > 0 {
-            let resp = RpcRequest::GetTransactionCount.make_rpc_request(&self.rpc_client, 1, None);
+            let resp = self
+                .rpc_client
+                .make_rpc_request(1, RpcRequest::GetTransactionCount, None);
 
             if let Ok(value) = resp {
                 debug!("transaction_count recv_response: {:?}", value);
@@ -233,7 +241,9 @@ impl ThinClient {
         let mut done = false;
         while !done {
             debug!("get_last_id send_to {}", &self.rpc_addr);
-            let resp = RpcRequest::GetLastId.make_rpc_request(&self.rpc_client, 1, None);
+            let resp = self
+                .rpc_client
+                .make_rpc_request(1, RpcRequest::GetLastId, None);
 
             if let Ok(value) = resp {
                 done = true;
@@ -309,9 +319,9 @@ impl ThinClient {
         let now = Instant::now();
         let mut done = false;
         while !done {
-            let resp = RpcRequest::ConfirmTransaction.make_rpc_request(
-                &self.rpc_client,
+            let resp = self.rpc_client.make_rpc_request(
                 1,
+                RpcRequest::ConfirmTransaction,
                 Some(params.clone()),
             );
 
