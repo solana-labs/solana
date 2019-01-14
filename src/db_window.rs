@@ -562,10 +562,9 @@ mod test {
         let shared_blobs = make_tiny_test_entries(num_entries).to_shared_blobs();
 
         index_blobs(
-            &shared_blobs,
+            shared_blobs.iter().zip(vec![slot; num_entries].into_iter()),
             &Keypair::new().pubkey(),
             0,
-            &vec![slot; num_entries],
         );
 
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
@@ -658,10 +657,11 @@ mod test {
         let shared_blobs = original_entries.clone().to_shared_blobs();
 
         index_blobs(
-            &shared_blobs,
+            shared_blobs
+                .iter()
+                .zip(vec![DEFAULT_SLOT_HEIGHT; num_entries].into_iter()),
             &Keypair::new().pubkey(),
             0,
-            &vec![DEFAULT_SLOT_HEIGHT; num_entries],
         );
 
         let mut consume_queue = vec![];
