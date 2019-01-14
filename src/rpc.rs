@@ -40,7 +40,6 @@ impl JsonRpcService {
         let exit = Arc::new(AtomicBool::new(false));
         let request_processor = JsonRpcRequestProcessor::new(bank.clone());
         let info = cluster_info.clone();
-        let exit_pubsub = exit.clone();
         let exit_ = exit.clone();
         let thread_hdl = Builder::new()
             .name("solana-jsonrpc".to_string())
@@ -55,7 +54,6 @@ impl JsonRpcService {
                         cluster_info: info.clone(),
                         drone_addr,
                         rpc_addr,
-                        exit: exit_pubsub.clone(),
                     }).threads(4)
                         .cors(DomainsValidation::AllowOnly(vec![
                             AccessControlAllowOrigin::Any,
@@ -98,7 +96,6 @@ pub struct Meta {
     pub cluster_info: Arc<RwLock<ClusterInfo>>,
     pub rpc_addr: SocketAddr,
     pub drone_addr: SocketAddr,
-    pub exit: Arc<AtomicBool>,
 }
 impl Metadata for Meta {}
 
@@ -439,7 +436,6 @@ mod tests {
         cluster_info.write().unwrap().set_leader(leader.id);
         let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let drone_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
-        let exit = Arc::new(AtomicBool::new(false));
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
@@ -449,7 +445,6 @@ mod tests {
             cluster_info,
             drone_addr,
             rpc_addr,
-            exit,
         };
         (io, meta, last_id, alice.keypair())
     }
@@ -761,7 +756,6 @@ mod tests {
             cluster_info: Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default()))),
             drone_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             rpc_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
-            exit: Arc::new(AtomicBool::new(false)),
         };
 
         let req =
