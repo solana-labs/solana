@@ -29,7 +29,7 @@ bs58 = "0.2.0"
 bv = { version = "0.10.0", features = ["serde"] }
 byteorder = "1.2.1"
 chrono = { version = "0.4.0", features = ["serde"] }
-hashbrown = "0.1.7"
+hashbrown = "0.1.8"
 indexmap = "1.0"
 itertools = "0.8.0"
 libc = "0.2.46"
