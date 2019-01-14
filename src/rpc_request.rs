@@ -30,11 +30,7 @@ impl RpcClient {
     }
 
     pub fn new_from_socket(addr: SocketAddr) -> Self {
-        let addr = get_rpc_request_str(addr);
-        RpcClient {
-            client: reqwest::Client::new(),
-            addr,
-        }
+        Self::new(get_rpc_request_str(addr))
     }
 
     pub fn retry_make_rpc_request(
