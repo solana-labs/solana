@@ -220,6 +220,10 @@ impl ReplayStage {
                         .expect("Scheduled leader should be calculated by this point");
 
                     if leader_id == keypair.pubkey() {
+                        inc_new_counter_info!(
+                            "replay_stage-new_leader",
+                            bank.tick_height() as usize
+                        );
                         return Some(ReplayStageReturnType::LeaderRotation(
                             bank.tick_height(),
                             entry_height_,
