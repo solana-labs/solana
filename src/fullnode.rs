@@ -14,6 +14,7 @@ use crate::tpu::{Tpu, TpuReturnType};
 use crate::tpu_forwarder::TpuForwarder;
 use crate::tvu::{Sockets, Tvu, TvuReturnType};
 use crate::vote_signer_proxy::VoteSignerProxy;
+use crate::window::{new_window, SharedWindow};
 use log::Level;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -97,6 +98,7 @@ pub struct Fullnode {
     bank: Arc<Bank>,
     cluster_info: Arc<RwLock<ClusterInfo>>,
     sigverify_disabled: bool,
+    shared_window: SharedWindow,
     tvu_sockets: Vec<UdpSocket>,
     repair_socket: UdpSocket,
     retransmit_socket: UdpSocket,
@@ -202,6 +204,8 @@ impl Fullnode {
 
         let db_ledger = db_ledger.unwrap_or_else(|| Self::make_db_ledger(ledger_path));
 
+        let window = new_window(32 * 1024);
+        let shared_window = Arc::new(RwLock::new(window));
         node.info.wallclock = timestamp();
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_keypair(
             node.info,
@@ -311,6 +315,7 @@ impl Fullnode {
                     .try_clone()
                     .expect("Failed to clone broadcast socket"),
                 cluster_info.clone(),
+                shared_window.clone(),
                 entry_height,
                 bank.leader_scheduler.clone(),
                 entry_receiver,
@@ -326,6 +331,7 @@ impl Fullnode {
         Fullnode {
             keypair,
             cluster_info,
+            shared_window,
             bank,
             sigverify_disabled,
             gossip_service,
@@ -481,6 +487,7 @@ impl Fullnode {
                 .try_clone()
                 .expect("Failed to clone broadcast socket"),
             self.cluster_info.clone(),
+            self.shared_window.clone(),
             entry_height,
             self.bank.leader_scheduler.clone(),
             blob_receiver,
