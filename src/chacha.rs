@@ -156,7 +156,7 @@ mod tests {
         assert_eq!(
             hasher.result(),
             Hash::new(&hex!(
-                "1ef70b5491a5f2b05ebeb0f92a03c131a7a78622f3643064d6d3c52a0c083175"
+                "16b1159b112b11d7a2fb7b0471797ab079bce7e0e86b8a879474616abb61e5aa"
             )),
         );
         remove_file(out_path).unwrap();

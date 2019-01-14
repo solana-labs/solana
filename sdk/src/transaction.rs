@@ -2,12 +2,11 @@
 
 use crate::hash::{Hash, Hasher};
 use crate::pubkey::Pubkey;
+use crate::shortvec::{deserialize_vec, deserialize_vec_with, serialize_vec, serialize_vec_with};
 use crate::signature::{Keypair, KeypairUtil, Signature};
-use bincode::serialize;
-use serde::Serialize;
-use std::mem::size_of;
-
-pub const SIG_OFFSET: usize = size_of::<u64>();
+use bincode::{deserialize, serialize, Error};
+use serde::{Deserialize, Serialize, Serializer};
+use std::fmt;
 
 /// An instruction to execute a program
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -29,10 +28,35 @@ impl Instruction {
             accounts,
         }
     }
+    pub fn to_bytes(&self) -> Result<Vec<u8>, Error> {
+        let mut vec: Vec<u8> = vec![self.program_ids_index];
+        let mut accounts_vec = serialize_vec(&self.accounts)?;
+        let mut userdata_vec = serialize_vec(&self.userdata)?;
+        vec.append(&mut accounts_vec);
+        vec.append(&mut userdata_vec);
+        Ok(vec)
+    }
+
+    pub fn from_bytes(data: &[u8]) -> Result<(usize, Self), Error> {
+        let program_ids_index = data[0];
+        let mut len: usize = 1;
+        let (alen, accounts): (usize, Vec<u8>) = deserialize_vec(&data[len..])?;
+        len += alen;
+        let (ulen, userdata): (usize, Vec<u8>) = deserialize_vec(&data[len..])?;
+        len += ulen;
+        Ok((
+            len,
+            Instruction {
+                program_ids_index,
+                accounts,
+                userdata,
+            },
+        ))
+    }
 }
 
 /// An atomic transaction
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Transaction {
     /// A set of digital signatures of `account_keys`, `program_ids`, `last_id`, `fee` and `instructions`, signed by the first
     /// signatures.len() keys of account_keys
@@ -148,7 +172,7 @@ impl Transaction {
     }
     /// Get the transaction data to sign.
     pub fn get_sign_data(&self) -> Vec<u8> {
-        let mut data = serialize(&self.account_keys).expect("serialize account_keys");
+        let mut data = serialize_vec(&self.account_keys).expect("serialize account_keys");
 
         let last_id_data = serialize(&self.last_id).expect("serialize last_id");
         data.extend_from_slice(&last_id_data);
@@ -156,10 +180,11 @@ impl Transaction {
         let fee_data = serialize(&self.fee).expect("serialize fee");
         data.extend_from_slice(&fee_data);
 
-        let program_ids = serialize(&self.program_ids).expect("serialize program_ids");
+        let program_ids = serialize_vec(&self.program_ids).expect("serialize program_ids");
         data.extend_from_slice(&program_ids);
 
-        let instructions = serialize(&self.instructions).expect("serialize instructions");
+        let instructions = serialize_vec_with(&self.instructions, Instruction::to_bytes)
+            .expect("serialize instructions");
         data.extend_from_slice(&instructions);
         data
     }
@@ -210,10 +235,79 @@ impl Transaction {
     }
 }
 
+impl Serialize for Transaction {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        use serde::ser::Error;
+        let mut vec = serialize_vec(&self.signatures).map_err(Error::custom)?;
+        let mut account_keys_vec = serialize_vec(&self.account_keys).map_err(Error::custom)?;
+        vec.append(&mut account_keys_vec);
+        let mut last_id_vec = serialize(&self.last_id).map_err(Error::custom)?;
+        vec.append(&mut last_id_vec);
+        let mut fee_vec = serialize(&self.fee).map_err(Error::custom)?;
+        vec.append(&mut fee_vec);
+        let mut program_ids_vec = serialize_vec(&self.program_ids).map_err(Error::custom)?;
+        vec.append(&mut program_ids_vec);
+        let mut instructions_vec =
+            serialize_vec_with(&self.instructions, Instruction::to_bytes).map_err(Error::custom)?;
+        vec.append(&mut instructions_vec);
+        serializer.serialize_bytes(&vec)
+    }
+}
+
+struct TransactionVisitor;
+impl<'a> serde::de::Visitor<'a> for TransactionVisitor {
+    type Value = Transaction;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("Expecting Instruction")
+    }
+    fn visit_bytes<E>(self, data: &[u8]) -> Result<Transaction, E>
+    where
+        E: serde::de::Error,
+    {
+        use serde::de::Error;
+        let mut len = 0;
+        let (sig_len, signatures): (usize, Vec<Signature>) =
+            deserialize_vec(&data).map_err(Error::custom)?;
+        len += sig_len;
+        let (account_len, account_keys): (usize, Vec<Pubkey>) =
+            deserialize_vec(&data[len..]).map_err(Error::custom)?;
+        len += account_len;
+        let last_id: Hash = deserialize(&data[len..]).map_err(Error::custom)?;
+        len += last_id.as_ref().len();
+        let fee: u64 = deserialize(&data[len..]).map_err(Error::custom)?;
+        len += std::mem::size_of::<u64>();
+        let (ids_len, program_ids): (usize, Vec<Pubkey>) =
+            deserialize_vec(&data[len..]).map_err(Error::custom)?;
+        len += ids_len;
+        let (_, instructions): (usize, Vec<Instruction>) =
+            deserialize_vec_with(&data[len..], Instruction::from_bytes).map_err(Error::custom)?;
+        Ok(Transaction {
+            signatures,
+            account_keys,
+            last_id,
+            fee,
+            program_ids,
+            instructions,
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for Transaction {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_bytes(TransactionVisitor)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bincode::serialize;
 
     #[test]
     fn test_refs() {
@@ -287,6 +381,25 @@ mod tests {
         assert!(!tx.verify_refs());
     }
 
+    #[test]
+    fn test_transaction_serialize() {
+        let keypair = Keypair::new();
+        let program_id = Pubkey::new(&[4; 32]);
+        let to = Pubkey::new(&[5; 32]);
+        let tx = Transaction::new(
+            &keypair,
+            &[keypair.pubkey(), to],
+            program_id,
+            &(1u8, 2u8, 3u8),
+            Hash::default(),
+            99,
+        );
+
+        let ser = serialize(&tx).unwrap();
+        let deser = deserialize(&ser).unwrap();
+        assert_eq!(tx, deser);
+    }
+
     /// Detect binary changes in the serialized transaction userdata, which could have a downstream
     /// affect on SDKs and DApps
     #[test]
@@ -321,19 +434,18 @@ mod tests {
         assert_eq!(
             serialize(&tx).unwrap(),
             vec![
-                1, 0, 0, 0, 0, 0, 0, 0, 213, 248, 255, 179, 219, 217, 130, 31, 27, 85, 33, 217, 62,
-                28, 180, 204, 186, 141, 178, 150, 153, 184, 205, 87, 123, 128, 101, 254, 222, 111,
-                152, 17, 153, 210, 169, 1, 81, 208, 254, 64, 229, 205, 145, 10, 213, 241, 255, 31,
-                184, 52, 242, 148, 213, 131, 241, 165, 144, 181, 18, 4, 58, 171, 44, 11, 3, 0, 0,
-                0, 0, 0, 0, 0, 36, 100, 158, 252, 33, 161, 97, 185, 62, 89, 99, 195, 250, 249, 187,
-                189, 171, 118, 241, 90, 248, 14, 68, 219, 231, 62, 157, 5, 142, 27, 210, 117, 36,
-                100, 158, 252, 33, 161, 97, 185, 62, 89, 99, 195, 250, 249, 187, 189, 171, 118,
-                241, 90, 248, 14, 68, 219, 231, 62, 157, 5, 142, 27, 210, 117, 1, 1, 1, 4, 5, 6, 7,
-                8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                0, 99, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 2, 2, 2, 4, 5, 6, 7, 8, 9, 1,
-                1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 9, 8, 7, 6, 5, 4, 2, 2, 2, 1, 0, 0, 0, 0, 0,
-                0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3
+                245, 0, 0, 0, 0, 0, 0, 0, 1, 151, 224, 239, 74, 248, 111, 129, 62, 193, 150, 178,
+                53, 242, 136, 228, 153, 16, 245, 127, 217, 6, 122, 114, 165, 224, 243, 191, 164,
+                197, 107, 71, 41, 57, 132, 240, 19, 166, 239, 109, 168, 225, 215, 1, 59, 120, 57,
+                141, 103, 243, 182, 221, 176, 161, 153, 217, 129, 87, 178, 228, 151, 57, 163, 75,
+                13, 3, 36, 100, 158, 252, 33, 161, 97, 185, 62, 89, 99, 195, 250, 249, 187, 189,
+                171, 118, 241, 90, 248, 14, 68, 219, 231, 62, 157, 5, 142, 27, 210, 117, 36, 100,
+                158, 252, 33, 161, 97, 185, 62, 89, 99, 195, 250, 249, 187, 189, 171, 118, 241, 90,
+                248, 14, 68, 219, 231, 62, 157, 5, 142, 27, 210, 117, 1, 1, 1, 4, 5, 6, 7, 8, 9, 9,
+                9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 8, 7, 6, 5, 4, 1, 1, 1, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 99,
+                0, 0, 0, 0, 0, 0, 0, 1, 2, 2, 2, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 1, 9, 8, 7, 6, 5, 4, 2, 2, 2, 1, 0, 3, 0, 1, 2, 3, 1, 2, 3
             ],
         );
     }
