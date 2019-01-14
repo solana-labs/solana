@@ -1,4 +1,4 @@
-## 1. Overview
+## 1. Economic Design Overview
 
 Solana’s crypto-economic system is designed to promote a healthy, long term self-sustaining economy with participant incentives aligned to the security and decentralization of the network. The main participants in this economy are validation-clients and replication-clients. Their contributions to the network, state validation and data storage respectively, and their requisite remittance mechanisms are discussed below.
 
