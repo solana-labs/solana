@@ -125,11 +125,13 @@ impl Entry {
 
     /// Estimate serialized_size of Entry without creating an Entry.
     pub fn serialized_size(transactions: &[Transaction]) -> u64 {
-        let txs_size = serialized_size(transactions).unwrap();
-
+        let txs_size: u64 = transactions
+            .iter()
+            .map(|tx| Transaction::serialized_size(&tx))
+            .sum();
         // tick_height+num_hashes   +    id  +              txs
 
-        (2 * size_of::<u64>() + size_of::<Hash>()) as u64 + txs_size
+        (3 * size_of::<u64>() + size_of::<Hash>()) as u64 + txs_size
     }
 
     pub fn num_will_fit(transactions: &[Transaction]) -> usize {
@@ -432,7 +434,7 @@ pub fn make_large_test_entries(num_entries: usize) -> Vec<Entry> {
         one,
     );
 
-    let serialized_size = serialized_size(&vec![&tx]).unwrap();
+    let serialized_size = serialized_size(&[&tx]).unwrap();
     let num_txs = BLOB_DATA_SIZE / serialized_size as usize;
     let txs = vec![tx; num_txs];
     let entry = next_entries(&one, 1, txs)[0].clone();
@@ -672,8 +674,8 @@ mod tests {
         };
         let tx_large = Transaction::budget_new(&keypair, keypair.pubkey(), 1, next_id);
 
-        let tx_small_size = serialized_size(&tx_small).unwrap() as usize;
-        let tx_large_size = serialized_size(&tx_large).unwrap() as usize;
+        let tx_small_size = serialized_size(&[&tx_small]).unwrap() as usize;
+        let tx_large_size = serialized_size(&[&tx_large]).unwrap() as usize;
         let entry_size = serialized_size(&Entry {
             tick_height: 0,
             num_hashes: 0,
