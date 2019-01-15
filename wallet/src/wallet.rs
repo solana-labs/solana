@@ -9,7 +9,7 @@ use solana::rpc::{RpcSignatureStatus, RPC_PORT};
 use solana::rpc_mock::{request_airdrop_transaction, MockRpcClient as RpcClient};
 #[cfg(not(test))]
 use solana::rpc_request::RpcClient;
-use solana::rpc_request::{get_rpc_request_str, RpcRequest, RpcRequestHandler};
+use solana::rpc_request::{get_rpc_request_str, RpcRequest};
 use solana::socketaddr;
 #[cfg(not(test))]
 use solana_drone::drone::request_airdrop_transaction;
@@ -342,7 +342,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
             );
             let params = json!([format!("{}", config.id.pubkey())]);
             let previous_balance = match rpc_client
-                .make_rpc_request(1, RpcRequest::GetBalance, Some(params))?
+                .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
                 .as_u64()
             {
                 Some(tokens) => tokens,
@@ -356,7 +356,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
 
             let params = json!([format!("{}", config.id.pubkey())]);
             let current_balance = rpc_client
-                .make_rpc_request(1, RpcRequest::GetBalance, Some(params))?
+                .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
                 .as_u64()
                 .unwrap_or(previous_balance);
 
@@ -369,7 +369,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
         WalletCommand::Balance => {
             let params = json!([format!("{}", config.id.pubkey())]);
             let balance = rpc_client
-                .make_rpc_request(1, RpcRequest::GetBalance, Some(params))?
+                .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
                 .as_u64();
             match balance {
                 Some(0) => Ok("No account found! Request an airdrop to get started.".to_string()),
@@ -391,7 +391,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
         WalletCommand::Confirm(signature) => {
             let params = json!([format!("{}", signature)]);
             let confirmation = rpc_client
-                .make_rpc_request(1, RpcRequest::ConfirmTransaction, Some(params))?
+                .retry_make_rpc_request(1, &RpcRequest::ConfirmTransaction, Some(params), 5)?
                 .as_bool();
             match confirmation {
                 Some(b) => {
@@ -410,7 +410,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
         WalletCommand::Deploy(ref program_location) => {
             let params = json!([format!("{}", config.id.pubkey())]);
             let balance = rpc_client
-                .make_rpc_request(1, RpcRequest::GetBalance, Some(params))?
+                .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
                 .as_u64();
             if let Some(tokens) = balance {
                 if tokens < 1 {
@@ -484,7 +484,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
         }
         WalletCommand::GetTransactionCount => {
             let transaction_count = rpc_client
-                .make_rpc_request(1, RpcRequest::GetTransactionCount, None)?
+                .retry_make_rpc_request(1, &RpcRequest::GetTransactionCount, None, 5)?
                 .as_u64();
             match transaction_count {
                 Some(count) => Ok(count.to_string()),
@@ -618,7 +618,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
         WalletCommand::TimeElapsed(to, pubkey, dt) => {
             let params = json!([format!("{}", config.id.pubkey())]);
             let balance = rpc_client
-                .make_rpc_request(1, RpcRequest::GetBalance, Some(params))?
+                .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
                 .as_u64();
 
             if let Some(0) = balance {
@@ -637,7 +637,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
         WalletCommand::Witness(to, pubkey) => {
             let params = json!([format!("{}", config.id.pubkey())]);
             let balance = rpc_client
-                .make_rpc_request(1, RpcRequest::GetBalance, Some(params))?
+                .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
                 .as_u64();
 
             if let Some(0) = balance {
@@ -655,7 +655,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
 }
 
 fn get_last_id(rpc_client: &RpcClient) -> Result<Hash, Box<dyn error::Error>> {
-    let result = rpc_client.make_rpc_request(1, RpcRequest::GetLastId, None)?;
+    let result = rpc_client.retry_make_rpc_request(1, &RpcRequest::GetLastId, None, 5)?;
     if result.as_str().is_none() {
         Err(WalletError::RpcRequestError(
             "Received bad last_id".to_string(),
@@ -671,7 +671,8 @@ fn get_last_id(rpc_client: &RpcClient) -> Result<Hash, Box<dyn error::Error>> {
 fn send_tx(rpc_client: &RpcClient, tx: &Transaction) -> Result<String, Box<dyn error::Error>> {
     let serialized = serialize(tx).unwrap();
     let params = json!([serialized]);
-    let signature = rpc_client.make_rpc_request(2, RpcRequest::SendTransaction, Some(params))?;
+    let signature =
+        rpc_client.retry_make_rpc_request(2, &RpcRequest::SendTransaction, Some(params), 5)?;
     if signature.as_str().is_none() {
         Err(WalletError::RpcRequestError(
             "Received result of an unexpected type".to_string(),
@@ -686,7 +687,7 @@ fn confirm_tx(
 ) -> Result<RpcSignatureStatus, Box<dyn error::Error>> {
     let params = json!([signature.to_string()]);
     let signature_status =
-        rpc_client.make_rpc_request(1, RpcRequest::GetSignatureStatus, Some(params))?;
+        rpc_client.retry_make_rpc_request(1, &RpcRequest::GetSignatureStatus, Some(params), 5)?;
     if let Some(status) = signature_status.as_str() {
         let rpc_status = RpcSignatureStatus::from_str(status).map_err(|_| {
             WalletError::RpcRequestError("Unable to parse signature status".to_string())
