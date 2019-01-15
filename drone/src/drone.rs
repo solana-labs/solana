@@ -101,18 +101,6 @@ impl Drone {
         self.ip_cache.clear();
     }
 
-    pub fn check_rate_limit(&mut self, ip: IpAddr) -> Result<IpAddr, IpAddr> {
-        // [WIP] This is placeholder code for a proper rate limiter.
-        // Right now it will only allow one total drone request per IP
-        if self.ip_cache.contains(&ip) {
-            // Add proper error handling here
-            Err(ip)
-        } else {
-            self.add_ip_to_cache(ip);
-            Ok(ip)
-        }
-    }
-
     pub fn build_airdrop_transaction(
         &mut self,
         req: DroneRequest,
@@ -230,6 +218,7 @@ pub fn request_airdrop_transaction(
     Ok(transaction)
 }
 
+// For integration tests. Listens on random open port and reports port to Sender.
 pub fn run_local_drone(mint_keypair: Keypair, sender: Sender<SocketAddr>) {
     thread::spawn(move || {
         let drone_addr = socketaddr!(0, 0);
@@ -357,117 +346,41 @@ mod tests {
         assert_eq!(drone.request_cap, REQUEST_CAP);
     }
 
-    /*
     #[test]
-    #[ignore]
-    fn test_send_airdrop() {
-        use solana::bank::Bank;
-        use solana::cluster_info::Node;
-        use solana::fullnode::Fullnode;
-        use solana::leader_scheduler::LeaderScheduler;
-        use solana::ledger::get_tmp_ledger_path;
-        use solana::mint::Mint;
-        use solana::netutil::get_ip_addr;
-        use solana::thin_client::ThinClient;
-        use solana_logger;
-        use std::fs::remove_dir_all;
-        use std::net::UdpSocket;
-        use std::sync::{Arc, RwLock};
-
-        const SMALL_BATCH: u64 = 50;
-        const TPS_BATCH: u64 = 5_000_000;
-
-        solana_logger::setup();
-        let leader_keypair = Arc::new(Keypair::new());
-        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-
-        let alice = Mint::new(10_000_000);
-        let mut bank = Bank::new(&alice);
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader.info.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
-        let bob_pubkey = Keypair::new().pubkey();
-        let carlos_pubkey = Keypair::new().pubkey();
-        let leader_data = leader.info.clone();
-        let ledger_path = get_tmp_ledger_path("send_airdrop");
-
-        let vote_account_keypair = Arc::new(Keypair::new());
-        let last_id = bank.last_id();
-        let server = Fullnode::new_with_bank(
-            leader_keypair,
-            vote_account_keypair,
-            bank,
-            0,
-            &last_id,
-            leader,
-            None,
-            &ledger_path,
-            false,
-            None,
-        );
-
-        let mut addr: SocketAddr = "0.0.0.0:9900".parse().expect("bind to drone socket");
-        addr.set_ip(get_ip_addr().expect("drone get_ip_addr"));
-        let mut drone = Drone::new(alice.keypair(), None, Some(150_000));
-
-        let transactions_socket =
-            UdpSocket::bind("0.0.0.0:0").expect("drone bind to transactions socket");
-
-        let mut client = ThinClient::new(leader_data.rpc, leader_data.tpu, transactions_socket);
-
-        let bob_req = DroneRequest::GetAirdrop {
-            tokens: 50,
-            to: bob_pubkey,
-            last_id,
-        };
-        let bob_tx = drone.build_airdrop_transaction(bob_req).unwrap();
-        let bob_sig = client.transfer_signed(&bob_tx).unwrap();
-        assert!(client.poll_for_signature(&bob_sig).is_ok());
-
-        // restart the leader, drone should find the new one at the same gossip port
-        server.close().unwrap();
-
-        let leader_keypair = Arc::new(Keypair::new());
-        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let leader_data = leader.info.clone();
-        let server = Fullnode::new(
-            leader,
-            &ledger_path,
-            leader_keypair,
-            Arc::new(Keypair::new()),
-            None,
-            false,
-            LeaderScheduler::from_bootstrap_leader(leader_data.id),
-            None,
-        );
-
-        let transactions_socket =
-            UdpSocket::bind("0.0.0.0:0").expect("drone bind to transactions socket");
-
-        let mut client = ThinClient::new(leader_data.rpc, leader_data.tpu, transactions_socket);
-
-        let carlos_req = DroneRequest::GetAirdrop {
-            tokens: 5_000_000,
-            to: carlos_pubkey,
+    fn test_drone_build_airdrop_transaction() {
+        let to = Keypair::new().pubkey();
+        let last_id = Hash::default();
+        let request = DroneRequest::GetAirdrop {
+            tokens: 2,
+            to,
             last_id,
         };
 
-        // using existing drone, new thin client
-        let carlos_tx = drone.build_airdrop_transaction(carlos_req).unwrap();
-        let carlos_sig = client.transfer_signed(&carlos_tx).unwrap();
-        assert!(client.poll_for_signature(&carlos_sig).is_ok());
+        let mint = Keypair::new();
+        let mint_pubkey = mint.pubkey();
+        let mut drone = Drone::new(mint, None, None);
 
-        let bob_balance = client.get_balance(&bob_pubkey);
-        info!("Small request balance: {:?}", bob_balance);
-        assert_eq!(bob_balance.unwrap(), SMALL_BATCH);
+        let tx = drone.build_airdrop_transaction(request).unwrap();
 
-        let carlos_balance = client.get_balance(&carlos_pubkey);
-        info!("TPS request balance: {:?}", carlos_balance);
-        assert_eq!(carlos_balance.unwrap(), TPS_BATCH);
+        assert_eq!(tx.signatures.len(), 1);
+        assert_eq!(tx.account_keys, vec![mint_pubkey, to]);
+        assert_eq!(tx.last_id, last_id);
+        assert_eq!(tx.program_ids, vec![system_program::id()]);
 
-        server.close().unwrap();
-        remove_dir_all(ledger_path).unwrap();
+        assert_eq!(tx.instructions.len(), 1);
+        let instruction: SystemInstruction = deserialize(&tx.instructions[0].userdata).unwrap();
+        assert_eq!(
+            instruction,
+            SystemInstruction::CreateAccount {
+                tokens: 2,
+                space: 0,
+                program_id: Pubkey::default()
+            }
+        );
+
+        let mint = Keypair::new();
+        drone = Drone::new(mint, None, Some(1));
+        let tx = drone.build_airdrop_transaction(request);
+        assert!(tx.is_err());
     }
-    */
 }

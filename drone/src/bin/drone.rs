@@ -80,7 +80,6 @@ fn main() -> Result<(), Box<error::Error>> {
         .map_err(|e| println!("failed to accept socket; error = {:?}", e))
         .for_each(move |socket| {
             let drone2 = drone.clone();
-            // let client_ip = socket.peer_addr().expect("drone peer_addr").ip();
             let framed = BytesCodec::new().framed(socket);
             let (writer, reader) = framed.split();
 
@@ -93,7 +92,6 @@ fn main() -> Result<(), Box<error::Error>> {
                 })?;
 
                 println!("Airdrop transaction requested...{:?}", req);
-                // let res = drone2.lock().unwrap().check_rate_limit(client_ip);
                 let res = drone2.lock().unwrap().build_airdrop_transaction(req);
                 match res {
                     Ok(tx) => {
