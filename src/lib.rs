@@ -14,7 +14,6 @@ pub mod bank;
 pub mod banking_stage;
 pub mod blob_fetch_stage;
 pub mod bloom;
-pub mod bloom_hash_index;
 pub mod broadcast_service;
 #[cfg(feature = "chacha")]
 pub mod chacha;
