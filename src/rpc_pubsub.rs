@@ -41,6 +41,7 @@ impl Service for PubSubService {
 
 impl PubSubService {
     pub fn new(bank: &Arc<Bank>, pubsub_addr: SocketAddr) -> Self {
+        info!("rpc_pubsub bound to {:?}", pubsub_addr);
         let rpc = RpcSolPubSubImpl::new(bank.clone());
         let exit = Arc::new(AtomicBool::new(false));
         let exit_ = exit.clone();

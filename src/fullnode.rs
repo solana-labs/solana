@@ -102,9 +102,7 @@ pub struct Fullnode {
     retransmit_socket: UdpSocket,
     tpu_sockets: Vec<UdpSocket>,
     broadcast_socket: UdpSocket,
-    rpc_addr: SocketAddr,
     rpc_pubsub_addr: SocketAddr,
-    drone_addr: SocketAddr,
     db_ledger: Arc<DbLedger>,
     vote_signer: Arc<VoteSignerProxy>,
 }
@@ -215,8 +213,22 @@ impl Fullnode {
         };
         drone_addr.set_port(solana_drone::drone::DRONE_PORT);
 
-        let (rpc_service, rpc_pubsub_service) =
-            Self::startup_rpc_services(rpc_addr, rpc_pubsub_addr, drone_addr, &bank, &cluster_info);
+        // TODO: The RPC service assumes that there is a drone running on the leader
+        // See https://github.com/solana-labs/solana/issues/1830
+        let rpc_service = JsonRpcService::new(
+            &bank,
+            &cluster_info,
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_addr.port()),
+            drone_addr,
+        );
+
+        let rpc_pubsub_service = PubSubService::new(
+            &bank,
+            SocketAddr::new(
+                IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                rpc_pubsub_addr.port(),
+            ),
+        );
 
         let gossip_service = GossipService::new(
             &cluster_info,
@@ -338,21 +350,16 @@ impl Fullnode {
             retransmit_socket: node.sockets.retransmit,
             tpu_sockets: node.sockets.tpu,
             broadcast_socket: node.sockets.broadcast,
-            rpc_addr,
             rpc_pubsub_addr,
-            drone_addr,
             db_ledger,
             vote_signer,
         }
     }
 
     fn leader_to_validator(&mut self) -> Result<()> {
-        // Close down any services that could have a reference to the bank
-        if self.rpc_service.is_some() {
-            let old_rpc_service = self.rpc_service.take().unwrap();
-            old_rpc_service.close()?;
-        }
+        trace!("leader_to_validator");
 
+        // Close down any services that could have a reference to the bank
         if self.rpc_pubsub_service.is_some() {
             let old_rpc_pubsub_service = self.rpc_pubsub_service.take().unwrap();
             old_rpc_pubsub_service.close()?;
@@ -386,17 +393,21 @@ impl Fullnode {
             .unwrap()
             .set_leader(scheduled_leader);
 
-        // Spin up new versions of all the services that relied on the bank, passing in the
-        // new bank
-        let (rpc_service, rpc_pubsub_service) = Self::startup_rpc_services(
-            self.rpc_addr,
-            self.rpc_pubsub_addr,
-            self.drone_addr,
+        //
+        if let Some(ref mut rpc_service) = self.rpc_service {
+            rpc_service.set_bank(&new_bank);
+        }
+
+        // TODO: Don't restart PubSubService on leader rotation
+        //       See https://github.com/solana-labs/solana/issues/2419
+        self.rpc_pubsub_service = Some(PubSubService::new(
             &new_bank,
-            &self.cluster_info,
-        );
-        self.rpc_service = Some(rpc_service);
-        self.rpc_pubsub_service = Some(rpc_pubsub_service);
+            SocketAddr::new(
+                IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+                self.rpc_pubsub_addr.port(),
+            ),
+        ));
+
         self.bank = new_bank;
 
         // In the rare case that the leader exited on a multiple of seed_rotation_interval
@@ -448,6 +459,7 @@ impl Fullnode {
     }
 
     fn validator_to_leader(&mut self, tick_height: u64, entry_height: u64, last_id: Hash) {
+        trace!("validator_to_leader");
         self.cluster_info
             .write()
             .unwrap()
@@ -569,31 +581,6 @@ impl Fullnode {
 
     pub fn get_leader_scheduler(&self) -> &Arc<RwLock<LeaderScheduler>> {
         &self.bank.leader_scheduler
-    }
-
-    fn startup_rpc_services(
-        rpc_addr: SocketAddr,
-        rpc_pubsub_addr: SocketAddr,
-        drone_addr: SocketAddr,
-        bank: &Arc<Bank>,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
-    ) -> (JsonRpcService, PubSubService) {
-        let rpc_port = rpc_addr.port();
-        let rpc_pubsub_port = rpc_pubsub_addr.port();
-        // TODO: The RPC service assumes that there is a drone running on the leader
-        // Drone location/id will need to be handled a different way as soon as leader rotation begins
-        (
-            JsonRpcService::new(
-                bank,
-                cluster_info,
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_port),
-                drone_addr,
-            ),
-            PubSubService::new(
-                bank,
-                SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_pubsub_port),
-            ),
-        )
     }
 
     fn make_db_ledger(ledger_path: &str) -> Arc<DbLedger> {

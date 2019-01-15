@@ -28,6 +28,7 @@ pub const RPC_PORT: u16 = 8899;
 pub struct JsonRpcService {
     thread_hdl: JoinHandle<()>,
     exit: Arc<AtomicBool>,
+    request_processor: Arc<RwLock<JsonRpcRequestProcessor>>,
 }
 
 impl JsonRpcService {
@@ -37,10 +38,15 @@ impl JsonRpcService {
         rpc_addr: SocketAddr,
         drone_addr: SocketAddr,
     ) -> Self {
+        info!("rpc bound to {:?}", rpc_addr);
         let exit = Arc::new(AtomicBool::new(false));
-        let request_processor = JsonRpcRequestProcessor::new(bank.clone());
+        let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(bank.clone())));
+        request_processor.write().unwrap().bank = bank.clone();
+        let request_processor_ = request_processor.clone();
+
         let info = cluster_info.clone();
         let exit_ = exit.clone();
+
         let thread_hdl = Builder::new()
             .name("solana-jsonrpc".to_string())
             .spawn(move || {
@@ -50,7 +56,7 @@ impl JsonRpcService {
 
                 let server =
                     ServerBuilder::with_meta_extractor(io, move |_req: &hyper::Request<hyper::Body>| Meta {
-                        request_processor: request_processor.clone(),
+                        request_processor: request_processor_.clone(),
                         cluster_info: info.clone(),
                         drone_addr,
                         rpc_addr,
@@ -69,7 +75,15 @@ impl JsonRpcService {
                 server.unwrap().close();
             })
             .unwrap();
-        Self { thread_hdl, exit }
+        Self {
+            thread_hdl,
+            exit,
+            request_processor,
+        }
+    }
+
+    pub fn set_bank(&mut self, bank: &Arc<Bank>) {
+        self.request_processor.write().unwrap().bank = bank.clone();
     }
 
     pub fn exit(&self) {
@@ -92,7 +106,7 @@ impl Service for JsonRpcService {
 
 #[derive(Clone)]
 pub struct Meta {
-    pub request_processor: JsonRpcRequestProcessor,
+    pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>,
     pub cluster_info: Arc<RwLock<ClusterInfo>>,
     pub rpc_addr: SocketAddr,
     pub drone_addr: SocketAddr,
@@ -177,25 +191,35 @@ impl RpcSol for RpcSolImpl {
     fn get_account_info(&self, meta: Self::Metadata, id: String) -> Result<Account> {
         info!("get_account_info rpc request received: {:?}", id);
         let pubkey = verify_pubkey(id)?;
-        meta.request_processor.get_account_info(pubkey)
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_account_info(pubkey)
     }
     fn get_balance(&self, meta: Self::Metadata, id: String) -> Result<u64> {
         info!("get_balance rpc request received: {:?}", id);
         let pubkey = verify_pubkey(id)?;
-        meta.request_processor.get_balance(pubkey)
+        meta.request_processor.read().unwrap().get_balance(pubkey)
     }
     fn get_confirmation_time(&self, meta: Self::Metadata) -> Result<usize> {
         info!("get_confirmation_time rpc request received");
-        meta.request_processor.get_confirmation_time()
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_confirmation_time()
     }
     fn get_last_id(&self, meta: Self::Metadata) -> Result<String> {
         info!("get_last_id rpc request received");
-        meta.request_processor.get_last_id()
+        meta.request_processor.read().unwrap().get_last_id()
     }
     fn get_signature_status(&self, meta: Self::Metadata, id: String) -> Result<RpcSignatureStatus> {
         info!("get_signature_status rpc request received: {:?}", id);
         let signature = verify_signature(&id)?;
-        let res = meta.request_processor.get_signature_status(signature);
+        let res = meta
+            .request_processor
+            .read()
+            .unwrap()
+            .get_signature_status(signature);
         if res.is_none() {
             return Ok(RpcSignatureStatus::SignatureNotFound);
         }
@@ -216,17 +240,21 @@ impl RpcSol for RpcSolImpl {
                 }
             },
         };
+        info!("get_signature_status rpc request status: {:?}", status);
         Ok(status)
     }
     fn get_transaction_count(&self, meta: Self::Metadata) -> Result<u64> {
         info!("get_transaction_count rpc request received");
-        meta.request_processor.get_transaction_count()
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_transaction_count()
     }
     fn request_airdrop(&self, meta: Self::Metadata, id: String, tokens: u64) -> Result<String> {
         trace!("request_airdrop id={} tokens={}", id, tokens);
         let pubkey = verify_pubkey(id)?;
 
-        let last_id = meta.request_processor.bank.last_id();
+        let last_id = meta.request_processor.read().unwrap().bank.last_id();
         let transaction = request_airdrop_transaction(&meta.drone_addr, &pubkey, tokens, last_id)
             .map_err(|err| {
             info!("request_airdrop_transaction failed: {:?}", err);
@@ -251,7 +279,11 @@ impl RpcSol for RpcSolImpl {
         let now = Instant::now();
         let mut signature_status;
         loop {
-            signature_status = meta.request_processor.get_signature_status(signature);
+            signature_status = meta
+                .request_processor
+                .read()
+                .unwrap()
+                .get_signature_status(signature);
 
             if signature_status == Some(Status::Complete(Ok(()))) {
                 info!("airdrop signature ok");
@@ -278,6 +310,7 @@ impl RpcSol for RpcSolImpl {
         }
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let transactions_addr = get_leader_addr(&meta.cluster_info)?;
+        trace!("send_transaction: leader is {:?}", &transactions_addr);
         transactions_socket
             .send_to(&data, transactions_addr)
             .map_err(|err| {
@@ -293,10 +326,16 @@ impl RpcSol for RpcSolImpl {
         Ok(signature)
     }
     fn get_storage_mining_last_id(&self, meta: Self::Metadata) -> Result<String> {
-        meta.request_processor.get_storage_mining_last_id()
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_storage_mining_last_id()
     }
     fn get_storage_mining_entry_height(&self, meta: Self::Metadata) -> Result<u64> {
-        meta.request_processor.get_storage_mining_entry_height()
+        meta.request_processor
+            .read()
+            .unwrap()
+            .get_storage_mining_entry_height()
     }
     fn get_storage_pubkeys_for_entry_height(
         &self,
@@ -304,6 +343,8 @@ impl RpcSol for RpcSolImpl {
         entry_height: u64,
     ) -> Result<Vec<Pubkey>> {
         meta.request_processor
+            .read()
+            .unwrap()
             .get_storage_pubkeys_for_entry_height(entry_height)
     }
 }
@@ -428,7 +469,7 @@ mod tests {
         let tx = Transaction::system_move(&alice.keypair(), pubkey, 20, last_id, 0);
         bank.process_transaction(&tx).expect("process transaction");
 
-        let request_processor = JsonRpcRequestProcessor::new(Arc::new(bank));
+        let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(Arc::new(bank))));
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default())));
         let leader = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
 
@@ -752,7 +793,7 @@ mod tests {
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
         let meta = Meta {
-            request_processor: JsonRpcRequestProcessor::new(Arc::new(bank)),
+            request_processor: Arc::new(RwLock::new(JsonRpcRequestProcessor::new(Arc::new(bank)))),
             cluster_info: Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default()))),
             drone_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             rpc_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
