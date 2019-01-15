@@ -20,7 +20,6 @@ Validators know to only forward blobs that came from the leader by checking the 
 
 **BroadcastStage -> run** = Used by leader (TPU) to broadcast to all validators. Currently all TVU Peers are considered layer-1. But blobs are transmitted sort of round robin. See Cluster_info->Broadcast. 
 
-
 ## Proposed Design
 
 The new design organizes the network by stake and divides it into a collection of nodes, called `neighborhoods`. 
@@ -44,7 +43,6 @@ is that each `neighbor` actually receives blobs from 1 one validator _per_ neigh
 Since multiple neighborhoods exist in the upper layer and a node will receive blobs from a node in each of those neighborhoods, we'd need a big network failure in the upper layers to end up with incomplete data.
  
 <img alt="Inner workings of a neighborhood" src="img/data-plane-neighborhood.svg" class="center"/>
-
                
 #### A Stake weighted selection mechanism
 To support this mechanism, there needs to be a agreed upon way of dividing the network amongst the nodes. To achieve this the `tvu_peers` are sorted by stake and stored in a list. This list can then be indexed in different ways to figure out neighborhood boundaries and retransmit peers.
