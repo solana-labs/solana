@@ -44,7 +44,7 @@ Since multiple neighborhoods exist in the upper layer and a node will receive bl
  
 <img alt="Inner workings of a neighborhood" src="img/data-plane-neighborhood.svg" class="center"/>
                
-#### A Stake weighted selection mechanism
+#### A weighted selection mechanism
 To support this mechanism, there needs to be a agreed upon way of dividing the network amongst the nodes. To achieve this the `tvu_peers` are sorted by stake and stored in a list. This list can then be indexed in different ways to figure out neighborhood boundaries and retransmit peers.
 For example, the leader will simply select the first `DATA_PLANE_FANOUT` nodes as its layer 1 nodes. These will automatically be the highest stake holders allowing the heaviest votes to come back to the leader first. 
 The same logic determines which nodes each node in layer needs to retransmit its blobs to. This involves finding its neighbors and lower layer peers.    
