@@ -19,10 +19,11 @@ use solana_vote_signer::rpc::LocalVoteSigner;
 use std::io::Cursor;
 use std::sync::Arc;
 
-pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = 1000;
-pub const DEFAULT_LEADER_ROTATION_INTERVAL: u64 = 100;
-pub const DEFAULT_SEED_ROTATION_INTERVAL: u64 = 1000;
-pub const DEFAULT_ACTIVE_WINDOW_LENGTH: u64 = 1000;
+pub const TICKS_PER_BLOCK: u64 = 4;
+pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = TICKS_PER_BLOCK * 256;
+pub const DEFAULT_LEADER_ROTATION_INTERVAL: u64 = TICKS_PER_BLOCK * 32;
+pub const DEFAULT_SEED_ROTATION_INTERVAL: u64 = TICKS_PER_BLOCK * 256;
+pub const DEFAULT_ACTIVE_WINDOW_LENGTH: u64 = TICKS_PER_BLOCK * 256;
 
 pub struct LeaderSchedulerConfig {
     // The interval at which to rotate the leader, should be much less than
