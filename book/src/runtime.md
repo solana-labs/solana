@@ -44,6 +44,10 @@ The runtime enforces the following rules:
    greater than or equal to the balances before the transaction.
 4. All instructions in the transaction executed atomically. If one fails, all
    account modifications are discarded.
+5. Before committing the accounts, the transactions are tagged with a count
+   from the PoH service, indicating the time transaction processing completed.
+   If that time falls outside the leader's allotted slot, the transactions
+   are discarded.
 
 Execution of the program involves mapping the program's public key to an
 entrypoint which takes a pointer to the transaction, and an array of loaded
