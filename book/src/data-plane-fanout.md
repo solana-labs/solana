@@ -1,6 +1,6 @@
 # Data Plane Fan-out 
 
-This RFC describes the current single layer broadcast and retransmit mechanisms as well as proposed changes to add a multi-layer retransmit via an Avalanche mechanism.
+This Article describes the current single layer broadcast and retransmit mechanisms as well as proposed changes to add a multi-layer retransmit via an Avalanche mechanism.
 
 ## Current Design
 There's two basic parts to the current Data Plane's Fan-out design. 
@@ -29,37 +29,23 @@ Each neighborhood has `NEIGHBORHOOD_SIZE` nodes and `fanout/2` neighborhoods are
 
 Nodes in a layer will broadcast their blobs to exactly 1 node in each next-layer neighborhood and each node in a neighborhood will perform retransmits amongst its neighbors (just like layer-1 does with its layer-1 peers).
 This means any node has to only send its data to its neighbors and each neighborhood in the layer below instead of every single tvu peer it has.  
-The retransmit mechanism also supports a second, `grow`,  mode of operation that squares the number of neighborhoods allowed per layer which dramatically reduces the number of layers needed to support a large network but can also have a negative impact on the network pressure each node in the lower layers has to deal with.  
+The retransmit mechanism also supports a second, `grow`,  mode of operation that squares the number of neighborhoods allowed per layer which dramatically reduces the number of layers needed to support a large network but can also have a negative impact on the network pressure each node in the lower layers has to deal with.
+A good way to think of the default mode (when `grow` is disabled) is to imagine it as `chain` of layers where the leader sends blobs to layer-1 and then layer-1 to layer-2 and so on, but instead of growing layer-3 to the square of number of nodes in layer-2, we keep the `layer capacities` constant, so all layers past layer-2 will have the same number of nodes until the whole network is covered. When `grow` is enabled, this 
+quickly turns into a traditional fanout where layer-3 will have the square of the number of nodes in layer-2 and so on.    
 
 Below is an example of a two layer network. Note - this example doesn't describe the same `fanout/2` limit for lower layer neighborhoods.
+
+<img alt="Two layer network" src="img/data-plane.svg" class="center"/>
+
+#### Neighborhoods
+
+The following diagram shows how two neighborhoods in different layers interact. What this diagram doesn't capture
+is that each `neighbor` actually receives blobs from 1 one validator _per_ neighborhood above it. This means that, to cripple a neighborhood, enough nodes (erasure codes +1 _per_ neighborhood) from the layer above need to fail. 
+Since multiple neighborhoods exist in the upper layer and a node will receive blobs from a node in each of those neighborhoods, we'd need a big network failure in the upper layers to end up with incomplete data.
+ 
+<img alt="Inner workings of a neighborhood" src="img/data-plane-neighborhood.svg" class="center"/>
+
                
-                                              +--------------+
-                                              |              |
-                                 +------------+    Leader    +------------+
-                                 |            |              |            |
-                                 |            +--------------+            |
-                                 v                                        v
-                        +--------+--------+                      +--------+--------+
-                        |                 +--------------------->+                 |
-      +-----------------+   Validator 1   |                      |   Validator 2   +-------------+
-      |                 |                 +<---------------------+                 |             |
-      |                 +------+-+-+------+                      +---+-+-+---------+             |
-      |                        | | |                                 | | |                       |
-      |                        | | |                                 | | |                       |
-      |                +---------------------------------------------+ | |                       |
-      |                |       | | |                                   | |                       |
-      |                |       | | |            +----------------------+ |                       |
-      |                |       | | |            |                        |                       |
-      |                |       | | +--------------------------------------------+                |
-      |                |       | |              |                        |      |                |
-      |                |       | +----------------------+                |      |                |
-      v                v       v                v       v                v      v                v
-    +-+----------------+-+   +-+----------------+-+   +-+----------------+-+  +-+----------------+-+
-    |                    |   |                    |   |                    |  |                    |
-    |   Neighborhood 1   |   |   Neighborhood 2   |   |   Neighborhood 3   |  |   Neighborhood 4   |
-    |                    |   |                    |   |                    |  |                    |
-    +--------------------+   +--------------------+   +--------------------+  +--------------------+
-              
 #### A Stake weighted selection mechanism
 To support this mechanism, there needs to be a agreed upon way of dividing the network amongst the nodes. To achieve this the `tvu_peers` are sorted by stake and stored in a list. This list can then be indexed in different ways to figure out neighborhood boundaries and retransmit peers.
 For example, the leader will simply select the first `DATA_PLANE_FANOUT` nodes as its layer 1 nodes. These will automatically be the highest stake holders allowing the heaviest votes to come back to the leader first. 
@@ -69,8 +55,8 @@ The same logic determines which nodes each node in layer needs to retransmit its
 Broadcast Stage uses a bank to figure out stakes and hands this off to ClusterInfo to figure out the top `DATA_PLANE_FANOUT` stake holders. 
 These top stake holders will be considered Layer 1. For the leader this is pretty straightforward and can be achieved with a `truncate` call on a sorted list of peers. 
 
-#### Replicate stage
-The biggest challenge in updating to this mechanism is to update replicate stage and make it "layer aware"; i.e using the bank each node can figure out which layer it belongs in and which lower layer peers nodes to send blobs to with minimal overlap across neighborhood boundaries. 
+#### Retransmit stage
+The biggest challenge in updating to this mechanism is to update the retransmit stage and make it "layer aware"; i.e using the bank each node can figure out which layer it belongs in and which lower layer peers nodes to send blobs to with minimal overlap across neighborhood boundaries. 
 Overlaps will be minimized based on `((node.layer_index) % (layer_neighborhood_size) * cur_neighborhood_index)` where `cur_neighborhood_index` is the loop index in `num_neighborhoods` so that a node only forwards blobs to a single node in a lower layer neighborhood. 
 
 Each node can receive blobs froms its peer in the layer above as well as its neighbors. As long as the failure rate is less than the number of erasure codes, blobs can be repaired without the network failing. 
