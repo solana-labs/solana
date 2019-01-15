@@ -705,8 +705,8 @@ fn send_and_confirm_tx(
     tx: &mut Transaction,
     signer: &Keypair,
 ) -> Result<String, Box<dyn error::Error>> {
-    let mut send_retries = 3;
-    while send_retries > 0 {
+    let mut send_retries = 5;
+    loop {
         let mut status_retries = 4;
         let signature_str = send_tx(rpc_client, tx)?;
         let status = loop {
@@ -720,11 +720,12 @@ fn send_and_confirm_tx(
                 break status;
             }
             if cfg!(not(test)) {
-                sleep(Duration::from_secs(1));
+                sleep(Duration::from_millis(500));
             }
         };
         match status {
-            RpcSignatureStatus::AccountInUse => {
+            RpcSignatureStatus::AccountInUse | RpcSignatureStatus::SignatureNotFound => {
+                // Fetch a new last_id and re-sign the transaction before sending it again
                 resign_tx(rpc_client, tx, signer)?;
                 send_retries -= 1;
             }
@@ -732,17 +733,16 @@ fn send_and_confirm_tx(
                 return Ok(signature_str);
             }
             _ => {
-                return Err(WalletError::RpcRequestError(format!(
-                    "Transaction {:?} failed: {:?}",
-                    signature_str, status
-                )))?;
+                send_retries = 0;
             }
         }
+        if send_retries == 0 {
+            Err(WalletError::RpcRequestError(format!(
+                "Transaction {:?} failed: {:?}",
+                signature_str, status
+            )))?;
+        }
     }
-    Err(WalletError::RpcRequestError(format!(
-        "AccountInUse after 3 retries: {:?}",
-        tx.account_keys[0]
-    )))?
 }
 
 fn resign_tx(
@@ -750,7 +750,23 @@ fn resign_tx(
     tx: &mut Transaction,
     signer_key: &Keypair,
 ) -> Result<(), Box<dyn error::Error>> {
-    let last_id = get_last_id(rpc_client)?;
+    // Fetch a new last_id to prevent the retry from getting rejected as a
+    // DuplicateSignature
+    let mut next_last_id_retries = 3;
+    let last_id = loop {
+        let next_last_id = get_last_id(rpc_client)?;
+        if next_last_id != tx.last_id {
+            break next_last_id;
+        }
+        if next_last_id_retries == 0 {
+            Err(WalletError::RpcRequestError(
+                "Unable to fetch next last_id".to_string(),
+            ))?;
+        }
+        next_last_id_retries -= 1;
+        sleep(Duration::from_secs(1));
+    };
+
     tx.sign(&[signer_key], last_id);
     Ok(())
 }
