@@ -150,14 +150,14 @@ define C_RULE
 $1: $2
 	@echo "[cc] $1 ($2)"
 	$(_@)mkdir -p $(dir $1)
-	$(_@)$(CC) $(BPF_C_FLAGS) -o $1 -c $2 -MD -MF $(1:.ll=.d)
+	$(_@)$(CC) $(BPF_C_FLAGS) -o $1 -c $2 -MD -MF $(1:.o=.d)
 endef
 
 define CC_RULE
 $1: $2 
 	@echo "[cxx] $1 ($2)"
 	$(_@)mkdir -p $(dir $1)
-	$(_@)$(CXX) $(BPF_CXX_FLAGS) -o $1 -c $2 -MD -MF $(1:.ll=.d)
+	$(_@)$(CXX) $(BPF_CXX_FLAGS) -o $1 -c $2 -MD -MF $(1:.o=.d)
 endef
 
 define O_RULE
@@ -195,7 +195,7 @@ $(INSTALL_SH):
 	$(_@)$(INSTALL_SH)
 
 PROGRAM_NAMES := $(notdir $(basename $(wildcard $(SRC_DIR)/*)))
-# TEST_NAMES := $(addprefix test_,$(notdir $(basename $(wildcard $(TEST_DIR)/*.c))))
+TEST_NAMES := $(addprefix test_,$(notdir $(basename $(wildcard $(TEST_DIR)/*.c))))
 
 define \n
 
