@@ -134,14 +134,14 @@ impl VoteSignerProxy {
         match VoteSignerProxy::get_leader_tpu(&bank, cluster_info) {
             Ok(tpu) => {
                 self.unsent_votes.write().unwrap().retain(|old_tx| {
-                    if let Ok(shared_blob) = self.new_signed_vote_blob(old_tx.clone(), tpu) {
+                    if let Ok(shared_blob) = self.new_signed_vote_blob(old_tx, tpu) {
                         inc_new_counter_info!("validator-pending_vote_sent", 1);
                         inc_new_counter_info!("validator-vote_sent", 1);
                         vote_blob_sender.send(vec![shared_blob]).unwrap();
                     }
                     false
                 });
-                if let Ok(shared_blob) = self.new_signed_vote_blob(tx, tpu) {
+                if let Ok(shared_blob) = self.new_signed_vote_blob(&tx, tpu) {
                     inc_new_counter_info!("validator-vote_sent", 1);
                     vote_blob_sender.send(vec![shared_blob])?;
                 }
@@ -175,7 +175,7 @@ impl VoteSignerProxy {
         }
     }
 
-    fn new_signed_vote_blob(&self, tx: Transaction, leader_tpu: SocketAddr) -> Result<SharedBlob> {
+    fn new_signed_vote_blob(&self, tx: &Transaction, leader_tpu: SocketAddr) -> Result<SharedBlob> {
         let shared_blob = SharedBlob::default();
         {
             let mut blob = shared_blob.write().unwrap();
