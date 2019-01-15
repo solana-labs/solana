@@ -7,6 +7,7 @@ use crate::entry::{EntryReceiver, EntrySender};
 use solana_sdk::hash::Hash;
 
 use crate::entry::EntrySlice;
+use crate::leader_scheduler::BLOCK_TICK_COUNT;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -25,7 +26,6 @@ use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
 
-pub const BLOCK_TICK_COUNT: u64 = 4;
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
 
 #[derive(Debug, PartialEq, Eq, Clone)]

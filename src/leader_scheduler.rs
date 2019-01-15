@@ -4,7 +4,6 @@
 use crate::bank::Bank;
 
 use crate::entry::{create_ticks, Entry};
-use crate::replay_stage;
 use crate::vote_signer_proxy::VoteSignerProxy;
 use bincode::serialize;
 use byteorder::{LittleEndian, ReadBytesExt};
@@ -20,10 +19,11 @@ use solana_vote_signer::rpc::LocalVoteSigner;
 use std::io::Cursor;
 use std::sync::Arc;
 
-pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = replay_stage::BLOCK_TICK_COUNT * 256;
-pub const DEFAULT_LEADER_ROTATION_INTERVAL: u64 = replay_stage::BLOCK_TICK_COUNT * 32;
-pub const DEFAULT_SEED_ROTATION_INTERVAL: u64 = replay_stage::BLOCK_TICK_COUNT * 256;
-pub const DEFAULT_ACTIVE_WINDOW_LENGTH: u64 = replay_stage::BLOCK_TICK_COUNT * 256;
+pub const BLOCK_TICK_COUNT: u64 = 4;
+pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = BLOCK_TICK_COUNT * 256;
+pub const DEFAULT_LEADER_ROTATION_INTERVAL: u64 = BLOCK_TICK_COUNT * 32;
+pub const DEFAULT_SEED_ROTATION_INTERVAL: u64 = BLOCK_TICK_COUNT * 256;
+pub const DEFAULT_ACTIVE_WINDOW_LENGTH: u64 = BLOCK_TICK_COUNT * 256;
 
 pub struct LeaderSchedulerConfig {
     // The interval at which to rotate the leader, should be much less than
