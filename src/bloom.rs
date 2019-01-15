@@ -65,26 +65,26 @@ impl<T: BloomHashIndex> Bloom<T> {
 
 fn to_slice(v: u64) -> [u8; 8] {
     [
-        (v & 0xffu64) as u8,
-        (v >> (1 * 8) & 0xffu64) as u8,
-        (v >> (2 * 8) & 0xffu64) as u8,
-        (v >> (3 * 8) & 0xffu64) as u8,
-        (v >> (4 * 8) & 0xffu64) as u8,
-        (v >> (5 * 8) & 0xffu64) as u8,
-        (v >> (6 * 8) & 0xffu64) as u8,
-        (v >> (7 * 8) & 0xffu64) as u8,
+        v as u8,
+        (v >> 8) as u8,
+        (v >> 16) as u8,
+        (v >> 24) as u8,
+        (v >> 32) as u8,
+        (v >> 40) as u8,
+        (v >> 48) as u8,
+        (v >> 56) as u8,
     ]
 }
 
 fn from_slice(v: &[u8]) -> u64 {
-    (v[0] as u64)
-        | ((v[1] as u64) << (1 * 8))
-        | ((v[2] as u64) << (2 * 8))
-        | ((v[3] as u64) << (3 * 8))
-        | ((v[4] as u64) << (4 * 8))
-        | ((v[5] as u64) << (5 * 8))
-        | ((v[6] as u64) << (6 * 8))
-        | ((v[7] as u64) << (7 * 8))
+    u64::from(v[0])
+        | u64::from(v[1]) << 8
+        | u64::from(v[2]) << 16
+        | u64::from(v[3]) << 24
+        | u64::from(v[4]) << 32
+        | u64::from(v[5]) << 40
+        | u64::from(v[6]) << 48
+        | u64::from(v[7]) << 56
 }
 
 fn slice_hash(slice: &[u8], hash_index: u64) -> u64 {
