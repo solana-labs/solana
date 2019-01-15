@@ -7,7 +7,7 @@ use crate::entry::{EntryReceiver, EntrySender};
 use solana_sdk::hash::Hash;
 
 use crate::entry::EntrySlice;
-use crate::leader_scheduler::BLOCK_TICK_COUNT;
+use crate::leader_scheduler::TICKS_PER_BLOCK;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -104,7 +104,7 @@ impl ReplayStage {
         let my_id = keypair.pubkey();
 
         // Next vote tick is ceiling of (current tick/ticks per block)
-        let mut num_ticks_to_next_vote = BLOCK_TICK_COUNT - (bank.tick_height() % BLOCK_TICK_COUNT);
+        let mut num_ticks_to_next_vote = TICKS_PER_BLOCK - (bank.tick_height() % TICKS_PER_BLOCK);
         let mut start_entry_index = 0;
         for (i, entry) in entries.iter().enumerate() {
             inc_new_counter_info!("replicate-stage_bank-tick", bank.tick_height() as usize);
@@ -157,7 +157,7 @@ impl ReplayStage {
                     break;
                 }
                 start_entry_index = i + 1;
-                num_ticks_to_next_vote = BLOCK_TICK_COUNT;
+                num_ticks_to_next_vote = TICKS_PER_BLOCK;
             }
         }
 
