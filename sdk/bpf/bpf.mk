@@ -65,6 +65,7 @@ BPF_LLD_FLAGS := \
   -shared \
   --Bdynamic \
   $(LOCAL_PATH)bpf.ld \
+  --entry entrypoint \
 
 OBJ_DUMP_FLAGS := \
   -color \
@@ -170,7 +171,7 @@ define SO_RULE
 $1: $2
 	@echo "[lld] $1 ($2)"
 	$(_@)mkdir -p $(dir $1)
-	$(_@)$(LLD) $(BPF_LLD_FLAGS) --entry entrypoint -o $1 $2
+	$(_@)$(LLD) $(BPF_LLD_FLAGS) -o $1 $2
 endef
 
 define TEST_C_RULE
