@@ -765,7 +765,7 @@ mod tests {
         let json: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
         let signature = &json["result"];
 
-        sleep(Duration::from_millis(500));
+        let mut confirmed_tx = false;
 
         let client = reqwest::Client::new();
         let request = json!({
@@ -774,16 +774,26 @@ mod tests {
            "method": "confirmTransaction",
            "params": [signature],
         });
-        let mut response = client
-            .post(&rpc_string)
-            .header(CONTENT_TYPE, "application/json")
-            .body(request.to_string())
-            .send()
-            .unwrap();
-        let response_json_text = response.text().unwrap();
-        let json: Value = serde_json::from_str(&response_json_text).unwrap();
 
-        assert_eq!(true, json["result"]);
+        for _ in 0..5 {
+            let mut response = client
+                .post(&rpc_string)
+                .header(CONTENT_TYPE, "application/json")
+                .body(request.to_string())
+                .send()
+                .unwrap();
+            let response_json_text = response.text().unwrap();
+            let json: Value = serde_json::from_str(&response_json_text).unwrap();
+
+            if true == json["result"] {
+                confirmed_tx = true;
+                break;
+            }
+
+            sleep(Duration::from_millis(250));
+        }
+
+        assert!(confirmed_tx);
 
         server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
