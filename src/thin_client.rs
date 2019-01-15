@@ -234,9 +234,10 @@ impl ThinClient {
         self.transaction_count
     }
 
-    /// Request the last Entry ID from the server. This method blocks
-    /// until the server sends a response.
-    pub fn get_last_id(&mut self) -> Hash {
+    /// Request the last Entry ID from the server. Can timeout
+    /// after a number of tries and return an error
+    pub fn get_last_id_retry(&mut self, tries: usize) -> io::Result<Hash> {
+        let mut tries = tries;
         trace!("get_last_id");
         let mut done = false;
         while !done {
@@ -245,17 +246,30 @@ impl ThinClient {
                 .rpc_client
                 .make_rpc_request(1, RpcRequest::GetLastId, None);
 
-            if let Ok(value) = resp {
-                done = true;
-                let last_id_str = value.as_str().unwrap();
-                let last_id_vec = bs58::decode(last_id_str).into_vec().unwrap();
-                let last_id = Hash::new(&last_id_vec);
-                self.last_id = Some(last_id);
-            } else {
-                debug!("thin_client get_last_id error: {:?}", resp);
+            match resp {
+                Ok(value) => {
+                    done = true;
+                    let last_id_str = value.as_str().unwrap();
+                    let last_id_vec = bs58::decode(last_id_str).into_vec().unwrap();
+                    let last_id = Hash::new(&last_id_vec);
+                    self.last_id = Some(last_id);
+                }
+                Err(e) => {
+                    info!("thin_client get_last_id error: {:?}", e);
+                    if tries == 0 {
+                        return Err(io::Error::new(io::ErrorKind::Other, "get_last_id timeout"));
+                    }
+                    tries -= 1;
+                }
             }
         }
-        self.last_id.expect("some last_id")
+        Ok(self.last_id.expect("some last_id"))
+    }
+
+    /// Request the last Entry ID from the server. This method
+    /// tries 10 times until the server sends a response then panics.
+    pub fn get_last_id(&mut self) -> Hash {
+        self.get_last_id_retry(10).unwrap()
     }
 
     pub fn submit_poll_balance_metrics(elapsed: &Duration) {

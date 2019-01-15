@@ -186,55 +186,57 @@ impl StorageStage {
     ) {
         if !local_state.system_storage_account_created {
             info!("Creating storage accounts");
-            let last_id = leader_client.get_last_id();
-            match leader_client.get_account_userdata(&storage_program::system_id()) {
-                Ok(_) => {
-                    info!("storage account already created");
-                    local_state.system_storage_account_created = true;
-                }
-                Err(e) => {
-                    debug!("error storage userdata: {:?}", e);
-
-                    let mut tx = Transaction::system_create(
-                        keypair,
-                        storage_program::system_id(),
-                        last_id,
-                        1,
-                        16 * 1024,
-                        storage_program::id(),
-                        1,
-                    );
-                    if let Err(e) = leader_client.retry_transfer(keypair, &mut tx, 5) {
-                        info!("Couldn't create storage account error: {}", e);
-                    } else {
+            if let Ok(last_id) = leader_client.get_last_id_retry(1) {
+                match leader_client.get_account_userdata(&storage_program::system_id()) {
+                    Ok(_) => {
+                        info!("storage account already created");
                         local_state.system_storage_account_created = true;
+                    }
+                    Err(e) => {
+                        debug!("error storage userdata: {:?}", e);
+
+                        let mut tx = Transaction::system_create(
+                            keypair,
+                            storage_program::system_id(),
+                            last_id,
+                            1,
+                            16 * 1024,
+                            storage_program::id(),
+                            1,
+                        );
+                        if let Err(e) = leader_client.retry_transfer(keypair, &mut tx, 5) {
+                            info!("Couldn't create storage account error: {}", e);
+                        } else {
+                            local_state.system_storage_account_created = true;
+                        }
                     }
                 }
             }
         }
         if !local_state.my_storage_account_created {
             info!("Creating my storage account");
-            let last_id = leader_client.get_last_id();
-            match leader_client.get_account_userdata(&keypair.pubkey()) {
-                Ok(_) => {
-                    info!("My account already created");
-                    local_state.my_storage_account_created = true;
-                }
-                Err(e) => {
-                    debug!("error storage userdata: {:?}", e);
-                    let mut tx = Transaction::system_create(
-                        keypair,
-                        keypair.pubkey(),
-                        last_id,
-                        1,
-                        0,
-                        storage_program::id(),
-                        1,
-                    );
-                    if let Err(e) = leader_client.retry_transfer(keypair, &mut tx, 1) {
-                        info!("Couldn't create storage account error: {}", e);
-                    } else {
+            if let Ok(last_id) = leader_client.get_last_id_retry(1) {
+                match leader_client.get_account_userdata(&keypair.pubkey()) {
+                    Ok(_) => {
+                        info!("My account already created");
                         local_state.my_storage_account_created = true;
+                    }
+                    Err(e) => {
+                        debug!("error storage userdata: {:?}", e);
+                        let mut tx = Transaction::system_create(
+                            keypair,
+                            keypair.pubkey(),
+                            last_id,
+                            1,
+                            0,
+                            storage_program::id(),
+                            1,
+                        );
+                        if let Err(e) = leader_client.retry_transfer(keypair, &mut tx, 1) {
+                            info!("Couldn't create storage account error: {}", e);
+                        } else {
+                            local_state.my_storage_account_created = true;
+                        }
                     }
                 }
             }
@@ -389,19 +391,19 @@ impl StorageStage {
         if !local_state.tried_to_set_hash_rate {
             if let Some(leader_data) = cluster_info.read().unwrap().leader_data() {
                 let mut leader_client = mk_client(leader_data);
-                let last_id = leader_client.get_last_id();
-
-                let mut tx = Transaction::storage_new_set_hash_rotate_count(
-                    &keypair,
-                    last_id,
-                    NUM_HASHES_FOR_STORAGE_ROTATE,
-                );
-                if let Err(e) = leader_client.retry_transfer(&keypair, &mut tx, 1) {
-                    debug!("Couldn't set storage hash rate error: {}", e);
-                } else {
-                    info!("set the rotate count");
+                if let Ok(last_id) = leader_client.get_last_id_retry(0) {
+                    let mut tx = Transaction::storage_new_set_hash_rotate_count(
+                        &keypair,
+                        last_id,
+                        NUM_HASHES_FOR_STORAGE_ROTATE,
+                    );
+                    if let Err(e) = leader_client.retry_transfer(&keypair, &mut tx, 1) {
+                        info!("Couldn't set storage hash rate error: {}", e);
+                    } else {
+                        info!("set the rotate count");
+                    }
+                    local_state.tried_to_set_hash_rate = true;
                 }
-                local_state.tried_to_set_hash_rate = true;
             } else {
                 info!("no leader yet..");
             }
