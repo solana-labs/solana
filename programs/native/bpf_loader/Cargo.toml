@@ -16,7 +16,7 @@ bpf_rust = []
 bincode = "1.0.0"
 byteorder = "1.2.1"
 elf = "0.0.10"
-libc = "0.2.46"
+libc = "0.2.47"
 log = "0.4.2"
 solana_rbpf = "=0.1.9"
 serde = "1.0.84"
