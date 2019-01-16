@@ -360,8 +360,18 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
                 .as_u64()
                 .unwrap_or(previous_balance);
 
+            if current_balance < previous_balance {
+                Err(format!(
+                    "Airdrop failed: current_balance({}) < previous_balance({})",
+                    current_balance, previous_balance
+                ))?;
+            }
             if current_balance - previous_balance < tokens {
-                Err("Airdrop failed!")?;
+                Err(format!(
+                    "Airdrop failed: Account balance increased by {} instead of {}",
+                    current_balance - previous_balance,
+                    tokens
+                ))?;
             }
             Ok(format!("Your balance is: {:?}", current_balance))
         }
