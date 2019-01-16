@@ -17,12 +17,13 @@ use crate::vote_signer_proxy::VoteSignerProxy;
 use log::Level;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::timing::timestamp;
+use solana_sdk::timing::{duration_as_ms, timestamp};
 use std::net::UdpSocket;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::Result;
+use std::time::Instant;
 
 pub enum NodeRole {
     Leader(LeaderServices),
@@ -561,13 +562,18 @@ impl Fullnode {
         let mut bank = Bank::new_with_builtin_programs();
         bank.leader_scheduler = leader_scheduler;
 
+        let now = Instant::now();
         let entries = db_ledger.read_ledger().expect("opening ledger");
         info!("processing ledger...");
 
         let (entry_height, last_entry_id) = bank.process_ledger(entries).expect("process_ledger");
         // entry_height is the network-wide agreed height of the ledger.
         //  initialize it from the input ledger
-        info!("processed {} ledger...", entry_height);
+        info!(
+            "processed {} ledger in {}ms...",
+            entry_height,
+            duration_as_ms(&now.elapsed())
+        );
         (bank, entry_height, last_entry_id)
     }
 
