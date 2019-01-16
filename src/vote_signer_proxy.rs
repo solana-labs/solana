@@ -113,9 +113,7 @@ impl VoteSignerProxy {
         vote_blob_sender: &BlobSender,
     ) -> Result<()> {
         {
-            let (leader, _) = bank
-                .get_current_leader()
-                .expect("Scheduled leader should be calculated by this point");
+            let (leader, _) = bank.get_current_leader().unwrap();
 
             let mut old_leader = self.last_leader.write().unwrap();
 
@@ -146,10 +144,9 @@ impl VoteSignerProxy {
                     vote_blob_sender.send(vec![shared_blob])?;
                 }
             }
-            Err(e) => {
+            Err(_) => {
                 self.unsent_votes.write().unwrap().push(tx);
                 inc_new_counter_info!("validator-new_pending_vote", 1);
-                return Err(e);
             }
         };
 
@@ -237,15 +234,15 @@ mod test {
         let (sender, receiver) = channel();
 
         assert_eq!(signer.unsent_votes.read().unwrap().len(), 0);
-        assert!(signer
+        signer
             .send_validator_vote(&bank, &cluster_info, &sender)
-            .is_err());
+            .unwrap();
         assert_eq!(signer.unsent_votes.read().unwrap().len(), 1);
         assert!(receiver.recv_timeout(Duration::from_millis(400)).is_err());
 
-        assert!(signer
+        signer
             .send_validator_vote(&bank, &cluster_info, &sender)
-            .is_err());
+            .unwrap();
         assert_eq!(signer.unsent_votes.read().unwrap().len(), 2);
         assert!(receiver.recv_timeout(Duration::from_millis(400)).is_err());
 
