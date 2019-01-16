@@ -18,6 +18,7 @@ use solana::streamer::blob_receiver;
 use solana::vote_signer_proxy::VoteSignerProxy;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::storage_program;
 use solana_sdk::storage_program::StorageTransaction;
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
@@ -63,6 +64,41 @@ fn test_replicator_startup() {
         );
 
         let validator_keypair = Arc::new(Keypair::new());
+
+        let mut leader_client = mk_client(&leader_info);
+
+        let last_id = leader_client.get_last_id();
+        info!("giving validator tokens: {}", validator_keypair.pubkey());
+        let signature = leader_client
+            .transfer(10, &mint.keypair(), validator_keypair.pubkey(), &last_id)
+            .unwrap();
+        leader_client.poll_for_signature(&signature).unwrap();
+
+        let last_id = leader_client.get_last_id();
+        let tx = Transaction::system_create(
+            &mint.keypair(),
+            storage_program::system_id(),
+            last_id,
+            1,
+            16 * 1024,
+            storage_program::id(),
+            1,
+        );
+        let signature = leader_client.transfer_signed(&tx).unwrap();
+        leader_client.poll_for_signature(&signature).unwrap();
+
+        // Set storage_rotate value to a low-ish number so we don't need to create
+        // so much ledger for the first segment to be created.
+        const STORAGE_ROTATE: u64 = 128;
+        let last_id = leader_client.get_last_id();
+        let tx = Transaction::storage_new_set_hash_rotate_count(
+            &mint.keypair(),
+            last_id,
+            STORAGE_ROTATE,
+        );
+        let signature = leader_client.transfer_signed(&tx).unwrap();
+        leader_client.poll_for_signature(&signature).unwrap();
+
         let signer_proxy =
             VoteSignerProxy::new(&validator_keypair, Box::new(LocalVoteSigner::default()));
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
@@ -80,21 +116,7 @@ fn test_replicator_startup() {
             None,
         );
 
-        let mut leader_client = mk_client(&leader_info);
-
         let bob = Keypair::new();
-
-        // Set storage_rotate value to a low-ish number so we don't need to create
-        // so much ledger for the first segment to be created.
-        const STORAGE_ROTATE: u64 = 128;
-        let last_id = leader_client.get_last_id();
-        let tx = Transaction::storage_new_set_hash_rotate_count(
-            &mint.keypair(),
-            last_id,
-            STORAGE_ROTATE,
-        );
-        let signature = leader_client.transfer_signed(&tx).unwrap();
-        leader_client.poll_for_signature(&signature).unwrap();
 
         info!("Sending txs..");
         // Create enough entries to roll over the hashes
@@ -108,11 +130,6 @@ fn test_replicator_startup() {
                 info!("Sent {} txs", i);
             }
         }
-
-        let last_id = leader_client.get_last_id();
-        leader_client
-            .transfer(10, &mint.keypair(), validator_keypair.pubkey(), &last_id)
-            .unwrap();
 
         let replicator_keypair = Keypair::new();
 

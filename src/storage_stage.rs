@@ -19,7 +19,9 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::storage_program;
-use solana_sdk::storage_program::{get_segment_from_entry, StorageProgram, StorageTransaction};
+use solana_sdk::storage_program::{
+    get_segment_from_entry, StorageProgram, StorageProgramState, StorageTransaction,
+};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use std::collections::HashSet;
@@ -265,7 +267,7 @@ impl StorageStage {
 
             let last_id = leader_client.get_last_id();
 
-            info!(
+            debug!(
                 "advertising new storage last id entry_height: {}!",
                 local_state.entry_height
             );
@@ -391,6 +393,24 @@ impl StorageStage {
         if !local_state.tried_to_set_hash_rate {
             if let Some(leader_data) = cluster_info.read().unwrap().leader_data() {
                 let mut leader_client = mk_client(leader_data);
+
+                debug!("getting user data");
+                match leader_client.get_account_userdata(&storage_program::system_id()) {
+                    Ok(userdata) => {
+                        if let Some(userdata) = userdata {
+                            let program_state: StorageProgramState =
+                                deserialize(&userdata).unwrap();
+                            debug!("got user data: {:?}", program_state);
+                            if program_state.rotate_count != 0 {
+                                local_state.tried_to_set_hash_rate = true;
+                                return;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        debug!("e: {:?}", e);
+                    }
+                }
                 if let Ok(last_id) = leader_client.get_last_id_retry(0) {
                     let mut tx = Transaction::storage_new_set_hash_rotate_count(
                         &keypair,
@@ -400,12 +420,12 @@ impl StorageStage {
                     if let Err(e) = leader_client.retry_transfer(&keypair, &mut tx, 1) {
                         info!("Couldn't set storage hash rate error: {}", e);
                     } else {
-                        info!("set the rotate count");
+                        debug!("set the rotate count");
                     }
                     local_state.tried_to_set_hash_rate = true;
                 }
             } else {
-                info!("no leader yet..");
+                debug!("no leader yet..");
             }
         }
     }
