@@ -220,25 +220,30 @@ impl RpcSol for RpcSolImpl {
             .read()
             .unwrap()
             .get_signature_status(signature);
-        if res.is_none() {
-            return Ok(RpcSignatureStatus::SignatureNotFound);
-        }
 
-        let status = match res.unwrap() {
-            Status::Reserved => {
-                // Report SignatureReserved as SignatureNotFound as SignatureReserved is
-                // transitory while the bank processes the associated transaction.
+        let status = {
+            if res.is_none() {
                 RpcSignatureStatus::SignatureNotFound
-            }
-            Status::Complete(res) => match res {
-                Ok(_) => RpcSignatureStatus::Confirmed,
-                Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
-                Err(BankError::ProgramError(_, _)) => RpcSignatureStatus::ProgramRuntimeError,
-                Err(err) => {
-                    trace!("mapping {:?} to GenericFailure", err);
-                    RpcSignatureStatus::GenericFailure
+            } else {
+                match res.unwrap() {
+                    Status::Reserved => {
+                        // Report SignatureReserved as SignatureNotFound as SignatureReserved is
+                        // transitory while the bank processes the associated transaction.
+                        RpcSignatureStatus::SignatureNotFound
+                    }
+                    Status::Complete(res) => match res {
+                        Ok(_) => RpcSignatureStatus::Confirmed,
+                        Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
+                        Err(BankError::ProgramError(_, _)) => {
+                            RpcSignatureStatus::ProgramRuntimeError
+                        }
+                        Err(err) => {
+                            trace!("mapping {:?} to GenericFailure", err);
+                            RpcSignatureStatus::GenericFailure
+                        }
+                    },
                 }
-            },
+            }
         };
         info!("get_signature_status rpc request status: {:?}", status);
         Ok(status)
