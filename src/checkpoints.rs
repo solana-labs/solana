@@ -23,7 +23,10 @@ impl<T> Checkpoints<T> {
     }
     pub fn store(&mut self, fork: u64, data: T, parent: u64) {
         if fork <= parent {
-            panic!("fork: {}, parent: {} error: out of order or trivial cycle");
+            panic!(
+                "fork: {}, parent: {} error: out of order or trivial cycle",
+                fork, parent
+            );
         }
         self.latest.remove(&parent);
         self.latest.insert(fork);
@@ -111,7 +114,7 @@ impl<T> std::fmt::Debug for Checkpoints<T> {
             for (fork, _) in self.collect(std::usize::MAX, *tip) {
                 write!(f, "{} ", fork)?;
             }
-            write!(f, "\n")?;
+            writeln!(f)?;
         }
         Ok(())
     }
