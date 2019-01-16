@@ -85,25 +85,19 @@ impl<T> Checkpoints<T> {
             for chain in chains.iter_mut() {
                 // chain is in reverse order, so search comparison is backwards
                 match chain.binary_search_by(|probe| trytrunk.cmp(&probe.0)) {
-                    Ok(idx) => {
-                        chain.truncate(idx);
-                    }
-                    _ => {
-                        break 'outer; // not found
-                    }
+                    Ok(idx) => chain.truncate(idx),
+                    _ => break 'outer, // not found
                 }
             }
             trunk = Some(trytrunk);
 
-            // now all chains end with trytrunk
-            // remove trytrunk item and try the minimum next highest
-            for chain in chains.iter_mut() {
-                if chain.len() < 2 {
+            // all chains are now truncated before the trytrunk entry
+            for chain in chains.iter() {
+                if chain.is_empty() {
                     // outer loop needs all chains to have at least one item
                     // (because of last().unwrap() above)
                     break 'outer;
                 }
-                chain.pop();
             }
         }
         trunk
@@ -142,6 +136,11 @@ mod test {
     fn test_checkpoints_trivial_cycle() {
         let mut checkpoints: Checkpoints<u64> = Default::default();
         checkpoints.store(0, 0, 0);
+    }
+    #[test]
+    #[should_panic]
+    fn test_checkpoints_out_of_order() {
+        let mut checkpoints: Checkpoints<u64> = Default::default();
         checkpoints.store(0, 0, 1);
     }
 
@@ -155,6 +154,8 @@ mod test {
         for i in 1..11 {
             checkpoints.store(i as u64, i, (i - 1) as u64);
         }
+        // now checkpoints:
+        // 10->9->8->7->6->5->4->3->2->1
 
         let points = checkpoints.collect(std::usize::MAX, 10);
         assert_eq!(points.len(), 10);
@@ -172,22 +173,50 @@ mod test {
             assert_eq!(**data, 10 - i);
             assert_eq!(*parent, 10 - i as u64);
         }
-        // only one chain, trunk is latest
+
+        // only one chain, so tip of trunk is latest
         assert_eq!(checkpoints.trunk(11), Some(10));
 
-        // only one chain, trunk is latest
+        // only one chain, tip trunk is latest
         assert_eq!(checkpoints.trunk(1), Some(10));
 
-        // only one chain, but zero length
+        // zero length ask
         assert_eq!(checkpoints.trunk(0), None);
 
         for i in 11..15 {
             checkpoints.store(i as u64, i, 1 as u64);
         }
+        // now checkpoints:
+        // 10->9->8->7->6->5->4->3->2->1
+        // 11->1
+        // 12->1
+        // 13->1
+        // 14->1
 
         assert_eq!(checkpoints.trunk(1), None);
         assert_eq!(checkpoints.trunk(0), None);
         assert_eq!(checkpoints.trunk(9), None);
         assert_eq!(checkpoints.trunk(10), Some(1));
+        assert_eq!(checkpoints.trunk(11), Some(1));
+
+        // higher trunk
+        let mut checkpoints: Checkpoints<usize> = Default::default();
+
+        // 3->2->1
+        // 4->2->1
+        checkpoints.store(1, 0, 0);
+        checkpoints.store(2, 0, 1);
+        checkpoints.store(3, 0, 2);
+        checkpoints.store(4, 0, 2);
+        assert_eq!(
+            checkpoints.collect(std::usize::MAX, 3),
+            vec![(3u64, &0), (2u64, &0), (1u64, &0)]
+        );
+        assert_eq!(
+            checkpoints.collect(std::usize::MAX, 4),
+            vec![(4u64, &0), (2u64, &0), (1u64, &0)]
+        );
+        assert_eq!(checkpoints.trunk(std::usize::MAX), Some(2));
+        //        assert_eq!(checkpoints.collect(std::usize::MAX, 4);
     }
 }
