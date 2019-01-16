@@ -10,7 +10,7 @@ homepage = "https://solana.com/"
 
 [dependencies]
 clap = "2.32.0"
-serde_json = "1.0.35"
+serde_json = "1.0.36"
 solana = { path = "..", version = "0.12.0" }
 solana-sdk = { path = "../sdk", version = "0.12.0" }
 solana-logger = { path = "../logger", version = "0.12.0" }
