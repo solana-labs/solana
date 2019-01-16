@@ -15,11 +15,6 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
     } else {
         socketaddr!("127.0.0.1:8001")
     };
-    let timeout = if let Some(secs) = matches.value_of("timeout") {
-        Some(secs.to_string().parse().expect("integer"))
-    } else {
-        None
-    };
 
     let proxy = matches.value_of("proxy").map(|proxy| proxy.to_string());
 
@@ -48,7 +43,6 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
         id,
         command,
         network,
-        timeout,
         proxy,
         drone_port: None,
         rpc_client: None,
@@ -74,12 +68,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .value_name("PATH")
                 .takes_value(true)
                 .help("/path/to/id.json"),
-        ).arg(
-            Arg::with_name("timeout")
-                .long("timeout")
-                .value_name("SECS")
-                .takes_value(true)
-                .help("Max seconds to wait to get necessary gossip from the network"),
         ).arg(
             Arg::with_name("proxy")
                 .long("proxy")
