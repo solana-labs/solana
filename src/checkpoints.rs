@@ -36,14 +36,11 @@ impl<T> Checkpoints<T> {
     /// forks starting from the base fork backwards
     pub fn collect(&self, num: usize, mut fork: u64) -> Vec<(u64, &T)> {
         let mut rv = vec![];
-        loop {
+        while rv.len() < num {
             if let Some((val, parent)) = self.load(fork) {
                 rv.push((fork, val));
                 fork = *parent;
             } else {
-                break;
-            }
-            if rv.len() == num {
                 break;
             }
         }
@@ -52,6 +49,11 @@ impl<T> Checkpoints<T> {
     /// given a maximum depth, find the highest parent shared by all
     ///  forks
     pub fn trunk(&self, num: usize) -> Option<u64> {
+        // no chains of length 0
+        if num == 0 {
+            return None;
+        }
+
         let mut chains: Vec<_> = self
             .latest
             .iter()
@@ -62,7 +64,7 @@ impl<T> Checkpoints<T> {
         if chains.is_empty() {
             return None;
         }
-        // one chains, no trunk
+        // one chain, trunk is tip
         if chains.len() == 1 {
             return chains[0].first().map(|fork| fork.0);
         }
@@ -110,13 +112,15 @@ impl<T> Checkpoints<T> {
 
 impl<T> std::fmt::Debug for Checkpoints<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{{ ")?;
         for tip in self.latest.iter() {
+            write!(f, "[ ")?;
             for (fork, _) in self.collect(std::usize::MAX, *tip) {
-                write!(f, "{} ", fork)?;
+                write!(f, "{}, ", fork)?;
             }
-            writeln!(f)?;
+            write!(f, "], ")?;
         }
-        Ok(())
+        write!(f, "}}")
     }
 }
 
@@ -138,6 +142,7 @@ mod test {
     fn test_checkpoints_trivial_cycle() {
         let mut checkpoints: Checkpoints<u64> = Default::default();
         checkpoints.store(0, 0, 0);
+        checkpoints.store(0, 0, 1);
     }
 
     #[test]
@@ -151,11 +156,17 @@ mod test {
             checkpoints.store(i as u64, i, (i - 1) as u64);
         }
 
-        let points = checkpoints.collect(1000, 11);
+        let points = checkpoints.collect(std::usize::MAX, 10);
+        assert_eq!(points.len(), 10);
+
+        let points = checkpoints.collect(0, 10);
         assert_eq!(points.len(), 0);
 
-        let points = checkpoints.collect(1000, 10);
-        assert_eq!(points.len(), 10);
+        let points = checkpoints.collect(1, 10);
+        assert_eq!(points.len(), 1);
+
+        let points = checkpoints.collect(std::usize::MAX, 11);
+        assert_eq!(points.len(), 0);
 
         for (i, (parent, data)) in points.iter().enumerate() {
             assert_eq!(**data, 10 - i);
@@ -164,12 +175,19 @@ mod test {
         // only one chain, trunk is latest
         assert_eq!(checkpoints.trunk(11), Some(10));
 
+        // only one chain, trunk is latest
+        assert_eq!(checkpoints.trunk(1), Some(10));
+
+        // only one chain, but zero length
+        assert_eq!(checkpoints.trunk(0), None);
+
         for i in 11..15 {
             checkpoints.store(i as u64, i, 1 as u64);
         }
 
         assert_eq!(checkpoints.trunk(1), None);
-        assert_eq!(checkpoints.trunk(10), None);
-        assert_eq!(checkpoints.trunk(11), Some(1));
+        assert_eq!(checkpoints.trunk(0), None);
+        assert_eq!(checkpoints.trunk(9), None);
+        assert_eq!(checkpoints.trunk(10), Some(1));
     }
 }
