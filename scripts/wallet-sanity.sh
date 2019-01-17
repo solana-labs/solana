@@ -45,21 +45,21 @@ pay_and_confirm() {
 
 $solana_keygen
 
-leader_readiness=false
+node_readiness=false
 timeout=60
 while [[ $timeout -gt 0 ]]; do
   expected_output="Leader ready"
   exec 42>&1
   output=$($solana_wallet "${entrypoint[@]}" get-transaction-count | tee >(cat - >&42))
   if [[ $output -gt 0 ]]; then
-    leader_readiness=true
+    node_readiness=true
     break
   fi
   sleep 2
   (( timeout=timeout-2 ))
 done
-if ! "$leader_readiness"; then
-  echo "Timed out waiting for leader"
+if ! "$node_readiness"; then
+  echo "Timed out waiting for cluster to start"
   exit 1
 fi
 
