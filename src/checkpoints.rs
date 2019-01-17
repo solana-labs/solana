@@ -3,7 +3,7 @@
 //!
 //! `latest` forks is a set of all the forks with no children.
 //!
-//! A trunk is the latest fork that is a parent all the `latest` forks.  If
+//! A trunk is the most recent fork that is a parent to all the `latest` forks.  If
 //! consensus works correctly, then latest should be pruned such that only one
 //! trunk exists within N links.
 
@@ -28,6 +28,14 @@ impl<T> Checkpoints<T> {
                 fork, parent
             );
         }
+
+        if self.checkpoints.get(&fork).is_some() {
+            panic!(
+                "fork: {}, parent: {} error: fork is already checkpointed",
+                fork, parent
+            );
+        }
+
         self.latest.remove(&parent);
         self.latest.insert(fork);
         self.checkpoints.insert(fork, (data, parent));
@@ -46,6 +54,19 @@ impl<T> Checkpoints<T> {
         }
         rv
     }
+
+    /// returns the trunks, and an inverse dag
+    pub fn invert(&self) -> (HashSet<u64>, HashMap<u64, HashSet<u64>>) {
+        let mut trunks = HashSet::new();
+        let mut idag = HashMap::new();
+        for (k, (_, v)) in &self.checkpoints {
+            trunks.remove(k);
+            trunks.insert(*v);
+            idag.entry(*v).or_insert(HashSet::new()).insert(*k);
+        }
+        (trunks, idag)
+    }
+
     /// given a maximum depth, find the highest parent shared by all
     ///  forks
     pub fn trunk(&self, num: usize) -> Option<u64> {
@@ -91,12 +112,14 @@ impl<T> Checkpoints<T> {
             }
             trunk = Some(trytrunk);
 
-            // all chains are now truncated before the trytrunk entry
+            // all chains are now truncated before the trytrunk entry,
+            // none should be empty, implies a structure like
+            //   3->1
+            //   1
+            // which we prevent in store()
             for chain in chains.iter() {
                 if chain.is_empty() {
-                    // outer loop needs all chains to have at least one item
-                    // (because of last().unwrap() above)
-                    break 'outer;
+                    panic!("parent forks should never appear in latest");
                 }
             }
         }
@@ -159,6 +182,10 @@ mod test {
 
         let points = checkpoints.collect(std::usize::MAX, 10);
         assert_eq!(points.len(), 10);
+        for (i, (parent, data)) in points.iter().enumerate() {
+            assert_eq!(**data, 10 - i);
+            assert_eq!(*parent, 10 - i as u64);
+        }
 
         let points = checkpoints.collect(0, 10);
         assert_eq!(points.len(), 0);
@@ -168,11 +195,6 @@ mod test {
 
         let points = checkpoints.collect(std::usize::MAX, 11);
         assert_eq!(points.len(), 0);
-
-        for (i, (parent, data)) in points.iter().enumerate() {
-            assert_eq!(**data, 10 - i);
-            assert_eq!(*parent, 10 - i as u64);
-        }
 
         // only one chain, so tip of trunk is latest
         assert_eq!(checkpoints.trunk(11), Some(10));
@@ -199,7 +221,7 @@ mod test {
         assert_eq!(checkpoints.trunk(10), Some(1));
         assert_eq!(checkpoints.trunk(11), Some(1));
 
-        // higher trunk
+        // test higher trunk
         let mut checkpoints: Checkpoints<usize> = Default::default();
 
         // 3->2->1
@@ -217,6 +239,64 @@ mod test {
             vec![(4u64, &0), (2u64, &0), (1u64, &0)]
         );
         assert_eq!(checkpoints.trunk(std::usize::MAX), Some(2));
-        //        assert_eq!(checkpoints.collect(std::usize::MAX, 4);
     }
+
+    #[test]
+    fn test_checkpoints_invert() {
+        // test higher trunk
+        let mut checkpoints: Checkpoints<usize> = Default::default();
+
+        // 3->2->1
+        // 4->2->1
+        checkpoints.store(1, 0, 0);
+        checkpoints.store(2, 0, 1);
+        checkpoints.store(3, 0, 2);
+        checkpoints.store(4, 0, 2);
+
+        let _trunks: Vec<_> = checkpoints.invert().0.into_iter().collect();
+        // TODO: returns [0, 2] ??
+
+        // 30->20->10
+        // 40->20->10
+        checkpoints.store(10, 0, 0);
+        checkpoints.store(20, 0, 10);
+        checkpoints.store(30, 0, 20);
+        checkpoints.store(40, 0, 20);
+
+        let _trunks: Vec<_> = checkpoints.invert().0.into_iter().collect();
+        // TODO: returns [0, 2, 10, 20, 1] ??
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_checkpoints_latest_is_a_parent() {
+        // trunk is actually live...
+        let mut checkpoints: Checkpoints<usize> = Default::default();
+
+        // 2->1
+        // 1
+        checkpoints.store(1, 0, 0);
+        checkpoints.store(3, 0, 1);
+        checkpoints.store(1, 0, 0); // <== panic...
+    }
+    #[test]
+    #[should_panic]
+    fn test_checkpoints_latest_is_a_parent_corrupt() {
+        // trunk is actually live...
+        let mut checkpoints: Checkpoints<usize> = Default::default();
+
+        // 2->1
+        // 1
+        checkpoints.store(1, 0, 0);
+        checkpoints.store(3, 0, 1);
+
+        // same as:
+        // checkpoints.store(1, 0, 0); // <== would corrupt the checkpoints...
+        checkpoints.latest.remove(&0);
+        checkpoints.latest.insert(1);
+        checkpoints.checkpoints.insert(1, (0, 0));
+
+        checkpoints.trunk(std::usize::MAX); // panic
+    }
+
 }
