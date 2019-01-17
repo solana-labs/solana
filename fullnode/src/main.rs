@@ -179,11 +179,11 @@ fn main() {
                 .help("Use DIR as persistent ledger location"),
         )
         .arg(
-            Arg::with_name("rpc")
-                .long("rpc")
+            Arg::with_name("rpc_port")
+                .long("rpc-port")
                 .value_name("PORT")
                 .takes_value(true)
-                .help("Custom RPC port for this node"),
+                .help("RPC port to use for this node"),
         )
         .get_matches();
 
@@ -207,7 +207,7 @@ fn main() {
     let mut leader_scheduler = LeaderScheduler::default();
     leader_scheduler.use_only_bootstrap_leader = use_only_bootstrap_leader;
 
-    let rpc_port = if let Some(port) = matches.value_of("rpc") {
+    let rpc_port = if let Some(port) = matches.value_of("rpc_port") {
         let port_number = port.to_string().parse().expect("integer");
         if port_number == 0 {
             eprintln!("Invalid RPC port requested: {:?}", port);
