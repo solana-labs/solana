@@ -12,6 +12,7 @@ use std::hash::Hasher;
 use test::Bencher;
 
 #[bench]
+#[ignore]
 fn bench_bits_set(bencher: &mut Bencher) {
     let mut bits: BitVec<u8> = BitVec::new_fill(false, 38_340_234 as u64);
     let mut hasher: FnvHasher = Default::default();
@@ -21,8 +22,12 @@ fn bench_bits_set(bencher: &mut Bencher) {
         bits.set(idx, true);
         hasher.write_u64(idx);
     });
+    // subtract the next bencher result from this one to get a number for raw
+    //  bits.set()
 }
+
 #[bench]
+#[ignore]
 fn bench_bits_set_hasher(bencher: &mut Bencher) {
     let bits: BitVec<u8> = BitVec::new_fill(false, 38_340_234 as u64);
     let mut hasher: FnvHasher = Default::default();
@@ -34,6 +39,7 @@ fn bench_bits_set_hasher(bencher: &mut Bencher) {
 }
 
 #[bench]
+#[ignore]
 fn bench_sigs_bloom(bencher: &mut Bencher) {
     // 1M TPS * 1s (length of block in sigs) == 1M items in filter
     // 1.0E-8 false positive rate
@@ -67,6 +73,7 @@ fn bench_sigs_bloom(bencher: &mut Bencher) {
 }
 
 #[bench]
+#[ignore]
 fn bench_sigs_hashmap(bencher: &mut Bencher) {
     // same structure as above, new
     let last_id = hash(Hash::default().as_ref());
