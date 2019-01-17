@@ -132,6 +132,7 @@ fn test_replicator_startup() {
             replicator_node,
             &leader_info,
             &replicator_keypair,
+            None,
         )
         .unwrap();
 
@@ -210,6 +211,43 @@ fn test_replicator_startup() {
         replicator.close();
         validator.exit();
         leader.close().expect("Expected successful node closure");
+    }
+
+    DbLedger::destroy(&leader_ledger_path).expect("Expected successful database destruction");
+    DbLedger::destroy(&replicator_ledger_path).expect("Expected successful database destruction");
+    let _ignored = remove_dir_all(&leader_ledger_path);
+    let _ignored = remove_dir_all(&replicator_ledger_path);
+}
+
+#[test]
+#[should_panic]
+fn test_replicator_startup_hang() {
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::time::Duration;
+
+    solana_logger::setup();
+    info!("starting replicator test");
+
+    let replicator_ledger_path = &get_tmp_ledger_path("replicator_test_replicator_ledger");
+    let leader_ledger_path = "replicator_test_leader_ledger";
+
+    {
+        let replicator_keypair = Keypair::new();
+
+        info!("starting replicator node");
+        let replicator_node = Node::new_localhost_with_pubkey(replicator_keypair.pubkey());
+
+        let fake_gossip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
+        let leader_info = NodeInfo::new_entry_point(&fake_gossip);
+
+        let _ = Replicator::new(
+            Some(replicator_ledger_path),
+            replicator_node,
+            &leader_info,
+            &replicator_keypair,
+            Some(Duration::from_secs(3)),
+        )
+        .unwrap();
     }
 
     DbLedger::destroy(&leader_ledger_path).expect("Expected successful database destruction");

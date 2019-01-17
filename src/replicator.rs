@@ -13,6 +13,7 @@ use crate::storage_stage::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
 use crate::streamer::BlobReceiver;
 use crate::thin_client::{retry_get_balance, ThinClient};
 use crate::window_service::window_service;
+use chrono;
 use rand::thread_rng;
 use rand::Rng;
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
@@ -99,15 +100,26 @@ fn get_entry_heights_from_last_id(
 }
 
 impl Replicator {
+    /// Returns a Result that contains a replicator on success
+    ///
+    /// # Arguments
+    /// * `ledger_path` - Not actually optional path to where the the ledger will be stored
+    /// * `node` -
+    /// * `leader_info` - NodeInfo representing the leader
+    /// * `keypair` - Keypair for this replicator
+    /// * `timeout` - (optional) timeout for polling for leader/downloading the ledger. Defaults to
+    /// 10 seconds
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         ledger_path: Option<&str>,
         node: Node,
         leader_info: &NodeInfo,
         keypair: &Keypair,
+        timeout: Option<Duration>,
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));
         let done = Arc::new(AtomicBool::new(false));
+        let timeout = timeout.unwrap_or(Duration::new(10, 0));
 
         info!("Replicator: id: {}", keypair.pubkey());
         info!("Creating cluster info....");
@@ -355,7 +367,6 @@ impl Replicator {
 
 #[cfg(test)]
 mod tests {
-
     use crate::replicator::sample_file;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -429,5 +440,4 @@ mod tests {
         let res = sample_file(&in_path, &samples);
         assert!(res.is_err());
     }
-
 }
