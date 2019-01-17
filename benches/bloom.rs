@@ -1,13 +1,37 @@
 #![feature(test)]
 
 extern crate test;
-
+use bv::BitVec;
+use fnv::FnvHasher;
 use solana::bloom::{Bloom, BloomHashIndex};
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::signature::Signature;
 //use std::collections::HashSet;
 use hashbrown::HashSet;
+use std::hash::Hasher;
 use test::Bencher;
+
+#[bench]
+fn bench_bits_set(bencher: &mut Bencher) {
+    let mut bits: BitVec<u8> = BitVec::new_fill(false, 38_340_234 as u64);
+    let mut hasher: FnvHasher = Default::default();
+
+    bencher.iter(|| {
+        let idx = hasher.finish() % bits.len();
+        bits.set(idx, true);
+        hasher.write_u64(idx);
+    });
+}
+#[bench]
+fn bench_bits_set_hasher(bencher: &mut Bencher) {
+    let bits: BitVec<u8> = BitVec::new_fill(false, 38_340_234 as u64);
+    let mut hasher: FnvHasher = Default::default();
+
+    bencher.iter(|| {
+        let idx = hasher.finish() % bits.len();
+        hasher.write_u64(idx);
+    });
+}
 
 #[bench]
 fn bench_sigs_bloom(bencher: &mut Bencher) {
@@ -15,7 +39,7 @@ fn bench_sigs_bloom(bencher: &mut Bencher) {
     // 1.0E-8 false positive rate
     // https://hur.st/bloomfilter/?n=1000000&p=1.0E-8&m=&k=
     let last_id = hash(Hash::default().as_ref());
-    eprintln!("last_id = {:?}", last_id);
+    //    eprintln!("last_id = {:?}", last_id);
     let keys = (0..27)
         .into_iter()
         .map(|i| last_id.hash_at_index(i))
@@ -39,14 +63,14 @@ fn bench_sigs_bloom(bencher: &mut Bencher) {
         sigs.contains(&sig);
         iterations += 1;
     });
-    eprintln!("bloom falses: {}/{}", falses, iterations);
+    assert_eq!(falses, 0);
 }
 
 #[bench]
 fn bench_sigs_hashmap(bencher: &mut Bencher) {
     // same structure as above, new
     let last_id = hash(Hash::default().as_ref());
-    eprintln!("last_id = {:?}", last_id);
+    //    eprintln!("last_id = {:?}", last_id);
     let mut sigs: HashSet<Signature> = HashSet::new();
 
     let mut id = last_id;
@@ -66,5 +90,5 @@ fn bench_sigs_hashmap(bencher: &mut Bencher) {
         sigs.contains(&sig);
         iterations += 1;
     });
-    eprintln!("hashset falses: {}/{}", falses, iterations);
+    assert_eq!(falses, 0);
 }
