@@ -20,12 +20,13 @@ usage() {
     echo "$*"
     echo
   fi
-  echo "usage: $0 [-x] [--no-leader-rotation] [rsync network path to bootstrap leader configuration] [network entry point]"
+  echo "usage: $0 [-x] [--no-leader-rotation] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]"
   echo
   echo " Start a full node on the specified network"
   echo
   echo "   -x: runs a new, dynamically-configured full node"
   echo "   --no-leader-rotation: disable leader rotation"
+  echo "   --rpc-port port: custom RPC port for this node"
   echo
   exit 1
 }
@@ -45,6 +46,12 @@ maybe_no_leader_rotation=
 if [[ $1 = --no-leader-rotation ]]; then
   maybe_no_leader_rotation="--no-leader-rotation"
   shift
+fi
+
+maybe_rpc_port=
+if [[ $1 = --rpc-port ]]; then
+  maybe_rpc_port="--rpc $2"
+  shift 2
 fi
 
 if [[ -d $SNAP ]]; then
@@ -211,6 +218,7 @@ done
 trap 'kill "$pid" && wait "$pid"' INT TERM
 $program \
   $maybe_no_leader_rotation \
+  $maybe_rpc_port \
   --identity "$fullnode_json_path" \
   --network "$leader_address" \
   --ledger "$ledger_config_dir"/ledger \
