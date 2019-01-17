@@ -12,7 +12,7 @@ source multinode-demo/common.sh
 if [[ -z $1 ]]; then # no network argument, use default
   entrypoint=()
 else
-  entrypoint=(-n "$1")
+  entrypoint=("$@")
 fi
 
 # Tokens transferred to this address are lost forever...

@@ -168,21 +168,23 @@ $ solana-wallet send-timestamp <PUBKEY> <PROCESS_ID> --date 2018-12-24T23:59:00
 ### Usage
 
 ```manpage
-solana-wallet 0.11.0
+solana-wallet 0.12.0
 
 USAGE:
-    solana-wallet [OPTIONS] [SUBCOMMAND]
+    solana-wallet [FLAGS] [OPTIONS] [SUBCOMMAND]
 
 FLAGS:
     -h, --help       Prints help information
+        --rpc-tls    Enable TLS for the RPC endpoint
     -V, --version    Prints version information
 
 OPTIONS:
-    -k, --keypair <PATH>         /path/to/id.json
-    -n, --network <HOST:PORT>    Rendezvous with the network at this gossip entry point; defaults to 127.0.0.1:8001
-        --proxy <URL>            Address of TLS proxy
-        --port <NUM>             Optional rpc-port configuration to connect to non-default nodes
-        --timeout <SECS>         Max seconds to wait to get necessary gossip from the network
+        --drone-host <IP ADDRESS>    Drone host to use [default: same as --host]
+        --drone-port <PORT>          Drone port to use [default: 9900]
+    -n, --host <IP ADDRESS>          Host to use for both RPC and drone [default: 127.0.0.1]
+    -k, --keypair <PATH>             /path/to/id.json
+        --rpc-host <IP ADDRESS>      RPC host to use [default: same as --host]
+        --rpc-port <PORT>            RPC port to use [default: 8899]
 
 SUBCOMMANDS:
     address                  Get your public key
@@ -199,7 +201,7 @@ SUBCOMMANDS:
 ```
 
 ```manpage
-solana-wallet-address 
+solana-wallet-address
 Get your public key
 
 USAGE:
@@ -211,7 +213,7 @@ FLAGS:
 ```
 
 ```manpage
-solana-wallet-airdrop 
+solana-wallet-airdrop
 Request a batch of tokens
 
 USAGE:
@@ -226,7 +228,7 @@ ARGS:
 ```
 
 ```manpage
-solana-wallet-balance 
+solana-wallet-balance
 Get your balance
 
 USAGE:
@@ -238,7 +240,7 @@ FLAGS:
 ```
 
 ```manpage
-solana-wallet-cancel 
+solana-wallet-cancel
 Cancel a transfer
 
 USAGE:
@@ -253,7 +255,7 @@ ARGS:
 ```
 
 ```manpage
-solana-wallet-confirm 
+solana-wallet-confirm
 Confirm transaction by signature
 
 USAGE:
@@ -268,7 +270,7 @@ ARGS:
 ```
 
 ```manpage
-solana-wallet-deploy 
+solana-wallet-deploy
 Deploy a program
 
 USAGE:
@@ -283,7 +285,7 @@ ARGS:
 ```
 
 ```manpage
-solana-wallet-get-transaction-count 
+solana-wallet-get-transaction-count
 Get current transaction count
 
 USAGE:
@@ -295,14 +297,14 @@ FLAGS:
 ```
 
 ```manpage
-solana-wallet-pay 
+solana-wallet-pay
 Send a payment
 
 USAGE:
     solana-wallet pay [FLAGS] [OPTIONS] <PUBKEY> <NUM>
 
 FLAGS:
-        --cancelable    
+        --cancelable
     -h, --help          Prints help information
     -V, --version       Prints version information
 
@@ -317,7 +319,7 @@ ARGS:
 ```
 
 ```manpage
-solana-wallet-send-signature 
+solana-wallet-send-signature
 Send a signature to authorize a transfer
 
 USAGE:
@@ -333,7 +335,7 @@ ARGS:
 ```
 
 ```manpage
-solana-wallet-send-timestamp 
+solana-wallet-send-timestamp
 Send a timestamp to unlock a transfer
 
 USAGE:

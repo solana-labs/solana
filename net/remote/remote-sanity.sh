@@ -123,7 +123,7 @@ echo "--- RPC API: getTransactionCount"
 echo "--- $entrypointIp: wallet sanity"
 (
   set -x
-  scripts/wallet-sanity.sh "$entrypointIp":8001
+  scripts/wallet-sanity.sh --host "$entrypointIp"
 )
 
 echo "--- $entrypointIp: verify ledger"
