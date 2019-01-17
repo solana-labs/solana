@@ -797,7 +797,7 @@ mod tests {
     use solana_sdk::signature::{gen_keypair_file, read_keypair, read_pkcs8, Keypair, KeypairUtil};
     use std::fs;
     use std::net::{Ipv4Addr, SocketAddr};
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn test_wallet_config_drone_addr() {
@@ -1304,6 +1304,40 @@ mod tests {
         assert!(process_command(&config).is_err());
 
         config.command = WalletCommand::TimeElapsed(bob_pubkey, process_id, dt);
+        assert!(process_command(&config).is_err());
+    }
+
+    #[test]
+    fn test_wallet_deploy() {
+        let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        pathbuf.push("tests");
+        pathbuf.push("fixtures");
+        pathbuf.push("noop");
+        pathbuf.set_extension("so");
+
+        // Success case
+        let mut config = WalletConfig::default();
+        config.rpc_client = Some(RpcClient::new("succeeds".to_string()));
+
+        config.command = WalletCommand::Deploy(pathbuf.to_str().unwrap().to_string());
+        let result = process_command(&config);
+        assert!(result.is_ok());
+        let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
+        let program_id = json
+            .as_object()
+            .unwrap()
+            .get("programId")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        let program_id_vec = bs58::decode(program_id).into_vec().unwrap();
+        assert_eq!(program_id_vec.len(), mem::size_of::<Pubkey>());
+
+        // Failure cases
+        config.rpc_client = Some(RpcClient::new("airdrop".to_string()));
+        assert!(process_command(&config).is_err());
+
+        config.command = WalletCommand::Deploy("bad/file/location.so".to_string());
         assert!(process_command(&config).is_err());
     }
 
