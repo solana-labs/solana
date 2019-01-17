@@ -234,6 +234,16 @@ impl Bank {
         self.accounts
             .store_slow(&storage_program::id(), &storage_program_account);
 
+        let storage_system_account = Account {
+            tokens: 1,
+            owner: storage_program::system_id(),
+            userdata: vec![0; 16 * 1024],
+            executable: false,
+            loader: Pubkey::default(),
+        };
+        self.accounts
+            .store_slow(&storage_program::system_id(), &storage_system_account);
+
         // Bpf Loader
         let bpf_loader_account = Account {
             tokens: 1,
@@ -282,6 +292,33 @@ impl Bank {
     pub fn get_pubkeys_for_entry_height(&self, entry_height: u64) -> Vec<Pubkey> {
         self.storage_state
             .get_pubkeys_for_entry_height(entry_height)
+    }
+
+    pub fn get_storage_entry_height(&self) -> u64 {
+        match self.get_account(&storage_program::system_id()) {
+            Some(storage_system_account) => {
+                let state = deserialize(&storage_system_account.userdata);
+                if let Ok(state) = state {
+                    let state: storage_program::StorageProgramState = state;
+                    return state.entry_height;
+                }
+            }
+            None => {
+                info!("error in reading entry_height");
+            }
+        }
+        0
+    }
+
+    pub fn get_storage_last_id(&self) -> Hash {
+        if let Some(storage_system_account) = self.get_account(&storage_program::system_id()) {
+            let state = deserialize(&storage_system_account.userdata);
+            if let Ok(state) = state {
+                let state: storage_program::StorageProgramState = state;
+                return state.id;
+            }
+        }
+        Hash::default()
     }
 
     /// Forget all signatures. Useful for benchmarking.
@@ -964,6 +1001,7 @@ mod tests {
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::Keypair;
     use solana_sdk::signature::KeypairUtil;
+    use solana_sdk::storage_program::{StorageTransaction, ENTRIES_PER_SEGMENT};
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Instruction;
     use std;
@@ -1699,6 +1737,10 @@ mod tests {
             132, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0,
         ]);
+        let storage_system = Pubkey::new(&[
+            133, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0,
+        ]);
 
         assert_eq!(system_program::id(), system);
         assert_eq!(solana_native_loader::id(), native);
@@ -1707,6 +1749,7 @@ mod tests {
         assert_eq!(storage_program::id(), storage);
         assert_eq!(token_program::id(), token);
         assert_eq!(vote_program::id(), vote);
+        assert_eq!(storage_program::system_id(), storage_system);
     }
 
     #[test]
@@ -1720,6 +1763,7 @@ mod tests {
             storage_program::id(),
             token_program::id(),
             vote_program::id(),
+            storage_program::system_id(),
         ];
         assert!(ids.into_iter().all(move |id| unique.insert(id)));
     }
@@ -1929,5 +1973,56 @@ mod tests {
             .unwrap();
         let entries = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].transactions.len(), transactions.len() - 1);
+    }
+
+    #[test]
+    fn test_bank_storage() {
+        solana_logger::setup();
+        let alice = Mint::new(1000);
+        let bank = Bank::new(&alice);
+
+        let bob = Keypair::new();
+        let jack = Keypair::new();
+        let jill = Keypair::new();
+
+        let x = 42;
+        let last_id = hash(&[x]);
+        let x2 = x * 2;
+        let storage_last_id = hash(&[x2]);
+
+        bank.register_tick(&last_id);
+
+        bank.transfer(10, &alice.keypair(), jill.pubkey(), last_id)
+            .unwrap();
+
+        bank.transfer(10, &alice.keypair(), bob.pubkey(), last_id)
+            .unwrap();
+        bank.transfer(10, &alice.keypair(), jack.pubkey(), last_id)
+            .unwrap();
+
+        let tx = Transaction::storage_new_advertise_last_id(
+            &bob,
+            storage_last_id,
+            last_id,
+            ENTRIES_PER_SEGMENT,
+        );
+
+        assert!(bank.process_transaction(&tx).is_ok());
+
+        let entry_height = 0;
+
+        let tx = Transaction::storage_new_mining_proof(
+            &jack,
+            Hash::default(),
+            last_id,
+            entry_height,
+            Signature::default(),
+        );
+
+        assert!(bank.process_transaction(&tx).is_ok());
+
+        assert_eq!(bank.get_storage_entry_height(), ENTRIES_PER_SEGMENT);
+        assert_eq!(bank.get_storage_last_id(), storage_last_id);
+        assert_eq!(bank.get_pubkeys_for_entry_height(0), vec![]);
     }
 }

@@ -4,6 +4,8 @@
 
 #[cfg(all(feature = "chacha", feature = "cuda"))]
 use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
+use crate::client::mk_client;
+use crate::cluster_info::ClusterInfo;
 use crate::db_ledger::DbLedger;
 use crate::entry::EntryReceiver;
 use crate::result::{Error, Result};
@@ -17,12 +19,17 @@ use solana_sdk::signature::Keypair;
 use solana_sdk::signature::Signature;
 use solana_sdk::storage_program;
 use solana_sdk::storage_program::StorageProgram;
+use solana_sdk::storage_program::StorageTransaction;
+use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program;
 use std::collections::HashSet;
+use std::io;
 use std::mem::size_of;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::RecvTimeoutError;
+use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, RwLock};
+use std::thread::sleep;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 
@@ -48,6 +55,7 @@ pub struct StorageState {
 
 pub struct StorageStage {
     t_storage_mining_verifier: JoinHandle<()>,
+    t_storage_create_accounts: JoinHandle<()>,
 }
 
 macro_rules! cross_boundary {
@@ -62,6 +70,8 @@ const NUM_IDENTITIES: usize = 1024;
 pub const NUM_STORAGE_SAMPLES: usize = 4;
 pub const ENTRIES_PER_SEGMENT: u64 = 16;
 const KEY_SIZE: usize = 64;
+
+type TransactionSender = Sender<Transaction>;
 
 pub fn get_segment_from_entry(entry_height: u64) -> u64 {
     entry_height / ENTRIES_PER_SEGMENT
@@ -136,25 +146,30 @@ impl StorageStage {
         storage_state: &StorageState,
         storage_entry_receiver: EntryReceiver,
         db_ledger: Option<Arc<DbLedger>>,
-        keypair: Arc<Keypair>,
-        exit: Arc<AtomicBool>,
+        keypair: &Arc<Keypair>,
+        exit: &Arc<AtomicBool>,
         entry_height: u64,
         storage_rotate_count: u64,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) -> Self {
         debug!("storage_stage::new: entry_height: {}", entry_height);
         storage_state.state.write().unwrap().entry_height = entry_height;
         let storage_state_inner = storage_state.state.clone();
+        let exit0 = exit.clone();
+        let keypair0 = keypair.clone();
+
+        let (tx_sender, tx_receiver) = channel();
+
         let t_storage_mining_verifier = Builder::new()
             .name("solana-storage-mining-verify-stage".to_string())
             .spawn(move || {
-                let exit = exit.clone();
                 let mut poh_height = 0;
                 let mut current_key = 0;
                 let mut entry_height = entry_height;
                 loop {
                     if let Some(ref some_db_ledger) = db_ledger {
                         if let Err(e) = Self::process_entries(
-                            &keypair,
+                            &keypair0,
                             &storage_state_inner,
                             &storage_entry_receiver,
                             &some_db_ledger,
@@ -162,6 +177,7 @@ impl StorageStage {
                             &mut entry_height,
                             &mut current_key,
                             storage_rotate_count,
+                            &tx_sender,
                         ) {
                             match e {
                                 Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
@@ -170,16 +186,84 @@ impl StorageStage {
                             }
                         }
                     }
-                    if exit.load(Ordering::Relaxed) {
+                    if exit0.load(Ordering::Relaxed) {
                         break;
                     }
                 }
             })
             .unwrap();
 
+        let cluster_info0 = cluster_info.clone();
+        let exit1 = exit.clone();
+        let keypair1 = keypair.clone();
+        let t_storage_create_accounts = Builder::new()
+            .name("solana-storage-create-accounts".to_string())
+            .spawn(move || loop {
+                match tx_receiver.recv_timeout(Duration::from_secs(1)) {
+                    Ok(mut tx) => {
+                        if Self::send_tx(&cluster_info0, &mut tx, &exit1, &keypair1, None).is_ok() {
+                            debug!("sent tx: {:?}", tx);
+                        }
+                    }
+                    Err(e) => match e {
+                        RecvTimeoutError::Disconnected => break,
+                        RecvTimeoutError::Timeout => (),
+                    },
+                };
+
+                if exit1.load(Ordering::Relaxed) {
+                    break;
+                }
+                sleep(Duration::from_millis(100));
+            })
+            .unwrap();
+
         StorageStage {
             t_storage_mining_verifier,
+            t_storage_create_accounts,
         }
+    }
+
+    fn send_tx(
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        tx: &mut Transaction,
+        exit: &Arc<AtomicBool>,
+        keypair: &Arc<Keypair>,
+        account_to_create: Option<Pubkey>,
+    ) -> io::Result<()> {
+        if let Some(leader_info) = cluster_info.read().unwrap().leader_data() {
+            let mut client = mk_client(leader_info);
+
+            if let Some(account) = account_to_create {
+                if client.get_account_userdata(&account).is_ok() {
+                    return Ok(());
+                }
+            }
+
+            let last_id = client.get_last_id();
+
+            tx.sign(&[&keypair], last_id);
+
+            if exit.load(Ordering::Relaxed) {
+                Err(io::Error::new(io::ErrorKind::Other, "exit signaled"))?;
+            }
+
+            if let Ok(signature) = client.transfer_signed(&tx) {
+                for _ in 0..10 {
+                    if client.check_signature(&signature) {
+                        return Ok(());
+                    }
+
+                    if exit.load(Ordering::Relaxed) {
+                        Err(io::Error::new(io::ErrorKind::Other, "exit signaled"))?;
+                    }
+
+                    sleep(Duration::from_millis(200));
+                }
+            }
+        }
+
+        Err(io::Error::new(io::ErrorKind::Other, "leader not found"))
     }
 
     pub fn process_entry_crossing(
@@ -188,9 +272,18 @@ impl StorageStage {
         _db_ledger: &Arc<DbLedger>,
         entry_id: Hash,
         entry_height: u64,
+        tx_sender: &TransactionSender,
     ) -> Result<()> {
         let mut seed = [0u8; 32];
         let signature = keypair.sign(&entry_id.as_ref());
+
+        let tx = Transaction::storage_new_advertise_last_id(
+            keypair,
+            entry_id,
+            Hash::default(),
+            entry_height,
+        );
+        tx_sender.send(tx)?;
 
         seed.copy_from_slice(&signature.as_ref()[..32]);
 
@@ -259,6 +352,7 @@ impl StorageStage {
         entry_height: &mut u64,
         current_key_idx: &mut usize,
         storage_rotate_count: u64,
+        tx_sender: &TransactionSender,
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
         let entries = entry_receiver.recv_timeout(timeout)?;
@@ -302,6 +396,7 @@ impl StorageStage {
                                 }
                                 debug!("storage proof: entry_height: {}", entry_height);
                             }
+                            Ok(_) => {}
                             Err(e) => {
                                 info!("error: {:?}", e);
                             }
@@ -320,6 +415,7 @@ impl StorageStage {
                     &db_ledger,
                     entry.id,
                     *entry_height,
+                    tx_sender,
                 )?;
             }
             *entry_height += 1;
@@ -333,6 +429,7 @@ impl Service for StorageStage {
     type JoinReturnType = ();
 
     fn join(self) -> thread::Result<()> {
+        self.t_storage_create_accounts.join().unwrap();
         self.t_storage_mining_verifier.join()
     }
 }
@@ -343,6 +440,7 @@ mod tests {
     use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
     use crate::entry::{make_tiny_test_entries, Entry};
 
+    use crate::cluster_info::{ClusterInfo, NodeInfo};
     use crate::service::Service;
     use crate::storage_stage::StorageState;
     use crate::storage_stage::NUM_IDENTITIES;
@@ -352,6 +450,7 @@ mod tests {
     use rayon::prelude::*;
     use solana_sdk::hash::Hash;
     use solana_sdk::hash::Hasher;
+    use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
     use solana_sdk::transaction::Transaction;
     use solana_sdk::vote_program::Vote;
@@ -360,7 +459,7 @@ mod tests {
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     use std::sync::mpsc::channel;
-    use std::sync::Arc;
+    use std::sync::{Arc, RwLock};
     use std::thread::sleep;
     use std::time::Duration;
 
@@ -369,19 +468,28 @@ mod tests {
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
+        let cluster_info = test_cluster_info(keypair.pubkey());
+
         let (_storage_entry_sender, storage_entry_receiver) = channel();
         let storage_state = StorageState::new();
         let storage_stage = StorageStage::new(
             &storage_state,
             storage_entry_receiver,
             None,
-            keypair,
-            exit.clone(),
+            &keypair,
+            &exit.clone(),
             0,
             STORAGE_ROTATE_TEST_COUNT,
+            &cluster_info,
         );
         exit.store(true, Ordering::Relaxed);
         storage_stage.join().unwrap();
+    }
+
+    fn test_cluster_info(id: Pubkey) -> Arc<RwLock<ClusterInfo>> {
+        let node_info = NodeInfo::new_localhost(id, 0);
+        let cluster_info = ClusterInfo::new(node_info);
+        Arc::new(RwLock::new(cluster_info))
     }
 
     #[test]
@@ -404,16 +512,19 @@ mod tests {
             .write_entries(DEFAULT_SLOT_HEIGHT, genesis_entries.len() as u64, &entries)
             .unwrap();
 
+        let cluster_info = test_cluster_info(keypair.pubkey());
+
         let (storage_entry_sender, storage_entry_receiver) = channel();
         let storage_state = StorageState::new();
         let storage_stage = StorageStage::new(
             &storage_state,
             storage_entry_receiver,
             Some(Arc::new(db_ledger)),
-            keypair,
-            exit.clone(),
+            &keypair,
+            &exit.clone(),
             0,
             STORAGE_ROTATE_TEST_COUNT,
+            &cluster_info,
         );
         storage_entry_sender.send(entries.clone()).unwrap();
 
@@ -469,16 +580,19 @@ mod tests {
             .write_entries(DEFAULT_SLOT_HEIGHT, genesis_entries.len() as u64, &entries)
             .unwrap();
 
+        let cluster_info = test_cluster_info(keypair.pubkey());
+
         let (storage_entry_sender, storage_entry_receiver) = channel();
         let storage_state = StorageState::new();
         let storage_stage = StorageStage::new(
             &storage_state,
             storage_entry_receiver,
             Some(Arc::new(db_ledger)),
-            keypair,
-            exit.clone(),
+            &keypair,
+            &exit.clone(),
             0,
             STORAGE_ROTATE_TEST_COUNT,
+            &cluster_info,
         );
         storage_entry_sender.send(entries.clone()).unwrap();
 
