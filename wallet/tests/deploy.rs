@@ -17,8 +17,6 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
-use std::thread::sleep;
-use std::time::Duration;
 
 #[test]
 fn test_wallet_deploy_program() {
@@ -58,7 +56,6 @@ fn test_wallet_deploy_program() {
         false,
         None,
     );
-    sleep(Duration::from_millis(900));
 
     let (sender, receiver) = channel();
     run_local_drone(alice.keypair(), sender);
