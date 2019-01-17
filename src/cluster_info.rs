@@ -637,8 +637,9 @@ impl ClusterInfo {
 
         let mut orders = Vec::with_capacity(blobs.len());
 
+        let x = thread_rng().gen_range(0, broadcast_table.len());
         for (i, blob) in blobs.iter().enumerate() {
-            let br_idx = i % broadcast_table.len();
+            let br_idx = (x + i) % broadcast_table.len();
 
             trace!("broadcast order data br_idx {}", br_idx);
 
