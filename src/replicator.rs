@@ -13,7 +13,6 @@ use crate::storage_stage::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
 use crate::streamer::BlobReceiver;
 use crate::thin_client::{retry_get_balance, ThinClient};
 use crate::window_service::window_service;
-use chrono;
 use rand::thread_rng;
 use rand::Rng;
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
@@ -36,7 +35,7 @@ use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub struct Replicator {
     gossip_service: GossipService,
@@ -119,7 +118,7 @@ impl Replicator {
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));
         let done = Arc::new(AtomicBool::new(false));
-        let timeout = timeout.unwrap_or(Duration::new(10, 0));
+        let timeout = timeout.unwrap_or_else(|| Duration::new(10, 0));
 
         info!("Replicator: id: {}", keypair.pubkey());
         info!("Creating cluster info....");
@@ -173,6 +172,8 @@ impl Replicator {
         // todo: pull blobs off the retransmit_receiver and recycle them?
         let (retransmit_sender, retransmit_receiver) = channel();
 
+        let (entry_tx, entry_rx) = channel();
+
         let t_window = window_service(
             db_ledger.clone(),
             cluster_info.clone(),
@@ -180,7 +181,7 @@ impl Replicator {
             entry_height,
             max_entry_height,
             blob_fetch_receiver,
-            None,
+            Some(entry_tx),
             retransmit_sender,
             repair_socket,
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
@@ -190,9 +191,24 @@ impl Replicator {
         );
 
         info!("window created, waiting for ledger download done");
+        let start = Instant::now();
+        let mut received_so_far = 0;
+
         while !done.load(Ordering::Relaxed) {
             sleep(Duration::from_millis(100));
+
+            let elapsed = start.elapsed();
+            received_so_far += entry_rx.try_recv().map(|v| v.len()).unwrap_or(0);
+
+            if received_so_far == 0 && elapsed > timeout {
+                return Err(result::Error::IO(io::Error::new(
+                    ErrorKind::TimedOut,
+                    "Timed out waiting to receive any blocks",
+                )));
+            }
         }
+
+        info!("Done receiving entries from window_service");
 
         let mut node_info = node.info.clone();
         node_info.tvu = "0.0.0.0:0".parse().unwrap();
