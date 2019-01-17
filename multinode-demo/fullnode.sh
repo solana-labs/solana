@@ -216,6 +216,7 @@ while true; do
 done
 
 trap 'kill "$pid" && wait "$pid"' INT TERM
+# shellcheck disable=SC2086 # Don't want to double quote # maybe_rpc_port
 $program \
   $maybe_no_leader_rotation \
   $maybe_rpc_port \

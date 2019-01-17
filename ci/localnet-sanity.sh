@@ -4,6 +4,7 @@ set -e
 iterations=1
 maybeNoLeaderRotation=
 extraNodes=0
+walletRpcEndpoint=
 
 usage() {
   exitcode=0
@@ -20,6 +21,9 @@ Start a local cluster and run sanity on it
    -i [number] - Number of times to run sanity (default: $iterations)
    -b          - Disable leader rotation
    -x          - Add an extra fullnode (may be supplied multiple times)
+   -r          - Select the RPC endpoint hosted by a node that starts as
+                 a validator node.  If unspecified the RPC endpoint hosted by
+                 the bootstrap leader will be used.
 
 EOF
   exit $exitcode
@@ -27,7 +31,7 @@ EOF
 
 cd "$(dirname "$0")"/..
 
-while getopts "h?i:bx" opt; do
+while getopts "h?i:brx" opt; do
   case $opt in
   h | \?)
     usage
@@ -40,6 +44,9 @@ while getopts "h?i:bx" opt; do
     ;;
   x)
     extraNodes=$((extraNodes + 1))
+    ;;
+  r)
+    walletRpcEndpoint="--rpc-port 18899"
     ;;
   *)
     usage "Error: unhandled option: $opt"
@@ -55,7 +62,7 @@ multinode-demo/setup.sh
 backgroundCommands=(
   "multinode-demo/drone.sh"
   "multinode-demo/bootstrap-leader.sh $maybeNoLeaderRotation"
-  "multinode-demo/fullnode.sh $maybeNoLeaderRotation"
+  "multinode-demo/fullnode.sh $maybeNoLeaderRotation --rpc-port 18899"
 )
 
 for _ in $(seq 1 $extraNodes); do
@@ -135,7 +142,7 @@ while [[ $iteration -le $iterations ]]; do
     rm -rf $client_id
   ) || flag_error
 
-  echo "--- RPC API: getTransactionCount ($iteration)"
+  echo "--- RPC API: bootstrap-leader getTransactionCount ($iteration)"
   (
     set -x
     curl --retry 5 --retry-delay 2 --retry-connrefused \
@@ -144,10 +151,20 @@ while [[ $iteration -le $iterations ]]; do
       http://localhost:8899
   ) || flag_error
 
+  echo "--- RPC API: fullnode getTransactionCount ($iteration)"
+  (
+    set -x
+    curl --retry 5 --retry-delay 2 --retry-connrefused \
+      -X POST -H 'Content-Type: application/json' \
+      -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' \
+      http://localhost:18899
+  ) || flag_error
+
   echo "--- Wallet sanity ($iteration)"
   (
     set -x
-    timeout 60s scripts/wallet-sanity.sh
+    # shellcheck disable=SC2086 # Don't want to double quote $walletRpcEndpoint
+    timeout 60s scripts/wallet-sanity.sh $walletRpcEndpoint
   ) || flag_error
 
   iteration=$((iteration + 1))
