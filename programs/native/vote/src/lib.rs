@@ -1,13 +1,55 @@
 //! Vote program
 //! Receive and processes votes from validators
 
+use bincode::{deserialize, serialize_into};
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::solana_entrypoint;
 use solana_sdk::vote_program::*;
+use solana_sdk::weighted_election::WeightedElection;
 use std::collections::VecDeque;
+
+fn propose_block(
+    accounts: &mut [KeyedAccount],
+    description: BlockDescription,
+) -> Result<(), ProgramError> {
+    if accounts.len() < 2 {
+        return Err(ProgramError::GenericError);
+    }
+
+    if accounts[0].signer_key().is_none() {
+        return Err(ProgramError::GenericError);
+    }
+
+    let election = WeightedElection::new(description.weights);
+    serialize_into(&mut accounts[1].account.userdata, &election).unwrap();
+    Ok(())
+}
+
+fn vote(accounts: &mut [KeyedAccount]) -> Result<(), ProgramError> {
+    if accounts.len() < 2 {
+        return Err(ProgramError::GenericError);
+    }
+
+    let voter_id = match accounts[0].signer_key() {
+        None => {
+            return Err(ProgramError::GenericError);
+        }
+        Some(id) => id,
+    };
+
+    let mut election: WeightedElection =
+        deserialize(&accounts[1].account.userdata).map_err(|_| ProgramError::InvalidUserdata)?;
+
+    election
+        .vote(&voter_id)
+        .map_err(|_| ProgramError::GenericError)?;
+
+    serialize_into(&mut accounts[1].account.userdata, &election).unwrap();
+    Ok(())
+}
 
 solana_entrypoint!(entrypoint);
 fn entrypoint(
@@ -27,8 +69,8 @@ fn entrypoint(
         Err(ProgramError::InvalidArgument)?;
     }
 
-    match bincode::deserialize(data) {
-        Ok(VoteInstruction::RegisterAccount) => {
+    match deserialize(data).map_err(|_| ProgramError::InvalidUserdata)? {
+        VoteInstruction::RegisterAccount => {
             if !check_id(&keyed_accounts[1].account.owner) {
                 error!("account[1] is not assigned to the VOTE_PROGRAM");
                 Err(ProgramError::InvalidArgument)?;
@@ -45,7 +87,7 @@ fn entrypoint(
 
             Ok(())
         }
-        Ok(VoteInstruction::NewVote(vote)) => {
+        VoteInstruction::NewVote(vote) => {
             if !check_id(&keyed_accounts[0].account.owner) {
                 error!("account[0] is not assigned to the VOTE_PROGRAM");
                 Err(ProgramError::InvalidArgument)?;
@@ -73,9 +115,7 @@ fn entrypoint(
 
             Ok(())
         }
-        Err(_) => {
-            info!("Invalid transaction instruction userdata: {:?}", data);
-            Err(ProgramError::InvalidUserdata)
-        }
+        VoteInstruction::ProposeBlock(description) => propose_block(keyed_accounts, description),
+        VoteInstruction::Vote => vote(keyed_accounts),
     }
 }
