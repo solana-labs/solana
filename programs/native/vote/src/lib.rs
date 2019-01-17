@@ -3,13 +3,21 @@
 
 use bincode::{deserialize, serialize_into};
 use log::*;
-use solana_sdk::account::KeyedAccount;
+use solana_sdk::account::{Account, KeyedAccount};
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::solana_entrypoint;
 use solana_sdk::vote_program::*;
 use solana_sdk::weighted_election::WeightedElection;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
+
+fn initialize_election_account(
+    account: &mut Account,
+    weights: HashMap<Pubkey, u64>,
+) -> Result<(), ProgramError> {
+    let election = WeightedElection::new(weights);
+    serialize_into(&mut account.userdata[..], &election).map_err(|_| ProgramError::UserdataTooSmall)
+}
 
 fn propose_block(
     accounts: &mut [KeyedAccount],
@@ -20,12 +28,10 @@ fn propose_block(
     }
 
     if accounts[0].signer_key().is_none() {
-        return Err(ProgramError::GenericError);
+        return Err(ProgramError::AssignOfUnownedAccount);
     }
 
-    let election = WeightedElection::new(description.weights);
-    serialize_into(&mut accounts[1].account.userdata, &election).unwrap();
-    Ok(())
+    initialize_election_account(&mut accounts[1].account, description.weights)
 }
 
 fn vote(accounts: &mut [KeyedAccount]) -> Result<(), ProgramError> {
@@ -35,7 +41,7 @@ fn vote(accounts: &mut [KeyedAccount]) -> Result<(), ProgramError> {
 
     let voter_id = match accounts[0].signer_key() {
         None => {
-            return Err(ProgramError::GenericError);
+            return Err(ProgramError::AssignOfUnownedAccount);
         }
         Some(id) => id,
     };
@@ -47,7 +53,7 @@ fn vote(accounts: &mut [KeyedAccount]) -> Result<(), ProgramError> {
         .vote(&voter_id)
         .map_err(|_| ProgramError::GenericError)?;
 
-    serialize_into(&mut accounts[1].account.userdata, &election).unwrap();
+    serialize_into(&mut accounts[1].account.userdata[..], &election).unwrap();
     Ok(())
 }
 
@@ -117,5 +123,219 @@ fn entrypoint(
         }
         VoteInstruction::ProposeBlock(description) => propose_block(keyed_accounts, description),
         VoteInstruction::Vote => vote(keyed_accounts),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use solana_sdk::hash::Hash;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
+
+    fn create_election_account(tokens: u64, num_voters: usize) -> Account {
+        let space = WeightedElection::serialized_size(num_voters);
+        Account::new(tokens, space, Pubkey::default())
+    }
+
+    fn create_initialized_election_account(tokens: u64, weights: HashMap<Pubkey, u64>) -> Account {
+        let mut account = create_election_account(tokens, weights.len());
+        initialize_election_account(&mut account, weights).unwrap();
+        account
+    }
+
+    fn propose_block_and_deserialize(
+        keyed_accounts: &mut [KeyedAccount],
+        desc: BlockDescription,
+    ) -> Result<WeightedElection, ProgramError> {
+        propose_block(keyed_accounts, desc)?;
+        let election = deserialize(&keyed_accounts[1].account.userdata).unwrap();
+        Ok(election)
+    }
+
+    fn vote_and_deserialize(
+        keyed_accounts: &mut [KeyedAccount],
+    ) -> Result<WeightedElection, ProgramError> {
+        vote(keyed_accounts)?;
+        let election = deserialize(&keyed_accounts[1].account.userdata).unwrap();
+        Ok(election)
+    }
+
+    #[test]
+    fn test_propose_block() {
+        let leader_id = Keypair::new().pubkey();
+        let mut leader_account = Account::new(100, 0, Pubkey::default());
+
+        let mut weights = HashMap::new();
+        weights.insert(leader_id, 1);
+        let election_id = Keypair::new().pubkey();
+        let mut election_account = create_election_account(100, weights.len());
+
+        let mut keyed_accounts = [
+            KeyedAccount::new(&leader_id, true, &mut leader_account),
+            KeyedAccount::new(&election_id, false, &mut election_account),
+        ];
+
+        let desc = BlockDescription::new(0, Hash::default(), Hash::default(), weights);
+        let election = propose_block_and_deserialize(&mut keyed_accounts, desc).unwrap();
+        assert_eq!(election.total_weight(), 1);
+    }
+
+    #[test]
+    fn test_propose_block_missing_accounts() {
+        let leader_id = Keypair::new().pubkey();
+        let mut leader_account = Account::new(100, 0, Pubkey::default());
+
+        let mut keyed_accounts = [KeyedAccount::new(&leader_id, true, &mut leader_account)]; // <--- Missing account
+
+        let weights = HashMap::new();
+        let desc = BlockDescription::new(0, Hash::default(), Hash::default(), weights);
+        assert_eq!(
+            propose_block_and_deserialize(&mut keyed_accounts, desc),
+            Err(ProgramError::GenericError)
+        );
+    }
+
+    #[test]
+    fn test_propose_block_unsigned() {
+        let leader_id = Keypair::new().pubkey();
+        let mut leader_account = Account::new(100, 0, Pubkey::default());
+
+        let weights = HashMap::new();
+        let election_id = Keypair::new().pubkey();
+        let mut election_account = create_election_account(100, weights.len());
+
+        let mut keyed_accounts = [
+            KeyedAccount::new(&leader_id, false, &mut leader_account), // <--- attack!
+            KeyedAccount::new(&election_id, false, &mut election_account),
+        ];
+
+        let desc = BlockDescription::new(0, Hash::default(), Hash::default(), weights);
+        assert_eq!(
+            propose_block_and_deserialize(&mut keyed_accounts, desc),
+            Err(ProgramError::AssignOfUnownedAccount)
+        );
+    }
+
+    #[test]
+    fn test_propose_block_with_inadequate_space() {
+        let leader_id = Keypair::new().pubkey();
+        let mut leader_account = Account::new(100, 0, Pubkey::default());
+
+        let mut weights = HashMap::new();
+        weights.insert(leader_id, 1);
+
+        let election_id = Keypair::new().pubkey();
+        let mut election_account = create_election_account(100, 0); // <---- Oops, zero is less than weights.len()
+
+        let mut keyed_accounts = [
+            KeyedAccount::new(&leader_id, true, &mut leader_account),
+            KeyedAccount::new(&election_id, false, &mut election_account),
+        ];
+
+        let desc = BlockDescription::new(0, Hash::default(), Hash::default(), weights);
+        assert_eq!(
+            propose_block_and_deserialize(&mut keyed_accounts, desc),
+            Err(ProgramError::UserdataTooSmall)
+        );
+    }
+
+    #[test]
+    fn test_vote() {
+        let voter_id = Keypair::new().pubkey();
+        let mut voter_account = Account::new(100, 0, Pubkey::default());
+
+        let election_id = Keypair::new().pubkey();
+        let mut weights = HashMap::new();
+        weights.insert(voter_id, 1);
+
+        let mut election_account = create_initialized_election_account(100, weights);
+
+        let mut keyed_accounts = [
+            KeyedAccount::new(&voter_id, true, &mut voter_account),
+            KeyedAccount::new(&election_id, false, &mut election_account),
+        ];
+
+        let election = vote_and_deserialize(&mut keyed_accounts).unwrap();
+        assert_eq!(election.voted_weight(), 1);
+    }
+
+    #[test]
+    fn test_vote_unsigned() {
+        let voter_id = Keypair::new().pubkey();
+        let mut voter_account = Account::new(100, 0, Pubkey::default());
+
+        let election_id = Keypair::new().pubkey();
+        let mut weights = HashMap::new();
+        weights.insert(voter_id, 1);
+
+        let mut election_account = create_initialized_election_account(100, weights);
+
+        let mut keyed_accounts = [
+            KeyedAccount::new(&voter_id, false, &mut voter_account), // <--- attack!
+            KeyedAccount::new(&election_id, false, &mut election_account),
+        ];
+
+        assert_eq!(
+            vote_and_deserialize(&mut keyed_accounts),
+            Err(ProgramError::AssignOfUnownedAccount)
+        );
+    }
+
+    #[test]
+    fn test_vote_missing_accounts() {
+        let voter_id = Keypair::new().pubkey();
+        let mut voter_account = Account::new(100, 0, Pubkey::default());
+
+        let mut keyed_accounts = [KeyedAccount::new(&voter_id, true, &mut voter_account)]; // <--- Missing account
+
+        assert_eq!(
+            vote_and_deserialize(&mut keyed_accounts),
+            Err(ProgramError::GenericError)
+        );
+    }
+
+    #[test]
+    fn test_vote_corrupt_data() {
+        let voter_id = Keypair::new().pubkey();
+        let mut voter_account = Account::new(100, 0, Pubkey::default());
+
+        let election_id = Keypair::new().pubkey();
+        let mut weights = HashMap::new();
+        weights.insert(voter_id, 1);
+
+        let mut election_account = create_initialized_election_account(100, weights);
+
+        let mut keyed_accounts = [
+            KeyedAccount::new(&election_id, true, &mut election_account), // <--- Oops, reversed account order
+            KeyedAccount::new(&voter_id, false, &mut voter_account),
+        ];
+
+        assert_eq!(
+            vote_and_deserialize(&mut keyed_accounts),
+            Err(ProgramError::InvalidUserdata)
+        );
+    }
+
+    #[test]
+    fn test_vote_id_not_found() {
+        let voter_id = Keypair::new().pubkey();
+        let bogus_id = Keypair::new().pubkey();
+        let mut bogus_account = Account::new(100, 0, Pubkey::default());
+
+        let election_id = Keypair::new().pubkey();
+        let mut weights = HashMap::new();
+        weights.insert(voter_id, 1);
+
+        let mut election_account = create_initialized_election_account(100, weights);
+
+        let mut keyed_accounts = [
+            KeyedAccount::new(&bogus_id, true, &mut bogus_account),
+            KeyedAccount::new(&election_id, false, &mut election_account),
+        ];
+
+        assert_eq!(
+            vote_and_deserialize(&mut keyed_accounts),
+            Err(ProgramError::GenericError)
+        );
     }
 }

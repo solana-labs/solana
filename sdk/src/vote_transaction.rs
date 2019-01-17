@@ -8,7 +8,7 @@ use crate::system_program;
 use crate::transaction::{Instruction, Transaction};
 use crate::vote_program::{self, BlockDescription, Vote, VoteInstruction};
 use crate::weighted_election::WeightedElection;
-use bincode::{deserialize, serialized_size};
+use bincode::deserialize;
 
 pub trait VoteTransaction {
     fn vote_new(vote_account: &Pubkey, vote: Vote, last_id: Hash, fee: u64) -> Self;
@@ -20,7 +20,7 @@ pub trait VoteTransaction {
         fee: u64,
     ) -> Self;
     fn vote_propose_block(
-        validator_id: &Keypair,
+        leader_id: &Keypair,
         election_id: Pubkey,
         desc: BlockDescription,
         last_id: Hash,
@@ -74,7 +74,7 @@ impl VoteTransaction for Transaction {
     }
 
     fn vote_propose_block(
-        validator_id: &Keypair,
+        leader_id: &Keypair,
         election_id: Pubkey,
         desc: BlockDescription,
         last_id: Hash,
@@ -83,7 +83,7 @@ impl VoteTransaction for Transaction {
     ) -> Self {
         let program_ids = vec![system_program::id(), vote_program::id()];
 
-        let space = serialized_size(&WeightedElection::new(desc.weights.clone())).unwrap();
+        let space = WeightedElection::serialized_size(desc.weights.len()) as u64;
         let create_ix = SystemInstruction::CreateAccount {
             tokens,
             space,
@@ -96,7 +96,7 @@ impl VoteTransaction for Transaction {
         ];
 
         Transaction::new_with_instructions(
-            &[validator_id],
+            &[leader_id],
             &[election_id],
             last_id,
             fee,

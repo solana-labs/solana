@@ -1,9 +1,10 @@
 //! An election object where the weight of each vote is determined upfront.
 
 use crate::pubkey::Pubkey;
+use bincode::serialized_size;
 use std::collections::HashMap;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Voter {
     voted: bool,
     weight: u64,
@@ -21,7 +22,7 @@ pub enum WeightedElectionError {
     VoterIdNotFound, // The voter was not registered at the time the election began.
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct WeightedElection {
     voters: HashMap<Pubkey, Voter>,
 }
@@ -57,6 +58,11 @@ impl WeightedElection {
                 Ok(())
             }
         }
+    }
+
+    pub fn serialized_size(num_voters: usize) -> usize {
+        let weights: HashMap<_, _> = (0..num_voters).map(|_| (Pubkey::default(), 1)).collect();
+        serialized_size(&Self::new(weights)).unwrap() as usize
     }
 }
 
