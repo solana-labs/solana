@@ -893,7 +893,8 @@ pub mod test {
         index_blobs(
             &blobs,
             &Keypair::new().pubkey(),
-            offset as u64,
+            &mut (offset as u64),
+            &mut (slot as u64),
             &vec![slot; blobs.len()],
         );
 
@@ -911,7 +912,8 @@ pub mod test {
         index_blobs(
             &blobs,
             &Keypair::new().pubkey(),
-            offset as u64,
+            &mut (offset as u64),
+            &mut DEFAULT_SLOT_HEIGHT,
             &vec![DEFAULT_SLOT_HEIGHT; blobs.len()],
         );
         blobs

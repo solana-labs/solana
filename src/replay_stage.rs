@@ -265,7 +265,6 @@ impl ReplayStage {
                                 to_leader_sender
                                     .send(TvuReturnType::LeaderRotation(
                                         current_tick_height,
-                                        *entry_height.read().unwrap(),
                                         *last_entry_id.read().unwrap(),
                                     ))
                                     .unwrap();
@@ -449,7 +448,6 @@ mod test {
             assert_eq!(
                 Some(TvuReturnType::LeaderRotation(
                     2 * ticks_per_slot - 1,
-                    expected_entry_height,
                     expected_last_id,
                 )),
                 {
@@ -677,7 +675,6 @@ mod test {
             assert_eq!(
                 Some(TvuReturnType::LeaderRotation(
                     active_window_tick_length,
-                    expected_entry_height,
                     expected_last_id,
                 )),
                 {

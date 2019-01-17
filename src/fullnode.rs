@@ -184,7 +184,7 @@ impl Fullnode {
         }
 
         // Get the scheduled leader
-        let (scheduled_leader, max_tpu_tick_height) = {
+        let (scheduled_leader, slot_index, max_tpu_tick_height) = {
             let tick_height = bank.tick_height();
 
             let leader_scheduler = bank.leader_scheduler.read().unwrap();
@@ -193,6 +193,7 @@ impl Fullnode {
                 leader_scheduler
                     .get_leader_for_slot(slot)
                     .expect("Leader not known after processing bank"),
+                slot,
                 tick_height + leader_scheduler.num_ticks_left_in_slot(tick_height),
             )
         };
@@ -235,6 +236,8 @@ impl Fullnode {
         let (to_leader_sender, to_leader_receiver) = channel();
         let (to_validator_sender, to_validator_receiver) = channel();
 
+        let blob_index = Self::get_consumed_for_slot(&db_ledger, slot_index);
+
         let (tvu, blob_sender) = Tvu::new(
             voting_keypair_option,
             &bank,
@@ -263,7 +266,8 @@ impl Fullnode {
                 .try_clone()
                 .expect("Failed to clone broadcast socket"),
             cluster_info.clone(),
-            entry_height,
+            slot_index,
+            blob_index,
             config.sigverify_disabled,
             max_tpu_tick_height,
             &last_entry_id,
@@ -318,8 +322,8 @@ impl Fullnode {
 
         if scheduled_leader == self.id {
             debug!("node is still the leader");
-            let (last_entry_id, entry_height) = self.node_services.tvu.get_state();
-            self.validator_to_leader(tick_height, entry_height, last_entry_id);
+            let (last_entry_id, _) = self.node_services.tvu.get_state();
+            self.validator_to_leader(tick_height, last_entry_id);
             FullnodeReturnType::LeaderToLeaderRotation
         } else {
             debug!("new leader is {}", scheduled_leader);
@@ -334,16 +338,15 @@ impl Fullnode {
         }
     }
 
-    fn validator_to_leader(&mut self, tick_height: u64, entry_height: u64, last_entry_id: Hash) {
+    pub fn validator_to_leader(&mut self, tick_height: u64, last_entry_id: Hash) {
         trace!(
-            "validator_to_leader({:?}): tick_height={} entry_height={} last_entry_id={}",
+            "validator_to_leader({:?}): tick_height={} last_entry_id={}",
             self.id,
             tick_height,
-            entry_height,
             last_entry_id,
         );
 
-        let (scheduled_leader, max_tick_height) = {
+        let (scheduled_leader, slot_index, max_tick_height) = {
             let mut leader_scheduler = self.bank.leader_scheduler.write().unwrap();
 
             // A transition is only permitted on the final tick of a slot
@@ -354,6 +357,7 @@ impl Fullnode {
             let slot = leader_scheduler.tick_height_to_slot(first_tick_of_next_slot);
             (
                 leader_scheduler.get_leader_for_slot(slot).unwrap(),
+                slot,
                 first_tick_of_next_slot
                     + leader_scheduler.num_ticks_left_in_slot(first_tick_of_next_slot),
             )
@@ -382,7 +386,8 @@ impl Fullnode {
             self.cluster_info.clone(),
             self.sigverify_disabled,
             max_tick_height,
-            entry_height,
+            slot_index,
+            0,
             &last_entry_id,
             self.id,
             &to_validator_sender,
@@ -503,6 +508,15 @@ pub fn new_bank_from_ledger(
         ledger_signal_sender,
         ledger_signal_receiver,
     )
+}
+
+fn get_consumed_for_slot(db_ledger: &DbLedger, slot_index: u64) -> u64 {
+    let meta = db_ledger.meta(slot_index).expect("Database error");
+    if let Some(meta) = meta {
+        meta.consumed
+    } else {
+        0
+    }
 }
 
 impl Service for Fullnode {

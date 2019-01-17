@@ -4,7 +4,7 @@
 
 use crate::entry::Entry;
 use crate::genesis_block::GenesisBlock;
-use crate::leader_scheduler::TICKS_PER_BLOCK;
+use crate::leader_scheduler::DEFAULT_TICKS_PER_SLOT;
 use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
 use crate::result::{Error, Result};
 use bincode::{deserialize, serialize};
@@ -153,13 +153,8 @@ impl SlotMeta {
         }
     }
 
-    fn contains_all_ticks(
-        &self,
-        slot_height: u64,
-        ticks_per_block: u64,
-    ) -> bool {
-        let num_expected_slot_ticks = 
-            ticks_per_block * self.num_blocks;
+    fn contains_all_ticks(&self, ticks_per_block: u64) -> bool {
+        let num_expected_slot_ticks = ticks_per_block * self.num_blocks;
 
         num_expected_slot_ticks == self.consumed_ticks
     }
@@ -365,7 +360,7 @@ impl DbLedger {
 
         // TODO: make these constructor arguments
         // Issue: https://github.com/solana-labs/solana/issues/2458
-        let ticks_per_block = TICKS_PER_BLOCK;
+        let ticks_per_block = DEFAULT_TICKS_PER_SLOT;
         Ok(DbLedger {
             db,
             meta_cf,
@@ -880,7 +875,6 @@ impl DbLedger {
                     // 1) Chain to the previous slot, and also
                     // 2) Determine whether to set the is_trunk flag
                     self.chain_new_slot_to_prev_slot(
-                        prev_slot_index,
                         &mut prev_slot.borrow_mut(),
                         slot_height,
                         &mut slot_meta,
@@ -889,7 +883,7 @@ impl DbLedger {
             }
         }
 
-        if self.is_newly_completed_slot(slot_height, &RefCell::borrow(&*meta_copy), meta_backup)
+        if self.is_newly_completed_slot(&RefCell::borrow(&*meta_copy), meta_backup)
             && RefCell::borrow(&*meta_copy).is_trunk
         {
             // This is a newly inserted slot and slot.is_trunk is true, so go through
@@ -897,14 +891,11 @@ impl DbLedger {
             let mut next_slots: Vec<(u64, Rc<RefCell<(SlotMeta)>>)> =
                 vec![(slot_height, meta_copy.clone())];
             while !next_slots.is_empty() {
-                let (current_slot_index, current_slot) = next_slots.pop().unwrap();
+                let (_, current_slot) = next_slots.pop().unwrap();
                 current_slot.borrow_mut().is_trunk = true;
 
                 let current_slot = &RefCell::borrow(&*current_slot);
-                if current_slot.contains_all_ticks(
-                    current_slot_index,
-                    self.ticks_per_block,
-                ) {
+                if current_slot.contains_all_ticks(self.ticks_per_block) {
                     for next_slot_index in current_slot.next_slots.iter() {
                         let next_slot = self.find_slot_meta_else_create(
                             working_set,
@@ -922,26 +913,21 @@ impl DbLedger {
 
     fn chain_new_slot_to_prev_slot(
         &self,
-        prev_slot_height: u64,
         prev_slot: &mut SlotMeta,
         current_slot_height: u64,
         current_slot: &mut SlotMeta,
     ) {
         prev_slot.next_slots.push(current_slot_height);
-        current_slot.is_trunk = prev_slot.is_trunk
-            && prev_slot.contains_all_ticks(
-                prev_slot_height,
-                self.ticks_per_block,
-            );
+        current_slot.is_trunk =
+            prev_slot.is_trunk && prev_slot.contains_all_ticks(self.ticks_per_block);
     }
 
     fn is_newly_completed_slot(
         &self,
-        slot_height: u64,
         slot_meta: &SlotMeta,
         backup_slot_meta: &Option<SlotMeta>,
     ) -> bool {
-        slot_meta.contains_all_ticks(slot_height, self.ticks_per_block)
+        slot_meta.contains_all_ticks(self.ticks_per_block)
             && (backup_slot_meta.is_none()
                 || slot_meta.consumed_ticks != backup_slot_meta.as_ref().unwrap().consumed_ticks)
     }
@@ -1310,7 +1296,13 @@ mod tests {
     fn test_read_blobs_bytes() {
         let shared_blobs = make_tiny_test_entries(10).to_shared_blobs();
         let slot = DEFAULT_SLOT_HEIGHT;
-        index_blobs(&shared_blobs, &Keypair::new().pubkey(), 0, &[slot; 10]);
+        index_blobs(
+            &shared_blobs,
+            &Keypair::new().pubkey(),
+            &mut 0,
+            &mut 0,
+            &[slot; 10],
+        );
 
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();

@@ -31,7 +31,7 @@ pub fn repair(
     leader_scheduler_option: &Arc<RwLock<LeaderScheduler>>,
 ) -> Result<Vec<(SocketAddr, Vec<u8>)>> {
     let rcluster_info = cluster_info.read().unwrap();
-    let mut is_next_leader = false;
+    let is_next_leader = false;
     let meta = db_ledger.meta(0)?;
     if meta.is_none() {
         return Ok(vec![]);
@@ -584,7 +584,8 @@ mod test {
         index_blobs(
             &shared_blobs,
             &Keypair::new().pubkey(),
-            0,
+            &mut 0,
+            &mut 0,
             &vec![slot; num_entries],
         );
 
@@ -676,7 +677,8 @@ mod test {
         index_blobs(
             &shared_blobs,
             &Keypair::new().pubkey(),
-            0,
+            &mut 0,
+            &mut 0,
             &vec![DEFAULT_SLOT_HEIGHT; num_entries],
         );
 
