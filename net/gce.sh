@@ -23,7 +23,7 @@ ec2)
   source "$here"/scripts/ec2-provider.sh
 
   cpuBootstrapLeaderMachineType=m4.4xlarge
-  gpuBootstrapLeaderMachineType=p2.xlarge
+  gpuBootstrapLeaderMachineType=p3.8xlarge
   bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
   fullNodeMachineType=m4.2xlarge
   clientMachineType=m4.2xlarge
