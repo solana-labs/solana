@@ -392,7 +392,7 @@ impl Bank {
             .iter()
             .zip(txs.iter())
             .filter_map(|(r, x)| match r {
-                Ok(_) => Some(x.clone()),
+                Ok(_) | Err(BankError::ProgramError(_, _)) => Some(x.clone()),
                 Err(ref e) => {
                     debug!("process transaction failed {:?}", e);
                     None
@@ -962,6 +962,7 @@ mod tests {
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Instruction;
     use std;
+    use std::sync::mpsc::channel;
     use tokio::prelude::{Async, Stream};
 
     #[test]
@@ -1879,4 +1880,40 @@ mod tests {
         bank.rollback();
     }
 
+    #[test]
+    fn test_bank_record_transactions() {
+        let mint = Mint::new(10_000);
+        let bank = Arc::new(Bank::new(&mint));
+        let (entry_sender, entry_receiver) = channel();
+        let poh_recorder = PohRecorder::new(bank.clone(), entry_sender, bank.last_id(), None);
+        let pubkey = Keypair::new().pubkey();
+
+        let transactions = vec![
+            Transaction::system_move(&mint.keypair(), pubkey, 1, mint.last_id(), 0),
+            Transaction::system_move(&mint.keypair(), pubkey, 1, mint.last_id(), 0),
+        ];
+
+        let mut results = vec![Ok(()), Ok(())];
+        bank.record_transactions(&transactions, &results, &poh_recorder)
+            .unwrap();
+        let entries = entry_receiver.recv().unwrap();
+        assert_eq!(entries[0].transactions.len(), transactions.len());
+
+        // ProgramErrors should still be recorded
+        results[0] = Err(BankError::ProgramError(
+            1,
+            ProgramError::ResultWithNegativeTokens,
+        ));
+        bank.record_transactions(&transactions, &results, &poh_recorder)
+            .unwrap();
+        let entries = entry_receiver.recv().unwrap();
+        assert_eq!(entries[0].transactions.len(), transactions.len());
+
+        // Other BankErrors should not be recorded
+        results[0] = Err(BankError::AccountNotFound);
+        bank.record_transactions(&transactions, &results, &poh_recorder)
+            .unwrap();
+        let entries = entry_receiver.recv().unwrap();
+        assert_eq!(entries[0].transactions.len(), transactions.len() - 1);
+    }
 }
