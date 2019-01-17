@@ -50,7 +50,7 @@ fi
 
 maybe_rpc_port=
 if [[ $1 = --rpc-port ]]; then
-  maybe_rpc_port="--rpc $2"
+  maybe_rpc_port="$1 $2"
   shift 2
 fi
 
