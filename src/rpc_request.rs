@@ -21,7 +21,7 @@ impl RpcClient {
     }
 
     pub fn new_with_timeout(addr: SocketAddr, timeout: Duration) -> Self {
-        let addr = get_rpc_request_str(addr);
+        let addr = get_rpc_request_str(addr, false);
         let client = reqwest::Client::builder()
             .timeout(timeout)
             .build()
@@ -30,7 +30,7 @@ impl RpcClient {
     }
 
     pub fn new_from_socket(addr: SocketAddr) -> Self {
-        Self::new(get_rpc_request_str(addr))
+        Self::new(get_rpc_request_str(addr, false))
     }
 
     pub fn retry_make_rpc_request(
@@ -77,8 +77,12 @@ impl RpcClient {
     }
 }
 
-pub fn get_rpc_request_str(rpc_addr: SocketAddr) -> String {
-    format!("http://{}", rpc_addr)
+pub fn get_rpc_request_str(rpc_addr: SocketAddr, tls: bool) -> String {
+    if tls {
+        format!("https://{}", rpc_addr)
+    } else {
+        format!("http://{}", rpc_addr)
+    }
 }
 
 pub trait RpcRequestHandler {

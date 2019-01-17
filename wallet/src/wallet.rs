@@ -10,7 +10,6 @@ use solana::rpc_mock::{request_airdrop_transaction, MockRpcClient as RpcClient};
 #[cfg(not(test))]
 use solana::rpc_request::RpcClient;
 use solana::rpc_request::{get_rpc_request_str, RpcRequest};
-use solana::socketaddr;
 #[cfg(not(test))]
 use solana_drone::drone::request_airdrop_transaction;
 use solana_drone::drone::DRONE_PORT;
@@ -25,7 +24,7 @@ use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use std::fs::File;
 use std::io::Read;
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
@@ -85,41 +84,41 @@ impl error::Error for WalletError {
 pub struct WalletConfig {
     pub id: Keypair,
     pub command: WalletCommand,
-    pub network: SocketAddr,
-    pub proxy: Option<String>,
-    pub drone_port: Option<u16>,
+    pub drone_host: Option<IpAddr>,
+    pub drone_port: u16,
+    pub host: IpAddr,
     pub rpc_client: Option<RpcClient>,
-    pub rpc_port: Option<u16>,
+    pub rpc_host: Option<IpAddr>,
+    pub rpc_port: u16,
+    pub rpc_tls: bool,
 }
 
 impl Default for WalletConfig {
     fn default() -> WalletConfig {
-        let default_addr = socketaddr!(0, 8000);
         WalletConfig {
-            id: Keypair::new(),
             command: WalletCommand::Balance,
-            network: default_addr,
-            proxy: None,
-            drone_port: None,
+            drone_host: None,
+            drone_port: DRONE_PORT,
+            host: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            id: Keypair::new(),
             rpc_client: None,
-            rpc_port: None,
+            rpc_host: None,
+            rpc_port: RPC_PORT,
+            rpc_tls: false,
         }
     }
 }
 
 impl WalletConfig {
     pub fn drone_addr(&self) -> SocketAddr {
-        // Assume drone is running on the provided network entrypoint
-        let mut drone_addr = self.network;
-        drone_addr.set_port(self.drone_port.unwrap_or(DRONE_PORT));
-        drone_addr
+        SocketAddr::new(self.drone_host.unwrap_or(self.host), self.drone_port)
     }
 
     pub fn rpc_addr(&self) -> String {
-        let mut rpc_addr = self.network;
-        rpc_addr.set_port(self.rpc_port.unwrap_or(RPC_PORT));
-        let rpc_addr_str = get_rpc_request_str(rpc_addr);
-        self.proxy.clone().unwrap_or(rpc_addr_str)
+        get_rpc_request_str(
+            SocketAddr::new(self.rpc_host.unwrap_or(self.host), self.rpc_port),
+            self.rpc_tls,
+        )
     }
 }
 
@@ -794,6 +793,7 @@ mod tests {
     use clap::{App, Arg, SubCommand};
     use serde_json::Value;
     use solana::rpc_mock::{PUBKEY, SIGNATURE};
+    use solana::socketaddr;
     use solana_sdk::signature::{gen_keypair_file, read_keypair, read_pkcs8, Keypair, KeypairUtil};
     use std::fs;
     use std::net::{Ipv4Addr, SocketAddr};
@@ -802,15 +802,29 @@ mod tests {
     #[test]
     fn test_wallet_config_drone_addr() {
         let mut config = WalletConfig::default();
-        assert_eq!(config.drone_addr(), socketaddr!(0, DRONE_PORT));
+        assert_eq!(
+            config.drone_addr(),
+            SocketAddr::new(config.host, config.drone_port)
+        );
 
-        config.drone_port = Some(1234);
-        assert_eq!(config.drone_addr(), socketaddr!(0, 1234));
+        config.drone_port = 1234;
+        assert_eq!(config.drone_addr(), SocketAddr::new(config.host, 1234));
 
-        assert_eq!(config.rpc_addr(), "http://0.0.0.0:8899");
+        config.drone_host = Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2)));
+        assert_eq!(
+            config.drone_addr(),
+            SocketAddr::new(config.drone_host.unwrap(), 1234)
+        );
+    }
 
-        config.rpc_port = Some(1234);
-        assert_eq!(config.rpc_addr(), "http://0.0.0.0:1234");
+    #[test]
+    fn test_wallet_config_rpc_addr() {
+        let mut config = WalletConfig::default();
+        assert_eq!(config.rpc_addr(), "http://127.0.0.1:8899");
+        config.rpc_port = 1234;
+        assert_eq!(config.rpc_addr(), "http://127.0.0.1:1234");
+        config.rpc_host = Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2)));
+        assert_eq!(config.rpc_addr(), "http://127.0.0.2:1234");
     }
 
     #[test]

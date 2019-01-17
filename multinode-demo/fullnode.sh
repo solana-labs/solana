@@ -194,7 +194,7 @@ $solana_wallet --keypair "$fullnode_id_path" address
 # - one token to keep the node identity public key valid.
 retries=5
 while true; do
-  if $solana_wallet --keypair "$fullnode_id_path" --network "$leader_address" airdrop 3; then
+  if $solana_wallet --keypair "$fullnode_id_path" --host "${leader_address%:*}" airdrop 3; then
     break
   fi
 

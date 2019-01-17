@@ -507,7 +507,7 @@ mod tests {
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-jsonrpc");
 
-        let rpc_string = get_rpc_request_str(rpc_addr);
+        let rpc_string = get_rpc_request_str(rpc_addr, false);
         let client = reqwest::Client::new();
         let request = json!({
            "jsonrpc": "2.0",
@@ -755,7 +755,7 @@ mod tests {
            "params": json!([serial_tx])
         });
         let rpc_addr = leader_data.rpc;
-        let rpc_string = get_rpc_request_str(rpc_addr);
+        let rpc_string = get_rpc_request_str(rpc_addr, false);
         let mut response = client
             .post(&rpc_string)
             .header(CONTENT_TYPE, "application/json")
