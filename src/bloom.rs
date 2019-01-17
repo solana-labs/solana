@@ -1,8 +1,9 @@
 //! Simple Bloom Filter
 use bv::BitVec;
+use fnv::FnvHasher;
 use rand::{self, Rng};
-use solana_sdk::hash::hashv;
 use std::cmp;
+use std::hash::Hasher;
 use std::marker::PhantomData;
 
 /// Generate a stable hash of `self` for each `hash_index`
@@ -63,33 +64,34 @@ impl<T: BloomHashIndex> Bloom<T> {
     }
 }
 
-fn to_slice(v: u64) -> [u8; 8] {
-    [
-        v as u8,
-        (v >> 8) as u8,
-        (v >> 16) as u8,
-        (v >> 24) as u8,
-        (v >> 32) as u8,
-        (v >> 40) as u8,
-        (v >> 48) as u8,
-        (v >> 56) as u8,
-    ]
-}
+//fn to_slice(v: u64) -> [u8; 8] {
+//    [
+//        v as u8,
+//        (v >> 8) as u8,
+//        (v >> 16) as u8,
+//        (v >> 24) as u8,
+//        (v >> 32) as u8,
+//        (v >> 40) as u8,
+//        (v >> 48) as u8,
+//        (v >> 56) as u8,
+//    ]
+//}
 
-fn from_slice(v: &[u8]) -> u64 {
-    u64::from(v[0])
-        | u64::from(v[1]) << 8
-        | u64::from(v[2]) << 16
-        | u64::from(v[3]) << 24
-        | u64::from(v[4]) << 32
-        | u64::from(v[5]) << 40
-        | u64::from(v[6]) << 48
-        | u64::from(v[7]) << 56
-}
-
+//fn from_slice(v: &[u8]) -> u64 {
+//    u64::from(v[0])
+//        | u64::from(v[1]) << 8
+//        | u64::from(v[2]) << 16
+//        | u64::from(v[3]) << 24
+//        | u64::from(v[4]) << 32
+//        | u64::from(v[5]) << 40
+//        | u64::from(v[6]) << 48
+//        | u64::from(v[7]) << 56
+//}
+//
 fn slice_hash(slice: &[u8], hash_index: u64) -> u64 {
-    let hash = hashv(&[slice, &to_slice(hash_index)]);
-    from_slice(hash.as_ref())
+    let mut hasher = FnvHasher::with_key(hash_index);
+    hasher.write(slice);
+    hasher.finish()
 }
 
 impl<T: AsRef<[u8]>> BloomHashIndex for T {
@@ -102,15 +104,15 @@ impl<T: AsRef<[u8]>> BloomHashIndex for T {
 mod test {
     use super::*;
     use solana_sdk::hash::{hash, Hash};
-    #[test]
-    fn test_slice() {
-        assert_eq!(from_slice(&to_slice(10)), 10);
-        assert_eq!(from_slice(&to_slice(0x7fff7fff)), 0x7fff7fff);
-        assert_eq!(
-            from_slice(&to_slice(0x7fff7fff7fff7fff)),
-            0x7fff7fff7fff7fff
-        );
-    }
+    //    #[test]
+    //    fn test_slice() {
+    //        assert_eq!(from_slice(&to_slice(10)), 10);
+    //        assert_eq!(from_slice(&to_slice(0x7fff7fff)), 0x7fff7fff);
+    //        assert_eq!(
+    //            from_slice(&to_slice(0x7fff7fff7fff7fff)),
+    //            0x7fff7fff7fff7fff
+    //        );
+    //    }
 
     #[test]
     fn test_bloom_filter() {
