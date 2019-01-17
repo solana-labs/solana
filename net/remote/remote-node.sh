@@ -172,17 +172,17 @@ local|tar)
     fi
 
     set -x
-    set +e
     if [[ $skipSetup != true ]]; then
       ./multinode-demo/setup.sh -t fullnode $setupArgs
     fi
-    ./multinode-demo/fullnode.sh $maybeNoLeaderRotation "$entrypointIp":~/solana "$entrypointIp:8001" > fullnode.log 2>&1 & disown
+    ./multinode-demo/fullnode.sh $maybeNoLeaderRotation "$entrypointIp":~/solana "$entrypointIp:8001" > fullnode.log 2>&1 &
     ;;
   *)
     echo "Error: unknown node type: $nodeType"
     exit 1
     ;;
   esac
+  disown
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"
