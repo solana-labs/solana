@@ -172,10 +172,11 @@ local|tar)
     fi
 
     set -x
+    set +e
     if [[ $skipSetup != true ]]; then
       ./multinode-demo/setup.sh -t fullnode $setupArgs
     fi
-    ./multinode-demo/fullnode.sh $maybeNoLeaderRotation "$entrypointIp":~/solana "$entrypointIp:8001" > fullnode.log 2>&1 &
+    ./multinode-demo/fullnode.sh $maybeNoLeaderRotation "$entrypointIp":~/solana "$entrypointIp:8001" > fullnode.log 2>&1 & disown
     ;;
   *)
     echo "Error: unknown node type: $nodeType"
