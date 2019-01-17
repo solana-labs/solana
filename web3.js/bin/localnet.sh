@@ -93,6 +93,7 @@ up)
       --rm \
       --publish 8899:8899 \
       --publish 8900:8900 \
+      --publish 9900:9900 \
       --tty \
       --env RUST_LOG="$RUST_LOG" \
       solanalabs/solana:"$channel"
