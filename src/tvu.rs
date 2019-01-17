@@ -117,10 +117,11 @@ impl Tvu {
             &bank.storage_state,
             ledger_entry_receiver,
             Some(db_ledger),
-            keypair,
-            exit.clone(),
+            &keypair,
+            &exit.clone(),
             entry_height,
             storage_rotate_count,
+            &cluster_info,
         );
 
         Tvu {
