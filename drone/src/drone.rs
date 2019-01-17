@@ -6,7 +6,7 @@
 
 use bincode::{deserialize, serialize};
 use byteorder::{ByteOrder, LittleEndian};
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_metrics;
@@ -130,7 +130,7 @@ impl Drone {
                     let create_instruction = SystemInstruction::CreateAccount {
                         tokens,
                         space: 0,
-                        program_id: Pubkey::default(),
+                        program_id: system_program::id(),
                     };
                     let mut transaction = Transaction::new(
                         &self.mint_keypair,
@@ -146,6 +146,39 @@ impl Drone {
                 } else {
                     Err(Error::new(ErrorKind::Other, "token limit reached"))
                 }
+            }
+        }
+    }
+    pub fn process_drone_request(&mut self, bytes: &BytesMut) -> Result<Bytes, io::Error> {
+        let req: DroneRequest = deserialize(bytes).or_else(|err| {
+            Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("deserialize packet in drone: {:?}", err),
+            ))
+        })?;
+
+        info!("Airdrop transaction requested...{:?}", req);
+        let res = self.build_airdrop_transaction(req);
+        match res {
+            Ok(tx) => {
+                let response_vec = bincode::serialize(&tx).or_else(|err| {
+                    Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("deserialize packet in drone: {:?}", err),
+                    ))
+                })?;
+
+                let mut response_vec_with_length = vec![0; 2];
+                LittleEndian::write_u16(&mut response_vec_with_length, response_vec.len() as u16);
+                response_vec_with_length.extend_from_slice(&response_vec);
+
+                let response_bytes = Bytes::from(response_vec_with_length);
+                info!("Airdrop transaction granted");
+                Ok(response_bytes)
+            }
+            Err(err) => {
+                warn!("Airdrop transaction failed: {:?}", err);
+                Err(err)
             }
         }
     }
@@ -235,42 +268,12 @@ pub fn run_local_drone(mint_keypair: Keypair, sender: Sender<SocketAddr>) {
                 let (writer, reader) = framed.split();
 
                 let processor = reader.and_then(move |bytes| {
-                    let req: DroneRequest = deserialize(&bytes).or_else(|err| {
-                        Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("deserialize packet in drone: {:?}", err),
-                        ))
-                    })?;
-
-                    info!("Airdrop requested...");
-                    let res = drone2.lock().unwrap().build_airdrop_transaction(req);
-                    match res {
-                        Ok(_) => info!("Airdrop sent!"),
-                        Err(_) => info!("Request limit reached for this time slice"),
-                    }
-                    let response = res?;
-
-                    info!("Airdrop tx signature: {:?}", response);
-                    let response_vec = serialize(&response).or_else(|err| {
-                        Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("serialize signature in drone: {:?}", err),
-                        ))
-                    })?;
-
-                    let mut response_vec_with_length = vec![0; 2];
-                    LittleEndian::write_u16(
-                        &mut response_vec_with_length,
-                        response_vec.len() as u16,
-                    );
-                    info!(
-                        "Airdrop response_vec_with_length: {:?}",
-                        response_vec_with_length
-                    );
-                    response_vec_with_length.extend_from_slice(&response_vec);
-
-                    let response_bytes = Bytes::from(response_vec_with_length.clone());
-                    info!("Airdrop response_bytes: {:?}", response_bytes);
+                    let response_bytes = drone2
+                        .lock()
+                        .unwrap()
+                        .process_drone_request(&bytes)
+                        .unwrap();
+                    info!("Airdrop response_bytes: {:?}", response_bytes.to_vec());
                     Ok(response_bytes)
                 });
                 let server = writer
@@ -290,6 +293,7 @@ pub fn run_local_drone(mint_keypair: Keypair, sender: Sender<SocketAddr>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bytes::BufMut;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::time::Duration;
 
@@ -382,5 +386,51 @@ mod tests {
         drone = Drone::new(mint, None, Some(1));
         let tx = drone.build_airdrop_transaction(request);
         assert!(tx.is_err());
+    }
+
+    #[test]
+    fn test_process_drone_request() {
+        let to = Keypair::new().pubkey();
+        let last_id = Hash::new(&to.as_ref());
+        let tokens = 50;
+        let req = DroneRequest::GetAirdrop {
+            tokens,
+            last_id,
+            to,
+        };
+        let req = serialize(&req).unwrap();
+        let mut bytes = BytesMut::with_capacity(req.len());
+        bytes.put(&req[..]);
+
+        let keypair = Keypair::new();
+        let expected_instruction = SystemInstruction::CreateAccount {
+            tokens,
+            space: 0,
+            program_id: system_program::id(),
+        };
+        let mut expected_tx = Transaction::new(
+            &keypair,
+            &[to],
+            system_program::id(),
+            &expected_instruction,
+            last_id,
+            0,
+        );
+        expected_tx.sign(&[&keypair], last_id);
+        let expected_bytes = serialize(&expected_tx).unwrap();
+        let mut expected_vec_with_length = vec![0; 2];
+        LittleEndian::write_u16(&mut expected_vec_with_length, expected_bytes.len() as u16);
+        expected_vec_with_length.extend_from_slice(&expected_bytes);
+
+        let mut drone = Drone::new(keypair, None, None);
+        let response = drone.process_drone_request(&bytes);
+        assert!(response.is_ok());
+
+        let response_vec = response.unwrap().to_vec();
+        assert_eq!(expected_vec_with_length, response_vec);
+
+        let mut bad_bytes = BytesMut::with_capacity(9);
+        bad_bytes.put("bad bytes");
+        assert!(drone.process_drone_request(&bad_bytes).is_err());
     }
 }
