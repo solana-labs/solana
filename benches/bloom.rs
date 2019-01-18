@@ -45,7 +45,7 @@ fn bench_sigs_bloom(bencher: &mut Bencher) {
     // 1.0E-8 false positive rate
     // https://hur.st/bloomfilter/?n=1000000&p=1.0E-8&m=&k=
     let last_id = hash(Hash::default().as_ref());
-    //    eprintln!("last_id = {:?}", last_id);
+
     let keys = (0..27)
         .into_iter()
         .map(|i| last_id.hash_at_index(i))
@@ -69,15 +69,21 @@ fn bench_sigs_bloom(bencher: &mut Bencher) {
         sigs.contains(&sig);
         iterations += 1;
     });
+    eprintln!(
+        "falses {}/{} ({}%, 1/{})",
+        falses,
+        iterations,
+        falses as f64 / iterations as f64 * 100f64,
+        iterations as f64 / falses as f64
+    );
     assert_eq!(falses, 0);
 }
 
 #[bench]
 #[ignore]
 fn bench_sigs_hashmap(bencher: &mut Bencher) {
-    // same structure as above, new
+    // same structure as above
     let last_id = hash(Hash::default().as_ref());
-    //    eprintln!("last_id = {:?}", last_id);
     let mut sigs: HashSet<Signature> = HashSet::new();
 
     let mut id = last_id;
