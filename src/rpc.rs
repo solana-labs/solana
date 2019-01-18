@@ -500,8 +500,14 @@ mod tests {
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default())));
-        let rpc_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 24680);
-        let drone_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 24681);
+        let rpc_addr = SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+            solana_netutil::find_available_port_in_range((10000, 65535)).unwrap(),
+        );
+        let drone_addr = SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
+            solana_netutil::find_available_port_in_range((10000, 65535)).unwrap(),
+        );
         let rpc_service = JsonRpcService::new(&Arc::new(bank), &cluster_info, rpc_addr, drone_addr);
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-jsonrpc");
