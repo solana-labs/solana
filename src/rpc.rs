@@ -496,7 +496,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_rpc_new() {
         let alice = Mint::new(10_000);
         let bank = Bank::new(&alice);
