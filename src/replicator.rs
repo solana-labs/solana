@@ -4,6 +4,7 @@ use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
 use crate::client::mk_client;
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
 use crate::db_ledger::DbLedger;
+use crate::entry::EntryReceiver;
 use crate::gossip_service::GossipService;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::result::Result;
@@ -42,6 +43,9 @@ pub struct Replicator {
     fetch_stage: BlobFetchStage,
     t_window: JoinHandle<()>,
     pub retransmit_receiver: BlobReceiver,
+    // Currently unused. Stored to prevent the window service from experiencing errors when sending
+    #[allow(dead_code)]
+    entry_receiver: EntryReceiver,
     exit: Arc<AtomicBool>,
     entry_height: u64,
 }
@@ -173,7 +177,7 @@ impl Replicator {
         // todo: pull blobs off the retransmit_receiver and recycle them?
         let (retransmit_sender, retransmit_receiver) = channel();
 
-        let (entry_tx, entry_rx) = channel();
+        let (entry_sender, entry_receiver) = channel();
 
         let t_window = window_service(
             db_ledger.clone(),
@@ -182,7 +186,7 @@ impl Replicator {
             entry_height,
             max_entry_height,
             blob_fetch_receiver,
-            Some(entry_tx),
+            Some(entry_sender),
             retransmit_sender,
             repair_socket,
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
@@ -199,7 +203,7 @@ impl Replicator {
             sleep(Duration::from_millis(100));
 
             let elapsed = start.elapsed();
-            received_so_far += entry_rx.try_recv().map(|v| v.len()).unwrap_or(0);
+            received_so_far += entry_receiver.try_recv().map(|v| v.len()).unwrap_or(0);
 
             if received_so_far == 0 && elapsed > timeout {
                 return Err(result::Error::IO(io::Error::new(
@@ -279,6 +283,7 @@ impl Replicator {
             gossip_service,
             fetch_stage,
             t_window,
+            entry_receiver,
             retransmit_receiver,
             exit,
             entry_height,
