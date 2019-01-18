@@ -124,7 +124,7 @@ fn main() {
             let head = head - NUM_GENESIS_ENTRIES;
 
             let mut last_id = bank.last_id();
-
+            let mut num_entries = 0;
             for (i, entry) in entries.enumerate() {
                 if i >= head {
                     break;
@@ -137,6 +137,7 @@ fn main() {
                     }
                 }
                 last_id = entry.id;
+                num_entries += 1;
 
                 if let Err(e) = bank.process_entry(&entry) {
                     eprintln!("verify failed at entry[{}], err: {:?}", i + 2, e);
@@ -145,6 +146,7 @@ fn main() {
                     }
                 }
             }
+            println!("{} entries.  last_id={:?}", num_entries, last_id);
         }
         ("", _) => {
             eprintln!("{}", matches.usage());
