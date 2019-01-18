@@ -8,16 +8,15 @@ use crate::checkpoint::Checkpoint;
 use crate::counter::Counter;
 use crate::entry::Entry;
 use crate::entry::EntrySlice;
-use crate::jsonrpc_macros::pubsub::Sink;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::mint::Mint;
 use crate::poh_recorder::PohRecorder;
 use crate::rpc::RpcSignatureStatus;
+use crate::rpc_pubsub::RpcSubsciptions;
 use crate::runtime::{self, RuntimeError};
 use crate::status_deque::{Status, StatusDeque, MAX_ENTRY_IDS};
 use crate::storage_stage::StorageState;
 use bincode::deserialize;
-use hashbrown::HashMap;
 use itertools::Itertools;
 use log::Level;
 use rayon::prelude::*;
@@ -44,7 +43,6 @@ use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
-use tokio::prelude::Future;
 
 /// Reasons a transaction might be rejected.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -87,6 +85,11 @@ pub type Result<T> = result::Result<T, BankError>;
 
 pub const VERIFY_BLOCK_SIZE: usize = 16;
 
+pub trait BankSubscriptions {
+    fn check_account(&self, pubkey: &Pubkey, account: &Account);
+    fn check_signature(&self, signature: &Signature, status: RpcSignatureStatus);
+}
+
 /// Manager for the state of all accounts and programs after processing its entries.
 pub struct Bank {
     pub accounts: Accounts,
@@ -97,17 +100,13 @@ pub struct Bank {
     // The latest confirmation time for the network
     confirmation_time: AtomicUsize,
 
-    // Mapping of account ids to Subscriber ids and sinks to notify on userdata update
-    account_subscriptions: RwLock<HashMap<Pubkey, HashMap<Pubkey, Sink<Account>>>>,
-
-    // Mapping of signatures to Subscriber ids and sinks to notify on confirmation
-    signature_subscriptions: RwLock<HashMap<Signature, HashMap<Pubkey, Sink<RpcSignatureStatus>>>>,
-
     /// Tracks and updates the leader schedule based on the votes and account stakes
     /// processed by the bank
     pub leader_scheduler: Arc<RwLock<LeaderScheduler>>,
 
     pub storage_state: StorageState,
+
+    subscriptions: RwLock<Arc<RpcSubsciptions>>,
 }
 
 impl Default for Bank {
@@ -116,10 +115,9 @@ impl Default for Bank {
             accounts: Accounts::default(),
             last_ids: RwLock::new(StatusDeque::default()),
             confirmation_time: AtomicUsize::new(std::usize::MAX),
-            account_subscriptions: RwLock::new(HashMap::new()),
-            signature_subscriptions: RwLock::new(HashMap::new()),
             leader_scheduler: Arc::new(RwLock::new(LeaderScheduler::default())),
             storage_state: StorageState::new(),
+            subscriptions: RwLock::new(Arc::new(RpcSubsciptions::default())),
         }
     }
 }
@@ -145,6 +143,11 @@ impl Bank {
         bank
     }
 
+    pub fn update_subscriptions(&self, subscriptions: &Arc<RpcSubsciptions>) {
+        let mut sub = self.subscriptions.write().unwrap();
+        *sub = subscriptions.clone()
+    }
+
     pub fn checkpoint(&self) {
         self.accounts.checkpoint();
         self.last_ids.write().unwrap().checkpoint();
@@ -160,7 +163,10 @@ impl Bank {
 
         rolled_back_pubkeys.iter().for_each(|pubkey| {
             if let Some(account) = self.accounts.load_slow(&pubkey) {
-                self.check_account_subscriptions(&pubkey, &account)
+                self.subscriptions
+                    .read()
+                    .unwrap()
+                    .check_account(&pubkey, &account)
             }
         });
 
@@ -300,7 +306,10 @@ impl Bank {
                 Err(_) => RpcSignatureStatus::GenericFailure,
             };
             if status != RpcSignatureStatus::SignatureNotFound {
-                self.check_signature_subscriptions(&tx.signatures[0], status);
+                self.subscriptions
+                    .read()
+                    .unwrap()
+                    .check_signature(&tx.signatures[0], status);
             }
         }
     }
@@ -845,39 +854,12 @@ impl Bank {
             let tx = &txs[i];
             let accs = raccs.as_ref().unwrap();
             for (key, account) in tx.account_keys.iter().zip(accs.0.iter()) {
-                self.check_account_subscriptions(&key, account);
+                self.subscriptions
+                    .read()
+                    .unwrap()
+                    .check_account(&key, account);
             }
         }
-    }
-
-    pub fn add_account_subscription(
-        &self,
-        bank_sub_id: Pubkey,
-        pubkey: Pubkey,
-        sink: Sink<Account>,
-    ) {
-        let mut subscriptions = self.account_subscriptions.write().unwrap();
-        if let Some(current_hashmap) = subscriptions.get_mut(&pubkey) {
-            current_hashmap.insert(bank_sub_id, sink);
-            return;
-        }
-        let mut hashmap = HashMap::new();
-        hashmap.insert(bank_sub_id, sink);
-        subscriptions.insert(pubkey, hashmap);
-    }
-
-    pub fn remove_account_subscription(&self, bank_sub_id: &Pubkey, pubkey: &Pubkey) -> bool {
-        let mut subscriptions = self.account_subscriptions.write().unwrap();
-        match subscriptions.get_mut(pubkey) {
-            Some(ref current_hashmap) if current_hashmap.len() == 1 => {}
-            Some(current_hashmap) => {
-                return current_hashmap.remove(bank_sub_id).is_some();
-            }
-            None => {
-                return false;
-            }
-        }
-        subscriptions.remove(pubkey).is_some()
     }
 
     pub fn get_current_leader(&self) -> Option<(Pubkey, u64)> {
@@ -889,59 +871,6 @@ impl Bank {
 
     pub fn tick_height(&self) -> u64 {
         self.last_ids.read().unwrap().tick_height
-    }
-
-    fn check_account_subscriptions(&self, pubkey: &Pubkey, account: &Account) {
-        let subscriptions = self.account_subscriptions.read().unwrap();
-        if let Some(hashmap) = subscriptions.get(pubkey) {
-            for (_bank_sub_id, sink) in hashmap.iter() {
-                sink.notify(Ok(account.clone())).wait().unwrap();
-            }
-        }
-    }
-
-    pub fn add_signature_subscription(
-        &self,
-        bank_sub_id: Pubkey,
-        signature: Signature,
-        sink: Sink<RpcSignatureStatus>,
-    ) {
-        let mut subscriptions = self.signature_subscriptions.write().unwrap();
-        if let Some(current_hashmap) = subscriptions.get_mut(&signature) {
-            current_hashmap.insert(bank_sub_id, sink);
-            return;
-        }
-        let mut hashmap = HashMap::new();
-        hashmap.insert(bank_sub_id, sink);
-        subscriptions.insert(signature, hashmap);
-    }
-
-    pub fn remove_signature_subscription(
-        &self,
-        bank_sub_id: &Pubkey,
-        signature: &Signature,
-    ) -> bool {
-        let mut subscriptions = self.signature_subscriptions.write().unwrap();
-        match subscriptions.get_mut(signature) {
-            Some(ref current_hashmap) if current_hashmap.len() == 1 => {}
-            Some(current_hashmap) => {
-                return current_hashmap.remove(bank_sub_id).is_some();
-            }
-            None => {
-                return false;
-            }
-        }
-        subscriptions.remove(signature).is_some()
-    }
-
-    fn check_signature_subscriptions(&self, signature: &Signature, status: RpcSignatureStatus) {
-        let mut subscriptions = self.signature_subscriptions.write().unwrap();
-        if let Some(hashmap) = subscriptions.get(signature) {
-            for (_bank_sub_id, sink) in hashmap.iter() {
-                sink.notify(Ok(status)).wait().unwrap();
-            }
-        }
-        subscriptions.remove(&signature);
     }
 }
 

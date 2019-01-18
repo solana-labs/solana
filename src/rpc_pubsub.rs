@@ -1,9 +1,10 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::bank::Bank;
+use crate::bank::{Bank, BankSubscriptions};
 use crate::jsonrpc_core::futures::Future;
 use crate::jsonrpc_core::*;
 use crate::jsonrpc_macros::pubsub;
+use crate::jsonrpc_macros::pubsub::Sink;
 use crate::jsonrpc_pubsub::{PubSubHandler, Session, SubscriptionId};
 use crate::jsonrpc_ws_server::{RequestContext, Sender, ServerBuilder};
 use crate::rpc::RpcSignatureStatus;
@@ -12,7 +13,7 @@ use crate::status_deque::Status;
 use bs58;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+use solana_sdk::signature::Signature;
 use std::collections::HashMap;
 use std::mem;
 use std::net::SocketAddr;
@@ -29,6 +30,8 @@ pub enum ClientState {
 pub struct PubSubService {
     thread_hdl: JoinHandle<()>,
     exit: Arc<AtomicBool>,
+    rpc_bank: Arc<RwLock<RpcPubSubBank>>,
+    subscription: Arc<RpcSubsciptions>,
 }
 
 impl Service for PubSubService {
@@ -42,7 +45,10 @@ impl Service for PubSubService {
 impl PubSubService {
     pub fn new(bank: &Arc<Bank>, pubsub_addr: SocketAddr) -> Self {
         info!("rpc_pubsub bound to {:?}", pubsub_addr);
-        let rpc = RpcSolPubSubImpl::new(bank.clone());
+        let rpc_bank = Arc::new(RwLock::new(RpcPubSubBank::new(bank.clone())));
+        let rpc = RpcSolPubSubImpl::new(rpc_bank.clone());
+        let subscription = rpc.subscription.clone();
+        bank.update_subscriptions(&subscription);
         let exit = Arc::new(AtomicBool::new(false));
         let exit_ = exit.clone();
         let thread_hdl = Builder::new()
@@ -71,7 +77,17 @@ impl PubSubService {
                 server.unwrap().close();
             })
             .unwrap();
-        PubSubService { thread_hdl, exit }
+        PubSubService {
+            thread_hdl,
+            exit,
+            rpc_bank,
+            subscription,
+        }
+    }
+
+    pub fn set_bank(&self, bank: &Arc<Bank>) {
+        self.rpc_bank.write().unwrap().bank = bank.clone();
+        bank.update_subscriptions(&self.subscription);
     }
 
     pub fn exit(&self) {
@@ -111,20 +127,69 @@ build_rpc_trait! {
     }
 }
 
+struct RpcPubSubBank {
+    bank: Arc<Bank>,
+}
+
+impl RpcPubSubBank {
+    pub fn new(bank: Arc<Bank>) -> Self {
+        RpcPubSubBank { bank }
+    }
+}
+
+pub struct RpcSubsciptions {
+    account_subscriptions: RwLock<HashMap<Pubkey, HashMap<SubscriptionId, Sink<Account>>>>,
+    signature_subscriptions:
+        RwLock<HashMap<Signature, HashMap<SubscriptionId, Sink<RpcSignatureStatus>>>>,
+}
+
+impl Default for RpcSubsciptions {
+    fn default() -> Self {
+        RpcSubsciptions {
+            account_subscriptions: Default::default(),
+            signature_subscriptions: Default::default(),
+        }
+    }
+}
+
+impl BankSubscriptions for RpcSubsciptions {
+    fn check_account(&self, pubkey: &Pubkey, account: &Account) {
+        let subscriptions = self.account_subscriptions.read().unwrap();
+        if let Some(hashmap) = subscriptions.get(pubkey) {
+            for (_bank_sub_id, sink) in hashmap.iter() {
+                sink.notify(Ok(account.clone())).wait().unwrap();
+            }
+        }
+    }
+
+    fn check_signature(&self, signature: &Signature, status: RpcSignatureStatus) {
+        let mut subscriptions = self.signature_subscriptions.write().unwrap();
+        if let Some(hashmap) = subscriptions.get(signature) {
+            for (_bank_sub_id, sink) in hashmap.iter() {
+                sink.notify(Ok(status)).wait().unwrap();
+            }
+        }
+        subscriptions.remove(&signature);
+    }
+}
+
 struct RpcSolPubSubImpl {
     uid: Arc<atomic::AtomicUsize>,
-    bank: Arc<Bank>,
-    account_subscriptions: Arc<RwLock<HashMap<SubscriptionId, (Pubkey, Pubkey)>>>,
-    signature_subscriptions: Arc<RwLock<HashMap<SubscriptionId, (Pubkey, Signature)>>>,
+    bank: Arc<RwLock<RpcPubSubBank>>,
+    subscription: Arc<RpcSubsciptions>,
+    /*
+    account_subscriptions: RwLock<HashMap<Pubkey, HashMap<SubscriptionId, Sink<Account>>>>,
+    signature_subscriptions:
+        RwLock<HashMap<Signature, HashMap<SubscriptionId, Sink<RpcSignatureStatus>>>>,
+    */
 }
 
 impl RpcSolPubSubImpl {
-    fn new(bank: Arc<Bank>) -> Self {
+    fn new(bank: Arc<RwLock<RpcPubSubBank>>) -> Self {
         RpcSolPubSubImpl {
             uid: Default::default(),
             bank,
-            account_subscriptions: Default::default(),
-            signature_subscriptions: Default::default(),
+            subscription: Arc::new(Default::default()),
         }
     }
 }
@@ -155,22 +220,35 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         let sub_id = SubscriptionId::Number(id as u64);
         info!("account_subscribe: account={:?} id={:?}", pubkey, sub_id);
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-        let bank_sub_id = Keypair::new().pubkey();
-        self.account_subscriptions
-            .write()
-            .unwrap()
-            .insert(sub_id.clone(), (bank_sub_id, pubkey));
+        //let bank_sub_id = Keypair::new().pubkey();
 
-        self.bank
-            .add_account_subscription(bank_sub_id, pubkey, sink);
+        let mut subscriptions = self.subscription.account_subscriptions.write().unwrap();
+        if let Some(current_hashmap) = subscriptions.get_mut(&pubkey) {
+            current_hashmap.insert(sub_id.clone(), sink);
+            return;
+        }
+        let mut hashmap = HashMap::new();
+        hashmap.insert(sub_id.clone(), sink);
+        subscriptions.insert(pubkey, hashmap);
     }
 
     fn account_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
         info!("account_unsubscribe: id={:?}", id);
-        if let Some((bank_sub_id, pubkey)) = self.account_subscriptions.write().unwrap().remove(&id)
-        {
-            self.bank.remove_account_subscription(&bank_sub_id, &pubkey);
-            Ok(true)
+
+        let mut subscriptions = self.subscription.account_subscriptions.write().unwrap();
+        let mut found = false;
+        subscriptions.retain(|_, v| {
+            v.retain(|k, _| {
+                if *k == id {
+                    found = true;
+                }
+                !found
+            });
+            v.len() != 0
+        });
+
+        if found == true {
+            Ok(found)
         } else {
             Err(Error {
                 code: ErrorCode::InvalidParams,
@@ -199,19 +277,20 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             return;
         }
         let signature = Signature::new(&signature_vec);
-
         let id = self.uid.fetch_add(1, atomic::Ordering::SeqCst);
         let sub_id = SubscriptionId::Number(id as u64);
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-        let bank_sub_id = Keypair::new().pubkey();
-        self.signature_subscriptions
-            .write()
-            .unwrap()
-            .insert(sub_id.clone(), (bank_sub_id, signature));
 
-        let status = self.bank.get_signature_status(&signature);
+        let status = self
+            .bank
+            .read()
+            .unwrap()
+            .bank
+            .get_signature_status(&signature);
         if status.is_none() {
-            return;
+            sink.notify(Ok(RpcSignatureStatus::Confirmed))
+                .wait()
+                .unwrap();
         }
 
         match status.unwrap() {
@@ -219,26 +298,36 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                 sink.notify(Ok(RpcSignatureStatus::Confirmed))
                     .wait()
                     .unwrap();
-                self.signature_subscriptions
-                    .write()
-                    .unwrap()
-                    .remove(&sub_id);
             }
             _ => {
-                self.bank
-                    .add_signature_subscription(bank_sub_id, signature, sink);
+                let mut subscriptions = self.subscription.signature_subscriptions.write().unwrap();
+                if let Some(current_hashmap) = subscriptions.get_mut(&signature) {
+                    current_hashmap.insert(sub_id.clone(), sink);
+                } else {
+                    let mut hashmap = HashMap::new();
+                    hashmap.insert(sub_id.clone(), sink);
+                    subscriptions.insert(signature, hashmap);
+                }
             }
         }
     }
 
     fn signature_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
         info!("signature_unsubscribe");
-        if let Some((bank_sub_id, signature)) =
-            self.signature_subscriptions.write().unwrap().remove(&id)
-        {
-            self.bank
-                .remove_signature_subscription(&bank_sub_id, &signature);
-            Ok(true)
+        let mut subscriptions = self.subscription.signature_subscriptions.write().unwrap();
+        let mut found = false;
+        subscriptions.retain(|_, v| {
+            v.retain(|k, _| {
+                if *k == id {
+                    found = true;
+                }
+                !found
+            });
+            v.len() != 0
+        });
+
+        if found == true {
+            Ok(found)
         } else {
             Err(Error {
                 code: ErrorCode::InvalidParams,
