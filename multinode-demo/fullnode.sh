@@ -163,6 +163,8 @@ fi
   exit 1
 }
 
+tune_system
+
 rsync_url() { # adds the 'rsync://` prefix to URLs that need it
   declare url="$1"
 
@@ -183,38 +185,37 @@ rsync_url() { # adds the 'rsync://` prefix to URLs that need it
 }
 
 rsync_leader_url=$(rsync_url "$leader")
-
-tune_system
-
 set -ex
-$rsync -vPr "$rsync_leader_url"/config/ledger/ "$ledger_config_dir"
-[[ -d $ledger_config_dir ]] || {
-  echo "Unable to retrieve ledger from $rsync_leader_url"
-  exit 1
-}
-$solana_ledger_tool --ledger "$ledger_config_dir" verify
-
-$solana_wallet --keypair "$fullnode_id_path" address
-
-# A fullnode requires 3 tokens to function:
-# - one token to create an instance of the vote_program with
-# - one token for the transaction fee
-# - one token to keep the node identity public key valid.
-retries=5
-while true; do
-  if $solana_wallet --keypair "$fullnode_id_path" --host "${leader_address%:*}" airdrop 3; then
-    break
-  fi
-
-  # TODO: Consider moving this retry logic into `solana-wallet airdrop` itself,
-  #       currently it does not retry on "Connection refused" errors.
-  retries=$((retries - 1))
-  if [[ $retries -le 0 ]]; then
+if [[ ! -d "$ledger_config_dir" ]]; then
+  $rsync -vPr "$rsync_leader_url"/config/ledger/ "$ledger_config_dir"
+  [[ -d $ledger_config_dir ]] || {
+    echo "Unable to retrieve ledger from $rsync_leader_url"
     exit 1
-  fi
-  echo "Airdrop failed. Remaining retries: $retries"
-  sleep 1
-done
+  }
+  $solana_ledger_tool --ledger "$ledger_config_dir" verify
+
+  $solana_wallet --keypair "$fullnode_id_path" address
+
+  # A fullnode requires 3 tokens to function:
+  # - one token to create an instance of the vote_program with
+  # - one token for the transaction fee
+  # - one token to keep the node identity public key valid.
+  retries=5
+  while true; do
+    if $solana_wallet --keypair "$fullnode_id_path" --host "${leader_address%:*}" airdrop 3; then
+      break
+    fi
+
+    # TODO: Consider moving this retry logic into `solana-wallet airdrop` itself,
+    #       currently it does not retry on "Connection refused" errors.
+    retries=$((retries - 1))
+    if [[ $retries -le 0 ]]; then
+      exit 1
+    fi
+    echo "Airdrop failed. Remaining retries: $retries"
+    sleep 1
+  done
+fi
 
 trap 'kill "$pid" && wait "$pid"' INT TERM
 # shellcheck disable=SC2086 # Don't want to double quote # maybe_rpc_port
