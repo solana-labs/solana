@@ -49,6 +49,7 @@ fi
 tune_system
 
 trap 'kill "$pid" && wait "$pid"' INT TERM
+$solana_ledger_tool --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger verify
 $program \
   $maybe_no_leader_rotation \
   --identity "$SOLANA_CONFIG_DIR"/bootstrap-leader.json \
