@@ -19,7 +19,7 @@ pub struct Bloom<T: BloomHashIndex> {
     _phantom: PhantomData<T>,
 }
 
-impl<T: BloomHashIndex> Bloom<T> {
+impl<T: BloomHashIndex + AsRef<[u8]>> Bloom<T> {
     pub fn new(num_bits: usize, keys: Vec<u64>) -> Self {
         let bits = BitVec::new_fill(false, num_bits as u64);
         Bloom {
@@ -41,21 +41,35 @@ impl<T: BloomHashIndex> Bloom<T> {
         let keys: Vec<u64> = (0..num_keys).map(|_| rand::thread_rng().gen()).collect();
         Self::new(num_bits, keys)
     }
-    fn pos(&self, key: &T, k: u64) -> u64 {
-        key.hash_at_index(k) % self.bits.len()
-    }
+    //    fn pos(&self, key: &T, k: u64) -> u64 {
+    //        key.hash_at_index(k) % self.bits.len()
+    //    }
     pub fn clear(&mut self) {
         self.bits.clear();
     }
     pub fn add(&mut self, key: &T) {
+        let mut hasher: FnvHasher = Default::default();
+        hasher.write(&key.as_ref());
+        let key = hasher.finish();
+
         for k in &self.keys {
-            let pos = self.pos(key, *k);
+            let mut hasher = FnvHasher::with_key(key);
+            hasher.write_u64(*k);
+            let pos = hasher.finish() % self.bits.len();
+
             self.bits.set(pos, true);
         }
     }
     pub fn contains(&mut self, key: &T) -> bool {
+        let mut hasher: FnvHasher = Default::default();
+        hasher.write(&key.as_ref());
+        let key = hasher.finish();
+
         for k in &self.keys {
-            let pos = self.pos(key, *k);
+            let mut hasher = FnvHasher::with_key(key);
+            hasher.write_u64(*k);
+            let pos = hasher.finish() % self.bits.len();
+
             if !self.bits.get(pos) {
                 return false;
             }
