@@ -187,8 +187,8 @@ rsync_leader_url=$(rsync_url "$leader")
 tune_system
 
 set -ex
-$rsync -vPr "$rsync_leader_url"/config/ "$ledger_config_dir"
-[[ -d $ledger_config_dir/ledger ]] || {
+$rsync -vPr "$rsync_leader_url"/config/ledger/ "$ledger_config_dir"
+[[ -d $ledger_config_dir ]] || {
   echo "Unable to retrieve ledger from $rsync_leader_url"
   exit 1
 }
@@ -222,7 +222,7 @@ $program \
   $maybe_rpc_port \
   --identity "$fullnode_json_path" \
   --network "$leader_address" \
-  --ledger "$ledger_config_dir"/ledger \
+  --ledger "$ledger_config_dir" \
   > >($fullnode_logger) 2>&1 &
 pid=$!
 oom_score_adj "$pid" 1000
