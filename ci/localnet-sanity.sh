@@ -2,6 +2,7 @@
 set -e
 
 iterations=1
+restartInterval=never
 maybeNoLeaderRotation=
 extraNodes=0
 walletRpcEndpoint=
@@ -19,6 +20,7 @@ Start a local cluster and run sanity on it
 
   options:
    -i [number] - Number of times to run sanity (default: $iterations)
+   -k [number] - Restart the cluster after this number of sanity iterations (default: $restartInterval)
    -b          - Disable leader rotation
    -x          - Add an extra fullnode (may be supplied multiple times)
    -r          - Select the RPC endpoint hosted by a node that starts as
@@ -31,13 +33,16 @@ EOF
 
 cd "$(dirname "$0")"/..
 
-while getopts "h?i:brx" opt; do
+while getopts "h?i:k:brx" opt; do
   case $opt in
   h | \?)
     usage
     ;;
   i)
     iterations=$OPTARG
+    ;;
+  k)
+    restartInterval=$OPTARG
     ;;
   b)
     maybeNoLeaderRotation="--no-leader-rotation"
@@ -57,37 +62,42 @@ done
 source ci/upload-ci-artifact.sh
 source scripts/configure-metrics.sh
 
-multinode-demo/setup.sh
-
-backgroundCommands=(
+nodes=(
   "multinode-demo/drone.sh"
   "multinode-demo/bootstrap-leader.sh $maybeNoLeaderRotation"
   "multinode-demo/fullnode.sh $maybeNoLeaderRotation --rpc-port 18899"
 )
 
 for _ in $(seq 1 $extraNodes); do
-  backgroundCommands+=(
-    "multinode-demo/fullnode-x.sh $maybeNoLeaderRotation"
-  )
+  nodes+=("multinode-demo/fullnode-x.sh $maybeNoLeaderRotation")
 done
 numNodes=$((2 + extraNodes))
 
 pids=()
 logs=()
 
-for cmd in "${backgroundCommands[@]}"; do
-  echo "--- Start $cmd"
-  baseCmd=$(basename "${cmd// */}" .sh)
-  declare log=log-$baseCmd.txt
-  rm -f "$log"
-  $cmd > "$log" 2>&1 &
-  logs+=("$log")
-  declare pid=$!
-  pids+=("$pid")
-  echo "pid: $pid"
-done
+startNodes() {
+  declare addLogs=false
+  if [[ ${#logs[@]} -eq 0 ]]; then
+    addLogs=true
+  fi
+  for cmd in "${nodes[@]}"; do
+    echo "--- Start $cmd"
+    baseCmd=$(basename "${cmd// */}" .sh)
+    declare log=log-$baseCmd.txt
+    rm -f "$log"
+    $cmd > "$log" 2>&1 &
+    if $addLogs; then
+      logs+=("$log")
+    fi
+    declare pid=$!
+    pids+=("$pid")
+    echo "pid: $pid"
+  done
+}
 
-killBackgroundCommands() {
+killNodes() {
+  echo "--- Killing nodes"
   set +e
   for pid in "${pids[@]}"; do
     if kill "$pid"; then
@@ -100,9 +110,20 @@ killBackgroundCommands() {
   pids=()
 }
 
+verifyLedger() {
+  for ledger in bootstrap-leader fullnode; do
+    echo "--- $ledger ledger verification"
+    (
+      source multinode-demo/common.sh
+      set -x
+      $solana_ledger_tool --ledger "$SOLANA_CONFIG_DIR"/$ledger-ledger verify
+    ) || flag_error
+  done
+}
+
 shutdown() {
   exitcode=$?
-  killBackgroundCommands
+  killNodes
 
   set +e
 
@@ -127,6 +148,8 @@ flag_error() {
   exit 1
 }
 
+multinode-demo/setup.sh
+startNodes
 while [[ $iteration -le $iterations ]]; do
   echo "--- Node count ($iteration)"
   (
@@ -168,18 +191,16 @@ while [[ $iteration -le $iterations ]]; do
   ) || flag_error
 
   iteration=$((iteration + 1))
+
+  if [[ $restartInterval != never && $((iteration % restartInterval)) -eq 0 ]]; then
+    killNodes
+    verifyLedger
+    startNodes
+  fi
 done
 
-killBackgroundCommands
-
-echo "--- Ledger verification"
-(
-  source multinode-demo/common.sh
-  set -x
-  cp -R "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger /tmp/ledger-$$
-  $solana_ledger_tool --ledger /tmp/ledger-$$ verify || exit $?
-  rm -rf /tmp/ledger-$$
-) || flag_error
+killNodes
+verifyLedger
 
 echo +++
 echo "Ok ($iterations iterations)"
