@@ -1270,7 +1270,6 @@ fn run_node(
 }
 
 #[test]
-#[ignore]
 // TODO: fix
 fn test_dropped_handoff_recovery() {
     solana_logger::setup();
@@ -1343,6 +1342,8 @@ fn test_dropped_handoff_recovery() {
         Some(seed_rotation_interval),
         Some(leader_rotation_interval),
     );
+    info!("bootstrap_leader: {}", bootstrap_leader_keypair.pubkey());
+    info!("'next leader': {}", next_leader_keypair.pubkey());
 
     let signer_proxy = VoteSignerProxy::new(
         &bootstrap_leader_keypair,
@@ -1366,12 +1367,13 @@ fn test_dropped_handoff_recovery() {
     let mut nodes = vec![bootstrap_leader];
 
     // Start up the validators other than the "next_leader" validator
-    for _ in 0..(N - 1) {
+    for i in 0..(N - 1) {
         let kp = Arc::new(Keypair::new());
         let validator_ledger_path =
             tmp_copy_ledger(&genesis_ledger_path, "test_dropped_handoff_recovery");
         ledger_paths.push(validator_ledger_path.clone());
         let validator_id = kp.pubkey();
+        info!("validator {}: {}", i, validator_id);
         let validator_node = Node::new_localhost_with_pubkey(validator_id);
         let signer_proxy = VoteSignerProxy::new(&kp, Box::new(LocalVoteSigner::default()));
         let validator = Fullnode::new(
@@ -1392,17 +1394,17 @@ fn test_dropped_handoff_recovery() {
     let num_converged = converge(&bootstrap_leader_info, N).len();
     assert_eq!(num_converged, N);
 
-    info!("Wait for leader transition");
+    info!("Wait for bootstrap_leader to transition to a validator",);
     match nodes[0].handle_role_transition().unwrap() {
         Some(FullnodeReturnType::LeaderToValidatorRotation) => (),
         _ => panic!("Expected reason for exit to be leader rotation"),
     }
 
-    info!("Now start up the 'next leader' node");
+    info!("Starting the 'next leader' node");
     let next_leader_node = Node::new_localhost_with_pubkey(next_leader_keypair.pubkey());
     let signer_proxy =
         VoteSignerProxy::new(&next_leader_keypair, Box::new(LocalVoteSigner::default()));
-    let mut next_leader = Fullnode::new(
+    let next_leader = Fullnode::new(
         next_leader_node,
         &next_leader_ledger_path,
         next_leader_keypair,
@@ -1413,11 +1415,15 @@ fn test_dropped_handoff_recovery() {
         None,
     );
 
-    info!("Wait for catchup");
+    info!("Wait for 'next leader' to assume leader role");
+    error!("TODO: FIX https://github.com/solana-labs/solana/issues/2482");
+    // TODO: Once fixed restore the commented out code below
+    /*
     match next_leader.handle_role_transition().unwrap() {
         Some(FullnodeReturnType::ValidatorToLeaderRotation) => (),
         _ => panic!("Expected reason for exit to be leader rotation"),
     }
+    */
     nodes.push(next_leader);
 
     info!("done!");
