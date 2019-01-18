@@ -202,7 +202,10 @@ if [[ ! -d "$ledger_config_dir" ]]; then
   # - one token to keep the node identity public key valid.
   retries=5
   while true; do
-    if $solana_wallet --keypair "$fullnode_id_path" --host "${leader_address%:*}" airdrop 3; then
+    # TODO: Until https://github.com/solana-labs/solana/issues/2355 is resolved
+    # a fullnode needs N tokens as its vote account gets re-created on every
+    # node restart, costing it tokens
+    if $solana_wallet --keypair "$fullnode_id_path" --host "${leader_address%:*}" airdrop 1000000; then
       break
     fi
 
