@@ -1270,7 +1270,6 @@ fn run_node(
 }
 
 #[test]
-// TODO: fix
 fn test_dropped_handoff_recovery() {
     solana_logger::setup();
     // The number of validators
