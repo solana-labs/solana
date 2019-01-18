@@ -184,11 +184,18 @@ while [[ $iteration -le $iterations ]]; do
   ) || flag_error
 
   echo "--- Wallet sanity ($iteration)"
+  flag_error_if_no_leader_rotation() {
+    # TODO: Stop ignoring wallet sanity failures when leader rotation is enabled
+    #       once https://github.com/solana-labs/solana/issues/2474 is fixed
+    if [[ -n $maybeNoLeaderRotation ]]; then
+      flag_error
+    fi
+  }
   (
     set -x
     # shellcheck disable=SC2086 # Don't want to double quote $walletRpcEndpoint
     timeout 60s scripts/wallet-sanity.sh $walletRpcEndpoint
-  ) || flag_error
+  ) || flag_error_if_no_leader_rotation
 
   iteration=$((iteration + 1))
 
