@@ -17,7 +17,7 @@ use crate::runtime::{self, RuntimeError};
 use crate::status_deque::{Status, StatusDeque, MAX_ENTRY_IDS};
 use crate::storage_stage::StorageState;
 use bincode::deserialize;
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 use itertools::Itertools;
 use log::Level;
 use rayon::prelude::*;
@@ -784,6 +784,13 @@ impl Bank {
     /// Right now this just gets the account balances. See github issue #1655.
     pub fn get_stake(&self, pubkey: &Pubkey) -> u64 {
         self.get_balance(pubkey)
+    }
+
+    pub fn get_stakes(&self, pubkeys: &HashSet<Pubkey>) -> std::collections::HashMap<Pubkey, u64> {
+        pubkeys
+            .iter()
+            .map(|pubkey| (*pubkey, self.get_stake(pubkey)))
+            .collect()
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {

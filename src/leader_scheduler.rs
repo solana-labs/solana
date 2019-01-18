@@ -158,6 +158,16 @@ impl LeaderScheduler {
         }
     }
 
+    // Returns true if the given height is the last entry of a block
+    pub fn is_last_in_block(slot_tick_height: u64, height: u64) -> bool {
+        if height < slot_tick_height {
+            return false;
+        }
+
+        let tick_index = height - slot_tick_height;
+        tick_index % TICKS_PER_BLOCK == TICKS_PER_BLOCK - 1
+    }
+
     // Returns true if the given height is the first tick of a slot
     pub fn is_first_slot_tick(&self, height: u64) -> bool {
         if self.use_only_bootstrap_leader {
@@ -316,7 +326,7 @@ impl LeaderScheduler {
     // TODO: We use a HashSet for now because a single validator could potentially register
     // multiple vote account. Once that is no longer possible (see the TODO in vote_program.rs,
     // process_transaction(), case VoteInstruction::RegisterAccount), we can use a vector.
-    fn get_active_set(&mut self, height: u64, bank: &Bank) -> HashSet<Pubkey> {
+    pub fn get_active_set(&mut self, height: u64, bank: &Bank) -> HashSet<Pubkey> {
         let upper_bound = height;
         let lower_bound = height.saturating_sub(self.active_window_length);
 
@@ -528,11 +538,8 @@ pub fn make_active_set_entries(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::bank::Bank;
-    use crate::leader_scheduler::{
-        LeaderScheduler, LeaderSchedulerConfig, DEFAULT_BOOTSTRAP_HEIGHT,
-        DEFAULT_LEADER_ROTATION_INTERVAL, DEFAULT_SEED_ROTATION_INTERVAL,
-    };
     use crate::mint::Mint;
     use crate::vote_signer_proxy::VoteSignerProxy;
     use hashbrown::HashSet;
@@ -1459,5 +1466,13 @@ mod tests {
                 .max_height_for_leader(bootstrap_height + 2 * seed_rotation_interval + 1),
             None
         );
+    }
+
+    #[test]
+    fn test_is_last_in_block() {
+        assert!(!LeaderScheduler::is_last_in_block(1, 0));
+        assert!(LeaderScheduler::is_last_in_block(0, TICKS_PER_BLOCK - 1));
+        assert!(!LeaderScheduler::is_last_in_block(1, TICKS_PER_BLOCK - 1));
+        assert!(LeaderScheduler::is_last_in_block(1, TICKS_PER_BLOCK));
     }
 }

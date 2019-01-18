@@ -329,6 +329,7 @@ impl Fullnode {
                 entry_receiver,
                 max_tick_height,
                 tpu_exit,
+                keypair.clone(),
                 feedback_sender,
             );
             let leader_state = LeaderServices::new(tpu, broadcast_service);
@@ -500,6 +501,7 @@ impl Fullnode {
             blob_receiver,
             max_tick_height,
             tpu_exit,
+            self.keypair.clone(),
             feedback_sender,
         );
         let leader_state = LeaderServices::new(tpu, broadcast_service);

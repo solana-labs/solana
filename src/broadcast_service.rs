@@ -15,15 +15,53 @@ use crate::service::Service;
 use log::Level;
 use rayon::prelude::*;
 use solana_metrics::{influxdb, submit};
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::duration_as_ms;
 use solana_sdk::transaction::Transaction;
+use solana_sdk::vote_program::BlockDescription;
+use solana_sdk::vote_transaction::VoteTransaction;
+use std::collections::HashMap;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::{Duration, Instant};
+
+// Trigger a block election on the last entry of each block.
+fn send_block_elections(
+    ventries: &[Vec<Entry>],
+    slot_tick_height: u64,
+    weights: &HashMap<Pubkey, u64>,
+    leader_keypair: &Arc<Keypair>,
+    last_id: Hash,
+    feedback_sender: &Sender<Transaction>,
+) {
+    for entries in ventries {
+        for entry in entries {
+            if LeaderScheduler::is_last_in_block(slot_tick_height, entry.tick_height) {
+                let election_id = Keypair::new().pubkey();
+                let desc = BlockDescription::new(
+                    entry.tick_height,
+                    entry.id,
+                    Hash::default(), // TODO: Query the bank for the state hash at entry.id
+                    weights.clone(),
+                );
+                let election_tx = Transaction::vote_propose_block(
+                    leader_keypair,
+                    election_id,
+                    desc,
+                    last_id,
+                    1,
+                    1,
+                );
+                let _result = feedback_sender.send(election_tx);
+            }
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BroadcastServiceReturnType {
@@ -42,13 +80,18 @@ struct Broadcast {
 }
 
 impl Broadcast {
+    #[allow(clippy::too_many_arguments)]
     fn run(
         &mut self,
         broadcast_table: &[NodeInfo],
         receiver: &Receiver<Vec<Entry>>,
         sock: &UdpSocket,
+        entry_height: u64,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
         db_ledger: &Arc<DbLedger>,
+        leader_keypair: &Arc<Keypair>,
+        bank: &Arc<Bank>,
+        feedback_sender: &Sender<Transaction>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let entries = receiver.recv_timeout(timer)?;
@@ -74,6 +117,22 @@ impl Broadcast {
         };
 
         inc_new_counter_info!("broadcast_service-entries_received", num_entries);
+
+        // TODO: Hoist this up one function.
+        let active_set = leader_scheduler
+            .write()
+            .unwrap()
+            .get_active_set(entry_height, bank);
+        let weights = bank.get_stakes(&active_set);
+
+        send_block_elections(
+            &ventries,
+            entry_height,
+            &weights,
+            leader_keypair,
+            bank.last_id(),
+            feedback_sender,
+        );
 
         let to_blobs_start = Instant::now();
 
@@ -190,6 +249,7 @@ pub struct BroadcastService {
 }
 
 impl BroadcastService {
+    #[allow(clippy::too_many_arguments)]
     fn run(
         db_ledger: &Arc<DbLedger>,
         bank: &Arc<Bank>,
@@ -200,6 +260,8 @@ impl BroadcastService {
         receiver: &Receiver<Vec<Entry>>,
         max_tick_height: Option<u64>,
         exit_signal: &Arc<AtomicBool>,
+        leader_keypair: &Arc<Keypair>,
+        feedback_sender: &Sender<Transaction>,
     ) -> BroadcastServiceReturnType {
         let me = cluster_info.read().unwrap().my_data().clone();
 
@@ -223,8 +285,12 @@ impl BroadcastService {
                 &broadcast_table,
                 receiver,
                 sock,
+                entry_height,
                 leader_scheduler,
                 db_ledger,
+                leader_keypair,
+                bank,
+                feedback_sender,
             ) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => {
@@ -256,6 +322,7 @@ impl BroadcastService {
     /// WriteStage is the last stage in the pipeline), which will then close Broadcast service,
     /// which will then close FetchStage in the Tpu, and then the rest of the Tpu,
     /// completing the cycle.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         db_ledger: Arc<DbLedger>,
         bank: Arc<Bank>,
@@ -266,7 +333,8 @@ impl BroadcastService {
         receiver: Receiver<Vec<Entry>>,
         max_tick_height: Option<u64>,
         exit_sender: Arc<AtomicBool>,
-        _feedback_sender: Sender<Transaction>,
+        leader_keypair: Arc<Keypair>,
+        feedback_sender: Sender<Transaction>,
     ) -> Self {
         let exit_signal = Arc::new(AtomicBool::new(false));
         let thread_hdl = Builder::new()
@@ -283,6 +351,8 @@ impl BroadcastService {
                     &receiver,
                     max_tick_height,
                     &exit_signal,
+                    &leader_keypair,
+                    &feedback_sender,
                 )
             })
             .unwrap();
@@ -321,7 +391,7 @@ mod test {
     }
 
     fn setup_dummy_broadcast_service(
-        leader_pubkey: Pubkey,
+        leader_keypair: Keypair,
         ledger_path: &str,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         entry_receiver: Receiver<Vec<Entry>>,
@@ -332,7 +402,7 @@ mod test {
         let db_ledger = Arc::new(DbLedger::open(ledger_path).unwrap());
 
         // Make the leader node and scheduler
-        let leader_info = Node::new_localhost_with_pubkey(leader_pubkey);
+        let leader_info = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         // Make a node to broadcast to
         let buddy_keypair = Keypair::new();
@@ -359,6 +429,7 @@ mod test {
             entry_receiver,
             Some(max_tick_height),
             exit_sender,
+            Arc::new(leader_keypair),
             feedback_sender,
         );
 
@@ -388,7 +459,7 @@ mod test {
             let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
             let (entry_sender, entry_receiver) = channel();
             let broadcast_service = setup_dummy_broadcast_service(
-                leader_keypair.pubkey(),
+                leader_keypair,
                 &ledger_path,
                 leader_scheduler.clone(),
                 entry_receiver,
