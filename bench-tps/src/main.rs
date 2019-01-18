@@ -93,7 +93,13 @@ fn main() {
     } = cfg;
 
     println!("Looking for leader at {:?}", network);
-    let leader = poll_gossip_for_leader(network, None).expect("unable to find leader on network");
+    let leader = poll_gossip_for_leader(network, Some(30)).unwrap_or_else(|err| {
+        println!(
+            "Error: unable to find leader on network after 30 seconds: {:?}",
+            err
+        );
+        exit(1);
+    });
 
     let exit_signal = Arc::new(AtomicBool::new(false));
     let (nodes, leader, gossip_service) = converge(&leader, &exit_signal, num_nodes);
