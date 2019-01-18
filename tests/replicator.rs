@@ -257,6 +257,7 @@ fn test_replicator_startup_leader_hang() {
 }
 
 #[test]
+#[should_panic]
 fn test_replicator_startup_ledger_hang() {
     use std::net::UdpSocket;
 
