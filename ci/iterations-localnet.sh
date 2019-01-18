@@ -19,6 +19,17 @@ _ cargo build --all --features="$FEATURES"
 export PATH=$PWD/target/debug:$PATH
 export USE_INSTALL=1
 
-_ ci/localnet-sanity.sh -b -i 256
-# TODO: Enable next line once leader rotation stability is fixed
-#_ ci/localnet-sanity.sh -i 256
+# Leader rotation disabled
+_ ci/localnet-sanity.sh -b -i 128
+
+# Leader rotation disabled, restart all nodes periodically
+_ ci/localnet-sanity.sh -b -i 128 -k 16
+
+# Leader rotation enabled
+_ ci/localnet-sanity.sh -i 128
+
+# Leader rotation enabled, restart all nodes periodically
+# TODO: Enable
+#_ ci/localnet-sanity.sh -i 128 -k 16
+
+echo --- fin
