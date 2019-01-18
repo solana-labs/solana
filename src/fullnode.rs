@@ -302,7 +302,7 @@ impl Fullnode {
             };
 
             // Start in leader mode.
-            let (tpu, entry_receiver, tpu_exit) = Tpu::new(
+            let (tpu, entry_receiver, tpu_exit, feedback_sender) = Tpu::new(
                 &bank,
                 Default::default(),
                 node.sockets
@@ -329,6 +329,7 @@ impl Fullnode {
                 entry_receiver,
                 max_tick_height,
                 tpu_exit,
+                feedback_sender,
             );
             let leader_state = LeaderServices::new(tpu, broadcast_service);
             Some(NodeRole::Leader(leader_state))
@@ -471,7 +472,7 @@ impl Fullnode {
             ls_lock.max_height_for_leader(tick_height + 1)
         };
 
-        let (tpu, blob_receiver, tpu_exit) = Tpu::new(
+        let (tpu, blob_receiver, tpu_exit, feedback_sender) = Tpu::new(
             &self.bank,
             Default::default(),
             self.tpu_sockets
@@ -499,6 +500,7 @@ impl Fullnode {
             blob_receiver,
             max_tick_height,
             tpu_exit,
+            feedback_sender,
         );
         let leader_state = LeaderServices::new(tpu, broadcast_service);
         self.node_role = Some(NodeRole::Leader(leader_state));

@@ -10,9 +10,10 @@ use crate::service::Service;
 use crate::sigverify_stage::SigVerifyStage;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::transaction::Transaction;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
 use std::thread;
 
@@ -37,7 +38,12 @@ impl Tpu {
         max_tick_height: Option<u64>,
         last_entry_id: &Hash,
         leader_id: Pubkey,
-    ) -> (Self, Receiver<Vec<Entry>>, Arc<AtomicBool>) {
+    ) -> (
+        Self,
+        Receiver<Vec<Entry>>,
+        Arc<AtomicBool>,
+        Sender<Transaction>,
+    ) {
         let exit = Arc::new(AtomicBool::new(false));
 
         let (fetch_stage, packet_receiver) = FetchStage::new(transactions_sockets, exit.clone());
@@ -45,7 +51,7 @@ impl Tpu {
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
 
-        let (banking_stage, entry_receiver) = BankingStage::new(
+        let (banking_stage, entry_receiver, feedback_sender) = BankingStage::new(
             &bank,
             verified_receiver,
             tick_duration,
@@ -61,7 +67,7 @@ impl Tpu {
             exit: exit.clone(),
         };
 
-        (tpu, entry_receiver, exit)
+        (tpu, entry_receiver, exit, feedback_sender)
     }
 
     pub fn exit(&self) {

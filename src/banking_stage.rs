@@ -20,7 +20,7 @@ use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
@@ -54,9 +54,14 @@ impl BankingStage {
         last_entry_id: &Hash,
         max_tick_height: Option<u64>,
         leader_id: Pubkey,
-    ) -> (Self, Receiver<Vec<Entry>>) {
+    ) -> (Self, Receiver<Vec<Entry>>, Sender<Transaction>) {
         let (entry_sender, entry_receiver) = channel();
+
+        // A way to send transations into the TPU from later stages.
+        let (feedback_sender, feedback_receiver) = channel();
+
         let shared_verified_receiver = Arc::new(Mutex::new(verified_receiver));
+        let shared_feedback_receiver = Arc::new(Mutex::new(feedback_receiver));
         let poh_recorder =
             PohRecorder::new(bank.clone(), entry_sender, *last_entry_id, max_tick_height);
 
@@ -80,6 +85,7 @@ impl BankingStage {
                 let thread_verified_receiver = shared_verified_receiver.clone();
                 let thread_poh_recorder = poh_recorder.clone();
                 let thread_banking_exit = poh_service.poh_exit.clone();
+                let thread_feedback_receiver = shared_feedback_receiver.clone();
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
@@ -88,6 +94,7 @@ impl BankingStage {
                                 &thread_bank,
                                 &thread_verified_receiver,
                                 &thread_poh_recorder,
+                                &thread_feedback_receiver,
                             ) {
                                 debug!("got error {:?}", e);
                                 match e {
@@ -125,6 +132,7 @@ impl BankingStage {
                 compute_confirmation_service,
             },
             entry_receiver,
+            feedback_sender,
         )
     }
 
@@ -169,6 +177,7 @@ impl BankingStage {
         bank: &Arc<Bank>,
         verified_receiver: &Arc<Mutex<Receiver<VerifiedPackets>>>,
         poh: &PohRecorder,
+        feedback_receiver: &Arc<Mutex<Receiver<Transaction>>>,
     ) -> Result<()> {
         let recv_start = Instant::now();
         let mms = verified_receiver
@@ -208,6 +217,13 @@ impl BankingStage {
                 })
                 .collect();
             debug!("verified transactions {}", transactions.len());
+
+            let transactions: Vec<_> = feedback_receiver
+                .lock()
+                .unwrap()
+                .try_iter()
+                .chain(transactions.into_iter())
+                .collect();
             Self::process_transactions(bank, &transactions, poh)?;
             new_tx_count += transactions.len();
         }
@@ -281,7 +297,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&Mint::new(2)));
         let dummy_leader_id = Keypair::new().pubkey();
         let (verified_sender, verified_receiver) = channel();
-        let (banking_stage, _entry_receiver) = BankingStage::new(
+        let (banking_stage, _entry_receiver, _feedback_sender) = BankingStage::new(
             &bank,
             verified_receiver,
             Default::default(),
@@ -301,7 +317,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&Mint::new(2)));
         let dummy_leader_id = Keypair::new().pubkey();
         let (_verified_sender, verified_receiver) = channel();
-        let (banking_stage, entry_receiver) = BankingStage::new(
+        let (banking_stage, entry_receiver, _feedback_sender) = BankingStage::new(
             &bank,
             verified_receiver,
             Default::default(),
@@ -322,7 +338,7 @@ mod tests {
         let dummy_leader_id = Keypair::new().pubkey();
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
-        let (banking_stage, entry_receiver) = BankingStage::new(
+        let (banking_stage, entry_receiver, _feedback_sender) = BankingStage::new(
             &bank,
             verified_receiver,
             Config::Sleep(Duration::from_millis(1)),
@@ -350,7 +366,7 @@ mod tests {
         let dummy_leader_id = Keypair::new().pubkey();
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
-        let (banking_stage, entry_receiver) = BankingStage::new(
+        let (banking_stage, entry_receiver, _feedback_sender) = BankingStage::new(
             &bank,
             verified_receiver,
             Default::default(),
@@ -406,7 +422,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&mint));
         let dummy_leader_id = Keypair::new().pubkey();
         let (verified_sender, verified_receiver) = channel();
-        let (banking_stage, entry_receiver) = BankingStage::new(
+        let (banking_stage, entry_receiver, _feedback_sender) = BankingStage::new(
             &bank,
             verified_receiver,
             Default::default(),
@@ -461,7 +477,7 @@ mod tests {
         let dummy_leader_id = Keypair::new().pubkey();
         let (_verified_sender_, verified_receiver) = channel();
         let max_tick_height = 10;
-        let (banking_stage, _entry_receiver) = BankingStage::new(
+        let (banking_stage, _entry_receiver, _feedback_sender) = BankingStage::new(
             &bank,
             verified_receiver,
             Default::default(),

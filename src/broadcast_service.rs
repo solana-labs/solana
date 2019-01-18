@@ -17,9 +17,10 @@ use rayon::prelude::*;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
+use solana_sdk::transaction::Transaction;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc::{Receiver, RecvTimeoutError};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::{Duration, Instant};
@@ -265,6 +266,7 @@ impl BroadcastService {
         receiver: Receiver<Vec<Entry>>,
         max_tick_height: Option<u64>,
         exit_sender: Arc<AtomicBool>,
+        _feedback_sender: Sender<Transaction>,
     ) -> Self {
         let exit_signal = Arc::new(AtomicBool::new(false));
         let thread_hdl = Builder::new()
@@ -344,6 +346,8 @@ mod test {
         let exit_sender = Arc::new(AtomicBool::new(false));
         let bank = Arc::new(Bank::default());
 
+        let (feedback_sender, _feedback_receiver) = channel();
+
         // Start up the broadcast stage
         let broadcast_service = BroadcastService::new(
             db_ledger.clone(),
@@ -355,6 +359,7 @@ mod test {
             entry_receiver,
             Some(max_tick_height),
             exit_sender,
+            feedback_sender,
         );
 
         MockBroadcastService {
