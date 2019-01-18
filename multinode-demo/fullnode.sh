@@ -192,6 +192,7 @@ $rsync -vPr "$rsync_leader_url"/config/ledger/ "$ledger_config_dir"
   echo "Unable to retrieve ledger from $rsync_leader_url"
   exit 1
 }
+$solana_ledger_tool --ledger "$ledger_config_dir" verify
 
 $solana_wallet --keypair "$fullnode_id_path" address
 
