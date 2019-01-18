@@ -473,6 +473,7 @@ impl Bank {
             .load_accounts(txs, &mut last_ids, lock_results, max_age, error_counters)
     }
 
+    #[allow(clippy::type_complexity)]
     fn load_and_execute_transactions(
         &self,
         txs: &[Transaction],
