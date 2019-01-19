@@ -190,17 +190,17 @@ impl RpcSubscriptions {
         subscriptions.insert(*pubkey, hashmap);
     }
 
-    pub fn remove_account_subscription(&self, id: SubscriptionId) -> bool {
+    pub fn remove_account_subscription(&self, id: &SubscriptionId) -> bool {
         let mut subscriptions = self.account_subscriptions.write().unwrap();
         let mut found = false;
         subscriptions.retain(|_, v| {
             v.retain(|k, _| {
-                if *k == id {
+                if *k == *id {
                     found = true;
                 }
                 !found
             });
-            v.len() != 0
+            !v.is_empty()
         });
         found
     }
@@ -221,17 +221,17 @@ impl RpcSubscriptions {
         subscriptions.insert(*signature, hashmap);
     }
 
-    pub fn remove_signature_subscription(&self, id: SubscriptionId) -> bool {
+    pub fn remove_signature_subscription(&self, id: &SubscriptionId) -> bool {
         let mut subscriptions = self.signature_subscriptions.write().unwrap();
         let mut found = false;
         subscriptions.retain(|_, v| {
             v.retain(|k, _| {
-                if *k == id {
+                if *k == *id {
                     found = true;
                 }
                 !found
             });
-            v.len() != 0
+            !v.is_empty()
         });
         found
     }
@@ -286,7 +286,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 
     fn account_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
         info!("account_unsubscribe: id={:?}", id);
-        if self.subscription.remove_account_subscription(id) == true {
+        if self.subscription.remove_account_subscription(&id) {
             Ok(true)
         } else {
             Err(Error {
@@ -346,7 +346,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 
     fn signature_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
         info!("signature_unsubscribe");
-        if self.subscription.remove_signature_subscription(id) == true {
+        if self.subscription.remove_signature_subscription(&id) {
             Ok(true)
         } else {
             Err(Error {
@@ -779,7 +779,7 @@ mod tests {
             assert_eq!(expected, response);
         }
 
-        subscriptions.remove_account_subscription(sub_id);
+        subscriptions.remove_account_subscription(&sub_id);
         assert!(!subscriptions
             .account_subscriptions
             .write()
@@ -817,7 +817,7 @@ mod tests {
             assert_eq!(expected, response);
         }
 
-        subscriptions.remove_signature_subscription(sub_id);
+        subscriptions.remove_signature_subscription(&sub_id);
         assert!(!subscriptions
             .signature_subscriptions
             .write()
