@@ -42,7 +42,7 @@ rayon = "1.0.0"
 reqwest = "0.9.8"
 ring = "0.13.2"
 rocksdb = "0.11.0"
-serde = "1.0.84"
+serde = "1.0.85"
 serde_derive = "1.0.84"
 serde_json = "1.0.36"
 solana-bpfloader = { path = "programs/native/bpf_loader", version = "0.12.0" }
