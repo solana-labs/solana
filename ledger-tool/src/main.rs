@@ -1,5 +1,5 @@
 use clap::{crate_version, App, Arg, SubCommand};
-use solana::bank::{Bank, BankError};
+use solana::bank::Bank;
 use solana::db_ledger::DbLedger;
 use std::io::{stdout, Write};
 use std::process::exit;
@@ -139,15 +139,12 @@ fn main() {
                 last_id = entry.id;
                 num_entries += 1;
 
-                match bank.process_entry(&entry) {
-                    Ok(_) | Err(BankError::ProgramError(_, _)) => {}
-                    Err(e) => {
-                        eprintln!("verify failed at entry[{}], err: {:?}", i + 2, e);
-                        if !matches.is_present("continue") {
-                            exit(1);
-                        }
+                if let Err(e) = bank.process_entry(&entry) {
+                    eprintln!("verify failed at entry[{}], err: {:?}", i + 2, e);
+                    if !matches.is_present("continue") {
+                        exit(1);
                     }
-                };
+                }
             }
             println!("{} entries.  last_id={:?}", num_entries, last_id);
         }
