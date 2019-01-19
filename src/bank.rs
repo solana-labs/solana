@@ -12,7 +12,7 @@ use crate::leader_scheduler::LeaderScheduler;
 use crate::mint::Mint;
 use crate::poh_recorder::PohRecorder;
 use crate::rpc::RpcSignatureStatus;
-use crate::rpc_pubsub::RpcSubsciptions;
+use crate::rpc_pubsub::RpcSubscriptions;
 use crate::runtime::{self, RuntimeError};
 use crate::status_deque::{Status, StatusDeque, MAX_ENTRY_IDS};
 use crate::storage_stage::StorageState;
@@ -106,7 +106,7 @@ pub struct Bank {
 
     pub storage_state: StorageState,
 
-    subscriptions: RwLock<Arc<RpcSubsciptions>>,
+    subscriptions: RwLock<Arc<RpcSubscriptions>>,
 }
 
 impl Default for Bank {
@@ -117,7 +117,7 @@ impl Default for Bank {
             confirmation_time: AtomicUsize::new(std::usize::MAX),
             leader_scheduler: Arc::new(RwLock::new(LeaderScheduler::default())),
             storage_state: StorageState::new(),
-            subscriptions: RwLock::new(Arc::new(RpcSubsciptions::default())),
+            subscriptions: RwLock::new(Arc::new(RpcSubscriptions::default())),
         }
     }
 }
@@ -143,7 +143,7 @@ impl Bank {
         bank
     }
 
-    pub fn update_subscriptions(&self, subscriptions: &Arc<RpcSubsciptions>) {
+    pub fn update_subscriptions(&self, subscriptions: &Arc<RpcSubscriptions>) {
         let mut sub = self.subscriptions.write().unwrap();
         *sub = subscriptions.clone()
     }
@@ -878,7 +878,6 @@ impl Bank {
 mod tests {
     use super::*;
     use crate::entry::{next_entries, next_entry, Entry};
-    use crate::jsonrpc_macros::pubsub::{Subscriber, SubscriptionId};
     use crate::signature::GenKeys;
     use crate::status_deque;
     use crate::status_deque::StatusDequeError;
@@ -892,7 +891,6 @@ mod tests {
     use solana_sdk::transaction::Instruction;
     use std;
     use std::sync::mpsc::channel;
-    use tokio::prelude::{Async, Stream};
 
     #[test]
     fn test_bank_new() {
@@ -1324,90 +1322,7 @@ mod tests {
             Ok(_)
         );
     }
-    #[test]
-    fn test_bank_account_subscribe() {
-        let mint = Mint::new(100);
-        let bank = Bank::new(&mint);
-        let alice = Keypair::new();
-        let bank_sub_id = Keypair::new().pubkey();
-        let last_id = bank.last_id();
-        let tx = Transaction::system_create(
-            &mint.keypair(),
-            alice.pubkey(),
-            last_id,
-            1,
-            16,
-            budget_program::id(),
-            0,
-        );
-        bank.process_transaction(&tx).unwrap();
 
-        let (subscriber, _id_receiver, mut transport_receiver) =
-            Subscriber::new_test("accountNotification");
-        let sub_id = SubscriptionId::Number(0 as u64);
-        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-        bank.add_account_subscription(bank_sub_id, alice.pubkey(), sink);
-
-        assert!(bank
-            .account_subscriptions
-            .write()
-            .unwrap()
-            .contains_key(&alice.pubkey()));
-
-        let account = bank.get_account(&alice.pubkey()).unwrap();
-        bank.check_account_subscriptions(&alice.pubkey(), &account);
-        let string = transport_receiver.poll();
-        assert!(string.is_ok());
-        if let Async::Ready(Some(response)) = string.unwrap() {
-            let expected = format!(r#"{{"jsonrpc":"2.0","method":"accountNotification","params":{{"result":{{"executable":false,"loader":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"owner":[129,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}},"subscription":0}}}}"#);
-            assert_eq!(expected, response);
-        }
-
-        bank.remove_account_subscription(&bank_sub_id, &alice.pubkey());
-        assert!(!bank
-            .account_subscriptions
-            .write()
-            .unwrap()
-            .contains_key(&alice.pubkey()));
-    }
-    #[test]
-    fn test_bank_signature_subscribe() {
-        let mint = Mint::new(100);
-        let bank = Bank::new(&mint);
-        let alice = Keypair::new();
-        let bank_sub_id = Keypair::new().pubkey();
-        let last_id = bank.last_id();
-        let tx = Transaction::system_move(&mint.keypair(), alice.pubkey(), 20, last_id, 0);
-        let signature = tx.signatures[0];
-        bank.process_transaction(&tx).unwrap();
-
-        let (subscriber, _id_receiver, mut transport_receiver) =
-            Subscriber::new_test("signatureNotification");
-        let sub_id = SubscriptionId::Number(0 as u64);
-        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-        bank.add_signature_subscription(bank_sub_id, signature, sink);
-
-        assert!(bank
-            .signature_subscriptions
-            .write()
-            .unwrap()
-            .contains_key(&signature));
-
-        bank.check_signature_subscriptions(&signature, RpcSignatureStatus::Confirmed);
-        let string = transport_receiver.poll();
-        assert!(string.is_ok());
-        if let Async::Ready(Some(response)) = string.unwrap() {
-            let expected = format!(r#"{{"jsonrpc":"2.0","method":"signatureNotification","params":{{"result":"Confirmed","subscription":0}}}}"#);
-            assert_eq!(expected, response);
-        }
-
-        bank.remove_signature_subscription(&bank_sub_id, &signature);
-        assert!(!bank
-            .signature_subscriptions
-            .write()
-            .unwrap()
-            .contains_key(&signature));
-    }
     #[test]
     fn test_first_err() {
         assert_eq!(Bank::first_err(&[Ok(())]), Ok(()));

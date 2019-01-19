@@ -31,7 +31,7 @@ pub struct PubSubService {
     thread_hdl: JoinHandle<()>,
     exit: Arc<AtomicBool>,
     rpc_bank: Arc<RwLock<RpcPubSubBank>>,
-    subscription: Arc<RpcSubsciptions>,
+    subscription: Arc<RpcSubscriptions>,
 }
 
 impl Service for PubSubService {
@@ -137,22 +137,22 @@ impl RpcPubSubBank {
     }
 }
 
-pub struct RpcSubsciptions {
+pub struct RpcSubscriptions {
     account_subscriptions: RwLock<HashMap<Pubkey, HashMap<SubscriptionId, Sink<Account>>>>,
     signature_subscriptions:
         RwLock<HashMap<Signature, HashMap<SubscriptionId, Sink<RpcSignatureStatus>>>>,
 }
 
-impl Default for RpcSubsciptions {
+impl Default for RpcSubscriptions {
     fn default() -> Self {
-        RpcSubsciptions {
+        RpcSubscriptions {
             account_subscriptions: Default::default(),
             signature_subscriptions: Default::default(),
         }
     }
 }
 
-impl BankSubscriptions for RpcSubsciptions {
+impl BankSubscriptions for RpcSubscriptions {
     fn check_account(&self, pubkey: &Pubkey, account: &Account) {
         let subscriptions = self.account_subscriptions.read().unwrap();
         if let Some(hashmap) = subscriptions.get(pubkey) {
@@ -173,15 +173,74 @@ impl BankSubscriptions for RpcSubsciptions {
     }
 }
 
+impl RpcSubscriptions {
+    pub fn add_account_subscription(
+        &self,
+        pubkey: &Pubkey,
+        sub_id: &SubscriptionId,
+        sink: &Sink<Account>,
+    ) {
+        let mut subscriptions = self.account_subscriptions.write().unwrap();
+        if let Some(current_hashmap) = subscriptions.get_mut(pubkey) {
+            current_hashmap.insert(sub_id.clone(), sink.clone());
+            return;
+        }
+        let mut hashmap = HashMap::new();
+        hashmap.insert(sub_id.clone(), sink.clone());
+        subscriptions.insert(*pubkey, hashmap);
+    }
+
+    pub fn remove_account_subscription(&self, id: SubscriptionId) -> bool {
+        let mut subscriptions = self.account_subscriptions.write().unwrap();
+        let mut found = false;
+        subscriptions.retain(|_, v| {
+            v.retain(|k, _| {
+                if *k == id {
+                    found = true;
+                }
+                !found
+            });
+            v.len() != 0
+        });
+        found
+    }
+
+    pub fn add_signature_subscription(
+        &self,
+        signature: &Signature,
+        sub_id: &SubscriptionId,
+        sink: &Sink<RpcSignatureStatus>,
+    ) {
+        let mut subscriptions = self.signature_subscriptions.write().unwrap();
+        if let Some(current_hashmap) = subscriptions.get_mut(signature) {
+            current_hashmap.insert(sub_id.clone(), sink.clone());
+            return;
+        }
+        let mut hashmap = HashMap::new();
+        hashmap.insert(sub_id.clone(), sink.clone());
+        subscriptions.insert(*signature, hashmap);
+    }
+
+    pub fn remove_signature_subscription(&self, id: SubscriptionId) -> bool {
+        let mut subscriptions = self.signature_subscriptions.write().unwrap();
+        let mut found = false;
+        subscriptions.retain(|_, v| {
+            v.retain(|k, _| {
+                if *k == id {
+                    found = true;
+                }
+                !found
+            });
+            v.len() != 0
+        });
+        found
+    }
+}
+
 struct RpcSolPubSubImpl {
     uid: Arc<atomic::AtomicUsize>,
     bank: Arc<RwLock<RpcPubSubBank>>,
-    subscription: Arc<RpcSubsciptions>,
-    /*
-    account_subscriptions: RwLock<HashMap<Pubkey, HashMap<SubscriptionId, Sink<Account>>>>,
-    signature_subscriptions:
-        RwLock<HashMap<Signature, HashMap<SubscriptionId, Sink<RpcSignatureStatus>>>>,
-    */
+    subscription: Arc<RpcSubscriptions>,
 }
 
 impl RpcSolPubSubImpl {
@@ -220,35 +279,15 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         let sub_id = SubscriptionId::Number(id as u64);
         info!("account_subscribe: account={:?} id={:?}", pubkey, sub_id);
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
-        //let bank_sub_id = Keypair::new().pubkey();
 
-        let mut subscriptions = self.subscription.account_subscriptions.write().unwrap();
-        if let Some(current_hashmap) = subscriptions.get_mut(&pubkey) {
-            current_hashmap.insert(sub_id.clone(), sink);
-            return;
-        }
-        let mut hashmap = HashMap::new();
-        hashmap.insert(sub_id.clone(), sink);
-        subscriptions.insert(pubkey, hashmap);
+        self.subscription
+            .add_account_subscription(&pubkey, &sub_id, &sink)
     }
 
     fn account_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
         info!("account_unsubscribe: id={:?}", id);
-
-        let mut subscriptions = self.subscription.account_subscriptions.write().unwrap();
-        let mut found = false;
-        subscriptions.retain(|_, v| {
-            v.retain(|k, _| {
-                if *k == id {
-                    found = true;
-                }
-                !found
-            });
-            v.len() != 0
-        });
-
-        if found == true {
-            Ok(found)
+        if self.subscription.remove_account_subscription(id) == true {
+            Ok(true)
         } else {
             Err(Error {
                 code: ErrorCode::InvalidParams,
@@ -288,9 +327,9 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
             .bank
             .get_signature_status(&signature);
         if status.is_none() {
-            sink.notify(Ok(RpcSignatureStatus::Confirmed))
-                .wait()
-                .unwrap();
+            self.subscription
+                .add_signature_subscription(&signature, &sub_id, &sink);
+            return;
         }
 
         match status.unwrap() {
@@ -299,35 +338,16 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
                     .wait()
                     .unwrap();
             }
-            _ => {
-                let mut subscriptions = self.subscription.signature_subscriptions.write().unwrap();
-                if let Some(current_hashmap) = subscriptions.get_mut(&signature) {
-                    current_hashmap.insert(sub_id.clone(), sink);
-                } else {
-                    let mut hashmap = HashMap::new();
-                    hashmap.insert(sub_id.clone(), sink);
-                    subscriptions.insert(signature, hashmap);
-                }
-            }
+            _ => self
+                .subscription
+                .add_signature_subscription(&signature, &sub_id, &sink),
         }
     }
 
     fn signature_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
         info!("signature_unsubscribe");
-        let mut subscriptions = self.subscription.signature_subscriptions.write().unwrap();
-        let mut found = false;
-        subscriptions.retain(|_, v| {
-            v.retain(|k, _| {
-                if *k == id {
-                    found = true;
-                }
-                !found
-            });
-            v.len() != 0
-        });
-
-        if found == true {
-            Ok(found)
+        if self.subscription.remove_signature_subscription(id) == true {
+            Ok(true)
         } else {
             Err(Error {
                 code: ErrorCode::InvalidParams,
@@ -342,6 +362,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 mod tests {
     use super::*;
     use crate::jsonrpc_core::futures::sync::mpsc;
+    use crate::jsonrpc_macros::pubsub::{Subscriber, SubscriptionId};
     use crate::mint::Mint;
     use solana_sdk::budget_program;
     use solana_sdk::budget_transaction::BudgetTransaction;
@@ -375,7 +396,8 @@ mod tests {
         let session = Arc::new(Session::new(sender));
 
         let mut io = PubSubHandler::default();
-        let rpc = RpcSolPubSubImpl::new(arc_bank.clone());
+        let rpc_bank = Arc::new(RwLock::new(RpcPubSubBank::new(arc_bank.clone())));
+        let rpc = RpcSolPubSubImpl::new(rpc_bank.clone());
         io.extend_with(rpc.to_delegate());
 
         // Test signature subscription
@@ -448,7 +470,8 @@ mod tests {
         let session = Arc::new(Session::new(sender));
 
         let mut io = PubSubHandler::default();
-        let rpc = RpcSolPubSubImpl::new(arc_bank.clone());
+        let rpc_bank = Arc::new(RwLock::new(RpcPubSubBank::new(arc_bank.clone())));
+        let rpc = RpcSolPubSubImpl::new(rpc_bank.clone());
         io.extend_with(rpc.to_delegate());
 
         let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 20, last_id, 0);
@@ -502,7 +525,8 @@ mod tests {
         let session = Arc::new(Session::new(sender));
 
         let mut io = PubSubHandler::default();
-        let rpc = RpcSolPubSubImpl::new(arc_bank.clone());
+        let rpc_bank = Arc::new(RwLock::new(RpcPubSubBank::new(arc_bank.clone())));
+        let rpc = RpcSolPubSubImpl::new(rpc_bank.clone());
         io.extend_with(rpc.to_delegate());
 
         let req = format!(
@@ -680,7 +704,8 @@ mod tests {
         let session = Arc::new(Session::new(sender));
 
         let mut io = PubSubHandler::default();
-        let rpc = RpcSolPubSubImpl::new(arc_bank.clone());
+        let rpc_bank = Arc::new(RwLock::new(RpcPubSubBank::new(arc_bank.clone())));
+        let rpc = RpcSolPubSubImpl::new(rpc_bank.clone());
 
         io.extend_with(rpc.to_delegate());
 
@@ -713,5 +738,90 @@ mod tests {
         let result: Response = serde_json::from_str(&res.expect("actual response"))
             .expect("actual response deserialization");
         assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_check_account_subscribe() {
+        let mint = Mint::new(100);
+        let bank = Bank::new(&mint);
+        let alice = Keypair::new();
+        let last_id = bank.last_id();
+        let tx = Transaction::system_create(
+            &mint.keypair(),
+            alice.pubkey(),
+            last_id,
+            1,
+            16,
+            budget_program::id(),
+            0,
+        );
+        bank.process_transaction(&tx).unwrap();
+
+        let (subscriber, _id_receiver, mut transport_receiver) =
+            Subscriber::new_test("accountNotification");
+        let sub_id = SubscriptionId::Number(0 as u64);
+        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
+        let subscriptions = RpcSubscriptions::default();
+        subscriptions.add_account_subscription(&alice.pubkey(), &sub_id, &sink);
+
+        assert!(subscriptions
+            .account_subscriptions
+            .write()
+            .unwrap()
+            .contains_key(&alice.pubkey()));
+
+        let account = bank.get_account(&alice.pubkey()).unwrap();
+        subscriptions.check_account(&alice.pubkey(), &account);
+        let string = transport_receiver.poll();
+        assert!(string.is_ok());
+        if let Async::Ready(Some(response)) = string.unwrap() {
+            let expected = format!(r#"{{"jsonrpc":"2.0","method":"accountNotification","params":{{"result":{{"executable":false,"loader":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"owner":[129,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}},"subscription":0}}}}"#);
+            assert_eq!(expected, response);
+        }
+
+        subscriptions.remove_account_subscription(sub_id);
+        assert!(!subscriptions
+            .account_subscriptions
+            .write()
+            .unwrap()
+            .contains_key(&alice.pubkey()));
+    }
+    #[test]
+    fn test_check_signature_subscribe() {
+        let mint = Mint::new(100);
+        let bank = Bank::new(&mint);
+        let alice = Keypair::new();
+        let last_id = bank.last_id();
+        let tx = Transaction::system_move(&mint.keypair(), alice.pubkey(), 20, last_id, 0);
+        let signature = tx.signatures[0];
+        bank.process_transaction(&tx).unwrap();
+
+        let (subscriber, _id_receiver, mut transport_receiver) =
+            Subscriber::new_test("signatureNotification");
+        let sub_id = SubscriptionId::Number(0 as u64);
+        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
+        let subscriptions = RpcSubscriptions::default();
+        subscriptions.add_signature_subscription(&signature, &sub_id, &sink);
+
+        assert!(subscriptions
+            .signature_subscriptions
+            .write()
+            .unwrap()
+            .contains_key(&signature));
+
+        subscriptions.check_signature(&signature, RpcSignatureStatus::Confirmed);
+        let string = transport_receiver.poll();
+        assert!(string.is_ok());
+        if let Async::Ready(Some(response)) = string.unwrap() {
+            let expected = format!(r#"{{"jsonrpc":"2.0","method":"signatureNotification","params":{{"result":"Confirmed","subscription":0}}}}"#);
+            assert_eq!(expected, response);
+        }
+
+        subscriptions.remove_signature_subscription(sub_id);
+        assert!(!subscriptions
+            .signature_subscriptions
+            .write()
+            .unwrap()
+            .contains_key(&signature));
     }
 }
