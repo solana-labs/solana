@@ -536,7 +536,12 @@ impl Bank {
     pub fn process_entry(&self, entry: &Entry) -> Result<()> {
         if !entry.is_tick() {
             for result in self.process_transactions(&entry.transactions) {
-                result?;
+                match result {
+                    // Entries that result in a ProgramError are still valid and are written in the
+                    // ledger so map them to an ok return value
+                    Err(BankError::ProgramError(_, _)) => Ok(()),
+                    _ => result,
+                }?;
             }
         } else {
             self.register_tick(&entry.id);
@@ -1277,6 +1282,15 @@ mod tests {
             let entry = Entry::new(&hash, 0, num_hashes, vec![tx]);
             hash = entry.id;
             entries.push(entry);
+
+            // Add a second Transaction that will produce a
+            // ProgramError<0, ResultWithNegativeTokens> error when processed
+            let keypair2 = Keypair::new();
+            let tx = Transaction::system_new(&keypair, keypair2.pubkey(), 42, last_id);
+            let entry = Entry::new(&hash, 0, num_hashes, vec![tx]);
+            hash = entry.id;
+            entries.push(entry);
+
             if (i + 1) % ticks == 0 {
                 let tick = Entry::new(&hash, 0, num_hashes, vec![]);
                 hash = tick.id;
@@ -1316,7 +1330,7 @@ mod tests {
         bank.add_system_program();
         let (ledger_height, last_id) = bank.process_ledger(ledger).unwrap();
         assert_eq!(bank.get_balance(&pubkey), 1);
-        assert_eq!(ledger_height, 5);
+        assert_eq!(ledger_height, 6);
         assert_eq!(bank.tick_height(), 2);
         assert_eq!(bank.last_id(), last_id);
     }
