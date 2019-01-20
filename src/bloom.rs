@@ -44,7 +44,8 @@ impl<T: BloomHashIndex> Bloom<T> {
         key.hash_at_index(k) % self.bits.len()
     }
     pub fn clear(&mut self) {
-        self.bits.clear();
+        let len = self.bits.len();
+        self.bits = BitVec::new_fill(false, len);
     }
     pub fn add(&mut self, key: &T) {
         for k in &self.keys {

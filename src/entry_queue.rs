@@ -147,3 +147,55 @@ impl EntryQueue {
         self.last_id = last_id;
     }
 }
+#[cfg(test)]
+mod tests {
+    //    use super::*;
+    //    use bincode::serialize;
+    //
+    //     #[test]
+    //     fn test_count_valid_ids() {
+    //         let first_id = Default::default();
+    //         let mut status_deque: StatusDeque<()> = StatusDeque::default();
+    //         status_deque.register_tick(&first_id);
+    //         let ids: Vec<_> = (0..MAX_ENTRY_IDS)
+    //             .map(|i| {
+    //                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
+    //                 status_deque.register_tick(&last_id);
+    //                 last_id
+    //             })
+    //             .collect();
+    //         assert_eq!(status_deque.count_valid_ids(&[]).len(), 0);
+    //         assert_eq!(status_deque.count_valid_ids(&[first_id]).len(), 0);
+    //         for (i, id) in status_deque.count_valid_ids(&ids).iter().enumerate() {
+    //             assert_eq!(id.0, i);
+    //         }
+    //     }
+    //
+    //     #[test]
+    //     fn test_register_tick() {
+    //         let signature = Signature::default();
+    //         let last_id = Default::default();
+    //         let mut status_deque: StatusDeque<()> = StatusDeque::default();
+    //         assert_eq!(
+    //             status_deque.get_signature(&last_id, &signature),
+    //             Err(StatusDequeError::LastIdNotFound)
+    //         );
+    //         status_deque.register_tick(&last_id);
+    //         assert_eq!(status_deque.get_signature(&last_id, &signature), Ok(()));
+    //     }
+    //     #[test]
+    //     fn test_reject_old_last_id() {
+    //         let signature = Signature::default();
+    //         let last_id = Default::default();
+    //         let mut status_deque: StatusDeque<()> = StatusDeque::default();
+    //         for i in 0..MAX_ENTRY_IDS {
+    //             let last_id = hash(&serialize(&i).unwrap()); // Unique hash
+    //             status_deque.register_tick(&last_id);
+    //         }
+    //         // Assert we're no longer able to use the oldest entry ID.
+    //         assert_eq!(
+    //             status_deque.get_signature(&last_id, &signature),
+    //             Err(StatusDequeError::LastIdNotFound)
+    //         );
+    //     }
+}

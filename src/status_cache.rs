@@ -5,7 +5,7 @@ use hashbrown::HashMap;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Signature;
 use std::collections::VecDeque;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 
 type FailureMap<T> = HashMap<Signature, T>;
 
@@ -118,6 +118,15 @@ impl StatusCache {
         }
         false
     }
+    pub fn clear_all<U>(checkpoints: &mut [U]) -> bool
+    where
+        U: DerefMut<Target = Self>,
+    {
+        for c in checkpoints.iter_mut() {
+            c.clear();
+        }
+        false
+    }
 }
 #[cfg(test)]
 mod tests {
@@ -125,7 +134,7 @@ mod tests {
     //use bincode::serialize;
     use solana_sdk::hash::hash;
     #[test]
-    fn test_duplicate_transaction_signature() {
+    fn test_has_signature() {
         let sig = Default::default();
         let last_id = hash(Hash::default().as_ref());
         let mut status_cache = StatusCache::new(&last_id);
@@ -137,7 +146,7 @@ mod tests {
     }
 
     #[test]
-    fn test_duplicate_transaction_signature_checkpoint() {
+    fn test_has_signature_checkpoint() {
         let sig = Default::default();
         let last_id = hash(Hash::default().as_ref());
         let mut first = StatusCache::new(&last_id);
@@ -152,99 +161,75 @@ mod tests {
         );
         assert!(StatusCache::has_signature_all(&checkpoints, &sig));
     }
-    //
-    //     #[test]
-    //     fn test_count_valid_ids() {
-    //         let first_id = Default::default();
-    //         let mut status_deque: StatusDeque<()> = StatusDeque::default();
-    //         status_deque.register_tick(&first_id);
-    //         let ids: Vec<_> = (0..MAX_ENTRY_IDS)
-    //             .map(|i| {
-    //                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-    //                 status_deque.register_tick(&last_id);
-    //                 last_id
-    //             })
-    //             .collect();
-    //         assert_eq!(status_deque.count_valid_ids(&[]).len(), 0);
-    //         assert_eq!(status_deque.count_valid_ids(&[first_id]).len(), 0);
-    //         for (i, id) in status_deque.count_valid_ids(&ids).iter().enumerate() {
-    //             assert_eq!(id.0, i);
-    //         }
-    //     }
-    //
-    //     #[test]
-    //     fn test_clear_signatures() {
-    //         let signature = Signature::default();
-    //         let last_id = Default::default();
-    //         let mut status_deque: StatusDeque<()> = StatusDeque::default();
-    //         status_deque.register_tick(&last_id);
-    //         status_deque.get_signature(&last_id, &signature).unwrap();
-    //         status_deque.clear_signatures();
-    //         assert_eq!(status_deque.get_signature(&last_id, &signature), Ok(()));
-    //     }
-    //
-    //     #[test]
-    //     fn test_clear_signatures_checkpoint() {
-    //         let signature = Signature::default();
-    //         let last_id = Default::default();
-    //         let mut status_deque: StatusDeque<()> = StatusDeque::default();
-    //         status_deque.register_tick(&last_id);
-    //         status_deque.get_signature(&last_id, &signature).unwrap();
-    //         status_deque.checkpoint();
-    //         status_deque.clear_signatures();
-    //         assert_eq!(status_deque.get_signature(&last_id, &signature), Ok(()));
-    //     }
-    //
-    //     #[test]
-    //     fn test_get_signature_status() {
-    //         let signature = Signature::default();
-    //         let last_id = Default::default();
-    //         let mut status_deque: StatusDeque<()> = StatusDeque::default();
-    //         status_deque.register_tick(&last_id);
-    //         status_deque
-    //             .get_signature(&last_id, &signature)
-    //             .expect("reserve signature");
-    //         assert_eq!(status_deque.get_signature_status(&signature), Some(Ok()),);
-    //     }
-    //
-    //     #[test]
-    //     fn test_register_tick() {
-    //         let signature = Signature::default();
-    //         let last_id = Default::default();
-    //         let mut status_deque: StatusDeque<()> = StatusDeque::default();
-    //         assert_eq!(
-    //             status_deque.get_signature(&last_id, &signature),
-    //             Err(StatusDequeError::LastIdNotFound)
-    //         );
-    //         status_deque.register_tick(&last_id);
-    //         assert_eq!(status_deque.get_signature(&last_id, &signature), Ok(()));
-    //     }
-    //
-    //     #[test]
-    //     fn test_has_signature() {
-    //         let signature = Signature::default();
-    //         let last_id = Default::default();
-    //         let mut status_deque: StatusDeque<()> = StatusDeque::default();
-    //         status_deque.register_tick(&last_id);
-    //         status_deque
-    //             .get_signature(&last_id, &signature)
-    //             .expect("reserve signature");
-    //         assert!(status_deque.has_signature(&signature));
-    //     }
-    //
-    //     #[test]
-    //     fn test_reject_old_last_id() {
-    //         let signature = Signature::default();
-    //         let last_id = Default::default();
-    //         let mut status_deque: StatusDeque<()> = StatusDeque::default();
-    //         for i in 0..MAX_ENTRY_IDS {
-    //             let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-    //             status_deque.register_tick(&last_id);
-    //         }
-    //         // Assert we're no longer able to use the oldest entry ID.
-    //         assert_eq!(
-    //             status_deque.get_signature(&last_id, &signature),
-    //             Err(StatusDequeError::LastIdNotFound)
-    //         );
-    //     }
+
+    #[test]
+    fn test_has_signature_merged1() {
+        let sig = Default::default();
+        let last_id = hash(Hash::default().as_ref());
+        let mut first = StatusCache::new(&last_id);
+        first.add(&sig);
+        assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
+        let last_id = hash(last_id.as_ref());
+        let second = StatusCache::new(&last_id);
+        first.merge_into_trunk(second);
+        assert_eq!(first.get_signature_status(&sig), Some(Ok(())),);
+        assert!(first.has_signature(&sig));
+    }
+
+    #[test]
+    fn test_has_signature_merged2() {
+        let sig = Default::default();
+        let last_id = hash(Hash::default().as_ref());
+        let mut first = StatusCache::new(&last_id);
+        first.add(&sig);
+        assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
+        let last_id = hash(last_id.as_ref());
+        let mut second = StatusCache::new(&last_id);
+        second.merge_into_trunk(first);
+        assert_eq!(second.get_signature_status(&sig), Some(Ok(())),);
+        assert!(second.has_signature(&sig));
+    }
+
+    #[test]
+    fn test_failure_status() {
+        let sig = Default::default();
+        let last_id = hash(Hash::default().as_ref());
+        let mut first = StatusCache::new(&last_id);
+        first.add(&sig);
+        first.save_failure_status(&sig, BankError::DuplicateSignature);
+        assert_eq!(first.has_signature(&sig), true);
+        assert_eq!(
+            first.get_signature_status(&sig),
+            Some(Err(BankError::DuplicateSignature)),
+        );
+    }
+
+    #[test]
+    fn test_clear_signatures() {
+        let sig = Default::default();
+        let last_id = hash(Hash::default().as_ref());
+        let mut first = StatusCache::new(&last_id);
+        first.add(&sig);
+        assert_eq!(first.has_signature(&sig), true);
+        first.save_failure_status(&sig, BankError::DuplicateSignature);
+        assert_eq!(
+            first.get_signature_status(&sig),
+            Some(Err(BankError::DuplicateSignature)),
+        );
+        first.clear();
+        assert_eq!(first.has_signature(&sig), false);
+        assert_eq!(first.get_signature_status(&sig), None,);
+    }
+    #[test]
+    fn test_clear_signatures_all() {
+        let sig = Default::default();
+        let last_id = hash(Hash::default().as_ref());
+        let mut first = StatusCache::new(&last_id);
+        first.add(&sig);
+        assert_eq!(first.has_signature(&sig), true);
+        let mut second = StatusCache::new(&last_id);
+        let mut checkpoints = [&mut second, &mut first];
+        StatusCache::clear_all(&mut checkpoints);
+        assert_eq!(StatusCache::has_signature_all(&checkpoints, &sig), false);
+    }
 }
