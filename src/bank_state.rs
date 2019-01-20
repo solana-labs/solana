@@ -583,21 +583,21 @@ impl BankState {
         }
         Ok(())
     }
-    pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
-        for c in &self.checkpoints {
-            if let Some(status) = c.get_signature_status(signature) {
-                return Some(status);
-            }
-        }
-        None
+    pub fn get_signature_status(&self, sig: &Signature) -> Option<Result<()>> {
+        let checkpoints: Vec<_> = self
+            .checkpoints
+            .iter()
+            .map(|c| c.status_cache.read().unwrap())
+            .collect();
+        StatusCache::get_signature_status_all(&checkpoints, sig)
     }
-    pub fn has_signature(&self, signature: &Signature) -> bool {
-        for c in &self.checkpoints {
-            if c.has_signature(signature) {
-                return true;
-            }
-        }
-        false
+    pub fn has_signature(&self, sig: &Signature) -> bool {
+        let checkpoints: Vec<_> = self
+            .checkpoints
+            .iter()
+            .map(|c| c.status_cache.read().unwrap())
+            .collect();
+        StatusCache::has_signature_all(&checkpoints, sig)
     }
 }
 
