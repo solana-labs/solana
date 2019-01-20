@@ -151,7 +151,6 @@ impl Fullnode {
         let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
 
         info!("creating bank...");
-
         let db_ledger = Self::make_db_ledger(ledger_path);
         let (bank, entry_height, last_entry_id) =
             Self::new_bank_from_db_ledger(&db_ledger, leader_scheduler);
@@ -167,9 +166,11 @@ impl Fullnode {
         if let Some(port) = rpc_port {
             rpc_addr.set_port(port);
         }
+        info!("node rpc address: {}", rpc_addr);
+        info!("node leader_addr: {:?}", leader_addr);
 
         let leader_info = leader_addr.map(|i| NodeInfo::new_entry_point(&i));
-        let server = Self::new_with_bank(
+        Self::new_with_bank(
             keypair,
             vote_signer,
             bank,
@@ -182,21 +183,7 @@ impl Fullnode {
             sigverify_disabled,
             rpc_port,
             storage_rotate_count,
-        );
-
-        match leader_addr {
-            Some(leader_addr) => {
-                info!(
-                    "validator ready... rpc address: {}, connected to: {}",
-                    rpc_addr, leader_addr
-                );
-            }
-            None => {
-                info!("leader ready... rpc address: {}", rpc_addr);
-            }
-        }
-
-        server
+        )
     }
 
     /// Create a fullnode instance acting as a leader or validator.
