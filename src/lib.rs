@@ -30,8 +30,8 @@ pub mod crds_gossip_push;
 pub mod crds_traits_impls;
 pub mod crds_value;
 pub mod create_vote_account;
-pub mod entry_queue;
 pub mod forks;
+pub mod last_id_queue;
 pub mod subscriptions;
 #[macro_use]
 pub mod contact_info;

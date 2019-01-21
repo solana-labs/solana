@@ -2,7 +2,7 @@ use crate::accounts::{Accounts, ErrorCounters};
 use crate::bank::{BankError, Result};
 use crate::counter::Counter;
 use crate::entry::Entry;
-use crate::entry_queue::{EntryQueue, MAX_ENTRY_IDS};
+use crate::last_id_queue::{LastIdQueue, MAX_ENTRY_IDS};
 use crate::poh_recorder::PohRecorder;
 use crate::replay_stage::BLOCK_TICK_COUNT;
 use crate::runtime::{self, RuntimeError};
@@ -27,7 +27,7 @@ pub struct BankCheckpoint {
     /// accounts database
     pub accounts: Accounts,
     /// entries
-    entry_q: RwLock<EntryQueue>,
+    entry_q: RwLock<LastIdQueue>,
     /// status cache
     status_cache: RwLock<StatusCache>,
     finalized: AtomicBool,
@@ -45,7 +45,7 @@ impl BankCheckpoint {
     pub fn new(fork_id: u64, last_id: &Hash) -> Self {
         BankCheckpoint {
             accounts: Accounts::default(),
-            entry_q: RwLock::new(EntryQueue::default()),
+            entry_q: RwLock::new(LastIdQueue::default()),
             status_cache: RwLock::new(StatusCache::new(last_id)),
             finalized: AtomicBool::new(false),
             fork_id: AtomicUsize::new(fork_id as usize),

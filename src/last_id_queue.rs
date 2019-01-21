@@ -12,23 +12,23 @@ use solana_sdk::timing::timestamp;
 pub const MAX_ENTRY_IDS: usize = NUM_TICKS_PER_SECOND * 120;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-struct Entry {
+struct LastIdEntry {
     timestamp: u64,
     tick_height: u64,
 }
 
 /// Low memory overhead, so can be cloned for every checkpoint
 #[derive(Clone)]
-pub struct EntryQueue {
+pub struct LastIdQueue {
     /// updated whenever an id is registered, at each tick ;)
     pub tick_height: u64,
 
     /// last tick to be registered
     pub last_id: Option<Hash>,
 
-    entries: HashMap<Hash, Entry>,
+    entries: HashMap<Hash, LastIdEntry>,
 }
-impl Default for EntryQueue {
+impl Default for LastIdQueue {
     fn default() -> Self {
         Self {
             entries: HashMap::new(),
@@ -38,7 +38,7 @@ impl Default for EntryQueue {
     }
 }
 
-impl EntryQueue {
+impl LastIdQueue {
     /// Check if the age of the entry_id is within the max_age
     /// return false for any entries with an age equal to or above max_age
     pub fn check_entry_id_age(&self, entry_id: Hash, max_age: usize) -> bool {
@@ -69,7 +69,7 @@ impl EntryQueue {
 
         self.entries.insert(
             *last_id,
-            Entry {
+            LastIdEntry {
                 tick_height,
                 timestamp: timestamp(),
             },
@@ -131,7 +131,7 @@ impl EntryQueue {
         self.tick_height = 0;
         self.last_id = None;
     }
-    /// fork for EntryQueue is a simple clone
+    /// fork for LastIdQueue is a simple clone
     pub fn fork(&self) -> Self {
         Self {
             entries: self.entries.clone(),
@@ -156,7 +156,7 @@ mod tests {
     #[test]
     fn test_count_valid_ids() {
         let first_id = Hash::default();
-        let mut entry_queue = EntryQueue::default();
+        let mut entry_queue = LastIdQueue::default();
         entry_queue.register_tick(&first_id);
         let ids: Vec<_> = (0..MAX_ENTRY_IDS)
             .map(|i| {
@@ -175,7 +175,7 @@ mod tests {
     #[test]
     fn test_register_tick() {
         let last_id = Hash::default();
-        let mut entry_queue = EntryQueue::default();
+        let mut entry_queue = LastIdQueue::default();
         assert!(!entry_queue.check_entry(last_id));
         entry_queue.register_tick(&last_id);
         assert!(entry_queue.check_entry(last_id));
@@ -183,7 +183,7 @@ mod tests {
     #[test]
     fn test_reject_old_last_id() {
         let last_id = Hash::default();
-        let mut entry_queue = EntryQueue::default();
+        let mut entry_queue = LastIdQueue::default();
         for i in 0..MAX_ENTRY_IDS {
             let last_id = hash(&serialize(&i).unwrap()); // Unique hash
             entry_queue.register_tick(&last_id);
@@ -194,7 +194,7 @@ mod tests {
     #[test]
     fn test_fork() {
         let last_id = Hash::default();
-        let mut first = EntryQueue::default();
+        let mut first = LastIdQueue::default();
         assert!(!first.check_entry(last_id));
         first.register_tick(&last_id);
         let second = first.fork();
@@ -203,7 +203,7 @@ mod tests {
     #[test]
     fn test_merge() {
         let last_id = Hash::default();
-        let mut first = EntryQueue::default();
+        let mut first = LastIdQueue::default();
         assert!(!first.check_entry(last_id));
         let mut second = first.fork();
         second.register_tick(&last_id);
