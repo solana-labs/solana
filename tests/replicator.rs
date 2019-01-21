@@ -294,8 +294,6 @@ fn test_replicator_startup_ledger_hang() {
         let signer_proxy =
             VoteSignerProxy::new(&validator_keypair, Box::new(LocalVoteSigner::default()));
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
-        #[cfg(feature = "chacha")]
-        let validator_node_info = validator_node.info.clone();
 
         let _ = Fullnode::new(
             validator_node,
