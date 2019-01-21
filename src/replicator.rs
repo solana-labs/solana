@@ -4,10 +4,9 @@ use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
 use crate::client::mk_client;
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
 use crate::db_ledger::DbLedger;
-use crate::entry::EntryReceiver;
 use crate::gossip_service::GossipService;
 use crate::leader_scheduler::LeaderScheduler;
-use crate::result::Result;
+use crate::result::{self, Result};
 use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
 use crate::service::Service;
 use crate::storage_stage::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
@@ -43,9 +42,6 @@ pub struct Replicator {
     fetch_stage: BlobFetchStage,
     t_window: JoinHandle<()>,
     pub retransmit_receiver: BlobReceiver,
-    // Currently unused. Stored to prevent the window service from experiencing errors when sending
-    #[allow(dead_code)]
-    entry_receiver: EntryReceiver,
     exit: Arc<AtomicBool>,
     entry_height: u64,
 }
@@ -112,7 +108,7 @@ impl Replicator {
     /// * `leader_info` - NodeInfo representing the leader
     /// * `keypair` - Keypair for this replicator
     /// * `timeout` - (optional) timeout for polling for leader/downloading the ledger. Defaults to
-    /// 10 seconds
+    /// 30 seconds
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         ledger_path: Option<&str>,
@@ -123,7 +119,7 @@ impl Replicator {
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));
         let done = Arc::new(AtomicBool::new(false));
-        let timeout = timeout.unwrap_or_else(|| Duration::new(10, 0));
+        let timeout = timeout.unwrap_or_else(|| Duration::new(30, 0));
 
         info!("Replicator: id: {}", keypair.pubkey());
         info!("Creating cluster info....");
@@ -154,7 +150,7 @@ impl Replicator {
         );
 
         info!("polling for leader");
-        let leader = Self::poll_for_leader(&cluster_info)?;
+        let leader = Self::poll_for_leader(&cluster_info, timeout)?;
 
         info!("Got leader: {:?}", leader);
 
@@ -283,7 +279,6 @@ impl Replicator {
             gossip_service,
             fetch_stage,
             t_window,
-            entry_receiver,
             retransmit_receiver,
             exit,
             entry_height,
@@ -313,16 +308,27 @@ impl Replicator {
         self.entry_height
     }
 
-    fn poll_for_leader(cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<NodeInfo> {
-        for _ in 0..30 {
+    fn poll_for_leader(
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        timeout: Duration,
+    ) -> Result<NodeInfo> {
+        let start = Instant::now();
+        loop {
             if let Some(l) = cluster_info.read().unwrap().get_gossip_top_leader() {
                 return Ok(l.clone());
+            }
+
+            let elapsed = start.elapsed();
+            if elapsed > timeout {
+                return Err(result::Error::IO(io::Error::new(
+                    ErrorKind::TimedOut,
+                    "Timed out waiting to receive any blocks",
+                )));
             }
 
             sleep(Duration::from_millis(900));
             info!("{}", cluster_info.read().unwrap().node_info_trace());
         }
-        Err(Error::new(ErrorKind::Other, "Couldn't find leader"))?
     }
 
     fn poll_for_last_id_and_entry_height(

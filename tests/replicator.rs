@@ -220,7 +220,6 @@ fn test_replicator_startup() {
 }
 
 #[test]
-#[should_panic]
 fn test_replicator_startup_leader_hang() {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::time::Duration;
@@ -240,24 +239,24 @@ fn test_replicator_startup_leader_hang() {
         let fake_gossip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let leader_info = NodeInfo::new_entry_point(&fake_gossip);
 
-        let _ = Replicator::new(
+        let replicator_res = Replicator::new(
             Some(replicator_ledger_path),
             replicator_node,
             &leader_info,
             &replicator_keypair,
             Some(Duration::from_secs(3)),
-        )
-        .unwrap();
+        );
+
+        assert!(replicator_res.is_err());
     }
 
-    DbLedger::destroy(&leader_ledger_path).expect("Expected successful database destruction");
-    DbLedger::destroy(&replicator_ledger_path).expect("Expected successful database destruction");
+    let _ignored = DbLedger::destroy(&leader_ledger_path);
+    let _ignored = DbLedger::destroy(&replicator_ledger_path);
     let _ignored = remove_dir_all(&leader_ledger_path);
     let _ignored = remove_dir_all(&replicator_ledger_path);
 }
 
 #[test]
-#[should_panic]
 fn test_replicator_startup_ledger_hang() {
     use std::net::UdpSocket;
 
@@ -318,18 +317,19 @@ fn test_replicator_startup_ledger_hang() {
 
         let leader_info = NodeInfo::new_entry_point(&leader_info.gossip);
 
-        let _ = Replicator::new(
+        let replicator_res = Replicator::new(
             Some(replicator_ledger_path),
             replicator_node,
             &leader_info,
             &bad_keys,
             Some(Duration::from_secs(3)),
-        )
-        .unwrap();
+        );
+
+        assert!(replicator_res.is_err());
     }
 
-    DbLedger::destroy(&leader_ledger_path).expect("Expected successful database destruction");
-    DbLedger::destroy(&replicator_ledger_path).expect("Expected successful database destruction");
+    let _ignored = DbLedger::destroy(&leader_ledger_path);
+    let _ignored = DbLedger::destroy(&replicator_ledger_path);
     let _ignored = remove_dir_all(&leader_ledger_path);
     let _ignored = remove_dir_all(&replicator_ledger_path);
 }
