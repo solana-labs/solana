@@ -19,8 +19,6 @@ use solana_wallet::wallet::{
 use std::fs::remove_dir_all;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
-use std::thread::sleep;
-use std::time::Duration;
 
 fn check_balance(expected_balance: u64, client: &RpcClient, params: Value) {
     let balance = client
@@ -65,7 +63,6 @@ fn test_wallet_timestamp_tx() {
         None,
         STORAGE_ROTATE_TEST_COUNT,
     );
-    sleep(Duration::from_millis(900));
 
     let (sender, receiver) = channel();
     run_local_drone(alice.keypair(), sender);
@@ -163,7 +160,6 @@ fn test_wallet_witness_tx() {
         None,
         STORAGE_ROTATE_TEST_COUNT,
     );
-    sleep(Duration::from_millis(900));
 
     let (sender, receiver) = channel();
     run_local_drone(alice.keypair(), sender);
@@ -257,7 +253,6 @@ fn test_wallet_cancel_tx() {
         None,
         STORAGE_ROTATE_TEST_COUNT,
     );
-    sleep(Duration::from_millis(900));
 
     let (sender, receiver) = channel();
     run_local_drone(alice.keypair(), sender);
