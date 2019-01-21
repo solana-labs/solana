@@ -3,6 +3,7 @@ set -e
 
 iterations=1
 restartInterval=never
+rollingRestart=false
 maybeNoLeaderRotation=
 extraNodes=0
 walletRpcEndpoint=
@@ -21,6 +22,9 @@ Start a local cluster and run sanity on it
   options:
    -i [number] - Number of times to run sanity (default: $iterations)
    -k [number] - Restart the cluster after this number of sanity iterations (default: $restartInterval)
+   -R          - Restart the cluster by incrementially stopping and restarting
+                 nodes (at the cadence specified by -k).  When disabled all
+                 nodes will be first killed then restarted (default: $rollingRestart)
    -b          - Disable leader rotation
    -x          - Add an extra fullnode (may be supplied multiple times)
    -r          - Select the RPC endpoint hosted by a node that starts as
@@ -33,7 +37,7 @@ EOF
 
 cd "$(dirname "$0")"/..
 
-while getopts "h?i:k:brx" opt; do
+while getopts "h?i:k:brxR" opt; do
   case $opt in
   h | \?)
     usage
@@ -52,6 +56,9 @@ while getopts "h?i:k:brx" opt; do
     ;;
   r)
     walletRpcEndpoint="--rpc-port 18899"
+    ;;
+  R)
+    rollingRestart=true
     ;;
   *)
     usage "Error: unhandled option: $opt"
@@ -76,38 +83,98 @@ numNodes=$((2 + extraNodes))
 pids=()
 logs=()
 
+getNodeLogFile() {
+  declare cmd=$1
+  declare baseCmd
+  baseCmd=$(basename "${cmd// */}" .sh)
+  echo "log-$baseCmd.txt"
+}
+
+startNode() {
+  declare cmd=$1
+  echo "--- Start $cmd"
+  declare log
+  log=$(getNodeLogFile "$cmd")
+  rm -f "$log"
+  $cmd > "$log" 2>&1 &
+  declare pid=$!
+  pids+=("$pid")
+  echo "pid: $pid"
+}
+
 startNodes() {
   declare addLogs=false
   if [[ ${#logs[@]} -eq 0 ]]; then
     addLogs=true
   fi
   for cmd in "${nodes[@]}"; do
-    echo "--- Start $cmd"
-    baseCmd=$(basename "${cmd// */}" .sh)
-    declare log=log-$baseCmd.txt
-    rm -f "$log"
-    $cmd > "$log" 2>&1 &
+    startNode "$cmd"
     if $addLogs; then
-      logs+=("$log")
+      logs+=("$(getNodeLogFile "$cmd")")
     fi
-    declare pid=$!
-    pids+=("$pid")
-    echo "pid: $pid"
   done
+}
+
+killNode() {
+  declare pid=$1
+  echo "kill $pid"
+  set +e
+  if kill "$pid"; then
+    wait "$pid"
+  else
+    echo -e "^^^ +++\\nWarning: unable to kill $pid"
+  fi
+  set -e
 }
 
 killNodes() {
   echo "--- Killing nodes"
-  set +e
   for pid in "${pids[@]}"; do
-    if kill "$pid"; then
-      wait "$pid"
+    killNode "$pid"
+  done
+  pids=()
+}
+
+rollingNodeRestart() {
+  if [[ ${#logs[@]} -ne ${#nodes[@]} ]]; then
+    echo "Error: log/nodes array length mismatch"
+    exit 1
+  fi
+  if [[ ${#pids[@]} -ne ${#nodes[@]} ]]; then
+    echo "Error: pids/nodes array length mismatch"
+    exit 1
+  fi
+
+  declare oldPids=("${pids[@]}")
+  for i in $(seq 0 $((${#logs[@]} - 1))); do
+    declare pid=${oldPids[$i]}
+    declare cmd=${nodes[$i]}
+    if [[ $i -eq 0 ]]; then
+      # First cmd should be the drone, don't restart it.
+      [[ "$cmd" = "multinode-demo/drone.sh" ]]
+      pids+=("$pid")
     else
-      echo -e "^^^ +++\\nWarning: unable to kill $pid"
+      echo "--- Restarting $pid: $cmd"
+      killNode "$pid"
+      # Delay 20 seconds to ensure the remaining cluster nodes will
+      # hit CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS (currently 15 seconds) for the
+      # node that was just stopped
+      echo "(sleeping for 20 seconds)"
+      sleep 20
+      startNode "$cmd"
     fi
   done
-  set -e
-  pids=()
+
+  # 'Atomically' remove the old pids from the pids array
+  declare oldPidsList
+  oldPidsList="$(printf ":%s" "${oldPids[@]}"):"
+  declare newPids=("${pids[0]}") # 0 = drone pid
+  for pid in "${pids[@]}"; do
+    [[ $oldPidsList =~ :$pid: ]] || {
+      newPids+=("$pid")
+    }
+  done
+  pids=("${newPids[@]}")
 }
 
 verifyLedger() {
@@ -200,9 +267,13 @@ while [[ $iteration -le $iterations ]]; do
   iteration=$((iteration + 1))
 
   if [[ $restartInterval != never && $((iteration % restartInterval)) -eq 0 ]]; then
-    killNodes
-    verifyLedger
-    startNodes
+    if $rollingRestart; then
+      rollingNodeRestart
+    else
+      killNodes
+      verifyLedger
+      startNodes
+    fi
   fi
 done
 
