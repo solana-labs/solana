@@ -114,7 +114,7 @@ impl Fullnode {
         ledger_path: &str,
         keypair: Arc<Keypair>,
         vote_signer: Arc<VoteSignerProxy>,
-        leader_addr: Option<SocketAddr>,
+        entrypoint_addr: Option<SocketAddr>,
         sigverify_disabled: bool,
         leader_scheduler: LeaderScheduler,
         rpc_port: Option<u16>,
@@ -128,7 +128,7 @@ impl Fullnode {
             ledger_path,
             keypair,
             vote_signer,
-            leader_addr,
+            entrypoint_addr,
             sigverify_disabled,
             leader_scheduler,
             rpc_port,
@@ -141,7 +141,7 @@ impl Fullnode {
         ledger_path: &str,
         keypair: Arc<Keypair>,
         vote_signer: Arc<VoteSignerProxy>,
-        leader_addr: Option<SocketAddr>,
+        entrypoint_addr: Option<SocketAddr>,
         sigverify_disabled: bool,
         leader_scheduler: LeaderScheduler,
         rpc_port: Option<u16>,
@@ -166,9 +166,9 @@ impl Fullnode {
             rpc_addr.set_port(port);
         }
         info!("node rpc address: {}", rpc_addr);
-        info!("node leader_addr: {:?}", leader_addr);
+        info!("node entrypoint_addr: {:?}", entrypoint_addr);
 
-        let leader_info = leader_addr.map(|i| NodeInfo::new_entry_point(&i));
+        let entrypoint_info = entrypoint_addr.map(|i| NodeInfo::new_entry_point(&i));
         Self::new_with_bank(
             keypair,
             vote_signer,
@@ -177,7 +177,7 @@ impl Fullnode {
             entry_height,
             &last_entry_id,
             node,
-            leader_info.as_ref(),
+            entrypoint_info.as_ref(),
             ledger_path,
             sigverify_disabled,
             rpc_port,
@@ -195,7 +195,7 @@ impl Fullnode {
         entry_height: u64,
         last_entry_id: &Hash,
         mut node: Node,
-        bootstrap_leader_info_option: Option<&NodeInfo>,
+        entrypoint_info_option: Option<&NodeInfo>,
         ledger_path: &str,
         sigverify_disabled: bool,
         rpc_port: Option<u16>,
@@ -224,15 +224,19 @@ impl Fullnode {
             keypair.clone(),
         )));
 
-        // Assume there's a drone running on the bootstrap leader
-        let mut drone_addr = match bootstrap_leader_info_option {
-            Some(bootstrap_leader_info) => bootstrap_leader_info.rpc,
-            None => rpc_addr,
+        // TODO: The RPC service assumes that there is a drone running on the cluster
+        //       entrypoint, which is a bad assumption.
+        //       See https://github.com/solana-labs/solana/issues/1830 for the removal of drone
+        //       from the RPC API
+        let drone_addr = {
+            let mut entrypoint_drone_addr = match entrypoint_info_option {
+                Some(entrypoint_info_info) => entrypoint_info_info.rpc,
+                None => rpc_addr,
+            };
+            entrypoint_drone_addr.set_port(solana_drone::drone::DRONE_PORT);
+            entrypoint_drone_addr
         };
-        drone_addr.set_port(solana_drone::drone::DRONE_PORT);
 
-        // TODO: The RPC service assumes that there is a drone running on the leader
-        // See https://github.com/solana-labs/solana/issues/1830
         let rpc_service = JsonRpcService::new(
             &bank,
             &cluster_info,
@@ -255,13 +259,13 @@ impl Fullnode {
             exit.clone(),
         );
 
-        // Insert the bootstrap leader info, should only be None if this node
+        // Insert the entrypoint info, should only be None if this node
         // is the bootstrap leader
-        if let Some(bootstrap_leader_info) = bootstrap_leader_info_option {
+        if let Some(entrypoint_info) = entrypoint_info_option {
             cluster_info
                 .write()
                 .unwrap()
-                .insert_info(bootstrap_leader_info.clone());
+                .insert_info(entrypoint_info.clone());
         }
 
         // Get the scheduled leader
