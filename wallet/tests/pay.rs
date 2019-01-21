@@ -99,7 +99,6 @@ fn test_wallet_timestamp_tx() {
         None,
     );
     let sig_response = process_command(&config_payer);
-    assert!(sig_response.is_ok());
 
     let object: Value = serde_json::from_str(&sig_response.unwrap()).unwrap();
     let process_id_str = object.get("processId").unwrap().as_str().unwrap();
@@ -117,8 +116,7 @@ fn test_wallet_timestamp_tx() {
 
     // Sign transaction by config_witness
     config_witness.command = WalletCommand::TimeElapsed(bob_pubkey, process_id, dt);
-    let sig_response = process_command(&config_witness);
-    assert!(sig_response.is_ok());
+    process_command(&config_witness).unwrap();
 
     let params = json!([format!("{}", config_payer.id.pubkey())]);
     check_balance(39, &rpc_client, params); // config_payer balance
@@ -195,7 +193,6 @@ fn test_wallet_witness_tx() {
         None,
     );
     let sig_response = process_command(&config_payer);
-    assert!(sig_response.is_ok());
 
     let object: Value = serde_json::from_str(&sig_response.unwrap()).unwrap();
     let process_id_str = object.get("processId").unwrap().as_str().unwrap();
@@ -213,8 +210,7 @@ fn test_wallet_witness_tx() {
 
     // Sign transaction by config_witness
     config_witness.command = WalletCommand::Witness(bob_pubkey, process_id);
-    let sig_response = process_command(&config_witness);
-    assert!(sig_response.is_ok());
+    process_command(&config_witness).unwrap();
 
     let params = json!([format!("{}", config_payer.id.pubkey())]);
     check_balance(39, &rpc_client, params); // config_payer balance
@@ -291,7 +287,6 @@ fn test_wallet_cancel_tx() {
         Some(config_payer.id.pubkey()),
     );
     let sig_response = process_command(&config_payer);
-    assert!(sig_response.is_ok());
 
     let object: Value = serde_json::from_str(&sig_response.unwrap()).unwrap();
     let process_id_str = object.get("processId").unwrap().as_str().unwrap();
@@ -309,8 +304,7 @@ fn test_wallet_cancel_tx() {
 
     // Sign transaction by config_witness
     config_payer.command = WalletCommand::Cancel(process_id);
-    let sig_response = process_command(&config_payer);
-    assert!(sig_response.is_ok());
+    process_command(&config_payer).unwrap();
 
     let params = json!([format!("{}", config_payer.id.pubkey())]);
     check_balance(49, &rpc_client, params); // config_payer balance
