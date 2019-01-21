@@ -35,13 +35,13 @@ impl<T: Clone> Checkpoints<T> {
     pub fn collect(&self, num: usize, mut base: u64) -> Vec<(u64, &T)> {
         let mut rv = vec![];
         loop {
+            if rv.len() == num {
+                break;
+            }
             if let Some((val, next)) = self.load(base) {
                 rv.push((base, val));
                 base = *next;
             } else {
-                break;
-            }
-            if rv.len() == num {
                 break;
             }
         }
@@ -85,5 +85,57 @@ impl<T> Default for Checkpoints<T> {
             checkpoints: HashMap::new(),
             latest: HashSet::new(),
         }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new() {
+        let cp: Checkpoints<bool> = Checkpoints::default();
+        assert!(cp.is_empty());
+    }
+
+    #[test]
+    fn test_load_store() {
+        let mut cp: Checkpoints<bool> = Checkpoints::default();
+        assert_eq!(cp.load(1), None);
+        cp.store(1, true, 0);
+        assert_eq!(cp.load(1), Some(&(true, 0)));
+    }
+    #[test]
+    fn test_collect() {
+        let mut cp: Checkpoints<bool> = Checkpoints::default();
+        assert_eq!(cp.load(1), None);
+        cp.store(1, true, 0);
+        assert_eq!(cp.collect(0, 1), vec![]);
+        assert_eq!(cp.collect(1, 1), vec![(1, &true)]);
+    }
+    #[test]
+    fn test_invert() {
+        let mut cp: Checkpoints<bool> = Checkpoints::default();
+        assert_eq!(cp.load(1), None);
+        cp.store(1, true, 0);
+        cp.store(2, true, 0);
+        let inverse = cp.invert();
+        assert_eq!(inverse.len(), 1);
+        assert_eq!(inverse[&0].len(), 2);
+        let list: Vec<u64> = inverse[&0].iter().cloned().collect();
+        assert_eq!(list, vec![1, 2]);
+    }
+    #[test]
+    fn test_prune() {
+        let mut cp: Checkpoints<bool> = Checkpoints::default();
+        assert_eq!(cp.load(1), None);
+        cp.store(1, true, 0);
+        cp.store(2, true, 0);
+        cp.store(3, true, 1);
+        let inverse = cp.invert();
+        let pruned = cp.prune(1, &inverse);
+        assert_eq!(pruned.load(0), None);
+        assert_eq!(pruned.load(1), Some(&(true, 0)));
+        assert_eq!(pruned.load(2), None);
+        assert_eq!(pruned.load(3), Some(&(true, 1)));
     }
 }
