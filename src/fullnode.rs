@@ -575,7 +575,7 @@ impl Fullnode {
         self.join()
     }
 
-    pub fn new_bank_from_db_ledger(
+    fn new_bank_from_db_ledger(
         db_ledger: &DbLedger,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> (Bank, u64, Hash) {
