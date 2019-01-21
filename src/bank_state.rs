@@ -604,6 +604,7 @@ mod test {
     use super::*;
     use solana_sdk::signature::Keypair;
     use solana_sdk::signature::KeypairUtil;
+    use solana_sdk::system_program;
     use solana_sdk::system_transaction::SystemTransaction;
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
@@ -632,6 +633,17 @@ mod test {
         }
     }
 
+    fn add_system_program(checkpoint: &BankCheckpoint) {
+        let system_program_account = Account {
+            tokens: 1,
+            owner: system_program::id(),
+            userdata: b"solana_system_program".to_vec(),
+            executable: true,
+            loader: solana_native_loader::id(),
+        };
+        checkpoint.store_slow(false, &system_program::id(), &system_program_account);
+    }
+
     #[test]
     fn test_interleaving_locks() {
         let last_id = Hash::default();
@@ -639,11 +651,14 @@ mod test {
         let alice = Keypair::new();
         let bob = Keypair::new();
         let bank = new_state(&mint, 3, &last_id);
+        bank.head().register_tick(&last_id);
+        add_system_program(bank.head());
 
         let tx1 = Transaction::system_new(&mint, alice.pubkey(), 1, last_id);
         let pay_alice = vec![tx1];
 
         let locked_alice = bank.head().lock_accounts(&pay_alice);
+        assert!(locked_alice[0].is_ok());
         let results_alice =
             bank.execute_and_commit_transactions(None, &pay_alice, locked_alice, MAX_ENTRY_IDS);
         assert_eq!(results_alice[0], Ok(()));
@@ -653,7 +668,7 @@ mod test {
             transfer(&bank, 1, &mint, bob.pubkey(), last_id),
             Err(BankError::AccountInUse)
         );
-        // the second time shoudl fail as well
+        // the second time should fail as well
         // this verifies that `unlock_accounts` doesn't unlock `AccountInUse` accounts
         assert_eq!(
             transfer(&bank, 1, &mint, bob.pubkey(), last_id),
