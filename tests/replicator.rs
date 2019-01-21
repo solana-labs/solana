@@ -132,6 +132,7 @@ fn test_replicator_startup() {
             replicator_node,
             &leader_info,
             &replicator_keypair,
+            None,
         )
         .unwrap();
 
@@ -214,6 +215,119 @@ fn test_replicator_startup() {
 
     DbLedger::destroy(&leader_ledger_path).expect("Expected successful database destruction");
     DbLedger::destroy(&replicator_ledger_path).expect("Expected successful database destruction");
+    let _ignored = remove_dir_all(&leader_ledger_path);
+    let _ignored = remove_dir_all(&replicator_ledger_path);
+}
+
+#[test]
+fn test_replicator_startup_leader_hang() {
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::time::Duration;
+
+    solana_logger::setup();
+    info!("starting replicator test");
+
+    let replicator_ledger_path = &get_tmp_ledger_path("replicator_test_replicator_ledger");
+    let leader_ledger_path = "replicator_test_leader_ledger";
+
+    {
+        let replicator_keypair = Keypair::new();
+
+        info!("starting replicator node");
+        let replicator_node = Node::new_localhost_with_pubkey(replicator_keypair.pubkey());
+
+        let fake_gossip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
+        let leader_info = NodeInfo::new_entry_point(&fake_gossip);
+
+        let replicator_res = Replicator::new(
+            Some(replicator_ledger_path),
+            replicator_node,
+            &leader_info,
+            &replicator_keypair,
+            Some(Duration::from_secs(3)),
+        );
+
+        assert!(replicator_res.is_err());
+    }
+
+    let _ignored = DbLedger::destroy(&leader_ledger_path);
+    let _ignored = DbLedger::destroy(&replicator_ledger_path);
+    let _ignored = remove_dir_all(&leader_ledger_path);
+    let _ignored = remove_dir_all(&replicator_ledger_path);
+}
+
+#[test]
+fn test_replicator_startup_ledger_hang() {
+    use std::net::UdpSocket;
+
+    solana_logger::setup();
+    info!("starting replicator test");
+    let replicator_ledger_path = &get_tmp_ledger_path("replicator_test_replicator_ledger");
+
+    info!("starting leader node");
+    let leader_keypair = Arc::new(Keypair::new());
+    let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+    let leader_info = leader_node.info.clone();
+
+    let leader_ledger_path = "replicator_test_leader_ledger";
+    let (_, leader_ledger_path) = create_tmp_genesis(leader_ledger_path, 100, leader_info.id, 1);
+
+    let validator_ledger_path =
+        tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");
+
+    {
+        let signer_proxy =
+            VoteSignerProxy::new(&leader_keypair, Box::new(LocalVoteSigner::default()));
+
+        let _ = Fullnode::new(
+            leader_node,
+            &leader_ledger_path,
+            leader_keypair,
+            Arc::new(signer_proxy),
+            None,
+            false,
+            LeaderScheduler::from_bootstrap_leader(leader_info.id.clone()),
+            None,
+        );
+
+        let validator_keypair = Arc::new(Keypair::new());
+        let signer_proxy =
+            VoteSignerProxy::new(&validator_keypair, Box::new(LocalVoteSigner::default()));
+        let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
+
+        let _ = Fullnode::new(
+            validator_node,
+            &validator_ledger_path,
+            validator_keypair,
+            Arc::new(signer_proxy),
+            Some(leader_info.gossip),
+            false,
+            LeaderScheduler::from_bootstrap_leader(leader_info.id),
+            None,
+        );
+
+        info!("starting replicator node");
+        let bad_keys = Keypair::new();
+        let mut replicator_node = Node::new_localhost_with_pubkey(bad_keys.pubkey());
+
+        // Pass bad TVU sockets to prevent successful ledger download
+        replicator_node.sockets.tvu = vec![UdpSocket::bind("0.0.0.0:0").unwrap()];
+
+        let leader_info = NodeInfo::new_entry_point(&leader_info.gossip);
+
+        let replicator_res = Replicator::new(
+            Some(replicator_ledger_path),
+            replicator_node,
+            &leader_info,
+            &bad_keys,
+            Some(Duration::from_secs(3)),
+        );
+
+        assert!(replicator_res.is_err());
+    }
+
+    let _ignored = DbLedger::destroy(&leader_ledger_path);
+    let _ignored = DbLedger::destroy(&replicator_ledger_path);
     let _ignored = remove_dir_all(&leader_ledger_path);
     let _ignored = remove_dir_all(&replicator_ledger_path);
 }
