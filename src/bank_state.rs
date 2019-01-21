@@ -161,10 +161,12 @@ impl BankCheckpoint {
     }
 
     /// Add signature to the current checkpoint
-    fn add_signatures(&self, txs: &[Transaction]) {
+    fn add_signatures(&self, txs: &[Transaction], results: &[Result<()>]) {
         let mut status_cache = self.status_cache.write().unwrap();
-        for tx in txs.iter() {
-            status_cache.add(&tx.signatures[0]);
+        for (i, tx) in txs.iter().enumerate() {
+            if results[i].is_ok() {
+                status_cache.add(&tx.signatures[0]);
+            }
         }
     }
 
@@ -295,8 +297,10 @@ impl BankState {
         let now = Instant::now();
         let results = head.check_last_id_age(txs, max_age, locked_accounts, &mut error_counters);
         let results = self.check_duplicate_signatures(txs, results, &mut error_counters);
+        head.add_signatures(txs, &results);
+
         let mut loaded_accounts = self.load_accounts(txs, results, &mut error_counters);
-        head.add_signatures(txs);
+
         let tick_height = head.tick_height();
 
         let loaders = self.load_loaders(txs, &loaded_accounts);

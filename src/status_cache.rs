@@ -49,10 +49,15 @@ impl StatusCache {
         // any mutable cache is "live" and should not be merged into
         // since it cannot be a valid trunk checkpoint
         assert!(self.merges.is_empty());
+
         self.signatures.add(&sig)
     }
     /// Save an error status for a signature
     pub fn save_failure_status(&mut self, sig: &Signature, err: BankError) {
+        if err == BankError::LastIdNotFound {
+            return;
+        }
+
         assert!(self.has_signature(sig));
         // any mutable cache is "live" and should not be merged into
         // since it cannot be a valid trunk checkpoint
