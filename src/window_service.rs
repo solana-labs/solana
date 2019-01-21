@@ -110,8 +110,7 @@ fn recv_window(
     if !consume_queue.is_empty() {
         inc_new_counter_info!("streamer-recv_window-consume", consume_queue.len());
         if let Some(entry_sender) = entry_sender {
-            // Purposefully ignoring failed sends in case receiver is dropped
-            let _ignored = entry_sender.send(consume_queue);
+            entry_sender.send(consume_queue)?;
         }
     }
     Ok(())
