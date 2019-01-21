@@ -12,7 +12,7 @@ use solana_sdk::timing::timestamp;
 pub const MAX_ENTRY_IDS: usize = NUM_TICKS_PER_SECOND * 120;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Entry {
+struct Entry {
     timestamp: u64,
     tick_height: u64,
 }
@@ -149,53 +149,65 @@ impl EntryQueue {
 }
 #[cfg(test)]
 mod tests {
-    //    use super::*;
-    //    use bincode::serialize;
-    //
-    //     #[test]
-    //     fn test_count_valid_ids() {
-    //         let first_id = Default::default();
-    //         let mut status_deque: StatusDeque<()> = StatusDeque::default();
-    //         status_deque.register_tick(&first_id);
-    //         let ids: Vec<_> = (0..MAX_ENTRY_IDS)
-    //             .map(|i| {
-    //                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-    //                 status_deque.register_tick(&last_id);
-    //                 last_id
-    //             })
-    //             .collect();
-    //         assert_eq!(status_deque.count_valid_ids(&[]).len(), 0);
-    //         assert_eq!(status_deque.count_valid_ids(&[first_id]).len(), 0);
-    //         for (i, id) in status_deque.count_valid_ids(&ids).iter().enumerate() {
-    //             assert_eq!(id.0, i);
-    //         }
-    //     }
-    //
-    //     #[test]
-    //     fn test_register_tick() {
-    //         let signature = Signature::default();
-    //         let last_id = Default::default();
-    //         let mut status_deque: StatusDeque<()> = StatusDeque::default();
-    //         assert_eq!(
-    //             status_deque.get_signature(&last_id, &signature),
-    //             Err(StatusDequeError::LastIdNotFound)
-    //         );
-    //         status_deque.register_tick(&last_id);
-    //         assert_eq!(status_deque.get_signature(&last_id, &signature), Ok(()));
-    //     }
-    //     #[test]
-    //     fn test_reject_old_last_id() {
-    //         let signature = Signature::default();
-    //         let last_id = Default::default();
-    //         let mut status_deque: StatusDeque<()> = StatusDeque::default();
-    //         for i in 0..MAX_ENTRY_IDS {
-    //             let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-    //             status_deque.register_tick(&last_id);
-    //         }
-    //         // Assert we're no longer able to use the oldest entry ID.
-    //         assert_eq!(
-    //             status_deque.get_signature(&last_id, &signature),
-    //             Err(StatusDequeError::LastIdNotFound)
-    //         );
-    //     }
+    use super::*;
+    use bincode::serialize;
+    use solana_sdk::hash::hash;
+
+    #[test]
+    fn test_count_valid_ids() {
+        let first_id = Hash::default();
+        let mut entry_queue = EntryQueue::default();
+        entry_queue.register_tick(&first_id);
+        let ids: Vec<_> = (0..MAX_ENTRY_IDS)
+            .map(|i| {
+                let last_id = hash(&serialize(&i).unwrap()); // Unique hash
+                entry_queue.register_tick(&last_id);
+                last_id
+            })
+            .collect();
+        assert_eq!(entry_queue.count_valid_ids(&[]).len(), 0);
+        assert_eq!(entry_queue.count_valid_ids(&[first_id]).len(), 0);
+        for (i, id) in entry_queue.count_valid_ids(&ids).iter().enumerate() {
+            assert_eq!(id.0, i);
+        }
+    }
+
+    #[test]
+    fn test_register_tick() {
+        let last_id = Hash::default();
+        let mut entry_queue = EntryQueue::default();
+        assert!(!entry_queue.check_entry(last_id));
+        entry_queue.register_tick(&last_id);
+        assert!(entry_queue.check_entry(last_id));
+    }
+    #[test]
+    fn test_reject_old_last_id() {
+        let last_id = Hash::default();
+        let mut entry_queue = EntryQueue::default();
+        for i in 0..MAX_ENTRY_IDS {
+            let last_id = hash(&serialize(&i).unwrap()); // Unique hash
+            entry_queue.register_tick(&last_id);
+        }
+        // Assert we're no longer able to use the oldest entry ID.
+        assert!(!entry_queue.check_entry(last_id));
+    }
+    #[test]
+    fn test_fork() {
+        let last_id = Hash::default();
+        let mut first = EntryQueue::default();
+        assert!(!first.check_entry(last_id));
+        first.register_tick(&last_id);
+        let second = first.fork();
+        assert!(second.check_entry(last_id));
+    }
+    #[test]
+    fn test_merge() {
+        let last_id = Hash::default();
+        let mut first = EntryQueue::default();
+        assert!(!first.check_entry(last_id));
+        let mut second = first.fork();
+        second.register_tick(&last_id);
+        first.merge_into_trunk(second);
+        assert!(first.check_entry(last_id));
+    }
 }
