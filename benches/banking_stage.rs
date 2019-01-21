@@ -42,7 +42,8 @@ fn check_txs(receiver: &Receiver<Vec<Entry>>, ref_tx_count: usize) {
 #[bench]
 fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let num_threads = BankingStage::num_threads() as usize;
-    let txes = 1000 * num_threads;
+    //   a multiple of packet chunk  2X duplicates to avoid races
+    let txes = 192 * 50 * num_threads * 2;
     let mint_total = 1_000_000_000_000;
     let mint = Mint::new(mint_total);
 
@@ -115,14 +116,18 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         bank.register_tick(&id);
     }
 
+    let half_len = verified.len() / 2;
+    let mut start = 0;
     bencher.iter(move || {
-        // make sure the tx last id is still registered
+        // make sure the transactions are still valid
         bank.register_tick(&mint.last_id());
-        for v in verified.chunks(verified.len() / num_threads) {
+        for v in verified[start..start + half_len].chunks(verified.len() / num_threads) {
             verified_sender.send(v.to_vec()).unwrap();
         }
-        check_txs(&signal_receiver, txes);
+        check_txs(&signal_receiver, txes / 2);
         bank.clear_signatures();
+        start += half_len;
+        start %= verified.len();
     });
 }
 
@@ -130,7 +135,8 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     let progs = 4;
     let num_threads = BankingStage::num_threads() as usize;
-    let txes = 1000 * num_threads;
+    //   a multiple of packet chunk  2X duplicates to avoid races
+    let txes = 96 * 100 * num_threads * 2;
     let mint_total = 1_000_000_000_000;
     let mint = Mint::new(mint_total);
 
@@ -218,13 +224,17 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         bank.register_tick(&id);
     }
 
+    let half_len = verified.len() / 2;
+    let mut start = 0;
     bencher.iter(move || {
         // make sure the transactions are still valid
         bank.register_tick(&mint.last_id());
-        for v in verified.chunks(verified.len() / num_threads) {
+        for v in verified[start..start + half_len].chunks(verified.len() / num_threads) {
             verified_sender.send(v.to_vec()).unwrap();
         }
-        check_txs(&signal_receiver, txes);
+        check_txs(&signal_receiver, txes / 2);
         bank.clear_signatures();
+        start += half_len;
+        start %= verified.len();
     });
 }
