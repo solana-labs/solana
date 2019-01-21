@@ -21,7 +21,7 @@ drone=$!
 solana-fullnode \
   --identity /config/leader-config.json \
   --ledger /ledger/ \
-  --rpc 8899 &
+  --rpc-port 8899 &
 fullnode=$!
 
 abort() {
