@@ -116,13 +116,6 @@ impl Default for Bank {
 }
 
 impl Bank {
-    /// Create an Bank with built-in programs.
-    pub fn new_with_builtin_programs() -> Self {
-        let bank = Self::default();
-        bank.add_builtin_programs();
-        bank
-    }
-
     /// Create an Bank using a deposit.
     fn new_from_deposits(deposits: &[Payment], trunk: u64, last_id: &Hash) -> Self {
         let bank = Self::default();
@@ -414,6 +407,8 @@ impl Bank {
             .write()
             .unwrap()
             .init_trunk_fork(BankCheckpoint::new(0, &entry0.id));
+
+        self.add_builtin_programs();
 
         // The second item in the ledger consists of a transaction with
         // two special instructions:
@@ -976,7 +971,6 @@ mod tests {
     fn test_process_ledger_simple() {
         let (ledger, pubkey) = create_sample_ledger(1);
         let bank = Bank::default();
-        bank.add_system_program();
         let (ledger_height, last_id) = bank.process_ledger(ledger).unwrap();
         assert_eq!(bank.get_balance(&pubkey), 1);
         assert_eq!(ledger_height, 5);
@@ -997,10 +991,8 @@ mod tests {
         let ledger1 = create_sample_ledger_with_mint_and_keypairs(&mint, &keypairs);
 
         let bank0 = Bank::default();
-        bank0.add_system_program();
         bank0.process_ledger(ledger0).unwrap();
         let bank1 = Bank::default();
-        bank1.add_system_program();
         bank1.process_ledger(ledger1).unwrap();
 
         let initial_state = bank0.hash_internal_state();
