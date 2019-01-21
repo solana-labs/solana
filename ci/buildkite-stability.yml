@@ -1,4 +1,0 @@
-steps:
-  - command: "ci/iterations-localnet.sh"
-    name: "iterations-localnet"
-    timeout_in_minutes: 40
