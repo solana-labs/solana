@@ -1,6 +1,7 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::bank::{Bank, BankSubscriptions};
+use crate::bank;
+use crate::bank::{Bank, BankError, BankSubscriptions};
 use crate::jsonrpc_core::futures::Future;
 use crate::jsonrpc_core::*;
 use crate::jsonrpc_macros::pubsub;
@@ -48,7 +49,7 @@ impl PubSubService {
         let rpc_bank = Arc::new(RwLock::new(RpcPubSubBank::new(bank.clone())));
         let rpc = RpcSolPubSubImpl::new(rpc_bank.clone());
         let subscription = rpc.subscription.clone();
-        bank.update_subscriptions(&subscription);
+        bank.set_subscriptions(Box::new(subscription.clone()));
         let exit = Arc::new(AtomicBool::new(false));
         let exit_ = exit.clone();
         let thread_hdl = Builder::new()
@@ -87,7 +88,7 @@ impl PubSubService {
 
     pub fn set_bank(&self, bank: &Arc<Bank>) {
         self.rpc_bank.write().unwrap().bank = bank.clone();
-        bank.update_subscriptions(&self.subscription);
+        bank.set_subscriptions(Box::new(self.subscription.clone()));
     }
 
     pub fn exit(&self) {
@@ -162,7 +163,14 @@ impl BankSubscriptions for RpcSubscriptions {
         }
     }
 
-    fn check_signature(&self, signature: &Signature, status: RpcSignatureStatus) {
+    fn check_signature(&self, signature: &Signature, bank_error: &bank::Result<()>) {
+        let status = match bank_error {
+            Ok(_) => RpcSignatureStatus::Confirmed,
+            Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
+            Err(BankError::ProgramError(_, _)) => RpcSignatureStatus::ProgramRuntimeError,
+            Err(_) => RpcSignatureStatus::GenericFailure,
+        };
+
         let mut subscriptions = self.signature_subscriptions.write().unwrap();
         if let Some(hashmap) = subscriptions.get(signature) {
             for (_bank_sub_id, sink) in hashmap.iter() {
@@ -809,7 +817,7 @@ mod tests {
             .unwrap()
             .contains_key(&signature));
 
-        subscriptions.check_signature(&signature, RpcSignatureStatus::Confirmed);
+        subscriptions.check_signature(&signature, &Ok(()));
         let string = transport_receiver.poll();
         assert!(string.is_ok());
         if let Async::Ready(Some(response)) = string.unwrap() {

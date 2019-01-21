@@ -11,8 +11,6 @@ use crate::entry::EntrySlice;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::mint::Mint;
 use crate::poh_recorder::PohRecorder;
-use crate::rpc::RpcSignatureStatus;
-use crate::rpc_pubsub::RpcSubscriptions;
 use crate::runtime::{self, RuntimeError};
 use crate::status_deque::{Status, StatusDeque, MAX_ENTRY_IDS};
 use crate::storage_stage::StorageState;
@@ -87,7 +85,19 @@ pub const VERIFY_BLOCK_SIZE: usize = 16;
 
 pub trait BankSubscriptions {
     fn check_account(&self, pubkey: &Pubkey, account: &Account);
-    fn check_signature(&self, signature: &Signature, status: RpcSignatureStatus);
+    fn check_signature(&self, signature: &Signature, status: &Result<()>);
+}
+
+struct LocalSubscriptions {}
+impl Default for LocalSubscriptions {
+    fn default() -> Self {
+        LocalSubscriptions {}
+    }
+}
+
+impl BankSubscriptions for LocalSubscriptions {
+    fn check_account(&self, _pubkey: &Pubkey, _account: &Account) {}
+    fn check_signature(&self, _signature: &Signature, _status: &Result<()>) {}
 }
 
 /// Manager for the state of all accounts and programs after processing its entries.
@@ -106,7 +116,7 @@ pub struct Bank {
 
     pub storage_state: StorageState,
 
-    subscriptions: RwLock<Arc<RpcSubscriptions>>,
+    subscriptions: RwLock<Box<Arc<BankSubscriptions + Send + Sync>>>,
 }
 
 impl Default for Bank {
@@ -117,7 +127,7 @@ impl Default for Bank {
             confirmation_time: AtomicUsize::new(std::usize::MAX),
             leader_scheduler: Arc::new(RwLock::new(LeaderScheduler::default())),
             storage_state: StorageState::new(),
-            subscriptions: RwLock::new(Arc::new(RpcSubscriptions::default())),
+            subscriptions: RwLock::new(Box::new(Arc::new(LocalSubscriptions::default()))),
         }
     }
 }
@@ -143,9 +153,9 @@ impl Bank {
         bank
     }
 
-    pub fn update_subscriptions(&self, subscriptions: &Arc<RpcSubscriptions>) {
+    pub fn set_subscriptions(&self, subscriptions: Box<Arc<BankSubscriptions + Send + Sync>>) {
         let mut sub = self.subscriptions.write().unwrap();
-        *sub = subscriptions.clone()
+        *sub = subscriptions
     }
 
     pub fn checkpoint(&self) {
@@ -299,18 +309,10 @@ impl Bank {
         let mut last_ids = self.last_ids.write().unwrap();
         for (i, tx) in txs.iter().enumerate() {
             last_ids.update_signature_status_with_last_id(&tx.signatures[0], &res[i], &tx.last_id);
-            let status = match res[i] {
-                Ok(_) => RpcSignatureStatus::Confirmed,
-                Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
-                Err(BankError::ProgramError(_, _)) => RpcSignatureStatus::ProgramRuntimeError,
-                Err(_) => RpcSignatureStatus::GenericFailure,
-            };
-            if status != RpcSignatureStatus::SignatureNotFound {
-                self.subscriptions
-                    .read()
-                    .unwrap()
-                    .check_signature(&tx.signatures[0], status);
-            }
+            self.subscriptions
+                .read()
+                .unwrap()
+                .check_signature(&tx.signatures[0], &res[i]);
         }
     }
 
