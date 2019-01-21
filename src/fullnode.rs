@@ -104,7 +104,6 @@ pub struct Fullnode {
     retransmit_socket: UdpSocket,
     tpu_sockets: Vec<UdpSocket>,
     broadcast_socket: UdpSocket,
-    rpc_pubsub_addr: SocketAddr,
     db_ledger: Arc<DbLedger>,
     vote_signer: Arc<VoteSignerProxy>,
 }
@@ -370,7 +369,6 @@ impl Fullnode {
             retransmit_socket: node.sockets.retransmit,
             tpu_sockets: node.sockets.tpu,
             broadcast_socket: node.sockets.broadcast,
-            rpc_pubsub_addr,
             db_ledger,
             vote_signer,
         }
@@ -378,12 +376,6 @@ impl Fullnode {
 
     fn leader_to_validator(&mut self) -> Result<()> {
         trace!("leader_to_validator");
-
-        // Close down any services that could have a reference to the bank
-        if self.rpc_pubsub_service.is_some() {
-            let old_rpc_pubsub_service = self.rpc_pubsub_service.take().unwrap();
-            old_rpc_pubsub_service.close()?;
-        }
 
         // Correctness check: Ensure that references to the bank and leader scheduler are no
         // longer held by any running thread
@@ -418,15 +410,9 @@ impl Fullnode {
             rpc_service.set_bank(&new_bank);
         }
 
-        // TODO: Don't restart PubSubService on leader rotation
-        //       See https://github.com/solana-labs/solana/issues/2419
-        self.rpc_pubsub_service = Some(PubSubService::new(
-            &new_bank,
-            SocketAddr::new(
-                IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-                self.rpc_pubsub_addr.port(),
-            ),
-        ));
+        if let Some(ref mut rpc_pubsub_service) = self.rpc_pubsub_service {
+            rpc_pubsub_service.set_bank(&new_bank);
+        }
 
         self.bank = new_bank;
 
