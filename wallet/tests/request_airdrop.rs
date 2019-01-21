@@ -15,8 +15,6 @@ use solana_wallet::wallet::{process_command, WalletCommand, WalletConfig};
 use std::fs::remove_dir_all;
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
-use std::thread::sleep;
-use std::time::Duration;
 
 #[test]
 fn test_wallet_request_airdrop() {
@@ -51,7 +49,6 @@ fn test_wallet_request_airdrop() {
         None,
         STORAGE_ROTATE_TEST_COUNT,
     );
-    sleep(Duration::from_millis(900));
 
     let (sender, receiver) = channel();
     run_local_drone(alice.keypair(), sender);

@@ -58,7 +58,6 @@ fn test_rpc_send_tx() {
         None,
         STORAGE_ROTATE_TEST_COUNT,
     );
-    sleep(Duration::from_millis(900));
 
     let client = reqwest::Client::new();
     let request = json!({
