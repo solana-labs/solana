@@ -85,7 +85,7 @@ pub struct Fork {
 
 impl Fork {
     fn is_trunk_of(&self, other: &Fork, fork_tree: &HashMap<usize, Fork>) -> bool {
-        let mut current = other.clone();
+        let mut current = other;
         loop {
             // found it
             if current.id == self.id {
@@ -100,7 +100,7 @@ impl Fork {
             if fork_tree.get(&current.base).is_none() {
                 return false;
             }
-            current = fork_tree.get(&current.base).unwrap().clone();
+            current = fork_tree.get(&current.base).unwrap();
         }
     }
 }
@@ -326,7 +326,7 @@ impl LockTower {
     pub fn last_fork(&self) -> Fork {
         self.last_vote()
             .map(|v| v.fork.clone())
-            .unwrap_or(self.fork_trunk.clone())
+            .unwrap_or_else(|| self.fork_trunk.clone())
     }
 }
 
@@ -520,7 +520,7 @@ fn test_with_partitions(
             }
             let vote = Vote::new(fork, time);
             assert!(tower.is_valid(&vote, &fork_tree));
-            assert!(tower.push_vote(vote.clone(), &fork_tree, &bmap));
+            assert!(tower.push_vote(vote, &fork_tree, &bmap));
         }
     }
     for tower in towers.iter_mut() {
@@ -534,7 +534,7 @@ fn test_with_partitions(
     for rounds in 0..10 {
         for i in 0..len {
             let time = warmup + rounds * len + i;
-            let base = towers[i].last_fork().clone();
+            let base = towers[i].last_fork();
             let fork = Fork {
                 id: time + num_partitions,
                 base: base.id,
