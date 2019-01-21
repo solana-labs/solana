@@ -2067,6 +2067,7 @@ mod tests {
         assert_eq!(bank.get_pubkeys_for_entry_height(0), vec![]);
     }
 
+    #[test]
     fn test_bank_process_and_record_transactions() {
         let mint = Mint::new(10_000);
         let bank = Arc::new(Bank::new(&mint));
