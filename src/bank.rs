@@ -659,11 +659,22 @@ impl Bank {
         let results: Vec<Result<()>> = entries
             .into_par_iter()
             .map(|(e, lock_results)| {
-                let results = self.load_execute_and_commit_transactions(
+                let old_results = self.load_execute_and_commit_transactions(
                     &e.transactions,
                     lock_results.to_vec(),
                     MAX_ENTRY_IDS,
                 );
+                let mut results = Vec::new();
+                results.reserve(old_results.len());
+                results = old_results
+                    .into_iter()
+                    .map(|result| match result {
+                        // Entries that result in a ProgramError are still valid and are written in the
+                        // ledger so map them to an ok return value
+                        Err(BankError::ProgramError(_, _)) => Ok(()),
+                        _ => result,
+                    })
+                    .collect();
                 self.unlock_accounts(&e.transactions, &results);
                 Self::first_err(&results)
             })
