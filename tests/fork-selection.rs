@@ -80,7 +80,7 @@ use std::collections::VecDeque;
 #[derive(Clone, Default, Debug, Hash, Eq, PartialEq)]
 pub struct Fork {
     id: usize,
-    base: usize,
+    parent_id: usize,
 }
 
 impl Fork {
@@ -91,16 +91,16 @@ impl Fork {
             if current.id == self.id {
                 return true;
             }
-            // base is 0, and this id is 0
-            if current.base == 0 && self.id == 0 {
+            // parent_id is 0, and this id is 0
+            if current.parent_id == 0 && self.id == 0 {
                 assert!(fork_tree.get(&0).is_none());
                 return true;
             }
-            // base is 0
-            if fork_tree.get(&current.base).is_none() {
+            // parent_id is 0
+            if fork_tree.get(&current.parent_id).is_none() {
                 return false;
             }
-            current = fork_tree.get(&current.base).unwrap();
+            current = fork_tree.get(&current.parent_id).unwrap();
         }
     }
 }
@@ -330,29 +330,53 @@ impl LockTower {
 #[test]
 fn test_is_trunk_of_1() {
     let tree = HashMap::new();
-    let b1 = Fork { id: 1, base: 0 };
-    let b2 = Fork { id: 2, base: 0 };
+    let b1 = Fork {
+        id: 1,
+        parent_id: 0,
+    };
+    let b2 = Fork {
+        id: 2,
+        parent_id: 0,
+    };
     assert!(!b1.is_trunk_of(&b2, &tree));
 }
 #[test]
 fn test_is_trunk_of_2() {
     let tree = HashMap::new();
-    let b1 = Fork { id: 1, base: 0 };
-    let b2 = Fork { id: 0, base: 0 };
+    let b1 = Fork {
+        id: 1,
+        parent_id: 0,
+    };
+    let b2 = Fork {
+        id: 0,
+        parent_id: 0,
+    };
     assert!(!b1.is_trunk_of(&b2, &tree));
 }
 #[test]
 fn test_is_trunk_of_3() {
     let tree = HashMap::new();
-    let b1 = Fork { id: 1, base: 0 };
-    let b2 = Fork { id: 1, base: 0 };
+    let b1 = Fork {
+        id: 1,
+        parent_id: 0,
+    };
+    let b2 = Fork {
+        id: 1,
+        parent_id: 0,
+    };
     assert!(b1.is_trunk_of(&b2, &tree));
 }
 #[test]
 fn test_is_trunk_of_4() {
     let mut tree = HashMap::new();
-    let b1 = Fork { id: 1, base: 0 };
-    let b2 = Fork { id: 2, base: 1 };
+    let b1 = Fork {
+        id: 1,
+        parent_id: 0,
+    };
+    let b2 = Fork {
+        id: 2,
+        parent_id: 1,
+    };
     tree.insert(b1.id, b1.clone());
     assert!(b1.is_trunk_of(&b2, &tree));
     assert!(!b2.is_trunk_of(&b1, &tree));
@@ -361,7 +385,10 @@ fn test_is_trunk_of_4() {
 fn test_push_vote() {
     let tree = HashMap::new();
     let bmap = HashMap::new();
-    let b0 = Fork { id: 0, base: 0 };
+    let b0 = Fork {
+        id: 0,
+        parent_id: 0,
+    };
     let mut tower = LockTower::new(32, 7, 0);
     let vote = Vote::new(b0.clone(), 0);
     assert!(tower.push_vote(vote, &tree, &bmap));
@@ -392,7 +419,10 @@ fn test_push_vote() {
 
     assert_eq!(tower.votes[0].lockout, 2);
 
-    let b1 = Fork { id: 1, base: 1 };
+    let b1 = Fork {
+        id: 1,
+        parent_id: 1,
+    };
     let vote = Vote::new(b1.clone(), 8);
     assert!(!tower.push_vote(vote, &tree, &bmap));
 
@@ -428,7 +458,7 @@ fn calc_fork_depth(fork_tree: &HashMap<usize, Fork>, id: usize) -> usize {
             break;
         }
         height += 1;
-        start = fork_tree.get(&start.unwrap().base);
+        start = fork_tree.get(&start.unwrap().parent_id);
     }
     height
 }
@@ -444,10 +474,10 @@ fn calc_fork_map(
         let mut start = tower.last_fork();
         loop {
             *lca_map.entry(start.id).or_insert(0) += 1;
-            if !fork_tree.contains_key(&start.base) {
+            if !fork_tree.contains_key(&start.parent_id) {
                 break;
             }
-            start = fork_tree.get(&start.base).unwrap().clone();
+            start = fork_tree.get(&start.parent_id).unwrap().clone();
         }
     }
     lca_map
@@ -475,10 +505,10 @@ fn test_no_partitions() {
     for rounds in 0..1 {
         for i in 0..towers.len() {
             let time = rounds * len + i;
-            let base = towers[i].last_fork().clone();
+            let parent = towers[i].last_fork().clone();
             let fork = Fork {
                 id: time + 1,
-                base: base.id,
+                parent_id: parent.id,
             };
             tree.insert(fork.id, fork.clone());
             let vote = Vote::new(fork, time);
@@ -531,10 +561,10 @@ fn test_with_partitions(
     for rounds in 0..10 {
         for i in 0..len {
             let time = warmup + rounds * len + i;
-            let base = towers[i].last_fork();
+            let parent = towers[i].last_fork();
             let fork = Fork {
                 id: time + num_partitions,
-                base: base.id,
+                parent_id: parent.id,
             };
             fork_tree.insert(fork.id, fork.clone());
             let converge_map = calc_fork_map(&towers, &fork_tree);
