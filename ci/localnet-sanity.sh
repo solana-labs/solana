@@ -90,22 +90,25 @@ pids=()
 logs=()
 
 getNodeLogFile() {
-  declare cmd=$1
+  declare nodeIndex=$1
+  declare cmd=$2
   declare baseCmd
   baseCmd=$(basename "${cmd// */}" .sh)
-  echo "log-$baseCmd.txt"
+  echo "log-$baseCmd-$nodeIndex.txt"
 }
 
 startNode() {
-  declare cmd=$1
+  declare nodeIndex=$1
+  declare cmd=$2
   echo "--- Start $cmd"
   declare log
-  log=$(getNodeLogFile "$cmd")
+  log=$(getNodeLogFile "$nodeIndex" "$cmd")
   rm -f "$log"
   $cmd > "$log" 2>&1 &
   declare pid=$!
   pids+=("$pid")
   echo "pid: $pid"
+  echo "log: $log"
 }
 
 startNodes() {
@@ -113,10 +116,11 @@ startNodes() {
   if [[ ${#logs[@]} -eq 0 ]]; then
     addLogs=true
   fi
-  for cmd in "${nodes[@]}"; do
-    startNode "$cmd"
+  for i in $(seq 0 $((${#nodes[@]} - 1))); do
+    declare cmd=${nodes[$i]}
+    startNode "$i" "$cmd"
     if $addLogs; then
-      logs+=("$(getNodeLogFile "$cmd")")
+      logs+=("$(getNodeLogFile "$i" "$cmd")")
     fi
   done
 }
@@ -167,7 +171,7 @@ rollingNodeRestart() {
       # node that was just stopped
       echo "(sleeping for 20 seconds)"
       sleep 20
-      startNode "$cmd"
+      startNode "$i" "$cmd"
     fi
   done
 
