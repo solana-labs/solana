@@ -167,6 +167,6 @@ impl LockTower {
                 ret = i + 1;
             }
         }
-        return ret;
+        ret
     }
 }
