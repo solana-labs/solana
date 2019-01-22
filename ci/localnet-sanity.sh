@@ -68,8 +68,8 @@ nodes=(
   "multinode-demo/fullnode.sh $maybeNoLeaderRotation --rpc-port 18899"
 )
 
-for _ in $(seq 1 $extraNodes); do
-  nodes+=("multinode-demo/fullnode-x.sh $maybeNoLeaderRotation")
+for i in $(seq 1 $extraNodes); do
+  nodes+=("multinode-demo/fullnode.sh -X dyn$i $maybeNoLeaderRotation")
 done
 numNodes=$((2 + extraNodes))
 
