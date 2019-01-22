@@ -29,16 +29,22 @@ else
   program="$solana_fullnode"
 fi
 
+maybe_init_complete_file=
 maybe_no_leader_rotation=
-if [[ $1 = --no-leader-rotation ]]; then
-  maybe_no_leader_rotation="--no-leader-rotation"
-  shift
-fi
 
-if [[ -n $1 ]]; then
-  echo "Unknown argument: $1"
-  exit 1
-fi
+while [[ -n $1 ]]; do
+  if [[ $1 = --init-complete-file ]]; then
+    maybe_init_complete_file="--init-complete-file $2"
+    shift 2
+  elif [[ $1 = --no-leader-rotation ]]; then
+    maybe_no_leader_rotation="--no-leader-rotation"
+    shift
+  else
+    echo "Unknown argument: $1"
+    exit 1
+  fi
+done
+
 
 if [[ -d $SNAP ]]; then
   if [[ $(snapctl get leader-rotation) = false ]]; then
@@ -50,7 +56,10 @@ tune_system
 
 trap 'kill "$pid" && wait "$pid"' INT TERM
 $solana_ledger_tool --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger verify
+
+# shellcheck disable=SC2086 # Don't want to double quote maybe_init_complete_file
 $program \
+  $maybe_init_complete_file \
   $maybe_no_leader_rotation \
   --identity "$SOLANA_CONFIG_DIR"/bootstrap-leader.json \
   --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger \
