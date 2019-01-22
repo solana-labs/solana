@@ -304,6 +304,15 @@ while [[ $iteration -le $iterations ]]; do
     timeout 60s scripts/wallet-sanity.sh $walletRpcEndpoint
   ) || flag_error_if_no_leader_rotation
 
+  echo "--- RPC API: bootstrap-leader getConfirmationTime ($iteration)"
+  (
+    set -x
+    curl --retry 5 --retry-delay 2 --retry-connrefused \
+      -X POST -H 'Content-Type: application/json' \
+      -d '{"jsonrpc":"2.0","id":1, "method":"getConfirmationTime"}' \
+      http://localhost:8899
+  ) || flag_error
+
   iteration=$((iteration + 1))
 
   if [[ $restartInterval != never && $((iteration % restartInterval)) -eq 0 ]]; then
