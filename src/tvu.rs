@@ -111,7 +111,6 @@ impl Tvu {
             db_ledger.clone(),
             &cluster_info,
             bank.tick_height(),
-            entry_height,
             Arc::new(retransmit_socket),
             repair_socket,
             blob_fetch_receiver,

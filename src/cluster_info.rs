@@ -145,7 +145,7 @@ enum Protocol {
 
     /// Window protocol messages
     /// TODO: move this message to a different module
-    RequestWindowIndex(NodeInfo, u64),
+    RequestWindowIndex(NodeInfo, u64, u64),
 }
 
 impl ClusterInfo {
@@ -692,13 +692,17 @@ impl ClusterInfo {
         orders
     }
 
-    pub fn window_index_request_bytes(&self, ix: u64) -> Result<Vec<u8>> {
-        let req = Protocol::RequestWindowIndex(self.my_data().clone(), ix);
+    pub fn window_index_request_bytes(&self, slot_height: u64, blob_index: u64) -> Result<Vec<u8>> {
+        let req = Protocol::RequestWindowIndex(self.my_data().clone(), slot_height, blob_index);
         let out = serialize(&req)?;
         Ok(out)
     }
 
-    pub fn window_index_request(&self, ix: u64) -> Result<(SocketAddr, Vec<u8>)> {
+    pub fn window_index_request(
+        &self,
+        slot_height: u64,
+        blob_index: u64,
+    ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication, as indicated
         //  by a valid tvu port location
         let valid: Vec<_> = self.repair_peers();
@@ -707,11 +711,11 @@ impl ClusterInfo {
         }
         let n = thread_rng().gen::<usize>() % valid.len();
         let addr = valid[n].gossip; // send the request to the peer's gossip port
-        let out = self.window_index_request_bytes(ix)?;
+        let out = self.window_index_request_bytes(slot_height, blob_index)?;
 
         submit(
             influxdb::Point::new("cluster-info")
-                .add_field("repair-ix", influxdb::Value::Integer(ix as i64))
+                .add_field("repair-ix", influxdb::Value::Integer(blob_index as i64))
                 .to_owned(),
         );
 
@@ -844,12 +848,12 @@ impl ClusterInfo {
         from_addr: &SocketAddr,
         db_ledger: Option<&Arc<DbLedger>>,
         me: &NodeInfo,
-        slot_index: u64,
+        slot_height: u64,
         blob_index: u64,
     ) -> Vec<SharedBlob> {
         if let Some(db_ledger) = db_ledger {
             // Try to find the requested index in one of the slots
-            let blob = db_ledger.get_data_blob(slot_index, blob_index);
+            let blob = db_ledger.get_data_blob(slot_height, blob_index);
 
             if let Ok(Some(mut blob)) = blob {
                 inc_new_counter_info!("cluster_info-window-request-ledger", 1);
@@ -864,7 +868,7 @@ impl ClusterInfo {
             "{}: failed RequestWindowIndex {} {} {}",
             me.id,
             from.id,
-            slot_index,
+            slot_height,
             blob_index,
         );
 
@@ -991,7 +995,8 @@ impl ClusterInfo {
         me: &Arc<RwLock<Self>>,
         from: &ContactInfo,
         db_ledger: Option<&Arc<DbLedger>>,
-        ix: u64,
+        slot_height: u64,
+        blob_index: u64,
         from_addr: &SocketAddr,
     ) -> Vec<SharedBlob> {
         let now = Instant::now();
@@ -1003,8 +1008,8 @@ impl ClusterInfo {
         let self_id = me.read().unwrap().gossip.id;
         if from.id == me.read().unwrap().gossip.id {
             warn!(
-                "{}: Ignored received RequestWindowIndex from ME {} {} ",
-                self_id, from.id, ix,
+                "{}: Ignored received RequestWindowIndex from ME {} {} {} ",
+                self_id, from.id, slot_height, blob_index,
             );
             inc_new_counter_info!("cluster_info-window-request-address-eq", 1);
             return vec![];
@@ -1014,16 +1019,24 @@ impl ClusterInfo {
         let my_info = me.read().unwrap().my_data().clone();
         inc_new_counter_info!("cluster_info-window-request-recv", 1);
         trace!(
-            "{}: received RequestWindowIndex from: {} index: {} ",
+            "{}: received RequestWindowIndex from: {} slot_height: {}, blob_index: {}",
             self_id,
             from.id,
-            ix,
+            slot_height,
+            blob_index,
         );
-        let res = Self::run_window_request(&from, &from_addr, db_ledger, &my_info, 0, ix);
+        let res = Self::run_window_request(
+            &from,
+            &from_addr,
+            db_ledger,
+            &my_info,
+            slot_height,
+            blob_index,
+        );
         report_time_spent(
             "RequestWindowIndex",
             &now.elapsed(),
-            &format!(" ix: {}", ix),
+            &format!("slot_height {}, blob_index: {}", slot_height, blob_index),
         );
         res
     }
@@ -1085,8 +1098,15 @@ impl ClusterInfo {
                 }
                 vec![]
             }
-            Protocol::RequestWindowIndex(from, ix) => {
-                Self::handle_request_window_index(me, &from, db_ledger, ix, from_addr)
+            Protocol::RequestWindowIndex(from, slot_height, blob_index) => {
+                Self::handle_request_window_index(
+                    me,
+                    &from,
+                    db_ledger,
+                    slot_height,
+                    blob_index,
+                    from_addr,
+                )
             }
         }
     }
@@ -1334,7 +1354,7 @@ mod tests {
     fn window_index_request() {
         let me = NodeInfo::new_localhost(Keypair::new().pubkey(), timestamp());
         let mut cluster_info = ClusterInfo::new(me);
-        let rv = cluster_info.window_index_request(0);
+        let rv = cluster_info.window_index_request(0, 0);
         assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
 
         let gossip_addr = socketaddr!([127, 0, 0, 1], 1234);
@@ -1349,7 +1369,7 @@ mod tests {
             0,
         );
         cluster_info.insert_info(nxt.clone());
-        let rv = cluster_info.window_index_request(0).unwrap();
+        let rv = cluster_info.window_index_request(0, 0).unwrap();
         assert_eq!(nxt.gossip, gossip_addr);
         assert_eq!(rv.0, nxt.gossip);
 
@@ -1369,7 +1389,7 @@ mod tests {
         let mut two = false;
         while !one || !two {
             //this randomly picks an option, so eventually it should pick both
-            let rv = cluster_info.window_index_request(0).unwrap();
+            let rv = cluster_info.window_index_request(0, 0).unwrap();
             if rv.0 == gossip_addr {
                 one = true;
             }

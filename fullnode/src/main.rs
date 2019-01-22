@@ -264,7 +264,7 @@ fn main() {
     let gossip_addr = node.info.gossip;
     let fullnode = Fullnode::new(
         node,
-        keypair.clone(),
+        &keypair,
         None,
         ledger_path,
         vote_signer,

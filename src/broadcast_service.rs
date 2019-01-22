@@ -420,7 +420,6 @@ mod test {
                     blob_index = 0;
                 }
 
-                println!("slot: {}, {}", slot, blob_index);
                 let result = db_ledger.get_data_blob(slot, blob_index).unwrap();
 
                 blob_index += 1;

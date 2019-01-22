@@ -159,7 +159,6 @@ impl ReplayStage {
         // an error occurred processing one of the entries (causing the rest of the entries to
         // not be processed).
         if entries_len != 0 {
-            println!("Sending {} entries", entries.len());
             ledger_entry_sender.send(entries)?;
         }
 

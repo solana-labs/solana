@@ -9,7 +9,9 @@ use bincode::deserialize;
 use solana::client::mk_client;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
 use solana::db_ledger::DbLedger;
-use solana::db_ledger::{create_tmp_sample_ledger, get_tmp_ledger_path, tmp_copy_ledger};
+use solana::db_ledger::{
+    create_tmp_sample_ledger, get_tmp_ledger_path, tmp_copy_ledger, DEFAULT_SLOT_HEIGHT,
+};
 use solana::entry::Entry;
 use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::replicator::Replicator;
@@ -150,7 +152,7 @@ fn test_replicator_startup_basic() {
         let cluster_info = ClusterInfo::new(tn.info.clone());
         let repair_index = replicator.entry_height();
         let req = cluster_info
-            .window_index_request_bytes(repair_index)
+            .window_index_request_bytes(DEFAULT_SLOT_HEIGHT, repair_index)
             .unwrap();
 
         let exit = Arc::new(AtomicBool::new(false));

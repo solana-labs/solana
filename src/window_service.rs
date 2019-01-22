@@ -5,10 +5,11 @@ use crate::counter::Counter;
 use crate::db_ledger::DbLedger;
 use crate::db_window::*;
 use crate::leader_scheduler::LeaderScheduler;
+use crate::repair_service::RepairService;
 use crate::result::{Error, Result};
+use crate::service::Service;
 use crate::streamer::{BlobReceiver, BlobSender};
 use log::Level;
-use rand::{thread_rng, Rng};
 use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
@@ -16,7 +17,7 @@ use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, RwLock};
-use std::thread::{Builder, JoinHandle};
+use std::thread::{self, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 
 pub const MAX_REPAIR_BACKOFF: usize = 128;
@@ -24,27 +25,6 @@ pub const MAX_REPAIR_BACKOFF: usize = 128;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum WindowServiceReturnType {
     LeaderRotation(u64),
-}
-
-fn repair_backoff(last: &mut u64, times: &mut usize, consumed: u64) -> bool {
-    //exponential backoff
-    if *last != consumed {
-        //start with a 50% chance of asking for repairs
-        *times = 1;
-    }
-    *last = consumed;
-    *times += 1;
-
-    // Experiment with capping repair request duration.
-    // Once nodes are too far behind they can spend many
-    // seconds without asking for repair
-    if *times > MAX_REPAIR_BACKOFF {
-        // 50% chance that a request will fire between 64 - 128 tries
-        *times = MAX_REPAIR_BACKOFF / 2;
-    }
-
-    //if we get lucky, make the request, which should exponentially get less likely
-    thread_rng().gen_range(0, *times as u64) == 0
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -107,99 +87,98 @@ fn recv_window(
     Ok(())
 }
 
-#[allow(clippy::too_many_arguments)]
-pub fn window_service(
-    db_ledger: Arc<DbLedger>,
-    cluster_info: Arc<RwLock<ClusterInfo>>,
-    tick_height: u64,
-    entry_height: u64,
-    max_entry_height: u64,
-    r: BlobReceiver,
-    retransmit: BlobSender,
-    repair_socket: Arc<UdpSocket>,
-    leader_scheduler: Arc<RwLock<LeaderScheduler>>,
-    done: Arc<AtomicBool>,
-    exit: Arc<AtomicBool>,
-) -> JoinHandle<()> {
-    Builder::new()
-        .name("solana-window".to_string())
-        .spawn(move || {
-            let mut tick_height_ = tick_height;
-            let mut last = entry_height;
-            let mut times = 0;
-            let id = cluster_info.read().unwrap().id();
-            trace!("{}: RECV_WINDOW started", id);
-            loop {
-                if exit.load(Ordering::Relaxed) {
-                    break;
-                }
-                if let Err(e) = recv_window(
-                    &db_ledger,
-                    &id,
-                    &leader_scheduler,
-                    &mut tick_height_,
-                    max_entry_height,
-                    &r,
-                    &retransmit,
-                    &done,
-                ) {
-                    match e {
-                        Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
-                        Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
-                        _ => {
-                            inc_new_counter_info!("streamer-window-error", 1, 1);
-                            error!("window error: {:?}", e);
-                        }
+// Implement a destructor for the window_service thread to signal it exited
+// even on panics
+struct Finalizer {
+    exit_sender: Arc<AtomicBool>,
+}
+
+impl Finalizer {
+    fn new(exit_sender: Arc<AtomicBool>) -> Self {
+        Finalizer { exit_sender }
+    }
+}
+// Implement a destructor for Finalizer.
+impl Drop for Finalizer {
+    fn drop(&mut self) {
+        self.exit_sender.clone().store(true, Ordering::Relaxed);
+    }
+}
+
+pub struct WindowService {
+    t_window: JoinHandle<()>,
+    repair_service: RepairService,
+}
+
+impl WindowService {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        db_ledger: Arc<DbLedger>,
+        cluster_info: Arc<RwLock<ClusterInfo>>,
+        tick_height: u64,
+        max_entry_height: u64,
+        r: BlobReceiver,
+        retransmit: BlobSender,
+        repair_socket: Arc<UdpSocket>,
+        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+        done: Arc<AtomicBool>,
+        exit: Arc<AtomicBool>,
+    ) -> WindowService {
+        let exit_ = exit.clone();
+        let repair_service = RepairService::new(
+            db_ledger.clone(),
+            exit.clone(),
+            repair_socket,
+            cluster_info.clone(),
+        );
+        let t_window = Builder::new()
+            .name("solana-window".to_string())
+            .spawn(move || {
+                let _exit = Finalizer::new(exit_);
+                let mut tick_height_ = tick_height;
+                let id = cluster_info.read().unwrap().id();
+                trace!("{}: RECV_WINDOW started", id);
+                loop {
+                    if exit.load(Ordering::Relaxed) {
+                        break;
                     }
-                }
-
-                let meta = db_ledger.meta(0);
-
-                if let Ok(Some(meta)) = meta {
-                    let received = meta.received;
-                    let consumed = meta.consumed;
-
-                    // Consumed should never be bigger than received
-                    assert!(consumed <= received);
-                    if received == consumed {
-                        trace!(
-                            "{} we have everything received: {} consumed: {}",
-                            id,
-                            received,
-                            consumed
-                        );
-                        continue;
-                    }
-
-                    //exponential backoff
-                    if !repair_backoff(&mut last, &mut times, consumed) {
-                        trace!("{} !repair_backoff() times = {}", id, times);
-                        continue;
-                    }
-                    trace!("{} let's repair! times = {}", id, times);
-
-                    let reqs = repair(
+                    if let Err(e) = recv_window(
                         &db_ledger,
-                        &cluster_info,
                         &id,
-                        times,
-                        tick_height_,
-                        max_entry_height,
                         &leader_scheduler,
-                    );
-
-                    if let Ok(reqs) = reqs {
-                        for (to, req) in reqs {
-                            repair_socket.send_to(&req, to).unwrap_or_else(|e| {
-                                info!("{} repair req send_to({}) error {:?}", id, to, e);
-                                0
-                            });
+                        &mut tick_height_,
+                        max_entry_height,
+                        &r,
+                        &retransmit,
+                        &done,
+                    ) {
+                        match e {
+                            Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
+                            Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
+                            _ => {
+                                inc_new_counter_info!("streamer-window-error", 1, 1);
+                                error!("window error: {:?}", e);
+                            }
                         }
                     }
                 }
-            }
-        })
-        .unwrap()
+            })
+            .unwrap();
+
+        WindowService {
+            t_window,
+            repair_service,
+        }
+    }
+}
+
+impl Service for WindowService {
+    type JoinReturnType = ();
+
+    fn join(self) -> thread::Result<()> {
+        self.t_window.join()?;
+        self.repair_service.join()
+    }
 }
 
 #[cfg(test)]
@@ -209,9 +188,9 @@ mod test {
     use crate::db_ledger::DbLedger;
     use crate::entry::make_consecutive_blobs;
     use crate::leader_scheduler::LeaderScheduler;
-
+    use crate::service::Service;
     use crate::streamer::{blob_receiver, responder};
-    use crate::window_service::{repair_backoff, window_service};
+    use crate::window_service::WindowService;
     use solana_sdk::hash::Hash;
     use std::fs::remove_dir_all;
     use std::net::UdpSocket;
@@ -245,10 +224,9 @@ mod test {
         );
         let mut leader_schedule = LeaderScheduler::default();
         leader_schedule.set_leader_schedule(vec![me_id]);
-        let t_window = window_service(
+        let t_window = WindowService::new(
             db_ledger,
             subs,
-            0,
             0,
             0,
             r_reader,
@@ -327,10 +305,9 @@ mod test {
         );
         let mut leader_schedule = LeaderScheduler::default();
         leader_schedule.set_leader_schedule(vec![me_id]);
-        let t_window = window_service(
+        let t_window = WindowService::new(
             db_ledger,
             subs.clone(),
-            0,
             0,
             0,
             r_reader,
@@ -380,34 +357,5 @@ mod test {
         t_window.join().expect("join");
         DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
         let _ignored = remove_dir_all(&db_ledger_path);
-    }
-
-    #[test]
-    pub fn test_repair_backoff() {
-        let num_tests = 100;
-        let res: usize = (0..num_tests)
-            .map(|_| {
-                let mut last = 0;
-                let mut times = 0;
-                let total: usize = (0..127)
-                    .map(|x| {
-                        let rv = repair_backoff(&mut last, &mut times, 1) as usize;
-                        assert_eq!(times, x + 2);
-                        rv
-                    })
-                    .sum();
-                assert_eq!(times, 128);
-                assert_eq!(last, 1);
-                repair_backoff(&mut last, &mut times, 1);
-                assert_eq!(times, 64);
-                repair_backoff(&mut last, &mut times, 2);
-                assert_eq!(times, 2);
-                assert_eq!(last, 2);
-                total
-            })
-            .sum();
-        let avg = res / num_tests;
-        assert!(avg >= 3);
-        assert!(avg <= 5);
     }
 }
