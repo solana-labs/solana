@@ -68,7 +68,7 @@ pub struct Fork {
 }
 
 impl Fork {
-    fn is_trunk_of(&self, other: &Fork, fork_tree: &HashMap<usize, Fork>) -> bool {
+    fn is_ancestor_of(&self, other: &Fork, fork_tree: &HashMap<usize, Fork>) -> bool {
         let mut current = other;
         loop {
             // found it
@@ -107,8 +107,8 @@ impl Vote {
     pub fn lock_height(&self) -> usize {
         self.time + self.lockout
     }
-    pub fn is_trunk_of(&self, other: &Vote, fork_tree: &HashMap<usize, Fork>) -> bool {
-        self.fork.is_trunk_of(&other.fork, fork_tree)
+    pub fn is_ancestor_of(&self, other: &Vote, fork_tree: &HashMap<usize, Fork>) -> bool {
+        self.fork.is_ancestor_of(&other.fork, fork_tree)
     }
 }
 
@@ -142,7 +142,7 @@ impl LockTower {
     ) {
         let is_valid = self
             .get_vote(self.trunk_height)
-            .map(|v| v.is_trunk_of(&vote, fork_tree))
+            .map(|v| v.is_ancestor_of(&vote, fork_tree))
             .unwrap_or(true);
         if is_valid {
             self.delayed_votes.push_front(vote);
@@ -194,7 +194,7 @@ impl LockTower {
             for i in 0..self.delayed_votes.len() {
                 let is_trunk = {
                     let v = &self.delayed_votes[i];
-                    v.is_trunk_of(votes.front().unwrap(), fork_tree)
+                    v.is_ancestor_of(votes.front().unwrap(), fork_tree)
                 };
                 if is_trunk {
                     votes.push_front(self.delayed_votes.remove(i).unwrap());
@@ -238,7 +238,7 @@ impl LockTower {
 
     pub fn score(&self, vote: &Vote, fork_tree: &HashMap<usize, Fork>) -> usize {
         let st = self.rollback_count(vote.time);
-        if st < self.votes.len() && !self.votes[st].is_trunk_of(vote, fork_tree) {
+        if st < self.votes.len() && !self.votes[st].is_ancestor_of(vote, fork_tree) {
             return 0;
         }
         let mut rv = 0;
@@ -271,7 +271,7 @@ impl LockTower {
     }
     /// only add votes that descend from the last vote in the stack
     fn is_valid(&self, vote: &Vote, fork_tree: &HashMap<usize, Fork>) -> bool {
-        self.last_fork().is_trunk_of(&vote.fork, fork_tree)
+        self.last_fork().is_ancestor_of(&vote.fork, fork_tree)
     }
 
     fn process_vote(&mut self, vote: Vote) {
@@ -322,7 +322,7 @@ fn test_is_trunk_of_1() {
         id: 2,
         parent_id: 0,
     };
-    assert!(!b1.is_trunk_of(&b2, &tree));
+    assert!(!b1.is_ancestor_of(&b2, &tree));
 }
 #[test]
 fn test_is_trunk_of_2() {
@@ -335,7 +335,7 @@ fn test_is_trunk_of_2() {
         id: 0,
         parent_id: 0,
     };
-    assert!(!b1.is_trunk_of(&b2, &tree));
+    assert!(!b1.is_ancestor_of(&b2, &tree));
 }
 #[test]
 fn test_is_trunk_of_3() {
@@ -348,7 +348,7 @@ fn test_is_trunk_of_3() {
         id: 1,
         parent_id: 0,
     };
-    assert!(b1.is_trunk_of(&b2, &tree));
+    assert!(b1.is_ancestor_of(&b2, &tree));
 }
 #[test]
 fn test_is_trunk_of_4() {
@@ -362,8 +362,8 @@ fn test_is_trunk_of_4() {
         parent_id: 1,
     };
     tree.insert(b1.id, b1.clone());
-    assert!(b1.is_trunk_of(&b2, &tree));
-    assert!(!b2.is_trunk_of(&b1, &tree));
+    assert!(b1.is_ancestor_of(&b2, &tree));
+    assert!(!b2.is_ancestor_of(&b1, &tree));
 }
 #[test]
 fn test_push_vote() {
