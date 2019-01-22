@@ -64,3 +64,5 @@ runTest "Leader rotation on" \
 runTest "Leader rotation on, periodic node restart" \
   "ci/localnet-sanity.sh -i 128 -k 16"
 
+runTest "Leader rotation on, periodic restart, extra node" \
+  "ci/localnet-sanity.sh -i 128 -k 8 -R -x"
