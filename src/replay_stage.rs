@@ -659,15 +659,6 @@ mod test {
         let (ledger_entry_sender, _ledger_entry_receiver) = channel();
         let mut last_entry_id = Hash::default();
         // Create keypair for the old leader
-        let old_leader_id = Keypair::new().pubkey();
-
-        let (_, my_ledger_path, _) = create_tmp_sample_ledger(
-            "test_replay_stage_leader_rotation_exit",
-            10_000,
-            0,
-            old_leader_id,
-            500,
-        );
 
         let mut entry_height = 0;
         let mut last_id = Hash::default();
@@ -733,6 +724,5 @@ mod test {
                 e
             ),
         }
-        let _ignored = remove_dir_all(&my_ledger_path);
     }
 }
