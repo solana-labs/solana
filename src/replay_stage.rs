@@ -467,7 +467,6 @@ mod test {
                 entries_to_send.push(entry);
             }
 
-            let expected_entry_height = (active_set_entries.len() + total_entries_to_send) as u64;
             let expected_last_id = entries_to_send.last().unwrap().id;
 
             // Write the entries to the ledger, replay_stage should get notified of changes

@@ -384,7 +384,6 @@ mod test {
             leader_scheduler.set_leader_schedule(vec![leader_keypair.pubkey()]);
             let start_tick_height = 0;
             let max_tick_height = start_tick_height + leader_scheduler.ticks_per_epoch;
-            let entry_height = 2 * start_tick_height;
 
             let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
             let (entry_sender, entry_receiver) = channel();
