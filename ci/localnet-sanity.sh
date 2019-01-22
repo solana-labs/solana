@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
+skipSetup=false
 iterations=1
 restartInterval=never
 rollingRestart=false
@@ -30,6 +31,8 @@ Start a local cluster and run sanity on it
    -r          - Select the RPC endpoint hosted by a node that starts as
                  a validator node.  If unspecified the RPC endpoint hosted by
                  the bootstrap leader will be used.
+   -c          - Reuse existing node/ledger configuration from a previous sanity
+                 run
 
 EOF
   exit $exitcode
@@ -37,10 +40,13 @@ EOF
 
 cd "$(dirname "$0")"/..
 
-while getopts "h?i:k:brxR" opt; do
+while getopts "ch?i:k:brxR" opt; do
   case $opt in
   h | \?)
     usage
+    ;;
+  c)
+    skipSetup=true
     ;;
   i)
     iterations=$OPTARG
@@ -215,7 +221,11 @@ flag_error() {
   exit 1
 }
 
-multinode-demo/setup.sh
+if ! $skipSetup; then
+  multinode-demo/setup.sh
+else
+  verifyLedger
+fi
 startNodes
 while [[ $iteration -le $iterations ]]; do
   echo "--- Node count ($iteration)"
