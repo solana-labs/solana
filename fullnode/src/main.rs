@@ -75,19 +75,30 @@ fn create_and_fund_vote_account(
         }
         loop {
             let last_id = client.get_last_id();
+            info!("create_and_fund_vote_account last_id={:?}", last_id);
             let transaction =
                 VoteTransaction::vote_account_new(node_keypair, vote_account, last_id, 1, 1);
 
             match client.transfer_signed(&transaction) {
-                Ok(_) => match client.poll_get_balance(&vote_account) {
-                    Ok(balance) => {
-                        info!("vote account balance: {}", balance);
-                        break;
-                    }
-                    Err(e) => {
-                        info!("Failed to get vote account balance: {:?}", e);
-                    }
-                },
+                Ok(signature) => {
+                    match client.poll_for_signature(&signature) {
+                        Ok(_) => match client.poll_get_balance(&vote_account) {
+                            Ok(balance) => {
+                                info!("vote account balance: {}", balance);
+                                break;
+                            }
+                            Err(e) => {
+                                info!("Failed to get vote account balance: {:?}", e);
+                            }
+                        },
+                        Err(e) => {
+                            info!(
+                                "vote_account_new signature not found: {:?}: {:?}",
+                                signature, e
+                            );
+                        }
+                    };
+                }
                 Err(e) => {
                     info!("Failed to send vote_account_new transaction: {:?}", e);
                 }
@@ -96,7 +107,7 @@ fn create_and_fund_vote_account(
         }
     }
 
-    debug!("Checking for vote account registration");
+    info!("Checking for vote account registration");
     let vote_account_user_data = client.get_account_userdata(&vote_account);
     if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
         if let Ok(vote_state) = VoteProgram::deserialize(&vote_account_user_data) {
