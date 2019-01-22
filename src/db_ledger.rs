@@ -827,7 +827,7 @@ impl Iterator for EntryIterator {
                 }
             }
         }
-        return None;
+        None
     }
 }
 
