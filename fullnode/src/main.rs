@@ -180,6 +180,13 @@ fn main() {
                 .takes_value(true)
                 .help("RPC port to use for this node"),
         )
+        .arg(
+            Arg::with_name("init_complete_file")
+                .long("init-complete-file")
+                .value_name("FILE")
+                .takes_value(true)
+                .help("Create this file, if it doesn't already exist, once node initialization is complete"),
+        )
         .get_matches();
 
     let no_sigverify = matches.is_present("nosigverify");
@@ -210,6 +217,7 @@ fn main() {
         solana_netutil::find_available_port_in_range(FULLNODE_PORT_RANGE)
             .expect("unable to allocate rpc port")
     };
+    let init_complete_file = matches.value_of("init_complete_file");
 
     let keypair = Arc::new(keypair);
     let node = Node::new_with_external_ip(keypair.pubkey(), &gossip);
@@ -258,6 +266,10 @@ fn main() {
         }
     }
 
+    if let Some(filename) = init_complete_file {
+        File::create(filename).unwrap_or_else(|_| panic!("Unable to create: {}", filename));
+    }
+    info!("Node initialized");
     loop {
         let status = fullnode.handle_role_transition();
         match status {
