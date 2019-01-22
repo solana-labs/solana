@@ -622,7 +622,7 @@ mod tests {
         //
         // TODO: this magic number and the mix of transaction types
         //       is designed to fill up a Blob more or less exactly,
-        //       to get near enough the the threshold that
+        //       to get near enough the threshold that
         //       deserialization falls over if it uses the wrong size()
         //       parameter to index into blob.data()
         //

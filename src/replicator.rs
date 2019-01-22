@@ -102,7 +102,7 @@ impl Replicator {
     /// Returns a Result that contains a replicator on success
     ///
     /// # Arguments
-    /// * `ledger_path` - (Not actually optional) path to where the the ledger will be stored.
+    /// * `ledger_path` - (Not actually optional) path to where the ledger will be stored.
     /// Causes panic if none
     /// * `node` - The replicator node
     /// * `leader_info` - NodeInfo representing the leader

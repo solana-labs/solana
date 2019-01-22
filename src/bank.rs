@@ -830,7 +830,7 @@ impl Bank {
 
                 // 2) Transfer tokens to the bootstrap leader. The first two
                 // account keys will both be the mint (because the mint is the source
-                // for this transaction and the first move instruction is to the the
+                // for this transaction and the first move instruction is to the
                 // mint itself), so we look at the third account key to find the first
                 // leader id.
                 let bootstrap_leader_id = tx.account_keys[2];
