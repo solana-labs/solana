@@ -395,12 +395,10 @@ pub fn create_ticks(num_ticks: usize, mut hash: Hash) -> Vec<Entry> {
     ticks
 }
 
-pub fn make_tiny_test_entries(num: usize) -> Vec<Entry> {
-    let zero = Hash::default();
-    let one = hash(&zero.as_ref());
+pub fn make_tiny_test_entries_from_id(start: &Hash, num: usize) -> Vec<Entry> {
     let keypair = Keypair::new();
 
-    let mut id = one;
+    let mut id = *start;
     let mut num_hashes = 0;
     (0..num)
         .map(|_| {
@@ -412,11 +410,17 @@ pub fn make_tiny_test_entries(num: usize) -> Vec<Entry> {
                     keypair.pubkey(),
                     keypair.pubkey(),
                     Utc::now(),
-                    one,
+                    *start,
                 )],
             )
         })
         .collect()
+}
+
+pub fn make_tiny_test_entries(num: usize) -> Vec<Entry> {
+    let zero = Hash::default();
+    let one = hash(&zero.as_ref());
+    make_tiny_test_entries_from_id(&one, num)
 }
 
 pub fn make_large_test_entries(num_entries: usize) -> Vec<Entry> {
