@@ -440,7 +440,7 @@ mod tests {
     }
 
     /// The "height" of this fork. How many forks until it connects to fork 0
-    fn calc_fork_depth(fork_tree: &HashMap<usize, Fork>, id: usize) -> usize {
+    fn calc_fork_height(fork_tree: &HashMap<usize, Fork>, id: usize) -> usize {
         let mut height = 0;
         let mut start = fork_tree.get(&id);
         loop {
@@ -586,7 +586,7 @@ mod tests {
                     trunk.0,
                     trunk_time,
                     trunk.1,
-                    calc_fork_depth(&fork_tree, trunk.0)
+                    calc_fork_height(&fork_tree, trunk.0)
                 );
                 if break_early && calc_tip_converged(&towers, &converge_map) == len {
                     break;
