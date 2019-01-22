@@ -37,7 +37,7 @@ runTest() {
     echo "
   - command: \"$0 '$runTestCmd'\"
     name: \"$runTestName\"
-    timeout_in_minutes: 30
+    timeout_in_minutes: 45
 "
     return
   fi
