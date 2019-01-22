@@ -452,7 +452,7 @@ impl Bank {
             .iter()
             .zip(txs.iter())
             .filter_map(|(r, x)| match r {
-                Ok(_) | Err(BankError::ProgramError(_, _)) => Some(x.clone()),
+                Ok(_) => Some(x.clone()),
                 Err(ref e) => {
                     debug!("process transaction failed {:?}", e);
                     None
@@ -503,7 +503,7 @@ impl Bank {
 
         let load_elapsed = now.elapsed();
         let now = Instant::now();
-        let executed: Vec<Result<()>> = loaded_accounts
+        let old_executed: Vec<Result<()>> = loaded_accounts
             .iter_mut()
             .zip(txs.iter())
             .map(|(accs, tx)| match accs {
@@ -515,6 +515,17 @@ impl Bank {
                         },
                     )
                 }
+            })
+            .collect();
+        let mut executed = Vec::new();
+        executed.reserve(old_executed.len());
+        executed = old_executed
+            .into_iter()
+            .map(|result| match result {
+                // Entries that result in a ProgramError are still valid and are written in the
+                // ledger so map them to an ok return value
+                Err(BankError::ProgramError(_, _)) => Ok(()),
+                _ => result,
             })
             .collect();
 
