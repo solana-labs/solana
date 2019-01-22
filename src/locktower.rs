@@ -66,7 +66,7 @@ impl LockTower {
         self.vote_locks
             .get(ix)
             .map(|lockout| tree.is_trunk_of(lockout.fork, vote))
-            .unwrap_or(tree.is_trunk_of(self.finalized_fork, vote))
+            .unwrap_or_else(|| tree.is_trunk_of(self.finalized_fork, vote))
     }
 
     /// * vote - fork id to vote on
