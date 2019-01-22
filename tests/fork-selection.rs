@@ -131,21 +131,19 @@ impl Vote {
 #[derive(Debug)]
 pub struct LockTower {
     votes: VecDeque<Vote>,
-    max_size: usize,
     fork_trunk: Fork,
-    converge_depth: usize,
+    converge_height: usize,
     delay_count: usize,
     delayed_votes: VecDeque<Vote>,
     parasite: bool,
 }
 
 impl LockTower {
-    pub fn new(max_size: usize, converge_depth: usize, delay_count: usize) -> Self {
+    pub fn new(max_size: usize, converge_height: usize, delay_count: usize) -> Self {
         Self {
-            votes: VecDeque::new(),
-            max_size,
+            votes: VecDeque::with_capacity(max_size),
             fork_trunk: Fork::default(),
-            converge_depth,
+            converge_height,
             delay_count,
             delayed_votes: VecDeque::new(),
             parasite: false,
@@ -159,7 +157,7 @@ impl LockTower {
         scores: &HashMap<Vote, usize>,
     ) {
         let is_valid = self
-            .get_vote(self.converge_depth)
+            .get_vote(self.converge_height)
             .map(|v| v.is_trunk_of(&vote, fork_tree))
             .unwrap_or(true);
         if is_valid {
@@ -174,7 +172,7 @@ impl LockTower {
                 self.push_vote(vote, fork_tree, converge_map);
             }
         }
-        let trunk = self.votes.get(self.converge_depth).cloned();
+        let trunk = self.votes.get(self.converge_height).cloned();
         trunk.map(|t| {
             self.delayed_votes.retain(|v| v.fork.id > t.fork.id);
         });
@@ -244,7 +242,7 @@ impl LockTower {
     }
     /// check if the vote at `height` has over 50% of the cluster committed
     fn is_converged(&self, converge_map: &HashMap<usize, usize>) -> bool {
-        self.get_vote(self.converge_depth)
+        self.get_vote(self.converge_height)
             .map(|v| {
                 let v = *converge_map.get(&v.fork.id).unwrap_or(&0);
                 // hard-coded to 100 nodes
@@ -287,7 +285,7 @@ impl LockTower {
             self.votes.pop_front();
         }
     }
-    /// only add votes that are descendent from the last vote in the stack
+    /// only add votes that descend from the last vote in the stack
     fn is_valid(&self, vote: &Vote, fork_tree: &HashMap<usize, Fork>) -> bool {
         self.last_fork().is_trunk_of(&vote.fork, fork_tree)
     }
@@ -311,8 +309,7 @@ impl LockTower {
         self.fork_trunk = self.votes.pop_back().unwrap().fork;
     }
     fn is_full(&self) -> bool {
-        assert!(self.votes.len() <= self.max_size);
-        self.votes.len() == self.max_size
+        self.votes.len() == self.votes.capacity()
     }
     fn last_vote(&self) -> Option<&Vote> {
         self.votes.front()
