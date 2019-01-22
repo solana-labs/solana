@@ -45,7 +45,11 @@ beta)
   CHANNEL_BRANCH=$BETA_CHANNEL
   ;;
 stable)
-  CHANNEL_BRANCH=$STABLE_CHANNEL
+  if [[ -n $BETA_CHANNEL_LATEST_TAG ]]; then
+    CHANNEL_BRANCH=$BETA_CHANNEL
+  else
+    CHANNEL_BRANCH=$STABLE_CHANNEL
+  fi
   ;;
 *)
   echo "Error: Invalid CHANNEL=$CHANNEL"
