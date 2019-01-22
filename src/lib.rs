@@ -27,6 +27,7 @@ pub mod crds_gossip_error;
 pub mod crds_gossip_pull;
 pub mod crds_gossip_push;
 pub mod crds_value;
+pub mod locktower;
 #[macro_use]
 pub mod contact_info;
 pub mod cluster_info;
