@@ -157,9 +157,9 @@ impl LockTower {
             }
         }
         let trunk = self.votes.get(self.trunk_height).cloned();
-        trunk.map(|t| {
+        if let Some(t) = trunk {
             self.delayed_votes.retain(|v| v.fork.id > t.fork.id);
-        });
+        }
     }
     pub fn pop_best_votes(
         &mut self,
