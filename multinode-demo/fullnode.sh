@@ -20,14 +20,18 @@ usage() {
     echo "$*"
     echo
   fi
-  echo "usage: $0 [-x] [--no-leader-rotation] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]"
-  echo
-  echo " Start a full node on the specified network"
-  echo
-  echo "   -x: runs a new, dynamically-configured full node"
-  echo "   --no-leader-rotation: disable leader rotation"
-  echo "   --rpc-port port: custom RPC port for this node"
-  echo
+  cat <<EOF
+usage: $0 [-x] [--no-leader-rotation] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]
+
+Start a full node on the specified network
+
+  -x                    - start a new, dynamically-configured full node
+  -X [label]            - start or restart a dynamically-configured full node with
+                          the specified label
+  --no-leader-rotation  - disable leader rotation
+  --rpc-port port       - custom RPC port for this node
+
+EOF
   exit 1
 }
 
@@ -35,8 +39,13 @@ if [[ $1 = -h ]]; then
   usage
 fi
 
-if [[ $1 = -x ]]; then
+if [[ $1 = -X ]]; then
   self_setup=1
+  self_setup_label=$2
+  shift 2
+elif [[ $1 = -x ]]; then
+  self_setup=1
+  self_setup_label=$$
   shift
 else
   self_setup=0
@@ -134,28 +143,28 @@ if ((!self_setup)); then
   ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger
 else
   mkdir -p "$SOLANA_CONFIG_DIR"
-  fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id-x$$.json
-  $solana_keygen -o "$fullnode_id_path"
+  fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id-x$self_setup_label.json
+  [[ -f "$fullnode_id_path" ]] || $solana_keygen -o "$fullnode_id_path"
 
   mkdir -p "$SOLANA_CONFIG_DIR"
-  fullnode_json_path=$SOLANA_CONFIG_DIR/fullnode-x$$.json
+  fullnode_json_path=$SOLANA_CONFIG_DIR/fullnode-x$self_setup_label.json
+  [[ -f "$fullnode_json_path" ]] || {
+    echo "Finding a port.."
+    # Find an available port in the range 9100-9899
+    (( port = 9100 + ($$ % 800) ))
+    while true; do
+      (( port = port >= 9900 ? 9100 : ++port ))
+      echo "Testing $port"
+      if ! nc -w 10 -z 127.0.0.1 $port; then
+        echo "Selected port $port"
+        break;
+      fi
+      echo "Port $port is in use"
+    done
+    $solana_fullnode_config --keypair="$fullnode_id_path" -l -b "$port" > "$fullnode_json_path"
+  }
 
-  echo "Finding a port.."
-  # Find an available port in the range 9100-9899
-  (( port = 9100 + ($$ % 800) ))
-  while true; do
-    (( port = port >= 9900 ? 9100 : ++port ))
-    echo "Testing $port"
-    if ! nc -w 10 -z 127.0.0.1 $port; then
-      echo "Selected port $port"
-      break;
-    fi
-    echo "Port $port is in use"
-  done
-
-  $solana_fullnode_config --keypair="$fullnode_id_path" -l -b "$port" > "$fullnode_json_path"
-
-  ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger-x$$
+  ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger-x$self_setup_label
 fi
 
 [[ -r $fullnode_id_path ]] || {
