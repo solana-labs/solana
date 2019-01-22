@@ -12,6 +12,7 @@ use byteorder::{BigEndian, ByteOrder, ReadBytesExt};
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, DBRawIterator, Options, WriteBatch, DB};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::borrow::Borrow;
@@ -634,7 +635,10 @@ impl DbLedger {
         let mut db_iterator = self.db.raw_iterator_cf(self.data_cf.handle())?;
 
         db_iterator.seek_to_first();
-        Ok(EntryIterator { db_iterator })
+        Ok(EntryIterator {
+            db_iterator,
+            last_id: None,
+        })
     }
 
     pub fn get_coding_blob_bytes(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
@@ -788,8 +792,14 @@ impl DbLedger {
     }
 }
 
+// TODO: all this goes away with EntryTree
 struct EntryIterator {
     db_iterator: DBRawIterator,
+
+    // TODO: remove me when replay_stage is iterating by block (EntryTree)
+    //    this verification is duplicating that of replay_stage, which
+    //    can do this in parallel
+    last_id: Option<Hash>,
     // https://github.com/rust-rocksdb/rust-rocksdb/issues/234
     //   rocksdb issue: the _db_ledger member must be lower in the struct to prevent a crash
     //   when the db_iterator member above is dropped.
@@ -805,18 +815,19 @@ impl Iterator for EntryIterator {
     fn next(&mut self) -> Option<Entry> {
         if self.db_iterator.valid() {
             if let Some(value) = self.db_iterator.value() {
-                self.db_iterator.next();
-
-                match deserialize(&value[BLOB_HEADER_SIZE..]) {
-                    Ok(entry) => Some(entry),
-                    _ => None,
+                if let Ok(entry) = deserialize::<Entry>(&value[BLOB_HEADER_SIZE..]) {
+                    if let Some(last_id) = self.last_id {
+                        if !entry.verify(&last_id) {
+                            return None;
+                        }
+                    }
+                    self.db_iterator.next();
+                    self.last_id = Some(entry.id);
+                    return Some(entry);
                 }
-            } else {
-                None
             }
-        } else {
-            None
         }
+        None
     }
 }
 
@@ -921,8 +932,9 @@ pub fn tmp_copy_ledger(from: &str, name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entry::{make_tiny_test_entries, EntrySlice};
+    use crate::entry::{make_tiny_test_entries, make_tiny_test_entries_from_id, EntrySlice};
     use crate::packet::index_blobs;
+    use solana_sdk::hash::Hash;
 
     #[test]
     fn test_put_get_simple() {
@@ -1168,7 +1180,8 @@ mod tests {
 
             // Write entries
             let num_entries = 8;
-            let shared_blobs = make_tiny_test_entries(num_entries).to_shared_blobs();
+            let entries = make_tiny_test_entries(num_entries);
+            let shared_blobs = entries.to_shared_blobs();
 
             for (i, b) in shared_blobs.iter().enumerate() {
                 let mut w_b = b.write().unwrap();
@@ -1347,7 +1360,8 @@ mod tests {
 
     #[test]
     pub fn test_genesis_and_entry_iterator() {
-        let entries = make_tiny_test_entries(100);
+        let entries = make_tiny_test_entries_from_id(&Hash::default(), 10);
+
         let ledger_path = get_tmp_ledger_path("test_genesis_and_entry_iterator");
         {
             assert!(genesis(&ledger_path, &Keypair::new(), &entries).is_ok());
@@ -1356,7 +1370,40 @@ mod tests {
 
             let read_entries: Vec<Entry> =
                 ledger.read_ledger().expect("read_ledger failed").collect();
+            assert!(read_entries.verify(&Hash::default()));
             assert_eq!(entries, read_entries);
+        }
+
+        DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
+    #[test]
+    pub fn test_entry_iterator_up_to_consumed() {
+        let entries = make_tiny_test_entries_from_id(&Hash::default(), 3);
+        let ledger_path = get_tmp_ledger_path("test_genesis_and_entry_iterator");
+        {
+            // put entries except last 2 into ledger
+            assert!(genesis(&ledger_path, &Keypair::new(), &entries[..entries.len() - 2]).is_ok());
+
+            let ledger = DbLedger::open(&ledger_path).expect("open failed");
+
+            // now write the last entry, ledger has a hole in it one before the end
+            // +-+-+-+-+-+-+-+    +-+
+            // | | | | | | | |    | |
+            // +-+-+-+-+-+-+-+    +-+
+            ledger
+                .write_entries(
+                    0u64,
+                    (entries.len() - 1) as u64,
+                    &entries[entries.len() - 1..],
+                )
+                .unwrap();
+
+            let read_entries: Vec<Entry> =
+                ledger.read_ledger().expect("read_ledger failed").collect();
+            assert!(read_entries.verify(&Hash::default()));
+
+            // enumeration should stop at the hole
+            assert_eq!(entries[..entries.len() - 2].to_vec(), read_entries);
         }
 
         DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
