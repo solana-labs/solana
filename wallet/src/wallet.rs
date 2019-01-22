@@ -764,7 +764,11 @@ fn resign_tx(
         }
         if next_last_id_retries == 0 {
             Err(WalletError::RpcRequestError(
-                "Unable to fetch next last_id".to_string(),
+                format!(
+                    "Unable to fetch new last_id, last_id stuck at {:?}",
+                    next_last_id
+                )
+                .to_string(),
             ))?;
         }
         next_last_id_retries -= 1;
