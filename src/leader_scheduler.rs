@@ -5,7 +5,7 @@ use crate::bank::Bank;
 
 use crate::entry::{create_ticks, Entry};
 use crate::vote_signer_proxy::VoteSignerProxy;
-use bincode::serialize;
+use bincode::{deserialize, serialize, ErrorKind};
 use byteorder::{LittleEndian, ReadBytesExt};
 use hashbrown::HashSet;
 use solana_sdk::hash::{hash, Hash};
@@ -59,7 +59,7 @@ impl LeaderSchedulerConfig {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct LeaderScheduler {
     // Set to true if we want the default implementation of the LeaderScheduler,
     // where ony the bootstrap leader is used
@@ -156,6 +156,15 @@ impl LeaderScheduler {
             active_window_length,
             seed: 0,
         }
+    }
+
+    pub fn serialize(&self) -> Vec<u8> {
+        serialize(self).unwrap()
+    }
+
+    pub fn deserialize(&mut self, bytes: &[u8]) -> core::result::Result<(), Box<ErrorKind>> {
+        *self = deserialize(bytes)?;
+        Ok(())
     }
 
     // Returns true if the given height is the first tick of a slot

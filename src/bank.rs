@@ -12,9 +12,10 @@ use crate::leader_scheduler::LeaderScheduler;
 use crate::mint::Mint;
 use crate::poh_recorder::PohRecorder;
 use crate::runtime::{self, RuntimeError};
+use crate::serialize_object::{deserialize_object, serialize_object};
 use crate::status_deque::{Status, StatusDeque, MAX_ENTRY_IDS};
 use crate::storage_stage::StorageState;
-use bincode::deserialize;
+use bincode::{deserialize, ErrorKind};
 use itertools::Itertools;
 use log::Level;
 use rayon::prelude::*;
@@ -43,7 +44,7 @@ use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 /// Reasons a transaction might be rejected.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum BankError {
     /// This Pubkey is being processed in another transaction
     AccountInUse,
@@ -133,6 +134,26 @@ impl Default for Bank {
 }
 
 impl Bank {
+    pub fn new_from_snapshot(snapshot: &[u8]) -> core::result::Result<Self, Box<ErrorKind>> {
+        let bank = Self::default();
+        let mut cur = 0;
+
+        bank.accounts
+            .deserialize(&deserialize_object(&mut cur, snapshot)?)?;
+
+        bank.last_ids
+            .write()
+            .unwrap()
+            .deserialize(&deserialize_object(&mut cur, snapshot)?)?;
+
+        bank.leader_scheduler
+            .write()
+            .unwrap()
+            .deserialize(&deserialize_object(&mut cur, snapshot)?)?;
+
+        Ok(bank)
+    }
+
     /// Create an Bank with built-in programs.
     pub fn new_with_builtin_programs() -> Self {
         let bank = Self::default();
@@ -732,7 +753,7 @@ impl Bank {
     }
 
     /// Append entry blocks to the ledger, verifying them along the way.
-    fn process_ledger_blocks<I>(
+    pub fn process_ledger_blocks<I>(
         &self,
         start_hash: Hash,
         entry_height: u64,
@@ -919,6 +940,17 @@ impl Bank {
     ///  of the delta of the ledger since the last vote and up to now
     pub fn hash_internal_state(&self) -> Hash {
         self.accounts.hash_internal_state()
+    }
+
+    pub fn serialize(&self) -> Vec<u8> {
+        let last_ids_r = self.last_ids.read().unwrap();
+        let mut v = vec![];
+
+        serialize_object(&mut v, self.accounts.serialize());
+        serialize_object(&mut v, last_ids_r.serialize());
+        serialize_object(&mut v, self.leader_scheduler.read().unwrap().serialize());
+
+        v
     }
 
     pub fn confirmation_time(&self) -> usize {
@@ -1974,4 +2006,44 @@ mod tests {
         assert_eq!(bank.get_balance(&pubkey), 1);
     }
 
+    #[test]
+    fn test_bank_snapshot() {
+        solana_logger::setup();
+        let mint = Mint::new(1000);
+        let bob = Keypair::new();
+        let bank = Bank::new(&mint);
+        bank.checkpoint();
+        bank.transfer(5, &mint.keypair(), bob.pubkey(), mint.last_id())
+            .unwrap();
+        let bytes = bank.serialize();
+        let reconstructed = Bank::new_from_snapshot(&bytes).unwrap();
+        assert_eq!(
+            bank.get_balance(&mint.pubkey()),
+            reconstructed.get_balance(&mint.pubkey())
+        );
+        assert_eq!(
+            bank.get_balance(&bob.pubkey()),
+            reconstructed.get_balance(&bob.pubkey())
+        );
+        assert_eq!(bank.last_id(), reconstructed.last_id());
+        assert_eq!(bank.transaction_count(), reconstructed.transaction_count());
+        assert_eq!(
+            bank.get_current_leader(),
+            reconstructed.get_current_leader()
+        );
+
+        // rollback and test the banks
+        bank.rollback();
+        reconstructed.rollback();
+        assert_eq!(bank.transaction_count(), reconstructed.transaction_count());
+        assert_eq!(bank.last_id(), reconstructed.last_id());
+        assert_eq!(
+            bank.get_balance(&mint.pubkey()),
+            reconstructed.get_balance(&mint.pubkey())
+        );
+        assert_eq!(
+            bank.get_balance(&bob.pubkey()),
+            reconstructed.get_balance(&bob.pubkey())
+        );
+    }
 }

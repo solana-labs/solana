@@ -1,9 +1,13 @@
 use crate::checkpoint::Checkpoint;
 use crate::poh_service::NUM_TICKS_PER_SECOND;
-use hashbrown::HashMap;
+use crate::serialize_object::{deserialize_object, serialize_object};
+use bincode::{deserialize, serialize, ErrorKind};
+use serde::de::DeserializeOwned;
+use serde::ser::Serialize;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Signature;
 use solana_sdk::timing::timestamp;
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::result;
 
@@ -15,7 +19,7 @@ use std::result;
 /// not be processed by the network.
 pub const MAX_ENTRY_IDS: usize = NUM_TICKS_PER_SECOND * 120;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum Status<T> {
     Reserved,
     Complete(T),
@@ -24,7 +28,7 @@ pub enum Status<T> {
 type StatusMap<T> = HashMap<Signature, Status<T>>;
 type StatusEntryMap<T> = HashMap<Hash, StatusEntry<T>>;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum StatusDequeError {
     /// The `Signature` has been seen before. This can occur under normal operation
     /// when a UDP packet is duplicated, as a user error from a client not updating
@@ -39,7 +43,7 @@ pub enum StatusDequeError {
 pub type Result<T> = result::Result<T, StatusDequeError>;
 
 /// a record of a tick, from register_tick
-#[derive(Clone)]
+#[derive(Serialize, Debug, Deserialize, Clone)]
 struct StatusEntry<T> {
     /// when the id was registered, according to network time
     tick_height: u64,
@@ -51,6 +55,7 @@ struct StatusEntry<T> {
     statuses: StatusMap<T>,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct StatusDeque<T> {
     /// A FIFO queue of `last_id` items, where each item is a set of signatures
     /// that have been processed using that `last_id`. Rejected `last_id`
@@ -103,7 +108,35 @@ impl<T: Clone> Checkpoint for StatusDeque<T> {
     }
 }
 
-impl<T: Clone> StatusDeque<T> {
+impl<T> StatusDeque<T>
+where
+    T: Clone + Serialize + DeserializeOwned,
+{
+    pub fn serialize(&self) -> Vec<u8> {
+        let mut v = vec![];
+
+        serialize_object(&mut v, serialize(&self.entries).unwrap());
+        serialize_object(&mut v, serialize(&self.last_id).unwrap());
+        v.extend(serialize(&self.tick_height).unwrap());
+        serialize_object(&mut v, serialize(&self.checkpoints).unwrap());
+
+        v
+    }
+
+    pub fn deserialize(&mut self, bytes: &[u8]) -> core::result::Result<(), Box<ErrorKind>> {
+        let mut cur = 0;
+
+        self.entries = deserialize(&deserialize_object(&mut cur, bytes)?)?;
+        self.last_id = deserialize(&deserialize_object(&mut cur, bytes)?)?;
+
+        self.tick_height = deserialize(&bytes[cur..cur + 8])?;
+        cur += 8;
+
+        self.checkpoints = deserialize(&deserialize_object(&mut cur, bytes)?)?;
+
+        Ok(())
+    }
+
     pub fn update_signature_status_with_last_id(
         &mut self,
         signature: &Signature,

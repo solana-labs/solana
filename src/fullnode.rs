@@ -5,11 +5,14 @@ use crate::broadcast_service::BroadcastService;
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
 use crate::counter::Counter;
 use crate::db_ledger::DbLedger;
+use crate::db_ledger::DEFAULT_SLOT_HEIGHT;
 use crate::gossip_service::GossipService;
 use crate::leader_scheduler::LeaderScheduler;
+use crate::result;
 use crate::rpc::JsonRpcService;
 use crate::rpc_pubsub::PubSubService;
 use crate::service::Service;
+use crate::snapshot::load_from_snapshot;
 use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use crate::tpu::{Tpu, TpuReturnType};
 use crate::tpu_forwarder::TpuForwarder;
@@ -106,6 +109,7 @@ pub struct Fullnode {
     broadcast_socket: UdpSocket,
     db_ledger: Arc<DbLedger>,
     vote_signer: Option<Arc<VoteSignerProxy>>,
+    ledger_path: String,
 }
 
 impl Fullnode {
@@ -136,6 +140,35 @@ impl Fullnode {
         )
     }
 
+    fn load_snapshot_and_process_db_entries(
+        path: &str,
+        db_ledger: &DbLedger,
+    ) -> result::Result<(Bank, u64, Hash)> {
+        let now = Instant::now();
+        let (bank, entry_height, last_entry_id) = load_from_snapshot(path)?;
+
+        info!(
+            "entry_height: {} id: {} count: {} bank.id: {} time {} ms",
+            entry_height,
+            last_entry_id,
+            bank.transaction_count(),
+            bank.last_id(),
+            duration_as_ms(&now.elapsed()),
+        );
+
+        let entries = db_ledger.read_ledger_at(entry_height, DEFAULT_SLOT_HEIGHT)?;
+        let (entry_height, last_id) =
+            bank.process_ledger_blocks(last_entry_id, entry_height, entries)?;
+
+        info!(
+            "Snapshot load took: {} ms height {}",
+            duration_as_ms(&now.elapsed()),
+            entry_height
+        );
+
+        Ok((bank, entry_height, last_id))
+    }
+
     pub fn new_with_storage_rotate(
         node: Node,
         ledger_path: &str,
@@ -151,8 +184,25 @@ impl Fullnode {
 
         info!("creating bank...");
         let db_ledger = Self::make_db_ledger(ledger_path);
-        let (bank, entry_height, last_entry_id) =
-            Self::new_bank_from_db_ledger(&db_ledger, leader_scheduler);
+        let (bank, entry_height, last_entry_id) = {
+            let snapshot_path = &format!("{}/{}", ledger_path, "bank.snapshot");
+            if let Ok((bank, entry_height_snap, last_entry_id)) =
+                Self::load_snapshot_and_process_db_entries(snapshot_path, &db_ledger)
+            {
+                (bank, entry_height_snap, last_entry_id)
+            } else {
+                let (bank, entry_height, last_entry_id) =
+                    Self::new_bank_from_db_ledger(&db_ledger, leader_scheduler);
+                info!(
+                    "db_ledger: entry_height: {} id: {} count: {} bank.id: {}",
+                    entry_height,
+                    last_entry_id,
+                    bank.transaction_count(),
+                    bank.last_id()
+                );
+                (bank, entry_height, last_entry_id)
+            }
+        };
 
         info!("creating networking stack...");
         let local_gossip_addr = node.sockets.gossip.local_addr().unwrap();
@@ -305,6 +355,7 @@ impl Fullnode {
                 sockets,
                 db_ledger.clone(),
                 storage_rotate_count,
+                ledger_path,
             );
             let tpu_forwarder = TpuForwarder::new(
                 node.sockets
@@ -375,6 +426,7 @@ impl Fullnode {
             broadcast_socket: node.sockets.broadcast,
             db_ledger,
             vote_signer,
+            ledger_path: ledger_path.to_string(),
         }
     }
 
@@ -454,6 +506,7 @@ impl Fullnode {
                 sockets,
                 self.db_ledger.clone(),
                 STORAGE_ROTATE_TEST_COUNT,
+                &self.ledger_path,
             );
             let tpu_forwarder = TpuForwarder::new(
                 self.tpu_sockets

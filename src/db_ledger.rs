@@ -630,6 +630,23 @@ impl DbLedger {
         Ok((total_blobs, total_current_size as u64))
     }
 
+    /// Return an iterator at a specific entry height
+    pub fn read_ledger_at(
+        &self,
+        start_index: u64,
+        slot_height: u64,
+    ) -> Result<impl Iterator<Item = Entry>> {
+        let mut db_iterator = self.db.raw_iterator_cf(self.data_cf.handle())?;
+
+        let start_key = DataCf::key(slot_height, start_index);
+        db_iterator.seek(&start_key);
+
+        Ok(EntryIterator {
+            db_iterator,
+            last_id: None,
+        })
+    }
+
     /// Return an iterator for all the entries in the given file.
     pub fn read_ledger(&self) -> Result<impl Iterator<Item = Entry>> {
         let mut db_iterator = self.db.raw_iterator_cf(self.data_cf.handle())?;

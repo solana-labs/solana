@@ -4,6 +4,7 @@ use crate::bank::Bank;
 use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
 use crate::entry::{EntryReceiver, EntrySender};
+use crate::snapshot::create_snapshot;
 use solana_sdk::hash::Hash;
 
 use crate::entry::EntrySlice;
@@ -69,6 +70,8 @@ impl ReplayStage {
         ledger_entry_sender: &EntrySender,
         entry_height: &mut u64,
         last_entry_id: &mut Hash,
+        ledger_path: Option<&str>,
+        last_snapshot_height: &mut u64,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         //coalesce all the available entries into a single vote
@@ -144,6 +147,22 @@ impl ReplayStage {
                                 .unwrap();
                         }
                     }
+
+                    if let Some(ledger_path) = ledger_path {
+                        let height = i as u64 + *entry_height + 1;
+                        const SNAPSHOT_CREATION_RATE_IN_ENTRIES: u64 = 1000;
+                        if height - *last_snapshot_height > SNAPSHOT_CREATION_RATE_IN_ENTRIES {
+                            let now = Instant::now();
+                            let snapshot_path = format!("{}/{}", ledger_path, "bank.snapshot");
+                            let _ignored = create_snapshot(&snapshot_path, bank, entry.id, height);
+                            debug!(
+                                "wrote snapshot {} in {} ms",
+                                height,
+                                duration_as_ms(&now.elapsed())
+                            );
+                            *last_snapshot_height = height;
+                        }
+                    }
                 }
                 let (scheduled_leader, _) = bank
                     .get_current_leader()
@@ -203,12 +222,14 @@ impl ReplayStage {
         exit: Arc<AtomicBool>,
         entry_height: u64,
         last_entry_id: Hash,
+        ledger_path: &str,
     ) -> (Self, EntryReceiver) {
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let (ledger_entry_sender, ledger_entry_receiver) = channel();
         let send = UdpSocket::bind("0.0.0.0:0").expect("bind");
         let t_responder = responder("replay_stage", Arc::new(send), vote_blob_receiver);
 
+        let ledger_path0 = ledger_path.to_string();
         let keypair = Arc::new(keypair);
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
@@ -216,6 +237,7 @@ impl ReplayStage {
                 let _exit = Finalizer::new(exit);
                 let mut entry_height_ = entry_height;
                 let mut last_entry_id = last_entry_id;
+                let mut last_snapshot_height = 0;
                 loop {
                     let (leader_id, _) = bank
                         .get_current_leader()
@@ -247,6 +269,8 @@ impl ReplayStage {
                         &ledger_entry_sender,
                         &mut entry_height_,
                         &mut last_entry_id,
+                        Some(&ledger_path0),
+                        &mut last_snapshot_height,
                     ) {
                         Err(Error::RecvTimeoutError(RecvTimeoutError::Disconnected)) => break,
                         Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
@@ -388,6 +412,7 @@ mod test {
             exit.clone(),
             initial_entry_len,
             last_entry_id,
+            &my_ledger_path,
         );
 
         // Send enough ticks to trigger leader rotation
@@ -484,6 +509,7 @@ mod test {
             exit.clone(),
             initial_entry_len as u64,
             last_entry_id,
+            &my_ledger_path,
         );
 
         // Vote sender should error because no leader contact info is found in the
@@ -600,6 +626,7 @@ mod test {
             exit.clone(),
             initial_entry_len as u64,
             last_entry_id,
+            &my_ledger_path,
         );
 
         // Vote sender should error because no leader contact info is found in the
@@ -663,6 +690,7 @@ mod test {
         // Create keypair for the old leader
 
         let mut entry_height = 0;
+        let mut last_snapshot_height = 0;
         let mut last_id = Hash::default();
         let mut entries = Vec::new();
         for _ in 0..5 {
@@ -689,6 +717,8 @@ mod test {
             &ledger_entry_sender,
             &mut entry_height,
             &mut last_entry_id,
+            None,
+            &mut last_snapshot_height,
         );
 
         match res {
@@ -715,6 +745,8 @@ mod test {
             &ledger_entry_sender,
             &mut entry_height,
             &mut last_entry_id,
+            None,
+            &mut last_snapshot_height,
         );
 
         match res {

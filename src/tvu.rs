@@ -66,6 +66,7 @@ impl Tvu {
         sockets: Sockets,
         db_ledger: Arc<DbLedger>,
         storage_rotate_count: u64,
+        ledger_path: &str,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
         let keypair: Arc<Keypair> = cluster_info
@@ -111,6 +112,7 @@ impl Tvu {
             exit.clone(),
             entry_height,
             last_entry_id,
+            ledger_path,
         );
 
         let storage_stage = StorageStage::new(
@@ -289,6 +291,7 @@ pub mod tests {
             },
             Arc::new(db_ledger),
             STORAGE_ROTATE_TEST_COUNT,
+            &db_ledger_path,
         );
 
         let mut alice_ref_balance = starting_balance;

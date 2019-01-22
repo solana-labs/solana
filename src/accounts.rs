@@ -2,16 +2,19 @@ use crate::bank::BankError;
 use crate::bank::Result;
 use crate::checkpoint::Checkpoint;
 use crate::counter::Counter;
+use crate::serialize_object::{deserialize_object, serialize_object};
 use crate::status_deque::{StatusDeque, StatusDequeError};
-use bincode::serialize;
-use hashbrown::{HashMap, HashSet};
+use bincode::ErrorKind;
+use bincode::{deserialize, serialize};
 use log::Level;
 use solana_sdk::account::Account;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::Transaction;
+use std::boxed::Box;
 use std::collections::BTreeMap;
 use std::collections::VecDeque;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Mutex, RwLock};
 
@@ -73,6 +76,24 @@ impl Default for Accounts {
 impl AccountsDB {
     pub fn keys(&self) -> Vec<Pubkey> {
         self.accounts.keys().cloned().collect()
+    }
+
+    pub fn deserialize(&mut self, snapshot: &[u8]) -> core::result::Result<(), Box<ErrorKind>> {
+        let mut current = 0;
+        self.checkpoints = deserialize(&deserialize_object(&mut current, snapshot)?)?;
+        self.accounts = deserialize(&deserialize_object(&mut current, snapshot)?)?;
+        self.transaction_count = deserialize(&snapshot[current..current + 8])?;
+        Ok(())
+    }
+
+    pub fn serialize(&self) -> Vec<u8> {
+        let mut v = vec![];
+
+        serialize_object(&mut v, serialize(&self.checkpoints).unwrap());
+        serialize_object(&mut v, serialize(&self.accounts).unwrap());
+
+        v.extend(serialize(&self.transaction_count).unwrap());
+        v
     }
 
     pub fn hash_internal_state(&self) -> Hash {
@@ -269,6 +290,10 @@ impl AccountsDB {
 }
 
 impl Accounts {
+    pub fn deserialize(&self, snapshot: &[u8]) -> core::result::Result<(), Box<ErrorKind>> {
+        self.accounts_db.write().unwrap().deserialize(snapshot)
+    }
+
     pub fn keys(&self) -> Vec<Pubkey> {
         self.accounts_db.read().unwrap().keys()
     }
@@ -314,6 +339,10 @@ impl Accounts {
 
     pub fn hash_internal_state(&self) -> Hash {
         self.accounts_db.read().unwrap().hash_internal_state()
+    }
+
+    pub fn serialize(&self) -> Vec<u8> {
+        self.accounts_db.read().unwrap().serialize()
     }
 
     /// This function will prevent multiple threads from modifying the same account state at the
