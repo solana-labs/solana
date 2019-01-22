@@ -77,12 +77,22 @@ source scripts/configure-metrics.sh
 
 nodes=(
   "multinode-demo/drone.sh"
-  "multinode-demo/bootstrap-leader.sh $maybeNoLeaderRotation"
-  "multinode-demo/fullnode.sh $maybeNoLeaderRotation --rpc-port 18899"
+  "multinode-demo/bootstrap-leader.sh \
+    $maybeNoLeaderRotation \
+    --init-complete-file init-complete-node1.log"
+  "multinode-demo/fullnode.sh \
+    $maybeNoLeaderRotation \
+    --init-complete-file init-complete-node2.log \
+    --rpc-port 18899"
 )
 
 for i in $(seq 1 $extraNodes); do
-  nodes+=("multinode-demo/fullnode.sh -X dyn$i $maybeNoLeaderRotation")
+  nodes+=(
+    "multinode-demo/fullnode.sh \
+      -X dyn$i \
+      --init-complete-file init-complete-node$((2 + i)).log \
+      $maybeNoLeaderRotation"
+  )
 done
 numNodes=$((2 + extraNodes))
 
@@ -111,18 +121,45 @@ startNode() {
   echo "log: $log"
 }
 
+initCompleteFiles=()
+waitForAllNodesToInit() {
+  echo "--- ${#initCompleteFiles[@]} nodes booting"
+  SECONDS=
+  for initCompleteFile in "${initCompleteFiles[@]}"; do
+    while [[ ! -r $initCompleteFile ]]; do
+      if [[ $SECONDS -ge 30 ]]; then
+        echo "Error: $initCompleteFile not found in $SECONDS seconds"
+        exit 1
+      fi
+      echo "Waiting for $initCompleteFile ($SECONDS)..."
+      sleep 2
+    done
+    echo "Found $initCompleteFile"
+  done
+  echo "All nodes finished booting in $SECONDS seconds"
+}
+
 startNodes() {
   declare addLogs=false
   if [[ ${#logs[@]} -eq 0 ]]; then
     addLogs=true
   fi
+  initCompleteFiles=()
   for i in $(seq 0 $((${#nodes[@]} - 1))); do
     declare cmd=${nodes[$i]}
+
+    if [[ "$i" -ne 0 ]]; then # 0 == drone, skip it
+      declare initCompleteFile="init-complete-node$i.log"
+      rm -f "$initCompleteFile"
+      initCompleteFiles+=("$initCompleteFile")
+    fi
     startNode "$i" "$cmd"
     if $addLogs; then
       logs+=("$(getNodeLogFile "$i" "$cmd")")
     fi
   done
+
+  waitForAllNodesToInit
 }
 
 killNode() {
@@ -171,6 +208,10 @@ rollingNodeRestart() {
       # node that was just stopped
       echo "(sleeping for 20 seconds)"
       sleep 20
+
+      declare initCompleteFile="init-complete-node$i.log"
+      rm -f "$initCompleteFile"
+      initCompleteFiles+=("$initCompleteFile")
       startNode "$i" "$cmd"
     fi
   done
@@ -185,6 +226,8 @@ rollingNodeRestart() {
     }
   done
   pids=("${newPids[@]}")
+
+  waitForAllNodesToInit
 }
 
 verifyLedger() {
