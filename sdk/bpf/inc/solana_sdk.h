@@ -176,19 +176,19 @@ SOL_FN_PREFIX size_t sol_strlen(const char *s) {
  * the BPF VM to immediately halt execution. No accounts' userdata are updated
  */
 #define sol_panic() _sol_panic(__LINE__)
-  SOL_FN_PREFIX void _sol_panic(uint64_t line) {
-    sol_log_64(0xFF, 0xFF, 0xFF, 0xFF, line);
-    uint8_t *pv = (uint8_t *)1;
-    *pv = 1;
-  }
+SOL_FN_PREFIX void _sol_panic(uint64_t line) {
+  sol_log_64(0xFF, 0xFF, 0xFF, 0xFF, line);
+  uint8_t *pv = (uint8_t *)1;
+  *pv = 1;
+}
 
 /**
  * Asserts
  */
 #define sol_assert(expr)  \
-  if (!(expr)) {          \
-    _sol_panic(__LINE__); \
-  }
+if (!(expr)) {          \
+  _sol_panic(__LINE__); \
+}
 
 /**
  * Structure that the program's entrypoint input data is deserialized into.
