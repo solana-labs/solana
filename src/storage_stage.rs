@@ -405,7 +405,7 @@ impl StorageStage {
                 }
             }
             if cross_boundary!(*poh_height, entry.num_hashes, storage_rotate_count) {
-                info!(
+                trace!(
                     "crosses sending at poh_height: {} entry_height: {}! hashes: {}",
                     *poh_height, entry_height, entry.num_hashes
                 );
