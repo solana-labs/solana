@@ -321,7 +321,7 @@ impl ClusterInfo {
     fn sort_by_stake(peers: &[NodeInfo], bank: &Arc<Bank>) -> Vec<(u64, NodeInfo)> {
         let mut peers_with_stakes: Vec<_> = peers
             .iter()
-            .map(|c| (bank.get_stake(&c.id), c.clone()))
+            .map(|c| (bank.get_balance(&c.id), c.clone()))
             .collect();
         peers_with_stakes.sort_unstable();
         peers_with_stakes
