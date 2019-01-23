@@ -49,7 +49,6 @@ pub enum VoteInstruction {
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VoteProgram {
     pub votes: VecDeque<Vote>,
-    pub node_id: Pubkey,
 }
 
 pub fn get_max_size() -> usize {
@@ -61,11 +60,6 @@ pub fn get_max_size() -> usize {
 }
 
 impl VoteProgram {
-    pub fn new(node_id: Pubkey) -> Self {
-        let votes = VecDeque::new();
-        Self { votes, node_id }
-    }
-
     pub fn deserialize(input: &[u8]) -> Result<VoteProgram, ProgramError> {
         deserialize(input).map_err(|_| ProgramError::InvalidUserdata)
     }

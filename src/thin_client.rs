@@ -473,7 +473,6 @@ mod tests {
     use bincode::{deserialize, serialize};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
-    use solana_sdk::vote_program::VoteProgram;
     use solana_sdk::vote_transaction::VoteTransaction;
     use std::fs::remove_dir_all;
 
@@ -584,25 +583,6 @@ mod tests {
         let balance = retry_get_balance(&mut client, &vote_account_id, Some(1))
             .expect("Expected balance for new account to exist");
         assert_eq!(balance, 1);
-
-        const LAST: usize = 30;
-        for run in 0..=LAST {
-            let account_user_data = client
-                .get_account_userdata(&vote_account_id)
-                .expect("Expected valid response for account userdata")
-                .expect("Expected valid account userdata to exist after account creation");
-
-            let vote_state = VoteProgram::deserialize(&account_user_data);
-
-            if vote_state.map(|vote_state| vote_state.node_id) == Ok(validator_keypair.pubkey()) {
-                break;
-            }
-
-            if run == LAST {
-                panic!("Expected successful vote account registration");
-            }
-            sleep(Duration::from_millis(900));
-        }
 
         server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
