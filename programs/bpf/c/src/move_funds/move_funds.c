@@ -13,22 +13,21 @@
 
 extern bool entrypoint(const uint8_t *input) {
   SolKeyedAccount ka[NUM_KA];
-  const uint8_t *data;
-  uint64_t data_len;
+  SolParameters params = (SolParameters) { .ka = ka };
 
-  if (!sol_deserialize(input, ka, NUM_KA, NULL, &data, &data_len, NULL)) {
+  if (!sol_deserialize(input, &params, SOL_ARRAY_SIZE(ka))) {
     return false;
   }
 
-  if (!ka[0].is_signer) {
+  if (!params.ka[0].is_signer) {
     sol_log("Transaction not signed by key 0");
     return false;
   }
 
-  int64_t tokens = *(int64_t *)data;
-  if (*ka[0].tokens >= tokens) {
-    *ka[0].tokens -= tokens;
-    *ka[2].tokens += tokens;
+  int64_t tokens = *(int64_t *)params.data;
+  if (*params.ka[0].tokens >= tokens) {
+    *params.ka[0].tokens -= tokens;
+    *params.ka[2].tokens += tokens;
     // sol_log_64(0, 0, *ka[0].tokens, *ka[2].tokens, tokens);
   } else {
     // sol_log_64(0, 0, 0xFF, *ka[0].tokens, tokens);

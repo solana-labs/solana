@@ -176,11 +176,11 @@ SOL_FN_PREFIX size_t sol_strlen(const char *s) {
  * the BPF VM to immediately halt execution. No accounts' userdata are updated
  */
 #define sol_panic() _sol_panic(__LINE__)
-SOL_FN_PREFIX void _sol_panic(uint64_t line) {
-  sol_log_64(0xFF, 0xFF, 0xFF, 0xFF, line);
-  uint8_t *pv = (uint8_t *)1;
-  *pv = 1;
-}
+  SOL_FN_PREFIX void _sol_panic(uint64_t line) {
+    sol_log_64(0xFF, 0xFF, 0xFF, 0xFF, line);
+    uint8_t *pv = (uint8_t *)1;
+    *pv = 1;
+  }
 
 /**
  * Asserts
@@ -191,13 +191,17 @@ SOL_FN_PREFIX void _sol_panic(uint64_t line) {
   }
 
 /**
- * Information about the state of the cluster immediately before the program
- * started executing the current instruction
+ * Structure that the program's entrypoint input data is deserialized into.
  */
 typedef struct {
+  SolKeyedAccount* ka; /** Pointer to an array of SolKeyedAccount, must already
+                           point to an array of SolKeyedAccounts */
+  uint64_t ka_num; /** Number of SolKeyedAccount entries in `ka` */
+  const uint8_t *data; /** pointer to the instruction data */
+  uint64_t data_len; /** Length in bytes of the instruction data */
   uint64_t tick_height; /** Current ledger tick */
   const SolPubkey *program_id; /** program_id of the currently executing program */
-} SolClusterInfo;
+} SolParameters;
 
 /**
  * De-serializes the input parameters into usable types
@@ -210,72 +214,55 @@ typedef struct {
  * at program end.
  *
  * @param input Source buffer containing serialized input parameters
- * @param ka Pointer to an array of SolKeyedAccount to deserialize into
- * @param ka_len Number of SolKeyedAccount entries in `ka`
- * @param ka_len_out If NULL, fill exactly `ka_len` accounts or fail.
- *                   If not NULL, fill up to `ka_len` accounts and return the
- *                   number of filled accounts in `ka_len_out`.
- * @param data On return, a pointer to the instruction data
- * @param data_len On return, the length in bytes of the instruction data
- * @param cluster_info If not NULL, fill cluster_info
- * @return Boolean true if successful
+ * @param params Pointer to a SolParameters structure
+ * @return Boolean true if successful.
  */
 SOL_FN_PREFIX bool sol_deserialize(
   const uint8_t *input,
-  SolKeyedAccount *ka,
-  uint64_t ka_len,
-  uint64_t *ka_len_out,
-  const uint8_t **data,
-  uint64_t *data_len,
-  SolClusterInfo *cluster_info
+  SolParameters *params,
+  uint64_t ka_num
 ) {
-  if (ka_len_out == NULL) {
-    if (ka_len != *(uint64_t *) input) {
-      return false;
-    }
-    ka_len = *(uint64_t *) input;
-  } else {
-    if (ka_len > *(uint64_t *) input) {
-      ka_len = *(uint64_t *) input;
-    }
-    *ka_len_out = ka_len;
+  if (NULL == input || NULL == params) {
+    return false;
+  }
+  params->ka_num = *(uint64_t *) input;
+  if (ka_num < *(uint64_t *) input) {
+    return false;
   }
 
   input += sizeof(uint64_t);
-  for (int i = 0; i < ka_len; i++) {
+  for (int i = 0; i < params->ka_num; i++) {
     // key
-    ka[i].is_signer = *(uint64_t *) input != 0;
+    params->ka[i].is_signer = *(uint64_t *) input != 0;
     input += sizeof(uint64_t);
-    ka[i].key = (SolPubkey *) input;
+    params->ka[i].key = (SolPubkey *) input;
     input += sizeof(SolPubkey);
 
     // tokens
-    ka[i].tokens = (uint64_t *) input;
+    params->ka[i].tokens = (uint64_t *) input;
     input += sizeof(uint64_t);
 
     // account userdata
-    ka[i].userdata_len = *(uint64_t *) input;
+    params->ka[i].userdata_len = *(uint64_t *) input;
     input += sizeof(uint64_t);
-    ka[i].userdata = (uint8_t *) input;
-    input += ka[i].userdata_len;
+    params->ka[i].userdata = (uint8_t *) input;
+    input += params->ka[i].userdata_len;
 
     // owner
-    ka[i].owner = (SolPubkey *) input;
+    params->ka[i].owner = (SolPubkey *) input;
     input += sizeof(SolPubkey);
   }
 
-  // input data
-  *data_len = *(uint64_t *) input;
+  params->data_len = *(uint64_t *) input;
   input += sizeof(uint64_t);
-  *data = input;
-  input += *data_len;
+  params->data = input;
+  input += params->data_len;
 
-  if (cluster_info != NULL) {
-    cluster_info->tick_height = *(uint64_t *) input;
-    input += sizeof(uint64_t);
-    cluster_info->program_id = (SolPubkey *) input;
-    input += sizeof(SolPubkey);
-  }
+  params->tick_height = *(uint64_t *) input;
+  input += sizeof(uint64_t);
+  params->program_id = (SolPubkey *) input;
+  input += sizeof(SolPubkey);
+
   return true;
 }
 
@@ -307,35 +294,32 @@ SOL_FN_PREFIX void sol_log_array(const uint8_t *array, int len) {
 }
 
 /**
- * Prints the hexadecimal representation of the program's input parameters
+ * Prints the program's input parameters
  *
- * @param ka A pointer to an array of SolKeyedAccount to print
- * @param ka_len Number of SolKeyedAccount to print
- * @param data A pointer to the instruction data to print
- * @param data_len The length in bytes of the instruction data
+ * @param params Pointer to a SolParameters structure
  */
-SOL_FN_PREFIX void sol_log_params(
-  const SolKeyedAccount *ka,
-  uint64_t ka_len,
-  const uint8_t *data,
-  uint64_t data_len
-) {
+SOL_FN_PREFIX void sol_log_params(const SolParameters *params) {
+  sol_log("- Tick height:");
+  sol_log_64(params->tick_height, 0, 0, 0, 0);
+  sol_log("- Program identifier:");
+  sol_log_key(params->program_id);
+
   sol_log("- Number of KeyedAccounts");
-  sol_log_64(0, 0, 0, 0, ka_len);
-  for (int i = 0; i < ka_len; i++) {
-    sol_log("- Is signer");
-    sol_log_64(0, 0, 0, 0, ka[i].is_signer);
-    sol_log("- Key");
-    sol_log_key(ka[i].key);
-    sol_log("- Tokens");
-    sol_log_64(0, 0, 0, 0, *ka[i].tokens);
-    sol_log("- Userdata");
-    sol_log_array(ka[i].userdata, ka[i].userdata_len);
-    sol_log("- Owner");
-    sol_log_key(ka[i].owner);
+  sol_log_64(0, 0, 0, 0, params->ka_num);
+  for (int i = 0; i < params->ka_num; i++) {
+    sol_log("  - Is signer");
+    sol_log_64(0, 0, 0, 0, params->ka[i].is_signer);
+    sol_log("  - Key");
+    sol_log_key(params->ka[i].key);
+    sol_log("  - Tokens");
+    sol_log_64(0, 0, 0, 0, *params->ka[i].tokens);
+    sol_log("  - Userdata");
+    sol_log_array(params->ka[i].userdata, params->ka[i].userdata_len);
+    sol_log("  - Owner");
+    sol_log_key(params->ka[i].owner);
   }
   sol_log("- Instruction data\0");
-  sol_log_array(data, data_len);
+  sol_log_array(params->data, params->data_len);
 }
 
 /**@}*/
