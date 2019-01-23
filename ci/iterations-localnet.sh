@@ -53,16 +53,19 @@ runTest() {
 build
 
 runTest "Leader rotation off" \
-  "ci/localnet-sanity.sh -b -i 128"
+  "ci/localnet-sanity.sh -i 128 -b"
 
-runTest "Leader rotation off, periodic node restart" \
-  "ci/localnet-sanity.sh -b -i 128 -k 16"
+runTest "Leader rotation off, restart" \
+  "ci/localnet-sanity.sh -i 128 -k 16 -b"
+
+runTest "Leader rotation off, incremental restart, extra node" \
+  "ci/localnet-sanity.sh -i 128 -k 16 -R -x -b"
 
 runTest "Leader rotation on" \
   "ci/localnet-sanity.sh -i 128"
 
-runTest "Leader rotation on, periodic node restart" \
+runTest "Leader rotation on, restart" \
   "ci/localnet-sanity.sh -i 128 -k 16"
 
-runTest "Leader rotation on, periodic restart, extra node" \
-  "ci/localnet-sanity.sh -i 128 -k 8 -R -x"
+runTest "Leader rotation on, incremental restart, extra node" \
+  "ci/localnet-sanity.sh -i 128 -k 16 -R -x"
