@@ -128,6 +128,7 @@ waitForAllNodesToInit() {
   for initCompleteFile in "${initCompleteFiles[@]}"; do
     while [[ ! -r $initCompleteFile ]]; do
       if [[ $SECONDS -ge 30 ]]; then
+        echo "^^^ +++"
         echo "Error: $initCompleteFile not found in $SECONDS seconds"
         exit 1
       fi
@@ -169,7 +170,8 @@ killNode() {
   if kill "$pid"; then
     wait "$pid"
   else
-    echo -e "^^^ +++\\nWarning: unable to kill $pid"
+    echo "^^^ +++"
+    echo "Warning: unable to kill $pid"
   fi
   set -e
 }
@@ -184,10 +186,12 @@ killNodes() {
 
 rollingNodeRestart() {
   if [[ ${#logs[@]} -ne ${#nodes[@]} ]]; then
+    echo "^^^ +++"
     echo "Error: log/nodes array length mismatch"
     exit 1
   fi
   if [[ ${#pids[@]} -ne ${#nodes[@]} ]]; then
+    echo "^^^ +++"
     echo "Error: pids/nodes array length mismatch"
     exit 1
   fi
