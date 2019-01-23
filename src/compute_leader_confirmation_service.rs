@@ -38,18 +38,18 @@ impl ComputeLeaderConfirmationService {
 
         // Hold an accounts_db read lock as briefly as possible, just long enough to collect all
         // the vote states
-        let vote_states: Vec<VoteProgram> = bank
+        let vote_states: Vec<(Pubkey, VoteProgram)> = bank
             .accounts
             .accounts_db
             .read()
             .unwrap()
             .accounts
-            .values()
-            .filter_map(|account| {
+            .iter()
+            .filter_map(|(node_id, account)| {
                 if vote_program::check_id(&account.owner) {
                     if let Ok(vote_state) = VoteProgram::deserialize(&account.userdata) {
-                        if leader_id != vote_state.node_id {
-                            return Some(vote_state);
+                        if leader_id != *node_id {
+                            return Some((*node_id, vote_state));
                         }
                     }
                 }
@@ -59,8 +59,8 @@ impl ComputeLeaderConfirmationService {
 
         let mut ticks_and_stakes: Vec<(u64, u64)> = vote_states
             .iter()
-            .filter_map(|vote_state| {
-                let validator_stake = bank.get_balance(&vote_state.node_id);
+            .filter_map(|(node_id, vote_state)| {
+                let validator_stake = bank.get_balance(&node_id);
                 total_stake += validator_stake;
                 // Filter out any validators that don't have at least one vote
                 // by returning None

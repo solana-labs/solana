@@ -17,7 +17,7 @@ fn register(keyed_accounts: &mut [KeyedAccount]) -> Result<(), ProgramError> {
 
     // TODO: a single validator could register multiple "vote accounts"
     // which would clutter the "accounts" structure. See github issue 1654.
-    let vote_state = VoteProgram::new(*keyed_accounts[0].signer_key().unwrap());
+    let vote_state = VoteProgram::default();
     vote_state.serialize(&mut keyed_accounts[1].account.userdata)?;
 
     Ok(())
@@ -121,7 +121,6 @@ mod tests {
         ];
 
         let vote_state = register_and_deserialize(&mut keyed_accounts).unwrap();
-        assert_eq!(vote_state.node_id, voter_id);
         assert!(vote_state.votes.is_empty());
     }
 
