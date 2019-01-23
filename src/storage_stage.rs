@@ -407,7 +407,9 @@ impl StorageStage {
             if cross_boundary!(*poh_height, entry.num_hashes, storage_rotate_count) {
                 trace!(
                     "crosses sending at poh_height: {} entry_height: {}! hashes: {}",
-                    *poh_height, entry_height, entry.num_hashes
+                    *poh_height,
+                    entry_height,
+                    entry.num_hashes
                 );
                 Self::process_entry_crossing(
                     &storage_state,
