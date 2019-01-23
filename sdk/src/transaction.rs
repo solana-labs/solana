@@ -1,6 +1,7 @@
 //! The `transaction` module provides functionality for creating log transactions.
 
 use crate::hash::{Hash, Hasher};
+use crate::packet::PACKET_DATA_SIZE;
 use crate::pubkey::Pubkey;
 use crate::shortvec::{
     deserialize_vec, deserialize_vec_with, encode_len, serialize_vec, serialize_vec_with,
@@ -11,8 +12,6 @@ use serde::{Deserialize, Serialize, Serializer};
 use std::fmt;
 use std::io::Cursor;
 use std::mem::size_of;
-
-const MAX_SERIALIZED_TX_SIZE: usize = 512;
 
 /// An instruction to execute a program
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -56,25 +55,21 @@ impl Instruction {
         })
     }
 
-    pub fn serialized_size(instructions: &[Instruction]) -> u64 {
+    pub fn serialized_size(&self) -> Result<u64, Error> {
         let mut buf = [0; size_of::<u64>() + 1];
         let mut wr = Cursor::new(&mut buf[..]);
-        let size: u64 = instructions
-            .iter()
-            .map(|ix| {
-                let mut size = size_of::<u8>();
-                let len = ix.accounts.len();
-                encode_len(&mut wr, len).unwrap();
-                size += wr.position() as usize + (len * size_of::<u8>());
-                let len = ix.userdata.len();
-                wr.set_position(0);
-                encode_len(&mut wr, len).unwrap();
-                (size + wr.position() as usize + (len * size_of::<u8>())) as u64
-            })
-            .sum();
+        let mut size = size_of::<u8>();
+
+        let len = self.accounts.len();
+        encode_len(&mut wr, len)?;
+        size += wr.position() as usize + (len * size_of::<u8>());
+
+        let len = self.userdata.len();
         wr.set_position(0);
-        encode_len(&mut wr, instructions.len()).unwrap();
-        size + wr.position()
+        encode_len(&mut wr, len)?;
+        size += wr.position() as usize + (len * size_of::<u8>());
+
+        Ok(size as u64)
     }
 }
 
@@ -195,7 +190,7 @@ impl Transaction {
     }
     /// Get the transaction data to sign.
     pub fn get_sign_data(&self) -> Vec<u8> {
-        let mut buf = vec![0u8; MAX_SERIALIZED_TX_SIZE];
+        let mut buf = vec![0u8; PACKET_DATA_SIZE];
         let mut wr = Cursor::new(&mut buf[..]);
         serialize_vec(&mut wr, &self.account_keys).expect("serialize account_keys");
         serialize_into(&mut wr, &self.last_id).expect("serialize last_id");
@@ -252,24 +247,39 @@ impl Transaction {
         hasher.result()
     }
 
-    pub fn serialized_size(tx: &Transaction) -> u64 {
+    pub fn serialized_size(&self) -> Result<u64, Error> {
         let mut buf = [0u8; size_of::<u64>() + 1];
         let mut wr = Cursor::new(&mut buf[..]);
         let mut size = size_of::<u64>();
-        let len = tx.signatures.len();
-        encode_len(&mut wr, len).unwrap();
+
+        let len = self.signatures.len();
+        encode_len(&mut wr, len)?;
         size += wr.position() as usize + (len * size_of::<Signature>());
-        let len = tx.account_keys.len();
+
+        let len = self.account_keys.len();
         wr.set_position(0);
-        encode_len(&mut wr, len).unwrap();
+        encode_len(&mut wr, len)?;
         size += wr.position() as usize + (len * size_of::<Pubkey>());
+
         size += size_of::<Hash>();
+
         size += size_of::<u64>();
-        let len = tx.program_ids.len();
+
+        let len = self.program_ids.len();
         wr.set_position(0);
-        encode_len(&mut wr, len).unwrap();
+        encode_len(&mut wr, len)?;
         size += wr.position() as usize + (len * size_of::<Pubkey>());
-        size as u64 + Instruction::serialized_size(&tx.instructions)
+
+        let len = self.instructions.len();
+        wr.set_position(0);
+        encode_len(&mut wr, len)?;
+        size += wr.position() as usize;
+        let inst_size: u64 = self
+            .instructions
+            .iter()
+            .map(|ix| ix.serialized_size().unwrap())
+            .sum();
+        Ok(size as u64 + inst_size)
     }
 }
 
@@ -279,7 +289,7 @@ impl Serialize for Transaction {
         S: Serializer,
     {
         use serde::ser::Error;
-        let mut buf = vec![0u8; Self::serialized_size(&self) as usize];
+        let mut buf = vec![0u8; self.serialized_size().unwrap() as usize];
         let mut wr = Cursor::new(&mut buf[..]);
         serialize_vec(&mut wr, &self.signatures).map_err(Error::custom)?;
         serialize_vec(&mut wr, &self.account_keys).map_err(Error::custom)?;
@@ -451,8 +461,9 @@ mod tests {
             + size_of::<u64>()
             + 1
             + (tx.program_ids.len() * size_of::<Pubkey>())
-            + Instruction::serialized_size(&tx.instructions) as usize;
-        let size = Transaction::serialized_size(&tx) as usize;
+            + 1
+            + tx.instructions[0].serialized_size().unwrap() as usize;
+        let size = tx.serialized_size().unwrap() as usize;
         assert_eq!(req_size, size);
     }
 
