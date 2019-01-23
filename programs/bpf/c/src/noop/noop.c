@@ -14,9 +14,9 @@ extern bool entrypoint(const uint8_t *input) {
     return false;
   }
 
-  // // Log the provided input parameters.  In the case of  the no-op
-  // // program, no account keys or input data are expected but real
-  // // programs will have specific requirements so they can do their work.
+  // Log the provided input parameters.  In the case of  the no-op
+  // program, no account keys or input data are expected but real
+  // programs will have specific requirements so they can do their work.
   sol_log_params(&params);
   return true;
 }
