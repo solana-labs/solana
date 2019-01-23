@@ -885,12 +885,6 @@ impl Bank {
             .unwrap_or(0)
     }
 
-    /// TODO: Need to implement a real staking program to hold node stake.
-    /// Right now this just gets the account balances. See github issue #1655.
-    pub fn get_stake(&self, pubkey: &Pubkey) -> u64 {
-        self.get_balance(pubkey)
-    }
-
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
         self.accounts.load_slow(pubkey)
     }

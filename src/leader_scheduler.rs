@@ -419,7 +419,7 @@ impl LeaderScheduler {
     {
         let mut active_accounts: Vec<(&'a Pubkey, u64)> = active
             .filter_map(|pk| {
-                let stake = bank.get_stake(pk);
+                let stake = bank.get_balance(pk);
                 if stake > 0 {
                     Some((pk, stake as u64))
                 } else {

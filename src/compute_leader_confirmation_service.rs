@@ -60,7 +60,7 @@ impl ComputeLeaderConfirmationService {
         let mut ticks_and_stakes: Vec<(u64, u64)> = vote_states
             .iter()
             .filter_map(|vote_state| {
-                let validator_stake = bank.get_stake(&vote_state.node_id);
+                let validator_stake = bank.get_balance(&vote_state.node_id);
                 total_stake += validator_stake;
                 // Filter out any validators that don't have at least one vote
                 // by returning None
