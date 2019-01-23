@@ -148,7 +148,7 @@ local|tar)
     maybeNoLeaderRotation="--no-leader-rotation"
   fi
 
-  rm -f init-complete-file
+
   case $nodeType in
   bootstrap-leader)
     if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-fullnode-cuda ]]; then
@@ -160,9 +160,7 @@ local|tar)
       ./multinode-demo/setup.sh -t bootstrap-leader $setupArgs
     fi
     ./multinode-demo/drone.sh > drone.log 2>&1 &
-    ./multinode-demo/bootstrap-leader.sh \
-      --init-complete-file init-complete-file
-      $maybeNoLeaderRotation > bootstrap-leader.log 2>&1 &
+    ./multinode-demo/bootstrap-leader.sh $maybeNoLeaderRotation > bootstrap-leader.log 2>&1 &
     ln -sTf bootstrap-leader.log fullnode.log
     ;;
   fullnode)
@@ -177,28 +175,13 @@ local|tar)
     if [[ $skipSetup != true ]]; then
       ./multinode-demo/setup.sh -t fullnode $setupArgs
     fi
-    ./multinode-demo/fullnode.sh \
-      --init-complete-file init-complete-file \
-      $maybeNoLeaderRotation \
-      "$entrypointIp":~/solana "$entrypointIp:8001" > fullnode.log 2>&1 &
+    ./multinode-demo/fullnode.sh $maybeNoLeaderRotation "$entrypointIp":~/solana "$entrypointIp:8001" > fullnode.log 2>&1 &
     ;;
   *)
     echo "Error: unknown node type: $nodeType"
     exit 1
     ;;
   esac
-
-  SECONDS=0
-  while [[ ! -r init-complete-file ]]; do
-    if [[ $SECONDS -ge 30 ]]; then
-      echo "Error: node failed to boot in $SECONDS seconds"
-      exit 1
-    fi
-    echo "Waiting for node to boot ($SECONDS)..."
-    sleep 2
-  done
-  echo "Node booted in $SECONDS seconds"
-
   disown
   ;;
 *)
