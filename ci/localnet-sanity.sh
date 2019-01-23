@@ -127,7 +127,7 @@ waitForAllNodesToInit() {
   SECONDS=
   for initCompleteFile in "${initCompleteFiles[@]}"; do
     while [[ ! -r $initCompleteFile ]]; do
-      if [[ $SECONDS -ge 30 ]]; then
+      if [[ $SECONDS -ge 240 ]]; then
         echo "^^^ +++"
         echo "Error: $initCompleteFile not found in $SECONDS seconds"
         exit 1
