@@ -35,10 +35,11 @@
     "/src"
   ],
   "scripts": {
-    "bpf-sdk:install": "set -ex; npm run bpf-sdk:fetch; npm run bpf-sdk:extract",
-    "bpf-sdk:extract": "test -d bpf-sdk || tar jxvf bpf-sdk.tar.bz2",
-    "bpf-sdk:fetch": "test -f bpf-sdk.tar.bz2 || curl http://solana-sdk.s3.amazonaws.com/$npm_package_testnetDefaultChannel/bpf-sdk.tar.bz2 -o bpf-sdk.tar.bz2",
+    "bpf-sdk:install": "set -ex; npm run bpf-sdk:fetch; npm run bpf-sdk:extract; npm run bpf-sdk:remove-symlinks; npm run bpf-sdk:clean",
+    "bpf-sdk:extract": "rm -rf bpf-sdk; tar jxvf bpf-sdk.tar.bz2",
+    "bpf-sdk:fetch": "curl http://solana-sdk.s3.amazonaws.com/$npm_package_testnetDefaultChannel/bpf-sdk.tar.bz2 -o bpf-sdk.tar.bz2",
     "bpf-sdk:remove-symlinks": "find bpf-sdk -type l -print -exec cp {} {}.tmp \\; -exec mv {}.tmp {} \\;",
+    "bpf-sdk:clean": "rm bpf-sdk.tar.bz2",
     "build": "cross-env NODE_ENV=production rollup -c",
     "clean": "rimraf ./coverage ./lib",
     "codecov": "set -ex; npm run test:cover; cat ./coverage/lcov.info | codecov",
@@ -58,7 +59,7 @@
     "localnet:up": "bin/localnet.sh up $npm_package_testnetDefaultChannel",
     "localnet:update": "bin/localnet.sh update $npm_package_testnetDefaultChannel",
     "ok": "set -ex; npm run lint; npm run flow; npm run test; npm run doc",
-    "prepare": "set -ex; npm run clean; npm run bpf-sdk:install; npm run build; rm -rf bpf-sdk; npm rum bpf-sdk:extract; npm run bpf-sdk:remove-symlinks",
+    "prepare": "set -ex; npm run clean; npm run bpf-sdk:install; npm run build",
     "pretty": "prettier --write '{,{examples,src,test}/**/}*.js'",
     "re": "semantic-release --repository-url git@github.com:solana-labs/solana-web3.js.git",
     "test": "cross-env NODE_ENV=test jest --useStderr",
