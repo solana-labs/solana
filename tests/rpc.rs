@@ -21,6 +21,7 @@ use std::thread::sleep;
 use std::time::Duration;
 
 #[test]
+#[ignore]
 fn test_rpc_send_tx() {
     let leader_keypair = Arc::new(Keypair::new());
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
