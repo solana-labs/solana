@@ -200,9 +200,6 @@ $(INSTALL_SH):
 
 PROGRAM_NAMES := $(notdir $(basename $(wildcard $(SRC_DIR)/*)))
 
-.PHONY: $(PROGRAM_NAMES)
-$(PROGRAM_NAMES): $(INSTALL_SH)
-
 define \n
 
 
@@ -220,6 +217,7 @@ $(foreach PROGRAM, $(PROGRAM_NAMES), \
   $(eval $(PROGRAM)_OBJS := $(subst $(SRC_DIR), $(OUT_DIR), \
     $(patsubst %.c,%.o, \
     $(patsubst %.cc,%.o,$($(PROGRAM)_SRCS))))) \
+	$(eval $($(PROGRAM)_SRCS): $(INSTALL_SH)) \
   $(eval $(call SO_RULE,$(OUT_DIR)/$(PROGRAM).so,$($(PROGRAM)_OBJS))) \
   $(foreach _,$(filter %.c,$($(PROGRAM)_SRCS)), \
     $(eval $(call C_RULE,$(subst $(SRC_DIR),$(OUT_DIR),$(_:%.c=%.o)),$_))) \
@@ -233,18 +231,19 @@ $(foreach PROGRAM, $(PROGRAM_NAMES), \
     $(eval $(TEST)_SRCS := \
       $(addprefix $(SRC_DIR)/$(PROGRAM)/, \
       $(notdir $(wildcard $(SRC_DIR)/$(PROGRAM)/$(TEST).c $(SRC_DIR)/$(PROGRAM)/$(TEST).cc)))) \
+		$(eval $($(TEST)_SRCS): $(INSTALL_SH)) \
     $(foreach _,$(filter %.c,$($(TEST)_SRCS)), \
-      $(eval $(call TEST_C_RULE,$(subst $(SRC_DIR),$(OUT_DIR),$(_:%.c=%)),$_ $(INSTALL_SH)))) \
+      $(eval $(call TEST_C_RULE,$(subst $(SRC_DIR),$(OUT_DIR),$(_:%.c=%)),$_))) \
     $(foreach _,$(filter %.cc, $($(TEST)_SRCS)), \
-      $(eval $(call TEST_CC_RULE,$(subst $(SRC_DIR),$(OUT_DIR),$(_:%.cc=%)),$_ $(INSTALL_SH)))) \
+      $(eval $(call TEST_CC_RULE,$(subst $(SRC_DIR),$(OUT_DIR),$(_:%.cc=%)),$_))) \
     $(eval $(call TEST_EXEC_RULE,$(TEST),$(addprefix $(OUT_DIR)/$(PROGRAM)/, $(TEST)))) \
    ) \
 )
 
-.PHONY: $(TEST_NAMES)
-
+.PHONY: $(PROGRAM_NAMES)
 programs: $(PROGRAM_NAMES)
 
+.PHONY: $(TEST_NAMES)
 tests: $(TEST_NAMES)
 
 dump_%: %
