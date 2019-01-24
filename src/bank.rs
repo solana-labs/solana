@@ -452,7 +452,11 @@ impl Bank {
             .iter()
             .zip(txs.iter())
             .filter_map(|(r, x)| match r {
-                Ok(_) | Err(BankError::ProgramError(_, _)) => Some(x.clone()),
+                Ok(_) => Some(x.clone()),
+                Err(BankError::ProgramError(index, err)) => {
+                    info!("program error {:?}, {:?}", index, err);
+                    Some(x.clone())
+                }
                 Err(ref e) => {
                     debug!("process transaction failed {:?}", e);
                     None
@@ -654,7 +658,24 @@ impl Bank {
         }
         Ok(())
     }
-    pub fn par_execute_entries(&self, entries: &[(&Entry, Vec<Result<()>>)]) -> Result<()> {
+
+    fn ignore_program_errors(results: Vec<Result<()>>) -> Vec<Result<()>> {
+        results
+            .into_iter()
+            .map(|result| match result {
+                // Entries that result in a ProgramError are still valid and are written in the
+                // ledger so map them to an ok return value
+                Err(BankError::ProgramError(index, err)) => {
+                    info!("program error {:?}, {:?}", index, err);
+                    inc_new_counter_info!("bank-ignore_program_err", 1);
+                    Ok(())
+                }
+                _ => result,
+            })
+            .collect()
+    }
+
+    fn par_execute_entries(&self, entries: &[(&Entry, Vec<Result<()>>)]) -> Result<()> {
         inc_new_counter_info!("bank-par_execute_entries-count", entries.len());
         let results: Vec<Result<()>> = entries
             .into_par_iter()
@@ -664,17 +685,7 @@ impl Bank {
                     lock_results.to_vec(),
                     MAX_ENTRY_IDS,
                 );
-                let mut results = Vec::new();
-                results.reserve(old_results.len());
-                results = old_results
-                    .into_iter()
-                    .map(|result| match result {
-                        // Entries that result in a ProgramError are still valid and are written in the
-                        // ledger so map them to an ok return value
-                        Err(BankError::ProgramError(_, _)) => Ok(()),
-                        _ => result,
-                    })
-                    .collect();
+                let results = Bank::ignore_program_errors(old_results);
                 self.unlock_accounts(&e.transactions, &results);
                 Self::first_err(&results)
             })
@@ -1871,6 +1882,29 @@ mod tests {
             .unwrap();
         let entries = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].transactions.len(), transactions.len() - 1);
+    }
+
+    #[test]
+    fn test_bank_ignore_program_errors() {
+        let expected_results = vec![Ok(()), Ok(())];
+        let results = vec![Ok(()), Ok(())];
+        let updated_results = Bank::ignore_program_errors(results);
+        assert_eq!(updated_results, expected_results);
+
+        let results = vec![
+            Err(BankError::ProgramError(
+                1,
+                ProgramError::ResultWithNegativeTokens,
+            )),
+            Ok(()),
+        ];
+        let updated_results = Bank::ignore_program_errors(results);
+        assert_eq!(updated_results, expected_results);
+
+        // Other BankErrors should not be ignored
+        let results = vec![Err(BankError::AccountNotFound), Ok(())];
+        let updated_results = Bank::ignore_program_errors(results);
+        assert_ne!(updated_results, expected_results);
     }
 
     #[test]
