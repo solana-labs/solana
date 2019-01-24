@@ -194,7 +194,6 @@ $1: $2
 	$2$(\n)
 endef
 
-
 .PHONY: $(INSTALL_SH)
 $(INSTALL_SH):
 	$(_@)$(INSTALL_SH)
