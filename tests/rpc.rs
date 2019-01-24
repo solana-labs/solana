@@ -4,10 +4,10 @@ use reqwest::header::CONTENT_TYPE;
 use serde_json::{json, Value};
 use solana::bank::Bank;
 use solana::cluster_info::Node;
-use solana::db_ledger::create_tmp_ledger_with_mint;
+use solana::db_ledger::create_tmp_ledger;
 use solana::fullnode::Fullnode;
+use solana::genesis_block::GenesisBlock;
 use solana::leader_scheduler::LeaderScheduler;
-use solana::mint::Mint;
 use solana::rpc_request::get_rpc_request_str;
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana::vote_signer_proxy::VoteSignerProxy;
@@ -26,14 +26,14 @@ fn test_rpc_send_tx() {
     let leader_keypair = Arc::new(Keypair::new());
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
-    let alice = Mint::new(10_000_000);
-    let mut bank = Bank::new(&alice);
+    let (genesis_block, alice) = GenesisBlock::new(10_000_000);
+    let mut bank = Bank::new(&genesis_block);
     let bob_pubkey = Keypair::new().pubkey();
     let leader_data = leader.info.clone();
-    let ledger_path = create_tmp_ledger_with_mint("rpc_send_tx", &alice);
+    let ledger_path = create_tmp_ledger("rpc_send_tx", &genesis_block);
 
     let last_id = bank.last_id();
-    let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 20, last_id, 0);
+    let tx = Transaction::system_move(&alice, bob_pubkey, 20, last_id, 0);
     let serial_tx = serialize(&tx).unwrap();
 
     let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
@@ -44,17 +44,16 @@ fn test_rpc_send_tx() {
     let vote_account_keypair = Arc::new(Keypair::new());
     let vote_signer =
         VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
-    let entry_height = alice.create_entries().len() as u64;
+    let entry_height = 0;
     let server = Fullnode::new_with_bank(
         leader_keypair,
         Some(Arc::new(vote_signer)),
         bank,
-        None,
+        &ledger_path,
         entry_height,
         &last_id,
         leader,
         None,
-        &ledger_path,
         false,
         None,
         STORAGE_ROTATE_TEST_COUNT,

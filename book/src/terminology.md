@@ -97,7 +97,7 @@ holding nonzero [native tokens](#native-tokens).
 
 #### genesis block
 
-The first [block](#block) of the [ledger](#ledger).
+The configuration file that prepares the [ledger](#ledger) for the first [block](#block).
 
 #### hash
 

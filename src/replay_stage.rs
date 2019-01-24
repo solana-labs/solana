@@ -318,8 +318,8 @@ mod test {
         let old_leader_id = Keypair::new().pubkey();
 
         // Create a ledger
-        let num_ending_ticks = 1;
-        let (mint, my_ledger_path, genesis_entries) = create_tmp_sample_ledger(
+        let num_ending_ticks = 3;
+        let (_, mint_keypair, my_ledger_path, genesis_entries) = create_tmp_sample_ledger(
             "test_replay_stage_leader_rotation_exit",
             10_000,
             num_ending_ticks,
@@ -336,11 +336,10 @@ mod test {
         // 1) Give the validator a nonzero number of tokens 2) A vote from the validator .
         // This will cause leader rotation after the bootstrap height
         let (active_set_entries, vote_account_id) =
-            make_active_set_entries(&my_keypair, &mint.keypair(), &last_id, &last_id, 0);
+            make_active_set_entries(&my_keypair, &mint_keypair, &last_id, &last_id, 0);
         last_id = active_set_entries.last().unwrap().id;
         let initial_tick_height = genesis_entries
             .iter()
-            .skip(2)
             .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
         let active_set_entries_len = active_set_entries.len() as u64;
         let initial_non_tick_height = genesis_entries.len() as u64 - initial_tick_height;
@@ -357,7 +356,7 @@ mod test {
                 .unwrap();
         }
 
-        // Set up the LeaderScheduler so that this this node becomes the leader at
+        // Set up the LeaderScheduler so that this node becomes the leader at
         // bootstrap_height = num_bootstrap_slots * leader_rotation_interval
         let leader_rotation_interval = 16;
         let num_bootstrap_slots = 2;
@@ -395,7 +394,6 @@ mod test {
         let total_entries_to_send = (bootstrap_height + extra_entries) as usize;
         let num_hashes = 1;
         let mut entries_to_send = vec![];
-
         while entries_to_send.len() < total_entries_to_send {
             let entry = Entry::new(&mut last_id, 0, num_hashes, vec![]);
             last_id = entry.id;
@@ -406,10 +404,10 @@ mod test {
 
         // Add on the only entries that weren't ticks to the bootstrap height to get the
         // total expected entry length
-        let leader_rotation_index = (bootstrap_height - initial_tick_height - 1) as usize;
+        let leader_rotation_index = (bootstrap_height - initial_tick_height) as usize;
         let expected_entry_height =
-            bootstrap_height + initial_non_tick_height + active_set_entries_len;
-        let expected_last_id = entries_to_send[leader_rotation_index].id;
+            bootstrap_height + initial_non_tick_height + active_set_entries_len - 1;
+        let expected_last_id = entries_to_send[leader_rotation_index - 2].id;
         entry_sender.send(entries_to_send.clone()).unwrap();
 
         // Wait for replay_stage to exit and check return value is correct
@@ -425,11 +423,11 @@ mod test {
         // Check that the entries on the ledger writer channel are correct
         let received_ticks = ledger_writer_recv
             .recv()
-            .expect("Expected to recieve an entry on the ledger writer receiver");
+            .expect("Expected to receive an entry on the ledger writer receiver");
 
         assert_eq!(
             &received_ticks[..],
-            &entries_to_send[..leader_rotation_index + 1]
+            &entries_to_send[..leader_rotation_index - 1]
         );
 
         assert_eq!(exit.load(Ordering::Relaxed), true);
@@ -448,14 +446,15 @@ mod test {
         let leader_id = Keypair::new().pubkey();
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
 
-        let num_ending_ticks = 0;
-        let (_, my_ledger_path, genesis_entries) = create_tmp_sample_ledger(
-            "test_vote_error_replay_stage_correctness",
-            10_000,
-            num_ending_ticks,
-            leader_id,
-            500,
-        );
+        let num_ending_ticks = 1;
+        let (_genesis_block, _mint_keypair, my_ledger_path, genesis_entries) =
+            create_tmp_sample_ledger(
+                "test_vote_error_replay_stage_correctness",
+                10_000,
+                num_ending_ticks,
+                leader_id,
+                500,
+            );
 
         let initial_entry_len = genesis_entries.len();
 
@@ -525,13 +524,14 @@ mod test {
         let leader_id = Keypair::new().pubkey();
 
         // Create the ledger
-        let (mint, my_ledger_path, genesis_entries) = create_tmp_sample_ledger(
-            "test_vote_error_replay_stage_leader_rotation",
-            10_000,
-            0,
-            leader_id,
-            500,
-        );
+        let (_genesis_block, mint_keypair, my_ledger_path, genesis_entries) =
+            create_tmp_sample_ledger(
+                "test_vote_error_replay_stage_leader_rotation",
+                10_000,
+                1,
+                leader_id,
+                500,
+            );
 
         let mut last_id = genesis_entries
             .last()
@@ -543,11 +543,10 @@ mod test {
         // 1) Give the validator a nonzero number of tokens 2) A vote from the validator.
         // This will cause leader rotation after the bootstrap height
         let (active_set_entries, vote_account_id) =
-            make_active_set_entries(&my_keypair, &mint.keypair(), &last_id, &last_id, 0);
+            make_active_set_entries(&my_keypair, &mint_keypair, &last_id, &last_id, 0);
         last_id = active_set_entries.last().unwrap().id;
         let initial_tick_height = genesis_entries
             .iter()
-            .skip(2)
             .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
         let active_set_entries_len = active_set_entries.len() as u64;
         let initial_non_tick_height = genesis_entries.len() as u64 - initial_tick_height;
@@ -614,10 +613,10 @@ mod test {
         // Add on the only entries that weren't ticks to the bootstrap height to get the
         // total expected entry length
         let expected_entry_height =
-            bootstrap_height + initial_non_tick_height + active_set_entries_len;
-        let leader_rotation_index = (bootstrap_height - initial_tick_height - 1) as usize;
+            bootstrap_height + initial_non_tick_height + active_set_entries_len - 1;
+        let leader_rotation_index = (bootstrap_height - initial_tick_height - 2) as usize;
         let mut expected_last_id = Hash::default();
-        for i in 0..total_entries_to_send {
+        for i in 0..total_entries_to_send - 1 {
             let entry = Entry::new(&mut last_id, 0, num_hashes, vec![]);
             last_id = entry.id;
             entry_sender
@@ -632,9 +631,11 @@ mod test {
             if i == leader_rotation_index {
                 expected_last_id = entry.id;
             }
+            debug!(
+                "loop: i={}, leader_rotation_index={}, entry={:?}",
+                i, leader_rotation_index, entry,
+            );
         }
-
-        assert_ne!(expected_last_id, Hash::default());
 
         // Wait for replay_stage to exit and check return value is correct
         assert_eq!(
@@ -645,6 +646,8 @@ mod test {
             )),
             replay_stage.join().expect("replay stage join")
         );
+        assert_ne!(expected_last_id, Hash::default());
+
         assert_eq!(exit.load(Ordering::Relaxed), true);
         let _ignored = remove_dir_all(&my_ledger_path);
     }

@@ -161,7 +161,7 @@ pub mod tests {
     use crate::compute_leader_confirmation_service::ComputeLeaderConfirmationService;
     use crate::vote_signer_proxy::VoteSignerProxy;
 
-    use crate::mint::Mint;
+    use crate::genesis_block::GenesisBlock;
     use bincode::serialize;
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -174,9 +174,9 @@ pub mod tests {
     fn test_compute_confirmation() {
         solana_logger::setup();
 
-        let mint = Mint::new(1234);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1234);
         let dummy_leader_id = Keypair::new().pubkey();
-        let bank = Arc::new(Bank::new(&mint));
+        let bank = Arc::new(Bank::new(&genesis_block));
         // generate 10 validators, but only vote for the first 6 validators
         let ids: Vec<_> = (0..10)
             .map(|i| {
@@ -199,7 +199,7 @@ pub mod tests {
                     VoteSignerProxy::new(&validator_keypair, Box::new(LocalVoteSigner::default()));
 
                 // Give the validator some tokens
-                bank.transfer(2, &mint.keypair(), validator_keypair.pubkey(), last_id)
+                bank.transfer(2, &mint_keypair, validator_keypair.pubkey(), last_id)
                     .unwrap();
                 vote_signer
                     .new_vote_account(&bank, 1, last_id)

@@ -98,7 +98,7 @@ impl Service for PohService {
 mod tests {
     use super::{Config, PohService};
     use crate::bank::Bank;
-    use crate::mint::Mint;
+    use crate::genesis_block::GenesisBlock;
     use crate::poh_recorder::PohRecorder;
     use crate::result::Result;
     use crate::service::Service;
@@ -111,8 +111,8 @@ mod tests {
 
     #[test]
     fn test_poh_service() {
-        let mint = Mint::new(1);
-        let bank = Arc::new(Bank::new(&mint));
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(1);
+        let bank = Arc::new(Bank::new(&genesis_block));
         let prev_id = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
         let poh_recorder = PohRecorder::new(bank, entry_sender, prev_id, None);

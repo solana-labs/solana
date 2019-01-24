@@ -10,7 +10,6 @@ use solana::entry::{reconstruct_entries_from_blobs, Entry};
 use solana::fullnode::{Fullnode, FullnodeReturnType};
 use solana::gossip_service::GossipService;
 use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
-use solana::mint::Mint;
 use solana::packet::SharedBlob;
 use solana::poh_service::NUM_TICKS_PER_SECOND;
 use solana::result;
@@ -135,7 +134,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (alice, leader_ledger_path) =
+    let (genesis_block, alice, leader_ledger_path) =
         create_tmp_genesis("multi_node_ledger_window", 10_000, leader_data.id, 500);
     ledger_paths.push(leader_ledger_path.clone());
 
@@ -146,14 +145,10 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     // write a bunch more ledger into leader's ledger, this should populate the leader's window
     // and force it to respond to repair from the ledger window
     {
-        let entries = make_tiny_test_entries(alice.last_id(), 100);
+        let entries = make_tiny_test_entries(genesis_block.last_id(), 100);
         let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
         db_ledger
-            .write_entries(
-                DEFAULT_SLOT_HEIGHT,
-                solana::mint::NUM_GENESIS_ENTRIES as u64,
-                &entries,
-            )
+            .write_entries(DEFAULT_SLOT_HEIGHT, 0, &entries)
             .unwrap();
     }
 
@@ -238,7 +233,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (alice, genesis_ledger_path) = create_tmp_genesis(
+    let (_genesis_block, alice, genesis_ledger_path) = create_tmp_genesis(
         "multi_node_validator_catchup_from_zero",
         10_000,
         leader_data.id,
@@ -431,7 +426,7 @@ fn test_multi_node_basic() {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (alice, genesis_ledger_path) =
+    let (_genesis_block, alice, genesis_ledger_path) =
         create_tmp_genesis("multi_node_basic", 10_000, leader_data.id, 500);
     ledger_paths.push(genesis_ledger_path.clone());
 
@@ -536,7 +531,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (alice, genesis_ledger_path) =
+    let (_genesis_block, alice, genesis_ledger_path) =
         create_tmp_genesis("boot_validator_from_file", 100_000, leader_pubkey, 1000);
     ledger_paths.push(genesis_ledger_path.clone());
 
@@ -621,7 +616,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
 
     let leader_keypair = Arc::new(Keypair::new());
     let initial_leader_balance = 500;
-    let (alice, ledger_path) = create_tmp_genesis(
+    let (_genesis_block, alice, ledger_path) = create_tmp_genesis(
         "leader_restart_validator_start_from_old_ledger",
         100_000 + 500 * solana::window_service::MAX_REPAIR_BACKOFF as u64,
         leader_keypair.pubkey(),
@@ -732,7 +727,7 @@ fn test_multi_node_dynamic_network() {
     let leader_pubkey = leader_keypair.pubkey().clone();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let bob_pubkey = Keypair::new().pubkey();
-    let (alice, genesis_ledger_path) =
+    let (_genesis_block, alice, genesis_ledger_path) =
         create_tmp_genesis("multi_node_dynamic_network", 10_000_000, leader_pubkey, 500);
 
     let mut ledger_paths = Vec::new();
@@ -857,12 +852,7 @@ fn test_multi_node_dynamic_network() {
         debug!("last_id: {}", last_id);
         trace!("Executing leader transfer of 100");
         let sig = client
-            .transfer(
-                100,
-                &alice_arc.read().unwrap().keypair(),
-                bob_pubkey,
-                &last_id,
-            )
+            .transfer(100, &alice_arc.read().unwrap(), bob_pubkey, &last_id)
             .unwrap();
 
         expected_balance += 100;
@@ -962,13 +952,14 @@ fn test_leader_to_validator_transition() {
     // Initialize the leader ledger. Make a mint and a genesis entry
     // in the leader ledger
     let num_ending_ticks = 1;
-    let (mint, leader_ledger_path, genesis_entries) = create_tmp_sample_ledger(
-        "test_leader_to_validator_transition",
-        10_000,
-        num_ending_ticks,
-        leader_info.id,
-        500,
-    );
+    let (_genesis_block, mint_keypair, leader_ledger_path, genesis_entries) =
+        create_tmp_sample_ledger(
+            "test_leader_to_validator_transition",
+            10_000,
+            num_ending_ticks,
+            leader_info.id,
+            500,
+        );
 
     let last_id = genesis_entries
         .last()
@@ -978,7 +969,7 @@ fn test_leader_to_validator_transition() {
     // Write the bootstrap entries to the ledger that will cause leader rotation
     // after the bootstrap height
     let (bootstrap_entries, _) =
-        make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id, 0);
+        make_active_set_entries(&validator_keypair, &mint_keypair, &last_id, &last_id, 0);
     {
         let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
         db_ledger
@@ -1040,8 +1031,13 @@ fn test_leader_to_validator_transition() {
         // Poll to see that the bank state is updated after every transaction
         // to ensure that each transaction is packaged as a single entry,
         // so that we can be sure leader rotation is triggered
-        let result =
-            send_tx_and_retry_get_balance(&leader_info, &mint, &bob_pubkey, 1, Some(i as u64));
+        let result = send_tx_and_retry_get_balance(
+            &leader_info,
+            &mint_keypair,
+            &bob_pubkey,
+            1,
+            Some(i as u64),
+        );
 
         // If the transaction wasn't reflected in the node, then we assume
         // the node has transitioned already
@@ -1102,13 +1098,14 @@ fn test_leader_validator_basic() {
 
     // Make a common mint and a genesis entry for both leader + validator ledgers
     let num_ending_ticks = 1;
-    let (mint, leader_ledger_path, genesis_entries) = create_tmp_sample_ledger(
-        "test_leader_validator_basic",
-        10_000,
-        num_ending_ticks,
-        leader_info.id,
-        500,
-    );
+    let (_genesis_block, mint_keypair, leader_ledger_path, genesis_entries) =
+        create_tmp_sample_ledger(
+            "test_leader_validator_basic",
+            10_000,
+            num_ending_ticks,
+            leader_info.id,
+            500,
+        );
 
     let validator_ledger_path = tmp_copy_ledger(&leader_ledger_path, "test_leader_validator_basic");
 
@@ -1125,7 +1122,7 @@ fn test_leader_validator_basic() {
     // Write the bootstrap entries to the ledger that will cause leader rotation
     // after the bootstrap height
     let (active_set_entries, _vote_account_keypair) =
-        make_active_set_entries(&validator_keypair, &mint.keypair(), &last_id, &last_id, 0);
+        make_active_set_entries(&validator_keypair, &mint_keypair, &last_id, &last_id, 0);
     {
         let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
         db_ledger
@@ -1184,7 +1181,8 @@ fn test_leader_validator_basic() {
         // Poll to see that the bank state is updated after every transaction
         // to ensure that each transaction is packaged as a single entry,
         // so that we can be sure leader rotation is triggered
-        let result = send_tx_and_retry_get_balance(&leader_info, &mint, &bob_pubkey, 1, None);
+        let result =
+            send_tx_and_retry_get_balance(&leader_info, &mint_keypair, &bob_pubkey, 1, None);
 
         // If the transaction wasn't reflected in the node, then we assume
         // the node has transitioned already
@@ -1284,13 +1282,14 @@ fn test_dropped_handoff_recovery() {
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
     let num_ending_ticks = 1;
-    let (mint, genesis_ledger_path, genesis_entries) = create_tmp_sample_ledger(
-        "test_dropped_handoff_recovery",
-        10_000,
-        num_ending_ticks,
-        bootstrap_leader_info.id,
-        500,
-    );
+    let (_genesis_block, mint_keypair, genesis_ledger_path, genesis_entries) =
+        create_tmp_sample_ledger(
+            "test_dropped_handoff_recovery",
+            10_000,
+            num_ending_ticks,
+            bootstrap_leader_info.id,
+            500,
+        );
 
     let last_id = genesis_entries
         .last()
@@ -1309,7 +1308,7 @@ fn test_dropped_handoff_recovery() {
     // Make the entries to give the next_leader validator some stake so that they will be in
     // leader election active set
     let (active_set_entries, _vote_account_keypair) =
-        make_active_set_entries(&next_leader_keypair, &mint.keypair(), &last_id, &last_id, 0);
+        make_active_set_entries(&next_leader_keypair, &mint_keypair, &last_id, &last_id, 0);
 
     // Write the entries
     {
@@ -1458,13 +1457,14 @@ fn test_full_leader_validator_network() {
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
     let num_ending_ticks = 1;
-    let (mint, bootstrap_leader_ledger_path, genesis_entries) = create_tmp_sample_ledger(
-        "test_full_leader_validator_network",
-        10_000,
-        num_ending_ticks,
-        bootstrap_leader_info.id,
-        500,
-    );
+    let (_genesis_block, mint_keypair, bootstrap_leader_ledger_path, genesis_entries) =
+        create_tmp_sample_ledger(
+            "test_full_leader_validator_network",
+            10_000,
+            num_ending_ticks,
+            bootstrap_leader_info.id,
+            500,
+        );
 
     let last_tick_id = genesis_entries
         .last()
@@ -1491,7 +1491,7 @@ fn test_full_leader_validator_network() {
         // leader election active set
         let (bootstrap_entries, vote_account_keypair) = make_active_set_entries(
             node_keypair,
-            &mint.keypair(),
+            &mint_keypair,
             &last_entry_id,
             &last_tick_id,
             0,
@@ -1711,20 +1711,22 @@ fn test_broadcast_last_tick() {
     let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
     // Create leader ledger
-    let (_, bootstrap_leader_ledger_path, genesis_entries) = create_tmp_sample_ledger(
-        "test_broadcast_last_tick",
-        10_000,
-        0,
-        bootstrap_leader_info.id,
-        500,
-    );
+    let (_genesis_block, _mint_keypair, bootstrap_leader_ledger_path, genesis_entries) =
+        create_tmp_sample_ledger(
+            "test_broadcast_last_tick",
+            10_000,
+            1,
+            bootstrap_leader_info.id,
+            500,
+        );
 
     let num_ending_ticks = genesis_entries
         .iter()
-        .skip(2)
         .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
 
     let genesis_ledger_len = genesis_entries.len() as u64 - num_ending_ticks;
+    debug!("num_ending_ticks: {}", num_ending_ticks);
+    debug!("genesis_ledger_len: {}", genesis_ledger_len);
     let blob_receiver_exit = Arc::new(AtomicBool::new(false));
 
     // Create the listeners
@@ -1786,21 +1788,25 @@ fn test_broadcast_last_tick() {
     let last_tick_entry_height = genesis_ledger_len as u64 + bootstrap_height;
     let entries = read_ledger(&bootstrap_leader_ledger_path);
     assert!(entries.len() >= last_tick_entry_height as usize);
-    let expected_last_tick = &entries[last_tick_entry_height as usize - 1];
+    let expected_last_tick = &entries[last_tick_entry_height as usize - 2];
+    debug!("last_tick_entry_height: {:?}", last_tick_entry_height);
+    debug!("expected_last_tick: {:?}", expected_last_tick);
 
     info!("Check that the nodes got the last broadcasted blob");
     for (_, receiver) in blob_fetch_stages.iter() {
+        info!("Checking a node...");
         let mut last_tick_blob: SharedBlob = SharedBlob::default();
         while let Ok(new_blobs) = receiver.try_recv() {
             let last_blob = new_blobs.into_iter().find(|b| {
                 b.read().unwrap().index().expect("Expected index in blob")
-                    == last_tick_entry_height - 1
+                    == last_tick_entry_height - 2
             });
             if let Some(last_blob) = last_blob {
                 last_tick_blob = last_blob;
                 break;
             }
         }
+        debug!("last_tick_blob: {:?}", last_tick_blob);
         let actual_last_tick =
             &reconstruct_entries_from_blobs(vec![&*last_tick_blob.read().unwrap()])
                 .expect("Expected to be able to reconstruct entries from blob")
@@ -1831,7 +1837,7 @@ fn mk_client(leader: &NodeInfo) -> ThinClient {
 
 fn send_tx_and_retry_get_balance(
     leader: &NodeInfo,
-    alice: &Mint,
+    alice: &Keypair,
     bob_pubkey: &Pubkey,
     transfer_amount: u64,
     expected: Option<u64>,
@@ -1839,20 +1845,20 @@ fn send_tx_and_retry_get_balance(
     let mut client = mk_client(leader);
     trace!("getting leader last_id");
     let last_id = client.get_last_id();
-    let mut tx = Transaction::system_new(&alice.keypair(), *bob_pubkey, transfer_amount, last_id);
+    let mut tx = Transaction::system_new(&alice, *bob_pubkey, transfer_amount, last_id);
     info!(
         "executing transfer of {} from {} to {}",
         transfer_amount,
-        alice.keypair().pubkey(),
+        alice.pubkey(),
         *bob_pubkey
     );
-    let _res = client.retry_transfer(&alice.keypair(), &mut tx, 30);
+    let _res = client.retry_transfer(&alice, &mut tx, 30);
     retry_get_balance(&mut client, bob_pubkey, expected)
 }
 
 fn retry_send_tx_and_retry_get_balance(
     leader: &NodeInfo,
-    alice: &Mint,
+    alice: &Keypair,
     bob_pubkey: &Pubkey,
     expected: Option<u64>,
 ) -> Option<u64> {
@@ -1862,9 +1868,7 @@ fn retry_send_tx_and_retry_get_balance(
     info!("executing leader transfer");
     const LAST: usize = 30;
     for run in 0..(LAST + 1) {
-        let _sig = client
-            .transfer(500, &alice.keypair(), *bob_pubkey, &last_id)
-            .unwrap();
+        let _sig = client.transfer(500, &alice, *bob_pubkey, &last_id).unwrap();
         let out = client.poll_get_balance(bob_pubkey);
         if expected.is_none() || run == LAST {
             return out.ok().clone();

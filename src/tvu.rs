@@ -179,7 +179,7 @@ pub mod tests {
     use crate::gossip_service::GossipService;
     use crate::leader_scheduler::LeaderScheduler;
 
-    use crate::mint::Mint;
+    use crate::genesis_block::GenesisBlock;
     use crate::packet::SharedBlob;
     use crate::service::Service;
     use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
@@ -251,12 +251,12 @@ pub mod tests {
         );
 
         let starting_balance = 10_000;
-        let mint = Mint::new(starting_balance);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(starting_balance);
         let tvu_addr = target1.info.tvu;
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_id,
         )));
-        let mut bank = Bank::new(&mint);
+        let mut bank = Bank::new(&genesis_block);
         bank.leader_scheduler = leader_scheduler;
         let bank = Arc::new(bank);
 
@@ -305,7 +305,7 @@ pub mod tests {
             cur_hash = entry_tick0.id;
 
             let tx0 = Transaction::system_new(
-                &mint.keypair(),
+                &mint_keypair,
                 bob_keypair.pubkey(),
                 transfer_amount,
                 cur_hash,
@@ -348,7 +348,7 @@ pub mod tests {
             trace!("got msg");
         }
 
-        let alice_balance = bank.get_balance(&mint.keypair().pubkey());
+        let alice_balance = bank.get_balance(&mint_keypair.pubkey());
         assert_eq!(alice_balance, alice_ref_balance);
 
         let bob_balance = bank.get_balance(&bob_keypair.pubkey());
