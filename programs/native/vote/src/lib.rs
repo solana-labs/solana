@@ -1,5 +1,5 @@
 //! Vote program
-//! Receive and processes votes from validators
+//! Manage validator staking and voting
 
 use bincode::deserialize;
 use log::*;
@@ -9,21 +9,30 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::solana_entrypoint;
 use solana_sdk::vote_program::{self, Vote, VoteInstruction, VoteProgram};
 
-fn register(keyed_accounts: &mut [KeyedAccount]) -> Result<(), ProgramError> {
-    if !vote_program::check_id(&keyed_accounts[1].account.owner) {
-        error!("account[1] is not assigned to the VOTE_PROGRAM");
+fn initialize_account(keyed_accounts: &mut [KeyedAccount]) -> Result<(), ProgramError> {
+    if !vote_program::check_id(&keyed_accounts[0].account.owner) {
+        error!("account[0] is not assigned to the VOTE_PROGRAM");
         Err(ProgramError::InvalidArgument)?;
     }
 
-    // TODO: a single validator could register multiple "vote accounts"
-    // which would clutter the "accounts" structure. See github issue 1654.
+    let vote_state = VoteProgram::deserialize(&keyed_accounts[0].account.userdata)?;
+    if !vote_state.votes.is_empty() {
+        error!("account[0] has already been initialized");
+        Err(ProgramError::GenericError)?;
+    }
+
     let vote_state = VoteProgram::default();
-    vote_state.serialize(&mut keyed_accounts[1].account.userdata)?;
+    vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
 
     Ok(())
 }
 
 fn process_vote(keyed_accounts: &mut [KeyedAccount], vote: Vote) -> Result<(), ProgramError> {
+    if keyed_accounts[0].signer_key().is_none() {
+        error!("account[0] is unsigned");
+        Err(ProgramError::InvalidArgument)?;
+    }
+
     if !vote_program::check_id(&keyed_accounts[0].account.owner) {
         error!("account[0] is not assigned to the VOTE_PROGRAM");
         Err(ProgramError::InvalidArgument)?;
@@ -58,15 +67,9 @@ fn entrypoint(
     trace!("process_instruction: {:?}", data);
     trace!("keyed_accounts: {:?}", keyed_accounts);
 
-    // all vote instructions require that accounts_keys[0] be a signer
-    if keyed_accounts[0].signer_key().is_none() {
-        error!("account[0] is unsigned");
-        Err(ProgramError::InvalidArgument)?;
-    }
-
     match deserialize(data).map_err(|_| ProgramError::InvalidUserdata)? {
-        VoteInstruction::RegisterAccount => register(keyed_accounts),
-        VoteInstruction::NewVote(vote) => {
+        VoteInstruction::InitializeAccount => initialize_account(keyed_accounts),
+        VoteInstruction::Vote(vote) => {
             debug!("{:?} by {}", vote, keyed_accounts[0].signer_key().unwrap());
             solana_metrics::submit(
                 solana_metrics::influxdb::Point::new("vote-native")
@@ -90,77 +93,70 @@ mod tests {
         Account::new(tokens, space, vote_program::id())
     }
 
-    fn register_and_deserialize(
-        keyed_accounts: &mut [KeyedAccount],
+    fn initialize_and_deserialize(
+        vote_state_id: &Pubkey,
+        vote_state_account: &mut Account,
     ) -> Result<VoteProgram, ProgramError> {
-        register(keyed_accounts)?;
-        let vote_state = VoteProgram::deserialize(&keyed_accounts[1].account.userdata).unwrap();
+        let mut keyed_accounts = [KeyedAccount::new(vote_state_id, true, vote_state_account)];
+        initialize_account(&mut keyed_accounts)?;
+        let vote_state = VoteProgram::deserialize(&keyed_accounts[0].account.userdata).unwrap();
         Ok(vote_state)
     }
 
     fn vote_and_deserialize(
-        keyed_accounts: &mut [KeyedAccount],
+        vote_state_id: &Pubkey,
+        vote_state_account: &mut Account,
         vote: Vote,
     ) -> Result<VoteProgram, ProgramError> {
-        process_vote(keyed_accounts, vote)?;
+        let mut keyed_accounts = [KeyedAccount::new(vote_state_id, true, vote_state_account)];
+        process_vote(&mut keyed_accounts, vote)?;
         let vote_state = VoteProgram::deserialize(&keyed_accounts[0].account.userdata).unwrap();
         Ok(vote_state)
     }
 
     #[test]
-    fn test_voter_registration() {
-        let voter_id = Keypair::new().pubkey();
-        let mut voter_account = Account::new(100, 0, Pubkey::default());
-
+    fn test_voter_initialization() {
         let vote_state_id = Keypair::new().pubkey();
         let mut vote_state_account = create_vote_program(100);
-
-        let mut keyed_accounts = [
-            KeyedAccount::new(&voter_id, true, &mut voter_account),
-            KeyedAccount::new(&vote_state_id, false, &mut vote_state_account),
-        ];
-
-        let vote_state = register_and_deserialize(&mut keyed_accounts).unwrap();
+        let vote_state =
+            initialize_and_deserialize(&vote_state_id, &mut vote_state_account).unwrap();
         assert!(vote_state.votes.is_empty());
     }
 
     #[test]
     fn test_vote() {
-        let voter_id = Keypair::new().pubkey();
-        let mut voter_account = Account::new(100, 0, Pubkey::default());
-
         let vote_state_id = Keypair::new().pubkey();
         let mut vote_state_account = create_vote_program(100);
+        initialize_and_deserialize(&vote_state_id, &mut vote_state_account).unwrap();
 
-        let mut keyed_accounts = [
-            KeyedAccount::new(&voter_id, true, &mut voter_account),
-            KeyedAccount::new(&vote_state_id, false, &mut vote_state_account),
-        ];
-        register(&mut keyed_accounts).unwrap();
-
-        let mut keyed_accounts = [KeyedAccount::new(
-            &vote_state_id,
-            true,
-            &mut vote_state_account,
-        )];
         let vote = Vote::new(1);
-        let vote_state = vote_and_deserialize(&mut keyed_accounts, vote.clone()).unwrap();
+        let vote_state =
+            vote_and_deserialize(&vote_state_id, &mut vote_state_account, vote.clone()).unwrap();
         assert_eq!(vote_state.votes, vec![vote]);
+
+        // Ensure initialize after voting doesn't clear the account
+        assert_eq!(
+            initialize_and_deserialize(&vote_state_id, &mut vote_state_account),
+            Err(ProgramError::GenericError)
+        );
+        assert_eq!(vote_state.votes.len(), 1);
     }
 
     #[test]
-    // TODO: Should this work?
-    fn test_vote_without_registration() {
+    fn test_vote_without_signature() {
         let vote_state_id = Keypair::new().pubkey();
         let mut vote_state_account = create_vote_program(100);
+        initialize_and_deserialize(&vote_state_id, &mut vote_state_account).unwrap();
 
+        let vote = Vote::new(1);
         let mut keyed_accounts = [KeyedAccount::new(
             &vote_state_id,
-            true,
+            false,
             &mut vote_state_account,
         )];
-        let vote = Vote::new(1);
-        let vote_state = vote_and_deserialize(&mut keyed_accounts, vote.clone()).unwrap();
-        assert_eq!(vote_state.votes, vec![vote]);
+        assert_eq!(
+            process_vote(&mut keyed_accounts, vote),
+            Err(ProgramError::InvalidArgument)
+        );
     }
 }
