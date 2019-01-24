@@ -2,10 +2,10 @@ use chrono::prelude::*;
 use serde_json::{json, Value};
 use solana::bank::Bank;
 use solana::cluster_info::Node;
-use solana::db_ledger::create_tmp_ledger_with_mint;
+use solana::db_ledger::create_tmp_ledger;
 use solana::fullnode::Fullnode;
+use solana::genesis_block::GenesisBlock;
 use solana::leader_scheduler::LeaderScheduler;
-use solana::mint::Mint;
 use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana::vote_signer_proxy::VoteSignerProxy;
@@ -35,11 +35,11 @@ fn test_wallet_timestamp_tx() {
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_data = leader.info.clone();
 
-    let alice = Mint::new(10_000);
-    let mut bank = Bank::new(&alice);
+    let (genesis_block, alice) = GenesisBlock::new(10_000);
+    let mut bank = Bank::new(&genesis_block);
     let bob_pubkey = Keypair::new().pubkey();
-    let ledger_path = create_tmp_ledger_with_mint("thin_client", &alice);
-    let entry_height = alice.create_entries().len() as u64;
+    let ledger_path = create_tmp_ledger("thin_client", &genesis_block);
+    let entry_height = 0;
 
     let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
         leader_data.id,
@@ -53,19 +53,18 @@ fn test_wallet_timestamp_tx() {
         leader_keypair,
         Some(Arc::new(vote_signer)),
         bank,
-        None,
+        &ledger_path,
         entry_height,
         &last_id,
         leader,
         None,
-        &ledger_path,
         false,
         None,
         STORAGE_ROTATE_TEST_COUNT,
     );
 
     let (sender, receiver) = channel();
-    run_local_drone(alice.keypair(), sender);
+    run_local_drone(alice, sender);
     let drone_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_from_socket(leader_data.rpc);
@@ -132,11 +131,11 @@ fn test_wallet_witness_tx() {
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_data = leader.info.clone();
 
-    let alice = Mint::new(10_000);
-    let mut bank = Bank::new(&alice);
+    let (genesis_block, alice) = GenesisBlock::new(10_000);
+    let mut bank = Bank::new(&genesis_block);
     let bob_pubkey = Keypair::new().pubkey();
-    let ledger_path = create_tmp_ledger_with_mint("thin_client", &alice);
-    let entry_height = alice.create_entries().len() as u64;
+    let ledger_path = create_tmp_ledger("test_wallet_witness_tx", &genesis_block);
+    let entry_height = 0;
 
     let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
         leader_data.id,
@@ -150,19 +149,18 @@ fn test_wallet_witness_tx() {
         leader_keypair,
         Some(Arc::new(vote_signer)),
         bank,
-        None,
+        &ledger_path,
         entry_height,
         &last_id,
         leader,
         None,
-        &ledger_path,
         false,
         None,
         STORAGE_ROTATE_TEST_COUNT,
     );
 
     let (sender, receiver) = channel();
-    run_local_drone(alice.keypair(), sender);
+    run_local_drone(alice, sender);
     let drone_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_from_socket(leader_data.rpc);
@@ -225,11 +223,11 @@ fn test_wallet_cancel_tx() {
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_data = leader.info.clone();
 
-    let alice = Mint::new(10_000);
-    let mut bank = Bank::new(&alice);
+    let (genesis_block, alice) = GenesisBlock::new(10_000);
+    let mut bank = Bank::new(&genesis_block);
     let bob_pubkey = Keypair::new().pubkey();
-    let ledger_path = create_tmp_ledger_with_mint("thin_client", &alice);
-    let entry_height = alice.create_entries().len() as u64;
+    let ledger_path = create_tmp_ledger("test_wallet_cancel_tx", &genesis_block);
+    let entry_height = 0;
 
     let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
         leader_data.id,
@@ -243,19 +241,18 @@ fn test_wallet_cancel_tx() {
         leader_keypair,
         Some(Arc::new(vote_signer)),
         bank,
-        None,
+        &ledger_path,
         entry_height,
         &last_id,
         leader,
         None,
-        &ledger_path,
         false,
         None,
         STORAGE_ROTATE_TEST_COUNT,
     );
 
     let (sender, receiver) = channel();
-    run_local_drone(alice.keypair(), sender);
+    run_local_drone(alice, sender);
     let drone_addr = receiver.recv().unwrap();
 
     let rpc_client = RpcClient::new_from_socket(leader_data.rpc);

@@ -115,7 +115,7 @@ impl PohRecorder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mint::Mint;
+    use crate::genesis_block::GenesisBlock;
     use crate::test_tx::test_tx;
     use solana_sdk::hash::hash;
     use std::sync::mpsc::channel;
@@ -123,8 +123,8 @@ mod tests {
 
     #[test]
     fn test_poh() {
-        let mint = Mint::new(1);
-        let bank = Arc::new(Bank::new(&mint));
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(1);
+        let bank = Arc::new(Bank::new(&genesis_block));
         let prev_id = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
         let mut poh_recorder = PohRecorder::new(bank, entry_sender, prev_id, Some(3));

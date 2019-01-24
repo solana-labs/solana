@@ -437,10 +437,10 @@ mod tests {
     use super::*;
     use crate::bank::Bank;
     use crate::cluster_info::Node;
-    use crate::db_ledger::create_tmp_ledger_with_mint;
+    use crate::db_ledger::create_tmp_ledger;
     use crate::fullnode::Fullnode;
+    use crate::genesis_block::GenesisBlock;
     use crate::leader_scheduler::LeaderScheduler;
-    use crate::mint::Mint;
     use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
     use crate::vote_signer_proxy::VoteSignerProxy;
     use bincode::deserialize;
@@ -458,11 +458,11 @@ mod tests {
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_data = leader.info.clone();
 
-        let alice = Mint::new(10_000);
-        let mut bank = Bank::new(&alice);
+        let (genesis_block, alice) = GenesisBlock::new(10_000);
+        let mut bank = Bank::new(&genesis_block);
         let bob_pubkey = Keypair::new().pubkey();
-        let ledger_path = create_tmp_ledger_with_mint("thin_client", &alice);
-        let entry_height = alice.create_entries().len() as u64;
+        let ledger_path = create_tmp_ledger("thin_client", &genesis_block);
+        let entry_height = 0;
 
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
@@ -476,12 +476,11 @@ mod tests {
             leader_keypair,
             Some(Arc::new(vote_signer)),
             bank,
-            None,
+            &ledger_path,
             entry_height,
             &last_id,
             leader,
             None,
-            &ledger_path,
             false,
             None,
             STORAGE_ROTATE_TEST_COUNT,
@@ -496,9 +495,7 @@ mod tests {
         let confirmation = client.get_confirmation_time();
         assert_eq!(confirmation, 18446744073709551615);
         let last_id = client.get_last_id();
-        let signature = client
-            .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
-            .unwrap();
+        let signature = client.transfer(500, &alice, bob_pubkey, &last_id).unwrap();
         client.poll_for_signature(&signature).unwrap();
         let balance = client.get_balance(&bob_pubkey);
         assert_eq!(balance.unwrap(), 500);
@@ -515,11 +512,11 @@ mod tests {
         solana_logger::setup();
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let alice = Mint::new(10_000);
-        let mut bank = Bank::new(&alice);
+        let (genesis_block, alice) = GenesisBlock::new(10_000);
+        let mut bank = Bank::new(&genesis_block);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
-        let ledger_path = create_tmp_ledger_with_mint("bad_sig", &alice);
+        let ledger_path = create_tmp_ledger("bad_sig", &genesis_block);
 
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
@@ -533,12 +530,11 @@ mod tests {
             leader_keypair,
             Some(Arc::new(vote_signer)),
             bank,
-            None,
+            &ledger_path,
             0,
             &last_id,
             leader,
             None,
-            &ledger_path,
             false,
             None,
             STORAGE_ROTATE_TEST_COUNT,
@@ -550,13 +546,13 @@ mod tests {
         let mut client = ThinClient::new(leader_data.rpc, leader_data.tpu, transactions_socket);
         let last_id = client.get_last_id();
 
-        let tx = Transaction::system_new(&alice.keypair(), bob_pubkey, 500, last_id);
+        let tx = Transaction::system_new(&alice, bob_pubkey, 500, last_id);
 
         let _sig = client.transfer_signed(&tx).unwrap();
 
         let last_id = client.get_last_id();
 
-        let mut tr2 = Transaction::system_new(&alice.keypair(), bob_pubkey, 501, last_id);
+        let mut tr2 = Transaction::system_new(&alice, bob_pubkey, 501, last_id);
         let mut instruction2 = deserialize(tr2.userdata(0)).unwrap();
         if let SystemInstruction::Move { ref mut tokens } = instruction2 {
             *tokens = 502;
@@ -576,11 +572,11 @@ mod tests {
         solana_logger::setup();
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let alice = Mint::new(10_000);
-        let mut bank = Bank::new(&alice);
+        let (genesis_block, alice) = GenesisBlock::new(10_000);
+        let mut bank = Bank::new(&genesis_block);
         let bob_pubkey = Keypair::new().pubkey();
         let leader_data = leader.info.clone();
-        let ledger_path = create_tmp_ledger_with_mint("client_check_signature", &alice);
+        let ledger_path = create_tmp_ledger("client_check_signature", &genesis_block);
 
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
@@ -589,18 +585,17 @@ mod tests {
         let vote_account_keypair = Arc::new(Keypair::new());
         let vote_signer =
             VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
-        let entry_height = alice.create_entries().len() as u64;
+        let entry_height = 0;
         let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
             Some(Arc::new(vote_signer)),
             bank,
-            None,
+            &ledger_path,
             entry_height,
             &last_id,
             leader,
             None,
-            &ledger_path,
             false,
             None,
             STORAGE_ROTATE_TEST_COUNT,
@@ -610,9 +605,7 @@ mod tests {
         let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
         let mut client = ThinClient::new(leader_data.rpc, leader_data.tpu, transactions_socket);
         let last_id = client.get_last_id();
-        let signature = client
-            .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
-            .unwrap();
+        let signature = client.transfer(500, &alice, bob_pubkey, &last_id).unwrap();
 
         assert!(client.poll_for_signature(&signature).is_ok());
 
@@ -625,14 +618,12 @@ mod tests {
         solana_logger::setup();
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let mint = Mint::new(10_000);
-        let mut bank = Bank::new(&mint);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
+        let mut bank = Bank::new(&genesis_block);
         let leader_data = leader.info.clone();
-        let ledger_path = create_tmp_ledger_with_mint("client_check_signature", &mint);
+        let ledger_path = create_tmp_ledger("client_check_signature", &genesis_block);
 
-        let genesis_entries = &mint.create_entries();
-        let entry_height = genesis_entries.len() as u64;
-
+        let entry_height = 0;
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
         )));
@@ -646,12 +637,11 @@ mod tests {
             leader_keypair,
             Some(Arc::new(vote_signer)),
             bank,
-            None,
+            &ledger_path,
             entry_height,
-            &genesis_entries.last().unwrap().id,
+            &genesis_block.last_id(),
             leader,
             None,
-            &ledger_path,
             false,
             None,
             STORAGE_ROTATE_TEST_COUNT,
@@ -665,7 +655,7 @@ mod tests {
         let validator_keypair = Keypair::new();
         let last_id = client.get_last_id();
         let signature = client
-            .transfer(500, &mint.keypair(), validator_keypair.pubkey(), &last_id)
+            .transfer(500, &mint_keypair, validator_keypair.pubkey(), &last_id)
             .unwrap();
 
         assert!(client.poll_for_signature(&signature).is_ok());
@@ -724,11 +714,11 @@ mod tests {
         solana_logger::setup();
         let leader_keypair = Arc::new(Keypair::new());
         let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let alice = Mint::new(10_000);
-        let mut bank = Bank::new(&alice);
+        let (genesis_block, alice) = GenesisBlock::new(10_000);
+        let mut bank = Bank::new(&genesis_block);
         let bob_keypair = Keypair::new();
         let leader_data = leader.info.clone();
-        let ledger_path = create_tmp_ledger_with_mint("zero_balance_check", &alice);
+        let ledger_path = create_tmp_ledger("zero_balance_check", &genesis_block);
 
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
@@ -738,17 +728,16 @@ mod tests {
         let vote_signer =
             VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
         let last_id = bank.last_id();
-        let entry_height = alice.create_entries().len() as u64;
+        let entry_height = 0;
         let server = Fullnode::new_with_bank(
             leader_keypair,
             Some(Arc::new(vote_signer)),
             bank,
-            None,
+            &ledger_path,
             entry_height,
             &last_id,
             leader,
             None,
-            &ledger_path,
             false,
             None,
             STORAGE_ROTATE_TEST_COUNT,
@@ -761,7 +750,7 @@ mod tests {
 
         // give bob 500 tokens
         let signature = client
-            .transfer(500, &alice.keypair(), bob_keypair.pubkey(), &last_id)
+            .transfer(500, &alice, bob_keypair.pubkey(), &last_id)
             .unwrap();
         assert!(client.poll_for_signature(&signature).is_ok());
 
@@ -771,7 +760,7 @@ mod tests {
 
         // take them away
         let signature = client
-            .transfer(500, &bob_keypair, alice.keypair().pubkey(), &last_id)
+            .transfer(500, &bob_keypair, alice.pubkey(), &last_id)
             .unwrap();
         assert!(client.poll_for_signature(&signature).is_ok());
 

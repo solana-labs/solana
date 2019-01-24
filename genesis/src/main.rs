@@ -2,12 +2,10 @@
 
 use clap::{crate_version, value_t_or_exit, App, Arg};
 use serde_json;
-use solana::db_ledger::genesis;
-use solana::mint::Mint;
+use solana::db_ledger::create_empty_ledger;
+use solana::genesis_block::GenesisBlock;
 use solana_sdk::signature::{read_keypair, KeypairUtil};
 use std::error;
-use std::fs::File;
-use std::path::Path;
 
 /**
  * Bootstrap leader gets two tokens:
@@ -24,6 +22,24 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let matches = App::new("solana-genesis")
         .version(crate_version!())
         .arg(
+            Arg::with_name("bootstrap_leader_keypair_file")
+                .short("b")
+                .long("bootstrap-leader-keypair")
+                .value_name("BOOTSTRAP LEADER KEYPAIR")
+                .takes_value(true)
+                .required(true)
+                .help("Path to file containing the bootstrap leader's keypair"),
+        )
+        .arg(
+            Arg::with_name("ledger_path")
+                .short("l")
+                .long("ledger")
+                .value_name("DIR")
+                .takes_value(true)
+                .required(true)
+                .help("Use directory as persistent ledger location"),
+        )
+        .arg(
             Arg::with_name("num_tokens")
                 .short("t")
                 .long("num_tokens")
@@ -33,7 +49,7 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .help("Number of tokens to create in the mint"),
         )
         .arg(
-            Arg::with_name("mint")
+            Arg::with_name("mint_keypair_file")
                 .short("m")
                 .long("mint")
                 .value_name("MINT")
@@ -41,48 +57,23 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                 .required(true)
                 .help("Path to file containing keys of the mint"),
         )
-        .arg(
-            Arg::with_name("bootstrap-leader-keypair")
-                .short("b")
-                .long("bootstrap-leader-keypair")
-                .value_name("BOOTSTRAP LEADER KEYPAIR")
-                .takes_value(true)
-                .required(true)
-                .help("Path to file containing the bootstrap leader's keypair"),
-        )
-        .arg(
-            Arg::with_name("ledger")
-                .short("l")
-                .long("ledger")
-                .value_name("DIR")
-                .takes_value(true)
-                .required(true)
-                .help("Use directory as persistent ledger location"),
-        )
         .get_matches();
 
-    // Load the bootstreap leader keypair
-    // TODO: Only the public key is really needed, genesis should not have access to the leader's
-    //       secret key.
-    let leader_keypair = read_keypair(matches.value_of("bootstrap-leader-keypair").unwrap())
-        .expect("failed to read bootstrap leader keypair");
-
-    // Parse the input mint configuration
+    let bootstrap_leader_keypair_file = matches.value_of("bootstrap_leader_keypair_file").unwrap();
+    let ledger_path = matches.value_of("ledger_path").unwrap();
+    let mint_keypair_file = matches.value_of("mint_keypair_file").unwrap();
     let num_tokens = value_t_or_exit!(matches, "num_tokens", u64);
-    let file = File::open(Path::new(&matches.value_of("mint").unwrap())).unwrap();
-    let pkcs8: Vec<u8> = serde_json::from_reader(&file)?;
-    let mint = Mint::new_with_pkcs8(
-        num_tokens,
-        pkcs8,
-        leader_keypair.pubkey(),
-        BOOTSTRAP_LEADER_TOKENS,
-    );
 
-    // Write the ledger entries
-    let entries = mint.create_entries();
+    let bootstrap_leader_keypair = read_keypair(bootstrap_leader_keypair_file)?;
+    let mint_keypair = read_keypair(mint_keypair_file)?;
 
-    let ledger_path = matches.value_of("ledger").unwrap();
-    genesis(&ledger_path, &leader_keypair, &entries)?;
+    let genesis_block = GenesisBlock {
+        mint_id: mint_keypair.pubkey(),
+        tokens: num_tokens,
+        bootstrap_leader_id: bootstrap_leader_keypair.pubkey(),
+        bootstrap_leader_tokens: BOOTSTRAP_LEADER_TOKENS,
+    };
 
+    create_empty_ledger(ledger_path, &genesis_block)?;
     Ok(())
 }

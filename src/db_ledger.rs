@@ -2,9 +2,8 @@
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
 
-use crate::entry::create_ticks;
 use crate::entry::Entry;
-use crate::mint::Mint;
+use crate::genesis_block::GenesisBlock;
 use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
 use crate::result::{Error, Result};
 use bincode::{deserialize, serialize};
@@ -17,7 +16,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::borrow::Borrow;
 use std::cmp;
-use std::fs::{create_dir_all, remove_dir_all};
+use std::fs;
 use std::io;
 use std::path::Path;
 use std::sync::Arc;
@@ -298,7 +297,7 @@ pub const ERASURE_CF: &str = "erasure";
 impl DbLedger {
     // Opens a Ledger in directory, provides "infinite" window of blobs
     pub fn open(ledger_path: &str) -> Result<Self> {
-        create_dir_all(&ledger_path)?;
+        fs::create_dir_all(&ledger_path)?;
         let ledger_path = Path::new(ledger_path).join(DB_LEDGER_DIRECTORY);
 
         // Use default database options
@@ -340,7 +339,7 @@ impl DbLedger {
 
     pub fn destroy(ledger_path: &str) -> Result<()> {
         // DB::destroy() fails if `ledger_path` doesn't exist
-        create_dir_all(&ledger_path)?;
+        fs::create_dir_all(&ledger_path)?;
         let ledger_path = Path::new(ledger_path).join(DB_LEDGER_DIRECTORY);
         DB::destroy(&Options::default(), &ledger_path)?;
         Ok(())
@@ -831,6 +830,13 @@ impl Iterator for EntryIterator {
     }
 }
 
+pub fn create_empty_ledger(ledger_path: &str, genesis_block: &GenesisBlock) -> Result<()> {
+    DbLedger::destroy(ledger_path)?;
+    DbLedger::open(ledger_path)?;
+    genesis_block.write(&ledger_path)?;
+    Ok(())
+}
+
 pub fn genesis<'a, I>(ledger_path: &str, keypair: &Keypair, entries: I) -> Result<()>
 where
     I: IntoIterator<Item = &'a Entry>,
@@ -862,20 +868,15 @@ pub fn get_tmp_ledger_path(name: &str) -> String {
     let path = format!("{}/tmp/ledger-{}-{}", out_dir, name, keypair.pubkey());
 
     // whack any possible collision
-    let _ignored = remove_dir_all(&path);
+    let _ignored = fs::remove_dir_all(&path);
 
     path
 }
 
-pub fn create_tmp_ledger_with_mint(name: &str, mint: &Mint) -> String {
-    let path = get_tmp_ledger_path(name);
-    DbLedger::destroy(&path).expect("Expected successful database destruction");
-    let db_ledger = DbLedger::open(&path).unwrap();
-    db_ledger
-        .write_entries(DEFAULT_SLOT_HEIGHT, 0, &mint.create_entries())
-        .unwrap();
-
-    path
+pub fn create_tmp_ledger(name: &str, genesis_block: &GenesisBlock) -> String {
+    let ledger_path = get_tmp_ledger_path(name);
+    create_empty_ledger(&ledger_path, genesis_block).unwrap();
+    ledger_path
 }
 
 pub fn create_tmp_genesis(
@@ -883,11 +884,12 @@ pub fn create_tmp_genesis(
     num: u64,
     bootstrap_leader_id: Pubkey,
     bootstrap_leader_tokens: u64,
-) -> (Mint, String) {
-    let mint = Mint::new_with_leader(num, bootstrap_leader_id, bootstrap_leader_tokens);
-    let path = create_tmp_ledger_with_mint(name, &mint);
+) -> (GenesisBlock, Keypair, String) {
+    let (genesis_block, mint_keypair) =
+        GenesisBlock::new_with_leader(num, bootstrap_leader_id, bootstrap_leader_tokens);
+    let ledger_path = create_tmp_ledger(name, &genesis_block);
 
-    (mint, path)
+    (genesis_block, mint_keypair, ledger_path)
 }
 
 pub fn create_tmp_sample_ledger(
@@ -896,37 +898,36 @@ pub fn create_tmp_sample_ledger(
     num_ending_ticks: usize,
     bootstrap_leader_id: Pubkey,
     bootstrap_leader_tokens: u64,
-) -> (Mint, String, Vec<Entry>) {
-    let mint = Mint::new_with_leader(num_tokens, bootstrap_leader_id, bootstrap_leader_tokens);
+) -> (GenesisBlock, Keypair, String, Vec<Entry>) {
+    let (genesis_block, mint_keypair) =
+        GenesisBlock::new_with_leader(num_tokens, bootstrap_leader_id, bootstrap_leader_tokens);
+    let path = get_tmp_ledger_path(name);
+    create_empty_ledger(&path, &genesis_block).unwrap();
+
+    let entries = crate::entry::create_ticks(num_ending_ticks, genesis_block.last_id());
+
+    let db_ledger = DbLedger::open(&path).unwrap();
+    db_ledger
+        .write_entries(DEFAULT_SLOT_HEIGHT, 0, &entries)
+        .unwrap();
+    (genesis_block, mint_keypair, path, entries)
+}
+
+pub fn tmp_copy_ledger(from: &str, name: &str) -> String {
     let path = get_tmp_ledger_path(name);
 
-    // Create the entries
-    let mut genesis = mint.create_entries();
-    let ticks = create_ticks(num_ending_ticks, mint.last_id());
-    genesis.extend(ticks);
+    let db_ledger = DbLedger::open(from).unwrap();
+    let ledger_entries = db_ledger.read_ledger().unwrap();
+    let genesis_block = GenesisBlock::load(from).unwrap();
 
     DbLedger::destroy(&path).expect("Expected successful database destruction");
     let db_ledger = DbLedger::open(&path).unwrap();
     db_ledger
-        .write_entries(DEFAULT_SLOT_HEIGHT, 0, &genesis)
-        .unwrap();
-
-    (mint, path, genesis)
-}
-
-pub fn tmp_copy_ledger(from: &str, name: &str) -> String {
-    let tostr = get_tmp_ledger_path(name);
-
-    let db_ledger = DbLedger::open(from).unwrap();
-    let ledger_entries = db_ledger.read_ledger().unwrap();
-
-    DbLedger::destroy(&tostr).expect("Expected successful database destruction");
-    let db_ledger = DbLedger::open(&tostr).unwrap();
-    db_ledger
         .write_entries(DEFAULT_SLOT_HEIGHT, 0, ledger_entries)
         .unwrap();
+    genesis_block.write(&path).unwrap();
 
-    tostr
+    path
 }
 
 #[cfg(test)]

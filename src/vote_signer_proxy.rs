@@ -206,7 +206,7 @@ impl VoteSignerProxy {
 mod test {
     use crate::bank::Bank;
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::mint::Mint;
+    use crate::genesis_block::GenesisBlock;
     use crate::vote_signer_proxy::VoteSignerProxy;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_vote_signer::rpc::LocalVoteSigner;
@@ -229,8 +229,8 @@ mod test {
         let my_node = Node::new_localhost_with_pubkey(my_id);
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
 
-        let mint = Mint::new_with_leader(10000, my_id, 500);
-        let bank = Arc::new(Bank::new(&mint));
+        let (genesis_block, _) = GenesisBlock::new_with_leader(10000, my_id, 500);
+        let bank = Arc::new(Bank::new(&genesis_block));
         let (sender, receiver) = channel();
 
         assert_eq!(signer.unsent_votes.read().unwrap().len(), 0);

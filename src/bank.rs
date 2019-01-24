@@ -8,8 +8,8 @@ use crate::checkpoint::Checkpoint;
 use crate::counter::Counter;
 use crate::entry::Entry;
 use crate::entry::EntrySlice;
+use crate::genesis_block::GenesisBlock;
 use crate::leader_scheduler::LeaderScheduler;
-use crate::mint::Mint;
 use crate::poh_recorder::PohRecorder;
 use crate::runtime::{self, RuntimeError};
 use crate::status_deque::{Status, StatusDeque, MAX_ENTRY_IDS};
@@ -24,12 +24,10 @@ use solana_sdk::bpf_loader;
 use solana_sdk::budget_program;
 use solana_sdk::hash::Hash;
 use solana_sdk::native_program::ProgramError;
-use solana_sdk::payment_plan::Payment;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signature::Signature;
 use solana_sdk::storage_program;
-use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::system_program;
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::duration_as_us;
@@ -133,22 +131,9 @@ impl Default for Bank {
 }
 
 impl Bank {
-    /// Create an Bank with built-in programs.
-    pub fn new_with_builtin_programs() -> Self {
+    pub fn new(genesis_block: &GenesisBlock) -> Self {
         let bank = Self::default();
-        bank.add_builtin_programs();
-        bank
-    }
-
-    /// Create an Bank using a deposit.
-    pub fn new_from_deposits(deposits: &[Payment]) -> Self {
-        let bank = Self::default();
-        for deposit in deposits {
-            let mut account = Account::default();
-            account.tokens += deposit.tokens;
-
-            bank.accounts.store_slow(&deposit.to, &account);
-        }
+        bank.process_genesis_block(genesis_block);
         bank.add_builtin_programs();
         bank
     }
@@ -186,31 +171,26 @@ impl Bank {
         self.accounts.depth()
     }
 
-    /// Create an Bank with only a Mint. Typically used by unit tests.
-    pub fn new(mint: &Mint) -> Self {
-        let mint_tokens = if mint.bootstrap_leader_id != Pubkey::default() {
-            mint.tokens - mint.bootstrap_leader_tokens
-        } else {
-            mint.tokens
+    fn process_genesis_block(&self, genesis_block: &GenesisBlock) {
+        assert!(genesis_block.mint_id != Pubkey::default());
+        assert!(genesis_block.tokens >= genesis_block.bootstrap_leader_tokens);
+
+        let mut mint_account = Account::default();
+        let mut bootstrap_leader_account = Account::default();
+        mint_account.tokens += genesis_block.tokens;
+
+        if genesis_block.bootstrap_leader_id != Pubkey::default() {
+            mint_account.tokens -= genesis_block.bootstrap_leader_tokens;
+            bootstrap_leader_account.tokens += genesis_block.bootstrap_leader_tokens;
+            self.accounts.store_slow(
+                &genesis_block.bootstrap_leader_id,
+                &bootstrap_leader_account,
+            );
         };
 
-        let mint_deposit = Payment {
-            to: mint.pubkey(),
-            tokens: mint_tokens,
-        };
-
-        let deposits = if mint.bootstrap_leader_id != Pubkey::default() {
-            let leader_deposit = Payment {
-                to: mint.bootstrap_leader_id,
-                tokens: mint.bootstrap_leader_tokens,
-            };
-            vec![mint_deposit, leader_deposit]
-        } else {
-            vec![mint_deposit]
-        };
-        let bank = Self::new_from_deposits(&deposits);
-        bank.register_tick(&mint.last_id());
-        bank
+        self.accounts
+            .store_slow(&genesis_block.mint_id, &mint_account);
+        self.register_tick(&genesis_block.last_id());
     }
 
     fn add_system_program(&self) {
@@ -743,19 +723,14 @@ impl Bank {
     }
 
     /// Append entry blocks to the ledger, verifying them along the way.
-    fn process_ledger_blocks<I>(
-        &self,
-        start_hash: Hash,
-        entry_height: u64,
-        entries: I,
-    ) -> Result<(u64, Hash)>
+    pub fn process_ledger<I>(&self, entries: I) -> Result<(u64, Hash)>
     where
         I: IntoIterator<Item = Entry>,
     {
         // these magic numbers are from genesis of the mint, could pull them
         //  back out of this loop.
-        let mut entry_height = entry_height;
-        let mut last_id = start_hash;
+        let mut entry_height = 0;
+        let mut last_id = self.last_id();
 
         // Ledger verification needs to be parallelized, but we can't pull the whole
         // thing into memory. We therefore chunk it.
@@ -773,96 +748,6 @@ impl Bank {
             entry_height += block.len() as u64;
         }
         Ok((entry_height, last_id))
-    }
-
-    /// Process a full ledger.
-    pub fn process_ledger<I>(&self, entries: I) -> Result<(u64, Hash)>
-    where
-        I: IntoIterator<Item = Entry>,
-    {
-        let mut entries = entries.into_iter();
-
-        // The first item in the ledger is required to be an entry with zero num_hashes,
-        // which implies its id can be used as the ledger's seed.
-        let entry0 = entries.next().expect("invalid ledger: empty");
-
-        // The second item in the ledger consists of a transaction with
-        // two special instructions:
-        // 1) The first is a special move instruction where the to and from
-        // fields are the same. That entry should be treated as a deposit, not a
-        // transfer to oneself.
-        // 2) The second is a move instruction that acts as a payment to the first
-        // leader from the mint. This bootstrap leader will stay in power during the
-        // bootstrapping period of the network
-        let entry1 = entries
-            .next()
-            .expect("invalid ledger: need at least 2 entries");
-
-        // genesis should conform to PoH
-        assert!(entry1.verify(&entry0.id));
-
-        {
-            // Process the first transaction
-            let tx = &entry1.transactions[0];
-            assert!(system_program::check_id(tx.program_id(0)), "Invalid ledger");
-            assert!(system_program::check_id(tx.program_id(1)), "Invalid ledger");
-            let mut instruction: SystemInstruction = deserialize(tx.userdata(0)).unwrap();
-            let mint_deposit = if let SystemInstruction::Move { tokens } = instruction {
-                Some(tokens)
-            } else {
-                None
-            }
-            .expect("invalid ledger, needs to start with mint deposit");
-
-            instruction = deserialize(tx.userdata(1)).unwrap();
-            let leader_payment = if let SystemInstruction::Move { tokens } = instruction {
-                Some(tokens)
-            } else {
-                None
-            }
-            .expect("invalid ledger, bootstrap leader payment expected");
-
-            assert!(leader_payment <= mint_deposit);
-            assert!(leader_payment > 0);
-
-            {
-                // 1) Deposit into the mint
-                let mut account = self
-                    .accounts
-                    .load_slow(&tx.account_keys[0])
-                    .unwrap_or_default();
-                account.tokens += mint_deposit - leader_payment;
-                self.accounts.store_slow(&tx.account_keys[0], &account);
-                trace!(
-                    "applied genesis payment {:?} => {:?}",
-                    mint_deposit - leader_payment,
-                    account
-                );
-
-                // 2) Transfer tokens to the bootstrap leader. The first two
-                // account keys will both be the mint (because the mint is the source
-                // for this transaction and the first move instruction is to the
-                // mint itself), so we look at the third account key to find the first
-                // leader id.
-                let bootstrap_leader_id = tx.account_keys[2];
-                let mut account = self
-                    .accounts
-                    .load_slow(&bootstrap_leader_id)
-                    .unwrap_or_default();
-                account.tokens += leader_payment;
-                self.accounts.store_slow(&bootstrap_leader_id, &account);
-
-                self.leader_scheduler.write().unwrap().bootstrap_leader = bootstrap_leader_id;
-
-                trace!(
-                    "applied genesis payment to bootstrap leader {:?} => {:?}",
-                    leader_payment,
-                    account
-                );
-            }
-        }
-
-        Ok(self.process_ledger_blocks(entry1.id, 2, entries)?)
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
@@ -989,6 +874,7 @@ mod tests {
     use solana_sdk::signature::Keypair;
     use solana_sdk::signature::KeypairUtil;
     use solana_sdk::storage_program::{StorageTransaction, ENTRIES_PER_SEGMENT};
+    use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Instruction;
     use std;
@@ -996,33 +882,34 @@ mod tests {
 
     #[test]
     fn test_bank_new() {
-        let mint = Mint::new(10_000);
-        let bank = Bank::new(&mint);
-        assert_eq!(bank.get_balance(&mint.pubkey()), 10_000);
+        let (genesis_block, _) = GenesisBlock::new(10_000);
+        let bank = Bank::new(&genesis_block);
+        assert_eq!(bank.get_balance(&genesis_block.mint_id), 10_000);
     }
 
     #[test]
     fn test_bank_new_with_leader() {
         let dummy_leader_id = Keypair::new().pubkey();
         let dummy_leader_tokens = 1;
-        let mint = Mint::new_with_leader(10_000, dummy_leader_id, dummy_leader_tokens);
-        let bank = Bank::new(&mint);
-        assert_eq!(bank.get_balance(&mint.pubkey()), 9999);
+        let (genesis_block, _) =
+            GenesisBlock::new_with_leader(10_000, dummy_leader_id, dummy_leader_tokens);
+        let bank = Bank::new(&genesis_block);
+        assert_eq!(bank.get_balance(&genesis_block.mint_id), 9999);
         assert_eq!(bank.get_balance(&dummy_leader_id), 1);
     }
 
     #[test]
     fn test_two_payments_to_one_party() {
-        let mint = Mint::new(10_000);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
         let pubkey = Keypair::new().pubkey();
-        let bank = Bank::new(&mint);
-        assert_eq!(bank.last_id(), mint.last_id());
+        let bank = Bank::new(&genesis_block);
+        assert_eq!(bank.last_id(), genesis_block.last_id());
 
-        bank.transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
+        bank.transfer(1_000, &mint_keypair, pubkey, genesis_block.last_id())
             .unwrap();
         assert_eq!(bank.get_balance(&pubkey), 1_000);
 
-        bank.transfer(500, &mint.keypair(), pubkey, mint.last_id())
+        bank.transfer(500, &mint_keypair, pubkey, genesis_block.last_id())
             .unwrap();
         assert_eq!(bank.get_balance(&pubkey), 1_500);
         assert_eq!(bank.transaction_count(), 2);
@@ -1030,19 +917,19 @@ mod tests {
 
     #[test]
     fn test_one_source_two_tx_one_batch() {
-        let mint = Mint::new(1);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
-        let bank = Bank::new(&mint);
-        assert_eq!(bank.last_id(), mint.last_id());
+        let bank = Bank::new(&genesis_block);
+        assert_eq!(bank.last_id(), genesis_block.last_id());
 
-        let t1 = Transaction::system_move(&mint.keypair(), key1, 1, mint.last_id(), 0);
-        let t2 = Transaction::system_move(&mint.keypair(), key2, 1, mint.last_id(), 0);
+        let t1 = Transaction::system_move(&mint_keypair, key1, 1, genesis_block.last_id(), 0);
+        let t2 = Transaction::system_move(&mint_keypair, key2, 1, genesis_block.last_id(), 0);
         let res = bank.process_transactions(&vec![t1.clone(), t2.clone()]);
         assert_eq!(res.len(), 2);
         assert_eq!(res[0], Ok(()));
         assert_eq!(res[1], Err(BankError::AccountInUse));
-        assert_eq!(bank.get_balance(&mint.pubkey()), 0);
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 0);
         assert_eq!(bank.get_balance(&key1), 1);
         assert_eq!(bank.get_balance(&key2), 0);
         assert_eq!(
@@ -1058,10 +945,10 @@ mod tests {
 
     #[test]
     fn test_one_tx_two_out_atomic_fail() {
-        let mint = Mint::new(1);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
-        let bank = Bank::new(&mint);
+        let bank = Bank::new(&genesis_block);
         let spend = SystemInstruction::Move { tokens: 1 };
         let instructions = vec![
             Instruction {
@@ -1077,9 +964,9 @@ mod tests {
         ];
 
         let t1 = Transaction::new_with_instructions(
-            &[&mint.keypair()],
+            &[&mint_keypair],
             &[key1, key2],
-            mint.last_id(),
+            genesis_block.last_id(),
             0,
             vec![system_program::id()],
             instructions,
@@ -1093,7 +980,7 @@ mod tests {
                 ProgramError::ResultWithNegativeTokens
             ))
         );
-        assert_eq!(bank.get_balance(&mint.pubkey()), 1);
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 1);
         assert_eq!(bank.get_balance(&key1), 0);
         assert_eq!(bank.get_balance(&key2), 0);
         assert_eq!(
@@ -1107,20 +994,20 @@ mod tests {
 
     #[test]
     fn test_one_tx_two_out_atomic_pass() {
-        let mint = Mint::new(2);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
-        let bank = Bank::new(&mint);
+        let bank = Bank::new(&genesis_block);
         let t1 = Transaction::system_move_many(
-            &mint.keypair(),
+            &mint_keypair,
             &[(key1, 1), (key2, 1)],
-            mint.last_id(),
+            genesis_block.last_id(),
             0,
         );
         let res = bank.process_transactions(&vec![t1.clone()]);
         assert_eq!(res.len(), 1);
         assert_eq!(res[0], Ok(()));
-        assert_eq!(bank.get_balance(&mint.pubkey()), 0);
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 0);
         assert_eq!(bank.get_balance(&key1), 1);
         assert_eq!(bank.get_balance(&key2), 1);
         assert_eq!(
@@ -1133,15 +1020,15 @@ mod tests {
     // See github issue 1157 (https://github.com/solana-labs/solana/issues/1157)
     #[test]
     fn test_detect_failed_duplicate_transactions_issue_1157() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
+        let bank = Bank::new(&genesis_block);
         let dest = Keypair::new();
 
         // source with 0 program context
         let tx = Transaction::system_create(
-            &mint.keypair(),
+            &mint_keypair,
             dest.pubkey(),
-            mint.last_id(),
+            genesis_block.last_id(),
             2,
             0,
             Pubkey::default(),
@@ -1166,16 +1053,16 @@ mod tests {
         assert_eq!(bank.get_balance(&dest.pubkey()), 0);
 
         // BUG: This should be the original balance minus the transaction fee.
-        //assert_eq!(bank.get_balance(&mint.pubkey()), 0);
+        //assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 0);
     }
 
     #[test]
     fn test_account_not_found() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
+        let bank = Bank::new(&genesis_block);
         let keypair = Keypair::new();
         assert_eq!(
-            bank.transfer(1, &keypair, mint.pubkey(), mint.last_id()),
+            bank.transfer(1, &keypair, mint_keypair.pubkey(), genesis_block.last_id()),
             Err(BankError::AccountNotFound)
         );
         assert_eq!(bank.transaction_count(), 0);
@@ -1183,15 +1070,15 @@ mod tests {
 
     #[test]
     fn test_insufficient_funds() {
-        let mint = Mint::new(11_000);
-        let bank = Bank::new(&mint);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(11_000);
+        let bank = Bank::new(&genesis_block);
         let pubkey = Keypair::new().pubkey();
-        bank.transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
+        bank.transfer(1_000, &mint_keypair, pubkey, genesis_block.last_id())
             .unwrap();
         assert_eq!(bank.transaction_count(), 1);
         assert_eq!(bank.get_balance(&pubkey), 1_000);
         assert_matches!(
-            bank.transfer(10_001, &mint.keypair(), pubkey, mint.last_id()),
+            bank.transfer(10_001, &mint_keypair, pubkey, genesis_block.last_id()),
             Err(BankError::ProgramError(
                 0,
                 ProgramError::ResultWithNegativeTokens
@@ -1199,28 +1086,30 @@ mod tests {
         );
         assert_eq!(bank.transaction_count(), 1);
 
-        let mint_pubkey = mint.keypair().pubkey();
+        let mint_pubkey = mint_keypair.pubkey();
         assert_eq!(bank.get_balance(&mint_pubkey), 10_000);
         assert_eq!(bank.get_balance(&pubkey), 1_000);
     }
 
     #[test]
     fn test_transfer_to_newb() {
-        let mint = Mint::new(10_000);
-        let bank = Bank::new(&mint);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
+        let bank = Bank::new(&genesis_block);
         let pubkey = Keypair::new().pubkey();
-        bank.transfer(500, &mint.keypair(), pubkey, mint.last_id())
+        bank.transfer(500, &mint_keypair, pubkey, genesis_block.last_id())
             .unwrap();
         assert_eq!(bank.get_balance(&pubkey), 500);
     }
 
     #[test]
     fn test_debits_before_credits() {
-        let mint = Mint::new(2);
-        let bank = Bank::new(&mint);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let bank = Bank::new(&genesis_block);
         let keypair = Keypair::new();
-        let tx0 = Transaction::system_new(&mint.keypair(), keypair.pubkey(), 2, mint.last_id());
-        let tx1 = Transaction::system_new(&keypair, mint.pubkey(), 1, mint.last_id());
+        let tx0 =
+            Transaction::system_new(&mint_keypair, keypair.pubkey(), 2, genesis_block.last_id());
+        let tx1 =
+            Transaction::system_new(&keypair, mint_keypair.pubkey(), 1, genesis_block.last_id());
         let txs = vec![tx0, tx1];
         let results = bank.process_transactions(&txs);
         assert!(results[1].is_err());
@@ -1231,11 +1120,11 @@ mod tests {
 
     #[test]
     fn test_process_empty_entry_is_registered() {
-        let mint = Mint::new(1);
-        let bank = Bank::new(&mint);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
+        let bank = Bank::new(&genesis_block);
         let keypair = Keypair::new();
-        let entry = next_entry(&mint.last_id(), 1, vec![]);
-        let tx = Transaction::system_new(&mint.keypair(), keypair.pubkey(), 1, entry.id);
+        let entry = next_entry(&genesis_block.last_id(), 1, vec![]);
+        let tx = Transaction::system_new(&mint_keypair, keypair.pubkey(), 1, entry.id);
 
         // First, ensure the TX is rejected because of the unregistered last ID
         assert_eq!(
@@ -1252,29 +1141,34 @@ mod tests {
     fn test_process_genesis() {
         let dummy_leader_id = Keypair::new().pubkey();
         let dummy_leader_tokens = 1;
-        let mint = Mint::new_with_leader(5, dummy_leader_id, dummy_leader_tokens);
-        let genesis = mint.create_entries();
+        let (genesis_block, _) =
+            GenesisBlock::new_with_leader(5, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::default();
-        bank.process_ledger(genesis).unwrap();
-        assert_eq!(bank.get_balance(&mint.pubkey()), 4);
+        bank.process_genesis_block(&genesis_block);
+        assert_eq!(bank.get_balance(&genesis_block.mint_id), 4);
         assert_eq!(bank.get_balance(&dummy_leader_id), 1);
+        // TODO: Restore next assert_eq() once leader scheduler configuration is stored in the
+        // genesis block
+        /*
         assert_eq!(
             bank.leader_scheduler.read().unwrap().bootstrap_leader,
             dummy_leader_id
         );
+        */
     }
 
     fn create_sample_block_with_next_entries_using_keypairs(
-        mint: &Mint,
+        genesis_block: &GenesisBlock,
+        mint_keypair: &Keypair,
         keypairs: &[Keypair],
     ) -> impl Iterator<Item = Entry> {
-        let mut last_id = mint.last_id();
-        let mut hash = mint.last_id();
+        let mut last_id = genesis_block.last_id();
+        let mut hash = genesis_block.last_id();
         let mut entries: Vec<Entry> = vec![];
         let num_hashes = 1;
         for k in keypairs {
             let txs = vec![Transaction::system_new(
-                &mint.keypair(),
+                mint_keypair,
                 k.pubkey(),
                 1,
                 last_id,
@@ -1292,17 +1186,18 @@ mod tests {
 
     // create a ledger with tick entries every `ticks` entries
     fn create_sample_block_with_ticks(
-        mint: &Mint,
+        genesis_block: &GenesisBlock,
+        mint_keypair: &Keypair,
         length: usize,
         ticks: usize,
     ) -> impl Iterator<Item = Entry> {
         let mut entries = Vec::with_capacity(length);
-        let mut hash = mint.last_id();
-        let mut last_id = mint.last_id();
+        let mut last_id = genesis_block.last_id();
+        let mut hash = genesis_block.last_id();
         let num_hashes = 1;
         for i in 0..length {
             let keypair = Keypair::new();
-            let tx = Transaction::system_new(&mint.keypair(), keypair.pubkey(), 1, last_id);
+            let tx = Transaction::system_new(mint_keypair, keypair.pubkey(), 1, last_id);
             let entry = Entry::new(&hash, 0, num_hashes, vec![tx]);
             hash = entry.id;
             entries.push(entry);
@@ -1325,57 +1220,61 @@ mod tests {
         entries.into_iter()
     }
 
-    fn create_sample_ledger(length: usize) -> (impl Iterator<Item = Entry>, Pubkey) {
-        let dummy_leader_id = Keypair::new().pubkey();
-        let dummy_leader_tokens = 1;
-        let mint = Mint::new_with_leader(
-            length as u64 + 1 + dummy_leader_tokens,
-            dummy_leader_id,
-            dummy_leader_tokens,
-        );
-        let genesis = mint.create_entries();
-        let block = create_sample_block_with_ticks(&mint, length, length);
-        (genesis.into_iter().chain(block), mint.pubkey())
-    }
-
-    fn create_sample_ledger_with_mint_and_keypairs(
-        mint: &Mint,
-        keypairs: &[Keypair],
-    ) -> impl Iterator<Item = Entry> {
-        let genesis = mint.create_entries();
-        let block = create_sample_block_with_next_entries_using_keypairs(mint, keypairs);
-        genesis.into_iter().chain(block)
+    fn create_sample_ledger(length: usize) -> (GenesisBlock, Keypair, impl Iterator<Item = Entry>) {
+        let mint_keypair = Keypair::new();
+        let genesis_block = GenesisBlock {
+            bootstrap_leader_id: Keypair::new().pubkey(),
+            bootstrap_leader_tokens: 1,
+            mint_id: mint_keypair.pubkey(),
+            tokens: length as u64 + 2,
+        };
+        let block = create_sample_block_with_ticks(&genesis_block, &mint_keypair, length, length);
+        (genesis_block, mint_keypair, block)
     }
 
     #[test]
     fn test_process_ledger_simple() {
-        let (ledger, pubkey) = create_sample_ledger(1);
+        let (genesis_block, mint_keypair, ledger) = create_sample_ledger(1);
         let bank = Bank::default();
+        bank.process_genesis_block(&genesis_block);
         bank.add_system_program();
         let (ledger_height, last_id) = bank.process_ledger(ledger).unwrap();
-        assert_eq!(bank.get_balance(&pubkey), 1);
-        assert_eq!(ledger_height, 6);
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 1);
+        assert_eq!(ledger_height, 3);
         assert_eq!(bank.tick_height(), 2);
         assert_eq!(bank.last_id(), last_id);
     }
 
     #[test]
     fn test_hash_internal_state() {
-        let dummy_leader_id = Keypair::new().pubkey();
-        let dummy_leader_tokens = 1;
-        let mint = Mint::new_with_leader(2_000, dummy_leader_id, dummy_leader_tokens);
-
+        let mint_keypair = Keypair::new();
+        let genesis_block = GenesisBlock {
+            bootstrap_leader_id: Keypair::new().pubkey(),
+            bootstrap_leader_tokens: 1,
+            mint_id: mint_keypair.pubkey(),
+            tokens: 2_000,
+        };
         let seed = [0u8; 32];
         let mut rnd = GenKeys::new(seed);
         let keypairs = rnd.gen_n_keypairs(5);
-        let ledger0 = create_sample_ledger_with_mint_and_keypairs(&mint, &keypairs);
-        let ledger1 = create_sample_ledger_with_mint_and_keypairs(&mint, &keypairs);
+        let ledger0 = create_sample_block_with_next_entries_using_keypairs(
+            &genesis_block,
+            &mint_keypair,
+            &keypairs,
+        );
+        let ledger1 = create_sample_block_with_next_entries_using_keypairs(
+            &genesis_block,
+            &mint_keypair,
+            &keypairs,
+        );
 
         let bank0 = Bank::default();
         bank0.add_system_program();
+        bank0.process_genesis_block(&genesis_block);
         bank0.process_ledger(ledger0).unwrap();
         let bank1 = Bank::default();
         bank1.add_system_program();
+        bank1.process_genesis_block(&genesis_block);
         bank1.process_ledger(ledger1).unwrap();
 
         let initial_state = bank0.hash_internal_state();
@@ -1384,11 +1283,11 @@ mod tests {
 
         let pubkey = keypairs[0].pubkey();
         bank0
-            .transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
+            .transfer(1_000, &mint_keypair, pubkey, genesis_block.last_id())
             .unwrap();
         assert_ne!(bank0.hash_internal_state(), initial_state);
         bank1
-            .transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
+            .transfer(1_000, &mint_keypair, pubkey, genesis_block.last_id())
             .unwrap();
         assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
     }
@@ -1401,12 +1300,13 @@ mod tests {
     }
     #[test]
     fn test_interleaving_locks() {
-        let mint = Mint::new(3);
-        let bank = Bank::new(&mint);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(3);
+        let bank = Bank::new(&genesis_block);
         let alice = Keypair::new();
         let bob = Keypair::new();
 
-        let tx1 = Transaction::system_new(&mint.keypair(), alice.pubkey(), 1, mint.last_id());
+        let tx1 =
+            Transaction::system_new(&mint_keypair, alice.pubkey(), 1, genesis_block.last_id());
         let pay_alice = vec![tx1];
 
         let lock_result = bank.lock_accounts(&pay_alice);
@@ -1416,20 +1316,20 @@ mod tests {
 
         // try executing an interleaved transfer twice
         assert_eq!(
-            bank.transfer(1, &mint.keypair(), bob.pubkey(), mint.last_id()),
+            bank.transfer(1, &mint_keypair, bob.pubkey(), genesis_block.last_id()),
             Err(BankError::AccountInUse)
         );
         // the second time should fail as well
         // this verifies that `unlock_accounts` doesn't unlock `AccountInUse` accounts
         assert_eq!(
-            bank.transfer(1, &mint.keypair(), bob.pubkey(), mint.last_id()),
+            bank.transfer(1, &mint_keypair, bob.pubkey(), genesis_block.last_id()),
             Err(BankError::AccountInUse)
         );
 
         bank.unlock_accounts(&pay_alice, &results_alice);
 
         assert_matches!(
-            bank.transfer(2, &mint.keypair(), bob.pubkey(), mint.last_id()),
+            bank.transfer(2, &mint_keypair, bob.pubkey(), genesis_block.last_id()),
             Ok(_)
         );
     }
@@ -1468,27 +1368,27 @@ mod tests {
     }
     #[test]
     fn test_par_process_entries_tick() {
-        let mint = Mint::new(1000);
-        let bank = Bank::new(&mint);
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(1000);
+        let bank = Bank::new(&genesis_block);
 
         // ensure bank can process a tick
-        let tick = next_entry(&mint.last_id(), 1, vec![]);
+        let tick = next_entry(&genesis_block.last_id(), 1, vec![]);
         assert_eq!(bank.par_process_entries(&[tick.clone()]), Ok(()));
         assert_eq!(bank.last_id(), tick.id);
     }
     #[test]
     fn test_par_process_entries_2_entries_collision() {
-        let mint = Mint::new(1000);
-        let bank = Bank::new(&mint);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
+        let bank = Bank::new(&genesis_block);
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
 
         let last_id = bank.last_id();
 
         // ensure bank can process 2 entries that have a common account and no tick is registered
-        let tx = Transaction::system_new(&mint.keypair(), keypair1.pubkey(), 2, bank.last_id());
+        let tx = Transaction::system_new(&mint_keypair, keypair1.pubkey(), 2, bank.last_id());
         let entry_1 = next_entry(&last_id, 1, vec![tx]);
-        let tx = Transaction::system_new(&mint.keypair(), keypair2.pubkey(), 2, bank.last_id());
+        let tx = Transaction::system_new(&mint_keypair, keypair2.pubkey(), 2, bank.last_id());
         let entry_2 = next_entry(&entry_1.id, 1, vec![tx]);
         assert_eq!(bank.par_process_entries(&[entry_1, entry_2]), Ok(()));
         assert_eq!(bank.get_balance(&keypair1.pubkey()), 2);
@@ -1497,23 +1397,23 @@ mod tests {
     }
     #[test]
     fn test_par_process_entries_2_txes_collision() {
-        let mint = Mint::new(1000);
-        let bank = Bank::new(&mint);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
+        let bank = Bank::new(&genesis_block);
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
         println!("KP1 {:?}", keypair1.pubkey());
         println!("KP2 {:?}", keypair2.pubkey());
         println!("KP3 {:?}", keypair3.pubkey());
-        println!("Mint {:?}", mint.keypair().pubkey());
+        println!("GenesisBlock {:?}", mint_keypair.pubkey());
 
         // fund: put 4 in each of 1 and 2
         assert_matches!(
-            bank.transfer(4, &mint.keypair(), keypair1.pubkey(), bank.last_id()),
+            bank.transfer(4, &mint_keypair, keypair1.pubkey(), bank.last_id()),
             Ok(_)
         );
         assert_matches!(
-            bank.transfer(4, &mint.keypair(), keypair2.pubkey(), bank.last_id()),
+            bank.transfer(4, &mint_keypair, keypair2.pubkey(), bank.last_id()),
             Ok(_)
         );
 
@@ -1523,7 +1423,7 @@ mod tests {
             1,
             vec![Transaction::system_new(
                 &keypair1,
-                mint.keypair().pubkey(),
+                mint_keypair.pubkey(),
                 1,
                 bank.last_id(),
             )],
@@ -1534,7 +1434,7 @@ mod tests {
             1,
             vec![
                 Transaction::system_new(&keypair2, keypair3.pubkey(), 2, bank.last_id()), // should be fine
-                Transaction::system_new(&keypair1, mint.keypair().pubkey(), 2, bank.last_id()), // will collide
+                Transaction::system_new(&keypair1, mint_keypair.pubkey(), 2, bank.last_id()), // will collide
             ],
         );
 
@@ -1549,17 +1449,17 @@ mod tests {
     }
     #[test]
     fn test_par_process_entries_2_entries_par() {
-        let mint = Mint::new(1000);
-        let bank = Bank::new(&mint);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
+        let bank = Bank::new(&genesis_block);
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
         let keypair4 = Keypair::new();
 
         //load accounts
-        let tx = Transaction::system_new(&mint.keypair(), keypair1.pubkey(), 1, bank.last_id());
+        let tx = Transaction::system_new(&mint_keypair, keypair1.pubkey(), 1, bank.last_id());
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        let tx = Transaction::system_new(&mint.keypair(), keypair2.pubkey(), 1, bank.last_id());
+        let tx = Transaction::system_new(&mint_keypair, keypair2.pubkey(), 1, bank.last_id());
         assert_eq!(bank.process_transaction(&tx), Ok(()));
 
         // ensure bank can process 2 entries that do not have a common account and no tick is registered
@@ -1575,17 +1475,17 @@ mod tests {
     }
     #[test]
     fn test_par_process_entries_2_entries_tick() {
-        let mint = Mint::new(1000);
-        let bank = Bank::new(&mint);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
+        let bank = Bank::new(&genesis_block);
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
         let keypair4 = Keypair::new();
 
         //load accounts
-        let tx = Transaction::system_new(&mint.keypair(), keypair1.pubkey(), 1, bank.last_id());
+        let tx = Transaction::system_new(&mint_keypair, keypair1.pubkey(), 1, bank.last_id());
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        let tx = Transaction::system_new(&mint.keypair(), keypair2.pubkey(), 1, bank.last_id());
+        let tx = Transaction::system_new(&mint_keypair, keypair2.pubkey(), 1, bank.last_id());
         assert_eq!(bank.process_transaction(&tx), Ok(()));
 
         let last_id = bank.last_id();
@@ -1673,17 +1573,17 @@ mod tests {
 
     #[test]
     fn test_bank_purge() {
-        let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let (genesis_block, alice) = GenesisBlock::new(10_000);
+        let bank = Bank::new(&genesis_block);
         let bob = Keypair::new();
         let charlie = Keypair::new();
 
         // bob should have 500
-        bank.transfer(500, &alice.keypair(), bob.pubkey(), alice.last_id())
+        bank.transfer(500, &alice, bob.pubkey(), genesis_block.last_id())
             .unwrap();
         assert_eq!(bank.get_balance(&bob.pubkey()), 500);
 
-        bank.transfer(500, &alice.keypair(), charlie.pubkey(), alice.last_id())
+        bank.transfer(500, &alice, charlie.pubkey(), genesis_block.last_id())
             .unwrap();
         assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
 
@@ -1696,7 +1596,7 @@ mod tests {
         assert_eq!(bank.transaction_count(), 2);
 
         // transfer money back, so bob has zero
-        bank.transfer(500, &bob, alice.keypair().pubkey(), alice.last_id())
+        bank.transfer(500, &bob, alice.pubkey(), genesis_block.last_id())
             .unwrap();
         // this has to be stored as zero in the top accounts hashmap ;)
         assert!(bank.accounts.load_slow(&bob.pubkey()).is_some());
@@ -1728,13 +1628,13 @@ mod tests {
 
     #[test]
     fn test_bank_checkpoint_zero_balance() {
-        let alice = Mint::new(1_000);
-        let bank = Bank::new(&alice);
+        let (genesis_block, alice) = GenesisBlock::new(1_000);
+        let bank = Bank::new(&genesis_block);
         let bob = Keypair::new();
         let charlie = Keypair::new();
 
         // bob should have 500
-        bank.transfer(500, &alice.keypair(), bob.pubkey(), alice.last_id())
+        bank.transfer(500, &alice, bob.pubkey(), genesis_block.last_id())
             .unwrap();
         assert_eq!(bank.get_balance(&bob.pubkey()), 500);
         assert_eq!(bank.checkpoint_depth(), 0);
@@ -1750,7 +1650,7 @@ mod tests {
         assert_eq!(bank.checkpoint_depth(), 1);
 
         // charlie should have 500, alice should have 0
-        bank.transfer(500, &alice.keypair(), charlie.pubkey(), alice.last_id())
+        bank.transfer(500, &alice, charlie.pubkey(), genesis_block.last_id())
             .unwrap();
         assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
         assert_eq!(bank.get_balance(&alice.pubkey()), 0);
@@ -1774,16 +1674,16 @@ mod tests {
 
     #[test]
     fn test_bank_checkpoint_rollback() {
-        let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let (genesis_block, alice) = GenesisBlock::new(10_000);
+        let bank = Bank::new(&genesis_block);
         let bob = Keypair::new();
         let charlie = Keypair::new();
 
         // bob should have 500
-        bank.transfer(500, &alice.keypair(), bob.pubkey(), alice.last_id())
+        bank.transfer(500, &alice, bob.pubkey(), genesis_block.last_id())
             .unwrap();
         assert_eq!(bank.get_balance(&bob.pubkey()), 500);
-        bank.transfer(500, &alice.keypair(), charlie.pubkey(), alice.last_id())
+        bank.transfer(500, &alice, charlie.pubkey(), genesis_block.last_id())
             .unwrap();
         assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
         assert_eq!(bank.checkpoint_depth(), 0);
@@ -1796,7 +1696,7 @@ mod tests {
         assert_eq!(bank.transaction_count(), 2);
 
         // transfer money back, so bob has zero
-        bank.transfer(500, &bob, alice.keypair().pubkey(), alice.last_id())
+        bank.transfer(500, &bob, alice.pubkey(), genesis_block.last_id())
             .unwrap();
         // this has to be stored as zero in the top accounts hashmap ;)
         assert_eq!(bank.get_balance(&bob.pubkey()), 0);
@@ -1817,18 +1717,18 @@ mod tests {
         }
         assert_eq!(bank.tick_height(), MAX_ENTRY_IDS as u64 + 2);
         assert_eq!(
-            reserve_signature_with_last_id_test(&bank, &signature, &alice.last_id()),
+            reserve_signature_with_last_id_test(&bank, &signature, &genesis_block.last_id()),
             Err(StatusDequeError::LastIdNotFound)
         );
         bank.rollback();
         assert_eq!(bank.tick_height(), 1);
         assert_eq!(
-            reserve_signature_with_last_id_test(&bank, &signature, &alice.last_id()),
+            reserve_signature_with_last_id_test(&bank, &signature, &genesis_block.last_id()),
             Ok(())
         );
         bank.checkpoint();
         assert_eq!(
-            reserve_signature_with_last_id_test(&bank, &signature, &alice.last_id()),
+            reserve_signature_with_last_id_test(&bank, &signature, &genesis_block.last_id()),
             Err(StatusDequeError::DuplicateSignature)
         );
     }
@@ -1836,22 +1736,22 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_bank_rollback_panic() {
-        let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let (genesis_block, _) = GenesisBlock::new(10_000);
+        let bank = Bank::new(&genesis_block);
         bank.rollback();
     }
 
     #[test]
     fn test_bank_record_transactions() {
-        let mint = Mint::new(10_000);
-        let bank = Arc::new(Bank::new(&mint));
+        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
+        let bank = Arc::new(Bank::new(&genesis_block));
         let (entry_sender, entry_receiver) = channel();
         let poh_recorder = PohRecorder::new(bank.clone(), entry_sender, bank.last_id(), None);
         let pubkey = Keypair::new().pubkey();
 
         let transactions = vec![
-            Transaction::system_move(&mint.keypair(), pubkey, 1, mint.last_id(), 0),
-            Transaction::system_move(&mint.keypair(), pubkey, 1, mint.last_id(), 0),
+            Transaction::system_move(&mint_keypair, pubkey, 1, genesis_block.last_id(), 0),
+            Transaction::system_move(&mint_keypair, pubkey, 1, genesis_block.last_id(), 0),
         ];
 
         let mut results = vec![Ok(()), Ok(())];
@@ -1904,8 +1804,8 @@ mod tests {
     #[test]
     fn test_bank_storage() {
         solana_logger::setup();
-        let alice = Mint::new(1000);
-        let bank = Bank::new(&alice);
+        let (genesis_block, alice) = GenesisBlock::new(1000);
+        let bank = Bank::new(&genesis_block);
 
         let bob = Keypair::new();
         let jack = Keypair::new();
@@ -1918,13 +1818,10 @@ mod tests {
 
         bank.register_tick(&last_id);
 
-        bank.transfer(10, &alice.keypair(), jill.pubkey(), last_id)
-            .unwrap();
+        bank.transfer(10, &alice, jill.pubkey(), last_id).unwrap();
 
-        bank.transfer(10, &alice.keypair(), bob.pubkey(), last_id)
-            .unwrap();
-        bank.transfer(10, &alice.keypair(), jack.pubkey(), last_id)
-            .unwrap();
+        bank.transfer(10, &alice, bob.pubkey(), last_id).unwrap();
+        bank.transfer(10, &alice, jack.pubkey(), last_id).unwrap();
 
         let tx = Transaction::storage_new_advertise_last_id(
             &bob,
@@ -1954,15 +1851,15 @@ mod tests {
 
     #[test]
     fn test_bank_process_and_record_transactions() {
-        let mint = Mint::new(10_000);
-        let bank = Arc::new(Bank::new(&mint));
+        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
+        let bank = Arc::new(Bank::new(&genesis_block));
         let pubkey = Keypair::new().pubkey();
 
         let transactions = vec![Transaction::system_move(
-            &mint.keypair(),
+            &mint_keypair,
             pubkey,
             1,
-            mint.last_id(),
+            genesis_block.last_id(),
             0,
         )];
 
@@ -1993,10 +1890,10 @@ mod tests {
         }
 
         let transactions = vec![Transaction::system_move(
-            &mint.keypair(),
+            &mint_keypair,
             pubkey,
             2,
-            mint.last_id(),
+            genesis_block.last_id(),
             0,
         )];
 

@@ -447,8 +447,8 @@ mod tests {
     use super::*;
     use crate::bank::Bank;
     use crate::cluster_info::NodeInfo;
+    use crate::genesis_block::GenesisBlock;
     use crate::jsonrpc_core::Response;
-    use crate::mint::Mint;
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
@@ -456,11 +456,11 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     fn start_rpc_handler_with_tx(pubkey: Pubkey) -> (MetaIoHandler<Meta>, Meta, Hash, Keypair) {
-        let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let (genesis_block, alice) = GenesisBlock::new(10_000);
+        let bank = Bank::new(&genesis_block);
 
         let last_id = bank.last_id();
-        let tx = Transaction::system_move(&alice.keypair(), pubkey, 20, last_id, 0);
+        let tx = Transaction::system_move(&alice, pubkey, 20, last_id, 0);
         bank.process_transaction(&tx).expect("process transaction");
 
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(Arc::new(bank))));
@@ -481,13 +481,13 @@ mod tests {
             drone_addr,
             rpc_addr,
         };
-        (io, meta, last_id, alice.keypair())
+        (io, meta, last_id, alice)
     }
 
     #[test]
     fn test_rpc_new() {
-        let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let (genesis_block, alice) = GenesisBlock::new(10_000);
+        let bank = Bank::new(&genesis_block);
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default())));
         let rpc_addr = SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
@@ -516,14 +516,14 @@ mod tests {
 
     #[test]
     fn test_rpc_request_processor_new() {
-        let alice = Mint::new(10_000);
+        let (genesis_block, alice) = GenesisBlock::new(10_000);
         let bob_pubkey = Keypair::new().pubkey();
-        let bank = Bank::new(&alice);
+        let bank = Bank::new(&genesis_block);
         let arc_bank = Arc::new(bank);
         let request_processor = JsonRpcRequestProcessor::new(arc_bank.clone());
         thread::spawn(move || {
             let last_id = arc_bank.last_id();
-            let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 20, last_id, 0);
+            let tx = Transaction::system_move(&alice, bob_pubkey, 20, last_id, 0);
             arc_bank
                 .process_transaction(&tx)
                 .expect("process transaction");
@@ -536,7 +536,7 @@ mod tests {
     #[test]
     fn test_rpc_get_balance() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, _last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
+        let (io, meta, _last_id, _alice) = start_rpc_handler_with_tx(bob_pubkey);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getBalance","params":["{}"]}}"#,
@@ -554,7 +554,7 @@ mod tests {
     #[test]
     fn test_rpc_get_tx_count() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, _last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
+        let (io, meta, _last_id, _alice) = start_rpc_handler_with_tx(bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getTransactionCount"}}"#);
         let res = io.handle_request_sync(&req, meta);
@@ -569,7 +569,7 @@ mod tests {
     #[test]
     fn test_rpc_get_account_info() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, _last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
+        let (io, meta, _last_id, _alice) = start_rpc_handler_with_tx(bob_pubkey);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}"]}}"#,
@@ -597,8 +597,8 @@ mod tests {
     #[test]
     fn test_rpc_confirm_tx() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, last_id, alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
-        let tx = Transaction::system_move(&alice_keypair, bob_pubkey, 20, last_id, 0);
+        let (io, meta, last_id, alice) = start_rpc_handler_with_tx(bob_pubkey);
+        let tx = Transaction::system_move(&alice, bob_pubkey, 20, last_id, 0);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"confirmTransaction","params":["{}"]}}"#,
@@ -616,8 +616,8 @@ mod tests {
     #[test]
     fn test_rpc_get_signature_status() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, last_id, alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
-        let tx = Transaction::system_move(&alice_keypair, bob_pubkey, 20, last_id, 0);
+        let (io, meta, last_id, alice) = start_rpc_handler_with_tx(bob_pubkey);
+        let tx = Transaction::system_move(&alice, bob_pubkey, 20, last_id, 0);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
@@ -632,7 +632,7 @@ mod tests {
         assert_eq!(expected, result);
 
         // Test getSignatureStatus request on unprocessed tx
-        let tx = Transaction::system_move(&alice_keypair, bob_pubkey, 10, last_id, 0);
+        let tx = Transaction::system_move(&alice, bob_pubkey, 10, last_id, 0);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
             tx.signatures[0]
@@ -649,7 +649,7 @@ mod tests {
     #[test]
     fn test_rpc_get_confirmation() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, _last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
+        let (io, meta, _last_id, _alice) = start_rpc_handler_with_tx(bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmationTime"}}"#);
         let res = io.handle_request_sync(&req, meta);
@@ -664,7 +664,7 @@ mod tests {
     #[test]
     fn test_rpc_get_last_id() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
+        let (io, meta, last_id, _alice) = start_rpc_handler_with_tx(bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getLastId"}}"#);
         let res = io.handle_request_sync(&req, meta);
@@ -679,7 +679,7 @@ mod tests {
     #[test]
     fn test_rpc_fail_request_airdrop() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, _last_id, _alice_keypair) = start_rpc_handler_with_tx(bob_pubkey);
+        let (io, meta, _last_id, _alice) = start_rpc_handler_with_tx(bob_pubkey);
 
         // Expect internal error because no leader is running
         let req = format!(
@@ -698,8 +698,8 @@ mod tests {
 
     #[test]
     fn test_rpc_send_bad_tx() {
-        let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let (genesis_block, _) = GenesisBlock::new(10_000);
+        let bank = Bank::new(&genesis_block);
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;

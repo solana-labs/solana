@@ -7,7 +7,7 @@ use rayon::prelude::*;
 use solana::bank::Bank;
 use solana::banking_stage::BankingStage;
 use solana::entry::Entry;
-use solana::mint::Mint;
+use solana::genesis_block::GenesisBlock;
 use solana::packet::to_packets_chunked;
 use solana::status_deque::MAX_ENTRY_IDS;
 use solana_sdk::hash::hash;
@@ -45,16 +45,16 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     //   a multiple of packet chunk  2X duplicates to avoid races
     let txes = 192 * 50 * num_threads * 2;
     let mint_total = 1_000_000_000_000;
-    let mint = Mint::new(mint_total);
+    let (genesis_block, mint_keypair) = GenesisBlock::new(mint_total);
 
     let (verified_sender, verified_receiver) = channel();
-    let bank = Arc::new(Bank::new(&mint));
+    let bank = Arc::new(Bank::new(&genesis_block));
     let dummy_leader_id = Keypair::new().pubkey();
     let dummy = Transaction::system_move(
-        &mint.keypair(),
-        mint.keypair().pubkey(),
+        &mint_keypair,
+        mint_keypair.pubkey(),
         1,
-        mint.last_id(),
+        genesis_block.last_id(),
         0,
     );
     let transactions: Vec<_> = (0..txes)
@@ -73,10 +73,10 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     // fund all the accounts
     transactions.iter().for_each(|tx| {
         let fund = Transaction::system_move(
-            &mint.keypair(),
+            &mint_keypair,
             tx.account_keys[0],
             mint_total / txes as u64,
-            mint.last_id(),
+            genesis_block.last_id(),
             0,
         );
         let x = bank.process_transaction(&fund);
@@ -105,12 +105,12 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         &bank,
         verified_receiver,
         Default::default(),
-        &mint.last_id(),
+        &genesis_block.last_id(),
         None,
         dummy_leader_id,
     );
 
-    let mut id = mint.last_id();
+    let mut id = genesis_block.last_id();
     for _ in 0..MAX_ENTRY_IDS {
         id = hash(&id.as_ref());
         bank.register_tick(&id);
@@ -120,7 +120,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let mut start = 0;
     bencher.iter(move || {
         // make sure the transactions are still valid
-        bank.register_tick(&mint.last_id());
+        bank.register_tick(&genesis_block.last_id());
         for v in verified[start..start + half_len].chunks(verified.len() / num_threads) {
             verified_sender.send(v.to_vec()).unwrap();
         }
@@ -138,16 +138,16 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     //   a multiple of packet chunk  2X duplicates to avoid races
     let txes = 96 * 100 * num_threads * 2;
     let mint_total = 1_000_000_000_000;
-    let mint = Mint::new(mint_total);
+    let (genesis_block, mint_keypair) = GenesisBlock::new(mint_total);
 
     let (verified_sender, verified_receiver) = channel();
-    let bank = Arc::new(Bank::new(&mint));
+    let bank = Arc::new(Bank::new(&genesis_block));
     let dummy_leader_id = Keypair::new().pubkey();
     let dummy = Transaction::system_move(
-        &mint.keypair(),
-        mint.keypair().pubkey(),
+        &mint_keypair,
+        mint_keypair.pubkey(),
         1,
-        mint.last_id(),
+        genesis_block.last_id(),
         0,
     );
     let transactions: Vec<_> = (0..txes)
@@ -182,10 +182,10 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         .collect();
     transactions.iter().for_each(|tx| {
         let fund = Transaction::system_move(
-            &mint.keypair(),
+            &mint_keypair,
             tx.account_keys[0],
             mint_total / txes as u64,
-            mint.last_id(),
+            genesis_block.last_id(),
             0,
         );
         assert!(bank.process_transaction(&fund).is_ok());
@@ -213,12 +213,12 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         &bank,
         verified_receiver,
         Default::default(),
-        &mint.last_id(),
+        &genesis_block.last_id(),
         None,
         dummy_leader_id,
     );
 
-    let mut id = mint.last_id();
+    let mut id = genesis_block.last_id();
     for _ in 0..MAX_ENTRY_IDS {
         id = hash(&id.as_ref());
         bank.register_tick(&id);
@@ -228,7 +228,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     let mut start = 0;
     bencher.iter(move || {
         // make sure the transactions are still valid
-        bank.register_tick(&mint.last_id());
+        bank.register_tick(&genesis_block.last_id());
         for v in verified[start..start + half_len].chunks(verified.len() / num_threads) {
             verified_sender.send(v.to_vec()).unwrap();
         }

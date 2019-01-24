@@ -529,11 +529,11 @@ pub fn make_active_set_entries(
 #[cfg(test)]
 mod tests {
     use crate::bank::Bank;
+    use crate::genesis_block::GenesisBlock;
     use crate::leader_scheduler::{
         LeaderScheduler, LeaderSchedulerConfig, DEFAULT_BOOTSTRAP_HEIGHT,
         DEFAULT_LEADER_ROTATION_INTERVAL, DEFAULT_SEED_ROTATION_INTERVAL,
     };
-    use crate::mint::Mint;
     use crate::vote_signer_proxy::VoteSignerProxy;
     use hashbrown::HashSet;
     use solana_sdk::hash::Hash;
@@ -580,17 +580,13 @@ mod tests {
 
         // Create the bank and validators, which are inserted in order of account balance
         let num_vote_account_tokens = 1;
-        let mint = Mint::new(
+        let (genesis_block, mint_keypair) = GenesisBlock::new(
             (((num_validators + 1) / 2) * (num_validators + 1)
                 + num_vote_account_tokens * num_validators) as u64,
         );
-        let bank = Bank::new(&mint);
+        let bank = Bank::new(&genesis_block);
         let mut validators = vec![];
-        let last_id = mint
-            .create_entries()
-            .last()
-            .expect("Mint should not create empty genesis entries")
-            .id;
+        let last_id = genesis_block.last_id();
         for i in 0..num_validators {
             let new_validator = Keypair::new();
             let new_pubkey = new_validator.pubkey();
@@ -602,7 +598,7 @@ mod tests {
             // Give the validator some tokens
             bank.transfer(
                 (i + 1 + num_vote_account_tokens) as u64,
-                &mint.keypair(),
+                &mint_keypair,
                 new_pubkey,
                 last_id,
             )
@@ -610,11 +606,15 @@ mod tests {
 
             // Create a vote account
             vote_signer
-                .new_vote_account(&bank, num_vote_account_tokens as u64, mint.last_id())
+                .new_vote_account(
+                    &bank,
+                    num_vote_account_tokens as u64,
+                    genesis_block.last_id(),
+                )
                 .unwrap();
             // Vote to make the validator part of the active set for the entire test
             // (we made the active_window_length large enough at the beginning of the test)
-            push_vote(&vote_signer, &bank, 1, mint.last_id());
+            push_vote(&vote_signer, &bank, 1, genesis_block.last_id());
         }
 
         // The scheduled leader during the bootstrapping period (assuming a seed + schedule
@@ -697,8 +697,8 @@ mod tests {
     fn test_active_set() {
         let leader_id = Keypair::new().pubkey();
         let active_window_length = 1000;
-        let mint = Mint::new_with_leader(10000, leader_id, 500);
-        let bank = Bank::new(&mint);
+        let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10000, leader_id, 500);
+        let bank = Bank::new(&genesis_block);
 
         let leader_scheduler_config =
             LeaderSchedulerConfig::new(Some(100), Some(100), Some(100), Some(active_window_length));
@@ -716,18 +716,18 @@ mod tests {
             old_ids.insert(pk.clone());
 
             // Give the account some stake
-            bank.transfer(5, &mint.keypair(), pk, mint.last_id())
+            bank.transfer(5, &mint_keypair, pk, genesis_block.last_id())
                 .unwrap();
 
             // Create a vote account
             let vote_signer =
                 VoteSignerProxy::new(&Arc::new(new_keypair), Box::new(LocalVoteSigner::default()));
             vote_signer
-                .new_vote_account(&bank, 1 as u64, mint.last_id())
+                .new_vote_account(&bank, 1 as u64, genesis_block.last_id())
                 .unwrap();
 
             // Push a vote for the account
-            push_vote(&vote_signer, &bank, start_height, mint.last_id());
+            push_vote(&vote_signer, &bank, start_height, genesis_block.last_id());
         }
 
         // Insert a bunch of votes at height "start_height + active_window_length"
@@ -738,21 +738,21 @@ mod tests {
             let pk = new_keypair.pubkey();
             new_ids.insert(pk);
             // Give the account some stake
-            bank.transfer(5, &mint.keypair(), pk, mint.last_id())
+            bank.transfer(5, &mint_keypair, pk, genesis_block.last_id())
                 .unwrap();
 
             // Create a vote account
             let vote_signer =
                 VoteSignerProxy::new(&Arc::new(new_keypair), Box::new(LocalVoteSigner::default()));
             vote_signer
-                .new_vote_account(&bank, 1 as u64, mint.last_id())
+                .new_vote_account(&bank, 1 as u64, genesis_block.last_id())
                 .unwrap();
 
             push_vote(
                 &vote_signer,
                 &bank,
                 start_height + active_window_length,
-                mint.last_id(),
+                genesis_block.last_id(),
             );
         }
 
@@ -788,22 +788,19 @@ mod tests {
     #[test]
     fn test_rank_active_set() {
         let num_validators: usize = 101;
-        // Give mint sum(1..num_validators) tokens
-        let mint = Mint::new((((num_validators + 1) / 2) * (num_validators + 1)) as u64);
-        let bank = Bank::new(&mint);
+        // Give genesis_block sum(1..num_validators) tokens
+        let (genesis_block, mint_keypair) =
+            GenesisBlock::new((((num_validators + 1) / 2) * (num_validators + 1)) as u64);
+        let bank = Bank::new(&genesis_block);
         let mut validators = vec![];
-        let last_id = mint
-            .create_entries()
-            .last()
-            .expect("Mint should not create empty genesis entries")
-            .id;
+        let last_id = genesis_block.last_id();
         for i in 0..num_validators {
             let new_validator = Keypair::new();
             let new_pubkey = new_validator.pubkey();
             validators.push(new_validator);
             bank.transfer(
                 (num_validators - i) as u64,
-                &mint.keypair(),
+                &mint_keypair,
                 new_pubkey,
                 last_id,
             )
@@ -851,20 +848,16 @@ mod tests {
         }
 
         // Break ties between validators with the same balances using public key
-        let mint = Mint::new(num_validators as u64);
-        let bank = Bank::new(&mint);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(num_validators as u64);
+        let bank = Bank::new(&genesis_block);
         let mut tied_validators_pk = vec![];
-        let last_id = mint
-            .create_entries()
-            .last()
-            .expect("Mint should not create empty genesis entries")
-            .id;
+        let last_id = genesis_block.last_id();
 
         for _ in 0..num_validators {
             let new_validator = Keypair::new();
             let new_pubkey = new_validator.pubkey();
             tied_validators_pk.push(new_pubkey);
-            bank.transfer(1, &mint.keypair(), new_pubkey, last_id)
+            bank.transfer(1, &mint_keypair, new_pubkey, last_id)
                 .unwrap();
         }
 
@@ -1002,17 +995,13 @@ mod tests {
         leader_scheduler.bootstrap_leader = bootstrap_leader_id;
 
         // Create the bank and validators
-        let mint = Mint::new(
+        let (genesis_block, mint_keypair) = GenesisBlock::new(
             ((((num_validators + 1) / 2) * (num_validators + 1))
                 + (num_vote_account_tokens * num_validators)) as u64,
         );
-        let bank = Bank::new(&mint);
+        let bank = Bank::new(&genesis_block);
         let mut validators = vec![];
-        let last_id = mint
-            .create_entries()
-            .last()
-            .expect("Mint should not create empty genesis entries")
-            .id;
+        let last_id = genesis_block.last_id();
         for i in 0..num_validators {
             let new_validator = Keypair::new();
             let new_pubkey = new_validator.pubkey();
@@ -1024,7 +1013,7 @@ mod tests {
             // Give the validator some tokens
             bank.transfer(
                 (i + 1 + num_vote_account_tokens) as u64,
-                &mint.keypair(),
+                &mint_keypair,
                 new_pubkey,
                 last_id,
             )
@@ -1032,7 +1021,11 @@ mod tests {
 
             // Create a vote account
             vote_signer
-                .new_vote_account(&bank, num_vote_account_tokens as u64, mint.last_id())
+                .new_vote_account(
+                    &bank,
+                    num_vote_account_tokens as u64,
+                    genesis_block.last_id(),
+                )
                 .unwrap();
 
             // Vote at height i * active_window_length for validator i
@@ -1040,7 +1033,7 @@ mod tests {
                 &vote_signer,
                 &bank,
                 i * active_window_length + bootstrap_height,
-                mint.last_id(),
+                genesis_block.last_id(),
             );
         }
 
@@ -1065,8 +1058,8 @@ mod tests {
         let leader_keypair = Keypair::new();
         let leader_id = leader_keypair.pubkey();
         let active_window_length = 1000;
-        let mint = Mint::new_with_leader(10000, leader_id, 500);
-        let bank = Bank::new(&mint);
+        let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10000, leader_id, 500);
+        let bank = Bank::new(&genesis_block);
 
         let leader_scheduler_config =
             LeaderSchedulerConfig::new(Some(100), Some(100), Some(100), Some(active_window_length));
@@ -1084,12 +1077,22 @@ mod tests {
         );
         // Create a vote account
         vote_signer
-            .new_vote_account(&bank, 1 as u64, mint.last_id())
+            .new_vote_account(&bank, 1 as u64, genesis_block.last_id())
             .unwrap();
 
         // Vote twice
-        push_vote(&vote_signer, &bank, initial_vote_height, mint.last_id());
-        push_vote(&vote_signer, &bank, initial_vote_height + 1, mint.last_id());
+        push_vote(
+            &vote_signer,
+            &bank,
+            initial_vote_height,
+            genesis_block.last_id(),
+        );
+        push_vote(
+            &vote_signer,
+            &bank,
+            initial_vote_height + 1,
+            genesis_block.last_id(),
+        );
 
         let result =
             leader_scheduler.get_active_set(initial_vote_height + active_window_length, &bank);
@@ -1205,20 +1208,17 @@ mod tests {
         leader_scheduler.bootstrap_leader = bootstrap_leader_id;
 
         // Create mint and bank
-        let mint = Mint::new_with_leader(10000, bootstrap_leader_id, 0);
-        let bank = Bank::new(&mint);
-        let last_id = mint
-            .create_entries()
-            .last()
-            .expect("Mint should not create empty genesis entries")
-            .id;
+        let (genesis_block, mint_keypair) =
+            GenesisBlock::new_with_leader(10000, bootstrap_leader_id, 0);
+        let bank = Bank::new(&genesis_block);
+        let last_id = genesis_block.last_id();
         let initial_vote_height = 1;
 
         // Create and add validator to the active set
         let validator_keypair = Keypair::new();
         let validator_id = validator_keypair.pubkey();
         if add_validator {
-            bank.transfer(5, &mint.keypair(), validator_id, last_id)
+            bank.transfer(5, &mint_keypair, validator_id, last_id)
                 .unwrap();
             // Create a vote account
             let vote_signer = VoteSignerProxy::new(
@@ -1226,10 +1226,15 @@ mod tests {
                 Box::new(LocalVoteSigner::default()),
             );
             vote_signer
-                .new_vote_account(&bank, 1 as u64, mint.last_id())
+                .new_vote_account(&bank, 1 as u64, genesis_block.last_id())
                 .unwrap();
 
-            push_vote(&vote_signer, &bank, initial_vote_height, mint.last_id());
+            push_vote(
+                &vote_signer,
+                &bank,
+                initial_vote_height,
+                genesis_block.last_id(),
+            );
         }
 
         // Make sure the bootstrap leader, not the validator, is picked again on next slot
@@ -1249,7 +1254,7 @@ mod tests {
         let vote_account_tokens = 1;
         bank.transfer(
             leader_stake + vote_account_tokens,
-            &mint.keypair(),
+            &mint_keypair,
             bootstrap_leader_id,
             last_id,
         )
@@ -1261,11 +1266,16 @@ mod tests {
             Box::new(LocalVoteSigner::default()),
         );
         vote_signer
-            .new_vote_account(&bank, vote_account_tokens as u64, mint.last_id())
+            .new_vote_account(&bank, vote_account_tokens as u64, genesis_block.last_id())
             .unwrap();
 
         // Add leader to the active set
-        push_vote(&vote_signer, &bank, initial_vote_height, mint.last_id());
+        push_vote(
+            &vote_signer,
+            &bank,
+            initial_vote_height,
+            genesis_block.last_id(),
+        );
 
         leader_scheduler.generate_schedule(bootstrap_height, &bank);
 
@@ -1311,13 +1321,10 @@ mod tests {
         leader_scheduler.bootstrap_leader = bootstrap_leader_id;
 
         // Create mint and bank
-        let mint = Mint::new_with_leader(10000, bootstrap_leader_id, 500);
-        let bank = Bank::new(&mint);
-        let last_id = mint
-            .create_entries()
-            .last()
-            .expect("Mint should not create empty genesis entries")
-            .id;
+        let (genesis_block, mint_keypair) =
+            GenesisBlock::new_with_leader(10000, bootstrap_leader_id, 0);
+        let bank = Bank::new(&genesis_block);
+        let last_id = genesis_block.last_id();
         let initial_vote_height = 1;
 
         // No schedule generated yet, so for all heights <= bootstrap height, the
@@ -1378,30 +1385,40 @@ mod tests {
         let validator_id = validator_keypair.pubkey();
 
         // Create a vote account for the validator
-        bank.transfer(5, &mint.keypair(), validator_id, last_id)
+        bank.transfer(5, &mint_keypair, validator_id, last_id)
             .unwrap();
         let vote_signer = VoteSignerProxy::new(
             &Arc::new(validator_keypair),
             Box::new(LocalVoteSigner::default()),
         );
         vote_signer
-            .new_vote_account(&bank, 1 as u64, mint.last_id())
+            .new_vote_account(&bank, 1 as u64, genesis_block.last_id())
             .unwrap();
-        push_vote(&vote_signer, &bank, initial_vote_height, mint.last_id());
+        push_vote(
+            &vote_signer,
+            &bank,
+            initial_vote_height,
+            genesis_block.last_id(),
+        );
 
         // Create a vote account for the leader
-        bank.transfer(5, &mint.keypair(), bootstrap_leader_id, last_id)
+        bank.transfer(5, &mint_keypair, bootstrap_leader_id, last_id)
             .unwrap();
         let vote_signer = VoteSignerProxy::new(
             &Arc::new(bootstrap_leader_keypair),
             Box::new(LocalVoteSigner::default()),
         );
         vote_signer
-            .new_vote_account(&bank, 1 as u64, mint.last_id())
+            .new_vote_account(&bank, 1 as u64, genesis_block.last_id())
             .unwrap();
 
         // Add leader to the active set
-        push_vote(&vote_signer, &bank, initial_vote_height, mint.last_id());
+        push_vote(
+            &vote_signer,
+            &bank,
+            initial_vote_height,
+            genesis_block.last_id(),
+        );
 
         // Generate the schedule
         leader_scheduler.generate_schedule(bootstrap_height, &bank);

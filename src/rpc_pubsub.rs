@@ -369,9 +369,9 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::genesis_block::GenesisBlock;
     use crate::jsonrpc_core::futures::sync::mpsc;
     use crate::jsonrpc_macros::pubsub::{Subscriber, SubscriptionId};
-    use crate::mint::Mint;
     use solana_sdk::budget_program;
     use solana_sdk::budget_transaction::BudgetTransaction;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -382,8 +382,8 @@ mod tests {
 
     #[test]
     fn test_pubsub_new() {
-        let alice = Mint::new(10_000);
-        let bank = Bank::new(&alice);
+        let (genesis_block, _) = GenesisBlock::new(10_000);
+        let bank = Bank::new(&genesis_block);
         let pubsub_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
         let pubsub_service = PubSubService::new(&Arc::new(bank), pubsub_addr);
         let thread = pubsub_service.thread_hdl.thread();
@@ -393,10 +393,10 @@ mod tests {
     #[test]
     #[ignore]
     fn test_signature_subscribe() {
-        let alice = Mint::new(10_000);
+        let (genesis_block, alice) = GenesisBlock::new(10_000);
         let bob = Keypair::new();
         let bob_pubkey = bob.pubkey();
-        let bank = Bank::new(&alice);
+        let bank = Bank::new(&genesis_block);
         let arc_bank = Arc::new(bank);
         let last_id = arc_bank.last_id();
 
@@ -409,7 +409,7 @@ mod tests {
         io.extend_with(rpc.to_delegate());
 
         // Test signature subscription
-        let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 20, last_id, 0);
+        let tx = Transaction::system_move(&alice, bob_pubkey, 20, last_id, 0);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"signatureSubscribe","params":["{}"]}}"#,
@@ -451,7 +451,7 @@ mod tests {
         }
 
         // Test subscription id increment
-        let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 10, last_id, 0);
+        let tx = Transaction::system_move(&alice, bob_pubkey, 10, last_id, 0);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"signatureSubscribe","params":["{}"]}}"#,
             tx.signatures[0].to_string()
@@ -468,9 +468,9 @@ mod tests {
 
     #[test]
     fn test_signature_unsubscribe() {
-        let alice = Mint::new(10_000);
+        let (genesis_block, alice) = GenesisBlock::new(10_000);
         let bob_pubkey = Keypair::new().pubkey();
-        let bank = Bank::new(&alice);
+        let bank = Bank::new(&genesis_block);
         let arc_bank = Arc::new(bank);
         let last_id = arc_bank.last_id();
 
@@ -482,7 +482,7 @@ mod tests {
         let rpc = RpcSolPubSubImpl::new(rpc_bank.clone());
         io.extend_with(rpc.to_delegate());
 
-        let tx = Transaction::system_move(&alice.keypair(), bob_pubkey, 20, last_id, 0);
+        let tx = Transaction::system_move(&alice, bob_pubkey, 20, last_id, 0);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"signatureSubscribe","params":["{}"]}}"#,
             tx.signatures[0].to_string()
@@ -517,7 +517,7 @@ mod tests {
     #[test]
     #[ignore]
     fn test_account_subscribe() {
-        let alice = Mint::new(10_000);
+        let (genesis_block, alice) = GenesisBlock::new(10_000);
         let bob_pubkey = Keypair::new().pubkey();
         let witness = Keypair::new();
         let contract_funds = Keypair::new();
@@ -525,7 +525,7 @@ mod tests {
         let budget_program_id = budget_program::id();
         let loader = Pubkey::default(); // TODO
         let executable = false; // TODO
-        let bank = Bank::new(&alice);
+        let bank = Bank::new(&genesis_block);
         let arc_bank = Arc::new(bank);
         let last_id = arc_bank.last_id();
 
@@ -565,7 +565,7 @@ mod tests {
         assert_eq!(expected, result);
 
         let tx = Transaction::system_create(
-            &alice.keypair(),
+            &alice,
             contract_funds.pubkey(),
             last_id,
             50,
@@ -578,7 +578,7 @@ mod tests {
             .expect("process transaction");
 
         let tx = Transaction::system_create(
-            &alice.keypair(),
+            &alice,
             contract_state.pubkey(),
             last_id,
             1,
@@ -660,7 +660,7 @@ mod tests {
             assert_eq!(serde_json::to_string(&expected).unwrap(), response);
         }
 
-        let tx = Transaction::system_new(&alice.keypair(), witness.pubkey(), 1, last_id);
+        let tx = Transaction::system_new(&alice, witness.pubkey(), 1, last_id);
         arc_bank
             .process_transaction(&tx)
             .expect("process transaction");
@@ -703,9 +703,9 @@ mod tests {
 
     #[test]
     fn test_account_unsubscribe() {
-        let alice = Mint::new(10_000);
+        let (genesis_block, _) = GenesisBlock::new(10_000);
         let bob_pubkey = Keypair::new().pubkey();
-        let bank = Bank::new(&alice);
+        let bank = Bank::new(&genesis_block);
         let arc_bank = Arc::new(bank);
 
         let (sender, _receiver) = mpsc::channel(1);
@@ -750,12 +750,12 @@ mod tests {
 
     #[test]
     fn test_check_account_subscribe() {
-        let mint = Mint::new(100);
-        let bank = Bank::new(&mint);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(100);
+        let bank = Bank::new(&genesis_block);
         let alice = Keypair::new();
         let last_id = bank.last_id();
         let tx = Transaction::system_create(
-            &mint.keypair(),
+            &mint_keypair,
             alice.pubkey(),
             last_id,
             1,
@@ -796,11 +796,11 @@ mod tests {
     }
     #[test]
     fn test_check_signature_subscribe() {
-        let mint = Mint::new(100);
-        let bank = Bank::new(&mint);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(100);
+        let bank = Bank::new(&genesis_block);
         let alice = Keypair::new();
         let last_id = bank.last_id();
-        let tx = Transaction::system_move(&mint.keypair(), alice.pubkey(), 20, last_id, 0);
+        let tx = Transaction::system_move(&mint_keypair, alice.pubkey(), 20, last_id, 0);
         let signature = tx.signatures[0];
         bank.process_transaction(&tx).unwrap();
 

@@ -269,7 +269,7 @@ mod tests {
     use crate::bank::Bank;
     use crate::banking_stage::BankingStageReturnType;
     use crate::entry::EntrySlice;
-    use crate::mint::Mint;
+    use crate::genesis_block::GenesisBlock;
     use crate::packet::to_packets;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
@@ -278,7 +278,8 @@ mod tests {
 
     #[test]
     fn test_banking_stage_shutdown1() {
-        let bank = Arc::new(Bank::new(&Mint::new(2)));
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
         let dummy_leader_id = Keypair::new().pubkey();
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, _entry_receiver) = BankingStage::new(
@@ -298,7 +299,8 @@ mod tests {
 
     #[test]
     fn test_banking_stage_shutdown2() {
-        let bank = Arc::new(Bank::new(&Mint::new(2)));
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
         let dummy_leader_id = Keypair::new().pubkey();
         let (_verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
@@ -318,7 +320,8 @@ mod tests {
 
     #[test]
     fn test_banking_stage_tick() {
-        let bank = Arc::new(Bank::new(&Mint::new(2)));
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
         let dummy_leader_id = Keypair::new().pubkey();
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
@@ -345,8 +348,8 @@ mod tests {
 
     #[test]
     fn test_banking_stage_entries_only() {
-        let mint = Mint::new(2);
-        let bank = Arc::new(Bank::new(&mint));
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
         let dummy_leader_id = Keypair::new().pubkey();
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
@@ -360,7 +363,7 @@ mod tests {
         );
 
         // good tx
-        let keypair = mint.keypair();
+        let keypair = mint_keypair;
         let tx = Transaction::system_new(&keypair, keypair.pubkey(), 1, start_hash);
 
         // good tx, but no verify
@@ -402,8 +405,8 @@ mod tests {
         // In this attack we'll demonstrate that a verifier can interpret the ledger
         // differently if either the server doesn't signal the ledger to add an
         // Entry OR if the verifier tries to parallelize across multiple Entries.
-        let mint = Mint::new(2);
-        let bank = Arc::new(Bank::new(&mint));
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
         let dummy_leader_id = Keypair::new().pubkey();
         let (verified_sender, verified_receiver) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
@@ -417,7 +420,7 @@ mod tests {
 
         // Process a batch that includes a transaction that receives two tokens.
         let alice = Keypair::new();
-        let tx = Transaction::system_new(&mint.keypair(), alice.pubkey(), 2, mint.last_id());
+        let tx = Transaction::system_new(&mint_keypair, alice.pubkey(), 2, genesis_block.last_id());
 
         let packets = to_packets(&[tx]);
         verified_sender
@@ -425,7 +428,7 @@ mod tests {
             .unwrap();
 
         // Process a second batch that spends one of those tokens.
-        let tx = Transaction::system_new(&alice, mint.pubkey(), 1, mint.last_id());
+        let tx = Transaction::system_new(&alice, mint_keypair.pubkey(), 1, genesis_block.last_id());
         let packets = to_packets(&[tx]);
         verified_sender
             .send(vec![(packets[0].clone(), vec![1u8])])
@@ -444,7 +447,7 @@ mod tests {
         // Assert the user holds one token, not two. If the stage only outputs one
         // entry, then the second transaction will be rejected, because it drives
         // the account balance below zero before the credit is added.
-        let bank = Bank::new(&mint);
+        let bank = Bank::new(&genesis_block);
         for entry in entries {
             bank.process_transactions(&entry.transactions)
                 .iter()
@@ -457,7 +460,8 @@ mod tests {
     // with reason BankingStageReturnType::LeaderRotation
     #[test]
     fn test_max_tick_height_shutdown() {
-        let bank = Arc::new(Bank::new(&Mint::new(2)));
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
         let dummy_leader_id = Keypair::new().pubkey();
         let (_verified_sender_, verified_receiver) = channel();
         let max_tick_height = 10;

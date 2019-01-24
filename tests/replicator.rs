@@ -41,7 +41,7 @@ fn test_replicator_startup() {
     let leader_info = leader_node.info.clone();
 
     let leader_ledger_path = "replicator_test_leader_ledger";
-    let (mint, leader_ledger_path) =
+    let (_genesis_block, mint_keypair, leader_ledger_path) =
         create_tmp_genesis(leader_ledger_path, 1_000_000_000, leader_info.id, 1);
 
     let validator_ledger_path =
@@ -73,7 +73,7 @@ fn test_replicator_startup() {
         let mut leader_client = mk_client(&leader_info);
 
         leader_client
-            .transfer(10, &mint.keypair(), validator_keypair.pubkey(), &last_id)
+            .transfer(10, &mint_keypair, validator_keypair.pubkey(), &last_id)
             .unwrap();
 
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
@@ -99,7 +99,7 @@ fn test_replicator_startup() {
         for _ in 0..64 {
             let last_id = leader_client.get_last_id();
             leader_client
-                .transfer(1, &mint.keypair(), bob.pubkey(), &last_id)
+                .transfer(1, &mint_keypair, bob.pubkey(), &last_id)
                 .unwrap();
             sleep(Duration::from_millis(200));
         }
@@ -111,14 +111,10 @@ fn test_replicator_startup() {
         let last_id = leader_client.get_last_id();
         // Give the replicator some tokens
         let amount = 1;
-        let mut tx = Transaction::system_new(
-            &mint.keypair(),
-            replicator_keypair.pubkey(),
-            amount,
-            last_id,
-        );
+        let mut tx =
+            Transaction::system_new(&mint_keypair, replicator_keypair.pubkey(), amount, last_id);
         leader_client
-            .retry_transfer(&mint.keypair(), &mut tx, 5)
+            .retry_transfer(&mint_keypair, &mut tx, 5)
             .unwrap();
 
         info!("starting replicator node");
@@ -270,7 +266,8 @@ fn test_replicator_startup_ledger_hang() {
     let leader_info = leader_node.info.clone();
 
     let leader_ledger_path = "replicator_test_leader_ledger";
-    let (_, leader_ledger_path) = create_tmp_genesis(leader_ledger_path, 100, leader_info.id, 1);
+    let (_genesis_block, _mint_keypair, leader_ledger_path) =
+        create_tmp_genesis(leader_ledger_path, 100, leader_info.id, 1);
 
     let validator_ledger_path =
         tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");

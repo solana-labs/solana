@@ -1,10 +1,10 @@
 use serde_json::json;
 use solana::bank::Bank;
 use solana::cluster_info::Node;
-use solana::db_ledger::create_tmp_ledger_with_mint;
+use solana::db_ledger::create_tmp_ledger;
 use solana::fullnode::Fullnode;
+use solana::genesis_block::GenesisBlock;
 use solana::leader_scheduler::LeaderScheduler;
-use solana::mint::Mint;
 use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana::vote_signer_proxy::VoteSignerProxy;
@@ -22,10 +22,10 @@ fn test_wallet_request_airdrop() {
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_data = leader.info.clone();
 
-    let alice = Mint::new(10_000);
-    let mut bank = Bank::new(&alice);
-    let ledger_path = create_tmp_ledger_with_mint("thin_client", &alice);
-    let entry_height = alice.create_entries().len() as u64;
+    let (genesis_block, alice) = GenesisBlock::new(10_000);
+    let mut bank = Bank::new(&genesis_block);
+    let ledger_path = create_tmp_ledger("thin_client", &genesis_block);
+    let entry_height = 0;
 
     let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
         leader_data.id,
@@ -39,19 +39,18 @@ fn test_wallet_request_airdrop() {
         leader_keypair,
         Some(Arc::new(vote_signer)),
         bank,
-        None,
+        &ledger_path,
         entry_height,
         &last_id,
         leader,
         None,
-        &ledger_path,
         false,
         None,
         STORAGE_ROTATE_TEST_COUNT,
     );
 
     let (sender, receiver) = channel();
-    run_local_drone(alice.keypair(), sender);
+    run_local_drone(alice, sender);
     let drone_addr = receiver.recv().unwrap();
 
     let mut bob_config = WalletConfig::default();
