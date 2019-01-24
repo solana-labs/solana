@@ -182,7 +182,6 @@ impl Packets {
                 Err(_) if i > 0 => {
                     inc_new_counter_info!("packets-recv_count", i);
                     debug!("got {:?} messages on {}", i, socket.local_addr().unwrap());
-                    socket.set_nonblocking(true)?;
                     return Ok(i);
                 }
                 Err(e) => {
@@ -190,10 +189,12 @@ impl Packets {
                     return Err(Error::IO(e));
                 }
                 Ok(npkts) => {
+                    if i == 0 {
+                        socket.set_nonblocking(true)?;
+                    }
                     trace!("got {} packets", npkts);
                     i += npkts;
-                    if npkts != NUM_RCVMMSGS {
-                        socket.set_nonblocking(true)?;
+                    if npkts != NUM_RCVMMSGS || i >= 1024 {
                         inc_new_counter_info!("packets-recv_count", i);
                         return Ok(i);
                     }

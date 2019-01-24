@@ -654,7 +654,8 @@ impl Bank {
         }
         Ok(())
     }
-    pub fn par_execute_entries(&self, entries: &[(&Entry, Vec<Result<()>>)]) -> Result<()> {
+
+    fn par_execute_entries(&self, entries: &[(&Entry, Vec<Result<()>>)]) -> Result<()> {
         inc_new_counter_info!("bank-par_execute_entries-count", entries.len());
         let results: Vec<Result<()>> = entries
             .into_par_iter()

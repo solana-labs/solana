@@ -19,7 +19,7 @@ impl FetchStage {
         let tx_sockets = sockets.into_iter().map(Arc::new).collect();
         Self::new_multi_socket(tx_sockets, exit)
     }
-    pub fn new_multi_socket(
+    fn new_multi_socket(
         sockets: Vec<Arc<UdpSocket>>,
         exit: Arc<AtomicBool>,
     ) -> (Self, PacketReceiver) {
