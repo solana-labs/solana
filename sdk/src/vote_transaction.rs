@@ -35,7 +35,7 @@ impl VoteTransaction for Transaction {
         fee: u64,
     ) -> Self {
         let vote = Vote { tick_height };
-        let instruction = VoteInstruction::NewVote(vote);
+        let instruction = VoteInstruction::Vote(vote);
         Transaction::new(
             vote_account,
             &[],
@@ -47,14 +47,14 @@ impl VoteTransaction for Transaction {
     }
 
     fn vote_account_new(
-        validator_id: &Keypair,
+        from_keypair: &Keypair,
         vote_account_id: Pubkey,
         last_id: Hash,
         num_tokens: u64,
         fee: u64,
     ) -> Self {
         Transaction::new_with_instructions(
-            &[validator_id],
+            &[from_keypair],
             &[vote_account_id],
             last_id,
             fee,
@@ -69,7 +69,7 @@ impl VoteTransaction for Transaction {
                     },
                     vec![0, 1],
                 ),
-                Instruction::new(1, &VoteInstruction::RegisterAccount, vec![0, 1]),
+                Instruction::new(1, &VoteInstruction::InitializeAccount, vec![1]),
             ],
         )
     }
@@ -79,7 +79,7 @@ impl VoteTransaction for Transaction {
         for i in 0..self.instructions.len() {
             let tx_program_id = self.program_id(i);
             if vote_program::check_id(&tx_program_id) {
-                if let Ok(Some(VoteInstruction::NewVote(vote))) = deserialize(&self.userdata(i)) {
+                if let Ok(Some(VoteInstruction::Vote(vote))) = deserialize(&self.userdata(i)) {
                     votes.push((self.account_keys[0], vote, self.last_id))
                 }
             }

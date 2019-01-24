@@ -309,8 +309,7 @@ impl LeaderScheduler {
     }
 
     // TODO: We use a HashSet for now because a single validator could potentially register
-    // multiple vote account. Once that is no longer possible (see the TODO in vote_program.rs,
-    // process_transaction(), case VoteInstruction::RegisterAccount), we can use a vector.
+    // multiple vote account. Once that is no longer possible, we can use a vector.
     fn get_active_set(&mut self, height: u64, bank: &Bank) -> HashSet<Pubkey> {
         let upper_bound = height;
         let lower_bound = height.saturating_sub(self.active_window_length);

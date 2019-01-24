@@ -37,13 +37,12 @@ impl Vote {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum VoteInstruction {
-    /// Register a new "vote account" to represent a particular validator in the Vote Contract,
+    /// Initialize a new "vote account" to represent a particular validator in the Vote Program,
     /// and initialize the VoteState for this "vote account"
-    /// * Transaction::keys[0] - the validator id
-    /// * Transaction::keys[1] - the new "vote account" to be associated with the validator
+    /// * Transaction::keys[0] - the new "vote account"
     /// identified by keys[0] for voting
-    RegisterAccount,
-    NewVote(Vote),
+    InitializeAccount,
+    Vote(Vote),
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
