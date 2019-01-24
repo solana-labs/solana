@@ -21,7 +21,7 @@ usage() {
     echo
   fi
   cat <<EOF
-usage: $0 [-x] [--no-leader-rotation] [--init-complete-file FILE] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]
+usage: $0 [-x] [--no-leader-rotation] [--init-complete-file FILE] [--rpc-port port] [--no-signer] [rsync network path to bootstrap leader configuration] [network entry point]
 
 Start a full node on the specified network
 
@@ -31,6 +31,7 @@ Start a full node on the specified network
   --no-leader-rotation  - disable leader rotation
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
   --rpc-port port       - custom RPC port for this node
+  --no-signer           - start node without vote signer
 
 EOF
   exit 1
@@ -44,6 +45,7 @@ maybe_init_complete_file=
 maybe_no_leader_rotation=
 self_setup=0
 maybe_rpc_port=
+maybe_no_signer=
 
 while [[ ${1:0:1} = - ]]; do
   if [[ $1 = -X ]]; then
@@ -63,6 +65,9 @@ while [[ ${1:0:1} = - ]]; do
   elif [[ $1 = --rpc-port ]]; then
     maybe_rpc_port="$1 $2"
     shift 2
+  elif [[ $1 = --no-signer ]]; then
+    maybe_no_signer="--no-signer"
+    shift
   else
     echo "Unknown argument: $1"
     exit 1
@@ -236,11 +241,12 @@ if [[ ! -d "$ledger_config_dir" ]]; then
 fi
 
 trap 'kill "$pid" && wait "$pid"' INT TERM
-# shellcheck disable=SC2086 # Don't want to double quote maybe_rpc_port or maybe_init_complete_file
+# shellcheck disable=SC2086 # Don't want to double quote maybe_rpc_port or maybe_init_complete_file or maybe_no_signer
 $program \
   $maybe_init_complete_file \
   $maybe_no_leader_rotation \
   $maybe_rpc_port \
+  $maybe_no_signer \
   --identity "$fullnode_json_path" \
   --network "$leader_address" \
   --ledger "$ledger_config_dir" \

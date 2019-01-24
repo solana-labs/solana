@@ -64,7 +64,7 @@ impl ReplayStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window_receiver: &EntryReceiver,
         keypair: &Arc<Keypair>,
-        vote_signer: &Arc<VoteSignerProxy>,
+        vote_signer: Option<&Arc<VoteSignerProxy>>,
         vote_blob_sender: Option<&BlobSender>,
         ledger_entry_sender: &EntrySender,
         entry_height: &mut u64,
@@ -137,10 +137,12 @@ impl ReplayStage {
                 }
 
                 if 0 == num_ticks_to_next_vote {
-                    if let Some(sender) = vote_blob_sender {
-                        vote_signer
-                            .send_validator_vote(bank, &cluster_info, sender)
-                            .unwrap();
+                    if let Some(signer) = vote_signer {
+                        if let Some(sender) = vote_blob_sender {
+                            signer
+                                .send_validator_vote(bank, &cluster_info, sender)
+                                .unwrap();
+                        }
                     }
                 }
                 let (scheduled_leader, _) = bank
@@ -194,7 +196,7 @@ impl ReplayStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         keypair: Arc<Keypair>,
-        vote_signer: Arc<VoteSignerProxy>,
+        vote_signer: Option<Arc<VoteSignerProxy>>,
         bank: Arc<Bank>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window_receiver: EntryReceiver,
@@ -240,7 +242,7 @@ impl ReplayStage {
                         &cluster_info,
                         &window_receiver,
                         &keypair,
-                        &vote_signer,
+                        vote_signer.as_ref(),
                         Some(&vote_blob_sender),
                         &ledger_entry_sender,
                         &mut entry_height_,
@@ -379,7 +381,7 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let (replay_stage, ledger_writer_recv) = ReplayStage::new(
             my_keypair,
-            Arc::new(vote_account_id),
+            Some(Arc::new(vote_account_id)),
             Arc::new(bank),
             Arc::new(RwLock::new(cluster_info_me)),
             entry_receiver,
@@ -475,7 +477,7 @@ mod test {
         ));
         let (replay_stage, ledger_writer_recv) = ReplayStage::new(
             my_keypair.clone(),
-            vote_signer.clone(),
+            Some(vote_signer.clone()),
             bank.clone(),
             cluster_info_me.clone(),
             entry_receiver,
@@ -591,7 +593,7 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let (replay_stage, ledger_writer_recv) = ReplayStage::new(
             my_keypair.clone(),
-            signer_proxy.clone(),
+            Some(signer_proxy.clone()),
             bank.clone(),
             cluster_info_me.clone(),
             entry_receiver,
@@ -682,7 +684,7 @@ mod test {
             &cluster_info_me,
             &entry_receiver,
             &my_keypair,
-            &vote_signer,
+            Some(&vote_signer),
             None,
             &ledger_entry_sender,
             &mut entry_height,
@@ -708,7 +710,7 @@ mod test {
             &cluster_info_me,
             &entry_receiver,
             &Arc::new(Keypair::new()),
-            &vote_signer,
+            Some(&vote_signer),
             None,
             &ledger_entry_sender,
             &mut entry_height,

@@ -58,7 +58,7 @@ impl Tvu {
     /// * `sockets` - My fetch, repair, and restransmit sockets
     /// * `db_ledger` - the ledger itself
     pub fn new(
-        vote_signer: &Arc<VoteSignerProxy>,
+        vote_signer: &Option<Arc<VoteSignerProxy>>,
         bank: &Arc<Bank>,
         entry_height: u64,
         last_entry_id: Hash,
@@ -275,7 +275,7 @@ pub mod tests {
         let vote_signer =
             VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
         let tvu = Tvu::new(
-            &Arc::new(vote_signer),
+            &Some(Arc::new(vote_signer)),
             &bank,
             0,
             cur_hash,

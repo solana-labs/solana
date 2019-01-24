@@ -47,7 +47,7 @@ fn test_rpc_send_tx() {
     let entry_height = alice.create_entries().len() as u64;
     let server = Fullnode::new_with_bank(
         leader_keypair,
-        Arc::new(vote_signer),
+        Some(Arc::new(vote_signer)),
         bank,
         None,
         entry_height,

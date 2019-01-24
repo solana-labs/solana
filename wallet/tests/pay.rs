@@ -51,7 +51,7 @@ fn test_wallet_timestamp_tx() {
     let last_id = bank.last_id();
     let server = Fullnode::new_with_bank(
         leader_keypair,
-        Arc::new(vote_signer),
+        Some(Arc::new(vote_signer)),
         bank,
         None,
         entry_height,
@@ -148,7 +148,7 @@ fn test_wallet_witness_tx() {
     let last_id = bank.last_id();
     let server = Fullnode::new_with_bank(
         leader_keypair,
-        Arc::new(vote_signer),
+        Some(Arc::new(vote_signer)),
         bank,
         None,
         entry_height,
@@ -241,7 +241,7 @@ fn test_wallet_cancel_tx() {
     let last_id = bank.last_id();
     let server = Fullnode::new_with_bank(
         leader_keypair,
-        Arc::new(vote_signer),
+        Some(Arc::new(vote_signer)),
         bank,
         None,
         entry_height,
