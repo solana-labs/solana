@@ -191,6 +191,7 @@ fn main() {
             Arg::with_name("no_signer")
                 .long("no-signer")
                 .takes_value(false)
+                .conflicts_with("signer")
                 .help("Launch node without vote signer"),
         )
         .get_matches();
