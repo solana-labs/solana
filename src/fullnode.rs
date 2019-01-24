@@ -826,6 +826,8 @@ mod tests {
                 panic!("Expected bootstrap leader to be a leader");
             }
         }
+
+        bootstrap_leader.close().unwrap();
     }
 
     #[test]
