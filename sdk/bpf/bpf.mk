@@ -10,7 +10,7 @@ endif
 
 INC_DIRS ?=
 SRC_DIR ?= ./src
-TEST_DIR ?= ./test
+TEST_PREFIX ?= test_
 OUT_DIR ?= ./out
 OS := $(shell uname)
 
@@ -104,11 +104,9 @@ help:
 	@echo 'This makefile will build BPF Programs from C or C++ source files into ELFs'
 	@echo ''
 	@echo 'Assumptions:'
-	@echo '  - Programs are a single .c or .cc source file (may include headers)'
-	@echo '  - Programs are located in the source directory: $(SRC_DIR)'
-	@echo '  - Programs are named by their basename (eg. file name:foo.c/foo.cc -> program name:foo)'
-	@echo '  - Tests are located in the test directory: $(TEST_DIR)'
-	@echo '  - Tests are named by their basename (eg. file name:foo.c/foo.cc -> test name:test_foo)'
+	@echo '  - Programs are located in the source directory: $(SRC_DIR)/<program name>'
+	@echo '  - Programs are named by their directory name (eg. directory name:src/foo/ -> program name:foo)'
+	@echo '  - Tests are located in their corresponding program directory and must being with "test_"'
 	@echo '  - Output files will be placed in the directory: $(OUT_DIR)'
 	@echo ''
 	@echo 'User settings'
@@ -119,10 +117,8 @@ help:
 	@echo '      INC_DIRS=$(INC_DIRS)'
 	@echo '    - List of system include directories:'
 	@echo '      SYSTEM_INC_DIRS=$(SYSTEM_INC_DIRS)'
-	@echo '    - Location of source files:'
+	@echo '    - Location of source directories:'
 	@echo '      SRC_DIR=$(SRC_DIR)'
-	@echo '    - Location of test files:'
-	@echo '      TEST_DIR=$(TEST_DIR)'
 	@echo '    - Location to place output files:'
 	@echo '      OUT_DIR=$(OUT_DIR)'
 	@echo '    - Location of LLVM:'
@@ -130,18 +126,21 @@ help:
 	@echo ''
 	@echo 'Usage:'
 	@echo '  - make help - This help message'
-	@echo '  - make all - Build all the programs'
-	@echo '  - make test - Build and run all tests'
+	@echo '  - make all - Build all the programs and tests, run the tests'
+	@echo '  - make programs - Build all the programs'
+	@echo '  - make tests - Build and run all tests'
 	@echo '  - make dump_<program name> - Dumps the contents of the program to stdout'
 	@echo '  - make <program name> - Build a single program by name'
+	@echo '  - make <test name> - Build and run a single test by name'
 	@echo ''
 	@echo 'Available programs:'
 	$(foreach name, $(PROGRAM_NAMES), @echo '  - $(name)'$(\n))
+	@echo ''
 	@echo 'Available tests:'
 	$(foreach name, $(TEST_NAMES), @echo '  - $(name)'$(\n))
 	@echo ''
 	@echo 'Example:'
-	@echo '  - Assuming a programed named foo (src/foo.c)'
+	@echo '  - Assuming a programed named foo (src/foo/foo.c)'
 	@echo '    - make foo'
 	@echo '    - make dump_foo'
 	@echo ''
@@ -190,30 +189,31 @@ $1: $2
 	$(_@)$(MACOS_ADJUST_TEST_DYLIB) $1
 endef
 
+define TEST_EXEC_RULE
+$1: $2
+	$2$(\n)
+endef
+
+
 .PHONY: $(INSTALL_SH)
 $(INSTALL_SH):
 	$(_@)$(INSTALL_SH)
 
 PROGRAM_NAMES := $(notdir $(basename $(wildcard $(SRC_DIR)/*)))
-TEST_NAMES := $(addprefix test_,$(notdir $(basename $(wildcard $(TEST_DIR)/*.c))))
 
 define \n
 
 
 endef
 
-all: $(PROGRAM_NAMES)
-
-.PHONY: $(PROGRAM_NAMES)
-$(PROGRAM_NAMES): $(INSTALL_SH)
-$(PROGRAM_NAMES): %: $(addprefix $(OUT_DIR)/, %.so)
+all: programs tests
 
 $(foreach PROGRAM, $(PROGRAM_NAMES), \
   $(eval -include $(wildcard $(OUT_DIR)/$(PROGRAM)/*.d)) \
   \
   $(eval $(PROGRAM)_SRCS := \
     $(addprefix $(SRC_DIR)/$(PROGRAM)/, \
-    $(filter-out test_%,$(notdir $(wildcard $(SRC_DIR)/$(PROGRAM)/*.c $(SRC_DIR)/$(PROGRAM)/*.cc))))) \
+    $(filter-out $(TEST_PREFIX)%,$(notdir $(wildcard $(SRC_DIR)/$(PROGRAM)/*.c $(SRC_DIR)/$(PROGRAM)/*.cc))))) \
   $(eval $(PROGRAM)_OBJS := $(subst $(SRC_DIR), $(OUT_DIR), \
     $(patsubst %.c,%.o, \
     $(patsubst %.cc,%.o,$($(PROGRAM)_SRCS))))) \
@@ -223,22 +223,28 @@ $(foreach PROGRAM, $(PROGRAM_NAMES), \
   $(foreach _,$(filter %.cc,$($(PROGRAM)_SRCS)), \
     $(eval $(call CC_RULE,$(subst $(SRC_DIR),$(OUT_DIR),$(_:%.cc=%.o)),$_))) \
   \
-  $(eval TESTS := $(notdir $(basename $(wildcard $(SRC_DIR)/$(PROGRAM)/test_*.c)))) \
-  $(eval $(TESTS): %: $(addprefix $(OUT_DIR)/$(PROGRAM)/, %)) \
+  $(eval TESTS := $(notdir $(basename $(wildcard $(SRC_DIR)/$(PROGRAM)/$(TEST_PREFIX)*.c)))) \
+  $(eval $(TESTS) : %: $(addprefix $(OUT_DIR)/$(PROGRAM)/, %)) \
   $(eval TEST_NAMES := $(TEST_NAMES) $(TESTS)) \
   $(foreach TEST, $(TESTS), \
     $(eval $(TEST)_SRCS := \
       $(addprefix $(SRC_DIR)/$(PROGRAM)/, \
-      $(notdir $(wildcard $(SRC_DIR)/$(PROGRAM)/test_*.c $(SRC_DIR)/$(PROGRAM)/test_*.cc)))) \
+      $(notdir $(wildcard $(SRC_DIR)/$(PROGRAM)/$(TEST).c $(SRC_DIR)/$(PROGRAM)/$(TEST).cc)))) \
     $(foreach _,$(filter %.c,$($(TEST)_SRCS)), \
       $(eval $(call TEST_C_RULE,$(subst $(SRC_DIR),$(OUT_DIR),$(_:%.c=%)),$_))) \
     $(foreach _,$(filter %.cc, $($(TEST)_SRCS)), \
       $(eval $(call TEST_CC_RULE,$(subst $(SRC_DIR),$(OUT_DIR),$(_:%.cc=%)),$_))) \
+    $(eval $(call TEST_EXEC_RULE,$(TEST),$(addprefix $(OUT_DIR)/$(PROGRAM)/, $(TEST)))) \
    ) \
 )
 
-test: $(TEST_NAMES)
-	$(foreach test, $(TEST_NAMES), $(OUT_DIR)/bench_alu/$(test)$(\n))
+programs: $(PROGRAM_NAMES)
+
+.PHONY: $(PROGRAM_NAMES)
+$(PROGRAM_NAMES): $(INSTALL_SH)
+$(PROGRAM_NAMES): %: $(addprefix $(OUT_DIR)/, %.so)
+
+tests: $(TEST_NAMES)
 
 .PHONY: $(TEST_NAMES)
 $(TEST_NAMES): $(INSTALL_SH)
