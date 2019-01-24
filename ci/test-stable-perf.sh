@@ -33,7 +33,8 @@ else
   FEATURES=$FEATURES,cuda
 fi
 
-exec ci/test-stable.sh "$FEATURES"
-
 # Run all BPF C tests
 make -C programs/bpf/c tests
+
+exec ci/test-stable.sh "$FEATURES"
+
