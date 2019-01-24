@@ -700,7 +700,6 @@ mod tests {
             }
         }
         assert!(bootstrap_leader.node_services.tpu.is_leader());
-
         bootstrap_leader.close().unwrap();
     }
 
