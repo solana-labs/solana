@@ -37,7 +37,7 @@ fn test_wallet_request_airdrop() {
     let last_id = bank.last_id();
     let server = Fullnode::new_with_bank(
         leader_keypair,
-        Arc::new(vote_signer),
+        Some(Arc::new(vote_signer)),
         bank,
         None,
         entry_height,

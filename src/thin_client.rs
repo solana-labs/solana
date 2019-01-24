@@ -474,7 +474,7 @@ mod tests {
         let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            Arc::new(vote_signer),
+            Some(Arc::new(vote_signer)),
             bank,
             None,
             entry_height,
@@ -531,7 +531,7 @@ mod tests {
         let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            Arc::new(vote_signer),
+            Some(Arc::new(vote_signer)),
             bank,
             None,
             0,
@@ -593,7 +593,7 @@ mod tests {
         let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            Arc::new(vote_signer),
+            Some(Arc::new(vote_signer)),
             bank,
             None,
             entry_height,
@@ -644,7 +644,7 @@ mod tests {
         );
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            Arc::new(vote_signer),
+            Some(Arc::new(vote_signer)),
             bank,
             None,
             entry_height,
@@ -741,7 +741,7 @@ mod tests {
         let entry_height = alice.create_entries().len() as u64;
         let server = Fullnode::new_with_bank(
             leader_keypair,
-            Arc::new(vote_signer),
+            Some(Arc::new(vote_signer)),
             bank,
             None,
             entry_height,

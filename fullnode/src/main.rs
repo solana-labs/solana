@@ -187,9 +187,16 @@ fn main() {
                 .takes_value(true)
                 .help("Create this file, if it doesn't already exist, once node initialization is complete"),
         )
+        .arg(
+            Arg::with_name("no_signer")
+                .long("no-signer")
+                .takes_value(false)
+                .help("Launch node without vote signer"),
+        )
         .get_matches();
 
     let no_sigverify = matches.is_present("nosigverify");
+    let no_signer = matches.is_present("no_signer");
     let use_only_bootstrap_leader = matches.is_present("no-leader-rotation");
     let (keypair, gossip) = parse_identity(&matches);
     let ledger_path = matches.value_of("ledger").unwrap();
@@ -228,25 +235,33 @@ fn main() {
     let mut leader_scheduler = LeaderScheduler::default();
     leader_scheduler.use_only_bootstrap_leader = use_only_bootstrap_leader;
 
-    let vote_signer = VoteSignerProxy::new(&keypair, Box::new(RemoteVoteSigner::new(signer_addr)));
-    let vote_account = vote_signer.vote_account;
-
     info!("Node ID: {}", node.info.id);
-    info!("Signer service address: {:?}", signer_addr);
-    info!("New vote account ID is {:?}", vote_account);
+
+    let vote_account;
+    let signer_option = if !no_signer {
+        let vote_signer =
+            VoteSignerProxy::new(&keypair, Box::new(RemoteVoteSigner::new(signer_addr)));
+        vote_account = vote_signer.vote_account;
+        info!("Signer service address: {:?}", signer_addr);
+        info!("New vote account ID is {:?}", vote_account);
+        Some(Arc::new(vote_signer))
+    } else {
+        vote_account = Pubkey::default();
+        None
+    };
 
     let mut fullnode = Fullnode::new(
         node,
         ledger_path,
         keypair.clone(),
-        Arc::new(vote_signer),
+        signer_option,
         cluster_entrypoint,
         no_sigverify,
         leader_scheduler,
         Some(rpc_port),
     );
 
-    {
+    if !no_signer {
         let leader_node_info = loop {
             info!("Looking for leader...");
             match poll_gossip_for_leader(node_info.gossip, Some(10)) {

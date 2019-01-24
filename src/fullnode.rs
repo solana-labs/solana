@@ -105,7 +105,7 @@ pub struct Fullnode {
     tpu_sockets: Vec<UdpSocket>,
     broadcast_socket: UdpSocket,
     db_ledger: Arc<DbLedger>,
-    vote_signer: Arc<VoteSignerProxy>,
+    vote_signer: Option<Arc<VoteSignerProxy>>,
 }
 
 impl Fullnode {
@@ -113,7 +113,7 @@ impl Fullnode {
         node: Node,
         ledger_path: &str,
         keypair: Arc<Keypair>,
-        vote_signer: Arc<VoteSignerProxy>,
+        vote_signer: Option<Arc<VoteSignerProxy>>,
         entrypoint_addr: Option<SocketAddr>,
         sigverify_disabled: bool,
         leader_scheduler: LeaderScheduler,
@@ -140,7 +140,7 @@ impl Fullnode {
         node: Node,
         ledger_path: &str,
         keypair: Arc<Keypair>,
-        vote_signer: Arc<VoteSignerProxy>,
+        vote_signer: Option<Arc<VoteSignerProxy>>,
         entrypoint_addr: Option<SocketAddr>,
         sigverify_disabled: bool,
         leader_scheduler: LeaderScheduler,
@@ -189,7 +189,7 @@ impl Fullnode {
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_bank(
         keypair: Arc<Keypair>,
-        vote_signer: Arc<VoteSignerProxy>,
+        vote_signer: Option<Arc<VoteSignerProxy>>,
         bank: Bank,
         db_ledger: Option<Arc<DbLedger>>,
         entry_height: u64,
@@ -680,7 +680,7 @@ mod tests {
         let signer = VoteSignerProxy::new(&keypair, Box::new(LocalVoteSigner::default()));
         let v = Fullnode::new_with_bank(
             keypair,
-            Arc::new(signer),
+            Some(Arc::new(signer)),
             bank,
             None,
             entry_height,
@@ -724,7 +724,7 @@ mod tests {
                 let signer = VoteSignerProxy::new(&keypair, Box::new(LocalVoteSigner::default()));
                 Fullnode::new_with_bank(
                     keypair,
-                    Arc::new(signer),
+                    Some(Arc::new(signer)),
                     bank,
                     None,
                     entry_height,
@@ -804,7 +804,7 @@ mod tests {
             bootstrap_leader_node,
             &bootstrap_leader_ledger_path,
             bootstrap_leader_keypair,
-            Arc::new(signer),
+            Some(Arc::new(signer)),
             Some(bootstrap_leader_info.gossip),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
@@ -916,7 +916,7 @@ mod tests {
                 bootstrap_leader_node,
                 &bootstrap_leader_ledger_path,
                 bootstrap_leader_keypair,
-                Arc::new(vote_signer),
+                Some(Arc::new(vote_signer)),
                 Some(bootstrap_leader_info.gossip),
                 false,
                 LeaderScheduler::new(&leader_scheduler_config),
@@ -935,7 +935,7 @@ mod tests {
                 validator_node,
                 &validator_ledger_path,
                 validator_keypair,
-                Arc::new(validator_vote_account_id),
+                Some(Arc::new(validator_vote_account_id)),
                 Some(bootstrap_leader_info.gossip),
                 false,
                 LeaderScheduler::new(&leader_scheduler_config),
@@ -1037,7 +1037,7 @@ mod tests {
             validator_node,
             &validator_ledger_path,
             validator_keypair,
-            Arc::new(vote_signer),
+            Some(Arc::new(vote_signer)),
             Some(leader_gossip),
             false,
             LeaderScheduler::new(&leader_scheduler_config),
