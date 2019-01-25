@@ -13,6 +13,7 @@ pub mod accounts;
 pub mod bank;
 pub mod banking_stage;
 pub mod blob_fetch_stage;
+pub mod blob_store;
 pub mod bloom;
 pub mod broadcast_service;
 #[cfg(feature = "chacha")]

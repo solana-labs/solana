@@ -115,7 +115,7 @@ pub trait LedgerColumnFamilyRaw {
     fn db(&self) -> &Arc<DB>;
 }
 
-#[derive(Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 // The Meta column family
 pub struct SlotMeta {
     // The total number of consecutive blob starting from index 0
@@ -130,7 +130,7 @@ pub struct SlotMeta {
 }
 
 impl SlotMeta {
-    fn new() -> Self {
+    pub fn new() -> Self {
         SlotMeta {
             consumed: 0,
             received: 0,
