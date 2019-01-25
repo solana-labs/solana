@@ -208,9 +208,9 @@ impl BankCheckpoint {
             fork_id: AtomicUsize::new(fork_id as usize),
         }
     }
-    /// consume the checkpoint into the trunk state
-    /// self becomes the new trunk and its fork_id is updated
-    pub fn merge_into_trunk(&self, other: Self) {
+    /// consume the checkpoint into the root state
+    /// self becomes the new root and its fork_id is updated
+    pub fn merge_into_root(&self, other: Self) {
         let (accounts, entry_q, status_cache, fork_id) = {
             (
                 other.accounts,
@@ -219,15 +219,15 @@ impl BankCheckpoint {
                 other.fork_id,
             )
         };
-        self.accounts.merge_into_trunk(accounts);
+        self.accounts.merge_into_root(accounts);
         self.entry_q
             .write()
             .unwrap()
-            .merge_into_trunk(entry_q.into_inner().unwrap());
+            .merge_into_root(entry_q.into_inner().unwrap());
         self.status_cache
             .write()
             .unwrap()
-            .merge_into_trunk(status_cache.into_inner().unwrap());
+            .merge_into_root(status_cache.into_inner().unwrap());
         self.fork_id
             .store(fork_id.load(Ordering::Relaxed), Ordering::Relaxed);
     }

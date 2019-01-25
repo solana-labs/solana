@@ -321,7 +321,7 @@ impl LeaderScheduler {
         let lower_bound = height.saturating_sub(self.active_window_length);
 
         {
-            let state = bank.trunk_fork();
+            let state = bank.root_bank_state();
             let accounts = state.head().accounts.accounts_db.read().unwrap();
 
             // TODO: iterate through checkpoints, too

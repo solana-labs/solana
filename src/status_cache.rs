@@ -16,7 +16,7 @@ pub struct StatusCache {
     /// failures
     failures: FailureMap<BankError>,
 
-    /// Merges are empty unless this is the trunk checkpoint which cannot be unrolled
+    /// Merges are empty unless this is the root checkpoint which cannot be unrolled
     merges: VecDeque<StatusCache>,
 }
 
@@ -27,7 +27,7 @@ impl StatusCache {
             .map(|i| last_id.hash_at_index(i))
             .collect();
         Self {
-            signatures: Bloom::new(38340234, keys),
+            signatures: Bloom::new(38_340_234, keys),
             failures: HashMap::new(),
             merges: VecDeque::new(),
         }
@@ -38,7 +38,7 @@ impl StatusCache {
                 return true;
             }
         }
-        return false;
+        false
     }
     /// test if a signature is known
     pub fn has_signature(&self, sig: &Signature) -> bool {
@@ -47,7 +47,7 @@ impl StatusCache {
     /// add a signature
     pub fn add(&mut self, sig: &Signature) {
         // any mutable cache is "live" and should not be merged into
-        // since it cannot be a valid trunk checkpoint
+        // since it cannot be a valid root checkpoint
         assert!(self.merges.is_empty());
 
         self.signatures.add(&sig)
@@ -56,7 +56,7 @@ impl StatusCache {
     pub fn save_failure_status(&mut self, sig: &Signature, err: BankError) {
         assert!(self.has_signature(sig), "sig not found with err {:?}", err);
         // any mutable cache is "live" and should not be merged into
-        // since it cannot be a valid trunk checkpoint
+        // since it cannot be a valid root checkpoint
         assert!(self.merges.is_empty());
         self.failures.insert(*sig, err);
     }
@@ -84,8 +84,8 @@ impl StatusCache {
     /// like accounts, status cache starts with an new data structure for every checkpoint
     /// so only merge is implemented
     /// but the merges maintains a history
-    pub fn merge_into_trunk(&mut self, other: Self) {
-        // merges should be empty for every other checkpoint accept the trunk
+    pub fn merge_into_root(&mut self, other: Self) {
+        // merges should be empty for every other checkpoint accept the root
         // which cannot be rolled back
         assert!(other.merges.is_empty());
         self.merges.push_front(other);
@@ -172,7 +172,7 @@ mod tests {
         assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
         let last_id = hash(last_id.as_ref());
         let second = StatusCache::new(&last_id);
-        first.merge_into_trunk(second);
+        first.merge_into_root(second);
         assert_eq!(first.get_signature_status(&sig), Some(Ok(())),);
         assert!(first.has_signature(&sig));
     }
@@ -186,7 +186,7 @@ mod tests {
         assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
         let last_id = hash(last_id.as_ref());
         let mut second = StatusCache::new(&last_id);
-        second.merge_into_trunk(first);
+        second.merge_into_root(first);
         assert_eq!(second.get_signature_status(&sig), Some(Ok(())),);
         assert!(second.has_signature(&sig));
     }

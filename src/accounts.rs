@@ -380,8 +380,8 @@ impl Accounts {
         self.accounts_db.read().unwrap().transaction_count()
     }
     /// accounts starts with an empty data structure for every fork
-    /// self is trunk, merge the fork into self
-    pub fn merge_into_trunk(&self, other: Self) {
+    /// self is root, merge the fork into self
+    pub fn merge_into_root(&self, other: Self) {
         assert!(other.account_locks.lock().unwrap().is_empty());
         let db = other.accounts_db.into_inner().unwrap();
         let mut mydb = self.accounts_db.write().unwrap();

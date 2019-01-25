@@ -131,20 +131,22 @@ impl Default for Bank {
 
 impl Bank {
     /// Create an Bank using a deposit.
-    fn new_from_deposits(deposits: &[Payment], trunk: u64, last_id: &Hash) -> Self {
+    fn new_from_deposits(deposits: &[Payment], root: u64, last_id: &Hash) -> Self {
         let bank = Self::default();
         let accounts: Vec<_> = deposits
             .iter()
             .map(|deposit| {
-                let mut account = Account::default();
-                account.tokens += deposit.tokens;
+                let account = Account::new(deposit.tokens, 0, Default::default());
                 (deposit.to, account)
             })
             .collect();
-        let bank_checkpoint = BankCheckpoint::new_from_accounts(trunk, &accounts, last_id);
+        let bank_checkpoint = BankCheckpoint::new_from_accounts(root, &accounts, last_id);
 
         bank_checkpoint.register_tick(last_id);
-        bank.forks.write().unwrap().init_trunk_fork(bank_checkpoint);
+        bank.forks
+            .write()
+            .unwrap()
+            .init_root_bank_state(bank_checkpoint);
         bank.add_builtin_programs();
         bank
     }
@@ -188,8 +190,8 @@ impl Bank {
             .unwrap()
             .init_fork(current, last_id, base)
     }
-    fn live_fork(&self) -> BankState {
-        self.forks.read().unwrap().live_fork()
+    fn live_bank_state(&self) -> BankState {
+        self.forks.read().unwrap().live_bank_state()
     }
 
     fn add_system_program(&self) {
@@ -200,9 +202,11 @@ impl Bank {
             executable: true,
             loader: solana_native_loader::id(),
         };
-        self.live_fork()
-            .head()
-            .store_slow(false, &system_program::id(), &system_program_account);
+        self.live_bank_state().head().store_slow(
+            false,
+            &system_program::id(),
+            &system_program_account,
+        );
     }
 
     fn add_builtin_programs(&self) {
@@ -216,7 +220,7 @@ impl Bank {
             executable: true,
             loader: solana_native_loader::id(),
         };
-        self.live_fork()
+        self.live_bank_state()
             .head()
             .store_slow(false, &vote_program::id(), &vote_program_account);
 
@@ -228,9 +232,11 @@ impl Bank {
             executable: true,
             loader: solana_native_loader::id(),
         };
-        self.live_fork()
-            .head()
-            .store_slow(false, &storage_program::id(), &storage_program_account);
+        self.live_bank_state().head().store_slow(
+            false,
+            &storage_program::id(),
+            &storage_program_account,
+        );
 
         let storage_system_account = Account {
             tokens: 1,
@@ -239,7 +245,7 @@ impl Bank {
             executable: false,
             loader: Pubkey::default(),
         };
-        self.live_fork().head().store_slow(
+        self.live_bank_state().head().store_slow(
             false,
             &storage_program::system_id(),
             &storage_system_account,
@@ -254,7 +260,7 @@ impl Bank {
             loader: solana_native_loader::id(),
         };
 
-        self.live_fork()
+        self.live_bank_state()
             .head()
             .store_slow(false, &bpf_loader::id(), &bpf_loader_account);
 
@@ -266,9 +272,11 @@ impl Bank {
             executable: true,
             loader: solana_native_loader::id(),
         };
-        self.live_fork()
-            .head()
-            .store_slow(false, &budget_program::id(), &budget_program_account);
+        self.live_bank_state().head().store_slow(
+            false,
+            &budget_program::id(),
+            &budget_program_account,
+        );
 
         // Erc20 token program
         let erc20_account = Account {
@@ -279,18 +287,18 @@ impl Bank {
             loader: solana_native_loader::id(),
         };
 
-        self.live_fork()
+        self.live_bank_state()
             .head()
             .store_slow(false, &token_program::id(), &erc20_account);
     }
 
     pub fn tpu_register_tick(&self, last_id: &Hash) {
-        self.live_fork().head().register_tick(last_id)
+        self.live_bank_state().head().register_tick(last_id)
     }
 
     /// Return the last entry ID registered.
     pub fn last_id(&self) -> Hash {
-        self.live_fork().head().last_id()
+        self.live_bank_state().head().last_id()
     }
 
     pub fn get_pubkeys_for_entry_height(&self, entry_height: u64) -> Vec<Pubkey> {
@@ -331,7 +339,7 @@ impl Bank {
     /// Return a vec of tuple of (valid index, timestamp)
     /// index is into the passed ids slice to avoid copying hashes
     pub fn count_valid_ids(&self, ids: &[Hash]) -> Vec<(usize, u64)> {
-        self.live_fork().head().count_valid_ids(ids)
+        self.live_bank_state().head().count_valid_ids(ids)
     }
 
     /// Looks through a list of tick heights and stakes, and finds the latest
@@ -341,12 +349,12 @@ impl Bank {
         ticks_and_stakes: &mut [(u64, u64)],
         supermajority_stake: u64,
     ) -> Option<u64> {
-        self.live_fork()
+        self.live_bank_state()
             .head()
             .get_confirmation_timestamp(ticks_and_stakes, supermajority_stake)
     }
     pub fn tick_height(&self) -> u64 {
-        self.live_fork().head().tick_height()
+        self.live_bank_state().head().tick_height()
     }
 
     /// Process a Transaction. This is used for unit tests and simply calls the vector Bank::process_transactions method.
@@ -361,8 +369,8 @@ impl Bank {
         }
     }
 
-    pub fn trunk_fork(&self) -> BankState {
-        self.forks.read().unwrap().trunk_fork()
+    pub fn root_bank_state(&self) -> BankState {
+        self.forks.read().unwrap().root_bank_state()
     }
 
     pub fn bank_state(&self, fork: u64) -> Option<BankState> {
@@ -375,7 +383,7 @@ impl Bank {
         txs: &[Transaction],
         poh: Option<&PohRecorder>,
     ) -> Result<(Vec<Result<()>>)> {
-        let state = self.forks.read().unwrap().live_fork();
+        let state = self.forks.read().unwrap().live_bank_state();
         //TODO: pass the pubsub to process_and_record
         state.process_and_record_transactions(txs, poh)
     }
@@ -387,7 +395,7 @@ impl Bank {
 
     /// Process an ordered list of entries.
     pub fn process_entries(&self, entries: &[Entry]) -> Result<()> {
-        let state = self.forks.read().unwrap().live_fork();
+        let state = self.forks.read().unwrap().live_bank_state();
         state.par_process_entries(entries)
     }
 
@@ -434,7 +442,7 @@ impl Bank {
 
             if !self.forks.read().unwrap().is_active_fork(current) {
                 let new = current;
-                let base = self.forks.read().unwrap().live_fork;
+                let base = self.forks.read().unwrap().live_bank_state;
                 // create a new fork
                 self.init_fork(new, &block[0].id, base)
                     .expect("initializing fork for replay");
@@ -442,8 +450,8 @@ impl Bank {
                 self.forks
                     .write()
                     .unwrap()
-                    .merge_into_trunk(base, new)
-                    .expect("merge into trunk");
+                    .merge_into_root(base, new)
+                    .expect("merge into root");
             } else {
                 // only the first fork should be active at the start of the loop
                 // every block should be unique otherwise
@@ -474,7 +482,7 @@ impl Bank {
         self.forks
             .write()
             .unwrap()
-            .init_trunk_fork(BankCheckpoint::new(0, &entry0.id));
+            .init_root_bank_state(BankCheckpoint::new(0, &entry0.id));
 
         self.add_builtin_programs();
 
@@ -521,7 +529,7 @@ impl Bank {
                 // 1) Deposit into the mint
                 let mut account = self.get_account(&tx.account_keys[0]).unwrap_or_default();
                 account.tokens += mint_deposit - leader_payment;
-                self.live_fork()
+                self.live_bank_state()
                     .head()
                     .store_slow(false, &tx.account_keys[0], &account);
                 trace!(
@@ -538,7 +546,7 @@ impl Bank {
                 let bootstrap_leader_id = tx.account_keys[2];
                 let mut account = self.get_account(&bootstrap_leader_id).unwrap_or_default();
                 account.tokens += leader_payment;
-                self.live_fork()
+                self.live_bank_state()
                     .head()
                     .store_slow(false, &bootstrap_leader_id, &account);
 
@@ -587,32 +595,32 @@ impl Bank {
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
-        let state = self.live_fork();
+        let state = self.live_bank_state();
         state.load_slow(pubkey)
     }
 
     pub fn store_slow(&self, pubkey: &Pubkey, account: &Account) {
-        let state = self.live_fork();
+        let state = self.live_bank_state();
         let purge = state.checkpoints.len() == 1;
         state.head().store_slow(purge, pubkey, account)
     }
     pub fn transaction_count(&self) -> u64 {
-        self.live_fork().head().transaction_count()
+        self.live_bank_state().head().transaction_count()
     }
 
     pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
-        self.live_fork().get_signature_status(signature)
+        self.live_bank_state().get_signature_status(signature)
     }
 
     pub fn has_signature(&self, signature: &Signature) -> bool {
-        self.live_fork().has_signature(signature)
+        self.live_bank_state().has_signature(signature)
     }
 
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
     ///  of the delta of the ledger since the last vote and up to now
     pub fn hash_internal_state(&self) -> Hash {
         //TODO: this probably needs to iterate the checkpoints and update a merkle
-        self.live_fork().head().hash_internal_state()
+        self.live_bank_state().head().hash_internal_state()
     }
 
     pub fn confirmation_time(&self) -> usize {
@@ -1442,7 +1450,7 @@ mod tests {
         bank.transfer(500, &alice.keypair(), bob.pubkey(), alice.last_id())
             .unwrap();
         assert_eq!(bank.get_balance(&bob.pubkey()), 500);
-        assert_eq!(bank.live_fork().checkpoint_depth(), 1);
+        assert_eq!(bank.live_bank_state().checkpoint_depth(), 1);
 
         let account = bank.get_account(&alice.pubkey()).unwrap();
         let default_account = Account::default();
@@ -1451,13 +1459,13 @@ mod tests {
         assert_eq!(account.executable, default_account.executable);
         assert_eq!(account.loader, default_account.loader);
 
-        let base = bank.live_fork().head().fork_id();
+        let base = bank.live_bank_state().head().fork_id();
         let last_id = hash(alice.last_id().as_ref());
-        bank.live_fork().head().finalize();
+        bank.live_bank_state().head().finalize();
         assert_eq!(bank.init_fork(base + 1, &alice.last_id(), base), Ok(()));
-        assert_eq!(bank.live_fork().head().fork_id(), base + 1);
-        bank.live_fork().head().register_tick(&last_id);
-        assert_eq!(bank.live_fork().checkpoint_depth(), 2);
+        assert_eq!(bank.live_bank_state().head().fork_id(), base + 1);
+        bank.live_bank_state().head().register_tick(&last_id);
+        assert_eq!(bank.live_bank_state().checkpoint_depth(), 2);
 
         // charlie should have 500, alice should have 0
         bank.transfer(500, &alice.keypair(), charlie.pubkey(), alice.last_id())

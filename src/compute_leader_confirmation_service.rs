@@ -38,8 +38,8 @@ impl ComputeLeaderConfirmationService {
 
         // Hold an accounts_db read lock as briefly as possible, just long enough to collect all
         // the vote states
-        // TODO: do we use trunk or live fork here?
-        let state = bank.trunk_fork();
+        // TODO: do we use root or live fork here?
+        let state = bank.root_bank_state();
         let accounts = state.head().accounts.accounts_db.read().unwrap();
         let vote_states: Vec<VoteProgram> = accounts
             .accounts

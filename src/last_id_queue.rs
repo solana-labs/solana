@@ -140,7 +140,7 @@ impl LastIdQueue {
         }
     }
     /// merge for entryq is a swap
-    pub fn merge_into_trunk(&mut self, other: Self) {
+    pub fn merge_into_root(&mut self, other: Self) {
         let (entries, tick_height, last_id) = { (other.entries, other.tick_height, other.last_id) };
         self.entries = entries;
         self.tick_height = tick_height;
@@ -207,7 +207,7 @@ mod tests {
         assert!(!first.check_entry(last_id));
         let mut second = first.fork();
         second.register_tick(&last_id);
-        first.merge_into_trunk(second);
+        first.merge_into_root(second);
         assert!(first.check_entry(last_id));
     }
 }
