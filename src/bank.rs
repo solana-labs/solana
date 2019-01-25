@@ -1507,6 +1507,62 @@ mod tests {
         assert_eq!(entries[0].transactions.len(), transactions.len() - 1);
     }
 
+    #[test]
+    fn test_bank_process_and_record_transactions() {
+        let mint = Mint::new(10_000);
+        let bank = Arc::new(Bank::new(&mint));
+        let pubkey = Keypair::new().pubkey();
+
+        let transactions = vec![Transaction::system_move(
+            &mint.keypair(),
+            pubkey,
+            1,
+            mint.last_id(),
+            0,
+        )];
+
+        let (entry_sender, entry_receiver) = channel();
+        let mut poh_recorder = PohRecorder::new(
+            bank.clone(),
+            entry_sender,
+            bank.last_id(),
+            Some(bank.tick_height() + 1),
+        );
+
+        bank.process_and_record_transactions(&transactions, Some(&poh_recorder))
+            .unwrap();
+        poh_recorder.tick().unwrap();
+
+        let mut need_tick = true;
+        // read entries until I find mine, might be ticks...
+        while need_tick {
+            let entries = entry_receiver.recv().unwrap();
+            for entry in entries {
+                if !entry.is_tick() {
+                    assert_eq!(entry.transactions.len(), transactions.len());
+                    assert_eq!(bank.get_balance(&pubkey), 1);
+                } else {
+                    need_tick = false;
+                }
+            }
+        }
+
+        let transactions = vec![Transaction::system_move(
+            &mint.keypair(),
+            pubkey,
+            2,
+            mint.last_id(),
+            0,
+        )];
+
+        assert_eq!(
+            bank.process_and_record_transactions(&transactions, Some(&poh_recorder)),
+            Err(BankError::RecordFailure)
+        );
+
+        assert_eq!(bank.get_balance(&pubkey), 1);
+    }
+
     // #[test]
     // fn test_bank_storage() {
     //      solana_logger::setup();
