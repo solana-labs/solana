@@ -45,15 +45,30 @@ pub fn serialize_vec_with<T>(
     Ok(())
 }
 
+pub fn serialize_vec_bytes<W: Write>(mut writer: W, input: &[u8]) -> Result<(), Error> {
+    let len = input.len();
+    encode_len(&mut writer, len)?;
+    writer.write_all(input)?;
+    Ok(())
+}
+
 pub fn serialize_vec<W: Write, T>(mut writer: W, input: &[T]) -> Result<(), Error>
 where
     T: Serialize,
 {
-    encode_len(&mut writer, input.len())?;
+    let len = input.len();
+    encode_len(&mut writer, len)?;
     input
         .iter()
         .for_each(|e| serialize_into(&mut writer, &e).unwrap());
     Ok(())
+}
+
+pub fn deserialize_vec_bytes<R: Read>(mut reader: &mut R) -> Result<Vec<u8>, Error> {
+    let vec_len = decode_len(&mut reader)?;
+    let mut buf = vec![0; vec_len];
+    reader.read_exact(&mut buf[..])?;
+    Ok(buf)
 }
 
 pub fn deserialize_vec<R: Read, T>(mut reader: &mut R) -> Result<Vec<T>, Error>
@@ -186,12 +201,12 @@ mod tests {
         let vec: Vec<u8> = vec![4; 32];
         let mut buf = vec![0u8; serialized_size(&vec).unwrap() as usize + 1];
         let mut wr = Cursor::new(&mut buf[..]);
-        serialize_vec(&mut wr, &vec).unwrap();
+        serialize_vec_bytes(&mut wr, &vec).unwrap();
         let size = wr.position() as usize;
         let ser = &wr.into_inner()[..size];
         assert_eq!(ser.len(), vec.len() + 1);
         let mut rd = Cursor::new(&ser[..]);
-        let deser: Vec<u8> = deserialize_vec(&mut rd).unwrap();
+        let deser: Vec<u8> = deserialize_vec_bytes(&mut rd).unwrap();
         assert_eq!(vec, deser);
     }
 

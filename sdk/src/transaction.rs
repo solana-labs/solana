@@ -4,13 +4,15 @@ use crate::hash::{Hash, Hasher};
 use crate::packet::PACKET_DATA_SIZE;
 use crate::pubkey::Pubkey;
 use crate::shortvec::{
-    deserialize_vec, deserialize_vec_with, encode_len, serialize_vec, serialize_vec_with,
+    deserialize_vec_bytes, deserialize_vec_with, encode_len, serialize_vec_bytes,
+    serialize_vec_with,
 };
 use crate::signature::{Keypair, KeypairUtil, Signature};
-use bincode::{deserialize_from, serialize, serialize_into, Error};
+use bincode::{serialize, Error};
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use serde::{Deserialize, Serialize, Serializer};
 use std::fmt;
-use std::io::Cursor;
+use std::io::{Cursor, Read, Write};
 use std::mem::size_of;
 
 /// An instruction to execute a program
@@ -38,16 +40,18 @@ impl Instruction {
         mut writer: &mut Cursor<&mut [u8]>,
         ix: &Instruction,
     ) -> Result<(), Error> {
-        serialize_into(&mut writer, &ix.program_ids_index)?;
-        serialize_vec(&mut writer, &ix.accounts)?;
-        serialize_vec(&mut writer, &ix.userdata)?;
+        writer.write_all(&[ix.program_ids_index])?;
+        serialize_vec_bytes(&mut writer, &ix.accounts[..])?;
+        serialize_vec_bytes(&mut writer, &ix.userdata[..])?;
         Ok(())
     }
 
     pub fn deserialize_from(mut reader: &mut Cursor<&[u8]>) -> Result<Self, Error> {
-        let program_ids_index: u8 = deserialize_from(&mut reader)?;
-        let accounts: Vec<u8> = deserialize_vec(&mut reader)?;
-        let userdata: Vec<u8> = deserialize_vec(&mut reader)?;
+        let mut buf = [0];
+        reader.read_exact(&mut buf)?;
+        let program_ids_index = buf[0];
+        let accounts = deserialize_vec_bytes(&mut reader)?;
+        let userdata = deserialize_vec_bytes(&mut reader)?;
         Ok(Instruction {
             program_ids_index,
             accounts,
@@ -192,10 +196,14 @@ impl Transaction {
     pub fn get_sign_data(&self) -> Vec<u8> {
         let mut buf = vec![0u8; PACKET_DATA_SIZE];
         let mut wr = Cursor::new(&mut buf[..]);
-        serialize_vec(&mut wr, &self.account_keys).expect("serialize account_keys");
-        serialize_into(&mut wr, &self.last_id).expect("serialize last_id");
-        serialize_into(&mut wr, &self.fee).expect("serialize fee");
-        serialize_vec(&mut wr, &self.program_ids).expect("serialize program_ids");
+        serialize_vec_with(&mut wr, &self.account_keys, Transaction::serialize_pubkey)
+            .expect("serialize account_keys");
+        wr.write_all(self.last_id.as_ref())
+            .expect("serialize last_id");
+        wr.write_u64::<LittleEndian>(self.fee)
+            .expect("serialize fee");
+        serialize_vec_with(&mut wr, &self.program_ids, Transaction::serialize_pubkey)
+            .expect("serialize program_ids");
         serialize_vec_with(&mut wr, &self.instructions, Instruction::serialize_with)
             .expect("serialize instructions");
         let len = wr.position() as usize;
@@ -281,6 +289,28 @@ impl Transaction {
             .sum();
         Ok(size as u64 + inst_size)
     }
+
+    fn serialize_signature(writer: &mut Cursor<&mut [u8]>, sig: &Signature) -> Result<(), Error> {
+        writer.write_all(sig.as_ref())?;
+        Ok(())
+    }
+
+    fn serialize_pubkey(writer: &mut Cursor<&mut [u8]>, key: &Pubkey) -> Result<(), Error> {
+        writer.write_all(key.as_ref())?;
+        Ok(())
+    }
+
+    fn deserialize_signature(reader: &mut Cursor<&[u8]>) -> Result<Signature, Error> {
+        let mut buf = [0; size_of::<Signature>()];
+        reader.read_exact(&mut buf)?;
+        Ok(Signature::new(&buf))
+    }
+
+    fn deserialize_pubkey(reader: &mut Cursor<&[u8]>) -> Result<Pubkey, Error> {
+        let mut buf = [0; size_of::<Pubkey>()];
+        reader.read_exact(&mut buf)?;
+        Ok(Pubkey::new(&buf))
+    }
 }
 
 impl Serialize for Transaction {
@@ -291,11 +321,15 @@ impl Serialize for Transaction {
         use serde::ser::Error;
         let mut buf = vec![0u8; self.serialized_size().unwrap() as usize];
         let mut wr = Cursor::new(&mut buf[..]);
-        serialize_vec(&mut wr, &self.signatures).map_err(Error::custom)?;
-        serialize_vec(&mut wr, &self.account_keys).map_err(Error::custom)?;
-        serialize_into(&mut wr, &self.last_id).map_err(Error::custom)?;
-        serialize_into(&mut wr, &self.fee).map_err(Error::custom)?;
-        serialize_vec(&mut wr, &self.program_ids).map_err(Error::custom)?;
+        serialize_vec_with(&mut wr, &self.signatures, Transaction::serialize_signature)
+            .map_err(Error::custom)?;
+        serialize_vec_with(&mut wr, &self.account_keys, Transaction::serialize_pubkey)
+            .map_err(Error::custom)?;
+        wr.write_all(self.last_id.as_ref()).map_err(Error::custom)?;
+        wr.write_u64::<LittleEndian>(self.fee)
+            .map_err(Error::custom)?;
+        serialize_vec_with(&mut wr, &self.program_ids, Transaction::serialize_pubkey)
+            .map_err(Error::custom)?;
         serialize_vec_with(&mut wr, &self.instructions, Instruction::serialize_with)
             .map_err(Error::custom)?;
         let size = wr.position() as usize;
@@ -316,11 +350,19 @@ impl<'a> serde::de::Visitor<'a> for TransactionVisitor {
     {
         use serde::de::Error;
         let mut rd = Cursor::new(&data[..]);
-        let signatures: Vec<Signature> = deserialize_vec(&mut rd).map_err(Error::custom)?;
-        let account_keys: Vec<Pubkey> = deserialize_vec(&mut rd).map_err(Error::custom)?;
-        let last_id: Hash = deserialize_from(&mut rd).map_err(Error::custom)?;
-        let fee: u64 = deserialize_from(&mut rd).map_err(Error::custom)?;
-        let program_ids: Vec<Pubkey> = deserialize_vec(&mut rd).map_err(Error::custom)?;
+        let signatures: Vec<Signature> =
+            deserialize_vec_with(&mut rd, Transaction::deserialize_signature)
+                .map_err(Error::custom)?;
+        let account_keys: Vec<Pubkey> =
+            deserialize_vec_with(&mut rd, Transaction::deserialize_pubkey)
+                .map_err(Error::custom)?;
+        let mut buf = [0; size_of::<Hash>()];
+        rd.read_exact(&mut buf).map_err(Error::custom)?;
+        let last_id: Hash = Hash::new(&buf);
+        let fee = rd.read_u64::<LittleEndian>().map_err(Error::custom)?;
+        let program_ids: Vec<Pubkey> =
+            deserialize_vec_with(&mut rd, Transaction::deserialize_pubkey)
+                .map_err(Error::custom)?;
         let instructions: Vec<Instruction> =
             deserialize_vec_with(&mut rd, Instruction::deserialize_from).map_err(Error::custom)?;
         Ok(Transaction {

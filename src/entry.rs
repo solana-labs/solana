@@ -96,7 +96,7 @@ impl Entry {
             }
         };
 
-        let size = serialized_size(&entry).unwrap();
+        let size = Entry::serialized_size(&entry.transactions[..]);
         if size > BLOB_DATA_SIZE as u64 {
             panic!(
                 "Serialized entry size too large: {} ({} transactions):",

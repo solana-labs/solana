@@ -9,7 +9,7 @@ use crate::gossip_service::GossipService;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::result::{Error, Result};
 use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
-use bincode::serialize;
+use bincode::serialize_into;
 use bs58;
 use hashbrown::HashMap;
 use log::Level;
@@ -94,10 +94,12 @@ impl ThinClient {
     /// Send a signed Transaction to the server for processing. This method
     /// does not wait for a response.
     pub fn transfer_signed(&self, tx: &Transaction) -> io::Result<Signature> {
-        let data = serialize(&tx).expect("serialize Transaction in pub fn transfer_signed");
-        assert!(data.len() < PACKET_DATA_SIZE);
+        let mut buf = vec![0; tx.serialized_size().unwrap() as usize];
+        let mut wr = std::io::Cursor::new(&mut buf[..]);
+        serialize_into(&mut wr, &tx).expect("serialize Transaction in pub fn transfer_signed");
+        assert!(buf.len() < PACKET_DATA_SIZE);
         self.transactions_socket
-            .send_to(&data, &self.transactions_addr)?;
+            .send_to(&buf[..], &self.transactions_addr)?;
         Ok(tx.signatures[0])
     }
 
@@ -110,9 +112,11 @@ impl ThinClient {
     ) -> io::Result<Signature> {
         for x in 0..tries {
             tx.sign(&[&keypair], self.get_last_id());
-            let data = serialize(&tx).expect("serialize Transaction in pub fn transfer_signed");
+            let mut buf = vec![0; tx.serialized_size().unwrap() as usize];
+            let mut wr = std::io::Cursor::new(&mut buf[..]);
+            serialize_into(&mut wr, &tx).expect("serialize Transaction in pub fn transfer_signed");
             self.transactions_socket
-                .send_to(&data, &self.transactions_addr)?;
+                .send_to(&buf[..], &self.transactions_addr)?;
             if self.poll_for_signature(&tx.signatures[0]).is_ok() {
                 return Ok(tx.signatures[0]);
             }
@@ -443,7 +447,7 @@ mod tests {
     use crate::mint::Mint;
     use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
     use crate::vote_signer_proxy::VoteSignerProxy;
-    use bincode::deserialize;
+    use bincode::{deserialize, serialize};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::vote_program::VoteProgram;
