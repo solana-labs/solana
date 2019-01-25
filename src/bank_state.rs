@@ -1,7 +1,6 @@
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::bank::{BankError, Result};
 use crate::counter::Counter;
-use solana_sdk::native_program::ProgramError;
 use crate::entry::Entry;
 use crate::last_id_queue::{LastIdQueue, MAX_ENTRY_IDS};
 use crate::leader_scheduler::TICKS_PER_BLOCK;
@@ -141,19 +140,19 @@ impl BankCheckpoint {
         &self,
         txs: &[Transaction],
         max_age: usize,
-        results: Vec<Result<()>>,
+        results: &[Result<()>],
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
         let entry_q = self.entry_q.read().unwrap();
         txs.iter()
-            .zip(results.into_iter())
+            .zip(results.iter())
             .map(|etx| match etx {
                 (tx, Ok(())) if entry_q.check_entry_id_age(tx.last_id, max_age) => Ok(()),
                 (_, Ok(())) => {
                     error_counters.last_id_too_old += 1;
                     Err(BankError::LastIdNotFound)
                 }
-                (_, Err(e)) => Err(e),
+                (_, Err(e)) => Err(e.clone()),
             })
             .collect()
     }
@@ -283,7 +282,7 @@ impl BankState {
     fn load_and_execute_transactions(
         &self,
         txs: &[Transaction],
-        lock_results: Vec<Result<()>>,
+        lock_results: &[Result<()>],
         max_age: usize,
     ) -> (
         Vec<Result<(InstructionAccounts, InstructionLoaders)>>,
@@ -405,17 +404,20 @@ impl BankState {
 
     /// Process a batch of transactions.
     #[must_use]
-    pub fn load_execute_and_commit_transactions(
+    pub fn load_execute_record_commit(
         &self,
         txs: &[Transaction],
-        lock_results: Vec<Result<()>>,
+        recorder: Option<&PohRecorder>,
+        lock_results: &[Result<()>],
         max_age: usize,
-    ) -> Vec<Result<()>> {
+    ) -> Result<Vec<Result<()>>> {
         let (loaded_accounts, executed) =
             self.load_and_execute_transactions(txs, lock_results, max_age);
-
+        if let Some(poh) = recorder {
+            Self::record_transactions(txs, &executed, poh)?;
+        }
         self.commit_transactions(txs, &loaded_accounts, &executed);
-        executed
+        Ok(executed)
     }
 
     pub fn process_and_record_transactions(
@@ -435,38 +437,26 @@ impl BankState {
         // the likelihood of any single thread getting starved and processing old ids.
         // TODO: Banking stage threads should be prioritized to complete faster then this queue
         // expires.
-        let (loaded_accounts, results) =
-            self.load_and_execute_transactions(txs, lock_results, MAX_ENTRY_IDS as usize / 2);
-        let load_execute_time = now.elapsed();
-
-        let record_time = {
-            let now = Instant::now();
-            if let Some(poh) = recorder {
-                Self::record_transactions(txs, &results, poh)?;
-            }
-            now.elapsed()
-        };
-
-        let commit_time = {
-            let now = Instant::now();
-            self.commit_transactions(txs, &loaded_accounts, &results);
-            now.elapsed()
-        };
+        let results = self.load_execute_record_commit(
+            txs,
+            recorder,
+            &lock_results,
+            MAX_ENTRY_IDS as usize / 2,
+        );
+        let lerc_time = now.elapsed();
 
         let now = Instant::now();
         // Once the accounts are new transactions can enter the pipeline to process them
-        head.unlock_accounts(&txs, &results);
+        head.unlock_accounts(&txs, &lock_results);
         let unlock_time = now.elapsed();
         debug!(
-            "lock: {}us load_execute: {}us record: {}us commit: {}us unlock: {}us txs_len: {}",
+            "lock: {}us LERC: {}us unlock: {}us txs_len: {}",
             duration_as_us(&lock_time),
-            duration_as_us(&load_execute_time),
-            duration_as_us(&record_time),
-            duration_as_us(&commit_time),
+            duration_as_us(&lerc_time),
             duration_as_us(&unlock_time),
             txs.len(),
         );
-        Ok(results)
+        results
     }
     fn ignore_program_errors(results: Vec<Result<()>>) -> Vec<Result<()>> {
         results
@@ -482,7 +472,7 @@ impl BankState {
                 _ => result,
             })
             .collect()
-    } 
+    }
     pub fn par_execute_entries(&self, entries: &[(&Entry, Vec<Result<()>>)]) -> Result<()> {
         let head = &self.checkpoints[0];
         inc_new_counter_info!("bank-par_execute_entries-count", entries.len());
@@ -494,13 +484,11 @@ impl BankState {
                 //connect them to the previous fork.  We need a way to identify the fork from the
                 //entry itself, or have that information passed through.
                 assert_eq!(e.tick_height / TICKS_PER_BLOCK, head.fork_id());
-                let results = self.load_execute_and_commit_transactions(
-                    &e.transactions,
-                    locks.to_vec(),
-                    MAX_ENTRY_IDS,
-                );
+                let results = self
+                    .load_execute_record_commit(&e.transactions, None, locks, MAX_ENTRY_IDS)
+                    .expect("no record failures");
                 let results = BankState::ignore_program_errors(results);
-                head.unlock_accounts(&e.transactions, &results);
+                head.unlock_accounts(&e.transactions, &locks);
                 BankCheckpoint::first_err(&results)
             })
             .collect();
@@ -608,6 +596,7 @@ impl BankState {
 #[cfg(test)]
 mod test {
     use super::*;
+    use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::Keypair;
     use solana_sdk::signature::KeypairUtil;
     use solana_sdk::system_program;
@@ -665,8 +654,9 @@ mod test {
 
         let locked_alice = bank.head().lock_accounts(&pay_alice);
         assert!(locked_alice[0].is_ok());
-        let results_alice =
-            bank.load_execute_and_commit_transactions(&pay_alice, locked_alice, MAX_ENTRY_IDS);
+        let results_alice = bank
+            .load_execute_record_commit(&pay_alice, None, &locked_alice, MAX_ENTRY_IDS)
+            .unwrap();
         assert_eq!(results_alice[0], Ok(()));
 
         // try executing an interleaved transfer twice
@@ -681,7 +671,7 @@ mod test {
             Err(BankError::AccountInUse)
         );
 
-        bank.head().unlock_accounts(&pay_alice, &results_alice);
+        bank.head().unlock_accounts(&pay_alice, &locked_alice);
 
         assert_matches!(transfer(&bank, 2, &mint, bob.pubkey(), last_id), Ok(_));
     }
@@ -707,7 +697,7 @@ mod test {
         let updated_results = BankState::ignore_program_errors(results);
         assert_ne!(updated_results, expected_results);
     }
- 
+
     //#[test]
     //fn test_bank_record_transactions() {
     //    let mint = Mint::new(10_000);

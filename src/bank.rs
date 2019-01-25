@@ -401,8 +401,7 @@ impl Bank {
             .ok_or(BankError::UnknownFork)?;
         state.par_process_entries(entries)
     }
-    /// Process an ordered list of entries, populating a circular buffer "tail"
-    /// as we go.
+    /// Process an ordered list of entries
     /// Append entry blocks to the ledger, verifying them along the way.
     fn process_ledger_blocks<I>(
         &self,

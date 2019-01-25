@@ -190,13 +190,13 @@ impl ReplayStage {
         // vote(options.last());
 
         if end_block != start_block {
-                     if let Some(signer) = vote_signer {
-                        if let Some(sender) = vote_blob_sender {
-                            signer
-                                .send_validator_vote(bank, &cluster_info, sender)
-                                .unwrap();
-                        }
-                    } 
+            if let Some(signer) = vote_signer {
+                if let Some(sender) = vote_blob_sender {
+                    signer
+                        .send_validator_vote(bank, &cluster_info, sender)
+                        .unwrap();
+                }
+            }
         }
         let (scheduled_leader, _) = bank
             .get_current_leader()
