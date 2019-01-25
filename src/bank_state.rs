@@ -544,7 +544,7 @@ impl BankState {
         Ok(())
     }
 
-    fn record_transactions(
+    pub fn record_transactions(
         txs: &[Transaction],
         results: &[Result<()>],
         poh: &PohRecorder,
@@ -553,7 +553,7 @@ impl BankState {
             .iter()
             .zip(txs.iter())
             .filter_map(|(r, x)| match r {
-                Ok(_) => Some(x.clone()),
+                Ok(_) | Err(BankError::ProgramError(_, _)) => Some(x.clone()),
                 Err(ref e) => {
                     debug!("process transaction failed {:?}", e);
                     None
@@ -698,43 +698,6 @@ mod test {
         assert_ne!(updated_results, expected_results);
     }
 
-    //#[test]
-    //fn test_bank_record_transactions() {
-    //    let mint = Mint::new(10_000);
-    //    let bank = Arc::new(Bank::new(&mint));
-    //    let (entry_sender, entry_receiver) = channel();
-    //    let poh_recorder = PohRecorder::new(bank.clone(), entry_sender, bank.last_id(), None);
-    //    let pubkey = Keypair::new().pubkey();
-
-    //    let transactions = vec![
-    //        Transaction::system_move(&mint.keypair(), pubkey, 1, mint.last_id(), 0),
-    //        Transaction::system_move(&mint.keypair(), pubkey, 1, mint.last_id(), 0),
-    //    ];
-
-    //    let mut results = vec![Ok(()), Ok(())];
-    //    BankStater::record_transactions(&transactions, &results, &poh_recorder)
-    //        .unwrap();
-    //    let entries = entry_receiver.recv().unwrap();
-    //    assert_eq!(entries[0].transactions.len(), transactions.len());
-
-    //    // ProgramErrors should still be recorded
-    //    results[0] = Err(BankError::ProgramError(
-    //        1,
-    //        ProgramError::ResultWithNegativeTokens,
-    //    ));
-    //    BankState::record_transactions(&transactions, &results, &poh_recorder)
-    //        .unwrap();
-    //    let entries = entry_receiver.recv().unwrap();
-    //    assert_eq!(entries[0].transactions.len(), transactions.len());
-
-    //    // Other BankErrors should not be recorded
-    //    results[0] = Err(BankError::AccountNotFound);
-    //    BankState::record_transactions(&transactions, &results, &poh_recorder)
-    //        .unwrap();
-    //    let entries = entry_receiver.recv().unwrap();
-    //    assert_eq!(entries[0].transactions.len(), transactions.len() - 1);
-    //}
-    //
     // #[test]
     // fn test_bank_process_and_record_transactions() {
     //     let mint = Mint::new(10_000);

@@ -649,7 +649,7 @@ mod tests {
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Instruction;
     use std;
-    //use std::sync::mpsc::channel;
+    use std::sync::mpsc::channel;
     //use tokio::prelude::{Stream, Async};
 
     #[test]
@@ -1471,6 +1471,40 @@ mod tests {
         assert_eq!(account.owner, default_account.owner);
         assert_eq!(account.executable, default_account.executable);
         assert_eq!(account.loader, default_account.loader);
+    }
+
+    #[test]
+    fn test_bank_record_transactions() {
+        let mint = Mint::new(10_000);
+        let bank = Arc::new(Bank::new(&mint));
+        let (entry_sender, entry_receiver) = channel();
+        let poh_recorder = PohRecorder::new(bank.clone(), entry_sender, bank.last_id(), None);
+        let pubkey = Keypair::new().pubkey();
+
+        let transactions = vec![
+            Transaction::system_move(&mint.keypair(), pubkey, 1, mint.last_id(), 0),
+            Transaction::system_move(&mint.keypair(), pubkey, 1, mint.last_id(), 0),
+        ];
+
+        let mut results = vec![Ok(()), Ok(())];
+        BankState::record_transactions(&transactions, &results, &poh_recorder).unwrap();
+        let entries = entry_receiver.recv().unwrap();
+        assert_eq!(entries[0].transactions.len(), transactions.len());
+
+        // ProgramErrors should still be recorded
+        results[0] = Err(BankError::ProgramError(
+            1,
+            ProgramError::ResultWithNegativeTokens,
+        ));
+        BankState::record_transactions(&transactions, &results, &poh_recorder).unwrap();
+        let entries = entry_receiver.recv().unwrap();
+        assert_eq!(entries[0].transactions.len(), transactions.len());
+
+        // Other BankErrors should not be recorded
+        results[0] = Err(BankError::AccountNotFound);
+        BankState::record_transactions(&transactions, &results, &poh_recorder).unwrap();
+        let entries = entry_receiver.recv().unwrap();
+        assert_eq!(entries[0].transactions.len(), transactions.len() - 1);
     }
 
     // #[test]
