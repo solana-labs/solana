@@ -2,7 +2,7 @@
 use crate::counter::Counter;
 use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
 use crate::result::{Error, Result};
-use bincode::{deserialize, serialize};
+use bincode::{deserialize, serialize, serialize_into};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use log::Level;
 use serde::Serialize;
@@ -226,9 +226,9 @@ pub fn to_packets_chunked<T: Serialize>(xs: &[T], chunks: usize) -> Vec<SharedPa
             .packets
             .resize(x.len(), Default::default());
         for (i, o) in x.iter().zip(p.write().unwrap().packets.iter_mut()) {
-            let v = serialize(&i).expect("serialize request");
-            let len = v.len();
-            o.data[..len].copy_from_slice(&v);
+            let mut wr = io::Cursor::new(&mut o.data[..]);
+            serialize_into(&mut wr, &i).expect("serialize request");
+            let len = wr.position() as usize;
             o.meta.size = len;
         }
         out.push(p);
