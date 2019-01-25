@@ -141,7 +141,10 @@ impl AccountsDB {
             for key in &tx.account_keys {
                 called_accounts.push(Self::load(checkpoints, key).unwrap_or_default());
             }
-            if called_accounts[0].tokens == 0 {
+            if called_accounts.is_empty() {
+                error_counters.account_not_found += 1;
+                Err(BankError::AccountNotFound)
+            } else if called_accounts[0].tokens == 0 {
                 error_counters.account_not_found += 1;
                 Err(BankError::AccountNotFound)
             } else if called_accounts[0].tokens < tx.fee {

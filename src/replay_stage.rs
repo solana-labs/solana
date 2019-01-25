@@ -87,13 +87,14 @@ impl ReplayStage {
         bank: &Arc<Bank>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window_receiver: &EntryReceiver,
-        _keypair: &Arc<Keypair>,
+        keypair: &Arc<Keypair>,
         vote_signer: Option<&Arc<VoteSignerProxy>>,
         vote_blob_sender: Option<&BlobSender>,
         ledger_entry_sender: &EntrySender,
         entry_height: &mut u64,
         last_entry_id: &mut Hash,
     ) -> Result<()> {
+        let my_id = keypair.pubkey();
         let timer = Duration::new(1, 0);
         //coalesce all the available entries into a single vote
         let mut entries = window_receiver.recv_timeout(timer)?;
@@ -156,6 +157,18 @@ impl ReplayStage {
                 ledger_entry_sender.send(entries)?;
             }
             *entry_height += entries_len;
+            let (scheduled_leader, _) = bank
+                .get_current_leader()
+                .expect("Scheduled leader should be calculated by this point");
+
+            // TODO: Remove this soon once we boot the leader from ClusterInfo
+            if scheduled_leader != current_leader {
+                cluster_info.write().unwrap().set_leader(scheduled_leader);
+            }
+
+            if my_id == scheduled_leader {
+                break;
+            }
         }
         // do this at the trunk crossover
         bank.leader_scheduler
@@ -198,15 +211,6 @@ impl ReplayStage {
                 }
             }
         }
-        let (scheduled_leader, _) = bank
-            .get_current_leader()
-            .expect("Scheduled leader should be calculated by this point");
-
-        // TODO: Remove this soon once we boot the leader from ClusterInfo
-        if scheduled_leader != current_leader {
-            cluster_info.write().unwrap().set_leader(scheduled_leader);
-        }
-
         inc_new_counter_info!(
             "replicate_stage-duration",
             duration_as_ms(&now.elapsed()) as usize
