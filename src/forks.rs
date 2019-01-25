@@ -66,8 +66,8 @@ impl Forks {
                 return Err(BankError::InvalidTrunk);
             }
             let len = states.len();
-            let old_trunk = states[len - 1].clone();
-            let new_trunk = states[len - 2].clone();
+            let old_trunk = states[len - 1];
+            let new_trunk = states[len - 2];
             if !new_trunk.1.finalized() {
                 println!("new_trunk id {}", new_trunk.1.fork_id());
                 return Err(BankError::CheckpointNotFinalized);

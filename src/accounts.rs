@@ -248,10 +248,7 @@ impl AccountsDB {
         self.transaction_count
     }
     pub fn account_values_slow(&self) -> Vec<(Pubkey, solana_sdk::account::Account)> {
-        self.accounts
-            .iter()
-            .map(|(x, y)| (x.clone(), y.clone()))
-            .collect()
+        self.accounts.iter().map(|(x, y)| (*x, y.clone())).collect()
     }
     fn merge(&mut self, other: Self) {
         self.transaction_count += other.transaction_count;

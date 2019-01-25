@@ -111,7 +111,7 @@ fn main() {
                 );
                 exit(1);
             }
-            let bank = Bank::new_with_builtin_programs();
+            let bank = Bank::default();
             {
                 let genesis = entries.by_ref().take(NUM_GENESIS_ENTRIES);
                 if let Err(e) = bank.process_ledger(genesis) {
@@ -139,7 +139,7 @@ fn main() {
                 last_id = entry.id;
                 num_entries += 1;
 
-                if let Err(e) = bank.process_entry(&entry) {
+                if let Err(e) = bank.process_entries(&[entry]) {
                     eprintln!("verify failed at entry[{}], err: {:?}", i + 2, e);
                     if !matches.is_present("continue") {
                         exit(1);

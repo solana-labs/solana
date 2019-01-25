@@ -1,7 +1,6 @@
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::bank::{BankError, Result};
 use crate::counter::Counter;
-use solana_sdk::native_program::ProgramError;
 use crate::entry::Entry;
 use crate::last_id_queue::{LastIdQueue, MAX_ENTRY_IDS};
 use crate::leader_scheduler::TICKS_PER_BLOCK;
@@ -482,7 +481,7 @@ impl BankState {
                 _ => result,
             })
             .collect()
-    } 
+    }
     pub fn par_execute_entries(&self, entries: &[(&Entry, Vec<Result<()>>)]) -> Result<()> {
         let head = &self.checkpoints[0];
         inc_new_counter_info!("bank-par_execute_entries-count", entries.len());
@@ -608,6 +607,7 @@ impl BankState {
 #[cfg(test)]
 mod test {
     use super::*;
+    use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::Keypair;
     use solana_sdk::signature::KeypairUtil;
     use solana_sdk::system_program;
@@ -707,7 +707,7 @@ mod test {
         let updated_results = BankState::ignore_program_errors(results);
         assert_ne!(updated_results, expected_results);
     }
- 
+
     //#[test]
     //fn test_bank_record_transactions() {
     //    let mint = Mint::new(10_000);

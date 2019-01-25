@@ -135,8 +135,8 @@ impl LastIdQueue {
     pub fn fork(&self) -> Self {
         Self {
             entries: self.entries.clone(),
-            tick_height: self.tick_height.clone(),
-            last_id: self.last_id.clone(),
+            tick_height: self.tick_height,
+            last_id: self.last_id,
         }
     }
     /// merge for entryq is a swap
