@@ -382,6 +382,7 @@ impl BankState {
     ) {
         let head = &self.checkpoints[0];
         let now = Instant::now();
+        // purge if there is only 1 checkpoint and its this one.
         let purge = self.checkpoints.len() == 1;
         head.accounts
             .store_accounts(purge, txs, executed, loaded_accounts);

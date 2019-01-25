@@ -89,7 +89,8 @@ impl AccountsDB {
         }
         None
     }
-    /// purge == checkpoints.is_empty()
+    /// Store the account update.  If the update is to delete the account because the token balance
+    /// is 0, purge needs to be set to true for the delete to occur in place.
     pub fn store(&mut self, purge: bool, pubkey: &Pubkey, account: &Account) {
         if account.tokens == 0 {
             if purge {
