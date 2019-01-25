@@ -1,6 +1,7 @@
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::bank::{BankError, Result};
 use crate::counter::Counter;
+use solana_sdk::native_program::ProgramError;
 use crate::entry::Entry;
 use crate::last_id_queue::{LastIdQueue, MAX_ENTRY_IDS};
 use crate::leader_scheduler::TICKS_PER_BLOCK;
@@ -498,7 +499,7 @@ impl BankState {
                     locks.to_vec(),
                     MAX_ENTRY_IDS,
                 );
-                let results = Bank::ignore_program_errors(old_results);
+                let results = BankState::ignore_program_errors(results);
                 head.unlock_accounts(&e.transactions, &results);
                 BankCheckpoint::first_err(&results)
             })
