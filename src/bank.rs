@@ -653,7 +653,7 @@ mod tests {
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::Keypair;
     use solana_sdk::signature::KeypairUtil;
-    use solana_sdk::storage_program::{StorageTransaction, ENTRIES_PER_SEGMENT};
+    //use solana_sdk::storage_program::{StorageTransaction, ENTRIES_PER_SEGMENT};
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Instruction;
     use std;
