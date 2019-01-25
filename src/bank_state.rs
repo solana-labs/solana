@@ -549,6 +549,7 @@ impl BankState {
         results: &[Result<()>],
         poh: &PohRecorder,
     ) -> Result<()> {
+        let now = Instant::now();
         let processed_transactions: Vec<_> = results
             .iter()
             .zip(txs.iter())
@@ -570,6 +571,11 @@ impl BankState {
                 BankError::RecordFailure
             })?;
         }
+        debug!(
+            "record: {}us txs_len={}",
+            duration_as_us(&now.elapsed()),
+            txs.len(),
+        );
         Ok(())
     }
     pub fn get_signature_status(&self, sig: &Signature) -> Option<Result<()>> {

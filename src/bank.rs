@@ -653,7 +653,7 @@ mod tests {
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::Keypair;
     use solana_sdk::signature::KeypairUtil;
-    //use solana_sdk::storage_program::{StorageTransaction, ENTRIES_PER_SEGMENT};
+    use solana_sdk::storage_program::{StorageTransaction, ENTRIES_PER_SEGMENT};
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Instruction;
     use std;
@@ -1603,7 +1603,7 @@ mod tests {
     //          ENTRIES_PER_SEGMENT,
     //      );
 
-    //      assert!(bank.process_transaction(&tx).is_ok());
+    //      assert_eq!(bank.process_transaction(&tx), Ok(()));
 
     //      let entry_height = 0;
 
@@ -1615,10 +1615,10 @@ mod tests {
     //          Signature::default(),
     //      );
 
-    //      assert!(bank.process_transaction(&tx).is_ok());
+    //     assert_eq!(bank.process_transaction(&tx), Ok(()));
 
-    //      assert_eq!(bank.get_storage_entry_height(), ENTRIES_PER_SEGMENT);
-    //      assert_eq!(bank.get_storage_last_id(), storage_last_id);
-    //      assert_eq!(bank.get_pubkeys_for_entry_height(0), vec![]);
-    //  }
+    //     assert_eq!(bank.get_storage_entry_height(), ENTRIES_PER_SEGMENT);
+    //     assert_eq!(bank.get_storage_last_id(), storage_last_id);
+    //     assert_eq!(bank.get_pubkeys_for_entry_height(0), vec![]);
+    // }
 }
