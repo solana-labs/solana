@@ -16,7 +16,8 @@ use crate::bank::Bank;
 use crate::blob_fetch_stage::BlobFetchStage;
 use crate::cluster_info::ClusterInfo;
 use crate::db_ledger::DbLedger;
-use crate::replay_stage::{ReplayStage, ReplayStageReturnType};
+use crate::fullnode::TvuRotationSender;
+use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
 use crate::service::Service;
 use crate::storage_stage::StorageStage;
@@ -39,6 +40,8 @@ pub struct Tvu {
     replay_stage: ReplayStage,
     storage_stage: StorageStage,
     exit: Arc<AtomicBool>,
+    last_entry_id: Arc<RwLock<Hash>>,
+    entry_height: Arc<RwLock<u64>>,
 }
 
 pub struct Sockets {
@@ -58,7 +61,7 @@ impl Tvu {
     /// * `sockets` - My fetch, repair, and restransmit sockets
     /// * `db_ledger` - the ledger itself
     pub fn new(
-        vote_signer: &Option<Arc<VoteSignerProxy>>,
+        vote_signer: Option<Arc<VoteSignerProxy>>,
         bank: &Arc<Bank>,
         entry_height: u64,
         last_entry_id: Hash,
@@ -66,6 +69,7 @@ impl Tvu {
         sockets: Sockets,
         db_ledger: Arc<DbLedger>,
         storage_rotate_count: u64,
+        to_leader_sender: TvuRotationSender,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
         let keypair: Arc<Keypair> = cluster_info
@@ -102,15 +106,19 @@ impl Tvu {
             bank.leader_scheduler.clone(),
         );
 
+        let l_entry_height = Arc::new(RwLock::new(entry_height));
+        let l_last_entry_id = Arc::new(RwLock::new(last_entry_id));
+
         let (replay_stage, ledger_entry_receiver) = ReplayStage::new(
             keypair.clone(),
-            vote_signer.clone(),
+            vote_signer,
             bank.clone(),
             cluster_info.clone(),
             blob_window_receiver,
             exit.clone(),
-            entry_height,
-            last_entry_id,
+            l_entry_height.clone(),
+            l_last_entry_id.clone(),
+            to_leader_sender,
         );
 
         let storage_stage = StorageStage::new(
@@ -130,7 +138,16 @@ impl Tvu {
             replay_stage,
             storage_stage,
             exit,
+            last_entry_id: l_last_entry_id,
+            entry_height: l_entry_height,
         }
+    }
+
+    pub fn get_state(&self) -> (Hash, u64) {
+        (
+            *self.last_entry_id.read().unwrap(),
+            *self.entry_height.read().unwrap(),
+        )
     }
 
     pub fn is_exited(&self) -> bool {
@@ -155,15 +172,6 @@ impl Service for Tvu {
         self.fetch_stage.join()?;
         self.storage_stage.join()?;
         match self.replay_stage.join()? {
-            Some(ReplayStageReturnType::LeaderRotation(
-                tick_height,
-                entry_height,
-                last_entry_id,
-            )) => Ok(Some(TvuReturnType::LeaderRotation(
-                tick_height,
-                entry_height,
-                last_entry_id,
-            ))),
             _ => Ok(None),
         }
     }
@@ -274,8 +282,9 @@ pub mod tests {
         let vote_account_keypair = Arc::new(Keypair::new());
         let vote_signer =
             VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
+        let (sender, _) = channel();
         let tvu = Tvu::new(
-            &Some(Arc::new(vote_signer)),
+            Some(Arc::new(vote_signer)),
             &bank,
             0,
             cur_hash,
@@ -289,6 +298,7 @@ pub mod tests {
             },
             Arc::new(db_ledger),
             STORAGE_ROTATE_TEST_COUNT,
+            sender,
         );
 
         let mut alice_ref_balance = starting_balance;

@@ -282,8 +282,20 @@ impl ClusterInfo {
             .collect()
     }
 
-    /// compute broadcast table
+    /// compute broadcast table (includes own tvu)
     pub fn tvu_peers(&self) -> Vec<NodeInfo> {
+        self.gossip
+            .crds
+            .table
+            .values()
+            .filter_map(|x| x.value.contact_info())
+            .filter(|x| ContactInfo::is_valid_address(&x.tvu))
+            .cloned()
+            .collect()
+    }
+
+    /// all peers that have a valid tvu
+    pub fn retransmit_peers(&self) -> Vec<NodeInfo> {
         let me = self.my_data().id;
         self.gossip
             .crds
@@ -296,24 +308,12 @@ impl ClusterInfo {
             .collect()
     }
 
-    /// all peers that have a valid tvu except the leader
-    pub fn retransmit_peers(&self) -> Vec<NodeInfo> {
-        let me = self.my_data().id;
-        self.gossip
-            .crds
-            .table
-            .values()
-            .filter_map(|x| x.value.contact_info())
-            .filter(|x| x.id != me && x.id != self.leader_id())
-            .filter(|x| ContactInfo::is_valid_address(&x.tvu))
-            .cloned()
-            .collect()
-    }
-
     /// all tvu peers with valid gossip addrs
     pub fn repair_peers(&self) -> Vec<NodeInfo> {
+        let me = self.my_data().id;
         ClusterInfo::tvu_peers(self)
             .into_iter()
+            .filter(|x| x.id != me)
             .filter(|x| ContactInfo::is_valid_address(&x.gossip))
             .collect()
     }
@@ -634,7 +634,6 @@ impl ClusterInfo {
         if blobs.is_empty() {
             return vec![];
         }
-
         let mut orders = Vec::with_capacity(blobs.len());
 
         let x = thread_rng().gen_range(0, broadcast_table.len());

@@ -3,18 +3,19 @@
 use crate::bank::Bank;
 use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
-use crate::entry::{EntryReceiver, EntrySender};
-use solana_sdk::hash::Hash;
-
 use crate::entry::EntrySlice;
+use crate::entry::{EntryReceiver, EntrySender};
+use crate::fullnode::TvuRotationSender;
 use crate::leader_scheduler::TICKS_PER_BLOCK;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::streamer::{responder, BlobSender};
+use crate::tvu::TvuReturnType;
 use crate::vote_signer_proxy::VoteSignerProxy;
 use log::Level;
 use solana_metrics::{influxdb, submit};
+use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
@@ -27,11 +28,6 @@ use std::time::Duration;
 use std::time::Instant;
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum ReplayStageReturnType {
-    LeaderRotation(u64, u64, Hash),
-}
 
 // Implement a destructor for the ReplayStage thread to signal it exited
 // even on panics
@@ -53,7 +49,7 @@ impl Drop for Finalizer {
 
 pub struct ReplayStage {
     t_responder: JoinHandle<()>,
-    t_replay: JoinHandle<Option<ReplayStageReturnType>>,
+    t_replay: JoinHandle<()>,
 }
 
 impl ReplayStage {
@@ -67,8 +63,8 @@ impl ReplayStage {
         vote_signer: Option<&Arc<VoteSignerProxy>>,
         vote_blob_sender: Option<&BlobSender>,
         ledger_entry_sender: &EntrySender,
-        entry_height: &mut u64,
-        last_entry_id: &mut Hash,
+        entry_height: &Arc<RwLock<u64>>,
+        last_entry_id: &Arc<RwLock<Hash>>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         //coalesce all the available entries into a single vote
@@ -89,7 +85,7 @@ impl ReplayStage {
         let mut res = Ok(());
         let mut num_entries_to_write = entries.len();
         let now = Instant::now();
-        if !entries.as_slice().verify(last_entry_id) {
+        if !entries.as_slice().verify(&last_entry_id.read().unwrap()) {
             inc_new_counter_info!("replicate_stage-verify-fail", entries.len());
             return Err(Error::BlobError(BlobError::VerificationFailed));
         }
@@ -102,6 +98,8 @@ impl ReplayStage {
             .get_current_leader()
             .expect("Scheduled leader should be calculated by this point");
         let my_id = keypair.pubkey();
+        let already_leader = my_id == current_leader;
+        let mut did_rotate = false;
 
         // Next vote tick is ceiling of (current tick/ticks per block)
         let mut num_ticks_to_next_vote = TICKS_PER_BLOCK - (bank.tick_height() % TICKS_PER_BLOCK);
@@ -151,10 +149,11 @@ impl ReplayStage {
 
                 // TODO: Remove this soon once we boot the leader from ClusterInfo
                 if scheduled_leader != current_leader {
+                    did_rotate = true;
                     cluster_info.write().unwrap().set_leader(scheduled_leader);
                 }
 
-                if my_id == scheduled_leader {
+                if !already_leader && my_id == scheduled_leader && did_rotate {
                     num_entries_to_write = i + 1;
                     break;
                 }
@@ -165,7 +164,7 @@ impl ReplayStage {
 
         // If leader rotation happened, only write the entries up to leader rotation.
         entries.truncate(num_entries_to_write);
-        *last_entry_id = entries
+        *last_entry_id.write().unwrap() = entries
             .last()
             .expect("Entries cannot be empty at this point")
             .id;
@@ -183,7 +182,7 @@ impl ReplayStage {
             ledger_entry_sender.send(entries)?;
         }
 
-        *entry_height += entries_len;
+        *entry_height.write().unwrap() += entries_len;
         res?;
         inc_new_counter_info!(
             "replicate_stage-duration",
@@ -201,8 +200,9 @@ impl ReplayStage {
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window_receiver: EntryReceiver,
         exit: Arc<AtomicBool>,
-        entry_height: u64,
-        last_entry_id: Hash,
+        entry_height: Arc<RwLock<u64>>,
+        last_entry_id: Arc<RwLock<Hash>>,
+        to_leader_sender: TvuRotationSender,
     ) -> (Self, EntryReceiver) {
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let (ledger_entry_sender, ledger_entry_receiver) = channel();
@@ -214,28 +214,25 @@ impl ReplayStage {
             .name("solana-replay-stage".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit);
-                let mut entry_height_ = entry_height;
-                let mut last_entry_id = last_entry_id;
+                let entry_height_ = entry_height;
+                let last_entry_id = last_entry_id;
+                let (mut last_leader_id, _) = bank
+                    .get_current_leader()
+                    .expect("Scheduled leader should be calculated by this point");
                 loop {
                     let (leader_id, _) = bank
                         .get_current_leader()
                         .expect("Scheduled leader should be calculated by this point");
-
-                    if leader_id == keypair.pubkey() {
-                        inc_new_counter_info!(
-                            "replay_stage-new_leader",
-                            bank.tick_height() as usize
-                        );
-                        return Some(ReplayStageReturnType::LeaderRotation(
-                            bank.tick_height(),
-                            entry_height_,
-                            // We should never start the TPU / this stage on an exact entry that causes leader
-                            // rotation (Fullnode should automatically transition on startup if it detects
-                            // are no longer a validator. Hence we can assume that some entry must have
-                            // triggered leader rotation
-                            last_entry_id,
-                        ));
+                    if leader_id != last_leader_id && leader_id == keypair.pubkey() {
+                        to_leader_sender
+                            .send(TvuReturnType::LeaderRotation(
+                                bank.tick_height(),
+                                *entry_height_.read().unwrap(),
+                                *last_entry_id.read().unwrap(),
+                            ))
+                            .unwrap();
                     }
+                    last_leader_id = leader_id;
 
                     match Self::process_entries(
                         &bank,
@@ -245,8 +242,8 @@ impl ReplayStage {
                         vote_signer.as_ref(),
                         Some(&vote_blob_sender),
                         &ledger_entry_sender,
-                        &mut entry_height_,
-                        &mut last_entry_id,
+                        &entry_height_.clone(),
+                        &last_entry_id.clone(),
                     ) {
                         Err(Error::RecvTimeoutError(RecvTimeoutError::Disconnected)) => break,
                         Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
@@ -254,8 +251,6 @@ impl ReplayStage {
                         Ok(()) => (),
                     }
                 }
-
-                None
             })
             .unwrap();
 
@@ -270,9 +265,9 @@ impl ReplayStage {
 }
 
 impl Service for ReplayStage {
-    type JoinReturnType = Option<ReplayStageReturnType>;
+    type JoinReturnType = ();
 
-    fn join(self) -> thread::Result<Option<ReplayStageReturnType>> {
+    fn join(self) -> thread::Result<()> {
         self.t_responder.join()?;
         self.t_replay.join()
     }
@@ -290,11 +285,11 @@ mod test {
     use crate::leader_scheduler::{
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
-
     use crate::packet::BlobError;
-    use crate::replay_stage::{ReplayStage, ReplayStageReturnType};
+    use crate::replay_stage::ReplayStage;
     use crate::result::Error;
     use crate::service::Service;
+    use crate::tvu::TvuReturnType;
     use crate::vote_signer_proxy::VoteSignerProxy;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -377,16 +372,18 @@ mod test {
 
         // Set up the replay stage
         let (entry_sender, entry_receiver) = channel();
+        let (rotation_sender, rotation_receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
-        let (replay_stage, ledger_writer_recv) = ReplayStage::new(
+        let (_replay_stage, ledger_writer_recv) = ReplayStage::new(
             my_keypair,
             Some(Arc::new(vote_account_id)),
             Arc::new(bank),
             Arc::new(RwLock::new(cluster_info_me)),
             entry_receiver,
             exit.clone(),
-            initial_entry_len,
-            last_entry_id,
+            Arc::new(RwLock::new(initial_entry_len)),
+            Arc::new(RwLock::new(last_entry_id)),
+            rotation_sender,
         );
 
         // Send enough ticks to trigger leader rotation
@@ -412,12 +409,18 @@ mod test {
 
         // Wait for replay_stage to exit and check return value is correct
         assert_eq!(
-            Some(ReplayStageReturnType::LeaderRotation(
+            Some(TvuReturnType::LeaderRotation(
                 bootstrap_height,
                 expected_entry_height,
                 expected_last_id,
             )),
-            replay_stage.join().expect("replay stage join")
+            {
+                Some(
+                    rotation_receiver
+                        .recv()
+                        .expect("should have signaled leader rotation"),
+                )
+            }
         );
 
         // Check that the entries on the ledger writer channel are correct
@@ -429,9 +432,10 @@ mod test {
             &received_ticks[..],
             &entries_to_send[..leader_rotation_index - 1]
         );
-
-        assert_eq!(exit.load(Ordering::Relaxed), true);
-
+        //replay stage should continue running even after rotation has happened (tvu never goes down)
+        assert_eq!(exit.load(Ordering::Relaxed), false);
+        //force exit
+        exit.store(true, Ordering::Relaxed);
         let _ignored = remove_dir_all(&my_ledger_path);
     }
 
@@ -474,6 +478,7 @@ mod test {
             &my_keypair,
             Box::new(LocalVoteSigner::default()),
         ));
+        let (to_leader_sender, _) = channel();
         let (replay_stage, ledger_writer_recv) = ReplayStage::new(
             my_keypair.clone(),
             Some(vote_signer.clone()),
@@ -481,8 +486,9 @@ mod test {
             cluster_info_me.clone(),
             entry_receiver,
             exit.clone(),
-            initial_entry_len as u64,
-            last_entry_id,
+            Arc::new(RwLock::new(initial_entry_len as u64)),
+            Arc::new(RwLock::new(last_entry_id)),
+            to_leader_sender,
         );
 
         // Vote sender should error because no leader contact info is found in the
@@ -589,16 +595,18 @@ mod test {
         let signer_proxy = Arc::new(vote_account_id);
         let bank = Arc::new(bank);
         let (entry_sender, entry_receiver) = channel();
+        let (rotation_tx, rotation_rx) = channel();
         let exit = Arc::new(AtomicBool::new(false));
-        let (replay_stage, ledger_writer_recv) = ReplayStage::new(
+        let (_replay_stage, ledger_writer_recv) = ReplayStage::new(
             my_keypair.clone(),
             Some(signer_proxy.clone()),
             bank.clone(),
             cluster_info_me.clone(),
             entry_receiver,
             exit.clone(),
-            initial_entry_len as u64,
-            last_entry_id,
+            Arc::new(RwLock::new(initial_entry_len as u64)),
+            Arc::new(RwLock::new(last_entry_id)),
+            rotation_tx,
         );
 
         // Vote sender should error because no leader contact info is found in the
@@ -639,16 +647,22 @@ mod test {
 
         // Wait for replay_stage to exit and check return value is correct
         assert_eq!(
-            Some(ReplayStageReturnType::LeaderRotation(
+            Some(TvuReturnType::LeaderRotation(
                 bootstrap_height,
                 expected_entry_height,
                 expected_last_id,
             )),
-            replay_stage.join().expect("replay stage join")
+            {
+                Some(
+                    rotation_rx
+                        .recv()
+                        .expect("should have signaled leader rotation"),
+                )
+            }
         );
         assert_ne!(expected_last_id, Hash::default());
-
-        assert_eq!(exit.load(Ordering::Relaxed), true);
+        //replay stage should continue running even after rotation has happened (tvu never goes down)
+        assert_eq!(exit.load(Ordering::Relaxed), false);
         let _ignored = remove_dir_all(&my_ledger_path);
     }
 
@@ -662,10 +676,10 @@ mod test {
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
         let (entry_sender, entry_receiver) = channel();
         let (ledger_entry_sender, _ledger_entry_receiver) = channel();
-        let mut last_entry_id = Hash::default();
+        let last_entry_id = Hash::default();
         // Create keypair for the old leader
 
-        let mut entry_height = 0;
+        let entry_height = 0;
         let mut last_id = Hash::default();
         let mut entries = Vec::new();
         for _ in 0..5 {
@@ -690,8 +704,8 @@ mod test {
             Some(&vote_signer),
             None,
             &ledger_entry_sender,
-            &mut entry_height,
-            &mut last_entry_id,
+            &Arc::new(RwLock::new(entry_height)),
+            &Arc::new(RwLock::new(last_entry_id)),
         );
 
         match res {
@@ -701,7 +715,7 @@ mod test {
 
         entries.clear();
         for _ in 0..5 {
-            let entry = Entry::new(&mut Hash::default(), 0, 0, vec![]); //just broken entries
+            let entry = Entry::new(&mut Hash::default(), 0, 1, vec![]); //just broken entries
             entries.push(entry);
         }
         entry_sender
@@ -716,8 +730,8 @@ mod test {
             Some(&vote_signer),
             None,
             &ledger_entry_sender,
-            &mut entry_height,
-            &mut last_entry_id,
+            &Arc::new(RwLock::new(entry_height)),
+            &Arc::new(RwLock::new(last_entry_id)),
         );
 
         match res {

@@ -137,10 +137,23 @@ impl Bank {
         bank.add_builtin_programs();
         bank
     }
-
     pub fn set_subscriptions(&self, subscriptions: Box<Arc<BankSubscriptions + Send + Sync>>) {
         let mut sub = self.subscriptions.write().unwrap();
         *sub = subscriptions
+    }
+
+    /// Checkpoint this bank and return a copy of it
+    pub fn checkpoint_and_copy(&self) -> Bank {
+        let last_ids_cp = self.last_ids.write().unwrap().checkpoint_and_copy();
+        let accounts = self.accounts.checkpoint_and_copy();
+
+        let mut copy = Bank::default();
+        copy.accounts = accounts;
+        copy.last_ids = RwLock::new(last_ids_cp);
+        copy.leader_scheduler =
+            Arc::new(RwLock::new(self.leader_scheduler.read().unwrap().clone()));
+        copy.confirmation_time = AtomicUsize::new(self.confirmation_time.load(Ordering::Relaxed));
+        copy
     }
 
     pub fn checkpoint(&self) {
@@ -1731,6 +1744,29 @@ mod tests {
             reserve_signature_with_last_id_test(&bank, &signature, &genesis_block.last_id()),
             Err(StatusDequeError::DuplicateSignature)
         );
+    }
+
+    #[test]
+    fn test_bank_checkpoint_and_copy() {
+        let (genesis_block, alice) = GenesisBlock::new(10_000);
+        let bank = Bank::new(&genesis_block);
+        let bob = Keypair::new();
+        let charlie = Keypair::new();
+
+        // bob should have 500
+        bank.transfer(500, &alice, bob.pubkey(), genesis_block.last_id())
+            .unwrap();
+        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
+        bank.transfer(500, &alice, charlie.pubkey(), genesis_block.last_id())
+            .unwrap();
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+        assert_eq!(bank.checkpoint_depth(), 0);
+
+        let cp_bank = bank.checkpoint_and_copy();
+        assert_eq!(cp_bank.get_balance(&bob.pubkey()), 500);
+        assert_eq!(cp_bank.get_balance(&charlie.pubkey()), 500);
+        assert_eq!(cp_bank.checkpoint_depth(), 0);
+        assert_eq!(bank.checkpoint_depth(), 1);
     }
 
     #[test]

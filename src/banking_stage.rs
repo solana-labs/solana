@@ -2,16 +2,18 @@
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
 
-use crate::bank::Bank;
+use crate::bank::{Bank, BankError};
 use crate::compute_leader_confirmation_service::ComputeLeaderConfirmationService;
 use crate::counter::Counter;
 use crate::entry::Entry;
+use crate::fullnode::TpuRotationSender;
 use crate::packet::Packets;
 use crate::poh_recorder::{PohRecorder, PohRecorderError};
 use crate::poh_service::{Config, PohService};
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::sigverify_stage::VerifiedPackets;
+use crate::tpu::TpuReturnType;
 use bincode::deserialize;
 use log::Level;
 use solana_sdk::hash::Hash;
@@ -19,7 +21,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
@@ -54,6 +56,7 @@ impl BankingStage {
         last_entry_id: &Hash,
         max_tick_height: Option<u64>,
         leader_id: Pubkey,
+        to_validator_sender: &TpuRotationSender,
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (entry_sender, entry_receiver) = channel();
         let shared_verified_receiver = Arc::new(Mutex::new(verified_receiver));
@@ -63,7 +66,8 @@ impl BankingStage {
         // Single thread to generate entries from many banks.
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
         // Once an entry has been recorded, its last_id is registered with the bank.
-        let poh_service = PohService::new(poh_recorder.clone(), config);
+        let poh_service =
+            PohService::new(poh_recorder.clone(), config, to_validator_sender.clone());
 
         // Single thread to compute confirmation
         let compute_confirmation_service = ComputeLeaderConfirmationService::new(
@@ -71,6 +75,9 @@ impl BankingStage {
             leader_id,
             poh_service.poh_exit.clone(),
         );
+
+        // Used to send a rotation notification just once from the first thread to exit
+        let did_notify = Arc::new(AtomicBool::new(false));
 
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<Option<BankingStageReturnType>>> = (0
@@ -80,6 +87,8 @@ impl BankingStage {
                 let thread_verified_receiver = shared_verified_receiver.clone();
                 let thread_poh_recorder = poh_recorder.clone();
                 let thread_banking_exit = poh_service.poh_exit.clone();
+                let thread_sender = to_validator_sender.clone();
+                let thread_did_notify_rotation = did_notify.clone();
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
@@ -101,7 +110,16 @@ impl BankingStage {
                                     Error::SendError => {
                                         break Some(BankingStageReturnType::ChannelDisconnected);
                                     }
-                                    Error::PohRecorderError(PohRecorderError::MaxHeightReached) => {
+                                    Error::PohRecorderError(PohRecorderError::MaxHeightReached)
+                                    | Error::BankError(BankError::RecordFailure) => {
+                                        if !thread_did_notify_rotation.load(Ordering::Relaxed) {
+                                            let _ =
+                                                thread_sender.send(TpuReturnType::LeaderRotation);
+                                            thread_did_notify_rotation
+                                                .store(true, Ordering::Relaxed);
+                                        }
+
+                                        //should get restarted from the channel receiver
                                         break Some(BankingStageReturnType::LeaderRotation);
                                     }
                                     _ => error!("solana-banking-stage-tx {:?}", e),
@@ -117,7 +135,6 @@ impl BankingStage {
                     .unwrap()
             })
             .collect();
-
         (
             Self {
                 bank_thread_hdls,
@@ -282,6 +299,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let dummy_leader_id = Keypair::new().pubkey();
         let (verified_sender, verified_receiver) = channel();
+        let (to_validator_sender, _) = channel();
         let (banking_stage, _entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
@@ -289,6 +307,7 @@ mod tests {
             &bank.last_id(),
             None,
             dummy_leader_id,
+            &to_validator_sender,
         );
         drop(verified_sender);
         assert_eq!(
@@ -303,6 +322,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let dummy_leader_id = Keypair::new().pubkey();
         let (_verified_sender, verified_receiver) = channel();
+        let (to_validator_sender, _) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
@@ -310,6 +330,7 @@ mod tests {
             &bank.last_id(),
             None,
             dummy_leader_id,
+            &to_validator_sender,
         );
         drop(entry_receiver);
         assert_eq!(
@@ -325,6 +346,7 @@ mod tests {
         let dummy_leader_id = Keypair::new().pubkey();
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
+        let (to_validator_sender, _) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
@@ -332,6 +354,7 @@ mod tests {
             &bank.last_id(),
             None,
             dummy_leader_id,
+            &to_validator_sender,
         );
         sleep(Duration::from_millis(500));
         drop(verified_sender);
@@ -353,6 +376,7 @@ mod tests {
         let dummy_leader_id = Keypair::new().pubkey();
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
+        let (to_validator_sender, _) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
@@ -360,6 +384,7 @@ mod tests {
             &bank.last_id(),
             None,
             dummy_leader_id,
+            &to_validator_sender,
         );
 
         // good tx
@@ -409,6 +434,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let dummy_leader_id = Keypair::new().pubkey();
         let (verified_sender, verified_receiver) = channel();
+        let (to_validator_sender, _) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
@@ -416,6 +442,7 @@ mod tests {
             &bank.last_id(),
             None,
             dummy_leader_id,
+            &to_validator_sender,
         );
 
         // Process a batch that includes a transaction that receives two tokens.
@@ -464,6 +491,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let dummy_leader_id = Keypair::new().pubkey();
         let (_verified_sender_, verified_receiver) = channel();
+        let (to_validator_sender, _to_validator_receiver) = channel();
         let max_tick_height = 10;
         let (banking_stage, _entry_receiver) = BankingStage::new(
             &bank,
@@ -472,6 +500,7 @@ mod tests {
             &bank.last_id(),
             Some(max_tick_height),
             dummy_leader_id,
+            &to_validator_sender,
         );
         assert_eq!(
             banking_stage.join().unwrap(),
