@@ -452,7 +452,7 @@ mod tests {
     use solana_sdk::hash::Hash;
     use solana_sdk::hash::Hasher;
     use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
     use solana_sdk::vote_program::Vote;
     use solana_sdk::vote_transaction::VoteTransaction;
@@ -531,7 +531,7 @@ mod tests {
 
         let keypair = Keypair::new();
         let hash = Hash::default();
-        let signature = Signature::new(keypair.sign(&hash.as_ref()).as_ref());
+        let signature = keypair.sign_message(&hash.as_ref());
         let mut result = storage_state.get_mining_result(&signature);
         assert_eq!(result, Hash::default());
 
@@ -609,8 +609,7 @@ mod tests {
         };
         let keypair = Keypair::new();
         let tx = Transaction::vote_new(&keypair.pubkey(), vote, Hash::default(), 1);
-        let msg = tx.get_sign_data();
-        let sig = Signature::new(&keypair.sign(&msg).as_ref());
+        let sig = keypair.sign_message(&tx.message());
         let vote_tx = Transaction {
             signatures: vec![sig],
             account_keys: tx.account_keys,
@@ -661,7 +660,7 @@ mod tests {
                 .for_each(move |_| {
                     let keypair = Keypair::new();
                     let hash = hasher.clone().result();
-                    let signature = Signature::new(keypair.sign(&hash.as_ref()).as_ref());
+                    let signature = keypair.sign_message(&hash.as_ref());
                     let ix = get_identity_index_from_signature(&signature);
                     hist[ix].fetch_add(1, Ordering::Relaxed);
                 });

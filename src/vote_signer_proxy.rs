@@ -86,7 +86,7 @@ pub struct VoteSignerProxy {
 impl VoteSignerProxy {
     pub fn new(keypair: &Arc<Keypair>, signer: Box<VoteSigner + Send + Sync>) -> Self {
         let msg = "Registering a new node";
-        let sig = Signature::new(&keypair.sign(msg.as_bytes()).as_ref());
+        let sig = keypair.sign_message(msg.as_bytes());
         let vote_account = signer
             .register(keypair.pubkey(), &sig, msg.as_bytes())
             .unwrap();
@@ -161,9 +161,8 @@ impl VoteSignerProxy {
     pub fn new_signed_vote_transaction(&self, last_id: &Hash, tick_height: u64) -> Transaction {
         let vote = Vote { tick_height };
         let tx = Transaction::vote_new(&self.vote_account, vote, *last_id, 0);
-
-        let msg = tx.get_sign_data();
-        let sig = Signature::new(&self.keypair.sign(&msg).as_ref());
+        let msg = tx.message();
+        let sig = self.keypair.sign_message(&msg);
 
         let keypair = self.keypair.clone();
         let vote_signature = self.signer.sign(keypair.pubkey(), &sig, &msg).unwrap();
