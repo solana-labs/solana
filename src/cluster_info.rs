@@ -259,14 +259,27 @@ impl ClusterInfo {
         self.gossip.process_push_message(&[entry], now);
     }
 
-    pub fn get_votes(&self) -> Vec<Transaction> {
-        self.gossip
+    /// Get votes in the crds
+    /// * since - The local timestamp when the vote was updated or inserted must be greater then
+    /// since. This allows the bank to query for new votes only.
+    ///
+    /// * return - The votes, and the max local timestamp from the new set.
+    pub fn get_votes(&self, since: u64) -> (Vec<Transaction>, u64) {
+        let votes: Vec<_> = self
+            .gossip
             .crds
             .table
             .values()
-            .filter_map(|x| x.value.vote())
-            .map(|x| x.transaction.clone())
-            .collect()
+            .filter(|x| x.local_timestamp > since)
+            .filter_map(|x| {
+                x.value
+                    .vote()
+                    .map(|v| (x.local_timestamp, v.transaction.clone()))
+            })
+            .collect();
+        let max_ts = votes.iter().map(|x| x.0).max().unwrap_or(since);
+        let txs: Vec<Transaction> = votes.into_iter().map(|x| x.1).collect();
+        (txs, max_ts)
     }
 
     pub fn purge(&mut self, now: u64) {
@@ -1667,11 +1680,27 @@ mod tests {
     #[test]
     fn test_push_vote() {
         let keys = Keypair::new();
+        let now = timestamp();
         let node_info = NodeInfo::new_localhost(keys.pubkey(), 0);
         let mut cluster_info = ClusterInfo::new(node_info);
+
+        // make sure empty crds is handled correctly
+        let (votes, max_ts) = cluster_info.get_votes(now);
+        assert_eq!(votes, vec![]);
+        assert_eq!(max_ts, now);
+
+        // add a vote
         let tx = test_tx();
         cluster_info.push_vote(tx.clone());
-        let votes = cluster_info.get_votes();
-        assert_eq!(votes, vec![tx])
+
+        // -1 to make sure that the clock is strictly lower then when insert occurred
+        let (votes, max_ts) = cluster_info.get_votes(now - 1);
+        assert_eq!(votes, vec![tx]);
+        assert!(max_ts >= now - 1);
+
+        // make sure timestamp filter works
+        let (votes, new_max_ts) = cluster_info.get_votes(max_ts);
+        assert_eq!(votes, vec![]);
+        assert_eq!(max_ts, new_max_ts);
     }
 }
