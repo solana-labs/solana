@@ -293,7 +293,6 @@ mod test {
     use crate::vote_signer_proxy::VoteSignerProxy;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_vote_signer::rpc::LocalVoteSigner;
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
@@ -474,10 +473,7 @@ mod test {
         let (entry_sender, entry_receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         let my_keypair = Arc::new(my_keypair);
-        let vote_signer = Arc::new(VoteSignerProxy::new(
-            &my_keypair,
-            Box::new(LocalVoteSigner::default()),
-        ));
+        let vote_signer = Arc::new(VoteSignerProxy::new_local(&my_keypair));
         let (to_leader_sender, _) = channel();
         let (replay_stage, ledger_writer_recv) = ReplayStage::new(
             my_keypair.clone(),
@@ -692,10 +688,7 @@ mod test {
             .expect("Expected to err out");
 
         let my_keypair = Arc::new(my_keypair);
-        let vote_signer = Arc::new(VoteSignerProxy::new(
-            &my_keypair,
-            Box::new(LocalVoteSigner::default()),
-        ));
+        let vote_signer = Arc::new(VoteSignerProxy::new_local(&my_keypair));
         let res = ReplayStage::process_entries(
             &Arc::new(Bank::default()),
             &cluster_info_me,

@@ -12,7 +12,6 @@ use solana::vote_signer_proxy::VoteSignerProxy;
 use solana_drone::drone::run_local_drone;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_vote_signer::rpc::LocalVoteSigner;
 use solana_wallet::wallet::{
     process_command, request_and_confirm_airdrop, WalletCommand, WalletConfig,
 };
@@ -46,8 +45,7 @@ fn test_wallet_timestamp_tx() {
     )));
     bank.leader_scheduler = leader_scheduler;
     let vote_account_keypair = Arc::new(Keypair::new());
-    let vote_signer =
-        VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
+    let vote_signer = VoteSignerProxy::new_local(&vote_account_keypair);
     let last_id = bank.last_id();
     let server = Fullnode::new_with_bank(
         leader_keypair,
@@ -142,8 +140,7 @@ fn test_wallet_witness_tx() {
     )));
     bank.leader_scheduler = leader_scheduler;
     let vote_account_keypair = Arc::new(Keypair::new());
-    let vote_signer =
-        VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
+    let vote_signer = VoteSignerProxy::new_local(&vote_account_keypair);
     let last_id = bank.last_id();
     let server = Fullnode::new_with_bank(
         leader_keypair,
@@ -234,8 +231,7 @@ fn test_wallet_cancel_tx() {
     )));
     bank.leader_scheduler = leader_scheduler;
     let vote_account_keypair = Arc::new(Keypair::new());
-    let vote_signer =
-        VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
+    let vote_signer = VoteSignerProxy::new_local(&vote_account_keypair);
     let last_id = bank.last_id();
     let server = Fullnode::new_with_bank(
         leader_keypair,

@@ -452,7 +452,6 @@ mod tests {
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::vote_program::VoteProgram;
     use solana_sdk::vote_transaction::VoteTransaction;
-    use solana_vote_signer::rpc::LocalVoteSigner;
     use std::fs::remove_dir_all;
 
     #[test]
@@ -473,8 +472,7 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
-        let vote_signer =
-            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
+        let vote_signer = VoteSignerProxy::new_local(&vote_account_keypair);
         let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
@@ -527,8 +525,7 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
-        let vote_signer =
-            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
+        let vote_signer = VoteSignerProxy::new_local(&vote_account_keypair);
         let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
             leader_keypair,
@@ -587,8 +584,7 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
-        let vote_signer =
-            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
+        let vote_signer = VoteSignerProxy::new_local(&vote_account_keypair);
         let entry_height = 0;
         let last_id = bank.last_id();
         let server = Fullnode::new_with_bank(
@@ -633,10 +629,7 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
         let leader_vote_account_keypair = Arc::new(Keypair::new());
-        let vote_signer = VoteSignerProxy::new(
-            &leader_vote_account_keypair,
-            Box::new(LocalVoteSigner::default()),
-        );
+        let vote_signer = VoteSignerProxy::new_local(&leader_vote_account_keypair);
         let server = Fullnode::new_with_bank(
             leader_keypair,
             Some(Arc::new(vote_signer)),
@@ -729,8 +722,7 @@ mod tests {
         )));
         bank.leader_scheduler = leader_scheduler;
         let vote_account_keypair = Arc::new(Keypair::new());
-        let vote_signer =
-            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
+        let vote_signer = VoteSignerProxy::new_local(&vote_account_keypair);
         let last_id = bank.last_id();
         let entry_height = 0;
         let server = Fullnode::new_with_bank(

@@ -11,7 +11,6 @@ use solana::vote_signer_proxy::VoteSignerProxy;
 use solana_drone::drone::run_local_drone;
 use solana_sdk::bpf_loader;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_vote_signer::rpc::LocalVoteSigner;
 use solana_wallet::wallet::{process_command, WalletCommand, WalletConfig};
 use std::fs::{remove_dir_all, File};
 use std::io::Read;
@@ -41,8 +40,7 @@ fn test_wallet_deploy_program() {
     )));
     bank.leader_scheduler = leader_scheduler;
     let vote_account_keypair = Arc::new(Keypair::new());
-    let vote_signer =
-        VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
+    let vote_signer = VoteSignerProxy::new_local(&vote_account_keypair);
     let last_id = bank.last_id();
     let server = Fullnode::new_with_bank(
         leader_keypair,

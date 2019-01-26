@@ -16,6 +16,7 @@ use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::Vote;
 use solana_sdk::vote_transaction::VoteTransaction;
+use solana_vote_signer::rpc::LocalVoteSigner;
 use solana_vote_signer::rpc::VoteSigner;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
@@ -96,6 +97,10 @@ impl VoteSignerProxy {
             last_leader: RwLock::new(vote_account),
             unsent_votes: RwLock::new(vec![]),
         }
+    }
+
+    pub fn new_local(keypair: &Arc<Keypair>) -> Self {
+        Self::new(keypair, Box::new(LocalVoteSigner::default()))
     }
 
     pub fn new_vote_account(&self, bank: &Bank, num_tokens: u64, last_id: Hash) -> Result<()> {
@@ -209,7 +214,6 @@ mod test {
     use crate::genesis_block::GenesisBlock;
     use crate::vote_signer_proxy::VoteSignerProxy;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_vote_signer::rpc::LocalVoteSigner;
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
@@ -218,10 +222,7 @@ mod test {
     pub fn test_pending_votes() {
         solana_logger::setup();
 
-        let signer = VoteSignerProxy::new(
-            &Arc::new(Keypair::new()),
-            Box::new(LocalVoteSigner::default()),
-        );
+        let signer = VoteSignerProxy::new_local(&Arc::new(Keypair::new()));
 
         // Set up dummy node to host a ReplayStage
         let my_keypair = Keypair::new();

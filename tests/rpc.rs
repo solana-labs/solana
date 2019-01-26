@@ -14,7 +14,6 @@ use solana::vote_signer_proxy::VoteSignerProxy;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
-use solana_vote_signer::rpc::LocalVoteSigner;
 use std::fs::remove_dir_all;
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
@@ -42,8 +41,7 @@ fn test_rpc_send_tx() {
     bank.leader_scheduler = leader_scheduler;
 
     let vote_account_keypair = Arc::new(Keypair::new());
-    let vote_signer =
-        VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
+    let vote_signer = VoteSignerProxy::new_local(&vote_account_keypair);
     let entry_height = 0;
     let server = Fullnode::new_with_bank(
         leader_keypair,

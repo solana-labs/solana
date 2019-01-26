@@ -21,7 +21,6 @@ use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
-use solana_vote_signer::rpc::LocalVoteSigner;
 use std::fs::remove_dir_all;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
@@ -48,8 +47,7 @@ fn test_replicator_startup() {
         tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");
 
     {
-        let signer_proxy =
-            VoteSignerProxy::new(&leader_keypair, Box::new(LocalVoteSigner::default()));
+        let signer_proxy = VoteSignerProxy::new_local(&leader_keypair);
 
         let leader = Fullnode::new_with_storage_rotate(
             leader_node,
@@ -66,8 +64,7 @@ fn test_replicator_startup() {
         );
 
         let validator_keypair = Arc::new(Keypair::new());
-        let signer_proxy =
-            VoteSignerProxy::new(&validator_keypair, Box::new(LocalVoteSigner::default()));
+        let signer_proxy = VoteSignerProxy::new_local(&validator_keypair);
 
         let mut leader_client = mk_client(&leader_info);
 
@@ -277,8 +274,7 @@ fn test_replicator_startup_ledger_hang() {
         tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");
 
     {
-        let signer_proxy =
-            VoteSignerProxy::new(&leader_keypair, Box::new(LocalVoteSigner::default()));
+        let signer_proxy = VoteSignerProxy::new_local(&leader_keypair);
 
         let _ = Fullnode::new(
             leader_node,
@@ -294,8 +290,7 @@ fn test_replicator_startup_ledger_hang() {
         );
 
         let validator_keypair = Arc::new(Keypair::new());
-        let signer_proxy =
-            VoteSignerProxy::new(&validator_keypair, Box::new(LocalVoteSigner::default()));
+        let signer_proxy = VoteSignerProxy::new_local(&validator_keypair);
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
         let _ = Fullnode::new(

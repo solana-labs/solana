@@ -15,7 +15,6 @@ use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, Vote, VoteProgram};
 use solana_sdk::vote_transaction::VoteTransaction;
-use solana_vote_signer::rpc::LocalVoteSigner;
 use std::io::Cursor;
 use std::sync::Arc;
 
@@ -495,7 +494,7 @@ pub fn make_active_set_entries(
     let mut last_entry_id = transfer_entry.id;
 
     // 2) Create and register the vote account
-    let vote_signer = VoteSignerProxy::new(active_keypair, Box::new(LocalVoteSigner::default()));
+    let vote_signer = VoteSignerProxy::new_local(active_keypair);
     let vote_account_id: Pubkey = vote_signer.vote_account;
 
     let new_vote_account_tx =
@@ -539,7 +538,6 @@ mod tests {
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_vote_signer::rpc::LocalVoteSigner;
     use std::hash::Hash as StdHash;
     use std::iter::FromIterator;
     use std::sync::Arc;
@@ -590,10 +588,7 @@ mod tests {
         for i in 0..num_validators {
             let new_validator = Keypair::new();
             let new_pubkey = new_validator.pubkey();
-            let vote_signer = VoteSignerProxy::new(
-                &Arc::new(new_validator),
-                Box::new(LocalVoteSigner::default()),
-            );
+            let vote_signer = VoteSignerProxy::new_local(&Arc::new(new_validator));
             validators.push(new_pubkey);
             // Give the validator some tokens
             bank.transfer(
@@ -720,8 +715,7 @@ mod tests {
                 .unwrap();
 
             // Create a vote account
-            let vote_signer =
-                VoteSignerProxy::new(&Arc::new(new_keypair), Box::new(LocalVoteSigner::default()));
+            let vote_signer = VoteSignerProxy::new_local(&Arc::new(new_keypair));
             vote_signer
                 .new_vote_account(&bank, 1 as u64, genesis_block.last_id())
                 .unwrap();
@@ -742,8 +736,7 @@ mod tests {
                 .unwrap();
 
             // Create a vote account
-            let vote_signer =
-                VoteSignerProxy::new(&Arc::new(new_keypair), Box::new(LocalVoteSigner::default()));
+            let vote_signer = VoteSignerProxy::new_local(&Arc::new(new_keypair));
             vote_signer
                 .new_vote_account(&bank, 1 as u64, genesis_block.last_id())
                 .unwrap();
@@ -1005,10 +998,7 @@ mod tests {
         for i in 0..num_validators {
             let new_validator = Keypair::new();
             let new_pubkey = new_validator.pubkey();
-            let vote_signer = VoteSignerProxy::new(
-                &Arc::new(new_validator),
-                Box::new(LocalVoteSigner::default()),
-            );
+            let vote_signer = VoteSignerProxy::new_local(&Arc::new(new_validator));
             validators.push(new_pubkey);
             // Give the validator some tokens
             bank.transfer(
@@ -1071,10 +1061,7 @@ mod tests {
         // window
         let initial_vote_height = 1;
 
-        let vote_signer = VoteSignerProxy::new(
-            &Arc::new(leader_keypair),
-            Box::new(LocalVoteSigner::default()),
-        );
+        let vote_signer = VoteSignerProxy::new_local(&Arc::new(leader_keypair));
         // Create a vote account
         vote_signer
             .new_vote_account(&bank, 1 as u64, genesis_block.last_id())
@@ -1221,10 +1208,7 @@ mod tests {
             bank.transfer(5, &mint_keypair, validator_id, last_id)
                 .unwrap();
             // Create a vote account
-            let vote_signer = VoteSignerProxy::new(
-                &Arc::new(validator_keypair),
-                Box::new(LocalVoteSigner::default()),
-            );
+            let vote_signer = VoteSignerProxy::new_local(&Arc::new(validator_keypair));
             vote_signer
                 .new_vote_account(&bank, 1 as u64, genesis_block.last_id())
                 .unwrap();
@@ -1261,10 +1245,7 @@ mod tests {
         .unwrap();
 
         // Create a vote account
-        let vote_signer = VoteSignerProxy::new(
-            &Arc::new(bootstrap_leader_keypair),
-            Box::new(LocalVoteSigner::default()),
-        );
+        let vote_signer = VoteSignerProxy::new_local(&Arc::new(bootstrap_leader_keypair));
         vote_signer
             .new_vote_account(&bank, vote_account_tokens as u64, genesis_block.last_id())
             .unwrap();
@@ -1387,10 +1368,7 @@ mod tests {
         // Create a vote account for the validator
         bank.transfer(5, &mint_keypair, validator_id, last_id)
             .unwrap();
-        let vote_signer = VoteSignerProxy::new(
-            &Arc::new(validator_keypair),
-            Box::new(LocalVoteSigner::default()),
-        );
+        let vote_signer = VoteSignerProxy::new_local(&Arc::new(validator_keypair));
         vote_signer
             .new_vote_account(&bank, 1 as u64, genesis_block.last_id())
             .unwrap();
@@ -1404,10 +1382,7 @@ mod tests {
         // Create a vote account for the leader
         bank.transfer(5, &mint_keypair, bootstrap_leader_id, last_id)
             .unwrap();
-        let vote_signer = VoteSignerProxy::new(
-            &Arc::new(bootstrap_leader_keypair),
-            Box::new(LocalVoteSigner::default()),
-        );
+        let vote_signer = VoteSignerProxy::new_local(&Arc::new(bootstrap_leader_keypair));
         vote_signer
             .new_vote_account(&bank, 1 as u64, genesis_block.last_id())
             .unwrap();
