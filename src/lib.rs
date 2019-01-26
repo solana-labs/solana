@@ -21,6 +21,7 @@ pub mod chacha;
 pub mod chacha_cuda;
 pub mod checkpoint;
 pub mod client;
+pub mod cluster_info_vote_listener;
 pub mod crds;
 pub mod crds_gossip;
 pub mod crds_gossip_error;

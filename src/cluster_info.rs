@@ -56,7 +56,7 @@ pub const NEIGHBORHOOD_SIZE: usize = DATA_PLANE_FANOUT;
 pub const GROW_LAYER_CAPACITY: bool = false;
 
 /// milliseconds we sleep for between gossip requests
-const GOSSIP_SLEEP_MILLIS: u64 = 100;
+pub const GOSSIP_SLEEP_MILLIS: u64 = 100;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {

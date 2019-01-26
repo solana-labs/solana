@@ -227,7 +227,7 @@ impl BroadcastService {
             ) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => {
-                        return BroadcastServiceReturnType::ChannelDisconnected
+                        return BroadcastServiceReturnType::ChannelDisconnected;
                     }
                     Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                     Error::ClusterInfoError(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?

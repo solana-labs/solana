@@ -326,6 +326,7 @@ impl Fullnode {
             // Start in leader mode.
             let (tpu, entry_receiver, tpu_exit) = Tpu::new(
                 &bank,
+                cluster_info.clone(),
                 Default::default(),
                 node.sockets
                     .tpu
@@ -483,6 +484,7 @@ impl Fullnode {
 
         let (tpu, blob_receiver, tpu_exit) = Tpu::new(
             &self.bank,
+            self.cluster_info.clone(),
             Default::default(),
             self.tpu_sockets
                 .iter()
