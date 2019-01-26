@@ -19,7 +19,7 @@ use crate::counter::Counter;
 use crate::crds_gossip::CrdsGossip;
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
-use crate::crds_value::{CrdsValue, CrdsValueLabel, LeaderId};
+use crate::crds_value::{CrdsValue, CrdsValueLabel, LeaderId, Vote};
 use crate::db_ledger::DbLedger;
 use crate::packet::{to_shared_blob, Blob, SharedBlob, BLOB_SIZE};
 use crate::result::Result;
@@ -36,6 +36,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::timing::{duration_as_ms, timestamp};
+use solana_sdk::transaction::Transaction;
 use std::cmp::min;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
@@ -248,6 +249,24 @@ impl ClusterInfo {
         warn!("{}: LEADER_UPDATE TO {} from {}", self_id, key, prev);
         entry.sign(&self.keypair);
         self.gossip.process_push_message(&[entry], now);
+    }
+
+    pub fn push_vote(&mut self, vote: Transaction) {
+        let now = timestamp();
+        let vote = Vote::new(vote, now);
+        let mut entry = CrdsValue::Vote(vote);
+        entry.sign(&self.keypair);
+        self.gossip.process_push_message(&[entry], now);
+    }
+
+    pub fn get_votes(&self) -> Vec<Transaction> {
+        self.gossip
+            .crds
+            .table
+            .values()
+            .filter_map(|x| x.value.vote())
+            .map(|x| x.transaction.clone())
+            .collect()
     }
 
     pub fn purge(&mut self, now: u64) {
@@ -1253,6 +1272,7 @@ mod tests {
     use crate::db_ledger::DbLedger;
     use crate::packet::BLOB_HEADER_SIZE;
     use crate::result::Error;
+    use crate::test_tx::test_tx;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::collections::HashSet;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -1642,5 +1662,16 @@ mod tests {
         assert!(broadcast_set.contains(&(layer_indices.last().unwrap() - 1)));
         //sanity check for past total capacity.
         assert!(!broadcast_set.contains(&(layer_indices.last().unwrap())));
+    }
+
+    #[test]
+    fn test_push_vote() {
+        let keys = Keypair::new();
+        let node_info = NodeInfo::new_localhost(keys.pubkey(), 0);
+        let mut cluster_info = ClusterInfo::new(node_info);
+        let tx = test_tx();
+        cluster_info.push_vote(tx.clone());
+        let votes = cluster_info.get_votes();
+        assert_eq!(votes, vec![tx])
     }
 }
