@@ -5,8 +5,8 @@ use solana::client::mk_client;
 use solana::cluster_info::{ClusterInfo, NodeInfo};
 use solana::gossip_service::GossipService;
 
+use solana::gen_keys::GenKeys;
 use solana::service::Service;
-use solana::signature::GenKeys;
 use solana::thin_client::poll_gossip_for_leader;
 use solana_metrics;
 use solana_sdk::signature::KeypairUtil;

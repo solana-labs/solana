@@ -877,7 +877,7 @@ impl Bank {
 mod tests {
     use super::*;
     use crate::entry::{next_entries, next_entry, Entry};
-    use crate::signature::GenKeys;
+    use crate::gen_keys::GenKeys;
     use crate::status_deque;
     use crate::status_deque::StatusDequeError;
     use bincode::serialize;

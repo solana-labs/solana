@@ -2,7 +2,7 @@
 
 extern crate test;
 
-use solana::signature::GenKeys;
+use solana::gen_keys::GenKeys;
 use test::Bencher;
 
 #[bench]

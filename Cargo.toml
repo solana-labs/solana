@@ -81,7 +81,7 @@ name = "db_ledger"
 name = "ledger"
 
 [[bench]]
-name = "signature"
+name = "gen_keys"
 
 [[bench]]
 name = "sigverify"
