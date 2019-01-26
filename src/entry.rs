@@ -486,7 +486,7 @@ mod tests {
     use crate::packet::{to_blobs, BLOB_DATA_SIZE, PACKET_DATA_SIZE};
     use solana_sdk::budget_transaction::BudgetTransaction;
     use solana_sdk::hash::hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Transaction;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -608,8 +608,7 @@ mod tests {
         let keypair = Keypair::new();
         let vote_account = Keypair::new();
         let tx = Transaction::vote_new(&vote_account.pubkey(), Vote { tick_height: 1 }, one, 1);
-        let msg = tx.get_sign_data();
-        let sig = Signature::new(&vote_account.sign(&msg).as_ref());
+        let sig = vote_account.sign_message(&tx.message());
         let tx0 = Transaction {
             signatures: vec![sig],
             account_keys: tx.account_keys,
@@ -666,8 +665,7 @@ mod tests {
         let keypair = Keypair::new();
         let vote_account = Keypair::new();
         let tx = Transaction::vote_new(&vote_account.pubkey(), Vote { tick_height: 1 }, next_id, 2);
-        let msg = tx.get_sign_data();
-        let sig = Signature::new(&vote_account.sign(&msg).as_ref());
+        let sig = vote_account.sign_message(&tx.message());
         let tx_small = Transaction {
             signatures: vec![sig],
             account_keys: tx.account_keys,

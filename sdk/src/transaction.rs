@@ -193,7 +193,7 @@ impl Transaction {
         &self.program_ids[program_ids_index as usize]
     }
     /// Get the transaction data to sign.
-    pub fn get_sign_data(&self) -> Vec<u8> {
+    pub fn message(&self) -> Vec<u8> {
         let mut buf = vec![0u8; PACKET_DATA_SIZE];
         let mut wr = Cursor::new(&mut buf[..]);
         serialize_vec_with(&mut wr, &self.account_keys, Transaction::serialize_pubkey)
@@ -213,10 +213,10 @@ impl Transaction {
     /// Sign this transaction.
     pub fn sign(&mut self, keypairs: &[&Keypair], last_id: Hash) {
         self.last_id = last_id;
-        let sign_data = self.get_sign_data();
+        let message = self.message();
         self.signatures = keypairs
             .iter()
-            .map(|keypair| Signature::new(&keypair.sign(&sign_data).as_ref()))
+            .map(|keypair| keypair.sign_message(&message))
             .collect();
     }
 
@@ -224,7 +224,7 @@ impl Transaction {
     pub fn verify_signature(&self) -> bool {
         self.signatures
             .iter()
-            .all(|s| s.verify(&self.from().as_ref(), &self.get_sign_data()))
+            .all(|s| s.verify(&self.from().as_ref(), &self.message()))
     }
 
     /// Verify that references in the instructions are valid
