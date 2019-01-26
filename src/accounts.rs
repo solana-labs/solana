@@ -266,6 +266,15 @@ impl AccountsDB {
     pub fn transaction_count(&self) -> u64 {
         self.transaction_count
     }
+
+    pub fn checkpoint_and_copy(&mut self) -> AccountsDB {
+        self.checkpoint();
+        let (accounts, tx_count) = self.checkpoints.front().unwrap();
+        let mut copy = AccountsDB::default();
+        copy.accounts = accounts.clone();
+        copy.transaction_count = *tx_count;
+        copy
+    }
 }
 
 impl Accounts {
@@ -399,12 +408,18 @@ impl Accounts {
     pub fn depth(&self) -> usize {
         self.accounts_db.read().unwrap().depth()
     }
+
+    pub fn checkpoint_and_copy(&self) -> Accounts {
+        let db = self.accounts_db.write().unwrap().checkpoint_and_copy();
+        let mut copy = Accounts::default();
+        copy.accounts_db = RwLock::new(db);
+        copy
+    }
 }
 
 impl Checkpoint for AccountsDB {
     fn checkpoint(&mut self) {
-        let mut accounts = HashMap::new();
-        std::mem::swap(&mut self.accounts, &mut accounts);
+        let accounts = self.accounts.clone();
 
         self.checkpoints
             .push_front((accounts, self.transaction_count()));

@@ -356,7 +356,6 @@ impl StorageStage {
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
         let entries = entry_receiver.recv_timeout(timeout)?;
-
         for entry in entries {
             // Go through the transactions, find votes, and use them to update
             // the storage_keys with their signatures.

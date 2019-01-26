@@ -3,7 +3,6 @@
 use crate::bank::Bank;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo, DATA_PLANE_FANOUT};
 use crate::counter::Counter;
-use crate::db_ledger::DbLedger;
 use crate::entry::Entry;
 use crate::entry::EntrySlice;
 #[cfg(feature = "erasure")]
@@ -47,7 +46,6 @@ impl Broadcast {
         receiver: &Receiver<Vec<Entry>>,
         sock: &UdpSocket,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-        db_ledger: &Arc<DbLedger>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let entries = receiver.recv_timeout(timer)?;
@@ -60,7 +58,6 @@ impl Broadcast {
             num_entries += entries.len();
             ventries.push(entries);
         }
-
         let last_tick = match self.max_tick_height {
             Some(max_tick_height) => {
                 if let Some(Some(last)) = ventries.last().map(|entries| entries.last()) {
@@ -93,10 +90,6 @@ impl Broadcast {
         let broadcast_start = Instant::now();
 
         inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
-
-        db_ledger
-            .write_consecutive_blobs(&blobs)
-            .expect("Unrecoverable failure to write to database");
 
         // don't count coding blobs in the blob indexes
         self.blob_index += blobs.len() as u64;
@@ -190,7 +183,6 @@ pub struct BroadcastService {
 
 impl BroadcastService {
     fn run(
-        db_ledger: &Arc<DbLedger>,
         bank: &Arc<Bank>,
         sock: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -218,13 +210,7 @@ impl BroadcastService {
             // Layer 1, leader nodes are limited to the fanout size.
             broadcast_table.truncate(DATA_PLANE_FANOUT);
             inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
-            if let Err(e) = broadcast.run(
-                &broadcast_table,
-                receiver,
-                sock,
-                leader_scheduler,
-                db_ledger,
-            ) {
+            if let Err(e) = broadcast.run(&broadcast_table, receiver, sock, leader_scheduler) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => {
                         return BroadcastServiceReturnType::ChannelDisconnected
@@ -256,7 +242,6 @@ impl BroadcastService {
     /// which will then close FetchStage in the Tpu, and then the rest of the Tpu,
     /// completing the cycle.
     pub fn new(
-        db_ledger: Arc<DbLedger>,
         bank: Arc<Bank>,
         sock: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,
@@ -272,7 +257,6 @@ impl BroadcastService {
             .spawn(move || {
                 let _exit = Finalizer::new(exit_sender);
                 Self::run(
-                    &db_ledger,
                     &bank,
                     &sock,
                     &cluster_info,
@@ -346,7 +330,6 @@ mod test {
 
         // Start up the broadcast stage
         let broadcast_service = BroadcastService::new(
-            db_ledger.clone(),
             bank.clone(),
             leader_info.sockets.broadcast,
             cluster_info,
@@ -364,6 +347,8 @@ mod test {
     }
 
     #[test]
+    #[ignore]
+    //TODO this test won't work since broadcast stage no longer edits the ledger
     fn test_broadcast_ledger() {
         let ledger_path = get_tmp_ledger_path("test_broadcast");
         {

@@ -116,6 +116,15 @@ impl<T: Clone> StatusDeque<T> {
                 .insert(*signature, Status::Complete(result.clone()));
         }
     }
+    pub fn checkpoint_and_copy(&mut self) -> StatusDeque<T> {
+        self.checkpoint();
+        let (tick_height, last_id, entries) = self.checkpoints.front().unwrap().clone();
+        let mut copy = StatusDeque::default();
+        copy.tick_height = tick_height;
+        copy.last_id = last_id;
+        copy.entries = entries;
+        copy
+    }
     pub fn reserve_signature_with_last_id(
         &mut self,
         last_id: &Hash,
@@ -194,7 +203,9 @@ impl<T: Clone> StatusDeque<T> {
         let current_tick_height = self.tick_height;
         let mut total = 0;
         for (tick_height, stake) in ticks_and_stakes.iter() {
-            if ((current_tick_height - tick_height) as usize) < MAX_ENTRY_IDS {
+            if current_tick_height > *tick_height
+                && ((current_tick_height - tick_height) as usize) < MAX_ENTRY_IDS
+            {
                 total += stake;
                 if total > supermajority_stake {
                     return self.tick_height_to_timestamp(*tick_height);
