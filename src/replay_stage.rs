@@ -69,7 +69,7 @@ impl ReplayStage {
         let mut blocks = vec![];
         for e in entries {
             let current = e.tick_height / TICKS_PER_BLOCK;
-            let prev = current - 1;
+            let prev = if current == 0 { 0 } else { current - 1 };
             if blocks.is_empty() {
                 blocks.push((vec![], current, prev));
             }
