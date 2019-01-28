@@ -4,7 +4,6 @@
 //! already been signed and verified.
 
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
-use crate::checkpoint::Checkpoint;
 use crate::counter::Counter;
 use crate::entry::Entry;
 use crate::entry::EntrySlice;
@@ -136,48 +135,6 @@ impl Bank {
     pub fn set_subscriptions(&self, subscriptions: Box<Arc<BankSubscriptions + Send + Sync>>) {
         let mut sub = self.subscriptions.write().unwrap();
         *sub = subscriptions
-    }
-
-    /// Checkpoint this bank and return a copy of it
-    pub fn checkpoint_and_copy(&self) -> Bank {
-        let last_ids_cp = self.last_ids.write().unwrap().checkpoint_and_copy();
-        let accounts = self.accounts.checkpoint_and_copy();
-
-        let mut copy = Bank::default();
-        copy.accounts = accounts;
-        copy.last_ids = RwLock::new(last_ids_cp);
-        copy.leader_scheduler =
-            Arc::new(RwLock::new(self.leader_scheduler.read().unwrap().clone()));
-        copy.confirmation_time = AtomicUsize::new(self.confirmation_time.load(Ordering::Relaxed));
-        copy
-    }
-
-    pub fn checkpoint(&self) {
-        self.accounts.checkpoint();
-        self.last_ids.write().unwrap().checkpoint();
-    }
-    pub fn purge(&self, depth: usize) {
-        self.accounts.purge(depth);
-        self.last_ids.write().unwrap().purge(depth);
-    }
-
-    pub fn rollback(&self) {
-        let rolled_back_pubkeys: Vec<Pubkey> = self.accounts.keys();
-        self.accounts.rollback();
-
-        rolled_back_pubkeys.iter().for_each(|pubkey| {
-            if let Some(account) = self.accounts.load_slow(&pubkey) {
-                self.subscriptions
-                    .read()
-                    .unwrap()
-                    .check_account(&pubkey, &account)
-            }
-        });
-
-        self.last_ids.write().unwrap().rollback();
-    }
-    pub fn checkpoint_depth(&self) -> usize {
-        self.accounts.depth()
     }
 
     fn process_genesis_block(&self, genesis_block: &GenesisBlock) {
@@ -869,8 +826,6 @@ mod tests {
     use super::*;
     use crate::entry::{next_entries, next_entry, Entry};
     use crate::gen_keys::GenKeys;
-    use crate::status_deque;
-    use crate::status_deque::StatusDequeError;
     use bincode::serialize;
     use hashbrown::HashSet;
     use solana_sdk::hash::hash;
@@ -1575,199 +1530,6 @@ mod tests {
             storage_program::system_id(),
         ];
         assert!(ids.into_iter().all(move |id| unique.insert(id)));
-    }
-
-    #[test]
-    fn test_bank_purge() {
-        let (genesis_block, alice) = GenesisBlock::new(10_000);
-        let bank = Bank::new(&genesis_block);
-        let bob = Keypair::new();
-        let charlie = Keypair::new();
-
-        // bob should have 500
-        bank.transfer(500, &alice, bob.pubkey(), genesis_block.last_id())
-            .unwrap();
-        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
-
-        bank.transfer(500, &alice, charlie.pubkey(), genesis_block.last_id())
-            .unwrap();
-        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
-
-        bank.checkpoint();
-        bank.checkpoint();
-        assert_eq!(bank.checkpoint_depth(), 2);
-        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
-        assert_eq!(bank.get_balance(&alice.pubkey()), 9_000);
-        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
-        assert_eq!(bank.transaction_count(), 2);
-
-        // transfer money back, so bob has zero
-        bank.transfer(500, &bob, alice.pubkey(), genesis_block.last_id())
-            .unwrap();
-        // this has to be stored as zero in the top accounts hashmap ;)
-        assert!(bank.accounts.load_slow(&bob.pubkey()).is_some());
-        assert_eq!(bank.get_balance(&bob.pubkey()), 0);
-        // double-checks
-        assert_eq!(bank.get_balance(&alice.pubkey()), 9_500);
-        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
-        assert_eq!(bank.transaction_count(), 3);
-        bank.purge(1);
-
-        assert_eq!(bank.get_balance(&bob.pubkey()), 0);
-        // double-checks
-        assert_eq!(bank.get_balance(&alice.pubkey()), 9_500);
-        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
-        assert_eq!(bank.transaction_count(), 3);
-        assert_eq!(bank.checkpoint_depth(), 1);
-
-        bank.purge(0);
-
-        // bob should still have 0, alice should have 10_000
-        assert_eq!(bank.get_balance(&bob.pubkey()), 0);
-        assert!(bank.accounts.load_slow(&bob.pubkey()).is_none());
-        // double-checks
-        assert_eq!(bank.get_balance(&alice.pubkey()), 9_500);
-        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
-        assert_eq!(bank.transaction_count(), 3);
-        assert_eq!(bank.checkpoint_depth(), 0);
-    }
-
-    #[test]
-    fn test_bank_checkpoint_zero_balance() {
-        let (genesis_block, alice) = GenesisBlock::new(1_000);
-        let bank = Bank::new(&genesis_block);
-        let bob = Keypair::new();
-        let charlie = Keypair::new();
-
-        // bob should have 500
-        bank.transfer(500, &alice, bob.pubkey(), genesis_block.last_id())
-            .unwrap();
-        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
-        assert_eq!(bank.checkpoint_depth(), 0);
-
-        let account = bank.get_account(&alice.pubkey()).unwrap();
-        let default_account = Account::default();
-        assert_eq!(account.userdata, default_account.userdata);
-        assert_eq!(account.owner, default_account.owner);
-        assert_eq!(account.executable, default_account.executable);
-        assert_eq!(account.loader, default_account.loader);
-
-        bank.checkpoint();
-        assert_eq!(bank.checkpoint_depth(), 1);
-
-        // charlie should have 500, alice should have 0
-        bank.transfer(500, &alice, charlie.pubkey(), genesis_block.last_id())
-            .unwrap();
-        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
-        assert_eq!(bank.get_balance(&alice.pubkey()), 0);
-
-        let account = bank.get_account(&alice.pubkey()).unwrap();
-        assert_eq!(account.tokens, default_account.tokens);
-        assert_eq!(account.userdata, default_account.userdata);
-        assert_eq!(account.owner, default_account.owner);
-        assert_eq!(account.executable, default_account.executable);
-        assert_eq!(account.loader, default_account.loader);
-    }
-
-    fn reserve_signature_with_last_id_test(
-        bank: &Bank,
-        sig: &Signature,
-        last_id: &Hash,
-    ) -> status_deque::Result<()> {
-        let mut last_ids = bank.last_ids.write().unwrap();
-        last_ids.reserve_signature_with_last_id(last_id, sig)
-    }
-
-    #[test]
-    fn test_bank_checkpoint_rollback() {
-        let (genesis_block, alice) = GenesisBlock::new(10_000);
-        let bank = Bank::new(&genesis_block);
-        let bob = Keypair::new();
-        let charlie = Keypair::new();
-
-        // bob should have 500
-        bank.transfer(500, &alice, bob.pubkey(), genesis_block.last_id())
-            .unwrap();
-        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
-        bank.transfer(500, &alice, charlie.pubkey(), genesis_block.last_id())
-            .unwrap();
-        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
-        assert_eq!(bank.checkpoint_depth(), 0);
-
-        bank.checkpoint();
-        bank.checkpoint();
-        assert_eq!(bank.checkpoint_depth(), 2);
-        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
-        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
-        assert_eq!(bank.transaction_count(), 2);
-
-        // transfer money back, so bob has zero
-        bank.transfer(500, &bob, alice.pubkey(), genesis_block.last_id())
-            .unwrap();
-        // this has to be stored as zero in the top accounts hashmap ;)
-        assert_eq!(bank.get_balance(&bob.pubkey()), 0);
-        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
-        assert_eq!(bank.transaction_count(), 3);
-        bank.rollback();
-
-        // bob should have 500 again
-        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
-        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
-        assert_eq!(bank.transaction_count(), 2);
-        assert_eq!(bank.checkpoint_depth(), 1);
-
-        let signature = Signature::default();
-        for i in 0..MAX_ENTRY_IDS + 1 {
-            let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-            bank.register_tick(&last_id);
-        }
-        assert_eq!(bank.tick_height(), MAX_ENTRY_IDS as u64 + 2);
-        assert_eq!(
-            reserve_signature_with_last_id_test(&bank, &signature, &genesis_block.last_id()),
-            Err(StatusDequeError::LastIdNotFound)
-        );
-        bank.rollback();
-        assert_eq!(bank.tick_height(), 1);
-        assert_eq!(
-            reserve_signature_with_last_id_test(&bank, &signature, &genesis_block.last_id()),
-            Ok(())
-        );
-        bank.checkpoint();
-        assert_eq!(
-            reserve_signature_with_last_id_test(&bank, &signature, &genesis_block.last_id()),
-            Err(StatusDequeError::DuplicateSignature)
-        );
-    }
-
-    #[test]
-    fn test_bank_checkpoint_and_copy() {
-        let (genesis_block, alice) = GenesisBlock::new(10_000);
-        let bank = Bank::new(&genesis_block);
-        let bob = Keypair::new();
-        let charlie = Keypair::new();
-
-        // bob should have 500
-        bank.transfer(500, &alice, bob.pubkey(), genesis_block.last_id())
-            .unwrap();
-        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
-        bank.transfer(500, &alice, charlie.pubkey(), genesis_block.last_id())
-            .unwrap();
-        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
-        assert_eq!(bank.checkpoint_depth(), 0);
-
-        let cp_bank = bank.checkpoint_and_copy();
-        assert_eq!(cp_bank.get_balance(&bob.pubkey()), 500);
-        assert_eq!(cp_bank.get_balance(&charlie.pubkey()), 500);
-        assert_eq!(cp_bank.checkpoint_depth(), 0);
-        assert_eq!(bank.checkpoint_depth(), 1);
-    }
-
-    #[test]
-    #[should_panic]
-    fn test_bank_rollback_panic() {
-        let (genesis_block, _) = GenesisBlock::new(10_000);
-        let bank = Bank::new(&genesis_block);
-        bank.rollback();
     }
 
     #[test]
