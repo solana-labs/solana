@@ -3,7 +3,7 @@
 use crate::bank::Bank;
 use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
-use crate::entry::EntrySlice;
+use crate::entry::{Entry, EntrySlice};
 use crate::entry::{EntryReceiver, EntrySender};
 use crate::fullnode::TvuRotationSender;
 use crate::leader_scheduler::TICKS_PER_BLOCK;
@@ -18,7 +18,10 @@ use solana_metrics::{influxdb, submit};
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::duration_as_ms;
-use std::net::UdpSocket;
+use std::io::prelude::*;
+use std::net::{Shutdown, UdpSocket};
+use std::os::unix::net::UnixStream;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::mpsc::RecvTimeoutError;
@@ -65,6 +68,7 @@ impl ReplayStage {
         ledger_entry_sender: &EntrySender,
         entry_height: &Arc<RwLock<u64>>,
         last_entry_id: &Arc<RwLock<Hash>>,
+        entry_stream: Option<&String>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         //coalesce all the available entries into a single vote
@@ -74,6 +78,12 @@ impl ReplayStage {
             if entries.len() >= MAX_ENTRY_RECV_PER_ITER {
                 break;
             }
+        }
+
+        if entry_stream.is_some() {
+            stream_entries(&entry_stream.unwrap(), &entries).unwrap_or_else(|e| {
+                error!("Entry Stream error: {:?}, {:?}", e, entry_stream.unwrap());
+            });
         }
 
         submit(
@@ -192,7 +202,7 @@ impl ReplayStage {
         Ok(())
     }
 
-    #[allow(clippy::new_ret_no_self)]
+    #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new(
         keypair: Arc<Keypair>,
         vote_signer: Option<Arc<VoteSignerProxy>>,
@@ -203,6 +213,7 @@ impl ReplayStage {
         entry_height: Arc<RwLock<u64>>,
         last_entry_id: Arc<RwLock<Hash>>,
         to_leader_sender: TvuRotationSender,
+        entry_stream: Option<String>,
     ) -> (Self, EntryReceiver) {
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let (ledger_entry_sender, ledger_entry_receiver) = channel();
@@ -244,6 +255,7 @@ impl ReplayStage {
                         &ledger_entry_sender,
                         &entry_height_.clone(),
                         &last_entry_id.clone(),
+                        entry_stream.as_ref(),
                     ) {
                         Err(Error::RecvTimeoutError(RecvTimeoutError::Disconnected)) => break,
                         Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
@@ -271,6 +283,16 @@ impl Service for ReplayStage {
         self.t_responder.join()?;
         self.t_replay.join()
     }
+}
+
+fn stream_entries(entry_stream: &str, entries: &[Entry]) -> Result<()> {
+    let mut socket = UnixStream::connect(Path::new(entry_stream))?;
+    for entry in entries {
+        let result = serde_json::to_string(&entry)?;
+        socket.write_all(result.as_bytes())?;
+    }
+    socket.shutdown(Shutdown::Write)?;
+    Ok(())
 }
 
 #[cfg(test)]
