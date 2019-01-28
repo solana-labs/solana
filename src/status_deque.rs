@@ -1,10 +1,8 @@
-use crate::checkpoint::Checkpoint;
 use crate::poh_service::NUM_TICKS_PER_SECOND;
 use hashbrown::HashMap;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Signature;
 use solana_sdk::timing::timestamp;
-use std::collections::VecDeque;
 use std::result;
 
 /// The number of most recent `last_id` values that the bank will track the signatures
@@ -67,8 +65,6 @@ pub struct StatusDeque<T> {
     /// reject transactions with signatures it's seen before and to reject
     /// transactions that are too old (nth is too small)
     entries: StatusEntryMap<T>,
-
-    checkpoints: VecDeque<(u64, Option<Hash>, StatusEntryMap<T>)>,
 }
 
 impl<T> Default for StatusDeque<T> {
@@ -77,29 +73,7 @@ impl<T> Default for StatusDeque<T> {
             tick_height: 0,
             last_id: None,
             entries: HashMap::new(),
-            checkpoints: VecDeque::new(),
         }
-    }
-}
-
-impl<T: Clone> Checkpoint for StatusDeque<T> {
-    fn checkpoint(&mut self) {
-        self.checkpoints
-            .push_front((self.tick_height, self.last_id, self.entries.clone()));
-    }
-    fn rollback(&mut self) {
-        let (tick_height, last_id, entries) = self.checkpoints.pop_front().unwrap();
-        self.tick_height = tick_height;
-        self.last_id = last_id;
-        self.entries = entries;
-    }
-    fn purge(&mut self, depth: usize) {
-        while self.depth() > depth {
-            self.checkpoints.pop_back().unwrap();
-        }
-    }
-    fn depth(&self) -> usize {
-        self.checkpoints.len()
     }
 }
 
@@ -115,15 +89,6 @@ impl<T: Clone> StatusDeque<T> {
                 .statuses
                 .insert(*signature, Status::Complete(result.clone()));
         }
-    }
-    pub fn checkpoint_and_copy(&mut self) -> StatusDeque<T> {
-        self.checkpoint();
-        let (tick_height, last_id, entries) = self.checkpoints.front().unwrap().clone();
-        let mut copy = StatusDeque::default();
-        copy.tick_height = tick_height;
-        copy.last_id = last_id;
-        copy.entries = entries;
-        copy
     }
     pub fn reserve_signature_with_last_id(
         &mut self,
@@ -265,23 +230,6 @@ mod tests {
     }
 
     #[test]
-    fn test_duplicate_transaction_signature_checkpoint() {
-        let sig = Default::default();
-        let last_id = Default::default();
-        let mut status_deque: StatusDeque<()> = StatusDeque::default();
-        status_deque.register_tick(&last_id);
-        assert_eq!(
-            status_deque.reserve_signature_with_last_id(&last_id, &sig),
-            Ok(())
-        );
-        status_deque.checkpoint();
-        assert_eq!(
-            status_deque.reserve_signature_with_last_id(&last_id, &sig),
-            Err(StatusDequeError::DuplicateSignature)
-        );
-    }
-
-    #[test]
     fn test_clear_signatures() {
         let signature = Signature::default();
         let last_id = Default::default();
@@ -290,23 +238,6 @@ mod tests {
         status_deque
             .reserve_signature_with_last_id(&last_id, &signature)
             .unwrap();
-        status_deque.clear_signatures();
-        assert_eq!(
-            status_deque.reserve_signature_with_last_id(&last_id, &signature),
-            Ok(())
-        );
-    }
-
-    #[test]
-    fn test_clear_signatures_checkpoint() {
-        let signature = Signature::default();
-        let last_id = Default::default();
-        let mut status_deque: StatusDeque<()> = StatusDeque::default();
-        status_deque.register_tick(&last_id);
-        status_deque
-            .reserve_signature_with_last_id(&last_id, &signature)
-            .unwrap();
-        status_deque.checkpoint();
         status_deque.clear_signatures();
         assert_eq!(
             status_deque.reserve_signature_with_last_id(&last_id, &signature),

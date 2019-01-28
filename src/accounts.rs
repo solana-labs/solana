@@ -1,6 +1,5 @@
 use crate::bank::BankError;
 use crate::bank::Result;
-use crate::checkpoint::Checkpoint;
 use crate::counter::Counter;
 use crate::status_deque::{StatusDeque, StatusDequeError};
 use bincode::serialize;
@@ -11,7 +10,6 @@ use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::Transaction;
 use std::collections::BTreeMap;
-use std::collections::VecDeque;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Mutex, RwLock};
 
@@ -35,9 +33,6 @@ pub struct AccountsDB {
     /// Mapping of known public keys/IDs to accounts
     pub accounts: HashMap<Pubkey, Account>,
 
-    /// list of prior states
-    checkpoints: VecDeque<(HashMap<Pubkey, Account>, u64)>,
-
     /// The number of transactions the bank has processed without error since the
     /// start of the ledger.
     transaction_count: u64,
@@ -55,7 +50,6 @@ impl Default for AccountsDB {
     fn default() -> Self {
         Self {
             accounts: HashMap::new(),
-            checkpoints: VecDeque::new(),
             transaction_count: 0,
         }
     }
@@ -91,24 +85,12 @@ impl AccountsDB {
         if let Some(account) = self.accounts.get(pubkey) {
             return Some(account);
         }
-
-        for (accounts, _) in &self.checkpoints {
-            if let Some(account) = accounts.get(pubkey) {
-                return Some(account);
-            }
-        }
         None
     }
 
     pub fn store(&mut self, pubkey: &Pubkey, account: &Account) {
         if account.tokens == 0 {
-            if self.checkpoints.is_empty() {
-                // purge if balance is 0 and no checkpoints
-                self.accounts.remove(pubkey);
-            } else {
-                // store default account if balance is 0 and there's a checkpoint
-                self.accounts.insert(pubkey.clone(), Account::default());
-            }
+            self.accounts.remove(pubkey);
         } else {
             self.accounts.insert(pubkey.clone(), account.clone());
         }
@@ -266,15 +248,6 @@ impl AccountsDB {
     pub fn transaction_count(&self) -> u64 {
         self.transaction_count
     }
-
-    pub fn checkpoint_and_copy(&mut self) -> AccountsDB {
-        self.checkpoint();
-        let (accounts, tx_count) = self.checkpoints.front().unwrap();
-        let mut copy = AccountsDB::default();
-        copy.accounts = accounts.clone();
-        copy.transaction_count = *tx_count;
-        copy
-    }
 }
 
 impl Accounts {
@@ -391,66 +364,6 @@ impl Accounts {
 
     pub fn transaction_count(&self) -> u64 {
         self.accounts_db.read().unwrap().transaction_count()
-    }
-
-    pub fn checkpoint(&self) {
-        self.accounts_db.write().unwrap().checkpoint()
-    }
-
-    pub fn rollback(&self) {
-        self.accounts_db.write().unwrap().rollback()
-    }
-
-    pub fn purge(&self, depth: usize) {
-        self.accounts_db.write().unwrap().purge(depth)
-    }
-
-    pub fn depth(&self) -> usize {
-        self.accounts_db.read().unwrap().depth()
-    }
-
-    pub fn checkpoint_and_copy(&self) -> Accounts {
-        let db = self.accounts_db.write().unwrap().checkpoint_and_copy();
-        let mut copy = Accounts::default();
-        copy.accounts_db = RwLock::new(db);
-        copy
-    }
-}
-
-impl Checkpoint for AccountsDB {
-    fn checkpoint(&mut self) {
-        let accounts = self.accounts.clone();
-
-        self.checkpoints
-            .push_front((accounts, self.transaction_count()));
-    }
-
-    fn rollback(&mut self) {
-        let (accounts, transaction_count) = self.checkpoints.pop_front().unwrap();
-        self.accounts = accounts;
-        self.transaction_count = transaction_count;
-    }
-
-    fn purge(&mut self, depth: usize) {
-        fn merge(into: &mut HashMap<Pubkey, Account>, purge: &mut HashMap<Pubkey, Account>) {
-            purge.retain(|pubkey, _| !into.contains_key(pubkey));
-            into.extend(purge.drain());
-            into.retain(|_, account| account.tokens != 0);
-        }
-
-        while self.depth() > depth {
-            let (mut purge, _) = self.checkpoints.pop_back().unwrap();
-
-            if let Some((into, _)) = self.checkpoints.back_mut() {
-                merge(into, &mut purge);
-                continue;
-            }
-            merge(&mut self.accounts, &mut purge);
-        }
-    }
-
-    fn depth(&self) -> usize {
-        self.checkpoints.len()
     }
 }
 

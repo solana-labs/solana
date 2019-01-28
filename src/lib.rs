@@ -19,7 +19,6 @@ pub mod broadcast_service;
 pub mod chacha;
 #[cfg(all(feature = "chacha", feature = "cuda"))]
 pub mod chacha_cuda;
-pub mod checkpoint;
 pub mod client;
 pub mod crds;
 pub mod crds_gossip;
