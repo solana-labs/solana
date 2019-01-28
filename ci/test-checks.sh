@@ -13,6 +13,8 @@ _ cargo fmt --all -- --check
 _ cargo clippy --all -- --version
 _ cargo clippy --all -- --deny=warnings
 _ ci/audit.sh
+_ ci/nits.sh || true # catch println!
 _ book/build.sh
+
 
 echo --- ok
