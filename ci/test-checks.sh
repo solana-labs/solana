@@ -16,5 +16,4 @@ _ ci/audit.sh
 _ ci/nits.sh || true # catch println!
 _ book/build.sh
 
-
 echo --- ok
