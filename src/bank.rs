@@ -1371,10 +1371,6 @@ mod tests {
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
-        println!("KP1 {:?}", keypair1.pubkey());
-        println!("KP2 {:?}", keypair2.pubkey());
-        println!("KP3 {:?}", keypair3.pubkey());
-        println!("GenesisBlock {:?}", mint_keypair.pubkey());
 
         // fund: put 4 in each of 1 and 2
         assert_matches!(

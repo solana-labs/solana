@@ -76,7 +76,7 @@ pub fn chacha_cbc_encrypt_ledger(
 
                 chacha_cbc_encrypt(&buffer[..size], &mut encrypted_buffer[..size], &key, ivec);
                 if let Err(res) = out_file.write(&encrypted_buffer[..size]) {
-                    println!("Error writing file! {:?}", res);
+                    warn!("Error writing file! {:?}", res);
                     return Err(res);
                 }
 

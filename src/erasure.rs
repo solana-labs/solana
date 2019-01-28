@@ -881,7 +881,6 @@ pub mod test {
                 (thread_rng().gen_range(2, 8) * 4) + 1
             };
 
-            eprintln!("data_len of {} is {}", i, data_len);
             w.set_size(data_len);
 
             for k in 0..data_len {
@@ -970,7 +969,6 @@ pub mod test {
         let num_blobs = NUM_DATA + 2;
         let mut window = setup_window_ledger(offset, num_blobs, true, DEFAULT_SLOT_HEIGHT);
 
-        println!("** whack data block:");
         // Test erasing a data block
         let erase_offset = offset % window.len();
 
@@ -1019,7 +1017,6 @@ pub mod test {
         let num_blobs = NUM_DATA + 2;
         let mut window = setup_window_ledger(offset, num_blobs, true, DEFAULT_SLOT_HEIGHT);
 
-        println!("** whack coding block and data block");
         // Tests erasing a coding block and a data block
         let coding_start = offset - (offset % NUM_DATA) + (NUM_DATA - NUM_CODING);
         let erase_offset = coding_start % window.len();
