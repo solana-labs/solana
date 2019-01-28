@@ -24,7 +24,14 @@ pub(super) const INDEX_RECORD_SIZE: u64 = 3 * 8;
 
 impl Store {
     pub(super) fn mk_slot_path(&self, slot_height: u64) -> PathBuf {
-        self.root.join(&format!("{:#016x}", slot_height))
+        let splat = slot_height.to_be_bytes();
+        let mut path = self.root.join(format!("{:#04x}", splat[0]));
+
+        for byte in &splat[1..] {
+            path = path.join(format!("{:02x}", byte));
+        }
+
+        path
     }
 
     pub(super) fn mk_data_path(&self, slot_height: u64) -> PathBuf {
@@ -162,9 +169,7 @@ impl Store {
                 range.start, range.end
             );
             let slot_path = self.mk_slot_path(slot);
-            if !slot_path.exists() {
-                fs::create_dir(&slot_path)?;
-            }
+            ensure_slot(&slot_path)?;
 
             let (data_path, meta_path, index_path) = (
                 slot_path.join(store_impl::DATA_FILE_NAME),
@@ -364,4 +369,17 @@ where
     let f = OpenOptions::new().append(true).create(true).open(path)?;
 
     Ok(f)
+}
+
+pub(super) fn ensure_slot<P>(path: P) -> Result<()>
+where
+    P: AsRef<Path>,
+{
+    let path = path.as_ref();
+
+    if !path.exists() {
+        fs::create_dir_all(&path)?;
+    }
+
+    Ok(())
 }

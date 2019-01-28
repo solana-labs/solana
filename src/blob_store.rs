@@ -62,9 +62,7 @@ impl Store {
 
     pub fn put_meta(&self, slot: u64, meta: SlotMeta) -> Result<()> {
         let slot_path = self.mk_slot_path(slot);
-        if !slot_path.exists() {
-            fs::create_dir(&slot_path)?;
-        }
+        store_impl::ensure_slot(&slot_path)?;
 
         let meta_path = slot_path.join(store_impl::META_FILE_NAME);
 
@@ -135,10 +133,7 @@ impl Store {
 
     pub fn put_erasure(&self, slot: u64, index: u64, erasure: &[u8]) -> Result<()> {
         let slot_path = self.mk_slot_path(slot);
-
-        if !slot_path.exists() {
-            fs::create_dir(&slot_path)?;
-        }
+        store_impl::ensure_slot(&slot_path)?;
 
         let (index_path, data_path) = (
             slot_path.join(store_impl::ERASURE_INDEX_FILE_NAME),
