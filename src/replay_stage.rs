@@ -356,10 +356,10 @@ mod test {
         let num_bootstrap_slots = 2;
         let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            Some(bootstrap_height),
-            Some(leader_rotation_interval),
-            Some(leader_rotation_interval * 2),
-            Some(bootstrap_height),
+            bootstrap_height,
+            leader_rotation_interval,
+            leader_rotation_interval * 2,
+            bootstrap_height,
         );
 
         let leader_scheduler =
@@ -571,10 +571,10 @@ mod test {
         let num_bootstrap_slots = 2;
         let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            Some(bootstrap_height),
-            Some(leader_rotation_interval),
-            Some(leader_rotation_interval * 2),
-            Some(bootstrap_height),
+            bootstrap_height,
+            leader_rotation_interval,
+            leader_rotation_interval * 2,
+            bootstrap_height,
         );
 
         let leader_scheduler =
