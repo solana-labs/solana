@@ -65,7 +65,7 @@ tokio-codec = "0.1"
 untrusted = "0.6.2"
 
 [dev-dependencies]
-hex-literal = "0.1.1"
+hex-literal = "0.1.2"
 matches = "0.1.6"
 
 [[bench]]
