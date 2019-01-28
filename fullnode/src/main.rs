@@ -131,17 +131,6 @@ fn main() {
     let matches = App::new("fullnode")
         .version(crate_version!())
         .arg(
-            Arg::with_name("nosigverify")
-                .short("v")
-                .long("nosigverify")
-                .help("Run without signature verification"),
-        )
-        .arg(
-            Arg::with_name("no-leader-rotation")
-                .long("no-leader-rotation")
-                .help("Disable leader rotation"),
-        )
-        .arg(
             Arg::with_name("identity")
                 .short("i")
                 .long("identity")
@@ -150,20 +139,11 @@ fn main() {
                 .help("Run with the identity found in FILE"),
         )
         .arg(
-            Arg::with_name("network")
-                .short("n")
-                .long("network")
-                .value_name("HOST:PORT")
+            Arg::with_name("init_complete_file")
+                .long("init-complete-file")
+                .value_name("FILE")
                 .takes_value(true)
-                .help("Rendezvous with the cluster at this gossip entry point"),
-        )
-        .arg(
-            Arg::with_name("signer")
-                .short("s")
-                .long("signer")
-                .value_name("HOST:PORT")
-                .takes_value(true)
-                .help("Rendezvous with the vote signer at this RPC end point"),
+                .help("Create this file, if it doesn't already exist, once node initialization is complete"),
         )
         .arg(
             Arg::with_name("ledger")
@@ -175,18 +155,17 @@ fn main() {
                 .help("Use DIR as persistent ledger location"),
         )
         .arg(
-            Arg::with_name("rpc_port")
-                .long("rpc-port")
-                .value_name("PORT")
+            Arg::with_name("network")
+                .short("n")
+                .long("network")
+                .value_name("HOST:PORT")
                 .takes_value(true)
-                .help("RPC port to use for this node"),
+                .help("Rendezvous with the cluster at this gossip entry point"),
         )
         .arg(
-            Arg::with_name("init_complete_file")
-                .long("init-complete-file")
-                .value_name("FILE")
-                .takes_value(true)
-                .help("Create this file, if it doesn't already exist, once node initialization is complete"),
+            Arg::with_name("no_leader_rotation")
+                .long("no-leader-rotation")
+                .help("Disable leader rotation"),
         )
         .arg(
             Arg::with_name("no_signer")
@@ -195,11 +174,32 @@ fn main() {
                 .conflicts_with("signer")
                 .help("Launch node without vote signer"),
         )
+        .arg(
+            Arg::with_name("no_sigverify")
+                .short("v")
+                .long("no-sigverify")
+                .help("Run without signature verification"),
+        )
+        .arg(
+            Arg::with_name("rpc_port")
+                .long("rpc-port")
+                .value_name("PORT")
+                .takes_value(true)
+                .help("RPC port to use for this node"),
+        )
+        .arg(
+            Arg::with_name("signer")
+                .short("s")
+                .long("signer")
+                .value_name("HOST:PORT")
+                .takes_value(true)
+                .help("Rendezvous with the vote signer at this RPC end point"),
+        )
         .get_matches();
 
-    let no_sigverify = matches.is_present("nosigverify");
+    let no_sigverify = matches.is_present("no_sigverify");
     let no_signer = matches.is_present("no_signer");
-    let use_only_bootstrap_leader = matches.is_present("no-leader-rotation");
+    let use_only_bootstrap_leader = matches.is_present("no_leader_rotation");
     let (keypair, gossip) = parse_identity(&matches);
     let ledger_path = matches.value_of("ledger").unwrap();
     let cluster_entrypoint = matches

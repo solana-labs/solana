@@ -21,17 +21,17 @@ usage() {
     echo
   fi
   cat <<EOF
-usage: $0 [-x] [--no-leader-rotation] [--init-complete-file FILE] [--rpc-port port] [--no-signer] [rsync network path to bootstrap leader configuration] [network entry point]
+usage: $0 [-x] [--init-complete-file FILE] [--no-leader-rotation] [--no-signer] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]
 
 Start a full node on the specified network
 
   -x                    - start a new, dynamically-configured full node
   -X [label]            - start or restart a dynamically-configured full node with
                           the specified label
-  --no-leader-rotation  - disable leader rotation
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
-  --rpc-port port       - custom RPC port for this node
+  --no-leader-rotation  - disable leader rotation
   --no-signer           - start node without vote signer
+  --rpc-port port       - custom RPC port for this node
 
 EOF
   exit 1
@@ -43,9 +43,9 @@ fi
 
 maybe_init_complete_file=
 maybe_no_leader_rotation=
-self_setup=0
-maybe_rpc_port=
 maybe_no_signer=
+maybe_rpc_port=
+self_setup=0
 
 while [[ ${1:0:1} = - ]]; do
   if [[ $1 = -X ]]; then
@@ -62,12 +62,12 @@ while [[ ${1:0:1} = - ]]; do
   elif [[ $1 = --no-leader-rotation ]]; then
     maybe_no_leader_rotation="--no-leader-rotation"
     shift
-  elif [[ $1 = --rpc-port ]]; then
-    maybe_rpc_port="$1 $2"
-    shift 2
   elif [[ $1 = --no-signer ]]; then
     maybe_no_signer="--no-signer"
     shift
+  elif [[ $1 = --rpc-port ]]; then
+    maybe_rpc_port="$1 $2"
+    shift 2
   else
     echo "Unknown argument: $1"
     exit 1
@@ -241,12 +241,12 @@ if [[ ! -d "$ledger_config_dir" ]]; then
 fi
 
 trap 'kill "$pid" && wait "$pid"' INT TERM
-# shellcheck disable=SC2086 # Don't want to double quote maybe_rpc_port or maybe_init_complete_file or maybe_no_signer
+# shellcheck disable=SC2086 # Don't want to double quote maybe_init_complete_file or maybe_no_signer or maybe_rpc_port
 $program \
   $maybe_init_complete_file \
   $maybe_no_leader_rotation \
-  $maybe_rpc_port \
   $maybe_no_signer \
+  $maybe_rpc_port \
   --identity "$fullnode_json_path" \
   --network "$leader_address" \
   --ledger "$ledger_config_dir" \
