@@ -22,10 +22,7 @@ pub struct StatusCache {
 
 impl StatusCache {
     pub fn new(last_id: &Hash) -> Self {
-        let keys = (0..27)
-            .into_iter()
-            .map(|i| last_id.hash_at_index(i))
-            .collect();
+        let keys = (0..27).map(|i| last_id.hash_at_index(i)).collect();
         Self {
             signatures: Bloom::new(38_340_234, keys),
             failures: HashMap::new(),

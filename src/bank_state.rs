@@ -704,5 +704,96 @@ mod test {
         let updated_results = BankState::ignore_program_errors(results);
         assert_ne!(updated_results, expected_results);
     }
+    //#[test]
+    //fn test_bank_record_transactions() {
+    //    let mint = Mint::new(10_000);
+    //    let bank = Arc::new(Bank::new(&mint));
+    //    let (entry_sender, entry_receiver) = channel();
+    //    let poh_recorder = PohRecorder::new(bank.clone(), entry_sender, bank.last_id(), None);
+    //    let pubkey = Keypair::new().pubkey();
 
+    //    let transactions = vec![
+    //        Transaction::system_move(&mint.keypair(), pubkey, 1, mint.last_id(), 0),
+    //        Transaction::system_move(&mint.keypair(), pubkey, 1, mint.last_id(), 0),
+    //    ];
+
+    //    let mut results = vec![Ok(()), Ok(())];
+    //    BankStater::record_transactions(&transactions, &results, &poh_recorder)
+    //        .unwrap();
+    //    let entries = entry_receiver.recv().unwrap();
+    //    assert_eq!(entries[0].transactions.len(), transactions.len());
+
+    //    // ProgramErrors should still be recorded
+    //    results[0] = Err(BankError::ProgramError(
+    //        1,
+    //        ProgramError::ResultWithNegativeTokens,
+    //    ));
+    //    BankState::record_transactions(&transactions, &results, &poh_recorder)
+    //        .unwrap();
+    //    let entries = entry_receiver.recv().unwrap();
+    //    assert_eq!(entries[0].transactions.len(), transactions.len());
+
+    //    // Other BankErrors should not be recorded
+    //    results[0] = Err(BankError::AccountNotFound);
+    //    BankState::record_transactions(&transactions, &results, &poh_recorder)
+    //        .unwrap();
+    //    let entries = entry_receiver.recv().unwrap();
+    //    assert_eq!(entries[0].transactions.len(), transactions.len() - 1);
+    //}
+    //
+    // #[test]
+    // fn test_bank_process_and_record_transactions() {
+    //     let mint = Mint::new(10_000);
+    //     let bank = Arc::new(Bank::new(&mint));
+    //     let pubkey = Keypair::new().pubkey();
+
+    //     let transactions = vec![Transaction::system_move(
+    //         &mint.keypair(),
+    //         pubkey,
+    //         1,
+    //         mint.last_id(),
+    //         0,
+    //     )];
+
+    //     let (entry_sender, entry_receiver) = channel();
+    //     let mut poh_recorder = PohRecorder::new(
+    //         bank.clone(),
+    //         entry_sender,
+    //         bank.last_id(),
+    //         Some(bank.tick_height() + 1),
+    //     );
+
+    //     bank.process_and_record_transactions(&transactions, &poh_recorder)
+    //         .unwrap();
+    //     poh_recorder.tick().unwrap();
+
+    //     let mut need_tick = true;
+    //     // read entries until I find mine, might be ticks...
+    //     while need_tick {
+    //         let entries = entry_receiver.recv().unwrap();
+    //         for entry in entries {
+    //             if !entry.is_tick() {
+    //                 assert_eq!(entry.transactions.len(), transactions.len());
+    //                 assert_eq!(bank.get_balance(&pubkey), 1);
+    //             } else {
+    //                 need_tick = false;
+    //             }
+    //         }
+    //     }
+
+    //     let transactions = vec![Transaction::system_move(
+    //         &mint.keypair(),
+    //         pubkey,
+    //         2,
+    //         mint.last_id(),
+    //         0,
+    //     )];
+
+    //     assert_eq!(
+    //         bank.process_and_record_transactions(&transactions, &poh_recorder),
+    //         Err(BankError::RecordFailure)
+    //     );
+
+    //     assert_eq!(bank.get_balance(&pubkey), 1);
+    // }
 }

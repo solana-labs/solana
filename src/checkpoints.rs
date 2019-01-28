@@ -71,7 +71,7 @@ impl<T: Clone> Checkpoints<T> {
             let (data, prev) = self.load(trunk).expect("load from inverse").clone();
             new.store(trunk, data.clone(), prev);
             if let Some(children) = inverse.get(&trunk) {
-                let mut next = children.into_iter().map(|x| *x).collect();
+                let mut next = children.into_iter().cloned().collect();
                 queue.append(&mut next);
             }
         }

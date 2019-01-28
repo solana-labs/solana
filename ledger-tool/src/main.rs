@@ -139,7 +139,7 @@ fn main() {
                 last_id = entry.id;
                 num_entries += 1;
 
-                if let Err(e) = bank.process_entry(&entry) {
+                if let Err(e) = bank.process_entries(&[entry]) {
                     eprintln!("verify failed at entry[{}], err: {:?}", i + 2, e);
                     if !matches.is_present("continue") {
                         exit(1);

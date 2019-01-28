@@ -211,6 +211,14 @@ impl ReplayStage {
                 }
             }
         }
+        let (scheduled_leader, _) = bank
+            .get_current_leader()
+            .expect("Scheduled leader should be calculated by this point");
+
+        // TODO: Remove this soon once we boot the leader from ClusterInfo
+        if scheduled_leader != current_leader {
+            cluster_info.write().unwrap().set_leader(scheduled_leader);
+        }
         inc_new_counter_info!(
             "replicate_stage-duration",
             duration_as_ms(&now.elapsed()) as usize
