@@ -41,6 +41,7 @@ fn get_put_simple() {
 
     assert_eq!(meta, meta2);
 
+    // simple blob insert
     let entries = entry::make_tiny_test_entries(1);
     let blob = entries[0].to_blob();
 
@@ -49,6 +50,15 @@ fn get_put_simple() {
     let out_blob = store.get_blob(slot, idx).expect("couldn't retrieve blob");
 
     assert_eq!(blob, out_blob);
+
+    // simple erasure insert
+    let code: Vec<u8> = (0u8..255u8).cycle().take(1024).collect();
+    store
+        .put_erasure(5, 2, &code)
+        .expect("couldn't insert erasure");
+    let out_code = store.get_erasure(5, 2).expect("couldn't retrieve erasure");
+
+    assert_eq!(code, out_code);
 
     drop(store);
     Store::destroy(&p).expect("destruction should succeed");

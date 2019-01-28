@@ -11,19 +11,17 @@ use crate::db_ledger::SlotMeta;
 use crate::entry::Entry;
 use crate::packet::Blob;
 
+use byteorder::{BigEndian, ByteOrder};
+
 use serde::Serialize;
 
 use std::borrow::Borrow;
 use std::error::Error;
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, prelude::*, BufReader, Seek, SeekFrom};
+use std::io::{self, prelude::*, BufReader, BufWriter, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::result::Result as StdRes;
-
-mod store_impl;
-#[cfg(test)]
-mod tests;
 
 type Result<T> = StdRes<T, StoreError>;
 
@@ -48,12 +46,10 @@ struct BlobIndex {
     pub size: u64,
 }
 
-/// Dummy struct that will disappear, just getting tests compiling
 pub struct Entries;
 
 pub struct DataIter;
 
-/// Dummy struct that will disappear, just getting tests compiling
 impl Store {
     pub fn new<P>(path: &P) -> Store
     where
@@ -127,11 +123,67 @@ impl Store {
     }
 
     pub fn get_erasure(&self, slot: u64, index: u64) -> Result<Vec<u8>> {
-        unimplemented!()
+        let (erasure_path, index) = self.index_erasure(slot, index)?;
+
+        let mut erasure_file = File::open(&erasure_path)?;
+        erasure_file.seek(SeekFrom::Start(index.offset))?;
+        let mut data = vec![0u8; index.size as usize];
+        erasure_file.read_exact(&mut data)?;
+
+        Ok(data)
     }
 
-    pub fn put_erasure(&self, slot: u64, index: u64) -> Result<()> {
-        unimplemented!()
+    pub fn put_erasure(&self, slot: u64, index: u64, erasure: &[u8]) -> Result<()> {
+        let slot_path = self.mk_slot_path(slot);
+
+        if !slot_path.exists() {
+            fs::create_dir(&slot_path)?;
+        }
+
+        let (index_path, data_path) = (
+            slot_path.join(store_impl::ERASURE_INDEX_FILE_NAME),
+            slot_path.join(store_impl::ERASURE_FILE_NAME),
+        );
+
+        println!(
+            "put_erasure: index_path = {}, slot_path = {}",
+            index_path.to_string_lossy(),
+            slot_path.to_string_lossy()
+        );
+
+        let mut erasure_wtr = BufWriter::new(store_impl::open_append(&data_path)?);
+        let mut index_wtr = BufWriter::new(store_impl::open_append(&index_path)?);
+
+        let mut idx_buf = [0u8; store_impl::INDEX_RECORD_SIZE as usize];
+
+        let offset = erasure_wtr.seek(SeekFrom::Current(0))?;
+        let size = erasure.len() as u64;
+
+        erasure_wtr.write_all(&erasure)?;
+
+        let idx = BlobIndex {
+            index,
+            size,
+            offset,
+        };
+
+        BigEndian::write_u64(&mut idx_buf[0..8], idx.index);
+        BigEndian::write_u64(&mut idx_buf[8..16], idx.offset);
+        BigEndian::write_u64(&mut idx_buf[16..24], idx.size);
+
+        println!("put_erasure: idx = {:?}", idx);
+        index_wtr.write_all(&idx_buf)?;
+
+        erasure_wtr.flush()?;
+        index_wtr.flush()?;
+
+        let erasure_file = erasure_wtr.into_inner()?;
+        let index_file = index_wtr.into_inner()?;
+
+        erasure_file.sync_data()?;
+        index_file.sync_data()?;
+
+        Ok(())
     }
 
     pub fn put_blobs<'a, I>(&self, iter: I) -> Result<()>
@@ -258,3 +310,8 @@ impl Iterator for DataIter {
         unimplemented!()
     }
 }
+
+mod store_impl;
+
+#[cfg(test)]
+mod tests;

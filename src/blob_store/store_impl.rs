@@ -15,7 +15,8 @@ use super::*;
 const DATA_FILE_NAME: &str = "data";
 pub(super) const META_FILE_NAME: &str = "meta";
 const INDEX_FILE_NAME: &str = "index";
-const ERASURE_FILE_NAME: &str = "erasure";
+pub(super) const ERASURE_FILE_NAME: &str = "erasure";
+pub(super) const ERASURE_INDEX_FILE_NAME: &str = "erasure_index";
 
 const DATA_FILE_BUF_SIZE: usize = 64 * 1024 * 32;
 
@@ -36,6 +37,10 @@ impl Store {
 
     pub(super) fn mk_erasure_path(&self, slot_height: u64) -> PathBuf {
         self.mk_slot_path(slot_height).join(ERASURE_FILE_NAME)
+    }
+
+    pub(super) fn mk_erasure_index_path(&self, slot: u64) -> PathBuf {
+        self.mk_slot_path(slot).join(ERASURE_INDEX_FILE_NAME)
     }
 
     // TODO: possibly optimize by checking metadata and immediately quiting based on too big indices
@@ -74,6 +79,44 @@ impl Store {
         }
 
         Err(StoreError::NoSuchBlob(slot_height, blob_index))
+    }
+
+    // TODO: possibly optimize by checking metadata and immediately quiting based on too big indices
+    pub(super) fn index_erasure(
+        &self,
+        slot: u64,
+        erasure_index: u64,
+    ) -> Result<(PathBuf, BlobIndex)> {
+        let slot_path = self.mk_slot_path(slot);
+        if !slot_path.exists() {
+            return Err(StoreError::NoSuchSlot(slot));
+        }
+
+        let (erasure_path, index_path) = (
+            slot_path.join(ERASURE_FILE_NAME),
+            slot_path.join(ERASURE_INDEX_FILE_NAME),
+        );
+
+        let mut index_file = BufReader::new(File::open(&index_path)?);
+
+        let mut buf = [0u8; INDEX_RECORD_SIZE as usize];
+        while let Ok(_) = index_file.read_exact(&mut buf) {
+            let index = BigEndian::read_u64(&buf[0..8]);
+            if index == erasure_index {
+                let offset = BigEndian::read_u64(&buf[8..16]);
+                let size = BigEndian::read_u64(&buf[16..24]);
+                return Ok((
+                    erasure_path,
+                    BlobIndex {
+                        index,
+                        offset,
+                        size,
+                    },
+                ));
+            }
+        }
+
+        Err(StoreError::NoSuchBlob(slot, erasure_index))
     }
 
     pub(super) fn insert_blobs<I>(&self, iter: I) -> Result<()>
