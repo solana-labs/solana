@@ -376,10 +376,7 @@ mod test {
                 max_tick_height,
             );
 
-            let ticks = create_ticks(
-                (max_tick_height - start_tick_height) as usize,
-                Hash::default(),
-            );
+            let ticks = create_ticks(max_tick_height - start_tick_height, Hash::default());
             for (i, mut tick) in ticks.into_iter().enumerate() {
                 // Simulate the tick heights generated in poh.rs
                 tick.tick_height = start_tick_height + i as u64 + 1;

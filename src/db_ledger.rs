@@ -895,7 +895,7 @@ pub fn create_tmp_genesis(
 pub fn create_tmp_sample_ledger(
     name: &str,
     num_tokens: u64,
-    num_ending_ticks: usize,
+    num_ending_ticks: u64,
     bootstrap_leader_id: Pubkey,
     bootstrap_leader_tokens: u64,
 ) -> (GenesisBlock, Keypair, String, Vec<Entry>) {

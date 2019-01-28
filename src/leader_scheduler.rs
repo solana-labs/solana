@@ -485,7 +485,7 @@ pub fn make_active_set_entries(
     token_source: &Keypair,
     last_entry_id: &Hash,
     last_tick_id: &Hash,
-    num_ending_ticks: usize,
+    num_ending_ticks: u64,
 ) -> (Vec<Entry>, VoteSignerProxy) {
     // 1) Create transfer token entry
     let transfer_tx =

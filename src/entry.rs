@@ -386,9 +386,9 @@ pub fn next_entries(
     next_entries_mut(&mut id, &mut num_hashes, transactions)
 }
 
-pub fn create_ticks(num_ticks: usize, mut hash: Hash) -> Vec<Entry> {
+pub fn create_ticks(num_ticks: u64, mut hash: Hash) -> Vec<Entry> {
     let mut ticks = Vec::with_capacity(num_ticks as usize);
-    for _ in 0..num_ticks as u64 {
+    for _ in 0..num_ticks {
         let new_tick = Entry::new(&hash, 0, 1, vec![]);
         hash = new_tick.id;
         ticks.push(new_tick);
@@ -453,7 +453,7 @@ pub fn make_consecutive_blobs(
     start_hash: Hash,
     addr: &std::net::SocketAddr,
 ) -> Vec<SharedBlob> {
-    let entries = create_ticks(num_blobs_to_make as usize, start_hash);
+    let entries = create_ticks(num_blobs_to_make, start_hash);
 
     let blobs = entries.to_shared_blobs();
     let mut index = start_height;
