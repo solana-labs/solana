@@ -20,7 +20,7 @@ use crate::fullnode::TvuRotationSender;
 use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
 use crate::service::Service;
-use crate::storage_stage::StorageStage;
+use crate::storage_stage::{StorageStage, StorageState};
 use crate::vote_signer_proxy::VoteSignerProxy;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Keypair;
@@ -60,6 +60,7 @@ impl Tvu {
     /// * `cluster_info` - The cluster_info state.
     /// * `sockets` - My fetch, repair, and restransmit sockets
     /// * `db_ledger` - the ledger itself
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         vote_signer: Option<Arc<VoteSignerProxy>>,
         bank: &Arc<Bank>,
@@ -70,6 +71,7 @@ impl Tvu {
         db_ledger: Arc<DbLedger>,
         storage_rotate_count: u64,
         to_leader_sender: TvuRotationSender,
+        storage_state: &StorageState,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
         let keypair: Arc<Keypair> = cluster_info
@@ -122,7 +124,7 @@ impl Tvu {
         );
 
         let storage_stage = StorageStage::new(
-            &bank.storage_state,
+            storage_state,
             ledger_entry_receiver,
             Some(db_ledger),
             &keypair,
@@ -190,7 +192,7 @@ pub mod tests {
     use crate::genesis_block::GenesisBlock;
     use crate::packet::SharedBlob;
     use crate::service::Service;
-    use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
+    use crate::storage_stage::{StorageState, STORAGE_ROTATE_TEST_COUNT};
     use crate::streamer;
     use crate::tvu::{Sockets, Tvu};
     use crate::vote_signer_proxy::VoteSignerProxy;
@@ -297,6 +299,7 @@ pub mod tests {
             Arc::new(db_ledger),
             STORAGE_ROTATE_TEST_COUNT,
             sender,
+            &StorageState::default(),
         );
 
         let mut alice_ref_balance = starting_balance;

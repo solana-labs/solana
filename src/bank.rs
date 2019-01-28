@@ -13,7 +13,6 @@ use crate::leader_scheduler::LeaderScheduler;
 use crate::poh_recorder::PohRecorder;
 use crate::runtime::{self, RuntimeError};
 use crate::status_deque::{Status, StatusDeque, MAX_ENTRY_IDS};
-use crate::storage_stage::StorageState;
 use bincode::deserialize;
 use itertools::Itertools;
 use log::Level;
@@ -112,8 +111,6 @@ pub struct Bank {
     /// processed by the bank
     pub leader_scheduler: Arc<RwLock<LeaderScheduler>>,
 
-    pub storage_state: StorageState,
-
     subscriptions: RwLock<Box<Arc<BankSubscriptions + Send + Sync>>>,
 }
 
@@ -124,7 +121,6 @@ impl Default for Bank {
             last_ids: RwLock::new(StatusDeque::default()),
             confirmation_time: AtomicUsize::new(std::usize::MAX),
             leader_scheduler: Arc::new(RwLock::new(LeaderScheduler::default())),
-            storage_state: StorageState::new(),
             subscriptions: RwLock::new(Box::new(Arc::new(LocalSubscriptions::default()))),
         }
     }
@@ -296,11 +292,6 @@ impl Bank {
             .unwrap()
             .last_id
             .expect("no last_id has been set")
-    }
-
-    pub fn get_pubkeys_for_entry_height(&self, entry_height: u64) -> Vec<Pubkey> {
-        self.storage_state
-            .get_pubkeys_for_entry_height(entry_height)
     }
 
     pub fn get_storage_entry_height(&self) -> u64 {
@@ -1884,7 +1875,6 @@ mod tests {
 
         assert_eq!(bank.get_storage_entry_height(), ENTRIES_PER_SEGMENT);
         assert_eq!(bank.get_storage_last_id(), storage_last_id);
-        assert_eq!(bank.get_pubkeys_for_entry_height(0), vec![]);
     }
 
     #[test]
