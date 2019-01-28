@@ -30,13 +30,11 @@ fn test_wallet_deploy_program() {
     config.drone_port = drone_addr.port();
     config.rpc_port = leader_data.rpc.port();
     config.command = WalletCommand::Airdrop(50);
-    let response = process_command(&config);
-    assert!(response.is_ok());
+    process_command(&config).unwrap();
 
     config.command = WalletCommand::Deploy(pathbuf.to_str().unwrap().to_string());
 
     let response = process_command(&config);
-    assert!(response.is_ok());
     let json: Value = serde_json::from_str(&response.unwrap()).unwrap();
     let program_id_str = json
         .as_object()

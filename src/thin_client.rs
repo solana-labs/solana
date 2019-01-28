@@ -564,7 +564,7 @@ mod tests {
         let last_id = client.get_last_id();
         let signature = client.transfer(500, &alice, bob_pubkey, &last_id).unwrap();
 
-        assert!(client.poll_for_signature(&signature).is_ok());
+        client.poll_for_signature(&signature).unwrap();
 
         server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
@@ -584,7 +584,7 @@ mod tests {
             .transfer(500, &alice, validator_keypair.pubkey(), &last_id)
             .unwrap();
 
-        assert!(client.poll_for_signature(&signature).is_ok());
+        client.poll_for_signature(&signature).unwrap();
 
         // Create and register the vote account
         let validator_vote_account_keypair = Keypair::new();
@@ -594,7 +594,7 @@ mod tests {
         let transaction =
             VoteTransaction::vote_account_new(&validator_keypair, vote_account_id, last_id, 1, 1);
         let signature = client.transfer_signed(&transaction).unwrap();
-        assert!(client.poll_for_signature(&signature).is_ok());
+        client.poll_for_signature(&signature).unwrap();
 
         let balance = retry_get_balance(&mut client, &vote_account_id, Some(1))
             .expect("Expected balance for new account to exist");
@@ -648,17 +648,16 @@ mod tests {
         let signature = client
             .transfer(500, &alice, bob_keypair.pubkey(), &last_id)
             .unwrap();
-        assert!(client.poll_for_signature(&signature).is_ok());
+        client.poll_for_signature(&signature).unwrap();
 
         let balance = client.poll_get_balance(&bob_keypair.pubkey());
-        assert!(balance.is_ok());
         assert_eq!(balance.unwrap(), 500);
 
         // take them away
         let signature = client
             .transfer(500, &bob_keypair, alice.pubkey(), &last_id)
             .unwrap();
-        assert!(client.poll_for_signature(&signature).is_ok());
+        client.poll_for_signature(&signature).unwrap();
         let balance = client.poll_get_balance(&alice.pubkey());
         assert_eq!(balance.unwrap(), 10_000);
 

@@ -307,7 +307,7 @@ mod test {
             ENTRIES_PER_SEGMENT,
         );
 
-        assert!(test_transaction(&tx, &mut accounts).is_ok());
+        test_transaction(&tx, &mut accounts).unwrap();
 
         let tx = Transaction::storage_new_mining_proof(
             &keypair,
@@ -317,7 +317,7 @@ mod test {
             Signature::default(),
         );
 
-        assert!(test_transaction(&tx, &mut accounts).is_ok());
+        test_transaction(&tx, &mut accounts).unwrap();
     }
 
     #[test]
@@ -336,7 +336,7 @@ mod test {
             ENTRIES_PER_SEGMENT,
         );
 
-        assert!(test_transaction(&tx, &mut accounts).is_ok());
+        test_transaction(&tx, &mut accounts).unwrap();
 
         let tx = Transaction::storage_new_mining_proof(
             &keypair,
@@ -345,7 +345,7 @@ mod test {
             entry_height,
             Signature::default(),
         );
-        assert!(test_transaction(&tx, &mut accounts).is_ok());
+        test_transaction(&tx, &mut accounts).unwrap();
 
         let tx = Transaction::storage_new_advertise_last_id(
             &keypair,
@@ -353,7 +353,7 @@ mod test {
             Hash::default(),
             ENTRIES_PER_SEGMENT * 2,
         );
-        assert!(test_transaction(&tx, &mut accounts).is_ok());
+        test_transaction(&tx, &mut accounts).unwrap();
 
         let tx = Transaction::storage_new_proof_validation(
             &keypair,
@@ -361,7 +361,7 @@ mod test {
             entry_height,
             vec![ProofStatus::Valid],
         );
-        assert!(test_transaction(&tx, &mut accounts).is_ok());
+        test_transaction(&tx, &mut accounts).unwrap();
 
         let tx = Transaction::storage_new_advertise_last_id(
             &keypair,
@@ -369,10 +369,10 @@ mod test {
             Hash::default(),
             ENTRIES_PER_SEGMENT * 3,
         );
-        assert!(test_transaction(&tx, &mut accounts).is_ok());
+        test_transaction(&tx, &mut accounts).unwrap();
 
         let tx = Transaction::storage_new_reward_claim(&keypair, Hash::default(), entry_height);
-        assert!(test_transaction(&tx, &mut accounts).is_ok());
+        test_transaction(&tx, &mut accounts).unwrap();
 
         assert!(accounts[0].tokens == TOTAL_VALIDATOR_REWARDS);
     }

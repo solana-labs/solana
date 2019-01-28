@@ -157,7 +157,7 @@ mod tests {
             "abcd1234abcd1234abcd1234abcd1234 abcd1234abcd1234abcd1234abcd1234
                             abcd1234abcd1234abcd1234abcd1234 abcd1234abcd1234abcd1234abcd1234"
         );
-        assert!(chacha_cbc_encrypt_ledger(&db_ledger, 0, out_path, &mut key).is_ok());
+        chacha_cbc_encrypt_ledger(&db_ledger, 0, out_path, &mut key).unwrap();
         let mut out_file = File::open(out_path).unwrap();
         let mut buf = vec![];
         let size = out_file.read_to_end(&mut buf).unwrap();

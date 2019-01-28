@@ -1866,7 +1866,7 @@ mod tests {
             ENTRIES_PER_SEGMENT,
         );
 
-        assert!(bank.process_transaction(&tx).is_ok());
+        bank.process_transaction(&tx).unwrap();
 
         let entry_height = 0;
 
@@ -1878,7 +1878,7 @@ mod tests {
             Signature::default(),
         );
 
-        assert!(bank.process_transaction(&tx).is_ok());
+        bank.process_transaction(&tx).unwrap();
 
         assert_eq!(bank.get_storage_entry_height(), ENTRIES_PER_SEGMENT);
         assert_eq!(bank.get_storage_last_id(), storage_last_id);

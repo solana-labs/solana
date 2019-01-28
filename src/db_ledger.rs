@@ -1365,7 +1365,7 @@ mod tests {
 
         let ledger_path = get_tmp_ledger_path("test_genesis_and_entry_iterator");
         {
-            assert!(genesis(&ledger_path, &Keypair::new(), &entries).is_ok());
+            genesis(&ledger_path, &Keypair::new(), &entries).unwrap();
 
             let ledger = DbLedger::open(&ledger_path).expect("open failed");
 
@@ -1383,7 +1383,7 @@ mod tests {
         let ledger_path = get_tmp_ledger_path("test_genesis_and_entry_iterator");
         {
             // put entries except last 2 into ledger
-            assert!(genesis(&ledger_path, &Keypair::new(), &entries[..entries.len() - 2]).is_ok());
+            genesis(&ledger_path, &Keypair::new(), &entries[..entries.len() - 2]).unwrap();
 
             let ledger = DbLedger::open(&ledger_path).expect("open failed");
 

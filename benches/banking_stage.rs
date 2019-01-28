@@ -80,7 +80,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             0,
         );
         let x = bank.process_transaction(&fund);
-        assert!(x.is_ok());
+        x.unwrap();
     });
     //sanity check, make sure all the transactions can execute sequentially
     transactions.iter().for_each(|tx| {
@@ -190,7 +190,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
             genesis_block.last_id(),
             0,
         );
-        assert!(bank.process_transaction(&fund).is_ok());
+        bank.process_transaction(&fund).unwrap();
     });
     //sanity check, make sure all the transactions can execute sequentially
     transactions.iter().for_each(|tx| {

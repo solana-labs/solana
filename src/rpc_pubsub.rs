@@ -434,7 +434,6 @@ mod tests {
 
         // Test signature confirmation notification
         let string = receiver.poll();
-        assert!(string.is_ok());
         if let Async::Ready(Some(response)) = string.unwrap() {
             let expected = format!(r#"{{"jsonrpc":"2.0","method":"signatureNotification","params":{{"result":"Confirmed","subscription":0}}}}"#);
             assert_eq!(expected, response);
@@ -540,7 +539,6 @@ mod tests {
 
         // Test signature confirmation notification #1
         let string = receiver.poll();
-        assert!(string.is_ok());
 
         let expected_userdata = arc_bank
             .get_account(&contract_state.pubkey())
@@ -583,7 +581,6 @@ mod tests {
 
         // Test signature confirmation notification #2
         let string = receiver.poll();
-        assert!(string.is_ok());
         let expected_userdata = arc_bank
             .get_account(&contract_state.pubkey())
             .unwrap()
@@ -642,7 +639,6 @@ mod tests {
            }
         });
         let string = receiver.poll();
-        assert!(string.is_ok());
         if let Async::Ready(Some(response)) = string.unwrap() {
             assert_eq!(serde_json::to_string(&expected).unwrap(), response);
         }
@@ -728,7 +724,6 @@ mod tests {
         let account = bank.get_account(&alice.pubkey()).unwrap();
         subscriptions.check_account(&alice.pubkey(), &account);
         let string = transport_receiver.poll();
-        assert!(string.is_ok());
         if let Async::Ready(Some(response)) = string.unwrap() {
             let expected = format!(r#"{{"jsonrpc":"2.0","method":"accountNotification","params":{{"result":{{"executable":false,"loader":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"owner":[129,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}},"subscription":0}}}}"#);
             assert_eq!(expected, response);
@@ -766,7 +761,6 @@ mod tests {
 
         subscriptions.check_signature(&signature, &Ok(()));
         let string = transport_receiver.poll();
-        assert!(string.is_ok());
         if let Async::Ready(Some(response)) = string.unwrap() {
             let expected = format!(r#"{{"jsonrpc":"2.0","method":"signatureNotification","params":{{"result":"Confirmed","subscription":0}}}}"#);
             assert_eq!(expected, response);
