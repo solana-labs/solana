@@ -653,12 +653,12 @@ mod tests {
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::Keypair;
     use solana_sdk::signature::KeypairUtil;
-    //use solana_sdk::storage_program::{StorageTransaction, ENTRIES_PER_SEGMENT};
+    use solana_sdk::storage_program::{StorageTransaction, ENTRIES_PER_SEGMENT};
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Instruction;
     use std;
     use std::sync::mpsc::channel;
-    //use tokio::prelude::{Stream, Async};
+    use tokio::prelude::{Stream, Async};
 
     #[test]
     fn test_bank_new() {
@@ -1571,54 +1571,54 @@ mod tests {
         assert_eq!(bank.get_balance(&pubkey), 1);
     }
 
-    // #[test]
-    // fn test_bank_storage() {
-    //      solana_logger::setup();
-    //      let alice = Mint::new(1000);
-    //      let bank = Bank::new(&alice);
+    #[test]
+    fn test_bank_storage() {
+         solana_logger::setup();
+         let alice = Mint::new(1000);
+         let bank = Bank::new(&alice);
 
-    //      let bob = Keypair::new();
-    //      let jack = Keypair::new();
-    //      let jill = Keypair::new();
+         let bob = Keypair::new();
+         let jack = Keypair::new();
+         let jill = Keypair::new();
 
-    //      let x = 42;
-    //      let last_id = hash(&[x]);
-    //      let x2 = x * 2;
-    //      let storage_last_id = hash(&[x2]);
+         let x = 42;
+         let last_id = hash(&[x]);
+         let x2 = x * 2;
+         let storage_last_id = hash(&[x2]);
 
-    //      bank.tpu_register_tick(&last_id);
+         bank.tpu_register_tick(&last_id);
 
-    //      bank.transfer(10, &alice.keypair(), jill.pubkey(), last_id)
-    //          .unwrap();
+         bank.transfer(10, &alice.keypair(), jill.pubkey(), last_id)
+             .unwrap();
 
-    //      bank.transfer(10, &alice.keypair(), bob.pubkey(), last_id)
-    //          .unwrap();
-    //      bank.transfer(10, &alice.keypair(), jack.pubkey(), last_id)
-    //          .unwrap();
+         bank.transfer(10, &alice.keypair(), bob.pubkey(), last_id)
+             .unwrap();
+         bank.transfer(10, &alice.keypair(), jack.pubkey(), last_id)
+             .unwrap();
 
-    //      let tx = Transaction::storage_new_advertise_last_id(
-    //          &bob,
-    //          storage_last_id,
-    //          last_id,
-    //          ENTRIES_PER_SEGMENT,
-    //      );
+         let tx = Transaction::storage_new_advertise_last_id(
+             &bob,
+             storage_last_id,
+             last_id,
+             ENTRIES_PER_SEGMENT,
+         );
 
-    //      assert_eq!(bank.process_transaction(&tx), Ok(()));
+         assert_eq!(bank.process_transaction(&tx), Ok(()));
 
-    //      let entry_height = 0;
+         let entry_height = 0;
 
-    //      let tx = Transaction::storage_new_mining_proof(
-    //          &jack,
-    //          Hash::default(),
-    //          last_id,
-    //          entry_height,
-    //          Signature::default(),
-    //      );
+         let tx = Transaction::storage_new_mining_proof(
+             &jack,
+             Hash::default(),
+             last_id,
+             entry_height,
+             Signature::default(),
+         );
 
-    //     assert_eq!(bank.process_transaction(&tx), Ok(()));
+        assert_eq!(bank.process_transaction(&tx), Ok(()));
 
-    //     assert_eq!(bank.get_storage_entry_height(), ENTRIES_PER_SEGMENT);
-    //     assert_eq!(bank.get_storage_last_id(), storage_last_id);
-    //     assert_eq!(bank.get_pubkeys_for_entry_height(0), vec![]);
-    // }
+        assert_eq!(bank.get_storage_entry_height(), ENTRIES_PER_SEGMENT);
+        assert_eq!(bank.get_storage_last_id(), storage_last_id);
+        assert_eq!(bank.get_pubkeys_for_entry_height(0), vec![]);
+    }
 }
