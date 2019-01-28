@@ -27,33 +27,44 @@ pub const DEFAULT_ACTIVE_WINDOW_LENGTH: u64 = TICKS_PER_BLOCK * 256;
 pub struct LeaderSchedulerConfig {
     // The interval at which to rotate the leader, should be much less than
     // seed_rotation_interval
-    pub leader_rotation_interval_option: Option<u64>,
+    pub leader_rotation_interval: u64,
 
     // The interval at which to generate the seed used for ranking the validators
-    pub seed_rotation_interval_option: Option<u64>,
+    pub seed_rotation_interval: u64,
 
     // The last height at which the bootstrap_leader will be in power before
     // the leader rotation process begins to pick future leaders
-    pub bootstrap_height_option: Option<u64>,
+    pub bootstrap_height: u64,
 
     // The length of the acceptable window for determining live validators
-    pub active_window_length_option: Option<u64>,
+    pub active_window_length: u64,
 }
 
 // Used to toggle leader rotation in fullnode so that tests that don't
 // need leader rotation don't break
 impl LeaderSchedulerConfig {
     pub fn new(
-        bootstrap_height_option: Option<u64>,
-        leader_rotation_interval_option: Option<u64>,
-        seed_rotation_interval_option: Option<u64>,
-        active_window_length_option: Option<u64>,
+        bootstrap_height: u64,
+        leader_rotation_interval: u64,
+        seed_rotation_interval: u64,
+        active_window_length: u64,
     ) -> Self {
         LeaderSchedulerConfig {
-            bootstrap_height_option,
-            leader_rotation_interval_option,
-            seed_rotation_interval_option,
-            active_window_length_option,
+            bootstrap_height,
+            leader_rotation_interval,
+            seed_rotation_interval,
+            active_window_length,
+        }
+    }
+}
+
+impl Default for LeaderSchedulerConfig {
+    fn default() -> Self {
+        Self {
+            bootstrap_height: DEFAULT_BOOTSTRAP_HEIGHT,
+            leader_rotation_interval: DEFAULT_LEADER_ROTATION_INTERVAL,
+            seed_rotation_interval: DEFAULT_SEED_ROTATION_INTERVAL,
+            active_window_length: DEFAULT_ACTIVE_WINDOW_LENGTH,
         }
     }
 }
@@ -111,7 +122,7 @@ pub struct LeaderScheduler {
 // calculate the leader schedule for the upcoming seed_rotation_interval PoH counts.
 impl LeaderScheduler {
     pub fn from_bootstrap_leader(bootstrap_leader: Pubkey) -> Self {
-        let config = LeaderSchedulerConfig::new(None, None, None, None);
+        let config = LeaderSchedulerConfig::default();
         let mut leader_scheduler = LeaderScheduler::new(&config);
         leader_scheduler.use_only_bootstrap_leader = true;
         leader_scheduler.bootstrap_leader = bootstrap_leader;
@@ -119,25 +130,10 @@ impl LeaderScheduler {
     }
 
     pub fn new(config: &LeaderSchedulerConfig) -> Self {
-        let mut bootstrap_height = DEFAULT_BOOTSTRAP_HEIGHT;
-        if let Some(input) = config.bootstrap_height_option {
-            bootstrap_height = input;
-        }
-
-        let mut leader_rotation_interval = DEFAULT_LEADER_ROTATION_INTERVAL;
-        if let Some(input) = config.leader_rotation_interval_option {
-            leader_rotation_interval = input;
-        }
-
-        let mut seed_rotation_interval = DEFAULT_SEED_ROTATION_INTERVAL;
-        if let Some(input) = config.seed_rotation_interval_option {
-            seed_rotation_interval = input;
-        }
-
-        let mut active_window_length = DEFAULT_ACTIVE_WINDOW_LENGTH;
-        if let Some(input) = config.active_window_length_option {
-            active_window_length = input;
-        }
+        let bootstrap_height = config.bootstrap_height;
+        let leader_rotation_interval = config.leader_rotation_interval;
+        let seed_rotation_interval = config.seed_rotation_interval;
+        let active_window_length = config.active_window_length;
 
         // Enforced invariants
         assert!(seed_rotation_interval >= leader_rotation_interval);
@@ -566,10 +562,10 @@ mod tests {
         // Set up the LeaderScheduler struct
         let bootstrap_leader_id = Keypair::new().pubkey();
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            Some(bootstrap_height),
-            Some(leader_rotation_interval),
-            Some(seed_rotation_interval),
-            Some(active_window_length),
+            bootstrap_height,
+            leader_rotation_interval,
+            seed_rotation_interval,
+            active_window_length,
         );
 
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
@@ -695,7 +691,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
 
         let leader_scheduler_config =
-            LeaderSchedulerConfig::new(Some(100), Some(100), Some(100), Some(active_window_length));
+            LeaderSchedulerConfig::new(100, 100, 100, active_window_length);
 
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
         leader_scheduler.bootstrap_leader = leader_id;
@@ -977,10 +973,10 @@ mod tests {
         let active_window_length = seed_rotation_interval;
 
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            Some(bootstrap_height),
-            Some(leader_rotation_interval),
-            Some(seed_rotation_interval),
-            Some(active_window_length),
+            bootstrap_height,
+            leader_rotation_interval,
+            seed_rotation_interval,
+            active_window_length,
         );
 
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
@@ -1051,7 +1047,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
 
         let leader_scheduler_config =
-            LeaderSchedulerConfig::new(Some(100), Some(100), Some(100), Some(active_window_length));
+            LeaderSchedulerConfig::new(100, 100, 100, active_window_length);
 
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
         leader_scheduler.bootstrap_leader = leader_id;
@@ -1100,10 +1096,10 @@ mod tests {
         let active_window_length = 1;
 
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            Some(bootstrap_height),
-            Some(leader_rotation_interval),
-            Some(seed_rotation_interval),
-            Some(active_window_length),
+            bootstrap_height,
+            leader_rotation_interval,
+            seed_rotation_interval,
+            active_window_length,
         );
 
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
@@ -1130,7 +1126,7 @@ mod tests {
         let bootstrap_leader_id = Keypair::new().pubkey();
 
         // Check defaults for LeaderScheduler
-        let leader_scheduler_config = LeaderSchedulerConfig::new(None, None, None, None);
+        let leader_scheduler_config = LeaderSchedulerConfig::default();
 
         let leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
 
@@ -1154,10 +1150,10 @@ mod tests {
         let active_window_length = 1;
 
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            Some(bootstrap_height),
-            Some(leader_rotation_interval),
-            Some(seed_rotation_interval),
-            Some(active_window_length),
+            bootstrap_height,
+            leader_rotation_interval,
+            seed_rotation_interval,
+            active_window_length,
         );
 
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
@@ -1184,10 +1180,10 @@ mod tests {
         let active_window_length = bootstrap_height + seed_rotation_interval;
 
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            Some(bootstrap_height),
-            Some(leader_rotation_interval),
-            Some(seed_rotation_interval),
-            Some(active_window_length),
+            bootstrap_height,
+            leader_rotation_interval,
+            seed_rotation_interval,
+            active_window_length,
         );
 
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
@@ -1291,10 +1287,10 @@ mod tests {
         let active_window_length = bootstrap_height + seed_rotation_interval;
 
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            Some(bootstrap_height),
-            Some(leader_rotation_interval),
-            Some(seed_rotation_interval),
-            Some(active_window_length),
+            bootstrap_height,
+            leader_rotation_interval,
+            seed_rotation_interval,
+            active_window_length,
         );
 
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);

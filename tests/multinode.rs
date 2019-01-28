@@ -1007,10 +1007,10 @@ fn test_leader_to_validator_transition() {
     // Start the leader node
     let bootstrap_height = leader_rotation_interval;
     let leader_scheduler_config = LeaderSchedulerConfig::new(
-        Some(bootstrap_height),
-        Some(leader_rotation_interval),
-        Some(leader_rotation_interval * 2),
-        Some(bootstrap_height),
+        bootstrap_height,
+        leader_rotation_interval,
+        leader_rotation_interval * 2,
+        bootstrap_height,
     );
 
     let signer_proxy = VoteSignerProxy::new_local(&leader_keypair);
@@ -1161,10 +1161,10 @@ fn test_leader_validator_basic() {
     let num_bootstrap_slots = 2;
     let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
     let leader_scheduler_config = LeaderSchedulerConfig::new(
-        Some(bootstrap_height),
-        Some(leader_rotation_interval),
-        Some(leader_rotation_interval * 2),
-        Some(bootstrap_height),
+        bootstrap_height,
+        leader_rotation_interval,
+        leader_rotation_interval * 2,
+        bootstrap_height,
     );
 
     // Start the validator node
@@ -1364,10 +1364,10 @@ fn test_dropped_handoff_recovery() {
     let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
     let bootstrap_height = initial_tick_height + 1;
     let leader_scheduler_config = LeaderSchedulerConfig::new(
-        Some(bootstrap_height),
-        Some(leader_rotation_interval),
-        Some(seed_rotation_interval),
-        Some(leader_rotation_interval),
+        bootstrap_height,
+        leader_rotation_interval,
+        seed_rotation_interval,
+        leader_rotation_interval,
     );
     info!("bootstrap_leader: {}", bootstrap_leader_keypair.pubkey());
     info!("'next leader': {}", next_leader_keypair.pubkey());
@@ -1545,10 +1545,10 @@ fn test_full_leader_validator_network() {
     let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
     let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
     let leader_scheduler_config = LeaderSchedulerConfig::new(
-        Some(bootstrap_height),
-        Some(leader_rotation_interval),
-        Some(seed_rotation_interval),
-        Some(100),
+        bootstrap_height,
+        leader_rotation_interval,
+        seed_rotation_interval,
+        100,
     );
 
     let exit = Arc::new(AtomicBool::new(false));
@@ -1764,10 +1764,10 @@ fn test_broadcast_last_tick() {
     let leader_rotation_interval = 100;
     let seed_rotation_interval = 200;
     let leader_scheduler_config = LeaderSchedulerConfig::new(
-        Some(bootstrap_height),
-        Some(leader_rotation_interval),
-        Some(seed_rotation_interval),
-        Some(leader_rotation_interval),
+        bootstrap_height,
+        leader_rotation_interval,
+        seed_rotation_interval,
+        leader_rotation_interval,
     );
 
     // Start up the bootstrap leader fullnode

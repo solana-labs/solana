@@ -667,10 +667,10 @@ mod tests {
         // restart as a leader again.
         let bootstrap_height = initial_tick_height + 1;
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            Some(bootstrap_height as u64),
-            Some(leader_rotation_interval),
-            Some(seed_rotation_interval),
-            Some(active_window_length),
+            bootstrap_height as u64,
+            leader_rotation_interval,
+            seed_rotation_interval,
+            active_window_length,
         );
 
         let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
@@ -771,10 +771,10 @@ mod tests {
         // after parsing the ledger during startup
         let bootstrap_height = genesis_tick_height;
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            Some(bootstrap_height),
-            Some(leader_rotation_interval),
-            Some(seed_rotation_interval),
-            Some(genesis_tick_height),
+            bootstrap_height,
+            leader_rotation_interval,
+            seed_rotation_interval,
+            genesis_tick_height,
         );
 
         {
@@ -882,10 +882,10 @@ mod tests {
         let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
 
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            Some(bootstrap_height),
-            Some(leader_rotation_interval),
-            Some(leader_rotation_interval * 2),
-            Some(bootstrap_height),
+            bootstrap_height,
+            leader_rotation_interval,
+            leader_rotation_interval * 2,
+            bootstrap_height,
         );
 
         let vote_signer = VoteSignerProxy::new_local(&validator_keypair);
