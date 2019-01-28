@@ -10,6 +10,7 @@ use crate::leader_scheduler::LeaderScheduler;
 use crate::rpc::JsonRpcService;
 use crate::rpc_pubsub::PubSubService;
 use crate::service::Service;
+use crate::storage_stage::StorageState;
 use crate::tpu::{Tpu, TpuReturnType};
 use crate::tvu::{Sockets, Tvu, TvuReturnType};
 use crate::vote_signer_proxy::VoteSignerProxy;
@@ -232,11 +233,14 @@ impl Fullnode {
             entrypoint_drone_addr
         };
 
+        let storage_state = StorageState::new();
+
         let rpc_service = JsonRpcService::new(
             &bank,
             &cluster_info,
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_addr.port()),
             drone_addr,
+            storage_state.clone(),
         );
 
         let rpc_pubsub_service = PubSubService::new(
@@ -304,6 +308,7 @@ impl Fullnode {
             db_ledger.clone(),
             storage_rotate_count,
             to_leader_sender,
+            &storage_state,
         );
         let max_tick_height = {
             let ls_lock = bank.leader_scheduler.read().unwrap();

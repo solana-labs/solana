@@ -48,7 +48,7 @@ pub struct StorageStateInner {
     entry_height: u64,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct StorageState {
     state: Arc<RwLock<StorageStateInner>>,
 }

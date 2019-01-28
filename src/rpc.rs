@@ -7,6 +7,7 @@ use crate::jsonrpc_http_server::*;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::service::Service;
 use crate::status_deque::Status;
+use crate::storage_stage::StorageState;
 use bincode::{deserialize, serialize};
 use bs58;
 use solana_drone::drone::request_airdrop_transaction;
@@ -36,10 +37,14 @@ impl JsonRpcService {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         rpc_addr: SocketAddr,
         drone_addr: SocketAddr,
+        storage_state: StorageState,
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
         let exit = Arc::new(AtomicBool::new(false));
-        let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(bank.clone())));
+        let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
+            bank.clone(),
+            storage_state,
+        )));
         request_processor.write().unwrap().bank = bank.clone();
         let request_processor_ = request_processor.clone();
 
@@ -355,11 +360,15 @@ impl RpcSol for RpcSolImpl {
 #[derive(Clone)]
 pub struct JsonRpcRequestProcessor {
     bank: Arc<Bank>,
+    storage_state: StorageState,
 }
 impl JsonRpcRequestProcessor {
     /// Create a new request processor that wraps the given Bank.
-    pub fn new(bank: Arc<Bank>) -> Self {
-        JsonRpcRequestProcessor { bank }
+    pub fn new(bank: Arc<Bank>, storage_state: StorageState) -> Self {
+        JsonRpcRequestProcessor {
+            bank,
+            storage_state,
+        }
     }
 
     /// Process JSON-RPC request items sent via JSON-RPC.
@@ -386,15 +395,17 @@ impl JsonRpcRequestProcessor {
         Ok(self.bank.transaction_count() as u64)
     }
     fn get_storage_mining_last_id(&self) -> Result<String> {
-        let id = self.bank.storage_state.get_last_id();
+        let id = self.storage_state.get_last_id();
         Ok(bs58::encode(id).into_string())
     }
     fn get_storage_mining_entry_height(&self) -> Result<u64> {
-        let entry_height = self.bank.storage_state.get_entry_height();
+        let entry_height = self.storage_state.get_entry_height();
         Ok(entry_height)
     }
     fn get_storage_pubkeys_for_entry_height(&self, entry_height: u64) -> Result<Vec<Pubkey>> {
-        Ok(self.bank.get_pubkeys_for_entry_height(entry_height))
+        Ok(self
+            .storage_state
+            .get_pubkeys_for_entry_height(entry_height))
     }
 }
 
@@ -463,7 +474,10 @@ mod tests {
         let tx = Transaction::system_move(&alice, pubkey, 20, last_id, 0);
         bank.process_transaction(&tx).expect("process transaction");
 
-        let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(Arc::new(bank))));
+        let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
+            Arc::new(bank),
+            StorageState::default(),
+        )));
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default())));
         let leader = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
 
@@ -497,7 +511,13 @@ mod tests {
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             solana_netutil::find_available_port_in_range((10000, 65535)).unwrap(),
         );
-        let rpc_service = JsonRpcService::new(&Arc::new(bank), &cluster_info, rpc_addr, drone_addr);
+        let rpc_service = JsonRpcService::new(
+            &Arc::new(bank),
+            &cluster_info,
+            rpc_addr,
+            drone_addr,
+            StorageState::default(),
+        );
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-jsonrpc");
 
@@ -520,7 +540,8 @@ mod tests {
         let bob_pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
         let arc_bank = Arc::new(bank);
-        let request_processor = JsonRpcRequestProcessor::new(arc_bank.clone());
+        let request_processor =
+            JsonRpcRequestProcessor::new(arc_bank.clone(), StorageState::default());
         thread::spawn(move || {
             let last_id = arc_bank.last_id();
             let tx = Transaction::system_move(&alice, bob_pubkey, 20, last_id, 0);
@@ -705,7 +726,10 @@ mod tests {
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
         let meta = Meta {
-            request_processor: Arc::new(RwLock::new(JsonRpcRequestProcessor::new(Arc::new(bank)))),
+            request_processor: Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
+                Arc::new(bank),
+                StorageState::default(),
+            ))),
             cluster_info: Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default()))),
             drone_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
             rpc_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0),
