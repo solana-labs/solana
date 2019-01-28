@@ -38,17 +38,17 @@ fn nominal() {
     // Print everything
     let output = run_ledger_tool(&["-l", &ledger_path, "print"]);
     assert!(output.status.success());
-    assert_eq!(count_newlines(&output.stdout), 13);
+    assert_eq!(count_newlines(&output.stdout), 10);
 
     // Only print the first 5 items
     let output = run_ledger_tool(&["-l", &ledger_path, "-n", "5", "print"]);
     assert!(output.status.success());
     assert_eq!(count_newlines(&output.stdout), 5);
 
-    // Skip entries with no hashes (first entry)
+    // Skip entries with no hashes
     let output = run_ledger_tool(&["-l", &ledger_path, "-h", "1", "print"]);
     assert!(output.status.success());
-    assert_eq!(count_newlines(&output.stdout), 12);
+    assert_eq!(count_newlines(&output.stdout), 10);
 
     // Skip entries with fewer than 2 hashes (skip everything)
     let output = run_ledger_tool(&["-l", &ledger_path, "-h", "2", "print"]);
