@@ -1510,15 +1510,17 @@ mod tests {
         let tx = Transaction::system_new(&keypair1, keypair4.pubkey(), 1, tick.id);
         let entry_2 = next_entry(&tick.id, 1, vec![tx]);
         assert_eq!(
-            bank.par_process_entries(&[entry_1.clone(), tick.clone(), entry_2]),
+            bank.par_process_entries(&[entry_1.clone(), tick.clone(), entry_2.clone()]),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
         assert_eq!(bank.get_balance(&keypair4.pubkey()), 1);
         assert_eq!(bank.last_id(), tick.id);
-        // ensure that errors are returned
+        // ensure that an error is returned for an empty account (keypair2)
+        let tx = Transaction::system_new(&keypair2, keypair3.pubkey(), 1, tick.id);
+        let entry_3 = next_entry(&entry_2.id, 1, vec![tx]);
         assert_eq!(
-            bank.par_process_entries(&[entry_1]),
+            bank.par_process_entries(&[entry_3]),
             Err(BankError::AccountNotFound)
         );
     }
