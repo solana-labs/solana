@@ -4,7 +4,7 @@ Validator votes are messages that have a critical function for consensus and con
 
 ## Challenges
 
-1. Leader rotation is triggered by PoH, which is clock with high drift.  So many nodes are likely to have an incorrect view if the next leader is active in real-time or not.
+1. Leader rotation is triggered by PoH, which is clock with high drift.  So many nodes are likely to have an incorrect view if the next leader is active in realtime or not.
 2. The next leader maybe easily be flooded.  Thus a DDOS would not only prevent delivery of regular transactions, but also consensus messages.
 3. Udp is unreliable, and our asynchronous protocol requires any message that is transmitted to be retransmitted until it is observed in the ledger.  Potentially creating a DDOS against the leader with a large number of validators.  Worst case flood would be Number of nodes * Number of retransmits.
 4. Tracking if the vote has been transmitted or not via the ledger does not guarantee it will appear in a confirmed block.  The current observed block may be unrolled, validators would need to maintain state for each vote and fork.
@@ -33,7 +33,7 @@ Gossip is designed for efficient propagation of state.  Messages that are sent t
 
 1. Because there is no easy way for validators to be in sync with leaders on the leaders "active" state, gossip allows for eventual delivery regardless of that state.  
 2. Gossip will deliver the messages to all the subsequent leaders, so if the current leader is flooded the next leader would have already received these votes and is able to encode them.
-3. Gossip minimizes the number of requests through the network by maintaining an efficient spanning tree, and using bloom filters to repair state.  So retransmit back-off is not necessary.
+3. Gossip minimizes the number of requests through the network by maintaining an efficient spanning tree, and using bloom filters to repair state.  So retransmit back-off is not necessary and messages are batched.
 4. Leaders that read the crds table for votes will encode all the new valid votes that appear in the table.  Even this this leaders block is unrolled, the next leader will try to add the same votes without any additional work done by the validator.  Thus ensuring not only eventual delivery, but eventual encoding into the ledger.
 
 
@@ -41,7 +41,7 @@ Gossip is designed for efficient propagation of state.  Messages that are sent t
 
 1. Worst case propagation time to the next leader is Log(N) hops depending on the fanout.  With our current default fanout of 6, its about 6 hops to 20k nodes.
 2. Leader should receive 20k validation votes aggregated by gossip push into 64kb blobs. Which would reduce the number of packets for 20k network to 80 blobs.
-3. Each validators votes is replicated across the entire network.  To maintain a queue of 5 previous votes the Crds table would grow by 25 megabytes.  20,000 nodes * 256 bytes * 5.
+3. Each validators votes is replicated across the entire network.  To maintain a queue of 5 previous votes the Crds table would grow by 25 megabytes. 20,000 nodes * 256 bytes * 5.
 
 ## Two step implementation rollout
 
@@ -54,15 +54,15 @@ Initially the network can perform reliably with just 1 vote transmitted and main
 3. Fanout of 6.
 
 * Worst case 256kb memory overhead per node.
-* Worst case 4 hops worst case to propagate to every node.
+* Worst case 4 hops to propagate to every node.
 * Leader should receive the entire validator vote set in 4 push message blobs.
 
-### Sub 20k+ network
+### Sub 20k network
 
 Everything above plus the following:
 
 1. crds table maintains a vector of 5 latest validator votes.
-2. Votes encode a wallclock, so CrdsValue::Vote is a type that recurses into the transaction vector for all the gossip protocols.
+2. Votes encode a wallclock.  CrdsValue::Votes is a type that recurses into the transaction vector for all the gossip protocols.
 3. Increase fanout to 20.
 
 * Worst case 25mb memory overhead per node.
