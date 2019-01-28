@@ -29,6 +29,7 @@
   - [Fork Selection](fork-selection.md)
   - [Entry Tree](entry-tree.md)
   - [Data Plane Fanout](data-plane-fanout.md)
+  - [Reliable Vote Transmission](reliable-vote-transmission.md)
 
 - [Economic Design](ed_overview.md)
   - [Validation-client Economics](ed_validation_client_economics.md)
