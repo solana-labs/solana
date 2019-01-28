@@ -269,11 +269,9 @@ mod tests {
             RpcRequest::GetBalance,
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])),
         );
-        assert!(balance.is_ok());
         assert_eq!(balance.unwrap().as_u64().unwrap(), 50);
 
         let last_id = rpc_client.make_rpc_request(2, RpcRequest::GetLastId, None);
-        assert!(last_id.is_ok());
         assert_eq!(
             last_id.unwrap().as_str().unwrap(),
             "deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"
@@ -321,7 +319,6 @@ mod tests {
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhw"])),
             10,
         );
-        assert!(balance.is_ok());
         assert_eq!(balance.unwrap().as_u64().unwrap(), 5);
     }
 }

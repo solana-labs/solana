@@ -433,7 +433,6 @@ mod tests {
         let num_samples = (string.len() * num_strings / size_of::<Hash>()) as u64;
         let samples: Vec<_> = (0..num_samples).collect();
         let res = sample_file(&in_path, samples.as_slice());
-        assert!(res.is_ok());
         let ref_hash: Hash = Hash::new(&[
             173, 251, 182, 165, 10, 54, 33, 150, 133, 226, 106, 150, 99, 192, 179, 1, 230, 144,
             151, 126, 18, 191, 54, 67, 249, 140, 230, 160, 56, 30, 170, 52,

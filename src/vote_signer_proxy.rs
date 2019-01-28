@@ -254,7 +254,7 @@ mod test {
         assert!(signer
             .send_validator_vote(&bank, &cluster_info, &sender)
             .is_ok());
-        assert!(receiver.recv_timeout(Duration::from_millis(400)).is_ok());
+        receiver.recv_timeout(Duration::from_millis(400)).unwrap();
 
         assert_eq!(signer.unsent_votes.read().unwrap().len(), 0);
     }

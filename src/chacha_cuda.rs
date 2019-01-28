@@ -141,7 +141,7 @@ mod tests {
         );
 
         let mut cpu_iv = ivecs.clone();
-        assert!(chacha_cbc_encrypt_ledger(&db_ledger, 0, out_path, &mut cpu_iv,).is_ok());
+        chacha_cbc_encrypt_ledger(&db_ledger, 0, out_path, &mut cpu_iv).unwrap();
 
         let ref_hash = sample_file(&out_path, &samples).unwrap();
 
@@ -178,7 +178,7 @@ mod tests {
             );
             ivec[0] = i;
             ivecs.extend(ivec.clone().iter());
-            assert!(chacha_cbc_encrypt_ledger(&db_ledger.clone(), 0, out_path, &mut ivec,).is_ok());
+            chacha_cbc_encrypt_ledger(&db_ledger.clone(), 0, out_path, &mut ivec).unwrap();
 
             ref_hashes.push(sample_file(&out_path, &samples).unwrap());
             info!(

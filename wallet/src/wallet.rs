@@ -1192,7 +1192,6 @@ mod tests {
         let bob_pubkey = Keypair::new().pubkey();
         config.command = WalletCommand::Pay(10, bob_pubkey, None, None, None, None);
         let signature = process_command(&config);
-        assert!(signature.is_ok());
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let date_string = "\"2018-09-19T17:30:59Z\"";
@@ -1206,7 +1205,6 @@ mod tests {
             None,
         );
         let result = process_command(&config);
-        assert!(result.is_ok());
         let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
         assert_eq!(
             json.as_object()
@@ -1228,7 +1226,6 @@ mod tests {
             Some(config.id.pubkey()),
         );
         let result = process_command(&config);
-        assert!(result.is_ok());
         let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
         assert_eq!(
             json.as_object()
@@ -1243,13 +1240,11 @@ mod tests {
         let process_id = Keypair::new().pubkey();
         config.command = WalletCommand::TimeElapsed(bob_pubkey, process_id, dt);
         let signature = process_command(&config);
-        assert!(signature.is_ok());
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let witness = Keypair::new().pubkey();
         config.command = WalletCommand::Witness(bob_pubkey, witness);
         let signature = process_command(&config);
-        assert!(signature.is_ok());
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         // Need airdrop cases
@@ -1259,13 +1254,11 @@ mod tests {
         config.rpc_client = Some(RpcClient::new("airdrop".to_string()));
         config.command = WalletCommand::TimeElapsed(bob_pubkey, process_id, dt);
         let signature = process_command(&config);
-        assert!(signature.is_ok());
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let witness = Keypair::new().pubkey();
         config.command = WalletCommand::Witness(bob_pubkey, witness);
         let signature = process_command(&config);
-        assert!(signature.is_ok());
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         // Failture cases
@@ -1325,7 +1318,6 @@ mod tests {
 
         config.command = WalletCommand::Deploy(pathbuf.to_str().unwrap().to_string());
         let result = process_command(&config);
-        assert!(result.is_ok());
         let json: Value = serde_json::from_str(&result.unwrap()).unwrap();
         let program_id = json
             .as_object()
@@ -1360,7 +1352,7 @@ mod tests {
         let keypair_vec: Vec<u8> = serde_json::from_str(&serialized_keypair).unwrap();
         assert!(Path::new(&outfile).exists());
         assert_eq!(keypair_vec, read_pkcs8(&outfile).unwrap());
-        assert!(read_keypair(&outfile).is_ok());
+        read_keypair(&outfile).unwrap();
         assert_eq!(
             read_keypair(&outfile).unwrap().pubkey().as_ref().len(),
             mem::size_of::<Pubkey>()
@@ -1377,7 +1369,6 @@ mod tests {
         let expected_last_id = Hash::new(&vec);
 
         let last_id = get_last_id(&rpc_client);
-        assert!(last_id.is_ok());
         assert_eq!(last_id.unwrap(), expected_last_id);
 
         let rpc_client = RpcClient::new("fails".to_string());
@@ -1396,7 +1387,6 @@ mod tests {
         let tx = Transaction::system_new(&key, to, 50, last_id);
 
         let signature = send_tx(&rpc_client, &tx);
-        assert!(signature.is_ok());
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let rpc_client = RpcClient::new("fails".to_string());
@@ -1410,7 +1400,6 @@ mod tests {
         let rpc_client = RpcClient::new("succeeds".to_string());
         let signature = "good_signature";
         let status = confirm_tx(&rpc_client, &signature);
-        assert!(status.is_ok());
         assert_eq!(status.unwrap(), RpcSignatureStatus::Confirmed);
 
         let rpc_client = RpcClient::new("bad_sig_status".to_string());
@@ -1436,7 +1425,7 @@ mod tests {
         let signer = Keypair::new();
 
         let result = send_and_confirm_tx(&rpc_client, &mut tx, &signer);
-        assert!(result.is_ok());
+        result.unwrap();
 
         let rpc_client = RpcClient::new("account_in_use".to_string());
         let result = send_and_confirm_tx(&rpc_client, &mut tx, &signer);

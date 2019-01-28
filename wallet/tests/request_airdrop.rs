@@ -22,7 +22,7 @@ fn test_wallet_request_airdrop() {
     bob_config.command = WalletCommand::Airdrop(50);
 
     let sig_response = process_command(&bob_config);
-    assert!(sig_response.is_ok());
+    sig_response.unwrap();
 
     let rpc_client = RpcClient::new_from_socket(leader_data.rpc);
 

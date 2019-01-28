@@ -424,8 +424,6 @@ mod tests {
 
         let mut drone = Drone::new(keypair, None, None);
         let response = drone.process_drone_request(&bytes);
-        assert!(response.is_ok());
-
         let response_vec = response.unwrap().to_vec();
         assert_eq!(expected_vec_with_length, response_vec);
 

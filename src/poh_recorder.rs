@@ -132,16 +132,16 @@ mod tests {
         //send some data
         let h1 = hash(b"hello world!");
         let tx = test_tx();
-        assert!(poh_recorder.record(h1, vec![tx.clone()]).is_ok());
+        poh_recorder.record(h1, vec![tx.clone()]).unwrap();
         //get some events
         let e = entry_receiver.recv().unwrap();
         assert_eq!(e[0].tick_height, 1);
 
-        assert!(poh_recorder.tick().is_ok());
+        poh_recorder.tick().unwrap();
         let e = entry_receiver.recv().unwrap();
         assert_eq!(e[0].tick_height, 2);
 
-        assert!(poh_recorder.tick().is_ok());
+        poh_recorder.tick().unwrap();
         let e = entry_receiver.recv().unwrap();
         assert_eq!(e[0].tick_height, 3);
 

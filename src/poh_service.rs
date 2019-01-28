@@ -152,7 +152,7 @@ mod tests {
                         // send some data
                         let h1 = hash(b"hello world!");
                         let tx = test_tx();
-                        assert!(poh_recorder.record(h1, vec![tx]).is_ok());
+                        poh_recorder.record(h1, vec![tx]).unwrap();
 
                         if exit.load(Ordering::Relaxed) {
                             break Ok(());
@@ -198,8 +198,8 @@ mod tests {
         }
         exit.store(true, Ordering::Relaxed);
         poh_service.exit();
-        assert!(poh_service.join().is_ok());
-        assert!(entry_producer.join().is_ok());
+        let _ = poh_service.join().unwrap();
+        let _ = entry_producer.join().unwrap();
     }
 
 }
