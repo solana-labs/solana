@@ -302,6 +302,7 @@ pub mod tests {
             STORAGE_ROTATE_TEST_COUNT,
             sender,
             &StorageState::default(),
+            None,
         );
 
         let mut alice_ref_balance = starting_balance;

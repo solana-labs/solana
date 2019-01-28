@@ -405,6 +405,7 @@ mod test {
             Arc::new(RwLock::new(initial_entry_len)),
             Arc::new(RwLock::new(last_entry_id)),
             rotation_sender,
+            None,
         );
 
         // Send enough ticks to trigger leader rotation
@@ -507,6 +508,7 @@ mod test {
             Arc::new(RwLock::new(initial_entry_len as u64)),
             Arc::new(RwLock::new(last_entry_id)),
             to_leader_sender,
+            None,
         );
 
         // Vote sender should error because no leader contact info is found in the
@@ -625,6 +627,7 @@ mod test {
             Arc::new(RwLock::new(initial_entry_len as u64)),
             Arc::new(RwLock::new(last_entry_id)),
             rotation_tx,
+            None,
         );
 
         // Vote sender should error because no leader contact info is found in the
@@ -721,6 +724,7 @@ mod test {
             &ledger_entry_sender,
             &Arc::new(RwLock::new(entry_height)),
             &Arc::new(RwLock::new(last_entry_id)),
+            None,
         );
 
         match res {
@@ -747,6 +751,7 @@ mod test {
             &ledger_entry_sender,
             &Arc::new(RwLock::new(entry_height)),
             &Arc::new(RwLock::new(last_entry_id)),
+            None,
         );
 
         match res {

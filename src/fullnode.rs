@@ -573,6 +573,7 @@ mod tests {
             Some(&entry),
             false,
             None,
+            None,
         );
         v.close().unwrap();
         remove_dir_all(validator_ledger_path).unwrap();
@@ -614,6 +615,7 @@ mod tests {
                     Some(Arc::new(signer)),
                     Some(&entry),
                     false,
+                    None,
                     None,
                 )
             })
@@ -685,6 +687,7 @@ mod tests {
             Some(Arc::new(signer)),
             Some(&bootstrap_leader_info),
             false,
+            None,
             None,
         );
 
@@ -790,6 +793,7 @@ mod tests {
                 Some(&bootstrap_leader_info),
                 false,
                 None,
+                None,
             );
 
             assert!(!bootstrap_leader.node_services.tpu.is_leader());
@@ -803,6 +807,7 @@ mod tests {
                 Some(Arc::new(validator_vote_account_id)),
                 Some(&bootstrap_leader_info),
                 false,
+                None,
                 None,
             );
 
@@ -898,6 +903,7 @@ mod tests {
             Some(Arc::new(vote_signer)),
             Some(&leader_node.info),
             false,
+            None,
             None,
         );
 
