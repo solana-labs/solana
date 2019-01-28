@@ -391,7 +391,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_signature_subscribe() {
         let (genesis_block, alice) = GenesisBlock::new(10_000);
         let bob = Keypair::new();
@@ -515,7 +514,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_account_subscribe() {
         let (genesis_block, alice) = GenesisBlock::new(10_000);
         let bob_pubkey = Keypair::new().pubkey();
