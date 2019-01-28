@@ -698,7 +698,6 @@ mod test {
         let (entry_sender, entry_receiver) = channel();
         let (ledger_entry_sender, _ledger_entry_receiver) = channel();
         let last_entry_id = Hash::default();
-        // Create keypair for the old leader
 
         let entry_height = 0;
         let mut last_id = Hash::default();
