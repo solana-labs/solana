@@ -29,7 +29,7 @@ done
 
 # Run integration tests serially
 OLD_RUST_LOG=$RUST_LOG
-for test in tests/*.rs wallet/tests/*.rs drone/tests/*.rs; do
+for test in {,*/}tests/*.rs; do
   test=${test##*/} # basename x
   test=${test%.rs} # basename x .rs
   export RUST_LOG="$test"=trace
