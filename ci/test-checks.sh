@@ -13,6 +13,7 @@ _ cargo fmt --all -- --check
 _ cargo clippy --all -- --version
 _ cargo clippy --all -- --deny=warnings
 _ ci/audit.sh
+_ ci/nits.sh || true # TODO: remove || true once all println!s are expunged
 _ book/build.sh
 
 echo --- ok
