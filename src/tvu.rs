@@ -62,7 +62,7 @@ impl Tvu {
     /// * `cluster_info` - The cluster_info state.
     /// * `sockets` - My fetch, repair, and restransmit sockets
     /// * `db_ledger` - the ledger itself
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new(
         vote_signer: Option<Arc<VoteSignerProxy>>,
         bank: &Arc<Bank>,

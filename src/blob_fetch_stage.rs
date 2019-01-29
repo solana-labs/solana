@@ -13,7 +13,6 @@ pub struct BlobFetchStage {
 }
 
 impl BlobFetchStage {
-    #[allow(clippy::new_ret_no_self)]
     pub fn new(socket: Arc<UdpSocket>, sender: &BlobSender, exit: Arc<AtomicBool>) -> Self {
         Self::new_multi_socket(vec![socket], sender, exit)
     }
