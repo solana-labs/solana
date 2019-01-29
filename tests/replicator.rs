@@ -11,7 +11,7 @@ use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
 use solana::db_ledger::DbLedger;
 use solana::db_ledger::{create_tmp_genesis, get_tmp_ledger_path, tmp_copy_ledger};
 use solana::entry::Entry;
-use solana::fullnode::Fullnode;
+use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::leader_scheduler::LeaderScheduler;
 use solana::replicator::Replicator;
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
@@ -49,19 +49,18 @@ fn test_replicator_startup() {
     {
         let signer_proxy = VoteSignerProxy::new_local(&leader_keypair);
 
-        let leader = Fullnode::new_with_storage_rotate(
+        let mut fullnode_config = FullnodeConfig::default();
+        fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
+        let leader = Fullnode::new(
             leader_node,
             leader_keypair,
             &leader_ledger_path,
-            Some(Arc::new(signer_proxy)),
-            None,
-            false,
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_info.id.clone(),
             ))),
+            Some(Arc::new(signer_proxy)),
             None,
-            STORAGE_ROTATE_TEST_COUNT,
-            None,
+            fullnode_config,
         );
 
         let validator_keypair = Arc::new(Keypair::new());
@@ -80,19 +79,18 @@ fn test_replicator_startup() {
         #[cfg(feature = "chacha")]
         let validator_node_info = validator_node.info.clone();
 
-        let validator = Fullnode::new_with_storage_rotate(
+        let mut fullnode_config = FullnodeConfig::default();
+        fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
+        let validator = Fullnode::new(
             validator_node,
             validator_keypair,
             &validator_ledger_path,
-            Some(Arc::new(signer_proxy)),
-            Some(&leader_info),
-            false,
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_info.id,
             ))),
-            None,
-            STORAGE_ROTATE_TEST_COUNT,
-            None,
+            Some(Arc::new(signer_proxy)),
+            Some(&leader_info),
+            fullnode_config,
         );
 
         let bob = Keypair::new();
@@ -287,9 +285,7 @@ fn test_replicator_startup_ledger_hang() {
             ))),
             Some(Arc::new(signer_proxy)),
             None,
-            false,
-            None,
-            None,
+            Default::default(),
         );
 
         let validator_keypair = Arc::new(Keypair::new());
@@ -305,9 +301,7 @@ fn test_replicator_startup_ledger_hang() {
             ))),
             Some(Arc::new(signer_proxy)),
             Some(&leader_info),
-            false,
-            None,
-            None,
+            Default::default(),
         );
 
         info!("starting replicator node");

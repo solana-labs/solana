@@ -65,6 +65,27 @@ pub enum FullnodeReturnType {
     ValidatorToLeaderRotation,
 }
 
+pub struct FullnodeConfig {
+    pub sigverify_disabled: bool,
+    pub rpc_port: Option<u16>,
+    pub entry_stream: Option<String>,
+    pub storage_rotate_count: u64,
+}
+impl Default for FullnodeConfig {
+    fn default() -> Self {
+        // TODO: remove this, temporary parameter to configure
+        // storage amount differently for test configurations
+        // so tests don't take forever to run.
+        const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = 1024;
+        Self {
+            sigverify_disabled: false,
+            rpc_port: None,
+            entry_stream: None,
+            storage_rotate_count: NUM_HASHES_FOR_STORAGE_ROTATE,
+        }
+    }
+}
+
 pub struct Fullnode {
     keypair: Arc<Keypair>,
     exit: Arc<AtomicBool>,
@@ -80,11 +101,6 @@ pub struct Fullnode {
     pub role_notifiers: (TvuRotationReceiver, TpuRotationReceiver),
 }
 
-// TODO: remove this, temporary parameter to configure
-// storage amount differently for test configurations
-// so tests don't take forever to run.
-const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = 1024;
-
 impl Fullnode {
     pub fn new(
         node: Node,
@@ -93,36 +109,7 @@ impl Fullnode {
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         vote_signer: Option<Arc<VoteSignerProxy>>,
         entrypoint_info_option: Option<&NodeInfo>,
-        sigverify_disabled: bool,
-        rpc_port: Option<u16>,
-        entry_stream: Option<String>,
-    ) -> Self {
-        Self::new_with_storage_rotate(
-            node,
-            keypair,
-            ledger_path,
-            vote_signer,
-            entrypoint_info_option,
-            sigverify_disabled,
-            leader_scheduler,
-            rpc_port,
-            NUM_HASHES_FOR_STORAGE_ROTATE,
-            entry_stream,
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_with_storage_rotate(
-        node: Node,
-        keypair: Arc<Keypair>,
-        ledger_path: &str,
-        vote_signer: Option<Arc<VoteSignerProxy>>,
-        entrypoint_info_option: Option<&NodeInfo>,
-        sigverify_disabled: bool,
-        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
-        rpc_port: Option<u16>,
-        storage_rotate_count: u64,
-        entry_stream: Option<String>,
+        config: FullnodeConfig,
     ) -> Self {
         let (genesis_block, db_ledger) = Self::make_db_ledger(ledger_path);
         let (bank, entry_height, last_entry_id) =
@@ -136,10 +123,7 @@ impl Fullnode {
             &last_entry_id,
             vote_signer,
             entrypoint_info_option,
-            sigverify_disabled,
-            rpc_port,
-            storage_rotate_count,
-            entry_stream,
+            config,
         )
     }
 
@@ -153,9 +137,7 @@ impl Fullnode {
         last_entry_id: &Hash,
         vote_signer: Option<Arc<VoteSignerProxy>>,
         entrypoint_info_option: Option<&NodeInfo>,
-        sigverify_disabled: bool,
-        rpc_port: Option<u16>,
-        entry_stream: Option<String>,
+        config: FullnodeConfig,
     ) -> Self {
         let (_genesis_block, db_ledger) = Self::make_db_ledger(ledger_path);
         Self::new_with_bank_and_db_ledger(
@@ -167,10 +149,7 @@ impl Fullnode {
             &last_entry_id,
             vote_signer,
             entrypoint_info_option,
-            sigverify_disabled,
-            rpc_port,
-            NUM_HASHES_FOR_STORAGE_ROTATE,
-            entry_stream,
+            config,
         )
     }
 
@@ -184,15 +163,12 @@ impl Fullnode {
         last_entry_id: &Hash,
         vote_signer: Option<Arc<VoteSignerProxy>>,
         entrypoint_info_option: Option<&NodeInfo>,
-        sigverify_disabled: bool,
-        rpc_port: Option<u16>,
-        storage_rotate_count: u64,
-        entry_stream: Option<String>,
+        config: FullnodeConfig,
     ) -> Self {
         let mut rpc_addr = node.info.rpc;
         let mut rpc_pubsub_addr = node.info.rpc_pubsub;
         // If rpc_port == `None`, node will listen on the ports set in NodeInfo
-        if let Some(port) = rpc_port {
+        if let Some(port) = config.rpc_port {
             rpc_addr.set_port(port);
             node.info.rpc = rpc_addr;
             rpc_pubsub_addr.set_port(port + 1);
@@ -304,10 +280,10 @@ impl Fullnode {
             &cluster_info,
             sockets,
             db_ledger.clone(),
-            storage_rotate_count,
+            config.storage_rotate_count,
             to_leader_sender,
             &storage_state,
-            entry_stream,
+            config.entry_stream,
         );
         let max_tick_height = {
             let ls_lock = bank.leader_scheduler.read().unwrap();
@@ -328,7 +304,7 @@ impl Fullnode {
                 .expect("Failed to clone broadcast socket"),
             cluster_info.clone(),
             entry_height,
-            sigverify_disabled,
+            config.sigverify_disabled,
             max_tick_height,
             last_entry_id,
             keypair.pubkey(),
@@ -342,7 +318,7 @@ impl Fullnode {
             keypair,
             cluster_info,
             bank,
-            sigverify_disabled,
+            sigverify_disabled: config.sigverify_disabled,
             gossip_service,
             rpc_service: Some(rpc_service),
             rpc_pubsub_service: Some(rpc_pubsub_service),
@@ -571,9 +547,7 @@ mod tests {
             &last_id,
             Some(Arc::new(signer)),
             Some(&entry),
-            false,
-            None,
-            None,
+            Default::default(),
         );
         v.close().unwrap();
         remove_dir_all(validator_ledger_path).unwrap();
@@ -614,9 +588,7 @@ mod tests {
                     &last_id,
                     Some(Arc::new(signer)),
                     Some(&entry),
-                    false,
-                    None,
-                    None,
+                    Default::default(),
                 )
             })
             .collect();
@@ -686,9 +658,7 @@ mod tests {
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
             Some(Arc::new(signer)),
             Some(&bootstrap_leader_info),
-            false,
-            None,
-            None,
+            Default::default(),
         );
 
         // Wait for the leader to transition, ticks should cause the leader to
@@ -791,9 +761,7 @@ mod tests {
                 Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
                 Some(Arc::new(vote_signer)),
                 Some(&bootstrap_leader_info),
-                false,
-                None,
-                None,
+                Default::default(),
             );
 
             assert!(!bootstrap_leader.node_services.tpu.is_leader());
@@ -806,9 +774,7 @@ mod tests {
                 Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
                 Some(Arc::new(validator_vote_account_id)),
                 Some(&bootstrap_leader_info),
-                false,
-                None,
-                None,
+                Default::default(),
             );
 
             assert!(validator.node_services.tpu.is_leader());
@@ -902,9 +868,7 @@ mod tests {
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
             Some(Arc::new(vote_signer)),
             Some(&leader_node.info),
-            false,
-            None,
-            None,
+            Default::default(),
         );
 
         // Send blobs to the validator from our mock leader

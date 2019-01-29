@@ -44,7 +44,6 @@ pub struct ThinClient {
     balances: HashMap<Pubkey, Account>,
     signature_status: bool,
     confirmation: Option<usize>,
-
     rpc_client: RpcClient,
 }
 
@@ -472,9 +471,7 @@ pub fn new_fullnode(
         &last_id,
         Some(Arc::new(vote_signer)),
         None,
-        false,
-        None,
-        None,
+        Default::default(),
     );
 
     (server, leader_data, genesis_block, alice, ledger_path)
