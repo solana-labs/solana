@@ -130,7 +130,7 @@ impl VoteSignerProxy {
 
     pub fn send_validator_vote(
         &self,
-        bank: &Arc<Bank>,
+        bank: &Bank,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         vote_blob_sender: &BlobSender,
     ) -> Result<()> {
@@ -238,7 +238,7 @@ mod test {
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
 
         let (genesis_block, _) = GenesisBlock::new_with_leader(10000, my_id, 500);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let bank = Bank::new(&genesis_block);
         let (sender, receiver) = channel();
 
         assert_eq!(signer.unsent_votes.read().unwrap().len(), 0);
