@@ -9,7 +9,7 @@
 
 use crate::entry::Entry;
 use crate::leader_scheduler::{DEFAULT_BOOTSTRAP_HEIGHT, TICKS_PER_BLOCK};
-use crate::packet::Blob;
+use crate::packet::{self, Blob};
 
 use byteorder::{BigEndian, ByteOrder};
 
@@ -234,6 +234,48 @@ impl Store {
         range: std::ops::Range<u64>,
     ) -> Result<impl Iterator<Item = Result<Vec<u8>>>> {
         self.slot_data(slot, range)
+    }
+
+    /// Returns the entry vector for the slot starting with `entry_start_index`, capping the result
+    /// at `max` if `max_entries == Some(max)`, otherwise, no upper limit on the length of the return
+    /// vector is imposed.
+    pub fn get_slot_entries(
+        &self,
+        slot: u64,
+        entry_start_index: usize,
+        max_entries: Option<u64>,
+    ) -> Result<Vec<Entry>> {
+        let range = (entry_start_index as u64)..(max_entries.unwrap_or(std::u64::MAX));
+
+        let entries = self
+            .slot_entries_range(slot, range)?
+            .collect::<Result<Vec<Entry>>>()?;
+
+        Ok(entries)
+    }
+
+    pub fn slot_entries_from(
+        &self,
+        slot: u64,
+        range: std::ops::RangeFrom<u64>,
+    ) -> Result<impl Iterator<Item = Result<Entry>>> {
+        self.slot_entries_range(slot, range.start..std::u64::MAX)
+    }
+
+    pub fn slot_entries_range(
+        &self,
+        slot: u64,
+        range: std::ops::Range<u64>,
+    ) -> Result<impl Iterator<Item = Result<Entry>>> {
+        let iter = self.slot_data(slot, range)?.map(|blob_data| {
+            let entry_data = &blob_data?[packet::BLOB_HEADER_SIZE..];
+            let entry =
+                bincode::deserialize(entry_data).expect("Blobs must be well formed in the ledger");
+
+            Ok(entry)
+        });
+
+        Ok(iter)
     }
 
     /// Return an iterator for all the entries in the given file.

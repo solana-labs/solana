@@ -128,7 +128,7 @@ fn test_insert_noncontiguous_blobs() {
 
 #[test]
 fn test_ensure_correct_metadata() {
-    let p = get_tmp_ledger_path("get-put-simple").unwrap();
+    let p = get_tmp_ledger_path("test_ensure_correct_metadata").unwrap();
     let store = Store::open(&p);
     let num_ticks = store.config.ticks_per_block * store.config.num_blocks_per_slot;
     let slot = 1;
@@ -164,6 +164,46 @@ fn test_ensure_correct_metadata() {
     assert_eq!(meta.consumed, num_ticks - 1);
     assert_eq!(meta.consumed_ticks, num_ticks - 1);
     assert!(meta.contains_all_ticks(&store.config));
+
+    drop(store);
+    Store::destroy(&p).expect("destruction should succeed");
+}
+
+#[test]
+fn test_retrieve_entries() {
+    let p = get_tmp_ledger_path("test_retrieve_entries").unwrap();
+    let store = Store::open(&p);
+
+    // try inserting some blobs
+    let entries = entry::make_tiny_test_entries(1024);
+
+    let blobs: Vec<_> = entries
+        .iter()
+        .enumerate()
+        .map(|(idx, entry)| {
+            let mut b = entry.to_blob();
+            b.set_slot(0).unwrap();
+            b.set_index(idx as u64).unwrap();
+            b
+        })
+        .collect();
+
+    store
+        .insert_blobs(&blobs)
+        .expect("unable to insert entries");
+
+    let retrieved = store
+        .get_slot_entries(0, 0, None)
+        .expect("failed to retrieve slot entries");
+
+    assert_eq!(entries.len(), retrieved.len());
+    for (input, retrieved) in entries.iter().zip(retrieved.iter()) {
+        assert_eq!(input, retrieved);
+    }
+
+    let meta = store.get_meta(0).unwrap();
+    assert_eq!(meta.received, 1023);
+    assert_eq!(meta.consumed, 1023);
 
     drop(store);
     Store::destroy(&p).expect("destruction should succeed");
