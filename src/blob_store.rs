@@ -98,6 +98,10 @@ impl Store {
         }
     }
 
+    pub fn get_config(&self) -> &StoreConfig {
+        &self.config
+    }
+
     pub fn put_meta(&self, slot: u64, meta: SlotMeta) -> Result<()> {
         let slot_path = self.mk_slot_path(slot);
         store_impl::ensure_slot(&slot_path)?;
@@ -431,6 +435,3 @@ impl Iterator for DataIter {
 }
 
 mod store_impl;
-
-#[cfg(test)]
-mod tests;

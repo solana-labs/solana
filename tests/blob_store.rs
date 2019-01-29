@@ -1,13 +1,15 @@
-use crate::entry;
-use crate::packet::BLOB_HEADER_SIZE;
+use solana::blob_store::*;
+use solana::entry;
+use solana::packet::BLOB_HEADER_SIZE;
 
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 
 use std::fs;
 use std::path::PathBuf;
+use std::result::Result as StdRes;
 
-use super::*;
+type Result<T> = StdRes<T, StoreError>;
 
 fn get_tmp_ledger_path(name: &str) -> Result<PathBuf> {
     use std::env;
@@ -94,9 +96,7 @@ fn test_insert_noncontiguous_blobs() {
         .chain(e2_iter)
         .collect();
 
-    store
-        .insert_blobs(&blobs)
-        .expect("unable to insert entries");
+    store.put_blobs(&blobs).expect("unable to insert entries");
 
     let blob_bytes = blobs
         .into_iter()
@@ -130,11 +130,12 @@ fn test_insert_noncontiguous_blobs() {
 fn test_ensure_correct_metadata() {
     let p = get_tmp_ledger_path("test_ensure_correct_metadata").unwrap();
     let store = Store::open(&p);
-    let num_ticks = store.config.ticks_per_block * store.config.num_blocks_per_slot;
+    let config = store.get_config();
+    let num_ticks = config.ticks_per_block * config.num_blocks_per_slot;
     let slot = 1;
 
     // try inserting ticks to fill a slot
-    let entries = entry::create_ticks(num_ticks as usize, Hash::default());
+    let entries = entry::create_ticks(num_ticks, Hash::default());
 
     // Skip slot 0 because bootstrap slot has a different expected amount of ticks
     let blobs: Vec<_> = entries
@@ -149,21 +150,19 @@ fn test_ensure_correct_metadata() {
         })
         .collect();
 
-    store
-        .insert_blobs(&blobs)
-        .expect("unable to insert entries");
+    store.put_blobs(&blobs).expect("unable to insert entries");
 
     let meta = store.get_meta(slot).unwrap();
     println!(
         "meta = {:?}, expected_ticks = {}",
         meta,
-        meta.num_expected_ticks(&store.config)
+        meta.num_expected_ticks(config)
     );
 
     assert_eq!(meta.received, num_ticks - 1);
     assert_eq!(meta.consumed, num_ticks - 1);
     assert_eq!(meta.consumed_ticks, num_ticks - 1);
-    assert!(meta.contains_all_ticks(&store.config));
+    assert!(meta.contains_all_ticks(config));
 
     drop(store);
     Store::destroy(&p).expect("destruction should succeed");
@@ -188,9 +187,7 @@ fn test_retrieve_entries() {
         })
         .collect();
 
-    store
-        .insert_blobs(&blobs)
-        .expect("unable to insert entries");
+    store.put_blobs(&blobs).expect("unable to insert entries");
 
     let retrieved = store
         .get_slot_entries(0, 0, None)
