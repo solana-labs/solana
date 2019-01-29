@@ -2,7 +2,7 @@
 
 use clap::{crate_version, value_t_or_exit, App, Arg};
 use serde_json;
-use solana::db_ledger::create_empty_ledger;
+use solana::db_ledger::create_new_ledger;
 use solana::genesis_block::GenesisBlock;
 use solana_sdk::signature::{read_keypair, KeypairUtil};
 use std::error;
@@ -74,6 +74,6 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         bootstrap_leader_tokens: BOOTSTRAP_LEADER_TOKENS,
     };
 
-    create_empty_ledger(ledger_path, &genesis_block)?;
+    create_new_ledger(ledger_path, &genesis_block)?;
     Ok(())
 }

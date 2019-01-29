@@ -830,11 +830,16 @@ impl Iterator for EntryIterator {
     }
 }
 
-pub fn create_empty_ledger(ledger_path: &str, genesis_block: &GenesisBlock) -> Result<(u64, Hash)> {
+pub fn create_new_ledger(ledger_path: &str, genesis_block: &GenesisBlock) -> Result<(u64, Hash)> {
     DbLedger::destroy(ledger_path)?;
-    DbLedger::open(ledger_path)?;
     genesis_block.write(&ledger_path)?;
-    Ok((0, genesis_block.last_id()))
+
+    // Add a single tick linked back to the genesis_block to bootstrap the ledger
+    let db_ledger = DbLedger::open(ledger_path)?;
+    let entries = crate::entry::create_ticks(1, genesis_block.last_id());
+    db_ledger.write_entries(DEFAULT_SLOT_HEIGHT, 0, &entries)?;
+
+    Ok((1, entries[0].id))
 }
 
 pub fn genesis<'a, I>(ledger_path: &str, keypair: &Keypair, entries: I) -> Result<()>
@@ -875,7 +880,7 @@ pub fn get_tmp_ledger_path(name: &str) -> String {
 
 pub fn create_tmp_ledger(name: &str, genesis_block: &GenesisBlock) -> String {
     let ledger_path = get_tmp_ledger_path(name);
-    create_empty_ledger(&ledger_path, genesis_block).unwrap();
+    create_new_ledger(&ledger_path, genesis_block).unwrap();
     ledger_path
 }
 
