@@ -97,11 +97,11 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    pub fn new<T: Serialize>(
-        from_keypair: &Keypair,
+    pub fn new<S: Serialize, T: KeypairUtil>(
+        from_keypair: &T,
         transaction_keys: &[Pubkey],
         program_id: Pubkey,
-        userdata: &T,
+        userdata: &S,
         last_id: Hash,
         fee: u64,
     ) -> Self {
@@ -130,7 +130,14 @@ impl Transaction {
         let instructions = vec![Instruction::new(0, userdata, accounts)];
         let mut keys = vec![*from_pubkey];
         keys.extend_from_slice(transaction_keys);
-        Self::new_with_instructions(&[], &keys[..], last_id, fee, program_ids, instructions)
+        Self::new_with_instructions::<Keypair>(
+            &[],
+            &keys[..],
+            last_id,
+            fee,
+            program_ids,
+            instructions,
+        )
     }
     /// Create a signed transaction
     /// * `from_keypair` - The key used to sign the transaction.  This key is stored as keys[0]
@@ -140,8 +147,8 @@ impl Transaction {
     /// * `fee` - The transaction fee.
     /// * `program_ids` - The keys that identify programs used in the `instruction` vector.
     /// * `instructions` - The programs and their arguments that the transaction will execute atomically
-    pub fn new_with_instructions(
-        from_keypairs: &[&Keypair],
+    pub fn new_with_instructions<T: KeypairUtil>(
+        from_keypairs: &[&T],
         keys: &[Pubkey],
         last_id: Hash,
         fee: u64,
@@ -211,7 +218,7 @@ impl Transaction {
     }
 
     /// Sign this transaction.
-    pub fn sign(&mut self, keypairs: &[&Keypair], last_id: Hash) {
+    pub fn sign<T: KeypairUtil>(&mut self, keypairs: &[&T], last_id: Hash) {
         self.last_id = last_id;
         let message = self.message();
         self.signatures = keypairs

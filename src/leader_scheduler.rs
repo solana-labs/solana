@@ -13,7 +13,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
-use solana_sdk::vote_program::{self, Vote, VoteProgram};
+use solana_sdk::vote_program::{self, VoteProgram};
 use solana_sdk::vote_transaction::VoteTransaction;
 use std::io::Cursor;
 use std::sync::Arc;
@@ -499,8 +499,7 @@ pub fn make_active_set_entries(
     last_entry_id = new_vote_account_entry.id;
 
     // 3) Create vote entry
-    let vote = Vote { tick_height: 1 };
-    let tx = Transaction::vote_new(&vote_account_id, vote, *last_tick_id, 0);
+    let tx = Transaction::vote_new(&vote_account_id, 1, *last_tick_id, 0);
     let sig = active_keypair.sign_message(&tx.message());
     let vote_tx = Transaction {
         signatures: vec![sig],

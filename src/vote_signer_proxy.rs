@@ -14,7 +14,6 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::transaction::Transaction;
-use solana_sdk::vote_program::Vote;
 use solana_sdk::vote_transaction::VoteTransaction;
 use solana_vote_signer::rpc::LocalVoteSigner;
 use solana_vote_signer::rpc::VoteSigner;
@@ -176,8 +175,7 @@ impl VoteSignerProxy {
     }
 
     pub fn new_signed_vote_transaction(&self, last_id: &Hash, tick_height: u64) -> Transaction {
-        let vote = Vote { tick_height };
-        let mut tx = Transaction::vote_new(&self.vote_account, vote, *last_id, 0);
+        let mut tx = Transaction::vote_new(&self.vote_account, tick_height, *last_id, 0);
         assert!(tx.signatures.is_empty());
         let sig = self.sign_message(&tx.message());
         tx.signatures.push(sig);

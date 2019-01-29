@@ -112,7 +112,7 @@ impl ThinClient {
         tries: usize,
     ) -> io::Result<Signature> {
         for x in 0..tries {
-            tx.sign(&[&keypair], self.get_last_id());
+            tx.sign(&[keypair], self.get_last_id());
             let mut buf = vec![0; tx.serialized_size().unwrap() as usize];
             let mut wr = std::io::Cursor::new(&mut buf[..]);
             serialize_into(&mut wr, &tx).expect("serialize Transaction in pub fn transfer_signed");
