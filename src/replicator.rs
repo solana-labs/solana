@@ -167,8 +167,9 @@ impl Replicator {
         let mut blob_sockets: Vec<Arc<UdpSocket>> =
             node.sockets.tvu.into_iter().map(Arc::new).collect();
         blob_sockets.push(repair_socket.clone());
-        let (fetch_stage, blob_fetch_receiver) =
-            BlobFetchStage::new_multi_socket(blob_sockets, exit.clone());
+        let (blob_fetch_sender, blob_fetch_receiver) = channel();
+        let fetch_stage =
+            BlobFetchStage::new_multi_socket(blob_sockets, &blob_fetch_sender, exit.clone());
 
         // todo: pull blobs off the retransmit_receiver and recycle them?
         let (retransmit_sender, retransmit_receiver) = channel();

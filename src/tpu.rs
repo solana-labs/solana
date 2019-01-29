@@ -10,6 +10,7 @@ use crate::fullnode::TpuRotationSender;
 use crate::poh_service::Config;
 use crate::service::Service;
 use crate::sigverify_stage::SigVerifyStage;
+use crate::streamer::BlobSender;
 use crate::tpu_forwarder::TpuForwarder;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -81,6 +82,7 @@ impl Tpu {
         leader_id: Pubkey,
         is_leader: bool,
         to_validator_sender: &TpuRotationSender,
+        blob_sender: &BlobSender,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
 
@@ -110,6 +112,7 @@ impl Tpu {
                 entry_receiver,
                 max_tick_height,
                 exit.clone(),
+                blob_sender,
             );
 
             let svcs = LeaderServices::new(
@@ -162,6 +165,7 @@ impl Tpu {
         last_entry_id: &Hash,
         leader_id: Pubkey,
         to_validator_sender: &TpuRotationSender,
+        blob_sender: &BlobSender,
     ) {
         match &self.tpu_mode {
             TpuMode::Leader(svcs) => {
@@ -197,6 +201,7 @@ impl Tpu {
             entry_receiver,
             max_tick_height,
             self.exit.clone(),
+            blob_sender,
         );
 
         let svcs = LeaderServices::new(

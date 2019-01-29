@@ -21,11 +21,13 @@ use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
 use crate::service::Service;
 use crate::storage_stage::{StorageStage, StorageState};
+use crate::streamer::BlobSender;
 use crate::vote_signer_proxy::VoteSignerProxy;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread;
 
@@ -73,7 +75,7 @@ impl Tvu {
         to_leader_sender: TvuRotationSender,
         storage_state: &StorageState,
         entry_stream: Option<String>,
-    ) -> Self {
+    ) -> (Self, BlobSender) {
         let exit = Arc::new(AtomicBool::new(false));
         let keypair: Arc<Keypair> = cluster_info
             .read()
@@ -87,12 +89,14 @@ impl Tvu {
             retransmit: retransmit_socket,
         } = sockets;
 
+        let (blob_fetch_sender, blob_fetch_receiver) = channel();
+
         let repair_socket = Arc::new(repair_socket);
         let mut blob_sockets: Vec<Arc<UdpSocket>> =
             fetch_sockets.into_iter().map(Arc::new).collect();
         blob_sockets.push(repair_socket.clone());
-        let (fetch_stage, blob_fetch_receiver) =
-            BlobFetchStage::new_multi_socket(blob_sockets, exit.clone());
+        let fetch_stage =
+            BlobFetchStage::new_multi_socket(blob_sockets, &blob_fetch_sender, exit.clone());
 
         //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
@@ -136,15 +140,18 @@ impl Tvu {
             &cluster_info,
         );
 
-        Tvu {
-            fetch_stage,
-            retransmit_stage,
-            replay_stage,
-            storage_stage,
-            exit,
-            last_entry_id: l_last_entry_id,
-            entry_height: l_entry_height,
-        }
+        (
+            Tvu {
+                fetch_stage,
+                retransmit_stage,
+                replay_stage,
+                storage_stage,
+                exit,
+                last_entry_id: l_last_entry_id,
+                entry_height: l_entry_height,
+            },
+            blob_fetch_sender,
+        )
     }
 
     pub fn get_state(&self) -> (Hash, u64) {
@@ -285,7 +292,7 @@ pub mod tests {
         let vote_account_keypair = Arc::new(Keypair::new());
         let vote_signer = VoteSignerProxy::new_local(&vote_account_keypair);
         let (sender, _) = channel();
-        let tvu = Tvu::new(
+        let (tvu, _) = Tvu::new(
             Some(Arc::new(vote_signer)),
             &bank,
             0,

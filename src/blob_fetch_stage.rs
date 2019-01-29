@@ -1,10 +1,9 @@
 //! The `blob_fetch_stage` pulls blobs from UDP sockets and sends it to a channel.
 
 use crate::service::Service;
-use crate::streamer::{self, BlobReceiver};
+use crate::streamer::{self, BlobSender};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
@@ -15,20 +14,20 @@ pub struct BlobFetchStage {
 
 impl BlobFetchStage {
     #[allow(clippy::new_ret_no_self)]
-    pub fn new(socket: Arc<UdpSocket>, exit: Arc<AtomicBool>) -> (Self, BlobReceiver) {
-        Self::new_multi_socket(vec![socket], exit)
+    pub fn new(socket: Arc<UdpSocket>, sender: &BlobSender, exit: Arc<AtomicBool>) -> Self {
+        Self::new_multi_socket(vec![socket], sender, exit)
     }
     pub fn new_multi_socket(
         sockets: Vec<Arc<UdpSocket>>,
+        sender: &BlobSender,
         exit: Arc<AtomicBool>,
-    ) -> (Self, BlobReceiver) {
-        let (sender, receiver) = channel();
+    ) -> Self {
         let thread_hdls: Vec<_> = sockets
             .into_iter()
             .map(|socket| streamer::blob_receiver(socket, exit.clone(), sender.clone()))
             .collect();
 
-        (Self { exit, thread_hdls }, receiver)
+        Self { exit, thread_hdls }
     }
 
     pub fn close(&self) {
