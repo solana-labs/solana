@@ -7,7 +7,11 @@ use std::process::Output;
 use std::sync::Arc;
 
 fn run_ledger_tool(args: &[&str]) -> Output {
-    Command::main_binary().unwrap().args(args).output().unwrap()
+    Command::cargo_bin(env!("CARGO_PKG_NAME"))
+        .unwrap()
+        .args(args)
+        .output()
+        .unwrap()
 }
 
 fn count_newlines(chars: &[u8]) -> usize {
