@@ -101,7 +101,7 @@ impl Tvu {
         //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
         //then sent to the window, which does the erasure coding reconstruction
-        let (retransmit_stage, blob_window_receiver) = RetransmitStage::new(
+        let retransmit_stage = RetransmitStage::new(
             bank,
             db_ledger.clone(),
             &cluster_info,
@@ -120,9 +120,9 @@ impl Tvu {
         let (replay_stage, ledger_entry_receiver) = ReplayStage::new(
             keypair.pubkey(),
             voting_keypair,
+            db_ledger.clone(),
             bank.clone(),
             cluster_info.clone(),
-            blob_window_receiver,
             exit.clone(),
             l_entry_height.clone(),
             l_last_entry_id.clone(),
@@ -223,6 +223,58 @@ pub mod tests {
         exit: Arc<AtomicBool>,
     ) -> GossipService {
         GossipService::new(&cluster_info, None, gossip, exit)
+    }
+
+    #[test]
+    fn test_tvu_exit() {
+        solana_logger::setup();
+        let leader = Node::new_localhost();
+        let target1_keypair = Keypair::new();
+        let target1 = Node::new_localhost_with_pubkey(target1_keypair.pubkey());
+
+        let starting_balance = 10_000;
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(starting_balance);
+        let leader_id = leader.info.id;
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
+            leader_id,
+        )));
+        let mut bank = Bank::new(&genesis_block);
+        bank.leader_scheduler = leader_scheduler;
+        let bank = Arc::new(bank);
+
+        //start cluster_info1
+        let mut cluster_info1 = ClusterInfo::new(target1.info.clone());
+        cluster_info1.insert_info(leader.info.clone());
+        cluster_info1.set_leader(leader.info.id);
+        let cref1 = Arc::new(RwLock::new(cluster_info1));
+
+        let cur_hash = Hash::default();
+        let db_ledger_path = get_tmp_ledger_path("test_replay");
+        let db_ledger =
+            DbLedger::open(&db_ledger_path).expect("Expected to successfully open ledger");
+        let vote_account_keypair = Arc::new(Keypair::new());
+        let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
+        let (sender, _receiver) = channel();
+        let (tvu, _blob_sender) = Tvu::new(
+            Some(Arc::new(voting_keypair)),
+            &bank,
+            0,
+            cur_hash,
+            &cref1,
+            {
+                Sockets {
+                    repair: target1.sockets.repair,
+                    retransmit: target1.sockets.retransmit,
+                    fetch: target1.sockets.tvu,
+                }
+            },
+            Arc::new(db_ledger),
+            STORAGE_ROTATE_TEST_COUNT,
+            sender,
+            &StorageState::default(),
+            None,
+        );
+        tvu.close().expect("close");
     }
 
     /// Test that message sent from leader to target1 and replayed to target2

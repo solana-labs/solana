@@ -4,7 +4,6 @@ use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
 use crate::db_ledger::DbLedger;
 use crate::db_window::*;
-use crate::entry::EntrySender;
 
 use crate::leader_scheduler::LeaderScheduler;
 use crate::result::{Error, Result};
@@ -57,7 +56,6 @@ fn recv_window(
     tick_height: &mut u64,
     max_ix: u64,
     r: &BlobReceiver,
-    entry_sender: &Option<EntrySender>,
     retransmit: &BlobSender,
     done: &Arc<AtomicBool>,
 ) -> Result<()> {
@@ -107,12 +105,6 @@ fn recv_window(
         duration_as_ms(&now.elapsed())
     );
 
-    if !consume_queue.is_empty() {
-        inc_new_counter_info!("streamer-recv_window-consume", consume_queue.len());
-        if let Some(entry_sender) = entry_sender {
-            entry_sender.send(consume_queue)?;
-        }
-    }
     Ok(())
 }
 
@@ -124,7 +116,6 @@ pub fn window_service(
     entry_height: u64,
     max_entry_height: u64,
     r: BlobReceiver,
-    entry_sender: Option<EntrySender>,
     retransmit: BlobSender,
     repair_socket: Arc<UdpSocket>,
     leader_scheduler: Arc<RwLock<LeaderScheduler>>,
@@ -150,7 +141,6 @@ pub fn window_service(
                     &mut tick_height_,
                     max_entry_height,
                     &r,
-                    &entry_sender,
                     &retransmit,
                     &done,
                 ) {
@@ -218,7 +208,7 @@ mod test {
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::db_ledger::get_tmp_ledger_path;
     use crate::db_ledger::DbLedger;
-    use crate::entry::{make_consecutive_blobs, Entry};
+    use crate::entry::make_consecutive_blobs;
     use crate::leader_scheduler::LeaderScheduler;
 
     use crate::streamer::{blob_receiver, responder};
@@ -227,24 +217,9 @@ mod test {
     use std::fs::remove_dir_all;
     use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::mpsc::{channel, Receiver};
+    use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
     use std::time::Duration;
-
-    fn get_entries(r: Receiver<Vec<Entry>>, num: &mut usize) {
-        for _t in 0..5 {
-            let timer = Duration::new(1, 0);
-            match r.recv_timeout(timer) {
-                Ok(m) => {
-                    *num += m.len();
-                }
-                e => info!("error {:?}", e),
-            }
-            if *num == 10 {
-                break;
-            }
-        }
-    }
 
     #[test]
     pub fn window_send_test() {
@@ -262,7 +237,6 @@ mod test {
         let (s_reader, r_reader) = channel();
         let t_receiver =
             blob_receiver(Arc::new(leader_node.sockets.gossip), exit.clone(), s_reader);
-        let (s_window, r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let done = Arc::new(AtomicBool::new(false));
         let db_ledger_path = get_tmp_ledger_path("window_send_test");
@@ -276,7 +250,6 @@ mod test {
             0,
             0,
             r_reader,
-            Some(s_window),
             s_retransmit,
             Arc::new(leader_node.sockets.repair),
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(me_id))),
@@ -305,9 +278,6 @@ mod test {
             t_responder
         };
 
-        let mut num = 0;
-        get_entries(r_window, &mut num);
-        assert_eq!(num, 10);
         let mut q = r_retransmit.recv().unwrap();
         while let Ok(mut nq) = r_retransmit.try_recv() {
             q.append(&mut nq);
@@ -336,7 +306,6 @@ mod test {
         let (s_reader, r_reader) = channel();
         let t_receiver =
             blob_receiver(Arc::new(leader_node.sockets.gossip), exit.clone(), s_reader);
-        let (s_window, _r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let done = Arc::new(AtomicBool::new(false));
         let db_ledger_path = get_tmp_ledger_path("window_send_late_leader_test");
@@ -350,7 +319,6 @@ mod test {
             0,
             0,
             r_reader,
-            Some(s_window),
             s_retransmit,
             Arc::new(leader_node.sockets.repair),
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(me_id))),
