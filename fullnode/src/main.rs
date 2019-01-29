@@ -223,32 +223,31 @@ fn main() {
         let (signer_service, signer_addr) = LocalVoteSignerService::new();
         (Some(signer_service), signer_addr)
     };
-    let rpc_port = if let Some(port) = matches.value_of("rpc_port") {
+    let (rpc_port, rpc_pubsub_port) = if let Some(port) = matches.value_of("rpc_port") {
         let port_number = port.to_string().parse().expect("integer");
         if port_number == 0 {
             eprintln!("Invalid RPC port requested: {:?}", port);
             exit(1);
         }
-        port_number
+        (port_number, port_number + 1)
     } else {
-        solana_netutil::find_available_port_in_range(FULLNODE_PORT_RANGE)
-            .expect("unable to allocate rpc port")
+        (
+            solana_netutil::find_available_port_in_range(FULLNODE_PORT_RANGE)
+                .expect("unable to allocate rpc_port"),
+            solana_netutil::find_available_port_in_range(FULLNODE_PORT_RANGE)
+                .expect("unable to allocate rpc_pubsub_port"),
+        )
     };
-    fullnode_config.rpc_port = Some(rpc_port);
     let init_complete_file = matches.value_of("init_complete_file");
     fullnode_config.entry_stream = matches.value_of("entry_stream").map(|s| s.to_string());
 
     let keypair = Arc::new(keypair);
-    let node = Node::new_with_external_ip(keypair.pubkey(), &gossip);
-    let mut node_info = node.info.clone();
-
-    node_info.rpc.set_port(rpc_port);
-    node_info.rpc_pubsub.set_port(rpc_port + 1);
+    let mut node = Node::new_with_external_ip(keypair.pubkey(), &gossip);
+    node.info.rpc.set_port(rpc_port);
+    node.info.rpc_pubsub.set_port(rpc_pubsub_port);
 
     let mut leader_scheduler = LeaderScheduler::default();
     leader_scheduler.use_only_bootstrap_leader = use_only_bootstrap_leader;
-
-    info!("Node ID: {}", node.info.id);
 
     let vote_account;
     let vote_signer_option = if !no_signer {
@@ -263,6 +262,7 @@ fn main() {
         None
     };
 
+    let gossip_addr = node.info.gossip;
     let mut fullnode = Fullnode::new(
         node,
         keypair.clone(),
@@ -278,7 +278,7 @@ fn main() {
     if !no_signer {
         let leader_node_info = loop {
             info!("Looking for leader...");
-            match poll_gossip_for_leader(node_info.gossip, Some(10)) {
+            match poll_gossip_for_leader(gossip_addr, Some(10)) {
                 Ok(leader_node_info) => {
                     info!("Found leader: {:?}", leader_node_info);
                     break leader_node_info;

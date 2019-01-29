@@ -67,7 +67,6 @@ pub enum FullnodeReturnType {
 
 pub struct FullnodeConfig {
     pub sigverify_disabled: bool,
-    pub rpc_port: Option<u16>,
     pub entry_stream: Option<String>,
     pub storage_rotate_count: u64,
 }
@@ -79,7 +78,6 @@ impl Default for FullnodeConfig {
         const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = 1024;
         Self {
             sigverify_disabled: false,
-            rpc_port: None,
             entry_stream: None,
             storage_rotate_count: NUM_HASHES_FOR_STORAGE_ROTATE,
         }
@@ -165,22 +163,11 @@ impl Fullnode {
         entrypoint_info_option: Option<&NodeInfo>,
         config: FullnodeConfig,
     ) -> Self {
-        let mut rpc_addr = node.info.rpc;
-        let mut rpc_pubsub_addr = node.info.rpc_pubsub;
-        // If rpc_port == `None`, node will listen on the ports set in NodeInfo
-        if let Some(port) = config.rpc_port {
-            rpc_addr.set_port(port);
-            node.info.rpc = rpc_addr;
-            rpc_pubsub_addr.set_port(port + 1);
-            node.info.rpc_pubsub = rpc_pubsub_addr;
-        }
-
-        info!("node rpc address: {}", node.info.rpc);
+        info!("node info: {:?}", node.info);
         info!("node entrypoint_info: {:?}", entrypoint_info_option);
-        let local_gossip_addr = node.sockets.gossip.local_addr().unwrap();
         info!(
-            "node local gossip address: {} (advertising {})",
-            local_gossip_addr, node.info.gossip
+            "node local gossip address: {}",
+            node.sockets.gossip.local_addr().unwrap()
         );
 
         let exit = Arc::new(AtomicBool::new(false));
@@ -189,7 +176,7 @@ impl Fullnode {
         node.info.wallclock = timestamp();
         assert_eq!(keypair.pubkey(), node.info.id);
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_keypair(
-            node.info,
+            node.info.clone(),
             keypair.clone(),
         )));
 
@@ -200,7 +187,7 @@ impl Fullnode {
         let drone_addr = {
             let mut entrypoint_drone_addr = match entrypoint_info_option {
                 Some(entrypoint_info_info) => entrypoint_info_info.rpc,
-                None => rpc_addr,
+                None => node.info.rpc,
             };
             entrypoint_drone_addr.set_port(solana_drone::drone::DRONE_PORT);
             entrypoint_drone_addr
@@ -211,7 +198,7 @@ impl Fullnode {
         let rpc_service = JsonRpcService::new(
             &bank,
             &cluster_info,
-            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), rpc_addr.port()),
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
             drone_addr,
             storage_state.clone(),
         );
@@ -220,7 +207,7 @@ impl Fullnode {
             &bank,
             SocketAddr::new(
                 IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
-                rpc_pubsub_addr.port(),
+                node.info.rpc_pubsub.port(),
             ),
         );
 
