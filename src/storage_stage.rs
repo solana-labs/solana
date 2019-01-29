@@ -242,7 +242,7 @@ impl StorageStage {
 
             let last_id = client.get_last_id();
 
-            tx.sign(&[&keypair], last_id);
+            tx.sign(&[keypair.as_ref()], last_id);
 
             if exit.load(Ordering::Relaxed) {
                 Err(io::Error::new(io::ErrorKind::Other, "exit signaled"))?;
@@ -454,7 +454,6 @@ mod tests {
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::transaction::Transaction;
-    use solana_sdk::vote_program::Vote;
     use solana_sdk::vote_transaction::VoteTransaction;
     use std::cmp::{max, min};
     use std::fs::remove_dir_all;
@@ -604,11 +603,8 @@ mod tests {
             reference_keys.copy_from_slice(keys);
         }
         let mut vote_txs: Vec<Transaction> = Vec::new();
-        let vote = Vote {
-            tick_height: 123456,
-        };
         let keypair = Keypair::new();
-        let tx = Transaction::vote_new(&keypair.pubkey(), vote, Hash::default(), 1);
+        let tx = Transaction::vote_new(&keypair.pubkey(), 123456, Hash::default(), 1);
         let sig = keypair.sign_message(&tx.message());
         let vote_tx = Transaction {
             signatures: vec![sig],

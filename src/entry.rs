@@ -607,7 +607,7 @@ mod tests {
         let one = hash(&zero.as_ref());
         let keypair = Keypair::new();
         let vote_account = Keypair::new();
-        let tx = Transaction::vote_new(&vote_account.pubkey(), Vote { tick_height: 1 }, one, 1);
+        let tx = Transaction::vote_new(&vote_account.pubkey(), 1, one, 1);
         let sig = vote_account.sign_message(&tx.message());
         let tx0 = Transaction {
             signatures: vec![sig],
@@ -664,7 +664,7 @@ mod tests {
         let next_id = hash(&id.as_ref());
         let keypair = Keypair::new();
         let vote_account = Keypair::new();
-        let tx = Transaction::vote_new(&vote_account.pubkey(), Vote { tick_height: 1 }, next_id, 2);
+        let tx = Transaction::vote_new(&vote_account.pubkey(), 1, next_id, 2);
         let sig = vote_account.sign_message(&tx.message());
         let tx_small = Transaction {
             signatures: vec![sig],
