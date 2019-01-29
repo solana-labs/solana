@@ -7,8 +7,8 @@
 // and then farm
 #![allow(unreachable_code, unused_imports, unused_variables, dead_code)]
 
-use crate::db_ledger::SlotMeta;
 use crate::entry::Entry;
+use crate::leader_scheduler::{DEFAULT_BOOTSTRAP_HEIGHT, TICKS_PER_BLOCK};
 use crate::packet::Blob;
 
 use byteorder::{BigEndian, ByteOrder};
@@ -25,9 +25,19 @@ use std::result::Result as StdRes;
 
 type Result<T> = StdRes<T, StoreError>;
 
+pub const DEFAULT_BLOCKS_PER_SLOT: u64 = 32;
+
 #[derive(Debug)]
 pub struct Store {
     root: PathBuf,
+    config: StoreConfig,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug)]
+pub struct StoreConfig {
+    pub ticks_per_block: u64,
+    pub num_bootstrap_ticks: u64,
+    pub num_blocks_per_slot: u64,
 }
 
 #[derive(Debug)]
@@ -46,17 +56,45 @@ struct BlobIndex {
     pub size: u64,
 }
 
+/// Per-slot meta-data
+#[derive(Clone, Debug, Deserialize, Serialize, Eq, PartialEq)]
+pub struct SlotMeta {
+    /// The total number of consecutive blob starting from index 0
+    /// we have received for this slot.
+    pub consumed: u64,
+    /// The entry height of the highest blob received for this slot.
+    pub received: u64,
+    /// The index of thist slot
+    pub slot_index: u64,
+    /// Tick height of the highest received blob. Used to detect when a slot is full
+    pub consumed_ticks: u64,
+    /// Number of blocks in this slot
+    pub num_blocks: u64, // TODO: once blobs have a `num_blocks` property, the first blob for this slot will determine this
+    /// List of slots that chain to this slot
+    pub next_slots: Vec<u64>, //TODO: slot_x.slot_index - `num_blocks` should have this `slot_index` in it's next_slots if it's incomplete
+    /// True iff all blocks from `0..self.slot_index` are full
+    pub is_trunk: bool, // TODO: true iff this slot is complete plus all slots in its chain are complete
+}
+
 pub struct Entries;
 
 pub struct DataIter;
 
 impl Store {
-    pub fn new<P>(path: &P) -> Store
+    pub fn open<P>(path: &P) -> Store
+    where
+        P: AsRef<Path>,
+    {
+        Store::open_config(path, StoreConfig::default())
+    }
+
+    pub fn open_config<P>(path: &P, config: StoreConfig) -> Store
     where
         P: AsRef<Path>,
     {
         Store {
             root: PathBuf::from(path.as_ref()),
+            config,
         }
     }
 
@@ -72,7 +110,7 @@ impl Store {
             .create(true)
             .open(&meta_path)?;
 
-        meta_file.write_all(&mut bincode::serialize(&meta)?)?;
+        meta_file.write_all(&bincode::serialize(&meta)?)?;
         Ok(())
     }
 
@@ -140,12 +178,6 @@ impl Store {
             slot_path.join(store_impl::ERASURE_FILE_NAME),
         );
 
-        println!(
-            "put_erasure: index_path = {}, slot_path = {}",
-            index_path.to_string_lossy(),
-            slot_path.to_string_lossy()
-        );
-
         let mut erasure_wtr = BufWriter::new(store_impl::open_append(&data_path)?);
         let mut index_wtr = BufWriter::new(store_impl::open_append(&index_path)?);
 
@@ -166,7 +198,6 @@ impl Store {
         BigEndian::write_u64(&mut idx_buf[8..16], idx.offset);
         BigEndian::write_u64(&mut idx_buf[16..24], idx.size);
 
-        println!("put_erasure: idx = {:?}", idx);
         index_wtr.write_all(&idx_buf)?;
 
         erasure_wtr.flush()?;
@@ -181,7 +212,7 @@ impl Store {
         Ok(())
     }
 
-    pub fn put_blobs<'a, I>(&self, iter: I) -> Result<()>
+    pub fn put_blobs<I>(&self, iter: I) -> Result<()>
     where
         I: IntoIterator,
         I::Item: Borrow<Blob>,
@@ -232,6 +263,57 @@ impl Store {
     {
         fs::remove_dir_all(root)?;
         Ok(())
+    }
+}
+
+impl Default for StoreConfig {
+    fn default() -> Self {
+        StoreConfig {
+            ticks_per_block: TICKS_PER_BLOCK,
+            num_bootstrap_ticks: DEFAULT_BOOTSTRAP_HEIGHT,
+            num_blocks_per_slot: DEFAULT_BLOCKS_PER_SLOT,
+        }
+    }
+}
+
+impl Default for SlotMeta {
+    fn default() -> SlotMeta {
+        SlotMeta {
+            consumed: 0,
+            received: 0,
+            slot_index: 0,
+            consumed_ticks: 0,
+            num_blocks: 1,
+            next_slots: Vec::new(),
+            is_trunk: false,
+        }
+    }
+}
+
+impl SlotMeta {
+    pub fn new(slot: u64, num_blocks: u64) -> SlotMeta {
+        SlotMeta {
+            slot_index: slot,
+            num_blocks,
+            ..SlotMeta::default()
+        }
+    }
+
+    pub fn num_expected_ticks(&self, config: &StoreConfig) -> u64 {
+        if self.slot_index == 0 {
+            config.num_bootstrap_ticks
+        } else {
+            config.ticks_per_block * self.num_blocks
+        }
+    }
+
+    pub fn contains_all_ticks(&self, config: &StoreConfig) -> bool {
+        if self.num_blocks == 0 {
+            // A placeholder slot does not contain all the ticks
+            false
+        } else {
+            self.num_expected_ticks(config) <= self.consumed_ticks + 1
+        }
     }
 }
 

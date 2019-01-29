@@ -1,4 +1,3 @@
-use crate::db_ledger::SlotMeta;
 use crate::packet::{Blob, BlobError, BLOB_HEADER_SIZE};
 use crate::result::Error as SErr;
 
@@ -126,6 +125,7 @@ impl Store {
         Err(StoreError::NoSuchBlob(slot, erasure_index))
     }
 
+    #[allow(clippy::range_plus_one)]
     pub(super) fn insert_blobs<I>(&self, iter: I) -> Result<()>
     where
         I: IntoIterator,
@@ -200,13 +200,13 @@ impl Store {
                 (
                     File::create(&meta_path)?,
                     SlotMeta {
-                        consumed: 0,
-                        consumed_slot: 0,
-                        received: 0,
-                        received_slot: 0,
+                        slot_index: slot,
+                        num_blocks: self.config.num_blocks_per_slot,
+                        ..SlotMeta::default()
                     },
                 )
             };
+
             println!("insert_blobs: loaded meta data: {:?}", meta);
 
             let mut data_wtr =
@@ -217,17 +217,17 @@ impl Store {
 
             let mut idx_buf = [0u8; INDEX_RECORD_SIZE as usize];
 
-            println!(
-                "insert_blobs: about to attempt adding {} blosbs",
-                slot_blobs.len()
-            );
             for blob in slot_blobs {
                 let blob = blob.borrow();
                 let blob_index = blob.index().map_err(bad_blob)?;
+                let blob_size = blob.size().map_err(bad_blob)?;
 
                 let offset = data_wtr.seek(SeekFrom::Current(0))?;
-                let serialized_blob_datas =
-                    &blob.data[..BLOB_HEADER_SIZE + blob.size().map_err(bad_blob)?];
+                // TODO: blob.size() is wrong here, but should be right
+                let serialized_blob_datas = &blob.data[..BLOB_HEADER_SIZE + blob_size];
+                let serialized_entry_data = &blob.data[BLOB_HEADER_SIZE..];
+                let entry: Entry = bincode::deserialize(serialized_entry_data)
+                    .expect("Blobs must be well formed by the time they reach the ledger");
 
                 data_wtr.write_all(&serialized_blob_datas)?;
                 let data_len = serialized_blob_datas.len() as u64;
@@ -243,9 +243,9 @@ impl Store {
                 BigEndian::write_u64(&mut idx_buf[16..24], blob_idx.size);
 
                 // update index file
+                // TODO: batch writes for outer loop
                 blob_indices.push(blob_idx);
                 println!("insert_blobs: blob_idx = {:?}", blob_idx);
-                println!("insert_blobs: idx_buf.len() = {}", idx_buf.len());
                 index_wtr.write_all(&idx_buf)?;
 
                 // update meta. write to file once in outer loop
@@ -256,7 +256,14 @@ impl Store {
                 if blob_index == meta.consumed + 1 {
                     meta.consumed += 1;
                 }
+
+                if entry.is_tick() {
+                    meta.consumed_ticks = std::cmp::max(entry.tick_height, meta.consumed_ticks);
+                    meta.is_trunk = meta.contains_all_ticks(&self.config);
+                }
             }
+
+            println!("insert_blobs: saving meta data: {:?}", meta);
 
             bincode::serialize_into(&mut meta_file, &meta)?;
 
@@ -299,7 +306,7 @@ impl Store {
 
         while let Ok(_) = index_rdr.read_exact(&mut buf) {
             let index = BigEndian::read_u64(&buf[0..8]);
-            if index < range.start || range.end < index {
+            if index < range.start || range.end <= index {
                 continue;
             }
 

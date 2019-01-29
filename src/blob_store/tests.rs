@@ -1,7 +1,7 @@
-use crate::db_ledger::SlotMeta;
 use crate::entry;
 use crate::packet::BLOB_HEADER_SIZE;
 
+use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 
 use std::fs;
@@ -30,13 +30,16 @@ fn get_tmp_ledger_path(name: &str) -> Result<PathBuf> {
 }
 
 #[test]
-fn get_put_simple() {
-    let p = get_tmp_ledger_path("get-put-simple").unwrap();
-    let store = Store::new(&p);
+fn test_get_put_simple() {
+    let p = get_tmp_ledger_path("test_get_put_simple").unwrap();
+    let store = Store::open(&p);
+    let slot = 0;
 
     // simple metadata insert
-    let meta = SlotMeta::new();
-    store.put_meta(0, meta).expect("couldn't insert slotmeta");
+    let meta = SlotMeta::new(slot, 1);
+    store
+        .put_meta(0, meta.clone())
+        .expect("couldn't insert slotmeta");
     let meta2 = store.get_meta(0).expect("couldn't retrieve slotmeta");
 
     assert_eq!(meta, meta2);
@@ -65,16 +68,9 @@ fn get_put_simple() {
 }
 
 #[test]
-fn get_put_incomplete_slot() {
-    let p = get_tmp_ledger_path("get-put-simple").unwrap();
-    let store = Store::new(&p);
-
-    // simple metadata insert
-    let meta = SlotMeta::new();
-    store.put_meta(0, meta).expect("couldn't insert slotmeta");
-    let meta2 = store.get_meta(0).expect("couldn't retrieve slotmeta");
-
-    assert_eq!(meta, meta2);
+fn test_insert_noncontiguous_blobs() {
+    let p = get_tmp_ledger_path("test_insert_noncontiguous_blobs").unwrap();
+    let store = Store::open(&p);
 
     // try inserting some blobs
     let entries = entry::make_tiny_test_entries(10);
@@ -125,6 +121,49 @@ fn get_put_incomplete_slot() {
     let meta = store.get_meta(0).unwrap();
     assert_eq!(meta.received, 29);
     assert_eq!(meta.consumed, 9);
+
+    drop(store);
+    Store::destroy(&p).expect("destruction should succeed");
+}
+
+#[test]
+fn test_ensure_correct_metadata() {
+    let p = get_tmp_ledger_path("get-put-simple").unwrap();
+    let store = Store::open(&p);
+    let num_ticks = store.config.ticks_per_block * store.config.num_blocks_per_slot;
+    let slot = 1;
+
+    // try inserting ticks to fill a slot
+    let entries = entry::create_ticks(num_ticks as usize, Hash::default());
+
+    // Skip slot 0 because bootstrap slot has a different expected amount of ticks
+    let blobs: Vec<_> = entries
+        .into_iter()
+        .enumerate()
+        .map(|(idx, mut entry)| {
+            entry.tick_height = idx as u64;
+            let mut b = entry.to_blob();
+            b.set_slot(slot).unwrap();
+            b.set_index(idx as u64).unwrap();
+            b
+        })
+        .collect();
+
+    store
+        .insert_blobs(&blobs)
+        .expect("unable to insert entries");
+
+    let meta = store.get_meta(slot).unwrap();
+    println!(
+        "meta = {:?}, expected_ticks = {}",
+        meta,
+        meta.num_expected_ticks(&store.config)
+    );
+
+    assert_eq!(meta.received, num_ticks - 1);
+    assert_eq!(meta.consumed, num_ticks - 1);
+    assert_eq!(meta.consumed_ticks, num_ticks - 1);
+    assert!(meta.contains_all_ticks(&store.config));
 
     drop(store);
     Store::destroy(&p).expect("destruction should succeed");
