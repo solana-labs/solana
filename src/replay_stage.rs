@@ -347,7 +347,6 @@ mod test {
         let initial_tick_height = genesis_entry_height;
         let active_set_entries_len = active_set_entries.len() as u64;
         let initial_non_tick_height = genesis_entry_height - initial_tick_height;
-        let initial_entry_len = genesis_entry_height + active_set_entries_len;
 
         {
             let db_ledger = DbLedger::open(&my_ledger_path).unwrap();
@@ -361,10 +360,10 @@ mod test {
         }
 
         // Set up the LeaderScheduler so that this node becomes the leader at
-        // bootstrap_height = num_bootstrap_slots * leader_rotation_interval
+        // bootstrap_height
         let leader_rotation_interval = 16;
-        let num_bootstrap_slots = 2;
-        let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
+        let bootstrap_height = 2 * leader_rotation_interval;
+        assert!((num_ending_ticks as u64) < bootstrap_height);
         let leader_scheduler_config = LeaderSchedulerConfig::new(
             bootstrap_height,
             leader_rotation_interval,
@@ -376,7 +375,7 @@ mod test {
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
 
         // Set up the bank
-        let (bank, _, last_entry_id) =
+        let (bank, entry_height, last_entry_id) =
             Fullnode::new_bank_from_ledger(&my_ledger_path, leader_scheduler);
 
         // Set up the replay stage
@@ -390,31 +389,27 @@ mod test {
             Arc::new(RwLock::new(cluster_info_me)),
             entry_receiver,
             exit.clone(),
-            Arc::new(RwLock::new(initial_entry_len)),
+            Arc::new(RwLock::new(entry_height)),
             Arc::new(RwLock::new(last_entry_id)),
             rotation_sender,
             None,
         );
 
         // Send enough ticks to trigger leader rotation
-        let extra_entries = leader_rotation_interval;
-        let total_entries_to_send = (bootstrap_height + extra_entries) as usize;
-        let num_hashes = 1;
+        let total_entries_to_send = (bootstrap_height + leader_rotation_interval) as usize;
         let mut entries_to_send = vec![];
         while entries_to_send.len() < total_entries_to_send {
-            let entry = Entry::new(&mut last_id, 0, num_hashes, vec![]);
+            let entry = Entry::new(&mut last_id, 0, 1, vec![]);
             last_id = entry.id;
             entries_to_send.push(entry);
         }
-
-        assert!((num_ending_ticks as u64) < bootstrap_height);
 
         // Add on the only entries that weren't ticks to the bootstrap height to get the
         // total expected entry length
         let leader_rotation_index = (bootstrap_height - initial_tick_height) as usize;
         let expected_entry_height =
-            bootstrap_height + initial_non_tick_height + active_set_entries_len - 1;
-        let expected_last_id = entries_to_send[leader_rotation_index - 2].id;
+            bootstrap_height + initial_non_tick_height + active_set_entries_len;
+        let expected_last_id = entries_to_send[leader_rotation_index - 1].id;
         entry_sender.send(entries_to_send.clone()).unwrap();
 
         // Wait for replay_stage to exit and check return value is correct
@@ -440,7 +435,7 @@ mod test {
 
         assert_eq!(
             &received_ticks[..],
-            &entries_to_send[..leader_rotation_index - 1]
+            &entries_to_send[..leader_rotation_index]
         );
         //replay stage should continue running even after rotation has happened (tvu never goes down)
         assert_eq!(exit.load(Ordering::Relaxed), false);
@@ -470,7 +465,7 @@ mod test {
         );
 
         // Set up the bank
-        let (bank, entry_height, last_id) =
+        let (bank, entry_height, last_entry_id) =
             Fullnode::new_bank_from_ledger(&my_ledger_path, leader_scheduler);
 
         // Set up the cluster info
@@ -491,7 +486,7 @@ mod test {
             entry_receiver,
             exit.clone(),
             Arc::new(RwLock::new(entry_height)),
-            Arc::new(RwLock::new(last_id)),
+            Arc::new(RwLock::new(last_entry_id)),
             to_leader_sender,
             None,
         );
@@ -503,7 +498,7 @@ mod test {
             vote_signer_proxy.send_validator_vote(&bank, &cluster_info_me, &mock_sender);
 
         // Send ReplayStage an entry, should see it on the ledger writer receiver
-        let next_tick = create_ticks(1, last_id);
+        let next_tick = create_ticks(1, last_entry_id);
         entry_sender
             .send(next_tick.clone())
             .expect("Error sending entry to ReplayStage");
@@ -521,6 +516,8 @@ mod test {
 
     #[test]
     fn test_vote_error_replay_stage_leader_rotation() {
+        solana_logger::setup();
+
         // Set up dummy node to host a ReplayStage
         let my_keypair = Keypair::new();
         let my_id = my_keypair.pubkey();
@@ -549,7 +546,6 @@ mod test {
         let initial_tick_height = genesis_entry_height;
         let active_set_entries_len = active_set_entries.len() as u64;
         let initial_non_tick_height = genesis_entry_height - initial_tick_height;
-        let initial_entry_len = genesis_entry_height + active_set_entries_len;
 
         {
             let db_ledger = DbLedger::open(&my_ledger_path).unwrap();
@@ -578,7 +574,7 @@ mod test {
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
 
         // Set up the bank
-        let (bank, _, last_entry_id) =
+        let (bank, entry_height, last_entry_id) =
             Fullnode::new_bank_from_ledger(&my_ledger_path, leader_scheduler);
 
         // Set up the cluster info
@@ -597,7 +593,7 @@ mod test {
             cluster_info_me.clone(),
             entry_receiver,
             exit.clone(),
-            Arc::new(RwLock::new(initial_entry_len as u64)),
+            Arc::new(RwLock::new(entry_height)),
             Arc::new(RwLock::new(last_entry_id)),
             rotation_tx,
             None,
@@ -611,16 +607,15 @@ mod test {
 
         // Send enough ticks to trigger leader rotation
         let total_entries_to_send = (bootstrap_height - initial_tick_height) as usize;
-        let num_hashes = 1;
 
         // Add on the only entries that weren't ticks to the bootstrap height to get the
         // total expected entry length
         let expected_entry_height =
-            bootstrap_height + initial_non_tick_height + active_set_entries_len - 1;
-        let leader_rotation_index = (bootstrap_height - initial_tick_height - 2) as usize;
+            bootstrap_height + initial_non_tick_height + active_set_entries_len;
+        let leader_rotation_index = (bootstrap_height - initial_tick_height - 1) as usize;
         let mut expected_last_id = Hash::default();
-        for i in 0..total_entries_to_send - 1 {
-            let entry = Entry::new(&mut last_id, 0, num_hashes, vec![]);
+        for i in 0..total_entries_to_send {
+            let entry = Entry::new(&mut last_id, 0, 1, vec![]);
             last_id = entry.id;
             entry_sender
                 .send(vec![entry.clone()])
@@ -640,7 +635,7 @@ mod test {
             );
         }
 
-        // Wait for replay_stage to exit and check return value is correct
+        info!("Wait for replay_stage to exit and check return value is correct");
         assert_eq!(
             Some(TvuReturnType::LeaderRotation(
                 bootstrap_height,
@@ -656,7 +651,8 @@ mod test {
             }
         );
         assert_ne!(expected_last_id, Hash::default());
-        //replay stage should continue running even after rotation has happened (tvu never goes down)
+
+        info!("Replay stage should continue running even after rotation has happened (TVU never goes down)");
         assert_eq!(exit.load(Ordering::Relaxed), false);
         let _ignored = remove_dir_all(&my_ledger_path);
     }

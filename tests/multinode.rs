@@ -135,7 +135,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (alice, leader_ledger_path, _last_entry_height, _last_entry_id) =
+    let (alice, leader_ledger_path, last_entry_height, last_entry_id) =
         create_tmp_sample_ledger("multi_node_ledger_window", 10_000, 0, leader_data.id, 500);
     ledger_paths.push(leader_ledger_path.clone());
 
@@ -146,10 +146,10 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     // write a bunch more ledger into leader's ledger, this should populate the leader's window
     // and force it to respond to repair from the ledger window
     {
-        let entries = make_tiny_test_entries(genesis_block.last_id(), 100);
+        let entries = make_tiny_test_entries(last_entry_id, 100);
         let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
         db_ledger
-            .write_entries(DEFAULT_SLOT_HEIGHT, 0, &entries)
+            .write_entries(DEFAULT_SLOT_HEIGHT, last_entry_height, &entries)
             .unwrap();
     }
 

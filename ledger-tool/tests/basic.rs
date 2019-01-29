@@ -33,7 +33,7 @@ fn bad_arguments() {
 fn nominal() {
     let keypair = Arc::new(Keypair::new());
     let (_, ledger_path, _, _) =
-        create_tmp_sample_ledger("test_ledger_tool_nominal", 100, 10, keypair.pubkey(), 50);
+        create_tmp_sample_ledger("test_ledger_tool_nominal", 100, 9, keypair.pubkey(), 50);
 
     // Basic validation
     let output = run_ledger_tool(&["-l", &ledger_path, "verify"]);

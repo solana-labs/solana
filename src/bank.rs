@@ -724,15 +724,19 @@ impl Bank {
         Ok(())
     }
 
-    /// Append entry blocks to the ledger, verifying them along the way.
-    pub fn process_ledger<I>(&self, entries: I) -> Result<(u64, Hash)>
+    /// Starting from the genesis block, append the provided entries to the ledger verifying them
+    /// along the way.
+    pub fn process_ledger<I>(
+        &mut self,
+        genesis_block: &GenesisBlock,
+        entries: I,
+    ) -> Result<(u64, Hash)>
     where
         I: IntoIterator<Item = Entry>,
     {
-        // these magic numbers are from genesis of the mint, could pull them
-        //  back out of this loop.
         let mut entry_height = 0;
-        let mut last_id = self.last_id();
+        let mut last_id = genesis_block.last_id();
+        self.last_ids = RwLock::new(StatusDeque::default());
 
         // Ledger verification needs to be parallelized, but we can't pull the whole
         // thing into memory. We therefore chunk it.
@@ -1162,9 +1166,14 @@ mod tests {
         mint_keypair: &Keypair,
         keypairs: &[Keypair],
     ) -> impl Iterator<Item = Entry> {
-        let mut last_id = genesis_block.last_id();
-        let mut hash = genesis_block.last_id();
         let mut entries: Vec<Entry> = vec![];
+
+        // Start off the ledger with a tick linked to the genesis block
+        let tick = Entry::new(&genesis_block.last_id(), 0, 1, vec![]);
+        let mut hash = tick.id;
+        let mut last_id = tick.id;
+        entries.push(tick);
+
         let num_hashes = 1;
         for k in keypairs {
             let txs = vec![Transaction::system_new(
@@ -1184,18 +1193,24 @@ mod tests {
         entries.into_iter()
     }
 
-    // create a ledger with tick entries every `ticks` entries
+    // create a ledger with a tick every `tick_interval` entries and a couple other transactions
     fn create_sample_block_with_ticks(
         genesis_block: &GenesisBlock,
         mint_keypair: &Keypair,
-        length: usize,
-        ticks: usize,
+        num_entries: usize,
+        tick_interval: usize,
     ) -> impl Iterator<Item = Entry> {
-        let mut entries = Vec::with_capacity(length);
-        let mut last_id = genesis_block.last_id();
-        let mut hash = genesis_block.last_id();
+        assert!(num_entries > 0);
+        let mut entries = Vec::with_capacity(num_entries);
+
+        // Start off the ledger with a tick linked to the genesis block
+        let tick = Entry::new(&genesis_block.last_id(), 0, 1, vec![]);
+        let mut hash = tick.id;
+        let mut last_id = tick.id;
+        entries.push(tick);
+
         let num_hashes = 1;
-        for i in 0..length {
+        for i in 1..num_entries {
             let keypair = Keypair::new();
             let tx = Transaction::system_new(mint_keypair, keypair.pubkey(), 1, last_id);
             let entry = Entry::new(&hash, 0, num_hashes, vec![tx]);
@@ -1210,7 +1225,7 @@ mod tests {
             hash = entry.id;
             entries.push(entry);
 
-            if (i + 1) % ticks == 0 {
+            if (i + 1) % tick_interval == 0 {
                 let tick = Entry::new(&hash, 0, num_hashes, vec![]);
                 hash = tick.id;
                 last_id = hash;
@@ -1220,27 +1235,31 @@ mod tests {
         entries.into_iter()
     }
 
-    fn create_sample_ledger(length: usize) -> (GenesisBlock, Keypair, impl Iterator<Item = Entry>) {
+    fn create_sample_ledger(
+        tokens: u64,
+        num_entries: usize,
+    ) -> (GenesisBlock, Keypair, impl Iterator<Item = Entry>) {
         let mint_keypair = Keypair::new();
         let genesis_block = GenesisBlock {
             bootstrap_leader_id: Keypair::new().pubkey(),
             bootstrap_leader_tokens: 1,
             mint_id: mint_keypair.pubkey(),
-            tokens: length as u64 + 2,
+            tokens,
         };
-        let block = create_sample_block_with_ticks(&genesis_block, &mint_keypair, length, length);
+        let block =
+            create_sample_block_with_ticks(&genesis_block, &mint_keypair, num_entries, num_entries);
         (genesis_block, mint_keypair, block)
     }
 
     #[test]
     fn test_process_ledger_simple() {
-        let (genesis_block, mint_keypair, ledger) = create_sample_ledger(1);
-        let bank = Bank::default();
+        let (genesis_block, mint_keypair, ledger) = create_sample_ledger(100, 2);
+        let mut bank = Bank::default();
         bank.process_genesis_block(&genesis_block);
         bank.add_system_program();
-        let (ledger_height, last_id) = bank.process_ledger(ledger).unwrap();
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 1);
-        assert_eq!(ledger_height, 3);
+        let (ledger_height, last_id) = bank.process_ledger(&genesis_block, ledger).unwrap();
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 98);
+        assert_eq!(ledger_height, 4);
         assert_eq!(bank.tick_height(), 2);
         assert_eq!(bank.last_id(), last_id);
     }
@@ -1268,14 +1287,14 @@ mod tests {
             &keypairs,
         );
 
-        let bank0 = Bank::default();
+        let mut bank0 = Bank::default();
         bank0.add_system_program();
         bank0.process_genesis_block(&genesis_block);
-        bank0.process_ledger(ledger0).unwrap();
-        let bank1 = Bank::default();
+        bank0.process_ledger(&genesis_block, ledger0).unwrap();
+        let mut bank1 = Bank::default();
         bank1.add_system_program();
         bank1.process_genesis_block(&genesis_block);
-        bank1.process_ledger(ledger1).unwrap();
+        bank1.process_ledger(&genesis_block, ledger1).unwrap();
 
         let initial_state = bank0.hash_internal_state();
 
@@ -1283,11 +1302,11 @@ mod tests {
 
         let pubkey = keypairs[0].pubkey();
         bank0
-            .transfer(1_000, &mint_keypair, pubkey, genesis_block.last_id())
+            .transfer(1_000, &mint_keypair, pubkey, bank0.last_id())
             .unwrap();
         assert_ne!(bank0.hash_internal_state(), initial_state);
         bank1
-            .transfer(1_000, &mint_keypair, pubkey, genesis_block.last_id())
+            .transfer(1_000, &mint_keypair, pubkey, bank1.last_id())
             .unwrap();
         assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
     }

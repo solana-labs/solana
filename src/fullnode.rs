@@ -384,7 +384,9 @@ impl Fullnode {
         let entries = db_ledger.read_ledger().expect("opening ledger");
         info!("processing ledger...");
 
-        let (entry_height, last_entry_id) = bank.process_ledger(entries).expect("process_ledger");
+        let (entry_height, last_entry_id) = bank
+            .process_ledger(genesis_block, entries)
+            .expect("process_ledger");
         // entry_height is the network-wide agreed height of the ledger.
         //  initialize it from the input ledger
         info!(
