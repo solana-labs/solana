@@ -14,7 +14,7 @@ use solana::packet::SharedBlob;
 use solana::poh_service::NUM_TICKS_PER_SECOND;
 use solana::result;
 use solana::service::Service;
-use solana::thin_client::{retry_get_balance, ThinClient};
+use solana::thin_client::{poll_gossip_for_leader, retry_get_balance, ThinClient};
 use solana::tpu::TpuReturnType;
 use solana::tvu::TvuReturnType;
 use solana::vote_signer_proxy::VoteSignerProxy;
@@ -771,8 +771,11 @@ fn test_multi_node_dynamic_network() {
         ))),
         None,
     );
+    info!(
+        "found leader: {:?}",
+        poll_gossip_for_leader(leader_data.gossip, Some(5)).unwrap()
+    );
 
-    info!("{} LEADER", leader_data.id);
     let leader_balance = retry_send_tx_and_retry_get_balance(
         &leader_data,
         &alice_arc.read().unwrap(),
