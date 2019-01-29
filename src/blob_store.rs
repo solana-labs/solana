@@ -435,3 +435,25 @@ impl Iterator for DataIter {
 }
 
 mod store_impl;
+
+pub fn get_tmp_store_path(name: &str) -> Result<PathBuf> {
+    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use std::env;
+
+    let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
+    let keypair = Keypair::new();
+
+    let path: PathBuf = [
+        out_dir,
+        "tmp".into(),
+        format!("store-{}-{}", name, keypair.pubkey()),
+    ]
+    .iter()
+    .collect();
+
+    // whack any possible collision
+    let _ignore = fs::remove_dir_all(&path);
+    fs::create_dir_all(&path)?;
+
+    Ok(path)
+}

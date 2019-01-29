@@ -3,37 +3,14 @@ use solana::entry;
 use solana::packet::BLOB_HEADER_SIZE;
 
 use solana_sdk::hash::Hash;
-use solana_sdk::signature::{Keypair, KeypairUtil};
 
-use std::fs;
-use std::path::PathBuf;
 use std::result::Result as StdRes;
 
 type Result<T> = StdRes<T, StoreError>;
 
-fn get_tmp_ledger_path(name: &str) -> Result<PathBuf> {
-    use std::env;
-    let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
-    let keypair = Keypair::new();
-
-    let path: PathBuf = [
-        out_dir,
-        "tmp".into(),
-        format!("store-{}-{}", name, keypair.pubkey()),
-    ]
-    .iter()
-    .collect();
-
-    // whack any possible collision
-    let _ignore = fs::remove_dir_all(&path);
-    fs::create_dir_all(&path)?;
-
-    Ok(path)
-}
-
 #[test]
 fn test_get_put_simple() {
-    let p = get_tmp_ledger_path("test_get_put_simple").unwrap();
+    let p = get_tmp_store_path("test_get_put_simple").unwrap();
     let store = Store::open(&p);
     let slot = 0;
 
@@ -71,7 +48,7 @@ fn test_get_put_simple() {
 
 #[test]
 fn test_insert_noncontiguous_blobs() {
-    let p = get_tmp_ledger_path("test_insert_noncontiguous_blobs").unwrap();
+    let p = get_tmp_store_path("test_insert_noncontiguous_blobs").unwrap();
     let store = Store::open(&p);
 
     // try inserting some blobs
@@ -128,7 +105,7 @@ fn test_insert_noncontiguous_blobs() {
 
 #[test]
 fn test_ensure_correct_metadata() {
-    let p = get_tmp_ledger_path("test_ensure_correct_metadata").unwrap();
+    let p = get_tmp_store_path("test_ensure_correct_metadata").unwrap();
     let store = Store::open(&p);
     let config = store.get_config();
     let num_ticks = config.ticks_per_block * config.num_blocks_per_slot;
@@ -170,7 +147,7 @@ fn test_ensure_correct_metadata() {
 
 #[test]
 fn test_retrieve_entries() {
-    let p = get_tmp_ledger_path("test_retrieve_entries").unwrap();
+    let p = get_tmp_store_path("test_retrieve_entries").unwrap();
     let store = Store::open(&p);
 
     // try inserting some blobs
