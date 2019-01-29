@@ -491,7 +491,7 @@ pub fn make_active_set_entries(
 
     // 2) Create and register the vote account
     let vote_signer = VoteSignerProxy::new_local(active_keypair);
-    let vote_account_id: Pubkey = vote_signer.vote_account;
+    let vote_account_id = vote_signer.pubkey();
 
     let new_vote_account_tx =
         Transaction::vote_account_new(active_keypair, vote_account_id, *last_tick_id, 1, 1);

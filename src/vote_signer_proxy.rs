@@ -75,16 +75,33 @@ impl VoteSigner for RemoteVoteSigner {
     }
 }
 
+impl KeypairUtil for VoteSignerProxy {
+    /// Return a local VoteSignerProxy with a new keypair. Used for unit-tests.
+    fn new() -> Self {
+        Self::new_local(&Arc::new(Keypair::new()))
+    }
+
+    /// Return the public key of the keypair used to sign votes
+    fn pubkey(&self) -> Pubkey {
+        self.vote_account
+    }
+
+    fn sign_message(&self, msg: &[u8]) -> Signature {
+        let sig = self.keypair.sign_message(msg);
+        self.signer.sign(self.keypair.pubkey(), &sig, &msg).unwrap()
+    }
+}
+
 pub struct VoteSignerProxy {
     keypair: Arc<Keypair>,
     signer: Box<VoteSigner + Send + Sync>,
-    pub vote_account: Pubkey,
+    vote_account: Pubkey,
     last_leader: RwLock<Pubkey>,
     unsent_votes: RwLock<Vec<Transaction>>,
 }
 
 impl VoteSignerProxy {
-    pub fn new(keypair: &Arc<Keypair>, signer: Box<VoteSigner + Send + Sync>) -> Self {
+    pub fn new_with_signer(keypair: &Arc<Keypair>, signer: Box<VoteSigner + Send + Sync>) -> Self {
         let msg = "Registering a new node";
         let sig = keypair.sign_message(msg.as_bytes());
         let vote_account = signer
@@ -100,7 +117,7 @@ impl VoteSignerProxy {
     }
 
     pub fn new_local(keypair: &Arc<Keypair>) -> Self {
-        Self::new(keypair, Box::new(LocalVoteSigner::default()))
+        Self::new_with_signer(keypair, Box::new(LocalVoteSigner::default()))
     }
 
     pub fn new_vote_account(&self, bank: &Bank, num_tokens: u64, last_id: Hash) -> Result<()> {
@@ -160,20 +177,11 @@ impl VoteSignerProxy {
 
     pub fn new_signed_vote_transaction(&self, last_id: &Hash, tick_height: u64) -> Transaction {
         let vote = Vote { tick_height };
-        let tx = Transaction::vote_new(&self.vote_account, vote, *last_id, 0);
-        let msg = tx.message();
-        let sig = self.keypair.sign_message(&msg);
-
-        let keypair = self.keypair.clone();
-        let vote_signature = self.signer.sign(keypair.pubkey(), &sig, &msg).unwrap();
-        Transaction {
-            signatures: vec![vote_signature],
-            account_keys: tx.account_keys,
-            last_id: tx.last_id,
-            fee: tx.fee,
-            program_ids: tx.program_ids,
-            instructions: tx.instructions,
-        }
+        let mut tx = Transaction::vote_new(&self.vote_account, vote, *last_id, 0);
+        assert!(tx.signatures.is_empty());
+        let sig = self.sign_message(&tx.message());
+        tx.signatures.push(sig);
+        tx
     }
 
     fn new_signed_vote_blob(&self, tx: &Transaction, leader_tpu: SocketAddr) -> Result<SharedBlob> {

@@ -249,18 +249,18 @@ fn main() {
     let mut leader_scheduler = LeaderScheduler::default();
     leader_scheduler.use_only_bootstrap_leader = use_only_bootstrap_leader;
 
-    let vote_account;
     let vote_signer_option = if !no_signer {
-        let vote_signer =
-            VoteSignerProxy::new(&keypair, Box::new(RemoteVoteSigner::new(signer_addr)));
-        vote_account = vote_signer.vote_account;
+        let vote_signer = VoteSignerProxy::new_with_signer(
+            &keypair,
+            Box::new(RemoteVoteSigner::new(signer_addr)),
+        );
         info!("Signer service address: {:?}", signer_addr);
-        info!("New vote account ID is {:?}", vote_account);
+        info!("New vote account ID is {:?}", vote_signer.pubkey());
         Some(Arc::new(vote_signer))
     } else {
-        vote_account = Pubkey::default();
         None
     };
+    let vote_account_option = vote_signer_option.as_ref().map(|x| x.pubkey());
 
     let gossip_addr = node.info.gossip;
     let mut fullnode = Fullnode::new(
@@ -275,7 +275,7 @@ fn main() {
         fullnode_config,
     );
 
-    if !no_signer {
+    if let Some(vote_account) = vote_account_option {
         let leader_node_info = loop {
             info!("Looking for leader...");
             match poll_gossip_for_leader(gossip_addr, Some(10)) {
