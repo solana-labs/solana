@@ -137,6 +137,17 @@ impl Bank {
         *sub = subscriptions
     }
 
+    pub fn copy_for_tpu(&self) -> Self {
+        Self {
+            accounts: self.accounts.copy_for_tpu(),
+            last_ids: RwLock::new(self.last_ids.read().unwrap().clone()),
+            confirmation_time: AtomicUsize::new(self.confirmation_time()),
+            leader_scheduler: self.leader_scheduler.clone(),
+            storage_state: StorageState::new(),
+            subscriptions: RwLock::new(Box::new(Arc::new(LocalSubscriptions::default()))),
+        }
+    }
+
     fn process_genesis_block(&self, genesis_block: &GenesisBlock) {
         assert!(genesis_block.mint_id != Pubkey::default());
         assert!(genesis_block.tokens >= genesis_block.bootstrap_leader_tokens);

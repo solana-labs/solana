@@ -278,7 +278,7 @@ impl Fullnode {
         };
 
         let tpu = Tpu::new(
-            &bank,
+            &Arc::new(bank.copy_for_tpu()),
             Default::default(),
             node.sockets
                 .tpu
@@ -360,7 +360,7 @@ impl Fullnode {
         let (to_validator_sender, to_validator_receiver) = channel();
         self.role_notifiers.1 = to_validator_receiver;
         self.node_services.tpu.switch_to_leader(
-            &self.bank,
+            &Arc::new(self.bank.copy_for_tpu()),
             Default::default(),
             self.tpu_sockets
                 .iter()

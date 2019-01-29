@@ -49,6 +49,7 @@ struct StatusEntry<T> {
     statuses: StatusMap<T>,
 }
 
+#[derive(Clone)]
 pub struct StatusDeque<T> {
     /// A FIFO queue of `last_id` items, where each item is a set of signatures
     /// that have been processed using that `last_id`. Rejected `last_id`

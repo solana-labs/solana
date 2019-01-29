@@ -251,6 +251,21 @@ impl AccountsDB {
 }
 
 impl Accounts {
+    // TODO use a fork
+    pub fn copy_for_tpu(&self) -> Self {
+        let copy = Accounts::default();
+
+        {
+            let mut accounts_db = copy.accounts_db.write().unwrap();
+            for (key, val) in self.accounts_db.read().unwrap().accounts.iter() {
+                accounts_db.accounts.insert(key.clone(), val.clone());
+            }
+            accounts_db.transaction_count = self.transaction_count();
+        }
+
+        copy
+    }
+
     pub fn keys(&self) -> Vec<Pubkey> {
         self.accounts_db.read().unwrap().keys()
     }
