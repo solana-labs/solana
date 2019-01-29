@@ -2,7 +2,7 @@ use clap::{crate_version, App, Arg, ArgMatches};
 use log::*;
 use solana::client::mk_client;
 use solana::cluster_info::{Node, NodeInfo, FULLNODE_PORT_RANGE};
-use solana::fullnode::Fullnode;
+use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::leader_scheduler::LeaderScheduler;
 use solana::local_vote_signer_service::LocalVoteSignerService;
 use solana::socketaddr;
@@ -204,7 +204,8 @@ fn main() {
         )
         .get_matches();
 
-    let no_sigverify = matches.is_present("no_sigverify");
+    let mut fullnode_config = FullnodeConfig::default();
+    fullnode_config.sigverify_disabled = matches.is_present("no_sigverify");
     let no_signer = matches.is_present("no_signer");
     let use_only_bootstrap_leader = matches.is_present("no_leader_rotation");
     let (keypair, gossip) = parse_identity(&matches);
@@ -233,12 +234,14 @@ fn main() {
         solana_netutil::find_available_port_in_range(FULLNODE_PORT_RANGE)
             .expect("unable to allocate rpc port")
     };
+    fullnode_config.rpc_port = Some(rpc_port);
     let init_complete_file = matches.value_of("init_complete_file");
-    let entry_stream = matches.value_of("entry_stream").map(|s| s.to_string());
+    fullnode_config.entry_stream = matches.value_of("entry_stream").map(|s| s.to_string());
 
     let keypair = Arc::new(keypair);
     let node = Node::new_with_external_ip(keypair.pubkey(), &gossip);
     let mut node_info = node.info.clone();
+
     node_info.rpc.set_port(rpc_port);
     node_info.rpc_pubsub.set_port(rpc_port + 1);
 
@@ -248,7 +251,7 @@ fn main() {
     info!("Node ID: {}", node.info.id);
 
     let vote_account;
-    let signer_option = if !no_signer {
+    let vote_signer_option = if !no_signer {
         let vote_signer =
             VoteSignerProxy::new(&keypair, Box::new(RemoteVoteSigner::new(signer_addr)));
         vote_account = vote_signer.vote_account;
@@ -265,13 +268,11 @@ fn main() {
         keypair.clone(),
         ledger_path,
         Arc::new(RwLock::new(leader_scheduler)),
-        signer_option,
+        vote_signer_option,
         cluster_entrypoint
             .map(|i| NodeInfo::new_entry_point(&i))
             .as_ref(),
-        no_sigverify,
-        Some(rpc_port),
-        entry_stream,
+        fullnode_config,
     );
 
     if !no_signer {
