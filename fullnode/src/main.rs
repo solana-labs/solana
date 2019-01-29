@@ -254,12 +254,14 @@ fn main() {
 
     let mut fullnode = Fullnode::new(
         node,
-        ledger_path,
         keypair.clone(),
-        signer_option,
-        cluster_entrypoint,
-        no_sigverify,
+        ledger_path,
         Arc::new(RwLock::new(leader_scheduler)),
+        signer_option,
+        cluster_entrypoint
+            .map(|i| NodeInfo::new_entry_point(&i))
+            .as_ref(),
+        no_sigverify,
         Some(rpc_port),
     );
 

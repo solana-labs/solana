@@ -444,7 +444,6 @@ pub fn new_fullnode(
     use crate::cluster_info::Node;
     use crate::db_ledger::create_tmp_ledger;
     use crate::leader_scheduler::LeaderScheduler;
-    use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
     use crate::vote_signer_proxy::VoteSignerProxy;
     use solana_sdk::signature::KeypairUtil;
 
@@ -465,17 +464,16 @@ pub fn new_fullnode(
     let vote_signer = VoteSignerProxy::new_local(&vote_account_keypair);
     let last_id = bank.last_id();
     let server = Fullnode::new_with_bank(
+        leader,
         leader_keypair,
-        Some(Arc::new(vote_signer)),
-        bank,
         &ledger_path,
+        bank,
         entry_height,
         &last_id,
-        leader,
+        Some(Arc::new(vote_signer)),
         None,
         false,
         None,
-        STORAGE_ROTATE_TEST_COUNT,
     );
 
     (server, leader_data, genesis_block, alice, ledger_path)

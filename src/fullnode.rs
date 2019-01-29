@@ -80,27 +80,28 @@ pub struct Fullnode {
     pub role_notifiers: (TvuRotationReceiver, TpuRotationReceiver),
 }
 
+// TODO: remove this, temporary parameter to configure
+// storage amount differently for test configurations
+// so tests don't take forever to run.
+const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = 1024;
+
 impl Fullnode {
     pub fn new(
         node: Node,
-        ledger_path: &str,
         keypair: Arc<Keypair>,
-        vote_signer: Option<Arc<VoteSignerProxy>>,
-        entrypoint_addr: Option<SocketAddr>,
-        sigverify_disabled: bool,
+        ledger_path: &str,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+        vote_signer: Option<Arc<VoteSignerProxy>>,
+        entrypoint_info_option: Option<&NodeInfo>,
+        sigverify_disabled: bool,
         rpc_port: Option<u16>,
     ) -> Self {
-        // TODO: remove this, temporary parameter to configure
-        // storage amount differently for test configurations
-        // so tests don't take forever to run.
-        const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = 1024;
         Self::new_with_storage_rotate(
             node,
-            ledger_path,
             keypair,
+            ledger_path,
             vote_signer,
-            entrypoint_addr,
+            entrypoint_info_option,
             sigverify_disabled,
             leader_scheduler,
             rpc_port,
@@ -110,44 +111,27 @@ impl Fullnode {
 
     pub fn new_with_storage_rotate(
         node: Node,
-        ledger_path: &str,
         keypair: Arc<Keypair>,
+        ledger_path: &str,
         vote_signer: Option<Arc<VoteSignerProxy>>,
-        entrypoint_addr: Option<SocketAddr>,
+        entrypoint_info_option: Option<&NodeInfo>,
         sigverify_disabled: bool,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         rpc_port: Option<u16>,
         storage_rotate_count: u64,
     ) -> Self {
-        info!("creating bank...");
         let (genesis_block, db_ledger) = Self::make_db_ledger(ledger_path);
         let (bank, entry_height, last_entry_id) =
             Self::new_bank_from_db_ledger(&genesis_block, &db_ledger, leader_scheduler);
-
-        info!("creating networking stack...");
-        let local_gossip_addr = node.sockets.gossip.local_addr().unwrap();
-
-        info!(
-            "starting... local gossip address: {} (advertising {})",
-            local_gossip_addr, node.info.gossip
-        );
-        let mut rpc_addr = node.info.rpc;
-        if let Some(port) = rpc_port {
-            rpc_addr.set_port(port);
-        }
-        info!("node rpc address: {}", rpc_addr);
-        info!("node entrypoint_addr: {:?}", entrypoint_addr);
-
-        let entrypoint_info = entrypoint_addr.map(|i| NodeInfo::new_entry_point(&i));
         Self::new_with_bank_and_db_ledger(
+            node,
             keypair,
-            vote_signer,
             bank,
             &db_ledger,
             entry_height,
             &last_entry_id,
-            node,
-            entrypoint_info.as_ref(),
+            vote_signer,
+            entrypoint_info_option,
             sigverify_disabled,
             rpc_port,
             storage_rotate_count,
@@ -156,44 +140,42 @@ impl Fullnode {
 
     #[allow(clippy::too_many_arguments)]
     pub fn new_with_bank(
+        node: Node,
         keypair: Arc<Keypair>,
-        vote_signer: Option<Arc<VoteSignerProxy>>,
-        bank: Bank,
         ledger_path: &str,
+        bank: Bank,
         entry_height: u64,
         last_entry_id: &Hash,
-        node: Node,
+        vote_signer: Option<Arc<VoteSignerProxy>>,
         entrypoint_info_option: Option<&NodeInfo>,
         sigverify_disabled: bool,
         rpc_port: Option<u16>,
-        storage_rotate_count: u64,
     ) -> Self {
         let (_genesis_block, db_ledger) = Self::make_db_ledger(ledger_path);
         Self::new_with_bank_and_db_ledger(
+            node,
             keypair,
-            vote_signer,
             bank,
             &db_ledger,
             entry_height,
             &last_entry_id,
-            node,
+            vote_signer,
             entrypoint_info_option,
             sigverify_disabled,
             rpc_port,
-            storage_rotate_count,
+            NUM_HASHES_FOR_STORAGE_ROTATE,
         )
     }
 
-    /// Create a fullnode instance acting as a leader or validator.
     #[allow(clippy::too_many_arguments)]
-    pub fn new_with_bank_and_db_ledger(
+    fn new_with_bank_and_db_ledger(
+        mut node: Node,
         keypair: Arc<Keypair>,
-        vote_signer: Option<Arc<VoteSignerProxy>>,
         bank: Bank,
         db_ledger: &Arc<DbLedger>,
         entry_height: u64,
         last_entry_id: &Hash,
-        mut node: Node,
+        vote_signer: Option<Arc<VoteSignerProxy>>,
         entrypoint_info_option: Option<&NodeInfo>,
         sigverify_disabled: bool,
         rpc_port: Option<u16>,
@@ -201,8 +183,6 @@ impl Fullnode {
     ) -> Self {
         let mut rpc_addr = node.info.rpc;
         let mut rpc_pubsub_addr = node.info.rpc_pubsub;
-        // Use custom RPC port, if provided (`Some(port)`)
-        // RPC port may be any valid open port on the node
         // If rpc_port == `None`, node will listen on the ports set in NodeInfo
         if let Some(port) = rpc_port {
             rpc_addr.set_port(port);
@@ -211,10 +191,19 @@ impl Fullnode {
             node.info.rpc_pubsub = rpc_pubsub_addr;
         }
 
+        info!("node rpc address: {}", node.info.rpc);
+        info!("node entrypoint_info: {:?}", entrypoint_info_option);
+        let local_gossip_addr = node.sockets.gossip.local_addr().unwrap();
+        info!(
+            "node local gossip address: {} (advertising {})",
+            local_gossip_addr, node.info.gossip
+        );
+
         let exit = Arc::new(AtomicBool::new(false));
         let bank = Arc::new(bank);
 
         node.info.wallclock = timestamp();
+        assert_eq!(keypair.pubkey(), node.info.id);
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_keypair(
             node.info,
             keypair.clone(),
@@ -274,7 +263,8 @@ impl Fullnode {
 
         cluster_info.write().unwrap().set_leader(scheduled_leader);
 
-        // todo always start leader and validator, keep leader side switching between tpu forwarder and regular tpu.
+        // TODO: always start leader and validator, keep leader side switching between tpu
+        // forwarder and regular tpu.
         let sockets = Sockets {
             repair: node
                 .sockets
@@ -294,7 +284,7 @@ impl Fullnode {
                 .collect(),
         };
 
-        //setup channels for rotation indications
+        // Setup channels for rotation indications
         let (to_leader_sender, to_leader_receiver) = channel();
         let (to_validator_sender, to_validator_receiver) = channel();
 
@@ -442,7 +432,7 @@ impl Fullnode {
         }
     }
 
-    //used for notifying many nodes in parallel to exit
+    // Used for notifying many nodes in parallel to exit
     pub fn exit(&self) {
         self.exit.store(true, Ordering::Relaxed);
         if let Some(ref rpc_service) = self.rpc_service {
@@ -534,7 +524,6 @@ mod tests {
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
     use crate::service::Service;
-    use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
     use crate::streamer::responder;
     use crate::tpu::TpuReturnType;
     use crate::tvu::TvuReturnType;
@@ -565,17 +554,16 @@ mod tests {
         let keypair = Arc::new(keypair);
         let signer = VoteSignerProxy::new_local(&keypair);
         let v = Fullnode::new_with_bank(
+            tn,
             keypair,
-            Some(Arc::new(signer)),
-            bank,
             &validator_ledger_path,
+            bank,
             entry_height,
             &last_id,
-            tn,
+            Some(Arc::new(signer)),
             Some(&entry),
             false,
             None,
-            STORAGE_ROTATE_TEST_COUNT,
         );
         v.close().unwrap();
         remove_dir_all(validator_ledger_path).unwrap();
@@ -608,17 +596,16 @@ mod tests {
                 let keypair = Arc::new(keypair);
                 let signer = VoteSignerProxy::new_local(&keypair);
                 Fullnode::new_with_bank(
+                    tn,
                     keypair,
-                    Some(Arc::new(signer)),
-                    bank,
                     &validator_ledger_path,
+                    bank,
                     entry_height,
                     &last_id,
-                    tn,
+                    Some(Arc::new(signer)),
                     Some(&entry),
                     false,
                     None,
-                    STORAGE_ROTATE_TEST_COUNT,
                 )
             })
             .collect();
@@ -683,12 +670,12 @@ mod tests {
         // Start up the leader
         let mut bootstrap_leader = Fullnode::new(
             bootstrap_leader_node,
-            &bootstrap_leader_ledger_path,
             bootstrap_leader_keypair,
-            Some(Arc::new(signer)),
-            Some(bootstrap_leader_info.gossip),
-            false,
+            &bootstrap_leader_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
+            Some(Arc::new(signer)),
+            Some(&bootstrap_leader_info),
+            false,
             None,
         );
 
@@ -787,12 +774,12 @@ mod tests {
             let vote_signer = VoteSignerProxy::new_local(&bootstrap_leader_keypair);
             let bootstrap_leader = Fullnode::new(
                 bootstrap_leader_node,
-                &bootstrap_leader_ledger_path,
                 bootstrap_leader_keypair,
-                Some(Arc::new(vote_signer)),
-                Some(bootstrap_leader_info.gossip),
-                false,
+                &bootstrap_leader_ledger_path,
                 Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
+                Some(Arc::new(vote_signer)),
+                Some(&bootstrap_leader_info),
+                false,
                 None,
             );
 
@@ -801,12 +788,12 @@ mod tests {
             // Test that a node knows to transition to a leader based on parsing the ledger
             let validator = Fullnode::new(
                 validator_node,
-                &validator_ledger_path,
                 validator_keypair,
-                Some(Arc::new(validator_vote_account_id)),
-                Some(bootstrap_leader_info.gossip),
-                false,
+                &validator_ledger_path,
                 Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
+                Some(Arc::new(validator_vote_account_id)),
+                Some(&bootstrap_leader_info),
+                false,
                 None,
             );
 
@@ -829,7 +816,6 @@ mod tests {
         let leader_keypair = Keypair::new();
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let leader_id = leader_node.info.id;
-        let leader_gossip = leader_node.info.gossip;
 
         // Create validator identity
         let num_ending_ticks = 1;
@@ -897,12 +883,12 @@ mod tests {
         // Start the validator
         let validator = Fullnode::new(
             validator_node,
-            &validator_ledger_path,
             validator_keypair,
-            Some(Arc::new(vote_signer)),
-            Some(leader_gossip),
-            false,
+            &validator_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
+            Some(Arc::new(vote_signer)),
+            Some(&leader_node.info),
+            false,
             None,
         );
 

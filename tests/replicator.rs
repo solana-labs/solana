@@ -51,8 +51,8 @@ fn test_replicator_startup() {
 
         let leader = Fullnode::new_with_storage_rotate(
             leader_node,
-            &leader_ledger_path,
             leader_keypair,
+            &leader_ledger_path,
             Some(Arc::new(signer_proxy)),
             None,
             false,
@@ -81,10 +81,10 @@ fn test_replicator_startup() {
 
         let validator = Fullnode::new_with_storage_rotate(
             validator_node,
-            &validator_ledger_path,
             validator_keypair,
+            &validator_ledger_path,
             Some(Arc::new(signer_proxy)),
-            Some(leader_info.gossip),
+            Some(&leader_info),
             false,
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_info.id,
@@ -278,14 +278,14 @@ fn test_replicator_startup_ledger_hang() {
 
         let _ = Fullnode::new(
             leader_node,
-            &leader_ledger_path,
             leader_keypair,
-            Some(Arc::new(signer_proxy)),
-            None,
-            false,
+            &leader_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_info.id.clone(),
             ))),
+            Some(Arc::new(signer_proxy)),
+            None,
+            false,
             None,
         );
 
@@ -295,14 +295,14 @@ fn test_replicator_startup_ledger_hang() {
 
         let _ = Fullnode::new(
             validator_node,
-            &validator_ledger_path,
             validator_keypair,
-            Some(Arc::new(signer_proxy)),
-            Some(leader_info.gossip),
-            false,
+            &validator_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_info.id,
             ))),
+            Some(Arc::new(signer_proxy)),
+            Some(&leader_info),
+            false,
             None,
         );
 
