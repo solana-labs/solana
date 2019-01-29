@@ -34,6 +34,7 @@ pub mod compute_leader_confirmation_service;
 pub mod db_ledger;
 pub mod db_window;
 pub mod entry;
+pub mod entry_stream;
 #[cfg(feature = "erasure")]
 pub mod erasure;
 pub mod fetch_stage;

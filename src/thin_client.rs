@@ -474,6 +474,7 @@ pub fn new_fullnode(
         None,
         false,
         None,
+        None,
     );
 
     (server, leader_data, genesis_block, alice, ledger_path)

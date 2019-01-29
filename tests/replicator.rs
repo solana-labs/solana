@@ -61,6 +61,7 @@ fn test_replicator_startup() {
             ))),
             None,
             STORAGE_ROTATE_TEST_COUNT,
+            None,
         );
 
         let validator_keypair = Arc::new(Keypair::new());
@@ -91,6 +92,7 @@ fn test_replicator_startup() {
             ))),
             None,
             STORAGE_ROTATE_TEST_COUNT,
+            None,
         );
 
         let bob = Keypair::new();
@@ -287,6 +289,7 @@ fn test_replicator_startup_ledger_hang() {
             None,
             false,
             None,
+            None,
         );
 
         let validator_keypair = Arc::new(Keypair::new());
@@ -303,6 +306,7 @@ fn test_replicator_startup_ledger_hang() {
             Some(Arc::new(signer_proxy)),
             Some(&leader_info),
             false,
+            None,
             None,
         );
 

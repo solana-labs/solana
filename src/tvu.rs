@@ -72,6 +72,7 @@ impl Tvu {
         storage_rotate_count: u64,
         to_leader_sender: TvuRotationSender,
         storage_state: &StorageState,
+        entry_stream: Option<String>,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
         let keypair: Arc<Keypair> = cluster_info
@@ -121,6 +122,7 @@ impl Tvu {
             l_entry_height.clone(),
             l_last_entry_id.clone(),
             to_leader_sender,
+            entry_stream,
         );
 
         let storage_stage = StorageStage::new(
@@ -300,6 +302,7 @@ pub mod tests {
             STORAGE_ROTATE_TEST_COUNT,
             sender,
             &StorageState::default(),
+            None,
         );
 
         let mut alice_ref_balance = starting_balance;

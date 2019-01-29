@@ -3,8 +3,12 @@
 use crate::bank::Bank;
 use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
-use crate::entry::EntrySlice;
-use crate::entry::{EntryReceiver, EntrySender};
+use crate::entry::{EntryReceiver, EntrySender, EntrySlice};
+#[cfg(not(test))]
+use crate::entry_stream::EntryStream;
+use crate::entry_stream::EntryStreamHandler;
+#[cfg(test)]
+use crate::entry_stream::MockEntryStream as EntryStream;
 use crate::fullnode::TvuRotationSender;
 use crate::leader_scheduler::TICKS_PER_BLOCK;
 use crate::packet::BlobError;
@@ -65,6 +69,7 @@ impl ReplayStage {
         ledger_entry_sender: &EntrySender,
         entry_height: &Arc<RwLock<u64>>,
         last_entry_id: &Arc<RwLock<Hash>>,
+        entry_stream: Option<&mut EntryStream>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         //coalesce all the available entries into a single vote
@@ -74,6 +79,12 @@ impl ReplayStage {
             if entries.len() >= MAX_ENTRY_RECV_PER_ITER {
                 break;
             }
+        }
+
+        if let Some(stream) = entry_stream {
+            stream.stream_entries(&entries).unwrap_or_else(|e| {
+                error!("Entry Stream error: {:?}, {:?}", e, stream.socket);
+            });
         }
 
         submit(
@@ -192,7 +203,7 @@ impl ReplayStage {
         Ok(())
     }
 
-    #[allow(clippy::new_ret_no_self)]
+    #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new(
         keypair: Arc<Keypair>,
         vote_signer: Option<Arc<VoteSignerProxy>>,
@@ -203,6 +214,7 @@ impl ReplayStage {
         entry_height: Arc<RwLock<u64>>,
         last_entry_id: Arc<RwLock<Hash>>,
         to_leader_sender: TvuRotationSender,
+        entry_stream: Option<String>,
     ) -> (Self, EntryReceiver) {
         let (vote_blob_sender, vote_blob_receiver) = channel();
         let (ledger_entry_sender, ledger_entry_receiver) = channel();
@@ -219,6 +231,7 @@ impl ReplayStage {
                 let (mut last_leader_id, _) = bank
                     .get_current_leader()
                     .expect("Scheduled leader should be calculated by this point");
+                let mut entry_stream = entry_stream.map(EntryStream::new);
                 loop {
                     let (leader_id, _) = bank
                         .get_current_leader()
@@ -244,6 +257,7 @@ impl ReplayStage {
                         &ledger_entry_sender,
                         &entry_height_.clone(),
                         &last_entry_id.clone(),
+                        entry_stream.as_mut(),
                     ) {
                         Err(Error::RecvTimeoutError(RecvTimeoutError::Disconnected)) => break,
                         Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
@@ -275,6 +289,7 @@ impl Service for ReplayStage {
 
 #[cfg(test)]
 mod test {
+    use super::*;
     use crate::bank::Bank;
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::db_ledger::create_tmp_sample_ledger;
@@ -383,6 +398,7 @@ mod test {
             Arc::new(RwLock::new(initial_entry_len)),
             Arc::new(RwLock::new(last_entry_id)),
             rotation_sender,
+            None,
         );
 
         // Send enough ticks to trigger leader rotation
@@ -485,6 +501,7 @@ mod test {
             Arc::new(RwLock::new(initial_entry_len as u64)),
             Arc::new(RwLock::new(last_entry_id)),
             to_leader_sender,
+            None,
         );
 
         // Vote sender should error because no leader contact info is found in the
@@ -603,6 +620,7 @@ mod test {
             Arc::new(RwLock::new(initial_entry_len as u64)),
             Arc::new(RwLock::new(last_entry_id)),
             rotation_tx,
+            None,
         );
 
         // Vote sender should error because no leader contact info is found in the
@@ -673,7 +691,6 @@ mod test {
         let (entry_sender, entry_receiver) = channel();
         let (ledger_entry_sender, _ledger_entry_receiver) = channel();
         let last_entry_id = Hash::default();
-        // Create keypair for the old leader
 
         let entry_height = 0;
         let mut last_id = Hash::default();
@@ -699,6 +716,7 @@ mod test {
             &ledger_entry_sender,
             &Arc::new(RwLock::new(entry_height)),
             &Arc::new(RwLock::new(last_entry_id)),
+            None,
         );
 
         match res {
@@ -725,6 +743,7 @@ mod test {
             &ledger_entry_sender,
             &Arc::new(RwLock::new(entry_height)),
             &Arc::new(RwLock::new(last_entry_id)),
+            None,
         );
 
         match res {
@@ -736,5 +755,54 @@ mod test {
                 e
             ),
         }
+    }
+
+    #[test]
+    fn test_replay_stage_stream_entries() {
+        // Set up entry stream
+        let mut entry_stream = EntryStream::new("test_stream".to_string());
+
+        // Set up dummy node to host a ReplayStage
+        let my_keypair = Keypair::new();
+        let my_id = my_keypair.pubkey();
+        let my_node = Node::new_localhost_with_pubkey(my_id);
+        // Set up the cluster info
+        let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
+        let (entry_sender, entry_receiver) = channel();
+        let (ledger_entry_sender, _ledger_entry_receiver) = channel();
+        let last_entry_id = Hash::default();
+
+        let entry_height = 0;
+        let mut last_id = Hash::default();
+        let mut entries = Vec::new();
+        let mut expected_entries = Vec::new();
+        for _ in 0..5 {
+            let entry = Entry::new(&mut last_id, 0, 1, vec![]); //just ticks
+            last_id = entry.id;
+            expected_entries.push(serde_json::to_string(&entry).unwrap());
+            entries.push(entry);
+        }
+        entry_sender
+            .send(entries.clone())
+            .expect("Expected to err out");
+
+        let my_keypair = Arc::new(my_keypair);
+        let vote_signer = Arc::new(VoteSignerProxy::new_local(&my_keypair));
+        ReplayStage::process_entries(
+            &Arc::new(Bank::default()),
+            &cluster_info_me,
+            &entry_receiver,
+            &my_keypair,
+            Some(&vote_signer),
+            None,
+            &ledger_entry_sender,
+            &Arc::new(RwLock::new(entry_height)),
+            &Arc::new(RwLock::new(last_entry_id)),
+            Some(&mut entry_stream),
+        )
+        .unwrap();
+
+        assert_eq!(entry_stream.socket.len(), 5);
+        assert_eq!(entry_stream.socket, expected_entries);
     }
 }

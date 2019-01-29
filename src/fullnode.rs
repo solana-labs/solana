@@ -95,6 +95,7 @@ impl Fullnode {
         entrypoint_info_option: Option<&NodeInfo>,
         sigverify_disabled: bool,
         rpc_port: Option<u16>,
+        entry_stream: Option<String>,
     ) -> Self {
         Self::new_with_storage_rotate(
             node,
@@ -106,9 +107,11 @@ impl Fullnode {
             leader_scheduler,
             rpc_port,
             NUM_HASHES_FOR_STORAGE_ROTATE,
+            entry_stream,
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_with_storage_rotate(
         node: Node,
         keypair: Arc<Keypair>,
@@ -119,6 +122,7 @@ impl Fullnode {
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         rpc_port: Option<u16>,
         storage_rotate_count: u64,
+        entry_stream: Option<String>,
     ) -> Self {
         let (genesis_block, db_ledger) = Self::make_db_ledger(ledger_path);
         let (bank, entry_height, last_entry_id) =
@@ -135,6 +139,7 @@ impl Fullnode {
             sigverify_disabled,
             rpc_port,
             storage_rotate_count,
+            entry_stream,
         )
     }
 
@@ -150,6 +155,7 @@ impl Fullnode {
         entrypoint_info_option: Option<&NodeInfo>,
         sigverify_disabled: bool,
         rpc_port: Option<u16>,
+        entry_stream: Option<String>,
     ) -> Self {
         let (_genesis_block, db_ledger) = Self::make_db_ledger(ledger_path);
         Self::new_with_bank_and_db_ledger(
@@ -164,6 +170,7 @@ impl Fullnode {
             sigverify_disabled,
             rpc_port,
             NUM_HASHES_FOR_STORAGE_ROTATE,
+            entry_stream,
         )
     }
 
@@ -180,6 +187,7 @@ impl Fullnode {
         sigverify_disabled: bool,
         rpc_port: Option<u16>,
         storage_rotate_count: u64,
+        entry_stream: Option<String>,
     ) -> Self {
         let mut rpc_addr = node.info.rpc;
         let mut rpc_pubsub_addr = node.info.rpc_pubsub;
@@ -299,6 +307,7 @@ impl Fullnode {
             storage_rotate_count,
             to_leader_sender,
             &storage_state,
+            entry_stream,
         );
         let max_tick_height = {
             let ls_lock = bank.leader_scheduler.read().unwrap();
@@ -564,6 +573,7 @@ mod tests {
             Some(&entry),
             false,
             None,
+            None,
         );
         v.close().unwrap();
         remove_dir_all(validator_ledger_path).unwrap();
@@ -605,6 +615,7 @@ mod tests {
                     Some(Arc::new(signer)),
                     Some(&entry),
                     false,
+                    None,
                     None,
                 )
             })
@@ -676,6 +687,7 @@ mod tests {
             Some(Arc::new(signer)),
             Some(&bootstrap_leader_info),
             false,
+            None,
             None,
         );
 
@@ -781,6 +793,7 @@ mod tests {
                 Some(&bootstrap_leader_info),
                 false,
                 None,
+                None,
             );
 
             assert!(!bootstrap_leader.node_services.tpu.is_leader());
@@ -794,6 +807,7 @@ mod tests {
                 Some(Arc::new(validator_vote_account_id)),
                 Some(&bootstrap_leader_info),
                 false,
+                None,
                 None,
             );
 
@@ -889,6 +903,7 @@ mod tests {
             Some(Arc::new(vote_signer)),
             Some(&leader_node.info),
             false,
+            None,
             None,
         );
 

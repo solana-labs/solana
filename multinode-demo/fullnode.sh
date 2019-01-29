@@ -21,13 +21,14 @@ usage() {
     echo
   fi
   cat <<EOF
-usage: $0 [-x] [--init-complete-file FILE] [--no-leader-rotation] [--no-signer] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]
+usage: $0 [-x] [--entry-stream PATH] [--init-complete-file FILE] [--no-leader-rotation] [--no-signer] [--rpc-port port] [rsync network path to bootstrap leader configuration] [network entry point]
 
 Start a full node on the specified network
 
   -x                    - start a new, dynamically-configured full node
   -X [label]            - start or restart a dynamically-configured full node with
                           the specified label
+  --entry-stream PATH   - open entry stream at this unix domain socket location
   --init-complete-file FILE - create this file, if it doesn't already exist, once node initialization is complete
   --no-leader-rotation  - disable leader rotation
   --no-signer           - start node without vote signer
@@ -41,6 +42,7 @@ if [[ $1 = -h ]]; then
   usage
 fi
 
+maybe_entry_stream=
 maybe_init_complete_file=
 maybe_no_leader_rotation=
 maybe_no_signer=
@@ -56,6 +58,9 @@ while [[ ${1:0:1} = - ]]; do
     self_setup=1
     self_setup_label=$$
     shift
+  elif [[ $1 = --entry-stream ]]; then
+    maybe_entry_stream="$1 $2"
+    shift 2
   elif [[ $1 = --init-complete-file ]]; then
     maybe_init_complete_file="--init-complete-file $2"
     shift 2
@@ -241,8 +246,9 @@ if [[ ! -d "$ledger_config_dir" ]]; then
 fi
 
 trap 'kill "$pid" && wait "$pid"' INT TERM
-# shellcheck disable=SC2086 # Don't want to double quote maybe_init_complete_file or maybe_no_signer or maybe_rpc_port
+# shellcheck disable=SC2086 # Don't want to double quote maybe_entry_stream or maybe_init_complete_file or maybe_no_signer or maybe_rpc_port
 $program \
+  $maybe_entry_stream \
   $maybe_init_complete_file \
   $maybe_no_leader_rotation \
   $maybe_no_signer \

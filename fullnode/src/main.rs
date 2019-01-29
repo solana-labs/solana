@@ -131,6 +131,13 @@ fn main() {
     let matches = App::new("fullnode")
         .version(crate_version!())
         .arg(
+            Arg::with_name("entry_stream")
+                .long("entry-stream")
+                .takes_value(true)
+                .value_name("UNIX DOMAIN SOCKET")
+                .help("Open entry stream at this unix domain socket location")
+        )
+        .arg(
             Arg::with_name("identity")
                 .short("i")
                 .long("identity")
@@ -227,6 +234,7 @@ fn main() {
             .expect("unable to allocate rpc port")
     };
     let init_complete_file = matches.value_of("init_complete_file");
+    let entry_stream = matches.value_of("entry_stream").map(|s| s.to_string());
 
     let keypair = Arc::new(keypair);
     let node = Node::new_with_external_ip(keypair.pubkey(), &gossip);
@@ -263,6 +271,7 @@ fn main() {
             .as_ref(),
         no_sigverify,
         Some(rpc_port),
+        entry_stream,
     );
 
     if !no_signer {
