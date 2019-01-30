@@ -101,7 +101,7 @@ pub struct Fullnode {
     broadcast_socket: UdpSocket,
     pub node_services: NodeServices,
     pub role_notifiers: (TvuRotationReceiver, TpuRotationReceiver),
-    blob_sender: BlobSender,
+    blob_sender: Option<BlobSender>,
 }
 
 impl Fullnode {
@@ -277,7 +277,7 @@ impl Fullnode {
             tpu_sockets: node.sockets.tpu,
             broadcast_socket: node.sockets.broadcast,
             role_notifiers: (to_leader_receiver, to_validator_receiver),
-            blob_sender,
+            blob_sender: Some(blob_sender),
         }
     }
 
@@ -337,7 +337,7 @@ impl Fullnode {
             &last_id,
             self.id,
             &to_validator_sender,
-            &self.blob_sender,
+            &self.blob_sender.as_ref().unwrap(),
         )
     }
 
@@ -378,8 +378,11 @@ impl Fullnode {
         self.node_services.exit()
     }
 
-    pub fn close(self) -> Result<()> {
+    pub fn close(mut self) -> Result<()> {
         self.exit();
+        if let Some(blob_sender) = self.blob_sender.take() {
+            drop(blob_sender);
+        }
         self.join()
     }
 
@@ -469,7 +472,6 @@ mod tests {
     use std::net::UdpSocket;
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
-    use std::thread::Builder;
 
     #[test]
     fn validator_exit() {
@@ -587,22 +589,16 @@ mod tests {
             Default::default(),
         );
 
-        Builder::new()
-            .name("solana-poh-service-entry_producer".to_string())
-            .spawn(move || {
-                // Wait for the leader to transition, ticks should cause the leader to
-                // reach the height for leader rotation
-                match bootstrap_leader.handle_role_transition().unwrap() {
-                    Some(FullnodeReturnType::LeaderToValidatorRotation) => {
-                        assert!(bootstrap_leader.node_services.tpu.is_leader());
-                        bootstrap_leader.close().unwrap();
-                    }
-                    _ => {
-                        panic!("Expected a leader transition");
-                    }
-                }
-            })
-            .unwrap();
+        // Wait for the leader to transition, ticks should cause the leader to
+        // reach the height for leader rotation
+        match bootstrap_leader.handle_role_transition().unwrap() {
+            Some(FullnodeReturnType::LeaderToValidatorRotation) => (),
+            _ => {
+                panic!("Expected a leader transition");
+            }
+        }
+        assert!(bootstrap_leader.node_services.tpu.is_leader());
+        bootstrap_leader.close().unwrap();
     }
 
     #[test]
