@@ -101,7 +101,7 @@ pub struct Fullnode {
 
 impl Fullnode {
     pub fn new(
-        node: Node,
+        mut node: Node,
         keypair: Arc<Keypair>,
         ledger_path: &str,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
@@ -112,57 +112,7 @@ impl Fullnode {
         let (genesis_block, db_ledger) = Self::make_db_ledger(ledger_path);
         let (bank, entry_height, last_entry_id) =
             Self::new_bank_from_db_ledger(&genesis_block, &db_ledger, leader_scheduler);
-        Self::new_with_bank_and_db_ledger(
-            node,
-            keypair,
-            bank,
-            &db_ledger,
-            entry_height,
-            &last_entry_id,
-            vote_signer,
-            entrypoint_info_option,
-            config,
-        )
-    }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_with_bank(
-        node: Node,
-        keypair: Arc<Keypair>,
-        ledger_path: &str,
-        bank: Bank,
-        entry_height: u64,
-        last_entry_id: &Hash,
-        vote_signer: Option<Arc<VoteSignerProxy>>,
-        entrypoint_info_option: Option<&NodeInfo>,
-        config: FullnodeConfig,
-    ) -> Self {
-        let (_genesis_block, db_ledger) = Self::make_db_ledger(ledger_path);
-        Self::new_with_bank_and_db_ledger(
-            node,
-            keypair,
-            bank,
-            &db_ledger,
-            entry_height,
-            &last_entry_id,
-            vote_signer,
-            entrypoint_info_option,
-            config,
-        )
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    fn new_with_bank_and_db_ledger(
-        mut node: Node,
-        keypair: Arc<Keypair>,
-        bank: Bank,
-        db_ledger: &Arc<DbLedger>,
-        entry_height: u64,
-        last_entry_id: &Hash,
-        vote_signer: Option<Arc<VoteSignerProxy>>,
-        entrypoint_info_option: Option<&NodeInfo>,
-        config: FullnodeConfig,
-    ) -> Self {
         info!("node info: {:?}", node.info);
         info!("node entrypoint_info: {:?}", entrypoint_info_option);
         info!(
@@ -263,7 +213,7 @@ impl Fullnode {
             vote_signer,
             &bank,
             entry_height,
-            *last_entry_id,
+            last_entry_id,
             &cluster_info,
             sockets,
             db_ledger.clone(),
@@ -293,7 +243,7 @@ impl Fullnode {
             entry_height,
             config.sigverify_disabled,
             max_tick_height,
-            last_entry_id,
+            &last_entry_id,
             keypair.pubkey(),
             scheduled_leader == keypair.pubkey(),
             &to_validator_sender,
@@ -487,7 +437,6 @@ impl Service for Fullnode {
 
 #[cfg(test)]
 mod tests {
-    use crate::bank::Bank;
     use crate::cluster_info::Node;
     use crate::db_ledger::*;
     use crate::entry::make_consecutive_blobs;
@@ -509,83 +458,63 @@ mod tests {
 
     #[test]
     fn validator_exit() {
-        let keypair = Keypair::new();
-        let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
-        let (genesis_block, _mint_keypair, validator_ledger_path) =
-            create_tmp_genesis("validator_exit", 10_000, keypair.pubkey(), 1000);
-        let mut bank = Bank::new(&genesis_block);
-        let entry = tn.info.clone();
-        let entry_height = 0;
+        let leader_keypair = Keypair::new();
+        let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            entry.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
+        let validator_keypair = Keypair::new();
+        let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
+        let (_, _, validator_ledger_path) =
+            create_tmp_genesis("validator_exit", 10_000, leader_keypair.pubkey(), 1000);
 
-        let last_id = bank.last_id();
-        let keypair = Arc::new(keypair);
-        let signer = VoteSignerProxy::new_local(&keypair);
-        let v = Fullnode::new_with_bank(
-            tn,
-            keypair,
+        let validator = Fullnode::new(
+            validator_node,
+            Arc::new(validator_keypair),
             &validator_ledger_path,
-            bank,
-            entry_height,
-            &last_id,
-            Some(Arc::new(signer)),
-            Some(&entry),
+            Arc::new(RwLock::new(LeaderScheduler::new(&Default::default()))),
+            None,
+            Some(&leader_node.info),
             Default::default(),
         );
-        v.close().unwrap();
+        validator.close().unwrap();
         remove_dir_all(validator_ledger_path).unwrap();
     }
 
     #[test]
     fn validator_parallel_exit() {
+        let leader_keypair = Keypair::new();
+        let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+
         let mut ledger_paths = vec![];
-        let vals: Vec<Fullnode> = (0..2)
+        let validators: Vec<Fullnode> = (0..2)
             .map(|i| {
-                let keypair = Keypair::new();
-                let tn = Node::new_localhost_with_pubkey(keypair.pubkey());
-                let (genesis_block, _mint_keypair, validator_ledger_path) = create_tmp_genesis(
+                let validator_keypair = Keypair::new();
+                let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
+                let (_, _, validator_ledger_path) = create_tmp_genesis(
                     &format!("validator_parallel_exit_{}", i),
                     10_000,
-                    keypair.pubkey(),
+                    leader_keypair.pubkey(),
                     1000,
                 );
                 ledger_paths.push(validator_ledger_path.clone());
-                let mut bank = Bank::new(&genesis_block);
-                let entry = tn.info.clone();
 
-                let leader_scheduler = Arc::new(RwLock::new(
-                    LeaderScheduler::from_bootstrap_leader(entry.id),
-                ));
-                bank.leader_scheduler = leader_scheduler;
-
-                let entry_height = 0;
-                let last_id = bank.last_id();
-                let keypair = Arc::new(keypair);
-                let signer = VoteSignerProxy::new_local(&keypair);
-                Fullnode::new_with_bank(
-                    tn,
-                    keypair,
+                Fullnode::new(
+                    validator_node,
+                    Arc::new(validator_keypair),
                     &validator_ledger_path,
-                    bank,
-                    entry_height,
-                    &last_id,
-                    Some(Arc::new(signer)),
-                    Some(&entry),
+                    Arc::new(RwLock::new(LeaderScheduler::new(&Default::default()))),
+                    None,
+                    Some(&leader_node.info),
                     Default::default(),
                 )
             })
             .collect();
 
-        //each validator can exit in parallel to speed many sequential calls to `join`
-        vals.iter().for_each(|v| v.exit());
-        //while join is called sequentially, the above exit call notified all the
-        //validators to exit from all their threads
-        vals.into_iter().for_each(|v| {
-            v.join().unwrap();
+        // Each validator can exit in parallel to speed many sequential calls to `join`
+        validators.iter().for_each(|v| v.exit());
+        // While join is called sequentially, the above exit call notified all the
+        // validators to exit from all their threads
+        validators.into_iter().for_each(|validator| {
+            validator.join().unwrap();
         });
 
         for path in ledger_paths {
