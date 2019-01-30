@@ -129,5 +129,5 @@ recurses into the transaction vector for all the gossip protocols.
 3.  Increase fanout to 20.
 
 * Worst case 25mb memory overhead per node.
-* Sub 4 hops worst case to deliver to the entire network. 
+* Sub 4 hops worst case to deliver to the entire network.
 * 80 blobs received by the leader for all the validator messages.
