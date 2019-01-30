@@ -1,9 +1,14 @@
-# Signing using Secure Enclave
+# Secure Vote Signing
 
-This document defines the security mechanism of signing keys used by the
-fullnodes. Every node contains an asymmetric key that's used for signing
-and verifying the votes. The node signs the vote transactions using its private
-key. Other entities can verify the signature using the node's public key.
+The gaol of this design is to address the following challenges with voting:
+
+* Validators execute untrusted code in a potentially insecure VM.
+* Validators sign the result of their work and submit consensus votes.
+* Votes that violate consensus rules could be used to slash the stake used in the vote.
+
+Every node contains an asymmetric key that's used for signing and verifying the
+votes. The node signs the vote transactions using its private key. Other
+entities can verify the signature using the node's public key.
 
 The node's stake or its resources could be compromised if its private key is
 used to sign incorrect data (e.g. voting on multiple forks of the ledger). So,
@@ -13,6 +18,45 @@ Secure Enclaves (such as SGX) provide a layer of memory and computation
 protection. An enclave can be used to generate an asymmetric key and keep the
 private key in its protected memory. It can expose an API that user (untrusted)
 code can use for signing the transactions.
+
+## Vote Signers, Validators and Stake Owners
+
+A validator is a fullnode that is connected to the cluster and
+executes transactions.  A validator computes all the possible forks
+that are concurrently active in the cluster.  A validator picks the
+best possible fork to vote and requests the vote signer to sign the
+vote.
+
+A vote signer evaluates the vote proposed by the validator and signs
+the vote only if it does not violate a slashing condition.  A vote
+signer only needs to maintain minimum state regarding the votes it
+signed, and the votes signed by the rest of the cluster.  It doesn't
+need to process a full set of transactions.
+
+A stake owner is an identity that has control of the staked capital.
+The stake owner can delegate their stake to the vote signer.  Once
+a stake is delegated, the vote signer votes represent the voting
+weight of all the delegated stakes, and produce rewards for all the
+delegated stakes.
+
+A single validator could do work for multiple vote signers.  For a
+single vote signer to observe votes from multiple validators and
+only vote if M/N agree. For a single vote signer to be delegated
+multiple stakes. For a single stake owner to delegate a portion of
+the stake to multiple vote signers.
+
+For simplicity, the intial rollout should focus on the following
+configuration:
+
+* 1:1 relationship between validator and vote signer.  The validator
+can use the vote signer's public key as its identity.  This key
+should have some sols to pay for execution of votes.
+
+* Stake Owner can delegate the entire stake to a single vote signer.
+And a vote signer may have more than 1 stake delegated to them.
+The vote signer may need to submit multiple votes to register a
+vote with a stake public key that does not fit into a single
+transaction.
 
 ## Message Flow
 
