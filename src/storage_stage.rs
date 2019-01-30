@@ -498,18 +498,19 @@ mod tests {
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
-        let (_genesis_block, _mint, ledger_path, genesis_entries) = create_tmp_sample_ledger(
-            "storage_stage_process_entries",
-            1000,
-            1,
-            Keypair::new().pubkey(),
-            1,
-        );
+        let (_genesis_block, _mint, ledger_path, genesis_entry_height, _last_id) =
+            create_tmp_sample_ledger(
+                "storage_stage_process_entries",
+                1000,
+                1,
+                Keypair::new().pubkey(),
+                1,
+            );
 
         let entries = make_tiny_test_entries(64);
         let db_ledger = DbLedger::open(&ledger_path).unwrap();
         db_ledger
-            .write_entries(DEFAULT_SLOT_HEIGHT, genesis_entries.len() as u64, &entries)
+            .write_entries(DEFAULT_SLOT_HEIGHT, genesis_entry_height, &entries)
             .unwrap();
 
         let cluster_info = test_cluster_info(keypair.pubkey());
@@ -566,18 +567,19 @@ mod tests {
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
-        let (_genesis_block, _mint, ledger_path, genesis_entries) = create_tmp_sample_ledger(
-            "storage_stage_process_entries",
-            1000,
-            1,
-            Keypair::new().pubkey(),
-            1,
-        );
+        let (_genesis_block, _mint, ledger_path, genesis_entry_height, _last_id) =
+            create_tmp_sample_ledger(
+                "storage_stage_process_entries",
+                1000,
+                1,
+                Keypair::new().pubkey(),
+                1,
+            );
 
         let entries = make_tiny_test_entries(128);
         let db_ledger = DbLedger::open(&ledger_path).unwrap();
         db_ledger
-            .write_entries(DEFAULT_SLOT_HEIGHT, genesis_entries.len() as u64, &entries)
+            .write_entries(DEFAULT_SLOT_HEIGHT, genesis_entry_height, &entries)
             .unwrap();
 
         let cluster_info = test_cluster_info(keypair.pubkey());

@@ -531,19 +531,19 @@ mod tests {
         let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
         // Make a mint and a genesis entries for leader ledger
-        let num_ending_ticks = 1;
-        let (_genesis_block, _mint_keypair, bootstrap_leader_ledger_path, genesis_entries) =
-            create_tmp_sample_ledger(
-                "test_leader_to_leader_transition",
-                10_000,
-                num_ending_ticks,
-                bootstrap_leader_keypair.pubkey(),
-                500,
-            );
-
-        let initial_tick_height = genesis_entries
-            .iter()
-            .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
+        let (
+            _genesis_block,
+            _mint_keypair,
+            bootstrap_leader_ledger_path,
+            _genesis_entry_height,
+            _last_id,
+        ) = create_tmp_sample_ledger(
+            "test_leader_to_leader_transition",
+            10_000,
+            1,
+            bootstrap_leader_keypair.pubkey(),
+            500,
+        );
 
         // Create the common leader scheduling configuration
         let num_slots_per_epoch = 3;
@@ -556,9 +556,8 @@ mod tests {
         // choices in the active set, this leader will remain the leader in the next
         // epoch. In the next epoch, check that the same leader knows to shut down and
         // restart as a leader again.
-        let bootstrap_height = initial_tick_height + 1;
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            bootstrap_height as u64,
+            2,
             leader_rotation_interval,
             seed_rotation_interval,
             active_window_length,
@@ -591,6 +590,8 @@ mod tests {
 
     #[test]
     fn test_wrong_role_transition() {
+        solana_logger::setup();
+
         // Create the leader node information
         let bootstrap_leader_keypair = Arc::new(Keypair::new());
         let bootstrap_leader_node =
@@ -602,43 +603,32 @@ mod tests {
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
         // Make a common mint and a genesis entry for both leader + validator's ledgers
-        let num_ending_ticks = 3;
-        let (_genesis_block, mint_keypair, bootstrap_leader_ledger_path, genesis_entries) =
-            create_tmp_sample_ledger(
-                "test_wrong_role_transition",
-                10_000,
-                num_ending_ticks,
-                bootstrap_leader_keypair.pubkey(),
-                500,
-            );
-
-        let last_id = genesis_entries
-            .last()
-            .expect("expected at least one genesis entry")
-            .id;
+        let (
+            _genesis_block,
+            mint_keypair,
+            bootstrap_leader_ledger_path,
+            genesis_entry_height,
+            last_id,
+        ) = create_tmp_sample_ledger(
+            "test_wrong_role_transition",
+            10_000,
+            0,
+            bootstrap_leader_keypair.pubkey(),
+            500,
+        );
 
         // Write the entries to the ledger that will cause leader rotation
         // after the bootstrap height
         let validator_keypair = Arc::new(validator_keypair);
-        let (active_set_entries, validator_vote_account_id) = make_active_set_entries(
-            &validator_keypair,
-            &mint_keypair,
-            &last_id,
-            &last_id,
-            num_ending_ticks,
-        );
-
-        let genesis_tick_height = genesis_entries
-            .iter()
-            .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64)
-            + num_ending_ticks as u64;
+        let (active_set_entries, _) =
+            make_active_set_entries(&validator_keypair, &mint_keypair, &last_id, &last_id, 10);
 
         {
             let db_ledger = DbLedger::open(&bootstrap_leader_ledger_path).unwrap();
             db_ledger
                 .write_entries(
                     DEFAULT_SLOT_HEIGHT,
-                    genesis_entries.len() as u64,
+                    genesis_entry_height,
                     &active_set_entries,
                 )
                 .unwrap();
@@ -652,30 +642,26 @@ mod tests {
         ];
 
         // Create the common leader scheduling configuration
-        let num_slots_per_epoch = 3;
-        let leader_rotation_interval = 5;
-        let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
+        let leader_rotation_interval = 3;
 
         // Set the bootstrap height exactly the current tick height, so that we can
         // test if the bootstrap leader knows to immediately transition to a validator
         // after parsing the ledger during startup
-        let bootstrap_height = genesis_tick_height;
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            bootstrap_height,
+            1,
             leader_rotation_interval,
-            seed_rotation_interval,
-            genesis_tick_height,
+            leader_rotation_interval,
+            leader_rotation_interval * 10,
         );
 
         {
             // Test that a node knows to transition to a validator based on parsing the ledger
-            let vote_signer = VoteSignerProxy::new_local(&bootstrap_leader_keypair);
             let bootstrap_leader = Fullnode::new(
                 bootstrap_leader_node,
                 bootstrap_leader_keypair,
                 &bootstrap_leader_ledger_path,
                 Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
-                Some(Arc::new(vote_signer)),
+                None,
                 Some(&bootstrap_leader_info),
                 Default::default(),
             );
@@ -688,7 +674,7 @@ mod tests {
                 validator_keypair,
                 &validator_ledger_path,
                 Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
-                Some(Arc::new(validator_vote_account_id)),
+                None,
                 Some(&bootstrap_leader_info),
                 Default::default(),
             );
@@ -714,12 +700,11 @@ mod tests {
         let leader_id = leader_node.info.id;
 
         // Create validator identity
-        let num_ending_ticks = 1;
-        let (_genesis_block, mint_keypair, validator_ledger_path, genesis_entries) =
+        let (_genesis_block, mint_keypair, validator_ledger_path, genesis_entry_height, last_id) =
             create_tmp_sample_ledger(
                 "test_validator_to_leader_transition",
                 10_000,
-                num_ending_ticks,
+                1,
                 leader_id,
                 500,
             );
@@ -727,11 +712,6 @@ mod tests {
         let validator_keypair = Keypair::new();
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
         let validator_info = validator_node.info.clone();
-
-        let mut last_id = genesis_entries
-            .last()
-            .expect("expected at least one genesis entry")
-            .id;
 
         let validator_keypair = Arc::new(validator_keypair);
         // Write two entries so that the validator is in the active set:
@@ -741,27 +721,23 @@ mod tests {
         // after the bootstrap height
         //
         // 2) A vote from the validator
-        let (active_set_entries, _validator_vote_account_id) =
+        let (active_set_entries, _) =
             make_active_set_entries(&validator_keypair, &mint_keypair, &last_id, &last_id, 0);
-        let initial_tick_height = genesis_entries
-            .iter()
-            .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
-        let initial_non_tick_height = genesis_entries.len() as u64 - initial_tick_height;
         let active_set_entries_len = active_set_entries.len() as u64;
-        last_id = active_set_entries.last().unwrap().id;
+        let last_id = active_set_entries.last().unwrap().id;
 
         {
             let db_ledger = DbLedger::open(&validator_ledger_path).unwrap();
             db_ledger
                 .write_entries(
                     DEFAULT_SLOT_HEIGHT,
-                    genesis_entries.len() as u64,
+                    genesis_entry_height,
                     &active_set_entries,
                 )
                 .unwrap();
         }
 
-        let ledger_initial_len = genesis_entries.len() as u64 + active_set_entries_len;
+        let ledger_initial_len = genesis_entry_height + active_set_entries_len;
 
         // Set the leader scheduler for the validator
         let leader_rotation_interval = 16;
@@ -850,9 +826,7 @@ mod tests {
         assert!(bank.tick_height() >= bootstrap_height);
         // Only the first genesis entry has num_hashes = 0, every other entry
         // had num_hashes = 1
-        assert!(
-            entry_height >= bootstrap_height + active_set_entries_len + initial_non_tick_height
-        );
+        assert!(entry_height >= bootstrap_height + active_set_entries_len);
 
         // Shut down
         t_responder.join().expect("responder thread join");

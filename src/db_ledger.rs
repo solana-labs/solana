@@ -830,11 +830,11 @@ impl Iterator for EntryIterator {
     }
 }
 
-pub fn create_empty_ledger(ledger_path: &str, genesis_block: &GenesisBlock) -> Result<()> {
+pub fn create_empty_ledger(ledger_path: &str, genesis_block: &GenesisBlock) -> Result<(u64, Hash)> {
     DbLedger::destroy(ledger_path)?;
     DbLedger::open(ledger_path)?;
     genesis_block.write(&ledger_path)?;
-    Ok(())
+    Ok((0, genesis_block.last_id()))
 }
 
 pub fn genesis<'a, I>(ledger_path: &str, keypair: &Keypair, entries: I) -> Result<()>
@@ -898,19 +898,23 @@ pub fn create_tmp_sample_ledger(
     num_ending_ticks: u64,
     bootstrap_leader_id: Pubkey,
     bootstrap_leader_tokens: u64,
-) -> (GenesisBlock, Keypair, String, Vec<Entry>) {
+) -> (GenesisBlock, Keypair, String, u64, Hash) {
     let (genesis_block, mint_keypair) =
         GenesisBlock::new_with_leader(num_tokens, bootstrap_leader_id, bootstrap_leader_tokens);
     let path = get_tmp_ledger_path(name);
-    create_empty_ledger(&path, &genesis_block).unwrap();
+    let (mut entry_height, mut last_id) = create_empty_ledger(&path, &genesis_block).unwrap();
 
-    let entries = crate::entry::create_ticks(num_ending_ticks, genesis_block.last_id());
+    if num_ending_ticks > 0 {
+        let entries = crate::entry::create_ticks(num_ending_ticks, last_id);
 
-    let db_ledger = DbLedger::open(&path).unwrap();
-    db_ledger
-        .write_entries(DEFAULT_SLOT_HEIGHT, 0, &entries)
-        .unwrap();
-    (genesis_block, mint_keypair, path, entries)
+        let db_ledger = DbLedger::open(&path).unwrap();
+        db_ledger
+            .write_entries(DEFAULT_SLOT_HEIGHT, entry_height, &entries)
+            .unwrap();
+        entry_height += entries.len() as u64;
+        last_id = entries.last().unwrap().id
+    }
+    (genesis_block, mint_keypair, path, entry_height, last_id)
 }
 
 pub fn tmp_copy_ledger(from: &str, name: &str) -> String {

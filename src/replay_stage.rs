@@ -64,7 +64,7 @@ impl ReplayStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window_receiver: &EntryReceiver,
         keypair: &Arc<Keypair>,
-        vote_signer: Option<&Arc<VoteSignerProxy>>,
+        vote_signer_proxy: Option<&Arc<VoteSignerProxy>>,
         vote_blob_sender: Option<&BlobSender>,
         ledger_entry_sender: &EntrySender,
         entry_height: &Arc<RwLock<u64>>,
@@ -146,7 +146,7 @@ impl ReplayStage {
                 }
 
                 if 0 == num_ticks_to_next_vote {
-                    if let Some(signer) = vote_signer {
+                    if let Some(signer) = vote_signer_proxy {
                         if let Some(sender) = vote_blob_sender {
                             signer
                                 .send_validator_vote(bank, &cluster_info, sender)
@@ -206,7 +206,7 @@ impl ReplayStage {
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new(
         keypair: Arc<Keypair>,
-        vote_signer: Option<Arc<VoteSignerProxy>>,
+        vote_signer_proxy: Option<Arc<VoteSignerProxy>>,
         bank: Arc<Bank>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         window_receiver: EntryReceiver,
@@ -252,7 +252,7 @@ impl ReplayStage {
                         &cluster_info,
                         &window_receiver,
                         &keypair,
-                        vote_signer.as_ref(),
+                        vote_signer_proxy.as_ref(),
                         Some(&vote_blob_sender),
                         &ledger_entry_sender,
                         &entry_height_.clone(),
@@ -328,38 +328,33 @@ mod test {
 
         // Create a ledger
         let num_ending_ticks = 3;
-        let (_, mint_keypair, my_ledger_path, genesis_entries) = create_tmp_sample_ledger(
-            "test_replay_stage_leader_rotation_exit",
-            10_000,
-            num_ending_ticks,
-            old_leader_id,
-            500,
-        );
-        let mut last_id = genesis_entries
-            .last()
-            .expect("expected at least one genesis entry")
-            .id;
+        let (_, mint_keypair, my_ledger_path, genesis_entry_height, mut last_id) =
+            create_tmp_sample_ledger(
+                "test_replay_stage_leader_rotation_exit",
+                10_000,
+                num_ending_ticks,
+                old_leader_id,
+                500,
+            );
 
         let my_keypair = Arc::new(my_keypair);
         // Write two entries to the ledger so that the validator is in the active set:
         // 1) Give the validator a nonzero number of tokens 2) A vote from the validator .
         // This will cause leader rotation after the bootstrap height
-        let (active_set_entries, vote_account_id) =
+        let (active_set_entries, vote_signer_proxy) =
             make_active_set_entries(&my_keypair, &mint_keypair, &last_id, &last_id, 0);
         last_id = active_set_entries.last().unwrap().id;
-        let initial_tick_height = genesis_entries
-            .iter()
-            .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
+        let initial_tick_height = genesis_entry_height;
         let active_set_entries_len = active_set_entries.len() as u64;
-        let initial_non_tick_height = genesis_entries.len() as u64 - initial_tick_height;
-        let initial_entry_len = genesis_entries.len() as u64 + active_set_entries_len;
+        let initial_non_tick_height = genesis_entry_height - initial_tick_height;
+        let initial_entry_len = genesis_entry_height + active_set_entries_len;
 
         {
             let db_ledger = DbLedger::open(&my_ledger_path).unwrap();
             db_ledger
                 .write_entries(
                     DEFAULT_SLOT_HEIGHT,
-                    genesis_entries.len() as u64,
+                    genesis_entry_height,
                     &active_set_entries,
                 )
                 .unwrap();
@@ -390,7 +385,7 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let (_replay_stage, ledger_writer_recv) = ReplayStage::new(
             my_keypair,
-            Some(Arc::new(vote_account_id)),
+            Some(Arc::new(vote_signer_proxy)),
             Arc::new(bank),
             Arc::new(RwLock::new(cluster_info_me)),
             entry_receiver,
@@ -466,19 +461,16 @@ mod test {
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
 
         let num_ending_ticks = 1;
-        let (_genesis_block, _mint_keypair, my_ledger_path, genesis_entries) =
-            create_tmp_sample_ledger(
-                "test_vote_error_replay_stage_correctness",
-                10_000,
-                num_ending_ticks,
-                leader_id,
-                500,
-            );
-
-        let initial_entry_len = genesis_entries.len();
+        let (_, _, my_ledger_path, _, _) = create_tmp_sample_ledger(
+            "test_vote_error_replay_stage_correctness",
+            10_000,
+            num_ending_ticks,
+            leader_id,
+            500,
+        );
 
         // Set up the bank
-        let (bank, _, last_entry_id) =
+        let (bank, entry_height, last_id) =
             Fullnode::new_bank_from_ledger(&my_ledger_path, leader_scheduler);
 
         // Set up the cluster info
@@ -489,17 +481,17 @@ mod test {
         let (entry_sender, entry_receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         let my_keypair = Arc::new(my_keypair);
-        let vote_signer = Arc::new(VoteSignerProxy::new_local(&my_keypair));
+        let vote_signer_proxy = Arc::new(VoteSignerProxy::new_local(&my_keypair));
         let (to_leader_sender, _) = channel();
         let (replay_stage, ledger_writer_recv) = ReplayStage::new(
             my_keypair.clone(),
-            Some(vote_signer.clone()),
+            Some(vote_signer_proxy.clone()),
             bank.clone(),
             cluster_info_me.clone(),
             entry_receiver,
             exit.clone(),
-            Arc::new(RwLock::new(initial_entry_len as u64)),
-            Arc::new(RwLock::new(last_entry_id)),
+            Arc::new(RwLock::new(entry_height)),
+            Arc::new(RwLock::new(last_id)),
             to_leader_sender,
             None,
         );
@@ -507,16 +499,11 @@ mod test {
         // Vote sender should error because no leader contact info is found in the
         // ClusterInfo
         let (mock_sender, _mock_receiver) = channel();
-        let _vote_err = vote_signer.send_validator_vote(&bank, &cluster_info_me, &mock_sender);
+        let _vote_err =
+            vote_signer_proxy.send_validator_vote(&bank, &cluster_info_me, &mock_sender);
 
         // Send ReplayStage an entry, should see it on the ledger writer receiver
-        let next_tick = create_ticks(
-            1,
-            genesis_entries
-                .last()
-                .expect("Expected nonzero number of entries in genesis")
-                .id,
-        );
+        let next_tick = create_ticks(1, last_id);
         entry_sender
             .send(next_tick.clone())
             .expect("Error sending entry to ReplayStage");
@@ -543,7 +530,7 @@ mod test {
         let leader_id = Keypair::new().pubkey();
 
         // Create the ledger
-        let (_genesis_block, mint_keypair, my_ledger_path, genesis_entries) =
+        let (_genesis_block, mint_keypair, my_ledger_path, genesis_entry_height, last_id) =
             create_tmp_sample_ledger(
                 "test_vote_error_replay_stage_leader_rotation",
                 10_000,
@@ -552,31 +539,24 @@ mod test {
                 500,
             );
 
-        let mut last_id = genesis_entries
-            .last()
-            .expect("expected at least one genesis entry")
-            .id;
-
         let my_keypair = Arc::new(my_keypair);
         // Write two entries to the ledger so that the validator is in the active set:
         // 1) Give the validator a nonzero number of tokens 2) A vote from the validator.
         // This will cause leader rotation after the bootstrap height
-        let (active_set_entries, vote_account_id) =
+        let (active_set_entries, vote_signer_proxy) =
             make_active_set_entries(&my_keypair, &mint_keypair, &last_id, &last_id, 0);
-        last_id = active_set_entries.last().unwrap().id;
-        let initial_tick_height = genesis_entries
-            .iter()
-            .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
+        let mut last_id = active_set_entries.last().unwrap().id;
+        let initial_tick_height = genesis_entry_height;
         let active_set_entries_len = active_set_entries.len() as u64;
-        let initial_non_tick_height = genesis_entries.len() as u64 - initial_tick_height;
-        let initial_entry_len = genesis_entries.len() as u64 + active_set_entries_len;
+        let initial_non_tick_height = genesis_entry_height - initial_tick_height;
+        let initial_entry_len = genesis_entry_height + active_set_entries_len;
 
         {
             let db_ledger = DbLedger::open(&my_ledger_path).unwrap();
             db_ledger
                 .write_entries(
                     DEFAULT_SLOT_HEIGHT,
-                    genesis_entries.len() as u64,
+                    genesis_entry_height,
                     &active_set_entries,
                 )
                 .unwrap();
@@ -605,14 +585,14 @@ mod test {
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
 
         // Set up the replay stage
-        let signer_proxy = Arc::new(vote_account_id);
+        let vote_signer_proxy = Arc::new(vote_signer_proxy);
         let bank = Arc::new(bank);
         let (entry_sender, entry_receiver) = channel();
         let (rotation_tx, rotation_rx) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         let (_replay_stage, ledger_writer_recv) = ReplayStage::new(
             my_keypair.clone(),
-            Some(signer_proxy.clone()),
+            Some(vote_signer_proxy.clone()),
             bank.clone(),
             cluster_info_me.clone(),
             entry_receiver,
@@ -626,7 +606,8 @@ mod test {
         // Vote sender should error because no leader contact info is found in the
         // ClusterInfo
         let (mock_sender, _mock_receiver) = channel();
-        let _vote_err = signer_proxy.send_validator_vote(&bank, &cluster_info_me, &mock_sender);
+        let _vote_err =
+            vote_signer_proxy.send_validator_vote(&bank, &cluster_info_me, &mock_sender);
 
         // Send enough ticks to trigger leader rotation
         let total_entries_to_send = (bootstrap_height - initial_tick_height) as usize;
@@ -705,13 +686,13 @@ mod test {
             .expect("Expected to err out");
 
         let my_keypair = Arc::new(my_keypair);
-        let vote_signer = Arc::new(VoteSignerProxy::new_local(&my_keypair));
+        let vote_signer_proxy = Arc::new(VoteSignerProxy::new_local(&my_keypair));
         let res = ReplayStage::process_entries(
             &Arc::new(Bank::default()),
             &cluster_info_me,
             &entry_receiver,
             &my_keypair,
-            Some(&vote_signer),
+            Some(&vote_signer_proxy),
             None,
             &ledger_entry_sender,
             &Arc::new(RwLock::new(entry_height)),
@@ -738,7 +719,7 @@ mod test {
             &cluster_info_me,
             &entry_receiver,
             &Arc::new(Keypair::new()),
-            Some(&vote_signer),
+            Some(&vote_signer_proxy),
             None,
             &ledger_entry_sender,
             &Arc::new(RwLock::new(entry_height)),
@@ -787,13 +768,13 @@ mod test {
             .expect("Expected to err out");
 
         let my_keypair = Arc::new(my_keypair);
-        let vote_signer = Arc::new(VoteSignerProxy::new_local(&my_keypair));
+        let vote_signer_proxy = Arc::new(VoteSignerProxy::new_local(&my_keypair));
         ReplayStage::process_entries(
             &Arc::new(Bank::default()),
             &cluster_info_me,
             &entry_receiver,
             &my_keypair,
-            Some(&vote_signer),
+            Some(&vote_signer_proxy),
             None,
             &ledger_entry_sender,
             &Arc::new(RwLock::new(entry_height)),
