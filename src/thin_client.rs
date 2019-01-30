@@ -637,7 +637,9 @@ mod tests {
         let mut client = mk_client(&leader_data);
         let last_id = client.get_last_id();
 
-        // give bob 500 tokens
+        let starting_balance = client.poll_get_balance(&alice.pubkey()).unwrap();
+
+        info!("Give Bob 500 tokens");
         let signature = client
             .transfer(500, &alice, bob_keypair.pubkey(), &last_id)
             .unwrap();
@@ -646,22 +648,19 @@ mod tests {
         let balance = client.poll_get_balance(&bob_keypair.pubkey());
         assert_eq!(balance.unwrap(), 500);
 
-        // take them away
+        info!("Take Bob's 500 tokens away");
         let signature = client
             .transfer(500, &bob_keypair, alice.pubkey(), &last_id)
             .unwrap();
         client.poll_for_signature(&signature).unwrap();
-        let balance = client.poll_get_balance(&alice.pubkey());
-        assert_eq!(balance.unwrap(), 10_000);
+        let balance = client.poll_get_balance(&alice.pubkey()).unwrap();
+        assert_eq!(balance, starting_balance);
 
-        // should get an error when bob's account is purged
+        info!("Should get an error when Bob's balance hits zero and is purged");
         let balance = client.poll_get_balance(&bob_keypair.pubkey());
-        //todo check why this is expected to be an error? why is bob's account purged?
-        assert!(balance.is_err() || balance.unwrap() == 0);
+        assert!(balance.is_err());
 
-        server
-            .close()
-            .unwrap_or_else(|e| panic!("close() failed! {:?}", e));
+        server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
     }
 }
