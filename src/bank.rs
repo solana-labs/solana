@@ -96,12 +96,17 @@ impl BankSubscriptions for LocalSubscriptions {
     fn check_signature(&self, _signature: &Signature, _status: &Result<()>) {}
 }
 
+type BankStatusCache = StatusCache<BankError>;
+
 /// Manager for the state of all accounts and programs after processing its entries.
 pub struct Bank {
     pub accounts: Accounts,
 
+    /// A cache of signature statuses
+    status_cache: RwLock<BankStatusCache>,
+
     /// FIFO queue of `last_id` items
-    last_ids: RwLock<StatusDeque<Result<()>>>,
+    last_id_queue: RwLock<LastIdQueue>,
 
     // The latest confirmation time for the network
     confirmation_time: AtomicUsize,
@@ -138,9 +143,12 @@ impl Bank {
     }
 
     pub fn copy_for_tpu(&self) -> Self {
+        let mut status_cache = BankStatusCache::default();
+        status_cache.merge_into_root(self.status_cache.read().unwrap().clone());
         Self {
             accounts: self.accounts.copy_for_tpu(),
-            last_ids: RwLock::new(self.last_ids.read().unwrap().clone()),
+            status_cache: RwLock::new(status_cache),
+            last_id_queue: RwLock::new(self.last_id_queue.read().unwrap().clone()),
             confirmation_time: AtomicUsize::new(self.confirmation_time()),
             leader_scheduler: self.leader_scheduler.clone(),
             subscriptions: RwLock::new(Box::new(Arc::new(LocalSubscriptions::default()))),
