@@ -301,9 +301,9 @@ while [[ $iteration -le $iterations ]]; do
     curl --retry 5 --retry-delay 2 --retry-connrefused \
       -X POST -H 'Content-Type: application/json' \
       -d '{"jsonrpc":"2.0","id":1, "method":"getTransactionCount"}' \
-      -o transactionCount.json \
+      -o log-transactionCount.txt \
       http://localhost:8899
-    cat transactionCount.json
+    cat log-transactionCount.txt
   ) || flag_error
 
   echo "--- RPC API: fullnode getTransactionCount ($iteration)"
@@ -316,7 +316,7 @@ while [[ $iteration -le $iterations ]]; do
   ) || flag_error
 
   # Verify transaction count as reported by the bootstrap-leader node is advancing
-  transactionCount=$(sed -e 's/{"jsonrpc":"2.0","result":\([0-9]*\),"id":1}/\1/' transactionCount.json)
+  transactionCount=$(sed -e 's/{"jsonrpc":"2.0","result":\([0-9]*\),"id":1}/\1/' log-transactionCount.txt)
   if [[ -n $lastTransactionCount ]]; then
     echo "--- Transaction count check: $lastTransactionCount < $transactionCount"
     if $enforceTransactionCountAdvance; then
