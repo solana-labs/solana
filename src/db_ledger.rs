@@ -879,23 +879,10 @@ pub fn create_tmp_ledger(name: &str, genesis_block: &GenesisBlock) -> String {
     ledger_path
 }
 
-pub fn create_tmp_genesis(
-    name: &str,
-    num: u64,
-    bootstrap_leader_id: Pubkey,
-    bootstrap_leader_tokens: u64,
-) -> (GenesisBlock, Keypair, String) {
-    let (genesis_block, mint_keypair) =
-        GenesisBlock::new_with_leader(num, bootstrap_leader_id, bootstrap_leader_tokens);
-    let ledger_path = create_tmp_ledger(name, &genesis_block);
-
-    (genesis_block, mint_keypair, ledger_path)
-}
-
 pub fn create_tmp_sample_ledger(
     name: &str,
     num_tokens: u64,
-    num_ending_ticks: u64,
+    num_extra_ticks: u64,
     bootstrap_leader_id: Pubkey,
     bootstrap_leader_tokens: u64,
 ) -> (GenesisBlock, Keypair, String, u64, Hash) {
@@ -904,8 +891,8 @@ pub fn create_tmp_sample_ledger(
     let path = get_tmp_ledger_path(name);
     let (mut entry_height, mut last_id) = create_empty_ledger(&path, &genesis_block).unwrap();
 
-    if num_ending_ticks > 0 {
-        let entries = crate::entry::create_ticks(num_ending_ticks, last_id);
+    if num_extra_ticks > 0 {
+        let entries = crate::entry::create_ticks(num_extra_ticks, last_id);
 
         let db_ledger = DbLedger::open(&path).unwrap();
         db_ledger
