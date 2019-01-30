@@ -16,6 +16,7 @@ use crate::tvu::{Sockets, Tvu, TvuReturnType};
 use crate::vote_signer_proxy::VoteSignerProxy;
 use log::Level;
 use solana_sdk::hash::Hash;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::{duration_as_ms, timestamp};
 use std::net::UdpSocket;
@@ -97,6 +98,7 @@ pub struct Fullnode {
     broadcast_socket: UdpSocket,
     pub node_services: NodeServices,
     pub role_notifiers: (TvuRotationReceiver, TpuRotationReceiver),
+    vote_account_id: Option<Pubkey>,
 }
 
 impl Fullnode {
@@ -205,11 +207,7 @@ impl Fullnode {
                 .collect(),
         };
 
-        let is_leader = if let Some(ref vote_signer) = vote_signer {
-            scheduled_leader == vote_signer.pubkey()
-        } else {
-            false
-        };
+        let vote_account_id = vote_signer.as_ref().map(|x| x.pubkey());
 
         // Setup channels for rotation indications
         let (to_leader_sender, to_leader_receiver) = channel();
@@ -251,7 +249,7 @@ impl Fullnode {
             max_tick_height,
             &last_entry_id,
             keypair.pubkey(),
-            is_leader,
+            Some(scheduled_leader) == vote_account_id,
             &to_validator_sender,
         );
 
@@ -270,6 +268,7 @@ impl Fullnode {
             tpu_sockets: node.sockets.tpu,
             broadcast_socket: node.sockets.broadcast,
             role_notifiers: (to_leader_receiver, to_validator_receiver),
+            vote_account_id,
         }
     }
 
@@ -285,7 +284,7 @@ impl Fullnode {
         // when the new leader schedule was being generated, and there are no other validators
         // in the active set, then the leader scheduler will pick the same leader again, so
         // check for that
-        if scheduled_leader == self.keypair.pubkey() {
+        if Some(scheduled_leader) == self.vote_account_id {
             let (last_entry_id, entry_height) = self.node_services.tvu.get_state();
             self.validator_to_leader(self.bank.tick_height(), entry_height, last_entry_id);
             Ok(())
@@ -306,7 +305,7 @@ impl Fullnode {
         self.cluster_info
             .write()
             .unwrap()
-            .set_leader(self.keypair.pubkey());
+            .set_leader(self.vote_account_id.unwrap());
 
         let max_tick_height = {
             let ls_lock = self.bank.leader_scheduler.read().unwrap();

@@ -449,10 +449,9 @@ pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, 
 
     let (mint_keypair, ledger_path, _, _) =
         create_tmp_sample_ledger(ledger_name, 10_000, 0, node_info.id, 42);
+    let vote_signer = VoteSignerProxy::new();
 
-    let leader_scheduler = LeaderScheduler::from_bootstrap_leader(node_info.id);
-    let vote_account_keypair = Arc::new(Keypair::new());
-    let vote_signer = VoteSignerProxy::new_local(&vote_account_keypair);
+    let leader_scheduler = LeaderScheduler::from_bootstrap_leader(vote_signer.pubkey());
     let node = Fullnode::new(
         node,
         node_keypair,
