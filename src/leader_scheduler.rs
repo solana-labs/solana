@@ -702,7 +702,7 @@ mod tests {
             // Create a vote account
             let vote_signer = VoteSignerProxy::new_local(&Arc::new(new_keypair));
             vote_signer
-                .new_vote_account(&bank, 1 as u64, genesis_block.last_id())
+                .new_vote_account(&bank, 1, genesis_block.last_id())
                 .unwrap();
 
             // Push a vote for the account
@@ -723,7 +723,7 @@ mod tests {
             // Create a vote account
             let vote_signer = VoteSignerProxy::new_local(&Arc::new(new_keypair));
             vote_signer
-                .new_vote_account(&bank, 1 as u64, genesis_block.last_id())
+                .new_vote_account(&bank, 1, genesis_block.last_id())
                 .unwrap();
 
             push_vote(
@@ -1049,7 +1049,7 @@ mod tests {
         let vote_signer = VoteSignerProxy::new_local(&Arc::new(leader_keypair));
         // Create a vote account
         vote_signer
-            .new_vote_account(&bank, 1 as u64, genesis_block.last_id())
+            .new_vote_account(&bank, 1, genesis_block.last_id())
             .unwrap();
 
         // Vote twice
@@ -1195,7 +1195,7 @@ mod tests {
             // Create a vote account
             let vote_signer = VoteSignerProxy::new_local(&Arc::new(validator_keypair));
             vote_signer
-                .new_vote_account(&bank, 1 as u64, genesis_block.last_id())
+                .new_vote_account(&bank, 1, genesis_block.last_id())
                 .unwrap();
 
             push_vote(
@@ -1212,13 +1212,7 @@ mod tests {
         // [(validator, 1), (leader, leader_stake)]. Thus we just need to make sure that
         // seed % (leader_stake + 1) > 0 to make sure that the leader is picked again.
         let seed = LeaderScheduler::calculate_seed(bootstrap_height);
-        let leader_stake = {
-            if seed % 3 == 0 {
-                3
-            } else {
-                2
-            }
-        };
+        let leader_stake = if seed % 3 == 0 { 3 } else { 2 };
 
         let vote_account_tokens = 1;
         bank.transfer(
@@ -1355,7 +1349,7 @@ mod tests {
             .unwrap();
         let vote_signer = VoteSignerProxy::new_local(&Arc::new(validator_keypair));
         vote_signer
-            .new_vote_account(&bank, 1 as u64, genesis_block.last_id())
+            .new_vote_account(&bank, 1, genesis_block.last_id())
             .unwrap();
         push_vote(
             &vote_signer,
@@ -1369,7 +1363,7 @@ mod tests {
             .unwrap();
         let vote_signer = VoteSignerProxy::new_local(&Arc::new(bootstrap_leader_keypair));
         vote_signer
-            .new_vote_account(&bank, 1 as u64, genesis_block.last_id())
+            .new_vote_account(&bank, 1, genesis_block.last_id())
             .unwrap();
 
         // Add leader to the active set
