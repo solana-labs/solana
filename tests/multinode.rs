@@ -965,7 +965,7 @@ fn test_leader_to_validator_transition() {
     // Initialize the leader ledger. Make a mint and a genesis entry
     // in the leader ledger
     let num_ending_ticks = 1;
-    let (_genesis_block, mint_keypair, leader_ledger_path, genesis_entries) =
+    let (_genesis_block, mint_keypair, leader_ledger_path, genesis_entry_height, last_id) =
         create_tmp_sample_ledger(
             "test_leader_to_validator_transition",
             10_000,
@@ -973,11 +973,6 @@ fn test_leader_to_validator_transition() {
             leader_info.id,
             500,
         );
-
-    let last_id = genesis_entries
-        .last()
-        .expect("expected at least one genesis entry")
-        .id;
 
     // Write the bootstrap entries to the ledger that will cause leader rotation
     // after the bootstrap height
@@ -988,7 +983,7 @@ fn test_leader_to_validator_transition() {
         db_ledger
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
-                genesis_entries.len() as u64,
+                genesis_entry_height,
                 &bootstrap_entries,
             )
             .unwrap();
@@ -1110,7 +1105,7 @@ fn test_leader_validator_basic() {
 
     // Make a common mint and a genesis entry for both leader + validator ledgers
     let num_ending_ticks = 1;
-    let (_genesis_block, mint_keypair, leader_ledger_path, genesis_entries) =
+    let (_genesis_block, mint_keypair, leader_ledger_path, genesis_entry_height, last_id) =
         create_tmp_sample_ledger(
             "test_leader_validator_basic",
             10_000,
@@ -1121,11 +1116,6 @@ fn test_leader_validator_basic() {
 
     let validator_ledger_path = tmp_copy_ledger(&leader_ledger_path, "test_leader_validator_basic");
 
-    let last_id = genesis_entries
-        .last()
-        .expect("expected at least one genesis entry")
-        .id;
-
     // Initialize both leader + validator ledger
     let mut ledger_paths = Vec::new();
     ledger_paths.push(leader_ledger_path.clone());
@@ -1133,14 +1123,14 @@ fn test_leader_validator_basic() {
 
     // Write the bootstrap entries to the ledger that will cause leader rotation
     // after the bootstrap height
-    let (active_set_entries, _vote_account_keypair) =
+    let (active_set_entries, _) =
         make_active_set_entries(&validator_keypair, &mint_keypair, &last_id, &last_id, 0);
     {
         let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
         db_ledger
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
-                genesis_entries.len() as u64,
+                genesis_entry_height,
                 &active_set_entries,
             )
             .unwrap();
@@ -1298,7 +1288,7 @@ fn test_dropped_handoff_recovery() {
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
     let num_ending_ticks = 1;
-    let (_genesis_block, mint_keypair, genesis_ledger_path, genesis_entries) =
+    let (_genesis_block, mint_keypair, genesis_ledger_path, genesis_entry_height, last_id) =
         create_tmp_sample_ledger(
             "test_dropped_handoff_recovery",
             10_000,
@@ -1306,11 +1296,6 @@ fn test_dropped_handoff_recovery() {
             bootstrap_leader_info.id,
             500,
         );
-
-    let last_id = genesis_entries
-        .last()
-        .expect("expected at least one genesis entry")
-        .id;
 
     // Create the validator keypair that will be the next leader in line
     let next_leader_keypair = Arc::new(Keypair::new());
@@ -1323,7 +1308,7 @@ fn test_dropped_handoff_recovery() {
 
     // Make the entries to give the next_leader validator some stake so that they will be in
     // leader election active set
-    let (active_set_entries, _vote_account_keypair) =
+    let (active_set_entries, _) =
         make_active_set_entries(&next_leader_keypair, &mint_keypair, &last_id, &last_id, 0);
 
     // Write the entries
@@ -1332,7 +1317,7 @@ fn test_dropped_handoff_recovery() {
         db_ledger
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
-                genesis_entries.len() as u64,
+                genesis_entry_height,
                 &active_set_entries,
             )
             .unwrap();
@@ -1343,9 +1328,7 @@ fn test_dropped_handoff_recovery() {
     ledger_paths.push(next_leader_ledger_path.clone());
 
     // Create the common leader scheduling configuration
-    let initial_tick_height = genesis_entries
-        .iter()
-        .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
+    let initial_tick_height = genesis_entry_height;
     let num_slots_per_epoch = (N + 1) as u64;
     let leader_rotation_interval = 5;
     let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
@@ -1466,7 +1449,7 @@ fn test_full_leader_validator_network() {
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
     let num_ending_ticks = 1;
-    let (_genesis_block, mint_keypair, bootstrap_leader_ledger_path, genesis_entries) =
+    let (_genesis_block, mint_keypair, bootstrap_leader_ledger_path, genesis_entry_height, last_id) =
         create_tmp_sample_ledger(
             "test_full_leader_validator_network",
             10_000,
@@ -1475,15 +1458,8 @@ fn test_full_leader_validator_network() {
             500,
         );
 
-    let last_tick_id = genesis_entries
-        .last()
-        .expect("expected at least one genesis entry")
-        .id;
-
-    let mut last_entry_id = genesis_entries
-        .last()
-        .expect("expected at least one genesis entry")
-        .id;
+    let last_tick_id = last_id;
+    let mut last_entry_id = last_id;
 
     // Create a common ledger with entries in the beginnging that will add all the validators
     // to the active set for leader election. TODO: Leader rotation does not support dynamic
@@ -1493,20 +1469,17 @@ fn test_full_leader_validator_network() {
     let mut ledger_paths = Vec::new();
     ledger_paths.push(bootstrap_leader_ledger_path.clone());
 
-    let mut vote_account_keypairs = VecDeque::new();
-    let mut index = genesis_entries.len() as u64;
+    let mut index = genesis_entry_height;
     for node_keypair in node_keypairs.iter() {
         // Make entries to give each node some stake so that they will be in the
         // leader election active set
-        let (bootstrap_entries, vote_account_keypair) = make_active_set_entries(
+        let (bootstrap_entries, _) = make_active_set_entries(
             node_keypair,
             &mint_keypair,
             &last_entry_id,
             &last_tick_id,
             0,
         );
-
-        vote_account_keypairs.push_back(vote_account_keypair);
 
         // Write the entries
         last_entry_id = bootstrap_entries
@@ -1543,7 +1516,6 @@ fn test_full_leader_validator_network() {
     // 2) Modifying the leader ledger which validators are going to be copying
     // during startup
     let leader_keypair = node_keypairs.pop_front().unwrap();
-    let _leader_vote_keypair = vote_account_keypairs.pop_front().unwrap();
     let mut schedules: Vec<Arc<RwLock<LeaderScheduler>>> = vec![];
     let mut t_nodes = vec![];
 
@@ -1708,21 +1680,21 @@ fn test_broadcast_last_tick() {
     let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
     // Create leader ledger
-    let (_genesis_block, _mint_keypair, bootstrap_leader_ledger_path, genesis_entries) =
-        create_tmp_sample_ledger(
-            "test_broadcast_last_tick",
-            10_000,
-            1,
-            bootstrap_leader_info.id,
-            500,
-        );
+    let (
+        _genesis_block,
+        _mint_keypair,
+        bootstrap_leader_ledger_path,
+        genesis_entry_height,
+        _last_id,
+    ) = create_tmp_sample_ledger(
+        "test_broadcast_last_tick",
+        10_000,
+        1,
+        bootstrap_leader_info.id,
+        500,
+    );
 
-    let num_ending_ticks = genesis_entries
-        .iter()
-        .fold(0, |tick_count, entry| tick_count + entry.is_tick() as u64);
-
-    let genesis_ledger_len = genesis_entries.len() as u64 - num_ending_ticks;
-    debug!("num_ending_ticks: {}", num_ending_ticks);
+    let genesis_ledger_len = genesis_entry_height;
     debug!("genesis_ledger_len: {}", genesis_ledger_len);
     let blob_receiver_exit = Arc::new(AtomicBool::new(false));
 
