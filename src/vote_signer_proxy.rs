@@ -148,7 +148,7 @@ impl VoteSignerProxy {
             );
         }
 
-        let tx = self.new_signed_vote_transaction(&bank.last_id(), bank.tick_height());
+        let tx = Transaction::vote_new(self, bank.tick_height(), bank.last_id(), 0);
 
         match VoteSignerProxy::get_leader_tpu(&bank, cluster_info) {
             Ok(tpu) => {
@@ -172,14 +172,6 @@ impl VoteSignerProxy {
         };
 
         Ok(())
-    }
-
-    pub fn new_signed_vote_transaction(&self, last_id: &Hash, tick_height: u64) -> Transaction {
-        let mut tx = Transaction::vote_new(&self.vote_account, tick_height, *last_id, 0);
-        assert!(tx.signatures.is_empty());
-        let sig = self.sign_message(&tx.message());
-        tx.signatures.push(sig);
-        tx
     }
 
     fn new_signed_vote_blob(&self, tx: &Transaction, leader_tpu: SocketAddr) -> Result<SharedBlob> {
