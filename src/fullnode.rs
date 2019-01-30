@@ -675,7 +675,6 @@ mod tests {
             );
 
             assert!(validator.node_services.tpu.is_leader());
-
             validator.close().expect("Expected leader node to close");
             bootstrap_leader
                 .close()

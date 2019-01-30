@@ -167,11 +167,14 @@ impl Tvu {
     }
 
     pub fn exit(&self) {
-        self.exit.store(true, Ordering::Relaxed);
+        // Call exit to make sure replay stage is unblocked from it's condition variable.
+        // Then replay stage will set the self.exit variable and cause the rest of the
+        // pipeline to exit
+        self.replay_stage.exit();
     }
 
     pub fn close(self) -> thread::Result<Option<TvuReturnType>> {
-        self.fetch_stage.close();
+        self.exit();
         self.join()
     }
 }
