@@ -444,35 +444,27 @@ pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, 
     use crate::vote_signer_proxy::VoteSignerProxy;
     use solana_sdk::signature::KeypairUtil;
 
-    let leader_keypair = Arc::new(Keypair::new());
-    let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-    let leader_data = leader.info.clone();
+    let node_keypair = Arc::new(Keypair::new());
+    let node = Node::new_localhost_with_pubkey(node_keypair.pubkey());
+    let node_info = node.info.clone();
 
-    let (genesis_block, alice) = GenesisBlock::new(10_000);
-    let mut bank = Bank::new(&genesis_block);
+    let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10_000, node_info.id, 42);
     let ledger_path = create_tmp_ledger(ledger_name, &genesis_block);
-    let entry_height = 0;
 
-    let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-        leader_data.id,
-    )));
-    bank.leader_scheduler = leader_scheduler;
+    let leader_scheduler = LeaderScheduler::from_bootstrap_leader(node_info.id);
     let vote_account_keypair = Arc::new(Keypair::new());
     let vote_signer = VoteSignerProxy::new_local(&vote_account_keypair);
-    let last_id = bank.last_id();
-    let server = Fullnode::new_with_bank(
-        leader,
-        leader_keypair,
+    let node = Fullnode::new(
+        node,
+        node_keypair,
         &ledger_path,
-        bank,
-        entry_height,
-        &last_id,
+        Arc::new(RwLock::new(leader_scheduler)),
         Some(Arc::new(vote_signer)),
         None,
         Default::default(),
     );
 
-    (server, leader_data, alice, ledger_path)
+    (node, node_info, mint_keypair, ledger_path)
 }
 
 #[cfg(test)]
