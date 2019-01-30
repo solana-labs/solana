@@ -6,7 +6,6 @@
 use crate::bank::Bank;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
 use crate::fullnode::Fullnode;
-use crate::genesis_block::GenesisBlock;
 use crate::gossip_service::GossipService;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::result::{Error, Result};
@@ -439,7 +438,7 @@ pub fn retry_get_balance(
 
 pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, String) {
     use crate::cluster_info::Node;
-    use crate::db_ledger::create_tmp_ledger;
+    use crate::db_ledger::create_tmp_sample_ledger;
     use crate::leader_scheduler::LeaderScheduler;
     use crate::vote_signer_proxy::VoteSignerProxy;
     use solana_sdk::signature::KeypairUtil;
@@ -448,8 +447,8 @@ pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, 
     let node = Node::new_localhost_with_pubkey(node_keypair.pubkey());
     let node_info = node.info.clone();
 
-    let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10_000, node_info.id, 42);
-    let ledger_path = create_tmp_ledger(ledger_name, &genesis_block);
+    let (_genesis_block, mint_keypair, ledger_path, _, _) =
+        create_tmp_sample_ledger(ledger_name, 10_000, 0, node_info.id, 42);
 
     let leader_scheduler = LeaderScheduler::from_bootstrap_leader(node_info.id);
     let vote_account_keypair = Arc::new(Keypair::new());

@@ -9,7 +9,7 @@ use bincode::deserialize;
 use solana::client::mk_client;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
 use solana::db_ledger::DbLedger;
-use solana::db_ledger::{create_tmp_genesis, get_tmp_ledger_path, tmp_copy_ledger};
+use solana::db_ledger::{create_tmp_sample_ledger, get_tmp_ledger_path, tmp_copy_ledger};
 use solana::entry::Entry;
 use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::leader_scheduler::LeaderScheduler;
@@ -40,8 +40,8 @@ fn test_replicator_startup() {
     let leader_info = leader_node.info.clone();
 
     let leader_ledger_path = "replicator_test_leader_ledger";
-    let (_genesis_block, mint_keypair, leader_ledger_path) =
-        create_tmp_genesis(leader_ledger_path, 1_000_000_000, leader_info.id, 1);
+    let (_genesis_block, mint_keypair, leader_ledger_path, _last_entry_height, _last_entry_id) =
+        create_tmp_sample_ledger(leader_ledger_path, 1_000_000_000, 0, leader_info.id, 1);
 
     let validator_ledger_path =
         tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");
@@ -267,8 +267,8 @@ fn test_replicator_startup_ledger_hang() {
     let leader_info = leader_node.info.clone();
 
     let leader_ledger_path = "replicator_test_leader_ledger";
-    let (_genesis_block, _mint_keypair, leader_ledger_path) =
-        create_tmp_genesis(leader_ledger_path, 100, leader_info.id, 1);
+    let (_genesis_block, _mint_keypair, leader_ledger_path, _last_entry_height, _last_entry_id) =
+        create_tmp_sample_ledger(leader_ledger_path, 100, 0, leader_info.id, 1);
 
     let validator_ledger_path =
         tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");

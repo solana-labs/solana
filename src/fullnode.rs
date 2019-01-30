@@ -463,8 +463,8 @@ mod tests {
 
         let validator_keypair = Keypair::new();
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
-        let (_, _, validator_ledger_path) =
-            create_tmp_genesis("validator_exit", 10_000, leader_keypair.pubkey(), 1000);
+        let (_, _, validator_ledger_path, _, _) =
+            create_tmp_sample_ledger("validator_exit", 10_000, 0, leader_keypair.pubkey(), 1000);
 
         let validator = Fullnode::new(
             validator_node,
@@ -489,9 +489,10 @@ mod tests {
             .map(|i| {
                 let validator_keypair = Keypair::new();
                 let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
-                let (_, _, validator_ledger_path) = create_tmp_genesis(
+                let (_, _, validator_ledger_path, _, _) = create_tmp_sample_ledger(
                     &format!("validator_parallel_exit_{}", i),
                     10_000,
+                    0,
                     leader_keypair.pubkey(),
                     1000,
                 );

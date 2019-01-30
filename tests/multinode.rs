@@ -4,7 +4,7 @@ extern crate log;
 use solana::blob_fetch_stage::BlobFetchStage;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
 use solana::contact_info::ContactInfo;
-use solana::db_ledger::{create_tmp_genesis, create_tmp_sample_ledger, tmp_copy_ledger};
+use solana::db_ledger::{create_tmp_sample_ledger, tmp_copy_ledger};
 use solana::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
 use solana::entry::{reconstruct_entries_from_blobs, Entry};
 use solana::fullnode::{Fullnode, FullnodeReturnType};
@@ -135,8 +135,8 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (genesis_block, alice, leader_ledger_path) =
-        create_tmp_genesis("multi_node_ledger_window", 10_000, leader_data.id, 500);
+    let (genesis_block, alice, leader_ledger_path, _last_entry_height, _last_entry_id) =
+        create_tmp_sample_ledger("multi_node_ledger_window", 10_000, 0, leader_data.id, 500);
     ledger_paths.push(leader_ledger_path.clone());
 
     // make a copy at zero
@@ -236,12 +236,14 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (_genesis_block, alice, genesis_ledger_path) = create_tmp_genesis(
-        "multi_node_validator_catchup_from_zero",
-        10_000,
-        leader_data.id,
-        500,
-    );
+    let (_genesis_block, alice, genesis_ledger_path, _last_entry_height, _last_entry_id) =
+        create_tmp_sample_ledger(
+            "multi_node_validator_catchup_from_zero",
+            10_000,
+            0,
+            leader_data.id,
+            500,
+        );
     ledger_paths.push(genesis_ledger_path.clone());
 
     let zero_ledger_path = tmp_copy_ledger(
@@ -432,8 +434,8 @@ fn test_multi_node_basic() {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (_genesis_block, alice, genesis_ledger_path) =
-        create_tmp_genesis("multi_node_basic", 10_000, leader_data.id, 500);
+    let (_genesis_block, alice, genesis_ledger_path, _last_entry_height, _last_entry_id) =
+        create_tmp_sample_ledger("multi_node_basic", 10_000, 0, leader_data.id, 500);
     ledger_paths.push(genesis_ledger_path.clone());
 
     let leader_ledger_path = tmp_copy_ledger(&genesis_ledger_path, "multi_node_basic");
@@ -539,8 +541,8 @@ fn test_boot_validator_from_file() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (_genesis_block, alice, genesis_ledger_path) =
-        create_tmp_genesis("boot_validator_from_file", 100_000, leader_pubkey, 1000);
+    let (_genesis_block, alice, genesis_ledger_path, _last_entry_height, _last_entry_id) =
+        create_tmp_sample_ledger("boot_validator_from_file", 100_000, 0, leader_pubkey, 1000);
     ledger_paths.push(genesis_ledger_path.clone());
 
     let leader_ledger_path = tmp_copy_ledger(&genesis_ledger_path, "multi_node_basic");
@@ -627,12 +629,14 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
 
     let leader_keypair = Arc::new(Keypair::new());
     let initial_leader_balance = 500;
-    let (_genesis_block, alice, ledger_path) = create_tmp_genesis(
-        "leader_restart_validator_start_from_old_ledger",
-        100_000 + 500 * solana::window_service::MAX_REPAIR_BACKOFF as u64,
-        leader_keypair.pubkey(),
-        initial_leader_balance,
-    );
+    let (_genesis_block, alice, ledger_path, _last_entry_height, _last_entry_id) =
+        create_tmp_sample_ledger(
+            "leader_restart_validator_start_from_old_ledger",
+            100_000 + 500 * solana::window_service::MAX_REPAIR_BACKOFF as u64,
+            0,
+            leader_keypair.pubkey(),
+            initial_leader_balance,
+        );
     let bob_pubkey = Keypair::new().pubkey();
 
     let signer_proxy = Arc::new(VoteSignerProxy::new_local(&leader_keypair));
@@ -736,8 +740,14 @@ fn test_multi_node_dynamic_network() {
     let leader_pubkey = leader_keypair.pubkey().clone();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let bob_pubkey = Keypair::new().pubkey();
-    let (_genesis_block, alice, genesis_ledger_path) =
-        create_tmp_genesis("multi_node_dynamic_network", 10_000_000, leader_pubkey, 500);
+    let (_genesis_block, alice, genesis_ledger_path, _last_entry_height, _last_entry_id) =
+        create_tmp_sample_ledger(
+            "multi_node_dynamic_network",
+            10_000_000,
+            0,
+            leader_pubkey,
+            500,
+        );
 
     let mut ledger_paths = Vec::new();
     ledger_paths.push(genesis_ledger_path.clone());
