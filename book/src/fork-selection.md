@@ -8,17 +8,18 @@ voters need to recover from voting on such forks.
 
 * Many forks may be votable by different voters, and each voter may see a
 different set of votable forks.  The selected forks should eventually converge
-for the network.
+for the cluster.
 
 * Reward based votes have an associated risk.  Voters should have the ability to
 configure how much risk they take on.
 
-* The [cost of rollback](#cost-of-rollback) is important to clients that rely on
-a measure of Consistency.  It needs to be computable, and increase
-super-linearly for older votes.
+* The [cost of rollback](#cost-of-rollback) needs to be computable.  It is
+important to clients that rely on some measurable form of Consistency.  The
+costs to break consistency need to be computable, and increase super-linearly
+for older votes.
 
 * ASIC speeds are different between nodes, and attackers could employ Proof of
-History ASICS that are much faster than the rest of the network.  Consensus
+History ASICS that are much faster than the rest of the cluster.  Consensus
 needs to be resistant to attacks that exploit the variability in Proof of
 History ASIC speed.
 
@@ -107,7 +108,7 @@ votes.
 
 ### Slashing and Rewards
 
-Voters should be rewarded for selecting the fork that the rest of the network
+Voters should be rewarded for selecting the fork that the rest of the cluster
 selected as often as possible.  This is well-aligned with generating a reward
 when the vote stack is full and the oldest vote needs to be dequeued.  Thus a
 reward should be generated for each successful dequeue.
@@ -125,10 +126,10 @@ confirmed *fork A*.
 
 ### Thresholds
 
-Each voter can independently set a threshold of network commitment to a fork
+Each voter can independently set a threshold of cluster commitment to a fork
 before that voter commits to a fork.  For example, at vote stack index 7, the
 lockout is 256 time units.  A voter may withhold votes and let votes 0-7 expire
-unless the vote at index 7 has at greater than 50% commitment in the network.
+unless the vote at index 7 has at greater than 50% commitment in the cluster.
 This allows each voter to independently control how much risk to commit to a
 fork.  Committing to forks at a higher frequency would allow the voter to earn
 more rewards.
@@ -140,9 +141,9 @@ These parameters need to be tuned.
 * Number of votes in the stack before dequeue occurs (32).
 * Rate of growth for lockouts in the stack (2x).
 * Starting default lockout (2).
-* Threshold depth for minimum network commitment before committing to the fork
+* Threshold depth for minimum cluster commitment before committing to the fork
   (8).
-* Minimum network commitment size at threshold depth (50%+).
+* Minimum cluster commitment size at threshold depth (50%+).
 
 ### Free Choice
 
@@ -158,7 +159,7 @@ service.  Two options exits for voter:
 
 * a voter can withhold a vote to observe multiple forks before voting
 
-In both cases, the voters in the network have several forks to pick from
+In both cases, the voters in the cluster have several forks to pick from
 concurrently, even though each fork represents a different height.  In both
 cases it is impossible for the protocol to detect if the voter behavior is
 intentional or not.
@@ -196,14 +197,14 @@ must satisfy the *Greedy Choice* rule.
 3. Fork must have a greater amount of cluster transaction fees.
 
 This attack is then limited to censoring the previous leaders fees, and
-individual transactions.  But it cannot halt the network, or reduce the
+individual transactions.  But it cannot halt the cluster, or reduce the
 validator set compared to the concurrent fork.  Fee censorship is limited to
 access fees going to the leaders but not the validators.
 
 ### ASIC Rollback
 
 An attacker generates a concurrent fork from an older block to try to rollback
-the network.  In this attack the concurrent fork is competing with forks that
+the cluster.  In this attack the concurrent fork is competing with forks that
 have already been voted on.  This attack is limited by the exponential growth of
 the lockouts.
 
