@@ -219,6 +219,7 @@ mod test {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
+    use std::thread::sleep;
     use std::time::Duration;
 
     #[test]
@@ -278,11 +279,22 @@ mod test {
             t_responder
         };
 
-        let mut q = r_retransmit.recv().unwrap();
-        while let Ok(mut nq) = r_retransmit.try_recv() {
-            q.append(&mut nq);
+        let max_attempts = 10;
+        let mut num_attempts = 0;
+        loop {
+            assert!(num_attempts != max_attempts);
+            let mut q = r_retransmit.recv().unwrap();
+            while let Ok(mut nq) = r_retransmit.try_recv() {
+                q.append(&mut nq);
+            }
+            if q.len() != 10 {
+                sleep(Duration::from_millis(100));
+            } else {
+                break;
+            }
+            num_attempts += 1;
         }
-        assert_eq!(q.len(), 10);
+
         exit.store(true, Ordering::Relaxed);
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
