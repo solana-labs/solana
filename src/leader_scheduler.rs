@@ -20,7 +20,8 @@ use std::sync::Arc;
 
 pub const TICKS_PER_BLOCK: u64 = 4;
 pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = TICKS_PER_BLOCK * 256;
-pub const DEFAULT_LEADER_ROTATION_INTERVAL: u64 = TICKS_PER_BLOCK * 32;
+pub const DEFAULT_BLOCKS_PER_SLOT: u64 = 32;
+pub const DEFAULT_LEADER_ROTATION_INTERVAL: u64 = TICKS_PER_BLOCK * DEFAULT_BLOCKS_PER_SLOT;
 pub const DEFAULT_SEED_ROTATION_INTERVAL: u64 = TICKS_PER_BLOCK * 256;
 pub const DEFAULT_ACTIVE_WINDOW_LENGTH: u64 = TICKS_PER_BLOCK * 256;
 
@@ -181,6 +182,15 @@ impl LeaderScheduler {
                 self.leader_rotation_interval
                     - ((height - self.bootstrap_height) % self.leader_rotation_interval),
             )
+        }
+    }
+
+    // Returns the last tick height for a given slot index
+    pub fn max_tick_height_for_slot(&self, slot_index: u64) -> u64 {
+        if self.use_only_bootstrap_leader {
+            std::u64::MAX
+        } else {
+            slot_index * self.leader_rotation_interval + self.bootstrap_height
         }
     }
 
@@ -517,7 +527,7 @@ pub mod tests {
     use crate::genesis_block::GenesisBlock;
     use crate::leader_scheduler::{
         LeaderScheduler, LeaderSchedulerConfig, DEFAULT_BOOTSTRAP_HEIGHT,
-        DEFAULT_LEADER_ROTATION_INTERVAL, DEFAULT_SEED_ROTATION_INTERVAL,
+        DEFAULT_LEADER_ROTATION_INTERVAL, DEFAULT_SEED_ROTATION_INTERVAL, TICKS_PER_BLOCK,
     };
     use crate::vote_signer_proxy::VoteSignerProxy;
     use hashbrown::HashSet;
@@ -963,9 +973,9 @@ pub mod tests {
         // Test when seed_rotation_interval == leader_rotation_interval,
         // only one validator should be selected
         num_validators = 10;
-        bootstrap_height = 1;
-        leader_rotation_interval = 1;
-        seed_rotation_interval = 1;
+        bootstrap_height = TICKS_PER_BLOCK;
+        leader_rotation_interval = TICKS_PER_BLOCK as usize;
+        seed_rotation_interval = TICKS_PER_BLOCK as usize;
         run_scheduler_test(
             num_validators,
             bootstrap_height,
