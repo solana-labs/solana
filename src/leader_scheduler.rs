@@ -18,9 +18,9 @@ use solana_sdk::vote_transaction::VoteTransaction;
 use std::io::Cursor;
 use std::sync::Arc;
 
-pub const TICKS_PER_BLOCK: u64 = 4;
+pub const TICKS_PER_BLOCK: u64 = 128;
 pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = TICKS_PER_BLOCK * 256;
-pub const DEFAULT_BLOCKS_PER_SLOT: u64 = 32;
+pub const DEFAULT_BLOCKS_PER_SLOT: u64 = 1;
 pub const DEFAULT_LEADER_ROTATION_INTERVAL: u64 = TICKS_PER_BLOCK * DEFAULT_BLOCKS_PER_SLOT;
 pub const DEFAULT_SEED_ROTATION_INTERVAL: u64 = TICKS_PER_BLOCK * 256;
 pub const DEFAULT_ACTIVE_WINDOW_LENGTH: u64 = TICKS_PER_BLOCK * 256;
