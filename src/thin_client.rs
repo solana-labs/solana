@@ -598,7 +598,6 @@ mod tests {
 
         const LAST: usize = 30;
         for run in 0..=LAST {
-            println!("Checking for account registered: {}", run);
             let account_user_data = client
                 .get_account_userdata(&vote_account_id)
                 .expect("Expected valid response for account userdata")
