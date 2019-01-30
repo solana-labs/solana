@@ -11,7 +11,7 @@ use crate::genesis_block::GenesisBlock;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::poh_recorder::PohRecorder;
 use crate::runtime::{self, RuntimeError};
-use crate::status_deque::{Status, StatusDeque, MAX_ENTRY_IDS};
+use crate::status_deque::{Status, StatusDeque, StatusDequeError, MAX_ENTRY_IDS};
 use bincode::deserialize;
 use itertools::Itertools;
 use log::Level;
@@ -159,13 +159,14 @@ impl Bank {
             mint_account.tokens -= genesis_block.bootstrap_leader_tokens;
             bootstrap_leader_account.tokens += genesis_block.bootstrap_leader_tokens;
             self.accounts.store_slow(
+                true,
                 &genesis_block.bootstrap_leader_id,
                 &bootstrap_leader_account,
             );
         };
 
         self.accounts
-            .store_slow(&genesis_block.mint_id, &mint_account);
+            .store_slow(true, &genesis_block.mint_id, &mint_account);
         self.register_tick(&genesis_block.last_id());
     }
 
@@ -178,7 +179,7 @@ impl Bank {
             loader: solana_native_loader::id(),
         };
         self.accounts
-            .store_slow(&system_program::id(), &system_program_account);
+            .store_slow(true, &system_program::id(), &system_program_account);
     }
 
     fn add_builtin_programs(&self) {
@@ -193,7 +194,7 @@ impl Bank {
             loader: solana_native_loader::id(),
         };
         self.accounts
-            .store_slow(&vote_program::id(), &vote_program_account);
+            .store_slow(true, &vote_program::id(), &vote_program_account);
 
         // Storage program
         let storage_program_account = Account {
@@ -204,7 +205,7 @@ impl Bank {
             loader: solana_native_loader::id(),
         };
         self.accounts
-            .store_slow(&storage_program::id(), &storage_program_account);
+            .store_slow(true, &storage_program::id(), &storage_program_account);
 
         let storage_system_account = Account {
             tokens: 1,
@@ -214,7 +215,7 @@ impl Bank {
             loader: Pubkey::default(),
         };
         self.accounts
-            .store_slow(&storage_program::system_id(), &storage_system_account);
+            .store_slow(true, &storage_program::system_id(), &storage_system_account);
 
         // Bpf Loader
         let bpf_loader_account = Account {
@@ -226,7 +227,7 @@ impl Bank {
         };
 
         self.accounts
-            .store_slow(&bpf_loader::id(), &bpf_loader_account);
+            .store_slow(true, &bpf_loader::id(), &bpf_loader_account);
 
         // Budget program
         let budget_program_account = Account {
@@ -237,7 +238,7 @@ impl Bank {
             loader: solana_native_loader::id(),
         };
         self.accounts
-            .store_slow(&budget_program::id(), &budget_program_account);
+            .store_slow(true, &budget_program::id(), &budget_program_account);
 
         // Erc20 token program
         let erc20_account = Account {
@@ -249,7 +250,7 @@ impl Bank {
         };
 
         self.accounts
-            .store_slow(&token_program::id(), &erc20_account);
+            .store_slow(true, &token_program::id(), &erc20_account);
     }
 
     /// Return the last entry ID registered.
@@ -430,15 +431,44 @@ impl Bank {
     fn load_accounts(
         &self,
         txs: &[Transaction],
+        results: Vec<Result<()>>,
+        error_counters: &mut ErrorCounters,
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
+        Accounts::load_accounts(&[&self.accounts], txs, results, error_counters)
+    }
+    fn check_signatures(
+        &self,
+        txs: &[Transaction],
         lock_results: Vec<Result<()>>,
         max_age: usize,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
+    ) -> Vec<Result<()>> {
         let mut last_ids = self.last_ids.write().unwrap();
-        self.accounts
-            .load_accounts(txs, &mut last_ids, lock_results, max_age, error_counters)
+        txs.iter()
+            .zip(lock_results.into_iter())
+            .map(|(tx, lock_res)| {
+                if lock_res.is_ok() {
+                    let r = if !last_ids.check_entry_id_age(tx.last_id, max_age) {
+                        Err(StatusDequeError::LastIdNotFound)
+                    } else {
+                        last_ids.reserve_signature_with_last_id(&tx.last_id, &tx.signatures[0])
+                    };
+                    r.map_err(|err| match err {
+                        StatusDequeError::LastIdNotFound => {
+                            error_counters.reserve_last_id += 1;
+                            BankError::LastIdNotFound
+                        }
+                        StatusDequeError::DuplicateSignature => {
+                            error_counters.duplicate_signature += 1;
+                            BankError::DuplicateSignature
+                        }
+                    })
+                } else {
+                    lock_res
+                }
+            })
+            .collect()
     }
-
     #[allow(clippy::type_complexity)]
     fn load_and_execute_transactions(
         &self,
@@ -452,8 +482,8 @@ impl Bank {
         debug!("processing transactions: {}", txs.len());
         let mut error_counters = ErrorCounters::default();
         let now = Instant::now();
-        let mut loaded_accounts =
-            self.load_accounts(txs, lock_results, max_age, &mut error_counters);
+        let sig_results = self.check_signatures(txs, lock_results, max_age, &mut error_counters);
+        let mut loaded_accounts = self.load_accounts(txs, sig_results, &mut error_counters);
         let tick_height = self.tick_height();
 
         let load_elapsed = now.elapsed();
@@ -539,7 +569,8 @@ impl Bank {
         executed: &[Result<()>],
     ) {
         let now = Instant::now();
-        self.accounts.store_accounts(txs, executed, loaded_accounts);
+        self.accounts
+            .store_accounts(true, txs, executed, loaded_accounts);
 
         // Check account subscriptions and send notifications
         self.send_account_notifications(txs, executed, loaded_accounts);
@@ -753,7 +784,7 @@ impl Bank {
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
-        self.accounts.load_slow(pubkey)
+        Accounts::load_slow(&[&self.accounts], pubkey)
     }
 
     pub fn transaction_count(&self) -> u64 {
