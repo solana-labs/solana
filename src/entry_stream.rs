@@ -4,6 +4,7 @@
 
 use crate::entry::Entry;
 use crate::result::Result;
+use chrono::Utc;
 use std::io::prelude::*;
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
@@ -27,8 +28,9 @@ impl EntryStreamHandler for EntryStream {
     fn stream_entries(&mut self, entries: &[Entry]) -> Result<()> {
         let mut socket = UnixStream::connect(Path::new(&self.socket))?;
         for entry in entries {
-            let result = serde_json::to_string(&entry)?;
-            socket.write_all(result.as_bytes())?;
+            let json = serde_json::to_string(&entry)?;
+            let payload = format!(r#"{{"dt":"{}","entry":{}}}"#, Utc::now().to_rfc3339(), json);
+            socket.write_all(payload.as_bytes())?;
         }
         socket.shutdown(Shutdown::Write)?;
         Ok(())
@@ -49,8 +51,9 @@ impl MockEntryStream {
 impl EntryStreamHandler for MockEntryStream {
     fn stream_entries(&mut self, entries: &[Entry]) -> Result<()> {
         for entry in entries {
-            let result = serde_json::to_string(&entry)?;
-            self.socket.push(result);
+            let json = serde_json::to_string(&entry)?;
+            let payload = format!(r#"{{"dt":"{}","entry":{}}}"#, Utc::now().to_rfc3339(), json);
+            self.socket.push(payload);
         }
         Ok(())
     }

@@ -294,6 +294,8 @@ mod test {
     use crate::service::Service;
     use crate::tvu::TvuReturnType;
     use crate::voting_keypair::VotingKeypair;
+    use chrono::{DateTime, FixedOffset};
+    use serde_json::Value;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
@@ -740,7 +742,7 @@ mod test {
         for _ in 0..5 {
             let entry = Entry::new(&mut last_id, 0, 1, vec![]); //just ticks
             last_id = entry.id;
-            expected_entries.push(serde_json::to_string(&entry).unwrap());
+            expected_entries.push(entry.clone());
             entries.push(entry);
         }
         entry_sender
@@ -763,6 +765,17 @@ mod test {
         .unwrap();
 
         assert_eq!(entry_stream.socket.len(), 5);
-        assert_eq!(entry_stream.socket, expected_entries);
+
+        for (i, item) in entry_stream.socket.iter().enumerate() {
+            let json: Value = serde_json::from_str(&item).unwrap();
+            let dt_str = json["dt"].as_str().unwrap();
+
+            // Ensure `ts` field parses as valid DateTime
+            let _dt: DateTime<FixedOffset> = DateTime::parse_from_rfc3339(dt_str).unwrap();
+
+            let entry_obj = json["entry"].clone();
+            let entry: Entry = serde_json::from_value(entry_obj).unwrap();
+            assert_eq!(entry, expected_entries[i]);
+        }
     }
 }
