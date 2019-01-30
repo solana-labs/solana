@@ -463,7 +463,7 @@ mod tests {
 
         let validator_keypair = Keypair::new();
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
-        let (_, _, validator_ledger_path, _, _) =
+        let (_, validator_ledger_path, _, _) =
             create_tmp_sample_ledger("validator_exit", 10_000, 0, leader_keypair.pubkey(), 1000);
 
         let validator = Fullnode::new(
@@ -489,7 +489,7 @@ mod tests {
             .map(|i| {
                 let validator_keypair = Keypair::new();
                 let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
-                let (_, _, validator_ledger_path, _, _) = create_tmp_sample_ledger(
+                let (_, validator_ledger_path, _, _) = create_tmp_sample_ledger(
                     &format!("validator_parallel_exit_{}", i),
                     10_000,
                     0,
@@ -532,19 +532,14 @@ mod tests {
         let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
         // Make a mint and a genesis entries for leader ledger
-        let (
-            _genesis_block,
-            _mint_keypair,
-            bootstrap_leader_ledger_path,
-            _genesis_entry_height,
-            _last_id,
-        ) = create_tmp_sample_ledger(
-            "test_leader_to_leader_transition",
-            10_000,
-            1,
-            bootstrap_leader_keypair.pubkey(),
-            500,
-        );
+        let (_mint_keypair, bootstrap_leader_ledger_path, _genesis_entry_height, _last_id) =
+            create_tmp_sample_ledger(
+                "test_leader_to_leader_transition",
+                10_000,
+                1,
+                bootstrap_leader_keypair.pubkey(),
+                500,
+            );
 
         // Create the common leader scheduling configuration
         let num_slots_per_epoch = 3;
@@ -604,19 +599,14 @@ mod tests {
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
         // Make a common mint and a genesis entry for both leader + validator's ledgers
-        let (
-            _genesis_block,
-            mint_keypair,
-            bootstrap_leader_ledger_path,
-            genesis_entry_height,
-            last_id,
-        ) = create_tmp_sample_ledger(
-            "test_wrong_role_transition",
-            10_000,
-            0,
-            bootstrap_leader_keypair.pubkey(),
-            500,
-        );
+        let (mint_keypair, bootstrap_leader_ledger_path, genesis_entry_height, last_id) =
+            create_tmp_sample_ledger(
+                "test_wrong_role_transition",
+                10_000,
+                0,
+                bootstrap_leader_keypair.pubkey(),
+                500,
+            );
 
         // Write the entries to the ledger that will cause leader rotation
         // after the bootstrap height
@@ -701,7 +691,7 @@ mod tests {
         let leader_id = leader_node.info.id;
 
         // Create validator identity
-        let (_genesis_block, mint_keypair, validator_ledger_path, genesis_entry_height, last_id) =
+        let (mint_keypair, validator_ledger_path, genesis_entry_height, last_id) =
             create_tmp_sample_ledger(
                 "test_validator_to_leader_transition",
                 10_000,

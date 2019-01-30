@@ -447,7 +447,7 @@ pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, 
     let node = Node::new_localhost_with_pubkey(node_keypair.pubkey());
     let node_info = node.info.clone();
 
-    let (_genesis_block, mint_keypair, ledger_path, _, _) =
+    let (mint_keypair, ledger_path, _, _) =
         create_tmp_sample_ledger(ledger_name, 10_000, 0, node_info.id, 42);
 
     let leader_scheduler = LeaderScheduler::from_bootstrap_leader(node_info.id);

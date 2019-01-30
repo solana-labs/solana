@@ -328,7 +328,7 @@ mod test {
 
         // Create a ledger
         let num_ending_ticks = 3;
-        let (_, mint_keypair, my_ledger_path, genesis_entry_height, mut last_id) =
+        let (mint_keypair, my_ledger_path, genesis_entry_height, mut last_id) =
             create_tmp_sample_ledger(
                 "test_replay_stage_leader_rotation_exit",
                 10_000,
@@ -461,7 +461,7 @@ mod test {
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
 
         let num_ending_ticks = 1;
-        let (_, _, my_ledger_path, _, _) = create_tmp_sample_ledger(
+        let (_, my_ledger_path, _, _) = create_tmp_sample_ledger(
             "test_vote_error_replay_stage_correctness",
             10_000,
             num_ending_ticks,
@@ -530,7 +530,7 @@ mod test {
         let leader_id = Keypair::new().pubkey();
 
         // Create the ledger
-        let (_genesis_block, mint_keypair, my_ledger_path, genesis_entry_height, last_id) =
+        let (mint_keypair, my_ledger_path, genesis_entry_height, last_id) =
             create_tmp_sample_ledger(
                 "test_vote_error_replay_stage_leader_rotation",
                 10_000,
