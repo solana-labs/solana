@@ -165,6 +165,8 @@ pub mod tests {
     use bincode::serialize;
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::transaction::Transaction;
+    use solana_sdk::vote_transaction::VoteTransaction;
     use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;
@@ -204,7 +206,7 @@ pub mod tests {
                     .expect("Expected successful creation of account");
 
                 if i < 6 {
-                    let vote_tx = vote_signer.new_signed_vote_transaction(&last_id, (i + 1) as u64);
+                    let vote_tx = Transaction::vote_new(&vote_signer, (i + 1) as u64, last_id, 0);
                     bank.process_transaction(&vote_tx).unwrap();
                 }
                 (vote_signer, validator_keypair)
@@ -222,7 +224,7 @@ pub mod tests {
 
         // Get another validator to vote, so we now have 2/3 consensus
         let vote_signer = &vote_accounts[7].0;
-        let vote_tx = vote_signer.new_signed_vote_transaction(&ids[6], 7);
+        let vote_tx = Transaction::vote_new(vote_signer, 7, ids[6], 0);
         bank.process_transaction(&vote_tx).unwrap();
 
         ComputeLeaderConfirmationService::compute_confirmation(

@@ -2,7 +2,7 @@
 
 use crate::hash::Hash;
 use crate::pubkey::Pubkey;
-use crate::signature::Keypair;
+use crate::signature::{Keypair, KeypairUtil};
 use crate::system_instruction::SystemInstruction;
 use crate::system_program;
 use crate::transaction::{Instruction, Transaction};
@@ -10,7 +10,12 @@ use crate::vote_program::{self, Vote, VoteInstruction};
 use bincode::deserialize;
 
 pub trait VoteTransaction {
-    fn vote_new(vote_account: &Pubkey, tick_height: u64, last_id: Hash, fee: u64) -> Self;
+    fn vote_new<T: KeypairUtil>(
+        vote_account: &T,
+        tick_height: u64,
+        last_id: Hash,
+        fee: u64,
+    ) -> Self;
     fn vote_account_new(
         validator_id: &Keypair,
         vote_account_id: Pubkey,
@@ -23,10 +28,15 @@ pub trait VoteTransaction {
 }
 
 impl VoteTransaction for Transaction {
-    fn vote_new(vote_account: &Pubkey, tick_height: u64, last_id: Hash, fee: u64) -> Self {
+    fn vote_new<T: KeypairUtil>(
+        vote_account: &T,
+        tick_height: u64,
+        last_id: Hash,
+        fee: u64,
+    ) -> Self {
         let vote = Vote { tick_height };
         let instruction = VoteInstruction::NewVote(vote);
-        Transaction::new_unsigned(
+        Transaction::new(
             vote_account,
             &[],
             vote_program::id(),

@@ -499,16 +499,7 @@ pub fn make_active_set_entries(
     last_entry_id = new_vote_account_entry.id;
 
     // 3) Create vote entry
-    let tx = Transaction::vote_new(&vote_account_id, 1, *last_tick_id, 0);
-    let sig = active_keypair.sign_message(&tx.message());
-    let vote_tx = Transaction {
-        signatures: vec![sig],
-        account_keys: tx.account_keys,
-        last_id: tx.last_id,
-        fee: tx.fee,
-        program_ids: tx.program_ids,
-        instructions: tx.instructions,
-    };
+    let vote_tx = Transaction::vote_new(&vote_signer, 1, *last_tick_id, 0);
     let vote_entry = Entry::new(&last_entry_id, 0, 1, vec![vote_tx]);
     last_entry_id = vote_entry.id;
 
@@ -521,6 +512,7 @@ pub fn make_active_set_entries(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::bank::Bank;
     use crate::genesis_block::GenesisBlock;
     use crate::leader_scheduler::{
@@ -544,8 +536,7 @@ mod tests {
     }
 
     fn push_vote(vote_signer: &VoteSignerProxy, bank: &Bank, height: u64, last_id: Hash) {
-        let new_vote_tx = vote_signer.new_signed_vote_transaction(&last_id, height);
-
+        let new_vote_tx = Transaction::vote_new(vote_signer, height, last_id, 0);
         bank.process_transaction(&new_vote_tx).unwrap();
     }
 

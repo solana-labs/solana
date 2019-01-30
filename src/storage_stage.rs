@@ -604,16 +604,7 @@ mod tests {
         }
         let mut vote_txs: Vec<Transaction> = Vec::new();
         let keypair = Keypair::new();
-        let tx = Transaction::vote_new(&keypair.pubkey(), 123456, Hash::default(), 1);
-        let sig = keypair.sign_message(&tx.message());
-        let vote_tx = Transaction {
-            signatures: vec![sig],
-            account_keys: tx.account_keys,
-            last_id: tx.last_id,
-            fee: tx.fee,
-            program_ids: tx.program_ids,
-            instructions: tx.instructions,
-        };
+        let vote_tx = Transaction::vote_new(&keypair, 123456, Hash::default(), 1);
         vote_txs.push(vote_tx);
         let vote_entries = vec![Entry::new(&Hash::default(), 0, 1, vote_txs)];
         storage_entry_sender.send(vote_entries).unwrap();
