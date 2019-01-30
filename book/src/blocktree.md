@@ -1,4 +1,4 @@
-# Entry Tree
+# Blocktree
 
 This document proposes a change to ledger and window to support Solana's [fork
 generation](fork-generation.md) behavior.
@@ -72,30 +72,30 @@ follow, which Entries to persist or when to persist them.
 
 Repair requests for recent blobs are served out of RAM or recent files and out
 of deeper storage for less recent blobs, as implemented by the store backing
-EntryTree.
+Blocktree.
 
-### Functionalities of EntryTree
+### Functionalities of Blocktree
 
-1. Persistence: the EntryTree lives in the front of the nodes verification
+1. Persistence: the Blocktree lives in the front of the nodes verification
    pipeline, right behind network receive and signature verification.  If the
 blob received is consistent with the leader schedule (i.e. was signed by the
 leader for the indicated slot), it is immediately stored.
 2. Repair: repair is the same as window repair above, but able to serve any
-   blob that's been received. EntryTree stores blobs with signatures,
+   blob that's been received. Blocktree stores blobs with signatures,
 preserving the chain of origination.
-3. Forks: EntryTree supports random access of blobs, so can support a
+3. Forks: Blocktree supports random access of blobs, so can support a
    validator's need to rollback and replay from a Bank checkpoint.
-4. Restart: with proper pruning/culling, the EntryTree can be replayed by
+4. Restart: with proper pruning/culling, the Blocktree can be replayed by
    ordered enumeration of entries from slot 0.  The logic of the replay stage
 (i.e. dealing with forks) will have to be used for the most recent entries in
-the EntryTree.
+the Blocktree.
 
-### EntryTree Design
+### Blocktree Design
 
-1. Entries in the EntryTree are stored as key-value pairs, where the key is the concatenated
+1. Entries in the Blocktree are stored as key-value pairs, where the key is the concatenated
 slot index and blob index for an entry, and the value is the entry data. Note blob indexes are zero-based for each slot (i.e. they're slot-relative).
 
-2. The EntryTree maintains metadata for each slot, in the `SlotMeta` struct containing:
+2. The Blocktree maintains metadata for each slot, in the `SlotMeta` struct containing:
       * `slot_index` - The index of this slot
       * `num_blocks` - The number of blocks in the slot (used for chaining to a previous slot)
       * `consumed` - The highest blob index `n`, such that for all `m < n`, there exists a blob in this slot with blob index equal to `n` (i.e. the highest consecutive blob index).
@@ -110,18 +110,18 @@ slot index and blob index for an entry, and the value is the entry data. Note bl
 
 3. Chaining - When a blob for a new slot `x` arrives, we check the number of blocks (`num_blocks`) for that new slot (this information is encoded in the blob). We then know that this new slot chains to slot `x - num_blocks`.
 
-4. Subscriptions - The EntryTree records a set of slots that have been "subscribed" to. This means entries that chain to these slots will be sent on the EntryTree channel for consumption by the ReplayStage. See the `EntryTree APIs` for details.
+4. Subscriptions - The Blocktree records a set of slots that have been "subscribed" to. This means entries that chain to these slots will be sent on the Blocktree channel for consumption by the ReplayStage. See the `Blocktree APIs` for details.
 
-5. Update notifications - The EntryTree notifies listeners when slot(n).is_trunk is flipped from false to true for any `n`. 
+5. Update notifications - The Blocktree notifies listeners when slot(n).is_trunk is flipped from false to true for any `n`. 
 
-### EntryTree APIs
+### Blocktree APIs
 
-The EntryTree offers a subscription based API that ReplayStage uses to ask for entries it's interested in. The entries will be sent on a channel exposed by the EntryTree. These subscription API's are as follows:
+The Blocktree offers a subscription based API that ReplayStage uses to ask for entries it's interested in. The entries will be sent on a channel exposed by the Blocktree. These subscription API's are as follows:
    1. `fn get_slots_since(slot_indexes: &[u64]) -> Vec<SlotMeta>`: Returns new slots connecting to any element of the list `slot_indexes`.
 
    2. `fn get_slot_entries(slot_index: u64, entry_start_index: usize, max_entries: Option<u64>) -> Vec<Entry>`: Returns the entry vector for the slot starting with `entry_start_index`, capping the result at `max` if `max_entries == Some(max)`, otherwise, no upper limit on the length of the return vector is imposed.
 
-Note: Cumulatively, this means that the replay stage will now have to know when a slot is finished, and subscribe to the next slot it's interested in to get the next set of entries. Previously, the burden of chaining slots fell on the EntryTree.
+Note: Cumulatively, this means that the replay stage will now have to know when a slot is finished, and subscribe to the next slot it's interested in to get the next set of entries. Previously, the burden of chaining slots fell on the Blocktree.
 
 ### Interfacing with Bank
 
@@ -138,16 +138,16 @@ The bank exposes to replay stage:
     3. `lockout period`: how long a chain must be observed to be in the ledger to
        be able to be chained below this vote
 
-Replay stage uses EntryTree APIs to find the longest chain of entries it can
+Replay stage uses Blocktree APIs to find the longest chain of entries it can
 hang off a previous vote.  If that chain of entries does not hang off the
 latest vote, the replay stage rolls back the bank to that vote and replays the
 chain from there.
 
-### Pruning EntryTree
+### Pruning Blocktree
 
-Once EntryTree entries are old enough, representing all the possible forks
+Once Blocktree entries are old enough, representing all the possible forks
 becomes less useful, perhaps even problematic for replay upon restart.  Once a
-validator's votes have reached max lockout, however, any EntryTree contents
+validator's votes have reached max lockout, however, any Blocktree contents
 that are not on the PoH chain for that vote for can be pruned, expunged.
 
 Replicator nodes will be responsible for storing really old ledger contents,

@@ -791,11 +791,11 @@ impl DbLedger {
     }
 }
 
-// TODO: all this goes away with EntryTree
+// TODO: all this goes away with Blocktree
 struct EntryIterator {
     db_iterator: DBRawIterator,
 
-    // TODO: remove me when replay_stage is iterating by block (EntryTree)
+    // TODO: remove me when replay_stage is iterating by block (Blocktree)
     //    this verification is duplicating that of replay_stage, which
     //    can do this in parallel
     last_id: Option<Hash>,
