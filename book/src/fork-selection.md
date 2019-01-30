@@ -1,5 +1,7 @@
-# Fork Selection This article describes Solana's *Fork Selection* algorithm
-based on lockouts. It attempts to solve the following problems:
+# Fork Selection
+
+This article describes Solana's *Fork Selection* algorithm based on lockouts. It
+attempts to solve the following problems:
 
 * Some forks may not end up accepted by the super-majority of the cluster, and
 voters need to recover from voting on such forks.
