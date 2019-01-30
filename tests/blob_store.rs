@@ -84,7 +84,7 @@ fn test_insert_noncontiguous_blobs() {
         .collect::<Vec<Vec<u8>>>();
 
     let retrieved: Result<Vec<_>> = store
-        .slot_data_from(0, 0..)
+        .slot_data_from(0, 0)
         .expect("couldn't create slot daaa iterator")
         .collect();
     let retrieved = retrieved.expect("Bad iterator somehow or something");

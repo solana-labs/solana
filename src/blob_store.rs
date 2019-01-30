@@ -227,9 +227,9 @@ impl Store {
     pub fn slot_data_from(
         &self,
         slot: u64,
-        range: std::ops::RangeFrom<u64>,
+        start_index: u64,
     ) -> Result<impl Iterator<Item = Result<Vec<u8>>>> {
-        self.slot_data(slot, range.start..std::u64::MAX)
+        self.slot_data(slot, start_index..std::u64::MAX)
     }
 
     pub fn slot_data_range(
@@ -261,9 +261,9 @@ impl Store {
     pub fn slot_entries_from(
         &self,
         slot: u64,
-        range: std::ops::RangeFrom<u64>,
+        start_index: u64,
     ) -> Result<impl Iterator<Item = Result<Entry>>> {
-        self.slot_entries_range(slot, range.start..std::u64::MAX)
+        self.slot_entries_range(slot, start_index..std::u64::MAX)
     }
 
     pub fn slot_entries_range(

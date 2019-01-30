@@ -1,7 +1,7 @@
 use crate::packet::{Blob, BlobError, BLOB_HEADER_SIZE};
 use crate::result::Error as SErr;
 
-use byteorder::{BigEndian, ByteOrder};
+use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
 
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -17,7 +17,8 @@ const INDEX_FILE_NAME: &str = "index";
 pub(super) const ERASURE_FILE_NAME: &str = "erasure";
 pub(super) const ERASURE_INDEX_FILE_NAME: &str = "erasure_index";
 
-const DATA_FILE_BUF_SIZE: usize = 64 * 1024 * 32;
+//const DATA_FILE_BUF_SIZE: usize = 2 * 1024 * 1024;
+const DATA_FILE_BUF_SIZE: usize = 64 * 1024;
 
 pub(super) const INDEX_RECORD_SIZE: u64 = 3 * 8;
 
@@ -133,7 +134,6 @@ impl Store {
     {
         let mut blobs: Vec<_> = iter.into_iter().collect();
         assert!(!blobs.is_empty());
-        println!("insert_blobs: inserting {} blobs", blobs.len());
 
         // sort on lexi order (slot_idx, blob_idx)
         // TODO: this sort may cause panics while malformed blobs result in `Result`s elsewhere
@@ -160,14 +160,7 @@ impl Store {
                 .or_insert(index..(index + 1));
         }
 
-        println!("insert_blobs: arranged slots and stuff");
-
         for (slot, range) in slot_ranges {
-            println!("insert_blobs: slot = {}", slot);
-            println!(
-                "insert_blobs: range.start = {}, range.end = {}",
-                range.start, range.end
-            );
             let slot_path = self.mk_slot_path(slot);
             ensure_slot(&slot_path)?;
 
@@ -177,18 +170,6 @@ impl Store {
                 slot_path.join(store_impl::INDEX_FILE_NAME),
             );
 
-            println!(
-                "insert_blobs: paths: data = {}",
-                data_path.to_string_lossy()
-            );
-            println!(
-                "insert_blobs: paths: meta = {}",
-                meta_path.to_string_lossy()
-            );
-            println!(
-                "insert_blobs: paths: index = {}",
-                index_path.to_string_lossy()
-            );
             // load meta_data
             let (mut meta_file, mut meta) = if meta_path.exists() {
                 let mut f = OpenOptions::new().read(true).write(true).open(&meta_path)?;
@@ -207,30 +188,26 @@ impl Store {
                 )
             };
 
-            println!("insert_blobs: loaded meta data: {:?}", meta);
+            let slot_blobs = &blobs[range];
+            let mut idx_buf = Vec::with_capacity(slot_blobs.len() * INDEX_RECORD_SIZE as usize);
 
             let mut data_wtr =
                 BufWriter::with_capacity(DATA_FILE_BUF_SIZE, open_append(&data_path)?);
-            let mut index_wtr = BufWriter::new(open_append(&index_path)?);
-            let slot_blobs = &blobs[range];
-            let mut blob_indices = Vec::with_capacity(slot_blobs.len());
-
-            let mut idx_buf = [0u8; INDEX_RECORD_SIZE as usize];
+            let mut offset = data_wtr.seek(SeekFrom::Current(0))?;
+            let mut blob_slices_to_write = Vec::with_capacity(slot_blobs.len());
 
             for blob in slot_blobs {
                 let blob = blob.borrow();
                 let blob_index = blob.index().map_err(bad_blob)?;
                 let blob_size = blob.size().map_err(bad_blob)?;
 
-                let offset = data_wtr.seek(SeekFrom::Current(0))?;
-                // TODO: blob.size() is wrong here, but should be right
-                let serialized_blob_datas = &blob.data[..BLOB_HEADER_SIZE + blob_size];
+                let serialized_blob_data = &blob.data[..BLOB_HEADER_SIZE + blob_size];
                 let serialized_entry_data = &blob.data[BLOB_HEADER_SIZE..];
                 let entry: Entry = bincode::deserialize(serialized_entry_data)
                     .expect("Blobs must be well formed by the time they reach the ledger");
 
-                data_wtr.write_all(&serialized_blob_datas)?;
-                let data_len = serialized_blob_datas.len() as u64;
+                blob_slices_to_write.push(serialized_blob_data);
+                let data_len = serialized_blob_data.len() as u64;
 
                 let blob_idx = BlobIndex {
                     index: blob_index,
@@ -238,15 +215,13 @@ impl Store {
                     offset,
                 };
 
-                BigEndian::write_u64(&mut idx_buf[0..8], blob_idx.index);
-                BigEndian::write_u64(&mut idx_buf[8..16], blob_idx.offset);
-                BigEndian::write_u64(&mut idx_buf[16..24], blob_idx.size);
+                offset += data_len;
 
-                // update index file
-                // TODO: batch writes for outer loop
-                blob_indices.push(blob_idx);
-                println!("insert_blobs: blob_idx = {:?}", blob_idx);
-                index_wtr.write_all(&idx_buf)?;
+                // Write indices to buffer, which will be written to index file
+                // in the outer (per-slot) loop
+                idx_buf.write_u64::<BigEndian>(blob_idx.index)?;
+                idx_buf.write_u64::<BigEndian>(blob_idx.offset)?;
+                idx_buf.write_u64::<BigEndian>(blob_idx.size)?;
 
                 // update meta. write to file once in outer loop
                 if blob_index > meta.received {
@@ -263,9 +238,15 @@ impl Store {
                 }
             }
 
-            println!("insert_blobs: saving meta data: {:?}", meta);
+            let mut index_wtr = BufWriter::new(open_append(&index_path)?);
+
+            // write blob slices
+            for slice in blob_slices_to_write {
+                data_wtr.write_all(slice)?;
+            }
 
             bincode::serialize_into(&mut meta_file, &meta)?;
+            index_wtr.write_all(&idx_buf)?;
 
             data_wtr.flush()?;
             let data_f = data_wtr.into_inner()?;
@@ -298,7 +279,7 @@ impl Store {
         let index_rdr = File::open(&index_path)?;
 
         let index_size = index_rdr.metadata()?.len();
-        println!("slot_data: index_size = {}", index_size);
+
         let mut index_rdr = BufReader::new(index_rdr);
         let mut buf = [0u8; INDEX_RECORD_SIZE as usize];
         let mut blob_indices: Vec<BlobIndex> =
@@ -321,7 +302,6 @@ impl Store {
         }
 
         blob_indices.sort_unstable_by_key(|bix| bix.index);
-        println!("slot_data: blob_indices: {:#?}", blob_indices);
 
         let data_rdr = BufReader::new(File::open(&data_path)?);
 
