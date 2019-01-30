@@ -383,8 +383,8 @@ impl DbLedger {
             .enumerate()
             .map(|(idx, entry)| {
                 let mut b = entry.borrow().to_blob();
-                b.set_index(idx as u64 + index).unwrap();
-                b.set_slot(slot).unwrap();
+                b.set_index(idx as u64 + index);
+                b.set_slot(slot);
                 b
             })
             .collect();
@@ -403,12 +403,7 @@ impl DbLedger {
             return Ok(vec![]);
         }
 
-        new_blobs.sort_unstable_by(|b1, b2| {
-            b1.borrow()
-                .index()
-                .unwrap()
-                .cmp(&b2.borrow().index().unwrap())
-        });
+        new_blobs.sort_unstable_by(|b1, b2| b1.borrow().index().cmp(&b2.borrow().index()));
 
         let meta_key = MetaCf::key(DEFAULT_SLOT_HEIGHT);
 
@@ -425,10 +420,10 @@ impl DbLedger {
 
         // TODO: Handle if leader sends different blob for same index when the index > consumed
         // The old window implementation would just replace that index.
-        let lowest_index = new_blobs[0].borrow().index()?;
-        let lowest_slot = new_blobs[0].borrow().slot()?;
-        let highest_index = new_blobs.last().unwrap().borrow().index()?;
-        let highest_slot = new_blobs.last().unwrap().borrow().slot()?;
+        let lowest_index = new_blobs[0].borrow().index();
+        let lowest_slot = new_blobs[0].borrow().slot();
+        let highest_index = new_blobs.last().unwrap().borrow().index();
+        let highest_slot = new_blobs.last().unwrap().borrow().slot();
         if lowest_index < meta.consumed {
             return Err(Error::DbLedgerError(DbLedgerError::BlobForIndexExists));
         }
@@ -458,7 +453,7 @@ impl DbLedger {
                     let mut found_blob = None;
                     while index_into_blob < new_blobs.len() {
                         let new_blob = new_blobs[index_into_blob].borrow();
-                        let index = new_blob.index()?;
+                        let index = new_blob.index();
 
                         // Skip over duplicate blobs with the same index and continue
                         // until we either find the index we're looking for, or detect
@@ -477,9 +472,9 @@ impl DbLedger {
                     // If we found the blob in the new_blobs vector, process it, otherwise,
                     // look for the blob in the database.
                     if let Some(next_blob) = found_blob {
-                        current_slot = next_blob.slot()?;
-                        let serialized_entry_data = &next_blob.data
-                            [BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + next_blob.size()?];
+                        current_slot = next_blob.slot();
+                        let serialized_entry_data =
+                            &next_blob.data[BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + next_blob.size()];
                         // Verify entries can actually be reconstructed
                         deserialize(serialized_entry_data).expect(
                             "Blob made it past validation, so must be deserializable at this point",
@@ -521,8 +516,8 @@ impl DbLedger {
 
         for blob in new_blobs {
             let blob = blob.borrow();
-            let key = DataCf::key(blob.slot()?, blob.index()?);
-            let serialized_blob_datas = &blob.data[..BLOB_HEADER_SIZE + blob.size()?];
+            let key = DataCf::key(blob.slot(), blob.index());
+            let serialized_blob_datas = &blob.data[..BLOB_HEADER_SIZE + blob.size()];
             batch.put_cf(self.data_cf.handle(), &key, serialized_blob_datas)?;
         }
 
@@ -539,7 +534,7 @@ impl DbLedger {
         let mut meta = {
             if let Some(meta) = self.meta_cf.get(&meta_key)? {
                 let first = blobs[0].read().unwrap();
-                assert_eq!(meta.consumed, first.index()?);
+                assert_eq!(meta.consumed, first.index());
                 meta
             } else {
                 SlotMeta::new()
@@ -548,18 +543,18 @@ impl DbLedger {
 
         {
             let last = blobs.last().unwrap().read().unwrap();
-            meta.consumed = last.index()? + 1;
-            meta.consumed_slot = last.slot()?;
-            meta.received = cmp::max(meta.received, last.index()? + 1);
-            meta.received_slot = cmp::max(meta.received_slot, last.index()?);
+            meta.consumed = last.index() + 1;
+            meta.consumed_slot = last.slot();
+            meta.received = cmp::max(meta.received, last.index() + 1);
+            meta.received_slot = cmp::max(meta.received_slot, last.index());
         }
 
         let mut batch = WriteBatch::default();
         batch.put_cf(self.meta_cf.handle(), &meta_key, &serialize(&meta)?)?;
         for blob in blobs {
             let blob = blob.read().unwrap();
-            let key = DataCf::key(blob.slot()?, blob.index()?);
-            let serialized_blob_datas = &blob.data[..BLOB_HEADER_SIZE + blob.size()?];
+            let key = DataCf::key(blob.slot(), blob.index());
+            let serialized_blob_datas = &blob.data[..BLOB_HEADER_SIZE + blob.size()];
             batch.put_cf(self.data_cf.handle(), &key, serialized_blob_datas)?;
         }
         self.db.write(batch)?;
@@ -661,8 +656,8 @@ impl DbLedger {
         let bytes = self.get_data_blob_bytes(slot, index)?;
         Ok(bytes.map(|bytes| {
             let blob = Blob::new(&bytes);
-            assert!(blob.slot().unwrap() == slot);
-            assert!(blob.index().unwrap() == index);
+            assert!(blob.slot() == slot);
+            assert!(blob.index() == index);
             blob
         }))
     }
@@ -849,9 +844,9 @@ where
         .enumerate()
         .map(|(idx, entry)| {
             let mut b = entry.borrow().to_blob();
-            b.set_index(idx as u64).unwrap();
-            b.set_id(&keypair.pubkey()).unwrap();
-            b.set_slot(DEFAULT_SLOT_HEIGHT).unwrap();
+            b.set_index(idx as u64);
+            b.set_id(&keypair.pubkey());
+            b.set_slot(DEFAULT_SLOT_HEIGHT);
             b
         })
         .collect();
@@ -1056,7 +1051,7 @@ mod tests {
         let shared_blobs = entries.to_shared_blobs();
 
         for (i, b) in shared_blobs.iter().enumerate() {
-            b.write().unwrap().set_index(i as u64).unwrap();
+            b.write().unwrap().set_index(i as u64);
         }
 
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
@@ -1099,7 +1094,7 @@ mod tests {
         let entries = make_tiny_test_entries(num_blobs);
         let shared_blobs = entries.to_shared_blobs();
         for (i, b) in shared_blobs.iter().enumerate() {
-            b.write().unwrap().set_index(i as u64).unwrap();
+            b.write().unwrap().set_index(i as u64);
         }
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
@@ -1136,7 +1131,7 @@ mod tests {
         let entries = make_tiny_test_entries(num_blobs);
         let shared_blobs = entries.to_shared_blobs();
         for (i, b) in shared_blobs.iter().enumerate() {
-            b.write().unwrap().set_index(i as u64).unwrap();
+            b.write().unwrap().set_index(i as u64);
         }
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
@@ -1186,8 +1181,8 @@ mod tests {
 
             for (i, b) in shared_blobs.iter().enumerate() {
                 let mut w_b = b.write().unwrap();
-                w_b.set_index(1 << (i * 8)).unwrap();
-                w_b.set_slot(DEFAULT_SLOT_HEIGHT).unwrap();
+                w_b.set_index(1 << (i * 8));
+                w_b.set_slot(DEFAULT_SLOT_HEIGHT);
             }
 
             assert_eq!(
@@ -1228,8 +1223,8 @@ mod tests {
             let shared_blobs = original_entries.clone().to_shared_blobs();
             for (i, b) in shared_blobs.iter().enumerate() {
                 let mut w_b = b.write().unwrap();
-                w_b.set_index(i as u64).unwrap();
-                w_b.set_slot(i as u64).unwrap();
+                w_b.set_index(i as u64);
+                w_b.set_slot(i as u64);
             }
 
             assert_eq!(
@@ -1275,8 +1270,8 @@ mod tests {
             for (i, b) in shared_blobs.iter().enumerate() {
                 let index = (i / 2) as u64;
                 let mut w_b = b.write().unwrap();
-                w_b.set_index(index).unwrap();
-                w_b.set_slot(index).unwrap();
+                w_b.set_index(index);
+                w_b.set_slot(index);
             }
 
             assert_eq!(
@@ -1325,8 +1320,8 @@ mod tests {
             let shared_blobs = original_entries.to_shared_blobs();
             for (i, b) in shared_blobs.iter().enumerate() {
                 let mut w_b = b.write().unwrap();
-                w_b.set_index(i as u64).unwrap();
-                w_b.set_slot(i as u64).unwrap();
+                w_b.set_index(i as u64);
+                w_b.set_slot(i as u64);
             }
 
             db_ledger
@@ -1342,8 +1337,8 @@ mod tests {
 
             for (i, b) in shared_blobs.iter().enumerate() {
                 let mut w_b = b.write().unwrap();
-                w_b.set_index(num_entries + i as u64).unwrap();
-                w_b.set_slot(num_entries + i as u64).unwrap();
+                w_b.set_index(num_entries + i as u64);
+                w_b.set_slot(num_entries + i as u64);
             }
 
             db_ledger

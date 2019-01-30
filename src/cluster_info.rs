@@ -537,10 +537,7 @@ impl ClusterInfo {
             let s = obj.read().unwrap();
             (s.my_data().clone(), peers)
         };
-        blob.write()
-            .unwrap()
-            .set_id(&me.id)
-            .expect("set_id in pub fn retransmit");
+        blob.write().unwrap().set_id(&me.id);
         let rblob = blob.read().unwrap();
         trace!("retransmit orders {}", orders.len());
         let errs: Vec<_> = orders
@@ -549,7 +546,7 @@ impl ClusterInfo {
                 debug!(
                     "{}: retransmit blob {} to {} {}",
                     me.id,
-                    rblob.index().unwrap(),
+                    rblob.index(),
                     v.id,
                     v.tvu,
                 );
@@ -594,7 +591,7 @@ impl ClusterInfo {
                     trace!(
                         "{}: BROADCAST idx: {} sz: {} to {:?} coding: {}",
                         id,
-                        blob.index().unwrap(),
+                        blob.index(),
                         blob.meta.size,
                         ids_and_tvus,
                         blob.is_coding()
@@ -1369,8 +1366,8 @@ mod tests {
             {
                 let mut w_blob = blob.write().unwrap();
                 w_blob.set_size(data_size);
-                w_blob.set_index(1).expect("set_index()");
-                w_blob.set_slot(2).expect("set_slot()");
+                w_blob.set_index(1);
+                w_blob.set_slot(2);
                 w_blob.meta.size = data_size + BLOB_HEADER_SIZE;
             }
 
@@ -1382,8 +1379,8 @@ mod tests {
                 ClusterInfo::run_window_request(&me, &socketaddr_any!(), Some(&db_ledger), &me, 1);
             assert!(!rv.is_empty());
             let v = rv[0].clone();
-            assert_eq!(v.read().unwrap().index().unwrap(), 1);
-            assert_eq!(v.read().unwrap().slot().unwrap(), 2);
+            assert_eq!(v.read().unwrap().index(), 1);
+            assert_eq!(v.read().unwrap().slot(), 2);
             assert_eq!(v.read().unwrap().meta.size, BLOB_HEADER_SIZE + data_size);
         }
 
