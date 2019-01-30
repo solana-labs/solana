@@ -17,8 +17,7 @@ fn test_wallet_deploy_program() {
     pathbuf.push("noop");
     pathbuf.set_extension("so");
 
-    let (server, leader_data, _genesis_block, alice, ledger_path) =
-        new_fullnode("test_wallet_deploy_program");
+    let (server, leader_data, alice, ledger_path) = new_fullnode("test_wallet_deploy_program");
 
     let (sender, receiver) = channel();
     run_local_drone(alice, sender);

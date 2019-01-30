@@ -1,9 +1,11 @@
 use bincode::serialize;
+use log::*;
 use reqwest;
 use reqwest::header::CONTENT_TYPE;
 use serde_json::{json, Value};
 use solana::rpc_request::get_rpc_request_str;
 use solana::thin_client::new_fullnode;
+use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
@@ -12,12 +14,34 @@ use std::thread::sleep;
 use std::time::Duration;
 
 #[test]
-#[ignore]
 fn test_rpc_send_tx() {
-    let (server, leader_data, genesis_block, alice, ledger_path) = new_fullnode("test_rpc_send_tx");
+    solana_logger::setup();
+
+    let (server, leader_data, alice, ledger_path) = new_fullnode("test_rpc_send_tx");
     let bob_pubkey = Keypair::new().pubkey();
 
-    let last_id = genesis_block.last_id();
+    let client = reqwest::Client::new();
+    let request = json!({
+       "jsonrpc": "2.0",
+       "id": 1,
+       "method": "getLastId",
+       "params": json!([])
+    });
+    let rpc_addr = leader_data.rpc;
+    let rpc_string = get_rpc_request_str(rpc_addr, false);
+    let mut response = client
+        .post(&rpc_string)
+        .header(CONTENT_TYPE, "application/json")
+        .body(request.to_string())
+        .send()
+        .unwrap();
+    let json: Value = serde_json::from_str(&response.text().unwrap()).unwrap();
+    let last_id_vec = bs58::decode(json["result"].as_str().unwrap())
+        .into_vec()
+        .unwrap();
+    let last_id = Hash::new(&last_id_vec);
+
+    info!("last_id: {:?}", last_id);
     let tx = Transaction::system_move(&alice, bob_pubkey, 20, last_id, 0);
     let serial_tx = serialize(&tx).unwrap();
 
@@ -49,7 +73,7 @@ fn test_rpc_send_tx() {
        "params": [signature],
     });
 
-    for _ in 0..5 {
+    for _ in 0..10 {
         let mut response = client
             .post(&rpc_string)
             .header(CONTENT_TYPE, "application/json")
@@ -64,7 +88,7 @@ fn test_rpc_send_tx() {
             break;
         }
 
-        sleep(Duration::from_millis(250));
+        sleep(Duration::from_millis(500));
     }
 
     assert_eq!(confirmed_tx, true);

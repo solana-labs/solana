@@ -437,9 +437,7 @@ pub fn retry_get_balance(
     None
 }
 
-pub fn new_fullnode(
-    ledger_name: &'static str,
-) -> (Fullnode, NodeInfo, GenesisBlock, Keypair, String) {
+pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, String) {
     use crate::cluster_info::Node;
     use crate::db_ledger::create_tmp_ledger;
     use crate::leader_scheduler::LeaderScheduler;
@@ -474,7 +472,7 @@ pub fn new_fullnode(
         Default::default(),
     );
 
-    (server, leader_data, genesis_block, alice, ledger_path)
+    (server, leader_data, alice, ledger_path)
 }
 
 #[cfg(test)]
@@ -491,7 +489,7 @@ mod tests {
     #[test]
     fn test_thin_client() {
         solana_logger::setup();
-        let (server, leader_data, _genesis_block, alice, ledger_path) = new_fullnode("thin_client");
+        let (server, leader_data, alice, ledger_path) = new_fullnode("thin_client");
         let bob_pubkey = Keypair::new().pubkey();
 
         sleep(Duration::from_millis(900));
@@ -519,7 +517,7 @@ mod tests {
     fn test_bad_sig() {
         solana_logger::setup();
 
-        let (server, leader_data, _genesis_block, alice, ledger_path) = new_fullnode("bad_sig");
+        let (server, leader_data, alice, ledger_path) = new_fullnode("bad_sig");
         let bob_pubkey = Keypair::new().pubkey();
 
         //TODO: remove this sleep, or add a retry so CI is stable
@@ -553,7 +551,7 @@ mod tests {
     #[test]
     fn test_client_check_signature() {
         solana_logger::setup();
-        let (server, leader_data, _genesis_block, alice, ledger_path) = new_fullnode("thin_client");
+        let (server, leader_data, alice, ledger_path) = new_fullnode("thin_client");
         let bob_pubkey = Keypair::new().pubkey();
 
         let mut client = mk_client(&leader_data);
@@ -569,7 +567,7 @@ mod tests {
     #[test]
     fn test_register_vote_account() {
         solana_logger::setup();
-        let (server, leader_data, _genesis_block, alice, ledger_path) = new_fullnode("thin_client");
+        let (server, leader_data, alice, ledger_path) = new_fullnode("thin_client");
 
         let mut client = mk_client(&leader_data);
 
@@ -633,7 +631,7 @@ mod tests {
     #[test]
     fn test_zero_balance_after_nonzero() {
         solana_logger::setup();
-        let (server, leader_data, _genesis_block, alice, ledger_path) = new_fullnode("thin_client");
+        let (server, leader_data, alice, ledger_path) = new_fullnode("thin_client");
         let bob_keypair = Keypair::new();
 
         let mut client = mk_client(&leader_data);

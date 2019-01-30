@@ -24,8 +24,7 @@ fn check_balance(expected_balance: u64, client: &RpcClient, params: Value) {
 
 #[test]
 fn test_wallet_timestamp_tx() {
-    let (server, leader_data, _genesis_block, alice, ledger_path) =
-        new_fullnode("test_wallet_timestamp_tx");
+    let (server, leader_data, alice, ledger_path) = new_fullnode("test_wallet_timestamp_tx");
     let bob_pubkey = Keypair::new().pubkey();
 
     let (sender, receiver) = channel();
@@ -92,8 +91,7 @@ fn test_wallet_timestamp_tx() {
 
 #[test]
 fn test_wallet_witness_tx() {
-    let (server, leader_data, _genesis_block, alice, ledger_path) =
-        new_fullnode("test_wallet_witness_tx");
+    let (server, leader_data, alice, ledger_path) = new_fullnode("test_wallet_witness_tx");
     let bob_pubkey = Keypair::new().pubkey();
 
     let (sender, receiver) = channel();
@@ -156,8 +154,7 @@ fn test_wallet_witness_tx() {
 
 #[test]
 fn test_wallet_cancel_tx() {
-    let (server, leader_data, _genesis_block, alice, ledger_path) =
-        new_fullnode("test_wallet_cancel_tx");
+    let (server, leader_data, alice, ledger_path) = new_fullnode("test_wallet_cancel_tx");
     let bob_pubkey = Keypair::new().pubkey();
 
     let (sender, receiver) = channel();
