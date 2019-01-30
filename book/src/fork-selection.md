@@ -1,7 +1,7 @@
 # Fork Selection
 
-This article describes Solana's *Fork Selection* algorithm based on lockouts. It
-attempts to solve the following problems:
+This design describes a *Fork Selection* algorithm. It addresses the following
+problems:
 
 * Some forks may not end up accepted by the super-majority of the cluster, and
 voters need to recover from voting on such forks.
@@ -23,6 +23,9 @@ History ASICS that are much faster than the rest of the cluster.  Consensus
 needs to be resistant to attacks that exploit the variability in Proof of
 History ASIC speed.
 
+For brevity this design assumes that a single voter with a stake is deployed as
+an individual validator in the cluster.
+
 ## Time
 
 The Solana cluster generates a source of time via a Verifiable Delay Function we
@@ -35,38 +38,38 @@ generation](fork-generation.md) and [leader rotation](leader-rotation.md).
 
 ## Lockouts
 
-The purpose of the lockout is to force a voter to commit opportunity cost to a
-specific fork.  Lockouts are measured in slots, and therefor represent a
-real-time forced delay that a voter needs to wait before breaking the commitment
-to a fork.
+The purpose of the lockout is to force a validator to commit opportunity cost to
+a specific fork.  Lockouts are measured in slots, and therefor represent a
+real-time forced delay that a validator needs to wait before breaking the
+commitment to a fork.
 
-Voters that violate the lockouts and vote for a diverging fork within the
-lockout should be punished. The proposed punishment is to slash the voters stake
-if a concurrent vote within a lockout for a non-descendant fork can be proven to
-the cluster.
+Validators that violate the lockouts and vote for a diverging fork within the
+lockout should be punished. The proposed punishment is to slash the validator
+stake if a concurrent vote within a lockout for a non-descendant fork can be
+proven to the cluster.
 
 ## Algorithm
 
 The basic idea to this approach is to stack consensus votes and double lockouts.
 Each vote in the stack is a confirmation of a fork.  Each confirmed fork is an
-ancestor of the fork above it.  Each consensus vote has a `lockout` in units of
-slots before the validator can submit a vote that does not contain the confirmed
-fork as an ancestor.
+ancestor of the fork above it.  Each vote has a `lockout` in units of slots
+before the validator can submit a vote that does not contain the confirmed fork
+as an ancestor.
 
 When a vote is added to the stack, the lockouts of all the previous votes in the
 stack are doubled (more on this in [Rollback](#Rollback)).  With each new vote,
-a voter commits the previous votes to an ever-increasing lockout.  At 32 votes
-we can consider the vote to be at `max lockout` any votes with a lockout equal
-to or above `1<<32` are dequeued (FIFO).  Dequeuing a vote is the trigger for a
-reward.  If a vote expires before it is dequeued, it and all the votes above it
-are popped (LIFO) from the vote stack.  The voter needs to start rebuilding the
-stack from that point.
+a validator commits the previous votes to an ever-increasing lockout.  At 32
+votes we can consider the vote to be at `max lockout` any votes with a lockout
+equal to or above `1<<32` are dequeued (FIFO).  Dequeuing a vote is the trigger
+for a reward.  If a vote expires before it is dequeued, it and all the votes
+above it are popped (LIFO) from the vote stack.  The validator needs to start
+rebuilding the stack from that point.
 
 ### Rollback
 
 Before a vote is pushed to the stack, all the votes leading up to vote with a
 lower lock time than the new vote are popped.  After rollback lockouts are not
-doubled until the voter catches up to the rollback height of votes.
+doubled until the validator catches up to the rollback height of votes.
 
 For example, a vote stack with the following state:
 
@@ -108,67 +111,73 @@ votes.
 
 ### Slashing and Rewards
 
-Voters should be rewarded for selecting the fork that the rest of the cluster
-selected as often as possible.  This is well-aligned with generating a reward
-when the vote stack is full and the oldest vote needs to be dequeued.  Thus a
-reward should be generated for each successful dequeue.
+Validators should be rewarded for selecting the fork that the rest of the
+cluster selected as often as possible.  This is well-aligned with generating a
+reward when the vote stack is full and the oldest vote needs to be dequeued.
+Thus a reward should be generated for each successful dequeue.
 
 ### Cost of Rollback
 
 Cost of rollback of *fork A* is defined as the cost in terms of lockout time to
-the validators to confirm any other fork that does not include *fork A* as an
+the validator to confirm any other fork that does not include *fork A* as an
 ancestor.
 
 The **Economic Finality** of *fork A* can be calculated as the loss of all the
-rewards from rollback of *fork A* and its descendants, plus the opportunity
-cost of reward due to the exponentially growing lockout of the votes that have
+rewards from rollback of *fork A* and its descendants, plus the opportunity cost
+of reward due to the exponentially growing lockout of the votes that have
 confirmed *fork A*.
 
 ### Thresholds
 
-Each voter can independently set a threshold of cluster commitment to a fork
-before that voter commits to a fork.  For example, at vote stack index 7, the
-lockout is 256 time units.  A voter may withhold votes and let votes 0-7 expire
-unless the vote at index 7 has at greater than 50% commitment in the cluster.
-This allows each voter to independently control how much risk to commit to a
-fork.  Committing to forks at a higher frequency would allow the voter to earn
-more rewards.
+Each validator can independently set a threshold of cluster commitment to a fork
+before that validator commits to a fork.  For example, at vote stack index 7,
+the lockout is 256 time units.  A validator may withhold votes and let votes 0-7
+expire unless the vote at index 7 has at greater than 50% commitment in the
+cluster.  This allows each validator to independently control how much risk to
+commit to a fork.  Committing to forks at a higher frequency would allow the
+validator to earn more rewards.
 
 ### Algorithm parameters
 
-These parameters need to be tuned.
+The following parameters need to be tuned:
 
 * Number of votes in the stack before dequeue occurs (32).
+
 * Rate of growth for lockouts in the stack (2x).
+
 * Starting default lockout (2).
+
 * Threshold depth for minimum cluster commitment before committing to the fork
-  (8).
+(8).
+
 * Minimum cluster commitment size at threshold depth (50%+).
 
 ### Free Choice
 
-A "Free Choice" is an unenforcible voter action.  A voter that maximizes
-self-reward over all possible futures should behave in such a way that the
-system is stable, and the local greedy choice should result in a greedy choice
-over all possible futures.  A set of voter that are engaging in choices to
-disrupt the protocol should be bound by their stake weight to the denial of
-service.  Two options exits for voter:
+A "Free Choice" is an unenforcible validator action.  There is no way for the
+protocol to encode and enforce these actions since each validator can modify the
+code and adjust the algorithm.  A validator that maximizes self-reward over all
+possible futures should behave in such a way that the system is stable, and the
+local greedy choice should result in a greedy choice over all possible futures.
+A set of validator that are engaging in choices to disrupt the protocol should
+be bound by their stake weight to the denial of service.  Two options exits for
+validator:
 
-* a voter can outrun previous voters in virtual generation and submit a
+* a validator can outrun previous validator in virtual generation and submit a
   concurrent fork
 
-* a voter can withhold a vote to observe multiple forks before voting
+* a validator can withhold a vote to observe multiple forks before voting
 
-In both cases, the voters in the cluster have several forks to pick from
+In both cases, the validator in the cluster have several forks to pick from
 concurrently, even though each fork represents a different height.  In both
-cases it is impossible for the protocol to detect if the voter behavior is
+cases it is impossible for the protocol to detect if the validator behavior is
 intentional or not.
 
 ### Greedy Choice for Concurrent Forks
 
-When evaluating multiple forks, each voter should use the following rules:
+When evaluating multiple forks, each validator should use the following rules:
 
-1. Forks must satisify the *Threshold* rule.
+1. Forks must satisfy the *Threshold* rule.
 
 2. Pick the fork that maximizes the total cluster lockout time for all the
 ancestor forks.
@@ -192,8 +201,10 @@ effort to censor them. A fork proposed by this attacker will be available
 concurrently with the next available leader.  For nodes to pick this fork it
 must satisfy the *Greedy Choice* rule.
 
-1. Fork must have equal number of validator votes for the ancestor fork.  
+1. Fork must have equal number of votes for the ancestor fork.
+
 2. Fork cannot be so far a head as to cause expired votes.
+
 3. Fork must have a greater amount of cluster transaction fees.
 
 This attack is then limited to censoring the previous leaders fees, and
