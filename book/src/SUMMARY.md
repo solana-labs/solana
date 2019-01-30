@@ -27,7 +27,7 @@
   - [Secure Enclave](enclave.md)
   - [Staking Rewards](staking-rewards.md)
   - [Fork Selection](fork-selection.md)
-  - [Entry Tree](entry-tree.md)
+  - [Blocktree](blocktree.md)
   - [Data Plane Fanout](data-plane-fanout.md)
 
 - [Economic Design](ed_overview.md)
