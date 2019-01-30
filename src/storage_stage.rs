@@ -498,14 +498,13 @@ mod tests {
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
-        let (_genesis_block, _mint, ledger_path, genesis_entry_height, _last_id) =
-            create_tmp_sample_ledger(
-                "storage_stage_process_entries",
-                1000,
-                1,
-                Keypair::new().pubkey(),
-                1,
-            );
+        let (_mint, ledger_path, genesis_entry_height, _last_id) = create_tmp_sample_ledger(
+            "storage_stage_process_entries",
+            1000,
+            1,
+            Keypair::new().pubkey(),
+            1,
+        );
 
         let entries = make_tiny_test_entries(64);
         let db_ledger = DbLedger::open(&ledger_path).unwrap();
@@ -567,14 +566,13 @@ mod tests {
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
-        let (_genesis_block, _mint, ledger_path, genesis_entry_height, _last_id) =
-            create_tmp_sample_ledger(
-                "storage_stage_process_entries",
-                1000,
-                1,
-                Keypair::new().pubkey(),
-                1,
-            );
+        let (_mint, ledger_path, genesis_entry_height, _last_id) = create_tmp_sample_ledger(
+            "storage_stage_process_entries",
+            1000,
+            1,
+            Keypair::new().pubkey(),
+            1,
+        );
 
         let entries = make_tiny_test_entries(128);
         let db_ledger = DbLedger::open(&ledger_path).unwrap();

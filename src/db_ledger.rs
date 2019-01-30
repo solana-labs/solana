@@ -885,23 +885,23 @@ pub fn create_tmp_sample_ledger(
     num_extra_ticks: u64,
     bootstrap_leader_id: Pubkey,
     bootstrap_leader_tokens: u64,
-) -> (GenesisBlock, Keypair, String, u64, Hash) {
+) -> (Keypair, String, u64, Hash) {
     let (genesis_block, mint_keypair) =
         GenesisBlock::new_with_leader(num_tokens, bootstrap_leader_id, bootstrap_leader_tokens);
-    let path = get_tmp_ledger_path(name);
-    let (mut entry_height, mut last_id) = create_empty_ledger(&path, &genesis_block).unwrap();
+    let ledger_path = get_tmp_ledger_path(name);
+    let (mut entry_height, mut last_id) = create_new_ledger(&ledger_path, &genesis_block).unwrap();
 
     if num_extra_ticks > 0 {
         let entries = crate::entry::create_ticks(num_extra_ticks, last_id);
 
-        let db_ledger = DbLedger::open(&path).unwrap();
+        let db_ledger = DbLedger::open(&ledger_path).unwrap();
         db_ledger
             .write_entries(DEFAULT_SLOT_HEIGHT, entry_height, &entries)
             .unwrap();
         entry_height += entries.len() as u64;
         last_id = entries.last().unwrap().id
     }
-    (genesis_block, mint_keypair, path, entry_height, last_id)
+    (mint_keypair, ledger_path, entry_height, last_id)
 }
 
 pub fn tmp_copy_ledger(from: &str, name: &str) -> String {

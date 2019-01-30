@@ -135,7 +135,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (genesis_block, alice, leader_ledger_path, _last_entry_height, _last_entry_id) =
+    let (alice, leader_ledger_path, _last_entry_height, _last_entry_id) =
         create_tmp_sample_ledger("multi_node_ledger_window", 10_000, 0, leader_data.id, 500);
     ledger_paths.push(leader_ledger_path.clone());
 
@@ -236,14 +236,13 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (_genesis_block, alice, genesis_ledger_path, _last_entry_height, _last_entry_id) =
-        create_tmp_sample_ledger(
-            "multi_node_validator_catchup_from_zero",
-            10_000,
-            0,
-            leader_data.id,
-            500,
-        );
+    let (alice, genesis_ledger_path, _last_entry_height, _last_entry_id) = create_tmp_sample_ledger(
+        "multi_node_validator_catchup_from_zero",
+        10_000,
+        0,
+        leader_data.id,
+        500,
+    );
     ledger_paths.push(genesis_ledger_path.clone());
 
     let zero_ledger_path = tmp_copy_ledger(
@@ -434,7 +433,7 @@ fn test_multi_node_basic() {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (_genesis_block, alice, genesis_ledger_path, _last_entry_height, _last_entry_id) =
+    let (alice, genesis_ledger_path, _last_entry_height, _last_entry_id) =
         create_tmp_sample_ledger("multi_node_basic", 10_000, 0, leader_data.id, 500);
     ledger_paths.push(genesis_ledger_path.clone());
 
@@ -541,7 +540,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (_genesis_block, alice, genesis_ledger_path, _last_entry_height, _last_entry_id) =
+    let (alice, genesis_ledger_path, _last_entry_height, _last_entry_id) =
         create_tmp_sample_ledger("boot_validator_from_file", 100_000, 0, leader_pubkey, 1000);
     ledger_paths.push(genesis_ledger_path.clone());
 
@@ -629,14 +628,13 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
 
     let leader_keypair = Arc::new(Keypair::new());
     let initial_leader_balance = 500;
-    let (_genesis_block, alice, ledger_path, _last_entry_height, _last_entry_id) =
-        create_tmp_sample_ledger(
-            "leader_restart_validator_start_from_old_ledger",
-            100_000 + 500 * solana::window_service::MAX_REPAIR_BACKOFF as u64,
-            0,
-            leader_keypair.pubkey(),
-            initial_leader_balance,
-        );
+    let (alice, ledger_path, _last_entry_height, _last_entry_id) = create_tmp_sample_ledger(
+        "leader_restart_validator_start_from_old_ledger",
+        100_000 + 500 * solana::window_service::MAX_REPAIR_BACKOFF as u64,
+        0,
+        leader_keypair.pubkey(),
+        initial_leader_balance,
+    );
     let bob_pubkey = Keypair::new().pubkey();
 
     let signer_proxy = Arc::new(VoteSignerProxy::new_local(&leader_keypair));
@@ -740,14 +738,13 @@ fn test_multi_node_dynamic_network() {
     let leader_pubkey = leader_keypair.pubkey().clone();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let bob_pubkey = Keypair::new().pubkey();
-    let (_genesis_block, alice, genesis_ledger_path, _last_entry_height, _last_entry_id) =
-        create_tmp_sample_ledger(
-            "multi_node_dynamic_network",
-            10_000_000,
-            0,
-            leader_pubkey,
-            500,
-        );
+    let (alice, genesis_ledger_path, _last_entry_height, _last_entry_id) = create_tmp_sample_ledger(
+        "multi_node_dynamic_network",
+        10_000_000,
+        0,
+        leader_pubkey,
+        500,
+    );
 
     let mut ledger_paths = Vec::new();
     ledger_paths.push(genesis_ledger_path.clone());
@@ -975,7 +972,7 @@ fn test_leader_to_validator_transition() {
     // Initialize the leader ledger. Make a mint and a genesis entry
     // in the leader ledger
     let num_ending_ticks = 1;
-    let (_genesis_block, mint_keypair, leader_ledger_path, genesis_entry_height, last_id) =
+    let (mint_keypair, leader_ledger_path, genesis_entry_height, last_id) =
         create_tmp_sample_ledger(
             "test_leader_to_validator_transition",
             10_000,
@@ -1115,7 +1112,7 @@ fn test_leader_validator_basic() {
 
     // Make a common mint and a genesis entry for both leader + validator ledgers
     let num_ending_ticks = 1;
-    let (_genesis_block, mint_keypair, leader_ledger_path, genesis_entry_height, last_id) =
+    let (mint_keypair, leader_ledger_path, genesis_entry_height, last_id) =
         create_tmp_sample_ledger(
             "test_leader_validator_basic",
             10_000,
@@ -1298,7 +1295,7 @@ fn test_dropped_handoff_recovery() {
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
     let num_ending_ticks = 1;
-    let (_genesis_block, mint_keypair, genesis_ledger_path, genesis_entry_height, last_id) =
+    let (mint_keypair, genesis_ledger_path, genesis_entry_height, last_id) =
         create_tmp_sample_ledger(
             "test_dropped_handoff_recovery",
             10_000,
@@ -1459,7 +1456,7 @@ fn test_full_leader_validator_network() {
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
     let num_ending_ticks = 1;
-    let (_genesis_block, mint_keypair, bootstrap_leader_ledger_path, genesis_entry_height, last_id) =
+    let (mint_keypair, bootstrap_leader_ledger_path, genesis_entry_height, last_id) =
         create_tmp_sample_ledger(
             "test_full_leader_validator_network",
             10_000,
@@ -1690,19 +1687,14 @@ fn test_broadcast_last_tick() {
     let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
     // Create leader ledger
-    let (
-        _genesis_block,
-        _mint_keypair,
-        bootstrap_leader_ledger_path,
-        genesis_entry_height,
-        _last_id,
-    ) = create_tmp_sample_ledger(
-        "test_broadcast_last_tick",
-        10_000,
-        1,
-        bootstrap_leader_info.id,
-        500,
-    );
+    let (_mint_keypair, bootstrap_leader_ledger_path, genesis_entry_height, _last_id) =
+        create_tmp_sample_ledger(
+            "test_broadcast_last_tick",
+            10_000,
+            1,
+            bootstrap_leader_info.id,
+            500,
+        );
 
     let genesis_ledger_len = genesis_entry_height;
     debug!("genesis_ledger_len: {}", genesis_ledger_len);
