@@ -10,7 +10,6 @@ use crate::rpc_request::{RpcClient, RpcRequest};
 use crate::streamer::BlobSender;
 use bincode::serialize;
 use log::Level;
-use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::transaction::Transaction;
@@ -117,14 +116,6 @@ impl VoteSignerProxy {
 
     pub fn new_local(keypair: &Arc<Keypair>) -> Self {
         Self::new_with_signer(keypair, Box::new(LocalVoteSigner::default()))
-    }
-
-    pub fn new_vote_account(&self, bank: &Bank, num_tokens: u64, last_id: Hash) -> Result<()> {
-        // Create and register the new vote account
-        let tx =
-            Transaction::vote_account_new(&self.keypair, self.vote_account, last_id, num_tokens, 0);
-        bank.process_transaction(&tx)?;
-        Ok(())
     }
 
     pub fn send_validator_vote(

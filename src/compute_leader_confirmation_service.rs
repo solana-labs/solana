@@ -162,6 +162,7 @@ pub mod tests {
     use crate::vote_signer_proxy::VoteSignerProxy;
 
     use crate::genesis_block::GenesisBlock;
+    use crate::leader_scheduler::tests::new_vote_account;
     use bincode::serialize;
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -201,9 +202,7 @@ pub mod tests {
                 // Give the validator some tokens
                 bank.transfer(2, &mint_keypair, validator_keypair.pubkey(), last_id)
                     .unwrap();
-                vote_signer
-                    .new_vote_account(&bank, 1, last_id)
-                    .expect("Expected successful creation of account");
+                new_vote_account(&validator_keypair, &vote_signer, &bank, 1, last_id);
 
                 if i < 6 {
                     let vote_tx = Transaction::vote_new(&vote_signer, (i + 1) as u64, last_id, 0);
