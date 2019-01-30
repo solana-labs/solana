@@ -1,47 +1,63 @@
-# Fork Selection
-This article describes Solana's *Nakomoto Fork Selection* algorithm based on time
-locks. It satisfies the following properties:
+# Fork Selection This article describes Solana's *Fork Selection* algorithm
+based on lockouts. It attempts to solve the following problems:
 
+* Some forks may not end up accepted by the super-majority of the cluster, and
+voters need to recover from voting on such forks.
 
-* A voter can eventually recover from voting on a fork that doesn't become the
-  fork with the desired network finality.
-* If the voters share a common ancestor then they will converge to a fork
-  containing that ancestor no matter how they are partitioned. The converged
-  ancestor may not be the latest possible ancestor at the start of the fork.
-* Rollback requires exponentially more time for older votes than for newer
-  votes.
-* Voters have the freedom to set a minimum network confirmation threshold
-  before committing a vote to a higher lockout.  This allows each voter to make
-  a trade-off between risk and reward. See [cost of rollback](#cost-of-rollback).
+* Many forks may be votable by different voters, and each voter may see a
+different set of votable forks.  The selected forks should eventually converge
+for the network.
+
+* Reward based votes have an associated risk.  Voters should have the ability to
+configure how much risk they take on.
+
+* The [cost of rollback](#cost-of-rollback) is important to clients that rely on
+a measure of Consistency.  It needs to be computable, and increase
+super-linearly for older votes.
+
+* ASIC speeds are different between nodes, and attackers could employ Proof of
+History ASICS that are much faster than the rest of the network.  Consensus
+needs to be resistant to attacks that exploit the variability in Proof of
+History ASIC speed.
 
 ## Time
 
-For networks like Solana, time can be the PoH hash count, which is a VDF that
-provides a source of time before consensus. Other networks adopting this
-approach would need to consider a global source of time.
+The Solana cluster generates a source of time via a Verifiable Delay Function we
+are calling [Proof of History](book/src/synchronization.md).
 
-For Solana, time uniquely identifies a specific leader for fork generation.  At
-any given time only 1 leader, which can be computed from the ledger itself, can
-propose a fork.  For more details, see [fork generation](fork-generation.md)
-and [leader rotation](leader-rotation.md).
+Proof of History is used to create a deterministic round robin schedule for all
+the active leaders.  At any given time only 1 leader, which can be computed from
+the ledger itself, can propose a fork.  For more details, see [fork
+generation](fork-generation.md) and [leader rotation](leader-rotation.md).
+
+## Lockouts
+
+The purpose of the lockout is to force a voter to commit opportunity cost to a
+specific fork.  Lockouts are measured in slots, and therefor represent a
+real-time forced delay that a voter needs to wait before breaking the commitment
+to a fork.
+
+Voters that violate the lockouts and vote for a diverging fork within the
+lockout should be punished. The proposed punishment is to slash the voters stake
+if a concurrent vote within a lockout for a non-descendant fork can be proven to
+the cluster.
 
 ## Algorithm
 
-The basic idea to this approach is to stack consensus votes.  Each vote in the
-stack is a confirmation of a fork.  Each confirmed fork is an ancestor of the
-fork above it.  Each consensus vote has a `lockout` in units of time before the
-validator can submit a vote that does not contain the confirmed fork as an
-ancestor.
+The basic idea to this approach is to stack consensus votes and double lockouts.
+Each vote in the stack is a confirmation of a fork.  Each confirmed fork is an
+ancestor of the fork above it.  Each consensus vote has a `lockout` in units of
+slots before the validator can submit a vote that does not contain the confirmed
+fork as an ancestor.
 
-When a vote is added to the stack, the lockouts of all the previous votes in
-the stack are doubled (more on this in [Rollback](#Rollback)).  With each new
-vote, a voter commits the previous votes to an ever-increasing lockout.  At 32
-votes we can consider the vote to be at `max lockout` any votes with a lockout
-equal to or above `1<<32` are dequeued (FIFO).  Dequeuing a vote is the trigger
-for a reward.  If a vote expires before it is dequeued, it and all the votes
-above it are popped (LIFO) from the vote stack.  The voter needs to start
-rebuilding the stack from that point.
-
+When a vote is added to the stack, the lockouts of all the previous votes in the
+stack are doubled (more on this in [Rollback](#Rollback)).  With each new vote,
+a voter commits the previous votes to an ever-increasing lockout.  At 32 votes
+we can consider the vote to be at `max lockout` any votes with a lockout equal
+to or above `1<<32` are dequeued (FIFO).  Dequeuing a vote is the trigger for a
+reward.  If a vote expires before it is dequeued, it and all the votes above it
+are popped (LIFO) from the vote stack.  The voter needs to start rebuilding the
+stack from that point.
 
 ### Rollback
 
@@ -88,11 +104,6 @@ The lockout for vote 1 will not increase from 16 until the stack contains 5
 votes.
 
 ### Slashing and Rewards
-
-The purpose of the lockout is to force a voter to commit opportunity cost to a
-specific fork.  Voters that violate the lockouts and vote for a diverging fork
-within the lockout should be punished.  Slashing or simply freezing the voter
-from rewards for a long period of time can be used as punishment.
 
 Voters should be rewarded for selecting the fork that the rest of the network
 selected as often as possible.  This is well-aligned with generating a reward
@@ -142,6 +153,7 @@ service.  Two options exits for voter:
 
 * a voter can outrun previous voters in virtual generation and submit a
   concurrent fork
+
 * a voter can withhold a vote to observe multiple forks before voting
 
 In both cases, the voters in the network have several forks to pick from
@@ -151,5 +163,57 @@ intentional or not.
 
 ### Greedy Choice for Concurrent Forks
 
-When evaluating multiple forks, each voter should pick the fork that will
-maximize economic finality for the network, or the latest fork if all are equal.
+When evaluating multiple forks, each voter should use the following rules:
+
+1. Forks must satisify the *Threshold* rule.
+
+2. Pick the fork that maximizes the total cluster lockout time for all the
+ancestor forks.
+
+3. Pick the fork that has the greatest amount of cluster transaction fees.
+
+4. Pick the latest fork in terms of PoH.
+
+Cluster transaction fees are fees that are deposited to the mining pool as
+described in the [Staking Rewards](book/src/staking-rewards.md) section.
+
+## PoH ASIC Resistance
+
+Votes and lockouts grow exponentially while ASIC speed up is linear.  There are
+two possible attack vectors involving a faster ASIC.
+
+### ASIC censorship
+
+An attacker generates a concurrent fork that outruns previous leaders in an
+effort to censor them. A fork proposed by this attacker will be available
+concurrently with the next available leader.  For nodes to pick this fork it
+must satisfy the *Greedy Choice* rule.
+
+1. Fork must have equal number of validator votes for the ancestor fork.  
+2. Fork cannot be so far a head as to cause expired votes.
+3. Fork must have a greater amount of cluster transaction fees.
+
+This attack is then limited to censoring the previous leaders fees, and
+individual transactions.  But it cannot halt the network, or reduce the
+validator set compared to the concurrent fork.  Fee censorship is limited to
+access fees going to the leaders but not the validators.
+
+### ASIC Rollback
+
+An attacker generates a concurrent fork from an older block to try to rollback
+the network.  In this attack the concurrent fork is competing with forks that
+have already been voted on.  This attack is limited by the exponential growth of
+the lockouts.
+
+* 1 vote has a lockout of 2 slots.  Concurrent fork must be at least 2 slots
+ahead, and be produced in 1 slot. Therefore requires an ASIC 2x faster.
+
+* 2 votes have a lockout of 4 slots.  Concurrent fork must be at least 4 slots
+ahead and produced in 2 slots. Therefore requires an ASIC 2x faster.
+
+* 3 votes have a lockout of 8 slots.  Concurrent fork must be at least 8 slots
+ahead and produced in 3 slots. Therefore requires an ASIC 2.6x faster.
+
+* 10 votes have a lockout of 1024 slots.  1024/10, or 102.4x faster ASIC.
+
+* 20 votes have a lockout of 2^20 slots.  2^20/20, or 52,428.8x faster ASIC.
