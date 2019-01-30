@@ -469,6 +469,7 @@ mod tests {
     use std::net::UdpSocket;
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
+    use std::thread::Builder;
 
     #[test]
     fn validator_exit() {
@@ -586,16 +587,22 @@ mod tests {
             Default::default(),
         );
 
-        // Wait for the leader to transition, ticks should cause the leader to
-        // reach the height for leader rotation
-        match bootstrap_leader.handle_role_transition().unwrap() {
-            Some(FullnodeReturnType::LeaderToValidatorRotation) => (),
-            _ => {
-                panic!("Expected a leader transition");
-            }
-        }
-        assert!(bootstrap_leader.node_services.tpu.is_leader());
-        bootstrap_leader.close().unwrap();
+        Builder::new()
+            .name("solana-poh-service-entry_producer".to_string())
+            .spawn(move || {
+                // Wait for the leader to transition, ticks should cause the leader to
+                // reach the height for leader rotation
+                match bootstrap_leader.handle_role_transition().unwrap() {
+                    Some(FullnodeReturnType::LeaderToValidatorRotation) => {
+                        assert!(bootstrap_leader.node_services.tpu.is_leader());
+                        bootstrap_leader.close().unwrap();
+                    }
+                    _ => {
+                        panic!("Expected a leader transition");
+                    }
+                }
+            })
+            .unwrap();
     }
 
     #[test]
