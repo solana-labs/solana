@@ -11,7 +11,6 @@ use hashbrown::HashSet;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, VoteProgram};
 use solana_sdk::vote_transaction::VoteTransaction;
@@ -476,34 +475,28 @@ impl Default for LeaderScheduler {
 // 1) Give the node a nonzero number of tokens,
 // 2) A vote from the validator
 pub fn make_active_set_entries(
-    active_keypair: &Arc<Keypair>,
+    validator_keypair: &Arc<Keypair>,
     token_source: &Keypair,
     last_entry_id: &Hash,
     last_tick_id: &Hash,
     num_ending_ticks: u64,
 ) -> (Vec<Entry>, VoteSignerProxy) {
-    // 1) Create transfer token entry
-    let transfer_tx =
-        Transaction::system_new(&token_source, active_keypair.pubkey(), 3, *last_tick_id);
-    let transfer_entry = Entry::new(last_entry_id, 0, 1, vec![transfer_tx]);
-    let mut last_entry_id = transfer_entry.id;
-
-    // 2) Create and register the vote account
-    let vote_signer = VoteSignerProxy::new_local(active_keypair);
+    // 1) Create and register the vote account
+    let vote_signer = VoteSignerProxy::new_local(validator_keypair);
     let vote_account_id = vote_signer.pubkey();
 
     let new_vote_account_tx =
-        Transaction::vote_account_new(active_keypair, vote_account_id, *last_tick_id, 1, 1);
-    let new_vote_account_entry = Entry::new(&last_entry_id, 0, 1, vec![new_vote_account_tx]);
-    last_entry_id = new_vote_account_entry.id;
+        Transaction::vote_account_new(token_source, vote_account_id, *last_tick_id, 1, 1);
+    let new_vote_account_entry = Entry::new(last_entry_id, 0, 1, vec![new_vote_account_tx]);
+    let mut last_entry_id = new_vote_account_entry.id;
 
-    // 3) Create vote entry
+    // 2) Create vote entry
     let vote_tx = Transaction::vote_new(&vote_signer, 1, *last_tick_id, 0);
     let vote_entry = Entry::new(&last_entry_id, 0, 1, vec![vote_tx]);
     last_entry_id = vote_entry.id;
 
-    // 4) Create the ending empty ticks
-    let mut txs = vec![transfer_entry, new_vote_account_entry, vote_entry];
+    // 3) Create the ending empty ticks
+    let mut txs = vec![new_vote_account_entry, vote_entry];
     let empty_ticks = create_ticks(num_ending_ticks, last_entry_id);
     txs.extend(empty_ticks);
     (txs, vote_signer)
@@ -578,34 +571,18 @@ pub mod tests {
         leader_scheduler.bootstrap_leader = bootstrap_leader_id;
 
         // Create the bank and validators, which are inserted in order of account balance
-        let num_vote_account_tokens = 1;
-        let (genesis_block, mint_keypair) = GenesisBlock::new(
-            (((num_validators + 1) / 2) * (num_validators + 1)
-                + num_vote_account_tokens * num_validators) as u64,
-        );
+        let (genesis_block, mint_keypair) = GenesisBlock::new(10000);
         let bank = Bank::new(&genesis_block);
         let mut validators = vec![];
-        let last_id = genesis_block.last_id();
         for i in 0..num_validators {
-            let new_validator = Arc::new(Keypair::new());
-            let new_pubkey = new_validator.pubkey();
-            let vote_signer = VoteSignerProxy::new_local(&new_validator);
-            validators.push(new_pubkey);
-            // Give the validator some tokens
-            bank.transfer(
-                (i + 1 + num_vote_account_tokens) as u64,
-                &mint_keypair,
-                new_pubkey,
-                last_id,
-            )
-            .unwrap();
-
+            let vote_signer = VoteSignerProxy::new();
+            validators.push(vote_signer.pubkey());
             // Create a vote account
             new_vote_account(
-                &new_validator,
+                &mint_keypair,
                 &vote_signer,
                 &bank,
-                num_vote_account_tokens as u64,
+                (i + 1) as u64,
                 genesis_block.last_id(),
             );
 
@@ -708,23 +685,16 @@ pub mod tests {
         let num_old_ids = 20;
         let mut old_ids = HashSet::new();
         for _ in 0..num_old_ids {
-            let new_keypair = Arc::new(Keypair::new());
-            let pk = new_keypair.pubkey();
-            old_ids.insert(pk.clone());
-
-            // Give the account some stake
-            bank.transfer(5, &mint_keypair, pk, genesis_block.last_id())
-                .unwrap();
-
             // Create a vote account
-            let vote_signer = VoteSignerProxy::new_local(&new_keypair);
+            let vote_signer = VoteSignerProxy::new();
             new_vote_account(
-                &new_keypair,
+                &mint_keypair,
                 &vote_signer,
                 &bank,
                 1,
                 genesis_block.last_id(),
             );
+            old_ids.insert(vote_signer.pubkey());
 
             // Push a vote for the account
             push_vote(&vote_signer, &bank, start_height, genesis_block.last_id());
@@ -734,22 +704,16 @@ pub mod tests {
         let num_new_ids = 10;
         let mut new_ids = HashSet::new();
         for _ in 0..num_new_ids {
-            let new_keypair = Arc::new(Keypair::new());
-            let pk = new_keypair.pubkey();
-            new_ids.insert(pk);
-            // Give the account some stake
-            bank.transfer(5, &mint_keypair, pk, genesis_block.last_id())
-                .unwrap();
-
             // Create a vote account
-            let vote_signer = VoteSignerProxy::new_local(&new_keypair);
+            let vote_signer = VoteSignerProxy::new();
             new_vote_account(
-                &new_keypair,
+                &mint_keypair,
                 &vote_signer,
                 &bank,
                 1,
                 genesis_block.last_id(),
             );
+            new_ids.insert(vote_signer.pubkey());
 
             push_vote(
                 &vote_signer,
@@ -916,7 +880,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_scheduler() {
+    fn test_scheduler_basic() {
         // Test when the number of validators equals
         // seed_rotation_interval / leader_rotation_interval, so each validator
         // is selected once
@@ -976,7 +940,7 @@ pub mod tests {
     #[test]
     fn test_scheduler_active_window() {
         let num_validators = 10;
-        let num_vote_account_tokens = 1;
+
         // Set up the LeaderScheduler struct
         let bootstrap_leader_id = Keypair::new().pubkey();
         let bootstrap_height = 500;
@@ -987,44 +951,20 @@ pub mod tests {
         let seed_rotation_interval = leader_rotation_interval * num_validators;
         let active_window_length = seed_rotation_interval;
 
-        let leader_scheduler_config = LeaderSchedulerConfig::new(
-            bootstrap_height,
-            leader_rotation_interval,
-            seed_rotation_interval,
-            active_window_length,
-        );
-
-        let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
-        leader_scheduler.bootstrap_leader = bootstrap_leader_id;
-
         // Create the bank and validators
-        let (genesis_block, mint_keypair) = GenesisBlock::new(
-            ((((num_validators + 1) / 2) * (num_validators + 1))
-                + (num_vote_account_tokens * num_validators)) as u64,
-        );
+        let (genesis_block, mint_keypair) = GenesisBlock::new(10000);
         let bank = Bank::new(&genesis_block);
         let mut validators = vec![];
-        let last_id = genesis_block.last_id();
         for i in 0..num_validators {
-            let new_validator = Arc::new(Keypair::new());
-            let new_pubkey = new_validator.pubkey();
-            let vote_signer = VoteSignerProxy::new_local(&new_validator);
-            validators.push(new_pubkey);
-            // Give the validator some tokens
-            bank.transfer(
-                (i + 1 + num_vote_account_tokens) as u64,
-                &mint_keypair,
-                new_pubkey,
-                last_id,
-            )
-            .unwrap();
+            let vote_signer = VoteSignerProxy::new();
+            validators.push(vote_signer.pubkey());
 
             // Create a vote account
             new_vote_account(
-                &new_validator,
+                &mint_keypair,
                 &vote_signer,
                 &bank,
-                num_vote_account_tokens as u64,
+                (i + 1) as u64,
                 genesis_block.last_id(),
             );
 
@@ -1036,6 +976,16 @@ pub mod tests {
                 genesis_block.last_id(),
             );
         }
+
+        let leader_scheduler_config = LeaderSchedulerConfig::new(
+            bootstrap_height,
+            leader_rotation_interval,
+            seed_rotation_interval,
+            active_window_length,
+        );
+
+        let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
+        leader_scheduler.bootstrap_leader = bootstrap_leader_id;
 
         // Generate schedule every active_window_length entries and check that
         // validators are falling out of the rotation as they fall out of the
@@ -1055,31 +1005,22 @@ pub mod tests {
 
     #[test]
     fn test_multiple_vote() {
-        let leader_keypair = Arc::new(Keypair::new());
-        let leader_id = leader_keypair.pubkey();
-        let active_window_length = 1000;
-        let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10000, leader_id, 500);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(10000);
         let bank = Bank::new(&genesis_block);
 
-        let leader_scheduler_config =
-            LeaderSchedulerConfig::new(100, 100, 100, active_window_length);
-
-        let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
-        leader_scheduler.bootstrap_leader = leader_id;
-
-        // Check that a node that votes twice in a row will get included in the active
-        // window
-        let initial_vote_height = 1;
-
-        let vote_signer = VoteSignerProxy::new_local(&leader_keypair);
         // Create a vote account
+        let vote_signer = VoteSignerProxy::new();
         new_vote_account(
-            &leader_keypair,
+            &mint_keypair,
             &vote_signer,
             &bank,
             1,
             genesis_block.last_id(),
         );
+
+        // Check that a node that votes twice in a row will get included in the active
+        // window
+        let initial_vote_height = 1;
 
         // Vote twice
         push_vote(
@@ -1095,9 +1036,15 @@ pub mod tests {
             genesis_block.last_id(),
         );
 
+        let active_window_length = 1000;
+        let leader_scheduler_config =
+            LeaderSchedulerConfig::new(100, 100, 100, active_window_length);
+
+        let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
+
         let result =
             leader_scheduler.get_active_set(initial_vote_height + active_window_length, &bank);
-        assert_eq!(result, to_hashset_owned(&vec![leader_id]));
+        assert_eq!(result, to_hashset_owned(&vec![vote_signer.pubkey()]));
         let result =
             leader_scheduler.get_active_set(initial_vote_height + active_window_length + 1, &bank);
         assert!(result.is_empty());
@@ -1191,9 +1138,58 @@ pub mod tests {
     }
 
     fn run_consecutive_leader_test(num_slots_per_epoch: u64, add_validator: bool) {
-        let bootstrap_leader_keypair = Arc::new(Keypair::new());
-        let bootstrap_leader_id = bootstrap_leader_keypair.pubkey();
+        // Create mint and bank
+        let (genesis_block, mint_keypair) = GenesisBlock::new(10000);
+        let bank = Bank::new(&genesis_block);
+        let initial_vote_height = 1;
+
+        // Create and add validator to the active set
+        let validator_vote_signer = VoteSignerProxy::new();
+        if add_validator {
+            // Create a vote account
+            new_vote_account(
+                &mint_keypair,
+                &validator_vote_signer,
+                &bank,
+                4,
+                genesis_block.last_id(),
+            );
+
+            push_vote(
+                &validator_vote_signer,
+                &bank,
+                initial_vote_height,
+                genesis_block.last_id(),
+            );
+        }
+
+        // Make sure the bootstrap leader, not the validator, is picked again on next slot
+        // Depending on the seed, we make the leader stake either 2, or 3. Because the
+        // validator stake is always 1, then the rankings will always be
+        // [(validator, 1), (leader, leader_stake)]. Thus we just need to make sure that
+        // seed % (leader_stake + 1) > 0 to make sure that the leader is picked again.
         let bootstrap_height = 500;
+        let seed = LeaderScheduler::calculate_seed(bootstrap_height);
+        let leader_stake = if seed % 3 == 0 { 3 } else { 2 };
+
+        // Create a vote account
+        let vote_signer = VoteSignerProxy::new();
+        new_vote_account(
+            &mint_keypair,
+            &vote_signer,
+            &bank,
+            leader_stake,
+            genesis_block.last_id(),
+        );
+
+        // Add leader to the active set
+        push_vote(
+            &vote_signer,
+            &bank,
+            initial_vote_height,
+            genesis_block.last_id(),
+        );
+
         let leader_rotation_interval = 100;
         let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
         let active_window_length = bootstrap_height + seed_rotation_interval;
@@ -1206,82 +1202,19 @@ pub mod tests {
         );
 
         let mut leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
-        leader_scheduler.bootstrap_leader = bootstrap_leader_id;
-
-        // Create mint and bank
-        let (genesis_block, mint_keypair) =
-            GenesisBlock::new_with_leader(10000, bootstrap_leader_id, 0);
-        let bank = Bank::new(&genesis_block);
-        let last_id = genesis_block.last_id();
-        let initial_vote_height = 1;
-
-        // Create and add validator to the active set
-        let validator_keypair = Arc::new(Keypair::new());
-        let validator_id = validator_keypair.pubkey();
-        if add_validator {
-            bank.transfer(5, &mint_keypair, validator_id, last_id)
-                .unwrap();
-            // Create a vote account
-            let vote_signer = VoteSignerProxy::new_local(&validator_keypair);
-            new_vote_account(
-                &validator_keypair,
-                &vote_signer,
-                &bank,
-                1,
-                genesis_block.last_id(),
-            );
-
-            push_vote(
-                &vote_signer,
-                &bank,
-                initial_vote_height,
-                genesis_block.last_id(),
-            );
-        }
-
-        // Make sure the bootstrap leader, not the validator, is picked again on next slot
-        // Depending on the seed, we make the leader stake either 2, or 3. Because the
-        // validator stake is always 1, then the rankings will always be
-        // [(validator, 1), (leader, leader_stake)]. Thus we just need to make sure that
-        // seed % (leader_stake + 1) > 0 to make sure that the leader is picked again.
-        let seed = LeaderScheduler::calculate_seed(bootstrap_height);
-        let leader_stake = if seed % 3 == 0 { 3 } else { 2 };
-
-        let vote_account_tokens = 1;
-        bank.transfer(
-            leader_stake + vote_account_tokens,
-            &mint_keypair,
-            bootstrap_leader_id,
-            last_id,
-        )
-        .unwrap();
-
-        // Create a vote account
-        let vote_signer = VoteSignerProxy::new_local(&bootstrap_leader_keypair);
-        new_vote_account(
-            &bootstrap_leader_keypair,
-            &vote_signer,
-            &bank,
-            vote_account_tokens as u64,
-            genesis_block.last_id(),
-        );
-
-        // Add leader to the active set
-        push_vote(
-            &vote_signer,
-            &bank,
-            initial_vote_height,
-            genesis_block.last_id(),
-        );
+        leader_scheduler.bootstrap_leader = vote_signer.pubkey();
 
         leader_scheduler.generate_schedule(bootstrap_height, &bank);
 
         // Make sure the validator, not the leader is selected on the first slot of the
         // next epoch
         if add_validator {
-            assert!(leader_scheduler.leader_schedule[0] == validator_id);
+            assert_eq!(
+                leader_scheduler.leader_schedule[0],
+                validator_vote_signer.pubkey()
+            );
         } else {
-            assert!(leader_scheduler.leader_schedule[0] == bootstrap_leader_id);
+            assert_eq!(leader_scheduler.leader_schedule[0], vote_signer.pubkey());
         }
     }
 

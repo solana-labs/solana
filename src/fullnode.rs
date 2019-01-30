@@ -205,6 +205,12 @@ impl Fullnode {
                 .collect(),
         };
 
+        let is_leader = if let Some(ref vote_signer) = vote_signer {
+            scheduled_leader == vote_signer.pubkey()
+        } else {
+            false
+        };
+
         // Setup channels for rotation indications
         let (to_leader_sender, to_leader_receiver) = channel();
         let (to_validator_sender, to_validator_receiver) = channel();
@@ -245,7 +251,7 @@ impl Fullnode {
             max_tick_height,
             &last_entry_id,
             keypair.pubkey(),
-            scheduled_leader == keypair.pubkey(),
+            is_leader,
             &to_validator_sender,
         );
 
@@ -613,7 +619,7 @@ mod tests {
         // Write the entries to the ledger that will cause leader rotation
         // after the bootstrap height
         let validator_keypair = Arc::new(validator_keypair);
-        let (active_set_entries, _) =
+        let (active_set_entries, validator_vote_signer) =
             make_active_set_entries(&validator_keypair, &mint_keypair, &last_id, &last_id, 10);
 
         {
@@ -667,7 +673,7 @@ mod tests {
                 validator_keypair,
                 &validator_ledger_path,
                 Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
-                None,
+                Some(Arc::new(validator_vote_signer)),
                 Some(&bootstrap_leader_info),
                 Default::default(),
             );
