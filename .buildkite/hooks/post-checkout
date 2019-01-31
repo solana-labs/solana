@@ -1,2 +1,18 @@
 CI_BUILD_START=$(date +%s)
 export CI_BUILD_START
+
+# Processes from previously aborted CI jobs seem to loiter, unclear why as one
+# would expect the buildkite-agent to clean up all child processes of the
+# aborted CI job.
+# But as a workaround for now manually kill some known loiterers.  These
+# processes will all have the `init` process as their PPID:
+(
+  victims=
+  for name in bash cargo docker solana; do
+    victims="$victims $(pgrep -u "$(id -u)" -P 1 -d \  $name)"
+  done
+  for victim in $victims; do
+    echo "Killing pid $victim"
+    kill -9 "$victim" || true
+  done
+)
