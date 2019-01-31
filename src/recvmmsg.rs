@@ -10,7 +10,6 @@ pub const NUM_RCVMMSGS: usize = 16;
 #[cfg(not(target_os = "linux"))]
 pub fn recv_mmsg(socket: &UdpSocket, packets: &mut [Packet]) -> io::Result<usize> {
     let mut i = 0;
-    socket.set_nonblocking(false)?;
     let count = cmp::min(NUM_RCVMMSGS, packets.len());
     for p in packets.iter_mut().take(count) {
         p.meta.size = 0;
