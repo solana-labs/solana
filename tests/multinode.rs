@@ -1238,7 +1238,6 @@ fn test_leader_validator_basic() {
 
     let leader_entries = read_ledger(&leader_ledger_path);
 
-    assert_eq!(leader_entries.len(), validator_entries.len());
     assert!(leader_entries.len() as u64 >= bootstrap_height);
 
     for (v, l) in validator_entries.iter().zip(leader_entries) {

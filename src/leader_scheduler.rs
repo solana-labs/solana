@@ -18,11 +18,14 @@ use solana_sdk::vote_transaction::VoteTransaction;
 use std::io::Cursor;
 use std::sync::Arc;
 
-pub const TICKS_PER_BLOCK: u64 = 4;
-pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = TICKS_PER_BLOCK * 256;
-pub const DEFAULT_LEADER_ROTATION_INTERVAL: u64 = TICKS_PER_BLOCK * 32;
-pub const DEFAULT_SEED_ROTATION_INTERVAL: u64 = TICKS_PER_BLOCK * 256;
-pub const DEFAULT_ACTIVE_WINDOW_LENGTH: u64 = TICKS_PER_BLOCK * 256;
+// At 10 ticks/s, 8 ticks per slot implies that leader rotation and voting will happen
+// every 800 ms. A fast voting cadence ensures faster finality and convergence
+pub const DEFAULT_TICKS_PER_SLOT: u64 = 8;
+// Bootstrap height lasts for ~100 seconds
+pub const DEFAULT_BOOTSTRAP_HEIGHT: u64 = 1024;
+pub const DEFAULT_SLOTS_PER_EPOCH: u64 = 64;
+pub const DEFAULT_SEED_ROTATION_INTERVAL: u64 = DEFAULT_SLOTS_PER_EPOCH * DEFAULT_TICKS_PER_SLOT;
+pub const DEFAULT_ACTIVE_WINDOW_LENGTH: u64 = DEFAULT_SEED_ROTATION_INTERVAL;
 
 pub struct LeaderSchedulerConfig {
     // The interval at which to rotate the leader, should be much less than
@@ -62,7 +65,7 @@ impl Default for LeaderSchedulerConfig {
     fn default() -> Self {
         Self {
             bootstrap_height: DEFAULT_BOOTSTRAP_HEIGHT,
-            leader_rotation_interval: DEFAULT_LEADER_ROTATION_INTERVAL,
+            leader_rotation_interval: DEFAULT_TICKS_PER_SLOT,
             seed_rotation_interval: DEFAULT_SEED_ROTATION_INTERVAL,
             active_window_length: DEFAULT_ACTIVE_WINDOW_LENGTH,
         }
@@ -181,6 +184,15 @@ impl LeaderScheduler {
                 self.leader_rotation_interval
                     - ((height - self.bootstrap_height) % self.leader_rotation_interval),
             )
+        }
+    }
+
+    // Returns the last tick height for a given slot index
+    pub fn max_tick_height_for_slot(&self, slot_index: u64) -> u64 {
+        if self.use_only_bootstrap_leader {
+            std::u64::MAX
+        } else {
+            slot_index * self.leader_rotation_interval + self.bootstrap_height
         }
     }
 
@@ -517,7 +529,7 @@ pub mod tests {
     use crate::genesis_block::GenesisBlock;
     use crate::leader_scheduler::{
         LeaderScheduler, LeaderSchedulerConfig, DEFAULT_BOOTSTRAP_HEIGHT,
-        DEFAULT_LEADER_ROTATION_INTERVAL, DEFAULT_SEED_ROTATION_INTERVAL,
+        DEFAULT_SEED_ROTATION_INTERVAL, DEFAULT_TICKS_PER_SLOT,
     };
     use crate::vote_signer_proxy::VoteSignerProxy;
     use hashbrown::HashSet;
@@ -964,8 +976,8 @@ pub mod tests {
         // only one validator should be selected
         num_validators = 10;
         bootstrap_height = 1;
-        leader_rotation_interval = 1;
-        seed_rotation_interval = 1;
+        leader_rotation_interval = 1 as usize;
+        seed_rotation_interval = 1 as usize;
         run_scheduler_test(
             num_validators,
             bootstrap_height,
@@ -1156,7 +1168,7 @@ pub mod tests {
 
         assert_eq!(
             leader_scheduler.leader_rotation_interval,
-            DEFAULT_LEADER_ROTATION_INTERVAL
+            DEFAULT_TICKS_PER_SLOT
         );
         assert_eq!(
             leader_scheduler.seed_rotation_interval,

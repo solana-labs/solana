@@ -10,7 +10,7 @@ use crate::entry_stream::EntryStreamHandler;
 #[cfg(test)]
 use crate::entry_stream::MockEntryStream as EntryStream;
 use crate::fullnode::TvuRotationSender;
-use crate::leader_scheduler::TICKS_PER_BLOCK;
+use crate::leader_scheduler::DEFAULT_TICKS_PER_SLOT;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -112,7 +112,8 @@ impl ReplayStage {
         let mut did_rotate = false;
 
         // Next vote tick is ceiling of (current tick/ticks per block)
-        let mut num_ticks_to_next_vote = TICKS_PER_BLOCK - (bank.tick_height() % TICKS_PER_BLOCK);
+        let mut num_ticks_to_next_vote =
+            DEFAULT_TICKS_PER_SLOT - (bank.tick_height() % DEFAULT_TICKS_PER_SLOT);
         let mut start_entry_index = 0;
         for (i, entry) in entries.iter().enumerate() {
             inc_new_counter_info!("replicate-stage_bank-tick", bank.tick_height() as usize);
@@ -168,7 +169,7 @@ impl ReplayStage {
                     break;
                 }
                 start_entry_index = i + 1;
-                num_ticks_to_next_vote = TICKS_PER_BLOCK;
+                num_ticks_to_next_vote = DEFAULT_TICKS_PER_SLOT;
             }
         }
 
