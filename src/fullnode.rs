@@ -472,6 +472,7 @@ mod tests {
     use crate::tpu::TpuReturnType;
     use crate::tvu::TvuReturnType;
     use crate::vote_signer_proxy::VoteSignerProxy;
+    use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::cmp;
     use std::fs::remove_dir_all;
@@ -611,45 +612,22 @@ mod tests {
     fn test_wrong_role_transition() {
         solana_logger::setup();
 
-        // Create the leader node information
+        // Create the leader and validator nodes
         let bootstrap_leader_keypair = Arc::new(Keypair::new());
-        let bootstrap_leader_node =
-            Node::new_localhost_with_pubkey(bootstrap_leader_keypair.pubkey());
-        let bootstrap_leader_info = bootstrap_leader_node.info.clone();
-
-        // Create the validator node information
-        let validator_keypair = Keypair::new();
-        let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
-
-        // Make a common mint and a genesis entry for both leader + validator's ledgers
-        let (mint_keypair, bootstrap_leader_ledger_path, genesis_entry_height, last_id) =
-            create_tmp_sample_ledger(
-                "test_wrong_role_transition",
-                10_000,
+        let validator_keypair = Arc::new(Keypair::new());
+        let (bootstrap_leader_node, validator_node, bootstrap_leader_ledger_path, _, _) =
+            setup_leader_validator(
+                &bootstrap_leader_keypair,
+                &validator_keypair,
                 0,
-                bootstrap_leader_keypair.pubkey(),
-                500,
+                10,
+                "test_wrong_role_transition",
             );
-
-        // Write the entries to the ledger that will cause leader rotation
-        // after the bootstrap height
-        let validator_keypair = Arc::new(validator_keypair);
-        let (active_set_entries, _) =
-            make_active_set_entries(&validator_keypair, &mint_keypair, &last_id, &last_id, 10);
-
-        {
-            let db_ledger = DbLedger::open(&bootstrap_leader_ledger_path).unwrap();
-            db_ledger
-                .write_entries(
-                    DEFAULT_SLOT_HEIGHT,
-                    genesis_entry_height,
-                    &active_set_entries,
-                )
-                .unwrap();
-        }
+        let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
         let validator_ledger_path =
             tmp_copy_ledger(&bootstrap_leader_ledger_path, "test_wrong_role_transition");
+
         let ledger_paths = vec![
             bootstrap_leader_ledger_path.clone(),
             validator_ledger_path.clone(),
@@ -708,50 +686,21 @@ mod tests {
 
     #[test]
     fn test_validator_to_leader_transition() {
-        // Make a leader identity
-        let leader_keypair = Keypair::new();
-        let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let leader_id = leader_node.info.id;
-
-        // Create validator identity
-        let (mint_keypair, validator_ledger_path, genesis_entry_height, last_id) =
-            create_tmp_sample_ledger(
+        // Make leader and validator node
+        let leader_keypair = Arc::new(Keypair::new());
+        let validator_keypair = Arc::new(Keypair::new());
+        let num_genesis_ticks = 1;
+        let (leader_node, validator_node, validator_ledger_path, ledger_initial_len, last_id) =
+            setup_leader_validator(
+                &leader_keypair,
+                &validator_keypair,
+                num_genesis_ticks,
+                0,
                 "test_validator_to_leader_transition",
-                10_000,
-                1,
-                leader_id,
-                500,
             );
 
-        let validator_keypair = Keypair::new();
-        let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
+        let leader_id = leader_keypair.pubkey();
         let validator_info = validator_node.info.clone();
-
-        let validator_keypair = Arc::new(validator_keypair);
-        // Write two entries so that the validator is in the active set:
-        //
-        // 1) Give the validator a nonzero number of tokens
-        // Write the bootstrap entries to the ledger that will cause leader rotation
-        // after the bootstrap height
-        //
-        // 2) A vote from the validator
-        let (active_set_entries, _) =
-            make_active_set_entries(&validator_keypair, &mint_keypair, &last_id, &last_id, 0);
-        let active_set_entries_len = active_set_entries.len() as u64;
-        let last_id = active_set_entries.last().unwrap().id;
-
-        {
-            let db_ledger = DbLedger::open(&validator_ledger_path).unwrap();
-            db_ledger
-                .write_entries(
-                    DEFAULT_SLOT_HEIGHT,
-                    genesis_entry_height,
-                    &active_set_entries,
-                )
-                .unwrap();
-        }
-
-        let ledger_initial_len = genesis_entry_height + active_set_entries_len;
 
         // Set the leader scheduler for the validator
         let leader_rotation_interval = 16;
@@ -837,7 +786,7 @@ mod tests {
         assert!(bank.tick_height() >= bootstrap_height);
         // Only the first genesis entry has num_hashes = 0, every other entry
         // had num_hashes = 1
-        assert!(entry_height >= bootstrap_height + active_set_entries_len);
+        assert!(entry_height >= bootstrap_height + ledger_initial_len - num_genesis_ticks);
 
         // Shut down
         t_responder.join().expect("responder thread join");
@@ -848,38 +797,14 @@ mod tests {
 
     #[test]
     fn test_tvu_behind() {
-        // Make a leader identity
+        // Make leader node
         let leader_keypair = Arc::new(Keypair::new());
-        let leader_id = leader_keypair.pubkey();
-        let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let leader_node_info = leader_node.info.clone();
-
-        // Create validator identity
         let validator_keypair = Arc::new(Keypair::new());
-        let validator_id = validator_keypair.pubkey();
-        // Create the ledger
-        let (mint_keypair, leader_ledger_path, genesis_entry_height, last_id) =
-            create_tmp_sample_ledger("test_tvu_behind", 10_000, 1, leader_id, 500);
 
-        // Write two entries so that the validator is in the active set:
-        //
-        // 1) Give the validator a nonzero number of tokens
-        // Write the bootstrap entries to the ledger that will cause leader rotation
-        // after the bootstrap height
-        //
-        // 2) A vote from the validator
-        let (active_set_entries, _) =
-            make_active_set_entries(&validator_keypair, &mint_keypair, &last_id, &last_id, 0);
-        {
-            let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
-            db_ledger
-                .write_entries(
-                    DEFAULT_SLOT_HEIGHT,
-                    genesis_entry_height,
-                    &active_set_entries,
-                )
-                .unwrap();
-        }
+        let (leader_node, _, leader_ledger_path, _, _) =
+            setup_leader_validator(&leader_keypair, &validator_keypair, 1, 0, "test_tvu_behind");
+
+        let leader_node_info = leader_node.info.clone();
 
         // Set the leader scheduler for the validator
         let leader_rotation_interval = NUM_TICKS_PER_SECOND as u64 * 5;
@@ -930,13 +855,66 @@ mod tests {
         );
         assert_eq!(
             leader.cluster_info.read().unwrap().leader_id(),
-            validator_id
+            validator_keypair.pubkey(),
         );
         assert!(!leader.node_services.tpu.is_leader());
+        // Confirm the bank actually made progress
+        assert_eq!(leader.bank.tick_height(), bootstrap_height);
 
         // Shut down
         leader.close().expect("leader shutdown");
         DbLedger::destroy(&leader_ledger_path).expect("Expected successful database destruction");
         let _ignored = remove_dir_all(&leader_ledger_path).unwrap();
+    }
+
+    fn setup_leader_validator(
+        leader_keypair: &Arc<Keypair>,
+        validator_keypair: &Arc<Keypair>,
+        num_genesis_ticks: u64,
+        num_ending_ticks: u64,
+        test_name: &str,
+    ) -> (Node, Node, String, u64, Hash) {
+        // Make a leader identity
+        let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+        let leader_id = leader_node.info.id;
+
+        // Create validator identity
+        let (mint_keypair, ledger_path, genesis_entry_height, last_id) =
+            create_tmp_sample_ledger(test_name, 10_000, num_genesis_ticks, leader_id, 500);
+
+        let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
+
+        // Write two entries so that the validator is in the active set:
+        //
+        // 1) Give the validator a nonzero number of tokens
+        // Write the bootstrap entries to the ledger that will cause leader rotation
+        // after the bootstrap height
+        //
+        // 2) A vote from the validator
+        let (active_set_entries, _) = make_active_set_entries(
+            validator_keypair,
+            &mint_keypair,
+            &last_id,
+            &last_id,
+            num_ending_ticks,
+        );
+
+        let db_ledger = DbLedger::open(&ledger_path).unwrap();
+        db_ledger
+            .write_entries(
+                DEFAULT_SLOT_HEIGHT,
+                genesis_entry_height,
+                &active_set_entries,
+            )
+            .unwrap();
+
+        let entry_height = genesis_entry_height + active_set_entries.len() as u64;
+        (
+            leader_node,
+            validator_node,
+            ledger_path,
+            entry_height,
+            active_set_entries.last().unwrap().id,
+        )
     }
 }
