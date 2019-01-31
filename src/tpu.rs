@@ -5,9 +5,7 @@ use crate::bank::Bank;
 use crate::banking_stage::{BankingStage, BankingStageReturnType};
 use crate::broadcast_service::BroadcastService;
 use crate::cluster_info::ClusterInfo;
-use crate::cluster_info::ClusterInfo;
 use crate::cluster_info_vote_listener::ClusterInfoVoteListener;
-use crate::entry::Entry;
 use crate::fetch_stage::FetchStage;
 use crate::fullnode::TpuRotationSender;
 use crate::poh_service::Config;
@@ -19,7 +17,6 @@ use solana_sdk::pubkey::Pubkey;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
-use std::sync::mpsc::Receiver;
 use std::sync::{Arc, RwLock};
 use std::thread;
 
@@ -96,7 +93,7 @@ impl Tpu {
             let fetch_stage = FetchStage::new_with_sender(
                 transactions_sockets,
                 exit.clone(),
-                packet_sender.clone(),
+                &packet_sender.clone(),
             );
             let cluster_info_vote_listener =
                 ClusterInfoVoteListener::new(exit.clone(), cluster_info.clone(), packet_sender);
@@ -187,10 +184,13 @@ impl Tpu {
         }
         self.exit = Arc::new(AtomicBool::new(false));
         let (packet_sender, packet_receiver) = channel();
-        let fetch_stage =
-            FetchStage::new_with_sender(transactions_sockets, exit.clone(), packet_sender.clone());
+        let fetch_stage = FetchStage::new_with_sender(
+            transactions_sockets,
+            self.exit.clone(),
+            &packet_sender.clone(),
+        );
         let cluster_info_vote_listener =
-            ClusterInfoVoteListener::new(exit.clone(), cluster_info.clone(), packet_sender);
+            ClusterInfoVoteListener::new(self.exit.clone(), cluster_info.clone(), packet_sender);
 
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);

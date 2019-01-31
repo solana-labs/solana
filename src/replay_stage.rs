@@ -14,7 +14,6 @@ use crate::leader_scheduler::TICKS_PER_BLOCK;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
 use crate::service::Service;
-use crate::streamer::{responder, BlobSender};
 use crate::tvu::TvuReturnType;
 use crate::vote_signer_proxy::VoteSignerProxy;
 use log::Level;

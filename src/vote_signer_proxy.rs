@@ -4,9 +4,6 @@ use crate::bank::Bank;
 use crate::jsonrpc_core;
 use crate::result::Result;
 use crate::rpc_request::{RpcClient, RpcRequest};
-use crate::streamer::BlobSender;
-use bincode::serialize;
-use log::Level;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
@@ -120,11 +117,11 @@ impl VoteSignerProxy {
     }
 
     pub fn validator_vote(&self, bank: &Arc<Bank>) -> Transaction {
-        Transaction::vote_new(self, vote, *last_id, 0)
+        self.new_signed_vote_transaction(&bank.last_id(), bank.tick_height())
     }
 
     pub fn new_signed_vote_transaction(&self, last_id: &Hash, tick_height: u64) -> Transaction {
-        let mut tx = Transaction::vote_new(&self.vote_account, tick_height, *last_id, 0);
+        let mut tx = Transaction::vote_new(self, tick_height, *last_id, 0);
         assert!(tx.signatures.is_empty());
         let sig = self.sign_message(&tx.message());
         tx.signatures.push(sig);
