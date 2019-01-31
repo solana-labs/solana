@@ -305,19 +305,27 @@ impl Bank {
         self.status_cache.write().unwrap().clear();
     }
 
-    fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
-        let mut status_cache = self.status_cache.write().unwrap();
+    fn update_subscriptions(&self, txs: &[Transaction], res: &[Result<()>]) {
         for (i, tx) in txs.iter().enumerate() {
-            status_cache.add(&tx.signatures[0]);
-            if let Err(e) = &res[i] {
-                //TODO: this may not be necessary if `subscriptions` handles clients checking
-                //signature results
-                status_cache.save_failure_status(&tx.signatures[0], e.clone());
-            }
             self.subscriptions
                 .read()
                 .unwrap()
                 .check_signature(&tx.signatures[0], &res[i]);
+        }
+    }
+    fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
+        let mut status_cache = self.status_cache.write().unwrap();
+        for (i, tx) in txs.iter().enumerate() {
+            match &res[i] {
+                Ok(_) => status_cache.add(&tx.signatures[0]),
+                Err(BankError::LastIdNotFound) => (),
+                Err(BankError::DuplicateSignature) => (),
+                Err(BankError::AccountNotFound) => (),
+                Err(e) => {
+                    status_cache.add(&tx.signatures[0]);
+                    status_cache.save_failure_status(&tx.signatures[0], e.clone());
+                }
+            }
         }
     }
 
@@ -606,6 +614,7 @@ impl Bank {
             txs.len(),
         );
         self.update_transaction_statuses(txs, &executed);
+        self.update_subscriptions(txs, &executed);
     }
 
     /// Process a batch of transactions.
