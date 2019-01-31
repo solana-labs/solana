@@ -455,7 +455,7 @@ pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, 
     let vote_signer = VoteSignerProxy::new_local(&vote_account_keypair);
     let node = Fullnode::new(
         node,
-        node_keypair,
+        &node_keypair,
         &ledger_path,
         Arc::new(RwLock::new(leader_scheduler)),
         vote_signer,

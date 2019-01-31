@@ -105,7 +105,7 @@ pub struct Fullnode {
 impl Fullnode {
     pub fn new(
         mut node: Node,
-        keypair: Arc<Keypair>,
+        keypair: &Arc<Keypair>,
         ledger_path: &str,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         vote_signer: VoteSignerProxy,
@@ -477,7 +477,7 @@ mod tests {
 
         let validator = Fullnode::new(
             validator_node,
-            Arc::new(validator_keypair),
+            &Arc::new(validator_keypair),
             &validator_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::new(&Default::default()))),
             VoteSignerProxy::new(),
@@ -509,7 +509,7 @@ mod tests {
 
                 Fullnode::new(
                     validator_node,
-                    Arc::new(validator_keypair),
+                    &Arc::new(validator_keypair),
                     &validator_ledger_path,
                     Arc::new(RwLock::new(LeaderScheduler::new(&Default::default()))),
                     VoteSignerProxy::new(),
@@ -573,7 +573,7 @@ mod tests {
         // Start up the leader
         let mut bootstrap_leader = Fullnode::new(
             bootstrap_leader_node,
-            bootstrap_leader_keypair,
+            &bootstrap_leader_keypair,
             &bootstrap_leader_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
             signer,
@@ -658,7 +658,7 @@ mod tests {
             // Test that a node knows to transition to a validator based on parsing the ledger
             let bootstrap_leader = Fullnode::new(
                 bootstrap_leader_node,
-                bootstrap_leader_keypair,
+                &bootstrap_leader_keypair,
                 &bootstrap_leader_ledger_path,
                 Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
                 VoteSignerProxy::new(),
@@ -671,7 +671,7 @@ mod tests {
             // Test that a node knows to transition to a leader based on parsing the ledger
             let validator = Fullnode::new(
                 validator_node,
-                validator_keypair,
+                &validator_keypair,
                 &validator_ledger_path,
                 Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
                 VoteSignerProxy::new(),
@@ -755,7 +755,7 @@ mod tests {
         // Start the validator
         let validator = Fullnode::new(
             validator_node,
-            validator_keypair,
+            &validator_keypair,
             &validator_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
             vote_signer,
