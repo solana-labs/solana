@@ -5,6 +5,7 @@ use crate::bank::Bank;
 use crate::banking_stage::{BankingStage, BankingStageReturnType};
 use crate::broadcast_service::BroadcastService;
 use crate::cluster_info::ClusterInfo;
+use crate::cluster_info_vote_listener::ClusterInfoVoteListener;
 use crate::fetch_stage::FetchStage;
 use crate::fullnode::TpuRotationSender;
 use crate::poh_service::Config;
@@ -16,6 +17,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread;
 
@@ -32,6 +34,7 @@ pub struct LeaderServices {
     fetch_stage: FetchStage,
     sigverify_stage: SigVerifyStage,
     banking_stage: BankingStage,
+    cluster_info_vote_listener: ClusterInfoVoteListener,
     broadcast_service: BroadcastService,
 }
 
@@ -40,12 +43,14 @@ impl LeaderServices {
         fetch_stage: FetchStage,
         sigverify_stage: SigVerifyStage,
         banking_stage: BankingStage,
+        cluster_info_vote_listener: ClusterInfoVoteListener,
         broadcast_service: BroadcastService,
     ) -> Self {
         LeaderServices {
             fetch_stage,
             sigverify_stage,
             banking_stage,
+            cluster_info_vote_listener,
             broadcast_service,
         }
     }
@@ -85,10 +90,15 @@ impl Tpu {
         blob_sender: &BlobSender,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
-
         let tpu_mode = if is_leader {
-            let (fetch_stage, packet_receiver) =
-                FetchStage::new(transactions_sockets, exit.clone());
+            let (packet_sender, packet_receiver) = channel();
+            let fetch_stage = FetchStage::new_with_sender(
+                transactions_sockets,
+                exit.clone(),
+                &packet_sender.clone(),
+            );
+            let cluster_info_vote_listener =
+                ClusterInfoVoteListener::new(exit.clone(), cluster_info.clone(), packet_sender);
 
             let (sigverify_stage, verified_receiver) =
                 SigVerifyStage::new(packet_receiver, sigverify_disabled);
@@ -119,6 +129,7 @@ impl Tpu {
                 fetch_stage,
                 sigverify_stage,
                 banking_stage,
+                cluster_info_vote_listener,
                 broadcast_service,
             );
             TpuMode::Leader(svcs)
@@ -176,8 +187,14 @@ impl Tpu {
             }
         }
         self.exit = Arc::new(AtomicBool::new(false));
-        let (fetch_stage, packet_receiver) =
-            FetchStage::new(transactions_sockets, self.exit.clone());
+        let (packet_sender, packet_receiver) = channel();
+        let fetch_stage = FetchStage::new_with_sender(
+            transactions_sockets,
+            self.exit.clone(),
+            &packet_sender.clone(),
+        );
+        let cluster_info_vote_listener =
+            ClusterInfoVoteListener::new(self.exit.clone(), cluster_info.clone(), packet_sender);
 
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
@@ -208,6 +225,7 @@ impl Tpu {
             fetch_stage,
             sigverify_stage,
             banking_stage,
+            cluster_info_vote_listener,
             broadcast_service,
         );
         self.tpu_mode = TpuMode::Leader(svcs);
@@ -250,6 +268,7 @@ impl Service for Tpu {
                 svcs.broadcast_service.join()?;
                 svcs.fetch_stage.join()?;
                 svcs.sigverify_stage.join()?;
+                svcs.cluster_info_vote_listener.join()?;
                 match svcs.banking_stage.join()? {
                     Some(BankingStageReturnType::LeaderRotation) => {
                         Ok(Some(TpuReturnType::LeaderRotation))
