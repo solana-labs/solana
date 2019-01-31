@@ -159,6 +159,7 @@ mod tests {
             assert_eq!(packets[i].meta.size, PACKET_DATA_SIZE);
             assert_eq!(packets[i].meta.addr(), saddr);
         }
+        reader.set_nonblocking(true).unwrap();
 
         let _recv = recv_mmsg(&reader, &mut packets[..]);
         assert!(start.elapsed().as_secs() < 5);
