@@ -38,10 +38,7 @@ fn create_bpf_path(name: &str) -> PathBuf {
 fn check_tx_results(bank: &Bank, tx: &Transaction, result: Vec<solana::bank::Result<()>>) {
     assert_eq!(result.len(), 1);
     assert_eq!(result[0], Ok(()));
-    assert_eq!(
-        bank.get_signature_status(&tx.signatures[0]),
-        Some(Ok(()))
-    );
+    assert_eq!(bank.get_signature_status(&tx.signatures[0]), Some(Ok(())));
 }
 
 struct Loader {

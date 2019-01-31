@@ -459,19 +459,19 @@ impl Bank {
         max_age: usize,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
-        let last_ids = self.last_id_queue.read().unwrap(); 
-         txs.iter()
+        let last_ids = self.last_id_queue.read().unwrap();
+        txs.iter()
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
                 if lock_res.is_ok() && !last_ids.check_entry_id_age(tx.last_id, max_age) {
-                        error_counters.reserve_last_id += 1;
-                        Err(BankError::LastIdNotFound)
+                    error_counters.reserve_last_id += 1;
+                    Err(BankError::LastIdNotFound)
                 } else {
                     lock_res
                 }
             })
             .collect()
-    } 
+    }
     fn check_signatures(
         &self,
         txs: &[Transaction],
@@ -483,8 +483,8 @@ impl Bank {
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
                 if lock_res.is_ok() && status_cache.has_signature(&tx.signatures[0]) {
-                        error_counters.duplicate_signature += 1;
-                        Err(BankError::DuplicateSignature)
+                    error_counters.duplicate_signature += 1;
+                    Err(BankError::DuplicateSignature)
                 } else {
                     lock_res
                 }
@@ -948,10 +948,7 @@ mod tests {
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 0);
         assert_eq!(bank.get_balance(&key1), 1);
         assert_eq!(bank.get_balance(&key2), 0);
-        assert_eq!(
-            bank.get_signature_status(&t1.signatures[0]),
-            Some(Ok(()))
-        );
+        assert_eq!(bank.get_signature_status(&t1.signatures[0]), Some(Ok(())));
         // TODO: Transactions that fail to pay a fee could be dropped silently
         assert_eq!(
             bank.get_signature_status(&t2.signatures[0]),
@@ -1026,10 +1023,7 @@ mod tests {
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 0);
         assert_eq!(bank.get_balance(&key1), 1);
         assert_eq!(bank.get_balance(&key2), 1);
-        assert_eq!(
-            bank.get_signature_status(&t1.signatures[0]),
-            Some(Ok(()))
-        );
+        assert_eq!(bank.get_signature_status(&t1.signatures[0]), Some(Ok(())));
     }
 
     // TODO: This test demonstrates that fees are not paid when a program fails.
