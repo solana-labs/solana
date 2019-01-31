@@ -23,7 +23,7 @@ use crate::service::Service;
 use crate::storage_stage::{StorageStage, StorageState};
 use crate::vote_signer_proxy::VoteSignerProxy;
 use solana_sdk::hash::Hash;
-use solana_sdk::signature::Keypair;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -113,7 +113,7 @@ impl Tvu {
         let l_last_entry_id = Arc::new(RwLock::new(last_entry_id));
 
         let (replay_stage, ledger_entry_receiver) = ReplayStage::new(
-            keypair.clone(),
+            keypair.pubkey(),
             vote_signer,
             bank.clone(),
             cluster_info.clone(),

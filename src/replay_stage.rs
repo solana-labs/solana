@@ -20,7 +20,7 @@ use crate::vote_signer_proxy::VoteSignerProxy;
 use log::Level;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::hash::Hash;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -63,7 +63,7 @@ impl ReplayStage {
         bank: &Arc<Bank>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         window_receiver: &EntryReceiver,
-        keypair: &Arc<Keypair>,
+        my_id: Pubkey,
         vote_signer_proxy: Option<&Arc<VoteSignerProxy>>,
         vote_blob_sender: Option<&BlobSender>,
         ledger_entry_sender: &EntrySender,
@@ -108,7 +108,6 @@ impl ReplayStage {
         let (current_leader, _) = bank
             .get_current_leader()
             .expect("Scheduled leader should be calculated by this point");
-        let my_id = keypair.pubkey();
         let already_leader = my_id == current_leader;
         let mut did_rotate = false;
 
@@ -205,7 +204,7 @@ impl ReplayStage {
 
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new(
-        keypair: Arc<Keypair>,
+        my_id: Pubkey,
         vote_signer_proxy: Option<Arc<VoteSignerProxy>>,
         bank: Arc<Bank>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
@@ -221,7 +220,6 @@ impl ReplayStage {
         let send = UdpSocket::bind("0.0.0.0:0").expect("bind");
         let t_responder = responder("replay_stage", Arc::new(send), vote_blob_receiver);
 
-        let keypair = Arc::new(keypair);
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
@@ -236,7 +234,7 @@ impl ReplayStage {
                     let (leader_id, _) = bank
                         .get_current_leader()
                         .expect("Scheduled leader should be calculated by this point");
-                    if leader_id != last_leader_id && leader_id == keypair.pubkey() {
+                    if leader_id != last_leader_id && leader_id == my_id {
                         to_leader_sender
                             .send(TvuReturnType::LeaderRotation(
                                 bank.tick_height(),
@@ -251,7 +249,7 @@ impl ReplayStage {
                         &bank,
                         &cluster_info,
                         &window_receiver,
-                        &keypair,
+                        my_id,
                         vote_signer_proxy.as_ref(),
                         Some(&vote_blob_sender),
                         &ledger_entry_sender,
@@ -383,7 +381,7 @@ mod test {
         let (rotation_sender, rotation_receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         let (_replay_stage, ledger_writer_recv) = ReplayStage::new(
-            my_keypair,
+            my_keypair.pubkey(),
             Some(Arc::new(vote_signer_proxy)),
             Arc::new(bank),
             Arc::new(RwLock::new(cluster_info_me)),
@@ -479,7 +477,7 @@ mod test {
         let vote_signer_proxy = Arc::new(VoteSignerProxy::new_local(&my_keypair));
         let (to_leader_sender, _) = channel();
         let (replay_stage, ledger_writer_recv) = ReplayStage::new(
-            my_keypair.clone(),
+            my_keypair.pubkey(),
             Some(vote_signer_proxy.clone()),
             bank.clone(),
             cluster_info_me.clone(),
@@ -587,7 +585,7 @@ mod test {
         let (rotation_tx, rotation_rx) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         let (_replay_stage, ledger_writer_recv) = ReplayStage::new(
-            my_keypair.clone(),
+            my_keypair.pubkey(),
             Some(vote_signer_proxy.clone()),
             bank.clone(),
             cluster_info_me.clone(),
@@ -687,7 +685,7 @@ mod test {
             &Arc::new(Bank::default()),
             &cluster_info_me,
             &entry_receiver,
-            &my_keypair,
+            my_id,
             Some(&vote_signer_proxy),
             None,
             &ledger_entry_sender,
@@ -714,7 +712,7 @@ mod test {
             &Arc::new(Bank::default()),
             &cluster_info_me,
             &entry_receiver,
-            &Arc::new(Keypair::new()),
+            Keypair::new().pubkey(),
             Some(&vote_signer_proxy),
             None,
             &ledger_entry_sender,
@@ -769,7 +767,7 @@ mod test {
             &Arc::new(Bank::default()),
             &cluster_info_me,
             &entry_receiver,
-            &my_keypair,
+            my_id,
             Some(&vote_signer_proxy),
             None,
             &ledger_entry_sender,
