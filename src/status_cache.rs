@@ -8,6 +8,7 @@ use std::ops::{Deref, DerefMut};
 
 type FailureMap<T> = HashMap<Signature, T>;
 
+#[derive(Clone)]
 pub struct StatusCache<T> {
     /// all signatures seen at this checkpoint
     signatures: Bloom<Signature>,
@@ -16,10 +17,16 @@ pub struct StatusCache<T> {
     failures: FailureMap<T>,
 
     /// Merges are empty unless this is the root checkpoint which cannot be unrolled
-    merges: VecDeque<StatusCache>,
+    merges: VecDeque<Self>,
 }
 
-impl StatusCache<T> {
+impl<T: Clone> Default for StatusCache<T> {
+    fn default() -> Self {
+        Self::new(&Hash::default())
+    }
+}
+
+impl<T: Clone> StatusCache<T> {
     pub fn new(last_id: &Hash) -> Self {
         let keys = (0..27).map(|i| last_id.hash_at_index(i)).collect();
         Self {
@@ -42,18 +49,11 @@ impl StatusCache<T> {
     }
     /// add a signature
     pub fn add(&mut self, sig: &Signature) {
-        // any mutable cache is "live" and should not be merged into
-        // since it cannot be a valid root checkpoint
-        assert!(self.merges.is_empty());
-
         self.signatures.add(&sig)
     }
     /// Save an error status for a signature
     pub fn save_failure_status(&mut self, sig: &Signature, err: T) {
-        assert!(self.has_signature(sig), "sig not found with err {:?}", err);
-        // any mutable cache is "live" and should not be merged into
-        // since it cannot be a valid root checkpoint
-        assert!(self.merges.is_empty());
+        assert!(self.has_signature(sig), "sig not found");
         self.failures.insert(*sig, err);
     }
     /// Forget all signatures. Useful for benchmarking.
@@ -128,8 +128,8 @@ impl StatusCache<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::bank::BankError;
     use solana_sdk::hash::hash;
-    use crate::bank::{BankError};
 
     type BankStatusCache = StatusCache<BankError>;
 
@@ -137,7 +137,7 @@ mod tests {
     fn test_has_signature() {
         let sig = Default::default();
         let last_id = hash(Hash::default().as_ref());
-        let mut status_cache = StatusCache::new(&last_id);
+        let mut status_cache = BankStatusCache::new(&last_id);
         assert_eq!(status_cache.has_signature(&sig), false);
         assert_eq!(status_cache.get_signature_status(&sig), None,);
         status_cache.add(&sig);
@@ -149,7 +149,7 @@ mod tests {
     fn test_has_signature_checkpoint() {
         let sig = Default::default();
         let last_id = hash(Hash::default().as_ref());
-        let mut first = StatusCache::new(&last_id);
+        let mut first = BankStatusCache::new(&last_id);
         first.add(&sig);
         assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
         let last_id = hash(last_id.as_ref());
@@ -166,11 +166,11 @@ mod tests {
     fn test_has_signature_merged1() {
         let sig = Default::default();
         let last_id = hash(Hash::default().as_ref());
-        let mut first = StatusCache::new(&last_id);
+        let mut first = BankStatusCache::new(&last_id);
         first.add(&sig);
         assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
         let last_id = hash(last_id.as_ref());
-        let second = StatusCache::new(&last_id);
+        let second = BankStatusCache::new(&last_id);
         first.merge_into_root(second);
         assert_eq!(first.get_signature_status(&sig), Some(Ok(())),);
         assert!(first.has_signature(&sig));
@@ -180,11 +180,11 @@ mod tests {
     fn test_has_signature_merged2() {
         let sig = Default::default();
         let last_id = hash(Hash::default().as_ref());
-        let mut first = StatusCache::new(&last_id);
+        let mut first = BankStatusCache::new(&last_id);
         first.add(&sig);
         assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
         let last_id = hash(last_id.as_ref());
-        let mut second = StatusCache::new(&last_id);
+        let mut second = BankStatusCache::new(&last_id);
         second.merge_into_root(first);
         assert_eq!(second.get_signature_status(&sig), Some(Ok(())),);
         assert!(second.has_signature(&sig));
@@ -230,6 +230,9 @@ mod tests {
         let mut second = StatusCache::new(&last_id);
         let mut checkpoints = [&mut second, &mut first];
         BankStatusCache::clear_all(&mut checkpoints);
-        assert_eq!(BankStatusCache::has_signature_all(&checkpoints, &sig), false);
+        assert_eq!(
+            BankStatusCache::has_signature_all(&checkpoints, &sig),
+            false
+        );
     }
 }
