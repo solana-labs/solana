@@ -16,6 +16,7 @@ use crate::tvu::{Sockets, Tvu, TvuReturnType};
 use crate::vote_signer_proxy::VoteSignerProxy;
 use log::Level;
 use solana_sdk::hash::Hash;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::{duration_as_ms, timestamp};
 use std::net::UdpSocket;
@@ -87,7 +88,7 @@ impl Default for FullnodeConfig {
 }
 
 pub struct Fullnode {
-    keypair: Arc<Keypair>,
+    id: Pubkey,
     exit: Arc<AtomicBool>,
     rpc_service: Option<JsonRpcService>,
     rpc_pubsub_service: Option<PubSubService>,
@@ -111,6 +112,7 @@ impl Fullnode {
         entrypoint_info_option: Option<&NodeInfo>,
         config: FullnodeConfig,
     ) -> Self {
+        let id = keypair.pubkey();
         let (genesis_block, db_ledger) = Self::make_db_ledger(ledger_path);
         let (bank, entry_height, last_entry_id) =
             Self::new_bank_from_db_ledger(&genesis_block, &db_ledger, leader_scheduler);
@@ -126,7 +128,7 @@ impl Fullnode {
         let bank = Arc::new(bank);
 
         node.info.wallclock = timestamp();
-        assert_eq!(keypair.pubkey(), node.info.id);
+        assert_eq!(id, node.info.id);
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_keypair(
             node.info.clone(),
             keypair.clone(),
@@ -252,15 +254,15 @@ impl Fullnode {
             config.sigverify_disabled,
             max_tick_height,
             &last_entry_id,
-            keypair.pubkey(),
-            scheduled_leader == keypair.pubkey(),
+            id,
+            scheduled_leader == id,
             &to_validator_sender,
         );
 
         inc_new_counter_info!("fullnode-new", 1);
 
         Self {
-            keypair,
+            id,
             cluster_info,
             bank,
             sigverify_disabled: config.sigverify_disabled,
@@ -287,7 +289,7 @@ impl Fullnode {
         // when the new leader schedule was being generated, and there are no other validators
         // in the active set, then the leader scheduler will pick the same leader again, so
         // check for that
-        if scheduled_leader == self.keypair.pubkey() {
+        if scheduled_leader == self.id {
             let (last_entry_id, entry_height) = self.node_services.tvu.get_state();
             self.validator_to_leader(self.bank.tick_height(), entry_height, last_entry_id);
             Ok(())
@@ -305,10 +307,7 @@ impl Fullnode {
 
     pub fn validator_to_leader(&mut self, tick_height: u64, entry_height: u64, last_id: Hash) {
         trace!("validator_to_leader");
-        self.cluster_info
-            .write()
-            .unwrap()
-            .set_leader(self.keypair.pubkey());
+        self.cluster_info.write().unwrap().set_leader(self.id);
 
         let max_tick_height = {
             let ls_lock = self.bank.leader_scheduler.read().unwrap();
@@ -332,7 +331,7 @@ impl Fullnode {
             max_tick_height,
             entry_height,
             &last_id,
-            self.keypair.pubkey(),
+            self.id,
             &to_validator_sender,
         )
     }
@@ -794,10 +793,7 @@ mod tests {
             t_responder
         };
 
-        assert_ne!(
-            validator.bank.get_current_leader().unwrap().0,
-            validator.keypair.pubkey()
-        );
+        assert_ne!(validator.bank.get_current_leader().unwrap().0, validator.id);
         loop {
             let should_be_forwarder = validator.role_notifiers.1.try_recv();
             let should_be_leader = validator.role_notifiers.0.try_recv();
