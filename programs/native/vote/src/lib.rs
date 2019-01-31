@@ -27,6 +27,25 @@ fn initialize_account(keyed_accounts: &mut [KeyedAccount]) -> Result<(), Program
     Ok(())
 }
 
+fn delegate(keyed_accounts: &mut [KeyedAccount], node_id: Pubkey) -> Result<(), ProgramError> {
+    if keyed_accounts[0].signer_key().is_none() {
+        error!("account[0] is unsigned");
+        Err(ProgramError::InvalidArgument)?;
+    }
+
+    if !vote_program::check_id(&keyed_accounts[0].account.owner) {
+        error!("account[0] is not assigned to the VOTE_PROGRAM");
+        Err(ProgramError::InvalidArgument)?;
+    }
+
+    let mut vote_state = VoteProgram::deserialize(&keyed_accounts[0].account.userdata)?;
+    vote_state.node_id = node_id;
+
+    vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
+
+    Ok(())
+}
+
 fn process_vote(keyed_accounts: &mut [KeyedAccount], vote: Vote) -> Result<(), ProgramError> {
     if keyed_accounts[0].signer_key().is_none() {
         error!("account[0] is unsigned");
@@ -69,6 +88,7 @@ fn entrypoint(
 
     match deserialize(data).map_err(|_| ProgramError::InvalidUserdata)? {
         VoteInstruction::InitializeAccount => initialize_account(keyed_accounts),
+        VoteInstruction::Delegate(node_id) => delegate(keyed_accounts, node_id),
         VoteInstruction::Vote(vote) => {
             debug!("{:?} by {}", vote, keyed_accounts[0].signer_key().unwrap());
             solana_metrics::submit(

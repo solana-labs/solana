@@ -23,27 +23,21 @@ pub trait VoteTransaction {
         num_tokens: u64,
         fee: u64,
     ) -> Self;
+    fn vote_delegate<T: KeypairUtil>(signer: &T, node_id: Pubkey, last_id: Hash, fee: u64) -> Self;
 
     fn get_votes(&self) -> Vec<(Pubkey, Vote, Hash)>;
 }
 
 impl VoteTransaction for Transaction {
-    fn vote_new<T: KeypairUtil>(
-        vote_account: &T,
-        tick_height: u64,
-        last_id: Hash,
-        fee: u64,
-    ) -> Self {
-        let vote = Vote { tick_height };
-        let instruction = VoteInstruction::Vote(vote);
-        Transaction::new(
-            vote_account,
-            &[],
-            vote_program::id(),
-            &instruction,
-            last_id,
-            fee,
-        )
+    /// Delegate block producing to the Fullnode with the given `node_id`
+    fn vote_delegate<T: KeypairUtil>(signer: &T, node_id: Pubkey, last_id: Hash, fee: u64) -> Self {
+        let ix = VoteInstruction::Delegate(node_id);
+        Transaction::new(signer, &[], vote_program::id(), &ix, last_id, fee)
+    }
+
+    fn vote_new<T: KeypairUtil>(signer: &T, tick_height: u64, last_id: Hash, fee: u64) -> Self {
+        let ix = VoteInstruction::Vote(Vote { tick_height });
+        Transaction::new(signer, &[], vote_program::id(), &ix, last_id, fee)
     }
 
     fn vote_account_new(
@@ -53,6 +47,11 @@ impl VoteTransaction for Transaction {
         num_tokens: u64,
         fee: u64,
     ) -> Self {
+        let create_ix = SystemInstruction::CreateAccount {
+            tokens: num_tokens,
+            space: vote_program::get_max_size() as u64,
+            program_id: vote_program::id(),
+        };
         Transaction::new_with_instructions(
             &[from_keypair],
             &[vote_account_id],
@@ -60,15 +59,7 @@ impl VoteTransaction for Transaction {
             fee,
             vec![system_program::id(), vote_program::id()],
             vec![
-                Instruction::new(
-                    0,
-                    &SystemInstruction::CreateAccount {
-                        tokens: num_tokens,
-                        space: vote_program::get_max_size() as u64,
-                        program_id: vote_program::id(),
-                    },
-                    vec![0, 1],
-                ),
+                Instruction::new(0, &create_ix, vec![0, 1]),
                 Instruction::new(1, &VoteInstruction::InitializeAccount, vec![1]),
             ],
         )

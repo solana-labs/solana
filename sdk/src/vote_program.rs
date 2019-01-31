@@ -42,12 +42,18 @@ pub enum VoteInstruction {
     /// * Transaction::keys[0] - the new "vote account"
     /// identified by keys[0] for voting
     InitializeAccount,
+
+    /// Delegate block producing to the Fullnode with the given `node_id`
+    Delegate(Pubkey),
+
+    /// Commit to a fork by voting on a block
     Vote(Vote),
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VoteProgram {
     pub votes: VecDeque<Vote>,
+    pub node_id: Pubkey,
 }
 
 pub fn get_max_size() -> usize {
