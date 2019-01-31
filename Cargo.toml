@@ -40,6 +40,7 @@ jsonrpc-pubsub = "10.0.1"
 jsonrpc-ws-server = "10.0.1"
 libc = "0.2.48"
 log = "0.4.2"
+memmap = "0.7.0"
 nix = "0.13.0"
 rand = "0.6.5"
 rand_chacha = "0.1.1"
@@ -117,5 +118,5 @@ members = [
     "upload-perf",
     "vote-signer",
     "wallet",
-]
-exclude = ["programs/bpf/rust/noop"]
+    ]
+    exclude = ["programs/bpf/rust/noop"]

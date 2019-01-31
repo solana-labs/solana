@@ -1,4 +1,4 @@
-use crate::blob_store::slot::{self, SlotData, SlotFiles, SlotIO, SlotPaths};
+use crate::blob_store::slot::{self, FreeSlotData, SlotData, SlotFiles, SlotIO, SlotPaths};
 use crate::blob_store::DEFAULT_BLOCKS_PER_SLOT;
 use crate::blob_store::{BlobIndex, Result, SlotMeta, Store, StoreConfig, StoreError};
 use crate::packet::{Blob, BlobError, BLOB_HEADER_SIZE};
@@ -11,6 +11,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, File, OpenOptions};
 use std::io::{prelude::*, BufReader, BufWriter, Seek, SeekFrom};
+use std::marker::PhantomData;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
@@ -25,6 +26,62 @@ pub const ERASURE_INDEX_FILE_NAME: &str = "erasure_index";
 pub const DEFAULT_SLOT_CACHE_SIZE: usize = 10;
 pub const DATA_FILE_BUF_SIZE: usize = 64 * 1024;
 pub const INDEX_RECORD_SIZE: u64 = 3 * 8;
+
+#[derive(Debug)]
+pub struct Data<'a, S> {
+    slot_iter: Option<FreeSlotData>,
+    marker: PhantomData<&'a S>,
+}
+
+#[derive(Debug)]
+pub struct SlotCache {
+    max_size: usize,
+    map: BTreeMap<u64, SlotIO>,
+}
+
+impl SlotCache {
+    pub const DEFAULT_CAPACITY: usize = 1024;
+
+    pub fn new() -> SlotCache {
+        Self::with_capacity(Self::DEFAULT_CAPACITY)
+    }
+
+    pub fn with_capacity(max_size: usize) -> Self {
+        let map = BTreeMap::new();
+        SlotCache { map, max_size }
+    }
+
+    pub fn get(&self, slot: u64) -> Option<&SlotIO> {
+        self.map.get(&slot)
+    }
+
+    pub fn get_mut(&mut self, slot: u64) -> Option<&mut SlotIO> {
+        self.map.get_mut(&slot)
+    }
+
+    /// Returns the `SlotIO` that was popped to make room, if any
+    pub fn push(&mut self, sio: SlotIO) -> Option<SlotIO> {
+        let popped = if self.map.len() >= self.max_size {
+            self.pop()
+        } else {
+            None
+        };
+
+        self.map.insert(sio.slot, sio);
+        assert!(self.map.len() <= self.max_size);
+
+        popped
+    }
+
+    pub fn pop(&mut self) -> Option<SlotIO> {
+        if self.map.is_empty() {
+            return None;
+        }
+
+        let first_key = *self.map.keys().next().unwrap();
+        self.map.remove(&first_key)
+    }
+}
 
 pub fn mk_slot_path(root: &Path, slot: u64) -> PathBuf {
     let splat = slot.to_be_bytes();
@@ -102,10 +159,11 @@ pub fn index_erasure(root: &Path, slot: u64, erasure_index: u64) -> Result<(Path
 
     Err(StoreError::NoSuchBlob(slot, erasure_index))
 }
+
 #[allow(clippy::range_plus_one)]
 pub fn insert_blobs<I>(
     root: &Path,
-    cache: &RwLock<BTreeMap<u64, RwLock<SlotIO>>>,
+    cache: &mut SlotCache,
     config: &StoreConfig,
     iter: I,
 ) -> Result<()>
@@ -117,14 +175,12 @@ where
     assert!(!blobs.is_empty());
 
     // sort on lexi order (slot_idx, blob_idx)
-    // TODO: this sort may cause panics while malformed blobs result in `Result`s elsewhere
     blobs.sort_unstable_by_key(|elem| {
         let blob = elem.borrow();
         (blob.slot(), blob.index())
     });
 
     // contains the indices into blobs of the first blob for that slot
-
     let mut slot_ranges = HashMap::new();
 
     for (index, blob) in blobs.iter().enumerate() {
@@ -138,21 +194,19 @@ where
             .or_insert(index..(index + 1));
     }
 
-    let mut slots_to_cache = Vec::with_capacity(slot_ranges.len());
+    let mut slots_to_cache = Vec::new();
 
     for (slot, range) in slot_ranges {
         let slot_blobs = &blobs[range];
 
-        //for blob in slot_blobs {
-        //}
-        let cache = cache.read().expect("concurrency error with cache");
-        match cache.get(&slot) {
-            Some(sio_lock) => {
-                let mut sio = sio_lock.write().expect("concurrency error with SlotIo");
+        match cache.get_mut(slot) {
+            Some(sio) => {
                 sio.insert(slot_blobs, config)?;
             }
             None => {
-                let mut sio = open_slot(root, slot)?;
+                let slot_path = mk_slot_path(root, slot);
+                ensure_slot(&slot_path)?;
+                let mut sio = open_slot(&slot_path, slot)?;
                 sio.insert(slot_blobs, config)?;
                 slots_to_cache.push(sio);
             }
@@ -160,27 +214,19 @@ where
     }
 
     // cache slots
-    {
-        let mut cache = cache.write().expect("concurrency error with cache");
-        for sio in slots_to_cache {
-            cache.insert(sio.slot, RwLock::new(sio));
-        }
+    for sio in slots_to_cache {
+        cache.push(sio);
     }
 
     Ok(())
 }
 
-pub fn slot_data<'a, T>(
-    src: &'a T,
+pub fn slot_data<'a, S>(
+    src: &'a S,
     root: &Path,
     slot: u64,
     range: std::ops::Range<u64>,
-) -> Result<impl Iterator<Item = Result<Vec<u8>>> + 'a> {
-    // iterate over index file, gather blob indexes
-    // sort by blob_index,
-
-    //let sio = self.open_slot(slot)?;
-    //sio.data(range)
+) -> Result<SlotData<'a, S>> {
     let (data_path, index_path) = {
         let slot_path = mk_slot_path(root, slot);
         (
@@ -189,13 +235,11 @@ pub fn slot_data<'a, T>(
         )
     };
 
-    let it = slot::mk_slot_data_iter(&index_path, &data_path, range, src)?;
-    Ok(it)
+    let it = slot::mk_slot_data_iter(&index_path, &data_path, range)?;
+    Ok(it.bind(src))
 }
 
-pub fn mk_paths(root: &Path, slot: u64) -> SlotPaths {
-    let slot_dir = mk_slot_path(root, slot);
-
+pub fn mk_paths(slot_dir: &Path) -> SlotPaths {
     SlotPaths {
         meta: slot_dir.join(META_FILE_NAME),
         index: slot_dir.join(INDEX_FILE_NAME),
@@ -205,8 +249,8 @@ pub fn mk_paths(root: &Path, slot: u64) -> SlotPaths {
     }
 }
 
-pub fn open_slot(root: &Path, slot: u64) -> Result<SlotIO> {
-    let paths = mk_paths(root, slot);
+pub fn open_slot(slot_path: &Path, slot: u64) -> Result<SlotIO> {
+    let paths = SlotPaths::new(&slot_path);
     let new_meta = !paths.meta.exists();
     let mut files = paths.open()?;
 

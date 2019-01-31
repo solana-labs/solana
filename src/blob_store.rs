@@ -7,13 +7,13 @@
 // and then farm
 #![allow(unreachable_code, unused_imports, unused_variables, dead_code)]
 
-use crate::blob_store::slot::SlotIO;
-use crate::blob_store::store_impl::{self as simpl, index_data, index_erasure, mk_slot_path};
 use crate::entry::Entry;
 use crate::leader_scheduler::{DEFAULT_BOOTSTRAP_HEIGHT, TICKS_PER_BLOCK};
 use crate::packet::{self, Blob};
 
 use byteorder::{BigEndian, ByteOrder};
+
+use memmap::{MmapMut, MmapOptions};
 
 use serde::Serialize;
 
@@ -28,6 +28,11 @@ use std::path::{Path, PathBuf};
 use std::result::Result as StdRes;
 use std::sync::RwLock;
 
+use appendvec::AppendVec;
+use slot::SlotIO;
+use store_impl::{self as simpl, index_data, index_erasure, mk_slot_path, SlotCache};
+
+mod appendvec;
 mod slot;
 mod store_impl;
 
@@ -39,7 +44,8 @@ pub const DEFAULT_BLOCKS_PER_SLOT: u64 = 1;
 pub struct Store {
     root: PathBuf,
     config: StoreConfig,
-    cache: RwLock<BTreeMap<u64, RwLock<SlotIO>>>,
+    cache: SlotCache,
+    slots_mmap: AppendVec<u64>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
@@ -90,22 +96,23 @@ pub struct Entries;
 pub struct DataIter;
 
 impl Store {
-    pub fn open<P>(path: &P) -> Store
+    pub fn open<P>(path: &P) -> Result<Store>
     where
         P: AsRef<Path>,
     {
         Store::open_config(path, StoreConfig::default())
     }
 
-    pub fn open_config<P>(path: &P, config: StoreConfig) -> Store
+    pub fn open_config<P>(path: &P, config: StoreConfig) -> Result<Store>
     where
         P: AsRef<Path>,
     {
-        Store {
+        Ok(Store {
             root: PathBuf::from(path.as_ref()),
             config,
-            cache: RwLock::new(BTreeMap::new()),
-        }
+            cache: SlotCache::new(),
+            slots_mmap: AppendVec::new()?,
+        })
     }
 
     pub fn get_config(&self) -> &StoreConfig {
@@ -236,7 +243,7 @@ impl Store {
         I: IntoIterator,
         I::Item: Borrow<Blob>,
     {
-        simpl::insert_blobs(&self.root, &self.cache, &self.config, iter)
+        simpl::insert_blobs(&self.root, &mut self.cache, &self.config, iter)
     }
 
     pub fn slot_data_from(

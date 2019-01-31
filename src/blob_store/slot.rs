@@ -1,5 +1,5 @@
 use crate::blob_store::store_impl::{
-    bad_blob, ensure_slot, open_append, DATA_FILE_BUF_SIZE, INDEX_RECORD_SIZE,
+    bad_blob, ensure_slot, mk_paths, open_append, DATA_FILE_BUF_SIZE, INDEX_RECORD_SIZE,
 };
 use crate::blob_store::{BlobIndex, Result, SlotMeta, StoreConfig};
 use crate::entry::Entry;
@@ -14,7 +14,7 @@ use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, File, OpenOptions};
 use std::io::{prelude::*, BufReader, BufWriter, Seek, SeekFrom};
-use std::iter::ExactSizeIterator;
+use std::iter::{ExactSizeIterator, FusedIterator};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -49,10 +49,15 @@ pub struct SlotFiles {
 
 #[derive(Debug)]
 pub struct SlotData<'a, T> {
-    pub f: BufReader<File>,
-    pub idxs: Vec<BlobIndex>,
-    pub pos: u64,
+    inner: FreeSlotData,
     marker: PhantomData<&'a T>,
+}
+
+#[derive(Debug)]
+pub struct FreeSlotData {
+    f: BufReader<File>,
+    idxs: Vec<BlobIndex>,
+    pos: u64,
 }
 
 impl SlotIO {
@@ -75,16 +80,26 @@ impl SlotIO {
         &self,
         range: std::ops::Range<u64>,
     ) -> Result<impl Iterator<Item = Result<Vec<u8>>> + '_> {
-        mk_slot_data_iter(&self.paths.index, &self.paths.data, range, self)
+        let it = mk_slot_data_iter(&self.paths.index, &self.paths.data, range)?.bind(self);
+
+        Ok(it)
     }
 }
 
-pub fn mk_slot_data_iter<'a, S, P>(
+impl FreeSlotData {
+    pub fn bind<'a, S>(self, src: &'a S) -> SlotData<'a, S> {
+        SlotData {
+            inner: self,
+            marker: PhantomData,
+        }
+    }
+}
+
+pub fn mk_slot_data_iter<P>(
     index_path: P,
     data_path: P,
     range: std::ops::Range<u64>,
-    src: &'a S,
-) -> Result<SlotData<'a, S>>
+) -> Result<FreeSlotData>
 where
     P: AsRef<Path>,
 {
@@ -119,22 +134,24 @@ where
 
     let data_rdr = BufReader::new(File::open(&data_path)?);
 
-    Ok(SlotData {
+    Ok(FreeSlotData {
         f: data_rdr,
         idxs: blob_indices,
         pos: 0,
-        marker: PhantomData,
     })
 }
 
 impl SlotPaths {
+    pub fn new(slot_dir: &Path) -> SlotPaths {
+        mk_paths(slot_dir)
+    }
+
     pub fn open(&self) -> Result<SlotFiles> {
         // Ensure slot
         let slot_path = self
             .meta
             .parent()
             .expect("slot files must be in a directory");
-        ensure_slot(&slot_path)?;
 
         let mut file_opts = OpenOptions::new();
         file_opts.read(true).write(true).create(true);
@@ -229,20 +246,29 @@ impl<'a, T> Iterator for SlotData<'a, T> {
     type Item = Result<Vec<u8>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.pos >= self.idxs.len() as u64 {
+        if self.inner.pos >= self.inner.idxs.len() as u64 {
             return None;
         }
 
         let mut hack = || {
-            let bix = self.idxs[self.pos as usize];
+            let bix = self.inner.idxs[self.inner.pos as usize];
 
             let mut buf = vec![0u8; bix.size as usize];
-            self.f.seek(SeekFrom::Start(bix.offset))?;
-            self.f.read_exact(&mut buf)?;
+            self.inner.f.seek(SeekFrom::Start(bix.offset))?;
+            self.inner.f.read_exact(&mut buf)?;
 
-            self.pos += 1;
+            self.inner.pos += 1;
             Ok(buf)
         };
         Some(hack())
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let diff = self.inner.idxs.len() - self.inner.pos as usize;
+        (diff, Some(diff))
+    }
 }
+
+impl<'a, T> ExactSizeIterator for SlotData<'a, T> {}
+
+impl<'a, T> FusedIterator for SlotData<'a, T> {}
