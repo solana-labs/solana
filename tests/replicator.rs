@@ -125,7 +125,7 @@ fn test_replicator_startup() {
         let leader_info = NodeInfo::new_entry_point(&leader_info.gossip);
 
         let replicator = Replicator::new(
-            Some(replicator_ledger_path),
+            replicator_ledger_path,
             replicator_node,
             &leader_info,
             &replicator_keypair,
@@ -237,7 +237,7 @@ fn test_replicator_startup_leader_hang() {
         let leader_info = NodeInfo::new_entry_point(&fake_gossip);
 
         let replicator_res = Replicator::new(
-            Some(replicator_ledger_path),
+            replicator_ledger_path,
             replicator_node,
             &leader_info,
             &replicator_keypair,
@@ -314,7 +314,7 @@ fn test_replicator_startup_ledger_hang() {
         let leader_info = NodeInfo::new_entry_point(&leader_info.gossip);
 
         let replicator_res = Replicator::new(
-            Some(replicator_ledger_path),
+            replicator_ledger_path,
             replicator_node,
             &leader_info,
             &bad_keys,
