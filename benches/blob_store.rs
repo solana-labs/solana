@@ -31,8 +31,8 @@ fn setup_read_bench(store: &mut Store, num_small_blobs: u64, num_large_blobs: u6
     // Convert the entries to blobs, write the blobs to the ledger
     let mut blobs = entries.to_blobs();
     for (index, b) in blobs.iter_mut().enumerate() {
-        b.set_index(index as u64).unwrap();
-        b.set_slot(slot).unwrap();
+        b.set_index(index as u64);
+        b.set_slot(slot);
     }
 
     store
@@ -49,7 +49,7 @@ fn bench_write_small(bench: &mut Bencher) {
     let entries = make_tiny_test_entries(num_entries);
     let mut blobs = entries.to_blobs();
     for (index, b) in blobs.iter_mut().enumerate() {
-        b.set_index(index as u64).unwrap();
+        b.set_index(index as u64);
     }
     bench_write_blobs(bench, &mut blobs, &ledger_path.to_string_lossy());
 }
@@ -63,7 +63,7 @@ fn bench_write_big(bench: &mut Bencher) {
     let entries = make_large_test_entries(num_entries);
     let mut blobs = entries.to_blobs();
     for (index, b) in blobs.iter_mut().enumerate() {
-        b.set_index(index as u64).unwrap();
+        b.set_index(index as u64);
     }
 
     bench_write_blobs(bench, &mut blobs, &ledger_path.to_string_lossy());
@@ -138,8 +138,8 @@ fn bench_insert_data_blob_small(bench: &mut Bencher) {
 
     bench.iter(move || {
         for blob in blobs.iter_mut() {
-            let index = blob.index().unwrap();
-            blob.set_index(index + num_entries as u64).unwrap();
+            let index = blob.index();
+            blob.set_index(index + num_entries as u64);
         }
         store.put_blobs(&blobs).unwrap();
     });
@@ -160,7 +160,7 @@ fn bench_insert_data_blob_big(bench: &mut Bencher) {
     bench.iter(move || {
         let mut i = 0;
         for blob in blobs.iter_mut() {
-            blob.set_index(i + num_entries as u64).unwrap();
+            blob.set_index(i + num_entries as u64);
             i += 1;
         }
 

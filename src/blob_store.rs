@@ -8,6 +8,7 @@
 #![allow(unreachable_code, unused_imports, unused_variables, dead_code)]
 
 use crate::blob_store::slot::SlotIO;
+use crate::blob_store::store_impl::{self as simpl, index_data, index_erasure, mk_slot_path};
 use crate::entry::Entry;
 use crate::leader_scheduler::{DEFAULT_BOOTSTRAP_HEIGHT, TICKS_PER_BLOCK};
 use crate::packet::{self, Blob};
@@ -22,6 +23,7 @@ use std::error::Error;
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, prelude::*, BufReader, BufWriter, Seek, SeekFrom};
+use std::ops::{Range, RangeFrom};
 use std::path::{Path, PathBuf};
 use std::result::Result as StdRes;
 use std::sync::RwLock;
@@ -32,7 +34,6 @@ mod store_impl;
 type Result<T> = StdRes<T, StoreError>;
 
 pub const DEFAULT_BLOCKS_PER_SLOT: u64 = 1;
-const DEFAULT_SLOT_CACHE_SIZE: usize = 10;
 
 #[derive(Debug)]
 pub struct Store {
@@ -112,7 +113,7 @@ impl Store {
     }
 
     pub fn put_meta(&self, slot: u64, meta: SlotMeta) -> Result<()> {
-        let slot_path = self.mk_slot_path(slot);
+        let slot_path = mk_slot_path(&self.root, slot);
         store_impl::ensure_slot(&slot_path)?;
 
         let meta_path = slot_path.join(store_impl::META_FILE_NAME);
@@ -128,7 +129,7 @@ impl Store {
     }
 
     pub fn get_meta(&self, slot: u64) -> Result<SlotMeta> {
-        let slot_path = self.mk_slot_path(slot);
+        let slot_path = mk_slot_path(&self.root, slot);
         if !slot_path.exists() {
             return Err(StoreError::NoSuchSlot(slot));
         }
@@ -141,11 +142,16 @@ impl Store {
     }
 
     pub fn put_blob(&mut self, blob: &Blob) -> Result<()> {
-        self.insert_blobs(std::iter::once(blob))
+        simpl::insert_blobs(
+            &self.root,
+            &mut self.cache,
+            &self.config,
+            std::iter::once(blob),
+        )
     }
 
     pub fn read_blob_data(&self, slot: u64, index: u64, buf: &mut [u8]) -> Result<()> {
-        let (data_path, blob_idx) = self.index_data(slot, index)?;
+        let (data_path, blob_idx) = index_data(&self.root, slot, index)?;
 
         let mut data_file = BufReader::new(File::open(&data_path)?);
         data_file.seek(SeekFrom::Start(blob_idx.offset))?;
@@ -155,7 +161,7 @@ impl Store {
     }
 
     pub fn get_blob_data(&self, slot: u64, index: u64) -> Result<Vec<u8>> {
-        let (data_path, blob_idx) = self.index_data(slot, index)?;
+        let (data_path, blob_idx) = index_data(&self.root, slot, index)?;
 
         let mut data_file = File::open(&data_path)?;
         data_file.seek(SeekFrom::Start(blob_idx.offset))?;
@@ -172,7 +178,7 @@ impl Store {
     }
 
     pub fn get_erasure(&self, slot: u64, index: u64) -> Result<Vec<u8>> {
-        let (erasure_path, index) = self.index_erasure(slot, index)?;
+        let (erasure_path, index) = index_erasure(&self.root, slot, index)?;
 
         let mut erasure_file = File::open(&erasure_path)?;
         erasure_file.seek(SeekFrom::Start(index.offset))?;
@@ -183,7 +189,7 @@ impl Store {
     }
 
     pub fn put_erasure(&self, slot: u64, index: u64, erasure: &[u8]) -> Result<()> {
-        let slot_path = self.mk_slot_path(slot);
+        let slot_path = mk_slot_path(&self.root, slot);
         store_impl::ensure_slot(&slot_path)?;
 
         let (index_path, data_path) = (
@@ -230,7 +236,7 @@ impl Store {
         I: IntoIterator,
         I::Item: Borrow<Blob>,
     {
-        self.insert_blobs(iter)
+        simpl::insert_blobs(&self.root, &self.cache, &self.config, iter)
     }
 
     pub fn slot_data_from(
@@ -238,15 +244,15 @@ impl Store {
         slot: u64,
         start_index: u64,
     ) -> Result<impl Iterator<Item = Result<Vec<u8>>> + '_> {
-        self.slot_data(slot, start_index..std::u64::MAX)
+        simpl::slot_data(self, &self.root, slot, start_index..std::u64::MAX)
     }
 
     pub fn slot_data_range(
         &self,
         slot: u64,
-        range: std::ops::Range<u64>,
+        range: Range<u64>,
     ) -> Result<impl Iterator<Item = Result<Vec<u8>>> + '_> {
-        self.slot_data(slot, range)
+        simpl::slot_data(self, &self.root, slot, range)
     }
 
     /// Returns the entry vector for the slot starting with `entry_start_index`, capping the result
@@ -278,9 +284,9 @@ impl Store {
     pub fn slot_entries_range(
         &self,
         slot: u64,
-        range: std::ops::Range<u64>,
+        range: Range<u64>,
     ) -> Result<impl Iterator<Item = Result<Entry>> + '_> {
-        let iter = self.slot_data(slot, range)?.map(|blob_data| {
+        let iter = simpl::slot_data(self, &self.root, slot, range)?.map(|blob_data| {
             let entry_data = &blob_data?[packet::BLOB_HEADER_SIZE..];
             let entry =
                 bincode::deserialize(entry_data).expect("Blobs must be well formed in the ledger");

@@ -68,67 +68,7 @@ impl SlotIO {
     }
 
     pub fn insert<B: Borrow<Blob>>(&mut self, blobs: &[B], cfg: &StoreConfig) -> Result<()> {
-        let mut idx_buf: Vec<u8> = Vec::with_capacity(blobs.len() * INDEX_RECORD_SIZE as usize);
-        let mut offset = self.files.data.seek(SeekFrom::Current(0))?;
-        let mut blob_slices_to_write = Vec::with_capacity(blobs.len());
-
-        for blob in blobs {
-            let blob = blob.borrow();
-            let blob_index = blob.index().map_err(bad_blob)?;
-            let blob_size = blob.size().map_err(bad_blob)?;
-
-            let serialized_blob_data = &blob.data[..BLOB_HEADER_SIZE + blob_size];
-            let serialized_entry_data = &blob.data[BLOB_HEADER_SIZE..];
-            let entry: Entry = bincode::deserialize(serialized_entry_data)
-                .expect("Blobs must be well formed by the time they reach the ledger");
-
-            blob_slices_to_write.push(serialized_blob_data);
-            let data_len = serialized_blob_data.len() as u64;
-
-            let blob_idx = BlobIndex {
-                index: blob_index,
-                size: data_len,
-                offset,
-            };
-
-            offset += data_len;
-
-            // Write indices to buffer, which will be written to index file
-            // in the outer (per-slot) loop
-            idx_buf.write_u64::<BigEndian>(blob_idx.index)?;
-            idx_buf.write_u64::<BigEndian>(blob_idx.offset)?;
-            idx_buf.write_u64::<BigEndian>(blob_idx.size)?;
-
-            // update meta. write to file once in outer loop
-            if blob_index > self.meta.received {
-                self.meta.received = blob_index;
-            }
-
-            if blob_index == self.meta.consumed + 1 {
-                self.meta.consumed += 1;
-            }
-
-            if entry.is_tick() {
-                self.meta.consumed_ticks =
-                    std::cmp::max(entry.tick_height, self.meta.consumed_ticks);
-                self.meta.is_trunk = self.meta.contains_all_ticks(cfg);
-            }
-        }
-
-        // write blob slices
-        for slice in blob_slices_to_write {
-            self.files.data.write_all(slice)?;
-        }
-
-        self.files.meta.set_len(0)?;
-        bincode::serialize_into(&mut self.files.meta, &self.meta)?;
-        self.files.index.write_all(&idx_buf)?;
-
-        self.files.data.flush()?;
-        self.files.index.flush()?;
-        self.files.meta.flush()?;
-
-        Ok(())
+        insert(&mut self.meta, &mut self.files, &self.paths, blobs, cfg)
     }
 
     pub fn data(
@@ -214,6 +154,75 @@ impl SlotPaths {
             erasure,
         })
     }
+}
+
+fn insert<B: Borrow<Blob>>(
+    meta: &mut SlotMeta,
+    files: &mut SlotFiles,
+    paths: &SlotPaths,
+    blobs: &[B],
+    cfg: &StoreConfig,
+) -> Result<()> {
+    let mut idx_buf: Vec<u8> = Vec::with_capacity(blobs.len() * INDEX_RECORD_SIZE as usize);
+    let mut offset = files.data.seek(SeekFrom::Current(0))?;
+    let mut blob_slices_to_write = Vec::with_capacity(blobs.len());
+
+    for blob in blobs {
+        let blob = blob.borrow();
+        let blob_index = blob.index();
+        let blob_size = blob.size();
+
+        let serialized_blob_data = &blob.data[..BLOB_HEADER_SIZE + blob_size];
+        let serialized_entry_data = &blob.data[BLOB_HEADER_SIZE..];
+        let entry: Entry = bincode::deserialize(serialized_entry_data)
+            .expect("Blobs must be well formed by the time they reach the ledger");
+
+        blob_slices_to_write.push(serialized_blob_data);
+        let data_len = serialized_blob_data.len() as u64;
+
+        let blob_idx = BlobIndex {
+            index: blob_index,
+            size: data_len,
+            offset,
+        };
+
+        offset += data_len;
+
+        // Write indices to buffer, which will be written to index file
+        // in the outer (per-slot) loop
+        idx_buf.write_u64::<BigEndian>(blob_idx.index)?;
+        idx_buf.write_u64::<BigEndian>(blob_idx.offset)?;
+        idx_buf.write_u64::<BigEndian>(blob_idx.size)?;
+
+        // update meta. write to file once in outer loop
+        if blob_index > meta.received {
+            meta.received = blob_index;
+        }
+
+        if blob_index == meta.consumed + 1 {
+            meta.consumed += 1;
+        }
+
+        if entry.is_tick() {
+            meta.consumed_ticks = std::cmp::max(entry.tick_height, meta.consumed_ticks);
+            meta.is_trunk = meta.contains_all_ticks(cfg);
+        }
+    }
+
+    // write blob slices
+    for slice in blob_slices_to_write {
+        files.data.write_all(slice)?;
+    }
+
+    files.meta.set_len(0)?;
+    bincode::serialize_into(&mut files.meta, &meta)?;
+    files.index.write_all(&idx_buf)?;
+
+    files.data.flush()?;
+    files.index.flush()?;
+    files.meta.flush()?;
+
+    Ok(())
 }
 
 impl<'a, T> Iterator for SlotData<'a, T> {

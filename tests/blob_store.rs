@@ -28,7 +28,7 @@ fn test_get_put_simple() {
     let blob = entries[0].to_blob();
 
     store.put_blob(&blob).expect("couldn't insert blob");
-    let (slot, idx) = (blob.slot().unwrap(), blob.index().unwrap());
+    let (slot, idx) = (blob.slot(), blob.index());
     let out_blob = store.get_blob(slot, idx).expect("couldn't retrieve blob");
 
     assert_eq!(blob, out_blob);
@@ -56,8 +56,8 @@ fn test_insert_noncontiguous_blobs() {
 
     let e2_iter = entries.iter().enumerate().map(|(idx, entry)| {
         let mut b = entry.to_blob();
-        b.set_slot(0).unwrap();
-        b.set_index(idx as u64 + 20).unwrap();
+        b.set_slot(0);
+        b.set_index(idx as u64 + 20);
         b
     });
 
@@ -66,8 +66,8 @@ fn test_insert_noncontiguous_blobs() {
         .enumerate()
         .map(|(idx, entry)| {
             let mut b = entry.to_blob();
-            b.set_slot(0).unwrap();
-            b.set_index(idx as u64).unwrap();
+            b.set_slot(0);
+            b.set_index(idx as u64);
             b
         })
         .chain(e2_iter)
@@ -78,7 +78,7 @@ fn test_insert_noncontiguous_blobs() {
     let blob_bytes = blobs
         .into_iter()
         .map(|blob| {
-            let ser_data = &blob.data[..BLOB_HEADER_SIZE + blob.size().unwrap()];
+            let ser_data = &blob.data[..BLOB_HEADER_SIZE + blob.size()];
             Vec::from(ser_data)
         })
         .collect::<Vec<Vec<u8>>>();
@@ -121,8 +121,8 @@ fn test_ensure_correct_metadata() {
         .map(|(idx, mut entry)| {
             entry.tick_height = idx as u64;
             let mut b = entry.to_blob();
-            b.set_slot(slot).unwrap();
-            b.set_index(idx as u64).unwrap();
+            b.set_slot(slot);
+            b.set_index(idx as u64);
             b
         })
         .collect();
@@ -158,8 +158,8 @@ fn test_retrieve_entries() {
         .enumerate()
         .map(|(idx, entry)| {
             let mut b = entry.to_blob();
-            b.set_slot(0).unwrap();
-            b.set_index(idx as u64).unwrap();
+            b.set_slot(0);
+            b.set_index(idx as u64);
             b
         })
         .collect();
