@@ -15,7 +15,7 @@ use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, AtomicUsize};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, RwLock};
 use std::thread::{Builder, JoinHandle};
@@ -129,6 +129,7 @@ pub fn window_service(
     repair_socket: Arc<UdpSocket>,
     leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     done: Arc<AtomicBool>,
+    exit: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
     Builder::new()
         .name("solana-window".to_string())
@@ -139,6 +140,9 @@ pub fn window_service(
             let id = cluster_info.read().unwrap().id();
             trace!("{}: RECV_WINDOW started", id);
             loop {
+                if exit.load(Ordering::Relaxed) {
+                    break;
+                }
                 if let Err(e) = recv_window(
                     &db_ledger,
                     &id,
@@ -273,6 +277,7 @@ mod test {
             Arc::new(tn.sockets.repair),
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(me_id))),
             done,
+            exit.clone(),
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
@@ -342,6 +347,7 @@ mod test {
             Arc::new(tn.sockets.repair),
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(me_id))),
             done,
+            exit.clone(),
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();

@@ -123,7 +123,7 @@ pub struct RetransmitStage {
 }
 
 impl RetransmitStage {
-    #[allow(clippy::new_ret_no_self)]
+    #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new(
         bank: &Arc<Bank>,
         db_ledger: Arc<DbLedger>,
@@ -134,6 +134,7 @@ impl RetransmitStage {
         repair_socket: Arc<UdpSocket>,
         fetch_stage_receiver: BlobReceiver,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+        exit: Arc<AtomicBool>,
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -157,6 +158,7 @@ impl RetransmitStage {
             repair_socket,
             leader_scheduler,
             done,
+            exit,
         );
 
         let thread_hdls = vec![t_retransmit, t_window];

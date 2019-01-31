@@ -29,6 +29,7 @@ use std::env;
 use std::fs::remove_dir_all;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder, JoinHandle};
 use std::time::{Duration, Instant};
@@ -1708,9 +1709,14 @@ fn test_broadcast_last_tick() {
     let blob_fetch_stages: Vec<_> = listening_nodes
         .iter_mut()
         .map(|(_, _, node, _)| {
-            BlobFetchStage::new(
-                Arc::new(node.sockets.tvu.pop().unwrap()),
-                blob_receiver_exit.clone(),
+            let (blob_fetch_sender, blob_fetch_receiver) = channel();
+            (
+                BlobFetchStage::new(
+                    Arc::new(node.sockets.tvu.pop().unwrap()),
+                    &blob_fetch_sender,
+                    blob_receiver_exit.clone(),
+                ),
+                blob_fetch_receiver,
             )
         })
         .collect();
