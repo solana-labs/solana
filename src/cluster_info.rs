@@ -19,7 +19,7 @@ use crate::counter::Counter;
 use crate::crds_gossip::CrdsGossip;
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
-use crate::crds_value::{CrdsValue, CrdsValueLabel, LeaderId};
+use crate::crds_value::{CrdsValue, CrdsValueLabel, LeaderId, Vote};
 use crate::db_ledger::DbLedger;
 use crate::packet::{to_shared_blob, Blob, SharedBlob, BLOB_SIZE};
 use crate::result::Result;
@@ -36,6 +36,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::timing::{duration_as_ms, timestamp};
+use solana_sdk::transaction::Transaction;
 use std::cmp::min;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
@@ -55,7 +56,7 @@ pub const NEIGHBORHOOD_SIZE: usize = DATA_PLANE_FANOUT;
 pub const GROW_LAYER_CAPACITY: bool = false;
 
 /// milliseconds we sleep for between gossip requests
-const GOSSIP_SLEEP_MILLIS: u64 = 100;
+pub const GOSSIP_SLEEP_MILLIS: u64 = 100;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -248,6 +249,37 @@ impl ClusterInfo {
         warn!("{}: LEADER_UPDATE TO {} from {}", self_id, key, prev);
         entry.sign(&self.keypair);
         self.gossip.process_push_message(&[entry], now);
+    }
+
+    pub fn push_vote(&mut self, vote: Transaction) {
+        let now = timestamp();
+        let vote = Vote::new(vote, now);
+        let mut entry = CrdsValue::Vote(vote);
+        entry.sign(&self.keypair);
+        self.gossip.process_push_message(&[entry], now);
+    }
+
+    /// Get votes in the crds
+    /// * since - The local timestamp when the vote was updated or inserted must be greater then
+    /// since. This allows the bank to query for new votes only.
+    ///
+    /// * return - The votes, and the max local timestamp from the new set.
+    pub fn get_votes(&self, since: u64) -> (Vec<Transaction>, u64) {
+        let votes: Vec<_> = self
+            .gossip
+            .crds
+            .table
+            .values()
+            .filter(|x| x.local_timestamp > since)
+            .filter_map(|x| {
+                x.value
+                    .vote()
+                    .map(|v| (x.local_timestamp, v.transaction.clone()))
+            })
+            .collect();
+        let max_ts = votes.iter().map(|x| x.0).max().unwrap_or(since);
+        let txs: Vec<Transaction> = votes.into_iter().map(|x| x.1).collect();
+        (txs, max_ts)
     }
 
     pub fn purge(&mut self, now: u64) {
@@ -1249,6 +1281,7 @@ mod tests {
     use crate::db_ledger::DbLedger;
     use crate::packet::BLOB_HEADER_SIZE;
     use crate::result::Error;
+    use crate::test_tx::test_tx;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::collections::HashSet;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -1638,5 +1671,32 @@ mod tests {
         assert!(broadcast_set.contains(&(layer_indices.last().unwrap() - 1)));
         //sanity check for past total capacity.
         assert!(!broadcast_set.contains(&(layer_indices.last().unwrap())));
+    }
+
+    #[test]
+    fn test_push_vote() {
+        let keys = Keypair::new();
+        let now = timestamp();
+        let node_info = NodeInfo::new_localhost(keys.pubkey(), 0);
+        let mut cluster_info = ClusterInfo::new(node_info);
+
+        // make sure empty crds is handled correctly
+        let (votes, max_ts) = cluster_info.get_votes(now);
+        assert_eq!(votes, vec![]);
+        assert_eq!(max_ts, now);
+
+        // add a vote
+        let tx = test_tx();
+        cluster_info.push_vote(tx.clone());
+
+        // -1 to make sure that the clock is strictly lower then when insert occurred
+        let (votes, max_ts) = cluster_info.get_votes(now - 1);
+        assert_eq!(votes, vec![tx]);
+        assert!(max_ts >= now - 1);
+
+        // make sure timestamp filter works
+        let (votes, new_max_ts) = cluster_info.get_votes(max_ts);
+        assert_eq!(votes, vec![]);
+        assert_eq!(max_ts, new_max_ts);
     }
 }
