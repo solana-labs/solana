@@ -8,6 +8,7 @@ import bs58 from 'bs58';
 import * as Layout from './layout';
 import {PublicKey} from './publickey';
 import {Account} from './account';
+import * as shortvec from './util/shortvec-encoding';
 
 /**
  * @typedef {string} TransactionSignature
@@ -161,6 +162,7 @@ export class Transaction {
     }
 
     const keys = this.signatures.map(({publicKey}) => publicKey.toString());
+
     const programIds = [];
     this.instructions.forEach(instruction => {
       const programId = instruction.programId.toString();
@@ -177,11 +179,25 @@ export class Transaction {
         });
     });
 
+    let keyCount = [];
+    shortvec.encodeLength(keyCount, keys.length);
+
+    let programIdCount = [];
+    shortvec.encodeLength(programIdCount, programIds.length);
+
     const instructions = this.instructions.map(instruction => {
       const {userdata, programId} = instruction;
+      let keyIndicesCount = [];
+      shortvec.encodeLength(keyIndicesCount, instruction.keys.length);
+      let userdataCount = [];
+      shortvec.encodeLength(userdataCount, instruction.userdata.length);
       return {
         programIdIndex: programIds.indexOf(programId.toString()),
-        keyIndices: instruction.keys.map(key => keys.indexOf(key.toString())),
+        keyIndicesCount: Buffer.from(keyIndicesCount),
+        keyIndices: Buffer.from(
+          instruction.keys.map(key => keys.indexOf(key.toString())),
+        ),
+        userdataLength: Buffer.from(userdataCount),
         userdata,
       };
     });
@@ -191,66 +207,70 @@ export class Transaction {
       instruction.keyIndices.forEach(keyIndex => invariant(keyIndex >= 0));
     });
 
-    const instructionLayout = BufferLayout.struct([
-      BufferLayout.u8('programIdIndex'),
+    let instructionCount = [];
+    shortvec.encodeLength(instructionCount, instructions.length);
+    let instructionBuffer = Buffer.alloc(PACKET_DATA_SIZE);
+    Buffer.from(instructionCount).copy(instructionBuffer);
+    let instructionBufferLength = instructionCount.length;
 
-      BufferLayout.u32('keyIndicesLength'),
-      BufferLayout.u32('keyIndicesLengthPadding'),
-      BufferLayout.seq(
-        BufferLayout.u8('keyIndex'),
-        BufferLayout.offset(BufferLayout.u32(), -8),
-        'keyIndices',
-      ),
-      BufferLayout.u32('userdataLength'),
-      BufferLayout.u32('userdataLengthPadding'),
-      BufferLayout.seq(
-        BufferLayout.u8('userdatum'),
-        BufferLayout.offset(BufferLayout.u32(), -8),
-        'userdata',
-      ),
-    ]);
+    instructions.forEach(instruction => {
+      const instructionLayout = BufferLayout.struct([
+        BufferLayout.u8('programIdIndex'),
+
+        BufferLayout.blob(
+          instruction.keyIndicesCount.length,
+          'keyIndicesCount',
+        ),
+        BufferLayout.seq(
+          BufferLayout.u8('keyIndex'),
+          instruction.keyIndices.length,
+          'keyIndices',
+        ),
+        BufferLayout.blob(instruction.userdataLength.length, 'userdataLength'),
+        BufferLayout.seq(
+          BufferLayout.u8('userdatum'),
+          instruction.userdata.length,
+          'userdata',
+        ),
+      ]);
+      const length = instructionLayout.encode(
+        instruction,
+        instructionBuffer,
+        instructionBufferLength,
+      );
+      instructionBufferLength += length;
+    });
+    instructionBuffer = instructionBuffer.slice(0, instructionBufferLength);
 
     const signDataLayout = BufferLayout.struct([
-      BufferLayout.u32('keysLength'),
-      BufferLayout.u32('keysLengthPadding'),
-      BufferLayout.seq(
-        Layout.publicKey('key'),
-        BufferLayout.offset(BufferLayout.u32(), -8),
-        'keys',
-      ),
+      BufferLayout.blob(keyCount.length, 'keyCount'),
+      BufferLayout.seq(Layout.publicKey('key'), keys.length, 'keys'),
       Layout.publicKey('lastId'),
       BufferLayout.ns64('fee'),
 
-      BufferLayout.u32('programIdsLength'),
-      BufferLayout.u32('programIdsLengthPadding'),
+      BufferLayout.blob(programIdCount.length, 'programIdCount'),
       BufferLayout.seq(
         Layout.publicKey('programId'),
-        BufferLayout.offset(BufferLayout.u32(), -8),
+        programIds.length,
         'programIds',
-      ),
-
-      BufferLayout.u32('instructionsLength'),
-      BufferLayout.u32('instructionsLengthPadding'),
-      BufferLayout.seq(
-        instructionLayout,
-        BufferLayout.offset(BufferLayout.u32(), -8),
-        'instructions',
       ),
     ]);
 
     const transaction = {
+      keyCount: Buffer.from(keyCount),
       keys: keys.map(key => new PublicKey(key).toBuffer()),
       lastId: Buffer.from(bs58.decode(lastId)),
       fee: this.fee,
+      programIdCount: Buffer.from(programIdCount),
       programIds: programIds.map(programId =>
         new PublicKey(programId).toBuffer(),
       ),
-      instructions,
     };
 
     let signData = Buffer.alloc(2048);
     const length = signDataLayout.encode(transaction, signData);
-    signData = signData.slice(0, length);
+    instructionBuffer.copy(signData, length);
+    signData = signData.slice(0, length + instructionBuffer.length);
 
     return signData;
   }
@@ -306,7 +326,7 @@ export class Transaction {
         accountOrPublicKey.secretKey,
       );
       invariant(signature.length === 64);
-      signatures[index].signature = signature;
+      signatures[index].signature = Buffer.from(signature);
     });
   }
 
@@ -326,7 +346,7 @@ export class Transaction {
     const signData = this._getSignData();
     const signature = nacl.sign.detached(signData, signer.secretKey);
     invariant(signature.length === 64);
-    this.signatures[index].signature = signature;
+    this.signatures[index].signature = Buffer.from(signature);
   }
 
   /**
@@ -341,17 +361,26 @@ export class Transaction {
     }
 
     const signData = this._getSignData();
-    const wireTransaction = Buffer.alloc(
-      8 + signatures.length * 64 + signData.length,
-    );
+    const signatureCount = [];
+    shortvec.encodeLength(signatureCount, signatures.length);
+    const transactionLength =
+      signatureCount.length + signatures.length * 64 + signData.length;
+    const wireTransaction = Buffer.alloc(8 + transactionLength);
+    wireTransaction.writeUInt32LE(transactionLength, 0);
     invariant(signatures.length < 256);
-    wireTransaction.writeUInt8(signatures.length, 0);
+    Buffer.from(signatureCount).copy(wireTransaction, 8);
     signatures.forEach(({signature}, index) => {
       invariant(signature !== null, `null signature`);
       invariant(signature.length === 64, `signature has invalid length`);
-      Buffer.from(signature).copy(wireTransaction, 8 + index * 64);
+      Buffer.from(signature).copy(
+        wireTransaction,
+        8 + signatureCount.length + index * 64,
+      );
     });
-    signData.copy(wireTransaction, 8 + signatures.length * 64);
+    signData.copy(
+      wireTransaction,
+      8 + signatureCount.length + signatures.length * 64,
+    );
     invariant(
       wireTransaction.length <= PACKET_DATA_SIZE,
       `Transaction too large: ${wireTransaction.length} > ${PACKET_DATA_SIZE}`,
@@ -384,5 +413,95 @@ export class Transaction {
   get userdata(): Buffer {
     invariant(this.instructions.length === 1);
     return this.instructions[0].userdata;
+  }
+
+  /**
+   * Parse a wire transaction into a Transaction object.
+   */
+  static from(buffer: Buffer): Transaction {
+    const PUBKEY_LENGTH = 32;
+    const SIGNATURE_LENGTH = 64;
+
+    let transaction = new Transaction();
+
+    // Slice up wire data
+    let byteArray = [...buffer];
+
+    const transactionLength = byteArray.slice(0, 8);
+    byteArray = byteArray.slice(8);
+    const len = Buffer.from(transactionLength).readIntLE(0, 4);
+    invariant(len == byteArray.length);
+
+    const signatureCount = shortvec.decodeLength(byteArray);
+    let signatures = [];
+    for (let i = 0; i < signatureCount; i++) {
+      const signature = byteArray.slice(0, SIGNATURE_LENGTH);
+      byteArray = byteArray.slice(SIGNATURE_LENGTH);
+      signatures.push(signature);
+    }
+
+    const accountCount = shortvec.decodeLength(byteArray);
+    let accounts = [];
+    for (let i = 0; i < accountCount; i++) {
+      const account = byteArray.slice(0, PUBKEY_LENGTH);
+      byteArray = byteArray.slice(PUBKEY_LENGTH);
+      accounts.push(account);
+    }
+
+    const lastId = byteArray.slice(0, PUBKEY_LENGTH);
+    byteArray = byteArray.slice(PUBKEY_LENGTH);
+
+    let fee = 0;
+    for (let i = 0; i < 8; i++) {
+      fee += byteArray.shift() >> (8 * i);
+    }
+
+    const programIdCount = shortvec.decodeLength(byteArray);
+    let programs = [];
+    for (let i = 0; i < programIdCount; i++) {
+      const program = byteArray.slice(0, PUBKEY_LENGTH);
+      byteArray = byteArray.slice(PUBKEY_LENGTH);
+      programs.push(program);
+    }
+
+    const instructionCount = shortvec.decodeLength(byteArray);
+    let instructions = [];
+    for (let i = 0; i < instructionCount; i++) {
+      let instruction = {};
+      instruction.programIndex = byteArray.shift();
+      const accountIndexCount = shortvec.decodeLength(byteArray);
+      instruction.accountIndex = byteArray.slice(0, accountIndexCount);
+      byteArray = byteArray.slice(accountIndexCount);
+      const userdataLength = shortvec.decodeLength(byteArray);
+      instruction.userdata = byteArray.slice(0, userdataLength);
+      byteArray = byteArray.slice(userdataLength);
+      instructions.push(instruction);
+    }
+
+    // Populate Transaction object
+    transaction.lastId = new PublicKey(lastId).toBase58();
+    transaction.fee = fee;
+    for (let i = 0; i < signatureCount; i++) {
+      const sigPubkeyPair = {
+        signature: Buffer.from(signatures[i]),
+        publicKey: new PublicKey(accounts[i]),
+      };
+      transaction.signatures.push(sigPubkeyPair);
+    }
+    for (let i = 0; i < instructionCount; i++) {
+      let instructionData = {
+        keys: [],
+        programId: new PublicKey(programs[instructions[i].programIndex]),
+        userdata: Buffer.from(instructions[i].userdata),
+      };
+      for (let j = 0; j < instructions[i].accountIndex.length; j++) {
+        instructionData.keys.push(
+          new PublicKey(accounts[instructions[i].accountIndex[j]]),
+        );
+      }
+      let instruction = new TransactionInstruction(instructionData);
+      transaction.instructions.push(instruction);
+    }
+    return transaction;
   }
 }

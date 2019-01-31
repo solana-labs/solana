@@ -3,8 +3,7 @@
 export function decodeLength(bytes: Array<number>): number {
   let len = 0;
   let size = 0;
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  for (;;) {
     let elem = bytes.shift();
     len |= (elem & 0x7f) << (size * 7);
     size += 1;
@@ -17,8 +16,7 @@ export function decodeLength(bytes: Array<number>): number {
 
 export function encodeLength(bytes: Array<number>, len: number) {
   let rem_len = len;
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  for (;;) {
     let elem = rem_len & 0x7f;
     rem_len >>= 7;
     if (rem_len == 0) {
