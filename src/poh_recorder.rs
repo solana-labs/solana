@@ -122,12 +122,12 @@ mod tests {
     use std::sync::Arc;
 
     #[test]
-    fn test_poh() {
+    fn test_poh_recorder() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(1);
         let bank = Arc::new(Bank::new(&genesis_block));
         let prev_id = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
-        let mut poh_recorder = PohRecorder::new(bank, entry_sender, prev_id, Some(3));
+        let mut poh_recorder = PohRecorder::new(bank, entry_sender, prev_id, Some(2));
 
         //send some data
         let h1 = hash(b"hello world!");
@@ -135,15 +135,15 @@ mod tests {
         poh_recorder.record(h1, vec![tx.clone()]).unwrap();
         //get some events
         let e = entry_receiver.recv().unwrap();
+        assert_eq!(e[0].tick_height, 0); // super weird case, but ok!
+
+        poh_recorder.tick().unwrap();
+        let e = entry_receiver.recv().unwrap();
         assert_eq!(e[0].tick_height, 1);
 
         poh_recorder.tick().unwrap();
         let e = entry_receiver.recv().unwrap();
         assert_eq!(e[0].tick_height, 2);
-
-        poh_recorder.tick().unwrap();
-        let e = entry_receiver.recv().unwrap();
-        assert_eq!(e[0].tick_height, 3);
 
         // max tick height reached
         assert!(poh_recorder.tick().is_err());
