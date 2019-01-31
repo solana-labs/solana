@@ -472,7 +472,7 @@ mod test {
             None,
         );
 
-        let vote = vote_signer.validator_vote(&bank);
+        let vote = vote_signer_proxy.validator_vote(&bank);
         cluster_info_me.write().unwrap().push_vote(vote);
 
         // Send ReplayStage an entry, should see it on the ledger writer receiver
@@ -578,7 +578,7 @@ mod test {
             None,
         );
 
-        let vote = signer_proxy.validator_vote(&bank);
+        let vote = vote_signer_proxy.validator_vote(&bank);
         cluster_info_me.write().unwrap().push_vote(vote);
 
         // Send enough ticks to trigger leader rotation
@@ -745,7 +745,6 @@ mod test {
             &entry_receiver,
             my_id,
             Some(&vote_signer_proxy),
-            None,
             &ledger_entry_sender,
             &Arc::new(RwLock::new(entry_height)),
             &Arc::new(RwLock::new(last_entry_id)),

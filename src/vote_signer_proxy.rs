@@ -117,15 +117,7 @@ impl VoteSignerProxy {
     }
 
     pub fn validator_vote(&self, bank: &Arc<Bank>) -> Transaction {
-        self.new_signed_vote_transaction(&bank.last_id(), bank.tick_height())
-    }
-
-    pub fn new_signed_vote_transaction(&self, last_id: &Hash, tick_height: u64) -> Transaction {
-        let mut tx = Transaction::vote_new(self, tick_height, *last_id, 0);
-        assert!(tx.signatures.is_empty());
-        let sig = self.sign_message(&tx.message());
-        tx.signatures.push(sig);
-        tx
+        Transaction::vote_new(self, bank.tick_height(), bank.last_id(), 0)
     }
 }
 
