@@ -17,7 +17,7 @@ pub struct StatusCache<T> {
     failures: FailureMap<T>,
 
     /// Merges are empty unless this is the root checkpoint which cannot be unrolled
-    merges: VecDeque<Self>,
+    merges: VecDeque<StatusCache<T>>,
 }
 
 impl<T: Clone> Default for StatusCache<T> {
