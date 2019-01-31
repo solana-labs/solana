@@ -873,6 +873,11 @@ impl Bank {
     pub fn tick_height(&self) -> u64 {
         self.last_ids.read().unwrap().tick_height
     }
+
+    #[cfg(test)]
+    pub fn last_ids(&self) -> &RwLock<StatusDeque<Result<()>>> {
+        &self.last_ids
+    }
 }
 
 #[cfg(test)]

@@ -62,7 +62,7 @@ impl NodeServices {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum FullnodeReturnType {
     LeaderToValidatorRotation,
     ValidatorToLeaderRotation,
@@ -466,6 +466,7 @@ mod tests {
     use crate::leader_scheduler::{
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
+    use crate::poh_service::NUM_TICKS_PER_SECOND;
     use crate::service::Service;
     use crate::streamer::responder;
     use crate::tpu::TpuReturnType;
@@ -843,5 +844,99 @@ mod tests {
         DbLedger::destroy(&validator_ledger_path)
             .expect("Expected successful database destruction");
         let _ignored = remove_dir_all(&validator_ledger_path).unwrap();
+    }
+
+    #[test]
+    fn test_tvu_behind() {
+        // Make a leader identity
+        let leader_keypair = Arc::new(Keypair::new());
+        let leader_id = leader_keypair.pubkey();
+        let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+        let leader_node_info = leader_node.info.clone();
+
+        // Create validator identity
+        let validator_keypair = Arc::new(Keypair::new());
+        let validator_id = validator_keypair.pubkey();
+        // Create the ledger
+        let (mint_keypair, leader_ledger_path, genesis_entry_height, last_id) =
+            create_tmp_sample_ledger("test_tvu_behind", 10_000, 1, leader_id, 500);
+
+        // Write two entries so that the validator is in the active set:
+        //
+        // 1) Give the validator a nonzero number of tokens
+        // Write the bootstrap entries to the ledger that will cause leader rotation
+        // after the bootstrap height
+        //
+        // 2) A vote from the validator
+        let (active_set_entries, _) =
+            make_active_set_entries(&validator_keypair, &mint_keypair, &last_id, &last_id, 0);
+        {
+            let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
+            db_ledger
+                .write_entries(
+                    DEFAULT_SLOT_HEIGHT,
+                    genesis_entry_height,
+                    &active_set_entries,
+                )
+                .unwrap();
+        }
+
+        // Set the leader scheduler for the validator
+        let leader_rotation_interval = NUM_TICKS_PER_SECOND as u64 * 5;
+        let bootstrap_height = leader_rotation_interval;
+
+        let leader_scheduler_config = LeaderSchedulerConfig::new(
+            bootstrap_height,
+            leader_rotation_interval,
+            leader_rotation_interval * 2,
+            bootstrap_height,
+        );
+
+        let vote_signer = VoteSignerProxy::new_local(&leader_keypair);
+        // Start the bootstrap leader
+        let mut leader = Fullnode::new(
+            leader_node,
+            &leader_keypair,
+            &leader_ledger_path,
+            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
+            vote_signer,
+            Some(&leader_node_info),
+            Default::default(),
+        );
+
+        // Hold Tvu bank lock to prevent tvu from making progress
+        {
+            let w_last_ids = leader.bank.last_ids().write().unwrap();
+
+            // Wait for leader -> validator transition
+            let signal = leader
+                .role_notifiers
+                .1
+                .recv()
+                .expect("signal for leader -> validator transition");
+            let (rn_sender, rn_receiver) = channel();
+            rn_sender.send(signal).expect("send");
+            leader.role_notifiers = (leader.role_notifiers.0, rn_receiver);
+
+            // Make sure the tvu bank is behind
+            assert!(w_last_ids.tick_height < bootstrap_height);
+        }
+
+        // Release tvu bank lock, tvu should start making progress again and
+        // handle_role_transition should sucessfully rotate the leader to a validator
+        assert_eq!(
+            leader.handle_role_transition().unwrap().unwrap(),
+            FullnodeReturnType::LeaderToValidatorRotation
+        );
+        assert_eq!(
+            leader.cluster_info.read().unwrap().leader_id(),
+            validator_id
+        );
+        assert!(!leader.node_services.tpu.is_leader());
+
+        // Shut down
+        leader.close().expect("leader shutdown");
+        DbLedger::destroy(&leader_ledger_path).expect("Expected successful database destruction");
+        let _ignored = remove_dir_all(&leader_ledger_path).unwrap();
     }
 }
