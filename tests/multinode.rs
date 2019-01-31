@@ -156,7 +156,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     let signer_proxy = VoteSignerProxy::new_local(&leader_keypair);
     let leader = Fullnode::new(
         leader,
-        leader_keypair,
+        &leader_keypair,
         &leader_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_pubkey,
@@ -175,7 +175,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     let signer_proxy = VoteSignerProxy::new_local(&keypair);
     let validator = Fullnode::new(
         validator,
-        keypair,
+        &keypair,
         &zero_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_pubkey,
@@ -259,7 +259,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     let signer_proxy = VoteSignerProxy::new_local(&leader_keypair);
     let server = Fullnode::new(
         leader,
-        leader_keypair,
+        &leader_keypair,
         &leader_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_pubkey,
@@ -292,7 +292,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
         let signer_proxy = VoteSignerProxy::new_local(&keypair);
         let val = Fullnode::new(
             validator,
-            keypair,
+            &keypair,
             &ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_pubkey,
@@ -354,7 +354,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
 
     let val = Fullnode::new(
         validator,
-        keypair,
+        &keypair,
         &zero_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_pubkey,
@@ -443,7 +443,7 @@ fn test_multi_node_basic() {
     let signer_proxy = VoteSignerProxy::new_local(&leader_keypair);
     let server = Fullnode::new(
         leader,
-        leader_keypair,
+        &leader_keypair,
         &leader_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_pubkey,
@@ -472,7 +472,7 @@ fn test_multi_node_basic() {
         let signer_proxy = VoteSignerProxy::new_local(&keypair);
         let val = Fullnode::new(
             validator,
-            keypair,
+            &keypair,
             &ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_pubkey,
@@ -551,7 +551,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
     let signer_proxy = VoteSignerProxy::new_local(&leader_keypair);
     let leader_fullnode = Fullnode::new(
         leader,
-        leader_keypair,
+        &leader_keypair,
         &leader_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_pubkey,
@@ -575,7 +575,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
     let signer_proxy = VoteSignerProxy::new_local(&keypair);
     let val_fullnode = Fullnode::new(
         validator,
-        keypair,
+        &keypair,
         &ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_pubkey,
@@ -607,7 +607,7 @@ fn create_leader(
     let leader_data = leader.info.clone();
     let leader_fullnode = Fullnode::new(
         leader,
-        leader_keypair,
+        &leader_keypair,
         &ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
@@ -684,7 +684,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
     let signer_proxy = VoteSignerProxy::new_local(&keypair);
     let val_fullnode = Fullnode::new(
         validator,
-        keypair,
+        &keypair,
         &stale_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
@@ -757,7 +757,7 @@ fn test_multi_node_dynamic_network() {
     let signer_proxy = VoteSignerProxy::new_local(&leader_keypair);
     let server = Fullnode::new(
         leader,
-        leader_keypair,
+        &leader_keypair,
         &leader_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_pubkey,
@@ -831,7 +831,7 @@ fn test_multi_node_dynamic_network() {
                     let signer_proxy = VoteSignerProxy::new_local(&keypair);
                     let val = Fullnode::new(
                         validator,
-                        keypair,
+                        &keypair,
                         &ledger_path,
                         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                             leader_pubkey,
@@ -1008,7 +1008,7 @@ fn test_leader_to_validator_transition() {
     let signer_proxy = VoteSignerProxy::new_local(&leader_keypair);
     let mut leader = Fullnode::new(
         leader_node,
-        leader_keypair,
+        &leader_keypair,
         &leader_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         signer_proxy,
@@ -1157,7 +1157,7 @@ fn test_leader_validator_basic() {
     let signer_proxy = VoteSignerProxy::new_local(&validator_keypair);
     let mut validator = Fullnode::new(
         validator_node,
-        validator_keypair,
+        &validator_keypair,
         &validator_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         signer_proxy,
@@ -1169,7 +1169,7 @@ fn test_leader_validator_basic() {
     let signer_proxy = VoteSignerProxy::new_local(&leader_keypair);
     let mut leader = Fullnode::new(
         leader_node,
-        leader_keypair,
+        &leader_keypair,
         &leader_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         signer_proxy,
@@ -1356,7 +1356,7 @@ fn test_dropped_handoff_recovery() {
     ledger_paths.push(bootstrap_leader_ledger_path.clone());
     let bootstrap_leader = Fullnode::new(
         bootstrap_leader_node,
-        bootstrap_leader_keypair,
+        &bootstrap_leader_keypair,
         &bootstrap_leader_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         signer_proxy,
@@ -1378,7 +1378,7 @@ fn test_dropped_handoff_recovery() {
         let signer_proxy = VoteSignerProxy::new_local(&keypair);
         let validator = Fullnode::new(
             validator_node,
-            keypair,
+            &keypair,
             &validator_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
             signer_proxy,
@@ -1404,7 +1404,7 @@ fn test_dropped_handoff_recovery() {
     let signer_proxy = VoteSignerProxy::new_local(&next_leader_keypair);
     let next_leader = Fullnode::new(
         next_leader_node,
-        next_leader_keypair,
+        &next_leader_keypair,
         &next_leader_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         signer_proxy,
@@ -1542,7 +1542,7 @@ fn test_full_leader_validator_network() {
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
         let validator = Fullnode::new(
             validator_node,
-            kp.clone(),
+            &kp,
             &validator_ledger_path,
             leader_scheduler.clone(),
             signer_proxy,
@@ -1559,7 +1559,7 @@ fn test_full_leader_validator_network() {
     let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
     let bootstrap_leader = Fullnode::new(
         bootstrap_leader_node,
-        leader_keypair.clone(),
+        &leader_keypair,
         &bootstrap_leader_ledger_path,
         leader_scheduler.clone(),
         signer_proxy,
@@ -1731,7 +1731,7 @@ fn test_broadcast_last_tick() {
     let signer_proxy = VoteSignerProxy::new_local(&bootstrap_leader_keypair);
     let mut bootstrap_leader = Fullnode::new(
         bootstrap_leader_node,
-        bootstrap_leader_keypair,
+        &bootstrap_leader_keypair,
         &bootstrap_leader_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         signer_proxy,

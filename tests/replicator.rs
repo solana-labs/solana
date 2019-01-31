@@ -53,7 +53,7 @@ fn test_replicator_startup() {
         fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
         let leader = Fullnode::new(
             leader_node,
-            leader_keypair,
+            &leader_keypair,
             &leader_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_info.id.clone(),
@@ -83,7 +83,7 @@ fn test_replicator_startup() {
         fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
         let validator = Fullnode::new(
             validator_node,
-            validator_keypair,
+            &validator_keypair,
             &validator_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_info.id,
@@ -278,7 +278,7 @@ fn test_replicator_startup_ledger_hang() {
 
         let _ = Fullnode::new(
             leader_node,
-            leader_keypair,
+            &leader_keypair,
             &leader_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_info.id.clone(),
@@ -294,7 +294,7 @@ fn test_replicator_startup_ledger_hang() {
 
         let _ = Fullnode::new(
             validator_node,
-            validator_keypair,
+            &validator_keypair,
             &validator_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_info.id,
