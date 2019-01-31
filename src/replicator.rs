@@ -102,7 +102,7 @@ impl Replicator {
     /// Returns a Result that contains a replicator on success
     ///
     /// # Arguments
-    /// * `ledger_path` - (Not actually optional) path to where the ledger will be stored.
+    /// * `ledger_path` - path to where the ledger will be stored.
     /// Causes panic if none
     /// * `node` - The replicator node
     /// * `leader_info` - NodeInfo representing the leader
@@ -111,7 +111,7 @@ impl Replicator {
     /// 30 seconds
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
-        ledger_path: Option<&str>,
+        ledger_path: &str,
         node: Node,
         leader_info: &NodeInfo,
         keypair: &Keypair,
@@ -138,8 +138,7 @@ impl Replicator {
         // in the ledger located at ledger_path, and will only append on newly received
         // entries after being passed to window_service
         let db_ledger = Arc::new(
-            DbLedger::open(&ledger_path.unwrap())
-                .expect("Expected to be able to open database ledger"),
+            DbLedger::open(ledger_path).expect("Expected to be able to open database ledger"),
         );
 
         let gossip_service = GossipService::new(
@@ -223,9 +222,9 @@ impl Replicator {
         let mut client = mk_client(&leader);
 
         Self::get_airdrop_tokens(&mut client, keypair, &leader_info);
-        info!("Done downloading ledger at {}", ledger_path.unwrap());
+        info!("Done downloading ledger at {}", ledger_path);
 
-        let ledger_path = Path::new(ledger_path.unwrap());
+        let ledger_path = Path::new(ledger_path);
         let ledger_data_file_encrypted = ledger_path.join("ledger.enc");
         let mut sampling_offsets = Vec::new();
 

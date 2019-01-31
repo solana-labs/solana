@@ -41,7 +41,7 @@ fn main() {
         )
         .get_matches();
 
-    let ledger_path = matches.value_of("ledger");
+    let ledger_path = matches.value_of("ledger").unwrap();
 
     let (keypair, gossip) = if let Some(i) = matches.value_of("identity") {
         let path = i.to_string();
