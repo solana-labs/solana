@@ -12,6 +12,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::vote_program::VoteProgram;
 use solana_sdk::vote_transaction::VoteTransaction;
+use solana_vote_signer::rpc::{LocalVoteSigner, VoteSigner};
 use std::fs::File;
 use std::io::{Error, ErrorKind, Result};
 use std::net::{Ipv4Addr, SocketAddr};
@@ -207,6 +208,7 @@ fn main() {
     let mut fullnode_config = FullnodeConfig::default();
     fullnode_config.sigverify_disabled = matches.is_present("no_sigverify");
     let no_signer = matches.is_present("no_signer");
+    fullnode_config.voting_disabled = no_signer;
     let use_only_bootstrap_leader = matches.is_present("no_leader_rotation");
     let (keypair, gossip) = parse_identity(&matches);
     let ledger_path = matches.value_of("ledger").unwrap();
@@ -249,18 +251,15 @@ fn main() {
     let mut leader_scheduler = LeaderScheduler::default();
     leader_scheduler.use_only_bootstrap_leader = use_only_bootstrap_leader;
 
-    let vote_signer_option = if !no_signer {
-        let vote_signer = VoteSignerProxy::new_with_signer(
-            &keypair,
-            Box::new(RemoteVoteSigner::new(signer_addr)),
-        );
+    let vote_signer: Box<dyn VoteSigner + Sync + Send> = if !no_signer {
         info!("Signer service address: {:?}", signer_addr);
-        info!("New vote account ID is {:?}", vote_signer.pubkey());
-        Some(Arc::new(vote_signer))
+        Box::new(RemoteVoteSigner::new(signer_addr))
     } else {
-        None
+        Box::new(LocalVoteSigner::default())
     };
-    let vote_account_option = vote_signer_option.as_ref().map(|x| x.pubkey());
+    let vote_signer = VoteSignerProxy::new_with_signer(&keypair, vote_signer);
+    let vote_account_id = vote_signer.pubkey();
+    info!("New vote account ID is {:?}", vote_account_id);
 
     let gossip_addr = node.info.gossip;
     let mut fullnode = Fullnode::new(
@@ -268,14 +267,14 @@ fn main() {
         keypair.clone(),
         ledger_path,
         Arc::new(RwLock::new(leader_scheduler)),
-        vote_signer_option,
+        vote_signer,
         cluster_entrypoint
             .map(|i| NodeInfo::new_entry_point(&i))
             .as_ref(),
         fullnode_config,
     );
 
-    if let Some(vote_account) = vote_account_option {
+    if !no_signer {
         let leader_node_info = loop {
             info!("Looking for leader...");
             match poll_gossip_for_leader(gossip_addr, Some(10)) {
@@ -290,7 +289,7 @@ fn main() {
         };
 
         let mut client = mk_client(&leader_node_info);
-        if let Err(err) = create_and_fund_vote_account(&mut client, vote_account, &keypair) {
+        if let Err(err) = create_and_fund_vote_account(&mut client, vote_account_id, &keypair) {
             panic!("Failed to create_and_fund_vote_account: {:?}", err);
         }
     }
