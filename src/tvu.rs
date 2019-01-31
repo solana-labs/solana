@@ -338,9 +338,9 @@ pub mod tests {
                 let b = SharedBlob::default();
                 {
                     let mut w = b.write().unwrap();
-                    w.set_index(blob_idx).unwrap();
+                    w.set_index(blob_idx);
                     blob_idx += 1;
-                    w.set_id(&leader_id).unwrap();
+                    w.set_id(&leader_id);
 
                     let serialized_entry = serialize(&entry).unwrap();
 

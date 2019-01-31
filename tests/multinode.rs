@@ -1764,10 +1764,9 @@ fn test_broadcast_last_tick() {
         info!("Checking a node...");
         let mut last_tick_blob: SharedBlob = SharedBlob::default();
         while let Ok(new_blobs) = receiver.try_recv() {
-            let last_blob = new_blobs.into_iter().find(|b| {
-                b.read().unwrap().index().expect("Expected index in blob")
-                    == last_tick_entry_height - 2
-            });
+            let last_blob = new_blobs
+                .into_iter()
+                .find(|b| b.read().unwrap().index() == last_tick_entry_height - 2);
             if let Some(last_blob) = last_blob {
                 last_tick_blob = last_blob;
                 break;

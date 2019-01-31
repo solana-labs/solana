@@ -247,7 +247,7 @@ where
 
     for blob in blobs.into_iter() {
         let entry: Entry = {
-            let msg_size = blob.borrow().size()?;
+            let msg_size = blob.borrow().size();
             deserialize(&blob.borrow().data()[..msg_size])?
         };
 
@@ -459,8 +459,8 @@ pub fn make_consecutive_blobs(
     let mut index = start_height;
     for blob in &blobs {
         let mut blob = blob.write().unwrap();
-        blob.set_index(index).unwrap();
-        blob.set_id(id).unwrap();
+        blob.set_index(index);
+        blob.set_id(id);
         blob.meta.set_addr(addr);
         index += 1;
     }

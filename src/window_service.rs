@@ -86,7 +86,7 @@ fn recv_window(
     for b in dq {
         let (pix, meta_size) = {
             let p = b.read().unwrap();
-            (p.index()?, p.meta.size)
+            (p.index(), p.meta.size)
         };
 
         trace!("{} window pix: {} size: {}", id, pix, meta_size);
@@ -217,7 +217,6 @@ mod test {
     use crate::entry::{make_consecutive_blobs, Entry};
     use crate::leader_scheduler::LeaderScheduler;
 
-    use crate::packet::{SharedBlob, PACKET_DATA_SIZE};
     use crate::streamer::{blob_receiver, responder};
     use crate::window_service::{repair_backoff, window_service};
     use solana_sdk::hash::Hash;
@@ -350,18 +349,12 @@ mod test {
                 tn.sockets.tvu.into_iter().map(Arc::new).collect();
             let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
             let mut msgs = Vec::new();
+            let blobs =
+                make_consecutive_blobs(&me_id, 14u64, 0, Default::default(), &tn.info.gossip);
+
             for v in 0..10 {
                 let i = 9 - v;
-                let b = SharedBlob::default();
-                {
-                    let mut w = b.write().unwrap();
-                    w.set_index(i).unwrap();
-                    w.set_id(&me_id).unwrap();
-                    assert_eq!(i, w.index().unwrap());
-                    w.meta.size = PACKET_DATA_SIZE;
-                    w.meta.set_addr(&tn.info.gossip);
-                }
-                msgs.push(b);
+                msgs.push(blobs[i].clone());
             }
             s_responder.send(msgs).expect("send");
 
@@ -369,16 +362,7 @@ mod test {
             let mut msgs1 = Vec::new();
             for v in 1..5 {
                 let i = 9 + v;
-                let b = SharedBlob::default();
-                {
-                    let mut w = b.write().unwrap();
-                    w.set_index(i).unwrap();
-                    w.set_id(&me_id).unwrap();
-                    assert_eq!(i, w.index().unwrap());
-                    w.meta.size = PACKET_DATA_SIZE;
-                    w.meta.set_addr(&tn.info.gossip);
-                }
-                msgs1.push(b);
+                msgs1.push(blobs[i].clone());
             }
             s_responder.send(msgs1).expect("send");
             t_responder

@@ -215,7 +215,7 @@ fn decode_blobs(
 
         let mut data_size;
         if n < NUM_DATA {
-            data_size = locks[n].data_size().unwrap() as usize;
+            data_size = locks[n].data_size() as usize;
             data_size -= BLOB_HEADER_SIZE;
             if data_size > BLOB_DATA_SIZE {
                 error!("corrupt data blob[{}] data_size: {}", idx, data_size);
@@ -225,8 +225,8 @@ fn decode_blobs(
         } else {
             data_size = size;
             idx -= NUM_CODING as u64;
-            locks[n].set_slot(slot).unwrap();
-            locks[n].set_index(idx).unwrap();
+            locks[n].set_slot(slot);
+            locks[n].set_index(idx);
 
             if data_size - BLOB_HEADER_SIZE > BLOB_DATA_SIZE {
                 error!("corrupt coding blob[{}] data_size: {}", idx, data_size);
@@ -327,18 +327,18 @@ impl CodingGenerator {
             let mut coding_blobs = Vec::with_capacity(NUM_CODING);
 
             for data_blob in &data_locks[NUM_DATA - NUM_CODING..NUM_DATA] {
-                let index = data_blob.index().unwrap();
-                let slot = data_blob.slot().unwrap();
-                let id = data_blob.id().unwrap();
+                let index = data_blob.index();
+                let slot = data_blob.slot();
+                let id = data_blob.id();
 
                 let coding_blob = SharedBlob::default();
                 {
                     let mut coding_blob = coding_blob.write().unwrap();
-                    coding_blob.set_index(index).unwrap();
-                    coding_blob.set_slot(slot).unwrap();
-                    coding_blob.set_id(&id).unwrap();
+                    coding_blob.set_index(index);
+                    coding_blob.set_slot(slot);
+                    coding_blob.set_id(&id);
                     coding_blob.set_size(max_data_size);
-                    coding_blob.set_coding().unwrap();
+                    coding_blob.set_coding();
                 }
                 coding_blobs.push(coding_blob);
             }
@@ -583,7 +583,7 @@ pub mod test {
                 assert_eq!(i % NUM_DATA, NUM_DATA - 1);
                 assert_eq!(coding.len(), NUM_CODING);
 
-                let size = coding[0].read().unwrap().size().unwrap();
+                let size = coding[0].read().unwrap().size();
 
                 // toss one data and one coding
                 let erasures: Vec<i32> = vec![0, NUM_DATA as i32, -1];
@@ -649,9 +649,9 @@ pub mod test {
                     let data = data.read().unwrap();
                     db_ledger
                         .put_data_blob_bytes(
-                            data.slot().unwrap(),
-                            data.index().unwrap(),
-                            &data.data[..data.data_size().unwrap() as usize],
+                            data.slot(),
+                            data.index(),
+                            &data.data[..data.data_size() as usize],
                         )
                         .expect("Expected successful put into data column of ledger");
                 } else {
@@ -664,17 +664,13 @@ pub mod test {
             if let Some(ref coding) = slot.coding {
                 let coding_lock = coding.read().unwrap();
 
-                let index = coding_lock
-                    .index()
-                    .expect("Expected coding blob to have valid index");
+                let index = coding_lock.index();
 
-                let data_size = coding_lock
-                    .size()
-                    .expect("Expected coding blob to have valid data size");
+                let data_size = coding_lock.size();
 
                 db_ledger
                     .put_coding_blob_bytes(
-                        coding_lock.slot().unwrap(),
+                        coding_lock.slot(),
                         index,
                         &coding_lock.data[..data_size as usize + BLOB_HEADER_SIZE],
                     )
@@ -764,9 +760,9 @@ pub mod test {
                 if let Some(data) = &window[n].data {
                     let data_rl = data.read().unwrap();
 
-                    let index = data_rl.index().unwrap();
-                    let slot = data_rl.slot().unwrap();
-                    let id = data_rl.id().unwrap();
+                    let index = data_rl.index();
+                    let slot = data_rl.slot();
+                    let id = data_rl.id();
 
                     trace!(
                         "{} copying index {} id {:?} from data to coding",
@@ -774,14 +770,12 @@ pub mod test {
                         index,
                         id
                     );
-                    coding_wl.set_index(index).unwrap();
-                    coding_wl.set_slot(slot).unwrap();
-                    coding_wl.set_id(&id).unwrap();
+                    coding_wl.set_index(index);
+                    coding_wl.set_slot(slot);
+                    coding_wl.set_id(&id);
                 }
                 coding_wl.set_size(max_data_size);
-                if coding_wl.set_coding().is_err() {
-                    return Err(Error::ErasureError(ErasureError::EncodeError));
-                }
+                coding_wl.set_coding();
 
                 coding_blobs.push(coding.clone());
             }
@@ -904,7 +898,7 @@ pub mod test {
         );
 
         for b in blobs {
-            let idx = b.read().unwrap().index().unwrap() as usize % WINDOW_SIZE;
+            let idx = b.read().unwrap().index() as usize % WINDOW_SIZE;
 
             window[idx].data = Some(b);
         }
@@ -936,7 +930,7 @@ pub mod test {
         let blobs = generate_test_blobs(offset, num_blobs);
 
         for b in blobs.into_iter() {
-            let idx = b.read().unwrap().index().unwrap() as usize % WINDOW_SIZE;
+            let idx = b.read().unwrap().index() as usize % WINDOW_SIZE;
 
             window[idx].data = Some(b);
         }
@@ -994,13 +988,13 @@ pub mod test {
             let ref_l2 = ref_l.read().unwrap();
             let result = recovered_blob.read().unwrap();
 
-            assert_eq!(result.size().unwrap(), ref_l2.size().unwrap());
+            assert_eq!(result.size(), ref_l2.size());
             assert_eq!(
-                result.data[..ref_l2.data_size().unwrap() as usize],
-                ref_l2.data[..ref_l2.data_size().unwrap() as usize]
+                result.data[..ref_l2.data_size() as usize],
+                ref_l2.data[..ref_l2.data_size() as usize]
             );
-            assert_eq!(result.index().unwrap(), offset as u64);
-            assert_eq!(result.slot().unwrap(), DEFAULT_SLOT_HEIGHT as u64);
+            assert_eq!(result.index(), offset as u64);
+            assert_eq!(result.slot(), DEFAULT_SLOT_HEIGHT as u64);
         }
         drop(db_ledger);
         DbLedger::destroy(&ledger_path)
@@ -1047,26 +1041,26 @@ pub mod test {
             let ref_l2 = ref_l.read().unwrap();
             let result = recovered_data_blob.read().unwrap();
 
-            assert_eq!(result.size().unwrap(), ref_l2.size().unwrap());
+            assert_eq!(result.size(), ref_l2.size());
             assert_eq!(
-                result.data[..ref_l2.data_size().unwrap() as usize],
-                ref_l2.data[..ref_l2.data_size().unwrap() as usize]
+                result.data[..ref_l2.data_size() as usize],
+                ref_l2.data[..ref_l2.data_size() as usize]
             );
-            assert_eq!(result.index().unwrap(), coding_start as u64);
-            assert_eq!(result.slot().unwrap(), DEFAULT_SLOT_HEIGHT as u64);
+            assert_eq!(result.index(), coding_start as u64);
+            assert_eq!(result.slot(), DEFAULT_SLOT_HEIGHT as u64);
 
             // Check the recovered erasure result
             let ref_l = refwindowcoding.clone().unwrap();
             let ref_l2 = ref_l.read().unwrap();
             let result = recovered_coding_blob.read().unwrap();
 
-            assert_eq!(result.size().unwrap(), ref_l2.size().unwrap());
+            assert_eq!(result.size(), ref_l2.size());
             assert_eq!(
-                result.data()[..ref_l2.size().unwrap() as usize],
-                ref_l2.data()[..ref_l2.size().unwrap() as usize]
+                result.data()[..ref_l2.size() as usize],
+                ref_l2.data()[..ref_l2.size() as usize]
             );
-            assert_eq!(result.index().unwrap(), coding_start as u64);
-            assert_eq!(result.slot().unwrap(), DEFAULT_SLOT_HEIGHT as u64);
+            assert_eq!(result.index(), coding_start as u64);
+            assert_eq!(result.slot(), DEFAULT_SLOT_HEIGHT as u64);
         }
         drop(db_ledger);
         DbLedger::destroy(&ledger_path)
