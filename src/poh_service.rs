@@ -2,7 +2,8 @@
 //! "ticks", a measure of time in the PoH stream
 
 use crate::fullnode::TpuRotationSender;
-use crate::poh_recorder::PohRecorder;
+use crate::poh_recorder::{PohRecorder, PohRecorderError};
+use crate::result::Error;
 use crate::result::Result;
 use crate::service::Service;
 use crate::tpu::TpuReturnType;
@@ -82,13 +83,20 @@ impl PohService {
         poh_exit: &AtomicBool,
         to_validator_sender: &TpuRotationSender,
     ) -> Result<()> {
+        let max_tick_height = poh.max_tick_height();
         loop {
             match config {
                 Config::Tick(num) => {
                     for _ in 1..num {
                         let res = poh.hash();
                         if let Err(e) = res {
-                            to_validator_sender.send(TpuReturnType::LeaderRotation)?;
+                            if let Error::PohRecorderError(PohRecorderError::MaxHeightReached) = e {
+                                // Leader rotation should only happen if a max_tick_height was specified
+                                assert!(max_tick_height.is_some());
+                                to_validator_sender.send(TpuReturnType::LeaderRotation(
+                                    max_tick_height.unwrap(),
+                                ))?;
+                            }
                             return Err(e);
                         }
                     }
@@ -99,7 +107,12 @@ impl PohService {
             }
             let res = poh.tick();
             if let Err(e) = res {
-                to_validator_sender.send(TpuReturnType::LeaderRotation)?;
+                if let Error::PohRecorderError(PohRecorderError::MaxHeightReached) = e {
+                    // Leader rotation should only happen if a max_tick_height was specified
+                    assert!(max_tick_height.is_some());
+                    to_validator_sender
+                        .send(TpuReturnType::LeaderRotation(max_tick_height.unwrap()))?;
+                }
                 return Err(e);
             }
             if poh_exit.load(Ordering::Relaxed) {

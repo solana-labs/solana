@@ -19,7 +19,7 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 
 pub enum TpuReturnType {
-    LeaderRotation,
+    LeaderRotation(u64),
 }
 
 pub enum TpuMode {
@@ -246,8 +246,8 @@ impl Service for Tpu {
                 svcs.fetch_stage.join()?;
                 svcs.sigverify_stage.join()?;
                 match svcs.banking_stage.join()? {
-                    Some(BankingStageReturnType::LeaderRotation) => {
-                        Ok(Some(TpuReturnType::LeaderRotation))
+                    Some(BankingStageReturnType::LeaderRotation(tick_height)) => {
+                        Ok(Some(TpuReturnType::LeaderRotation(tick_height)))
                     }
                     _ => Ok(None),
                 }

@@ -25,7 +25,9 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
+use std::thread::sleep;
 use std::thread::Result;
+use std::time::Duration;
 use std::time::Instant;
 
 pub type TvuRotationSender = Sender<TvuReturnType>;
@@ -277,10 +279,21 @@ impl Fullnode {
         }
     }
 
-    pub fn leader_to_validator(&mut self) -> Result<()> {
+    pub fn leader_to_validator(&mut self, tick_height: u64) -> Result<()> {
         trace!("leader_to_validator");
 
-        let (scheduled_leader, _) = self.bank.get_current_leader().unwrap();
+        while self.bank.tick_height() < tick_height {
+            sleep(Duration::from_millis(10));
+        }
+
+        let (scheduled_leader, _) = self
+            .bank
+            .leader_scheduler
+            .read()
+            .unwrap()
+            .get_scheduled_leader(tick_height + 1)
+            .unwrap();
+
         self.cluster_info
             .write()
             .unwrap()
@@ -291,7 +304,7 @@ impl Fullnode {
         // check for that
         if scheduled_leader == self.id {
             let (last_entry_id, entry_height) = self.node_services.tvu.get_state();
-            self.validator_to_leader(self.bank.tick_height(), entry_height, last_entry_id);
+            self.validator_to_leader(tick_height, entry_height, last_entry_id);
             Ok(())
         } else {
             self.node_services.tpu.switch_to_forwarder(
@@ -349,8 +362,8 @@ impl Fullnode {
                     return Ok(Some(FullnodeReturnType::ValidatorToLeaderRotation));
                 }
                 _ => match should_be_forwarder {
-                    Ok(TpuReturnType::LeaderRotation) => {
-                        self.leader_to_validator()?;
+                    Ok(TpuReturnType::LeaderRotation(tick_height)) => {
+                        self.leader_to_validator(tick_height)?;
                         return Ok(Some(FullnodeReturnType::LeaderToValidatorRotation));
                     }
                     _ => {
@@ -805,7 +818,7 @@ mod tests {
                     break;
                 }
                 _ => match should_be_forwarder {
-                    Ok(TpuReturnType::LeaderRotation) => {
+                    Ok(TpuReturnType::LeaderRotation(_)) => {
                         panic!("shouldn't be rotating to forwarder")
                     }
                     _ => continue,

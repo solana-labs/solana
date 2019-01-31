@@ -25,6 +25,10 @@ pub struct PohRecorder {
 }
 
 impl PohRecorder {
+    pub fn max_tick_height(&self) -> Option<u64> {
+        self.max_tick_height
+    }
+
     pub fn hash(&self) -> Result<()> {
         // TODO: amortize the cost of this lock by doing the loop in here for
         // some min amount of hashes

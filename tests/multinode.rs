@@ -1266,9 +1266,9 @@ fn run_node(id: Pubkey, mut fullnode: Fullnode, should_exit: Arc<AtomicBool>) ->
                     fullnode.validator_to_leader(tick_height, entry_height, last_entry_id);
                 }
                 Err(_) => match should_be_fwdr {
-                    Ok(TpuReturnType::LeaderRotation) => {
+                    Ok(TpuReturnType::LeaderRotation(tick_height)) => {
                         fullnode
-                            .leader_to_validator()
+                            .leader_to_validator(tick_height)
                             .expect("failed when transitioning to validator");
                     }
                     Err(_) => {

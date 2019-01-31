@@ -9,7 +9,8 @@ use crate::entry::Entry;
 use crate::entry::EntrySlice;
 use crate::genesis_block::GenesisBlock;
 use crate::leader_scheduler::LeaderScheduler;
-use crate::poh_recorder::PohRecorder;
+use crate::poh_recorder::{PohRecorder, PohRecorderError};
+use crate::result::Error;
 use crate::runtime::{self, RuntimeError};
 use crate::status_deque::{Status, StatusDeque, StatusDequeError, MAX_ENTRY_IDS};
 use bincode::deserialize;
@@ -73,6 +74,9 @@ pub enum BankError {
 
     /// Transaction has a fee but has no signature present
     MissingSignatureForFee,
+
+    // Poh recorder hit the maximum tick height before leader rotation
+    MaxHeightReached,
 }
 
 pub type Result<T> = result::Result<T, BankError>;
@@ -422,7 +426,12 @@ impl Bank {
             // record and unlock will unlock all the successfull transactions
             poh.record(hash, processed_transactions).map_err(|e| {
                 warn!("record failure: {:?}", e);
-                BankError::RecordFailure
+                match e {
+                    Error::PohRecorderError(PohRecorderError::MaxHeightReached) => {
+                        BankError::MaxHeightReached
+                    }
+                    _ => BankError::RecordFailure,
+                }
             })?;
         }
         Ok(())
@@ -1745,7 +1754,7 @@ mod tests {
 
         assert_eq!(
             bank.process_and_record_transactions(&transactions, &poh_recorder),
-            Err(BankError::RecordFailure)
+            Err(BankError::MaxHeightReached)
         );
 
         assert_eq!(bank.get_balance(&pubkey), 1);
