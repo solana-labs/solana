@@ -458,7 +458,7 @@ pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, 
         node_keypair,
         &ledger_path,
         Arc::new(RwLock::new(leader_scheduler)),
-        Some(Arc::new(vote_signer)),
+        vote_signer,
         None,
         Default::default(),
     );

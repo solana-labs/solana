@@ -58,7 +58,7 @@ fn test_replicator_startup() {
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_info.id.clone(),
             ))),
-            Some(Arc::new(signer_proxy)),
+            signer_proxy,
             None,
             fullnode_config,
         );
@@ -88,7 +88,7 @@ fn test_replicator_startup() {
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_info.id,
             ))),
-            Some(Arc::new(signer_proxy)),
+            signer_proxy,
             Some(&leader_info),
             fullnode_config,
         );
@@ -283,7 +283,7 @@ fn test_replicator_startup_ledger_hang() {
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_info.id.clone(),
             ))),
-            Some(Arc::new(signer_proxy)),
+            signer_proxy,
             None,
             Default::default(),
         );
@@ -299,7 +299,7 @@ fn test_replicator_startup_ledger_hang() {
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_info.id,
             ))),
-            Some(Arc::new(signer_proxy)),
+            signer_proxy,
             Some(&leader_info),
             Default::default(),
         );

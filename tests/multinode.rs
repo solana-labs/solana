@@ -161,7 +161,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_pubkey,
         ))),
-        Some(Arc::new(signer_proxy)),
+        signer_proxy,
         None,
         Default::default(),
     );
@@ -180,7 +180,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_pubkey,
         ))),
-        Some(Arc::new(signer_proxy)),
+        signer_proxy,
         Some(&leader_data),
         Default::default(),
     );
@@ -264,7 +264,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_pubkey,
         ))),
-        Some(Arc::new(signer_proxy)),
+        signer_proxy,
         None,
         Default::default(),
     );
@@ -297,7 +297,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_pubkey,
             ))),
-            Some(Arc::new(signer_proxy)),
+            signer_proxy,
             Some(&leader_data),
             Default::default(),
         );
@@ -359,7 +359,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_pubkey,
         ))),
-        Some(Arc::new(signer_proxy)),
+        signer_proxy,
         Some(&leader_data),
         Default::default(),
     );
@@ -448,7 +448,7 @@ fn test_multi_node_basic() {
         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_pubkey,
         ))),
-        Some(Arc::new(signer_proxy)),
+        signer_proxy,
         None,
         Default::default(),
     );
@@ -477,7 +477,7 @@ fn test_multi_node_basic() {
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_pubkey,
             ))),
-            Some(Arc::new(signer_proxy)),
+            signer_proxy,
             Some(&leader_data),
             Default::default(),
         );
@@ -556,7 +556,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_pubkey,
         ))),
-        Some(Arc::new(signer_proxy)),
+        signer_proxy,
         None,
         Default::default(),
     );
@@ -580,7 +580,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_pubkey,
         ))),
-        Some(Arc::new(signer_proxy)),
+        signer_proxy,
         Some(&leader_data),
         Default::default(),
     );
@@ -601,7 +601,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
 fn create_leader(
     ledger_path: &str,
     leader_keypair: Arc<Keypair>,
-    signer: Arc<VoteSignerProxy>,
+    signer: VoteSignerProxy,
 ) -> (NodeInfo, Fullnode) {
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_data = leader.info.clone();
@@ -612,7 +612,7 @@ fn create_leader(
         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
         ))),
-        Some(signer),
+        signer,
         None,
         Default::default(),
     );
@@ -637,11 +637,10 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
     );
     let bob_pubkey = Keypair::new().pubkey();
 
-    let signer_proxy = Arc::new(VoteSignerProxy::new_local(&leader_keypair));
-
     {
+        let signer_proxy = VoteSignerProxy::new_local(&leader_keypair);
         let (leader_data, leader_fullnode) =
-            create_leader(&ledger_path, leader_keypair.clone(), signer_proxy.clone());
+            create_leader(&ledger_path, leader_keypair.clone(), signer_proxy);
 
         // lengthen the ledger
         let leader_balance =
@@ -660,8 +659,9 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
     );
 
     {
+        let signer_proxy = VoteSignerProxy::new_local(&leader_keypair);
         let (leader_data, leader_fullnode) =
-            create_leader(&ledger_path, leader_keypair.clone(), signer_proxy.clone());
+            create_leader(&ledger_path, leader_keypair.clone(), signer_proxy);
 
         // lengthen the ledger
         let leader_balance =
@@ -673,8 +673,8 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
         leader_fullnode.close()?;
     }
 
-    let (leader_data, leader_fullnode) =
-        create_leader(&ledger_path, leader_keypair, signer_proxy.clone());
+    let signer_proxy = VoteSignerProxy::new_local(&leader_keypair);
+    let (leader_data, leader_fullnode) = create_leader(&ledger_path, leader_keypair, signer_proxy);
 
     // start validator from old ledger
     let keypair = Arc::new(Keypair::new());
@@ -689,7 +689,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_data.id,
         ))),
-        Some(Arc::new(signer_proxy)),
+        signer_proxy,
         Some(&leader_data),
         Default::default(),
     );
@@ -762,7 +762,7 @@ fn test_multi_node_dynamic_network() {
         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_pubkey,
         ))),
-        Some(Arc::new(signer_proxy)),
+        signer_proxy,
         None,
         Default::default(),
     );
@@ -836,7 +836,7 @@ fn test_multi_node_dynamic_network() {
                         Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                             leader_pubkey,
                         ))),
-                        Some(Arc::new(signer_proxy)),
+                        signer_proxy,
                         Some(&leader_data),
                         Default::default(),
                     );
@@ -1011,7 +1011,7 @@ fn test_leader_to_validator_transition() {
         leader_keypair,
         &leader_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
-        Some(Arc::new(signer_proxy)),
+        signer_proxy,
         Some(&leader_info),
         Default::default(),
     );
@@ -1160,7 +1160,7 @@ fn test_leader_validator_basic() {
         validator_keypair,
         &validator_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
-        Some(Arc::new(signer_proxy)),
+        signer_proxy,
         Some(&leader_info),
         Default::default(),
     );
@@ -1172,7 +1172,7 @@ fn test_leader_validator_basic() {
         leader_keypair,
         &leader_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
-        Some(Arc::new(signer_proxy)),
+        signer_proxy,
         Some(&leader_info),
         Default::default(),
     );
@@ -1359,7 +1359,7 @@ fn test_dropped_handoff_recovery() {
         bootstrap_leader_keypair,
         &bootstrap_leader_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
-        Some(Arc::new(signer_proxy)),
+        signer_proxy,
         Some(&bootstrap_leader_info),
         Default::default(),
     );
@@ -1381,7 +1381,7 @@ fn test_dropped_handoff_recovery() {
             keypair,
             &validator_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
-            Some(Arc::new(signer_proxy)),
+            signer_proxy,
             Some(&bootstrap_leader_info),
             Default::default(),
         );
@@ -1407,7 +1407,7 @@ fn test_dropped_handoff_recovery() {
         next_leader_keypair,
         &next_leader_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
-        Some(Arc::new(signer_proxy)),
+        signer_proxy,
         Some(&bootstrap_leader_info),
         Default::default(),
     );
@@ -1545,7 +1545,7 @@ fn test_full_leader_validator_network() {
             kp.clone(),
             &validator_ledger_path,
             leader_scheduler.clone(),
-            Some(Arc::new(signer_proxy)),
+            signer_proxy,
             Some(&bootstrap_leader_info),
             Default::default(),
         );
@@ -1562,7 +1562,7 @@ fn test_full_leader_validator_network() {
         leader_keypair.clone(),
         &bootstrap_leader_ledger_path,
         leader_scheduler.clone(),
-        Some(Arc::new(signer_proxy)),
+        signer_proxy,
         Some(&bootstrap_leader_info),
         Default::default(),
     );
@@ -1734,7 +1734,7 @@ fn test_broadcast_last_tick() {
         bootstrap_leader_keypair,
         &bootstrap_leader_ledger_path,
         Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
-        Some(Arc::new(signer_proxy)),
+        signer_proxy,
         Some(&bootstrap_leader_info),
         Default::default(),
     );

@@ -67,6 +67,7 @@ pub enum FullnodeReturnType {
 
 pub struct FullnodeConfig {
     pub sigverify_disabled: bool,
+    pub voting_disabled: bool,
     pub entry_stream: Option<String>,
     pub storage_rotate_count: u64,
 }
@@ -78,6 +79,7 @@ impl Default for FullnodeConfig {
         const NUM_HASHES_FOR_STORAGE_ROTATE: u64 = 1024;
         Self {
             sigverify_disabled: false,
+            voting_disabled: false,
             entry_stream: None,
             storage_rotate_count: NUM_HASHES_FOR_STORAGE_ROTATE,
         }
@@ -105,7 +107,7 @@ impl Fullnode {
         keypair: Arc<Keypair>,
         ledger_path: &str,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
-        vote_signer: Option<Arc<VoteSignerProxy>>,
+        vote_signer: VoteSignerProxy,
         entrypoint_info_option: Option<&NodeInfo>,
         config: FullnodeConfig,
     ) -> Self {
@@ -205,12 +207,18 @@ impl Fullnode {
                 .collect(),
         };
 
+        let vote_signer_option = if config.voting_disabled {
+            None
+        } else {
+            Some(Arc::new(vote_signer))
+        };
+
         // Setup channels for rotation indications
         let (to_leader_sender, to_leader_receiver) = channel();
         let (to_validator_sender, to_validator_receiver) = channel();
 
         let tvu = Tvu::new(
-            vote_signer,
+            vote_signer_option,
             &bank,
             entry_height,
             last_entry_id,
@@ -251,7 +259,7 @@ impl Fullnode {
 
         inc_new_counter_info!("fullnode-new", 1);
 
-        Fullnode {
+        Self {
             keypair,
             cluster_info,
             bank,
@@ -473,7 +481,7 @@ mod tests {
             Arc::new(validator_keypair),
             &validator_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::new(&Default::default()))),
-            None,
+            VoteSignerProxy::new(),
             Some(&leader_node.info),
             Default::default(),
         );
@@ -505,7 +513,7 @@ mod tests {
                     Arc::new(validator_keypair),
                     &validator_ledger_path,
                     Arc::new(RwLock::new(LeaderScheduler::new(&Default::default()))),
-                    None,
+                    VoteSignerProxy::new(),
                     Some(&leader_node.info),
                     Default::default(),
                 )
@@ -569,7 +577,7 @@ mod tests {
             bootstrap_leader_keypair,
             &bootstrap_leader_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
-            Some(Arc::new(signer)),
+            signer,
             Some(&bootstrap_leader_info),
             Default::default(),
         );
@@ -654,7 +662,7 @@ mod tests {
                 bootstrap_leader_keypair,
                 &bootstrap_leader_ledger_path,
                 Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
-                None,
+                VoteSignerProxy::new(),
                 Some(&bootstrap_leader_info),
                 Default::default(),
             );
@@ -667,7 +675,7 @@ mod tests {
                 validator_keypair,
                 &validator_ledger_path,
                 Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
-                None,
+                VoteSignerProxy::new(),
                 Some(&bootstrap_leader_info),
                 Default::default(),
             );
@@ -751,7 +759,7 @@ mod tests {
             validator_keypair,
             &validator_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
-            Some(Arc::new(vote_signer)),
+            vote_signer,
             Some(&leader_node.info),
             Default::default(),
         );
