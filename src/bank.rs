@@ -768,7 +768,8 @@ impl Bank {
     {
         let mut entry_height = 0;
         let mut last_id = genesis_block.last_id();
-        self.last_ids = RwLock::new(StatusDeque::default());
+        self.last_id_queue = RwLock::new(LastIdQueue::default());
+        self.status_cache = RwLock::new(BankStatusCache::default());
 
         // Ledger verification needs to be parallelized, but we can't pull the whole
         // thing into memory. We therefore chunk it.
