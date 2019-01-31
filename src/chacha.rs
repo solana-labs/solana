@@ -163,12 +163,15 @@ mod tests {
         let size = out_file.read_to_end(&mut buf).unwrap();
         let mut hasher = Hasher::default();
         hasher.hash(&buf[..size]);
-        assert_eq!(
-            hasher.result(),
-            Hash::new(&hex!(
-                "16b1159b112b11d7a2fb7b0471797ab079bce7e0e86b8a879474616abb61e5aa"
-            )),
+
+        use bs58;
+        //  golden needs to be updated if blob stuff changes....
+        let golden = Hash::new(
+            &bs58::decode("BES6jpfVwayNKq9YZbYjbZbyX3GLzFzeQJ7fksm6LifE")
+                .into_vec()
+                .unwrap(),
         );
+        assert_eq!(hasher.result(), golden,);
         remove_file(out_path).unwrap();
     }
 }
