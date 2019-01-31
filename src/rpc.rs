@@ -6,7 +6,6 @@ use crate::jsonrpc_core::*;
 use crate::jsonrpc_http_server::*;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::service::Service;
-use crate::status_deque::Status;
 use crate::storage_stage::StorageState;
 use bincode::{deserialize, serialize};
 use bs58;
@@ -230,22 +229,13 @@ impl RpcSol for RpcSolImpl {
                 RpcSignatureStatus::SignatureNotFound
             } else {
                 match res.unwrap() {
-                    Status::Reserved => {
-                        // Report SignatureReserved as SignatureNotFound as SignatureReserved is
-                        // transitory while the bank processes the associated transaction.
-                        RpcSignatureStatus::SignatureNotFound
+                    Ok(_) => RpcSignatureStatus::Confirmed,
+                    Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
+                    Err(BankError::ProgramError(_, _)) => RpcSignatureStatus::ProgramRuntimeError,
+                    Err(err) => {
+                        trace!("mapping {:?} to GenericFailure", err);
+                        RpcSignatureStatus::GenericFailure
                     }
-                    Status::Complete(res) => match res {
-                        Ok(_) => RpcSignatureStatus::Confirmed,
-                        Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
-                        Err(BankError::ProgramError(_, _)) => {
-                            RpcSignatureStatus::ProgramRuntimeError
-                        }
-                        Err(err) => {
-                            trace!("mapping {:?} to GenericFailure", err);
-                            RpcSignatureStatus::GenericFailure
-                        }
-                    },
                 }
             }
         };
@@ -294,7 +284,7 @@ impl RpcSol for RpcSolImpl {
                 .unwrap()
                 .get_signature_status(signature);
 
-            if signature_status == Some(Status::Complete(Ok(()))) {
+            if signature_status == Some(Ok(())) {
                 info!("airdrop signature ok");
                 return Ok(bs58::encode(signature).into_string());
             } else if now.elapsed().as_secs() > 5 {
@@ -388,7 +378,7 @@ impl JsonRpcRequestProcessor {
         let id = self.bank.last_id();
         Ok(bs58::encode(id).into_string())
     }
-    pub fn get_signature_status(&self, signature: Signature) -> Option<Status<bank::Result<()>>> {
+    pub fn get_signature_status(&self, signature: Signature) -> Option<bank::Result<()>> {
         self.bank.get_signature_status(&signature)
     }
     fn get_transaction_count(&self) -> Result<u64> {
