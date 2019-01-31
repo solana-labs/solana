@@ -93,7 +93,7 @@ impl Broadcast {
 
         inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
 
-        blob_sender.send(blobs.clone()).unwrap();
+        blob_sender.send(blobs.clone())?;
 
         // don't count coding blobs in the blob indexes
         self.blob_index += blobs.len() as u64;

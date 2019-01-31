@@ -101,7 +101,7 @@ pub struct Fullnode {
     broadcast_socket: UdpSocket,
     pub node_services: NodeServices,
     pub role_notifiers: (TvuRotationReceiver, TpuRotationReceiver),
-    blob_sender: Option<BlobSender>,
+    blob_sender: BlobSender,
 }
 
 impl Fullnode {
@@ -277,7 +277,7 @@ impl Fullnode {
             tpu_sockets: node.sockets.tpu,
             broadcast_socket: node.sockets.broadcast,
             role_notifiers: (to_leader_receiver, to_validator_receiver),
-            blob_sender: Some(blob_sender),
+            blob_sender,
         }
     }
 
@@ -337,7 +337,7 @@ impl Fullnode {
             &last_id,
             self.id,
             &to_validator_sender,
-            &self.blob_sender.as_ref().unwrap(),
+            &self.blob_sender,
         )
     }
 
@@ -378,11 +378,8 @@ impl Fullnode {
         self.node_services.exit()
     }
 
-    pub fn close(mut self) -> Result<()> {
+    pub fn close(self) -> Result<()> {
         self.exit();
-        if let Some(blob_sender) = self.blob_sender.take() {
-            drop(blob_sender);
-        }
         self.join()
     }
 

@@ -111,6 +111,7 @@ impl Tvu {
             repair_socket,
             blob_fetch_receiver,
             bank.leader_scheduler.clone(),
+            exit.clone(),
         );
 
         let l_entry_height = Arc::new(RwLock::new(entry_height));
