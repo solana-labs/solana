@@ -177,7 +177,11 @@ impl Bank {
 
         self.accounts
             .store_slow(true, &genesis_block.mint_id, &mint_account);
-        self.register_tick(&genesis_block.last_id());
+
+        self.last_id_queue
+            .write()
+            .unwrap()
+            .genesis_last_id(&genesis_block.last_id());
     }
 
     fn add_system_program(&self) {
@@ -757,18 +761,12 @@ impl Bank {
 
     /// Starting from the genesis block, append the provided entries to the ledger verifying them
     /// along the way.
-    pub fn process_ledger<I>(
-        &mut self,
-        genesis_block: &GenesisBlock,
-        entries: I,
-    ) -> Result<(u64, Hash)>
+    pub fn process_ledger<I>(&mut self, entries: I) -> Result<(u64, Hash)>
     where
         I: IntoIterator<Item = Entry>,
     {
         let mut entry_height = 0;
-        let mut last_id = genesis_block.last_id();
-        self.last_id_queue = RwLock::new(LastIdQueue::default());
-        self.status_cache = RwLock::new(BankStatusCache::default());
+        let mut last_id = self.last_id();
 
         // Ledger verification needs to be parallelized, but we can't pull the whole
         // thing into memory. We therefore chunk it.
@@ -1271,8 +1269,9 @@ mod tests {
         let (genesis_block, mint_keypair, ledger) = create_sample_ledger(100, 2);
         let mut bank = Bank::default();
         bank.process_genesis_block(&genesis_block);
+        assert_eq!(bank.tick_height(), 0);
         bank.add_system_program();
-        let (ledger_height, last_id) = bank.process_ledger(&genesis_block, ledger).unwrap();
+        let (ledger_height, last_id) = bank.process_ledger(ledger).unwrap();
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 98);
         assert_eq!(ledger_height, 4);
         assert_eq!(bank.tick_height(), 2);
@@ -1305,11 +1304,11 @@ mod tests {
         let mut bank0 = Bank::default();
         bank0.add_system_program();
         bank0.process_genesis_block(&genesis_block);
-        bank0.process_ledger(&genesis_block, ledger0).unwrap();
+        bank0.process_ledger(ledger0).unwrap();
         let mut bank1 = Bank::default();
         bank1.add_system_program();
         bank1.process_genesis_block(&genesis_block);
-        bank1.process_ledger(&genesis_block, ledger1).unwrap();
+        bank1.process_ledger(ledger1).unwrap();
 
         let initial_state = bank0.hash_internal_state();
 

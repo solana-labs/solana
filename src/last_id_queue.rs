@@ -52,6 +52,19 @@ impl LastIdQueue {
     pub fn check_entry(&self, entry_id: Hash) -> bool {
         self.entries.get(&entry_id).is_some()
     }
+
+    pub fn genesis_last_id(&mut self, last_id: &Hash) {
+        self.entries.insert(
+            *last_id,
+            LastIdEntry {
+                tick_height: 0,
+                timestamp: timestamp(),
+            },
+        );
+
+        self.last_id = Some(*last_id);
+    }
+
     /// Tell the bank which Entry IDs exist on the ledger. This function
     /// assumes subsequent calls correspond to later entries, and will boot
     /// the oldest ones once its internal cache is full. Once boot, the
