@@ -4,7 +4,7 @@ extern crate test;
 
 use solana::bank::*;
 use solana::genesis_block::GenesisBlock;
-use solana::status_deque::MAX_ENTRY_IDS;
+use solana::last_id_queue::MAX_ENTRY_IDS;
 use solana_sdk::hash::hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;

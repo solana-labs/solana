@@ -301,7 +301,6 @@ impl Bank {
 
     /// Forget all signatures. Useful for benchmarking.
     pub fn clear_signatures(&self) {
-        self.last_id_queue.write().unwrap().clear();
         self.status_cache.write().unwrap().clear();
     }
 
