@@ -1,26 +1,30 @@
+use crate::blob_store::slot::{SlotData, SlotFiles, SlotIO, SlotPaths};
 use crate::packet::{Blob, BlobError, BLOB_HEADER_SIZE};
 use crate::result::Error as SErr;
 
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
 
 use std::borrow::Borrow;
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, File, OpenOptions};
 use std::io::{prelude::*, BufReader, BufWriter};
 use std::path::{Path, PathBuf};
+use std::sync::RwLock;
+use std::time::Instant;
 
 use super::*;
 
 const DATA_FILE_NAME: &str = "data";
-pub(super) const META_FILE_NAME: &str = "meta";
+pub const META_FILE_NAME: &str = "meta";
 const INDEX_FILE_NAME: &str = "index";
-pub(super) const ERASURE_FILE_NAME: &str = "erasure";
-pub(super) const ERASURE_INDEX_FILE_NAME: &str = "erasure_index";
+pub const ERASURE_FILE_NAME: &str = "erasure";
+pub const ERASURE_INDEX_FILE_NAME: &str = "erasure_index";
 
 //const DATA_FILE_BUF_SIZE: usize = 2 * 1024 * 1024;
-const DATA_FILE_BUF_SIZE: usize = 64 * 1024;
+pub const DATA_FILE_BUF_SIZE: usize = 64 * 1024;
 
-pub(super) const INDEX_RECORD_SIZE: u64 = 3 * 8;
+pub const INDEX_RECORD_SIZE: u64 = 3 * 8;
 
 impl Store {
     pub(super) fn mk_slot_path(&self, slot_height: u64) -> PathBuf {
@@ -127,7 +131,7 @@ impl Store {
     }
 
     #[allow(clippy::range_plus_one)]
-    pub(super) fn insert_blobs<I>(&self, iter: I) -> Result<()>
+    pub(super) fn insert_blobs<I>(&mut self, iter: I) -> Result<()>
     where
         I: IntoIterator,
         I::Item: Borrow<Blob>,
@@ -160,101 +164,33 @@ impl Store {
                 .or_insert(index..(index + 1));
         }
 
+        let mut slots_to_cache = Vec::with_capacity(slot_ranges.len());
+
         for (slot, range) in slot_ranges {
-            let slot_path = self.mk_slot_path(slot);
-            ensure_slot(&slot_path)?;
-
-            let (data_path, meta_path, index_path) = (
-                slot_path.join(store_impl::DATA_FILE_NAME),
-                slot_path.join(store_impl::META_FILE_NAME),
-                slot_path.join(store_impl::INDEX_FILE_NAME),
-            );
-
-            // load meta_data
-            let (mut meta_file, mut meta) = if meta_path.exists() {
-                let mut f = OpenOptions::new().read(true).write(true).open(&meta_path)?;
-                let m = bincode::deserialize_from(&mut f)?;
-                f.seek(SeekFrom::Start(0))?;
-                f.set_len(0)?;
-                (f, m)
-            } else {
-                (
-                    File::create(&meta_path)?,
-                    SlotMeta {
-                        slot_index: slot,
-                        num_blocks: self.config.num_blocks_per_slot,
-                        ..SlotMeta::default()
-                    },
-                )
-            };
-
             let slot_blobs = &blobs[range];
-            let mut idx_buf = Vec::with_capacity(slot_blobs.len() * INDEX_RECORD_SIZE as usize);
 
-            let mut data_wtr =
-                BufWriter::with_capacity(DATA_FILE_BUF_SIZE, open_append(&data_path)?);
-            let mut offset = data_wtr.seek(SeekFrom::Current(0))?;
-            let mut blob_slices_to_write = Vec::with_capacity(slot_blobs.len());
-
-            for blob in slot_blobs {
-                let blob = blob.borrow();
-                let blob_index = blob.index().map_err(bad_blob)?;
-                let blob_size = blob.size().map_err(bad_blob)?;
-
-                let serialized_blob_data = &blob.data[..BLOB_HEADER_SIZE + blob_size];
-                let serialized_entry_data = &blob.data[BLOB_HEADER_SIZE..];
-                let entry: Entry = bincode::deserialize(serialized_entry_data)
-                    .expect("Blobs must be well formed by the time they reach the ledger");
-
-                blob_slices_to_write.push(serialized_blob_data);
-                let data_len = serialized_blob_data.len() as u64;
-
-                let blob_idx = BlobIndex {
-                    index: blob_index,
-                    size: data_len,
-                    offset,
-                };
-
-                offset += data_len;
-
-                // Write indices to buffer, which will be written to index file
-                // in the outer (per-slot) loop
-                idx_buf.write_u64::<BigEndian>(blob_idx.index)?;
-                idx_buf.write_u64::<BigEndian>(blob_idx.offset)?;
-                idx_buf.write_u64::<BigEndian>(blob_idx.size)?;
-
-                // update meta. write to file once in outer loop
-                if blob_index > meta.received {
-                    meta.received = blob_index;
+            //for blob in slot_blobs {
+            //}
+            let cache = self.cache.read().expect("concurrency error with cache");
+            match cache.get(&slot) {
+                Some(sio_lock) => {
+                    let mut sio = sio_lock.write().expect("concurrency error with SlotIo");
+                    sio.insert(slot_blobs, &self.config)?;
                 }
-
-                if blob_index == meta.consumed + 1 {
-                    meta.consumed += 1;
-                }
-
-                if entry.is_tick() {
-                    meta.consumed_ticks = std::cmp::max(entry.tick_height, meta.consumed_ticks);
-                    meta.is_trunk = meta.contains_all_ticks(&self.config);
+                None => {
+                    let mut sio = self.open_slot(slot)?;
+                    sio.insert(slot_blobs, &self.config)?;
+                    slots_to_cache.push(sio);
                 }
             }
+        }
 
-            let mut index_wtr = BufWriter::new(open_append(&index_path)?);
-
-            // write blob slices
-            for slice in blob_slices_to_write {
-                data_wtr.write_all(slice)?;
+        // cache slots
+        {
+            let mut cache = self.cache.write().expect("concurrency error with cache");
+            for sio in slots_to_cache {
+                cache.insert(sio.slot, RwLock::new(sio));
             }
-
-            bincode::serialize_into(&mut meta_file, &meta)?;
-            index_wtr.write_all(&idx_buf)?;
-
-            data_wtr.flush()?;
-            let data_f = data_wtr.into_inner()?;
-            let index_f = index_wtr.into_inner()?;
-
-            data_f.sync_data()?;
-            index_f.sync_data()?;
-            meta_file.sync_data()?;
         }
 
         Ok(())
@@ -264,10 +200,12 @@ impl Store {
         &self,
         slot: u64,
         range: std::ops::Range<u64>,
-    ) -> Result<impl Iterator<Item = Result<Vec<u8>>>> {
+    ) -> Result<impl Iterator<Item = Result<Vec<u8>>> + '_> {
         // iterate over index file, gather blob indexes
         // sort by blob_index,
 
+        //let sio = self.open_slot(slot)?;
+        //sio.data(range)
         let (data_path, index_path) = {
             let slot_path = self.mk_slot_path(slot);
             (
@@ -276,80 +214,47 @@ impl Store {
             )
         };
 
-        let index_rdr = File::open(&index_path)?;
-
-        let index_size = index_rdr.metadata()?.len();
-
-        let mut index_rdr = BufReader::new(index_rdr);
-        let mut buf = [0u8; INDEX_RECORD_SIZE as usize];
-        let mut blob_indices: Vec<BlobIndex> =
-            Vec::with_capacity((index_size / INDEX_RECORD_SIZE) as usize);
-
-        while let Ok(_) = index_rdr.read_exact(&mut buf) {
-            let index = BigEndian::read_u64(&buf[0..8]);
-            if index < range.start || range.end <= index {
-                continue;
-            }
-
-            let offset = BigEndian::read_u64(&buf[8..16]);
-            let size = BigEndian::read_u64(&buf[16..24]);
-            let blob_idx = BlobIndex {
-                index,
-                offset,
-                size,
-            };
-            blob_indices.push(blob_idx);
-        }
-
-        blob_indices.sort_unstable_by_key(|bix| bix.index);
-
-        let data_rdr = BufReader::new(File::open(&data_path)?);
-
-        Ok(SlotData {
-            f: data_rdr,
-            idxs: blob_indices,
-            pos: 0,
-        })
+        let it = slot::mk_slot_data_iter(&index_path, &data_path, range, self)?;
+        Ok(it)
     }
-}
 
-#[derive(Debug)]
-struct SlotData {
-    f: BufReader<File>,
-    idxs: Vec<BlobIndex>,
-    pos: u64,
-}
+    pub(super) fn mk_paths(&self, slot: u64) -> SlotPaths {
+        let slot_dir = self.mk_slot_path(slot);
 
-impl Iterator for SlotData {
-    type Item = Result<Vec<u8>>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.pos >= self.idxs.len() as u64 {
-            return None;
+        SlotPaths {
+            meta: slot_dir.join(META_FILE_NAME),
+            index: slot_dir.join(INDEX_FILE_NAME),
+            data: slot_dir.join(DATA_FILE_NAME),
+            erasure_index: slot_dir.join(ERASURE_INDEX_FILE_NAME),
+            erasure: slot_dir.join(ERASURE_FILE_NAME),
         }
+    }
 
-        let mut hack = || {
-            let bix = self.idxs[self.pos as usize];
+    pub(super) fn open_slot(&self, slot: u64) -> Result<SlotIO> {
+        let paths = self.mk_paths(slot);
+        let new_meta = !paths.meta.exists();
+        let mut files = paths.open()?;
 
-            let mut buf = vec![0u8; bix.size as usize];
-            self.f.seek(SeekFrom::Start(bix.offset))?;
-            self.f.read_exact(&mut buf)?;
-
-            self.pos += 1;
-            Ok(buf)
+        let meta = if new_meta {
+            SlotMeta::new(slot, DEFAULT_BLOCKS_PER_SLOT)
+        } else {
+            let meta = bincode::deserialize_from(&mut files.meta)?;
+            files.meta.seek(SeekFrom::Start(0))?;
+            meta
         };
-        Some(hack())
+
+        Ok(SlotIO::new(slot, meta, paths, files))
     }
 }
 
-pub(super) fn bad_blob(err: SErr) -> StoreError {
+pub fn bad_blob(err: SErr) -> StoreError {
     match err {
         SErr::BlobError(BlobError::BadState) => StoreError::BadBlob,
         _ => panic!("Swallowing error in blob store impl: {}", err),
     }
 }
 
-pub(super) fn open_append<P>(path: P) -> Result<File>
+pub fn open_append<P>(path: P) -> Result<File>
 where
     P: AsRef<Path>,
 {
@@ -358,7 +263,7 @@ where
     Ok(f)
 }
 
-pub(super) fn ensure_slot<P>(path: P) -> Result<()>
+pub fn ensure_slot<P>(path: P) -> Result<()>
 where
     P: AsRef<Path>,
 {

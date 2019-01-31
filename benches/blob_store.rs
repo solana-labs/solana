@@ -13,7 +13,7 @@ use test::Bencher;
 
 // Given some blobs and a ledger at ledger_path, benchmark writing the blobs to the ledger
 fn bench_write_blobs(bench: &mut Bencher, blobs: &mut [Blob], ledger_path: &str) {
-    let store = Store::open(&ledger_path);
+    let mut store = Store::open(&ledger_path);
 
     bench.iter(move || {
         store.put_blobs(&blobs[..]).expect("Failed to insert blobs");
@@ -129,7 +129,7 @@ fn bench_read_random(bench: &mut Bencher) {
 #[ignore]
 fn bench_insert_data_blob_small(bench: &mut Bencher) {
     let ledger_path = get_tmp_store_path("bench_insert_data_blob_small").unwrap();
-    let store = Store::open(&ledger_path);
+    let mut store = Store::open(&ledger_path);
     let num_entries = 32 * 1024;
     let entries = make_tiny_test_entries(num_entries);
     let mut blobs = entries.to_blobs();
@@ -151,7 +151,7 @@ fn bench_insert_data_blob_small(bench: &mut Bencher) {
 #[ignore]
 fn bench_insert_data_blob_big(bench: &mut Bencher) {
     let ledger_path = get_tmp_store_path("bench_insert_data_blob_big").unwrap();
-    let store = Store::open(&ledger_path);
+    let mut store = Store::open(&ledger_path);
     let num_entries = 32 * 1024;
     let entries = make_large_test_entries(num_entries);
     let mut blobs = entries.to_blobs();

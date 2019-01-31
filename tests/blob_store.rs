@@ -11,7 +11,7 @@ type Result<T> = StdRes<T, StoreError>;
 #[test]
 fn test_get_put_simple() {
     let p = get_tmp_store_path("test_get_put_simple").unwrap();
-    let store = Store::open(&p);
+    let mut store = Store::open(&p);
     let slot = 0;
 
     // simple metadata insert
@@ -49,7 +49,7 @@ fn test_get_put_simple() {
 #[test]
 fn test_insert_noncontiguous_blobs() {
     let p = get_tmp_store_path("test_insert_noncontiguous_blobs").unwrap();
-    let store = Store::open(&p);
+    let mut store = Store::open(&p);
 
     // try inserting some blobs
     let entries = entry::make_tiny_test_entries(10);
@@ -106,8 +106,8 @@ fn test_insert_noncontiguous_blobs() {
 #[test]
 fn test_ensure_correct_metadata() {
     let p = get_tmp_store_path("test_ensure_correct_metadata").unwrap();
-    let store = Store::open(&p);
-    let config = store.get_config();
+    let mut store = Store::open(&p);
+    let config = *store.get_config();
     let num_ticks = config.ticks_per_block * config.num_blocks_per_slot;
     let slot = 1;
 
@@ -133,13 +133,13 @@ fn test_ensure_correct_metadata() {
     println!(
         "meta = {:?}, expected_ticks = {}",
         meta,
-        meta.num_expected_ticks(config)
+        meta.num_expected_ticks(&config)
     );
 
     assert_eq!(meta.received, num_ticks - 1);
     assert_eq!(meta.consumed, num_ticks - 1);
     assert_eq!(meta.consumed_ticks, num_ticks - 1);
-    assert!(meta.contains_all_ticks(config));
+    assert!(meta.contains_all_ticks(&config));
 
     drop(store);
     Store::destroy(&p).expect("destruction should succeed");
@@ -148,7 +148,7 @@ fn test_ensure_correct_metadata() {
 #[test]
 fn test_retrieve_entries() {
     let p = get_tmp_store_path("test_retrieve_entries").unwrap();
-    let store = Store::open(&p);
+    let mut store = Store::open(&p);
 
     // try inserting some blobs
     let entries = entry::make_tiny_test_entries(1024);

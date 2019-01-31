@@ -7,6 +7,7 @@
 // and then farm
 #![allow(unreachable_code, unused_imports, unused_variables, dead_code)]
 
+use crate::blob_store::slot::SlotIO;
 use crate::entry::Entry;
 use crate::leader_scheduler::{DEFAULT_BOOTSTRAP_HEIGHT, TICKS_PER_BLOCK};
 use crate::packet::{self, Blob};
@@ -16,21 +17,28 @@ use byteorder::{BigEndian, ByteOrder};
 use serde::Serialize;
 
 use std::borrow::Borrow;
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, prelude::*, BufReader, BufWriter, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::result::Result as StdRes;
+use std::sync::RwLock;
+
+mod slot;
+mod store_impl;
 
 type Result<T> = StdRes<T, StoreError>;
 
-pub const DEFAULT_BLOCKS_PER_SLOT: u64 = 32;
+pub const DEFAULT_BLOCKS_PER_SLOT: u64 = 1;
+const DEFAULT_SLOT_CACHE_SIZE: usize = 10;
 
 #[derive(Debug)]
 pub struct Store {
     root: PathBuf,
     config: StoreConfig,
+    cache: RwLock<BTreeMap<u64, RwLock<SlotIO>>>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
@@ -50,7 +58,7 @@ pub enum StoreError {
 }
 
 #[derive(Copy, Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-struct BlobIndex {
+pub struct BlobIndex {
     pub index: u64,
     pub offset: u64,
     pub size: u64,
@@ -95,6 +103,7 @@ impl Store {
         Store {
             root: PathBuf::from(path.as_ref()),
             config,
+            cache: RwLock::new(BTreeMap::new()),
         }
     }
 
@@ -131,7 +140,7 @@ impl Store {
         Ok(meta)
     }
 
-    pub fn put_blob(&self, blob: &Blob) -> Result<()> {
+    pub fn put_blob(&mut self, blob: &Blob) -> Result<()> {
         self.insert_blobs(std::iter::once(blob))
     }
 
@@ -216,7 +225,7 @@ impl Store {
         Ok(())
     }
 
-    pub fn put_blobs<I>(&self, iter: I) -> Result<()>
+    pub fn put_blobs<I>(&mut self, iter: I) -> Result<()>
     where
         I: IntoIterator,
         I::Item: Borrow<Blob>,
@@ -228,7 +237,7 @@ impl Store {
         &self,
         slot: u64,
         start_index: u64,
-    ) -> Result<impl Iterator<Item = Result<Vec<u8>>>> {
+    ) -> Result<impl Iterator<Item = Result<Vec<u8>>> + '_> {
         self.slot_data(slot, start_index..std::u64::MAX)
     }
 
@@ -236,7 +245,7 @@ impl Store {
         &self,
         slot: u64,
         range: std::ops::Range<u64>,
-    ) -> Result<impl Iterator<Item = Result<Vec<u8>>>> {
+    ) -> Result<impl Iterator<Item = Result<Vec<u8>>> + '_> {
         self.slot_data(slot, range)
     }
 
@@ -262,7 +271,7 @@ impl Store {
         &self,
         slot: u64,
         start_index: u64,
-    ) -> Result<impl Iterator<Item = Result<Entry>>> {
+    ) -> Result<impl Iterator<Item = Result<Entry>> + '_> {
         self.slot_entries_range(slot, start_index..std::u64::MAX)
     }
 
@@ -270,7 +279,7 @@ impl Store {
         &self,
         slot: u64,
         range: std::ops::Range<u64>,
-    ) -> Result<impl Iterator<Item = Result<Entry>>> {
+    ) -> Result<impl Iterator<Item = Result<Entry>> + '_> {
         let iter = self.slot_data(slot, range)?.map(|blob_data| {
             let entry_data = &blob_data?[packet::BLOB_HEADER_SIZE..];
             let entry =
@@ -433,8 +442,6 @@ impl Iterator for DataIter {
         unimplemented!()
     }
 }
-
-mod store_impl;
 
 pub fn get_tmp_store_path(name: &str) -> Result<PathBuf> {
     use solana_sdk::signature::{Keypair, KeypairUtil};
