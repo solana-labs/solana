@@ -31,8 +31,9 @@ use sys_info;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum BankingStageReturnType {
-    LeaderRotation,
+    LeaderRotation(u64),
     ChannelDisconnected,
+    RecordFailure,
 }
 
 // number of threads is 1 until mt bank is ready
@@ -44,6 +45,7 @@ pub struct BankingStage {
     bank_thread_hdls: Vec<JoinHandle<Option<BankingStageReturnType>>>,
     poh_service: PohService,
     compute_confirmation_service: ComputeLeaderConfirmationService,
+    max_tick_height: Option<u64>,
 }
 
 impl BankingStage {
@@ -110,17 +112,25 @@ impl BankingStage {
                                     Error::SendError => {
                                         break Some(BankingStageReturnType::ChannelDisconnected);
                                     }
-                                    Error::PohRecorderError(PohRecorderError::MaxHeightReached)
-                                    | Error::BankError(BankError::RecordFailure) => {
+                                    Error::BankError(BankError::RecordFailure) => {
+                                        break Some(BankingStageReturnType::RecordFailure);
+                                    }
+                                    Error::PohRecorderError(PohRecorderError::MaxHeightReached) => {
+                                        assert!(max_tick_height.is_some());
+                                        let max_tick_height = max_tick_height.unwrap();
                                         if !thread_did_notify_rotation.load(Ordering::Relaxed) {
-                                            let _ =
-                                                thread_sender.send(TpuReturnType::LeaderRotation);
+                                            // Leader rotation should only happen if a max_tick_height was specified
+                                            let _ = thread_sender.send(
+                                                TpuReturnType::LeaderRotation(max_tick_height),
+                                            );
                                             thread_did_notify_rotation
                                                 .store(true, Ordering::Relaxed);
                                         }
 
                                         //should get restarted from the channel receiver
-                                        break Some(BankingStageReturnType::LeaderRotation);
+                                        break Some(BankingStageReturnType::LeaderRotation(
+                                            max_tick_height,
+                                        ));
                                     }
                                     _ => error!("solana-banking-stage-tx {:?}", e),
                                 }
@@ -140,6 +150,7 @@ impl BankingStage {
                 bank_thread_hdls,
                 poh_service,
                 compute_confirmation_service,
+                max_tick_height,
             },
             entry_receiver,
         )
@@ -268,7 +279,9 @@ impl Service for BankingStage {
         match poh_return_value {
             Ok(_) => (),
             Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) => {
-                return_value = Some(BankingStageReturnType::LeaderRotation);
+                return_value = Some(BankingStageReturnType::LeaderRotation(
+                    self.max_tick_height.unwrap(),
+                ));
             }
             Err(Error::SendError) => {
                 return_value = Some(BankingStageReturnType::ChannelDisconnected);
@@ -504,7 +517,7 @@ mod tests {
         );
         assert_eq!(
             banking_stage.join().unwrap(),
-            Some(BankingStageReturnType::LeaderRotation)
+            Some(BankingStageReturnType::LeaderRotation(max_tick_height))
         );
     }
 }
