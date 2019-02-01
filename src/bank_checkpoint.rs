@@ -237,19 +237,21 @@ impl BankCheckpoint {
             subscriptions.check_signature(&tx.signatures[0], &res[i]);
         }
     }
+
     fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
         assert!(!self.finalized());
         let mut status_cache = self.status_cache.write().unwrap();
         for (i, tx) in txs.iter().enumerate() {
-            match res[i] {
-                Ok(_) => (),
+            match &res[i] {
+                Ok(_) => status_cache.add(&tx.signatures[0]),
                 Err(BankError::LastIdNotFound) => (),
                 Err(BankError::DuplicateSignature) => (),
                 Err(BankError::AccountNotFound) => (),
-                _ => status_cache
-                    .save_failure_status(&tx.signatures[0], res[i].clone().err().unwrap()),
+                Err(e) => {
+                    status_cache.add(&tx.signatures[0]);
+                    status_cache.save_failure_status(&tx.signatures[0], e.clone());
+                }
             }
-            if res[i].is_err() {}
         }
     }
 
