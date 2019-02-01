@@ -422,7 +422,7 @@ mod test {
         bank.head().register_tick(&last_id);
         add_system_program(bank.head());
 
-        let tx1 = SystemTransaction::new_move(&mint, alice.pubkey(), 1, last_id,0);
+        let tx1 = SystemTransaction::new_move(&mint, alice.pubkey(), 1, last_id, 0);
         let pay_alice = vec![tx1];
 
         let locked_alice = bank.head().lock_accounts(&pay_alice);
