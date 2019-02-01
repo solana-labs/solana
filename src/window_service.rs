@@ -76,7 +76,7 @@ fn recv_window(
             .to_owned(),
     );
 
-    retransmit_all_leader_blocks(&dq, leader_scheduler, retransmit, id)?;
+    retransmit_all_leader_blocks(&dq, leader_scheduler, retransmit)?;
 
     //send a contiguous set of blocks
     let mut consume_queue = Vec::new();
@@ -249,19 +249,15 @@ mod test {
     #[test]
     pub fn window_send_test() {
         solana_logger::setup();
-        // setup a leader whose id is used to generates blobs and a validator
-        // node whose window service will retransmit leader blobs.
-        let leader_node = Node::new_localhost();
-        let validator_node = Node::new_localhost();
+        let tn = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
-        let mut cluster_info_me = ClusterInfo::new(validator_node.info.clone());
-        let me_id = leader_node.info.id;
+        let mut cluster_info_me = ClusterInfo::new(tn.info.clone());
+        let me_id = cluster_info_me.my_data().id;
         cluster_info_me.set_leader(me_id);
         let subs = Arc::new(RwLock::new(cluster_info_me));
 
         let (s_reader, r_reader) = channel();
-        let t_receiver =
-            blob_receiver(Arc::new(leader_node.sockets.gossip), exit.clone(), s_reader);
+        let t_receiver = blob_receiver(Arc::new(tn.sockets.gossip), exit.clone(), s_reader);
         let (s_window, r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let done = Arc::new(AtomicBool::new(false));
@@ -278,7 +274,7 @@ mod test {
             r_reader,
             Some(s_window),
             s_retransmit,
-            Arc::new(leader_node.sockets.repair),
+            Arc::new(tn.sockets.repair),
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(me_id))),
             done,
             exit.clone(),
@@ -286,11 +282,11 @@ mod test {
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let blob_sockets: Vec<Arc<UdpSocket>> =
-                leader_node.sockets.tvu.into_iter().map(Arc::new).collect();
+                tn.sockets.tvu.into_iter().map(Arc::new).collect();
 
             let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
             let num_blobs_to_make = 10;
-            let gossip_address = &leader_node.info.gossip;
+            let gossip_address = &tn.info.gossip;
             let msgs = make_consecutive_blobs(
                 &me_id,
                 num_blobs_to_make,
@@ -324,18 +320,14 @@ mod test {
     #[test]
     pub fn window_send_leader_test2() {
         solana_logger::setup();
-        // setup a leader whose id is used to generates blobs and a validator
-        // node whose window service will retransmit leader blobs.
-        let leader_node = Node::new_localhost();
-        let validator_node = Node::new_localhost();
+        let tn = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
-        let cluster_info_me = ClusterInfo::new(validator_node.info.clone());
-        let me_id = leader_node.info.id;
+        let cluster_info_me = ClusterInfo::new(tn.info.clone());
+        let me_id = cluster_info_me.my_data().id;
         let subs = Arc::new(RwLock::new(cluster_info_me));
 
         let (s_reader, r_reader) = channel();
-        let t_receiver =
-            blob_receiver(Arc::new(leader_node.sockets.gossip), exit.clone(), s_reader);
+        let t_receiver = blob_receiver(Arc::new(tn.sockets.gossip), exit.clone(), s_reader);
         let (s_window, _r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let done = Arc::new(AtomicBool::new(false));
@@ -352,7 +344,7 @@ mod test {
             r_reader,
             Some(s_window),
             s_retransmit,
-            Arc::new(leader_node.sockets.repair),
+            Arc::new(tn.sockets.repair),
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(me_id))),
             done,
             exit.clone(),
@@ -360,16 +352,11 @@ mod test {
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let blob_sockets: Vec<Arc<UdpSocket>> =
-                leader_node.sockets.tvu.into_iter().map(Arc::new).collect();
+                tn.sockets.tvu.into_iter().map(Arc::new).collect();
             let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
             let mut msgs = Vec::new();
-            let blobs = make_consecutive_blobs(
-                &me_id,
-                14u64,
-                0,
-                Default::default(),
-                &leader_node.info.gossip,
-            );
+            let blobs =
+                make_consecutive_blobs(&me_id, 14u64, 0, Default::default(), &tn.info.gossip);
 
             for v in 0..10 {
                 let i = 9 - v;

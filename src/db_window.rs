@@ -120,7 +120,6 @@ pub fn retransmit_all_leader_blocks(
     dq: &[SharedBlob],
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     retransmit: &BlobSender,
-    id: &Pubkey,
 ) -> Result<()> {
     let mut retransmit_queue: Vec<SharedBlob> = Vec::new();
     for b in dq {
@@ -128,9 +127,7 @@ pub fn retransmit_all_leader_blocks(
         // add to the retransmit_queue
         let slot = b.read().unwrap().slot();
         if let Some(leader_id) = leader_scheduler.read().unwrap().get_leader_for_slot(slot) {
-            if leader_id != *id {
-                add_blob_to_retransmit_queue(b, leader_id, &mut retransmit_queue);
-            }
+            add_blob_to_retransmit_queue(b, leader_id, &mut retransmit_queue);
         }
     }
 
@@ -401,13 +398,8 @@ mod test {
 
         // Expect blob from leader to be retransmitted
         blob.write().unwrap().set_id(&leader);
-        retransmit_all_leader_blocks(
-            &vec![blob.clone()],
-            &leader_scheduler,
-            &blob_sender,
-            &nonleader,
-        )
-        .expect("Expect successful retransmit");
+        retransmit_all_leader_blocks(&vec![blob.clone()], &leader_scheduler, &blob_sender)
+            .expect("Expect successful retransmit");
         let output_blob = blob_receiver
             .try_recv()
             .expect("Expect input blob to be retransmitted");
@@ -420,18 +412,7 @@ mod test {
 
         // Expect blob from nonleader to not be retransmitted
         blob.write().unwrap().set_id(&nonleader);
-        retransmit_all_leader_blocks(
-            &vec![blob.clone()],
-            &leader_scheduler,
-            &blob_sender,
-            &nonleader,
-        )
-        .expect("Expect successful retransmit");
-        assert!(blob_receiver.try_recv().is_err());
-
-        // Expect blob from leader while currently leader to not be retransmitted
-        blob.write().unwrap().set_id(&leader);
-        retransmit_all_leader_blocks(&vec![blob], &leader_scheduler, &blob_sender, &leader)
+        retransmit_all_leader_blocks(&vec![blob], &leader_scheduler, &blob_sender)
             .expect("Expect successful retransmit");
         assert!(blob_receiver.try_recv().is_err());
     }
