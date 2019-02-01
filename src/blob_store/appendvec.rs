@@ -54,7 +54,7 @@ where
 
     fn grow_file(&mut self) -> io::Result<()> {
         let end = self.file_size + DATA_FILE_INC_SIZE;
-        drop(&self.map);
+
         self.data.seek(SeekFrom::Start(end))?;
         self.data.write_all(&[0])?;
         self.data.seek(SeekFrom::Start(0))?;

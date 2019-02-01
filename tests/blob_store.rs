@@ -11,7 +11,7 @@ type Result<T> = StdRes<T, StoreError>;
 #[test]
 fn test_get_put_simple() {
     let p = get_tmp_store_path("test_get_put_simple").unwrap();
-    let mut store = Store::open(&p).unwrap();
+    let mut store = BlobStore::open(&p).unwrap();
     let slot = 0;
 
     // simple metadata insert
@@ -43,13 +43,13 @@ fn test_get_put_simple() {
     assert_eq!(code, out_code);
 
     drop(store);
-    Store::destroy(&p).expect("destruction should succeed");
+    BlobStore::destroy(&p).expect("destruction should succeed");
 }
 
 #[test]
 fn test_insert_noncontiguous_blobs() {
     let p = get_tmp_store_path("test_insert_noncontiguous_blobs").unwrap();
-    let mut store = Store::open(&p).unwrap();
+    let mut store = BlobStore::open(&p).unwrap();
 
     // try inserting some blobs
     let entries = entry::make_tiny_test_entries(10);
@@ -100,13 +100,13 @@ fn test_insert_noncontiguous_blobs() {
     assert_eq!(meta.consumed, 9);
 
     drop(store);
-    Store::destroy(&p).expect("destruction should succeed");
+    BlobStore::destroy(&p).expect("destruction should succeed");
 }
 
 #[test]
 fn test_ensure_correct_metadata() {
     let p = get_tmp_store_path("test_ensure_correct_metadata").unwrap();
-    let mut store = Store::open(&p).unwrap();
+    let mut store = BlobStore::open(&p).unwrap();
     let config = *store.get_config();
     let num_ticks = config.ticks_per_block * config.num_blocks_per_slot;
     let slot = 1;
@@ -142,13 +142,13 @@ fn test_ensure_correct_metadata() {
     assert!(meta.contains_all_ticks(&config));
 
     drop(store);
-    Store::destroy(&p).expect("destruction should succeed");
+    BlobStore::destroy(&p).expect("destruction should succeed");
 }
 
 #[test]
 fn test_retrieve_entries() {
     let p = get_tmp_store_path("test_retrieve_entries").unwrap();
-    let mut store = Store::open(&p).unwrap();
+    let mut store = BlobStore::open(&p).unwrap();
 
     // try inserting some blobs
     let entries = entry::make_tiny_test_entries(1024);
@@ -180,5 +180,5 @@ fn test_retrieve_entries() {
     assert_eq!(meta.consumed, 1023);
 
     drop(store);
-    Store::destroy(&p).expect("destruction should succeed");
+    BlobStore::destroy(&p).expect("destruction should succeed");
 }

@@ -1,42 +1,32 @@
-use crate::blob_store::slot::{self, FreeSlotData, SlotData, SlotFiles, SlotIO, SlotPaths};
-use crate::blob_store::DEFAULT_BLOCKS_PER_SLOT;
-use crate::blob_store::{BlobIndex, Result, SlotMeta, Store, StoreConfig, StoreError};
-use crate::packet::{Blob, BlobError, BLOB_HEADER_SIZE};
-use crate::result::Error as SErr;
+use crate::blob_store::slot::{self, SlotData, SlotIO, SlotPaths};
+use crate::blob_store::store::{Key, Storable, StorableNoCopy};
+use crate::blob_store::{BlobIndex, Result, StoreError};
 
-use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
+use byteorder::{BigEndian, ByteOrder};
 
-use std::borrow::Borrow;
-use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::fs::{self, File, OpenOptions};
-use std::io::{prelude::*, BufReader, BufWriter, Seek, SeekFrom};
-use std::marker::PhantomData;
+use std::io::{prelude::*, BufReader};
 use std::ops::Range;
 use std::path::{Path, PathBuf};
-use std::sync::RwLock;
-use std::time::Instant;
+use std::result::Result as StdRes;
 
 pub const DATA_FILE_NAME: &str = "data";
-pub const META_FILE_NAME: &str = "meta";
 pub const INDEX_FILE_NAME: &str = "index";
-pub const ERASURE_FILE_NAME: &str = "erasure";
-pub const ERASURE_INDEX_FILE_NAME: &str = "erasure_index";
 
-pub const DEFAULT_SLOT_CACHE_SIZE: usize = 10;
 pub const DATA_FILE_BUF_SIZE: usize = 64 * 1024;
 pub const INDEX_RECORD_SIZE: u64 = 3 * 8;
-
-#[derive(Debug)]
-pub struct Data<'a, S> {
-    slot_iter: Option<FreeSlotData>,
-    marker: PhantomData<&'a S>,
-}
 
 #[derive(Debug)]
 pub struct SlotCache {
     max_size: usize,
     map: BTreeMap<u64, SlotIO>,
+}
+
+impl Default for SlotCache {
+    fn default() -> SlotCache {
+        SlotCache::with_capacity(SlotCache::DEFAULT_CAPACITY)
+    }
 }
 
 impl SlotCache {
@@ -49,10 +39,6 @@ impl SlotCache {
     pub fn with_capacity(max_size: usize) -> Self {
         let map = BTreeMap::new();
         SlotCache { map, max_size }
-    }
-
-    pub fn get(&self, slot: u64) -> Option<&SlotIO> {
-        self.map.get(&slot)
     }
 
     pub fn get_mut(&mut self, slot: u64) -> Option<&mut SlotIO> {
@@ -126,65 +112,34 @@ pub fn index_data(root: &Path, slot_height: u64, blob_index: u64) -> Result<(Pat
 
     Err(StoreError::NoSuchBlob(slot_height, blob_index))
 }
-// TODO: possibly optimize by checking metadata and immediately quiting based on too big indices
-pub fn index_erasure(root: &Path, slot: u64, erasure_index: u64) -> Result<(PathBuf, BlobIndex)> {
-    let slot_path = mk_slot_path(&root, slot);
-    if !slot_path.exists() {
-        return Err(StoreError::NoSuchSlot(slot));
-    }
-
-    let (erasure_path, index_path) = (
-        slot_path.join(ERASURE_FILE_NAME),
-        slot_path.join(ERASURE_INDEX_FILE_NAME),
-    );
-
-    let mut index_file = BufReader::new(File::open(&index_path)?);
-
-    let mut buf = [0u8; INDEX_RECORD_SIZE as usize];
-    while let Ok(_) = index_file.read_exact(&mut buf) {
-        let index = BigEndian::read_u64(&buf[0..8]);
-        if index == erasure_index {
-            let offset = BigEndian::read_u64(&buf[8..16]);
-            let size = BigEndian::read_u64(&buf[16..24]);
-            return Ok((
-                erasure_path,
-                BlobIndex {
-                    index,
-                    offset,
-                    size,
-                },
-            ));
-        }
-    }
-
-    Err(StoreError::NoSuchBlob(slot, erasure_index))
-}
 
 #[allow(clippy::range_plus_one)]
-pub fn insert_blobs<I>(
-    root: &Path,
-    cache: &mut SlotCache,
-    config: &StoreConfig,
-    iter: I,
-) -> Result<()>
+pub fn insert_blobs<I, K, T>(root: &Path, cache: &mut SlotCache, iter: I) -> Result<()>
 where
-    I: IntoIterator,
-    I::Item: Borrow<Blob>,
+    I: IntoIterator<Item = (K, T)>,
+    T: Storable,
+    K: Copy,
+    Key: From<K>,
 {
-    let mut blobs: Vec<_> = iter.into_iter().collect();
+    let blobs: StdRes<Vec<(K, Vec<u8>)>, _> = iter
+        .into_iter()
+        .map(|(k, v)| v.to_data().map(|data| (k, data)))
+        .collect();
+    let mut blobs: Vec<_> =
+        blobs.map_err(|_| StoreError::Serialization("Bad ToData Impl".into()))?;
     assert!(!blobs.is_empty());
 
     // sort on lexi order (slot_idx, blob_idx)
-    blobs.sort_unstable_by_key(|elem| {
-        let blob = elem.borrow();
-        (blob.slot(), blob.index())
+    blobs.sort_unstable_by_key(|(k, _)| {
+        let key: Key = k.into();
+        key
     });
 
     // contains the indices into blobs of the first blob for that slot
     let mut slot_ranges = HashMap::new();
 
-    for (index, blob) in blobs.iter().enumerate() {
-        let slot = blob.borrow().slot();
+    for (index, (k, _)) in blobs.iter().enumerate() {
+        let slot = Key::from(*k).upper;
         slot_ranges
             .entry(slot)
             .and_modify(|r: &mut Range<usize>| {
@@ -201,13 +156,71 @@ where
 
         match cache.get_mut(slot) {
             Some(sio) => {
-                sio.insert(slot_blobs, config)?;
+                sio.insert(slot_blobs)?;
             }
             None => {
                 let slot_path = mk_slot_path(root, slot);
                 ensure_slot(&slot_path)?;
                 let mut sio = open_slot(&slot_path, slot)?;
-                sio.insert(slot_blobs, config)?;
+                sio.insert(slot_blobs)?;
+                slots_to_cache.push(sio);
+            }
+        }
+    }
+
+    // cache slots
+    for sio in slots_to_cache {
+        cache.push(sio);
+    }
+
+    Ok(())
+}
+
+#[allow(clippy::range_plus_one)]
+pub fn insert_blobs_no_copy<I, K, T>(root: &Path, cache: &mut SlotCache, iter: I) -> Result<()>
+where
+    I: IntoIterator<Item = (K, T)>,
+    T: StorableNoCopy,
+    K: Copy,
+    Key: From<K>,
+{
+    let mut blobs: Vec<_> = iter.into_iter().collect();
+    assert!(!blobs.is_empty());
+
+    // sort on lexi order (slot_idx, blob_idx)
+    blobs.sort_unstable_by_key(|(k, _)| {
+        let key: Key = k.into();
+        key
+    });
+
+    // contains the indices into blobs of the first blob for that slot
+    let mut slot_ranges = HashMap::new();
+
+    for (index, (k, _)) in blobs.iter().enumerate() {
+        let slot = Key::from(*k).upper;
+        slot_ranges
+            .entry(slot)
+            .and_modify(|r: &mut Range<usize>| {
+                r.start = std::cmp::min(r.start, index);
+                r.end = std::cmp::max(r.end, index + 1);
+            })
+            .or_insert(index..(index + 1));
+    }
+
+    let mut slots_to_cache = Vec::new();
+
+    for (slot, range) in slot_ranges {
+        let slot_blobs = &blobs[range];
+
+        match cache.get_mut(slot) {
+            Some(sio) => {
+                sio.insert_no_copy(slot_blobs)?;
+            }
+            None => {
+                let slot_path = mk_slot_path(root, slot);
+                ensure_slot(&slot_path)?;
+                let mut sio = open_slot(&slot_path, slot)?;
+                sio.insert_no_copy(slot_blobs)?;
                 slots_to_cache.push(sio);
             }
         }
@@ -241,35 +254,26 @@ pub fn slot_data<'a, S>(
 
 pub fn mk_paths(slot_dir: &Path) -> SlotPaths {
     SlotPaths {
-        meta: slot_dir.join(META_FILE_NAME),
+        slot: PathBuf::from(slot_dir),
         index: slot_dir.join(INDEX_FILE_NAME),
         data: slot_dir.join(DATA_FILE_NAME),
-        erasure_index: slot_dir.join(ERASURE_INDEX_FILE_NAME),
-        erasure: slot_dir.join(ERASURE_FILE_NAME),
     }
 }
 
 pub fn open_slot(slot_path: &Path, slot: u64) -> Result<SlotIO> {
     let paths = SlotPaths::new(&slot_path);
-    let new_meta = !paths.meta.exists();
-    let mut files = paths.open()?;
+    //let new_meta = !paths.meta.exists();
+    let files = paths.open()?;
 
-    let meta = if new_meta {
-        SlotMeta::new(slot, DEFAULT_BLOCKS_PER_SLOT)
-    } else {
-        let meta = bincode::deserialize_from(&mut files.meta)?;
-        files.meta.seek(SeekFrom::Start(0))?;
-        meta
-    };
+    //let meta = if new_meta {
+    //SlotMeta::new(slot, DEFAULT_BLOCKS_PER_SLOT)
+    //} else {
+    //let meta = bincode::deserialize_from(&mut files.meta)?;
+    //files.meta.seek(SeekFrom::Start(0))?;
+    //meta
+    //};
 
-    Ok(SlotIO::new(slot, meta, paths, files))
-}
-
-pub fn bad_blob(err: SErr) -> StoreError {
-    match err {
-        SErr::BlobError(BlobError::BadState) => StoreError::BadBlob,
-        _ => panic!("Swallowing error in blob store impl: {}", err),
-    }
+    Ok(SlotIO::new(slot, paths, files))
 }
 
 pub fn open_append<P>(path: P) -> Result<File>

@@ -3,7 +3,7 @@ use rand;
 
 extern crate test;
 
-use solana::blob_store::{get_tmp_store_path, Store};
+use solana::blob_store::{get_tmp_store_path, BlobStore};
 use solana::entry::{make_large_test_entries, make_tiny_test_entries, EntrySlice};
 use solana::packet::Blob;
 
@@ -13,17 +13,17 @@ use test::Bencher;
 
 // Given some blobs and a ledger at ledger_path, benchmark writing the blobs to the ledger
 fn bench_write_blobs(bench: &mut Bencher, blobs: &mut [Blob], ledger_path: &str) {
-    let mut store = Store::open(&ledger_path).unwrap();
+    let mut store = BlobStore::open(&ledger_path).unwrap();
 
     bench.iter(move || {
         store.put_blobs(&blobs[..]).expect("Failed to insert blobs");
     });
 
-    Store::destroy(&ledger_path).expect("Expected successful database destruction");
+    BlobStore::destroy(&ledger_path).expect("Expected successful database destruction");
 }
 
 // Insert some blobs into the ledger in preparation for read benchmarks
-fn setup_read_bench(store: &mut Store, num_small_blobs: u64, num_large_blobs: u64, slot: u64) {
+fn setup_read_bench(store: &mut BlobStore, num_small_blobs: u64, num_large_blobs: u64, slot: u64) {
     // Make some big and small entries
     let mut entries = make_large_test_entries(num_large_blobs as usize);
     entries.extend(make_tiny_test_entries(num_small_blobs as usize));
@@ -73,7 +73,7 @@ fn bench_write_big(bench: &mut Bencher) {
 #[ignore]
 fn bench_read_sequential(bench: &mut Bencher) {
     let ledger_path = get_tmp_store_path("bench_read_sequential").unwrap();
-    let mut store = Store::open(&ledger_path).unwrap();
+    let mut store = BlobStore::open(&ledger_path).unwrap();
 
     // Insert some big and small blobs into the ledger
     let num_small_blobs = 32 * 1024;
@@ -92,14 +92,14 @@ fn bench_read_sequential(bench: &mut Bencher) {
         }
     });
 
-    Store::destroy(&ledger_path).expect("Expected successful database destruction");
+    BlobStore::destroy(&ledger_path).expect("Expected successful database destruction");
 }
 
 #[bench]
 #[ignore]
 fn bench_read_random(bench: &mut Bencher) {
     let ledger_path = get_tmp_store_path("bench_read_random").unwrap();
-    let mut store = Store::open(&ledger_path).unwrap();
+    let mut store = BlobStore::open(&ledger_path).unwrap();
 
     // Insert some big and small blobs into the ledger
     let num_small_blobs = 32 * 1024;
@@ -122,14 +122,14 @@ fn bench_read_random(bench: &mut Bencher) {
         }
     });
 
-    Store::destroy(&ledger_path).expect("Expected successful database destruction");
+    BlobStore::destroy(&ledger_path).expect("Expected successful database destruction");
 }
 
 #[bench]
 #[ignore]
 fn bench_insert_data_blob_small(bench: &mut Bencher) {
     let ledger_path = get_tmp_store_path("bench_insert_data_blob_small").unwrap();
-    let mut store = Store::open(&ledger_path).unwrap();
+    let mut store = BlobStore::open(&ledger_path).unwrap();
     let num_entries = 32 * 1024;
     let entries = make_tiny_test_entries(num_entries);
     let mut blobs = entries.to_blobs();
@@ -144,14 +144,14 @@ fn bench_insert_data_blob_small(bench: &mut Bencher) {
         store.put_blobs(&blobs).unwrap();
     });
 
-    Store::destroy(&ledger_path).expect("Expect successful destruction");
+    BlobStore::destroy(&ledger_path).expect("Expect successful destruction");
 }
 
 #[bench]
 #[ignore]
 fn bench_insert_data_blob_big(bench: &mut Bencher) {
     let ledger_path = get_tmp_store_path("bench_insert_data_blob_big").unwrap();
-    let mut store = Store::open(&ledger_path).unwrap();
+    let mut store = BlobStore::open(&ledger_path).unwrap();
     let num_entries = 32 * 1024;
     let entries = make_large_test_entries(num_entries);
     let mut blobs = entries.to_blobs();
@@ -167,5 +167,5 @@ fn bench_insert_data_blob_big(bench: &mut Bencher) {
         store.put_blobs(&blobs).expect("failed to insert blobs");
     });
 
-    Store::destroy(&ledger_path).expect("Expect successful destruction");
+    BlobStore::destroy(&ledger_path).expect("Expect successful destruction");
 }
