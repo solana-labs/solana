@@ -2,7 +2,6 @@
 //! managing the schedule for leader rotation
 
 use crate::bank::Bank;
-
 use crate::entry::{create_ticks, Entry};
 use crate::voting_keypair::VotingKeypair;
 use bincode::serialize;
@@ -327,8 +326,8 @@ impl LeaderScheduler {
         let lower_bound = height.saturating_sub(self.active_window_length);
 
         {
-            let accounts = bank.accounts.accounts_db.read().unwrap();
-
+            let bank_state = bank.root_bank_state();
+            let accounts = bank_state.head().accounts.accounts_db.read().unwrap();
             // TODO: iterate through checkpoints, too
             accounts
                 .accounts
@@ -360,7 +359,7 @@ impl LeaderScheduler {
         assert!((height - self.bootstrap_height) % self.seed_rotation_interval == 0);
         let seed = Self::calculate_seed(height);
         self.seed = seed;
-        let active_set = self.get_active_set(height, &bank);
+        let active_set = self.get_active_set(height, bank);
         let ranked_active_set = Self::rank_active_set(bank, active_set.iter());
 
         // Handle case where there are no active validators with
@@ -425,7 +424,7 @@ impl LeaderScheduler {
     {
         let mut active_accounts: Vec<(&'a Pubkey, u64)> = active
             .filter_map(|pk| {
-                let stake = bank.get_balance(pk);
+                let stake = bank.root_bank_state().get_balance_slow(pk);
                 if stake > 0 {
                     Some((pk, stake as u64))
                 } else {

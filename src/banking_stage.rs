@@ -183,7 +183,7 @@ impl BankingStage {
         while chunk_start != transactions.len() {
             let chunk_end = chunk_start + Entry::num_will_fit(&transactions[chunk_start..]);
 
-            bank.process_and_record_transactions(&transactions[chunk_start..chunk_end], poh)?;
+            bank.process_and_record_transactions(&transactions[chunk_start..chunk_end], Some(poh))?;
 
             chunk_start = chunk_end;
         }
@@ -316,7 +316,7 @@ mod tests {
             &bank,
             verified_receiver,
             Default::default(),
-            &bank.last_id(),
+            &bank.live_bank_state().last_id(),
             None,
             dummy_leader_id,
             &to_validator_sender,
@@ -339,7 +339,7 @@ mod tests {
             &bank,
             verified_receiver,
             Default::default(),
-            &bank.last_id(),
+            &bank.live_bank_state().last_id(),
             None,
             dummy_leader_id,
             &to_validator_sender,
@@ -356,14 +356,14 @@ mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let dummy_leader_id = Keypair::new().pubkey();
-        let start_hash = bank.last_id();
+        let start_hash = bank.live_bank_state().last_id();
         let (verified_sender, verified_receiver) = channel();
         let (to_validator_sender, _) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
             Config::Sleep(Duration::from_millis(1)),
-            &bank.last_id(),
+            &bank.live_bank_state().last_id(),
             None,
             dummy_leader_id,
             &to_validator_sender,
@@ -374,7 +374,10 @@ mod tests {
         let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
         assert!(entries.len() != 0);
         assert!(entries.verify(&start_hash));
-        assert_eq!(entries[entries.len() - 1].id, bank.last_id());
+        assert_eq!(
+            entries[entries.len() - 1].id,
+            bank.live_bank_state().last_id()
+        );
         assert_eq!(
             banking_stage.join().unwrap(),
             Some(BankingStageReturnType::ChannelDisconnected)
@@ -386,14 +389,14 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let dummy_leader_id = Keypair::new().pubkey();
-        let start_hash = bank.last_id();
+        let start_hash = bank.live_bank_state().last_id();
         let (verified_sender, verified_receiver) = channel();
         let (to_validator_sender, _) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
             Default::default(),
-            &bank.last_id(),
+            &bank.live_bank_state().last_id(),
             None,
             dummy_leader_id,
             &to_validator_sender,
@@ -452,7 +455,7 @@ mod tests {
             &bank,
             verified_receiver,
             Default::default(),
-            &bank.last_id(),
+            &bank.live_bank_state().last_id(),
             None,
             dummy_leader_id,
             &to_validator_sender,
@@ -505,7 +508,7 @@ mod tests {
                 .iter()
                 .for_each(|x| assert_eq!(*x, Ok(())));
         }
-        assert_eq!(bank.get_balance(&alice.pubkey()), 1);
+        assert_eq!(bank.live_bank_state().get_balance_slow(&alice.pubkey()), 1);
     }
 
     // Test that when the max_tick_height is reached, the banking stage exits
@@ -522,7 +525,7 @@ mod tests {
             &bank,
             verified_receiver,
             Default::default(),
-            &bank.last_id(),
+            &bank.live_bank_state().last_id(),
             Some(max_tick_height),
             dummy_leader_id,
             &to_validator_sender,

@@ -97,11 +97,14 @@ impl ReplayStage {
             .expect("Scheduled leader should be calculated by this point");
 
         // Next vote tick is ceiling of (current tick/ticks per block)
-        let mut num_ticks_to_next_vote =
-            DEFAULT_TICKS_PER_SLOT - (bank.tick_height() % DEFAULT_TICKS_PER_SLOT);
+        let mut num_ticks_to_next_vote = DEFAULT_TICKS_PER_SLOT
+            - (bank.live_bank_state().tick_height() % DEFAULT_TICKS_PER_SLOT);
         let mut start_entry_index = 0;
         for (i, entry) in entries.iter().enumerate() {
-            inc_new_counter_info!("replicate-stage_bank-tick", bank.tick_height() as usize);
+            inc_new_counter_info!(
+                "replicate-stage_bank-tick",
+                bank.live_bank_state().tick_height() as usize
+            );
             if entry.is_tick() {
                 num_ticks_to_next_vote -= 1;
             }
@@ -113,7 +116,17 @@ impl ReplayStage {
             // If we don't process the entry now, the for loop will exit and the entry
             // will be dropped.
             if 0 == num_ticks_to_next_vote || (i + 1) == entries.len() {
-                res = bank.process_entries(&entries[start_entry_index..=i]);
+                //TODO: EntryTree should provide slot
+                let slot = entry.tick_height / DEFAULT_TICKS_PER_SLOT;
+                if slot > 0 && entry.tick_height % DEFAULT_TICKS_PER_SLOT == 0 {
+                    //TODO: EntryTree should provide base slot
+                    let base = slot - 1;
+                    bank.init_fork(slot, &entry.id, base).expect("init fork");
+                }
+                res = bank
+                    .bank_state(slot)
+                    .unwrap()
+                    .process_entries(&entries[start_entry_index..=i]);
 
                 if res.is_err() {
                     // TODO: This will return early from the first entry that has an erroneous
@@ -131,12 +144,15 @@ impl ReplayStage {
                 }
 
                 if 0 == num_ticks_to_next_vote {
+                    let bank_state = bank.bank_state(slot).unwrap();
+                    bank_state.head().finalize();
+                    bank.merge_into_root(slot);
                     if let Some(voting_keypair) = voting_keypair {
                         let keypair = voting_keypair.as_ref();
                         let vote = VoteTransaction::new_vote(
                             keypair,
-                            bank.tick_height(),
-                            bank.last_id(),
+                            bank_state.tick_height(),
+                            bank_state.last_id(),
                             0,
                         );
                         cluster_info.write().unwrap().push_vote(vote);
@@ -272,7 +288,7 @@ impl ReplayStage {
                             if leader_id != last_leader_id && my_id == leader_id {
                                 to_leader_sender
                                     .send(TvuReturnType::LeaderRotation(
-                                        bank.tick_height(),
+                                        bank.live_bank_state().tick_height(),
                                         *entry_height.read().unwrap(),
                                         *last_entry_id.read().unwrap(),
                                     ))
@@ -574,7 +590,13 @@ mod test {
             );
 
             let keypair = voting_keypair.as_ref();
-            let vote = VoteTransaction::new_vote(keypair, bank.tick_height(), bank.last_id(), 0);
+            let vote = VoteTransaction::new_vote(
+                keypair,
+                bank.live_bank_state().tick_height(),
+                bank.live_bank_state().last_id(),
+                0,
+            );
+
             cluster_info_me.write().unwrap().push_vote(vote);
 
             // Send ReplayStage an entry, should see it on the ledger writer receiver
@@ -694,7 +716,12 @@ mod test {
             );
 
             let keypair = voting_keypair.as_ref();
-            let vote = VoteTransaction::new_vote(keypair, bank.tick_height(), bank.last_id(), 0);
+            let vote = VoteTransaction::new_vote(
+                keypair,
+                bank.live_bank_state().tick_height(),
+                bank.live_bank_state().last_id(),
+                0,
+            );
             cluster_info_me.write().unwrap().push_vote(vote);
 
             // Send enough ticks to trigger leader rotation
