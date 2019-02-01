@@ -7,7 +7,7 @@ use solana::contact_info::ContactInfo;
 use solana::db_ledger::{create_tmp_sample_ledger, tmp_copy_ledger};
 use solana::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
 use solana::entry::{reconstruct_entries_from_blobs, Entry};
-use solana::fullnode::{Fullnode, FullnodeReturnType};
+use solana::fullnode::{Fullnode, FullnodeConfig, FullnodeReturnType};
 use solana::gossip_service::GossipService;
 use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
 use solana::packet::SharedBlob;
@@ -164,7 +164,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         ))),
         signer_proxy,
         None,
-        Default::default(),
+        &FullnodeConfig::default(),
     );
 
     // start up another validator from zero, converge and then check
@@ -183,7 +183,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         ))),
         signer_proxy,
         Some(&leader_data),
-        Default::default(),
+        &FullnodeConfig::default(),
     );
 
     // Send validator some tokens to vote
@@ -267,7 +267,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
         ))),
         signer_proxy,
         None,
-        Default::default(),
+        &FullnodeConfig::default(),
     );
 
     let mut nodes = vec![server];
@@ -300,7 +300,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
             ))),
             signer_proxy,
             Some(&leader_data),
-            Default::default(),
+            &FullnodeConfig::default(),
         );
         nodes.push(val);
     }
@@ -362,7 +362,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
         ))),
         signer_proxy,
         Some(&leader_data),
-        Default::default(),
+        &FullnodeConfig::default(),
     );
     nodes.push(val);
     let servers = converge(&leader_data, N + 2); // contains the leader and new node
@@ -451,7 +451,7 @@ fn test_multi_node_basic() {
         ))),
         signer_proxy,
         None,
-        Default::default(),
+        &FullnodeConfig::default(),
     );
 
     let mut nodes = vec![server];
@@ -480,7 +480,7 @@ fn test_multi_node_basic() {
             ))),
             signer_proxy,
             Some(&leader_data),
-            Default::default(),
+            &FullnodeConfig::default(),
         );
         nodes.push(val);
     }
@@ -559,7 +559,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
         ))),
         signer_proxy,
         None,
-        Default::default(),
+        &FullnodeConfig::default(),
     );
     let leader_balance =
         send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, 500, Some(500)).unwrap();
@@ -583,7 +583,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
         ))),
         signer_proxy,
         Some(&leader_data),
-        Default::default(),
+        &FullnodeConfig::default(),
     );
     let mut client = mk_client(&validator_data);
     let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
@@ -615,7 +615,7 @@ fn create_leader(
         ))),
         signer,
         None,
-        Default::default(),
+        &FullnodeConfig::default(),
     );
     (leader_data, leader_fullnode)
 }
@@ -692,7 +692,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
         ))),
         signer_proxy,
         Some(&leader_data),
-        Default::default(),
+        &FullnodeConfig::default(),
     );
 
     // trigger broadcast, validator should catch up from leader, whose window contains
@@ -765,7 +765,7 @@ fn test_multi_node_dynamic_network() {
         ))),
         signer_proxy,
         None,
-        Default::default(),
+        &FullnodeConfig::default(),
     );
     info!(
         "found leader: {:?}",
@@ -839,7 +839,7 @@ fn test_multi_node_dynamic_network() {
                         ))),
                         signer_proxy,
                         Some(&leader_data),
-                        Default::default(),
+                        &FullnodeConfig::default(),
                     );
                     (rd, val)
                 })
@@ -1014,7 +1014,7 @@ fn test_leader_to_validator_transition() {
         Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         signer_proxy,
         Some(&leader_info),
-        Default::default(),
+        &FullnodeConfig::default(),
     );
 
     // Make an extra node for our leader to broadcast to,
@@ -1163,7 +1163,7 @@ fn test_leader_validator_basic() {
         Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         signer_proxy,
         Some(&leader_info),
-        Default::default(),
+        &FullnodeConfig::default(),
     );
 
     // Start the leader fullnode
@@ -1175,7 +1175,7 @@ fn test_leader_validator_basic() {
         Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         signer_proxy,
         Some(&leader_info),
-        Default::default(),
+        &FullnodeConfig::default(),
     );
 
     // Wait for convergence
@@ -1361,7 +1361,7 @@ fn test_dropped_handoff_recovery() {
         Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         signer_proxy,
         Some(&bootstrap_leader_info),
-        Default::default(),
+        &FullnodeConfig::default(),
     );
 
     let mut nodes = vec![bootstrap_leader];
@@ -1383,7 +1383,7 @@ fn test_dropped_handoff_recovery() {
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
             signer_proxy,
             Some(&bootstrap_leader_info),
-            Default::default(),
+            &FullnodeConfig::default(),
         );
 
         nodes.push(validator);
@@ -1409,7 +1409,7 @@ fn test_dropped_handoff_recovery() {
         Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         signer_proxy,
         Some(&bootstrap_leader_info),
-        Default::default(),
+        &FullnodeConfig::default(),
     );
 
     info!("Wait for 'next leader' to assume leader role");
@@ -1547,7 +1547,7 @@ fn test_full_leader_validator_network() {
             leader_scheduler.clone(),
             signer_proxy,
             Some(&bootstrap_leader_info),
-            Default::default(),
+            &FullnodeConfig::default(),
         );
 
         schedules.push(leader_scheduler);
@@ -1564,7 +1564,7 @@ fn test_full_leader_validator_network() {
         leader_scheduler.clone(),
         signer_proxy,
         Some(&bootstrap_leader_info),
-        Default::default(),
+        &FullnodeConfig::default(),
     );
 
     schedules.push(leader_scheduler);
@@ -1741,7 +1741,7 @@ fn test_broadcast_last_tick() {
         Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         signer_proxy,
         Some(&bootstrap_leader_info),
-        Default::default(),
+        &FullnodeConfig::default(),
     );
 
     // Wait for convergence

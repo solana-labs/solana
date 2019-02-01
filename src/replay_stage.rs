@@ -207,9 +207,10 @@ impl ReplayStage {
         entry_height: Arc<RwLock<u64>>,
         last_entry_id: Arc<RwLock<Hash>>,
         to_leader_sender: TvuRotationSender,
-        entry_stream: Option<String>,
+        entry_stream: Option<&String>,
     ) -> (Self, EntryReceiver) {
         let (ledger_entry_sender, ledger_entry_receiver) = channel();
+        let mut entry_stream = entry_stream.cloned().map(EntryStream::new);
 
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
@@ -220,7 +221,6 @@ impl ReplayStage {
                 let (mut last_leader_id, _) = bank
                     .get_current_leader()
                     .expect("Scheduled leader should be calculated by this point");
-                let mut entry_stream = entry_stream.map(EntryStream::new);
                 loop {
                     let (leader_id, _) = bank
                         .get_current_leader()

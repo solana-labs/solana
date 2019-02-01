@@ -271,7 +271,7 @@ fn main() {
         cluster_entrypoint
             .map(|i| NodeInfo::new_entry_point(&i))
             .as_ref(),
-        fullnode_config,
+        &fullnode_config,
     );
 
     if !no_signer {

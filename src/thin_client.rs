@@ -5,7 +5,7 @@
 
 use crate::bank::Bank;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
-use crate::fullnode::Fullnode;
+use crate::fullnode::{Fullnode, FullnodeConfig};
 use crate::gossip_service::GossipService;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::result::{Error, Result};
@@ -460,7 +460,7 @@ pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, 
         Arc::new(RwLock::new(leader_scheduler)),
         vote_signer,
         None,
-        Default::default(),
+        &FullnodeConfig::default(),
     );
 
     (node, node_info, mint_keypair, ledger_path)
