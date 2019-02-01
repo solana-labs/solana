@@ -851,7 +851,7 @@ mod tests {
         }
 
         // Release tvu bank lock, tvu should start making progress again and
-        // handle_role_transition should sucessfully rotate the leader to a validator
+        // handle_role_transition should successfully rotate the leader to a validator
         assert_eq!(
             leader.handle_role_transition().unwrap().unwrap(),
             FullnodeReturnType::LeaderToValidatorRotation
