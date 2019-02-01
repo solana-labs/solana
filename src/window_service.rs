@@ -76,7 +76,7 @@ fn recv_window(
             .to_owned(),
     );
 
-    retransmit_all_leader_blocks(&dq, leader_scheduler, retransmit)?;
+    retransmit_all_leader_blocks(&dq, leader_scheduler, retransmit, id)?;
 
     //send a contiguous set of blocks
     let mut consume_queue = Vec::new();
