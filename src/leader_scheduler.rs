@@ -12,7 +12,7 @@ use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::vote_program::{self, VoteProgram};
+use solana_sdk::vote_program::{self, VoteState};
 use solana_sdk::vote_transaction::VoteTransaction;
 use std::io::Cursor;
 use std::sync::Arc;
@@ -335,7 +335,7 @@ impl LeaderScheduler {
                 .values()
                 .filter_map(|account| {
                     if vote_program::check_id(&account.owner) {
-                        if let Ok(vote_state) = VoteProgram::deserialize(&account.userdata) {
+                        if let Ok(vote_state) = VoteState::deserialize(&account.userdata) {
                             return vote_state
                                 .votes
                                 .back()

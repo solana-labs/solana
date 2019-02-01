@@ -13,15 +13,15 @@ pub struct VoteTransaction {}
 
 impl VoteTransaction {
     pub fn new_vote<T: KeypairUtil>(
-        vote_account: &T,
+        voting_keypair: &T,
         tick_height: u64,
         last_id: Hash,
         fee: u64,
     ) -> Transaction {
         let vote = Vote { tick_height };
-        let instruction = VoteInstruction::NewVote(vote);
+        let instruction = VoteInstruction::Vote(vote);
         Transaction::new(
-            vote_account,
+            voting_keypair,
             &[],
             vote_program::id(),
             &instruction,
@@ -31,28 +31,25 @@ impl VoteTransaction {
     }
 
     pub fn new_account(
-        validator_id: &Keypair,
+        from_keypair: &Keypair,
         vote_account_id: Pubkey,
         last_id: Hash,
         num_tokens: u64,
         fee: u64,
     ) -> Transaction {
+        let create_tx = SystemInstruction::CreateAccount {
+            tokens: num_tokens,
+            space: vote_program::get_max_size() as u64,
+            program_id: vote_program::id(),
+        };
         Transaction::new_with_instructions(
-            &[validator_id],
+            &[from_keypair],
             &[vote_account_id],
             last_id,
             fee,
             vec![system_program::id(), vote_program::id()],
             vec![
-                Instruction::new(
-                    0,
-                    &SystemInstruction::CreateAccount {
-                        tokens: num_tokens,
-                        space: vote_program::get_max_size() as u64,
-                        program_id: vote_program::id(),
-                    },
-                    vec![0, 1],
-                ),
+                Instruction::new(0, &create_tx, vec![0, 1]),
                 Instruction::new(1, &VoteInstruction::RegisterAccount, vec![0, 1]),
             ],
         )
@@ -63,7 +60,7 @@ impl VoteTransaction {
         for i in 0..tx.instructions.len() {
             let tx_program_id = tx.program_id(i);
             if vote_program::check_id(&tx_program_id) {
-                if let Ok(Some(VoteInstruction::NewVote(vote))) = deserialize(&tx.userdata(i)) {
+                if let Ok(Some(VoteInstruction::Vote(vote))) = deserialize(&tx.userdata(i)) {
                     votes.push((tx.account_keys[0], vote, tx.last_id))
                 }
             }
