@@ -91,19 +91,28 @@ mod tests {
     }
 
     fn register_and_deserialize(
-        keyed_accounts: &mut [KeyedAccount],
+        voter_id: &Pubkey,
+        voter_account: &mut Account,
+        vote_state_id: &Pubkey,
+        vote_state_account: &mut Account,
     ) -> Result<VoteProgram, ProgramError> {
-        register(keyed_accounts)?;
-        let vote_state = VoteProgram::deserialize(&keyed_accounts[1].account.userdata).unwrap();
+        let mut keyed_accounts = [
+            KeyedAccount::new(voter_id, true, voter_account),
+            KeyedAccount::new(vote_state_id, false, vote_state_account),
+        ];
+        register(&mut keyed_accounts)?;
+        let vote_state = VoteProgram::deserialize(&vote_state_account.userdata).unwrap();
         Ok(vote_state)
     }
 
     fn vote_and_deserialize(
-        keyed_accounts: &mut [KeyedAccount],
+        vote_state_id: &Pubkey,
+        vote_state_account: &mut Account,
         vote: Vote,
     ) -> Result<VoteProgram, ProgramError> {
-        process_vote(keyed_accounts, vote)?;
-        let vote_state = VoteProgram::deserialize(&keyed_accounts[0].account.userdata).unwrap();
+        let mut keyed_accounts = [KeyedAccount::new(vote_state_id, true, vote_state_account)];
+        process_vote(&mut keyed_accounts, vote)?;
+        let vote_state = VoteProgram::deserialize(&vote_state_account.userdata).unwrap();
         Ok(vote_state)
     }
 
@@ -115,12 +124,13 @@ mod tests {
         let vote_state_id = Keypair::new().pubkey();
         let mut vote_state_account = create_vote_program(100);
 
-        let mut keyed_accounts = [
-            KeyedAccount::new(&voter_id, true, &mut voter_account),
-            KeyedAccount::new(&vote_state_id, false, &mut vote_state_account),
-        ];
-
-        let vote_state = register_and_deserialize(&mut keyed_accounts).unwrap();
+        let vote_state = register_and_deserialize(
+            &voter_id,
+            &mut voter_account,
+            &vote_state_id,
+            &mut vote_state_account,
+        )
+        .unwrap();
         assert_eq!(vote_state.node_id, voter_id);
         assert!(vote_state.votes.is_empty());
     }
@@ -139,13 +149,9 @@ mod tests {
         ];
         register(&mut keyed_accounts).unwrap();
 
-        let mut keyed_accounts = [KeyedAccount::new(
-            &vote_state_id,
-            true,
-            &mut vote_state_account,
-        )];
         let vote = Vote::new(1);
-        let vote_state = vote_and_deserialize(&mut keyed_accounts, vote.clone()).unwrap();
+        let vote_state =
+            vote_and_deserialize(&vote_state_id, &mut vote_state_account, vote.clone()).unwrap();
         assert_eq!(vote_state.votes, vec![vote]);
     }
 
@@ -155,13 +161,9 @@ mod tests {
         let vote_state_id = Keypair::new().pubkey();
         let mut vote_state_account = create_vote_program(100);
 
-        let mut keyed_accounts = [KeyedAccount::new(
-            &vote_state_id,
-            true,
-            &mut vote_state_account,
-        )];
         let vote = Vote::new(1);
-        let vote_state = vote_and_deserialize(&mut keyed_accounts, vote.clone()).unwrap();
+        let vote_state =
+            vote_and_deserialize(&vote_state_id, &mut vote_state_account, vote.clone()).unwrap();
         assert_eq!(vote_state.votes, vec![vote]);
     }
 }
