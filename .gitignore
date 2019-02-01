@@ -1,4 +1,5 @@
 /target/
+/ledger-tool/target/
 /wallet/target/
 /book/html/
 /book/src/img/
@@ -19,4 +20,3 @@ log-*.txt
 # intellij files
 /.idea/
 /solana.iml
-
