@@ -18,4 +18,4 @@ solana-metrics = { path = "../metrics", version = "0.12.0" }
 solana-sdk = { path = "../sdk", version = "0.12.0" }
 
 [features]
-cuda = []
+cuda = ["solana/cuda"]

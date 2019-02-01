@@ -22,4 +22,4 @@ solana-sdk = { path = "../sdk", version = "0.12.0" }
 solana-vote-signer = { path = "../vote-signer", version = "0.12.0" }
 
 [features]
-cuda = []
+cuda = ["solana/cuda"]

@@ -19,4 +19,4 @@ solana-logger = { path = "../logger", version = "0.12.0" }
 assert_cmd = "0.11"
 
 [features]
-cuda = []
+cuda = ["solana/cuda"]
