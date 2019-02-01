@@ -70,7 +70,7 @@ pub mod thin_client;
 pub mod tpu;
 pub mod tpu_forwarder;
 pub mod tvu;
-pub mod vote_signer_proxy;
+pub mod voting_keypair;
 #[cfg(test)]
 pub mod window;
 pub mod window_service;
@@ -94,7 +94,6 @@ use solana_jsonrpc_http_server as jsonrpc_http_server;
 extern crate solana_jsonrpc_macros as jsonrpc_macros;
 use solana_jsonrpc_pubsub as jsonrpc_pubsub;
 use solana_jsonrpc_ws_server as jsonrpc_ws_server;
-//use solana_vote_signer;
 
 #[cfg(test)]
 #[macro_use]

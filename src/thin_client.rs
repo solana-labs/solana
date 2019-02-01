@@ -440,7 +440,7 @@ pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, 
     use crate::cluster_info::Node;
     use crate::db_ledger::create_tmp_sample_ledger;
     use crate::leader_scheduler::LeaderScheduler;
-    use crate::vote_signer_proxy::VoteSignerProxy;
+    use crate::voting_keypair::VotingKeypair;
     use solana_sdk::signature::KeypairUtil;
 
     let node_keypair = Arc::new(Keypair::new());
@@ -452,13 +452,13 @@ pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, 
 
     let leader_scheduler = LeaderScheduler::from_bootstrap_leader(node_info.id);
     let vote_account_keypair = Arc::new(Keypair::new());
-    let vote_signer = VoteSignerProxy::new_local(&vote_account_keypair);
+    let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
     let node = Fullnode::new(
         node,
         &node_keypair,
         &ledger_path,
         Arc::new(RwLock::new(leader_scheduler)),
-        vote_signer,
+        voting_keypair,
         None,
         &FullnodeConfig::default(),
     );

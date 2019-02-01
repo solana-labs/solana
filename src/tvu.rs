@@ -22,7 +22,7 @@ use crate::retransmit_stage::RetransmitStage;
 use crate::service::Service;
 use crate::storage_stage::{StorageStage, StorageState};
 use crate::streamer::BlobSender;
-use crate::vote_signer_proxy::VoteSignerProxy;
+use crate::voting_keypair::VotingKeypair;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
@@ -64,7 +64,7 @@ impl Tvu {
     /// * `db_ledger` - the ledger itself
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new(
-        vote_signer: Option<Arc<VoteSignerProxy>>,
+        voting_keypair: Option<Arc<VotingKeypair>>,
         bank: &Arc<Bank>,
         entry_height: u64,
         last_entry_id: Hash,
@@ -119,7 +119,7 @@ impl Tvu {
 
         let (replay_stage, ledger_entry_receiver) = ReplayStage::new(
             keypair.pubkey(),
-            vote_signer,
+            voting_keypair,
             bank.clone(),
             cluster_info.clone(),
             blob_window_receiver,
@@ -205,7 +205,7 @@ pub mod tests {
     use crate::storage_stage::{StorageState, STORAGE_ROTATE_TEST_COUNT};
     use crate::streamer;
     use crate::tvu::{Sockets, Tvu};
-    use crate::vote_signer_proxy::VoteSignerProxy;
+    use crate::voting_keypair::VotingKeypair;
     use bincode::serialize;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -291,10 +291,10 @@ pub mod tests {
         let db_ledger =
             DbLedger::open(&db_ledger_path).expect("Expected to successfully open ledger");
         let vote_account_keypair = Arc::new(Keypair::new());
-        let vote_signer = VoteSignerProxy::new_local(&vote_account_keypair);
+        let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
         let (sender, _) = channel();
         let (tvu, _) = Tvu::new(
-            Some(Arc::new(vote_signer)),
+            Some(Arc::new(voting_keypair)),
             &bank,
             0,
             cur_hash,

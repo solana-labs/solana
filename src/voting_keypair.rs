@@ -54,8 +54,8 @@ impl VoteSigner for RemoteVoteSigner {
     }
 }
 
-impl KeypairUtil for VoteSignerProxy {
-    /// Return a local VoteSignerProxy with a new keypair. Used for unit-tests.
+impl KeypairUtil for VotingKeypair {
+    /// Return a local VotingKeypair with a new keypair. Used for unit-tests.
     fn new() -> Self {
         Self::new_local(&Arc::new(Keypair::new()))
     }
@@ -71,13 +71,13 @@ impl KeypairUtil for VoteSignerProxy {
     }
 }
 
-pub struct VoteSignerProxy {
+pub struct VotingKeypair {
     keypair: Arc<Keypair>,
     signer: Box<VoteSigner + Send + Sync>,
     vote_account: Pubkey,
 }
 
-impl VoteSignerProxy {
+impl VotingKeypair {
     pub fn new_with_signer(keypair: &Arc<Keypair>, signer: Box<VoteSigner + Send + Sync>) -> Self {
         let msg = "Registering a new node";
         let sig = keypair.sign_message(msg.as_bytes());

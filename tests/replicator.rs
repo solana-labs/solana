@@ -16,7 +16,7 @@ use solana::leader_scheduler::LeaderScheduler;
 use solana::replicator::Replicator;
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana::streamer::blob_receiver;
-use solana::vote_signer_proxy::VoteSignerProxy;
+use solana::voting_keypair::VotingKeypair;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
@@ -47,7 +47,7 @@ fn test_replicator_startup() {
         tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");
 
     {
-        let signer_proxy = VoteSignerProxy::new_local(&leader_keypair);
+        let voting_keypair = VotingKeypair::new_local(&leader_keypair);
 
         let mut fullnode_config = FullnodeConfig::default();
         fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
@@ -58,13 +58,13 @@ fn test_replicator_startup() {
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_info.id.clone(),
             ))),
-            signer_proxy,
+            voting_keypair,
             None,
             &fullnode_config,
         );
 
         let validator_keypair = Arc::new(Keypair::new());
-        let signer_proxy = VoteSignerProxy::new_local(&validator_keypair);
+        let voting_keypair = VotingKeypair::new_local(&validator_keypair);
 
         let mut leader_client = mk_client(&leader_info);
 
@@ -86,7 +86,7 @@ fn test_replicator_startup() {
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_info.id,
             ))),
-            signer_proxy,
+            voting_keypair,
             Some(&leader_info),
             &fullnode_config,
         );
@@ -272,7 +272,7 @@ fn test_replicator_startup_ledger_hang() {
         tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");
 
     {
-        let signer_proxy = VoteSignerProxy::new_local(&leader_keypair);
+        let voting_keypair = VotingKeypair::new_local(&leader_keypair);
 
         let _ = Fullnode::new(
             leader_node,
@@ -281,13 +281,13 @@ fn test_replicator_startup_ledger_hang() {
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_info.id.clone(),
             ))),
-            signer_proxy,
+            voting_keypair,
             None,
             &FullnodeConfig::default(),
         );
 
         let validator_keypair = Arc::new(Keypair::new());
-        let signer_proxy = VoteSignerProxy::new_local(&validator_keypair);
+        let voting_keypair = VotingKeypair::new_local(&validator_keypair);
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
         let _ = Fullnode::new(
@@ -297,7 +297,7 @@ fn test_replicator_startup_ledger_hang() {
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
                 leader_info.id,
             ))),
-            signer_proxy,
+            voting_keypair,
             Some(&leader_info),
             &FullnodeConfig::default(),
         );
