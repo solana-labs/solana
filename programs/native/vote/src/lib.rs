@@ -136,12 +136,7 @@ mod tests {
 
         let vote_id = Keypair::new().pubkey();
         let mut vote_account = create_vote_account(100);
-
-        let mut keyed_accounts = [
-            KeyedAccount::new(&from_id, true, &mut from_account),
-            KeyedAccount::new(&vote_id, false, &mut vote_account),
-        ];
-        register(&mut keyed_accounts).unwrap();
+        register_and_deserialize(&from_id, &mut from_account, &vote_id, &mut vote_account).unwrap();
 
         let vote = Vote::new(1);
         let vote_state = vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();
