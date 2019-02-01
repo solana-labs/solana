@@ -137,7 +137,7 @@ impl ThinClient {
         last_id: &Hash,
     ) -> io::Result<Signature> {
         let now = Instant::now();
-        let tx = Transaction::system_new(keypair, to, n, *last_id);
+        let tx = SystemTransaction::new_account(keypair, to, n, *last_id, 0);
         let result = self.transfer_signed(&tx);
         solana_metrics::submit(
             influxdb::Point::new("thinclient")
@@ -518,13 +518,13 @@ mod tests {
 
         let last_id = client.get_last_id();
 
-        let tx = Transaction::system_new(&alice, bob_pubkey, 500, last_id);
+        let tx = SystemTransaction::new_account(&alice, bob_pubkey, 500, last_id, 0);
 
         let _sig = client.transfer_signed(&tx).unwrap();
 
         let last_id = client.get_last_id();
 
-        let mut tr2 = Transaction::system_new(&alice, bob_pubkey, 501, last_id);
+        let mut tr2 = SystemTransaction::new_account(&alice, bob_pubkey, 501, last_id, 0);
         let mut instruction2 = deserialize(tr2.userdata(0)).unwrap();
         if let SystemInstruction::Move { ref mut tokens } = instruction2 {
             *tokens = 502;
@@ -577,7 +577,7 @@ mod tests {
         let last_id = client.get_last_id();
 
         let transaction =
-            VoteTransaction::vote_account_new(&validator_keypair, vote_account_id, last_id, 1, 1);
+            VoteTransaction::new_account(&validator_keypair, vote_account_id, last_id, 1, 1);
         let signature = client.transfer_signed(&transaction).unwrap();
         client.poll_for_signature(&signature).unwrap();
 

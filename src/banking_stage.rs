@@ -303,7 +303,6 @@ mod tests {
     use crate::packet::to_packets;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
-    use solana_sdk::transaction::Transaction;
     use std::thread::sleep;
 
     #[test]
@@ -402,14 +401,15 @@ mod tests {
 
         // good tx
         let keypair = mint_keypair;
-        let tx = Transaction::system_new(&keypair, keypair.pubkey(), 1, start_hash);
+        let tx = SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, start_hash, 0);
 
         // good tx, but no verify
-        let tx_no_ver = Transaction::system_new(&keypair, keypair.pubkey(), 1, start_hash);
+        let tx_no_ver =
+            SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, start_hash, 0);
 
         // bad tx, AccountNotFound
         let keypair = Keypair::new();
-        let tx_anf = Transaction::system_new(&keypair, keypair.pubkey(), 1, start_hash);
+        let tx_anf = SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, start_hash, 0);
 
         // send 'em over
         let packets = to_packets(&[tx, tx_no_ver, tx_anf]);
@@ -460,7 +460,13 @@ mod tests {
 
         // Process a batch that includes a transaction that receives two tokens.
         let alice = Keypair::new();
-        let tx = Transaction::system_new(&mint_keypair, alice.pubkey(), 2, genesis_block.last_id());
+        let tx = SystemTransaction::new_account(
+            &mint_keypair,
+            alice.pubkey(),
+            2,
+            genesis_block.last_id(),
+            0,
+        );
 
         let packets = to_packets(&[tx]);
         verified_sender
@@ -468,7 +474,13 @@ mod tests {
             .unwrap();
 
         // Process a second batch that spends one of those tokens.
-        let tx = Transaction::system_new(&alice, mint_keypair.pubkey(), 1, genesis_block.last_id());
+        let tx = SystemTransaction::new_account(
+            &alice,
+            mint_keypair.pubkey(),
+            1,
+            genesis_block.last_id(),
+            0,
+        );
         let packets = to_packets(&[tx]);
         verified_sender
             .send(vec![(packets[0].clone(), vec![1u8])])

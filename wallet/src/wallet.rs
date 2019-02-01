@@ -389,7 +389,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
         WalletCommand::Cancel(pubkey) => {
             let last_id = get_last_id(&rpc_client)?;
             let mut tx =
-                Transaction::budget_new_signature(&config.id, pubkey, config.id.pubkey(), last_id);
+                BudgetTransaction::new_signature(&config.id, pubkey, config.id.pubkey(), last_id);
             let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
             Ok(signature_str.to_string())
         }
@@ -440,7 +440,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
                 )
             })?;
 
-            let mut tx = Transaction::system_create(
+            let mut tx = SystemTransaction::new_program_account(
                 &config.id,
                 program_id.pubkey(),
                 last_id,
@@ -455,7 +455,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
 
             let mut offset = 0;
             for chunk in program_userdata.chunks(USERDATA_CHUNK_SIZE) {
-                let mut tx = Transaction::loader_write(
+                let mut tx = LoaderTransaction::new_write(
                     &program_id,
                     bpf_loader::id(),
                     offset,
@@ -473,12 +473,12 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
             }
 
             let last_id = get_last_id(&rpc_client)?;
-            let mut tx = Transaction::loader_finalize(&program_id, bpf_loader::id(), last_id, 0);
+            let mut tx = LoaderTransaction::new_finalize(&program_id, bpf_loader::id(), last_id, 0);
             send_and_confirm_tx(&rpc_client, &mut tx, &program_id).map_err(|_| {
                 WalletError::DynamicProgramError("Program finalize transaction failed".to_string())
             })?;
 
-            let mut tx = Transaction::system_spawn(&program_id, last_id, 0);
+            let mut tx = SystemTransaction::new_spawn(&program_id, last_id, 0);
             send_and_confirm_tx(&rpc_client, &mut tx, &program_id).map_err(|_| {
                 WalletError::DynamicProgramError("Program spawn failed".to_string())
             })?;
@@ -504,7 +504,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
             let last_id = get_last_id(&rpc_client)?;
 
             if timestamp == None && *witnesses == None {
-                let mut tx = Transaction::system_new(&config.id, to, tokens, last_id);
+                let mut tx = SystemTransaction::new_account(&config.id, to, tokens, last_id, 0);
                 let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
                 Ok(signature_str.to_string())
             } else if *witnesses == None {
@@ -519,7 +519,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
                 let budget_program_id = budget_program::id();
 
                 // Create account for contract funds
-                let mut tx = Transaction::system_create(
+                let mut tx = SystemTransaction::new_program_account(
                     &config.id,
                     contract_funds.pubkey(),
                     last_id,
@@ -531,7 +531,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
                 send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
 
                 // Create account for contract state
-                let mut tx = Transaction::system_create(
+                let mut tx = SystemTransaction::new_program_account(
                     &config.id,
                     contract_state.pubkey(),
                     last_id,
@@ -543,7 +543,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
                 send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
 
                 // Initializing contract
-                let mut tx = Transaction::budget_new_on_date(
+                let mut tx = BudgetTransaction::new_on_date(
                     &contract_funds,
                     to,
                     contract_state.pubkey(),
@@ -576,7 +576,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
                 let budget_program_id = budget_program::id();
 
                 // Create account for contract funds
-                let mut tx = Transaction::system_create(
+                let mut tx = SystemTransaction::new_program_account(
                     &config.id,
                     contract_funds.pubkey(),
                     last_id,
@@ -588,7 +588,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
                 send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
 
                 // Create account for contract state
-                let mut tx = Transaction::system_create(
+                let mut tx = SystemTransaction::new_program_account(
                     &config.id,
                     contract_state.pubkey(),
                     last_id,
@@ -600,7 +600,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
                 send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
 
                 // Initializing contract
-                let mut tx = Transaction::budget_new_when_signed(
+                let mut tx = BudgetTransaction::new_when_signed(
                     &contract_funds,
                     to,
                     contract_state.pubkey(),
@@ -633,7 +633,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
 
             let last_id = get_last_id(&rpc_client)?;
 
-            let mut tx = Transaction::budget_new_timestamp(&config.id, pubkey, to, dt, last_id);
+            let mut tx = BudgetTransaction::new_timestamp(&config.id, pubkey, to, dt, last_id);
             let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
 
             Ok(signature_str.to_string())
@@ -650,7 +650,7 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
             }
 
             let last_id = get_last_id(&rpc_client)?;
-            let mut tx = Transaction::budget_new_signature(&config.id, pubkey, to, last_id);
+            let mut tx = BudgetTransaction::new_signature(&config.id, pubkey, to, last_id);
             let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
 
             Ok(signature_str.to_string())
@@ -1384,7 +1384,7 @@ mod tests {
         let key = Keypair::new();
         let to = Keypair::new().pubkey();
         let last_id = Hash::default();
-        let tx = Transaction::system_new(&key, to, 50, last_id);
+        let tx = SystemTransaction::new_account(&key, to, 50, last_id, 0);
 
         let signature = send_tx(&rpc_client, &tx);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
@@ -1420,7 +1420,7 @@ mod tests {
         let key = Keypair::new();
         let to = Keypair::new().pubkey();
         let last_id = Hash::default();
-        let mut tx = Transaction::system_new(&key, to, 50, last_id);
+        let mut tx = SystemTransaction::new_account(&key, to, 50, last_id, 0);
 
         let signer = Keypair::new();
 
@@ -1446,8 +1446,8 @@ mod tests {
             .into_vec()
             .unwrap();
         let last_id = Hash::new(&vec);
-        let prev_tx = Transaction::system_new(&key, to, 50, last_id);
-        let mut tx = Transaction::system_new(&key, to, 50, last_id);
+        let prev_tx = SystemTransaction::new_account(&key, to, 50, last_id, 0);
+        let mut tx = SystemTransaction::new_account(&key, to, 50, last_id, 0);
 
         resign_tx(&rpc_client, &mut tx, &key).unwrap();
 

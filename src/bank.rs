@@ -804,7 +804,7 @@ impl Bank {
         to: Pubkey,
         last_id: Hash,
     ) -> Result<Signature> {
-        let tx = Transaction::system_new(keypair, to, n, last_id);
+        let tx = SystemTransaction::new_account(keypair, to, n, last_id, 0);
         let signature = tx.signatures[0];
         self.process_transaction(&tx).map(|_| signature)
     }
@@ -960,8 +960,8 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         assert_eq!(bank.last_id(), genesis_block.last_id());
 
-        let t1 = Transaction::system_move(&mint_keypair, key1, 1, genesis_block.last_id(), 0);
-        let t2 = Transaction::system_move(&mint_keypair, key2, 1, genesis_block.last_id(), 0);
+        let t1 = SystemTransaction::new_move(&mint_keypair, key1, 1, genesis_block.last_id(), 0);
+        let t2 = SystemTransaction::new_move(&mint_keypair, key2, 1, genesis_block.last_id(), 0);
         let res = bank.process_transactions(&vec![t1.clone(), t2.clone()]);
         assert_eq!(res.len(), 2);
         assert_eq!(res[0], Ok(()));
@@ -1032,7 +1032,7 @@ mod tests {
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
-        let t1 = Transaction::system_move_many(
+        let t1 = SystemTransaction::new_move_many(
             &mint_keypair,
             &[(key1, 1), (key2, 1)],
             genesis_block.last_id(),
@@ -1056,13 +1056,11 @@ mod tests {
         let dest = Keypair::new();
 
         // source with 0 program context
-        let tx = Transaction::system_create(
+        let tx = SystemTransaction::new_account(
             &mint_keypair,
             dest.pubkey(),
-            genesis_block.last_id(),
             2,
-            0,
-            Pubkey::default(),
+            genesis_block.last_id(),
             1,
         );
         let signature = tx.signatures[0];
@@ -1137,10 +1135,20 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let bank = Bank::new(&genesis_block);
         let keypair = Keypair::new();
-        let tx0 =
-            Transaction::system_new(&mint_keypair, keypair.pubkey(), 2, genesis_block.last_id());
-        let tx1 =
-            Transaction::system_new(&keypair, mint_keypair.pubkey(), 1, genesis_block.last_id());
+        let tx0 = SystemTransaction::new_account(
+            &mint_keypair,
+            keypair.pubkey(),
+            2,
+            genesis_block.last_id(),
+            0,
+        );
+        let tx1 = SystemTransaction::new_account(
+            &keypair,
+            mint_keypair.pubkey(),
+            1,
+            genesis_block.last_id(),
+            0,
+        );
         let txs = vec![tx0, tx1];
         let results = bank.process_transactions(&txs);
         assert!(results[1].is_err());
@@ -1155,7 +1163,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         let keypair = Keypair::new();
         let entry = next_entry(&genesis_block.last_id(), 1, vec![]);
-        let tx = Transaction::system_new(&mint_keypair, keypair.pubkey(), 1, entry.id);
+        let tx = SystemTransaction::new_account(&mint_keypair, keypair.pubkey(), 1, entry.id, 0);
 
         // First, ensure the TX is rejected because of the unregistered last ID
         assert_eq!(
@@ -1203,12 +1211,8 @@ mod tests {
 
         let num_hashes = 1;
         for k in keypairs {
-            let txs = vec![Transaction::system_new(
-                mint_keypair,
-                k.pubkey(),
-                1,
-                last_id,
-            )];
+            let tx = SystemTransaction::new_account(mint_keypair, k.pubkey(), 1, last_id, 0);
+            let txs = vec![tx];
             let mut e = next_entries(&hash, 0, txs);
             entries.append(&mut e);
             hash = entries.last().unwrap().id;
@@ -1239,7 +1243,7 @@ mod tests {
         let num_hashes = 1;
         for i in 1..num_entries {
             let keypair = Keypair::new();
-            let tx = Transaction::system_new(mint_keypair, keypair.pubkey(), 1, last_id);
+            let tx = SystemTransaction::new_account(mint_keypair, keypair.pubkey(), 1, last_id, 0);
             let entry = Entry::new(&hash, 0, num_hashes, vec![tx]);
             hash = entry.id;
             entries.push(entry);
@@ -1247,7 +1251,7 @@ mod tests {
             // Add a second Transaction that will produce a
             // ProgramError<0, ResultWithNegativeTokens> error when processed
             let keypair2 = Keypair::new();
-            let tx = Transaction::system_new(&keypair, keypair2.pubkey(), 42, last_id);
+            let tx = SystemTransaction::new_account(&keypair, keypair2.pubkey(), 42, last_id, 0);
             let entry = Entry::new(&hash, 0, num_hashes, vec![tx]);
             hash = entry.id;
             entries.push(entry);
@@ -1352,8 +1356,13 @@ mod tests {
         let alice = Keypair::new();
         let bob = Keypair::new();
 
-        let tx1 =
-            Transaction::system_new(&mint_keypair, alice.pubkey(), 1, genesis_block.last_id());
+        let tx1 = SystemTransaction::new_account(
+            &mint_keypair,
+            alice.pubkey(),
+            1,
+            genesis_block.last_id(),
+            0,
+        );
         let pay_alice = vec![tx1];
 
         let lock_result = bank.lock_accounts(&pay_alice);
@@ -1433,9 +1442,11 @@ mod tests {
         let last_id = bank.last_id();
 
         // ensure bank can process 2 entries that have a common account and no tick is registered
-        let tx = Transaction::system_new(&mint_keypair, keypair1.pubkey(), 2, bank.last_id());
+        let tx =
+            SystemTransaction::new_account(&mint_keypair, keypair1.pubkey(), 2, bank.last_id(), 0);
         let entry_1 = next_entry(&last_id, 1, vec![tx]);
-        let tx = Transaction::system_new(&mint_keypair, keypair2.pubkey(), 2, bank.last_id());
+        let tx =
+            SystemTransaction::new_account(&mint_keypair, keypair2.pubkey(), 2, bank.last_id(), 0);
         let entry_2 = next_entry(&entry_1.id, 1, vec![tx]);
         assert_eq!(bank.par_process_entries(&[entry_1, entry_2]), Ok(()));
         assert_eq!(bank.get_balance(&keypair1.pubkey()), 2);
@@ -1464,11 +1475,12 @@ mod tests {
         let entry_1_to_mint = next_entry(
             &bank.last_id(),
             1,
-            vec![Transaction::system_new(
+            vec![SystemTransaction::new_account(
                 &keypair1,
                 mint_keypair.pubkey(),
                 1,
                 bank.last_id(),
+                0,
             )],
         );
 
@@ -1476,8 +1488,14 @@ mod tests {
             &entry_1_to_mint.id,
             1,
             vec![
-                Transaction::system_new(&keypair2, keypair3.pubkey(), 2, bank.last_id()), // should be fine
-                Transaction::system_new(&keypair1, mint_keypair.pubkey(), 2, bank.last_id()), // will collide
+                SystemTransaction::new_account(&keypair2, keypair3.pubkey(), 2, bank.last_id(), 0), // should be fine
+                SystemTransaction::new_account(
+                    &keypair1,
+                    mint_keypair.pubkey(),
+                    2,
+                    bank.last_id(),
+                    0,
+                ), // will collide
             ],
         );
 
@@ -1500,16 +1518,18 @@ mod tests {
         let keypair4 = Keypair::new();
 
         //load accounts
-        let tx = Transaction::system_new(&mint_keypair, keypair1.pubkey(), 1, bank.last_id());
+        let tx =
+            SystemTransaction::new_account(&mint_keypair, keypair1.pubkey(), 1, bank.last_id(), 0);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        let tx = Transaction::system_new(&mint_keypair, keypair2.pubkey(), 1, bank.last_id());
+        let tx =
+            SystemTransaction::new_account(&mint_keypair, keypair2.pubkey(), 1, bank.last_id(), 0);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
 
         // ensure bank can process 2 entries that do not have a common account and no tick is registered
         let last_id = bank.last_id();
-        let tx = Transaction::system_new(&keypair1, keypair3.pubkey(), 1, bank.last_id());
+        let tx = SystemTransaction::new_account(&keypair1, keypair3.pubkey(), 1, bank.last_id(), 0);
         let entry_1 = next_entry(&last_id, 1, vec![tx]);
-        let tx = Transaction::system_new(&keypair2, keypair4.pubkey(), 1, bank.last_id());
+        let tx = SystemTransaction::new_account(&keypair2, keypair4.pubkey(), 1, bank.last_id(), 0);
         let entry_2 = next_entry(&entry_1.id, 1, vec![tx]);
         assert_eq!(bank.par_process_entries(&[entry_1, entry_2]), Ok(()));
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
@@ -1526,18 +1546,20 @@ mod tests {
         let keypair4 = Keypair::new();
 
         //load accounts
-        let tx = Transaction::system_new(&mint_keypair, keypair1.pubkey(), 1, bank.last_id());
+        let tx =
+            SystemTransaction::new_account(&mint_keypair, keypair1.pubkey(), 1, bank.last_id(), 0);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        let tx = Transaction::system_new(&mint_keypair, keypair2.pubkey(), 1, bank.last_id());
+        let tx =
+            SystemTransaction::new_account(&mint_keypair, keypair2.pubkey(), 1, bank.last_id(), 0);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
 
         let last_id = bank.last_id();
 
         // ensure bank can process 2 entries that do not have a common account and tick is registered
-        let tx = Transaction::system_new(&keypair2, keypair3.pubkey(), 1, bank.last_id());
+        let tx = SystemTransaction::new_account(&keypair2, keypair3.pubkey(), 1, bank.last_id(), 0);
         let entry_1 = next_entry(&last_id, 1, vec![tx]);
         let tick = next_entry(&entry_1.id, 1, vec![]);
-        let tx = Transaction::system_new(&keypair1, keypair4.pubkey(), 1, tick.id);
+        let tx = SystemTransaction::new_account(&keypair1, keypair4.pubkey(), 1, tick.id, 0);
         let entry_2 = next_entry(&tick.id, 1, vec![tx]);
         assert_eq!(
             bank.par_process_entries(&[entry_1.clone(), tick.clone(), entry_2.clone()]),
@@ -1547,7 +1569,7 @@ mod tests {
         assert_eq!(bank.get_balance(&keypair4.pubkey()), 1);
         assert_eq!(bank.last_id(), tick.id);
         // ensure that an error is returned for an empty account (keypair2)
-        let tx = Transaction::system_new(&keypair2, keypair3.pubkey(), 1, tick.id);
+        let tx = SystemTransaction::new_account(&keypair2, keypair3.pubkey(), 1, tick.id, 0);
         let entry_3 = next_entry(&entry_2.id, 1, vec![tx]);
         assert_eq!(
             bank.par_process_entries(&[entry_3]),
@@ -1625,8 +1647,8 @@ mod tests {
         let pubkey = Keypair::new().pubkey();
 
         let transactions = vec![
-            Transaction::system_move(&mint_keypair, pubkey, 1, genesis_block.last_id(), 0),
-            Transaction::system_move(&mint_keypair, pubkey, 1, genesis_block.last_id(), 0),
+            SystemTransaction::new_move(&mint_keypair, pubkey, 1, genesis_block.last_id(), 0),
+            SystemTransaction::new_move(&mint_keypair, pubkey, 1, genesis_block.last_id(), 0),
         ];
 
         let mut results = vec![Ok(()), Ok(())];
@@ -1698,7 +1720,7 @@ mod tests {
         bank.transfer(10, &alice, bob.pubkey(), last_id).unwrap();
         bank.transfer(10, &alice, jack.pubkey(), last_id).unwrap();
 
-        let tx = Transaction::storage_new_advertise_last_id(
+        let tx = StorageTransaction::new_advertise_last_id(
             &bob,
             storage_last_id,
             last_id,
@@ -1709,7 +1731,7 @@ mod tests {
 
         let entry_height = 0;
 
-        let tx = Transaction::storage_new_mining_proof(
+        let tx = StorageTransaction::new_mining_proof(
             &jack,
             Hash::default(),
             last_id,
@@ -1729,7 +1751,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let pubkey = Keypair::new().pubkey();
 
-        let transactions = vec![Transaction::system_move(
+        let transactions = vec![SystemTransaction::new_move(
             &mint_keypair,
             pubkey,
             1,
@@ -1763,7 +1785,7 @@ mod tests {
             }
         }
 
-        let transactions = vec![Transaction::system_move(
+        let transactions = vec![SystemTransaction::new_move(
             &mint_keypair,
             pubkey,
             2,

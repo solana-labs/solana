@@ -190,7 +190,7 @@ pub fn generate_txs(
         .par_iter()
         .map(|(id, keypair)| {
             (
-                Transaction::system_new(id, keypair.pubkey(), 1, last_id),
+                SystemTransaction::new_account(id, keypair.pubkey(), 1, last_id, 0),
                 timestamp(),
             )
         })
@@ -342,7 +342,7 @@ pub fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], t
                 .map(|(k, m)| {
                     (
                         k.clone(),
-                        Transaction::system_move_many(k, &m, Default::default(), 0),
+                        SystemTransaction::new_move_many(k, &m, Default::default(), 0),
                     )
                 })
                 .collect();

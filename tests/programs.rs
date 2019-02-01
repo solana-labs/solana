@@ -56,7 +56,7 @@ impl Loader {
 
         // allocate, populate, finalize, and spawn loader
 
-        let tx = Transaction::system_create(
+        let tx = SystemTransaction::new_program_account(
             &mint_keypair,
             loader.pubkey(),
             genesis_block.last_id(),
@@ -68,7 +68,7 @@ impl Loader {
         check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
         let name = String::from(loader_name);
-        let tx = Transaction::loader_write(
+        let tx = LoaderTransaction::new_write(
             &loader,
             solana_native_loader::id(),
             0,
@@ -78,7 +78,7 @@ impl Loader {
         );
         check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
-        let tx = Transaction::loader_finalize(
+        let tx = LoaderTransaction::new_finalize(
             &loader,
             solana_native_loader::id(),
             genesis_block.last_id(),
@@ -86,7 +86,7 @@ impl Loader {
         );
         check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
-        let tx = Transaction::system_spawn(&loader, genesis_block.last_id(), 0);
+        let tx = SystemTransaction::new_spawn(&loader, genesis_block.last_id(), 0);
         check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
         Loader {
@@ -135,7 +135,7 @@ impl Program {
 
         // allocate, populate, finalize and spawn program
 
-        let tx = Transaction::system_create(
+        let tx = SystemTransaction::new_program_account(
             &loader.mint_keypair,
             program.pubkey(),
             loader.genesis_block.last_id(),
@@ -153,7 +153,7 @@ impl Program {
         let chunk_size = 256; // Size of chunk just needs to fit into tx
         let mut offset = 0;
         for chunk in userdata.chunks(chunk_size) {
-            let tx = Transaction::loader_write(
+            let tx = LoaderTransaction::new_write(
                 &program,
                 loader.loader,
                 offset,
@@ -169,7 +169,7 @@ impl Program {
             offset += chunk_size as u32;
         }
 
-        let tx = Transaction::loader_finalize(
+        let tx = LoaderTransaction::new_finalize(
             &program,
             loader.loader,
             loader.genesis_block.last_id(),
@@ -181,7 +181,7 @@ impl Program {
             loader.bank.process_transactions(&vec![tx.clone()]),
         );
 
-        let tx = Transaction::system_spawn(&program, loader.genesis_block.last_id(), 0);
+        let tx = SystemTransaction::new_spawn(&program, loader.genesis_block.last_id(), 0);
         check_tx_results(
             &loader.bank,
             &tx,
@@ -236,7 +236,7 @@ fn test_program_lua_move_funds() {
 
     // Call user program with two accounts
 
-    let tx = Transaction::system_create(
+    let tx = SystemTransaction::new_program_account(
         &loader.mint_keypair,
         from.pubkey(),
         loader.genesis_block.last_id(),
@@ -251,7 +251,7 @@ fn test_program_lua_move_funds() {
         loader.bank.process_transactions(&vec![tx.clone()]),
     );
 
-    let tx = Transaction::system_create(
+    let tx = SystemTransaction::new_program_account(
         &loader.mint_keypair,
         to,
         loader.genesis_block.last_id(),

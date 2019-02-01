@@ -23,7 +23,6 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::duration_as_s;
-use solana_sdk::transaction::Transaction;
 use std::collections::{HashSet, VecDeque};
 use std::env;
 use std::fs::remove_dir_all;
@@ -1817,7 +1816,7 @@ fn send_tx_and_retry_get_balance(
     let mut client = mk_client(leader);
     trace!("getting leader last_id");
     let last_id = client.get_last_id();
-    let mut tx = Transaction::system_new(&alice, *bob_pubkey, transfer_amount, last_id);
+    let mut tx = SystemTransaction::new_account(&alice, *bob_pubkey, transfer_amount, last_id, 0);
     info!(
         "executing transfer of {} from {} to {}",
         transfer_amount,

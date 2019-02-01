@@ -453,7 +453,6 @@ mod tests {
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
-    use solana_sdk::transaction::Transaction;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     fn start_rpc_handler_with_tx(pubkey: Pubkey) -> (MetaIoHandler<Meta>, Meta, Hash, Keypair) {
@@ -461,7 +460,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
 
         let last_id = bank.last_id();
-        let tx = Transaction::system_move(&alice, pubkey, 20, last_id, 0);
+        let tx = SystemTransaction::new_move(&alice, pubkey, 20, last_id, 0);
         bank.process_transaction(&tx).expect("process transaction");
 
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
@@ -534,7 +533,7 @@ mod tests {
             JsonRpcRequestProcessor::new(arc_bank.clone(), StorageState::default());
         thread::spawn(move || {
             let last_id = arc_bank.last_id();
-            let tx = Transaction::system_move(&alice, bob_pubkey, 20, last_id, 0);
+            let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
             arc_bank
                 .process_transaction(&tx)
                 .expect("process transaction");
@@ -609,7 +608,7 @@ mod tests {
     fn test_rpc_confirm_tx() {
         let bob_pubkey = Keypair::new().pubkey();
         let (io, meta, last_id, alice) = start_rpc_handler_with_tx(bob_pubkey);
-        let tx = Transaction::system_move(&alice, bob_pubkey, 20, last_id, 0);
+        let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"confirmTransaction","params":["{}"]}}"#,
@@ -628,7 +627,7 @@ mod tests {
     fn test_rpc_get_signature_status() {
         let bob_pubkey = Keypair::new().pubkey();
         let (io, meta, last_id, alice) = start_rpc_handler_with_tx(bob_pubkey);
-        let tx = Transaction::system_move(&alice, bob_pubkey, 20, last_id, 0);
+        let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
@@ -643,7 +642,7 @@ mod tests {
         assert_eq!(expected, result);
 
         // Test getSignatureStatus request on unprocessed tx
-        let tx = Transaction::system_move(&alice, bob_pubkey, 10, last_id, 0);
+        let tx = SystemTransaction::new_move(&alice, bob_pubkey, 10, last_id, 0);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
             tx.signatures[0]
@@ -770,8 +769,13 @@ mod tests {
 
     #[test]
     fn test_rpc_verify_signature() {
-        let tx =
-            Transaction::system_move(&Keypair::new(), Keypair::new().pubkey(), 20, hash(&[0]), 0);
+        let tx = SystemTransaction::new_move(
+            &Keypair::new(),
+            Keypair::new().pubkey(),
+            20,
+            hash(&[0]),
+            0,
+        );
         assert_eq!(
             verify_signature(&tx.signatures[0].to_string()).unwrap(),
             tx.signatures[0]

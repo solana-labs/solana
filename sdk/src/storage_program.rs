@@ -83,40 +83,16 @@ pub fn system_id() -> Pubkey {
     Pubkey::new(&STORAGE_SYSTEM_ACCOUNT_ID)
 }
 
-pub trait StorageTransaction {
-    fn storage_new_mining_proof(
+pub struct StorageTransaction {}
+
+impl StorageTransaction {
+    pub fn new_mining_proof(
         from_keypair: &Keypair,
         sha_state: Hash,
         last_id: Hash,
         entry_height: u64,
         signature: Signature,
-    ) -> Self;
-
-    fn storage_new_advertise_last_id(
-        from_keypair: &Keypair,
-        storage_last_id: Hash,
-        last_id: Hash,
-        entry_height: u64,
-    ) -> Self;
-
-    fn storage_new_proof_validation(
-        from_keypair: &Keypair,
-        last_id: Hash,
-        entry_height: u64,
-        proof_mask: Vec<ProofStatus>,
-    ) -> Self;
-
-    fn storage_new_reward_claim(from_keypair: &Keypair, last_id: Hash, entry_height: u64) -> Self;
-}
-
-impl StorageTransaction for Transaction {
-    fn storage_new_mining_proof(
-        from_keypair: &Keypair,
-        sha_state: Hash,
-        last_id: Hash,
-        entry_height: u64,
-        signature: Signature,
-    ) -> Self {
+    ) -> Transaction {
         let program = StorageProgram::SubmitMiningProof {
             sha_state,
             entry_height,
@@ -132,12 +108,12 @@ impl StorageTransaction for Transaction {
         )
     }
 
-    fn storage_new_advertise_last_id(
+    pub fn new_advertise_last_id(
         from_keypair: &Keypair,
         storage_id: Hash,
         last_id: Hash,
         entry_height: u64,
-    ) -> Self {
+    ) -> Transaction {
         let program = StorageProgram::AdvertiseStorageLastId {
             id: storage_id,
             entry_height,
@@ -152,12 +128,12 @@ impl StorageTransaction for Transaction {
         )
     }
 
-    fn storage_new_proof_validation(
+    pub fn new_proof_validation(
         from_keypair: &Keypair,
         last_id: Hash,
         entry_height: u64,
         proof_mask: Vec<ProofStatus>,
-    ) -> Self {
+    ) -> Transaction {
         let program = StorageProgram::ProofValidation {
             entry_height,
             proof_mask,
@@ -172,7 +148,11 @@ impl StorageTransaction for Transaction {
         )
     }
 
-    fn storage_new_reward_claim(from_keypair: &Keypair, last_id: Hash, entry_height: u64) -> Self {
+    pub fn new_reward_claim(
+        from_keypair: &Keypair,
+        last_id: Hash,
+        entry_height: u64,
+    ) -> Transaction {
         let program = StorageProgram::ClaimStorageReward { entry_height };
         Transaction::new(
             from_keypair,

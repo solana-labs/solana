@@ -210,7 +210,6 @@ pub mod tests {
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
-    use solana_sdk::transaction::Transaction;
     use std::fs::remove_dir_all;
     use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -326,11 +325,12 @@ pub mod tests {
             let entry_tick0 = Entry::new(&cur_hash, 0, i + 1, vec![]);
             cur_hash = entry_tick0.id;
 
-            let tx0 = Transaction::system_new(
+            let tx0 = SystemTransaction::new_account(
                 &mint_keypair,
                 bob_keypair.pubkey(),
                 transfer_amount,
                 cur_hash,
+                0,
             );
             bank.register_tick(&cur_hash);
             let entry_tick1 = Entry::new(&cur_hash, 0, i + 1, vec![]);

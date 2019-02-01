@@ -8,7 +8,6 @@ use solana::thin_client::new_fullnode;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::transaction::Transaction;
 use std::fs::remove_dir_all;
 use std::thread::sleep;
 use std::time::Duration;
@@ -42,7 +41,7 @@ fn test_rpc_send_tx() {
     let last_id = Hash::new(&last_id_vec);
 
     info!("last_id: {:?}", last_id);
-    let tx = Transaction::system_move(&alice, bob_pubkey, 20, last_id, 0);
+    let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
     let serial_tx = serialize(&tx).unwrap();
 
     let client = reqwest::Client::new();

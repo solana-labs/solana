@@ -102,7 +102,6 @@ mod tests {
     use solana_sdk::budget_transaction::BudgetTransaction;
     use solana_sdk::hash::{hash, Hash, Hasher};
     use solana_sdk::signature::KeypairUtil;
-    use solana_sdk::transaction::Transaction;
     use std::fs::remove_file;
     use std::fs::File;
     use std::io::Read;
@@ -129,7 +128,7 @@ mod tests {
                 Entry::new_mut(
                     &mut id,
                     &mut num_hashes,
-                    vec![Transaction::budget_new_signature(
+                    vec![BudgetTransaction::new_signature(
                         &keypair,
                         keypair.pubkey(),
                         keypair.pubkey(),

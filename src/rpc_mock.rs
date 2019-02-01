@@ -93,6 +93,6 @@ pub fn request_airdrop_transaction(
     let key = Keypair::new();
     let to = Keypair::new().pubkey();
     let last_id = Hash::default();
-    let tx = Transaction::system_new(&key, to, 50, last_id);
+    let tx = SystemTransaction::new_account(&key, to, 50, last_id, 0);
     Ok(tx)
 }
