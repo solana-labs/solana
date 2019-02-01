@@ -1,15 +1,120 @@
-use solana;
-use solana_native_loader;
-
 use solana::bank::Bank;
 use solana::genesis_block::GenesisBlock;
-#[cfg(feature = "bpf_c")]
-use solana_sdk::bpf_loader;
 use solana_sdk::loader_transaction::LoaderTransaction;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
+
+fn load_program(bank: &Bank, from: &Keypair, loader_id: Pubkey, program: Vec<u8>) -> Pubkey {
+    let program_account = Keypair::new();
+
+    let tx = SystemTransaction::new_program_account(
+        from,
+        program_account.pubkey(),
+        bank.last_id(),
+        1,
+        program.len() as u64,
+        loader_id,
+        0,
+    );
+    bank.process_transaction(&tx).unwrap();
+
+    let chunk_size = 256; // Size of chunk just needs to fit into tx
+    let mut offset = 0;
+    for chunk in program.chunks(chunk_size) {
+        let tx = LoaderTransaction::new_write(
+            &program_account,
+            loader_id,
+            offset,
+            chunk.to_vec(),
+            bank.last_id(),
+            0,
+        );
+        bank.process_transaction(&tx).unwrap();
+        offset += chunk_size as u32;
+    }
+
+    let tx = LoaderTransaction::new_finalize(&program_account, loader_id, bank.last_id(), 0);
+    bank.process_transaction(&tx).unwrap();
+
+    let tx = SystemTransaction::new_spawn(&program_account, bank.last_id(), 0);
+    bank.process_transaction(&tx).unwrap();
+
+    program_account.pubkey()
+}
+
+#[test]
+fn test_program_native_noop() {
+    solana_logger::setup();
+
+    let (genesis_block, mint_keypair) = GenesisBlock::new(50);
+    let bank = Bank::new(&genesis_block);
+
+    let program = "noop".as_bytes().to_vec();
+    let program_id = load_program(&bank, &mint_keypair, solana_native_loader::id(), program);
+
+    // Call user program
+    let tx = Transaction::new(&mint_keypair, &[], program_id, &1u8, bank.last_id(), 0);
+    bank.process_transaction(&tx).unwrap();
+}
+
+#[test]
+fn test_program_lua_move_funds() {
+    solana_logger::setup();
+
+    let (genesis_block, mint_keypair) = GenesisBlock::new(50);
+    let bank = Bank::new(&genesis_block);
+    let loader_id = load_program(
+        &bank,
+        &mint_keypair,
+        solana_native_loader::id(),
+        "solana_lua_loader".as_bytes().to_vec(),
+    );
+
+    let program = r#"
+            print("Lua Script!")
+            local tokens, _ = string.unpack("I", data)
+            accounts[1].tokens = accounts[1].tokens - tokens
+            accounts[2].tokens = accounts[2].tokens + tokens
+        "#
+    .as_bytes()
+    .to_vec();
+    let program_id = load_program(&bank, &mint_keypair, loader_id, program);
+    let from = Keypair::new();
+    let to = Keypair::new().pubkey();
+
+    // Call user program with two accounts
+    let tx = SystemTransaction::new_program_account(
+        &mint_keypair,
+        from.pubkey(),
+        bank.last_id(),
+        10,
+        0,
+        program_id,
+        0,
+    );
+    bank.process_transaction(&tx).unwrap();
+
+    let tx = SystemTransaction::new_program_account(
+        &mint_keypair,
+        to,
+        bank.last_id(),
+        1,
+        0,
+        program_id,
+        0,
+    );
+    bank.process_transaction(&tx).unwrap();
+
+    let tx = Transaction::new(&from, &[to], program_id, &10, bank.last_id(), 0);
+    bank.process_transaction(&tx).unwrap();
+    assert_eq!(bank.get_balance(&from.pubkey()), 0);
+    assert_eq!(bank.get_balance(&to), 11);
+}
+
+#[cfg(feature = "bpf_c")]
+use solana_sdk::bpf_loader;
 #[cfg(any(feature = "bpf_c", feature = "bpf_rust"))]
 use std::env;
 #[cfg(any(feature = "bpf_c", feature = "bpf_rust"))]
@@ -35,280 +140,29 @@ fn create_bpf_path(name: &str) -> PathBuf {
     pathbuf
 }
 
-fn check_tx_results(bank: &Bank, tx: &Transaction, result: Vec<solana::bank::Result<()>>) {
-    assert_eq!(result.len(), 1);
-    assert_eq!(result[0], Ok(()));
-    assert_eq!(bank.get_signature_status(&tx.signatures[0]), Some(Ok(())));
-}
-
-struct Loader {
-    genesis_block: GenesisBlock,
-    mint_keypair: Keypair,
-    bank: Bank,
-    loader: Pubkey,
-}
-
-impl Loader {
-    pub fn new_dynamic(loader_name: &str) -> Self {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(50);
-        let bank = Bank::new(&genesis_block);
-        let loader = Keypair::new();
-
-        // allocate, populate, finalize, and spawn loader
-
-        let tx = SystemTransaction::new_program_account(
-            &mint_keypair,
-            loader.pubkey(),
-            genesis_block.last_id(),
-            1,
-            56, // TODO
-            solana_native_loader::id(),
-            0,
-        );
-        check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-        let name = String::from(loader_name);
-        let tx = LoaderTransaction::new_write(
-            &loader,
-            solana_native_loader::id(),
-            0,
-            name.as_bytes().to_vec(),
-            genesis_block.last_id(),
-            0,
-        );
-        check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-        let tx = LoaderTransaction::new_finalize(
-            &loader,
-            solana_native_loader::id(),
-            genesis_block.last_id(),
-            0,
-        );
-        check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-        let tx = SystemTransaction::new_spawn(&loader, genesis_block.last_id(), 0);
-        check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
-
-        Loader {
-            genesis_block,
-            mint_keypair,
-            bank,
-            loader: loader.pubkey(),
-        }
-    }
-
-    pub fn new_native() -> Self {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(50);
-        let bank = Bank::new(&genesis_block);
-        let loader = solana_native_loader::id();
-
-        Loader {
-            genesis_block,
-            mint_keypair,
-            bank,
-            loader,
-        }
-    }
-
-    #[cfg(feature = "bpf_c")]
-    pub fn new_bpf() -> Self {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(50);
-        let bank = Bank::new(&genesis_block);
-        let loader = bpf_loader::id();
-
-        Loader {
-            genesis_block,
-            mint_keypair,
-            bank,
-            loader,
-        }
-    }
-}
-
-struct Program {
-    program: Keypair,
-}
-
-impl Program {
-    pub fn new(loader: &Loader, userdata: &Vec<u8>) -> Self {
-        let program = Keypair::new();
-
-        // allocate, populate, finalize and spawn program
-
-        let tx = SystemTransaction::new_program_account(
-            &loader.mint_keypair,
-            program.pubkey(),
-            loader.genesis_block.last_id(),
-            1,
-            userdata.len() as u64,
-            loader.loader,
-            0,
-        );
-        check_tx_results(
-            &loader.bank,
-            &tx,
-            loader.bank.process_transactions(&vec![tx.clone()]),
-        );
-
-        let chunk_size = 256; // Size of chunk just needs to fit into tx
-        let mut offset = 0;
-        for chunk in userdata.chunks(chunk_size) {
-            let tx = LoaderTransaction::new_write(
-                &program,
-                loader.loader,
-                offset,
-                chunk.to_vec(),
-                loader.genesis_block.last_id(),
-                0,
-            );
-            check_tx_results(
-                &loader.bank,
-                &tx,
-                loader.bank.process_transactions(&vec![tx.clone()]),
-            );
-            offset += chunk_size as u32;
-        }
-
-        let tx = LoaderTransaction::new_finalize(
-            &program,
-            loader.loader,
-            loader.genesis_block.last_id(),
-            0,
-        );
-        check_tx_results(
-            &loader.bank,
-            &tx,
-            loader.bank.process_transactions(&vec![tx.clone()]),
-        );
-
-        let tx = SystemTransaction::new_spawn(&program, loader.genesis_block.last_id(), 0);
-        check_tx_results(
-            &loader.bank,
-            &tx,
-            loader.bank.process_transactions(&vec![tx.clone()]),
-        );
-
-        Program { program }
-    }
-}
-
-#[test]
-fn test_program_native_noop() {
-    solana_logger::setup();
-
-    let loader = Loader::new_native();
-    let name = String::from("noop");
-    let userdata = name.as_bytes().to_vec();
-    let program = Program::new(&loader, &userdata);
-
-    // Call user program
-    let tx = Transaction::new(
-        &loader.mint_keypair,
-        &[],
-        program.program.pubkey(),
-        &1u8,
-        loader.genesis_block.last_id(),
-        0,
-    );
-    check_tx_results(
-        &loader.bank,
-        &tx,
-        loader.bank.process_transactions(&vec![tx.clone()]),
-    );
-}
-
-#[test]
-fn test_program_lua_move_funds() {
-    solana_logger::setup();
-
-    let loader = Loader::new_dynamic("solana_lua_loader");
-    let userdata = r#"
-            print("Lua Script!")
-            local tokens, _ = string.unpack("I", data)
-            accounts[1].tokens = accounts[1].tokens - tokens
-            accounts[2].tokens = accounts[2].tokens + tokens
-        "#
-    .as_bytes()
-    .to_vec();
-    let program = Program::new(&loader, &userdata);
-    let from = Keypair::new();
-    let to = Keypair::new().pubkey();
-
-    // Call user program with two accounts
-
-    let tx = SystemTransaction::new_program_account(
-        &loader.mint_keypair,
-        from.pubkey(),
-        loader.genesis_block.last_id(),
-        10,
-        0,
-        program.program.pubkey(),
-        0,
-    );
-    check_tx_results(
-        &loader.bank,
-        &tx,
-        loader.bank.process_transactions(&vec![tx.clone()]),
-    );
-
-    let tx = SystemTransaction::new_program_account(
-        &loader.mint_keypair,
-        to,
-        loader.genesis_block.last_id(),
-        1,
-        0,
-        program.program.pubkey(),
-        0,
-    );
-    check_tx_results(
-        &loader.bank,
-        &tx,
-        loader.bank.process_transactions(&vec![tx.clone()]),
-    );
-
-    let tx = Transaction::new(
-        &from,
-        &[to],
-        program.program.pubkey(),
-        &10,
-        loader.genesis_block.last_id(),
-        0,
-    );
-    check_tx_results(
-        &loader.bank,
-        &tx,
-        loader.bank.process_transactions(&vec![tx.clone()]),
-    );
-    assert_eq!(loader.bank.get_balance(&from.pubkey()), 0);
-    assert_eq!(loader.bank.get_balance(&to), 11);
-}
-
 #[cfg(feature = "bpf_c")]
 #[test]
-fn test_program_builtin_bpf_noop() {
+fn test_program_bpf_c_noop() {
     solana_logger::setup();
 
     let mut file = File::open(create_bpf_path("noop")).expect("file open failed");
     let mut elf = Vec::new();
     file.read_to_end(&mut elf).unwrap();
 
-    let loader = Loader::new_bpf();
-    let program = Program::new(&loader, &elf);
+    let (genesis_block, mint_keypair) = GenesisBlock::new(50);
+    let bank = Bank::new(&genesis_block);
 
     // Call user program
+    let program_id = load_program(&bank, &mint_keypair, bpf_loader::id(), elf);
     let tx = Transaction::new(
-        &loader.mint_keypair,
+        &mint_keypair,
         &[],
-        program.program.pubkey(),
+        program_id,
         &vec![1u8],
-        loader.genesis_block.last_id(),
+        bank.last_id(),
         0,
     );
-    check_tx_results(
-        &loader.bank,
-        &tx,
-        loader.bank.process_transactions(&vec![tx.clone()]),
-    );
+    bank.process_transaction(&tx).unwrap();
 }
 
 #[cfg(feature = "bpf_c")]
@@ -331,23 +185,27 @@ fn test_program_bpf_c() {
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
 
-        let loader = Loader::new_dynamic("solana_bpf_loader");
-        let program = Program::new(&loader, &elf);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(50);
+        let bank = Bank::new(&genesis_block);
+
+        let loader_id = load_program(
+            &bank,
+            &mint_keypair,
+            solana_native_loader::id(),
+            "solana_bpf_loader".as_bytes().to_vec(),
+        );
 
         // Call user program
+        let program_id = load_program(&bank, &mint_keypair, loader_id, elf);
         let tx = Transaction::new(
-            &loader.mint_keypair,
+            &mint_keypair,
             &[],
-            program.program.pubkey(),
+            program_id,
             &vec![1u8],
-            loader.genesis_block.last_id(),
+            bank.last_id(),
             0,
         );
-        check_tx_results(
-            &loader.bank,
-            &tx,
-            loader.bank.process_transactions(&vec![tx.clone()]),
-        );
+        bank.process_transaction(&tx).unwrap();
     }
 }
 
@@ -367,22 +225,25 @@ fn test_program_bpf_rust() {
         let mut elf = Vec::new();
         file.read_to_end(&mut elf).unwrap();
 
-        let loader = Loader::new_dynamic("solana_bpf_loader");
-        let program = Program::new(&loader, &elf);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(50);
+        let bank = Bank::new(&genesis_block);
+        let loader_id = load_program(
+            &bank,
+            &mint_keypair,
+            solana_native_loader::id(),
+            "solana_bpf_loader".as_bytes().to_vec(),
+        );
 
         // Call user program
+        let program_id = load_program(&bank, &mint_keypair, loader_id, elf);
         let tx = Transaction::new(
-            &loader.mint_keypair,
+            &mint_keypair,
             &[],
-            program.program.pubkey(),
+            program_id,
             &vec![1u8],
-            loader.genesis_block.last_id(),
+            bank.last_id(),
             0,
         );
-        check_tx_results(
-            &loader.bank,
-            &tx,
-            loader.bank.process_transactions(&vec![tx.clone()]),
-        );
+        bank.process_transaction(&tx).unwrap();
     }
 }
