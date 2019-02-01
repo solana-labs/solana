@@ -1,4 +1,5 @@
 mod accounts;
+pub mod appendvec;
 pub mod bank;
 pub mod bloom;
 mod last_id_queue;

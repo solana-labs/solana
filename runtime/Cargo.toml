@@ -14,6 +14,7 @@ bv = { version = "0.11.0", features = ["serde"] }
 fnv = "1.0.6"
 hashbrown = "0.1.8"
 log = "0.4.2"
+memmap = "0.6.2"
 rand = "0.6.5"
 rand_chacha = "0.1.1"
 serde = "1.0.88"
