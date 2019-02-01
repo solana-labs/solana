@@ -125,22 +125,6 @@ impl LastIdQueue {
         None
     }
 
-    /// Look through the last_ids and find all the valid ids
-    /// This is batched to avoid holding the lock for a significant amount of time
-    ///
-    /// Return a vec of tuple of (valid index, timestamp)
-    /// index is into the passed ids slice to avoid copying hashes
-    pub fn count_valid_ids(&self, ids: &[Hash]) -> Vec<(usize, u64)> {
-        let mut ret = Vec::new();
-        for (i, id) in ids.iter().enumerate() {
-            if let Some(entry) = self.entries.get(id) {
-                if self.tick_height - entry.tick_height < MAX_ENTRY_IDS as u64 {
-                    ret.push((i, entry.timestamp));
-                }
-            }
-        }
-        ret
-    }
     pub fn clear(&mut self) {
         self.entries = HashMap::new();
         self.tick_height = 0;
@@ -167,25 +151,6 @@ mod tests {
     use super::*;
     use bincode::serialize;
     use solana_sdk::hash::hash;
-
-    #[test]
-    fn test_count_valid_ids() {
-        let first_id = Hash::default();
-        let mut entry_queue = LastIdQueue::default();
-        entry_queue.register_tick(&first_id);
-        let ids: Vec<_> = (0..MAX_ENTRY_IDS)
-            .map(|i| {
-                let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-                entry_queue.register_tick(&last_id);
-                last_id
-            })
-            .collect();
-        assert_eq!(entry_queue.count_valid_ids(&[]).len(), 0);
-        assert_eq!(entry_queue.count_valid_ids(&[first_id]).len(), 0);
-        for (i, id) in entry_queue.count_valid_ids(&ids).iter().enumerate() {
-            assert_eq!(id.0, i);
-        }
-    }
 
     #[test]
     fn test_register_tick() {

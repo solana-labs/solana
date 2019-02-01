@@ -326,7 +326,10 @@ pub mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(starting_balance);
         let tvu_addr = target1.info.tvu;
         let bank = Arc::new(Bank::new(&genesis_block));
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), starting_balance);
+        assert_eq!(
+            bank.active_fork().get_balance_slow(&mint_keypair.pubkey()),
+            starting_balance
+        );
 
         //start cluster_info1
         let mut cluster_info1 = ClusterInfo::new(target1.info.clone());
@@ -407,10 +410,10 @@ pub mod tests {
             trace!("got msg");
         }
 
-        let alice_balance = bank.get_balance(&mint_keypair.pubkey());
+        let alice_balance = bank.active_fork().get_balance_slow(&mint_keypair.pubkey());
         assert_eq!(alice_balance, alice_ref_balance);
 
-        let bob_balance = bank.get_balance(&bob_keypair.pubkey());
+        let bob_balance = bank.active_fork().get_balance_slow(&bob_keypair.pubkey());
         assert_eq!(bob_balance, starting_balance - alice_ref_balance);
 
         tvu.close().expect("close");

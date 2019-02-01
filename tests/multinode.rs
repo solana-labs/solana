@@ -1015,7 +1015,7 @@ fn test_leader_to_validator_transition() {
     .0;
 
     assert_eq!(
-        bank.tick_height(),
+        bank.active_fork().tick_height(),
         fullnode_config.leader_scheduler_config.ticks_per_slot - 1
     );
     remove_dir_all(leader_ledger_path).unwrap();

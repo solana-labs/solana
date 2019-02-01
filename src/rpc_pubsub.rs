@@ -318,6 +318,7 @@ impl RpcSolPubSubImpl {
             .read()
             .unwrap()
             .bank
+            .active_fork()
             .get_signature_status(&signature);
         if status.is_none() {
             self.subscription
@@ -424,7 +425,7 @@ mod tests {
         let bob_pubkey = bob.pubkey();
         let bank = Bank::new(&genesis_block);
         let arc_bank = Arc::new(bank);
-        let last_id = arc_bank.last_id();
+        let last_id = arc_bank.active_fork().last_id();
 
         let rpc_bank = Arc::new(RwLock::new(RpcPubSubBank::new(arc_bank.clone())));
         let rpc = RpcSolPubSubImpl::new(rpc_bank.clone());
@@ -457,7 +458,7 @@ mod tests {
         let bob_pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
         let arc_bank = Arc::new(bank);
-        let last_id = arc_bank.last_id();
+        let last_id = arc_bank.active_fork().last_id();
 
         let (sender, _receiver) = mpsc::channel(1);
         let session = Arc::new(Session::new(sender));
@@ -511,7 +512,7 @@ mod tests {
         let executable = false; // TODO
         let bank = Bank::new(&genesis_block);
         let arc_bank = Arc::new(bank);
-        let last_id = arc_bank.last_id();
+        let last_id = arc_bank.active_fork().last_id();
 
         let rpc_bank = Arc::new(RwLock::new(RpcPubSubBank::new(arc_bank.clone())));
         let rpc = RpcSolPubSubImpl::new(rpc_bank.clone());
@@ -552,7 +553,8 @@ mod tests {
         let string = receiver.poll();
 
         let expected_userdata = arc_bank
-            .get_account(&contract_state.pubkey())
+            .active_fork()
+            .get_account_slow(&contract_state.pubkey())
             .unwrap()
             .userdata;
 
@@ -593,7 +595,8 @@ mod tests {
         // Test signature confirmation notification #2
         let string = receiver.poll();
         let expected_userdata = arc_bank
-            .get_account(&contract_state.pubkey())
+            .active_fork()
+            .get_account_slow(&contract_state.pubkey())
             .unwrap()
             .userdata;
         let expected = json!({
@@ -632,7 +635,8 @@ mod tests {
         sleep(Duration::from_millis(200));
 
         let expected_userdata = arc_bank
-            .get_account(&contract_state.pubkey())
+            .active_fork()
+            .get_account_slow(&contract_state.pubkey())
             .unwrap()
             .userdata;
         let expected = json!({
@@ -707,7 +711,7 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(100);
         let bank = Bank::new(&genesis_block);
         let alice = Keypair::new();
-        let last_id = bank.last_id();
+        let last_id = bank.active_fork().last_id();
         let tx = SystemTransaction::new_program_account(
             &mint_keypair,
             alice.pubkey(),
@@ -732,7 +736,10 @@ mod tests {
             .unwrap()
             .contains_key(&alice.pubkey()));
 
-        let account = bank.get_account(&alice.pubkey()).unwrap();
+        let account = bank
+            .active_fork()
+            .get_account_slow(&alice.pubkey())
+            .unwrap();
         subscriptions.check_account(&alice.pubkey(), &account);
         let string = transport_receiver.poll();
         if let Async::Ready(Some(response)) = string.unwrap() {
@@ -752,7 +759,7 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(100);
         let bank = Bank::new(&genesis_block);
         let alice = Keypair::new();
-        let last_id = bank.last_id();
+        let last_id = bank.active_fork().last_id();
         let tx = SystemTransaction::new_move(&mint_keypair, alice.pubkey(), 20, last_id, 0);
         let signature = tx.signatures[0];
         bank.process_transaction(&tx).unwrap();

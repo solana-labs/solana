@@ -185,8 +185,8 @@ impl Tpu {
             bank.leader_scheduler.clone(),
             entry_receiver,
             max_tick_height,
-            self.exit.clone(),
             blocktree,
+            self.exit.clone(),
         );
 
         let svcs = LeaderServices::new(

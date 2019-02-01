@@ -527,7 +527,6 @@ mod tests {
         );
 
         let mut client = mk_client(&leader_data);
-
         let transaction_count = client.transaction_count();
         assert_eq!(transaction_count, 0);
 

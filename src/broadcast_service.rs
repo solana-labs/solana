@@ -4,8 +4,7 @@ use crate::bank::Bank;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo, DATA_PLANE_FANOUT};
 use crate::counter::Counter;
-use crate::entry::Entry;
-use crate::entry::EntrySlice;
+use crate::entry::{Entry, EntrySlice};
 #[cfg(feature = "erasure")]
 use crate::erasure::CodingGenerator;
 use crate::leader_scheduler::LeaderScheduler;
@@ -94,10 +93,13 @@ impl Broadcast {
             blobs.last().unwrap().write().unwrap().set_is_last_in_slot();
         }
 
+        // TODO: retry this?
         blocktree.write_shared_blobs(&blobs)?;
 
         // Send out data
         ClusterInfo::broadcast(&self.id, contains_last_tick, &broadcast_table, sock, &blobs)?;
+
+        inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
 
         // Fill in the coding blob data from the window data blobs
         #[cfg(feature = "erasure")]
@@ -190,8 +192,8 @@ impl BroadcastService {
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
         receiver: &Receiver<Vec<Entry>>,
         max_tick_height: u64,
-        exit_signal: &Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
+        exit_signal: &Arc<AtomicBool>,
     ) -> BroadcastServiceReturnType {
         let me = cluster_info.read().unwrap().my_data().clone();
 
@@ -257,8 +259,8 @@ impl BroadcastService {
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         receiver: Receiver<Vec<Entry>>,
         max_tick_height: u64,
-        exit_sender: Arc<AtomicBool>,
         blocktree: &Arc<Blocktree>,
+        exit_sender: Arc<AtomicBool>,
     ) -> Self {
         let exit_signal = Arc::new(AtomicBool::new(false));
         let blocktree = blocktree.clone();
@@ -274,8 +276,8 @@ impl BroadcastService {
                     &leader_scheduler,
                     &receiver,
                     max_tick_height,
-                    &exit_signal,
                     &blocktree,
+                    &exit_signal,
                 )
             })
             .unwrap();
@@ -348,8 +350,8 @@ mod test {
             leader_scheduler,
             entry_receiver,
             max_tick_height,
-            exit_sender,
             &blocktree,
+            exit_sender,
         );
 
         MockBroadcastService {

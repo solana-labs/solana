@@ -86,13 +86,13 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         let res = bank.process_transaction(&tx);
         assert!(res.is_ok(), "sanity test transactions");
     });
-    bank.clear_signatures();
+    bank.active_fork().clear_signatures();
     //sanity check, make sure all the transactions can execute in parallel
     let res = bank.process_transactions(&transactions);
     for r in res {
         assert!(r.is_ok(), "sanity parallel execution");
     }
-    bank.clear_signatures();
+    bank.active_fork().clear_signatures();
     let verified: Vec<_> = to_packets_chunked(&transactions.clone(), 192)
         .into_iter()
         .map(|x| {
@@ -114,19 +114,19 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let mut id = genesis_block.last_id();
     for _ in 0..MAX_ENTRY_IDS {
         id = hash(&id.as_ref());
-        bank.register_tick(&id);
+        bank.active_fork().register_tick(&id);
     }
 
     let half_len = verified.len() / 2;
     let mut start = 0;
     bencher.iter(move || {
         // make sure the transactions are still valid
-        bank.register_tick(&genesis_block.last_id());
+        bank.active_fork().register_tick(&genesis_block.last_id());
         for v in verified[start..start + half_len].chunks(verified.len() / num_threads) {
             verified_sender.send(v.to_vec()).unwrap();
         }
         check_txs(&signal_receiver, txes / 2);
-        bank.clear_signatures();
+        bank.active_fork().clear_signatures();
         start += half_len;
         start %= verified.len();
     });
@@ -195,13 +195,13 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         let res = bank.process_transaction(&tx);
         assert!(res.is_ok(), "sanity test transactions");
     });
-    bank.clear_signatures();
+    bank.active_fork().clear_signatures();
     //sanity check, make sure all the transactions can execute in parallel
     let res = bank.process_transactions(&transactions);
     for r in res {
         assert!(r.is_ok(), "sanity parallel execution");
     }
-    bank.clear_signatures();
+    bank.active_fork().clear_signatures();
     let verified: Vec<_> = to_packets_chunked(&transactions.clone(), 96)
         .into_iter()
         .map(|x| {
@@ -223,19 +223,19 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     let mut id = genesis_block.last_id();
     for _ in 0..MAX_ENTRY_IDS {
         id = hash(&id.as_ref());
-        bank.register_tick(&id);
+        bank.active_fork().register_tick(&id);
     }
 
     let half_len = verified.len() / 2;
     let mut start = 0;
     bencher.iter(move || {
         // make sure the transactions are still valid
-        bank.register_tick(&genesis_block.last_id());
+        bank.active_fork().register_tick(&genesis_block.last_id());
         for v in verified[start..start + half_len].chunks(verified.len() / num_threads) {
             verified_sender.send(v.to_vec()).unwrap();
         }
         check_txs(&signal_receiver, txes / 2);
-        bank.clear_signatures();
+        bank.active_fork().clear_signatures();
         start += half_len;
         start %= verified.len();
     });

@@ -206,23 +206,21 @@ mod test {
             Arc::new(RwLock::new(leader_schedule)),
             exit.clone(),
         );
+        let num_blobs = 7;
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let blob_sockets: Vec<Arc<UdpSocket>> =
                 leader_node.sockets.tvu.into_iter().map(Arc::new).collect();
 
             let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
-            let num_blobs_to_make = 10;
             let gossip_address = &leader_node.info.gossip;
-            let msgs =
-                make_consecutive_blobs(num_blobs_to_make, 0, Hash::default(), &gossip_address)
-                    .into_iter()
-                    .rev()
-                    .collect();;
+            let msgs = make_consecutive_blobs(num_blobs, 0, Hash::default(), &gossip_address)
+                .into_iter()
+                .rev()
+                .collect();;
             s_responder.send(msgs).expect("send");
             t_responder
         };
-
         let max_attempts = 10;
         let mut num_attempts = 0;
         let mut q = Vec::new();
@@ -231,7 +229,7 @@ mod test {
             while let Ok(mut nq) = r_retransmit.recv_timeout(Duration::from_millis(500)) {
                 q.append(&mut nq);
             }
-            if q.len() == 10 {
+            if q.len() == num_blobs as usize {
                 break;
             }
             num_attempts += 1;

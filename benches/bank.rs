@@ -12,6 +12,7 @@ use test::Bencher;
 
 #[bench]
 fn bench_process_transaction(bencher: &mut Bencher) {
+    solana_logger::setup();
     let (genesis_block, mint_keypair) = GenesisBlock::new(100_000_000);
     let bank = Bank::new(&genesis_block);
 
@@ -25,14 +26,20 @@ fn bench_process_transaction(bencher: &mut Bencher) {
                 &mint_keypair,
                 rando0.pubkey(),
                 10_000,
-                bank.last_id(),
+                bank.active_fork().last_id(),
                 0,
             );
             assert_eq!(bank.process_transaction(&tx), Ok(()));
 
             // Seed the 'to' account and a cell for its signature.
             let rando1 = Keypair::new();
-            let tx = SystemTransaction::new_move(&rando0, rando1.pubkey(), 1, bank.last_id(), 0);
+            let tx = SystemTransaction::new_move(
+                &rando0,
+                rando1.pubkey(),
+                1,
+                bank.active_fork().last_id(),
+                0,
+            );
             assert_eq!(bank.process_transaction(&tx), Ok(()));
 
             // Finally, return the transaction to the benchmark.
@@ -40,16 +47,16 @@ fn bench_process_transaction(bencher: &mut Bencher) {
         })
         .collect();
 
-    let mut id = bank.last_id();
+    let mut id = bank.active_fork().last_id();
 
-    for _ in 0..(MAX_ENTRY_IDS - 1) {
-        bank.register_tick(&id);
+    for _ in 0..(MAX_ENTRY_IDS / 2) {
+        bank.active_fork().register_tick(&id);
         id = hash(&id.as_ref())
     }
 
     bencher.iter(|| {
         // Since benchmarker runs this multiple times, we need to clear the signatures.
-        bank.clear_signatures();
+        bank.active_fork().clear_signatures();
         let results = bank.process_transactions(&transactions);
         assert!(results.iter().all(Result::is_ok));
     })

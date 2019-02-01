@@ -40,7 +40,7 @@ pub const NUM_THREADS: u32 = 10;
 pub struct BankingStage {
     /// Handle to the stage's thread.
     bank_thread_hdls: Vec<JoinHandle<Option<BankingStageReturnType>>>,
-    poh_service: PohService,
+    poh_waiter_hdl: JoinHandle<Result<()>>,
     compute_confirmation_service: ComputeLeaderConfirmationService,
     max_tick_height: u64,
 }
@@ -62,18 +62,48 @@ impl BankingStage {
         let poh_recorder =
             PohRecorder::new(bank.clone(), entry_sender, *last_entry_id, max_tick_height);
 
+        // TODO: please pass me current slot
+        let current_slot = bank
+            .leader_scheduler
+            .read()
+            .unwrap()
+            .tick_height_to_slot(max_tick_height);
+
         // Single thread to generate entries from many banks.
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
         // Once an entry has been recorded, its last_id is registered with the bank.
-        let poh_service =
-            PohService::new(poh_recorder.clone(), config, to_validator_sender.clone());
+        let poh_service = PohService::new(poh_recorder.clone(), config);
+
+        let poh_exit = poh_service.poh_exit.clone();
+
+        // once poh_service finishes, we freeze the current slot and merge it into the root
+        let poh_waiter_hdl: JoinHandle<Result<()>> = {
+            let bank = bank.clone();
+            let to_validator_sender = to_validator_sender.clone();
+
+            Builder::new()
+                .name("solana-poh-waiter".to_string())
+                .spawn(move || {
+                    let poh_return_value = poh_service.join()?;
+
+                    match poh_return_value {
+                        Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) => {
+                            trace!("leader for slot {} done", current_slot);
+                            bank.fork(current_slot).unwrap().head().freeze();
+                            bank.merge_into_root(current_slot);
+                            to_validator_sender.send(max_tick_height)?
+                        }
+                        _ => (),
+                    }
+
+                    poh_return_value
+                })
+                .unwrap()
+        };
 
         // Single thread to compute confirmation
-        let compute_confirmation_service = ComputeLeaderConfirmationService::new(
-            bank.clone(),
-            leader_id,
-            poh_service.poh_exit.clone(),
-        );
+        let compute_confirmation_service =
+            ComputeLeaderConfirmationService::new(bank.clone(), leader_id, poh_exit.clone());
 
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<Option<BankingStageReturnType>>> = (0
@@ -82,7 +112,8 @@ impl BankingStage {
                 let thread_bank = bank.clone();
                 let thread_verified_receiver = shared_verified_receiver.clone();
                 let thread_poh_recorder = poh_recorder.clone();
-                let thread_banking_exit = poh_service.poh_exit.clone();
+                let thread_banking_exit = poh_exit.clone();
+
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
@@ -105,7 +136,6 @@ impl BankingStage {
                                         break Some(BankingStageReturnType::ChannelDisconnected);
                                     }
                                     Error::BankError(BankError::RecordFailure) => {
-                                        warn!("Bank failed to record");
                                         break Some(BankingStageReturnType::ChannelDisconnected);
                                     }
                                     Error::BankError(BankError::MaxHeightReached) => {
@@ -132,10 +162,11 @@ impl BankingStage {
                     .unwrap()
             })
             .collect();
+
         (
             Self {
                 bank_thread_hdls,
-                poh_service,
+                poh_waiter_hdl,
                 compute_confirmation_service,
                 max_tick_height,
             },
@@ -165,7 +196,7 @@ impl BankingStage {
         while chunk_start != transactions.len() {
             let chunk_end = chunk_start + Entry::num_will_fit(&transactions[chunk_start..]);
 
-            bank.process_and_record_transactions(&transactions[chunk_start..chunk_end], poh)?;
+            bank.process_and_record_transactions(&transactions[chunk_start..chunk_end], Some(poh))?;
 
             chunk_start = chunk_end;
         }
@@ -256,7 +287,10 @@ impl Service for BankingStage {
 
         self.compute_confirmation_service.join()?;
 
-        let poh_return_value = self.poh_service.join()?;
+        let poh_return_value = self.poh_waiter_hdl.join()?;
+
+        trace!("banking_stage join {:?}", poh_return_value);
+
         match poh_return_value {
             Ok(_) => (),
             Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) => {
@@ -294,7 +328,7 @@ mod tests {
             &bank,
             verified_receiver,
             PohServiceConfig::default(),
-            &bank.last_id(),
+            &bank.active_fork().last_id(),
             std::u64::MAX,
             genesis_block.bootstrap_leader_id,
             &to_validator_sender,
@@ -316,7 +350,7 @@ mod tests {
             &bank,
             verified_receiver,
             PohServiceConfig::default(),
-            &bank.last_id(),
+            &bank.active_fork().last_id(),
             std::u64::MAX,
             genesis_block.bootstrap_leader_id,
             &to_validator_sender,
@@ -332,14 +366,14 @@ mod tests {
     fn test_banking_stage_tick() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let start_hash = bank.last_id();
+        let start_hash = bank.active_fork().last_id();
         let (verified_sender, verified_receiver) = channel();
         let (to_validator_sender, _) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
             PohServiceConfig::Sleep(Duration::from_millis(1)),
-            &bank.last_id(),
+            &bank.active_fork().last_id(),
             std::u64::MAX,
             genesis_block.bootstrap_leader_id,
             &to_validator_sender,
@@ -350,7 +384,7 @@ mod tests {
         let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
         assert!(entries.len() != 0);
         assert!(entries.verify(&start_hash));
-        assert_eq!(entries[entries.len() - 1].id, bank.last_id());
+        assert_eq!(entries[entries.len() - 1].id, bank.active_fork().last_id());
         assert_eq!(
             banking_stage.join().unwrap(),
             Some(BankingStageReturnType::ChannelDisconnected)
@@ -361,14 +395,14 @@ mod tests {
     fn test_banking_stage_entries_only() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let start_hash = bank.last_id();
+        let start_hash = bank.active_fork().last_id();
         let (verified_sender, verified_receiver) = channel();
         let (to_validator_sender, _) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
             PohServiceConfig::default(),
-            &bank.last_id(),
+            &bank.active_fork().last_id(),
             std::u64::MAX,
             genesis_block.bootstrap_leader_id,
             &to_validator_sender,
@@ -426,7 +460,7 @@ mod tests {
             &bank,
             verified_receiver,
             PohServiceConfig::default(),
-            &bank.last_id(),
+            &bank.active_fork().last_id(),
             std::u64::MAX,
             genesis_block.bootstrap_leader_id,
             &to_validator_sender,
@@ -479,7 +513,7 @@ mod tests {
                 .iter()
                 .for_each(|x| assert_eq!(*x, Ok(())));
         }
-        assert_eq!(bank.get_balance(&alice.pubkey()), 1);
+        assert_eq!(bank.active_fork().get_balance_slow(&alice.pubkey()), 1);
     }
 
     // Test that when the max_tick_height is reached, the banking stage exits
@@ -495,7 +529,7 @@ mod tests {
             &bank,
             verified_receiver,
             PohServiceConfig::default(),
-            &bank.last_id(),
+            &bank.active_fork().last_id(),
             max_tick_height,
             genesis_block.bootstrap_leader_id,
             &to_validator_sender,
