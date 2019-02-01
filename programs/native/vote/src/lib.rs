@@ -9,13 +9,24 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::solana_entrypoint;
 use solana_sdk::vote_program::{self, Vote, VoteInstruction, VoteState};
 
+// TODO: Deprecate the RegisterAccount instruction and its awkward delegation
+// semantics.
 fn register(keyed_accounts: &mut [KeyedAccount]) -> Result<(), ProgramError> {
     if !vote_program::check_id(&keyed_accounts[1].account.owner) {
         error!("account[1] is not assigned to the VOTE_PROGRAM");
         Err(ProgramError::InvalidArgument)?;
     }
 
-    let vote_state = VoteState::new(*keyed_accounts[0].signer_key().unwrap());
+    // TODO: This assumes keyed_accounts[0] is the SystemInstruction::CreateAccount
+    // that created keyed_accounts[1]. Putting any other signed instruction in
+    // keyed_accounts[0] would allow the owner to highjack the vote account and
+    // insert itself into the leader rotation.
+    let from_id = keyed_accounts[0].signer_key().unwrap();
+
+    // Awkwardly configure the voting account to claim that the account that
+    // initially funded it is both the identity of the staker and the fullnode
+    // that should sign blocks on behalf of the staker.
+    let vote_state = VoteState::new(*from_id, *from_id);
     vote_state.serialize(&mut keyed_accounts[1].account.userdata)?;
 
     Ok(())

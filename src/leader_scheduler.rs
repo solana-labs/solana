@@ -343,7 +343,7 @@ impl LeaderScheduler {
                                     vote.tick_height > lower_bound
                                         && vote.tick_height <= upper_bound
                                 })
-                                .map(|_| vote_state.node_id);
+                                .map(|_| vote_state.staker_id);
                         }
                     }
 
