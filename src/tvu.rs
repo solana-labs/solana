@@ -74,7 +74,7 @@ impl Tvu {
         storage_rotate_count: u64,
         to_leader_sender: TvuRotationSender,
         storage_state: &StorageState,
-        entry_stream: Option<String>,
+        entry_stream: Option<&String>,
     ) -> (Self, BlobSender) {
         let exit = Arc::new(AtomicBool::new(false));
         let keypair: Arc<Keypair> = cluster_info

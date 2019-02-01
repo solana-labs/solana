@@ -114,7 +114,7 @@ impl Fullnode {
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         vote_signer: VoteSignerProxy,
         entrypoint_info_option: Option<&NodeInfo>,
-        config: FullnodeConfig,
+        config: &FullnodeConfig,
     ) -> Self {
         let id = keypair.pubkey();
         let (genesis_block, db_ledger) = Self::make_db_ledger(ledger_path);
@@ -234,7 +234,7 @@ impl Fullnode {
             config.storage_rotate_count,
             to_leader_sender,
             &storage_state,
-            config.entry_stream,
+            config.entry_stream.as_ref(),
         );
         let max_tick_height = {
             let ls_lock = bank.leader_scheduler.read().unwrap();
@@ -462,10 +462,10 @@ impl Service for Fullnode {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::cluster_info::Node;
     use crate::db_ledger::*;
     use crate::entry::make_consecutive_blobs;
-    use crate::fullnode::{Fullnode, FullnodeReturnType};
     use crate::leader_scheduler::{
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
@@ -500,7 +500,7 @@ mod tests {
             Arc::new(RwLock::new(LeaderScheduler::new(&Default::default()))),
             VoteSignerProxy::new(),
             Some(&leader_node.info),
-            Default::default(),
+            &FullnodeConfig::default(),
         );
         validator.close().unwrap();
         remove_dir_all(validator_ledger_path).unwrap();
@@ -532,7 +532,7 @@ mod tests {
                     Arc::new(RwLock::new(LeaderScheduler::new(&Default::default()))),
                     VoteSignerProxy::new(),
                     Some(&leader_node.info),
-                    Default::default(),
+                    &FullnodeConfig::default(),
                 )
             })
             .collect();
@@ -596,7 +596,7 @@ mod tests {
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
             signer,
             Some(&bootstrap_leader_info),
-            Default::default(),
+            &FullnodeConfig::default(),
         );
 
         // Wait for the leader to transition, ticks should cause the leader to
@@ -658,7 +658,7 @@ mod tests {
                 Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
                 VoteSignerProxy::new(),
                 Some(&bootstrap_leader_info),
-                Default::default(),
+                &FullnodeConfig::default(),
             );
 
             assert!(!bootstrap_leader.node_services.tpu.is_leader());
@@ -671,7 +671,7 @@ mod tests {
                 Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
                 VoteSignerProxy::new(),
                 Some(&bootstrap_leader_info),
-                Default::default(),
+                &FullnodeConfig::default(),
             );
 
             assert!(validator.node_services.tpu.is_leader());
@@ -726,7 +726,7 @@ mod tests {
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
             vote_signer,
             Some(&leader_node.info),
-            Default::default(),
+            &FullnodeConfig::default(),
         );
 
         // Send blobs to the validator from our mock leader
@@ -829,7 +829,7 @@ mod tests {
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
             vote_signer,
             Some(&leader_node_info),
-            Default::default(),
+            &FullnodeConfig::default(),
         );
 
         // Hold Tvu bank lock to prevent tvu from making progress

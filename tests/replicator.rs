@@ -60,7 +60,7 @@ fn test_replicator_startup() {
             ))),
             signer_proxy,
             None,
-            fullnode_config,
+            &fullnode_config,
         );
 
         let validator_keypair = Arc::new(Keypair::new());
@@ -79,8 +79,6 @@ fn test_replicator_startup() {
         #[cfg(feature = "chacha")]
         let validator_node_info = validator_node.info.clone();
 
-        let mut fullnode_config = FullnodeConfig::default();
-        fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
         let validator = Fullnode::new(
             validator_node,
             &validator_keypair,
@@ -90,7 +88,7 @@ fn test_replicator_startup() {
             ))),
             signer_proxy,
             Some(&leader_info),
-            fullnode_config,
+            &fullnode_config,
         );
 
         let bob = Keypair::new();
@@ -285,7 +283,7 @@ fn test_replicator_startup_ledger_hang() {
             ))),
             signer_proxy,
             None,
-            Default::default(),
+            &FullnodeConfig::default(),
         );
 
         let validator_keypair = Arc::new(Keypair::new());
@@ -301,7 +299,7 @@ fn test_replicator_startup_ledger_hang() {
             ))),
             signer_proxy,
             Some(&leader_info),
-            Default::default(),
+            &FullnodeConfig::default(),
         );
 
         info!("starting replicator node");
