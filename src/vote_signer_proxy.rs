@@ -1,25 +1,13 @@
 //! The `vote_signer_proxy` votes on the `last_id` of the bank at a regular cadence
 
-use crate::bank::Bank;
 use crate::jsonrpc_core;
-use crate::result::Result;
 use crate::rpc_request::{RpcClient, RpcRequest};
-use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
-use solana_sdk::transaction::Transaction;
-use solana_sdk::vote_transaction::VoteTransaction;
 use solana_vote_signer::rpc::LocalVoteSigner;
 use solana_vote_signer::rpc::VoteSigner;
 use std::net::SocketAddr;
 use std::sync::Arc;
-
-#[derive(Debug, PartialEq, Eq)]
-pub enum VoteError {
-    NoValidSupermajority,
-    NoLeader,
-    LeaderInfoNotFound,
-}
 
 pub struct RemoteVoteSigner {
     rpc_client: RpcClient,
@@ -27,9 +15,8 @@ pub struct RemoteVoteSigner {
 
 impl RemoteVoteSigner {
     pub fn new(signer: SocketAddr) -> Self {
-        Self {
-            rpc_client: RpcClient::new_from_socket(signer),
-        }
+        let rpc_client = RpcClient::new_from_socket(signer);
+        Self { rpc_client }
     }
 }
 
@@ -107,21 +94,4 @@ impl VoteSignerProxy {
     pub fn new_local(keypair: &Arc<Keypair>) -> Self {
         Self::new_with_signer(keypair, Box::new(LocalVoteSigner::default()))
     }
-
-    pub fn new_vote_account(&self, bank: &Bank, num_tokens: u64, last_id: Hash) -> Result<()> {
-        // Create and register the new vote account
-        let tx =
-            Transaction::vote_account_new(&self.keypair, self.vote_account, last_id, num_tokens, 0);
-        bank.process_transaction(&tx)?;
-        Ok(())
-    }
-
-    pub fn validator_vote(&self, bank: &Arc<Bank>) -> Transaction {
-        Transaction::vote_new(self, bank.tick_height(), bank.last_id(), 0)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    //TODO simple tests that cover the signing
 }
