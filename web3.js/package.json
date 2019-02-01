@@ -100,7 +100,7 @@
     "esdoc-standard-plugin": "^1.0.0",
     "eslint": "5.12.1",
     "eslint-config-prettier": "^3.1.0",
-    "eslint-plugin-import": "2.15.0",
+    "eslint-plugin-import": "2.16.0",
     "eslint-plugin-jest": "22.2.2",
     "eslint-plugin-prettier": "^3.0.0",
     "flow-bin": "0.91.0",
