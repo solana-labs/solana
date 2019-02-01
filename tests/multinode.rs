@@ -1673,8 +1673,6 @@ fn test_full_leader_validator_network() {
 }
 
 #[test]
-#[ignore]
-//TODO: This test relies on the tpu managing the ledger, which it no longer does. It cannot work without real tvus
 fn test_broadcast_last_tick() {
     solana_logger::setup();
     // The number of validators
@@ -1757,9 +1755,14 @@ fn test_broadcast_last_tick() {
     info!("Shutting down the leader...");
     bootstrap_leader.close().unwrap();
 
-    let last_tick_entry_height = genesis_ledger_len as u64 + bootstrap_height;
+    let last_tick_entry_height = bootstrap_height - genesis_ledger_len as u64;
     let entries = read_ledger(&bootstrap_leader_ledger_path);
-    assert!(entries.len() >= last_tick_entry_height as usize);
+    assert!(
+        entries.len() >= last_tick_entry_height as usize,
+        "entries: {:?} less than last_tick_entry_height: {:?}",
+        entries.len(),
+        last_tick_entry_height as usize
+    );
     let expected_last_tick = &entries[last_tick_entry_height as usize - 2];
     debug!("last_tick_entry_height: {:?}", last_tick_entry_height);
     debug!("expected_last_tick: {:?}", expected_last_tick);
