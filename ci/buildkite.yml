@@ -19,7 +19,7 @@ steps:
     timeout_in_minutes: 30
   - command: "ci/docker-run.sh solanalabs/rust-nightly:2019-01-31 ci/test-coverage.sh"
     name: "coverage"
-    timeout_in_minutes: 30
+    timeout_in_minutes: 40
   # TODO: Fix and re-enable test-large-network.sh
   # - command: "ci/test-large-network.sh || true"
   #   name: "large-network [ignored]"
