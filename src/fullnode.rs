@@ -364,8 +364,9 @@ impl Fullnode {
                 None => FullnodeReturnType::LeaderToLeaderRotation, // value doesn't matter here...
             };
 
+            self.bank.copy_for_tpu();
             self.node_services.tpu.switch_to_leader(
-                &Arc::new(self.bank.copy_for_tpu()),
+                &self.bank,
                 PohServiceConfig::default(),
                 self.tpu_sockets
                     .iter()
@@ -921,7 +922,8 @@ mod tests {
 
         info!("Make sure the tvu bank has not reached the last tick for the slot (the last tick is ticks_per_slot - 1)");
         {
-            let w_last_ids = leader.bank.last_ids().write().unwrap();
+            let fork_head = leader.bank.test_active_fork();
+            let w_last_ids = fork_head.head().last_ids().write().unwrap();
             assert!(w_last_ids.tick_height < ticks_per_slot - 1);
         }
 

@@ -3,20 +3,15 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 
-use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
-use crate::counter::Counter;
+use crate::bank_delta::BankDelta;
+use crate::bank_fork::BankFork;
 use crate::entry::Entry;
+use crate::forks::{self, Forks, ForksError};
 use crate::genesis_block::GenesisBlock;
-use crate::last_id_queue::{LastIdQueue, MAX_ENTRY_IDS};
 use crate::leader_scheduler::LeaderScheduler;
-use crate::poh_recorder::{PohRecorder, PohRecorderError};
-use crate::result::Error;
+use crate::poh_recorder::PohRecorder;
 use crate::rpc_pubsub::RpcSubscriptions;
-use crate::status_cache::StatusCache;
 use bincode::deserialize;
-use log::Level;
-use rayon::prelude::*;
-use solana_runtime::{self, RuntimeError};
 use solana_sdk::account::Account;
 use solana_sdk::bpf_loader;
 use solana_sdk::budget_program;
@@ -29,14 +24,12 @@ use solana_sdk::signature::Signature;
 use solana_sdk::storage_program;
 use solana_sdk::system_program;
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::timing::duration_as_us;
 use solana_sdk::token_program;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, VoteState};
 use std;
 use std::result;
 use std::sync::{Arc, RwLock};
-use std::time::Instant;
 
 /// Reasons a transaction might be rejected.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -80,6 +73,18 @@ pub enum BankError {
 
     // Poh recorder hit the maximum tick height before leader rotation
     MaxHeightReached,
+
+    /// Fork is not in the Deltas DAG
+    UnknownFork,
+
+    /// The specified trunk is not in the Deltas DAG
+    InvalidTrunk,
+
+    /// Specified base delta is still live
+    DeltaNotFrozen,
+
+    /// Requested live delta is frozen
+    DeltaIsFrozen,
 }
 
 pub type Result<T> = result::Result<T, BankError>;
@@ -89,27 +94,16 @@ pub trait BankSubscriptions {
     fn check_signature(&self, signature: &Signature, status: &Result<()>);
 }
 
-type BankStatusCache = StatusCache<BankError>;
-
 /// Manager for the state of all accounts and programs after processing its entries.
 pub struct Bank {
-    accounts: Accounts,
-
-    /// A cache of signature statuses
-    status_cache: RwLock<BankStatusCache>,
-
-    /// FIFO queue of `last_id` items
-    last_id_queue: RwLock<LastIdQueue>,
-
+    forks: RwLock<Forks>,
     subscriptions: RwLock<Option<Arc<RpcSubscriptions>>>,
 }
 
 impl Default for Bank {
     fn default() -> Self {
         Self {
-            accounts: Accounts::default(),
-            last_id_queue: RwLock::new(LastIdQueue::default()),
-            status_cache: RwLock::new(BankStatusCache::default()),
+            forks: RwLock::new(Forks::default()),
             subscriptions: RwLock::new(None),
         }
     }
@@ -118,9 +112,49 @@ impl Default for Bank {
 impl Bank {
     pub fn new(genesis_block: &GenesisBlock) -> Self {
         let bank = Self::default();
+        let last_id = genesis_block.last_id();
+        bank.init_root(&last_id);
         bank.process_genesis_block(genesis_block);
         bank.add_builtin_programs();
         bank
+    }
+
+    fn init_fork(&self, current: u64, last_id: &Hash, base: u64) -> Result<()> {
+        trace!("new fork current: {} base: {}", current, base);
+        if self.forks.read().unwrap().is_active_fork(current) {
+            let parent = self.forks.read().unwrap().deltas.load(current).unwrap().1;
+            assert_eq!(
+                parent, base,
+                "fork initialised a second time with a different base"
+            );
+            trace!("already active: {}", current);
+            return Ok(());
+        }
+        self.forks
+            .write()
+            .unwrap()
+            .init_fork(current, last_id, base)
+            .map_err(|e| match e {
+                ForksError::UnknownFork => BankError::UnknownFork,
+                ForksError::InvalidTrunk => BankError::InvalidTrunk,
+                ForksError::DeltaNotFrozen => BankError::DeltaNotFrozen,
+                ForksError::DeltaIsFrozen => BankError::DeltaIsFrozen,
+            })
+    }
+
+    #[cfg(test)]
+    pub fn test_active_fork(&self) -> BankFork {
+        self.active_fork()
+    }
+
+    fn active_fork(&self) -> BankFork {
+        self.forks.read().unwrap().active_fork()
+    }
+    fn root(&self) -> BankFork {
+        self.forks.read().unwrap().root()
+    }
+    pub fn fork(&self, slot: u64) -> Option<BankFork> {
+        self.forks.read().unwrap().fork(slot)
     }
 
     pub fn set_subscriptions(&self, subscriptions: Arc<RpcSubscriptions>) {
@@ -128,15 +162,21 @@ impl Bank {
         *sub = Some(subscriptions)
     }
 
-    pub fn copy_for_tpu(&self) -> Self {
-        let mut status_cache = BankStatusCache::default();
-        status_cache.merge_into_root(self.status_cache.read().unwrap().clone());
-        Self {
-            accounts: self.accounts.copy_for_tpu(),
-            status_cache: RwLock::new(status_cache),
-            last_id_queue: RwLock::new(self.last_id_queue.read().unwrap().clone()),
-            subscriptions: RwLock::new(None),
-        }
+    pub fn copy_for_tpu(&self) {
+        let current = self.active_fork().head().fork_id();
+        let last_id = self.active_fork().last_id();
+        self.active_fork().head().freeze();
+        self.merge_into_root(current);
+        self.init_fork(current + 1, &last_id, current)
+            .expect("init_fork");
+    }
+
+    /// Init the root fork.  Only tests should be using this.
+    pub fn init_root(&self, last_id: &Hash) {
+        self.forks
+            .write()
+            .unwrap()
+            .init_root(BankDelta::new(0, &last_id));
     }
 
     fn process_genesis_block(&self, genesis_block: &GenesisBlock) {
@@ -148,12 +188,13 @@ impl Bank {
 
         let mut mint_account = Account::default();
         mint_account.tokens = genesis_block.tokens - genesis_block.bootstrap_leader_tokens;
-        self.accounts
+        self.root()
+            .head()
             .store_slow(true, &genesis_block.mint_id, &mint_account);
 
         let mut bootstrap_leader_account = Account::default();
         bootstrap_leader_account.tokens = genesis_block.bootstrap_leader_tokens - 1;
-        self.accounts.store_slow(
+        self.root().head().store_slow(
             true,
             &genesis_block.bootstrap_leader_id,
             &bootstrap_leader_account,
@@ -177,60 +218,66 @@ impl Bank {
             .serialize(&mut bootstrap_leader_vote_account.userdata)
             .unwrap();
 
-        self.accounts.store_slow(
+        self.root().head().store_slow(
             true,
             &genesis_block.bootstrap_leader_vote_account_id,
             &bootstrap_leader_vote_account,
         );
 
-        self.last_id_queue
-            .write()
-            .unwrap()
-            .genesis_last_id(&genesis_block.last_id());
+        self.root()
+            .head()
+            .set_genesis_last_id(&genesis_block.last_id());
     }
 
     fn add_builtin_programs(&self) {
         let system_program_account = native_loader::create_program_account("solana_system_program");
-        self.accounts
+        self.root()
+            .head()
             .store_slow(true, &system_program::id(), &system_program_account);
 
         let vote_program_account = native_loader::create_program_account("solana_vote_program");
-        self.accounts
+        self.root()
+            .head()
             .store_slow(true, &vote_program::id(), &vote_program_account);
 
         let storage_program_account =
             native_loader::create_program_account("solana_storage_program");
-        self.accounts
+        self.root()
+            .head()
             .store_slow(true, &storage_program::id(), &storage_program_account);
 
         let storage_system_account = Account::new(1, 16 * 1024, storage_program::system_id());
-        self.accounts
+        self.root()
+            .head()
             .store_slow(true, &storage_program::system_id(), &storage_system_account);
 
         let bpf_loader_account = native_loader::create_program_account("solana_bpf_loader");
-        self.accounts
+        self.root()
+            .head()
             .store_slow(true, &bpf_loader::id(), &bpf_loader_account);
 
         let budget_program_account = native_loader::create_program_account("solana_budget_program");
-        self.accounts
+        self.root()
+            .head()
             .store_slow(true, &budget_program::id(), &budget_program_account);
 
         let erc20_account = native_loader::create_program_account("solana_erc20");
-        self.accounts
+        self.root()
+            .head()
             .store_slow(true, &token_program::id(), &erc20_account);
     }
 
     /// Return the last entry ID registered.
     pub fn last_id(&self) -> Hash {
-        self.last_id_queue
-            .read()
-            .unwrap()
-            .last_id
-            .expect("no last_id has been set")
+        self.active_fork().last_id()
     }
 
     pub fn get_storage_entry_height(&self) -> u64 {
-        match self.get_account(&storage_program::system_id()) {
+        //TODO: root or live?
+        match self
+            .active_fork()
+            .get_account_slow(&storage_program::system_id())
+        {
             Some(storage_system_account) => {
                 let state = deserialize(&storage_system_account.userdata);
                 if let Ok(state) = state {
@@ -246,7 +293,10 @@ impl Bank {
     }
 
     pub fn get_storage_last_id(&self) -> Hash {
-        if let Some(storage_system_account) = self.get_account(&storage_program::system_id()) {
+        if let Some(storage_system_account) = self
+            .active_fork()
+            .get_account_slow(&storage_program::system_id())
+        {
             let state = deserialize(&storage_system_account.userdata);
             if let Ok(state) = state {
                 let state: storage_program::StorageProgramState = state;
@@ -256,53 +306,15 @@ impl Bank {
         Hash::default()
     }
 
-    /// Forget all signatures. Useful for benchmarking.
-    pub fn clear_signatures(&self) {
-        self.status_cache.write().unwrap().clear();
-    }
-
-    fn update_subscriptions(&self, txs: &[Transaction], res: &[Result<()>]) {
-        for (i, tx) in txs.iter().enumerate() {
-            if let Some(ref subs) = *self.subscriptions.read().unwrap() {
-                subs.check_signature(&tx.signatures[0], &res[i]);
-            }
-        }
-    }
-    fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
-        let mut status_cache = self.status_cache.write().unwrap();
-        for (i, tx) in txs.iter().enumerate() {
-            match &res[i] {
-                Ok(_) => status_cache.add(&tx.signatures[0]),
-                Err(BankError::LastIdNotFound) => (),
-                Err(BankError::DuplicateSignature) => (),
-                Err(BankError::AccountNotFound) => (),
-                Err(e) => {
-                    status_cache.add(&tx.signatures[0]);
-                    status_cache.save_failure_status(&tx.signatures[0], e.clone());
-                }
-            }
-        }
-    }
-
-    /// Looks through a list of tick heights and stakes, and finds the latest
-    /// tick that has achieved confirmation
-    pub fn get_confirmation_timestamp(
+    #[must_use]
+    pub fn process_and_record_transactions(
         &self,
-        ticks_and_stakes: &mut [(u64, u64)],
-        supermajority_stake: u64,
-    ) -> Option<u64> {
-        let last_ids = self.last_id_queue.read().unwrap();
-        last_ids.get_confirmation_timestamp(ticks_and_stakes, supermajority_stake)
-    }
-
-    /// Tell the bank which Entry IDs exist on the ledger. This function
-    /// assumes subsequent calls correspond to later entries, and will boot
-    /// the oldest ones once its internal cache is full. Once boot, the
-    /// bank will reject transactions using that `last_id`.
-    pub fn register_tick(&self, last_id: &Hash) {
-        let mut last_id_queue = self.last_id_queue.write().unwrap();
-        inc_new_counter_info!("bank-register_tick-registered", 1);
-        last_id_queue.register_tick(last_id);
+        txs: &[Transaction],
+        poh: Option<&PohRecorder>,
+    ) -> Result<Vec<Result<()>>> {
+        let sub = self.subscriptions.read().unwrap();
+        self.active_fork()
+            .process_and_record_transactions(&sub, txs, poh)
     }
 
     /// Process a Transaction. This is used for unit tests and simply calls the vector Bank::process_transactions method.
@@ -317,295 +329,11 @@ impl Bank {
         }
     }
 
-    fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<()>> {
-        self.accounts.lock_accounts(txs)
-    }
-
-    fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
-        self.accounts.unlock_accounts(txs, results)
-    }
-
-    pub fn process_and_record_transactions(
-        &self,
-        txs: &[Transaction],
-        poh: &PohRecorder,
-    ) -> Result<()> {
-        let now = Instant::now();
-        // Once accounts are locked, other threads cannot encode transactions that will modify the
-        // same account state
-        let lock_results = self.lock_accounts(txs);
-        let lock_time = now.elapsed();
-
-        let now = Instant::now();
-        // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
-        // the likelihood of any single thread getting starved and processing old ids.
-        // TODO: Banking stage threads should be prioritized to complete faster then this queue
-        // expires.
-        let (loaded_accounts, results) =
-            self.load_and_execute_transactions(txs, lock_results, MAX_ENTRY_IDS as usize / 2);
-        let load_execute_time = now.elapsed();
-
-        let record_time = {
-            let now = Instant::now();
-            self.record_transactions(txs, &results, poh)?;
-            now.elapsed()
-        };
-
-        let commit_time = {
-            let now = Instant::now();
-            self.commit_transactions(txs, &loaded_accounts, &results);
-            now.elapsed()
-        };
-
-        let now = Instant::now();
-        // Once the accounts are new transactions can enter the pipeline to process them
-        self.unlock_accounts(&txs, &results);
-        let unlock_time = now.elapsed();
-        debug!(
-            "lock: {}us load_execute: {}us record: {}us commit: {}us unlock: {}us txs_len: {}",
-            duration_as_us(&lock_time),
-            duration_as_us(&load_execute_time),
-            duration_as_us(&record_time),
-            duration_as_us(&commit_time),
-            duration_as_us(&unlock_time),
-            txs.len(),
-        );
-        Ok(())
-    }
-
-    fn record_transactions(
-        &self,
-        txs: &[Transaction],
-        results: &[Result<()>],
-        poh: &PohRecorder,
-    ) -> Result<()> {
-        let processed_transactions: Vec<_> = results
-            .iter()
-            .zip(txs.iter())
-            .filter_map(|(r, x)| match r {
-                Ok(_) => Some(x.clone()),
-                Err(BankError::ProgramError(index, err)) => {
-                    info!("program error {:?}, {:?}", index, err);
-                    Some(x.clone())
-                }
-                Err(ref e) => {
-                    debug!("process transaction failed {:?}", e);
-                    None
-                }
-            })
-            .collect();
-        debug!("processed: {} ", processed_transactions.len());
-        // unlock all the accounts with errors which are filtered by the above `filter_map`
-        if !processed_transactions.is_empty() {
-            let hash = Transaction::hash(&processed_transactions);
-            // record and unlock will unlock all the successfull transactions
-            poh.record(hash, processed_transactions).map_err(|e| {
-                warn!("record failure: {:?}", e);
-                match e {
-                    Error::PohRecorderError(PohRecorderError::MaxHeightReached) => {
-                        BankError::MaxHeightReached
-                    }
-                    _ => BankError::RecordFailure,
-                }
-            })?;
-        }
-        Ok(())
-    }
-
-    fn load_accounts(
-        &self,
-        txs: &[Transaction],
-        results: Vec<Result<()>>,
-        error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
-        Accounts::load_accounts(&[&self.accounts], txs, results, error_counters)
-    }
-    fn check_age(
-        &self,
-        txs: &[Transaction],
-        lock_results: Vec<Result<()>>,
-        max_age: usize,
-        error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<()>> {
-        let last_ids = self.last_id_queue.read().unwrap();
-        txs.iter()
-            .zip(lock_results.into_iter())
-            .map(|(tx, lock_res)| {
-                if lock_res.is_ok() && !last_ids.check_entry_id_age(tx.last_id, max_age) {
-                    error_counters.reserve_last_id += 1;
-                    Err(BankError::LastIdNotFound)
-                } else {
-                    lock_res
-                }
-            })
-            .collect()
-    }
-    fn check_signatures(
-        &self,
-        txs: &[Transaction],
-        lock_results: Vec<Result<()>>,
-        error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<()>> {
-        let status_cache = self.status_cache.read().unwrap();
-        txs.iter()
-            .zip(lock_results.into_iter())
-            .map(|(tx, lock_res)| {
-                if lock_res.is_ok() && status_cache.has_signature(&tx.signatures[0]) {
-                    error_counters.duplicate_signature += 1;
-                    Err(BankError::DuplicateSignature)
-                } else {
-                    lock_res
-                }
-            })
-            .collect()
-    }
-    #[allow(clippy::type_complexity)]
-    fn load_and_execute_transactions(
-        &self,
-        txs: &[Transaction],
-        lock_results: Vec<Result<()>>,
-        max_age: usize,
-    ) -> (
-        Vec<Result<(InstructionAccounts, InstructionLoaders)>>,
-        Vec<Result<()>>,
-    ) {
-        debug!("processing transactions: {}", txs.len());
-        let mut error_counters = ErrorCounters::default();
-        let now = Instant::now();
-        let age_results = self.check_age(txs, lock_results, max_age, &mut error_counters);
-        let sig_results = self.check_signatures(txs, age_results, &mut error_counters);
-        let mut loaded_accounts = self.load_accounts(txs, sig_results, &mut error_counters);
-        let tick_height = self.tick_height();
-
-        let load_elapsed = now.elapsed();
-        let now = Instant::now();
-        let executed: Vec<Result<()>> = loaded_accounts
-            .iter_mut()
-            .zip(txs.iter())
-            .map(|(accs, tx)| match accs {
-                Err(e) => Err(e.clone()),
-                Ok((ref mut accounts, ref mut loaders)) => {
-                    solana_runtime::execute_transaction(tx, loaders, accounts, tick_height).map_err(
-                        |RuntimeError::ProgramError(index, err)| {
-                            BankError::ProgramError(index, err)
-                        },
-                    )
-                }
-            })
-            .collect();
-
-        let execution_elapsed = now.elapsed();
-
-        debug!(
-            "load: {}us execute: {}us txs_len={}",
-            duration_as_us(&load_elapsed),
-            duration_as_us(&execution_elapsed),
-            txs.len(),
-        );
-        let mut tx_count = 0;
-        let mut err_count = 0;
-        for (r, tx) in executed.iter().zip(txs.iter()) {
-            if r.is_ok() {
-                tx_count += 1;
-            } else {
-                if err_count == 0 {
-                    info!("tx error: {:?} {:?}", r, tx);
-                }
-                err_count += 1;
-            }
-        }
-        if err_count > 0 {
-            info!("{} errors of {} txs", err_count, err_count + tx_count);
-            inc_new_counter_info!(
-                "bank-process_transactions-account_not_found",
-                error_counters.account_not_found
-            );
-            inc_new_counter_info!("bank-process_transactions-error_count", err_count);
-        }
-
-        self.accounts.increment_transaction_count(tx_count);
-
-        inc_new_counter_info!("bank-process_transactions-txs", tx_count);
-        if 0 != error_counters.last_id_not_found {
-            inc_new_counter_info!(
-                "bank-process_transactions-error-last_id_not_found",
-                error_counters.last_id_not_found
-            );
-        }
-        if 0 != error_counters.reserve_last_id {
-            inc_new_counter_info!(
-                "bank-process_transactions-error-reserve_last_id",
-                error_counters.reserve_last_id
-            );
-        }
-        if 0 != error_counters.duplicate_signature {
-            inc_new_counter_info!(
-                "bank-process_transactions-error-duplicate_signature",
-                error_counters.duplicate_signature
-            );
-        }
-        if 0 != error_counters.insufficient_funds {
-            inc_new_counter_info!(
-                "bank-process_transactions-error-insufficient_funds",
-                error_counters.insufficient_funds
-            );
-        }
-        if 0 != error_counters.account_loaded_twice {
-            inc_new_counter_info!(
-                "bank-process_transactions-account_loaded_twice",
-                error_counters.account_loaded_twice
-            );
-        }
-        (loaded_accounts, executed)
-    }
-
-    fn commit_transactions(
-        &self,
-        txs: &[Transaction],
-        loaded_accounts: &[Result<(InstructionAccounts, InstructionLoaders)>],
-        executed: &[Result<()>],
-    ) {
-        let now = Instant::now();
-        self.accounts
-            .store_accounts(true, txs, executed, loaded_accounts);
-
-        // Check account subscriptions and send notifications
-        self.send_account_notifications(txs, executed, loaded_accounts);
-
-        // once committed there is no way to unroll
-        let write_elapsed = now.elapsed();
-        debug!(
-            "store: {}us txs_len={}",
-            duration_as_us(&write_elapsed),
-            txs.len(),
-        );
-        self.update_transaction_statuses(txs, &executed);
-        self.update_subscriptions(txs, &executed);
-    }
-
-    /// Process a batch of transactions.
-    #[must_use]
-    pub fn load_execute_and_commit_transactions(
-        &self,
-        txs: &[Transaction],
-        lock_results: Vec<Result<()>>,
-        max_age: usize,
-    ) -> Vec<Result<()>> {
-        let (loaded_accounts, executed) =
-            self.load_and_execute_transactions(txs, lock_results, max_age);
-
-        self.commit_transactions(txs, &loaded_accounts, &executed);
-        executed
-    }
-
     #[must_use]
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
-        let lock_results = self.lock_accounts(txs);
-        let results = self.load_execute_and_commit_transactions(txs, lock_results, MAX_ENTRY_IDS);
-        self.unlock_accounts(txs, &results);
-        results
+        self.process_and_record_transactions(txs, None)
+            .expect("record skipped")
     }
-
     pub fn process_entry(&self, entry: &Entry) -> Result<()> {
         if !entry.is_tick() {
             for result in self.process_transactions(&entry.transactions) {
@@ -639,40 +367,6 @@ impl Bank {
         Ok(())
     }
 
-    fn ignore_program_errors(results: Vec<Result<()>>) -> Vec<Result<()>> {
-        results
-            .into_iter()
-            .map(|result| match result {
-                // Entries that result in a ProgramError are still valid and are written in the
-                // ledger so map them to an ok return value
-                Err(BankError::ProgramError(index, err)) => {
-                    info!("program error {:?}, {:?}", index, err);
-                    inc_new_counter_info!("bank-ignore_program_err", 1);
-                    Ok(())
-                }
-                _ => result,
-            })
-            .collect()
-    }
-
-    fn par_execute_entries(&self, entries: &[(&Entry, Vec<Result<()>>)]) -> Result<()> {
-        inc_new_counter_info!("bank-par_execute_entries-count", entries.len());
-        let results: Vec<Result<()>> = entries
-            .into_par_iter()
-            .map(|(e, lock_results)| {
-                let old_results = self.load_execute_and_commit_transactions(
-                    &e.transactions,
-                    lock_results.to_vec(),
-                    MAX_ENTRY_IDS,
-                );
-                let results = Bank::ignore_program_errors(old_results);
-                self.unlock_accounts(&e.transactions, &results);
-                Self::first_err(&results)
-            })
-            .collect();
-        Self::first_err(&results)
-    }
-
     /// process entries in parallel
     /// 1. In order lock accounts for each entry while the lock succeeds, up to a Tick entry
     /// 2. Process the locked group in parallel
@@ -683,13 +377,14 @@ impl Bank {
         entries: &[Entry],
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     ) -> Result<()> {
+        let bank_fork = self.active_fork();
         // accumulator for entries that can be processed in parallel
         let mut mt_group = vec![];
         for entry in entries {
             if entry.is_tick() {
                 // if its a tick, execute the group and register the tick
-                self.par_execute_entries(&mt_group)?;
-                self.register_tick(&entry.id);
+                bank_fork.par_execute_entries(&mt_group)?;
+                bank_fork.register_tick(&entry.id);
                 leader_scheduler
                     .write()
                     .unwrap()
@@ -698,22 +393,24 @@ impl Bank {
                 continue;
             }
             // try to lock the accounts
-            let lock_results = self.lock_accounts(&entry.transactions);
+            let lock_results = bank_fork.head().lock_accounts(&entry.transactions);
             // if any of the locks error out
             // execute the current group
             if Self::first_err(&lock_results).is_err() {
-                self.par_execute_entries(&mt_group)?;
+                bank_fork.par_execute_entries(&mt_group)?;
                 mt_group = vec![];
                 //reset the lock and push the entry
-                self.unlock_accounts(&entry.transactions, &lock_results);
-                let lock_results = self.lock_accounts(&entry.transactions);
+                bank_fork
+                    .head()
+                    .unlock_accounts(&entry.transactions, &lock_results);
+                let lock_results = bank_fork.head().lock_accounts(&entry.transactions);
                 mt_group.push((entry, lock_results));
             } else {
                 // push the entry to the mt_group
                 mt_group.push((entry, lock_results));
             }
         }
-        self.par_execute_entries(&mt_group)?;
+        bank_fork.par_execute_entries(&mt_group)?;
         Ok(())
     }
 
@@ -737,107 +434,82 @@ impl Bank {
         self.process_transaction(&tx).map(|_| signature)
     }
 
-    pub fn read_balance(account: &Account) -> u64 {
-        // TODO: Re-instate budget_program special case?
-        /*
-        if budget_program::check_id(&account.owner) {
-           return budget_program::get_balance(account);
-        }
-        */
-        account.tokens
-    }
-    /// Each program would need to be able to introspect its own state
-    /// this is hard-coded to the Budget language
     pub fn get_balance(&self, pubkey: &Pubkey) -> u64 {
-        self.get_account(pubkey)
-            .map(|x| Self::read_balance(&x))
-            .unwrap_or(0)
+        self.active_fork().get_balance_slow(pubkey)
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
-        Accounts::load_slow(&[&self.accounts], pubkey)
+        self.active_fork().get_account_slow(pubkey)
     }
 
-    pub fn transaction_count(&self) -> u64 {
-        self.accounts.transaction_count()
+    /// Tell the bank which Entry IDs exist on the ledger. This function
+    /// assumes subsequent calls correspond to later entries, and will boot
+    /// the oldest ones once its internal cache is full. Once boot, the
+    /// bank will reject transactions using that `last_id`.
+    pub fn register_tick(&self, last_id: &Hash) {
+        self.active_fork().register_tick(last_id);
     }
 
     pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
-        self.status_cache
-            .read()
-            .unwrap()
-            .get_signature_status(signature)
+        self.active_fork().get_signature_status(signature)
+    }
+
+    pub fn transaction_count(&self) -> u64 {
+        self.active_fork().transaction_count()
     }
 
     pub fn has_signature(&self, signature: &Signature) -> bool {
-        self.status_cache.read().unwrap().has_signature(signature)
+        self.active_fork().head().has_signature(signature)
     }
 
-    /// Hash the `accounts` HashMap. This represents a validator's interpretation
-    ///  of the delta of the ledger since the last vote and up to now
     pub fn hash_internal_state(&self) -> Hash {
-        self.accounts.hash_internal_state()
+        self.active_fork().hash_internal_state()
     }
 
-    fn send_account_notifications(
-        &self,
-        txs: &[Transaction],
-        res: &[Result<()>],
-        loaded: &[Result<(InstructionAccounts, InstructionLoaders)>],
-    ) {
-        for (i, raccs) in loaded.iter().enumerate() {
-            if res[i].is_err() || raccs.is_err() {
-                continue;
-            }
+    pub fn clear_signatures(&self) {
+        self.active_fork().clear_signatures();
+    }
 
-            let tx = &txs[i];
-            let accs = raccs.as_ref().unwrap();
-            for (key, account) in tx.account_keys.iter().zip(accs.0.iter()) {
-                if let Some(ref subs) = *self.subscriptions.read().unwrap() {
-                    subs.check_account(&key, account)
-                }
-            }
-        }
+    pub fn get_confirmation_timestamp(
+        &self,
+        ticks_and_stakes: &mut [(u64, u64)],
+        supermajority_stake: u64,
+    ) -> Option<u64> {
+        self.active_fork()
+            .head()
+            .get_confirmation_timestamp(ticks_and_stakes, supermajority_stake)
     }
 
     pub fn vote_states<F>(&self, cond: F) -> Vec<VoteState>
     where
         F: Fn(&VoteState) -> bool,
     {
-        self.accounts
-            .accounts_db
-            .read()
-            .unwrap()
-            .accounts
-            .values()
-            .filter_map(|account| {
-                if vote_program::check_id(&account.owner) {
-                    if let Ok(vote_state) = VoteState::deserialize(&account.userdata) {
-                        if cond(&vote_state) {
-                            return Some(vote_state);
-                        }
-                    }
-                }
-                None
-            })
-            .collect()
+        self.active_fork().vote_states(cond)
     }
-
     pub fn tick_height(&self) -> u64 {
-        self.last_id_queue.read().unwrap().tick_height
+        self.active_fork().tick_height()
     }
 
-    #[cfg(test)]
-    pub fn last_ids(&self) -> &RwLock<LastIdQueue> {
-        &self.last_id_queue
+    /// An active chain is computed from the leaf_slot
+    /// The base that is a direct descendant of the root and is in the active chain to the leaf
+    /// is merged into root, and any forks not attached to the new root are purged.
+    fn merge_into_root(&self, leaf_slot: u64) {
+        //there is only one base, and its the current live fork
+        self.forks
+            .write()
+            .unwrap()
+            .merge_into_root(forks::ROLLBACK_DEPTH, leaf_slot)
+            .expect("merge into root");
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::bank_fork::BankFork;
     use crate::entry::{next_entries, next_entry, Entry};
     use crate::gen_keys::GenKeys;
+    use crate::poh_recorder::PohRecorder;
     use bincode::serialize;
     use hashbrown::HashSet;
     use solana_sdk::hash::hash;
@@ -1199,79 +871,7 @@ mod tests {
             .unwrap();
         assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
     }
-    #[test]
-    fn test_interleaving_locks() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(3);
-        let bank = Bank::new(&genesis_block);
-        let alice = Keypair::new();
-        let bob = Keypair::new();
 
-        let tx1 = SystemTransaction::new_account(
-            &mint_keypair,
-            alice.pubkey(),
-            1,
-            genesis_block.last_id(),
-            0,
-        );
-        let pay_alice = vec![tx1];
-
-        let lock_result = bank.lock_accounts(&pay_alice);
-        let results_alice =
-            bank.load_execute_and_commit_transactions(&pay_alice, lock_result, MAX_ENTRY_IDS);
-        assert_eq!(results_alice[0], Ok(()));
-
-        // try executing an interleaved transfer twice
-        assert_eq!(
-            bank.transfer(1, &mint_keypair, bob.pubkey(), genesis_block.last_id()),
-            Err(BankError::AccountInUse)
-        );
-        // the second time should fail as well
-        // this verifies that `unlock_accounts` doesn't unlock `AccountInUse` accounts
-        assert_eq!(
-            bank.transfer(1, &mint_keypair, bob.pubkey(), genesis_block.last_id()),
-            Err(BankError::AccountInUse)
-        );
-
-        bank.unlock_accounts(&pay_alice, &results_alice);
-
-        assert_matches!(
-            bank.transfer(2, &mint_keypair, bob.pubkey(), genesis_block.last_id()),
-            Ok(_)
-        );
-    }
-
-    #[test]
-    fn test_first_err() {
-        assert_eq!(Bank::first_err(&[Ok(())]), Ok(()));
-        assert_eq!(
-            Bank::first_err(&[Ok(()), Err(BankError::DuplicateSignature)]),
-            Err(BankError::DuplicateSignature)
-        );
-        assert_eq!(
-            Bank::first_err(&[
-                Ok(()),
-                Err(BankError::DuplicateSignature),
-                Err(BankError::AccountInUse)
-            ]),
-            Err(BankError::DuplicateSignature)
-        );
-        assert_eq!(
-            Bank::first_err(&[
-                Ok(()),
-                Err(BankError::AccountInUse),
-                Err(BankError::DuplicateSignature)
-            ]),
-            Err(BankError::AccountInUse)
-        );
-        assert_eq!(
-            Bank::first_err(&[
-                Err(BankError::AccountInUse),
-                Ok(()),
-                Err(BankError::DuplicateSignature)
-            ]),
-            Err(BankError::AccountInUse)
-        );
-    }
     #[test]
     fn test_par_process_entries_tick() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(1000);
@@ -1503,8 +1103,7 @@ mod tests {
         ];
 
         let mut results = vec![Ok(()), Ok(())];
-        bank.record_transactions(&transactions, &results, &poh_recorder)
-            .unwrap();
+        BankFork::record_transactions(&transactions, &results, &poh_recorder).unwrap();
         let entries = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].transactions.len(), transactions.len());
 
@@ -1513,40 +1112,15 @@ mod tests {
             1,
             ProgramError::ResultWithNegativeTokens,
         ));
-        bank.record_transactions(&transactions, &results, &poh_recorder)
-            .unwrap();
+        BankFork::record_transactions(&transactions, &results, &poh_recorder).unwrap();
         let entries = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].transactions.len(), transactions.len());
 
         // Other BankErrors should not be recorded
         results[0] = Err(BankError::AccountNotFound);
-        bank.record_transactions(&transactions, &results, &poh_recorder)
-            .unwrap();
+        BankFork::record_transactions(&transactions, &results, &poh_recorder).unwrap();
         let entries = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].transactions.len(), transactions.len() - 1);
-    }
-
-    #[test]
-    fn test_bank_ignore_program_errors() {
-        let expected_results = vec![Ok(()), Ok(())];
-        let results = vec![Ok(()), Ok(())];
-        let updated_results = Bank::ignore_program_errors(results);
-        assert_eq!(updated_results, expected_results);
-
-        let results = vec![
-            Err(BankError::ProgramError(
-                1,
-                ProgramError::ResultWithNegativeTokens,
-            )),
-            Ok(()),
-        ];
-        let updated_results = Bank::ignore_program_errors(results);
-        assert_eq!(updated_results, expected_results);
-
-        // Other BankErrors should not be ignored
-        let results = vec![Err(BankError::AccountNotFound), Ok(())];
-        let updated_results = Bank::ignore_program_errors(results);
-        assert_ne!(updated_results, expected_results);
     }
 
     #[test]
@@ -1618,7 +1192,7 @@ mod tests {
             bank.tick_height() + 1,
         );
 
-        bank.process_and_record_transactions(&transactions, &poh_recorder)
+        bank.process_and_record_transactions(&transactions, Some(&poh_recorder))
             .unwrap();
         poh_recorder.tick().unwrap();
 
@@ -1645,7 +1219,7 @@ mod tests {
         )];
 
         assert_eq!(
-            bank.process_and_record_transactions(&transactions, &poh_recorder),
+            bank.process_and_record_transactions(&transactions, Some(&poh_recorder)),
             Err(BankError::MaxHeightReached)
         );
 

@@ -135,8 +135,8 @@ impl BankingStage {
         while chunk_start != transactions.len() {
             let chunk_end = chunk_start + Entry::num_will_fit(&transactions[chunk_start..]);
 
-            let result =
-                bank.process_and_record_transactions(&transactions[chunk_start..chunk_end], poh);
+            let result = bank
+                .process_and_record_transactions(&transactions[chunk_start..chunk_end], Some(poh));
             if Err(BankError::MaxHeightReached) == result {
                 break;
             }

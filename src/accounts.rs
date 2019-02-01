@@ -80,11 +80,11 @@ impl AccountsDB {
         hash(&serialize(&ordered_accounts).unwrap())
     }
 
-    fn load<U>(checkpoints: &[U], pubkey: &Pubkey) -> Option<Account>
+    fn load<U>(deltas: &[U], pubkey: &Pubkey) -> Option<Account>
     where
         U: Deref<Target = Self>,
     {
-        for db in checkpoints {
+        for db in deltas {
             if let Some(account) = db.accounts.get(pubkey) {
                 return Some(account.clone());
             }
@@ -96,7 +96,7 @@ impl AccountsDB {
     pub fn store(&mut self, purge: bool, pubkey: &Pubkey, account: &Account) {
         if account.tokens == 0 {
             if purge {
-                // purge if balance is 0 and no checkpoints
+                // purge if balance is 0 and no deltas
                 self.accounts.remove(pubkey);
             } else {
                 // store default account if balance is 0 and there's a checkpoint
@@ -127,7 +127,7 @@ impl AccountsDB {
         }
     }
     fn load_tx_accounts<U>(
-        checkpoints: &[U],
+        deltas: &[U],
         tx: &Transaction,
         error_counters: &mut ErrorCounters,
     ) -> Result<Vec<Account>>
@@ -148,7 +148,7 @@ impl AccountsDB {
             // If a fee can pay for execution then the program will be scheduled
             let mut called_accounts: Vec<Account> = vec![];
             for key in &tx.account_keys {
-                called_accounts.push(Self::load(checkpoints, key).unwrap_or_default());
+                called_accounts.push(Self::load(deltas, key).unwrap_or_default());
             }
             if called_accounts.is_empty() || called_accounts[0].tokens == 0 {
                 error_counters.account_not_found += 1;
@@ -164,7 +164,7 @@ impl AccountsDB {
     }
 
     fn load_executable_accounts<U>(
-        checkpoints: &[U],
+        deltas: &[U],
         mut program_id: Pubkey,
         error_counters: &mut ErrorCounters,
     ) -> Result<Vec<(Pubkey, Account)>>
@@ -185,7 +185,7 @@ impl AccountsDB {
             }
             depth += 1;
 
-            let program = match Self::load(checkpoints, &program_id) {
+            let program = match Self::load(deltas, &program_id) {
                 Some(program) => program,
                 None => {
                     error_counters.account_not_found += 1;
@@ -207,7 +207,7 @@ impl AccountsDB {
 
     /// For each program_id in the transaction, load its loaders.
     fn load_loaders<U>(
-        checkpoints: &[U],
+        deltas: &[U],
         tx: &Transaction,
         error_counters: &mut ErrorCounters,
     ) -> Result<Vec<Vec<(Pubkey, Account)>>>
@@ -222,13 +222,13 @@ impl AccountsDB {
                     return Err(BankError::AccountNotFound);
                 }
                 let program_id = tx.program_ids[ix.program_ids_index as usize];
-                Self::load_executable_accounts(checkpoints, program_id, error_counters)
+                Self::load_executable_accounts(deltas, program_id, error_counters)
             })
             .collect()
     }
 
     fn load_accounts<U>(
-        checkpoints: &[U],
+        deltas: &[U],
         txs: &[Transaction],
         lock_results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
@@ -240,8 +240,8 @@ impl AccountsDB {
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
                 (tx, Ok(())) => {
-                    let accounts = Self::load_tx_accounts(checkpoints, tx, error_counters)?;
-                    let loaders = Self::load_loaders(checkpoints, tx, error_counters)?;
+                    let accounts = Self::load_tx_accounts(deltas, tx, error_counters)?;
+                    let loaders = Self::load_loaders(deltas, tx, error_counters)?;
                     Ok((accounts, loaders))
                 }
                 (_, Err(e)) => Err(e),
@@ -267,11 +267,11 @@ impl AccountsDB {
 
 impl Accounts {
     /// Slow because lock is held for 1 operation insted of many
-    pub fn load_slow<U>(checkpoints: &[U], pubkey: &Pubkey) -> Option<Account>
+    pub fn load_slow<U>(deltas: &[U], pubkey: &Pubkey) -> Option<Account>
     where
         U: Deref<Target = Self>,
     {
-        let dbs: Vec<_> = checkpoints
+        let dbs: Vec<_> = deltas
             .iter()
             .map(|obj| obj.accounts_db.read().unwrap())
             .collect();
@@ -349,7 +349,7 @@ impl Accounts {
     }
 
     pub fn load_accounts<U>(
-        checkpoints: &[U],
+        deltas: &[U],
         txs: &[Transaction],
         results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
@@ -357,7 +357,7 @@ impl Accounts {
     where
         U: Deref<Target = Self>,
     {
-        let dbs: Vec<_> = checkpoints
+        let dbs: Vec<_> = deltas
             .iter()
             .map(|obj| obj.accounts_db.read().unwrap())
             .collect();

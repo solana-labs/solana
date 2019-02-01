@@ -113,7 +113,7 @@ fn main() {
         }
         ("verify", _) => {
             let bank = Bank::new(&genesis_block);
-            let mut last_id = bank.last_id();
+            let mut last_id = bank.active_fork().last_id();
             let mut num_entries = 0;
             for (i, entry) in entries.enumerate() {
                 if i >= head {
@@ -129,7 +129,7 @@ fn main() {
                 last_id = entry.id;
                 num_entries += 1;
 
-                if let Err(e) = bank.process_entry(&entry) {
+                if let Err(e) = bank.active_fork().process_entries(&[entry]) {
                     eprintln!("verify failed at entry[{}], err: {:?}", i + 2, e);
                     if !matches.is_present("continue") {
                         exit(1);
