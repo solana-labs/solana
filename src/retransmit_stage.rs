@@ -49,9 +49,10 @@ fn compute_retransmit_peers(
         (peers, vec![])
     } else {
         //find my index (my ix is the same as the first node with smaller stake)
-        let my_index = peers
-            .iter()
-            .position(|ci| bank.get_balance(&ci.id) <= bank.get_balance(&my_id));
+        let my_index = peers.iter().position(|ci| {
+            bank.active_fork().get_balance_slow(&ci.id)
+                <= bank.active_fork().get_balance_slow(&my_id)
+        });
         //find my layer
         let locality = ClusterInfo::localize(
             &layer_indices,
@@ -273,7 +274,7 @@ mod tests {
                 //distribute neighbors across threads to maximize parallel compute
                 let batch_ix = *i as usize % batches.len();
                 let node = ContactInfo::new_localhost(Keypair::new().pubkey(), 0);
-                bank.transfer(*i, &mint_keypair, node.id, bank.last_id())
+                bank.transfer(*i, &mint_keypair, node.id, bank.active_fork().last_id())
                     .unwrap();
                 cluster_info.insert_info(node.clone());
                 let (s, r) = channel();
@@ -287,7 +288,10 @@ mod tests {
         let c_info = cluster_info.clone();
 
         // check that all tokens have been exhausted
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 0);
+        assert_eq!(
+            bank.active_fork().get_balance_slow(&mint_keypair.pubkey()),
+            0
+        );
 
         // create some "blobs".
         let blobs: Vec<(_, _)> = (0..100).into_par_iter().map(|i| (i as i32, true)).collect();

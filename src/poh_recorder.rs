@@ -71,7 +71,10 @@ impl PohRecorder {
         last_entry_id: Hash,
         max_tick_height: u64,
     ) -> Self {
-        let poh = Arc::new(Mutex::new(Poh::new(last_entry_id, bank.tick_height())));
+        let poh = Arc::new(Mutex::new(Poh::new(
+            last_entry_id,
+            bank.active_fork().tick_height(),
+        )));
         PohRecorder {
             poh,
             bank,
@@ -109,7 +112,7 @@ impl PohRecorder {
             id: tick.id,
             transactions: vec![],
         };
-        self.bank.register_tick(&tick.id);
+        self.bank.active_fork().register_tick(&tick.id);
         self.sender.send(vec![tick])?;
         Ok(())
     }
@@ -128,7 +131,7 @@ mod tests {
     fn test_poh_recorder() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_id = bank.last_id();
+        let prev_id = bank.active_fork().last_id();
         let (entry_sender, entry_receiver) = channel();
         let mut poh_recorder = PohRecorder::new(bank, entry_sender, prev_id, 2);
 

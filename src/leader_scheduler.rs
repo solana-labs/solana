@@ -133,6 +133,11 @@ impl LeaderScheduler {
         self.ticks_per_slot - tick_height % self.ticks_per_slot - 1
     }
 
+    // Returns the last tick for a given slot
+    pub fn max_tick_height_for_slot(&self, slot: u64) -> u64 {
+        slot * self.ticks_per_slot + self.ticks_per_slot - 1
+    }
+
     // Inform the leader scheduler about the current tick height of the cluster.  It may generate a
     // new schedule as a side-effect.
     pub fn update_tick_height(&mut self, tick_height: u64, bank: &Bank) {
@@ -208,7 +213,8 @@ impl LeaderScheduler {
         );
 
         {
-            let accounts = bank.accounts.accounts_db.read().unwrap();
+            let bank_state = bank.root();
+            let accounts = bank_state.head().accounts.accounts_db.read().unwrap();
             // TODO: iterate through checkpoints, too
             accounts
                 .accounts
@@ -327,7 +333,7 @@ impl LeaderScheduler {
     {
         let mut active_accounts: Vec<(&'a Pubkey, u64)> = active
             .filter_map(|pubkey| {
-                let stake = bank.get_balance(pubkey);
+                let stake = bank.root().get_balance_slow(pubkey);
                 if stake > 0 {
                     Some((pubkey, stake as u64))
                 } else {
@@ -821,7 +827,7 @@ pub mod tests {
             let new_validator = Keypair::new();
             let new_pubkey = new_validator.pubkey();
             tied_validators_pk.push(new_pubkey);
-            assert!(bank.get_balance(&mint_keypair.pubkey()) > 1);
+            assert!(bank.root().get_balance_slow(&mint_keypair.pubkey()) > 1);
             bank.transfer(1, &mint_keypair, new_pubkey, last_id)
                 .unwrap();
         }
@@ -1079,7 +1085,7 @@ pub mod tests {
             "bootstrap_leader_id: {:?}",
             genesis_block.bootstrap_leader_id
         );
-        assert_eq!(bank.tick_height(), 0);
+        assert_eq!(bank.active_fork().tick_height(), 0);
 
         //
         // Check various tick heights in epoch 0 up to the last tick
