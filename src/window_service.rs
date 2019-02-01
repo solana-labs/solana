@@ -320,8 +320,8 @@ mod test {
     #[test]
     pub fn window_send_leader_test2() {
         solana_logger::setup();
-        // setup a leader who's id is used to generates blobs and a validator
-        // node who's window service will retransmit leader blobs.
+        // setup a leader whose id is used to generates blobs and a validator
+        // node whose window service will retransmit leader blobs.
         let leader_node = Node::new_localhost();
         let validator_node = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
