@@ -320,14 +320,18 @@ mod test {
     #[test]
     pub fn window_send_leader_test2() {
         solana_logger::setup();
-        let tn = Node::new_localhost();
+        // setup a leader who's id is used to generates blobs and a validator
+        // node who's window service will retransmit leader blobs.
+        let leader_node = Node::new_localhost();
+        let validator_node = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
-        let cluster_info_me = ClusterInfo::new(tn.info.clone());
-        let me_id = cluster_info_me.my_data().id;
+        let cluster_info_me = ClusterInfo::new(validator_node.info.clone());
+        let me_id = leader_node.info.id;
         let subs = Arc::new(RwLock::new(cluster_info_me));
 
         let (s_reader, r_reader) = channel();
-        let t_receiver = blob_receiver(Arc::new(tn.sockets.gossip), exit.clone(), s_reader);
+        let t_receiver =
+            blob_receiver(Arc::new(leader_node.sockets.gossip), exit.clone(), s_reader);
         let (s_window, _r_window) = channel();
         let (s_retransmit, r_retransmit) = channel();
         let done = Arc::new(AtomicBool::new(false));
@@ -344,7 +348,7 @@ mod test {
             r_reader,
             Some(s_window),
             s_retransmit,
-            Arc::new(tn.sockets.repair),
+            Arc::new(leader_node.sockets.repair),
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(me_id))),
             done,
             exit.clone(),
@@ -352,11 +356,16 @@ mod test {
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let blob_sockets: Vec<Arc<UdpSocket>> =
-                tn.sockets.tvu.into_iter().map(Arc::new).collect();
+                leader_node.sockets.tvu.into_iter().map(Arc::new).collect();
             let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
             let mut msgs = Vec::new();
-            let blobs =
-                make_consecutive_blobs(&me_id, 14u64, 0, Default::default(), &tn.info.gossip);
+            let blobs = make_consecutive_blobs(
+                &me_id,
+                14u64,
+                0,
+                Default::default(),
+                &leader_node.info.gossip,
+            );
 
             for v in 0..10 {
                 let i = 9 - v;
