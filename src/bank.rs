@@ -894,8 +894,8 @@ impl Bank {
     }
 
     #[cfg(test)]
-    pub fn last_ids(&self) -> &RwLock<StatusDeque<Result<()>>> {
-        &self.last_ids
+    pub fn last_ids(&self) -> &RwLock<LastIdQueue> {
+        &self.last_id_queue
     }
 }
 
