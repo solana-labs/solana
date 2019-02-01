@@ -59,6 +59,8 @@ impl ReplayStage {
     #[allow(clippy::too_many_arguments)]
     fn process_entries(
         mut entries: Vec<Entry>,
+        current_slot: u64,
+        base_slot: u64,
         bank: &Arc<Bank>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         voting_keypair: Option<&Arc<VotingKeypair>>,
@@ -79,8 +81,35 @@ impl ReplayStage {
                 .to_owned(),
         );
 
-        let mut res = Ok(());
-        let mut num_entries_to_write = entries.len();
+        let max_tick_height = bank
+            .leader_scheduler
+            .write()
+            .unwrap()
+            .max_tick_height_for_slot(current_slot);
+
+        info!(
+            "entries.len(): {}, bank.tick_height(): {}",
+            entries.len(),
+            bank.active_fork().tick_height()
+        );
+
+        // this code to guard against consuming more ticks in a slot than are actually
+        //  allowed by protocol.  entries beyond max_tick_height are silently discarded
+        // TODO: slash somebody?
+        let mut ticks_left = max_tick_height - bank.active_fork().tick_height();
+        entries.retain(|e| {
+            let retain = ticks_left > 0;
+            if ticks_left > 0 && e.is_tick() {
+                ticks_left -= 1;
+            }
+            retain
+        });
+        info!(
+            "max_tick_height: {} entries.len() up to max_tick_height: {}",
+            max_tick_height,
+            entries.len(),
+        );
+
         let now = Instant::now();
         if !entries.as_slice().verify(&last_entry_id.read().unwrap()) {
             inc_new_counter_info!("replicate_stage-verify-fail", entries.len());
@@ -97,63 +126,51 @@ impl ReplayStage {
             .unwrap()
             .num_ticks_left_in_slot(bank.tick_height());
 
-        for (i, entry) in entries.iter().enumerate() {
-            inc_new_counter_info!("replicate-stage_bank-tick", bank.tick_height() as usize);
-            if entry.is_tick() {
-                if num_ticks_to_next_vote == 0 {
-                    num_ticks_to_next_vote = bank
-                        .leader_scheduler
-                        .read()
-                        .unwrap()
-                        .leader_rotation_interval;
-                }
-                num_ticks_to_next_vote -= 1;
-            }
+        inc_new_counter_info!(
+            "replicate-stage_bank-tick",
+            bank.active_fork().tick_height() as usize
+        );
+        if bank.fork(current_slot).is_none() {
+            bank.init_fork(current_slot, &entries[0].id, base_slot)
+                .expect("init fork");
+        }
+        let res = bank.fork(current_slot).unwrap().process_entries(&entries);
+
+        if res.is_err() {
+            // TODO: This will return early from the first entry that has an erroneous
+            // transaction, instead of processing the rest of the entries in the vector
+            // of received entries. This is in line with previous behavior when
+            // bank.process_entries() was used to process the entries, but doesn't solve the
+            // issue that the bank state was still changed, leading to inconsistencies with the
+            // leader as the leader currently should not be publishing erroneous transactions
             inc_new_counter_info!(
-                "replicate-stage_tick-to-vote",
-                num_ticks_to_next_vote as usize
+                "replicate-stage_failed_process_entries",
+                current_slot as usize
             );
-            // If it's the last entry in the vector, i will be vec len - 1.
-            // If we don't process the entry now, the for loop will exit and the entry
-            // will be dropped.
-            if 0 == num_ticks_to_next_vote || (i + 1) == entries.len() {
-                res = bank.process_entries(&entries[0..=i]);
 
-                if res.is_err() {
-                    // TODO: This will return early from the first entry that has an erroneous
-                    // transaction, instead of processing the rest of the entries in the vector
-                    // of received entries. This is in line with previous behavior when
-                    // bank.process_entries() was used to process the entries, but doesn't solve the
-                    // issue that the bank state was still changed, leading to inconsistencies with the
-                    // leader as the leader currently should not be publishing erroneous transactions
-                    inc_new_counter_info!("replicate-stage_failed_process_entries", i);
-                    break;
-                }
+            res?;
+        }
 
-                if 0 == num_ticks_to_next_vote {
-                    if let Some(voting_keypair) = voting_keypair {
-                        let keypair = voting_keypair.as_ref();
-                        let vote = VoteTransaction::new_vote(
-                            keypair,
-                            bank.tick_height(),
-                            bank.last_id(),
-                            0,
-                        );
-                        cluster_info.write().unwrap().push_vote(vote);
-                    }
+        {
+            let fork = bank.fork(current_slot).expect("current bank state");
+            if fork.tick_height() == max_tick_height {
+                info!("freezing {} from replay_stage", current_slot);
+                fork.head().freeze();
+                bank.merge_into_root(current_slot);
+                if let Some(voting_keypair) = voting_keypair {
+                    let keypair = voting_keypair.as_ref();
+                    let vote =
+                        VoteTransaction::new_vote(keypair, fork.tick_height(), fork.last_id(), 0);
+                    cluster_info.write().unwrap().push_vote(vote);
                 }
-                num_entries_to_write = i + 1;
-                break;
             }
         }
 
         // If leader rotation happened, only write the entries up to leader rotation.
-        entries.truncate(num_entries_to_write);
         *last_entry_id.write().unwrap() = entries
             .last()
             .expect("Entries cannot be empty at this point")
             .id;
-
         inc_new_counter_info!(
             "replicate-transactions",
             entries.iter().map(|x| x.transactions.len()).sum()
@@ -168,8 +185,15 @@ impl ReplayStage {
         }
 
         *entry_height.write().unwrap() += entries_len;
+        let (scheduled_leader, _) = bank
+            .get_current_leader()
+            .expect("Scheduled leader should be calculated by this point");
 
-        res?;
+        // TODO: Remove this soon once we boot the leader from ClusterInfo
+        if scheduled_leader != current_leader {
+            cluster_info.write().unwrap().set_leader(scheduled_leader);
+        }
+
         inc_new_counter_info!(
             "replicate_stage-duration",
             duration_as_ms(&now.elapsed()) as usize
@@ -236,12 +260,20 @@ impl ReplayStage {
                             vec![]
                         }
                     };
+                    // TODO: ledger provides from get_slot_entries()
+                    let base_slot = if current_slot == 0 {
+                        0
+                    } else {
+                        current_slot - 1
+                    };
 
                     let entry_len = entries.len();
                     // Fetch the next entries from the database
                     if !entries.is_empty() {
                         if let Err(e) = Self::process_entries(
                             entries,
+                            current_slot,
+                            base_slot,
                             &bank,
                             &cluster_info,
                             voting_keypair.as_ref(),
@@ -253,10 +285,14 @@ impl ReplayStage {
                             error!("process_entries failed: {:?}", e);
                         }
 
-                        let current_tick_height = bank.tick_height();
+                        let current_tick_height = bank.active_fork().tick_height();
 
-                        // We've reached the end of a slot, reset our state and check
+                        // we've reached the end of a slot, reset our state and check
                         // for leader rotation
+                        info!(
+                            "max_tick_height_for_slot: {} current_tick_height: {}",
+                            max_tick_height_for_slot, current_tick_height
+                        );
                         if max_tick_height_for_slot == current_tick_height {
                             // Check for leader rotation
                             let leader_id = Self::get_leader_for_next_tick(&bank);
@@ -264,7 +300,12 @@ impl ReplayStage {
                             // TODO: Remove this soon once we boot the leader from ClusterInfo
                             cluster_info.write().unwrap().set_leader(leader_id);
 
+                            info!(
+                                "leader_id: {} last_leader_id: {} my_id: {}",
+                                leader_id, last_leader_id, my_id
+                            );
                             if leader_id != last_leader_id && my_id == leader_id {
+                                info!("triggering leader rotation");
                                 to_leader_sender
                                     .send(TvuReturnType::LeaderRotation(
                                         current_tick_height,
@@ -549,7 +590,13 @@ mod test {
             );
 
             let keypair = voting_keypair.as_ref();
-            let vote = VoteTransaction::new_vote(keypair, bank.tick_height(), bank.last_id(), 0);
+            let vote = VoteTransaction::new_vote(
+                keypair,
+                bank.active_fork().tick_height(),
+                bank.active_fork().last_id(),
+                0,
+            );
+
             cluster_info_me.write().unwrap().push_vote(vote);
 
             // Send ReplayStage an entry, should see it on the ledger writer receiver
@@ -668,7 +715,12 @@ mod test {
             );
 
             let keypair = voting_keypair.as_ref();
-            let vote = VoteTransaction::new_vote(keypair, bank.tick_height(), bank.last_id(), 0);
+            let vote = VoteTransaction::new_vote(
+                keypair,
+                bank.active_fork().tick_height(),
+                bank.active_fork().last_id(),
+                0,
+            );
             cluster_info_me.write().unwrap().push_vote(vote);
 
             // Send enough ticks to trigger leader rotation
@@ -728,6 +780,7 @@ mod test {
 
     #[test]
     fn test_replay_stage_poh_error_entry_receiver() {
+        solana_logger::setup();
         // Set up dummy node to host a ReplayStage
         let my_keypair = Keypair::new();
         let my_id = my_keypair.pubkey();
@@ -735,22 +788,28 @@ mod test {
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
         let (ledger_entry_sender, _ledger_entry_receiver) = channel();
-        let last_entry_id = Hash::default();
-
+        let genesis_block = GenesisBlock::new(10_000);
+        let last_entry_id = genesis_block.last_id();
         let entry_height = 0;
-        let mut last_id = Hash::default();
+        let bank = Arc::new(Bank::new(&genesis_block));
+
         let mut entries = Vec::new();
-        for _ in 0..5 {
-            let entry = Entry::new(&mut last_id, 0, 1, vec![]); //just ticks
-            last_id = entry.id;
-            entries.push(entry);
+        {
+            let mut last_id = last_entry_id;
+            for _ in 0..5 {
+                let entry = Entry::new(&last_id, 0, 1, vec![]); //just ticks
+                last_id = entry.id;
+                entries.push(entry);
+            }
         }
 
         let my_keypair = Arc::new(my_keypair);
         let voting_keypair = Arc::new(VotingKeypair::new_local(&my_keypair));
         let res = ReplayStage::process_entries(
             entries.clone(),
-            &Arc::new(Bank::new(&GenesisBlock::new(10_000).0)),
+            0,
+            0,
+            &bank,
             &cluster_info_me,
             Some(&voting_keypair),
             &ledger_entry_sender,
@@ -772,7 +831,9 @@ mod test {
 
         let res = ReplayStage::process_entries(
             entries.clone(),
-            &Arc::new(Bank::default()),
+            0,
+            0,
+            &bank,
             &cluster_info_me,
             Some(&voting_keypair),
             &ledger_entry_sender,
@@ -808,6 +869,8 @@ mod test {
 
         let entry_height = 0;
         let mut last_id = Hash::default();
+        let bank = Bank::default();
+        bank.init_root(&last_id);
         let mut entries = Vec::new();
         let mut expected_entries = Vec::new();
         for _ in 0..5 {
@@ -822,6 +885,8 @@ mod test {
         let bank = Bank::new(&GenesisBlock::new(123).0);
         ReplayStage::process_entries(
             entries.clone(),
+            0,
+            0,
             &Arc::new(bank),
             &cluster_info_me,
             Some(&voting_keypair),

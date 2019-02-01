@@ -3,7 +3,7 @@
 //! messages to the network directly. The binary encoding of its messages are
 //! unstable and may change in future releases.
 
-use crate::bank::Bank;
+use crate::bank_fork::BankFork;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
 use crate::fullnode::{Fullnode, FullnodeConfig};
 use crate::gossip_service::GossipService;
@@ -198,7 +198,7 @@ impl ThinClient {
         // In the future custom contracts would need their own introspection
         self.balances
             .get(pubkey)
-            .map(Bank::read_balance)
+            .map(BankFork::read_balance)
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "AccountNotFound"))
     }
 
@@ -495,7 +495,6 @@ mod tests {
         );
 
         let mut client = mk_client(&leader_data);
-
         let transaction_count = client.transaction_count();
         assert_eq!(transaction_count, 0);
 

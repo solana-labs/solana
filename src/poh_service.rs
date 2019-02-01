@@ -144,7 +144,7 @@ mod tests {
     fn test_poh_service() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_id = bank.last_id();
+        let prev_id = bank.active_fork().last_id();
         let (entry_sender, entry_receiver) = channel();
         let poh_recorder = PohRecorder::new(bank, entry_sender, prev_id, std::u64::MAX);
         let exit = Arc::new(AtomicBool::new(false));

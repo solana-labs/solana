@@ -212,8 +212,8 @@ impl LeaderScheduler {
         );
 
         {
-            let accounts = bank.accounts.accounts_db.read().unwrap();
-
+            let bank_state = bank.root();
+            let accounts = bank_state.head().accounts.accounts_db.read().unwrap();
             // TODO: iterate through checkpoints, too
             accounts
                 .accounts
@@ -337,7 +337,7 @@ impl LeaderScheduler {
     {
         let mut active_accounts: Vec<(&'a Pubkey, u64)> = active
             .filter_map(|pubkey| {
-                let stake = bank.get_balance(pubkey);
+                let stake = bank.root().get_balance(pubkey);
                 if stake > 0 {
                     Some((pubkey, stake as u64))
                 } else {
@@ -1120,7 +1120,7 @@ pub mod tests {
             "bootstrap_leader_id: {:?}",
             genesis_block.bootstrap_leader_id
         );
-        assert_eq!(bank.tick_height(), 0);
+        assert_eq!(bank.active_fork().tick_height(), 0);
 
         //
         // tick_height == 0 is a special case

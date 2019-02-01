@@ -3,15 +3,14 @@
 use crate::bank::Bank;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo, DATA_PLANE_FANOUT};
 use crate::counter::Counter;
-use crate::entry::Entry;
-use crate::entry::EntrySlice;
+use crate::db_ledger::DbLedger;
+use crate::entry::{Entry, EntrySlice};
 #[cfg(feature = "erasure")]
 use crate::erasure::CodingGenerator;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::packet::index_blobs;
 use crate::result::{Error, Result};
 use crate::service::Service;
-use crate::streamer::BlobSender;
 use log::Level;
 use rayon::prelude::*;
 use solana_metrics::{influxdb, submit};
@@ -47,7 +46,7 @@ impl Broadcast {
         receiver: &Receiver<Vec<Entry>>,
         sock: &UdpSocket,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-        blob_sender: &BlobSender,
+        db_ledger: &Arc<DbLedger>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let entries = receiver.recv_timeout(timer)?;
@@ -84,19 +83,22 @@ impl Broadcast {
         // TODO: blob_index should be slot-relative...
         index_blobs(&blobs, &self.id, self.blob_index, &slots);
 
+        // TODO: retry this?
+        db_ledger
+            .write_consecutive_blobs(&blobs)
+            .expect("ledger recording failed for leader");
+
         let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
 
         let broadcast_start = Instant::now();
-
-        inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
-
-        blob_sender.send(blobs.clone())?;
 
         // don't count coding blobs in the blob indexes
         self.blob_index += blobs.len() as u64;
 
         // Send out data
         ClusterInfo::broadcast(&self.id, last_tick, &broadcast_table, sock, &blobs)?;
+
+        inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
 
         // Fill in the coding blob data from the window data blobs
         #[cfg(feature = "erasure")]
@@ -188,8 +190,8 @@ impl BroadcastService {
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
         receiver: &Receiver<Vec<Entry>>,
         max_tick_height: u64,
+        db_ledger: &Arc<DbLedger>,
         exit_signal: &Arc<AtomicBool>,
-        blob_sender: &BlobSender,
     ) -> BroadcastServiceReturnType {
         let me = cluster_info.read().unwrap().my_data().clone();
 
@@ -214,7 +216,7 @@ impl BroadcastService {
                 receiver,
                 sock,
                 leader_scheduler,
-                blob_sender,
+                db_ledger,
             ) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) | Error::SendError => {
@@ -254,11 +256,11 @@ impl BroadcastService {
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         receiver: Receiver<Vec<Entry>>,
         max_tick_height: u64,
+        db_ledger: &Arc<DbLedger>,
         exit_sender: Arc<AtomicBool>,
-        blob_sender: &BlobSender,
     ) -> Self {
         let exit_signal = Arc::new(AtomicBool::new(false));
-        let blob_sender = blob_sender.clone();
+        let db_ledger = db_ledger.clone();
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
@@ -271,8 +273,8 @@ impl BroadcastService {
                     &leader_scheduler,
                     &receiver,
                     max_tick_height,
+                    &db_ledger,
                     &exit_signal,
-                    &blob_sender,
                 )
             })
             .unwrap();
@@ -336,8 +338,6 @@ mod test {
         let exit_sender = Arc::new(AtomicBool::new(false));
         let bank = Arc::new(Bank::default());
 
-        let (blob_fetch_sender, _) = channel();
-
         // Start up the broadcast stage
         let broadcast_service = BroadcastService::new(
             bank.clone(),
@@ -347,8 +347,8 @@ mod test {
             leader_scheduler,
             entry_receiver,
             max_tick_height,
+            &db_ledger,
             exit_sender,
-            &blob_fetch_sender,
         );
 
         MockBroadcastService {

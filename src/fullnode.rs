@@ -11,7 +11,6 @@ use crate::rpc::JsonRpcService;
 use crate::rpc_pubsub::PubSubService;
 use crate::service::Service;
 use crate::storage_stage::StorageState;
-use crate::streamer::BlobSender;
 use crate::tpu::{Tpu, TpuReturnType};
 use crate::tvu::{Sockets, Tvu, TvuReturnType};
 use crate::voting_keypair::VotingKeypair;
@@ -97,13 +96,13 @@ pub struct Fullnode {
     rpc_pubsub_service: Option<PubSubService>,
     gossip_service: GossipService,
     bank: Arc<Bank>,
+    db_ledger: Arc<DbLedger>,
     cluster_info: Arc<RwLock<ClusterInfo>>,
     sigverify_disabled: bool,
     tpu_sockets: Vec<UdpSocket>,
     broadcast_socket: UdpSocket,
     pub node_services: NodeServices,
     pub role_notifiers: (TvuRotationReceiver, TpuRotationReceiver),
-    blob_sender: BlobSender,
 }
 
 impl Fullnode {
@@ -239,7 +238,7 @@ impl Fullnode {
         let (to_leader_sender, to_leader_receiver) = channel();
         let (to_validator_sender, to_validator_receiver) = channel();
 
-        let (tvu, blob_sender) = Tvu::new(
+        let tvu = Tvu::new(
             voting_keypair_option,
             &bank,
             entry_height,
@@ -255,7 +254,7 @@ impl Fullnode {
             ledger_signal_receiver,
         );
         let tpu = Tpu::new(
-            &Arc::new(bank.copy_for_tpu()),
+            &bank,
             Default::default(),
             node.sockets
                 .tpu
@@ -274,7 +273,7 @@ impl Fullnode {
             id,
             scheduled_leader == id,
             &to_validator_sender,
-            &blob_sender,
+            &db_ledger,
         );
 
         inc_new_counter_info!("fullnode-new", 1);
@@ -283,6 +282,7 @@ impl Fullnode {
             id,
             cluster_info,
             bank,
+            db_ledger,
             sigverify_disabled: config.sigverify_disabled,
             gossip_service,
             rpc_service: Some(rpc_service),
@@ -292,7 +292,6 @@ impl Fullnode {
             tpu_sockets: node.sockets.tpu,
             broadcast_socket: node.sockets.broadcast,
             role_notifiers: (to_leader_receiver, to_validator_receiver),
-            blob_sender,
         }
     }
 
@@ -378,7 +377,7 @@ impl Fullnode {
         let (to_validator_sender, to_validator_receiver) = channel();
         self.role_notifiers.1 = to_validator_receiver;
         self.node_services.tpu.switch_to_leader(
-            &Arc::new(self.bank.copy_for_tpu()),
+            &self.bank, //TODO: what slot should be `live`?
             Default::default(),
             self.tpu_sockets
                 .iter()
@@ -394,7 +393,7 @@ impl Fullnode {
             &last_entry_id,
             self.id,
             &to_validator_sender,
-            &self.blob_sender,
+            &self.db_ledger,
         )
     }
 
@@ -625,6 +624,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_leader_to_leader_transition() {
         solana_logger::setup();
 
@@ -847,7 +847,7 @@ mod tests {
         let (bank, entry_height, _) = Fullnode::new_bank_from_ledger(&validator_ledger_path, None);
 
         assert!(
-            bank.tick_height()
+            bank.active_fork().tick_height()
                 >= fullnode_config
                     .leader_scheduler_config
                     .seed_rotation_interval
@@ -902,7 +902,8 @@ mod tests {
 
         info!("Hold Tvu bank lock to prevent tvu from making progress");
         {
-            let w_last_ids = leader.bank.last_ids().write().unwrap();
+            let bank_state = leader.bank.active_fork();
+            let w_last_ids = bank_state.head().last_ids().write().unwrap();
 
             info!("Wait for leader -> validator transition");
             let signal = leader
