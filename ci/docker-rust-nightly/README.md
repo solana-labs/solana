@@ -15,7 +15,7 @@ To update the pinned version:
 1. Run `ci/docker-rust-nightly/build.sh` to rebuild the nightly image locally,
    or potentially `ci/docker-rust-nightly/build.sh YYYY-MM-DD` if there's a
    specific YYYY-MM-DD that is desired (default is today's build).
-1. Run `SOLANA_DOCKER_RUN_NOSETUID=1 ci/docker-run.sh --nopull solanalabs/rust-nightly:YYYY-MM-DD ci/test-nightly.sh`
+1. Run `SOLANA_DOCKER_RUN_NOSETUID=1 ci/docker-run.sh --nopull solanalabs/rust-nightly:YYYY-MM-DD ci/test-coverage.sh`
    to confirm the new nightly image builds.  Fix any issues as needed
 1. Run `docker login` to enable pushing images to Docker Hub, if you're authorized.
 1. Run `CI=true ci/docker-rust-nightly/build.sh YYYY-MM-DD` to push the new nightly image to dockerhub.com.
