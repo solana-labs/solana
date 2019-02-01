@@ -56,7 +56,7 @@ fn main() {
     });
 
     let db_ledger = match DbLedger::open(ledger_path) {
-        Ok(db_ledger) => db_ledger,
+        Ok((db_ledger, _, _)) => db_ledger,
         Err(err) => {
             eprintln!("Failed to open ledger at {}: {}", ledger_path, err);
             exit(1);

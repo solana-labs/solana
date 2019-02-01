@@ -144,7 +144,7 @@ mod tests {
         solana_logger::setup();
         let ledger_dir = "chacha_test_encrypt_file";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
-        let db_ledger = Arc::new(DbLedger::open(&ledger_path).unwrap());
+        let db_ledger = Arc::new(DbLedger::open(&ledger_path).unwrap().0);
         let out_path = Path::new("test_chacha_encrypt_file_output.txt.enc");
 
         let entries = make_tiny_deterministic_test_entries(32);

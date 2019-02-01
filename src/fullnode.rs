@@ -24,7 +24,7 @@ use std::net::UdpSocket;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender, SyncSender};
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::thread::Result;
@@ -117,7 +117,8 @@ impl Fullnode {
         config: &FullnodeConfig,
     ) -> Self {
         let id = keypair.pubkey();
-        let (genesis_block, db_ledger) = Self::make_db_ledger(ledger_path);
+        let (genesis_block, db_ledger, ledger_signal_sender, ledger_signal_receiver) =
+            Self::make_db_ledger(ledger_path);
         let (bank, entry_height, last_entry_id) =
             Self::new_bank_from_db_ledger(&genesis_block, &db_ledger, leader_scheduler);
 
@@ -235,6 +236,8 @@ impl Fullnode {
             to_leader_sender,
             &storage_state,
             config.entry_stream.as_ref(),
+            ledger_signal_sender,
+            ledger_signal_receiver,
         );
         let max_tick_height = {
             let ls_lock = bank.leader_scheduler.read().unwrap();
@@ -424,7 +427,7 @@ impl Fullnode {
         ledger_path: &str,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> (Bank, u64, Hash) {
-        let (genesis_block, db_ledger) = Self::make_db_ledger(ledger_path);
+        let (genesis_block, db_ledger, _, _) = Self::make_db_ledger(ledger_path);
         Self::new_bank_from_db_ledger(&genesis_block, &db_ledger, leader_scheduler)
     }
 
@@ -432,14 +435,19 @@ impl Fullnode {
         &self.bank.leader_scheduler
     }
 
-    fn make_db_ledger(ledger_path: &str) -> (GenesisBlock, Arc<DbLedger>) {
-        let db_ledger = Arc::new(
-            DbLedger::open(ledger_path).expect("Expected to successfully open database ledger"),
-        );
-
+    fn make_db_ledger(
+        ledger_path: &str,
+    ) -> (
+        GenesisBlock,
+        Arc<DbLedger>,
+        SyncSender<bool>,
+        Receiver<bool>,
+    ) {
+        let (db_ledger, l_sender, l_receiver) =
+            DbLedger::open(ledger_path).expect("Expected to successfully open database ledger");
         let genesis_block =
             GenesisBlock::load(ledger_path).expect("Expected to successfully open genesis block");
-        (genesis_block, db_ledger)
+        (genesis_block, Arc::new(db_ledger), l_sender, l_receiver)
     }
 }
 
@@ -901,7 +909,7 @@ mod tests {
             num_ending_ticks,
         );
 
-        let db_ledger = DbLedger::open(&ledger_path).unwrap();
+        let db_ledger = DbLedger::open(&ledger_path).unwrap().0;
         db_ledger
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,

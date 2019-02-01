@@ -441,7 +441,7 @@ mod test {
         let slot = DEFAULT_SLOT_HEIGHT;
 
         let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes_sanity");
-        let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+        let (db_ledger, _, _) = DbLedger::open(&db_ledger_path).unwrap();
 
         // Early exit conditions
         let empty: Vec<u64> = vec![];
@@ -485,7 +485,7 @@ mod test {
     pub fn test_find_missing_data_indexes() {
         let slot = DEFAULT_SLOT_HEIGHT;
         let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes");
-        let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+        let (db_ledger, _, _) = DbLedger::open(&db_ledger_path).unwrap();
 
         // Write entries
         let gap = 10;
@@ -569,7 +569,7 @@ mod test {
     pub fn test_no_missing_blob_indexes() {
         let slot = DEFAULT_SLOT_HEIGHT;
         let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes");
-        let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+        let (db_ledger, _, _) = DbLedger::open(&db_ledger_path).unwrap();
 
         // Write entries
         let num_entries = 10;
@@ -660,7 +660,7 @@ mod test {
         let mut leader_scheduler = LeaderScheduler::from_bootstrap_leader(leader_keypair.pubkey());
 
         let db_ledger_path = get_tmp_ledger_path("test_process_blob");
-        let db_ledger = Arc::new(DbLedger::open(&db_ledger_path).unwrap());
+        let db_ledger = Arc::new(DbLedger::open(&db_ledger_path).unwrap().0);
 
         // Mock the tick height to look like the tick height right after a leader transition
         leader_scheduler.last_seed_height = None;

@@ -639,8 +639,9 @@ pub mod test {
         window: &[WindowSlot],
         use_random: bool,
     ) -> DbLedger {
-        let db_ledger =
-            DbLedger::open(ledger_path).expect("Expected to be able to open database ledger");
+        let db_ledger = DbLedger::open(ledger_path)
+            .expect("Expected to be able to open database ledger")
+            .0;
         for slot in window {
             if let Some(ref data) = slot.data {
                 // If we're using gibberish blobs, skip validation checks and insert

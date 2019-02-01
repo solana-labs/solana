@@ -24,7 +24,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
 use solana_sdk::vote_transaction::VoteTransaction;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc::channel;
+use std::sync::mpsc::{channel, Receiver, SyncSender};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Instant;
@@ -52,7 +52,7 @@ impl Drop for Finalizer {
 pub struct ReplayStage {
     t_replay: JoinHandle<()>,
     exit: Arc<AtomicBool>,
-    db_ledger: Arc<DbLedger>,
+    ledger_signal_sender: SyncSender<bool>,
 }
 
 impl ReplayStage {
@@ -207,6 +207,8 @@ impl ReplayStage {
         last_entry_id: Arc<RwLock<Hash>>,
         to_leader_sender: TvuRotationSender,
         entry_stream: Option<&String>,
+        ledger_signal_sender: SyncSender<bool>,
+        ledger_signal_receiver: Receiver<bool>,
     ) -> (Self, EntryReceiver) {
         let (ledger_entry_sender, ledger_entry_receiver) = channel();
         let mut entry_stream = entry_stream.cloned().map(EntryStream::new);
@@ -221,7 +223,6 @@ impl ReplayStage {
             .unwrap()
             .max_tick_height_for_slot(current_slot);
 
-        let db_ledger_ = db_ledger.clone();
         let exit_ = exit.clone();
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
@@ -296,23 +297,10 @@ impl ReplayStage {
 
                     // Block until there are updates again
                     {
-                        let (cvar, lock) = &db_ledger.new_blobs_signal;
-                        let mut has_updates = lock.lock().unwrap();
-                        loop {
-                            // Check for exit signal
-                            if exit_.load(Ordering::Relaxed) {
-                                break 'outer;
-                            }
-
-                            // Check boolean predicate to protect against spurious wakeups
-                            if !*has_updates {
-                                has_updates = cvar.wait(has_updates).unwrap();
-                            } else {
-                                break;
-                            }
+                        if ledger_signal_receiver.recv().is_err() {
+                            // Update disconnected, exit
+                            break 'outer;
                         }
-
-                        *has_updates = false;
                     }
                 }
             })
@@ -322,7 +310,7 @@ impl ReplayStage {
             Self {
                 t_replay,
                 exit,
-                db_ledger: db_ledger_,
+                ledger_signal_sender,
             },
             ledger_entry_receiver,
         )
@@ -334,10 +322,8 @@ impl ReplayStage {
     }
 
     pub fn exit(&self) {
-        let (cvar, lock) = &self.db_ledger.new_blobs_signal;
         self.exit.store(true, Ordering::Relaxed);
-        let _ = lock.lock().unwrap();
-        cvar.notify_all();
+        let _ = self.ledger_signal_sender.send(true);
     }
 
     fn get_leader(bank: &Bank, cluster_info: &Arc<RwLock<ClusterInfo>>) -> Pubkey {
@@ -438,7 +424,8 @@ mod test {
             let leader_scheduler =
                 Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
 
-            let db_ledger = Arc::new(DbLedger::open(&my_ledger_path).unwrap());
+            let (db_ledger, l_sender, l_receiver) = DbLedger::open(&my_ledger_path).unwrap();
+            let db_ledger = Arc::new(db_ledger);
             db_ledger
                 .write_entries(
                     DEFAULT_SLOT_HEIGHT,
@@ -469,6 +456,8 @@ mod test {
                 Arc::new(RwLock::new(last_entry_id)),
                 rotation_sender,
                 None,
+                l_sender,
+                l_receiver,
             );
 
             // Send enough ticks to trigger leader rotation
@@ -567,7 +556,8 @@ mod test {
         let voting_keypair = Arc::new(VotingKeypair::new_local(&my_keypair));
         let (to_leader_sender, _) = channel();
         {
-            let db_ledger = Arc::new(DbLedger::open(&my_ledger_path).unwrap());
+            let (db_ledger, l_sender, l_receiver) = DbLedger::open(&my_ledger_path).unwrap();
+            let db_ledger = Arc::new(db_ledger);
             // Set up the bank
             let genesis_block = GenesisBlock::load(&my_ledger_path)
                 .expect("Expected to successfully open genesis block");
@@ -585,6 +575,8 @@ mod test {
                 Arc::new(RwLock::new(last_entry_id)),
                 to_leader_sender,
                 None,
+                l_sender,
+                l_receiver,
             );
 
             let keypair = voting_keypair.as_ref();
@@ -669,7 +661,8 @@ mod test {
         let (rotation_tx, rotation_rx) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         {
-            let db_ledger = Arc::new(DbLedger::open(&my_ledger_path).unwrap());
+            let (db_ledger, l_sender, l_receiver) = DbLedger::open(&my_ledger_path).unwrap();
+            let db_ledger = Arc::new(db_ledger);
             db_ledger
                 .write_entries(
                     DEFAULT_SLOT_HEIGHT,
@@ -701,6 +694,8 @@ mod test {
                 Arc::new(RwLock::new(last_entry_id)),
                 rotation_tx,
                 None,
+                l_sender,
+                l_receiver,
             );
 
             let keypair = voting_keypair.as_ref();

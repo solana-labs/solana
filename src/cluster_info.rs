@@ -1382,7 +1382,7 @@ mod tests {
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path("run_window_request");
         {
-            let db_ledger = Arc::new(DbLedger::open(&ledger_path).unwrap());
+            let db_ledger = Arc::new(DbLedger::open(&ledger_path).unwrap().0);
             let me = NodeInfo::new(
                 Keypair::new().pubkey(),
                 socketaddr!("127.0.0.1:1234"),

@@ -136,9 +136,10 @@ impl Replicator {
         // DbLedger. Note for now, this ledger will not contain any of the existing entries
         // in the ledger located at ledger_path, and will only append on newly received
         // entries after being passed to window_service
-        let db_ledger = Arc::new(
-            DbLedger::open(ledger_path).expect("Expected to be able to open database ledger"),
-        );
+        let (db_ledger, _, _) =
+            DbLedger::open(ledger_path).expect("Expected to be able to open database ledger");
+
+        let db_ledger = Arc::new(db_ledger);
 
         let gossip_service = GossipService::new(
             &cluster_info,

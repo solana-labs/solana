@@ -325,7 +325,7 @@ mod test {
         max_tick_height: u64,
     ) -> MockBroadcastService {
         // Make the database ledger
-        let db_ledger = Arc::new(DbLedger::open(ledger_path).unwrap());
+        let db_ledger = Arc::new(DbLedger::open(ledger_path).unwrap().0);
 
         // Make the leader node and scheduler
         let leader_info = Node::new_localhost_with_pubkey(leader_pubkey);

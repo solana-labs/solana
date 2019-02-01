@@ -27,7 +27,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
+use std::sync::mpsc::{channel, Receiver, SyncSender};
 use std::sync::{Arc, RwLock};
 use std::thread;
 
@@ -75,6 +75,8 @@ impl Tvu {
         to_leader_sender: TvuRotationSender,
         storage_state: &StorageState,
         entry_stream: Option<&String>,
+        ledger_signal_sender: SyncSender<bool>,
+        ledger_signal_receiver: Receiver<bool>,
     ) -> (Self, BlobSender) {
         let exit = Arc::new(AtomicBool::new(false));
         let keypair: Arc<Keypair> = cluster_info
@@ -128,6 +130,8 @@ impl Tvu {
             l_last_entry_id.clone(),
             to_leader_sender,
             entry_stream,
+            ledger_signal_sender,
+            ledger_signal_receiver,
         );
 
         let storage_stage = StorageStage::new(
@@ -253,7 +257,7 @@ pub mod tests {
 
         let cur_hash = Hash::default();
         let db_ledger_path = get_tmp_ledger_path("test_replay");
-        let db_ledger =
+        let (db_ledger, l_sender, l_receiver) =
             DbLedger::open(&db_ledger_path).expect("Expected to successfully open ledger");
         let vote_account_keypair = Arc::new(Keypair::new());
         let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
@@ -276,6 +280,8 @@ pub mod tests {
             sender,
             &StorageState::default(),
             None,
+            l_sender,
+            l_receiver,
         );
         tvu.close().expect("close");
     }
@@ -342,7 +348,7 @@ pub mod tests {
 
         let mut cur_hash = Hash::default();
         let db_ledger_path = get_tmp_ledger_path("test_replay");
-        let db_ledger =
+        let (db_ledger, l_sender, l_receiver) =
             DbLedger::open(&db_ledger_path).expect("Expected to successfully open ledger");
         let vote_account_keypair = Arc::new(Keypair::new());
         let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
@@ -365,6 +371,8 @@ pub mod tests {
             sender,
             &StorageState::default(),
             None,
+            l_sender,
+            l_receiver,
         );
 
         let mut alice_ref_balance = starting_balance;
