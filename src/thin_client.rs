@@ -473,7 +473,7 @@ mod tests {
     use bincode::{deserialize, serialize};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
-    use solana_sdk::vote_program::VoteProgram;
+    use solana_sdk::vote_program::VoteState;
     use solana_sdk::vote_transaction::VoteTransaction;
     use std::fs::remove_dir_all;
 
@@ -592,7 +592,7 @@ mod tests {
                 .expect("Expected valid response for account userdata")
                 .expect("Expected valid account userdata to exist after account creation");
 
-            let vote_state = VoteProgram::deserialize(&account_user_data);
+            let vote_state = VoteState::deserialize(&account_user_data);
 
             if vote_state.map(|vote_state| vote_state.node_id) == Ok(validator_keypair.pubkey()) {
                 break;

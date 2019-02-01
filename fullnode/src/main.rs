@@ -10,7 +10,7 @@ use solana::thin_client::{poll_gossip_for_leader, ThinClient};
 use solana::voting_keypair::{RemoteVoteSigner, VotingKeypair};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::vote_program::VoteProgram;
+use solana_sdk::vote_program::VoteState;
 use solana_sdk::vote_transaction::VoteTransaction;
 use solana_vote_signer::rpc::{LocalVoteSigner, VoteSigner};
 use std::fs::File;
@@ -112,7 +112,7 @@ fn create_and_fund_vote_account(
     info!("Checking for vote account registration");
     let vote_account_user_data = client.get_account_userdata(&vote_account);
     if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
-        if let Ok(vote_state) = VoteProgram::deserialize(&vote_account_user_data) {
+        if let Ok(vote_state) = VoteState::deserialize(&vote_account_user_data) {
             if vote_state.node_id == pubkey {
                 return Ok(());
             }

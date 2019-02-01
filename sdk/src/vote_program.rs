@@ -43,34 +43,34 @@ pub enum VoteInstruction {
     /// * Transaction::keys[1] - the new "vote account" to be associated with the validator
     /// identified by keys[0] for voting
     RegisterAccount,
-    NewVote(Vote),
+    Vote(Vote),
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct VoteProgram {
+pub struct VoteState {
     pub votes: VecDeque<Vote>,
     pub node_id: Pubkey,
 }
 
 pub fn get_max_size() -> usize {
     // Upper limit on the size of the Vote State. Equal to
-    // sizeof(VoteProgram) when votes.len() is MAX_VOTE_HISTORY
-    let mut vote_program = VoteProgram::default();
+    // sizeof(VoteState) when votes.len() is MAX_VOTE_HISTORY
+    let mut vote_program = VoteState::default();
     vote_program.votes = VecDeque::from(vec![Vote::default(); MAX_VOTE_HISTORY]);
     serialized_size(&vote_program).unwrap() as usize
 }
 
-impl VoteProgram {
+impl VoteState {
     pub fn new(node_id: Pubkey) -> Self {
         let votes = VecDeque::new();
         Self { votes, node_id }
     }
 
-    pub fn deserialize(input: &[u8]) -> Result<VoteProgram, ProgramError> {
+    pub fn deserialize(input: &[u8]) -> Result<Self, ProgramError> {
         deserialize(input).map_err(|_| ProgramError::InvalidUserdata)
     }
 
-    pub fn serialize(self: &VoteProgram, output: &mut [u8]) -> Result<(), ProgramError> {
+    pub fn serialize(&self, output: &mut [u8]) -> Result<(), ProgramError> {
         serialize_into(output, self).map_err(|err| match *err {
             ErrorKind::SizeLimit => ProgramError::UserdataTooSmall,
             _ => ProgramError::GenericError,
@@ -85,9 +85,9 @@ mod tests {
     #[test]
     fn test_serde() {
         let mut buffer: Vec<u8> = vec![0; get_max_size()];
-        let mut vote_program = VoteProgram::default();
+        let mut vote_program = VoteState::default();
         vote_program.votes = (0..MAX_VOTE_HISTORY).map(|_| Vote::default()).collect();
         vote_program.serialize(&mut buffer).unwrap();
-        assert_eq!(VoteProgram::deserialize(&buffer).unwrap(), vote_program);
+        assert_eq!(VoteState::deserialize(&buffer).unwrap(), vote_program);
     }
 }
