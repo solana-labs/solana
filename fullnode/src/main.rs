@@ -7,7 +7,7 @@ use solana::leader_scheduler::LeaderScheduler;
 use solana::local_vote_signer_service::LocalVoteSignerService;
 use solana::socketaddr;
 use solana::thin_client::{poll_gossip_for_leader, ThinClient};
-use solana::vote_signer_proxy::{RemoteVoteSigner, VoteSignerProxy};
+use solana::voting_keypair::{RemoteVoteSigner, VotingKeypair};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::vote_program::VoteProgram;
@@ -257,7 +257,7 @@ fn main() {
     } else {
         Box::new(LocalVoteSigner::default())
     };
-    let vote_signer = VoteSignerProxy::new_with_signer(&keypair, vote_signer);
+    let vote_signer = VotingKeypair::new_with_signer(&keypair, vote_signer);
     let vote_account_id = vote_signer.pubkey();
     info!("New vote account ID is {:?}", vote_account_id);
 

@@ -4,7 +4,7 @@
 use crate::bank::Bank;
 
 use crate::entry::{create_ticks, Entry};
-use crate::vote_signer_proxy::VoteSignerProxy;
+use crate::voting_keypair::VotingKeypair;
 use bincode::serialize;
 use byteorder::{LittleEndian, ReadBytesExt};
 use hashbrown::HashSet;
@@ -494,7 +494,7 @@ pub fn make_active_set_entries(
     last_entry_id: &Hash,
     last_tick_id: &Hash,
     num_ending_ticks: u64,
-) -> (Vec<Entry>, VoteSignerProxy) {
+) -> (Vec<Entry>, VotingKeypair) {
     // 1) Create transfer token entry
     let transfer_tx =
         Transaction::system_new(&token_source, active_keypair.pubkey(), 3, *last_tick_id);
@@ -502,8 +502,8 @@ pub fn make_active_set_entries(
     let mut last_entry_id = transfer_entry.id;
 
     // 2) Create and register the vote account
-    let vote_signer = VoteSignerProxy::new_local(active_keypair);
-    let vote_account_id = vote_signer.pubkey();
+    let voting_keypair = VotingKeypair::new_local(active_keypair);
+    let vote_account_id = voting_keypair.pubkey();
 
     let new_vote_account_tx =
         Transaction::vote_account_new(active_keypair, vote_account_id, *last_tick_id, 1, 1);
@@ -511,7 +511,7 @@ pub fn make_active_set_entries(
     last_entry_id = new_vote_account_entry.id;
 
     // 3) Create vote entry
-    let vote_tx = Transaction::vote_new(&vote_signer, 1, *last_tick_id, 0);
+    let vote_tx = Transaction::vote_new(&voting_keypair, 1, *last_tick_id, 0);
     let vote_entry = Entry::new(&last_entry_id, 0, 1, vec![vote_tx]);
     last_entry_id = vote_entry.id;
 
@@ -519,7 +519,7 @@ pub fn make_active_set_entries(
     let mut txs = vec![transfer_entry, new_vote_account_entry, vote_entry];
     let empty_ticks = create_ticks(num_ending_ticks, last_entry_id);
     txs.extend(empty_ticks);
-    (txs, vote_signer)
+    (txs, voting_keypair)
 }
 
 #[cfg(test)]
@@ -531,7 +531,7 @@ pub mod tests {
         LeaderScheduler, LeaderSchedulerConfig, DEFAULT_BOOTSTRAP_HEIGHT,
         DEFAULT_SEED_ROTATION_INTERVAL, DEFAULT_TICKS_PER_SLOT,
     };
-    use crate::vote_signer_proxy::VoteSignerProxy;
+    use crate::voting_keypair::VotingKeypair;
     use hashbrown::HashSet;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
@@ -549,14 +549,14 @@ pub mod tests {
 
     pub fn new_vote_account(
         from_keypair: &Keypair,
-        vote_signer: &VoteSignerProxy,
+        voting_keypair: &VotingKeypair,
         bank: &Bank,
         num_tokens: u64,
         last_id: Hash,
     ) {
         let tx = Transaction::vote_account_new(
             from_keypair,
-            vote_signer.pubkey(),
+            voting_keypair.pubkey(),
             last_id,
             num_tokens,
             0,
@@ -564,8 +564,8 @@ pub mod tests {
         bank.process_transaction(&tx).unwrap();
     }
 
-    fn push_vote(vote_signer: &VoteSignerProxy, bank: &Bank, height: u64, last_id: Hash) {
-        let new_vote_tx = Transaction::vote_new(vote_signer, height, last_id, 0);
+    fn push_vote(voting_keypair: &VotingKeypair, bank: &Bank, height: u64, last_id: Hash) {
+        let new_vote_tx = Transaction::vote_new(voting_keypair, height, last_id, 0);
         bank.process_transaction(&new_vote_tx).unwrap();
     }
 
@@ -602,7 +602,7 @@ pub mod tests {
         for i in 0..num_validators {
             let new_validator = Arc::new(Keypair::new());
             let new_pubkey = new_validator.pubkey();
-            let vote_signer = VoteSignerProxy::new_local(&new_validator);
+            let voting_keypair = VotingKeypair::new_local(&new_validator);
             validators.push(new_pubkey);
             // Give the validator some tokens
             bank.transfer(
@@ -616,7 +616,7 @@ pub mod tests {
             // Create a vote account
             new_vote_account(
                 &new_validator,
-                &vote_signer,
+                &voting_keypair,
                 &bank,
                 num_vote_account_tokens as u64,
                 genesis_block.last_id(),
@@ -624,7 +624,7 @@ pub mod tests {
 
             // Vote to make the validator part of the active set for the entire test
             // (we made the active_window_length large enough at the beginning of the test)
-            push_vote(&vote_signer, &bank, 1, genesis_block.last_id());
+            push_vote(&voting_keypair, &bank, 1, genesis_block.last_id());
         }
 
         // The scheduled leader during the bootstrapping period (assuming a seed + schedule
@@ -730,17 +730,22 @@ pub mod tests {
                 .unwrap();
 
             // Create a vote account
-            let vote_signer = VoteSignerProxy::new_local(&new_keypair);
+            let voting_keypair = VotingKeypair::new_local(&new_keypair);
             new_vote_account(
                 &new_keypair,
-                &vote_signer,
+                &voting_keypair,
                 &bank,
                 1,
                 genesis_block.last_id(),
             );
 
             // Push a vote for the account
-            push_vote(&vote_signer, &bank, start_height, genesis_block.last_id());
+            push_vote(
+                &voting_keypair,
+                &bank,
+                start_height,
+                genesis_block.last_id(),
+            );
         }
 
         // Insert a bunch of votes at height "start_height + active_window_length"
@@ -755,17 +760,17 @@ pub mod tests {
                 .unwrap();
 
             // Create a vote account
-            let vote_signer = VoteSignerProxy::new_local(&new_keypair);
+            let voting_keypair = VotingKeypair::new_local(&new_keypair);
             new_vote_account(
                 &new_keypair,
-                &vote_signer,
+                &voting_keypair,
                 &bank,
                 1,
                 genesis_block.last_id(),
             );
 
             push_vote(
-                &vote_signer,
+                &voting_keypair,
                 &bank,
                 start_height + active_window_length,
                 genesis_block.last_id(),
@@ -1021,7 +1026,7 @@ pub mod tests {
         for i in 0..num_validators {
             let new_validator = Arc::new(Keypair::new());
             let new_pubkey = new_validator.pubkey();
-            let vote_signer = VoteSignerProxy::new_local(&new_validator);
+            let voting_keypair = VotingKeypair::new_local(&new_validator);
             validators.push(new_pubkey);
             // Give the validator some tokens
             bank.transfer(
@@ -1035,7 +1040,7 @@ pub mod tests {
             // Create a vote account
             new_vote_account(
                 &new_validator,
-                &vote_signer,
+                &voting_keypair,
                 &bank,
                 num_vote_account_tokens as u64,
                 genesis_block.last_id(),
@@ -1043,7 +1048,7 @@ pub mod tests {
 
             // Vote at height i * active_window_length for validator i
             push_vote(
-                &vote_signer,
+                &voting_keypair,
                 &bank,
                 i * active_window_length + bootstrap_height,
                 genesis_block.last_id(),
@@ -1084,11 +1089,11 @@ pub mod tests {
         // window
         let initial_vote_height = 1;
 
-        let vote_signer = VoteSignerProxy::new_local(&leader_keypair);
+        let voting_keypair = VotingKeypair::new_local(&leader_keypair);
         // Create a vote account
         new_vote_account(
             &leader_keypair,
-            &vote_signer,
+            &voting_keypair,
             &bank,
             1,
             genesis_block.last_id(),
@@ -1096,13 +1101,13 @@ pub mod tests {
 
         // Vote twice
         push_vote(
-            &vote_signer,
+            &voting_keypair,
             &bank,
             initial_vote_height,
             genesis_block.last_id(),
         );
         push_vote(
-            &vote_signer,
+            &voting_keypair,
             &bank,
             initial_vote_height + 1,
             genesis_block.last_id(),
@@ -1235,17 +1240,17 @@ pub mod tests {
             bank.transfer(5, &mint_keypair, validator_id, last_id)
                 .unwrap();
             // Create a vote account
-            let vote_signer = VoteSignerProxy::new_local(&validator_keypair);
+            let voting_keypair = VotingKeypair::new_local(&validator_keypair);
             new_vote_account(
                 &validator_keypair,
-                &vote_signer,
+                &voting_keypair,
                 &bank,
                 1,
                 genesis_block.last_id(),
             );
 
             push_vote(
-                &vote_signer,
+                &voting_keypair,
                 &bank,
                 initial_vote_height,
                 genesis_block.last_id(),
@@ -1270,10 +1275,10 @@ pub mod tests {
         .unwrap();
 
         // Create a vote account
-        let vote_signer = VoteSignerProxy::new_local(&bootstrap_leader_keypair);
+        let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
         new_vote_account(
             &bootstrap_leader_keypair,
-            &vote_signer,
+            &voting_keypair,
             &bank,
             vote_account_tokens as u64,
             genesis_block.last_id(),
@@ -1281,7 +1286,7 @@ pub mod tests {
 
         // Add leader to the active set
         push_vote(
-            &vote_signer,
+            &voting_keypair,
             &bank,
             initial_vote_height,
             genesis_block.last_id(),
@@ -1397,17 +1402,17 @@ pub mod tests {
         // Create a vote account for the validator
         bank.transfer(5, &mint_keypair, validator_id, last_id)
             .unwrap();
-        let vote_signer = VoteSignerProxy::new_local(&validator_keypair);
+        let voting_keypair = VotingKeypair::new_local(&validator_keypair);
         new_vote_account(
             &validator_keypair,
-            &vote_signer,
+            &voting_keypair,
             &bank,
             1,
             genesis_block.last_id(),
         );
 
         push_vote(
-            &vote_signer,
+            &voting_keypair,
             &bank,
             initial_vote_height,
             genesis_block.last_id(),
@@ -1416,10 +1421,10 @@ pub mod tests {
         // Create a vote account for the leader
         bank.transfer(5, &mint_keypair, bootstrap_leader_id, last_id)
             .unwrap();
-        let vote_signer = VoteSignerProxy::new_local(&bootstrap_leader_keypair);
+        let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
         new_vote_account(
             &bootstrap_leader_keypair,
-            &vote_signer,
+            &voting_keypair,
             &bank,
             1,
             genesis_block.last_id(),
@@ -1427,7 +1432,7 @@ pub mod tests {
 
         // Add leader to the active set
         push_vote(
-            &vote_signer,
+            &voting_keypair,
             &bank,
             initial_vote_height,
             genesis_block.last_id(),

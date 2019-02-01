@@ -14,7 +14,7 @@ use crate::storage_stage::StorageState;
 use crate::streamer::BlobSender;
 use crate::tpu::{Tpu, TpuReturnType};
 use crate::tvu::{Sockets, Tvu, TvuReturnType};
-use crate::vote_signer_proxy::VoteSignerProxy;
+use crate::voting_keypair::VotingKeypair;
 use log::Level;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -112,7 +112,7 @@ impl Fullnode {
         keypair: &Arc<Keypair>,
         ledger_path: &str,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
-        vote_signer: VoteSignerProxy,
+        voting_keypair: VotingKeypair,
         entrypoint_info_option: Option<&NodeInfo>,
         config: FullnodeConfig,
     ) -> Self {
@@ -213,10 +213,10 @@ impl Fullnode {
                 .collect(),
         };
 
-        let vote_signer_option = if config.voting_disabled {
+        let voting_keypair_option = if config.voting_disabled {
             None
         } else {
-            Some(Arc::new(vote_signer))
+            Some(Arc::new(voting_keypair))
         };
 
         // Setup channels for rotation indications
@@ -224,7 +224,7 @@ impl Fullnode {
         let (to_validator_sender, to_validator_receiver) = channel();
 
         let (tvu, blob_sender) = Tvu::new(
-            vote_signer_option,
+            voting_keypair_option,
             &bank,
             entry_height,
             last_entry_id,
@@ -474,7 +474,7 @@ mod tests {
     use crate::streamer::responder;
     use crate::tpu::TpuReturnType;
     use crate::tvu::TvuReturnType;
-    use crate::vote_signer_proxy::VoteSignerProxy;
+    use crate::voting_keypair::VotingKeypair;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::cmp;
@@ -498,7 +498,7 @@ mod tests {
             &Arc::new(validator_keypair),
             &validator_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::new(&Default::default()))),
-            VoteSignerProxy::new(),
+            VotingKeypair::new(),
             Some(&leader_node.info),
             Default::default(),
         );
@@ -530,7 +530,7 @@ mod tests {
                     &Arc::new(validator_keypair),
                     &validator_ledger_path,
                     Arc::new(RwLock::new(LeaderScheduler::new(&Default::default()))),
-                    VoteSignerProxy::new(),
+                    VotingKeypair::new(),
                     Some(&leader_node.info),
                     Default::default(),
                 )
@@ -587,14 +587,14 @@ mod tests {
         );
 
         let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
-        let signer = VoteSignerProxy::new_local(&bootstrap_leader_keypair);
+        let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
         // Start up the leader
         let mut bootstrap_leader = Fullnode::new(
             bootstrap_leader_node,
             &bootstrap_leader_keypair,
             &bootstrap_leader_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
-            signer,
+            voting_keypair,
             Some(&bootstrap_leader_info),
             Default::default(),
         );
@@ -656,7 +656,7 @@ mod tests {
                 &bootstrap_leader_keypair,
                 &bootstrap_leader_ledger_path,
                 Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
-                VoteSignerProxy::new(),
+                VotingKeypair::new(),
                 Some(&bootstrap_leader_info),
                 Default::default(),
             );
@@ -669,7 +669,7 @@ mod tests {
                 &validator_keypair,
                 &validator_ledger_path,
                 Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
-                VoteSignerProxy::new(),
+                VotingKeypair::new(),
                 Some(&bootstrap_leader_info),
                 Default::default(),
             );
@@ -717,14 +717,14 @@ mod tests {
             bootstrap_height,
         );
 
-        let vote_signer = VoteSignerProxy::new_local(&validator_keypair);
+        let voting_keypair = VotingKeypair::new_local(&validator_keypair);
         // Start the validator
         let validator = Fullnode::new(
             validator_node,
             &validator_keypair,
             &validator_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
-            vote_signer,
+            voting_keypair,
             Some(&leader_node.info),
             Default::default(),
         );
@@ -820,14 +820,14 @@ mod tests {
             bootstrap_height,
         );
 
-        let vote_signer = VoteSignerProxy::new_local(&leader_keypair);
+        let voting_keypair = VotingKeypair::new_local(&leader_keypair);
         // Start the bootstrap leader
         let mut leader = Fullnode::new(
             leader_node,
             &leader_keypair,
             &leader_ledger_path,
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
-            vote_signer,
+            voting_keypair,
             Some(&leader_node_info),
             Default::default(),
         );

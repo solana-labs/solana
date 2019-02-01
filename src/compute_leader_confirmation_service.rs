@@ -159,7 +159,7 @@ impl Service for ComputeLeaderConfirmationService {
 pub mod tests {
     use crate::bank::Bank;
     use crate::compute_leader_confirmation_service::ComputeLeaderConfirmationService;
-    use crate::vote_signer_proxy::VoteSignerProxy;
+    use crate::voting_keypair::VotingKeypair;
 
     use crate::genesis_block::GenesisBlock;
     use crate::leader_scheduler::tests::new_vote_account;
@@ -197,18 +197,19 @@ pub mod tests {
                 // Create new validator to vote
                 let validator_keypair = Arc::new(Keypair::new());
                 let last_id = ids[i];
-                let vote_signer = VoteSignerProxy::new_local(&validator_keypair);
+                let voting_keypair = VotingKeypair::new_local(&validator_keypair);
 
                 // Give the validator some tokens
                 bank.transfer(2, &mint_keypair, validator_keypair.pubkey(), last_id)
                     .unwrap();
-                new_vote_account(&validator_keypair, &vote_signer, &bank, 1, last_id);
+                new_vote_account(&validator_keypair, &voting_keypair, &bank, 1, last_id);
 
                 if i < 6 {
-                    let vote_tx = Transaction::vote_new(&vote_signer, (i + 1) as u64, last_id, 0);
+                    let vote_tx =
+                        Transaction::vote_new(&voting_keypair, (i + 1) as u64, last_id, 0);
                     bank.process_transaction(&vote_tx).unwrap();
                 }
-                (vote_signer, validator_keypair)
+                (voting_keypair, validator_keypair)
             })
             .collect();
 
@@ -222,8 +223,8 @@ pub mod tests {
         assert_eq!(bank.confirmation_time(), std::usize::MAX);
 
         // Get another validator to vote, so we now have 2/3 consensus
-        let vote_signer = &vote_accounts[7].0;
-        let vote_tx = Transaction::vote_new(vote_signer, 7, ids[6], 0);
+        let voting_keypair = &vote_accounts[7].0;
+        let vote_tx = Transaction::vote_new(voting_keypair, 7, ids[6], 0);
         bank.process_transaction(&vote_tx).unwrap();
 
         ComputeLeaderConfirmationService::compute_confirmation(
