@@ -1897,7 +1897,6 @@ dependencies = [
  "serde 1.0.85 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.85 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.38 (registry+https://github.com/rust-lang/crates.io-index)",
- "solana-bpfloader 0.12.0",
  "solana-drone 0.12.0",
  "solana-jsonrpc-core 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-jsonrpc-http-server 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2202,6 +2201,18 @@ version = "0.12.0"
 dependencies = [
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "solana-logger 0.12.0",
+ "solana-sdk 0.12.0",
+]
+
+[[package]]
+name = "solana-programs"
+version = "0.12.0"
+dependencies = [
+ "solana 0.12.0",
+ "solana-bpfloader 0.12.0",
+ "solana-logger 0.12.0",
+ "solana-lualoader 0.12.0",
+ "solana-native-loader 0.12.0",
  "solana-sdk 0.12.0",
 ]
 
