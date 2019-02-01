@@ -223,7 +223,7 @@ impl BroadcastService {
                 blob_sender,
             ) {
                 match e {
-                    Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => {
+                    Error::RecvTimeoutError(RecvTimeoutError::Disconnected) | Error::SendError => {
                         return BroadcastServiceReturnType::ChannelDisconnected;
                     }
                     Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
