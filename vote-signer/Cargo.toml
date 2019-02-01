@@ -1,8 +1,9 @@
 [package]
-name = "solana-vote-signer"
-version = "0.12.0"
-description = "Solana Vote Signing Service"
 authors = ["Solana Maintainers <maintainers@solana.com>"]
+edition = "2018"
+name = "solana-vote-signer"
+description = "Solana Vote Signing Service"
+version = "0.12.0"
 repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"

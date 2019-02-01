@@ -1,7 +1,7 @@
 //! The `rpc` module implements the Vote signing service RPC interface.
 
-use jsonrpc_core::*;
-use jsonrpc_http_server::*;
+use crate::jsonrpc_core::*;
+use crate::jsonrpc_http_server::*;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use std::collections::HashMap;
@@ -178,7 +178,7 @@ impl Default for LocalVoteSigner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use jsonrpc_core::Response;
+    use crate::jsonrpc_core::Response;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::mem;
 
