@@ -166,7 +166,6 @@ pub mod tests {
     use bincode::serialize;
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::transaction::Transaction;
     use solana_sdk::vote_transaction::VoteTransaction;
     use std::sync::Arc;
     use std::thread::sleep;
@@ -206,7 +205,7 @@ pub mod tests {
 
                 if i < 6 {
                     let vote_tx =
-                        Transaction::vote_new(&voting_keypair, (i + 1) as u64, last_id, 0);
+                        VoteTransaction::new_vote(&voting_keypair, (i + 1) as u64, last_id, 0);
                     bank.process_transaction(&vote_tx).unwrap();
                 }
                 (voting_keypair, validator_keypair)
@@ -224,7 +223,7 @@ pub mod tests {
 
         // Get another validator to vote, so we now have 2/3 consensus
         let voting_keypair = &vote_accounts[7].0;
-        let vote_tx = Transaction::vote_new(voting_keypair, 7, ids[6], 0);
+        let vote_tx = VoteTransaction::new_vote(voting_keypair, 7, ids[6], 0);
         bank.process_transaction(&vote_tx).unwrap();
 
         ComputeLeaderConfirmationService::compute_confirmation(

@@ -391,7 +391,6 @@ mod tests {
     use solana_sdk::budget_transaction::BudgetTransaction;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
-    use solana_sdk::transaction::Transaction;
     use std::net::{IpAddr, Ipv4Addr};
     use tokio::prelude::{Async, Stream};
 
@@ -420,7 +419,7 @@ mod tests {
         arc_bank.set_subscriptions(Box::new(subscription));
 
         // Test signature subscription
-        let tx = Transaction::system_move(&alice, bob_pubkey, 20, last_id, 0);
+        let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
 
         let (subscriber, _id_receiver, mut receiver) =
             Subscriber::new_test("signatureNotification");
@@ -455,7 +454,7 @@ mod tests {
         let rpc = RpcSolPubSubImpl::new(rpc_bank.clone());
         io.extend_with(rpc.to_delegate());
 
-        let tx = Transaction::system_move(&alice, bob_pubkey, 20, last_id, 0);
+        let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"signatureSubscribe","params":["{}"]}}"#,
             tx.signatures[0].to_string()
@@ -509,7 +508,7 @@ mod tests {
         let (subscriber, _id_receiver, mut receiver) = Subscriber::new_test("accountNotification");
         rpc.subscribe_to_account_updates(subscriber, contract_state.pubkey().to_string());
 
-        let tx = Transaction::system_create(
+        let tx = SystemTransaction::new_program_account(
             &alice,
             contract_funds.pubkey(),
             last_id,
@@ -522,7 +521,7 @@ mod tests {
             .process_transaction(&tx)
             .expect("process transaction");
 
-        let tx = Transaction::system_create(
+        let tx = SystemTransaction::new_program_account(
             &alice,
             contract_state.pubkey(),
             last_id,
@@ -564,7 +563,7 @@ mod tests {
             assert_eq!(serde_json::to_string(&expected).unwrap(), response);
         }
 
-        let tx = Transaction::budget_new_when_signed(
+        let tx = BudgetTransaction::new_when_signed(
             &contract_funds,
             bob_pubkey,
             contract_state.pubkey(),
@@ -603,12 +602,12 @@ mod tests {
             assert_eq!(serde_json::to_string(&expected).unwrap(), response);
         }
 
-        let tx = Transaction::system_new(&alice, witness.pubkey(), 1, last_id);
+        let tx = SystemTransaction::new_account(&alice, witness.pubkey(), 1, last_id, 0);
         arc_bank
             .process_transaction(&tx)
             .expect("process transaction");
         sleep(Duration::from_millis(200));
-        let tx = Transaction::budget_new_signature(
+        let tx = BudgetTransaction::new_signature(
             &witness,
             contract_state.pubkey(),
             bob_pubkey,
@@ -696,7 +695,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         let alice = Keypair::new();
         let last_id = bank.last_id();
-        let tx = Transaction::system_create(
+        let tx = SystemTransaction::new_program_account(
             &mint_keypair,
             alice.pubkey(),
             last_id,
@@ -741,7 +740,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         let alice = Keypair::new();
         let last_id = bank.last_id();
-        let tx = Transaction::system_move(&mint_keypair, alice.pubkey(), 20, last_id, 0);
+        let tx = SystemTransaction::new_move(&mint_keypair, alice.pubkey(), 20, last_id, 0);
         let signature = tx.signatures[0];
         bank.process_transaction(&tx).unwrap();
 

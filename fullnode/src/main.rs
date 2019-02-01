@@ -79,7 +79,7 @@ fn create_and_fund_vote_account(
             let last_id = client.get_last_id();
             info!("create_and_fund_vote_account last_id={:?}", last_id);
             let transaction =
-                VoteTransaction::vote_account_new(node_keypair, vote_account, last_id, 1, 1);
+                VoteTransaction::new_account(node_keypair, vote_account, last_id, 1, 1);
 
             match client.transfer_signed(&transaction) {
                 Ok(signature) => {

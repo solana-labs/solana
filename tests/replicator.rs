@@ -20,7 +20,6 @@ use solana::voting_keypair::VotingKeypair;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::transaction::Transaction;
 use std::fs::remove_dir_all;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
@@ -110,8 +109,13 @@ fn test_replicator_startup() {
         let last_id = leader_client.get_last_id();
         // Give the replicator some tokens
         let amount = 1;
-        let mut tx =
-            Transaction::system_new(&mint_keypair, replicator_keypair.pubkey(), amount, last_id);
+        let mut tx = SystemTransaction::new_account(
+            &mint_keypair,
+            replicator_keypair.pubkey(),
+            amount,
+            last_id,
+            0,
+        );
         leader_client
             .retry_transfer(&mint_keypair, &mut tx, 5)
             .unwrap();

@@ -12,7 +12,6 @@ use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, VoteProgram};
 use solana_sdk::vote_transaction::VoteTransaction;
 use std::io::Cursor;
@@ -497,7 +496,7 @@ pub fn make_active_set_entries(
 ) -> (Vec<Entry>, VotingKeypair) {
     // 1) Create transfer token entry
     let transfer_tx =
-        Transaction::system_new(&token_source, active_keypair.pubkey(), 3, *last_tick_id);
+        SystemTransaction::new_account(&token_source, active_keypair.pubkey(), 3, *last_tick_id, 0);
     let transfer_entry = Entry::new(last_entry_id, 0, 1, vec![transfer_tx]);
     let mut last_entry_id = transfer_entry.id;
 
@@ -506,12 +505,12 @@ pub fn make_active_set_entries(
     let vote_account_id = voting_keypair.pubkey();
 
     let new_vote_account_tx =
-        Transaction::vote_account_new(active_keypair, vote_account_id, *last_tick_id, 1, 1);
+        VoteTransaction::new_account(active_keypair, vote_account_id, *last_tick_id, 1, 1);
     let new_vote_account_entry = Entry::new(&last_entry_id, 0, 1, vec![new_vote_account_tx]);
     last_entry_id = new_vote_account_entry.id;
 
     // 3) Create vote entry
-    let vote_tx = Transaction::vote_new(&voting_keypair, 1, *last_tick_id, 0);
+    let vote_tx = VoteTransaction::new_vote(&voting_keypair, 1, *last_tick_id, 0);
     let vote_entry = Entry::new(&last_entry_id, 0, 1, vec![vote_tx]);
     last_entry_id = vote_entry.id;
 
@@ -554,7 +553,7 @@ pub mod tests {
         num_tokens: u64,
         last_id: Hash,
     ) {
-        let tx = Transaction::vote_account_new(
+        let tx = VoteTransaction::new_account(
             from_keypair,
             voting_keypair.pubkey(),
             last_id,
@@ -565,7 +564,7 @@ pub mod tests {
     }
 
     fn push_vote(voting_keypair: &VotingKeypair, bank: &Bank, height: u64, last_id: Hash) {
-        let new_vote_tx = Transaction::vote_new(voting_keypair, height, last_id, 0);
+        let new_vote_tx = VoteTransaction::new_vote(voting_keypair, height, last_id, 0);
         bank.process_transaction(&new_vote_tx).unwrap();
     }
 

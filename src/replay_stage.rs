@@ -21,7 +21,6 @@ use solana_metrics::{influxdb, submit};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
-use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_transaction::VoteTransaction;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
@@ -146,8 +145,12 @@ impl ReplayStage {
                 if 0 == num_ticks_to_next_vote {
                     if let Some(voting_keypair) = voting_keypair {
                         let keypair = voting_keypair.as_ref();
-                        let vote =
-                            Transaction::vote_new(keypair, bank.tick_height(), bank.last_id(), 0);
+                        let vote = VoteTransaction::new_vote(
+                            keypair,
+                            bank.tick_height(),
+                            bank.last_id(),
+                            0,
+                        );
                         cluster_info.write().unwrap().push_vote(vote);
                     }
                 }
@@ -478,7 +481,7 @@ mod test {
         );
 
         let keypair = voting_keypair.as_ref();
-        let vote = Transaction::vote_new(keypair, bank.tick_height(), bank.last_id(), 0);
+        let vote = VoteTransaction::new_vote(keypair, bank.tick_height(), bank.last_id(), 0);
         cluster_info_me.write().unwrap().push_vote(vote);
 
         // Send ReplayStage an entry, should see it on the ledger writer receiver
@@ -585,7 +588,7 @@ mod test {
         );
 
         let keypair = voting_keypair.as_ref();
-        let vote = Transaction::vote_new(keypair, bank.tick_height(), bank.last_id(), 0);
+        let vote = VoteTransaction::new_vote(keypair, bank.tick_height(), bank.last_id(), 0);
         cluster_info_me.write().unwrap().push_vote(vote);
 
         // Send enough ticks to trigger leader rotation

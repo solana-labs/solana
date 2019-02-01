@@ -14,7 +14,6 @@ use solana_sdk::hash::hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::transaction::Transaction;
 use std::iter;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::Arc;
@@ -50,7 +49,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let (verified_sender, verified_receiver) = channel();
     let bank = Arc::new(Bank::new(&genesis_block));
     let dummy_leader_id = Keypair::new().pubkey();
-    let dummy = Transaction::system_move(
+    let dummy = SystemTransaction::new_move(
         &mint_keypair,
         mint_keypair.pubkey(),
         1,
@@ -72,7 +71,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         .collect();
     // fund all the accounts
     transactions.iter().for_each(|tx| {
-        let fund = Transaction::system_move(
+        let fund = SystemTransaction::new_move(
             &mint_keypair,
             tx.account_keys[0],
             mint_total / txes as u64,
@@ -145,7 +144,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     let (verified_sender, verified_receiver) = channel();
     let bank = Arc::new(Bank::new(&genesis_block));
     let dummy_leader_id = Keypair::new().pubkey();
-    let dummy = Transaction::system_move(
+    let dummy = SystemTransaction::new_move(
         &mint_keypair,
         mint_keypair.pubkey(),
         1,
@@ -183,7 +182,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         })
         .collect();
     transactions.iter().for_each(|tx| {
-        let fund = Transaction::system_move(
+        let fund = SystemTransaction::new_move(
             &mint_keypair,
             tx.account_keys[0],
             mint_total / txes as u64,

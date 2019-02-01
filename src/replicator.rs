@@ -19,7 +19,6 @@ use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::storage_program::StorageTransaction;
-use solana_sdk::transaction::Transaction;
 use std::fs::File;
 use std::io;
 use std::io::BufReader;
@@ -262,7 +261,7 @@ impl Replicator {
             Ok(hash) => {
                 let last_id = client.get_last_id();
                 info!("sampled hash: {}", hash);
-                let mut tx = Transaction::storage_new_mining_proof(
+                let mut tx = StorageTransaction::new_mining_proof(
                     &keypair,
                     hash,
                     last_id,

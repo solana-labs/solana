@@ -15,22 +15,17 @@ use rand::{Rng, SeedableRng};
 use rand_chacha::ChaChaRng;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Keypair;
-use solana_sdk::signature::Signature;
-use solana_sdk::storage_program;
-use solana_sdk::storage_program::StorageProgram;
-use solana_sdk::storage_program::StorageTransaction;
+use solana_sdk::signature::{Keypair, Signature};
+use solana_sdk::storage_program::{self, StorageProgram, StorageTransaction};
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program;
 use std::collections::HashSet;
 use std::io;
 use std::mem::size_of;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::RecvTimeoutError;
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::{channel, RecvTimeoutError, Sender};
 use std::sync::{Arc, RwLock};
-use std::thread::sleep;
-use std::thread::{self, Builder, JoinHandle};
+use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
 
 // Block of hash answers to validate against
@@ -277,7 +272,7 @@ impl StorageStage {
         let mut seed = [0u8; 32];
         let signature = keypair.sign(&entry_id.as_ref());
 
-        let tx = Transaction::storage_new_advertise_last_id(
+        let tx = StorageTransaction::new_advertise_last_id(
             keypair,
             entry_id,
             Hash::default(),
@@ -453,7 +448,6 @@ mod tests {
     use solana_sdk::hash::Hasher;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::transaction::Transaction;
     use solana_sdk::vote_transaction::VoteTransaction;
     use std::cmp::{max, min};
     use std::fs::remove_dir_all;
@@ -602,9 +596,9 @@ mod tests {
             reference_keys = vec![0; keys.len()];
             reference_keys.copy_from_slice(keys);
         }
-        let mut vote_txs: Vec<Transaction> = Vec::new();
+        let mut vote_txs: Vec<_> = Vec::new();
         let keypair = Keypair::new();
-        let vote_tx = Transaction::vote_new(&keypair, 123456, Hash::default(), 1);
+        let vote_tx = VoteTransaction::new_vote(&keypair, 123456, Hash::default(), 1);
         vote_txs.push(vote_tx);
         let vote_entries = vec![Entry::new(&Hash::default(), 0, 1, vote_txs)];
         storage_entry_sender.send(vote_entries).unwrap();

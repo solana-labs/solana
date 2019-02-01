@@ -242,7 +242,7 @@ mod test {
         keyed_accounts.push(KeyedAccount::new(&pubkey, true, &mut user_account));
         keyed_accounts.push(KeyedAccount::new(&system_key, false, &mut system_account));
 
-        let tx = Transaction::storage_new_advertise_last_id(
+        let tx = StorageTransaction::new_advertise_last_id(
             &keypair,
             Hash::default(),
             Hash::default(),
@@ -260,7 +260,7 @@ mod test {
         let keypair = Keypair::new();
         let mut accounts = [Default::default()];
 
-        let tx = Transaction::storage_new_mining_proof(
+        let tx = StorageTransaction::new_mining_proof(
             &keypair,
             Hash::default(),
             Hash::default(),
@@ -281,7 +281,7 @@ mod test {
         let mut accounts = [Account::default(), Account::default()];
         accounts[1].userdata.resize(16 * 1024, 0);
 
-        let tx = Transaction::storage_new_mining_proof(
+        let tx = StorageTransaction::new_mining_proof(
             &keypair,
             Hash::default(),
             Hash::default(),
@@ -300,7 +300,7 @@ mod test {
         let mut accounts = [Account::default(), Account::default()];
         accounts[1].userdata.resize(16 * 1024, 0);
 
-        let tx = Transaction::storage_new_advertise_last_id(
+        let tx = StorageTransaction::new_advertise_last_id(
             &keypair,
             Hash::default(),
             Hash::default(),
@@ -309,7 +309,7 @@ mod test {
 
         test_transaction(&tx, &mut accounts).unwrap();
 
-        let tx = Transaction::storage_new_mining_proof(
+        let tx = StorageTransaction::new_mining_proof(
             &keypair,
             Hash::default(),
             Hash::default(),
@@ -329,7 +329,7 @@ mod test {
 
         let entry_height = 0;
 
-        let tx = Transaction::storage_new_advertise_last_id(
+        let tx = StorageTransaction::new_advertise_last_id(
             &keypair,
             Hash::default(),
             Hash::default(),
@@ -338,7 +338,7 @@ mod test {
 
         test_transaction(&tx, &mut accounts).unwrap();
 
-        let tx = Transaction::storage_new_mining_proof(
+        let tx = StorageTransaction::new_mining_proof(
             &keypair,
             Hash::default(),
             Hash::default(),
@@ -347,7 +347,7 @@ mod test {
         );
         test_transaction(&tx, &mut accounts).unwrap();
 
-        let tx = Transaction::storage_new_advertise_last_id(
+        let tx = StorageTransaction::new_advertise_last_id(
             &keypair,
             Hash::default(),
             Hash::default(),
@@ -355,7 +355,7 @@ mod test {
         );
         test_transaction(&tx, &mut accounts).unwrap();
 
-        let tx = Transaction::storage_new_proof_validation(
+        let tx = StorageTransaction::new_proof_validation(
             &keypair,
             Hash::default(),
             entry_height,
@@ -363,7 +363,7 @@ mod test {
         );
         test_transaction(&tx, &mut accounts).unwrap();
 
-        let tx = Transaction::storage_new_advertise_last_id(
+        let tx = StorageTransaction::new_advertise_last_id(
             &keypair,
             Hash::default(),
             Hash::default(),
@@ -371,7 +371,7 @@ mod test {
         );
         test_transaction(&tx, &mut accounts).unwrap();
 
-        let tx = Transaction::storage_new_reward_claim(&keypair, Hash::default(), entry_height);
+        let tx = StorageTransaction::new_reward_claim(&keypair, Hash::default(), entry_height);
         test_transaction(&tx, &mut accounts).unwrap();
 
         assert!(accounts[0].tokens == TOTAL_VALIDATOR_REWARDS);
