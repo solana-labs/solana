@@ -35,7 +35,7 @@ impl Signature {
 pub trait Signable {
     fn sign(&mut self, keypair: &Keypair) {
         let data = self.signable_data();
-        self.set_signature(Signature::new(&keypair.sign(&data).as_ref()));
+        self.set_signature(keypair.sign_message(&data));
     }
     fn verify(&self) -> bool {
         self.get_signature()
@@ -69,6 +69,7 @@ impl fmt::Display for Signature {
 pub trait KeypairUtil {
     fn new() -> Self;
     fn pubkey(&self) -> Pubkey;
+    fn sign_message(&self, message: &[u8]) -> Signature;
 }
 
 impl KeypairUtil for Ed25519KeyPair {
@@ -82,6 +83,10 @@ impl KeypairUtil for Ed25519KeyPair {
     /// Return the public key for the given keypair
     fn pubkey(&self) -> Pubkey {
         Pubkey::new(self.public_key_bytes())
+    }
+
+    fn sign_message(&self, message: &[u8]) -> Signature {
+        Signature::new(self.sign(message).as_ref())
     }
 }
 

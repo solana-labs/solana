@@ -25,6 +25,10 @@ pub struct PohRecorder {
 }
 
 impl PohRecorder {
+    pub fn max_tick_height(&self) -> Option<u64> {
+        self.max_tick_height
+    }
+
     pub fn hash(&self) -> Result<()> {
         // TODO: amortize the cost of this lock by doing the loop in here for
         // some min amount of hashes
@@ -115,35 +119,35 @@ impl PohRecorder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mint::Mint;
+    use crate::genesis_block::GenesisBlock;
     use crate::test_tx::test_tx;
     use solana_sdk::hash::hash;
     use std::sync::mpsc::channel;
     use std::sync::Arc;
 
     #[test]
-    fn test_poh() {
-        let mint = Mint::new(1);
-        let bank = Arc::new(Bank::new(&mint));
+    fn test_poh_recorder() {
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(1);
+        let bank = Arc::new(Bank::new(&genesis_block));
         let prev_id = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
-        let mut poh_recorder = PohRecorder::new(bank, entry_sender, prev_id, Some(3));
+        let mut poh_recorder = PohRecorder::new(bank, entry_sender, prev_id, Some(2));
 
         //send some data
         let h1 = hash(b"hello world!");
         let tx = test_tx();
-        assert!(poh_recorder.record(h1, vec![tx.clone()]).is_ok());
+        poh_recorder.record(h1, vec![tx.clone()]).unwrap();
         //get some events
+        let e = entry_receiver.recv().unwrap();
+        assert_eq!(e[0].tick_height, 0); // super weird case, but ok!
+
+        poh_recorder.tick().unwrap();
         let e = entry_receiver.recv().unwrap();
         assert_eq!(e[0].tick_height, 1);
 
-        assert!(poh_recorder.tick().is_ok());
+        poh_recorder.tick().unwrap();
         let e = entry_receiver.recv().unwrap();
         assert_eq!(e[0].tick_height, 2);
-
-        assert!(poh_recorder.tick().is_ok());
-        let e = entry_receiver.recv().unwrap();
-        assert_eq!(e[0].tick_height, 3);
 
         // max tick height reached
         assert!(poh_recorder.tick().is_err());

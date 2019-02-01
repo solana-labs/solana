@@ -3,16 +3,15 @@
 use crate::bank::Bank;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo, DATA_PLANE_FANOUT};
 use crate::counter::Counter;
-use crate::db_ledger::DbLedger;
 use crate::entry::Entry;
 use crate::entry::EntrySlice;
 #[cfg(feature = "erasure")]
-use crate::erasure;
+use crate::erasure::CodingGenerator;
 use crate::leader_scheduler::LeaderScheduler;
-use crate::packet::{index_blobs, SharedBlob};
+use crate::packet::index_blobs;
 use crate::result::{Error, Result};
 use crate::service::Service;
-use crate::window::{SharedWindow, WindowIndex, WindowUtil};
+use crate::streamer::BlobSender;
 use log::Level;
 use rayon::prelude::*;
 use solana_metrics::{influxdb, submit};
@@ -32,160 +31,107 @@ pub enum BroadcastServiceReturnType {
     ExitSignal,
 }
 
-#[allow(clippy::too_many_arguments)]
-fn broadcast(
-    db_ledger: &Arc<DbLedger>,
+struct Broadcast {
+    id: Pubkey,
     max_tick_height: Option<u64>,
-    leader_id: Pubkey,
-    node_info: &NodeInfo,
-    broadcast_table: &[NodeInfo],
-    window: &SharedWindow,
-    receiver: &Receiver<Vec<Entry>>,
-    sock: &UdpSocket,
-    transmit_index: &mut WindowIndex,
-    receive_index: &mut u64,
-    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-) -> Result<()> {
-    let id = node_info.id;
-    let timer = Duration::new(1, 0);
-    let entries = receiver.recv_timeout(timer)?;
-    let now = Instant::now();
-    let mut num_entries = entries.len();
-    let mut ventries = Vec::new();
-    ventries.push(entries);
+    blob_index: u64,
 
-    let mut contains_last_tick = false;
-    while let Ok(entries) = receiver.try_recv() {
-        num_entries += entries.len();
+    #[cfg(feature = "erasure")]
+    coding_generator: CodingGenerator,
+}
+
+impl Broadcast {
+    fn run(
+        &mut self,
+        broadcast_table: &[NodeInfo],
+        receiver: &Receiver<Vec<Entry>>,
+        sock: &UdpSocket,
+        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
+        blob_sender: &BlobSender,
+    ) -> Result<()> {
+        let timer = Duration::new(1, 0);
+        let entries = receiver.recv_timeout(timer)?;
+        let now = Instant::now();
+        let mut num_entries = entries.len();
+        let mut ventries = Vec::new();
         ventries.push(entries);
-    }
 
-    if let Some(Some(last)) = ventries.last().map(|entries| entries.last()) {
-        contains_last_tick |= Some(last.tick_height) == max_tick_height;
-    }
-
-    inc_new_counter_info!("broadcast_service-entries_received", num_entries);
-
-    let to_blobs_start = Instant::now();
-
-    // Generate the slot heights for all the entries inside ventries
-    let slot_heights = generate_slots(&ventries, leader_scheduler);
-
-    let blobs: Vec<_> = ventries
-        .into_par_iter()
-        .flat_map(|p| p.to_shared_blobs())
-        .collect();
-
-    let blobs_slot_heights: Vec<(SharedBlob, u64)> = blobs.into_iter().zip(slot_heights).collect();
-
-    let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
-
-    let blobs_chunking = Instant::now();
-    // We could receive more blobs than window slots so
-    // break them up into window-sized chunks to process
-    let window_size = window.read().unwrap().window_size();
-    let blobs_chunked = blobs_slot_heights
-        .chunks(window_size as usize)
-        .map(|x| x.to_vec());
-    let chunking_elapsed = duration_as_ms(&blobs_chunking.elapsed());
-
-    let broadcast_start = Instant::now();
-    for blobs in blobs_chunked {
-        let blobs_len = blobs.len();
-        trace!("{}: broadcast blobs.len: {}", id, blobs_len);
-
-        index_blobs(blobs.iter(), &node_info.id, *receive_index);
-
-        // keep the cache of blobs that are broadcast
-        inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
-        {
-            let mut win = window.write().unwrap();
-            assert!(blobs.len() <= win.len());
-            let blobs: Vec<_> = blobs.into_iter().map(|(b, _)| b).collect();
-            for b in &blobs {
-                let ix = b.read().unwrap().index().expect("blob index");
-                let pos = (ix % window_size) as usize;
-                if let Some(x) = win[pos].data.take() {
-                    trace!(
-                        "{} popped {} at {}",
-                        id,
-                        x.read().unwrap().index().unwrap(),
-                        pos
-                    );
-                }
-                if let Some(x) = win[pos].coding.take() {
-                    trace!(
-                        "{} popped {} at {}",
-                        id,
-                        x.read().unwrap().index().unwrap(),
-                        pos
-                    );
-                }
-
-                trace!("{} null {}", id, pos);
-            }
-            for b in &blobs {
-                {
-                    let ix = b.read().unwrap().index().expect("blob index");
-                    let pos = (ix % window_size) as usize;
-                    trace!("{} caching {} at {}", id, ix, pos);
-                    assert!(win[pos].data.is_none());
-                    win[pos].data = Some(b.clone());
-                }
-            }
-
-            db_ledger
-                .write_consecutive_blobs(&blobs)
-                .expect("Unrecoverable failure to write to database");
+        while let Ok(entries) = receiver.try_recv() {
+            num_entries += entries.len();
+            ventries.push(entries);
         }
+        let last_tick = match self.max_tick_height {
+            Some(max_tick_height) => {
+                if let Some(Some(last)) = ventries.last().map(|entries| entries.last()) {
+                    last.tick_height == max_tick_height
+                } else {
+                    false
+                }
+            }
+            None => false,
+        };
+
+        inc_new_counter_info!("broadcast_service-entries_received", num_entries);
+
+        let to_blobs_start = Instant::now();
+
+        // Generate the slot heights for all the entries inside ventries
+        //  this may span slots if this leader broadcasts for consecutive slots...
+        let slots = generate_slots(&ventries, leader_scheduler);
+
+        let blobs: Vec<_> = ventries
+            .into_par_iter()
+            .flat_map(|p| p.to_shared_blobs())
+            .collect();
+
+        // TODO: blob_index should be slot-relative...
+        index_blobs(&blobs, &self.id, self.blob_index, &slots);
+
+        let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
+
+        let broadcast_start = Instant::now();
+
+        inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
+
+        blob_sender.send(blobs.clone())?;
+
+        // don't count coding blobs in the blob indexes
+        self.blob_index += blobs.len() as u64;
+
+        // Send out data
+        ClusterInfo::broadcast(&self.id, last_tick, &broadcast_table, sock, &blobs)?;
 
         // Fill in the coding blob data from the window data blobs
         #[cfg(feature = "erasure")]
         {
-            erasure::generate_coding(
-                &id,
-                &mut window.write().unwrap(),
-                *receive_index,
-                blobs_len,
-                &mut transmit_index.coding,
-            )?;
+            let coding = self.coding_generator.next(&blobs)?;
+
+            // send out erasures
+            ClusterInfo::broadcast(&self.id, false, &broadcast_table, sock, &coding)?;
         }
 
-        *receive_index += blobs_len as u64;
+        let broadcast_elapsed = duration_as_ms(&broadcast_start.elapsed());
 
-        // Send blobs out from the window
-        ClusterInfo::broadcast(
-            contains_last_tick,
-            leader_id,
-            &node_info,
-            &broadcast_table,
-            &window,
-            &sock,
-            transmit_index,
-            *receive_index,
-        )?;
+        inc_new_counter_info!(
+            "broadcast_service-time_ms",
+            duration_as_ms(&now.elapsed()) as usize
+        );
+        info!(
+            "broadcast: {} entries, blob time {} broadcast time {}",
+            num_entries, to_blobs_elapsed, broadcast_elapsed
+        );
+
+        submit(
+            influxdb::Point::new("broadcast-service")
+                .add_field(
+                    "transmit-index",
+                    influxdb::Value::Integer(self.blob_index as i64),
+                )
+                .to_owned(),
+        );
+
+        Ok(())
     }
-    let broadcast_elapsed = duration_as_ms(&broadcast_start.elapsed());
-
-    inc_new_counter_info!(
-        "broadcast_service-time_ms",
-        duration_as_ms(&now.elapsed()) as usize
-    );
-    info!(
-        "broadcast: {} entries, blob time {} chunking time {} broadcast time {}",
-        num_entries, to_blobs_elapsed, chunking_elapsed, broadcast_elapsed
-    );
-
-    submit(
-        influxdb::Point::new("broadcast-service")
-            .add_field(
-                "transmit-index",
-                influxdb::Value::Integer(transmit_index.data as i64),
-            )
-            .to_owned(),
-    );
-
-    Ok(())
 }
 
 fn generate_slots(
@@ -240,50 +186,45 @@ pub struct BroadcastService {
 }
 
 impl BroadcastService {
-    #[allow(clippy::too_many_arguments)]
     fn run(
-        db_ledger: &Arc<DbLedger>,
         bank: &Arc<Bank>,
         sock: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        window: &SharedWindow,
         entry_height: u64,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
         receiver: &Receiver<Vec<Entry>>,
         max_tick_height: Option<u64>,
         exit_signal: &Arc<AtomicBool>,
+        blob_sender: &BlobSender,
     ) -> BroadcastServiceReturnType {
-        let mut transmit_index = WindowIndex {
-            data: entry_height,
-            coding: entry_height,
-        };
-        let mut receive_index = entry_height;
         let me = cluster_info.read().unwrap().my_data().clone();
+
+        let mut broadcast = Broadcast {
+            id: me.id,
+            max_tick_height,
+            blob_index: entry_height,
+            #[cfg(feature = "erasure")]
+            coding_generator: CodingGenerator::new(),
+        };
+
         loop {
             if exit_signal.load(Ordering::Relaxed) {
                 return BroadcastServiceReturnType::ExitSignal;
             }
             let mut broadcast_table = cluster_info.read().unwrap().sorted_tvu_peers(&bank);
-            // Layer 1 nodes are limited to the fanout size.
+            // Layer 1, leader nodes are limited to the fanout size.
             broadcast_table.truncate(DATA_PLANE_FANOUT);
             inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);
-            let leader_id = cluster_info.read().unwrap().leader_id();
-            if let Err(e) = broadcast(
-                db_ledger,
-                max_tick_height,
-                leader_id,
-                &me,
+            if let Err(e) = broadcast.run(
                 &broadcast_table,
-                &window,
-                &receiver,
-                &sock,
-                &mut transmit_index,
-                &mut receive_index,
+                receiver,
+                sock,
                 leader_scheduler,
+                blob_sender,
             ) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => {
-                        return BroadcastServiceReturnType::ChannelDisconnected
+                        return BroadcastServiceReturnType::ChannelDisconnected;
                     }
                     Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                     Error::ClusterInfoError(ClusterInfoError::NoPeers) => (), // TODO: Why are the unit-tests throwing hundreds of these?
@@ -311,35 +252,33 @@ impl BroadcastService {
     /// WriteStage is the last stage in the pipeline), which will then close Broadcast service,
     /// which will then close FetchStage in the Tpu, and then the rest of the Tpu,
     /// completing the cycle.
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        db_ledger: Arc<DbLedger>,
         bank: Arc<Bank>,
         sock: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        window: SharedWindow,
         entry_height: u64,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         receiver: Receiver<Vec<Entry>>,
         max_tick_height: Option<u64>,
         exit_sender: Arc<AtomicBool>,
+        blob_sender: &BlobSender,
     ) -> Self {
         let exit_signal = Arc::new(AtomicBool::new(false));
+        let blob_sender = blob_sender.clone();
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit_sender);
                 Self::run(
-                    &db_ledger,
                     &bank,
                     &sock,
                     &cluster_info,
-                    &window,
                     entry_height,
                     &leader_scheduler,
                     &receiver,
                     max_tick_height,
                     &exit_signal,
+                    &blob_sender,
                 )
             })
             .unwrap();
@@ -364,7 +303,6 @@ mod test {
     use crate::db_ledger::DbLedger;
     use crate::entry::create_ticks;
     use crate::service::Service;
-    use crate::window::new_window;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::sync::atomic::AtomicBool;
@@ -401,23 +339,22 @@ mod test {
         cluster_info.insert_info(broadcast_buddy.info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
 
-        let window = new_window(32 * 1024);
-        let shared_window = Arc::new(RwLock::new(window));
         let exit_sender = Arc::new(AtomicBool::new(false));
         let bank = Arc::new(Bank::default());
 
+        let (blob_fetch_sender, _) = channel();
+
         // Start up the broadcast stage
         let broadcast_service = BroadcastService::new(
-            db_ledger.clone(),
             bank.clone(),
             leader_info.sockets.broadcast,
             cluster_info,
-            shared_window,
             entry_height,
             leader_scheduler,
             entry_receiver,
             Some(max_tick_height),
             exit_sender,
+            &blob_fetch_sender,
         );
 
         MockBroadcastService {
@@ -427,6 +364,8 @@ mod test {
     }
 
     #[test]
+    #[ignore]
+    //TODO this test won't work since broadcast stage no longer edits the ledger
     fn test_broadcast_ledger() {
         let ledger_path = get_tmp_ledger_path("test_broadcast");
         {
@@ -454,10 +393,7 @@ mod test {
                 max_tick_height,
             );
 
-            let ticks = create_ticks(
-                (max_tick_height - start_tick_height) as usize,
-                Hash::default(),
-            );
+            let ticks = create_ticks(max_tick_height - start_tick_height, Hash::default());
             for (i, mut tick) in ticks.into_iter().enumerate() {
                 // Simulate the tick heights generated in poh.rs
                 tick.tick_height = start_tick_height + i as u64 + 1;

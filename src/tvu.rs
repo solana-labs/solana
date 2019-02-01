@@ -16,15 +16,18 @@ use crate::bank::Bank;
 use crate::blob_fetch_stage::BlobFetchStage;
 use crate::cluster_info::ClusterInfo;
 use crate::db_ledger::DbLedger;
-use crate::replay_stage::{ReplayStage, ReplayStageReturnType};
+use crate::fullnode::TvuRotationSender;
+use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
 use crate::service::Service;
-use crate::storage_stage::StorageStage;
-use crate::vote_signer_proxy::VoteSignerProxy;
+use crate::storage_stage::{StorageStage, StorageState};
+use crate::streamer::BlobSender;
+use crate::voting_keypair::VotingKeypair;
 use solana_sdk::hash::Hash;
-use solana_sdk::signature::Keypair;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread;
 
@@ -39,6 +42,8 @@ pub struct Tvu {
     replay_stage: ReplayStage,
     storage_stage: StorageStage,
     exit: Arc<AtomicBool>,
+    last_entry_id: Arc<RwLock<Hash>>,
+    entry_height: Arc<RwLock<u64>>,
 }
 
 pub struct Sockets {
@@ -57,15 +62,20 @@ impl Tvu {
     /// * `cluster_info` - The cluster_info state.
     /// * `sockets` - My fetch, repair, and restransmit sockets
     /// * `db_ledger` - the ledger itself
+    #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new(
-        vote_signer: &Arc<VoteSignerProxy>,
+        voting_keypair: Option<Arc<VotingKeypair>>,
         bank: &Arc<Bank>,
         entry_height: u64,
         last_entry_id: Hash,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sockets: Sockets,
         db_ledger: Arc<DbLedger>,
-    ) -> Self {
+        storage_rotate_count: u64,
+        to_leader_sender: TvuRotationSender,
+        storage_state: &StorageState,
+        entry_stream: Option<&String>,
+    ) -> (Self, BlobSender) {
         let exit = Arc::new(AtomicBool::new(false));
         let keypair: Arc<Keypair> = cluster_info
             .read()
@@ -79,12 +89,14 @@ impl Tvu {
             retransmit: retransmit_socket,
         } = sockets;
 
+        let (blob_fetch_sender, blob_fetch_receiver) = channel();
+
         let repair_socket = Arc::new(repair_socket);
         let mut blob_sockets: Vec<Arc<UdpSocket>> =
             fetch_sockets.into_iter().map(Arc::new).collect();
         blob_sockets.push(repair_socket.clone());
-        let (fetch_stage, blob_fetch_receiver) =
-            BlobFetchStage::new_multi_socket(blob_sockets, exit.clone());
+        let fetch_stage =
+            BlobFetchStage::new_multi_socket(blob_sockets, &blob_fetch_sender, exit.clone());
 
         //TODO
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
@@ -99,35 +111,55 @@ impl Tvu {
             repair_socket,
             blob_fetch_receiver,
             bank.leader_scheduler.clone(),
+            exit.clone(),
         );
 
+        let l_entry_height = Arc::new(RwLock::new(entry_height));
+        let l_last_entry_id = Arc::new(RwLock::new(last_entry_id));
+
         let (replay_stage, ledger_entry_receiver) = ReplayStage::new(
-            keypair.clone(),
-            vote_signer.clone(),
+            keypair.pubkey(),
+            voting_keypair,
             bank.clone(),
             cluster_info.clone(),
             blob_window_receiver,
             exit.clone(),
-            entry_height,
-            last_entry_id,
+            l_entry_height.clone(),
+            l_last_entry_id.clone(),
+            to_leader_sender,
+            entry_stream,
         );
 
         let storage_stage = StorageStage::new(
-            &bank.storage_state,
+            storage_state,
             ledger_entry_receiver,
             Some(db_ledger),
-            keypair,
-            exit.clone(),
+            &keypair,
+            &exit.clone(),
             entry_height,
+            storage_rotate_count,
+            &cluster_info,
         );
 
-        Tvu {
-            fetch_stage,
-            retransmit_stage,
-            replay_stage,
-            storage_stage,
-            exit,
-        }
+        (
+            Tvu {
+                fetch_stage,
+                retransmit_stage,
+                replay_stage,
+                storage_stage,
+                exit,
+                last_entry_id: l_last_entry_id,
+                entry_height: l_entry_height,
+            },
+            blob_fetch_sender,
+        )
+    }
+
+    pub fn get_state(&self) -> (Hash, u64) {
+        (
+            *self.last_entry_id.read().unwrap(),
+            *self.entry_height.read().unwrap(),
+        )
     }
 
     pub fn is_exited(&self) -> bool {
@@ -152,15 +184,6 @@ impl Service for Tvu {
         self.fetch_stage.join()?;
         self.storage_stage.join()?;
         match self.replay_stage.join()? {
-            Some(ReplayStageReturnType::LeaderRotation(
-                tick_height,
-                entry_height,
-                last_entry_id,
-            )) => Ok(Some(TvuReturnType::LeaderRotation(
-                tick_height,
-                entry_height,
-                last_entry_id,
-            ))),
             _ => Ok(None),
         }
     }
@@ -176,18 +199,18 @@ pub mod tests {
     use crate::gossip_service::GossipService;
     use crate::leader_scheduler::LeaderScheduler;
 
-    use crate::mint::Mint;
+    use crate::genesis_block::GenesisBlock;
     use crate::packet::SharedBlob;
     use crate::service::Service;
+    use crate::storage_stage::{StorageState, STORAGE_ROTATE_TEST_COUNT};
     use crate::streamer;
     use crate::tvu::{Sockets, Tvu};
-    use crate::vote_signer_proxy::VoteSignerProxy;
+    use crate::voting_keypair::VotingKeypair;
     use bincode::serialize;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Transaction;
-    use solana_vote_signer::rpc::LocalVoteSigner;
     use std::fs::remove_dir_all;
     use std::net::UdpSocket;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -247,12 +270,12 @@ pub mod tests {
         );
 
         let starting_balance = 10_000;
-        let mint = Mint::new(starting_balance);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(starting_balance);
         let tvu_addr = target1.info.tvu;
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
             leader_id,
         )));
-        let mut bank = Bank::new(&mint);
+        let mut bank = Bank::new(&genesis_block);
         bank.leader_scheduler = leader_scheduler;
         let bank = Arc::new(bank);
 
@@ -268,10 +291,10 @@ pub mod tests {
         let db_ledger =
             DbLedger::open(&db_ledger_path).expect("Expected to successfully open ledger");
         let vote_account_keypair = Arc::new(Keypair::new());
-        let vote_signer =
-            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
-        let tvu = Tvu::new(
-            &Arc::new(vote_signer),
+        let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
+        let (sender, _) = channel();
+        let (tvu, _) = Tvu::new(
+            Some(Arc::new(voting_keypair)),
             &bank,
             0,
             cur_hash,
@@ -284,6 +307,10 @@ pub mod tests {
                 }
             },
             Arc::new(db_ledger),
+            STORAGE_ROTATE_TEST_COUNT,
+            sender,
+            &StorageState::default(),
+            None,
         );
 
         let mut alice_ref_balance = starting_balance;
@@ -300,7 +327,7 @@ pub mod tests {
             cur_hash = entry_tick0.id;
 
             let tx0 = Transaction::system_new(
-                &mint.keypair(),
+                &mint_keypair,
                 bob_keypair.pubkey(),
                 transfer_amount,
                 cur_hash,
@@ -319,9 +346,9 @@ pub mod tests {
                 let b = SharedBlob::default();
                 {
                     let mut w = b.write().unwrap();
-                    w.set_index(blob_idx).unwrap();
+                    w.set_index(blob_idx);
                     blob_idx += 1;
-                    w.set_id(&leader_id).unwrap();
+                    w.set_id(&leader_id);
 
                     let serialized_entry = serialize(&entry).unwrap();
 
@@ -343,7 +370,7 @@ pub mod tests {
             trace!("got msg");
         }
 
-        let alice_balance = bank.get_balance(&mint.keypair().pubkey());
+        let alice_balance = bank.get_balance(&mint_keypair.pubkey());
         assert_eq!(alice_balance, alice_ref_balance);
 
         let bob_balance = bank.get_balance(&bob_keypair.pubkey());

@@ -59,6 +59,7 @@ Manage testnet instances
  create - create a new testnet (implies 'config')
  config - configure the testnet and write a config file describing it
  delete - delete the testnet
+ info   - display information about the currently configured testnet
 
  common options:
    -p [prefix]      - Optional common prefix for instance names to avoid
@@ -85,6 +86,9 @@ Manage testnet instances
  delete-specific options:
    none
 
+ info-specific options:
+   none
+
 EOF
   exit $exitcode
 }
@@ -93,7 +97,8 @@ EOF
 command=$1
 [[ -n $command ]] || usage
 shift
-[[ $command = create || $command = config || $command = delete ]] || usage "Invalid command: $command"
+[[ $command = create || $command = config || $command = info || $command = delete ]] ||
+  usage "Invalid command: $command"
 
 while getopts "h?p:Pn:c:z:gG:a:d:b" opt; do
   case $opt in
@@ -465,6 +470,31 @@ EOF
 
 config)
   prepareInstancesAndWriteConfigFile
+  ;;
+info)
+  loadConfigFile
+  printNode() {
+    declare nodeType=$1
+    declare ip=$2
+    declare ipPrivate=$3
+    printf "  %-16s | %-15s | %-15s\n" "$nodeType" "$ip" "$ipPrivate"
+  }
+
+  printNode "Node Type" "Public IP" "Private IP"
+  echo "-------------------+-----------------+-----------------"
+  nodeType=bootstrap-leader
+  for i in $(seq 0 $(( ${#fullnodeIpList[@]} - 1)) ); do
+    ipAddress=${fullnodeIpList[$i]}
+    ipAddressPrivate=${fullnodeIpListPrivate[$i]}
+    printNode $nodeType "$ipAddress" "$ipAddressPrivate"
+    nodeType=fullnode
+  done
+
+  for i in $(seq 0 $(( ${#clientIpList[@]} - 1)) ); do
+    ipAddress=${clientIpList[$i]}
+    ipAddressPrivate=${clientIpListPrivate[$i]}
+    printNode bench-tps "$ipAddress" "$ipAddressPrivate"
+  done
   ;;
 *)
   usage "Unknown command: $command"

@@ -2,8 +2,6 @@
 use crate::db_ledger::DbLedger;
 use crate::packet::{Blob, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE, BLOB_SIZE};
 use crate::result::{Error, Result};
-use crate::window::WindowSlot;
-use solana_sdk::pubkey::Pubkey;
 use std::cmp;
 use std::sync::{Arc, RwLock};
 
@@ -177,6 +175,79 @@ pub fn decode_blocks(
     Ok(())
 }
 
+fn decode_blobs(
+    blobs: &[SharedBlob],
+    erasures: &[i32],
+    size: usize,
+    block_start_idx: u64,
+    slot: u64,
+) -> Result<bool> {
+    let mut locks = Vec::with_capacity(NUM_DATA + NUM_CODING);
+    let mut coding_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_CODING);
+    let mut data_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_DATA);
+
+    assert!(blobs.len() == NUM_DATA + NUM_CODING);
+    for b in blobs {
+        locks.push(b.write().unwrap());
+    }
+
+    for (i, l) in locks.iter_mut().enumerate() {
+        if i < NUM_DATA {
+            data_ptrs.push(&mut l.data[..size]);
+        } else {
+            coding_ptrs.push(&mut l.data_mut()[..size]);
+        }
+    }
+
+    // Decode the blocks
+    decode_blocks(
+        data_ptrs.as_mut_slice(),
+        coding_ptrs.as_mut_slice(),
+        &erasures,
+    )?;
+
+    // Create the missing blobs from the reconstructed data
+    let mut corrupt = false;
+
+    for i in &erasures[..erasures.len() - 1] {
+        let n = *i as usize;
+        let mut idx = n as u64 + block_start_idx;
+
+        let mut data_size;
+        if n < NUM_DATA {
+            data_size = locks[n].data_size() as usize;
+            data_size -= BLOB_HEADER_SIZE;
+            if data_size > BLOB_DATA_SIZE {
+                error!("corrupt data blob[{}] data_size: {}", idx, data_size);
+                corrupt = true;
+                break;
+            }
+        } else {
+            data_size = size;
+            idx -= NUM_CODING as u64;
+            locks[n].set_slot(slot);
+            locks[n].set_index(idx);
+
+            if data_size - BLOB_HEADER_SIZE > BLOB_DATA_SIZE {
+                error!("corrupt coding blob[{}] data_size: {}", idx, data_size);
+                corrupt = true;
+                break;
+            }
+        }
+
+        locks[n].set_size(data_size);
+        trace!(
+            "erasures[{}] ({}) size: {} data[0]: {}",
+            *i,
+            idx,
+            data_size,
+            locks[n].data()[0]
+        );
+    }
+
+    Ok(corrupt)
+}
+
 // Generate coding blocks in window starting from start_idx,
 //   for num_blobs..  For each block place the coding blobs
 //   at the end of the block like so:
@@ -214,137 +285,80 @@ pub fn decode_blocks(
 //
 //
 //
-pub fn generate_coding(
-    id: &Pubkey,
-    window: &mut [WindowSlot],
-    receive_index: u64,
-    num_blobs: usize,
-    transmit_index_coding: &mut u64,
-) -> Result<()> {
-    // beginning of the coding blobs of the block that receive_index points into
-    let coding_index_start =
-        receive_index - (receive_index % NUM_DATA as u64) + (NUM_DATA - NUM_CODING) as u64;
+pub struct CodingGenerator {
+    leftover: Vec<SharedBlob>, // SharedBlobs that couldn't be used in last call to next()
+}
 
-    let start_idx = receive_index as usize % window.len();
-    let mut block_start = start_idx - (start_idx % NUM_DATA);
-
-    loop {
-        let block_end = block_start + NUM_DATA;
-        if block_end > (start_idx + num_blobs) {
-            break;
+impl CodingGenerator {
+    pub fn new() -> Self {
+        Self {
+            leftover: Vec::with_capacity(NUM_DATA),
         }
-        info!(
-            "generate_coding {} start: {} end: {} start_idx: {} num_blobs: {}",
-            id, block_start, block_end, start_idx, num_blobs
-        );
-
-        let mut max_data_size = 0;
-
-        // find max_data_size, maybe bail if not all the data is here
-        for i in block_start..block_end {
-            let n = i % window.len();
-            trace!("{} window[{}] = {:?}", id, n, window[n].data);
-
-            if let Some(b) = &window[n].data {
-                max_data_size = cmp::max(b.read().unwrap().meta.size, max_data_size);
-            } else {
-                trace!("{} data block is null @ {}", id, n);
-                return Ok(());
-            }
-        }
-
-        // round up to the nearest jerasure alignment
-        max_data_size = align!(max_data_size, JERASURE_ALIGN);
-
-        let mut data_blobs = Vec::with_capacity(NUM_DATA);
-        for i in block_start..block_end {
-            let n = i % window.len();
-
-            if let Some(b) = &window[n].data {
-                // make sure extra bytes in each blob are zero-d out for generation of
-                //  coding blobs
-                let mut b_wl = b.write().unwrap();
-                for i in b_wl.meta.size..max_data_size {
-                    b_wl.data[i] = 0;
-                }
-                data_blobs.push(b);
-            }
-        }
-
-        // getting ready to do erasure coding, means that we're potentially
-        // going back in time, tell our caller we've inserted coding blocks
-        // starting at coding_index_start
-        *transmit_index_coding = cmp::min(*transmit_index_coding, coding_index_start);
-
-        let mut coding_blobs = Vec::with_capacity(NUM_CODING);
-        let coding_start = block_end - NUM_CODING;
-        for i in coding_start..block_end {
-            let n = i % window.len();
-            assert!(window[n].coding.is_none());
-
-            window[n].coding = Some(SharedBlob::default());
-
-            let coding = window[n].coding.clone().unwrap();
-            let mut coding_wl = coding.write().unwrap();
-            for i in 0..max_data_size {
-                coding_wl.data[i] = 0;
-            }
-            // copy index and id from the data blob
-            if let Some(data) = &window[n].data {
-                let data_rl = data.read().unwrap();
-
-                let index = data_rl.index().unwrap();
-                let slot = data_rl.slot().unwrap();
-                let id = data_rl.id().unwrap();
-
-                trace!(
-                    "{} copying index {} id {:?} from data to coding",
-                    id,
-                    index,
-                    id
-                );
-                coding_wl.set_index(index).unwrap();
-                coding_wl.set_slot(slot).unwrap();
-                coding_wl.set_id(&id).unwrap();
-            }
-            coding_wl.set_size(max_data_size);
-            if coding_wl.set_coding().is_err() {
-                return Err(Error::ErasureError(ErasureError::EncodeError));
-            }
-
-            coding_blobs.push(coding.clone());
-        }
-
-        let data_locks: Vec<_> = data_blobs.iter().map(|b| b.read().unwrap()).collect();
-
-        let data_ptrs: Vec<_> = data_locks
-            .iter()
-            .enumerate()
-            .map(|(i, l)| {
-                trace!("{} i: {} data: {}", id, i, l.data[0]);
-                &l.data[..max_data_size]
-            })
-            .collect();
-
-        let mut coding_locks: Vec<_> = coding_blobs.iter().map(|b| b.write().unwrap()).collect();
-
-        let mut coding_ptrs: Vec<_> = coding_locks
-            .iter_mut()
-            .enumerate()
-            .map(|(i, l)| {
-                trace!("{} i: {} coding: {}", id, i, l.data[0],);
-                &mut l.data_mut()[..max_data_size]
-            })
-            .collect();
-
-        generate_coding_blocks(coding_ptrs.as_mut_slice(), &data_ptrs)?;
-        debug!(
-            "{} start_idx: {} data: {}:{} coding: {}:{}",
-            id, start_idx, block_start, block_end, coding_start, block_end
-        );
-        block_start = block_end;
     }
-    Ok(())
+
+    // must be called with consecutive data blobs from previous invocation
+    pub fn next(&mut self, next_data: &[SharedBlob]) -> Result<Vec<SharedBlob>> {
+        let mut next_coding =
+            Vec::with_capacity((self.leftover.len() + next_data.len()) / NUM_DATA * NUM_CODING);
+
+        let next_data: Vec<_> = self.leftover.iter().chain(next_data).cloned().collect();
+
+        for data_blobs in next_data.chunks(NUM_DATA) {
+            if data_blobs.len() < NUM_DATA {
+                self.leftover = data_blobs.to_vec();
+                break;
+            }
+            self.leftover.clear();
+
+            // find max_data_size for the chunk
+            let max_data_size = align!(
+                data_blobs
+                    .iter()
+                    .fold(0, |max, blob| cmp::max(blob.read().unwrap().meta.size, max)),
+                JERASURE_ALIGN
+            );
+
+            let data_locks: Vec<_> = data_blobs.iter().map(|b| b.read().unwrap()).collect();
+            let data_ptrs: Vec<_> = data_locks
+                .iter()
+                .map(|l| &l.data[..max_data_size])
+                .collect();
+
+            let mut coding_blobs = Vec::with_capacity(NUM_CODING);
+
+            for data_blob in &data_locks[NUM_DATA - NUM_CODING..NUM_DATA] {
+                let index = data_blob.index();
+                let slot = data_blob.slot();
+                let id = data_blob.id();
+
+                let coding_blob = SharedBlob::default();
+                {
+                    let mut coding_blob = coding_blob.write().unwrap();
+                    coding_blob.set_index(index);
+                    coding_blob.set_slot(slot);
+                    coding_blob.set_id(&id);
+                    coding_blob.set_size(max_data_size);
+                    coding_blob.set_coding();
+                }
+                coding_blobs.push(coding_blob);
+            }
+
+            {
+                let mut coding_locks: Vec<_> =
+                    coding_blobs.iter().map(|b| b.write().unwrap()).collect();
+
+                let mut coding_ptrs: Vec<_> = coding_locks
+                    .iter_mut()
+                    .map(|l| &mut l.data_mut()[..max_data_size])
+                    .collect();
+
+                generate_coding_blocks(coding_ptrs.as_mut_slice(), &data_ptrs)?;
+            }
+            next_coding.append(&mut coding_blobs);
+        }
+
+        Ok(next_coding)
+    }
 }
 
 // Recover the missing data and coding blobs from the input ledger. Returns a vector
@@ -401,7 +415,6 @@ pub fn recover(
 
     let mut missing_data: Vec<SharedBlob> = vec![];
     let mut missing_coding: Vec<SharedBlob> = vec![];
-    let mut size = None;
 
     // Add the data blobs we have into the recovery vector, mark the missing ones
     for i in block_start_idx..block_end_idx {
@@ -416,6 +429,7 @@ pub fn recover(
         )?;
     }
 
+    let mut size = None;
     // Add the coding blobs we have into the recovery vector, mark the missing ones
     for i in coding_start_idx..block_end_idx {
         let result = db_ledger.get_coding_blob_bytes(slot, i)?;
@@ -434,78 +448,17 @@ pub fn recover(
             }
         }
     }
-
-    // Due to check (data_missing + coding_missing) > NUM_CODING from earlier in this function,
-    // we know at least one coding block must exist, so "size" will not remain None after the
-    // below processing.
+    // Due to checks above verifying that (data_missing + coding_missing) <= NUM_CODING and
+    //  data_missing > 0, we know at least one coding block must exist, so "size" can
+    //  not remain None after the above processing.
     let size = size.unwrap();
+
     // marks end of erasures
     erasures.push(-1);
+
     trace!("erasures[]:{:?} data_size: {}", erasures, size,);
 
-    let mut locks = Vec::with_capacity(NUM_DATA + NUM_CODING);
-    {
-        let mut coding_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_CODING);
-        let mut data_ptrs: Vec<&mut [u8]> = Vec::with_capacity(NUM_DATA);
-
-        for b in &blobs {
-            locks.push(b.write().unwrap());
-        }
-
-        for (i, l) in locks.iter_mut().enumerate() {
-            if i < NUM_DATA {
-                data_ptrs.push(&mut l.data[..size]);
-            } else {
-                coding_ptrs.push(&mut l.data_mut()[..size]);
-            }
-        }
-
-        // Decode the blocks
-        decode_blocks(
-            data_ptrs.as_mut_slice(),
-            coding_ptrs.as_mut_slice(),
-            &erasures,
-        )?;
-    }
-
-    // Create the missing blobs from the reconstructed data
-    let mut corrupt = false;
-
-    for i in &erasures[..erasures.len() - 1] {
-        let n = *i as usize;
-        let mut idx = n as u64 + block_start_idx;
-
-        let mut data_size;
-        if n < NUM_DATA {
-            data_size = locks[n].data_size().unwrap() as usize;
-            data_size -= BLOB_HEADER_SIZE;
-            if data_size > BLOB_DATA_SIZE {
-                error!("corrupt data blob[{}] data_size: {}", idx, data_size);
-                corrupt = true;
-                break;
-            }
-        } else {
-            data_size = size;
-            idx -= NUM_CODING as u64;
-            locks[n].set_slot(slot).unwrap();
-            locks[n].set_index(idx).unwrap();
-
-            if data_size - BLOB_HEADER_SIZE > BLOB_DATA_SIZE {
-                error!("corrupt coding blob[{}] data_size: {}", idx, data_size);
-                corrupt = true;
-                break;
-            }
-        }
-
-        locks[n].set_size(data_size);
-        trace!(
-            "erasures[{}] ({}) size: {} data[0]: {}",
-            *i,
-            idx,
-            data_size,
-            locks[n].data()[0]
-        );
-    }
+    let corrupt = decode_blobs(&blobs, &erasures, size, block_start_idx, slot)?;
 
     if corrupt {
         // Remove the corrupted coding blobs so there's no effort wasted in trying to
@@ -560,7 +513,7 @@ pub mod test {
     use std::sync::Arc;
 
     #[test]
-    pub fn test_coding() {
+    fn test_coding() {
         let zero_vec = vec![0; 16];
         let mut vs: Vec<Vec<u8>> = (0..4).map(|i| (i..(16 + i)).collect()).collect();
         let v_orig: Vec<u8> = vs[0].clone();
@@ -608,6 +561,75 @@ pub mod test {
         assert_eq!(v_orig, vs[0]);
     }
 
+    #[test]
+    fn test_erasure_generate_coding() {
+        solana_logger::setup();
+
+        // trivial case
+        let mut coding_generator = CodingGenerator::new();
+        let blobs = Vec::new();
+        for _ in 0..NUM_DATA * 2 {
+            let coding = coding_generator.next(&blobs).unwrap();
+            assert_eq!(coding.len(), 0);
+        }
+
+        // test coding by iterating one blob at a time
+        let data_blobs = generate_test_blobs(0, NUM_DATA * 2);
+
+        for (i, blob) in data_blobs.iter().cloned().enumerate() {
+            let coding = coding_generator.next(&[blob]).unwrap();
+
+            if !coding.is_empty() {
+                assert_eq!(i % NUM_DATA, NUM_DATA - 1);
+                assert_eq!(coding.len(), NUM_CODING);
+
+                let size = coding[0].read().unwrap().size();
+
+                // toss one data and one coding
+                let erasures: Vec<i32> = vec![0, NUM_DATA as i32, -1];
+
+                let block_start_idx = i - (i % NUM_DATA);
+                let mut blobs: Vec<SharedBlob> = Vec::with_capacity(NUM_DATA + NUM_CODING);
+
+                blobs.push(SharedBlob::default()); // empty data, erasure at zero
+                for blob in &data_blobs[block_start_idx + 1..block_start_idx + NUM_DATA] {
+                    // skip first blob
+                    blobs.push(blob.clone());
+                }
+                blobs.push(SharedBlob::default()); // empty coding, erasure at NUM_DATA
+                for blob in &coding[1..NUM_CODING] {
+                    blobs.push(blob.clone());
+                }
+
+                let corrupt =
+                    decode_blobs(&blobs, &erasures, size, block_start_idx as u64, 0).unwrap();
+
+                assert!(!corrupt);
+
+                assert_eq!(
+                    blobs[1].read().unwrap().meta,
+                    data_blobs[block_start_idx + 1].read().unwrap().meta
+                );
+                assert_eq!(
+                    blobs[1].read().unwrap().data(),
+                    data_blobs[block_start_idx + 1].read().unwrap().data()
+                );
+                assert_eq!(
+                    blobs[0].read().unwrap().meta,
+                    data_blobs[block_start_idx].read().unwrap().meta
+                );
+                assert_eq!(
+                    blobs[0].read().unwrap().data(),
+                    data_blobs[block_start_idx].read().unwrap().data()
+                );
+                assert_eq!(
+                    blobs[NUM_DATA].read().unwrap().data(),
+                    coding[0].read().unwrap().data()
+                );
+            }
+        }
+    }
+
     // TODO: Temprorary function used in tests to generate a database ledger
     // from the window (which is used to generate the erasure coding)
     // until we also transition generate_coding() and BroadcastStage to use DbLedger
@@ -627,9 +649,9 @@ pub mod test {
                     let data = data.read().unwrap();
                     db_ledger
                         .put_data_blob_bytes(
-                            data.slot().unwrap(),
-                            data.index().unwrap(),
-                            &data.data[..data.data_size().unwrap() as usize],
+                            data.slot(),
+                            data.index(),
+                            &data.data[..data.data_size() as usize],
                         )
                         .expect("Expected successful put into data column of ledger");
                 } else {
@@ -642,17 +664,13 @@ pub mod test {
             if let Some(ref coding) = slot.coding {
                 let coding_lock = coding.read().unwrap();
 
-                let index = coding_lock
-                    .index()
-                    .expect("Expected coding blob to have valid index");
+                let index = coding_lock.index();
 
-                let data_size = coding_lock
-                    .size()
-                    .expect("Expected coding blob to have valid data size");
+                let data_size = coding_lock.size();
 
                 db_ledger
                     .put_coding_blob_bytes(
-                        coding_lock.slot().unwrap(),
+                        coding_lock.slot(),
                         index,
                         &coding_lock.data[..data_size as usize + BLOB_HEADER_SIZE],
                     )
@@ -661,6 +679,138 @@ pub mod test {
         }
 
         db_ledger
+    }
+
+    fn generate_coding(
+        id: &Pubkey,
+        window: &mut [WindowSlot],
+        receive_index: u64,
+        num_blobs: usize,
+        transmit_index_coding: &mut u64,
+    ) -> Result<()> {
+        // beginning of the coding blobs of the block that receive_index points into
+        let coding_index_start =
+            receive_index - (receive_index % NUM_DATA as u64) + (NUM_DATA - NUM_CODING) as u64;
+
+        let start_idx = receive_index as usize % window.len();
+        let mut block_start = start_idx - (start_idx % NUM_DATA);
+
+        loop {
+            let block_end = block_start + NUM_DATA;
+            if block_end > (start_idx + num_blobs) {
+                break;
+            }
+            info!(
+                "generate_coding {} start: {} end: {} start_idx: {} num_blobs: {}",
+                id, block_start, block_end, start_idx, num_blobs
+            );
+
+            let mut max_data_size = 0;
+
+            // find max_data_size, maybe bail if not all the data is here
+            for i in block_start..block_end {
+                let n = i % window.len();
+                trace!("{} window[{}] = {:?}", id, n, window[n].data);
+
+                if let Some(b) = &window[n].data {
+                    max_data_size = cmp::max(b.read().unwrap().meta.size, max_data_size);
+                } else {
+                    trace!("{} data block is null @ {}", id, n);
+                    return Ok(());
+                }
+            }
+
+            // round up to the nearest jerasure alignment
+            max_data_size = align!(max_data_size, JERASURE_ALIGN);
+
+            let mut data_blobs = Vec::with_capacity(NUM_DATA);
+            for i in block_start..block_end {
+                let n = i % window.len();
+
+                if let Some(b) = &window[n].data {
+                    // make sure extra bytes in each blob are zero-d out for generation of
+                    //  coding blobs
+                    let mut b_wl = b.write().unwrap();
+                    for i in b_wl.meta.size..max_data_size {
+                        b_wl.data[i] = 0;
+                    }
+                    data_blobs.push(b);
+                }
+            }
+
+            // getting ready to do erasure coding, means that we're potentially
+            // going back in time, tell our caller we've inserted coding blocks
+            // starting at coding_index_start
+            *transmit_index_coding = cmp::min(*transmit_index_coding, coding_index_start);
+
+            let mut coding_blobs = Vec::with_capacity(NUM_CODING);
+            let coding_start = block_end - NUM_CODING;
+            for i in coding_start..block_end {
+                let n = i % window.len();
+                assert!(window[n].coding.is_none());
+
+                window[n].coding = Some(SharedBlob::default());
+
+                let coding = window[n].coding.clone().unwrap();
+                let mut coding_wl = coding.write().unwrap();
+                for i in 0..max_data_size {
+                    coding_wl.data[i] = 0;
+                }
+                // copy index and id from the data blob
+                if let Some(data) = &window[n].data {
+                    let data_rl = data.read().unwrap();
+
+                    let index = data_rl.index();
+                    let slot = data_rl.slot();
+                    let id = data_rl.id();
+
+                    trace!(
+                        "{} copying index {} id {:?} from data to coding",
+                        id,
+                        index,
+                        id
+                    );
+                    coding_wl.set_index(index);
+                    coding_wl.set_slot(slot);
+                    coding_wl.set_id(&id);
+                }
+                coding_wl.set_size(max_data_size);
+                coding_wl.set_coding();
+
+                coding_blobs.push(coding.clone());
+            }
+
+            let data_locks: Vec<_> = data_blobs.iter().map(|b| b.read().unwrap()).collect();
+
+            let data_ptrs: Vec<_> = data_locks
+                .iter()
+                .enumerate()
+                .map(|(i, l)| {
+                    trace!("{} i: {} data: {}", id, i, l.data[0]);
+                    &l.data[..max_data_size]
+                })
+                .collect();
+
+            let mut coding_locks: Vec<_> =
+                coding_blobs.iter().map(|b| b.write().unwrap()).collect();
+
+            let mut coding_ptrs: Vec<_> = coding_locks
+                .iter_mut()
+                .enumerate()
+                .map(|(i, l)| {
+                    trace!("{} i: {} coding: {}", id, i, l.data[0],);
+                    &mut l.data_mut()[..max_data_size]
+                })
+                .collect();
+
+            generate_coding_blocks(coding_ptrs.as_mut_slice(), &data_ptrs)?;
+            debug!(
+                "{} start_idx: {} data: {}:{} coding: {}:{}",
+                id, start_idx, block_start, block_end, coding_start, block_end
+            );
+            block_start = block_end;
+        }
+        Ok(())
     }
 
     pub fn setup_window_ledger(
@@ -725,7 +875,6 @@ pub mod test {
                 (thread_rng().gen_range(2, 8) * 4) + 1
             };
 
-            eprintln!("data_len of {} is {}", i, data_len);
             w.set_size(data_len);
 
             for k in 0..data_len {
@@ -740,18 +889,32 @@ pub mod test {
             blobs.push(b_);
         }
 
-        {
-            // Make some dummy slots
-            let slot_tick_heights: Vec<(&SharedBlob, u64)> =
-                blobs.iter().zip(vec![slot; blobs.len()]).collect();
-            index_blobs(slot_tick_heights, &Keypair::new().pubkey(), offset as u64);
-        }
+        // Make some dummy slots
+        index_blobs(
+            &blobs,
+            &Keypair::new().pubkey(),
+            offset as u64,
+            &vec![slot; blobs.len()],
+        );
+
         for b in blobs {
-            let idx = b.read().unwrap().index().unwrap() as usize % WINDOW_SIZE;
+            let idx = b.read().unwrap().index() as usize % WINDOW_SIZE;
 
             window[idx].data = Some(b);
         }
         window
+    }
+
+    fn generate_test_blobs(offset: usize, num_blobs: usize) -> Vec<SharedBlob> {
+        let blobs = make_tiny_test_entries(num_blobs).to_shared_blobs();
+
+        index_blobs(
+            &blobs,
+            &Keypair::new().pubkey(),
+            offset as u64,
+            &vec![DEFAULT_SLOT_HEIGHT; blobs.len()],
+        );
+        blobs
     }
 
     fn generate_entry_window(offset: usize, num_blobs: usize) -> Vec<WindowSlot> {
@@ -763,20 +926,11 @@ pub mod test {
             };
             WINDOW_SIZE
         ];
-        let entries = make_tiny_test_entries(num_blobs);
-        let blobs = entries.to_shared_blobs();
 
-        {
-            // Make some dummy slots
-            let slot_tick_heights: Vec<(&SharedBlob, u64)> = blobs
-                .iter()
-                .zip(vec![DEFAULT_SLOT_HEIGHT; blobs.len()])
-                .collect();
-            index_blobs(slot_tick_heights, &Keypair::new().pubkey(), offset as u64);
-        }
+        let blobs = generate_test_blobs(offset, num_blobs);
 
         for b in blobs.into_iter() {
-            let idx = b.read().unwrap().index().unwrap() as usize % WINDOW_SIZE;
+            let idx = b.read().unwrap().index() as usize % WINDOW_SIZE;
 
             window[idx].data = Some(b);
         }
@@ -809,7 +963,6 @@ pub mod test {
         let num_blobs = NUM_DATA + 2;
         let mut window = setup_window_ledger(offset, num_blobs, true, DEFAULT_SLOT_HEIGHT);
 
-        println!("** whack data block:");
         // Test erasing a data block
         let erase_offset = offset % window.len();
 
@@ -835,13 +988,13 @@ pub mod test {
             let ref_l2 = ref_l.read().unwrap();
             let result = recovered_blob.read().unwrap();
 
-            assert_eq!(result.size().unwrap(), ref_l2.size().unwrap());
+            assert_eq!(result.size(), ref_l2.size());
             assert_eq!(
-                result.data[..ref_l2.data_size().unwrap() as usize],
-                ref_l2.data[..ref_l2.data_size().unwrap() as usize]
+                result.data[..ref_l2.data_size() as usize],
+                ref_l2.data[..ref_l2.data_size() as usize]
             );
-            assert_eq!(result.index().unwrap(), offset as u64);
-            assert_eq!(result.slot().unwrap(), DEFAULT_SLOT_HEIGHT as u64);
+            assert_eq!(result.index(), offset as u64);
+            assert_eq!(result.slot(), DEFAULT_SLOT_HEIGHT as u64);
         }
         drop(db_ledger);
         DbLedger::destroy(&ledger_path)
@@ -858,7 +1011,6 @@ pub mod test {
         let num_blobs = NUM_DATA + 2;
         let mut window = setup_window_ledger(offset, num_blobs, true, DEFAULT_SLOT_HEIGHT);
 
-        println!("** whack coding block and data block");
         // Tests erasing a coding block and a data block
         let coding_start = offset - (offset % NUM_DATA) + (NUM_DATA - NUM_CODING);
         let erase_offset = coding_start % window.len();
@@ -889,26 +1041,26 @@ pub mod test {
             let ref_l2 = ref_l.read().unwrap();
             let result = recovered_data_blob.read().unwrap();
 
-            assert_eq!(result.size().unwrap(), ref_l2.size().unwrap());
+            assert_eq!(result.size(), ref_l2.size());
             assert_eq!(
-                result.data[..ref_l2.data_size().unwrap() as usize],
-                ref_l2.data[..ref_l2.data_size().unwrap() as usize]
+                result.data[..ref_l2.data_size() as usize],
+                ref_l2.data[..ref_l2.data_size() as usize]
             );
-            assert_eq!(result.index().unwrap(), coding_start as u64);
-            assert_eq!(result.slot().unwrap(), DEFAULT_SLOT_HEIGHT as u64);
+            assert_eq!(result.index(), coding_start as u64);
+            assert_eq!(result.slot(), DEFAULT_SLOT_HEIGHT as u64);
 
             // Check the recovered erasure result
             let ref_l = refwindowcoding.clone().unwrap();
             let ref_l2 = ref_l.read().unwrap();
             let result = recovered_coding_blob.read().unwrap();
 
-            assert_eq!(result.size().unwrap(), ref_l2.size().unwrap());
+            assert_eq!(result.size(), ref_l2.size());
             assert_eq!(
-                result.data()[..ref_l2.size().unwrap() as usize],
-                ref_l2.data()[..ref_l2.size().unwrap() as usize]
+                result.data()[..ref_l2.size() as usize],
+                ref_l2.data()[..ref_l2.size() as usize]
             );
-            assert_eq!(result.index().unwrap(), coding_start as u64);
-            assert_eq!(result.slot().unwrap(), DEFAULT_SLOT_HEIGHT as u64);
+            assert_eq!(result.index(), coding_start as u64);
+            assert_eq!(result.slot(), DEFAULT_SLOT_HEIGHT as u64);
         }
         drop(db_ledger);
         DbLedger::destroy(&ledger_path)

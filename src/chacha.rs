@@ -38,13 +38,15 @@ pub fn chacha_cbc_encrypt_ledger(
     slice: u64,
     out_path: &Path,
     ivec: &mut [u8; CHACHA_BLOCK_SIZE],
-) -> io::Result<()> {
+) -> io::Result<usize> {
     let mut out_file =
         BufWriter::new(File::create(out_path).expect("Can't open ledger encrypted data file"));
-    let mut buffer = [0; 8 * 1024];
-    let mut encrypted_buffer = [0; 8 * 1024];
+    const BUFFER_SIZE: usize = 8 * 1024;
+    let mut buffer = [0; BUFFER_SIZE];
+    let mut encrypted_buffer = [0; BUFFER_SIZE];
     let key = [0; CHACHA_KEY_SIZE];
     let mut total_entries = 0;
+    let mut total_size = 0;
     let mut entry = slice;
 
     loop {
@@ -60,13 +62,21 @@ pub fn chacha_cbc_encrypt_ledger(
                     slice, num_entries, entry_len
                 );
                 debug!("read {} bytes", entry_len);
-                let size = entry_len as usize;
+                let mut size = entry_len as usize;
                 if size == 0 {
                     break;
                 }
+
+                if size < BUFFER_SIZE {
+                    // We are on the last block, round to the nearest key_size
+                    // boundary
+                    size = (size + CHACHA_KEY_SIZE - 1) & !(CHACHA_KEY_SIZE - 1);
+                }
+                total_size += size;
+
                 chacha_cbc_encrypt(&buffer[..size], &mut encrypted_buffer[..size], &key, ivec);
                 if let Err(res) = out_file.write(&encrypted_buffer[..size]) {
-                    println!("Error writing file! {:?}", res);
+                    warn!("Error writing file! {:?}", res);
                     return Err(res);
                 }
 
@@ -79,7 +89,7 @@ pub fn chacha_cbc_encrypt_ledger(
             }
         }
     }
-    Ok(())
+    Ok(total_size)
 }
 
 #[cfg(test)]
@@ -147,18 +157,21 @@ mod tests {
             "abcd1234abcd1234abcd1234abcd1234 abcd1234abcd1234abcd1234abcd1234
                             abcd1234abcd1234abcd1234abcd1234 abcd1234abcd1234abcd1234abcd1234"
         );
-        assert!(chacha_cbc_encrypt_ledger(&db_ledger, 0, out_path, &mut key).is_ok());
+        chacha_cbc_encrypt_ledger(&db_ledger, 0, out_path, &mut key).unwrap();
         let mut out_file = File::open(out_path).unwrap();
         let mut buf = vec![];
         let size = out_file.read_to_end(&mut buf).unwrap();
         let mut hasher = Hasher::default();
         hasher.hash(&buf[..size]);
-        assert_eq!(
-            hasher.result(),
-            Hash::new(&hex!(
-                "1ef70b5491a5f2b05ebeb0f92a03c131a7a78622f3643064d6d3c52a0c083175"
-            )),
+
+        use bs58;
+        //  golden needs to be updated if blob stuff changes....
+        let golden = Hash::new(
+            &bs58::decode("BES6jpfVwayNKq9YZbYjbZbyX3GLzFzeQJ7fksm6LifE")
+                .into_vec()
+                .unwrap(),
         );
+        assert_eq!(hasher.result(), golden,);
         remove_file(out_path).unwrap();
     }
 }

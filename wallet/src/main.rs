@@ -1,27 +1,46 @@
 use clap::{crate_version, App, Arg, ArgMatches, SubCommand};
-use solana::socketaddr;
 use solana_sdk::signature::{gen_keypair_file, read_keypair, KeypairUtil};
 use solana_wallet::wallet::{parse_command, process_command, WalletConfig, WalletError};
 use std::error;
-use std::net::SocketAddr;
 
 pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn error::Error>> {
-    let network = if let Some(addr) = matches.value_of("network") {
-        addr.parse().or_else(|_| {
-            Err(WalletError::BadParameter(
-                "Invalid network location".to_string(),
-            ))
-        })?
-    } else {
-        socketaddr!("127.0.0.1:8001")
-    };
-    let timeout = if let Some(secs) = matches.value_of("timeout") {
-        Some(secs.to_string().parse().expect("integer"))
+    let host = matches
+        .value_of("host")
+        .unwrap()
+        .parse()
+        .or_else(|_| Err(WalletError::BadParameter("Invalid host".to_string())))?;
+
+    let drone_host = if let Some(drone_host) = matches.value_of("drone_host") {
+        Some(
+            drone_host
+                .parse()
+                .or_else(|_| Err(WalletError::BadParameter("Invalid drone host".to_string())))?,
+        )
     } else {
         None
     };
 
-    let proxy = matches.value_of("proxy").map(|proxy| proxy.to_string());
+    let rpc_host = if let Some(rpc_host) = matches.value_of("rpc_host") {
+        Some(
+            rpc_host
+                .parse()
+                .or_else(|_| Err(WalletError::BadParameter("Invalid rpc host".to_string())))?,
+        )
+    } else {
+        None
+    };
+
+    let drone_port = matches
+        .value_of("drone_port")
+        .unwrap()
+        .parse()
+        .or_else(|_| Err(WalletError::BadParameter("Invalid drone port".to_string())))?;
+
+    let rpc_port = matches
+        .value_of("rpc_port")
+        .unwrap()
+        .parse()
+        .or_else(|_| Err(WalletError::BadParameter("Invalid rpc port".to_string())))?;
 
     let mut path = dirs::home_dir().expect("home directory");
     let id_path = if matches.is_present("keypair") {
@@ -47,46 +66,83 @@ pub fn parse_args(matches: &ArgMatches<'_>) -> Result<WalletConfig, Box<dyn erro
     Ok(WalletConfig {
         id,
         command,
-        network,
-        timeout,
-        proxy,
-        drone_port: None,
+        drone_host,
+        drone_port,
+        host,
         rpc_client: None,
+        rpc_host,
+        rpc_port,
+        rpc_tls: matches.is_present("rpc_tls"),
     })
 }
 
 fn main() -> Result<(), Box<dyn error::Error>> {
     solana_logger::setup();
+
+    let (default_host, default_rpc_port, default_drone_port) = {
+        let defaults = WalletConfig::default();
+        (
+            defaults.host.to_string(),
+            defaults.rpc_port.to_string(),
+            defaults.drone_port.to_string(),
+        )
+    };
+
     let matches = App::new("solana-wallet")
         .version(crate_version!())
         .arg(
-            Arg::with_name("network")
+            Arg::with_name("host")
                 .short("n")
-                .long("network")
-                .value_name("HOST:PORT")
+                .long("host")
+                .value_name("IP ADDRESS")
                 .takes_value(true)
-                .help("Rendezvous with the network at this gossip entry point; defaults to 127.0.0.1:8001"),
-        ).arg(
+                .default_value(&default_host)
+                .help("Host to use for both RPC and drone"),
+        )
+        .arg(
+            Arg::with_name("rpc_host")
+                .long("rpc-host")
+                .value_name("IP ADDRESS")
+                .takes_value(true)
+                .help("RPC host to use [default: same as --host]"),
+        )
+        .arg(
+            Arg::with_name("rpc_port")
+                .long("rpc-port")
+                .value_name("PORT")
+                .takes_value(true)
+                .default_value(&default_rpc_port)
+                .help("RPC port to use"),
+        )
+        .arg(
+            Arg::with_name("rpc_tps")
+                .long("rpc-tls")
+                .help("Enable TLS for the RPC endpoint"),
+        )
+        .arg(
+            Arg::with_name("drone_host")
+                .long("drone-host")
+                .value_name("IP ADDRESS")
+                .takes_value(true)
+                .help("Drone host to use [default: same as --host]"),
+        )
+        .arg(
+            Arg::with_name("drone_port")
+                .long("drone-port")
+                .value_name("PORT")
+                .takes_value(true)
+                .default_value(&default_drone_port)
+                .help("Drone port to use"),
+        )
+        .arg(
             Arg::with_name("keypair")
                 .short("k")
                 .long("keypair")
                 .value_name("PATH")
                 .takes_value(true)
                 .help("/path/to/id.json"),
-        ).arg(
-            Arg::with_name("timeout")
-                .long("timeout")
-                .value_name("SECS")
-                .takes_value(true)
-                .help("Max seconds to wait to get necessary gossip from the network"),
-        ).arg(
-            Arg::with_name("proxy")
-                .long("proxy")
-                .takes_value(true)
-                .value_name("URL")
-                .help("Address of TLS proxy")
-                .conflicts_with("rpc-port")
-        ).subcommand(SubCommand::with_name("address").about("Get your public key"))
+        )
+        .subcommand(SubCommand::with_name("address").about("Get your public key"))
         .subcommand(
             SubCommand::with_name("airdrop")
                 .about("Request a batch of tokens")
@@ -98,7 +154,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .required(true)
                         .help("The number of tokens to request"),
                 ),
-        ).subcommand(SubCommand::with_name("balance").about("Get your balance"))
+        )
+        .subcommand(SubCommand::with_name("balance").about("Get your balance"))
         .subcommand(
             SubCommand::with_name("cancel")
                 .about("Cancel a transfer")
@@ -110,7 +167,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .required(true)
                         .help("The process id of the transfer to cancel"),
                 ),
-        ).subcommand(
+        )
+        .subcommand(
             SubCommand::with_name("confirm")
                 .about("Confirm transaction by signature")
                 .arg(
@@ -121,7 +179,8 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .required(true)
                         .help("The transaction signature to confirm"),
                 ),
-        ).subcommand(
+        )
+        .subcommand(
             SubCommand::with_name("deploy")
                 .about("Deploy a program")
                 .arg(
@@ -131,12 +190,12 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .takes_value(true)
                         .required(true)
                         .help("/path/to/program.o"),
-                )
-                // TODO: Add "loader" argument; current default is bpf_loader
-        ).subcommand(
-            SubCommand::with_name("get-transaction-count")
-                .about("Get current transaction count")
-        ).subcommand(
+                ), // TODO: Add "loader" argument; current default is bpf_loader
+        )
+        .subcommand(
+            SubCommand::with_name("get-transaction-count").about("Get current transaction count"),
+        )
+        .subcommand(
             SubCommand::with_name("pay")
                 .about("Send a payment")
                 .arg(
@@ -146,27 +205,31 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .takes_value(true)
                         .required(true)
                         .help("The pubkey of recipient"),
-                ).arg(
+                )
+                .arg(
                     Arg::with_name("tokens")
                         .index(2)
                         .value_name("NUM")
                         .takes_value(true)
                         .required(true)
                         .help("The number of tokens to send"),
-                ).arg(
+                )
+                .arg(
                     Arg::with_name("timestamp")
                         .long("after")
                         .value_name("DATETIME")
                         .takes_value(true)
                         .help("A timestamp after which transaction will execute"),
-                ).arg(
+                )
+                .arg(
                     Arg::with_name("timestamp-pubkey")
                         .long("require-timestamp-from")
                         .value_name("PUBKEY")
                         .takes_value(true)
                         .requires("timestamp")
                         .help("Require timestamp from this third party"),
-                ).arg(
+                )
+                .arg(
                     Arg::with_name("witness")
                         .long("require-signature-from")
                         .value_name("PUBKEY")
@@ -174,12 +237,14 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .multiple(true)
                         .use_delimiter(true)
                         .help("Any third party signatures required to unlock the tokens"),
-                ).arg(
+                )
+                .arg(
                     Arg::with_name("cancelable")
                         .long("cancelable")
                         .takes_value(false),
                 ),
-        ).subcommand(
+        )
+        .subcommand(
             SubCommand::with_name("send-signature")
                 .about("Send a signature to authorize a transfer")
                 .arg(
@@ -189,15 +254,17 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .takes_value(true)
                         .required(true)
                         .help("The pubkey of recipient"),
-                ).arg(
+                )
+                .arg(
                     Arg::with_name("process-id")
                         .index(2)
                         .value_name("PROCESS_ID")
                         .takes_value(true)
                         .required(true)
-                        .help("The process id of the transfer to authorize")
-                )
-        ).subcommand(
+                        .help("The process id of the transfer to authorize"),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("send-timestamp")
                 .about("Send a timestamp to unlock a transfer")
                 .arg(
@@ -207,21 +274,24 @@ fn main() -> Result<(), Box<dyn error::Error>> {
                         .takes_value(true)
                         .required(true)
                         .help("The pubkey of recipient"),
-                ).arg(
+                )
+                .arg(
                     Arg::with_name("process-id")
                         .index(2)
                         .value_name("PROCESS_ID")
                         .takes_value(true)
                         .required(true)
-                        .help("The process id of the transfer to unlock")
-                ).arg(
+                        .help("The process id of the transfer to unlock"),
+                )
+                .arg(
                     Arg::with_name("datetime")
                         .long("date")
                         .value_name("DATETIME")
                         .takes_value(true)
-                        .help("Optional arbitrary timestamp to apply")
-                )
-        ).get_matches();
+                        .help("Optional arbitrary timestamp to apply"),
+                ),
+        )
+        .get_matches();
 
     let config = parse_args(&matches)?;
     let result = process_command(&config)?;

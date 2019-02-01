@@ -50,6 +50,7 @@ LLD_FLAGS := \
   -shared \
   --Bdynamic \
   $(LOCAL_PATH)bpf.ld \
+  --entry entrypoint \
 
 OBJ_COPY_FLAGS := \
   --remove-section .eh_frame \

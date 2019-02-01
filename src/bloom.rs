@@ -1,9 +1,16 @@
 //! Simple Bloom Filter
-use crate::bloom_hash_index::BloomHashIndex;
 use bv::BitVec;
+use fnv::FnvHasher;
 use rand::{self, Rng};
 use std::cmp;
+use std::hash::Hasher;
 use std::marker::PhantomData;
+
+/// Generate a stable hash of `self` for each `hash_index`
+/// Best effort can be made for uniqueness of each hash.
+pub trait BloomHashIndex {
+    fn hash_at_index(&self, hash_index: u64) -> u64;
+}
 
 #[derive(Serialize, Deserialize, Default, Clone, Debug, PartialEq)]
 pub struct Bloom<T: BloomHashIndex> {
@@ -13,6 +20,14 @@ pub struct Bloom<T: BloomHashIndex> {
 }
 
 impl<T: BloomHashIndex> Bloom<T> {
+    pub fn new(num_bits: usize, keys: Vec<u64>) -> Self {
+        let bits = BitVec::new_fill(false, num_bits as u64);
+        Bloom {
+            keys,
+            bits,
+            _phantom: Default::default(),
+        }
+    }
     /// create filter optimal for num size given the `false_rate`
     /// the keys are randomized for picking data out of a collision resistant hash of size
     /// `keysize` bytes
@@ -24,15 +39,13 @@ impl<T: BloomHashIndex> Bloom<T> {
         let num_bits = cmp::max(1, cmp::min(min_num_bits, max_bits));
         let num_keys = ((num_bits as f64 / num as f64) * 2f64.log(2f64)).round() as usize;
         let keys: Vec<u64> = (0..num_keys).map(|_| rand::thread_rng().gen()).collect();
-        let bits = BitVec::new_fill(false, num_bits as u64);
-        Bloom {
-            keys,
-            bits,
-            _phantom: Default::default(),
-        }
+        Self::new(num_bits, keys)
     }
     fn pos(&self, key: &T, k: u64) -> u64 {
-        key.hash(k) % self.bits.len()
+        key.hash_at_index(k) % self.bits.len()
+    }
+    pub fn clear(&mut self) {
+        self.bits = BitVec::new_fill(false, self.bits.len());
     }
     pub fn add(&mut self, key: &T) {
         for k in &self.keys {
@@ -40,7 +53,7 @@ impl<T: BloomHashIndex> Bloom<T> {
             self.bits.set(pos, true);
         }
     }
-    pub fn contains(&mut self, key: &T) -> bool {
+    pub fn contains(&self, key: &T) -> bool {
         for k in &self.keys {
             let pos = self.pos(key, *k);
             if !self.bits.get(pos) {
@@ -48,6 +61,18 @@ impl<T: BloomHashIndex> Bloom<T> {
             }
         }
         true
+    }
+}
+
+fn slice_hash(slice: &[u8], hash_index: u64) -> u64 {
+    let mut hasher = FnvHasher::with_key(hash_index);
+    hasher.write(slice);
+    hasher.finish()
+}
+
+impl<T: AsRef<[u8]>> BloomHashIndex for T {
+    fn hash_at_index(&self, hash_index: u64) -> u64 {
+        slice_hash(self.as_ref(), hash_index)
     }
 }
 

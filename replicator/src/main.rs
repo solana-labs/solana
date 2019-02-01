@@ -27,6 +27,7 @@ fn main() {
                 .long("network")
                 .value_name("HOST:PORT")
                 .takes_value(true)
+                .required(true)
                 .help("Rendezvous with the network at this gossip entry point"),
         )
         .arg(
@@ -40,7 +41,7 @@ fn main() {
         )
         .get_matches();
 
-    let ledger_path = matches.value_of("ledger");
+    let ledger_path = matches.value_of("ledger").unwrap();
 
     let (keypair, gossip) = if let Some(i) = matches.value_of("identity") {
         let path = i.to_string();
@@ -81,7 +82,7 @@ fn main() {
 
     let leader_info = NodeInfo::new_entry_point(&network_addr);
 
-    let replicator = Replicator::new(ledger_path, node, &leader_info, &keypair).unwrap();
+    let replicator = Replicator::new(ledger_path, node, &leader_info, &keypair, None).unwrap();
 
     replicator.join();
 }

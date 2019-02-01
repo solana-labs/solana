@@ -1,13 +1,13 @@
 //! Fork Selection Simulation
 //!
-//! Description of the algorithm can be found in [book/src/fork-seleciton.md](book/src/fork-seleciton.md).
+//! Description of the algorithm can be found in [book/src/fork-selection.md](book/src/fork-selection.md).
 //!
 //! A test library function exists for configuring networks.
 //! ```
 //!     /// * num_partitions - 1 to 100 partitions
 //!     /// * fail_rate - 0 to 1.0 rate of packet receive failure
 //!     /// * delay_count - number of forks to observe before voting
-//!     /// * parasite_rate - number of parasite nodes that vote oposite the greedy choice
+//!     /// * parasite_rate - number of parasite nodes that vote opposite the greedy choice
 //!     fn test_with_partitions(num_partitions: usize, fail_rate: f64, delay_count: usize, parasite_rate: f64);
 //! ```
 //! Modify the test function
@@ -26,14 +26,14 @@
 //!
 //! The output will look like this
 //! ```
-//! time: 336, tip converged: 76, trunk id: 434, trunk time: 334, trunk converged 98, trunk depth 65
+//! time: 336, tip converged: 76, trunk id: 434, trunk time: 334, trunk converged 98, trunk height 65
 //! ```
-//! * time - The current network time.  Each packet is transmitted to the network at a different time value.
-//! * tip converged - How common is the tip of every voter in the network.
-//! * trunk id - fork of every trunk.  Every transmission generates a new fork.  A trunk is the newest most common fork for the largest converged set of the network.
+//! * time - The current cluster time.  Each packet is transmitted to the cluster at a different time value.
+//! * tip converged - Percentage of nodes voting on the tip.
+//! * trunk id - ID of the newest most common fork for the largest converged set of nodes.
 //! * trunk time - Time when the trunk fork was created.
-//! * trunk converged - How many voters have converged on this common fork.
-//! * trunk depth - How deep is this fork, or the height of this ledger.
+//! * trunk converged - Number of voters that have converged on this fork.
+//! * trunk height - Ledger height of the trunk.
 //!
 //!
 //! ### Simulating Greedy Choice
@@ -44,30 +44,32 @@
 //! // Each run starts with 100 partitions, and it takes about 260 forks for a dominant trunk to emerge
 //! // fully parasitic, 5 vote delay, 17% efficient
 //! test_with_partitions(100, 0.0, 5, 1.0)
-//! time: 1000, tip converged: 100, trunk id: 1095, trunk time: 995, trunk converged 100, trunk depth 125
+//! time: 1000, tip converged: 100, trunk id: 1095, trunk time: 995, trunk converged 100, trunk height 125
 //! // 50% parasitic, 5 vote delay, 30% efficient
 //! test_with_partitions(100, 0.0, 5, 0.5)
-//! time: 1000, tip converged: 51, trunk id: 1085, trunk time: 985, trunk converged 100, trunk depth 223
+//! time: 1000, tip converged: 51, trunk id: 1085, trunk time: 985, trunk converged 100, trunk
+//! height 223
 //! // 25%  parasitic, 5 vote delay, 49% efficient
 //! test_with_partitions(100, 0.0, 5, 0.25)
-//! time: 1000, tip converged: 79, trunk id: 1096, trunk time: 996, trunk converged 100, trunk depth 367
+//! time: 1000, tip converged: 79, trunk id: 1096, trunk time: 996, trunk converged 100, trunk
+//! height 367
 //! // 0%  parasitic, 5 vote delay, 62% efficient
 //! test_with_partitions(100, 0.0, 5, 0.0)
-//! time: 1000, tip converged: 100, trunk id: 1099, trunk time: 999, trunk converged 100, trunk depth 463
+//! time: 1000, tip converged: 100, trunk id: 1099, trunk time: 999, trunk converged 100, trunk height 463
 //! // 0%  parasitic, 0 vote delay, 100% efficient
 //! test_with_partitions(100, 0.0, 0, 0.0)
-//! time: 1000, tip converged: 100, trunk id: 1100, trunk time: 1000, trunk converged 100, trunk depth 740
+//! time: 1000, tip converged: 100, trunk id: 1100, trunk time: 1000, trunk converged 100, trunk height 740
 //! ```
 //!
 //! ### Impact of Receive Errors
 //!
-//! * with 10% of packet drops, the depth of the trunk is about 77% of the max possible
+//! * with 10% of packet drops, the height of the trunk is about 77% of the max possible
 //! ```
-//! time: 4007, tip converged: 94, trunk id: 4005, trunk time: 4002, trunk converged 100, trunk depth 3121
+//! time: 4007, tip converged: 94, trunk id: 4005, trunk time: 4002, trunk converged 100, trunk height 3121
 //! ```
-//! * with 90% of packet drops, the depth of the trunk is about 8.6% of the max possible
+//! * with 90% of packet drops, the height of the trunk is about 8.6% of the max possible
 //! ```
-//! time: 4007, tip converged: 10, trunk id: 3830, trunk time: 3827, trunk converged 100, trunk depth 348
+//! time: 4007, tip converged: 10, trunk id: 3830, trunk time: 3827, trunk converged 100, trunk height 348
 //! ```
 
 extern crate rand;
@@ -83,7 +85,7 @@ pub struct Fork {
 
 impl Fork {
     fn is_trunk_of(&self, other: &Fork, fork_tree: &HashMap<usize, Fork>) -> bool {
-        let mut current = other.clone();
+        let mut current = other;
         loop {
             // found it
             if current.id == self.id {
@@ -98,7 +100,7 @@ impl Fork {
             if fork_tree.get(&current.base).is_none() {
                 return false;
             }
-            current = fork_tree.get(&current.base).unwrap().clone();
+            current = fork_tree.get(&current.base).unwrap();
         }
     }
 }
@@ -149,7 +151,7 @@ impl LockTower {
             parasite: false,
         }
     }
-    pub fn enter_vote(
+    pub fn submit_vote(
         &mut self,
         vote: Vote,
         fork_tree: &HashMap<usize, Fork>,
@@ -234,23 +236,24 @@ impl LockTower {
         if !self.is_converged(converge_map) {
             return false;
         }
-        self.execute_vote(vote);
+        self.process_vote(vote);
         if self.is_full() {
             self.pop_full();
         }
         true
     }
-    /// check if the vote at `depth` has over 50% of the network committed
+    /// check if the vote at `height` has over 50% of the cluster committed
     fn is_converged(&self, converge_map: &HashMap<usize, usize>) -> bool {
         self.get_vote(self.converge_depth)
             .map(|v| {
                 let v = *converge_map.get(&v.fork.id).unwrap_or(&0);
-                // hard coded to 100 nodes
+                // hard-coded to 100 nodes
                 assert!(v <= 100);
                 v > 50
             })
             .unwrap_or(true)
     }
+
     pub fn score(&self, vote: &Vote, fork_tree: &HashMap<usize, Fork>) -> usize {
         let st = self.rollback_count(vote.time);
         if st < self.votes.len() && !self.votes[st].is_trunk_of(vote, fork_tree) {
@@ -289,13 +292,13 @@ impl LockTower {
         self.last_fork().is_trunk_of(&vote.fork, fork_tree)
     }
 
-    fn execute_vote(&mut self, vote: Vote) {
+    fn process_vote(&mut self, vote: Vote) {
         let vote_time = vote.time;
         assert!(!self.is_full());
         assert_eq!(vote.lockout, 2);
-        // push the new vote to the font
+        // push the new vote to the front
         self.votes.push_front(vote);
-        // double the lockouts if the threshold to doulbe is met
+        // double the lockouts if the threshold to double is met
         for i in 1..self.votes.len() {
             assert!(self.votes[i].time <= vote_time);
             if self.votes[i].lockout == self.votes[i - 1].lockout {
@@ -323,7 +326,7 @@ impl LockTower {
     pub fn last_fork(&self) -> Fork {
         self.last_vote()
             .map(|v| v.fork.clone())
-            .unwrap_or(self.fork_trunk.clone())
+            .unwrap_or_else(|| self.fork_trunk.clone())
     }
 }
 
@@ -362,89 +365,89 @@ fn test_push_vote() {
     let tree = HashMap::new();
     let bmap = HashMap::new();
     let b0 = Fork { id: 0, base: 0 };
-    let mut node = LockTower::new(32, 7, 0);
+    let mut tower = LockTower::new(32, 7, 0);
     let vote = Vote::new(b0.clone(), 0);
-    assert!(node.push_vote(vote, &tree, &bmap));
-    assert_eq!(node.votes.len(), 1);
+    assert!(tower.push_vote(vote, &tree, &bmap));
+    assert_eq!(tower.votes.len(), 1);
 
     let vote = Vote::new(b0.clone(), 1);
-    assert!(node.push_vote(vote, &tree, &bmap));
-    assert_eq!(node.votes.len(), 2);
+    assert!(tower.push_vote(vote, &tree, &bmap));
+    assert_eq!(tower.votes.len(), 2);
 
     let vote = Vote::new(b0.clone(), 2);
-    assert!(node.push_vote(vote, &tree, &bmap));
-    assert_eq!(node.votes.len(), 3);
+    assert!(tower.push_vote(vote, &tree, &bmap));
+    assert_eq!(tower.votes.len(), 3);
 
     let vote = Vote::new(b0.clone(), 3);
-    assert!(node.push_vote(vote, &tree, &bmap));
-    assert_eq!(node.votes.len(), 4);
+    assert!(tower.push_vote(vote, &tree, &bmap));
+    assert_eq!(tower.votes.len(), 4);
 
-    assert_eq!(node.votes[0].lockout, 2);
-    assert_eq!(node.votes[1].lockout, 4);
-    assert_eq!(node.votes[2].lockout, 8);
-    assert_eq!(node.votes[3].lockout, 16);
+    assert_eq!(tower.votes[0].lockout, 2);
+    assert_eq!(tower.votes[1].lockout, 4);
+    assert_eq!(tower.votes[2].lockout, 8);
+    assert_eq!(tower.votes[3].lockout, 16);
 
-    assert_eq!(node.votes[1].lock_height(), 6);
-    assert_eq!(node.votes[2].lock_height(), 9);
+    assert_eq!(tower.votes[1].lock_height(), 6);
+    assert_eq!(tower.votes[2].lock_height(), 9);
 
     let vote = Vote::new(b0.clone(), 7);
-    assert!(node.push_vote(vote, &tree, &bmap));
+    assert!(tower.push_vote(vote, &tree, &bmap));
 
-    assert_eq!(node.votes[0].lockout, 2);
+    assert_eq!(tower.votes[0].lockout, 2);
 
     let b1 = Fork { id: 1, base: 1 };
     let vote = Vote::new(b1.clone(), 8);
-    assert!(!node.push_vote(vote, &tree, &bmap));
+    assert!(!tower.push_vote(vote, &tree, &bmap));
 
     let vote = Vote::new(b0.clone(), 8);
-    assert!(node.push_vote(vote, &tree, &bmap));
+    assert!(tower.push_vote(vote, &tree, &bmap));
 
-    assert_eq!(node.votes.len(), 4);
-    assert_eq!(node.votes[0].lockout, 2);
-    assert_eq!(node.votes[1].lockout, 4);
-    assert_eq!(node.votes[2].lockout, 8);
-    assert_eq!(node.votes[3].lockout, 16);
+    assert_eq!(tower.votes.len(), 4);
+    assert_eq!(tower.votes[0].lockout, 2);
+    assert_eq!(tower.votes[1].lockout, 4);
+    assert_eq!(tower.votes[2].lockout, 8);
+    assert_eq!(tower.votes[3].lockout, 16);
 
     let vote = Vote::new(b0.clone(), 10);
-    assert!(node.push_vote(vote, &tree, &bmap));
-    assert_eq!(node.votes.len(), 2);
-    assert_eq!(node.votes[0].lockout, 2);
-    assert_eq!(node.votes[1].lockout, 16);
+    assert!(tower.push_vote(vote, &tree, &bmap));
+    assert_eq!(tower.votes.len(), 2);
+    assert_eq!(tower.votes[0].lockout, 2);
+    assert_eq!(tower.votes[1].lockout, 16);
 }
 
-fn create_network(sz: usize, depth: usize, delay_count: usize) -> Vec<LockTower> {
+fn create_towers(sz: usize, height: usize, delay_count: usize) -> Vec<LockTower> {
     (0..sz)
         .into_iter()
-        .map(|_| LockTower::new(32, depth, delay_count))
+        .map(|_| LockTower::new(32, height, delay_count))
         .collect()
 }
 
-/// The "height" or "depth" of this fork. How many forks until it connects to fork 0
+/// The "height" of this fork. How many forks until it connects to fork 0
 fn calc_fork_depth(fork_tree: &HashMap<usize, Fork>, id: usize) -> usize {
-    let mut depth = 0;
+    let mut height = 0;
     let mut start = fork_tree.get(&id);
     loop {
         if start.is_none() {
             break;
         }
-        depth += 1;
+        height += 1;
         start = fork_tree.get(&start.unwrap().base);
     }
-    depth
+    height
 }
-/// map of `fork id` to `node count`
-/// This map contains how many nodes have the fork as an ancestor
-/// The fork with the highest count that is the newest is the network "trunk"
+/// map of `fork id` to `tower count`
+/// This map contains the number of nodes that have the fork as an ancestor.
+/// The fork with the highest count that is the newest is the cluster "trunk".
 fn calc_fork_map(
-    network: &Vec<LockTower>,
+    towers: &Vec<LockTower>,
     fork_tree: &HashMap<usize, Fork>,
 ) -> HashMap<usize, usize> {
     let mut lca_map: HashMap<usize, usize> = HashMap::new();
-    for node in network {
-        let mut start = node.last_fork();
+    for tower in towers {
+        let mut start = tower.last_fork();
         loop {
             *lca_map.entry(start.id).or_insert(0) += 1;
-            if fork_tree.get(&start.base).is_none() {
+            if !fork_tree.contains_key(&start.base) {
                 break;
             }
             start = fork_tree.get(&start.base).unwrap().clone();
@@ -460,37 +463,37 @@ fn calc_newest_trunk(bmap: &HashMap<usize, usize>) -> (usize, usize) {
     data.last().map(|v| (*v.0, *v.1)).unwrap()
 }
 /// how common is the latest fork of all the nodes
-fn calc_tip_converged(network: &Vec<LockTower>, bmap: &HashMap<usize, usize>) -> usize {
-    let sum: usize = network
+fn calc_tip_converged(towers: &Vec<LockTower>, bmap: &HashMap<usize, usize>) -> usize {
+    let sum: usize = towers
         .iter()
         .map(|n| *bmap.get(&n.last_fork().id).unwrap_or(&0))
         .sum();
-    sum / network.len()
+    sum / towers.len()
 }
 #[test]
 fn test_no_partitions() {
     let mut tree = HashMap::new();
     let len = 100;
-    let mut network = create_network(len, 32, 0);
+    let mut towers = create_towers(len, 32, 0);
     for rounds in 0..1 {
-        for i in 0..network.len() {
+        for i in 0..towers.len() {
             let time = rounds * len + i;
-            let base = network[i].last_fork().clone();
+            let base = towers[i].last_fork().clone();
             let fork = Fork {
                 id: time + 1,
                 base: base.id,
             };
             tree.insert(fork.id, fork.clone());
             let vote = Vote::new(fork, time);
-            let bmap = calc_fork_map(&network, &tree);
-            for node in network.iter_mut() {
-                assert!(node.push_vote(vote.clone(), &tree, &bmap));
+            let bmap = calc_fork_map(&towers, &tree);
+            for tower in towers.iter_mut() {
+                assert!(tower.push_vote(vote.clone(), &tree, &bmap));
             }
-            println!("{} {}", time, calc_tip_converged(&network, &bmap));
+            println!("{} {}", time, calc_tip_converged(&towers, &bmap));
         }
     }
-    let bmap = calc_fork_map(&network, &tree);
-    assert_eq!(calc_tip_converged(&network, &bmap), len);
+    let bmap = calc_fork_map(&towers, &tree);
+    assert_eq!(calc_tip_converged(&towers, &bmap), len);
 }
 /// * num_partitions - 1 to 100 partitions
 /// * fail_rate - 0 to 1.0 rate of packet receive failure
@@ -506,52 +509,52 @@ fn test_with_partitions(
     let mut fork_tree = HashMap::new();
     let len = 100;
     let warmup = 8;
-    let mut network = create_network(len, warmup, delay_count);
+    let mut towers = create_towers(len, warmup, delay_count);
     for time in 0..warmup {
-        let bmap = calc_fork_map(&network, &fork_tree);
-        for node in network.iter_mut() {
-            let mut fork = node.last_fork().clone();
+        let bmap = calc_fork_map(&towers, &fork_tree);
+        for tower in towers.iter_mut() {
+            let mut fork = tower.last_fork().clone();
             if fork.id == 0 {
                 fork.id = thread_rng().gen_range(1, 1 + num_partitions);
                 fork_tree.insert(fork.id, fork.clone());
             }
             let vote = Vote::new(fork, time);
-            assert!(node.is_valid(&vote, &fork_tree));
-            assert!(node.push_vote(vote.clone(), &fork_tree, &bmap));
+            assert!(tower.is_valid(&vote, &fork_tree));
+            assert!(tower.push_vote(vote, &fork_tree, &bmap));
         }
     }
-    for node in network.iter_mut() {
-        assert_eq!(node.votes.len(), warmup);
-        assert_eq!(node.first_vote().unwrap().lockout, 1 << warmup);
-        assert!(node.first_vote().unwrap().lock_height() >= 1 << warmup);
-        node.parasite = parasite_rate > thread_rng().gen_range(0.0, 1.0);
+    for tower in towers.iter_mut() {
+        assert_eq!(tower.votes.len(), warmup);
+        assert_eq!(tower.first_vote().unwrap().lockout, 1 << warmup);
+        assert!(tower.first_vote().unwrap().lock_height() >= 1 << warmup);
+        tower.parasite = parasite_rate > thread_rng().gen_range(0.0, 1.0);
     }
-    let converge_map = calc_fork_map(&network, &fork_tree);
-    assert_ne!(calc_tip_converged(&network, &converge_map), len);
+    let converge_map = calc_fork_map(&towers, &fork_tree);
+    assert_ne!(calc_tip_converged(&towers, &converge_map), len);
     for rounds in 0..10 {
         for i in 0..len {
             let time = warmup + rounds * len + i;
-            let base = network[i].last_fork().clone();
+            let base = towers[i].last_fork();
             let fork = Fork {
                 id: time + num_partitions,
                 base: base.id,
             };
             fork_tree.insert(fork.id, fork.clone());
-            let converge_map = calc_fork_map(&network, &fork_tree);
+            let converge_map = calc_fork_map(&towers, &fork_tree);
             let vote = Vote::new(fork, time);
             let mut scores: HashMap<Vote, usize> = HashMap::new();
-            network.iter().for_each(|n| {
+            towers.iter().for_each(|n| {
                 n.delayed_votes.iter().for_each(|v| {
                     *scores.entry(v.clone()).or_insert(0) += n.score(&v, &fork_tree);
                 })
             });
-            for node in network.iter_mut() {
+            for tower in towers.iter_mut() {
                 if thread_rng().gen_range(0f64, 1.0f64) < fail_rate {
                     continue;
                 }
-                node.enter_vote(vote.clone(), &fork_tree, &converge_map, &scores);
+                tower.submit_vote(vote.clone(), &fork_tree, &converge_map, &scores);
             }
-            let converge_map = calc_fork_map(&network, &fork_tree);
+            let converge_map = calc_fork_map(&towers, &fork_tree);
             let trunk = calc_newest_trunk(&converge_map);
             let trunk_time = if trunk.0 > num_partitions {
                 trunk.0 - num_partitions
@@ -559,26 +562,26 @@ fn test_with_partitions(
                 trunk.0
             };
             println!(
-                    "time: {}, tip converged: {}, trunk id: {}, trunk time: {}, trunk converged {}, trunk depth {}",
+                    "time: {}, tip converged: {}, trunk id: {}, trunk time: {}, trunk converged {}, trunk height {}",
                     time,
-                    calc_tip_converged(&network, &converge_map),
+                    calc_tip_converged(&towers, &converge_map),
                     trunk.0,
                     trunk_time,
                     trunk.1,
                     calc_fork_depth(&fork_tree, trunk.0)
                 );
-            if break_early && calc_tip_converged(&network, &converge_map) == len {
+            if break_early && calc_tip_converged(&towers, &converge_map) == len {
                 break;
             }
         }
         if break_early {
-            let converge_map = calc_fork_map(&network, &fork_tree);
-            if calc_tip_converged(&network, &converge_map) == len {
+            let converge_map = calc_fork_map(&towers, &fork_tree);
+            if calc_tip_converged(&towers, &converge_map) == len {
                 break;
             }
         }
     }
-    let converge_map = calc_fork_map(&network, &fork_tree);
+    let converge_map = calc_fork_map(&towers, &fork_tree);
     let trunk = calc_newest_trunk(&converge_map);
     assert_eq!(trunk.1, len);
 }

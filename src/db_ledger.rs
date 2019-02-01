@@ -2,9 +2,8 @@
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
 
-use crate::entry::create_ticks;
 use crate::entry::Entry;
-use crate::mint::Mint;
+use crate::genesis_block::GenesisBlock;
 use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
 use crate::result::{Error, Result};
 use bincode::{deserialize, serialize};
@@ -12,11 +11,12 @@ use byteorder::{BigEndian, ByteOrder, ReadBytesExt};
 use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, DBRawIterator, Options, WriteBatch, DB};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::borrow::Borrow;
 use std::cmp;
-use std::fs::{create_dir_all, remove_dir_all};
+use std::fs;
 use std::io;
 use std::path::Path;
 use std::sync::Arc;
@@ -297,7 +297,7 @@ pub const ERASURE_CF: &str = "erasure";
 impl DbLedger {
     // Opens a Ledger in directory, provides "infinite" window of blobs
     pub fn open(ledger_path: &str) -> Result<Self> {
-        create_dir_all(&ledger_path)?;
+        fs::create_dir_all(&ledger_path)?;
         let ledger_path = Path::new(ledger_path).join(DB_LEDGER_DIRECTORY);
 
         // Use default database options
@@ -339,7 +339,7 @@ impl DbLedger {
 
     pub fn destroy(ledger_path: &str) -> Result<()> {
         // DB::destroy() fails if `ledger_path` doesn't exist
-        create_dir_all(&ledger_path)?;
+        fs::create_dir_all(&ledger_path)?;
         let ledger_path = Path::new(ledger_path).join(DB_LEDGER_DIRECTORY);
         DB::destroy(&Options::default(), &ledger_path)?;
         Ok(())
@@ -383,8 +383,8 @@ impl DbLedger {
             .enumerate()
             .map(|(idx, entry)| {
                 let mut b = entry.borrow().to_blob();
-                b.set_index(idx as u64 + index).unwrap();
-                b.set_slot(slot).unwrap();
+                b.set_index(idx as u64 + index);
+                b.set_slot(slot);
                 b
             })
             .collect();
@@ -403,12 +403,7 @@ impl DbLedger {
             return Ok(vec![]);
         }
 
-        new_blobs.sort_unstable_by(|b1, b2| {
-            b1.borrow()
-                .index()
-                .unwrap()
-                .cmp(&b2.borrow().index().unwrap())
-        });
+        new_blobs.sort_unstable_by(|b1, b2| b1.borrow().index().cmp(&b2.borrow().index()));
 
         let meta_key = MetaCf::key(DEFAULT_SLOT_HEIGHT);
 
@@ -425,10 +420,10 @@ impl DbLedger {
 
         // TODO: Handle if leader sends different blob for same index when the index > consumed
         // The old window implementation would just replace that index.
-        let lowest_index = new_blobs[0].borrow().index()?;
-        let lowest_slot = new_blobs[0].borrow().slot()?;
-        let highest_index = new_blobs.last().unwrap().borrow().index()?;
-        let highest_slot = new_blobs.last().unwrap().borrow().slot()?;
+        let lowest_index = new_blobs[0].borrow().index();
+        let lowest_slot = new_blobs[0].borrow().slot();
+        let highest_index = new_blobs.last().unwrap().borrow().index();
+        let highest_slot = new_blobs.last().unwrap().borrow().slot();
         if lowest_index < meta.consumed {
             return Err(Error::DbLedgerError(DbLedgerError::BlobForIndexExists));
         }
@@ -458,7 +453,7 @@ impl DbLedger {
                     let mut found_blob = None;
                     while index_into_blob < new_blobs.len() {
                         let new_blob = new_blobs[index_into_blob].borrow();
-                        let index = new_blob.index()?;
+                        let index = new_blob.index();
 
                         // Skip over duplicate blobs with the same index and continue
                         // until we either find the index we're looking for, or detect
@@ -477,9 +472,9 @@ impl DbLedger {
                     // If we found the blob in the new_blobs vector, process it, otherwise,
                     // look for the blob in the database.
                     if let Some(next_blob) = found_blob {
-                        current_slot = next_blob.slot()?;
-                        let serialized_entry_data = &next_blob.data
-                            [BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + next_blob.size()?];
+                        current_slot = next_blob.slot();
+                        let serialized_entry_data =
+                            &next_blob.data[BLOB_HEADER_SIZE..BLOB_HEADER_SIZE + next_blob.size()];
                         // Verify entries can actually be reconstructed
                         deserialize(serialized_entry_data).expect(
                             "Blob made it past validation, so must be deserializable at this point",
@@ -521,8 +516,8 @@ impl DbLedger {
 
         for blob in new_blobs {
             let blob = blob.borrow();
-            let key = DataCf::key(blob.slot()?, blob.index()?);
-            let serialized_blob_datas = &blob.data[..BLOB_HEADER_SIZE + blob.size()?];
+            let key = DataCf::key(blob.slot(), blob.index());
+            let serialized_blob_datas = &blob.data[..BLOB_HEADER_SIZE + blob.size()];
             batch.put_cf(self.data_cf.handle(), &key, serialized_blob_datas)?;
         }
 
@@ -539,7 +534,7 @@ impl DbLedger {
         let mut meta = {
             if let Some(meta) = self.meta_cf.get(&meta_key)? {
                 let first = blobs[0].read().unwrap();
-                assert_eq!(meta.consumed, first.index()?);
+                assert_eq!(meta.consumed, first.index());
                 meta
             } else {
                 SlotMeta::new()
@@ -548,18 +543,18 @@ impl DbLedger {
 
         {
             let last = blobs.last().unwrap().read().unwrap();
-            meta.consumed = last.index()? + 1;
-            meta.consumed_slot = last.slot()?;
-            meta.received = cmp::max(meta.received, last.index()? + 1);
-            meta.received_slot = cmp::max(meta.received_slot, last.index()?);
+            meta.consumed = last.index() + 1;
+            meta.consumed_slot = last.slot();
+            meta.received = cmp::max(meta.received, last.index() + 1);
+            meta.received_slot = cmp::max(meta.received_slot, last.index());
         }
 
         let mut batch = WriteBatch::default();
         batch.put_cf(self.meta_cf.handle(), &meta_key, &serialize(&meta)?)?;
         for blob in blobs {
             let blob = blob.read().unwrap();
-            let key = DataCf::key(blob.slot()?, blob.index()?);
-            let serialized_blob_datas = &blob.data[..BLOB_HEADER_SIZE + blob.size()?];
+            let key = DataCf::key(blob.slot(), blob.index());
+            let serialized_blob_datas = &blob.data[..BLOB_HEADER_SIZE + blob.size()];
             batch.put_cf(self.data_cf.handle(), &key, serialized_blob_datas)?;
         }
         self.db.write(batch)?;
@@ -634,7 +629,10 @@ impl DbLedger {
         let mut db_iterator = self.db.raw_iterator_cf(self.data_cf.handle())?;
 
         db_iterator.seek_to_first();
-        Ok(EntryIterator { db_iterator })
+        Ok(EntryIterator {
+            db_iterator,
+            last_id: None,
+        })
     }
 
     pub fn get_coding_blob_bytes(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
@@ -658,8 +656,8 @@ impl DbLedger {
         let bytes = self.get_data_blob_bytes(slot, index)?;
         Ok(bytes.map(|bytes| {
             let blob = Blob::new(&bytes);
-            assert!(blob.slot().unwrap() == slot);
-            assert!(blob.index().unwrap() == index);
+            assert!(blob.slot() == slot);
+            assert!(blob.index() == index);
             blob
         }))
     }
@@ -788,8 +786,14 @@ impl DbLedger {
     }
 }
 
+// TODO: all this goes away with Blocktree
 struct EntryIterator {
     db_iterator: DBRawIterator,
+
+    // TODO: remove me when replay_stage is iterating by block (Blocktree)
+    //    this verification is duplicating that of replay_stage, which
+    //    can do this in parallel
+    last_id: Option<Hash>,
     // https://github.com/rust-rocksdb/rust-rocksdb/issues/234
     //   rocksdb issue: the _db_ledger member must be lower in the struct to prevent a crash
     //   when the db_iterator member above is dropped.
@@ -805,19 +809,32 @@ impl Iterator for EntryIterator {
     fn next(&mut self) -> Option<Entry> {
         if self.db_iterator.valid() {
             if let Some(value) = self.db_iterator.value() {
-                self.db_iterator.next();
-
-                match deserialize(&value[BLOB_HEADER_SIZE..]) {
-                    Ok(entry) => Some(entry),
-                    _ => None,
+                if let Ok(entry) = deserialize::<Entry>(&value[BLOB_HEADER_SIZE..]) {
+                    if let Some(last_id) = self.last_id {
+                        if !entry.verify(&last_id) {
+                            return None;
+                        }
+                    }
+                    self.db_iterator.next();
+                    self.last_id = Some(entry.id);
+                    return Some(entry);
                 }
-            } else {
-                None
             }
-        } else {
-            None
         }
+        None
     }
+}
+
+pub fn create_new_ledger(ledger_path: &str, genesis_block: &GenesisBlock) -> Result<(u64, Hash)> {
+    DbLedger::destroy(ledger_path)?;
+    genesis_block.write(&ledger_path)?;
+
+    // Add a single tick linked back to the genesis_block to bootstrap the ledger
+    let db_ledger = DbLedger::open(ledger_path)?;
+    let entries = crate::entry::create_ticks(1, genesis_block.last_id());
+    db_ledger.write_entries(DEFAULT_SLOT_HEIGHT, 0, &entries)?;
+
+    Ok((1, entries[0].id))
 }
 
 pub fn genesis<'a, I>(ledger_path: &str, keypair: &Keypair, entries: I) -> Result<()>
@@ -832,9 +849,9 @@ where
         .enumerate()
         .map(|(idx, entry)| {
             let mut b = entry.borrow().to_blob();
-            b.set_index(idx as u64).unwrap();
-            b.set_id(&keypair.pubkey()).unwrap();
-            b.set_slot(DEFAULT_SLOT_HEIGHT).unwrap();
+            b.set_index(idx as u64);
+            b.set_id(&keypair.pubkey());
+            b.set_slot(DEFAULT_SLOT_HEIGHT);
             b
         })
         .collect();
@@ -851,78 +868,65 @@ pub fn get_tmp_ledger_path(name: &str) -> String {
     let path = format!("{}/tmp/ledger-{}-{}", out_dir, name, keypair.pubkey());
 
     // whack any possible collision
-    let _ignored = remove_dir_all(&path);
+    let _ignored = fs::remove_dir_all(&path);
 
     path
 }
 
-pub fn create_tmp_ledger_with_mint(name: &str, mint: &Mint) -> String {
-    let path = get_tmp_ledger_path(name);
-    DbLedger::destroy(&path).expect("Expected successful database destruction");
-    let db_ledger = DbLedger::open(&path).unwrap();
-    db_ledger
-        .write_entries(DEFAULT_SLOT_HEIGHT, 0, &mint.create_entries())
-        .unwrap();
-
-    path
-}
-
-pub fn create_tmp_genesis(
-    name: &str,
-    num: u64,
-    bootstrap_leader_id: Pubkey,
-    bootstrap_leader_tokens: u64,
-) -> (Mint, String) {
-    let mint = Mint::new_with_leader(num, bootstrap_leader_id, bootstrap_leader_tokens);
-    let path = create_tmp_ledger_with_mint(name, &mint);
-
-    (mint, path)
+pub fn create_tmp_ledger(name: &str, genesis_block: &GenesisBlock) -> String {
+    let ledger_path = get_tmp_ledger_path(name);
+    create_new_ledger(&ledger_path, genesis_block).unwrap();
+    ledger_path
 }
 
 pub fn create_tmp_sample_ledger(
     name: &str,
     num_tokens: u64,
-    num_ending_ticks: usize,
+    num_extra_ticks: u64,
     bootstrap_leader_id: Pubkey,
     bootstrap_leader_tokens: u64,
-) -> (Mint, String, Vec<Entry>) {
-    let mint = Mint::new_with_leader(num_tokens, bootstrap_leader_id, bootstrap_leader_tokens);
+) -> (Keypair, String, u64, Hash) {
+    let (genesis_block, mint_keypair) =
+        GenesisBlock::new_with_leader(num_tokens, bootstrap_leader_id, bootstrap_leader_tokens);
+    let ledger_path = get_tmp_ledger_path(name);
+    let (mut entry_height, mut last_id) = create_new_ledger(&ledger_path, &genesis_block).unwrap();
+
+    if num_extra_ticks > 0 {
+        let entries = crate::entry::create_ticks(num_extra_ticks, last_id);
+
+        let db_ledger = DbLedger::open(&ledger_path).unwrap();
+        db_ledger
+            .write_entries(DEFAULT_SLOT_HEIGHT, entry_height, &entries)
+            .unwrap();
+        entry_height += entries.len() as u64;
+        last_id = entries.last().unwrap().id
+    }
+    (mint_keypair, ledger_path, entry_height, last_id)
+}
+
+pub fn tmp_copy_ledger(from: &str, name: &str) -> String {
     let path = get_tmp_ledger_path(name);
 
-    // Create the entries
-    let mut genesis = mint.create_entries();
-    let ticks = create_ticks(num_ending_ticks, mint.last_id());
-    genesis.extend(ticks);
+    let db_ledger = DbLedger::open(from).unwrap();
+    let ledger_entries = db_ledger.read_ledger().unwrap();
+    let genesis_block = GenesisBlock::load(from).unwrap();
 
     DbLedger::destroy(&path).expect("Expected successful database destruction");
     let db_ledger = DbLedger::open(&path).unwrap();
     db_ledger
-        .write_entries(DEFAULT_SLOT_HEIGHT, 0, &genesis)
-        .unwrap();
-
-    (mint, path, genesis)
-}
-
-pub fn tmp_copy_ledger(from: &str, name: &str) -> String {
-    let tostr = get_tmp_ledger_path(name);
-
-    let db_ledger = DbLedger::open(from).unwrap();
-    let ledger_entries = db_ledger.read_ledger().unwrap();
-
-    DbLedger::destroy(&tostr).expect("Expected successful database destruction");
-    let db_ledger = DbLedger::open(&tostr).unwrap();
-    db_ledger
         .write_entries(DEFAULT_SLOT_HEIGHT, 0, ledger_entries)
         .unwrap();
+    genesis_block.write(&path).unwrap();
 
-    tostr
+    path
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entry::{make_tiny_test_entries, EntrySlice};
+    use crate::entry::{make_tiny_test_entries, make_tiny_test_entries_from_id, EntrySlice};
     use crate::packet::index_blobs;
+    use solana_sdk::hash::Hash;
 
     #[test]
     fn test_put_get_simple() {
@@ -976,11 +980,7 @@ mod tests {
     fn test_read_blobs_bytes() {
         let shared_blobs = make_tiny_test_entries(10).to_shared_blobs();
         let slot = DEFAULT_SLOT_HEIGHT;
-        index_blobs(
-            shared_blobs.iter().zip(vec![slot; 10].into_iter()),
-            &Keypair::new().pubkey(),
-            0,
-        );
+        index_blobs(&shared_blobs, &Keypair::new().pubkey(), 0, &[slot; 10]);
 
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
@@ -1047,7 +1047,7 @@ mod tests {
         let shared_blobs = entries.to_shared_blobs();
 
         for (i, b) in shared_blobs.iter().enumerate() {
-            b.write().unwrap().set_index(i as u64).unwrap();
+            b.write().unwrap().set_index(i as u64);
         }
 
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
@@ -1090,7 +1090,7 @@ mod tests {
         let entries = make_tiny_test_entries(num_blobs);
         let shared_blobs = entries.to_shared_blobs();
         for (i, b) in shared_blobs.iter().enumerate() {
-            b.write().unwrap().set_index(i as u64).unwrap();
+            b.write().unwrap().set_index(i as u64);
         }
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
@@ -1127,7 +1127,7 @@ mod tests {
         let entries = make_tiny_test_entries(num_blobs);
         let shared_blobs = entries.to_shared_blobs();
         for (i, b) in shared_blobs.iter().enumerate() {
-            b.write().unwrap().set_index(i as u64).unwrap();
+            b.write().unwrap().set_index(i as u64);
         }
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
@@ -1172,12 +1172,13 @@ mod tests {
 
             // Write entries
             let num_entries = 8;
-            let shared_blobs = make_tiny_test_entries(num_entries).to_shared_blobs();
+            let entries = make_tiny_test_entries(num_entries);
+            let shared_blobs = entries.to_shared_blobs();
 
             for (i, b) in shared_blobs.iter().enumerate() {
                 let mut w_b = b.write().unwrap();
-                w_b.set_index(1 << (i * 8)).unwrap();
-                w_b.set_slot(DEFAULT_SLOT_HEIGHT).unwrap();
+                w_b.set_index(1 << (i * 8));
+                w_b.set_slot(DEFAULT_SLOT_HEIGHT);
             }
 
             assert_eq!(
@@ -1218,8 +1219,8 @@ mod tests {
             let shared_blobs = original_entries.clone().to_shared_blobs();
             for (i, b) in shared_blobs.iter().enumerate() {
                 let mut w_b = b.write().unwrap();
-                w_b.set_index(i as u64).unwrap();
-                w_b.set_slot(i as u64).unwrap();
+                w_b.set_index(i as u64);
+                w_b.set_slot(i as u64);
             }
 
             assert_eq!(
@@ -1265,8 +1266,8 @@ mod tests {
             for (i, b) in shared_blobs.iter().enumerate() {
                 let index = (i / 2) as u64;
                 let mut w_b = b.write().unwrap();
-                w_b.set_index(index).unwrap();
-                w_b.set_slot(index).unwrap();
+                w_b.set_index(index);
+                w_b.set_slot(index);
             }
 
             assert_eq!(
@@ -1315,8 +1316,8 @@ mod tests {
             let shared_blobs = original_entries.to_shared_blobs();
             for (i, b) in shared_blobs.iter().enumerate() {
                 let mut w_b = b.write().unwrap();
-                w_b.set_index(i as u64).unwrap();
-                w_b.set_slot(i as u64).unwrap();
+                w_b.set_index(i as u64);
+                w_b.set_slot(i as u64);
             }
 
             db_ledger
@@ -1332,8 +1333,8 @@ mod tests {
 
             for (i, b) in shared_blobs.iter().enumerate() {
                 let mut w_b = b.write().unwrap();
-                w_b.set_index(num_entries + i as u64).unwrap();
-                w_b.set_slot(num_entries + i as u64).unwrap();
+                w_b.set_index(num_entries + i as u64);
+                w_b.set_slot(num_entries + i as u64);
             }
 
             db_ledger
@@ -1351,16 +1352,50 @@ mod tests {
 
     #[test]
     pub fn test_genesis_and_entry_iterator() {
-        let entries = make_tiny_test_entries(100);
+        let entries = make_tiny_test_entries_from_id(&Hash::default(), 10);
+
         let ledger_path = get_tmp_ledger_path("test_genesis_and_entry_iterator");
         {
-            assert!(genesis(&ledger_path, &Keypair::new(), &entries).is_ok());
+            genesis(&ledger_path, &Keypair::new(), &entries).unwrap();
 
             let ledger = DbLedger::open(&ledger_path).expect("open failed");
 
             let read_entries: Vec<Entry> =
                 ledger.read_ledger().expect("read_ledger failed").collect();
+            assert!(read_entries.verify(&Hash::default()));
             assert_eq!(entries, read_entries);
+        }
+
+        DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
+    #[test]
+    pub fn test_entry_iterator_up_to_consumed() {
+        let entries = make_tiny_test_entries_from_id(&Hash::default(), 3);
+        let ledger_path = get_tmp_ledger_path("test_genesis_and_entry_iterator");
+        {
+            // put entries except last 2 into ledger
+            genesis(&ledger_path, &Keypair::new(), &entries[..entries.len() - 2]).unwrap();
+
+            let ledger = DbLedger::open(&ledger_path).expect("open failed");
+
+            // now write the last entry, ledger has a hole in it one before the end
+            // +-+-+-+-+-+-+-+    +-+
+            // | | | | | | | |    | |
+            // +-+-+-+-+-+-+-+    +-+
+            ledger
+                .write_entries(
+                    0u64,
+                    (entries.len() - 1) as u64,
+                    &entries[entries.len() - 1..],
+                )
+                .unwrap();
+
+            let read_entries: Vec<Entry> =
+                ledger.read_ledger().expect("read_ledger failed").collect();
+            assert!(read_entries.verify(&Hash::default()));
+
+            // enumeration should stop at the hole
+            assert_eq!(entries[..entries.len() - 2].to_vec(), read_entries);
         }
 
         DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");

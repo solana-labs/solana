@@ -370,7 +370,7 @@ pub fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], t
 
                 // re-sign retained to_fund_txes with updated last_id
                 to_fund_txs.par_iter_mut().for_each(|(k, tx)| {
-                    tx.sign(&[k], last_id);
+                    tx.sign(&[*k], last_id);
                 });
 
                 to_fund_txs.iter().for_each(|(_, tx)| {

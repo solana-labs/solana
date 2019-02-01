@@ -14,14 +14,13 @@ pub mod bank;
 pub mod banking_stage;
 pub mod blob_fetch_stage;
 pub mod bloom;
-pub mod bloom_hash_index;
 pub mod broadcast_service;
 #[cfg(feature = "chacha")]
 pub mod chacha;
 #[cfg(all(feature = "chacha", feature = "cuda"))]
 pub mod chacha_cuda;
-pub mod checkpoint;
 pub mod client;
+pub mod cluster_info_vote_listener;
 pub mod crds;
 pub mod crds_gossip;
 pub mod crds_gossip_error;
@@ -35,14 +34,17 @@ pub mod compute_leader_confirmation_service;
 pub mod db_ledger;
 pub mod db_window;
 pub mod entry;
+pub mod entry_stream;
 #[cfg(feature = "erasure")]
 pub mod erasure;
 pub mod fetch_stage;
 pub mod fullnode;
+pub mod gen_keys;
+pub mod genesis_block;
 pub mod gossip_service;
+pub mod last_id_queue;
 pub mod leader_scheduler;
 pub mod local_vote_signer_service;
-pub mod mint;
 pub mod packet;
 pub mod poh;
 pub mod poh_recorder;
@@ -58,10 +60,9 @@ pub mod rpc_pubsub;
 pub mod rpc_request;
 pub mod runtime;
 pub mod service;
-pub mod signature;
 pub mod sigverify;
 pub mod sigverify_stage;
-pub mod status_deque;
+pub mod status_cache;
 pub mod storage_stage;
 pub mod streamer;
 pub mod test_tx;
@@ -69,7 +70,8 @@ pub mod thin_client;
 pub mod tpu;
 pub mod tpu_forwarder;
 pub mod tvu;
-pub mod vote_signer_proxy;
+pub mod voting_keypair;
+#[cfg(test)]
 pub mod window;
 pub mod window_service;
 
@@ -92,7 +94,6 @@ use solana_jsonrpc_http_server as jsonrpc_http_server;
 extern crate solana_jsonrpc_macros as jsonrpc_macros;
 use solana_jsonrpc_pubsub as jsonrpc_pubsub;
 use solana_jsonrpc_ws_server as jsonrpc_ws_server;
-//use solana_vote_signer;
 
 #[cfg(test)]
 #[macro_use]

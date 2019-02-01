@@ -96,7 +96,7 @@ impl Entry {
             }
         };
 
-        let size = serialized_size(&entry).unwrap();
+        let size = Entry::serialized_size(&entry.transactions[..]);
         if size > BLOB_DATA_SIZE as u64 {
             panic!(
                 "Serialized entry size too large: {} ({} transactions):",
@@ -125,11 +125,13 @@ impl Entry {
 
     /// Estimate serialized_size of Entry without creating an Entry.
     pub fn serialized_size(transactions: &[Transaction]) -> u64 {
-        let txs_size = serialized_size(transactions).unwrap();
-
+        let txs_size: u64 = transactions
+            .iter()
+            .map(|tx| tx.serialized_size().unwrap())
+            .sum();
         // tick_height+num_hashes   +    id  +              txs
 
-        (2 * size_of::<u64>() + size_of::<Hash>()) as u64 + txs_size
+        (3 * size_of::<u64>() + size_of::<Hash>()) as u64 + txs_size
     }
 
     pub fn num_will_fit(transactions: &[Transaction]) -> usize {
@@ -245,7 +247,7 @@ where
 
     for blob in blobs.into_iter() {
         let entry: Entry = {
-            let msg_size = blob.borrow().size()?;
+            let msg_size = blob.borrow().size();
             deserialize(&blob.borrow().data()[..msg_size])?
         };
 
@@ -384,9 +386,9 @@ pub fn next_entries(
     next_entries_mut(&mut id, &mut num_hashes, transactions)
 }
 
-pub fn create_ticks(num_ticks: usize, mut hash: Hash) -> Vec<Entry> {
+pub fn create_ticks(num_ticks: u64, mut hash: Hash) -> Vec<Entry> {
     let mut ticks = Vec::with_capacity(num_ticks as usize);
-    for _ in 0..num_ticks as u64 {
+    for _ in 0..num_ticks {
         let new_tick = Entry::new(&hash, 0, 1, vec![]);
         hash = new_tick.id;
         ticks.push(new_tick);
@@ -395,12 +397,10 @@ pub fn create_ticks(num_ticks: usize, mut hash: Hash) -> Vec<Entry> {
     ticks
 }
 
-pub fn make_tiny_test_entries(num: usize) -> Vec<Entry> {
-    let zero = Hash::default();
-    let one = hash(&zero.as_ref());
+pub fn make_tiny_test_entries_from_id(start: &Hash, num: usize) -> Vec<Entry> {
     let keypair = Keypair::new();
 
-    let mut id = one;
+    let mut id = *start;
     let mut num_hashes = 0;
     (0..num)
         .map(|_| {
@@ -412,11 +412,17 @@ pub fn make_tiny_test_entries(num: usize) -> Vec<Entry> {
                     keypair.pubkey(),
                     keypair.pubkey(),
                     Utc::now(),
-                    one,
+                    *start,
                 )],
             )
         })
         .collect()
+}
+
+pub fn make_tiny_test_entries(num: usize) -> Vec<Entry> {
+    let zero = Hash::default();
+    let one = hash(&zero.as_ref());
+    make_tiny_test_entries_from_id(&one, num)
 }
 
 pub fn make_large_test_entries(num_entries: usize) -> Vec<Entry> {
@@ -432,7 +438,7 @@ pub fn make_large_test_entries(num_entries: usize) -> Vec<Entry> {
         one,
     );
 
-    let serialized_size = serialized_size(&vec![&tx]).unwrap();
+    let serialized_size = tx.serialized_size().unwrap();
     let num_txs = BLOB_DATA_SIZE / serialized_size as usize;
     let txs = vec![tx; num_txs];
     let entry = next_entries(&one, 1, txs)[0].clone();
@@ -447,14 +453,14 @@ pub fn make_consecutive_blobs(
     start_hash: Hash,
     addr: &std::net::SocketAddr,
 ) -> Vec<SharedBlob> {
-    let entries = create_ticks(num_blobs_to_make as usize, start_hash);
+    let entries = create_ticks(num_blobs_to_make, start_hash);
 
     let blobs = entries.to_shared_blobs();
     let mut index = start_height;
     for blob in &blobs {
         let mut blob = blob.write().unwrap();
-        blob.set_index(index).unwrap();
-        blob.set_id(id).unwrap();
+        blob.set_index(index);
+        blob.set_id(id);
         blob.meta.set_addr(addr);
         index += 1;
     }
@@ -480,7 +486,7 @@ mod tests {
     use crate::packet::{to_blobs, BLOB_DATA_SIZE, PACKET_DATA_SIZE};
     use solana_sdk::budget_transaction::BudgetTransaction;
     use solana_sdk::hash::hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Transaction;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -601,17 +607,7 @@ mod tests {
         let one = hash(&zero.as_ref());
         let keypair = Keypair::new();
         let vote_account = Keypair::new();
-        let tx = Transaction::vote_new(&vote_account.pubkey(), Vote { tick_height: 1 }, one, 1);
-        let msg = tx.get_sign_data();
-        let sig = Signature::new(&vote_account.sign(&msg).as_ref());
-        let tx0 = Transaction {
-            signatures: vec![sig],
-            account_keys: tx.account_keys,
-            last_id: tx.last_id,
-            fee: tx.fee,
-            program_ids: tx.program_ids,
-            instructions: tx.instructions,
-        };
+        let tx0 = Transaction::vote_new(&vote_account, 1, one, 1);
         let tx1 = Transaction::budget_new_timestamp(
             &keypair,
             keypair.pubkey(),
@@ -622,7 +618,7 @@ mod tests {
         //
         // TODO: this magic number and the mix of transaction types
         //       is designed to fill up a Blob more or less exactly,
-        //       to get near enough the the threshold that
+        //       to get near enough the threshold that
         //       deserialization falls over if it uses the wrong size()
         //       parameter to index into blob.data()
         //
@@ -659,21 +655,11 @@ mod tests {
         let next_id = hash(&id.as_ref());
         let keypair = Keypair::new();
         let vote_account = Keypair::new();
-        let tx = Transaction::vote_new(&vote_account.pubkey(), Vote { tick_height: 1 }, next_id, 2);
-        let msg = tx.get_sign_data();
-        let sig = Signature::new(&vote_account.sign(&msg).as_ref());
-        let tx_small = Transaction {
-            signatures: vec![sig],
-            account_keys: tx.account_keys,
-            last_id: tx.last_id,
-            fee: tx.fee,
-            program_ids: tx.program_ids,
-            instructions: tx.instructions,
-        };
+        let tx_small = Transaction::vote_new(&vote_account, 1, next_id, 2);
         let tx_large = Transaction::budget_new(&keypair, keypair.pubkey(), 1, next_id);
 
-        let tx_small_size = serialized_size(&tx_small).unwrap() as usize;
-        let tx_large_size = serialized_size(&tx_large).unwrap() as usize;
+        let tx_small_size = tx_small.serialized_size().unwrap() as usize;
+        let tx_large_size = tx_large.serialized_size().unwrap() as usize;
         let entry_size = serialized_size(&Entry {
             tick_height: 0,
             num_hashes: 0,

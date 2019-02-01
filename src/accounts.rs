@@ -1,8 +1,6 @@
 use crate::bank::BankError;
 use crate::bank::Result;
-use crate::checkpoint::Checkpoint;
 use crate::counter::Counter;
-use crate::status_deque::{StatusDeque, StatusDequeError};
 use bincode::serialize;
 use hashbrown::{HashMap, HashSet};
 use log::Level;
@@ -11,7 +9,7 @@ use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::Transaction;
 use std::collections::BTreeMap;
-use std::collections::VecDeque;
+use std::ops::Deref;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Mutex, RwLock};
 
@@ -23,6 +21,7 @@ pub struct ErrorCounters {
     pub account_not_found: usize,
     pub account_in_use: usize,
     pub last_id_not_found: usize,
+    pub last_id_too_old: usize,
     pub reserve_last_id: usize,
     pub insufficient_funds: usize,
     pub duplicate_signature: usize,
@@ -34,9 +33,6 @@ pub struct ErrorCounters {
 pub struct AccountsDB {
     /// Mapping of known public keys/IDs to accounts
     pub accounts: HashMap<Pubkey, Account>,
-
-    /// list of prior states
-    checkpoints: VecDeque<(HashMap<Pubkey, Account>, u64)>,
 
     /// The number of transactions the bank has processed without error since the
     /// start of the ledger.
@@ -55,7 +51,6 @@ impl Default for AccountsDB {
     fn default() -> Self {
         Self {
             accounts: HashMap::new(),
-            checkpoints: VecDeque::new(),
             transaction_count: 0,
         }
     }
@@ -71,10 +66,6 @@ impl Default for Accounts {
 }
 
 impl AccountsDB {
-    pub fn keys(&self) -> Vec<Pubkey> {
-        self.accounts.keys().cloned().collect()
-    }
-
     pub fn hash_internal_state(&self) -> Hash {
         let mut ordered_accounts = BTreeMap::new();
 
@@ -87,22 +78,22 @@ impl AccountsDB {
         hash(&serialize(&ordered_accounts).unwrap())
     }
 
-    fn load(&self, pubkey: &Pubkey) -> Option<&Account> {
-        if let Some(account) = self.accounts.get(pubkey) {
-            return Some(account);
-        }
-
-        for (accounts, _) in &self.checkpoints {
-            if let Some(account) = accounts.get(pubkey) {
-                return Some(account);
+    fn load<U>(checkpoints: &[U], pubkey: &Pubkey) -> Option<Account>
+    where
+        U: Deref<Target = Self>,
+    {
+        for db in checkpoints {
+            if let Some(account) = db.accounts.get(pubkey) {
+                return Some(account.clone());
             }
         }
         None
     }
-
-    pub fn store(&mut self, pubkey: &Pubkey, account: &Account) {
+    /// Store the account update.  If the update is to delete the account because the token balance
+    /// is 0, purge needs to be set to true for the delete to occur in place.
+    pub fn store(&mut self, purge: bool, pubkey: &Pubkey, account: &Account) {
         if account.tokens == 0 {
-            if self.checkpoints.is_empty() {
+            if purge {
                 // purge if balance is 0 and no checkpoints
                 self.accounts.remove(pubkey);
             } else {
@@ -116,6 +107,7 @@ impl AccountsDB {
 
     pub fn store_accounts(
         &mut self,
+        purge: bool,
         txs: &[Transaction],
         res: &[Result<()>],
         loaded: &[Result<(InstructionAccounts, InstructionLoaders)>],
@@ -126,65 +118,51 @@ impl AccountsDB {
             }
 
             let tx = &txs[i];
-            let accs = raccs.as_ref().unwrap();
-            for (key, account) in tx.account_keys.iter().zip(accs.0.iter()) {
-                self.store(key, account);
+            let acc = raccs.as_ref().unwrap();
+            for (key, account) in tx.account_keys.iter().zip(acc.0.iter()) {
+                self.store(purge, key, account);
             }
         }
     }
-
-    fn load_tx_accounts(
-        &self,
+    fn load_tx_accounts<U>(
+        checkpoints: &[U],
         tx: &Transaction,
-        last_ids: &mut StatusDeque<Result<()>>,
-        max_age: usize,
         error_counters: &mut ErrorCounters,
-    ) -> Result<Vec<Account>> {
+    ) -> Result<Vec<Account>>
+    where
+        U: Deref<Target = Self>,
+    {
         // Copy all the accounts
         if tx.signatures.is_empty() && tx.fee != 0 {
             Err(BankError::MissingSignatureForFee)
-        } else if tx.account_keys.is_empty() || self.load(&tx.account_keys[0]).is_none() {
-            error_counters.account_not_found += 1;
-            Err(BankError::AccountNotFound)
-        } else if self.load(&tx.account_keys[0]).unwrap().tokens < tx.fee {
-            error_counters.insufficient_funds += 1;
-            Err(BankError::InsufficientFundsForFee)
         } else {
-            if !last_ids.check_entry_id_age(tx.last_id, max_age) {
-                error_counters.last_id_not_found += 1;
-                return Err(BankError::LastIdNotFound);
-            }
-
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
-            last_ids
-                .reserve_signature_with_last_id(&tx.last_id, &tx.signatures[0])
-                .map_err(|err| match err {
-                    StatusDequeError::LastIdNotFound => {
-                        error_counters.reserve_last_id += 1;
-                        BankError::LastIdNotFound
-                    }
-                    StatusDequeError::DuplicateSignature => {
-                        error_counters.duplicate_signature += 1;
-                        BankError::DuplicateSignature
-                    }
-                })?;
-
-            let mut called_accounts: Vec<Account> = tx
-                .account_keys
-                .iter()
-                .map(|key| self.load(key).cloned().unwrap_or_default())
-                .collect();
-            called_accounts[0].tokens -= tx.fee;
-            Ok(called_accounts)
+            let mut called_accounts: Vec<Account> = vec![];
+            for key in &tx.account_keys {
+                called_accounts.push(Self::load(checkpoints, key).unwrap_or_default());
+            }
+            if called_accounts.is_empty() || called_accounts[0].tokens == 0 {
+                error_counters.account_not_found += 1;
+                Err(BankError::AccountNotFound)
+            } else if called_accounts[0].tokens < tx.fee {
+                error_counters.insufficient_funds += 1;
+                Err(BankError::InsufficientFundsForFee)
+            } else {
+                called_accounts[0].tokens -= tx.fee;
+                Ok(called_accounts)
+            }
         }
     }
 
-    fn load_executable_accounts(
-        &self,
+    fn load_executable_accounts<U>(
+        checkpoints: &[U],
         mut program_id: Pubkey,
         error_counters: &mut ErrorCounters,
-    ) -> Result<Vec<(Pubkey, Account)>> {
+    ) -> Result<Vec<(Pubkey, Account)>>
+    where
+        U: Deref<Target = Self>,
+    {
         let mut accounts = Vec::new();
         let mut depth = 0;
         loop {
@@ -199,7 +177,7 @@ impl AccountsDB {
             }
             depth += 1;
 
-            let program = match self.load(&program_id) {
+            let program = match Self::load(checkpoints, &program_id) {
                 Some(program) => program,
                 None => {
                     error_counters.account_not_found += 1;
@@ -220,11 +198,14 @@ impl AccountsDB {
     }
 
     /// For each program_id in the transaction, load its loaders.
-    fn load_loaders(
-        &self,
+    fn load_loaders<U>(
+        checkpoints: &[U],
         tx: &Transaction,
         error_counters: &mut ErrorCounters,
-    ) -> Result<Vec<Vec<(Pubkey, Account)>>> {
+    ) -> Result<Vec<Vec<(Pubkey, Account)>>>
+    where
+        U: Deref<Target = Self>,
+    {
         tx.instructions
             .iter()
             .map(|ix| {
@@ -233,25 +214,26 @@ impl AccountsDB {
                     return Err(BankError::AccountNotFound);
                 }
                 let program_id = tx.program_ids[ix.program_ids_index as usize];
-                self.load_executable_accounts(program_id, error_counters)
+                Self::load_executable_accounts(checkpoints, program_id, error_counters)
             })
             .collect()
     }
 
-    fn load_accounts(
-        &self,
+    fn load_accounts<U>(
+        checkpoints: &[U],
         txs: &[Transaction],
-        last_ids: &mut StatusDeque<Result<()>>,
         lock_results: Vec<Result<()>>,
-        max_age: usize,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>>
+    where
+        U: Deref<Target = Self>,
+    {
         txs.iter()
             .zip(lock_results.into_iter())
             .map(|etx| match etx {
                 (tx, Ok(())) => {
-                    let accounts = self.load_tx_accounts(tx, last_ids, max_age, error_counters)?;
-                    let loaders = self.load_loaders(tx, error_counters)?;
+                    let accounts = Self::load_tx_accounts(checkpoints, tx, error_counters)?;
+                    let loaders = Self::load_loaders(checkpoints, tx, error_counters)?;
                     Ok((accounts, loaders))
                 }
                 (_, Err(e)) => Err(e),
@@ -266,21 +248,35 @@ impl AccountsDB {
     pub fn transaction_count(&self) -> u64 {
         self.transaction_count
     }
+    pub fn account_values_slow(&self) -> Vec<(Pubkey, solana_sdk::account::Account)> {
+        self.accounts.iter().map(|(x, y)| (*x, y.clone())).collect()
+    }
+    fn merge(&mut self, other: Self) {
+        self.transaction_count += other.transaction_count;
+        self.accounts.extend(other.accounts)
+    }
 }
 
 impl Accounts {
-    pub fn keys(&self) -> Vec<Pubkey> {
-        self.accounts_db.read().unwrap().keys()
+    /// Slow because lock is held for 1 operation insted of many
+    pub fn load_slow<U>(checkpoints: &[U], pubkey: &Pubkey) -> Option<Account>
+    where
+        U: Deref<Target = Self>,
+    {
+        let dbs: Vec<_> = checkpoints
+            .iter()
+            .map(|obj| obj.accounts_db.read().unwrap())
+            .collect();
+        AccountsDB::load(&dbs, pubkey)
     }
-
-    /// Slow because lock is held for 1 operation instead of many
-    pub fn load_slow(&self, pubkey: &Pubkey) -> Option<Account> {
-        self.accounts_db.read().unwrap().load(pubkey).cloned()
-    }
-
-    /// Slow because lock is held for 1 operation instead of many
-    pub fn store_slow(&self, pubkey: &Pubkey, account: &Account) {
-        self.accounts_db.write().unwrap().store(pubkey, account)
+    /// Slow because lock is held for 1 operation insted of many
+    /// * purge - if the account token value is 0 and purge is true then delete the account.
+    /// purge should be set to false for overlays, and true for the root checkpoint.
+    pub fn store_slow(&self, purge: bool, pubkey: &Pubkey, account: &Account) {
+        self.accounts_db
+            .write()
+            .unwrap()
+            .store(purge, pubkey, account)
     }
 
     fn lock_account(
@@ -344,25 +340,28 @@ impl Accounts {
             .for_each(|(tx, result)| Self::unlock_account(tx, result, &mut account_locks));
     }
 
-    pub fn load_accounts(
-        &self,
+    pub fn load_accounts<U>(
+        checkpoints: &[U],
         txs: &[Transaction],
-        last_ids: &mut StatusDeque<Result<()>>,
-        lock_results: Vec<Result<()>>,
-        max_age: usize,
+        results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
-        self.accounts_db.read().unwrap().load_accounts(
-            txs,
-            last_ids,
-            lock_results,
-            max_age,
-            error_counters,
-        )
+    ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>>
+    where
+        U: Deref<Target = Self>,
+    {
+        let dbs: Vec<_> = checkpoints
+            .iter()
+            .map(|obj| obj.accounts_db.read().unwrap())
+            .collect();
+        AccountsDB::load_accounts(&dbs, txs, results, error_counters)
     }
 
+    /// Store the accounts into the DB
+    /// * purge - if the account token value is 0 and purge is true then delete the account.
+    /// purge should be set to false for overlays, and true for the root checkpoint.
     pub fn store_accounts(
         &self,
+        purge: bool,
         txs: &[Transaction],
         res: &[Result<()>],
         loaded: &[Result<(InstructionAccounts, InstructionLoaders)>],
@@ -370,7 +369,7 @@ impl Accounts {
         self.accounts_db
             .write()
             .unwrap()
-            .store_accounts(txs, res, loaded)
+            .store_accounts(purge, txs, res, loaded)
     }
 
     pub fn increment_transaction_count(&self, tx_count: usize) {
@@ -383,59 +382,26 @@ impl Accounts {
     pub fn transaction_count(&self) -> u64 {
         self.accounts_db.read().unwrap().transaction_count()
     }
-
-    pub fn checkpoint(&self) {
-        self.accounts_db.write().unwrap().checkpoint()
+    /// accounts starts with an empty data structure for every fork
+    /// self is root, merge the fork into self
+    pub fn merge_into_root(&self, other: Self) {
+        assert!(other.account_locks.lock().unwrap().is_empty());
+        let db = other.accounts_db.into_inner().unwrap();
+        let mut mydb = self.accounts_db.write().unwrap();
+        mydb.merge(db)
     }
+    pub fn copy_for_tpu(&self) -> Self {
+        //TODO: deprecate this in favor of forks and merge_into_root
+        let copy = Accounts::default();
 
-    pub fn rollback(&self) {
-        self.accounts_db.write().unwrap().rollback()
-    }
-
-    pub fn purge(&self, depth: usize) {
-        self.accounts_db.write().unwrap().purge(depth)
-    }
-
-    pub fn depth(&self) -> usize {
-        self.accounts_db.read().unwrap().depth()
-    }
-}
-
-impl Checkpoint for AccountsDB {
-    fn checkpoint(&mut self) {
-        let mut accounts = HashMap::new();
-        std::mem::swap(&mut self.accounts, &mut accounts);
-
-        self.checkpoints
-            .push_front((accounts, self.transaction_count()));
-    }
-
-    fn rollback(&mut self) {
-        let (accounts, transaction_count) = self.checkpoints.pop_front().unwrap();
-        self.accounts = accounts;
-        self.transaction_count = transaction_count;
-    }
-
-    fn purge(&mut self, depth: usize) {
-        fn merge(into: &mut HashMap<Pubkey, Account>, purge: &mut HashMap<Pubkey, Account>) {
-            purge.retain(|pubkey, _| !into.contains_key(pubkey));
-            into.extend(purge.drain());
-            into.retain(|_, account| account.tokens != 0);
-        }
-
-        while self.depth() > depth {
-            let (mut purge, _) = self.checkpoints.pop_back().unwrap();
-
-            if let Some((into, _)) = self.checkpoints.back_mut() {
-                merge(into, &mut purge);
-                continue;
+        {
+            let mut accounts_db = copy.accounts_db.write().unwrap();
+            for (key, val) in self.accounts_db.read().unwrap().accounts.iter() {
+                accounts_db.accounts.insert(key.clone(), val.clone());
             }
-            merge(&mut self.accounts, &mut purge);
+            accounts_db.transaction_count = self.transaction_count();
         }
-    }
-
-    fn depth(&self) -> usize {
-        self.checkpoints.len()
+        copy
     }
 }
 
@@ -451,22 +417,30 @@ mod tests {
     use solana_sdk::transaction::Instruction;
     use solana_sdk::transaction::Transaction;
 
+    #[test]
+    fn test_purge() {
+        let mut db = AccountsDB::default();
+        let key = Pubkey::default();
+        let account = Account::new(0, 0, Pubkey::default());
+        // accounts are deleted when their token value is 0 and purge is true
+        db.store(false, &key, &account);
+        assert_eq!(AccountsDB::load(&[&db], &key), Some(account.clone()));
+        // purge should be set to true for the root checkpoint
+        db.store(true, &key, &account);
+        assert_eq!(AccountsDB::load(&[&db], &key), None);
+    }
+
     fn load_accounts(
         tx: Transaction,
         ka: &Vec<(Pubkey, Account)>,
         error_counters: &mut ErrorCounters,
-        max_age: usize,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
         let accounts = Accounts::default();
         for ka in ka.iter() {
-            accounts.store_slow(&ka.0, &ka.1);
+            accounts.store_slow(true, &ka.0, &ka.1);
         }
 
-        let id = Default::default();
-        let mut last_ids: StatusDeque<Result<()>> = StatusDeque::default();
-        last_ids.register_tick(&id);
-
-        accounts.load_accounts(&[tx], &mut last_ids, vec![Ok(())], max_age, error_counters)
+        Accounts::load_accounts(&[&accounts], &[tx], vec![Ok(())], error_counters)
     }
 
     fn assert_counters(error_counters: &ErrorCounters, expected: [usize; 8]) {
@@ -481,40 +455,12 @@ mod tests {
     }
 
     #[test]
-    fn test_load_accounts_index_out_of_bounds() {
-        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
-
-        let keypair = Keypair::new();
-        let key0 = keypair.pubkey();
-
-        let account = Account::new(1, 1, Pubkey::default());
-        accounts.push((key0, account));
-
-        let instructions = vec![Instruction::new(1, &(), vec![0, 1])];
-        let tx = Transaction::new_with_instructions(
-            &[&keypair],
-            &[], // TODO this should contain a key, should fail
-            Hash::default(),
-            0,
-            vec![solana_native_loader::id()],
-            instructions,
-        );
-
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 10);
-
-        assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
-        assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
-    }
-
-    #[test]
     fn test_load_accounts_no_key() {
         let accounts: Vec<(Pubkey, Account)> = Vec::new();
         let mut error_counters = ErrorCounters::default();
 
         let instructions = vec![Instruction::new(1, &(), vec![0])];
-        let tx = Transaction::new_with_instructions(
+        let tx = Transaction::new_with_instructions::<Keypair>(
             &[],
             &[],
             Hash::default(),
@@ -523,7 +469,7 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 10);
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
         assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
         assert_eq!(loaded_accounts.len(), 1);
@@ -547,7 +493,7 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 10);
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
         assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
         assert_eq!(loaded_accounts.len(), 1);
@@ -579,43 +525,11 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 10);
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
         assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
-    }
-
-    #[test]
-    fn test_load_accounts_max_age() {
-        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
-        let mut error_counters = ErrorCounters::default();
-
-        let keypair = Keypair::new();
-        let key0 = keypair.pubkey();
-        let key1 = Pubkey::new(&[5u8; 32]);
-
-        let account = Account::new(1, 1, Pubkey::default());
-        accounts.push((key0, account));
-
-        let account = Account::new(2, 1, Pubkey::default());
-        accounts.push((key1, account));
-
-        let instructions = vec![Instruction::new(1, &(), vec![0])];
-        let tx = Transaction::new_with_instructions(
-            &[&keypair],
-            &[],
-            Hash::default(),
-            0,
-            vec![solana_native_loader::id()],
-            instructions,
-        );
-
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 0);
-
-        assert_counters(&error_counters, [0, 0, 1, 0, 0, 0, 0, 0]);
-        assert_eq!(loaded_accounts.len(), 1);
-        assert_eq!(loaded_accounts[0], Err(BankError::LastIdNotFound));
     }
 
     #[test]
@@ -639,7 +553,7 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 10);
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
         assert_counters(&error_counters, [0, 0, 0, 0, 1, 0, 0, 0]);
         assert_eq!(loaded_accounts.len(), 1);
@@ -671,7 +585,7 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 10);
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
         assert_counters(&error_counters, [0, 0, 0, 0, 0, 0, 0, 0]);
         assert_eq!(loaded_accounts.len(), 1);
@@ -743,7 +657,7 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 10);
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
         assert_counters(&error_counters, [0, 0, 0, 0, 0, 0, 1, 0]);
         assert_eq!(loaded_accounts.len(), 1);
@@ -777,7 +691,7 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 10);
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
         assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
         assert_eq!(loaded_accounts.len(), 1);
@@ -810,7 +724,7 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 10);
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
         assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
         assert_eq!(loaded_accounts.len(), 1);
@@ -859,7 +773,7 @@ mod tests {
             instructions,
         );
 
-        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters, 10);
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
         assert_counters(&error_counters, [0, 0, 0, 0, 0, 0, 0, 0]);
         assert_eq!(loaded_accounts.len(), 1);

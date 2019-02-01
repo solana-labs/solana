@@ -2,8 +2,7 @@ use solana;
 use solana_native_loader;
 
 use solana::bank::Bank;
-use solana::mint::Mint;
-use solana::status_deque::Status;
+use solana::genesis_block::GenesisBlock;
 #[cfg(feature = "bpf_c")]
 use solana_sdk::bpf_loader;
 use solana_sdk::loader_transaction::LoaderTransaction;
@@ -39,30 +38,28 @@ fn create_bpf_path(name: &str) -> PathBuf {
 fn check_tx_results(bank: &Bank, tx: &Transaction, result: Vec<solana::bank::Result<()>>) {
     assert_eq!(result.len(), 1);
     assert_eq!(result[0], Ok(()));
-    assert_eq!(
-        bank.get_signature(&tx.last_id, &tx.signatures[0]),
-        Some(Status::Complete(Ok(())))
-    );
+    assert_eq!(bank.get_signature_status(&tx.signatures[0]), Some(Ok(())));
 }
 
 struct Loader {
-    mint: Mint,
+    genesis_block: GenesisBlock,
+    mint_keypair: Keypair,
     bank: Bank,
     loader: Pubkey,
 }
 
 impl Loader {
     pub fn new_dynamic(loader_name: &str) -> Self {
-        let mint = Mint::new(50);
-        let bank = Bank::new(&mint);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(50);
+        let bank = Bank::new(&genesis_block);
         let loader = Keypair::new();
 
         // allocate, populate, finalize, and spawn loader
 
         let tx = Transaction::system_create(
-            &mint.keypair(),
+            &mint_keypair,
             loader.pubkey(),
-            mint.last_id(),
+            genesis_block.last_id(),
             1,
             56, // TODO
             solana_native_loader::id(),
@@ -76,40 +73,55 @@ impl Loader {
             solana_native_loader::id(),
             0,
             name.as_bytes().to_vec(),
-            mint.last_id(),
+            genesis_block.last_id(),
             0,
         );
         check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
-        let tx =
-            Transaction::loader_finalize(&loader, solana_native_loader::id(), mint.last_id(), 0);
+        let tx = Transaction::loader_finalize(
+            &loader,
+            solana_native_loader::id(),
+            genesis_block.last_id(),
+            0,
+        );
         check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
-        let tx = Transaction::system_spawn(&loader, mint.last_id(), 0);
+        let tx = Transaction::system_spawn(&loader, genesis_block.last_id(), 0);
         check_tx_results(&bank, &tx, bank.process_transactions(&vec![tx.clone()]));
 
         Loader {
-            mint,
+            genesis_block,
+            mint_keypair,
             bank,
             loader: loader.pubkey(),
         }
     }
 
     pub fn new_native() -> Self {
-        let mint = Mint::new(50);
-        let bank = Bank::new(&mint);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(50);
+        let bank = Bank::new(&genesis_block);
         let loader = solana_native_loader::id();
 
-        Loader { mint, bank, loader }
+        Loader {
+            genesis_block,
+            mint_keypair,
+            bank,
+            loader,
+        }
     }
 
     #[cfg(feature = "bpf_c")]
     pub fn new_bpf() -> Self {
-        let mint = Mint::new(50);
-        let bank = Bank::new(&mint);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(50);
+        let bank = Bank::new(&genesis_block);
         let loader = bpf_loader::id();
 
-        Loader { mint, bank, loader }
+        Loader {
+            genesis_block,
+            mint_keypair,
+            bank,
+            loader,
+        }
     }
 }
 
@@ -124,9 +136,9 @@ impl Program {
         // allocate, populate, finalize and spawn program
 
         let tx = Transaction::system_create(
-            &loader.mint.keypair(),
+            &loader.mint_keypair,
             program.pubkey(),
-            loader.mint.last_id(),
+            loader.genesis_block.last_id(),
             1,
             userdata.len() as u64,
             loader.loader,
@@ -146,7 +158,7 @@ impl Program {
                 loader.loader,
                 offset,
                 chunk.to_vec(),
-                loader.mint.last_id(),
+                loader.genesis_block.last_id(),
                 0,
             );
             check_tx_results(
@@ -157,14 +169,19 @@ impl Program {
             offset += chunk_size as u32;
         }
 
-        let tx = Transaction::loader_finalize(&program, loader.loader, loader.mint.last_id(), 0);
+        let tx = Transaction::loader_finalize(
+            &program,
+            loader.loader,
+            loader.genesis_block.last_id(),
+            0,
+        );
         check_tx_results(
             &loader.bank,
             &tx,
             loader.bank.process_transactions(&vec![tx.clone()]),
         );
 
-        let tx = Transaction::system_spawn(&program, loader.mint.last_id(), 0);
+        let tx = Transaction::system_spawn(&program, loader.genesis_block.last_id(), 0);
         check_tx_results(
             &loader.bank,
             &tx,
@@ -186,11 +203,11 @@ fn test_program_native_noop() {
 
     // Call user program
     let tx = Transaction::new(
-        &loader.mint.keypair(),
+        &loader.mint_keypair,
         &[],
         program.program.pubkey(),
         &1u8,
-        loader.mint.last_id(),
+        loader.genesis_block.last_id(),
         0,
     );
     check_tx_results(
@@ -220,9 +237,9 @@ fn test_program_lua_move_funds() {
     // Call user program with two accounts
 
     let tx = Transaction::system_create(
-        &loader.mint.keypair(),
+        &loader.mint_keypair,
         from.pubkey(),
-        loader.mint.last_id(),
+        loader.genesis_block.last_id(),
         10,
         0,
         program.program.pubkey(),
@@ -235,9 +252,9 @@ fn test_program_lua_move_funds() {
     );
 
     let tx = Transaction::system_create(
-        &loader.mint.keypair(),
+        &loader.mint_keypair,
         to,
-        loader.mint.last_id(),
+        loader.genesis_block.last_id(),
         1,
         0,
         program.program.pubkey(),
@@ -254,7 +271,7 @@ fn test_program_lua_move_funds() {
         &[to],
         program.program.pubkey(),
         &10,
-        loader.mint.last_id(),
+        loader.genesis_block.last_id(),
         0,
     );
     check_tx_results(
@@ -280,11 +297,11 @@ fn test_program_builtin_bpf_noop() {
 
     // Call user program
     let tx = Transaction::new(
-        &loader.mint.keypair(),
+        &loader.mint_keypair,
         &[],
         program.program.pubkey(),
         &vec![1u8],
-        loader.mint.last_id(),
+        loader.genesis_block.last_id(),
         0,
     );
     check_tx_results(
@@ -319,11 +336,11 @@ fn test_program_bpf_c() {
 
         // Call user program
         let tx = Transaction::new(
-            &loader.mint.keypair(),
+            &loader.mint_keypair,
             &[],
             program.program.pubkey(),
             &vec![1u8],
-            loader.mint.last_id(),
+            loader.genesis_block.last_id(),
             0,
         );
         check_tx_results(
@@ -355,11 +372,11 @@ fn test_program_bpf_rust() {
 
         // Call user program
         let tx = Transaction::new(
-            &loader.mint.keypair(),
+            &loader.mint_keypair,
             &[],
             program.program.pubkey(),
             &vec![1u8],
-            loader.mint.last_id(),
+            loader.genesis_block.last_id(),
             0,
         );
         check_tx_results(

@@ -19,13 +19,12 @@ use crate::counter::Counter;
 use crate::crds_gossip::CrdsGossip;
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
-use crate::crds_value::{CrdsValue, CrdsValueLabel, LeaderId};
+use crate::crds_value::{CrdsValue, CrdsValueLabel, LeaderId, Vote};
 use crate::db_ledger::DbLedger;
 use crate::packet::{to_shared_blob, Blob, SharedBlob, BLOB_SIZE};
 use crate::result::Result;
 use crate::rpc::RPC_PORT;
 use crate::streamer::{BlobReceiver, BlobSender};
-use crate::window::{SharedWindow, WindowIndex};
 use bincode::{deserialize, serialize};
 use hashbrown::HashMap;
 use log::Level;
@@ -37,6 +36,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::timing::{duration_as_ms, timestamp};
+use solana_sdk::transaction::Transaction;
 use std::cmp::min;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
@@ -56,7 +56,7 @@ pub const NEIGHBORHOOD_SIZE: usize = DATA_PLANE_FANOUT;
 pub const GROW_LAYER_CAPACITY: bool = false;
 
 /// milliseconds we sleep for between gossip requests
-const GOSSIP_SLEEP_MILLIS: u64 = 100;
+pub const GOSSIP_SLEEP_MILLIS: u64 = 100;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ClusterInfoError {
@@ -251,6 +251,37 @@ impl ClusterInfo {
         self.gossip.process_push_message(&[entry], now);
     }
 
+    pub fn push_vote(&mut self, vote: Transaction) {
+        let now = timestamp();
+        let vote = Vote::new(vote, now);
+        let mut entry = CrdsValue::Vote(vote);
+        entry.sign(&self.keypair);
+        self.gossip.process_push_message(&[entry], now);
+    }
+
+    /// Get votes in the crds
+    /// * since - The local timestamp when the vote was updated or inserted must be greater then
+    /// since. This allows the bank to query for new votes only.
+    ///
+    /// * return - The votes, and the max local timestamp from the new set.
+    pub fn get_votes(&self, since: u64) -> (Vec<Transaction>, u64) {
+        let votes: Vec<_> = self
+            .gossip
+            .crds
+            .table
+            .values()
+            .filter(|x| x.local_timestamp > since)
+            .filter_map(|x| {
+                x.value
+                    .vote()
+                    .map(|v| (x.local_timestamp, v.transaction.clone()))
+            })
+            .collect();
+        let max_ts = votes.iter().map(|x| x.0).max().unwrap_or(since);
+        let txs: Vec<Transaction> = votes.into_iter().map(|x| x.1).collect();
+        (txs, max_ts)
+    }
+
     pub fn purge(&mut self, now: u64) {
         self.gossip.purge(now);
     }
@@ -283,8 +314,20 @@ impl ClusterInfo {
             .collect()
     }
 
-    /// compute broadcast table
+    /// compute broadcast table (includes own tvu)
     pub fn tvu_peers(&self) -> Vec<NodeInfo> {
+        self.gossip
+            .crds
+            .table
+            .values()
+            .filter_map(|x| x.value.contact_info())
+            .filter(|x| ContactInfo::is_valid_address(&x.tvu))
+            .cloned()
+            .collect()
+    }
+
+    /// all peers that have a valid tvu
+    pub fn retransmit_peers(&self) -> Vec<NodeInfo> {
         let me = self.my_data().id;
         self.gossip
             .crds
@@ -297,24 +340,12 @@ impl ClusterInfo {
             .collect()
     }
 
-    /// all peers that have a valid tvu except the leader
-    pub fn retransmit_peers(&self) -> Vec<NodeInfo> {
-        let me = self.my_data().id;
-        self.gossip
-            .crds
-            .table
-            .values()
-            .filter_map(|x| x.value.contact_info())
-            .filter(|x| x.id != me && x.id != self.leader_id())
-            .filter(|x| ContactInfo::is_valid_address(&x.tvu))
-            .cloned()
-            .collect()
-    }
-
     /// all tvu peers with valid gossip addrs
     pub fn repair_peers(&self) -> Vec<NodeInfo> {
+        let me = self.my_data().id;
         ClusterInfo::tvu_peers(self)
             .into_iter()
+            .filter(|x| x.id != me)
             .filter(|x| ContactInfo::is_valid_address(&x.gossip))
             .collect()
     }
@@ -322,7 +353,7 @@ impl ClusterInfo {
     fn sort_by_stake(peers: &[NodeInfo], bank: &Arc<Bank>) -> Vec<(u64, NodeInfo)> {
         let mut peers_with_stakes: Vec<_> = peers
             .iter()
-            .map(|c| (bank.get_stake(&c.id), c.clone()))
+            .map(|c| (bank.get_balance(&c.id), c.clone()))
             .collect();
         peers_with_stakes.sort_unstable();
         peers_with_stakes
@@ -493,58 +524,33 @@ impl ClusterInfo {
 
     /// broadcast messages from the leader to layer 1 nodes
     /// # Remarks
-    /// We need to avoid having obj locked while doing any io, such as the `send_to`
     pub fn broadcast(
+        id: &Pubkey,
         contains_last_tick: bool,
-        leader_id: Pubkey,
-        me: &NodeInfo,
         broadcast_table: &[NodeInfo],
-        window: &SharedWindow,
         s: &UdpSocket,
-        transmit_index: &mut WindowIndex,
-        received_index: u64,
+        blobs: &[SharedBlob],
     ) -> Result<()> {
         if broadcast_table.is_empty() {
-            debug!("{}:not enough peers in cluster_info table", me.id);
+            debug!("{}:not enough peers in cluster_info table", id);
             inc_new_counter_info!("cluster_info-broadcast-not_enough_peers_error", 1);
             Err(ClusterInfoError::NoPeers)?;
         }
-        trace!(
-            "{} transmit_index: {:?} received_index: {} broadcast_len: {}",
-            me.id,
-            *transmit_index,
-            received_index,
-            broadcast_table.len()
-        );
 
-        let old_transmit_index = transmit_index.data;
+        let orders = Self::create_broadcast_orders(contains_last_tick, blobs, broadcast_table);
 
-        let orders = Self::create_broadcast_orders(
-            contains_last_tick,
-            window,
-            broadcast_table,
-            transmit_index,
-            received_index,
-            me,
-        );
         trace!("broadcast orders table {}", orders.len());
 
-        let errs = Self::send_orders(s, orders, me, leader_id);
+        let errs = Self::send_orders(id, s, orders);
 
         for e in errs {
             if let Err(e) = &e {
-                trace!("broadcast result {:?}", e);
+                trace!("{}: broadcast result {:?}", id, e);
             }
             e?;
-            if transmit_index.data < received_index {
-                transmit_index.data += 1;
-            }
         }
-        inc_new_counter_info!(
-            "cluster_info-broadcast-max_idx",
-            (transmit_index.data - old_transmit_index) as usize
-        );
-        transmit_index.coding = transmit_index.data;
+
+        inc_new_counter_info!("cluster_info-broadcast-max_idx", blobs.len());
 
         Ok(())
     }
@@ -563,10 +569,7 @@ impl ClusterInfo {
             let s = obj.read().unwrap();
             (s.my_data().clone(), peers)
         };
-        blob.write()
-            .unwrap()
-            .set_id(&me.id)
-            .expect("set_id in pub fn retransmit");
+        blob.write().unwrap().set_id(&me.id);
         let rblob = blob.read().unwrap();
         trace!("retransmit orders {}", orders.len());
         let errs: Vec<_> = orders
@@ -575,7 +578,7 @@ impl ClusterInfo {
                 debug!(
                     "{}: retransmit blob {} to {} {}",
                     me.id,
-                    rblob.index().unwrap(),
+                    rblob.index(),
                     v.id,
                     v.tvu,
                 );
@@ -603,19 +606,15 @@ impl ClusterInfo {
     }
 
     fn send_orders(
+        id: &Pubkey,
         s: &UdpSocket,
-        orders: Vec<(Option<SharedBlob>, Vec<&NodeInfo>)>,
-        me: &NodeInfo,
-        leader_id: Pubkey,
+        orders: Vec<(SharedBlob, Vec<&NodeInfo>)>,
     ) -> Vec<io::Result<usize>> {
         orders
             .into_iter()
             .flat_map(|(b, vs)| {
-                // only leader should be broadcasting
-                assert!(vs.iter().find(|info| info.id == leader_id).is_none());
-                let bl = b.unwrap();
-                let blob = bl.read().unwrap();
-                //TODO profile this, may need multiple sockets for par_iter
+                let blob = b.read().unwrap();
+
                 let ids_and_tvus = if log_enabled!(Level::Trace) {
                     let v_ids = vs.iter().map(|v| v.id);
                     let tvus = vs.iter().map(|v| v.tvu);
@@ -623,8 +622,8 @@ impl ClusterInfo {
 
                     trace!(
                         "{}: BROADCAST idx: {} sz: {} to {:?} coding: {}",
-                        me.id,
-                        blob.index().unwrap(),
+                        id,
+                        blob.index(),
                         blob.meta.size,
                         ids_and_tvus,
                         blob.is_coding()
@@ -642,7 +641,7 @@ impl ClusterInfo {
                         let e = s.send_to(&blob.data[..blob.meta.size], &v.tvu);
                         trace!(
                             "{}: done broadcast {} to {:?}",
-                            me.id,
+                            id,
                             blob.meta.size,
                             ids_and_tvus
                         );
@@ -656,70 +655,36 @@ impl ClusterInfo {
 
     fn create_broadcast_orders<'a>(
         contains_last_tick: bool,
-        window: &SharedWindow,
+        blobs: &[SharedBlob],
         broadcast_table: &'a [NodeInfo],
-        transmit_index: &mut WindowIndex,
-        received_index: u64,
-        me: &NodeInfo,
-    ) -> Vec<(Option<SharedBlob>, Vec<&'a NodeInfo>)> {
+    ) -> Vec<(SharedBlob, Vec<&'a NodeInfo>)> {
         // enumerate all the blobs in the window, those are the indices
         // transmit them to nodes, starting from a different node.
-        let mut orders = Vec::with_capacity((received_index - transmit_index.data) as usize);
-        let window_l = window.read().unwrap();
-        let mut br_idx = transmit_index.data as usize % broadcast_table.len();
+        if blobs.is_empty() {
+            return vec![];
+        }
+        let mut orders = Vec::with_capacity(blobs.len());
 
-        for idx in transmit_index.data..received_index {
-            let w_idx = idx as usize % window_l.len();
+        let x = thread_rng().gen_range(0, broadcast_table.len());
+        for (i, blob) in blobs.iter().enumerate() {
+            let br_idx = (x + i) % broadcast_table.len();
 
-            trace!(
-                "{} broadcast order data w_idx {} br_idx {}",
-                me.id,
-                w_idx,
-                br_idx
-            );
+            trace!("broadcast order data br_idx {}", br_idx);
 
+            orders.push((blob.clone(), vec![&broadcast_table[br_idx]]));
+        }
+
+        if contains_last_tick {
             // Broadcast the last tick to everyone on the network so it doesn't get dropped
             // (Need to maximize probability the next leader in line sees this handoff tick
             // despite packet drops)
-            let target = if idx == received_index - 1 && contains_last_tick {
-                // If we see a tick at max_tick_height, then we know it must be the last
-                // Blob in the window, at index == received_index. There cannot be an entry
-                // that got sent after the last tick, guaranteed by the PohService).
-                assert!(window_l[w_idx].data.is_some());
-                (
-                    window_l[w_idx].data.clone(),
-                    broadcast_table.iter().collect(),
-                )
-            } else {
-                (window_l[w_idx].data.clone(), vec![&broadcast_table[br_idx]])
-            };
-
-            orders.push(target);
-            br_idx += 1;
-            br_idx %= broadcast_table.len();
-        }
-
-        for idx in transmit_index.coding..received_index {
-            let w_idx = idx as usize % window_l.len();
-
-            // skip over empty slots
-            if window_l[w_idx].coding.is_none() {
-                continue;
-            }
-
-            trace!(
-                "{} broadcast order coding w_idx: {} br_idx  :{}",
-                me.id,
-                w_idx,
-                br_idx,
-            );
-
+            // If we had a tick at max_tick_height, then we know it must be the last
+            // Blob in the broadcast, There cannot be an entry that got sent after the
+            // last tick, guaranteed by the PohService).
             orders.push((
-                window_l[w_idx].coding.clone(),
-                vec![&broadcast_table[br_idx]],
+                blobs.last().unwrap().clone(),
+                broadcast_table.iter().collect(),
             ));
-            br_idx += 1;
-            br_idx %= broadcast_table.len();
         }
 
         orders
@@ -1316,6 +1281,7 @@ mod tests {
     use crate::db_ledger::DbLedger;
     use crate::packet::BLOB_HEADER_SIZE;
     use crate::result::Error;
+    use crate::test_tx::test_tx;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::collections::HashSet;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -1433,8 +1399,8 @@ mod tests {
             {
                 let mut w_blob = blob.write().unwrap();
                 w_blob.set_size(data_size);
-                w_blob.set_index(1).expect("set_index()");
-                w_blob.set_slot(2).expect("set_slot()");
+                w_blob.set_index(1);
+                w_blob.set_slot(2);
                 w_blob.meta.size = data_size + BLOB_HEADER_SIZE;
             }
 
@@ -1446,8 +1412,8 @@ mod tests {
                 ClusterInfo::run_window_request(&me, &socketaddr_any!(), Some(&db_ledger), &me, 1);
             assert!(!rv.is_empty());
             let v = rv[0].clone();
-            assert_eq!(v.read().unwrap().index().unwrap(), 1);
-            assert_eq!(v.read().unwrap().slot().unwrap(), 2);
+            assert_eq!(v.read().unwrap().index(), 1);
+            assert_eq!(v.read().unwrap().slot(), 2);
             assert_eq!(v.read().unwrap().meta.size, BLOB_HEADER_SIZE + data_size);
         }
 
@@ -1705,5 +1671,32 @@ mod tests {
         assert!(broadcast_set.contains(&(layer_indices.last().unwrap() - 1)));
         //sanity check for past total capacity.
         assert!(!broadcast_set.contains(&(layer_indices.last().unwrap())));
+    }
+
+    #[test]
+    fn test_push_vote() {
+        let keys = Keypair::new();
+        let now = timestamp();
+        let node_info = NodeInfo::new_localhost(keys.pubkey(), 0);
+        let mut cluster_info = ClusterInfo::new(node_info);
+
+        // make sure empty crds is handled correctly
+        let (votes, max_ts) = cluster_info.get_votes(now);
+        assert_eq!(votes, vec![]);
+        assert_eq!(max_ts, now);
+
+        // add a vote
+        let tx = test_tx();
+        cluster_info.push_vote(tx.clone());
+
+        // -1 to make sure that the clock is strictly lower then when insert occurred
+        let (votes, max_ts) = cluster_info.get_votes(now - 1);
+        assert_eq!(votes, vec![tx]);
+        assert!(max_ts >= now - 1);
+
+        // make sure timestamp filter works
+        let (votes, new_max_ts) = cluster_info.get_votes(max_ts);
+        assert_eq!(votes, vec![]);
+        assert_eq!(max_ts, new_max_ts);
     }
 }

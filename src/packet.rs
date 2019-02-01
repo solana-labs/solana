@@ -2,13 +2,12 @@
 use crate::counter::Counter;
 use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
 use crate::result::{Error, Result};
-use bincode::{deserialize, serialize};
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use bincode::{serialize, serialize_into};
+use byteorder::{ByteOrder, LittleEndian};
 use log::Level;
 use serde::Serialize;
 pub use solana_sdk::packet::PACKET_DATA_SIZE;
 use solana_sdk::pubkey::Pubkey;
-use std::borrow::Borrow;
 use std::cmp;
 use std::fmt;
 use std::io;
@@ -183,7 +182,6 @@ impl Packets {
                 Err(_) if i > 0 => {
                     inc_new_counter_info!("packets-recv_count", i);
                     debug!("got {:?} messages on {}", i, socket.local_addr().unwrap());
-                    socket.set_nonblocking(true)?;
                     return Ok(i);
                 }
                 Err(e) => {
@@ -191,10 +189,12 @@ impl Packets {
                     return Err(Error::IO(e));
                 }
                 Ok(npkts) => {
+                    if i == 0 {
+                        socket.set_nonblocking(true)?;
+                    }
                     trace!("got {} packets", npkts);
                     i += npkts;
-                    if npkts != NUM_RCVMMSGS {
-                        socket.set_nonblocking(true)?;
+                    if npkts != NUM_RCVMMSGS || i >= 1024 {
                         inc_new_counter_info!("packets-recv_count", i);
                         return Ok(i);
                     }
@@ -226,9 +226,9 @@ pub fn to_packets_chunked<T: Serialize>(xs: &[T], chunks: usize) -> Vec<SharedPa
             .packets
             .resize(x.len(), Default::default());
         for (i, o) in x.iter().zip(p.write().unwrap().packets.iter_mut()) {
-            let v = serialize(&i).expect("serialize request");
-            let len = v.len();
-            o.data[..len].copy_from_slice(&v);
+            let mut wr = io::Cursor::new(&mut o.data[..]);
+            serialize_into(&mut wr, &i).expect("serialize request");
+            let len = wr.position() as usize;
             o.meta.size = len;
         }
         out.push(p);
@@ -272,20 +272,28 @@ pub fn to_shared_blobs<T: Serialize>(rsps: Vec<(T, SocketAddr)>) -> Result<Share
     Ok(blobs)
 }
 
-const BLOB_SLOT_END: usize = size_of::<u64>();
-const BLOB_INDEX_END: usize = BLOB_SLOT_END + size_of::<u64>();
-const BLOB_ID_END: usize = BLOB_INDEX_END + size_of::<Pubkey>();
-const BLOB_FLAGS_END: usize = BLOB_ID_END + size_of::<u32>();
-const BLOB_SIZE_END: usize = BLOB_FLAGS_END + size_of::<u64>();
-
-macro_rules! align {
-    ($x:expr, $align:expr) => {
-        $x + ($align - 1) & !($align - 1)
+macro_rules! range {
+    ($prev:expr, $type:ident) => {
+        $prev..$prev + size_of::<$type>()
     };
 }
 
+const PARENT_RANGE: std::ops::Range<usize> = range!(0, u64);
+const SLOT_RANGE: std::ops::Range<usize> = range!(PARENT_RANGE.end, u64);
+const INDEX_RANGE: std::ops::Range<usize> = range!(SLOT_RANGE.end, u64);
+const ID_RANGE: std::ops::Range<usize> = range!(INDEX_RANGE.end, Pubkey);
+const FLAGS_RANGE: std::ops::Range<usize> = range!(ID_RANGE.end, u32);
+const SIZE_RANGE: std::ops::Range<usize> = range!(FLAGS_RANGE.end, u64);
+
+macro_rules! align {
+    ($x:expr, $align:expr) => {
+        $x + ($align * 8 - 1) & !($align * 8 - 1)
+    };
+}
+
+pub const BLOB_HEADER_SIZE: usize = align!(SIZE_RANGE.end, 8);
+
 pub const BLOB_FLAG_IS_CODING: u32 = 0x1;
-pub const BLOB_HEADER_SIZE: usize = align!(BLOB_SIZE_END, 64);
 
 impl Blob {
     pub fn new(data: &[u8]) -> Self {
@@ -293,78 +301,61 @@ impl Blob {
         let data_len = cmp::min(data.len(), blob.data.len());
         let bytes = &data[..data_len];
         blob.data[..data_len].copy_from_slice(bytes);
-        blob.meta.size = blob.data_size().expect("Expected valid data size") as usize;
+        blob.meta.size = blob.data_size() as usize;
         blob
     }
 
-    pub fn slot(&self) -> Result<u64> {
-        let mut rdr = io::Cursor::new(&self.data[0..BLOB_SLOT_END]);
-        let r = rdr.read_u64::<LittleEndian>()?;
-        Ok(r)
+    pub fn parent(&self) -> u64 {
+        LittleEndian::read_u64(&self.data[PARENT_RANGE])
     }
-    pub fn set_slot(&mut self, ix: u64) -> Result<()> {
-        let mut wtr = vec![];
-        wtr.write_u64::<LittleEndian>(ix)?;
-        self.data[..BLOB_SLOT_END].clone_from_slice(&wtr);
-        Ok(())
+    pub fn set_parent(&mut self, ix: u64) {
+        LittleEndian::write_u64(&mut self.data[PARENT_RANGE], ix);
     }
-    pub fn index(&self) -> Result<u64> {
-        let mut rdr = io::Cursor::new(&self.data[BLOB_SLOT_END..BLOB_INDEX_END]);
-        let r = rdr.read_u64::<LittleEndian>()?;
-        Ok(r)
+    pub fn slot(&self) -> u64 {
+        LittleEndian::read_u64(&self.data[SLOT_RANGE])
     }
-    pub fn set_index(&mut self, ix: u64) -> Result<()> {
-        let mut wtr = vec![];
-        wtr.write_u64::<LittleEndian>(ix)?;
-        self.data[BLOB_SLOT_END..BLOB_INDEX_END].clone_from_slice(&wtr);
-        Ok(())
+    pub fn set_slot(&mut self, ix: u64) {
+        LittleEndian::write_u64(&mut self.data[SLOT_RANGE], ix);
     }
+    pub fn index(&self) -> u64 {
+        LittleEndian::read_u64(&self.data[INDEX_RANGE])
+    }
+    pub fn set_index(&mut self, ix: u64) {
+        LittleEndian::write_u64(&mut self.data[INDEX_RANGE], ix);
+    }
+
     /// sender id, we use this for identifying if its a blob from the leader that we should
     /// retransmit.  eventually blobs should have a signature that we can use for spam filtering
-    pub fn id(&self) -> Result<Pubkey> {
-        let e = deserialize(&self.data[BLOB_INDEX_END..BLOB_ID_END])?;
-        Ok(e)
+    pub fn id(&self) -> Pubkey {
+        Pubkey::new(&self.data[ID_RANGE])
     }
 
-    pub fn set_id(&mut self, id: &Pubkey) -> Result<()> {
-        let wtr = serialize(id)?;
-        self.data[BLOB_INDEX_END..BLOB_ID_END].clone_from_slice(&wtr);
-        Ok(())
+    pub fn set_id(&mut self, id: &Pubkey) {
+        self.data[ID_RANGE].copy_from_slice(id.as_ref())
     }
 
-    pub fn flags(&self) -> Result<u32> {
-        let mut rdr = io::Cursor::new(&self.data[BLOB_ID_END..BLOB_FLAGS_END]);
-        let r = rdr.read_u32::<LittleEndian>()?;
-        Ok(r)
+    pub fn flags(&self) -> u32 {
+        LittleEndian::read_u32(&self.data[FLAGS_RANGE])
     }
-
-    pub fn set_flags(&mut self, ix: u32) -> Result<()> {
-        let mut wtr = vec![];
-        wtr.write_u32::<LittleEndian>(ix)?;
-        self.data[BLOB_ID_END..BLOB_FLAGS_END].clone_from_slice(&wtr);
-        Ok(())
+    pub fn set_flags(&mut self, ix: u32) {
+        LittleEndian::write_u32(&mut self.data[FLAGS_RANGE], ix);
     }
 
     pub fn is_coding(&self) -> bool {
-        (self.flags().unwrap() & BLOB_FLAG_IS_CODING) != 0
+        (self.flags() & BLOB_FLAG_IS_CODING) != 0
     }
 
-    pub fn set_coding(&mut self) -> Result<()> {
-        let flags = self.flags().unwrap();
-        self.set_flags(flags | BLOB_FLAG_IS_CODING)
+    pub fn set_coding(&mut self) {
+        let flags = self.flags();
+        self.set_flags(flags | BLOB_FLAG_IS_CODING);
     }
 
-    pub fn data_size(&self) -> Result<u64> {
-        let mut rdr = io::Cursor::new(&self.data[BLOB_FLAGS_END..BLOB_SIZE_END]);
-        let r = rdr.read_u64::<LittleEndian>()?;
-        Ok(r)
+    pub fn data_size(&self) -> u64 {
+        LittleEndian::read_u64(&self.data[SIZE_RANGE])
     }
 
-    pub fn set_data_size(&mut self, ix: u64) -> Result<()> {
-        let mut wtr = vec![];
-        wtr.write_u64::<LittleEndian>(ix)?;
-        self.data[BLOB_FLAGS_END..BLOB_SIZE_END].clone_from_slice(&wtr);
-        Ok(())
+    pub fn set_data_size(&mut self, ix: u64) {
+        LittleEndian::write_u64(&mut self.data[SIZE_RANGE], ix);
     }
 
     pub fn data(&self) -> &[u8] {
@@ -373,20 +364,20 @@ impl Blob {
     pub fn data_mut(&mut self) -> &mut [u8] {
         &mut self.data[BLOB_HEADER_SIZE..]
     }
-    pub fn size(&self) -> Result<usize> {
-        let size = self.data_size()? as usize;
-        if size <= BLOB_HEADER_SIZE {
-            Err(Error::BlobError(BlobError::BadState))
-        } else if self.meta.size == size {
-            Ok(size - BLOB_HEADER_SIZE)
+    pub fn size(&self) -> usize {
+        let size = self.data_size() as usize;
+
+        if size > BLOB_HEADER_SIZE && size == self.meta.size {
+            size - BLOB_HEADER_SIZE
         } else {
-            Err(Error::BlobError(BlobError::BadState))
+            0
         }
     }
+
     pub fn set_size(&mut self, size: usize) {
         let new_size = size + BLOB_HEADER_SIZE;
         self.meta.size = new_size;
-        self.set_data_size(new_size as u64).unwrap();
+        self.set_data_size(new_size as u64);
     }
 
     pub fn recv_blob(socket: &UdpSocket, r: &SharedBlob) -> io::Result<()> {
@@ -451,21 +442,14 @@ impl Blob {
     }
 }
 
-pub fn index_blobs<I, J, K>(blobs: I, id: &Pubkey, mut index: u64)
-where
-    I: IntoIterator<Item = J>,
-    J: Borrow<(K, u64)>,
-    K: Borrow<SharedBlob>,
-{
+pub fn index_blobs(blobs: &[SharedBlob], id: &Pubkey, mut index: u64, slots: &[u64]) {
     // enumerate all the blobs, those are the indices
-    for b in blobs {
-        let (b, slot) = b.borrow();
-        let mut blob = b.borrow().write().unwrap();
+    for (blob, slot) in blobs.iter().zip(slots) {
+        let mut blob = blob.write().unwrap();
 
-        blob.set_index(index).expect("set_index");
-        blob.set_slot(*slot).expect("set_slot");
-        blob.set_id(id).expect("set_id");
-        blob.set_flags(0).unwrap();
+        blob.set_index(index);
+        blob.set_slot(*slot);
+        blob.set_id(id);
 
         index += 1;
     }
@@ -578,11 +562,11 @@ mod tests {
     #[test]
     pub fn blob_test() {
         let mut b = Blob::default();
-        b.set_index(<u64>::max_value()).unwrap();
-        assert_eq!(b.index().unwrap(), <u64>::max_value());
+        b.set_index(<u64>::max_value());
+        assert_eq!(b.index(), <u64>::max_value());
         b.data_mut()[0] = 1;
         assert_eq!(b.data()[0], 1);
-        assert_eq!(b.index().unwrap(), <u64>::max_value());
+        assert_eq!(b.index(), <u64>::max_value());
         assert_eq!(b.meta, Meta::default());
     }
 
