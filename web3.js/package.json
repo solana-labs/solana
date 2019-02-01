@@ -98,7 +98,7 @@
     "esdoc-flow-type-plugin": "^1.1.0",
     "esdoc-importpath-plugin": "^1.0.2",
     "esdoc-standard-plugin": "^1.0.0",
-    "eslint": "5.12.1",
+    "eslint": "5.13.0",
     "eslint-config-prettier": "^4.0.0",
     "eslint-plugin-import": "2.16.0",
     "eslint-plugin-jest": "22.2.2",
