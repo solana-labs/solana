@@ -241,11 +241,11 @@ impl Fullnode {
         );
         let max_tick_height = {
             let ls_lock = bank.leader_scheduler.read().unwrap();
-            ls_lock.max_height_for_leader(bank.tick_height() + 1)
+            ls_lock.max_height_for_leader(bank.live_bank_state().tick_height() + 1)
         };
 
         let tpu = Tpu::new(
-            &Arc::new(bank.copy_for_tpu()),
+            &bank,
             Default::default(),
             node.sockets
                 .tpu
@@ -289,7 +289,7 @@ impl Fullnode {
     pub fn leader_to_validator(&mut self, tick_height: u64) -> Result<()> {
         trace!("leader_to_validator");
 
-        while self.bank.tick_height() < tick_height {
+        while self.bank.live_bank_state().tick_height() < tick_height {
             sleep(Duration::from_millis(10));
         }
 
@@ -337,7 +337,7 @@ impl Fullnode {
         let (to_validator_sender, to_validator_receiver) = channel();
         self.role_notifiers.1 = to_validator_receiver;
         self.node_services.tpu.switch_to_leader(
-            &Arc::new(self.bank.copy_for_tpu()),
+            &self.bank, //TODO: what slot should be `live`?
             Default::default(),
             self.tpu_sockets
                 .iter()
@@ -773,7 +773,7 @@ mod tests {
             match should_be_leader {
                 Ok(TvuReturnType::LeaderRotation(tick_height, entry_height, _)) => {
                     assert_eq!(validator.node_services.tvu.get_state().1, entry_height);
-                    assert_eq!(validator.bank.tick_height(), tick_height);
+                    assert_eq!(validator.bank.live_bank_state().tick_height(), tick_height);
                     assert_eq!(tick_height, bootstrap_height);
                     break;
                 }
@@ -793,7 +793,7 @@ mod tests {
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         );
 
-        assert!(bank.tick_height() >= bootstrap_height);
+        assert!(bank.live_bank_state().tick_height() >= bootstrap_height);
         // Only the first genesis entry has num_hashes = 0, every other entry
         // had num_hashes = 1
         assert!(entry_height >= bootstrap_height + ledger_initial_len - num_genesis_ticks);
@@ -841,7 +841,8 @@ mod tests {
 
         // Hold Tvu bank lock to prevent tvu from making progress
         {
-            let w_last_ids = leader.bank.last_ids().write().unwrap();
+            let bank_state = leader.bank.live_bank_state();
+            let w_last_ids = bank_state.head().last_ids().write().unwrap();
 
             // Wait for leader -> validator transition
             let signal = leader
@@ -869,7 +870,10 @@ mod tests {
         );
         assert!(!leader.node_services.tpu.is_leader());
         // Confirm the bank actually made progress
-        assert_eq!(leader.bank.tick_height(), bootstrap_height);
+        assert_eq!(
+            leader.bank.live_bank_state().tick_height(),
+            bootstrap_height
+        );
 
         // Shut down
         leader.close().expect("leader shutdown");

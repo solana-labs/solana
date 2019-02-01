@@ -107,7 +107,7 @@ impl Tvu {
             bank,
             db_ledger.clone(),
             &cluster_info,
-            bank.tick_height(),
+            bank.live_bank_state().tick_height(),
             entry_height,
             Arc::new(retransmit_socket),
             repair_socket,
@@ -384,7 +384,7 @@ pub mod tests {
         for i in 0..num_transfers {
             let entry0 = Entry::new(&cur_hash, 0, i, vec![]);
             cur_hash = entry0.id;
-            bank.register_tick(&cur_hash);
+            bank.live_bank_state().register_tick(&cur_hash);
             let entry_tick0 = Entry::new(&cur_hash, 0, i + 1, vec![]);
             cur_hash = entry_tick0.id;
 
@@ -395,11 +395,11 @@ pub mod tests {
                 cur_hash,
                 0,
             );
-            bank.register_tick(&cur_hash);
+            bank.live_bank_state().register_tick(&cur_hash);
             let entry_tick1 = Entry::new(&cur_hash, 0, i + 1, vec![]);
             cur_hash = entry_tick1.id;
             let entry1 = Entry::new(&cur_hash, 0, i + num_transfers, vec![tx0]);
-            bank.register_tick(&entry1.id);
+            bank.live_bank_state().register_tick(&entry1.id);
             let entry_tick2 = Entry::new(&entry1.id, 0, i + 1, vec![]);
             cur_hash = entry_tick2.id;
 
@@ -433,10 +433,14 @@ pub mod tests {
             trace!("got msg");
         }
 
-        let alice_balance = bank.get_balance(&mint_keypair.pubkey());
+        let alice_balance = bank
+            .live_bank_state()
+            .get_balance_slow(&mint_keypair.pubkey());
         assert_eq!(alice_balance, alice_ref_balance);
 
-        let bob_balance = bank.get_balance(&bob_keypair.pubkey());
+        let bob_balance = bank
+            .live_bank_state()
+            .get_balance_slow(&bob_keypair.pubkey());
         assert_eq!(bob_balance, starting_balance - alice_ref_balance);
 
         tvu.close().expect("close");

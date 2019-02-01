@@ -59,9 +59,10 @@ fn retransmit(
         }
     } else {
         //find my index (my ix is the same as the first node with smaller stake)
-        let my_index = peers
-            .iter()
-            .position(|ci| bank.get_balance(&ci.id) <= bank.get_balance(&my_id));
+        let my_index = peers.iter().position(|ci| {
+            bank.root_bank_state().get_balance_slow(&ci.id)
+                <= bank.root_bank_state().get_balance_slow(&my_id)
+        });
         //find my layer
         let locality = ClusterInfo::localize(
             &layer_indices,

@@ -257,7 +257,13 @@ impl RpcSol for RpcSolImpl {
         trace!("request_airdrop id={} tokens={}", id, tokens);
         let pubkey = verify_pubkey(id)?;
 
-        let last_id = meta.request_processor.read().unwrap().bank.last_id();
+        let last_id = meta
+            .request_processor
+            .read()
+            .unwrap()
+            .bank
+            .root_bank_state()
+            .last_id();
         let transaction = request_airdrop_transaction(&meta.drone_addr, &pubkey, tokens, last_id)
             .map_err(|err| {
             info!("request_airdrop_transaction failed: {:?}", err);
@@ -368,25 +374,29 @@ impl JsonRpcRequestProcessor {
     /// Process JSON-RPC request items sent via JSON-RPC.
     pub fn get_account_info(&self, pubkey: Pubkey) -> Result<Account> {
         self.bank
-            .get_account(&pubkey)
+            .live_bank_state()
+            .get_account_slow(&pubkey)
             .ok_or_else(Error::invalid_request)
     }
     fn get_balance(&self, pubkey: Pubkey) -> Result<u64> {
-        let val = self.bank.get_balance(&pubkey);
+        let val = self.bank.live_bank_state().get_balance_slow(&pubkey);
         Ok(val)
     }
     fn get_confirmation_time(&self) -> Result<usize> {
         Ok(self.bank.confirmation_time())
     }
     fn get_last_id(&self) -> Result<String> {
-        let id = self.bank.last_id();
+        //TODO: least likely to unroll?
+        let id = self.bank.root_bank_state().last_id();
         Ok(bs58::encode(id).into_string())
     }
     pub fn get_signature_status(&self, signature: Signature) -> Option<bank::Result<()>> {
-        self.bank.get_signature_status(&signature)
+        //TODO: which fork?
+        self.bank.live_bank_state().get_signature_status(&signature)
     }
     fn get_transaction_count(&self) -> Result<u64> {
-        Ok(self.bank.transaction_count() as u64)
+        //TODO: which fork?
+        Ok(self.bank.live_bank_state().transaction_count() as u64)
     }
     fn get_storage_mining_last_id(&self) -> Result<String> {
         let id = self.storage_state.get_last_id();
@@ -463,7 +473,7 @@ mod tests {
         let (genesis_block, alice) = GenesisBlock::new(10_000);
         let bank = Bank::new(&genesis_block);
 
-        let last_id = bank.last_id();
+        let last_id = bank.live_bank_state().last_id();
         let tx = SystemTransaction::new_move(&alice, pubkey, 20, last_id, 0);
         bank.process_transaction(&tx).expect("process transaction");
 
@@ -536,7 +546,7 @@ mod tests {
         let request_processor =
             JsonRpcRequestProcessor::new(arc_bank.clone(), StorageState::default());
         thread::spawn(move || {
-            let last_id = arc_bank.last_id();
+            let last_id = arc_bank.live_bank_state().last_id();
             let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
             arc_bank
                 .process_transaction(&tx)

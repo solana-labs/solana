@@ -97,11 +97,14 @@ impl ReplayStage {
             .expect("Scheduled leader should be calculated by this point");
 
         // Next vote tick is ceiling of (current tick/ticks per block)
-        let mut num_ticks_to_next_vote =
-            DEFAULT_TICKS_PER_SLOT - (bank.tick_height() % DEFAULT_TICKS_PER_SLOT);
+        let mut num_ticks_to_next_vote = DEFAULT_TICKS_PER_SLOT
+            - (bank.live_bank_state().tick_height() % DEFAULT_TICKS_PER_SLOT);
         let mut start_entry_index = 0;
         for (i, entry) in entries.iter().enumerate() {
-            inc_new_counter_info!("replicate-stage_bank-tick", bank.tick_height() as usize);
+            inc_new_counter_info!(
+                "replicate-stage_bank-tick",
+                bank.live_bank_state().tick_height() as usize
+            );
             if entry.is_tick() {
                 num_ticks_to_next_vote -= 1;
             }
@@ -113,7 +116,17 @@ impl ReplayStage {
             // If we don't process the entry now, the for loop will exit and the entry
             // will be dropped.
             if 0 == num_ticks_to_next_vote || (i + 1) == entries.len() {
-                res = bank.process_entries(&entries[start_entry_index..=i]);
+                //TODO: EntryTree should provide slot
+                let slot = entry.tick_height / DEFAULT_TICKS_PER_SLOT;
+                if slot > 0 && entry.tick_height % DEFAULT_TICKS_PER_SLOT == 0 {
+                    //TODO: EntryTree should provide base slot
+                    let base = slot - 1;
+                    bank.init_fork(slot, &entry.id, base).expect("init fork");
+                }
+                res = bank
+                    .bank_state(slot)
+                    .unwrap()
+                    .process_entries(&entries[start_entry_index..=i]);
 
                 if res.is_err() {
                     // TODO: This will return early from the first entry that has an erroneous
@@ -131,12 +144,15 @@ impl ReplayStage {
                 }
 
                 if 0 == num_ticks_to_next_vote {
+                    let bank_state = bank.bank_state(slot).unwrap();
+                    bank_state.head().finalize();
+                    bank.merge_into_root(slot);
                     if let Some(voting_keypair) = voting_keypair {
                         let keypair = voting_keypair.as_ref();
                         let vote = VoteTransaction::new_vote(
                             keypair,
-                            bank.tick_height(),
-                            bank.last_id(),
+                            bank_state.tick_height(),
+                            bank_state.last_id(),
                             0,
                         );
                         cluster_info.write().unwrap().push_vote(vote);
@@ -230,6 +246,17 @@ impl ReplayStage {
                     // Stop getting entries if we get exit signal
                     if exit_.load(Ordering::Relaxed) {
                         break;
+                    let (leader_id, _) = bank
+                        .get_current_leader()
+                        .expect("Scheduled leader should be calculated by this point");
+                    if leader_id != last_leader_id && leader_id == my_id {
+                        to_leader_sender
+                            .send(TvuReturnType::LeaderRotation(
+                                bank.live_bank_state().tick_height(),
+                                *entry_height_.read().unwrap(),
+                                *last_entry_id.read().unwrap(),
+                            ))
+                            .unwrap();
                     }
 
                     let current_entry_height = *entry_height.read().unwrap();
@@ -588,12 +615,38 @@ mod test {
                 .recv()
                 .expect("Expected to recieve an entry on the ledger writer receiver");
 
+<<<<<<< HEAD
             assert_eq!(next_tick, received_tick);
 
             replay_stage
                 .close()
                 .expect("Expect successful ReplayStage exit");
         }
+=======
+        let keypair = voting_keypair.as_ref();
+        let vote = VoteTransaction::new_vote(
+            keypair,
+            bank.live_bank_state().tick_height(),
+            bank.live_bank_state().last_id(),
+            0,
+        );
+        cluster_info_me.write().unwrap().push_vote(vote);
+
+        // Send ReplayStage an entry, should see it on the ledger writer receiver
+        let next_tick = create_ticks(1, last_entry_id);
+        entry_sender
+            .send(next_tick.clone())
+            .expect("Error sending entry to ReplayStage");
+        let received_tick = ledger_writer_recv
+            .recv()
+            .expect("Expected to recieve an entry on the ledger writer receiver");
+
+        assert_eq!(next_tick, received_tick);
+        drop(entry_sender);
+        replay_stage
+            .join()
+            .expect("Expect successful ReplayStage exit");
+>>>>>>> reforkering
         let _ignored = remove_dir_all(&my_ledger_path);
     }
 
@@ -654,6 +707,7 @@ mod test {
         // Set up the replay stage
         let (rotation_tx, rotation_rx) = channel();
         let exit = Arc::new(AtomicBool::new(false));
+<<<<<<< HEAD
         {
             let (db_ledger, l_sender, l_receiver) =
                 DbLedger::open_with_signal(&my_ledger_path).unwrap();
@@ -691,6 +745,57 @@ mod test {
                 None,
                 l_sender,
                 l_receiver,
+=======
+        let (_replay_stage, ledger_writer_recv) = ReplayStage::new(
+            my_keypair.pubkey(),
+            Some(voting_keypair.clone()),
+            bank.clone(),
+            cluster_info_me.clone(),
+            entry_receiver,
+            exit.clone(),
+            Arc::new(RwLock::new(entry_height)),
+            Arc::new(RwLock::new(last_entry_id)),
+            rotation_tx,
+            None,
+        );
+
+        let keypair = voting_keypair.as_ref();
+        let vote = VoteTransaction::new_vote(
+            keypair,
+            bank.live_bank_state().tick_height(),
+            bank.live_bank_state().last_id(),
+            0,
+        );
+        cluster_info_me.write().unwrap().push_vote(vote);
+
+        // Send enough ticks to trigger leader rotation
+        let total_entries_to_send = (bootstrap_height - initial_tick_height) as usize;
+
+        // Add on the only entries that weren't ticks to the bootstrap height to get the
+        // total expected entry length
+        let expected_entry_height =
+            bootstrap_height + initial_non_tick_height + active_set_entries_len;
+        let leader_rotation_index = (bootstrap_height - initial_tick_height - 1) as usize;
+        let mut expected_last_id = Hash::default();
+        for i in 0..total_entries_to_send {
+            let entry = Entry::new(&mut last_id, 0, 1, vec![]);
+            last_id = entry.id;
+            entry_sender
+                .send(vec![entry.clone()])
+                .expect("Expected to be able to send entry to ReplayStage");
+            // Check that the entries on the ledger writer channel are correct
+            let received_entry = ledger_writer_recv
+                .recv()
+                .expect("Expected to recieve an entry on the ledger writer receiver");
+            assert_eq!(received_entry[0], entry);
+
+            if i == leader_rotation_index {
+                expected_last_id = entry.id;
+            }
+            debug!(
+                "loop: i={}, leader_rotation_index={}, entry={:?}",
+                i, leader_rotation_index, entry,
+>>>>>>> reforkering
             );
 
             let keypair = voting_keypair.as_ref();

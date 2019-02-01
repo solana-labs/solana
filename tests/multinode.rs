@@ -1090,7 +1090,7 @@ fn test_leader_to_validator_transition() {
         Arc::new(RwLock::new(LeaderScheduler::default())),
     );
 
-    assert_eq!(bank.tick_height(), bootstrap_height);
+    assert_eq!(bank.live_bank_state().tick_height(), bootstrap_height);
     remove_dir_all(leader_ledger_path).unwrap();
 }
 
