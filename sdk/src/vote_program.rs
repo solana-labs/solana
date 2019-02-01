@@ -50,6 +50,7 @@ pub enum VoteInstruction {
 pub struct VoteState {
     pub votes: VecDeque<Vote>,
     pub node_id: Pubkey,
+    pub staker_id: Pubkey,
 }
 
 pub fn get_max_size() -> usize {
@@ -61,9 +62,13 @@ pub fn get_max_size() -> usize {
 }
 
 impl VoteState {
-    pub fn new(node_id: Pubkey) -> Self {
+    pub fn new(node_id: Pubkey, staker_id: Pubkey) -> Self {
         let votes = VecDeque::new();
-        Self { votes, node_id }
+        Self {
+            votes,
+            node_id,
+            staker_id,
+        }
     }
 
     pub fn deserialize(input: &[u8]) -> Result<Self, ProgramError> {
