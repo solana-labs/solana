@@ -122,6 +122,8 @@ impl Default for Bank {
 impl Bank {
     pub fn new(genesis_block: &GenesisBlock) -> Self {
         let bank = Self::default();
+        let last_id = genesis_block.last_id();
+        bank.init_root(&last_id);
         bank.process_genesis_block(genesis_block);
         bank.add_builtin_programs();
         bank
@@ -150,14 +152,16 @@ impl Bank {
         *sub = Some(subscriptions)
     }
 
-    fn process_genesis_block(&self, genesis_block: &GenesisBlock) {
-        assert!(genesis_block.mint_id != Pubkey::default());
-        assert!(genesis_block.tokens >= genesis_block.bootstrap_leader_tokens);
-        let last_id = genesis_block.last_id();
+    fn init_root(&self, last_id: &Hash) {
         self.forks
             .write()
             .unwrap()
             .init_root_bank_state(BankCheckpoint::new(0, &last_id));
+    }
+
+    fn process_genesis_block(&self, genesis_block: &GenesisBlock) {
+        assert!(genesis_block.mint_id != Pubkey::default());
+        assert!(genesis_block.tokens >= genesis_block.bootstrap_leader_tokens);
 
         let mut mint_account = Account::default();
         let mut bootstrap_leader_account = Account::default();
@@ -346,7 +350,9 @@ impl Bank {
             bank_state.process_entries(&block)?;
             //assumes that ledger only has full blocks
             bank_state.head().finalize();
-            self.merge_into_root(slot);
+            if slot > 0 {
+                self.merge_into_root(slot);
+            }
 
             last_id = block.last().unwrap().id;
             entry_height += block.len() as u64;
@@ -896,10 +902,12 @@ mod tests {
         );
 
         let mut bank0 = Bank::default();
+        bank0.init_root(&genesis_block.last_id());
         bank0.add_system_program();
         bank0.process_genesis_block(&genesis_block);
         bank0.process_ledger(ledger0).unwrap();
         let mut bank1 = Bank::default();
+        bank1.init_root(&genesis_block.last_id());
         bank1.add_system_program();
         bank1.process_genesis_block(&genesis_block);
         bank1.process_ledger(ledger1).unwrap();
