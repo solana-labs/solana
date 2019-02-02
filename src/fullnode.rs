@@ -23,11 +23,9 @@ use solana_sdk::timing::{duration_as_ms, timestamp};
 use std::net::UdpSocket;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc::channel;
-use std::sync::mpsc::{Receiver, Sender, SyncSender};
+use std::sync::mpsc::{channel, Receiver, Sender, SyncSender};
 use std::sync::{Arc, RwLock};
-use std::thread::sleep;
-use std::thread::Result;
+use std::thread::{sleep, spawn, Result};
 use std::time::Duration;
 use std::time::Instant;
 
@@ -67,6 +65,7 @@ impl NodeServices {
 pub enum FullnodeReturnType {
     LeaderToValidatorRotation,
     ValidatorToLeaderRotation,
+    LeaderToLeaderRotation,
 }
 
 pub struct FullnodeConfig {
@@ -286,8 +285,8 @@ impl Fullnode {
         }
     }
 
-    pub fn leader_to_validator(&mut self, tick_height: u64) -> Result<()> {
-        trace!("leader_to_validator");
+    pub fn leader_to_validator(&mut self, tick_height: u64) -> FullnodeReturnType {
+        trace!("leader_to_validator: tick_height={}", tick_height);
 
         while self.bank.tick_height() < tick_height {
             sleep(Duration::from_millis(10));
@@ -305,14 +304,11 @@ impl Fullnode {
             .write()
             .unwrap()
             .set_leader(scheduled_leader);
-        // In the rare case that the leader exited on a multiple of seed_rotation_interval
-        // when the new leader schedule was being generated, and there are no other validators
-        // in the active set, then the leader scheduler will pick the same leader again, so
-        // check for that
+
         if scheduled_leader == self.id {
             let (last_entry_id, entry_height) = self.node_services.tvu.get_state();
             self.validator_to_leader(tick_height, entry_height, last_entry_id);
-            Ok(())
+            FullnodeReturnType::LeaderToLeaderRotation
         } else {
             self.node_services.tpu.switch_to_forwarder(
                 self.tpu_sockets
@@ -321,7 +317,7 @@ impl Fullnode {
                     .collect(),
                 self.cluster_info.clone(),
             );
-            Ok(())
+            FullnodeReturnType::LeaderToValidatorRotation
         }
     }
 
@@ -357,28 +353,56 @@ impl Fullnode {
         )
     }
 
-    pub fn handle_role_transition(&mut self) -> Result<Option<FullnodeReturnType>> {
+    pub fn handle_role_transition(&mut self) -> Option<FullnodeReturnType> {
         loop {
             if self.exit.load(Ordering::Relaxed) {
-                return Ok(None);
+                return None;
             }
             let should_be_forwarder = self.role_notifiers.1.try_recv();
             let should_be_leader = self.role_notifiers.0.try_recv();
             match should_be_leader {
                 Ok(TvuReturnType::LeaderRotation(tick_height, entry_height, last_entry_id)) => {
                     self.validator_to_leader(tick_height, entry_height, last_entry_id);
-                    return Ok(Some(FullnodeReturnType::ValidatorToLeaderRotation));
+                    return Some(FullnodeReturnType::ValidatorToLeaderRotation);
                 }
                 _ => match should_be_forwarder {
                     Ok(TpuReturnType::LeaderRotation(tick_height)) => {
-                        self.leader_to_validator(tick_height)?;
-                        return Ok(Some(FullnodeReturnType::LeaderToValidatorRotation));
+                        return Some(self.leader_to_validator(tick_height))
                     }
                     _ => {
                         continue;
                     }
                 },
             }
+        }
+    }
+
+    // Runs a thread to manage node role transitions.  The returned closure can be used to signal the
+    // node to exit.
+    pub fn run(mut self, rotation_notifier: Option<Sender<FullnodeReturnType>>) -> impl FnOnce() {
+        let (sender, receiver) = channel();
+        let exit = self.exit.clone();
+        spawn(move || loop {
+            let status = self.handle_role_transition();
+            match status {
+                None => {
+                    debug!("node shutdown requested");
+                    self.close().expect("Unable to close node");
+                    sender.send(true).expect("Unable to signal exit");
+                    break;
+                }
+                Some(transition) => {
+                    debug!("role_transition complete: {:?}", transition);
+                    if let Some(ref rotation_notifier) = rotation_notifier {
+                        rotation_notifier.send(transition).unwrap();
+                    }
+                }
+            };
+        });
+        move || {
+            exit.store(true, Ordering::Relaxed);
+            receiver.recv().unwrap();
+            debug!("node shutdown complete");
         }
     }
 
@@ -597,7 +621,7 @@ mod tests {
         let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
         let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
         // Start up the leader
-        let mut bootstrap_leader = Fullnode::new(
+        let bootstrap_leader = Fullnode::new(
             bootstrap_leader_node,
             &bootstrap_leader_keypair,
             &bootstrap_leader_ledger_path,
@@ -607,16 +631,16 @@ mod tests {
             &FullnodeConfig::default(),
         );
 
-        // Wait for the leader to transition, ticks should cause the leader to
-        // reach the height for leader rotation
-        match bootstrap_leader.handle_role_transition().unwrap() {
-            Some(FullnodeReturnType::LeaderToValidatorRotation) => (),
-            _ => {
-                panic!("Expected a leader transition");
-            }
-        }
-        assert!(bootstrap_leader.node_services.tpu.is_leader());
-        bootstrap_leader.close().unwrap();
+        let (rotation_sender, rotation_receiver) = channel();
+        let bootstrap_leader_exit = bootstrap_leader.run(Some(rotation_sender));
+
+        // Wait for the bootstrap leader to transition.  Since there are no other nodes in the
+        // cluster it will continue to be the leader
+        assert_eq!(
+            rotation_receiver.recv().unwrap(),
+            FullnodeReturnType::LeaderToLeaderRotation
+        );
+        bootstrap_leader_exit();
     }
 
     #[test]
@@ -860,7 +884,7 @@ mod tests {
         // Release tvu bank lock, tvu should start making progress again and
         // handle_role_transition should successfully rotate the leader to a validator
         assert_eq!(
-            leader.handle_role_transition().unwrap().unwrap(),
+            leader.handle_role_transition().unwrap(),
             FullnodeReturnType::LeaderToValidatorRotation
         );
         assert_eq!(

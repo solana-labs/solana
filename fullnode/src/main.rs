@@ -17,6 +17,7 @@ use std::fs::File;
 use std::io::{Error, ErrorKind, Result};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::process::exit;
+use std::sync::mpsc::channel;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::thread::sleep;
@@ -262,7 +263,7 @@ fn main() {
     info!("New vote account ID is {:?}", vote_account_id);
 
     let gossip_addr = node.info.gossip;
-    let mut fullnode = Fullnode::new(
+    let fullnode = Fullnode::new(
         node,
         &keypair,
         ledger_path,
@@ -273,6 +274,9 @@ fn main() {
             .as_ref(),
         &fullnode_config,
     );
+
+    let (rotation_sender, rotation_receiver) = channel();
+    fullnode.run(Some(rotation_sender));
 
     if !no_signer {
         let leader_node_info = loop {
@@ -299,17 +303,9 @@ fn main() {
     }
     info!("Node initialized");
     loop {
-        let status = fullnode.handle_role_transition();
-        match status {
-            Ok(Some(transition)) => {
-                info!("role_transition complete: {:?}", transition);
-            }
-            _ => {
-                panic!(
-                    "Fullnode TPU/TVU exited for some unexpected reason: {:?}",
-                    status
-                );
-            }
-        };
+        info!(
+            "Node rotation event: {:?}",
+            rotation_receiver.recv().unwrap()
+        );
     }
 }
