@@ -12,8 +12,8 @@ use std::borrow::Borrow;
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
-use std::fs::{self, File};
-use std::io::{self, prelude::*, BufReader, Seek, SeekFrom};
+use std::fs;
+use std::io;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::result::Result as StdRes;
@@ -28,6 +28,7 @@ mod store_impl;
 type Result<T> = StdRes<T, StoreError>;
 
 pub const DEFAULT_BLOCKS_PER_SLOT: u64 = 1;
+const ERASURE_COLUMN: &str = "erasure";
 
 #[derive(Debug)]
 pub struct BlobStore {
@@ -108,7 +109,7 @@ impl BlobStore {
     }
 
     pub fn get_meta(&self, slot: u64) -> Result<SlotMeta> {
-        self.store.get_single(slot)
+        self.store.get_single::<SlotMeta>(slot)
     }
 
     pub fn put_blob(&mut self, blob: &Blob) -> Result<()> {
@@ -117,18 +118,22 @@ impl BlobStore {
         self.store.put(key, blob)
     }
 
-    pub fn read_blob_data(&self, slot: u64, index: u64, buf: &mut [u8]) -> Result<()> {
-        let (data_path, blob_idx) = store_impl::index_data(&self.store.root, slot, index)?;
+    // TODO: replace once R/W serialization for store is in place
+    pub fn read_blob_data(&self, _slot: u64, _index: u64, _buf: &mut [u8]) -> Result<()> {
+        //let (data_path, blob_idx) = store_impl::index_data(&self.store.root, slot, index)?;
 
-        let mut data_file = BufReader::new(File::open(&data_path)?);
-        data_file.seek(SeekFrom::Start(blob_idx.offset))?;
-        data_file.read_exact(buf)?;
+        //let mut data_file = BufReader::new(File::open(&data_path)?);
+        //data_file.seek(SeekFrom::Start(blob_idx.offset))?;
+        //data_file.read_exact(buf)?;
 
-        Ok(())
+        //Ok(())
+        unimplemented!()
     }
 
     pub fn get_blob_data(&self, slot: u64, index: u64) -> Result<Vec<u8>> {
-        self.store.get(&(slot, index))
+        use store::Named;
+        self.store
+            .get_dyn::<_, Vec<u8>>(Blob::COLUMN, &(slot, index))
     }
 
     pub fn get_blob(&self, slot: u64, index: u64) -> Result<Blob> {
@@ -138,13 +143,14 @@ impl BlobStore {
     }
 
     pub fn get_erasure(&self, slot: u64, index: u64) -> Result<Vec<u8>> {
-        self.store.get(&(slot, index))
+        self.store
+            .get_dyn::<_, Vec<u8>>(ERASURE_COLUMN, &(slot, index))
     }
 
     pub fn put_erasure(&mut self, slot: u64, index: u64, erasure: &[u8]) -> Result<()> {
         let key = Key::from((slot, index));
 
-        self.store.put_no_copy(&key, erasure)
+        self.store.put_dyn_no_copy(ERASURE_COLUMN, &key, erasure)
     }
 
     pub fn put_blobs<'a, I>(&'a mut self, iter: I) -> Result<()>
@@ -211,7 +217,8 @@ impl BlobStore {
         slot: u64,
         range: Range<u64>,
     ) -> Result<impl Iterator<Item = Result<Vec<u8>>> + '_> {
-        self.store.slot_range(slot, range)
+        use store::Named;
+        self.store.slot_range(Blob::COLUMN, slot, range)
     }
 
     /// Returns the entry vector for the slot starting with `entry_start_index`, capping the result
@@ -245,7 +252,7 @@ impl BlobStore {
         slot: u64,
         range: Range<u64>,
     ) -> Result<impl Iterator<Item = Result<Entry>> + '_> {
-        let iter = self.store.slot_range(slot, range)?.map(|blob_data| {
+        let iter = self.slot_data_range(slot, range)?.map(|blob_data| {
             let entry_data = &blob_data?[packet::BLOB_HEADER_SIZE..];
             let entry =
                 bincode::deserialize(entry_data).expect("Blobs must be well formed in the ledger");
