@@ -1,9 +1,7 @@
 //! Simple data structure to keep track of checkpointed state.  It stores a map of forks to a type
 //! and parent forks.
 //!
-//! `latest` forks is a set of all the forks with no children.
-//!
-//! A trunk is the latest fork that is a parent all the `latest` forks.  If consensus works correctly, then latest should be pruned such that only one trunk exists within N links.
+//! A root is the fork that is a parent to all the leaf forks.
 
 use hashbrown::{HashMap, HashSet};
 use std::collections::VecDeque;
@@ -11,8 +9,6 @@ use std::collections::VecDeque;
 pub struct Checkpoints<T> {
     /// Stores a map from fork to a T and a parent fork
     pub checkpoints: HashMap<u64, (T, u64)>,
-    /// The latest forks that have been added
-    pub latest: HashSet<u64>,
 }
 
 impl<T: Clone> Checkpoints<T> {
@@ -23,8 +19,6 @@ impl<T: Clone> Checkpoints<T> {
         self.checkpoints.get(&fork)
     }
     pub fn store(&mut self, fork: u64, data: T, trunk: u64) {
-        self.latest.remove(&trunk);
-        self.latest.insert(fork);
         self.insert(fork, data, trunk);
     }
     pub fn insert(&mut self, fork: u64, data: T, trunk: u64) {
@@ -83,7 +77,6 @@ impl<T> Default for Checkpoints<T> {
     fn default() -> Self {
         Self {
             checkpoints: HashMap::new(),
-            latest: HashSet::new(),
         }
     }
 }
