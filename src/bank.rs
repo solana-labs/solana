@@ -152,7 +152,8 @@ impl Bank {
         *sub = Some(subscriptions)
     }
 
-    fn init_root(&self, last_id: &Hash) {
+    /// Init the root fork.  Only tests should be using this.
+    pub fn init_root(&self, last_id: &Hash) {
         self.forks
             .write()
             .unwrap()

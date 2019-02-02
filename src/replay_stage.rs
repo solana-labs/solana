@@ -601,52 +601,33 @@ mod test {
             );
 
             let keypair = voting_keypair.as_ref();
-            let vote = VoteTransaction::new_vote(keypair, bank.tick_height(), bank.last_id(), 0);
+            let vote = VoteTransaction::new_vote(
+                keypair,
+                bank.live_bank_state().tick_height(),
+                bank.live_bank_state().last_id(),
+                 0,
+            );
             cluster_info_me.write().unwrap().push_vote(vote);
-
+            
             // Send ReplayStage an entry, should see it on the ledger writer receiver
             let next_tick = create_ticks(1, last_entry_id);
-
+            
             db_ledger
                 .write_entries(DEFAULT_SLOT_HEIGHT, entry_height, next_tick.clone())
                 .unwrap();
-
+            
             let received_tick = ledger_writer_recv
                 .recv()
                 .expect("Expected to recieve an entry on the ledger writer receiver");
-
-<<<<<<< HEAD
+            
+            
             assert_eq!(next_tick, received_tick);
-
+            drop(entry_sender);
+            
             replay_stage
                 .close()
                 .expect("Expect successful ReplayStage exit");
         }
-=======
-        let keypair = voting_keypair.as_ref();
-        let vote = VoteTransaction::new_vote(
-            keypair,
-            bank.live_bank_state().tick_height(),
-            bank.live_bank_state().last_id(),
-            0,
-        );
-        cluster_info_me.write().unwrap().push_vote(vote);
-
-        // Send ReplayStage an entry, should see it on the ledger writer receiver
-        let next_tick = create_ticks(1, last_entry_id);
-        entry_sender
-            .send(next_tick.clone())
-            .expect("Error sending entry to ReplayStage");
-        let received_tick = ledger_writer_recv
-            .recv()
-            .expect("Expected to recieve an entry on the ledger writer receiver");
-
-        assert_eq!(next_tick, received_tick);
-        drop(entry_sender);
-        replay_stage
-            .join()
-            .expect("Expect successful ReplayStage exit");
->>>>>>> reforkering
         let _ignored = remove_dir_all(&my_ledger_path);
     }
 
@@ -707,7 +688,6 @@ mod test {
         // Set up the replay stage
         let (rotation_tx, rotation_rx) = channel();
         let exit = Arc::new(AtomicBool::new(false));
-<<<<<<< HEAD
         {
             let (db_ledger, l_sender, l_receiver) =
                 DbLedger::open_with_signal(&my_ledger_path).unwrap();
@@ -744,20 +724,7 @@ mod test {
                 rotation_tx,
                 None,
                 l_sender,
-                l_receiver,
-=======
-        let (_replay_stage, ledger_writer_recv) = ReplayStage::new(
-            my_keypair.pubkey(),
-            Some(voting_keypair.clone()),
-            bank.clone(),
-            cluster_info_me.clone(),
-            entry_receiver,
-            exit.clone(),
-            Arc::new(RwLock::new(entry_height)),
-            Arc::new(RwLock::new(last_entry_id)),
-            rotation_tx,
-            None,
-        );
+                l_receiver,);
 
         let keypair = voting_keypair.as_ref();
         let vote = VoteTransaction::new_vote(
@@ -795,7 +762,6 @@ mod test {
             debug!(
                 "loop: i={}, leader_rotation_index={}, entry={:?}",
                 i, leader_rotation_index, entry,
->>>>>>> reforkering
             );
 
             let keypair = voting_keypair.as_ref();
@@ -854,6 +820,7 @@ mod test {
                 .close()
                 .expect("Expect successful ReplayStage exit");
         }
+
         let _ignored = remove_dir_all(&my_ledger_path);
     }
 
@@ -870,6 +837,8 @@ mod test {
 
         let entry_height = 0;
         let mut last_id = Hash::default();
+        let bank = Bank::default();
+        bank.init_root(&last_id);
         let mut entries = Vec::new();
         for _ in 0..5 {
             let entry = Entry::new(&mut last_id, 0, 1, vec![]); //just ticks
@@ -881,7 +850,7 @@ mod test {
         let voting_keypair = Arc::new(VotingKeypair::new_local(&my_keypair));
         let res = ReplayStage::process_entries(
             entries.clone(),
-            &Arc::new(Bank::default()),
+            &Arc::new(bank),
             &cluster_info_me,
             Some(&voting_keypair),
             &ledger_entry_sender,
@@ -939,6 +908,8 @@ mod test {
 
         let entry_height = 0;
         let mut last_id = Hash::default();
+        let bank = Bank::default();
+        bank.init_root(&last_id);
         let mut entries = Vec::new();
         let mut expected_entries = Vec::new();
         for _ in 0..5 {
@@ -952,7 +923,7 @@ mod test {
         let voting_keypair = Arc::new(VotingKeypair::new_local(&my_keypair));
         ReplayStage::process_entries(
             entries.clone(),
-            &Arc::new(Bank::default()),
+            &Arc::new(bank),
             &cluster_info_me,
             Some(&voting_keypair),
             &ledger_entry_sender,
