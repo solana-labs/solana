@@ -420,7 +420,7 @@ impl Bank {
     }
 
     /// An active chain is computed from the leaf_slot
-    /// The base that is a direct descendasnt of the root and is in the active chain to the leaf
+    /// The base that is a direct descendant of the root and is in the active chain to the leaf
     /// is merged into root, and any forks not attached to the new root are purged.
     pub fn merge_into_root(&self, leaf_slot: u64) {
         //there is only one base, and its the current live fork
