@@ -85,13 +85,20 @@ loop {
     // make sure
     assert!(poh_entries.last().unwrap().tick_height == my_slot.start, "generator didn't reach my scheduled height, abort!");
 
+    // get the slot these entries connect to
+    let starting_slot = poh_entries.first().unwrap().slot_index() - 1;
+
+    // create a fork from the start to my slot
+    let bank_state = forks.init(my_slot.slot_id, starting_slot);
+
     // operate as leader
-    let bank_state = forks.get(my_slot.fork_id);
     let recorder = PohRecorder::new(poh_entries, my_slot.end, bank_state, exit_signal);
     let leader = Leader::new(bank_state); 
     exit_receiver.recv();
-    // finalize the bank_state and send the vote as a validator
     leader.exit();
+
+    // Finalize the bank_state, send the vote as a validator.
+    bank_state.finalize();
 }
 ```
 
