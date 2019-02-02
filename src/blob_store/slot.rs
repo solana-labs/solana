@@ -242,7 +242,6 @@ where
             size,
         };
 
-        println!("mk_slot_data_iter: blob_idx = {:?}", blob_idx);
         blob_indices.push(blob_idx);
     }
 

@@ -47,6 +47,36 @@ fn test_get_put_simple() {
 }
 
 #[test]
+fn test_multi_slot_entry_retrieve() {
+    let p = get_tmp_store_path("test_multi_slot_entry_retrieve").unwrap();
+    let mut store = BlobStore::open(&p).unwrap();
+
+    let entries = entry::make_tiny_test_entries(100);
+
+    let blobs: Vec<_> = entries
+        .iter()
+        .enumerate()
+        .map(|(idx, entry)| {
+            let mut b = entry.to_blob();
+            b.set_slot(idx as u64);
+            b.set_index(idx as u64);
+            b
+        })
+        .collect();
+
+    store.put_blobs(&blobs).expect("unable to insert entries");
+
+    let retrieved: Result<Vec<_>> = store.entries().collect();
+    let retrieved = retrieved.expect("Bad iterator somehow or something");
+
+    assert_eq!(blobs.len(), retrieved.len());
+    assert_eq!(entries, retrieved);
+
+    drop(store);
+    BlobStore::destroy(&p).expect("destruction should succeed");
+}
+
+#[test]
 fn test_insert_noncontiguous_blobs() {
     let p = get_tmp_store_path("test_insert_noncontiguous_blobs").unwrap();
     let mut store = BlobStore::open(&p).unwrap();
@@ -107,7 +137,7 @@ fn test_insert_noncontiguous_blobs() {
 fn test_ensure_correct_metadata() {
     let p = get_tmp_store_path("test_ensure_correct_metadata").unwrap();
     let mut store = BlobStore::open(&p).unwrap();
-    let config = *store.get_config();
+    let config = *store.config();
     let num_ticks = config.ticks_per_block * config.num_blocks_per_slot;
     let slot = 1;
 

@@ -1,7 +1,8 @@
-use crate::blob_store::appendvec::AppendVec;
+use crate::blob_store::recordfile::RecordFile;
 use crate::blob_store::slot::{SlotData, SlotIO};
 use crate::blob_store::store_impl as simpl;
 use crate::blob_store::{Result, SlotMeta, StoreConfig, StoreError};
+use crate::entry::Entry;
 use crate::packet::{Blob, BLOB_HEADER_SIZE};
 
 use byteorder::{BigEndian, ByteOrder};
@@ -15,22 +16,18 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::result::Result as StdRes;
 
-pub const DATA_FILE_NAME: &str = "data";
-pub const META_FILE_NAME: &str = "meta";
-pub const INDEX_FILE_NAME: &str = "index";
-pub const ERASURE_FILE_NAME: &str = "erasure";
-pub const ERASURE_INDEX_FILE_NAME: &str = "erasure_index";
-
 pub const DEFAULT_SLOT_CACHE_SIZE: usize = 10;
 pub const DATA_FILE_BUF_SIZE: usize = 64 * 1024;
 pub const INDEX_RECORD_SIZE: u64 = 3 * 8;
 
+const SLOT_REC_NAME: &str = "slots";
+
 #[derive(Debug)]
 pub struct Store {
-    pub root: PathBuf,
-    pub config: StoreConfig,
-    pub cache: SlotCache,
-    pub slots_mmap: AppendVec<u64>,
+    root: PathBuf,
+    config: StoreConfig,
+    cache: SlotCache,
+    slots_rec: RecordFile<u64>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -79,31 +76,12 @@ impl Store {
             root: PathBuf::from(path.as_ref()),
             config,
             cache: SlotCache::default(),
-            slots_mmap: AppendVec::new()?,
+            slots_rec: RecordFile::open(path.as_ref().join(SLOT_REC_NAME))?,
         })
     }
 
-    pub fn put_dyn<T>(&mut self, column: &str, key: Key, obj: T) -> Result<()>
-    where
-        T: Storable,
-    {
-        let iter = std::iter::once((key, obj));
-        simpl::insert_blobs(&self.root, column, &mut self.cache, iter)
-    }
-
-    pub fn put_dyn_no_copy<T>(&mut self, column: &str, key: Key, obj: T) -> Result<()>
-    where
-        T: StorableNoCopy,
-    {
-        let iter = std::iter::once((key, obj));
-        simpl::insert_blobs_no_copy(&self.root, column, &mut self.cache, iter)
-    }
-
-    pub fn put_no_copy<T>(&mut self, key: Key, obj: T) -> Result<()>
-    where
-        T: ColumnNoCopy,
-    {
-        self.put_dyn_no_copy(T::COLUMN, key, obj)
+    pub fn config(&self) -> &StoreConfig {
+        &self.config
     }
 
     #[inline]
@@ -114,22 +92,59 @@ impl Store {
         self.put_dyn(T::COLUMN, key, obj)
     }
 
+    #[inline]
+    pub fn put_dyn<T>(&mut self, column: &str, key: Key, obj: T) -> Result<()>
+    where
+        T: Storable,
+    {
+        let iter = std::iter::once((key, obj));
+        let touched = simpl::insert_blobs(&self.root, column, &mut self.cache, iter)?;
+
+        self.record_slots(&touched)
+    }
+
+    #[inline]
+    pub fn put_dyn_no_copy<T>(&mut self, column: &str, key: Key, obj: T) -> Result<()>
+    where
+        T: StorableNoCopy,
+    {
+        let iter = std::iter::once((key, obj));
+        let touched = simpl::insert_blobs_no_copy(&self.root, column, &mut self.cache, iter)?;
+
+        self.record_slots(&touched)
+    }
+
+    #[inline]
+    pub fn put_no_copy<T>(&mut self, key: Key, obj: T) -> Result<()>
+    where
+        T: ColumnNoCopy,
+    {
+        self.put_dyn_no_copy(T::COLUMN, key, obj)
+    }
+
+    #[inline]
     pub fn put_many<T, I>(&mut self, iter: I) -> Result<()>
     where
         T: Column,
         I: IntoIterator<Item = (Key, T)>,
     {
-        simpl::insert_blobs(&self.root, T::COLUMN, &mut self.cache, iter)
+        let touched = simpl::insert_blobs(&self.root, T::COLUMN, &mut self.cache, iter)?;
+
+        self.record_slots(&touched)
     }
 
+    #[inline]
     pub fn put_many_no_copy<T, I>(&mut self, iter: I) -> Result<()>
     where
         T: ColumnNoCopy,
         I: IntoIterator<Item = (Key, T)>,
     {
-        simpl::insert_blobs_no_copy(&self.root, T::COLUMN, &mut self.cache, iter)
+        let touched = simpl::insert_blobs_no_copy(&self.root, T::COLUMN, &mut self.cache, iter)?;
+
+        self.record_slots(&touched)
     }
 
+    #[inline]
     pub fn get<T>(&self, key: Key) -> Result<T::Output>
     where
         T: Column,
@@ -137,7 +152,7 @@ impl Store {
         self.get_dyn::<T>(T::COLUMN, key)
     }
 
-    // TODO: move to slotio + columnio impl, this is broken
+    #[inline]
     pub fn get_dyn<T>(&self, column: &str, key: Key) -> Result<T::Output>
     where
         T: Retrievable,
@@ -183,6 +198,7 @@ impl Store {
         Ok(())
     }
 
+    #[inline]
     pub fn slot_range(
         &self,
         column: &str,
@@ -190,6 +206,52 @@ impl Store {
         range: Range<u64>,
     ) -> Result<SlotData<Store>> {
         simpl::slot_data(self, &self.root, &self.cache, column, slot, range)
+    }
+
+    pub fn values_dyn<'a, T>(
+        &'a self,
+        column: &'a str,
+        start: Key,
+        end: Key,
+    ) -> impl Iterator<Item = Result<T::Output>> + 'a
+    where
+        T: Retrievable,
+    {
+        use std::u64;
+
+        let slot_bounds = start.0..end.0;
+        self.slots_rec
+            .records(slot_bounds)
+            .flat_map(move |slot| {
+                let start = if slot == start.0 { start.1 } else { 0 };
+                let end = if slot == end.0 - 1 { end.1 } else { u64::MAX };
+
+                simpl::slot_data(self, &self.root, &self.cache, column, slot, start..end)
+                    .into_iter()
+            })
+            .flatten()
+            .flatten()
+            .map(|data| T::from_data(&data).map_err(_str))
+    }
+
+    #[inline]
+    pub fn values<'a, T>(
+        &'a self,
+        start: Key,
+        end: Key,
+    ) -> impl Iterator<Item = Result<T::Output>> + 'a
+    where
+        T: Column + 'a,
+    {
+        self.values_dyn::<T>(T::COLUMN, start, end)
+    }
+
+    fn record_slots(&mut self, slots: &[u64]) -> Result<()> {
+        for slot in slots {
+            self.slots_rec.set(*slot, *slot)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -303,6 +365,28 @@ impl Retrievable for SlotMeta {
     fn from_data(data: &[u8]) -> StdRes<SlotMeta, bincode::Error> {
         bincode::deserialize(data)
     }
+}
+
+impl Storable for Entry {
+    type ToErr = &'static str;
+
+    fn to_data(&self) -> StdRes<Vec<u8>, Self::ToErr> {
+        let blob = self.to_blob();
+        Ok(Vec::from(&blob.data[..BLOB_HEADER_SIZE + blob.size()]))
+    }
+}
+
+impl Retrievable for Entry {
+    type FromErr = bincode::Error;
+    type Output = Entry;
+
+    fn from_data(data: &[u8]) -> StdRes<Entry, Self::FromErr> {
+        bincode::deserialize(&data[BLOB_HEADER_SIZE..])
+    }
+}
+
+impl Named for Entry {
+    const COLUMN: &'static str = "blob";
 }
 
 impl Storable for Blob {

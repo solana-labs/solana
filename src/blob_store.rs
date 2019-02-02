@@ -20,7 +20,7 @@ use std::result::Result as StdRes;
 
 use store::Key;
 
-mod appendvec;
+mod recordfile;
 mod slot;
 pub mod store;
 mod store_impl;
@@ -100,8 +100,8 @@ impl BlobStore {
         })
     }
 
-    pub fn get_config(&self) -> &StoreConfig {
-        &self.store.config
+    pub fn config(&self) -> &StoreConfig {
+        self.store.config()
     }
 
     pub fn put_meta(&mut self, slot: u64, meta: SlotMeta) -> Result<()> {
@@ -180,7 +180,6 @@ impl BlobStore {
             };
 
             for (blob_index, bl) in indices {
-                //update meta. write to file once in outer loop
                 if blob_index > meta.received {
                     meta.received = blob_index;
                 }
@@ -195,7 +194,7 @@ impl BlobStore {
 
                 if entry.is_tick() {
                     meta.consumed_ticks = std::cmp::max(entry.tick_height, meta.consumed_ticks);
-                    meta.is_trunk = meta.contains_all_ticks(&self.store.config);
+                    meta.is_trunk = meta.contains_all_ticks(self.config());
                 }
             }
             self.put_meta(slot, meta)?;
@@ -265,16 +264,28 @@ impl BlobStore {
 
     /// Return an iterator for all the entries in the given file.
     #[allow(unreachable_code)]
-    pub fn entries(&self) -> Result<Entries> {
-        unimplemented!();
+    pub fn entries<'a>(&'a self) -> impl Iterator<Item = Result<Entry>> + 'a {
+        use std::u64::MAX;
+
+        self.entries_range((0, 0), (MAX, MAX))
     }
 
-    pub fn entries_from(&self, _start: (u64, u64)) -> Result<Entries> {
-        unimplemented!();
+    pub fn entries_from<'a>(
+        &'a self,
+        (start_slot, start_index): (u64, u64),
+    ) -> impl Iterator<Item = Result<Entry>> + 'a {
+        use std::u64::MAX;
+
+        self.entries_range((start_slot, start_index), (MAX, MAX))
     }
 
-    pub fn entries_range(&self, _start: (u64, u64), _end: (u64, u64)) -> Result<Entries> {
-        unimplemented!();
+    pub fn entries_range<'a>(
+        &'a self,
+        (start_slot, start_index): (u64, u64),
+        (end_slot, end_index): (u64, u64),
+    ) -> impl Iterator<Item = Result<Entry>> + 'a {
+        self.store
+            .values::<Entry>(Key(start_slot, start_index), Key(end_slot, end_index))
     }
 
     pub fn destroy<P>(root: &P) -> Result<()>
