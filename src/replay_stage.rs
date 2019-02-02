@@ -792,6 +792,8 @@ mod test {
 
         let entry_height = 0;
         let mut last_id = Hash::default();
+        let bank = Bank::default();
+        bank.init_root(&last_id);
         let mut entries = Vec::new();
         for _ in 0..5 {
             let entry = Entry::new(&mut last_id, 0, 1, vec![]); //just ticks
@@ -861,6 +863,8 @@ mod test {
 
         let entry_height = 0;
         let mut last_id = Hash::default();
+        let bank = Bank::default();
+        bank.init_root(&last_id);
         let mut entries = Vec::new();
         let mut expected_entries = Vec::new();
         for _ in 0..5 {
@@ -874,7 +878,7 @@ mod test {
         let voting_keypair = Arc::new(VotingKeypair::new_local(&my_keypair));
         ReplayStage::process_entries(
             entries.clone(),
-            &Arc::new(Bank::default()),
+            &Arc::new(bank),
             &cluster_info_me,
             Some(&voting_keypair),
             &ledger_entry_sender,
