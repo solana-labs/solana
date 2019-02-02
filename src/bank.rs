@@ -342,18 +342,17 @@ impl Bank {
             if slot > 0 && block[0].tick_height % DEFAULT_TICKS_PER_SLOT == 0 {
                 //TODO: EntryTree should provide base slot
                 let base = slot - 1;
+                {
+                    let base_state = self.bank_state(base).expect("base fork");
+                    base_state.head().finalize();
+                }
                 self.init_fork(slot, &block[0].id, base)
                     .expect("init new fork");
+                self.merge_into_root(slot);
             }
 
             let bank_state = self.bank_state(slot).unwrap();
             bank_state.process_entries(&block)?;
-            //assumes that ledger only has full blocks
-            bank_state.head().finalize();
-            if slot > 0 {
-                self.merge_into_root(slot);
-            }
-
             last_id = block.last().unwrap().id;
             entry_height += block.len() as u64;
         }
