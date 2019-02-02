@@ -1,4 +1,4 @@
-### Replication-client Reward Auto-delegation
+### 3.2 Replication-client Reward Auto-delegation
 
 The ability for Solana network participant’s to earn rewards by providing storage service is a unique on-boarding path that requires little hardware overhead and minimal upfront capital. It offers an avenue for individuals with extra-storage space on their home laptops or PCs to contribute to the security of the network and become integrated into the Solana economy.
 

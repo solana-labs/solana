@@ -1,4 +1,4 @@
-### Storage-replication Rewards
+### 3.1 Storage-replication Rewards
 
 Replicator-clients download, encrypt and submit PoReps for ledger block sections.3  PoReps submitted to the PoH stream, and subsequently validated, function as evidence that the submitting replicator client is indeed storing the assigned ledger block sections on local hard drive space as a service to the network. Therefore, replicator clients should earn protocol rewards proportional to the amount of storage, and the number of successfully validated PoReps, that they are verifiably providing to the network.
 

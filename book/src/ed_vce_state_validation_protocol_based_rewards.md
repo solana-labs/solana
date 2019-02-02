@@ -1,12 +1,12 @@
-### State-validation Protocol-based Rewards
+### 2.1 State-validation protocol-based rewards
 
 Validator-clients have two functional roles in the Solana network
 
-* Validate (vote) the current global state of that PoH along with any Proofs-of-Replication (see [Replication Client Economics](ed_replication_client_economics.md)) that they are eligible to validate
+* Validate (vote) the current global state of that PoH along with any Proofs-of-Replication (see [Section 3](ed_replication_client_economics.md)) that they are eligible to validate
 
 * Be elected as ‘leader’ on a stake-weighted round-robin schedule during which time they are responsible for collecting outstanding transactions and Proofs-of-Replication and incorporating them into the PoH, thus updating the global state of the network and providing chain continuity.
 
-Validator-client rewards for these services are to be distributed at the end of each Solana epoch. Compensation for validator-clients is provided via a protocol-based annual interest rate dispersed in proportion to the stake-weight of each validator (see below) along with leader-claimed transaction fees available during each leader rotation. I.e. during the time a given validator-client is elected as leader, it has the opportunity to keep a portion of each non-PoRep transaction fee, less a protocol-specified amount that is returned to the mining pool (see [Validation-client State Transaction Fees](ed_vce_state_validation_transaction_fees.md)). PoRep transaction fees are not collected directly by the leader client but pooled and returned to the validator set in proportion to the number of successfully validated PoReps. (see [Replication-client Transaction Fees](ed_vce_replication_validation_transaction_fees.md))
+Validator-client rewards for these services are to be distributed at the end of each Solana epoch. Compensation for validator-clients is provided via a protocol-based annual interest rate dispersed in proportion to the stake-weight of each validator (see below) along with leader-claimed transaction fees available during each leader rotation. I.e. during the time a given validator-client is elected as leader, it has the opportunity to keep a portion of each non-PoRep transaction fee, less a protocol-specified amount that is returned to the mining pool (see [Section 2.2](ed_vce_state_validation_transaction_fees.md)). PoRep transaction fees are not collected directly by the leader client but pooled and returned to the validator set in proportion to the number of successfully validated PoReps. (see [Section 2.3](ed_vce_replication_validation_transaction_fees.md))
 
 The protocol-based annual interest-rate (%) per epoch to be distributed to validation-clients is to be a function of:
 
