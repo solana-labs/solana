@@ -56,6 +56,22 @@ pub struct ReplayStage {
 }
 
 impl ReplayStage {
+    fn entries_to_blocks(entries: Vec<Entry>) -> Vec<(Vec<Entry>, u64, u64)> {
+        let mut blocks = vec![];
+        for e in entries {
+            let current = e.tick_height / DEFAULT_TICKS_PER_SLOT;
+            let prev = if current == 0 { 0 } else { current - 1 };
+            if blocks.is_empty() {
+                blocks.push((vec![], current, prev));
+            }
+            if blocks.last().unwrap().1 != current {
+                blocks.push((vec![], current, prev));
+            }
+            blocks.last_mut().unwrap().0.push(e);
+        }
+        blocks
+    }
+
     /// Process entry blobs, already in order
     #[allow(clippy::too_many_arguments)]
     fn process_entries(
@@ -81,7 +97,6 @@ impl ReplayStage {
         );
 
         let mut res = Ok(());
-        let mut num_entries_to_write = entries.len();
         let now = Instant::now();
         if !entries.as_slice().verify(&last_entry_id.read().unwrap()) {
             inc_new_counter_info!("replicate_stage-verify-fail", entries.len());
@@ -96,57 +111,42 @@ impl ReplayStage {
             .get_current_leader()
             .expect("Scheduled leader should be calculated by this point");
 
-        // Next vote tick is ceiling of (current tick/ticks per block)
-        let mut num_ticks_to_next_vote = DEFAULT_TICKS_PER_SLOT
-            - (bank.live_bank_state().tick_height() % DEFAULT_TICKS_PER_SLOT);
-        let mut start_entry_index = 0;
-        for (i, entry) in entries.iter().enumerate() {
+        let start_slot = entries[0].tick_height / DEFAULT_TICKS_PER_SLOT;
+        let blocks = Self::entries_to_blocks(entries);
+        for (entries, current_slot, base_slot) in blocks {
             inc_new_counter_info!(
                 "replicate-stage_bank-tick",
                 bank.live_bank_state().tick_height() as usize
             );
-            if entry.is_tick() {
-                num_ticks_to_next_vote -= 1;
+            if bank.bank_state(current_slot).is_none() {
+                bank.init_fork(current_slot, &entries[0].id, base_slot)
+                    .expect("init fork");
             }
-            inc_new_counter_info!(
-                "replicate-stage_tick-to-vote",
-                num_ticks_to_next_vote as usize
-            );
-            // If it's the last entry in the vector, i will be vec len - 1.
-            // If we don't process the entry now, the for loop will exit and the entry
-            // will be dropped.
-            if 0 == num_ticks_to_next_vote || (i + 1) == entries.len() {
-                //TODO: EntryTree should provide slot
-                let slot = entry.tick_height / DEFAULT_TICKS_PER_SLOT;
-                if slot > 0 && entry.tick_height % DEFAULT_TICKS_PER_SLOT == 0 {
-                    //TODO: EntryTree should provide base slot
-                    let base = slot - 1;
-                    bank.init_fork(slot, &entry.id, base).expect("init fork");
-                }
-                res = bank
-                    .bank_state(slot)
-                    .unwrap()
-                    .process_entries(&entries[start_entry_index..=i]);
+            res = bank
+                .bank_state(current_slot)
+                .unwrap()
+                .process_entries(&entries);
 
-                if res.is_err() {
-                    // TODO: This will return early from the first entry that has an erroneous
-                    // transaction, instead of processing the rest of the entries in the vector
-                    // of received entries. This is in line with previous behavior when
-                    // bank.process_entries() was used to process the entries, but doesn't solve the
-                    // issue that the bank state was still changed, leading to inconsistencies with the
-                    // leader as the leader currently should not be publishing erroneous transactions
-                    inc_new_counter_info!(
-                        "replicate-stage_failed_process_entries",
-                        (i - start_entry_index)
-                    );
+            if res.is_err() {
+                // TODO: This will return early from the first entry that has an erroneous
+                // transaction, instead of processing the rest of the entries in the vector
+                // of received entries. This is in line with previous behavior when
+                // bank.process_entries() was used to process the entries, but doesn't solve the
+                // issue that the bank state was still changed, leading to inconsistencies with the
+                // leader as the leader currently should not be publishing erroneous transactions
+                inc_new_counter_info!(
+                    "replicate-stage_failed_process_entries",
+                    (current_slot - start_slot) as usize
+                );
 
-                    break;
-                }
-
-                if 0 == num_ticks_to_next_vote {
-                    let bank_state = bank.bank_state(slot).unwrap();
+                break;
+            }
+            {
+                let bank_state = bank.bank_state(current_slot).expect("current bank state");
+                let next_tick_slot = (bank_state.tick_height() + 1) / DEFAULT_TICKS_PER_SLOT;
+                if next_tick_slot != current_slot {
                     bank_state.head().finalize();
-                    bank.merge_into_root(slot);
+                    bank.merge_into_root(current_slot);
                     if let Some(voting_keypair) = voting_keypair {
                         let keypair = voting_keypair.as_ref();
                         let vote = VoteTransaction::new_vote(
@@ -158,43 +158,40 @@ impl ReplayStage {
                         cluster_info.write().unwrap().push_vote(vote);
                     }
                 }
-                let (scheduled_leader, _) = bank
-                    .get_current_leader()
-                    .expect("Scheduled leader should be calculated by this point");
+            }
+            // If leader rotation happened, only write the entries up to leader rotation.
+            *last_entry_id.write().unwrap() = entries
+                .last()
+                .expect("Entries cannot be empty at this point")
+                .id;
+            inc_new_counter_info!(
+                "replicate-transactions",
+                entries.iter().map(|x| x.transactions.len()).sum()
+            );
 
-                // TODO: Remove this soon once we boot the leader from ClusterInfo
-                if scheduled_leader != current_leader {
-                    cluster_info.write().unwrap().set_leader(scheduled_leader);
-                    num_entries_to_write = i + 1;
-                    break;
-                }
+            let entries_len = entries.len() as u64;
+            // TODO: In line with previous behavior, this will write all the entries even if
+            // an error occurred processing one of the entries (causing the rest of the entries to
+            // not be processed).
+            if entries_len != 0 {
+                ledger_entry_sender.send(entries)?;
+            }
 
-                start_entry_index = i + 1;
-                num_ticks_to_next_vote = DEFAULT_TICKS_PER_SLOT;
+            *entry_height.write().unwrap() += entries_len;
+            let (scheduled_leader, _) = bank
+                .get_current_leader()
+                .expect("Scheduled leader should be calculated by this point");
+
+            // TODO: Remove this soon once we boot the leader from ClusterInfo
+            if scheduled_leader != current_leader {
+                did_rotate = true;
+                cluster_info.write().unwrap().set_leader(scheduled_leader);
+            }
+
+            if !already_leader && my_id == scheduled_leader && did_rotate {
+                break;
             }
         }
-
-        // If leader rotation happened, only write the entries up to leader rotation.
-        entries.truncate(num_entries_to_write);
-        *last_entry_id.write().unwrap() = entries
-            .last()
-            .expect("Entries cannot be empty at this point")
-            .id;
-
-        inc_new_counter_info!(
-            "replicate-transactions",
-            entries.iter().map(|x| x.transactions.len()).sum()
-        );
-
-        let entries_len = entries.len() as u64;
-        // TODO: In line with previous behavior, this will write all the entries even if
-        // an error occurred processing one of the entries (causing the rest of the entries to
-        // not be processed).
-        if entries_len != 0 {
-            ledger_entry_sender.send(entries)?;
-        }
-
-        *entry_height.write().unwrap() += entries_len;
 
         res?;
         inc_new_counter_info!(
