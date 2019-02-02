@@ -7,7 +7,7 @@ use crate::bank_checkpoint::BankCheckpoint;
 use crate::bank_state::BankState;
 use crate::entry::Entry;
 use crate::entry::EntrySlice;
-use crate::forks::Forks;
+use crate::forks::{self, Forks};
 use crate::genesis_block::GenesisBlock;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::leader_scheduler::DEFAULT_TICKS_PER_SLOT;
@@ -428,7 +428,7 @@ impl Bank {
         self.forks
             .write()
             .unwrap()
-            .merge_into_root(leaf_slot)
+            .merge_into_root(forks::ROLLBACK_DEPTH, leaf_slot)
             .expect("merge into root");
         let height = self.root_bank_state().tick_height();
         self.leader_scheduler
