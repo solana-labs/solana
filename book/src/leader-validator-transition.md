@@ -59,7 +59,7 @@ PohRecorder {
 
 ## Fullnode Loop
 
-This object manages the transition between modes.  The main idea is that once a ledger is replayed, the validator can run until there is proof that it can be a leader.  The leader can then run and record its transactions.
+This object manages the transition between modes.  The main idea is that once a ledger is replayed, the validator can run until there is proof that it can be a leader.  The Leader can then run and record its transactions.
 
 ```
 let (exit_receiver, exit_signal) = channel();
@@ -94,3 +94,7 @@ loop {
     leader.exit();
 }
 ```
+
+## BankState
+
+BankState operates over a specific slot.  Once the final tick has been registered the state becomes finalized and further writes will error out.  Validators operate over a bunch of different BankStates that represent live active chains.  A Leader only operates over a single BankState.
