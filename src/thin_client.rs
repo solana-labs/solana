@@ -5,11 +5,12 @@
 
 use crate::bank::Bank;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
+use crate::fullnode::{Fullnode, FullnodeConfig};
 use crate::gossip_service::GossipService;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::result::{Error, Result};
 use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
-use bincode::serialize;
+use bincode::serialize_into;
 use bs58;
 use hashbrown::HashMap;
 use log::Level;
@@ -42,7 +43,6 @@ pub struct ThinClient {
     balances: HashMap<Pubkey, Account>,
     signature_status: bool,
     confirmation: Option<usize>,
-
     rpc_client: RpcClient,
 }
 
@@ -94,10 +94,12 @@ impl ThinClient {
     /// Send a signed Transaction to the server for processing. This method
     /// does not wait for a response.
     pub fn transfer_signed(&self, tx: &Transaction) -> io::Result<Signature> {
-        let data = serialize(&tx).expect("serialize Transaction in pub fn transfer_signed");
-        assert!(data.len() < PACKET_DATA_SIZE);
+        let mut buf = vec![0; tx.serialized_size().unwrap() as usize];
+        let mut wr = std::io::Cursor::new(&mut buf[..]);
+        serialize_into(&mut wr, &tx).expect("serialize Transaction in pub fn transfer_signed");
+        assert!(buf.len() < PACKET_DATA_SIZE);
         self.transactions_socket
-            .send_to(&data, &self.transactions_addr)?;
+            .send_to(&buf[..], &self.transactions_addr)?;
         Ok(tx.signatures[0])
     }
 
@@ -109,10 +111,12 @@ impl ThinClient {
         tries: usize,
     ) -> io::Result<Signature> {
         for x in 0..tries {
-            tx.sign(&[&keypair], self.get_last_id());
-            let data = serialize(&tx).expect("serialize Transaction in pub fn transfer_signed");
+            tx.sign(&[keypair], self.get_last_id());
+            let mut buf = vec![0; tx.serialized_size().unwrap() as usize];
+            let mut wr = std::io::Cursor::new(&mut buf[..]);
+            serialize_into(&mut wr, &tx).expect("serialize Transaction in pub fn transfer_signed");
             self.transactions_socket
-                .send_to(&data, &self.transactions_addr)?;
+                .send_to(&buf[..], &self.transactions_addr)?;
             if self.poll_for_signature(&tx.signatures[0]).is_ok() {
                 return Ok(tx.signatures[0]);
             }
@@ -133,7 +137,7 @@ impl ThinClient {
         last_id: &Hash,
     ) -> io::Result<Signature> {
         let now = Instant::now();
-        let tx = Transaction::system_new(keypair, to, n, *last_id);
+        let tx = SystemTransaction::new_account(keypair, to, n, *last_id, 0);
         let result = self.transfer_signed(&tx);
         solana_metrics::submit(
             influxdb::Point::new("thinclient")
@@ -432,71 +436,63 @@ pub fn retry_get_balance(
     None
 }
 
+pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, String) {
+    use crate::cluster_info::Node;
+    use crate::db_ledger::create_tmp_sample_ledger;
+    use crate::leader_scheduler::LeaderScheduler;
+    use crate::voting_keypair::VotingKeypair;
+    use solana_sdk::signature::KeypairUtil;
+
+    let node_keypair = Arc::new(Keypair::new());
+    let node = Node::new_localhost_with_pubkey(node_keypair.pubkey());
+    let node_info = node.info.clone();
+
+    let (mint_keypair, ledger_path, _, _) =
+        create_tmp_sample_ledger(ledger_name, 10_000, 0, node_info.id, 42);
+
+    let leader_scheduler = LeaderScheduler::from_bootstrap_leader(node_info.id);
+    let vote_account_keypair = Arc::new(Keypair::new());
+    let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
+    let node = Fullnode::new(
+        node,
+        &node_keypair,
+        &ledger_path,
+        Arc::new(RwLock::new(leader_scheduler)),
+        voting_keypair,
+        None,
+        &FullnodeConfig::default(),
+    );
+
+    (node, node_info, mint_keypair, ledger_path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bank::Bank;
-    use crate::cluster_info::Node;
-    use crate::db_ledger::create_tmp_ledger_with_mint;
-    use crate::fullnode::Fullnode;
-    use crate::leader_scheduler::LeaderScheduler;
-    use crate::mint::Mint;
-    use crate::vote_signer_proxy::VoteSignerProxy;
-    use bincode::deserialize;
+    use crate::client::mk_client;
+    use bincode::{deserialize, serialize};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::vote_program::VoteProgram;
     use solana_sdk::vote_transaction::VoteTransaction;
-    use solana_vote_signer::rpc::LocalVoteSigner;
     use std::fs::remove_dir_all;
 
     #[test]
     fn test_thin_client() {
         solana_logger::setup();
-        let leader_keypair = Arc::new(Keypair::new());
-        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let leader_data = leader.info.clone();
-
-        let alice = Mint::new(10_000);
-        let mut bank = Bank::new(&alice);
+        let (server, leader_data, alice, ledger_path) = new_fullnode("thin_client");
         let bob_pubkey = Keypair::new().pubkey();
-        let ledger_path = create_tmp_ledger_with_mint("thin_client", &alice);
-        let entry_height = alice.create_entries().len() as u64;
 
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_data.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
-        let vote_account_keypair = Arc::new(Keypair::new());
-        let vote_signer =
-            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
-        let last_id = bank.last_id();
-        let server = Fullnode::new_with_bank(
-            leader_keypair,
-            Arc::new(vote_signer),
-            bank,
-            None,
-            entry_height,
-            &last_id,
-            leader,
-            None,
-            &ledger_path,
-            false,
-            None,
-        );
         sleep(Duration::from_millis(900));
 
-        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+        let mut client = mk_client(&leader_data);
 
-        let mut client = ThinClient::new(leader_data.rpc, leader_data.tpu, transactions_socket);
         let transaction_count = client.transaction_count();
         assert_eq!(transaction_count, 0);
         let confirmation = client.get_confirmation_time();
         assert_eq!(confirmation, 18446744073709551615);
         let last_id = client.get_last_id();
-        let signature = client
-            .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
-            .unwrap();
+        let signature = client.transfer(500, &alice, bob_pubkey, &last_id).unwrap();
         client.poll_for_signature(&signature).unwrap();
         let balance = client.get_balance(&bob_pubkey);
         assert_eq!(balance.unwrap(), 500);
@@ -511,49 +507,24 @@ mod tests {
     #[ignore]
     fn test_bad_sig() {
         solana_logger::setup();
-        let leader_keypair = Arc::new(Keypair::new());
-        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let alice = Mint::new(10_000);
-        let mut bank = Bank::new(&alice);
-        let bob_pubkey = Keypair::new().pubkey();
-        let leader_data = leader.info.clone();
-        let ledger_path = create_tmp_ledger_with_mint("bad_sig", &alice);
 
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_data.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
-        let vote_account_keypair = Arc::new(Keypair::new());
-        let vote_signer =
-            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
-        let last_id = bank.last_id();
-        let server = Fullnode::new_with_bank(
-            leader_keypair,
-            Arc::new(vote_signer),
-            bank,
-            None,
-            0,
-            &last_id,
-            leader,
-            None,
-            &ledger_path,
-            false,
-            None,
-        );
+        let (server, leader_data, alice, ledger_path) = new_fullnode("bad_sig");
+        let bob_pubkey = Keypair::new().pubkey();
+
         //TODO: remove this sleep, or add a retry so CI is stable
         sleep(Duration::from_millis(300));
 
-        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let mut client = ThinClient::new(leader_data.rpc, leader_data.tpu, transactions_socket);
+        let mut client = mk_client(&leader_data);
+
         let last_id = client.get_last_id();
 
-        let tx = Transaction::system_new(&alice.keypair(), bob_pubkey, 500, last_id);
+        let tx = SystemTransaction::new_account(&alice, bob_pubkey, 500, last_id, 0);
 
         let _sig = client.transfer_signed(&tx).unwrap();
 
         let last_id = client.get_last_id();
 
-        let mut tr2 = Transaction::system_new(&alice.keypair(), bob_pubkey, 501, last_id);
+        let mut tr2 = SystemTransaction::new_account(&alice, bob_pubkey, 501, last_id, 0);
         let mut instruction2 = deserialize(tr2.userdata(0)).unwrap();
         if let SystemInstruction::Move { ref mut tokens } = instruction2 {
             *tokens = 502;
@@ -571,46 +542,14 @@ mod tests {
     #[test]
     fn test_client_check_signature() {
         solana_logger::setup();
-        let leader_keypair = Arc::new(Keypair::new());
-        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let alice = Mint::new(10_000);
-        let mut bank = Bank::new(&alice);
+        let (server, leader_data, alice, ledger_path) = new_fullnode("thin_client");
         let bob_pubkey = Keypair::new().pubkey();
-        let leader_data = leader.info.clone();
-        let ledger_path = create_tmp_ledger_with_mint("client_check_signature", &alice);
 
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_data.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
-        let vote_account_keypair = Arc::new(Keypair::new());
-        let vote_signer =
-            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
-        let entry_height = alice.create_entries().len() as u64;
-        let last_id = bank.last_id();
-        let server = Fullnode::new_with_bank(
-            leader_keypair,
-            Arc::new(vote_signer),
-            bank,
-            None,
-            entry_height,
-            &last_id,
-            leader,
-            None,
-            &ledger_path,
-            false,
-            None,
-        );
-        sleep(Duration::from_millis(300));
-
-        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let mut client = ThinClient::new(leader_data.rpc, leader_data.tpu, transactions_socket);
+        let mut client = mk_client(&leader_data);
         let last_id = client.get_last_id();
-        let signature = client
-            .transfer(500, &alice.keypair(), bob_pubkey, &last_id)
-            .unwrap();
+        let signature = client.transfer(500, &alice, bob_pubkey, &last_id).unwrap();
 
-        assert!(client.poll_for_signature(&signature).is_ok());
+        client.poll_for_signature(&signature).unwrap();
 
         server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
@@ -619,51 +558,18 @@ mod tests {
     #[test]
     fn test_register_vote_account() {
         solana_logger::setup();
-        let leader_keypair = Arc::new(Keypair::new());
-        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let mint = Mint::new(10_000);
-        let mut bank = Bank::new(&mint);
-        let leader_data = leader.info.clone();
-        let ledger_path = create_tmp_ledger_with_mint("client_check_signature", &mint);
+        let (server, leader_data, alice, ledger_path) = new_fullnode("thin_client");
 
-        let genesis_entries = &mint.create_entries();
-        let entry_height = genesis_entries.len() as u64;
-
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_data.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
-        let leader_vote_account_keypair = Arc::new(Keypair::new());
-        let vote_signer = VoteSignerProxy::new(
-            &leader_vote_account_keypair,
-            Box::new(LocalVoteSigner::default()),
-        );
-        let server = Fullnode::new_with_bank(
-            leader_keypair,
-            Arc::new(vote_signer),
-            bank,
-            None,
-            entry_height,
-            &genesis_entries.last().unwrap().id,
-            leader,
-            None,
-            &ledger_path,
-            false,
-            None,
-        );
-        sleep(Duration::from_millis(300));
-
-        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let mut client = ThinClient::new(leader_data.rpc, leader_data.tpu, transactions_socket);
+        let mut client = mk_client(&leader_data);
 
         // Create the validator account, transfer some tokens to that account
         let validator_keypair = Keypair::new();
         let last_id = client.get_last_id();
         let signature = client
-            .transfer(500, &mint.keypair(), validator_keypair.pubkey(), &last_id)
+            .transfer(500, &alice, validator_keypair.pubkey(), &last_id)
             .unwrap();
 
-        assert!(client.poll_for_signature(&signature).is_ok());
+        client.poll_for_signature(&signature).unwrap();
 
         // Create and register the vote account
         let validator_vote_account_keypair = Keypair::new();
@@ -671,9 +577,9 @@ mod tests {
         let last_id = client.get_last_id();
 
         let transaction =
-            VoteTransaction::vote_account_new(&validator_keypair, vote_account_id, last_id, 1, 1);
+            VoteTransaction::new_account(&validator_keypair, vote_account_id, last_id, 1, 1);
         let signature = client.transfer_signed(&transaction).unwrap();
-        assert!(client.poll_for_signature(&signature).is_ok());
+        client.poll_for_signature(&signature).unwrap();
 
         let balance = retry_get_balance(&mut client, &vote_account_id, Some(1))
             .expect("Expected balance for new account to exist");
@@ -681,7 +587,6 @@ mod tests {
 
         const LAST: usize = 30;
         for run in 0..=LAST {
-            println!("Checking for account registered: {}", run);
             let account_user_data = client
                 .get_account_userdata(&vote_account_id)
                 .expect("Expected valid response for account userdata")
@@ -717,65 +622,36 @@ mod tests {
     #[test]
     fn test_zero_balance_after_nonzero() {
         solana_logger::setup();
-        let leader_keypair = Arc::new(Keypair::new());
-        let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let alice = Mint::new(10_000);
-        let mut bank = Bank::new(&alice);
+        let (server, leader_data, alice, ledger_path) = new_fullnode("thin_client");
         let bob_keypair = Keypair::new();
-        let leader_data = leader.info.clone();
-        let ledger_path = create_tmp_ledger_with_mint("zero_balance_check", &alice);
 
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_data.id,
-        )));
-        bank.leader_scheduler = leader_scheduler;
-        let vote_account_keypair = Arc::new(Keypair::new());
-        let vote_signer =
-            VoteSignerProxy::new(&vote_account_keypair, Box::new(LocalVoteSigner::default()));
-        let last_id = bank.last_id();
-        let entry_height = alice.create_entries().len() as u64;
-        let server = Fullnode::new_with_bank(
-            leader_keypair,
-            Arc::new(vote_signer),
-            bank,
-            None,
-            entry_height,
-            &last_id,
-            leader,
-            None,
-            &ledger_path,
-            false,
-            None,
-        );
-        sleep(Duration::from_millis(900));
-
-        let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-        let mut client = ThinClient::new(leader_data.rpc, leader_data.tpu, transactions_socket);
+        let mut client = mk_client(&leader_data);
         let last_id = client.get_last_id();
 
-        // give bob 500 tokens
+        let starting_balance = client.poll_get_balance(&alice.pubkey()).unwrap();
+
+        info!("Give Bob 500 tokens");
         let signature = client
-            .transfer(500, &alice.keypair(), bob_keypair.pubkey(), &last_id)
+            .transfer(500, &alice, bob_keypair.pubkey(), &last_id)
             .unwrap();
-        assert!(client.poll_for_signature(&signature).is_ok());
+        client.poll_for_signature(&signature).unwrap();
 
         let balance = client.poll_get_balance(&bob_keypair.pubkey());
-        assert!(balance.is_ok());
         assert_eq!(balance.unwrap(), 500);
 
-        // take them away
+        info!("Take Bob's 500 tokens away");
         let signature = client
-            .transfer(500, &bob_keypair, alice.keypair().pubkey(), &last_id)
+            .transfer(500, &bob_keypair, alice.pubkey(), &last_id)
             .unwrap();
-        assert!(client.poll_for_signature(&signature).is_ok());
+        client.poll_for_signature(&signature).unwrap();
+        let balance = client.poll_get_balance(&alice.pubkey()).unwrap();
+        assert_eq!(balance, starting_balance);
 
-        // should get an error when bob's account is purged
+        info!("Should get an error when Bob's balance hits zero and is purged");
         let balance = client.poll_get_balance(&bob_keypair.pubkey());
         assert!(balance.is_err());
 
-        server
-            .close()
-            .unwrap_or_else(|e| panic!("close() failed! {:?}", e));
+        server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
     }
 }

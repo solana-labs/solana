@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -e
 
-FEATURES="$1"
+testCmd="$*"
+genPipeline=false
 
 cd "$(dirname "$0")/.."
 
@@ -9,16 +10,62 @@ cd "$(dirname "$0")/.."
 rm -rf "$HOME/.config/solana"
 
 source ci/_
-ci/version-check-with-upgrade.sh stable
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
-
-_ scripts/ulimit-n.sh
-_ cargo build --all --features="$FEATURES"
-
 export PATH=$PWD/target/debug:$PATH
 export USE_INSTALL=1
 
-_ ci/localnet-sanity.sh -b -i 256
-# TODO: Enable next line once leader rotation stability is fixed
-#_ ci/localnet-sanity.sh -i 256
+if [[ -n $BUILDKITE && -z $testCmd ]]; then
+  genPipeline=true
+  echo "
+steps:
+  "
+fi
+
+build() {
+  $genPipeline && return
+  ci/version-check-with-upgrade.sh stable
+  _ scripts/ulimit-n.sh
+  FEATURES=""
+  _ cargo build --all --features="$FEATURES"
+}
+
+runTest() {
+  declare runTestName="$1"
+  declare runTestCmd="$2"
+  if $genPipeline; then
+    echo "
+  - command: \"$0 '$runTestCmd'\"
+    name: \"$runTestName\"
+    timeout_in_minutes: 45
+"
+    return
+  fi
+
+  if [[ -n $testCmd && "$testCmd" != "$runTestCmd" ]]; then
+    echo Skipped "$runTestName"...
+    return
+  fi
+  #shellcheck disable=SC2068 # Don't want to double quote $runTestCmd
+  $runTestCmd
+}
+
+build
+
+runTest "Leader rotation off" \
+  "ci/localnet-sanity.sh -i 128 -b"
+
+runTest "Leader rotation off, restart" \
+  "ci/localnet-sanity.sh -i 128 -k 16 -b"
+
+runTest "Leader rotation off, incremental restart, extra node" \
+  "ci/localnet-sanity.sh -i 128 -k 16 -R -x -b"
+
+runTest "Leader rotation on" \
+  "ci/localnet-sanity.sh -i 128"
+
+runTest "Leader rotation on, restart" \
+  "ci/localnet-sanity.sh -i 128 -k 16"
+
+runTest "Leader rotation on, incremental restart, extra node" \
+  "ci/localnet-sanity.sh -i 128 -k 16 -R -x"

@@ -494,7 +494,7 @@ mod test {
             amount: 123,
             delegate: None,
         });
-        assert!(account.serialize(&mut userdata).is_ok());
+        account.serialize(&mut userdata).unwrap();
         assert_eq!(TokenProgram::deserialize(&userdata), Ok(account));
 
         let account = TokenProgram::Token(TokenInfo {
@@ -503,7 +503,7 @@ mod test {
             name: "A test token".to_string(),
             symbol: "TEST".to_string(),
         });
-        assert!(account.serialize(&mut userdata).is_ok());
+        account.serialize(&mut userdata).unwrap();
         assert_eq!(TokenProgram::deserialize(&userdata), Ok(account));
     }
 

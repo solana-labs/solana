@@ -7,42 +7,11 @@ use crate::system_instruction::SystemInstruction;
 use crate::system_program;
 use crate::transaction::{Instruction, Transaction};
 
-pub trait SystemTransaction {
-    fn system_create(
-        from_keypair: &Keypair,
-        to: Pubkey,
-        last_id: Hash,
-        tokens: u64,
-        space: u64,
-        program_id: Pubkey,
-        fee: u64,
-    ) -> Self;
+pub struct SystemTransaction {}
 
-    fn system_assign(from_keypair: &Keypair, last_id: Hash, program_id: Pubkey, fee: u64) -> Self;
-
-    fn system_new(from_keypair: &Keypair, to: Pubkey, tokens: u64, last_id: Hash) -> Self;
-
-    fn system_move(
-        from_keypair: &Keypair,
-        to: Pubkey,
-        tokens: u64,
-        last_id: Hash,
-        fee: u64,
-    ) -> Self;
-
-    fn system_move_many(
-        from_keypair: &Keypair,
-        moves: &[(Pubkey, u64)],
-        last_id: Hash,
-        fee: u64,
-    ) -> Self;
-
-    fn system_spawn(from_keypair: &Keypair, last_id: Hash, fee: u64) -> Self;
-}
-
-impl SystemTransaction for Transaction {
+impl SystemTransaction {
     /// Create and sign new SystemInstruction::CreateAccount transaction
-    fn system_create(
+    pub fn new_program_account(
         from_keypair: &Keypair,
         to: Pubkey,
         last_id: Hash,
@@ -50,7 +19,7 @@ impl SystemTransaction for Transaction {
         space: u64,
         program_id: Pubkey,
         fee: u64,
-    ) -> Self {
+    ) -> Transaction {
         let create = SystemInstruction::CreateAccount {
             tokens, //TODO, the tokens to allocate might need to be higher then 0 in the future
             space,
@@ -65,8 +34,25 @@ impl SystemTransaction for Transaction {
             fee,
         )
     }
+
+    /// Create and sign a transaction to create a system account
+    pub fn new_account(
+        from_keypair: &Keypair,
+        to: Pubkey,
+        tokens: u64,
+        last_id: Hash,
+        fee: u64,
+    ) -> Transaction {
+        let program_id = system_program::id();
+        Self::new_program_account(from_keypair, to, last_id, tokens, 0, program_id, fee)
+    }
     /// Create and sign new SystemInstruction::Assign transaction
-    fn system_assign(from_keypair: &Keypair, last_id: Hash, program_id: Pubkey, fee: u64) -> Self {
+    pub fn new_assign(
+        from_keypair: &Keypair,
+        last_id: Hash,
+        program_id: Pubkey,
+        fee: u64,
+    ) -> Transaction {
         let assign = SystemInstruction::Assign { program_id };
         Transaction::new(
             from_keypair,
@@ -77,18 +63,14 @@ impl SystemTransaction for Transaction {
             fee,
         )
     }
-    /// Create and sign new SystemInstruction::CreateAccount transaction with some defaults
-    fn system_new(from_keypair: &Keypair, to: Pubkey, tokens: u64, last_id: Hash) -> Self {
-        Transaction::system_create(from_keypair, to, last_id, tokens, 0, Pubkey::default(), 0)
-    }
     /// Create and sign new SystemInstruction::Move transaction
-    fn system_move(
+    pub fn new_move(
         from_keypair: &Keypair,
         to: Pubkey,
         tokens: u64,
         last_id: Hash,
         fee: u64,
-    ) -> Self {
+    ) -> Transaction {
         let move_tokens = SystemInstruction::Move { tokens };
         Transaction::new(
             from_keypair,
@@ -100,7 +82,12 @@ impl SystemTransaction for Transaction {
         )
     }
     /// Create and sign new SystemInstruction::Move transaction to many destinations
-    fn system_move_many(from: &Keypair, moves: &[(Pubkey, u64)], last_id: Hash, fee: u64) -> Self {
+    pub fn new_move_many(
+        from: &Keypair,
+        moves: &[(Pubkey, u64)],
+        last_id: Hash,
+        fee: u64,
+    ) -> Transaction {
         let instructions: Vec<_> = moves
             .iter()
             .enumerate()
@@ -121,7 +108,7 @@ impl SystemTransaction for Transaction {
         )
     }
     /// Create and sign new SystemInstruction::Spawn transaction
-    fn system_spawn(from_keypair: &Keypair, last_id: Hash, fee: u64) -> Self {
+    pub fn new_spawn(from_keypair: &Keypair, last_id: Hash, fee: u64) -> Transaction {
         let spawn = SystemInstruction::Spawn;
         Transaction::new(
             from_keypair,
@@ -146,7 +133,7 @@ mod tests {
         let t2 = Keypair::new();
         let moves = vec![(t1.pubkey(), 1), (t2.pubkey(), 2)];
 
-        let tx = Transaction::system_move_many(&from, &moves, Default::default(), 0);
+        let tx = SystemTransaction::new_move_many(&from, &moves, Default::default(), 0);
         assert_eq!(tx.account_keys[0], from.pubkey());
         assert_eq!(tx.account_keys[1], t1.pubkey());
         assert_eq!(tx.account_keys[2], t2.pubkey());

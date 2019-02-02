@@ -8,11 +8,11 @@ if [[ -z $BUILDKITE ]]; then
   exit 1
 fi
 
-if [[ -z $CHANNEL ]]; then
-  CHANNEL=$(buildkite-agent meta-data get "channel" --default "")
+if [[ -z $PUBLISH_CHANNEL ]]; then
+  PUBLISH_CHANNEL=$(buildkite-agent meta-data get "channel" --default "")
 fi
 
-if [[ -z $CHANNEL ]]; then
+if [[ -z $PUBLISH_CHANNEL ]]; then
   (
     cat <<EOF
 steps:
@@ -37,7 +37,7 @@ fi
 ci/channel-info.sh
 eval "$(ci/channel-info.sh)"
 
-case $CHANNEL in
+case $PUBLISH_CHANNEL in
 edge)
   CHANNEL_BRANCH=$EDGE_CHANNEL
   ;;
@@ -45,10 +45,14 @@ beta)
   CHANNEL_BRANCH=$BETA_CHANNEL
   ;;
 stable)
-  CHANNEL_BRANCH=$STABLE_CHANNEL
+  if [[ -n $BETA_CHANNEL_LATEST_TAG ]]; then
+    CHANNEL_BRANCH=$BETA_CHANNEL
+  else
+    CHANNEL_BRANCH=$STABLE_CHANNEL
+  fi
   ;;
 *)
-  echo "Error: Invalid CHANNEL=$CHANNEL"
+  echo "Error: Invalid PUBLISH_CHANNEL=$PUBLISH_CHANNEL"
   exit 1
   ;;
 esac
@@ -63,11 +67,11 @@ steps:
       message: "$BUILDKITE_MESSAGE"
       branch: "$CHANNEL_BRANCH"
       env:
-        CHANNEL: "$CHANNEL"
+        PUBLISH_CHANNEL: "$PUBLISH_CHANNEL"
 EOF
   ) | buildkite-agent pipeline upload
   exit 0
 fi
 
 set -x
-exec metrics/publish-metrics-dashboard.sh "$CHANNEL"
+exec metrics/publish-metrics-dashboard.sh "$PUBLISH_CHANNEL"

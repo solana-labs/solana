@@ -1,7 +1,6 @@
-use byteorder::{ByteOrder, LittleEndian};
-use bytes::Bytes;
 use clap::{crate_version, App, Arg};
-use solana_drone::drone::{Drone, DroneRequest, DRONE_PORT};
+use log::*;
+use solana_drone::drone::{Drone, DRONE_PORT};
 use solana_drone::socketaddr;
 use solana_sdk::signature::read_keypair;
 use std::error;
@@ -14,6 +13,7 @@ use tokio::prelude::*;
 use tokio_codec::{BytesCodec, Decoder};
 
 fn main() -> Result<(), Box<error::Error>> {
+    solana_logger::setup();
     solana_metrics::set_panic_hook("drone");
     let matches = App::new("drone")
         .version(crate_version!())
@@ -74,52 +74,22 @@ fn main() -> Result<(), Box<error::Error>> {
     });
 
     let socket = TcpListener::bind(&drone_addr).unwrap();
-    println!("Drone started. Listening on: {}", drone_addr);
+    info!("Drone started. Listening on: {}", drone_addr);
     let done = socket
         .incoming()
         .map_err(|e| println!("failed to accept socket; error = {:?}", e))
         .for_each(move |socket| {
             let drone2 = drone.clone();
-            // let client_ip = socket.peer_addr().expect("drone peer_addr").ip();
             let framed = BytesCodec::new().framed(socket);
             let (writer, reader) = framed.split();
 
             let processor = reader.and_then(move |bytes| {
-                let req: DroneRequest = bincode::deserialize(&bytes).or_else(|err| {
-                    Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        format!("deserialize packet in drone: {:?}", err),
-                    ))
-                })?;
-
-                println!("Airdrop transaction requested...{:?}", req);
-                // let res = drone2.lock().unwrap().check_rate_limit(client_ip);
-                let res = drone2.lock().unwrap().build_airdrop_transaction(req);
-                match res {
-                    Ok(tx) => {
-                        let response_vec = bincode::serialize(&tx).or_else(|err| {
-                            Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                format!("deserialize packet in drone: {:?}", err),
-                            ))
-                        })?;
-
-                        let mut response_vec_with_length = vec![0; 2];
-                        LittleEndian::write_u16(
-                            &mut response_vec_with_length,
-                            response_vec.len() as u16,
-                        );
-                        response_vec_with_length.extend_from_slice(&response_vec);
-
-                        let response_bytes = Bytes::from(response_vec_with_length);
-                        println!("Airdrop transaction granted");
-                        Ok(response_bytes)
-                    }
-                    Err(err) => {
-                        println!("Airdrop transaction failed: {:?}", err);
-                        Err(err)
-                    }
-                }
+                let response_bytes = drone2
+                    .lock()
+                    .unwrap()
+                    .process_drone_request(&bytes)
+                    .unwrap();
+                Ok(response_bytes)
             });
             let server = writer
                 .send_all(processor.or_else(|err| {

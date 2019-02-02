@@ -313,7 +313,7 @@ mod test {
         let contract = Keypair::new().pubkey();
         let to = Keypair::new().pubkey();
         let witness = Keypair::new().pubkey();
-        let tx = Transaction::budget_new_when_signed(
+        let tx = BudgetTransaction::new_when_signed(
             &from,
             to,
             contract,
@@ -326,7 +326,7 @@ mod test {
 
         // Attack! Part 1: Sign a witness transaction with a random key.
         let rando = Keypair::new();
-        let mut tx = Transaction::budget_new_signature(&rando, contract, to, Hash::default());
+        let mut tx = BudgetTransaction::new_signature(&rando, contract, to, Hash::default());
 
         // Attack! Part 2: Point the instruction to the expected, but unsigned, key.
         tx.account_keys.push(from.pubkey());
@@ -352,7 +352,7 @@ mod test {
         let contract = Keypair::new().pubkey();
         let to = Keypair::new().pubkey();
         let dt = Utc::now();
-        let tx = Transaction::budget_new_on_date(
+        let tx = BudgetTransaction::new_on_date(
             &from,
             to,
             contract,
@@ -366,7 +366,7 @@ mod test {
 
         // Attack! Part 1: Sign a timestamp transaction with a random key.
         let rando = Keypair::new();
-        let mut tx = Transaction::budget_new_timestamp(&rando, contract, to, dt, Hash::default());
+        let mut tx = BudgetTransaction::new_timestamp(&rando, contract, to, dt, Hash::default());
 
         // Attack! Part 2: Point the instruction to the expected, but unsigned, key.
         tx.account_keys.push(from.pubkey());
@@ -394,7 +394,7 @@ mod test {
         let to = Keypair::new();
         let rando = Keypair::new();
         let dt = Utc::now();
-        let tx = Transaction::budget_new_on_date(
+        let tx = BudgetTransaction::new_on_date(
             &from,
             to.pubkey(),
             contract.pubkey(),
@@ -411,7 +411,7 @@ mod test {
         assert!(program.is_pending());
 
         // Attack! Try to payout to a rando key
-        let tx = Transaction::budget_new_timestamp(
+        let tx = BudgetTransaction::new_timestamp(
             &from,
             contract.pubkey(),
             rando.pubkey(),
@@ -431,7 +431,7 @@ mod test {
 
         // Now, acknowledge the time in the condition occurred and
         // that pubkey's funds are now available.
-        let tx = Transaction::budget_new_timestamp(
+        let tx = BudgetTransaction::new_timestamp(
             &from,
             contract.pubkey(),
             to.pubkey(),
@@ -469,7 +469,7 @@ mod test {
         let contract = Keypair::new();
         let to = Keypair::new();
         let dt = Utc::now();
-        let tx = Transaction::budget_new_on_date(
+        let tx = BudgetTransaction::new_on_date(
             &from,
             to.pubkey(),
             contract.pubkey(),
@@ -487,7 +487,7 @@ mod test {
 
         // Attack! try to put the tokens into the wrong account with cancel
         let tx =
-            Transaction::budget_new_signature(&to, contract.pubkey(), to.pubkey(), Hash::default());
+            BudgetTransaction::new_signature(&to, contract.pubkey(), to.pubkey(), Hash::default());
         // unit test hack, the `from account` is passed instead of the `to` account to avoid
         // creating more account vectors
         process_transaction(&tx, &mut accounts).unwrap();
@@ -498,7 +498,7 @@ mod test {
         assert_eq!(accounts[pay_account].tokens, 0);
 
         // Now, cancel the transaction. from gets her funds back
-        let tx = Transaction::budget_new_signature(
+        let tx = BudgetTransaction::new_signature(
             &from,
             contract.pubkey(),
             from.pubkey(),
@@ -510,7 +510,7 @@ mod test {
         assert_eq!(accounts[pay_account].tokens, 1);
 
         // try to replay the signature contract
-        let tx = Transaction::budget_new_signature(
+        let tx = BudgetTransaction::new_signature(
             &from,
             contract.pubkey(),
             from.pubkey(),
@@ -535,7 +535,7 @@ mod test {
         let from = Keypair::new();
         let contract = Keypair::new();
         let to = Keypair::new();
-        let tx = Transaction::budget_new_on_date(
+        let tx = BudgetTransaction::new_on_date(
             &from,
             to.pubkey(),
             contract.pubkey(),
@@ -549,7 +549,7 @@ mod test {
         assert!(process_transaction(&tx, &mut accounts).is_err());
         assert!(BudgetProgram::deserialize(&accounts[1].userdata).is_err());
 
-        let tx = Transaction::budget_new_timestamp(
+        let tx = BudgetTransaction::new_timestamp(
             &from,
             contract.pubkey(),
             to.pubkey(),

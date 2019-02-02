@@ -190,7 +190,7 @@ pub fn generate_txs(
         .par_iter()
         .map(|(id, keypair)| {
             (
-                Transaction::system_new(id, keypair.pubkey(), 1, last_id),
+                SystemTransaction::new_account(id, keypair.pubkey(), 1, last_id, 0),
                 timestamp(),
             )
         })
@@ -342,7 +342,7 @@ pub fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], t
                 .map(|(k, m)| {
                     (
                         k.clone(),
-                        Transaction::system_move_many(k, &m, Default::default(), 0),
+                        SystemTransaction::new_move_many(k, &m, Default::default(), 0),
                     )
                 })
                 .collect();
@@ -370,7 +370,7 @@ pub fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], t
 
                 // re-sign retained to_fund_txes with updated last_id
                 to_fund_txs.par_iter_mut().for_each(|(k, tx)| {
-                    tx.sign(&[k], last_id);
+                    tx.sign(&[*k], last_id);
                 });
 
                 to_fund_txs.iter().for_each(|(_, tx)| {

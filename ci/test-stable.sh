@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -e
-
 FEATURES="$1"
-
 cd "$(dirname "$0")/.."
 
 # Clear cached json keypair files
@@ -27,12 +25,7 @@ for program in programs/native/*; do
   )
 done
 
-# Run integration tests serially
-for test in tests/*.rs wallet/tests/*.rs; do
-  test=${test##*/} # basename x
-  test=${test%.rs} # basename x .rs
-  _ cargo test --all --verbose --features="$FEATURES" --test="$test" -- --test-threads=1 --nocapture
-done
+_ ci/integration-tests.sh "$FEATURES"
 
 echo --- ci/localnet-sanity.sh
 (

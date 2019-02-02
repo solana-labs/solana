@@ -3,18 +3,17 @@
 extern crate test;
 
 use solana::bank::*;
-use solana::mint::Mint;
-use solana::status_deque::MAX_ENTRY_IDS;
+use solana::genesis_block::GenesisBlock;
+use solana::last_id_queue::MAX_ENTRY_IDS;
 use solana_sdk::hash::hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::transaction::Transaction;
 use test::Bencher;
 
 #[bench]
 fn bench_process_transaction(bencher: &mut Bencher) {
-    let mint = Mint::new(100_000_000);
-    let bank = Bank::new(&mint);
+    let (genesis_block, mint_keypair) = GenesisBlock::new(100_000_000);
+    let bank = Bank::new(&genesis_block);
 
     // Create transactions between unrelated parties.
     let transactions: Vec<_> = (0..4096)
@@ -22,8 +21,8 @@ fn bench_process_transaction(bencher: &mut Bencher) {
         .map(|_| {
             // Seed the 'from' account.
             let rando0 = Keypair::new();
-            let tx = Transaction::system_move(
-                &mint.keypair(),
+            let tx = SystemTransaction::new_move(
+                &mint_keypair,
                 rando0.pubkey(),
                 10_000,
                 bank.last_id(),
@@ -33,7 +32,7 @@ fn bench_process_transaction(bencher: &mut Bencher) {
 
             // Seed the 'to' account and a cell for its signature.
             let rando1 = Keypair::new();
-            let tx = Transaction::system_move(&rando0, rando1.pubkey(), 1, bank.last_id(), 0);
+            let tx = SystemTransaction::new_move(&rando0, rando1.pubkey(), 1, bank.last_id(), 0);
             assert_eq!(bank.process_transaction(&tx), Ok(()));
 
             // Finally, return the transaction to the benchmark.

@@ -21,7 +21,7 @@ pub struct WindowSlot {
 impl WindowSlot {
     fn blob_index(&self) -> Option<u64> {
         match self.data {
-            Some(ref blob) => blob.read().unwrap().index().ok(),
+            Some(ref blob) => Some(blob.read().unwrap().index()),
             None => None,
         }
     }

@@ -120,13 +120,15 @@ pub fn retransmit_all_leader_blocks(
     dq: &[SharedBlob],
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     retransmit: &BlobSender,
+    id: &Pubkey,
 ) -> Result<()> {
     let mut retransmit_queue: Vec<SharedBlob> = Vec::new();
     for b in dq {
         // Check if the blob is from the scheduled leader for its slot. If so,
         // add to the retransmit_queue
-        if let Ok(slot) = b.read().unwrap().slot() {
-            if let Some(leader_id) = leader_scheduler.read().unwrap().get_leader_for_slot(slot) {
+        let slot = b.read().unwrap().slot();
+        if let Some(leader_id) = leader_scheduler.read().unwrap().get_leader_for_slot(slot) {
+            if leader_id != *id {
                 add_blob_to_retransmit_queue(b, leader_id, &mut retransmit_queue);
             }
         }
@@ -154,7 +156,7 @@ pub fn add_blob_to_retransmit_queue(
     retransmit_queue: &mut Vec<SharedBlob>,
 ) {
     let p = b.read().unwrap();
-    if p.id().expect("get_id in fn add_block_to_retransmit_queue") == leader_id {
+    if p.id() == leader_id {
         let nv = SharedBlob::default();
         {
             let mut mnv = nv.write().unwrap();
@@ -186,7 +188,7 @@ pub fn process_blob(
     // Github issue: https://github.com/solana-labs/solana/issues/1899.
     let (slot, pix) = {
         let r_blob = blob.read().unwrap();
-        (r_blob.slot()?, r_blob.index()?)
+        (r_blob.slot(), r_blob.index())
     };
     let leader = leader_scheduler.read().unwrap().get_leader_for_slot(slot);
 
@@ -199,11 +201,7 @@ pub fn process_blob(
     // Insert the new blob into the window
     let mut consumed_entries = if is_coding {
         let blob = &blob.read().unwrap();
-        db_ledger.put_coding_blob_bytes(
-            slot,
-            pix,
-            &blob.data[..BLOB_HEADER_SIZE + blob.size().unwrap()],
-        )?;
+        db_ledger.put_coding_blob_bytes(slot, pix, &blob.data[..BLOB_HEADER_SIZE + blob.size()])?;
         vec![]
     } else {
         db_ledger.insert_data_blobs(vec![(*blob.read().unwrap()).borrow()])?
@@ -280,8 +278,8 @@ fn try_erasure(db_ledger: &Arc<DbLedger>, consume_queue: &mut Vec<Entry>) -> Res
             let c = c.read().unwrap();
             db_ledger.put_coding_blob_bytes(
                 meta.consumed_slot,
-                c.index().unwrap(),
-                &c.data[..BLOB_HEADER_SIZE + c.size().unwrap()],
+                c.index(),
+                &c.data[..BLOB_HEADER_SIZE + c.size()],
             )?;
         }
 
@@ -402,9 +400,14 @@ mod test {
         let (blob_sender, blob_receiver) = channel();
 
         // Expect blob from leader to be retransmitted
-        blob.write().unwrap().set_id(&leader).unwrap();
-        retransmit_all_leader_blocks(&vec![blob.clone()], &leader_scheduler, &blob_sender)
-            .expect("Expect successful retransmit");
+        blob.write().unwrap().set_id(&leader);
+        retransmit_all_leader_blocks(
+            &vec![blob.clone()],
+            &leader_scheduler,
+            &blob_sender,
+            &nonleader,
+        )
+        .expect("Expect successful retransmit");
         let output_blob = blob_receiver
             .try_recv()
             .expect("Expect input blob to be retransmitted");
@@ -412,12 +415,23 @@ mod test {
         // Retransmitted blob should be missing the leader id
         assert_ne!(*output_blob[0].read().unwrap(), *blob.read().unwrap());
         // Set the leader in the retransmitted blob, should now match the original
-        output_blob[0].write().unwrap().set_id(&leader).unwrap();
+        output_blob[0].write().unwrap().set_id(&leader);
         assert_eq!(*output_blob[0].read().unwrap(), *blob.read().unwrap());
 
         // Expect blob from nonleader to not be retransmitted
-        blob.write().unwrap().set_id(&nonleader).unwrap();
-        retransmit_all_leader_blocks(&vec![blob], &leader_scheduler, &blob_sender)
+        blob.write().unwrap().set_id(&nonleader);
+        retransmit_all_leader_blocks(
+            &vec![blob.clone()],
+            &leader_scheduler,
+            &blob_sender,
+            &nonleader,
+        )
+        .expect("Expect successful retransmit");
+        assert!(blob_receiver.try_recv().is_err());
+
+        // Expect blob from leader while currently leader to not be retransmitted
+        blob.write().unwrap().set_id(&leader);
+        retransmit_all_leader_blocks(&vec![blob], &leader_scheduler, &blob_sender, &leader)
             .expect("Expect successful retransmit");
         assert!(blob_receiver.try_recv().is_err());
     }
@@ -441,8 +455,8 @@ mod test {
         const ONE: u64 = 1;
         const OTHER: u64 = 4;
 
-        blobs[0].set_index(ONE).unwrap();
-        blobs[1].set_index(OTHER).unwrap();
+        blobs[0].set_index(ONE);
+        blobs[1].set_index(OTHER);
 
         // Insert one blob at index = first_index
         db_ledger.write_blobs(&blobs).unwrap();
@@ -479,8 +493,8 @@ mod test {
         let num_entries = 10;
         let mut blobs = make_tiny_test_entries(num_entries).to_blobs();
         for (i, b) in blobs.iter_mut().enumerate() {
-            b.set_index(i as u64 * gap).unwrap();
-            b.set_slot(slot).unwrap();
+            b.set_index(i as u64 * gap);
+            b.set_slot(slot);
         }
         db_ledger.write_blobs(&blobs).unwrap();
 
@@ -562,9 +576,10 @@ mod test {
         let shared_blobs = make_tiny_test_entries(num_entries).to_shared_blobs();
 
         index_blobs(
-            shared_blobs.iter().zip(vec![slot; num_entries].into_iter()),
+            &shared_blobs,
             &Keypair::new().pubkey(),
             0,
+            &vec![slot; num_entries],
         );
 
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
@@ -634,7 +649,7 @@ mod test {
                 .get_coding_blob_bytes(slot_height, erased_index as u64)
                 .unwrap()
                 .unwrap()[BLOB_HEADER_SIZE..],
-            &erased_coding_l.data()[..erased_coding_l.size().unwrap() as usize],
+            &erased_coding_l.data()[..erased_coding_l.size() as usize],
         );
     }
 
@@ -657,11 +672,10 @@ mod test {
         let shared_blobs = original_entries.clone().to_shared_blobs();
 
         index_blobs(
-            shared_blobs
-                .iter()
-                .zip(vec![DEFAULT_SLOT_HEIGHT; num_entries].into_iter()),
+            &shared_blobs,
             &Keypair::new().pubkey(),
             0,
+            &vec![DEFAULT_SLOT_HEIGHT; num_entries],
         );
 
         let mut consume_queue = vec![];

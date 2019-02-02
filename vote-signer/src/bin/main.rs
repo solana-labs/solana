@@ -1,11 +1,4 @@
-#[macro_use]
-extern crate clap;
-extern crate log;
-extern crate solana_metrics;
-extern crate solana_sdk;
-extern crate solana_vote_signer;
-
-use clap::{App, Arg};
+use clap::{crate_version, App, Arg};
 use solana_vote_signer::rpc::VoteSignerRpcService;
 use std::error;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};

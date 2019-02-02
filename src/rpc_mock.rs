@@ -24,14 +24,13 @@ impl MockRpcClient {
     pub fn new(addr: String) -> Self {
         MockRpcClient { addr }
     }
-}
 
-impl RpcRequestHandler for MockRpcClient {
-    fn make_rpc_request(
+    pub fn retry_make_rpc_request(
         &self,
         _id: u64,
-        request: RpcRequest,
+        request: &RpcRequest,
         params: Option<Value>,
+        mut _retries: usize,
     ) -> Result<Value, Box<dyn error::Error>> {
         if self.addr == "fails" {
             return Ok(Value::Null);
@@ -71,6 +70,17 @@ impl RpcRequestHandler for MockRpcClient {
     }
 }
 
+impl RpcRequestHandler for MockRpcClient {
+    fn make_rpc_request(
+        &self,
+        id: u64,
+        request: RpcRequest,
+        params: Option<Value>,
+    ) -> Result<Value, Box<dyn error::Error>> {
+        self.retry_make_rpc_request(id, &request, params, 0)
+    }
+}
+
 pub fn request_airdrop_transaction(
     _drone_addr: &SocketAddr,
     _id: &Pubkey,
@@ -83,6 +93,6 @@ pub fn request_airdrop_transaction(
     let key = Keypair::new();
     let to = Keypair::new().pubkey();
     let last_id = Hash::default();
-    let tx = Transaction::system_new(&key, to, 50, last_id);
+    let tx = SystemTransaction::new_account(&key, to, 50, last_id, 0);
     Ok(tx)
 }

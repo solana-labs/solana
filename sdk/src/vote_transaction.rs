@@ -2,30 +2,25 @@
 
 use crate::hash::Hash;
 use crate::pubkey::Pubkey;
-use crate::signature::Keypair;
+use crate::signature::{Keypair, KeypairUtil};
 use crate::system_instruction::SystemInstruction;
 use crate::system_program;
 use crate::transaction::{Instruction, Transaction};
 use crate::vote_program::{self, Vote, VoteInstruction};
 use bincode::deserialize;
 
-pub trait VoteTransaction {
-    fn vote_new(vote_account: &Pubkey, vote: Vote, last_id: Hash, fee: u64) -> Self;
-    fn vote_account_new(
-        validator_id: &Keypair,
-        vote_account_id: Pubkey,
+pub struct VoteTransaction {}
+
+impl VoteTransaction {
+    pub fn new_vote<T: KeypairUtil>(
+        vote_account: &T,
+        tick_height: u64,
         last_id: Hash,
-        num_tokens: u64,
         fee: u64,
-    ) -> Self;
-
-    fn get_votes(&self) -> Vec<(Pubkey, Vote, Hash)>;
-}
-
-impl VoteTransaction for Transaction {
-    fn vote_new(vote_account: &Pubkey, vote: Vote, last_id: Hash, fee: u64) -> Self {
+    ) -> Transaction {
+        let vote = Vote { tick_height };
         let instruction = VoteInstruction::NewVote(vote);
-        Transaction::new_unsigned(
+        Transaction::new(
             vote_account,
             &[],
             vote_program::id(),
@@ -35,13 +30,13 @@ impl VoteTransaction for Transaction {
         )
     }
 
-    fn vote_account_new(
+    pub fn new_account(
         validator_id: &Keypair,
         vote_account_id: Pubkey,
         last_id: Hash,
         num_tokens: u64,
         fee: u64,
-    ) -> Self {
+    ) -> Transaction {
         Transaction::new_with_instructions(
             &[validator_id],
             &[vote_account_id],
@@ -63,13 +58,13 @@ impl VoteTransaction for Transaction {
         )
     }
 
-    fn get_votes(&self) -> Vec<(Pubkey, Vote, Hash)> {
+    pub fn get_votes(tx: &Transaction) -> Vec<(Pubkey, Vote, Hash)> {
         let mut votes = vec![];
-        for i in 0..self.instructions.len() {
-            let tx_program_id = self.program_id(i);
+        for i in 0..tx.instructions.len() {
+            let tx_program_id = tx.program_id(i);
             if vote_program::check_id(&tx_program_id) {
-                if let Ok(Some(VoteInstruction::NewVote(vote))) = deserialize(&self.userdata(i)) {
-                    votes.push((self.account_keys[0], vote, self.last_id))
+                if let Ok(Some(VoteInstruction::NewVote(vote))) = deserialize(&tx.userdata(i)) {
+                    votes.push((tx.account_keys[0], vote, tx.last_id))
                 }
             }
         }

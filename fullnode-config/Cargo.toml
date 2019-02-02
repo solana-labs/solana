@@ -12,15 +12,12 @@ homepage = "https://solana.com/"
 clap = "2.32.0"
 dirs = "1.0.2"
 log = "0.4.2"
-serde = "1.0.84"
-serde_derive = "1.0.84"
-serde_json = "1.0.35"
+serde = "1.0.85"
+serde_derive = "1.0.85"
+serde_json = "1.0.38"
 solana-netutil = { path = "../netutil", version = "0.12.0" }
 solana-sdk = { path = "../sdk", version = "0.12.0" }
 untrusted = "0.6.2"
-
-[features]
-cuda = []
 
 [lib]
 name = "solana_fullnode_config"

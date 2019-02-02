@@ -182,6 +182,7 @@ local|tar)
     exit 1
     ;;
   esac
+  disown
   ;;
 *)
   echo "Unknown deployment method: $deployMethod"

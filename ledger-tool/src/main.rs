@@ -1,6 +1,7 @@
 use clap::{crate_version, App, Arg, SubCommand};
 use solana::bank::Bank;
 use solana::db_ledger::DbLedger;
+use solana::genesis_block::GenesisBlock;
 use std::io::{stdout, Write};
 use std::process::exit;
 
@@ -46,6 +47,14 @@ fn main() {
 
     let ledger_path = matches.value_of("ledger").unwrap();
 
+    let genesis_block = GenesisBlock::load(ledger_path).unwrap_or_else(|err| {
+        eprintln!(
+            "Failed to open ledger genesis_block at {}: {}",
+            ledger_path, err
+        );
+        exit(1);
+    });
+
     let db_ledger = match DbLedger::open(ledger_path) {
         Ok(db_ledger) => db_ledger,
         Err(err) => {
@@ -54,7 +63,7 @@ fn main() {
         }
     };
 
-    let mut entries = match db_ledger.read_ledger() {
+    let entries = match db_ledger.read_ledger() {
         Ok(entries) => entries,
         Err(err) => {
             eprintln!("Failed to read ledger at {}: {}", ledger_path, err);
@@ -103,28 +112,9 @@ fn main() {
             stdout().write_all(b"\n]}\n").expect("close array");
         }
         ("verify", _) => {
-            const NUM_GENESIS_ENTRIES: usize = 3;
-            if head < NUM_GENESIS_ENTRIES {
-                eprintln!(
-                    "verify requires at least {} entries to run",
-                    NUM_GENESIS_ENTRIES
-                );
-                exit(1);
-            }
-            let bank = Bank::new_with_builtin_programs();
-            {
-                let genesis = entries.by_ref().take(NUM_GENESIS_ENTRIES);
-                if let Err(e) = bank.process_ledger(genesis) {
-                    eprintln!("verify failed at genesis err: {:?}", e);
-                    if !matches.is_present("continue") {
-                        exit(1);
-                    }
-                }
-            }
-            let head = head - NUM_GENESIS_ENTRIES;
-
+            let bank = Bank::new(&genesis_block);
             let mut last_id = bank.last_id();
-
+            let mut num_entries = 0;
             for (i, entry) in entries.enumerate() {
                 if i >= head {
                     break;
@@ -137,6 +127,7 @@ fn main() {
                     }
                 }
                 last_id = entry.id;
+                num_entries += 1;
 
                 if let Err(e) = bank.process_entry(&entry) {
                     eprintln!("verify failed at entry[{}], err: {:?}", i + 2, e);
@@ -145,6 +136,7 @@ fn main() {
                     }
                 }
             }
+            println!("{} entries.  last_id={:?}", num_entries, last_id);
         }
         ("", _) => {
             eprintln!("{}", matches.usage());

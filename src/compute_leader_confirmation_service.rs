@@ -60,7 +60,7 @@ impl ComputeLeaderConfirmationService {
         let mut ticks_and_stakes: Vec<(u64, u64)> = vote_states
             .iter()
             .filter_map(|vote_state| {
-                let validator_stake = bank.get_stake(&vote_state.node_id);
+                let validator_stake = bank.get_balance(&vote_state.node_id);
                 total_stake += validator_stake;
                 // Filter out any validators that don't have at least one vote
                 // by returning None
@@ -159,13 +159,14 @@ impl Service for ComputeLeaderConfirmationService {
 pub mod tests {
     use crate::bank::Bank;
     use crate::compute_leader_confirmation_service::ComputeLeaderConfirmationService;
-    use crate::vote_signer_proxy::VoteSignerProxy;
+    use crate::voting_keypair::VotingKeypair;
 
-    use crate::mint::Mint;
+    use crate::genesis_block::GenesisBlock;
+    use crate::leader_scheduler::tests::new_vote_account;
     use bincode::serialize;
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_vote_signer::rpc::LocalVoteSigner;
+    use solana_sdk::vote_transaction::VoteTransaction;
     use std::sync::Arc;
     use std::thread::sleep;
     use std::time::Duration;
@@ -174,9 +175,9 @@ pub mod tests {
     fn test_compute_confirmation() {
         solana_logger::setup();
 
-        let mint = Mint::new(1234);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1234);
         let dummy_leader_id = Keypair::new().pubkey();
-        let bank = Arc::new(Bank::new(&mint));
+        let bank = Arc::new(Bank::new(&genesis_block));
         // generate 10 validators, but only vote for the first 6 validators
         let ids: Vec<_> = (0..10)
             .map(|i| {
@@ -195,21 +196,19 @@ pub mod tests {
                 // Create new validator to vote
                 let validator_keypair = Arc::new(Keypair::new());
                 let last_id = ids[i];
-                let vote_signer =
-                    VoteSignerProxy::new(&validator_keypair, Box::new(LocalVoteSigner::default()));
+                let voting_keypair = VotingKeypair::new_local(&validator_keypair);
 
                 // Give the validator some tokens
-                bank.transfer(2, &mint.keypair(), validator_keypair.pubkey(), last_id)
+                bank.transfer(2, &mint_keypair, validator_keypair.pubkey(), last_id)
                     .unwrap();
-                vote_signer
-                    .new_vote_account(&bank, 1, last_id)
-                    .expect("Expected successful creation of account");
+                new_vote_account(&validator_keypair, &voting_keypair, &bank, 1, last_id);
 
                 if i < 6 {
-                    let vote_tx = vote_signer.new_signed_vote_transaction(&last_id, (i + 1) as u64);
+                    let vote_tx =
+                        VoteTransaction::new_vote(&voting_keypair, (i + 1) as u64, last_id, 0);
                     bank.process_transaction(&vote_tx).unwrap();
                 }
-                (vote_signer, validator_keypair)
+                (voting_keypair, validator_keypair)
             })
             .collect();
 
@@ -223,8 +222,8 @@ pub mod tests {
         assert_eq!(bank.confirmation_time(), std::usize::MAX);
 
         // Get another validator to vote, so we now have 2/3 consensus
-        let vote_signer = &vote_accounts[7].0;
-        let vote_tx = vote_signer.new_signed_vote_transaction(&ids[6], 7);
+        let voting_keypair = &vote_accounts[7].0;
+        let vote_tx = VoteTransaction::new_vote(voting_keypair, 7, ids[6], 0);
         bank.process_transaction(&vote_tx).unwrap();
 
         ComputeLeaderConfirmationService::compute_confirmation(

@@ -1,26 +1,24 @@
-extern crate serde_json;
-
 use clap::{crate_version, App, Arg, ArgMatches};
 use log::*;
-
 use solana::client::mk_client;
 use solana::cluster_info::{Node, NodeInfo, FULLNODE_PORT_RANGE};
-use solana::fullnode::{Fullnode, FullnodeReturnType};
+use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::leader_scheduler::LeaderScheduler;
 use solana::local_vote_signer_service::LocalVoteSignerService;
-use solana::service::Service;
 use solana::socketaddr;
 use solana::thin_client::{poll_gossip_for_leader, ThinClient};
-use solana::vote_signer_proxy::{RemoteVoteSigner, VoteSignerProxy};
+use solana::voting_keypair::{RemoteVoteSigner, VotingKeypair};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::vote_program::VoteProgram;
 use solana_sdk::vote_transaction::VoteTransaction;
+use solana_vote_signer::rpc::{LocalVoteSigner, VoteSigner};
 use std::fs::File;
 use std::io::{Error, ErrorKind, Result};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::process::exit;
 use std::sync::Arc;
+use std::sync::RwLock;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -58,10 +56,9 @@ fn create_and_fund_vote_account(
     node_keypair: &Arc<Keypair>,
 ) -> Result<()> {
     let pubkey = node_keypair.pubkey();
-    let balance = client.poll_get_balance(&pubkey).unwrap_or(0);
-    info!("balance is {}", balance);
-    if balance < 1 {
-        error!("insufficient tokens, one token required");
+    let node_balance = client.poll_get_balance(&pubkey)?;
+    info!("node balance is {}", node_balance);
+    if node_balance < 1 {
         return Err(Error::new(
             ErrorKind::Other,
             "insufficient tokens, one token required",
@@ -71,7 +68,7 @@ fn create_and_fund_vote_account(
     // Create the vote account if necessary
     if client.poll_get_balance(&vote_account).unwrap_or(0) == 0 {
         // Need at least two tokens as one token will be spent on a vote_account_new() transaction
-        if balance < 2 {
+        if node_balance < 2 {
             error!("insufficient tokens, two tokens required");
             return Err(Error::new(
                 ErrorKind::Other,
@@ -80,70 +77,66 @@ fn create_and_fund_vote_account(
         }
         loop {
             let last_id = client.get_last_id();
+            info!("create_and_fund_vote_account last_id={:?}", last_id);
             let transaction =
-                VoteTransaction::vote_account_new(node_keypair, vote_account, last_id, 1, 1);
-            if client.transfer_signed(&transaction).is_err() {
-                sleep(Duration::from_secs(2));
-                continue;
-            }
+                VoteTransaction::new_account(node_keypair, vote_account, last_id, 1, 1);
 
-            let balance = client.poll_get_balance(&vote_account).unwrap_or(0);
-            if balance > 0 {
-                break;
-            }
+            match client.transfer_signed(&transaction) {
+                Ok(signature) => {
+                    match client.poll_for_signature(&signature) {
+                        Ok(_) => match client.poll_get_balance(&vote_account) {
+                            Ok(balance) => {
+                                info!("vote account balance: {}", balance);
+                                break;
+                            }
+                            Err(e) => {
+                                info!("Failed to get vote account balance: {:?}", e);
+                            }
+                        },
+                        Err(e) => {
+                            info!(
+                                "vote_account_new signature not found: {:?}: {:?}",
+                                signature, e
+                            );
+                        }
+                    };
+                }
+                Err(e) => {
+                    info!("Failed to send vote_account_new transaction: {:?}", e);
+                }
+            };
             sleep(Duration::from_secs(2));
         }
     }
-    Ok(())
-}
 
-fn wait_for_vote_account_registeration(
-    client: &mut ThinClient,
-    vote_account: &Pubkey,
-    node_id: Pubkey,
-) {
-    loop {
-        let vote_account_user_data = client.get_account_userdata(vote_account);
-        if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
-            if let Ok(vote_state) = VoteProgram::deserialize(&vote_account_user_data) {
-                if vote_state.node_id == node_id {
-                    break;
-                }
-            }
-        }
-        panic!("Expected successful vote account registration");
-    }
-}
-
-fn run_forever_and_do_role_transition(fullnode: &mut Fullnode) {
-    loop {
-        let status = fullnode.handle_role_transition();
-        match status {
-            Ok(Some(FullnodeReturnType::LeaderToValidatorRotation)) => (),
-            Ok(Some(FullnodeReturnType::ValidatorToLeaderRotation)) => (),
-            _ => {
-                // Fullnode tpu/tvu exited for some unexpected reason
-                return;
+    info!("Checking for vote account registration");
+    let vote_account_user_data = client.get_account_userdata(&vote_account);
+    if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
+        if let Ok(vote_state) = VoteProgram::deserialize(&vote_account_user_data) {
+            if vote_state.node_id == pubkey {
+                return Ok(());
             }
         }
     }
+
+    Err(Error::new(
+        ErrorKind::Other,
+        "expected successful vote account registration",
+    ))
 }
 
 fn main() {
     solana_logger::setup();
     solana_metrics::set_panic_hook("fullnode");
+
     let matches = App::new("fullnode")
         .version(crate_version!())
         .arg(
-            Arg::with_name("nosigverify")
-                .short("v")
-                .long("nosigverify")
-                .help("Run without signature verification"),
-        )
-        .arg(
-            Arg::with_name("no-leader-rotation")
-                .long("no-leader-rotation")
-                .help("Disable leader rotation"),
+            Arg::with_name("entry_stream")
+                .long("entry-stream")
+                .takes_value(true)
+                .value_name("UNIX DOMAIN SOCKET")
+                .help("Open entry stream at this unix domain socket location")
         )
         .arg(
             Arg::with_name("identity")
@@ -154,20 +147,11 @@ fn main() {
                 .help("Run with the identity found in FILE"),
         )
         .arg(
-            Arg::with_name("network")
-                .short("n")
-                .long("network")
-                .value_name("HOST:PORT")
+            Arg::with_name("init_complete_file")
+                .long("init-complete-file")
+                .value_name("FILE")
                 .takes_value(true)
-                .help("Rendezvous with the network at this gossip entry point"),
-        )
-        .arg(
-            Arg::with_name("signer")
-                .short("s")
-                .long("signer")
-                .value_name("HOST:PORT")
-                .takes_value(true)
-                .help("Rendezvous with the vote signer at this RPC end point"),
+                .help("Create this file, if it doesn't already exist, once node initialization is complete"),
         )
         .arg(
             Arg::with_name("ledger")
@@ -179,103 +163,153 @@ fn main() {
                 .help("Use DIR as persistent ledger location"),
         )
         .arg(
-            Arg::with_name("rpc")
-                .long("rpc")
+            Arg::with_name("network")
+                .short("n")
+                .long("network")
+                .value_name("HOST:PORT")
+                .takes_value(true)
+                .help("Rendezvous with the cluster at this gossip entry point"),
+        )
+        .arg(
+            Arg::with_name("no_leader_rotation")
+                .long("no-leader-rotation")
+                .help("Disable leader rotation"),
+        )
+        .arg(
+            Arg::with_name("no_signer")
+                .long("no-signer")
+                .takes_value(false)
+                .conflicts_with("signer")
+                .help("Launch node without vote signer"),
+        )
+        .arg(
+            Arg::with_name("no_sigverify")
+                .short("v")
+                .long("no-sigverify")
+                .help("Run without signature verification"),
+        )
+        .arg(
+            Arg::with_name("rpc_port")
+                .long("rpc-port")
                 .value_name("PORT")
                 .takes_value(true)
-                .help("Custom RPC port for this node"),
+                .help("RPC port to use for this node"),
+        )
+        .arg(
+            Arg::with_name("signer")
+                .short("s")
+                .long("signer")
+                .value_name("HOST:PORT")
+                .takes_value(true)
+                .help("Rendezvous with the vote signer at this RPC end point"),
         )
         .get_matches();
 
-    let nosigverify = matches.is_present("nosigverify");
-    let use_only_bootstrap_leader = matches.is_present("no-leader-rotation");
-
+    let mut fullnode_config = FullnodeConfig::default();
+    fullnode_config.sigverify_disabled = matches.is_present("no_sigverify");
+    let no_signer = matches.is_present("no_signer");
+    fullnode_config.voting_disabled = no_signer;
+    let use_only_bootstrap_leader = matches.is_present("no_leader_rotation");
     let (keypair, gossip) = parse_identity(&matches);
-
     let ledger_path = matches.value_of("ledger").unwrap();
-
-    // socketaddr that is initial pointer into the network's gossip
-    let network = matches
+    let cluster_entrypoint = matches
         .value_of("network")
         .map(|network| network.parse().expect("failed to parse network address"));
-
-    let node = Node::new_with_external_ip(keypair.pubkey(), &gossip);
-
-    let keypair = Arc::new(keypair);
-    let pubkey = keypair.pubkey();
-
-    let mut leader_scheduler = LeaderScheduler::default();
-    leader_scheduler.use_only_bootstrap_leader = use_only_bootstrap_leader;
-
-    let rpc_port = if let Some(port) = matches.value_of("rpc") {
-        let port_number = port.to_string().parse().expect("integer");
-        if port_number == 0 {
-            eprintln!("Invalid RPC port requested: {:?}", port);
-            exit(1);
-        }
-        Some(port_number)
-    } else {
-        match solana_netutil::find_available_port_in_range(FULLNODE_PORT_RANGE) {
-            Ok(port) => Some(port),
-            Err(_) => None,
-        }
-    };
-
-    let leader = match network {
-        Some(network) => {
-            poll_gossip_for_leader(network, None).expect("can't find leader on network")
-        }
-        None => {
-            //self = leader
-            let mut node_info = node.info.clone();
-            if rpc_port.is_some() {
-                node_info.rpc.set_port(rpc_port.unwrap());
-                node_info.rpc_pubsub.set_port(rpc_port.unwrap() + 1);
-            }
-            node_info
-        }
-    };
-
-    let (signer_service, signer) = if let Some(signer_addr) = matches.value_of("signer") {
+    let (_signer_service, signer_addr) = if let Some(signer_addr) = matches.value_of("signer") {
         (
             None,
             signer_addr.to_string().parse().expect("Signer IP Address"),
         )
     } else {
-        // If a remote vote-signer service is not provided, run a local instance
-        let (signer_service, addr) = LocalVoteSignerService::new();
-        (Some(signer_service), addr)
+        // Run a local vote signer if a vote signer service address was not provided
+        let (signer_service, signer_addr) = LocalVoteSignerService::new();
+        (Some(signer_service), signer_addr)
     };
+    let (rpc_port, rpc_pubsub_port) = if let Some(port) = matches.value_of("rpc_port") {
+        let port_number = port.to_string().parse().expect("integer");
+        if port_number == 0 {
+            eprintln!("Invalid RPC port requested: {:?}", port);
+            exit(1);
+        }
+        (port_number, port_number + 1)
+    } else {
+        (
+            solana_netutil::find_available_port_in_range(FULLNODE_PORT_RANGE)
+                .expect("unable to allocate rpc_port"),
+            solana_netutil::find_available_port_in_range(FULLNODE_PORT_RANGE)
+                .expect("unable to allocate rpc_pubsub_port"),
+        )
+    };
+    let init_complete_file = matches.value_of("init_complete_file");
+    fullnode_config.entry_stream = matches.value_of("entry_stream").map(|s| s.to_string());
 
-    let mut client = mk_client(&leader);
-    let vote_signer = VoteSignerProxy::new(&keypair, Box::new(RemoteVoteSigner::new(signer)));
-    let vote_account = vote_signer.vote_account;
-    info!("New vote account ID is {:?}", vote_account);
+    let keypair = Arc::new(keypair);
+    let mut node = Node::new_with_external_ip(keypair.pubkey(), &gossip);
+    node.info.rpc.set_port(rpc_port);
+    node.info.rpc_pubsub.set_port(rpc_pubsub_port);
 
+    let mut leader_scheduler = LeaderScheduler::default();
+    leader_scheduler.use_only_bootstrap_leader = use_only_bootstrap_leader;
+
+    let vote_signer: Box<dyn VoteSigner + Sync + Send> = if !no_signer {
+        info!("Signer service address: {:?}", signer_addr);
+        Box::new(RemoteVoteSigner::new(signer_addr))
+    } else {
+        Box::new(LocalVoteSigner::default())
+    };
+    let vote_signer = VotingKeypair::new_with_signer(&keypair, vote_signer);
+    let vote_account_id = vote_signer.pubkey();
+    info!("New vote account ID is {:?}", vote_account_id);
+
+    let gossip_addr = node.info.gossip;
     let mut fullnode = Fullnode::new(
         node,
+        &keypair,
         ledger_path,
-        keypair.clone(),
-        Arc::new(vote_signer),
-        network,
-        nosigverify,
-        leader_scheduler,
-        rpc_port,
+        Arc::new(RwLock::new(leader_scheduler)),
+        vote_signer,
+        cluster_entrypoint
+            .map(|i| NodeInfo::new_entry_point(&i))
+            .as_ref(),
+        &fullnode_config,
     );
 
-    if create_and_fund_vote_account(&mut client, vote_account, &keypair).is_err() {
-        if let Some(signer_service) = signer_service {
-            signer_service.join().unwrap();
+    if !no_signer {
+        let leader_node_info = loop {
+            info!("Looking for leader...");
+            match poll_gossip_for_leader(gossip_addr, Some(10)) {
+                Ok(leader_node_info) => {
+                    info!("Found leader: {:?}", leader_node_info);
+                    break leader_node_info;
+                }
+                Err(err) => {
+                    info!("Unable to find leader: {:?}", err);
+                }
+            };
+        };
+
+        let mut client = mk_client(&leader_node_info);
+        if let Err(err) = create_and_fund_vote_account(&mut client, vote_account_id, &keypair) {
+            panic!("Failed to create_and_fund_vote_account: {:?}", err);
         }
-        exit(1);
     }
 
-    wait_for_vote_account_registeration(&mut client, &vote_account, pubkey);
-    run_forever_and_do_role_transition(&mut fullnode);
-
-    if let Some(signer_service) = signer_service {
-        signer_service.join().unwrap();
+    if let Some(filename) = init_complete_file {
+        File::create(filename).unwrap_or_else(|_| panic!("Unable to create: {}", filename));
     }
-
-    exit(1);
+    info!("Node initialized");
+    loop {
+        let status = fullnode.handle_role_transition();
+        match status {
+            Ok(Some(transition)) => {
+                info!("role_transition complete: {:?}", transition);
+            }
+            _ => {
+                panic!(
+                    "Fullnode TPU/TVU exited for some unexpected reason: {:?}",
+                    status
+                );
+            }
+        };
+    }
 }
