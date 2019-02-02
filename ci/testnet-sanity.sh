@@ -54,8 +54,6 @@ set -x
 echo "--- $cloudProvider.sh config"
 timeout 5m net/"$cloudProvider".sh config -p "$netName" -z "$zone"
 net/init-metrics.sh -e
-echo "+++ $cloudProvider.sh info"
-net/"$cloudProvider".sh info
 echo --- net.sh sanity
 ok=true
 timeout 5m net/net.sh sanity \

@@ -201,9 +201,6 @@ else
 fi
 net/init-metrics.sh -e
 
-echo "+++ $cloudProvider.sh info"
-net/"$cloudProvider".sh info
-
 echo --- net.sh start
 maybeRejectExtraNodes=
 if ! $publicNetwork; then

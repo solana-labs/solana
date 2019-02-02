@@ -7,11 +7,7 @@ use std::process::Output;
 use std::sync::Arc;
 
 fn run_ledger_tool(args: &[&str]) -> Output {
-    Command::cargo_bin(env!("CARGO_PKG_NAME"))
-        .unwrap()
-        .args(args)
-        .output()
-        .unwrap()
+    Command::main_binary().unwrap().args(args).output().unwrap()
 }
 
 fn count_newlines(chars: &[u8]) -> usize {
@@ -32,8 +28,8 @@ fn bad_arguments() {
 #[test]
 fn nominal() {
     let keypair = Arc::new(Keypair::new());
-    let (_, ledger_path, _, _) =
-        create_tmp_sample_ledger("test_ledger_tool_nominal", 100, 9, keypair.pubkey(), 50);
+    let (_mint, ledger_path, _genesis_entries) =
+        create_tmp_sample_ledger("test_ledger_tool_nominal", 100, 10, keypair.pubkey(), 50);
 
     // Basic validation
     let output = run_ledger_tool(&["-l", &ledger_path, "verify"]);
@@ -42,17 +38,17 @@ fn nominal() {
     // Print everything
     let output = run_ledger_tool(&["-l", &ledger_path, "print"]);
     assert!(output.status.success());
-    assert_eq!(count_newlines(&output.stdout), 10);
+    assert_eq!(count_newlines(&output.stdout), 13);
 
     // Only print the first 5 items
     let output = run_ledger_tool(&["-l", &ledger_path, "-n", "5", "print"]);
     assert!(output.status.success());
     assert_eq!(count_newlines(&output.stdout), 5);
 
-    // Skip entries with no hashes
+    // Skip entries with no hashes (first entry)
     let output = run_ledger_tool(&["-l", &ledger_path, "-h", "1", "print"]);
     assert!(output.status.success());
-    assert_eq!(count_newlines(&output.stdout), 10);
+    assert_eq!(count_newlines(&output.stdout), 12);
 
     // Skip entries with fewer than 2 hashes (skip everything)
     let output = run_ledger_tool(&["-l", &ledger_path, "-h", "2", "print"]);

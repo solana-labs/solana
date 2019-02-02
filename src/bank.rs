@@ -4,17 +4,20 @@
 //! already been signed and verified.
 
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
+use crate::checkpoint::Checkpoint;
 use crate::counter::Counter;
 use crate::entry::Entry;
 use crate::entry::EntrySlice;
-use crate::genesis_block::GenesisBlock;
-use crate::last_id_queue::{LastIdQueue, MAX_ENTRY_IDS};
+use crate::jsonrpc_macros::pubsub::Sink;
 use crate::leader_scheduler::LeaderScheduler;
-use crate::poh_recorder::{PohRecorder, PohRecorderError};
-use crate::result::Error;
+use crate::mint::Mint;
+use crate::poh_recorder::PohRecorder;
+use crate::rpc::RpcSignatureStatus;
 use crate::runtime::{self, RuntimeError};
-use crate::status_cache::StatusCache;
+use crate::status_deque::{Status, StatusDeque, MAX_ENTRY_IDS};
+use crate::storage_stage::StorageState;
 use bincode::deserialize;
+use hashbrown::HashMap;
 use itertools::Itertools;
 use log::Level;
 use rayon::prelude::*;
@@ -24,10 +27,12 @@ use solana_sdk::bpf_loader;
 use solana_sdk::budget_program;
 use solana_sdk::hash::Hash;
 use solana_sdk::native_program::ProgramError;
+use solana_sdk::payment_plan::Payment;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::signature::Signature;
 use solana_sdk::storage_program;
+use solana_sdk::system_instruction::SystemInstruction;
 use solana_sdk::system_program;
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::duration_as_us;
@@ -39,6 +44,7 @@ use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
+use tokio::prelude::Future;
 
 /// Reasons a transaction might be rejected.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -75,117 +81,120 @@ pub enum BankError {
 
     /// Transaction has a fee but has no signature present
     MissingSignatureForFee,
-
-    // Poh recorder hit the maximum tick height before leader rotation
-    MaxHeightReached,
 }
 
 pub type Result<T> = result::Result<T, BankError>;
 
 pub const VERIFY_BLOCK_SIZE: usize = 16;
 
-pub trait BankSubscriptions {
-    fn check_account(&self, pubkey: &Pubkey, account: &Account);
-    fn check_signature(&self, signature: &Signature, status: &Result<()>);
-}
-
-struct LocalSubscriptions {}
-impl Default for LocalSubscriptions {
-    fn default() -> Self {
-        LocalSubscriptions {}
-    }
-}
-
-impl BankSubscriptions for LocalSubscriptions {
-    fn check_account(&self, _pubkey: &Pubkey, _account: &Account) {}
-    fn check_signature(&self, _signature: &Signature, _status: &Result<()>) {}
-}
-
-type BankStatusCache = StatusCache<BankError>;
-
 /// Manager for the state of all accounts and programs after processing its entries.
 pub struct Bank {
     pub accounts: Accounts,
 
-    /// A cache of signature statuses
-    status_cache: RwLock<BankStatusCache>,
-
     /// FIFO queue of `last_id` items
-    last_id_queue: RwLock<LastIdQueue>,
+    last_ids: RwLock<StatusDeque<Result<()>>>,
 
     // The latest confirmation time for the network
     confirmation_time: AtomicUsize,
+
+    // Mapping of account ids to Subscriber ids and sinks to notify on userdata update
+    account_subscriptions: RwLock<HashMap<Pubkey, HashMap<Pubkey, Sink<Account>>>>,
+
+    // Mapping of signatures to Subscriber ids and sinks to notify on confirmation
+    signature_subscriptions: RwLock<HashMap<Signature, HashMap<Pubkey, Sink<RpcSignatureStatus>>>>,
 
     /// Tracks and updates the leader schedule based on the votes and account stakes
     /// processed by the bank
     pub leader_scheduler: Arc<RwLock<LeaderScheduler>>,
 
-    subscriptions: RwLock<Box<Arc<BankSubscriptions + Send + Sync>>>,
+    pub storage_state: StorageState,
 }
 
 impl Default for Bank {
     fn default() -> Self {
         Bank {
             accounts: Accounts::default(),
-            last_id_queue: RwLock::new(LastIdQueue::default()),
-            status_cache: RwLock::new(BankStatusCache::default()),
+            last_ids: RwLock::new(StatusDeque::default()),
             confirmation_time: AtomicUsize::new(std::usize::MAX),
+            account_subscriptions: RwLock::new(HashMap::new()),
+            signature_subscriptions: RwLock::new(HashMap::new()),
             leader_scheduler: Arc::new(RwLock::new(LeaderScheduler::default())),
-            subscriptions: RwLock::new(Box::new(Arc::new(LocalSubscriptions::default()))),
+            storage_state: StorageState::new(),
         }
     }
 }
 
 impl Bank {
-    pub fn new(genesis_block: &GenesisBlock) -> Self {
+    /// Create an Bank with built-in programs.
+    pub fn new_with_builtin_programs() -> Self {
         let bank = Self::default();
-        bank.process_genesis_block(genesis_block);
         bank.add_builtin_programs();
         bank
     }
-    pub fn set_subscriptions(&self, subscriptions: Box<Arc<BankSubscriptions + Send + Sync>>) {
-        let mut sub = self.subscriptions.write().unwrap();
-        *sub = subscriptions
-    }
 
-    pub fn copy_for_tpu(&self) -> Self {
-        let mut status_cache = BankStatusCache::default();
-        status_cache.merge_into_root(self.status_cache.read().unwrap().clone());
-        Self {
-            accounts: self.accounts.copy_for_tpu(),
-            status_cache: RwLock::new(status_cache),
-            last_id_queue: RwLock::new(self.last_id_queue.read().unwrap().clone()),
-            confirmation_time: AtomicUsize::new(self.confirmation_time()),
-            leader_scheduler: self.leader_scheduler.clone(),
-            subscriptions: RwLock::new(Box::new(Arc::new(LocalSubscriptions::default()))),
+    /// Create an Bank using a deposit.
+    pub fn new_from_deposits(deposits: &[Payment]) -> Self {
+        let bank = Self::default();
+        for deposit in deposits {
+            let mut account = Account::default();
+            account.tokens += deposit.tokens;
+
+            bank.accounts.store_slow(&deposit.to, &account);
         }
+        bank.add_builtin_programs();
+        bank
     }
 
-    fn process_genesis_block(&self, genesis_block: &GenesisBlock) {
-        assert!(genesis_block.mint_id != Pubkey::default());
-        assert!(genesis_block.tokens >= genesis_block.bootstrap_leader_tokens);
+    pub fn checkpoint(&self) {
+        self.accounts.checkpoint();
+        self.last_ids.write().unwrap().checkpoint();
+    }
+    pub fn purge(&self, depth: usize) {
+        self.accounts.purge(depth);
+        self.last_ids.write().unwrap().purge(depth);
+    }
 
-        let mut mint_account = Account::default();
-        let mut bootstrap_leader_account = Account::default();
-        mint_account.tokens += genesis_block.tokens;
+    pub fn rollback(&self) {
+        let rolled_back_pubkeys: Vec<Pubkey> = self.accounts.keys();
+        self.accounts.rollback();
 
-        if genesis_block.bootstrap_leader_id != Pubkey::default() {
-            mint_account.tokens -= genesis_block.bootstrap_leader_tokens;
-            bootstrap_leader_account.tokens += genesis_block.bootstrap_leader_tokens;
-            self.accounts.store_slow(
-                true,
-                &genesis_block.bootstrap_leader_id,
-                &bootstrap_leader_account,
-            );
+        rolled_back_pubkeys.iter().for_each(|pubkey| {
+            if let Some(account) = self.accounts.load_slow(&pubkey) {
+                self.check_account_subscriptions(&pubkey, &account)
+            }
+        });
+
+        self.last_ids.write().unwrap().rollback();
+    }
+    pub fn checkpoint_depth(&self) -> usize {
+        self.accounts.depth()
+    }
+
+    /// Create an Bank with only a Mint. Typically used by unit tests.
+    pub fn new(mint: &Mint) -> Self {
+        let mint_tokens = if mint.bootstrap_leader_id != Pubkey::default() {
+            mint.tokens - mint.bootstrap_leader_tokens
+        } else {
+            mint.tokens
         };
 
-        self.accounts
-            .store_slow(true, &genesis_block.mint_id, &mint_account);
+        let mint_deposit = Payment {
+            to: mint.pubkey(),
+            tokens: mint_tokens,
+        };
 
-        self.last_id_queue
-            .write()
-            .unwrap()
-            .genesis_last_id(&genesis_block.last_id());
+        let deposits = if mint.bootstrap_leader_id != Pubkey::default() {
+            let leader_deposit = Payment {
+                to: mint.bootstrap_leader_id,
+                tokens: mint.bootstrap_leader_tokens,
+            };
+            vec![mint_deposit, leader_deposit]
+        } else {
+            vec![mint_deposit]
+        };
+        let bank = Self::new_from_deposits(&deposits);
+        bank.register_tick(&mint.last_id());
+        bank
     }
 
     fn add_system_program(&self) {
@@ -197,7 +206,7 @@ impl Bank {
             loader: solana_native_loader::id(),
         };
         self.accounts
-            .store_slow(true, &system_program::id(), &system_program_account);
+            .store_slow(&system_program::id(), &system_program_account);
     }
 
     fn add_builtin_programs(&self) {
@@ -212,7 +221,7 @@ impl Bank {
             loader: solana_native_loader::id(),
         };
         self.accounts
-            .store_slow(true, &vote_program::id(), &vote_program_account);
+            .store_slow(&vote_program::id(), &vote_program_account);
 
         // Storage program
         let storage_program_account = Account {
@@ -223,17 +232,7 @@ impl Bank {
             loader: solana_native_loader::id(),
         };
         self.accounts
-            .store_slow(true, &storage_program::id(), &storage_program_account);
-
-        let storage_system_account = Account {
-            tokens: 1,
-            owner: storage_program::system_id(),
-            userdata: vec![0; 16 * 1024],
-            executable: false,
-            loader: Pubkey::default(),
-        };
-        self.accounts
-            .store_slow(true, &storage_program::system_id(), &storage_system_account);
+            .store_slow(&storage_program::id(), &storage_program_account);
 
         // Bpf Loader
         let bpf_loader_account = Account {
@@ -245,7 +244,7 @@ impl Bank {
         };
 
         self.accounts
-            .store_slow(true, &bpf_loader::id(), &bpf_loader_account);
+            .store_slow(&bpf_loader::id(), &bpf_loader_account);
 
         // Budget program
         let budget_program_account = Account {
@@ -256,7 +255,7 @@ impl Bank {
             loader: solana_native_loader::id(),
         };
         self.accounts
-            .store_slow(true, &budget_program::id(), &budget_program_account);
+            .store_slow(&budget_program::id(), &budget_program_account);
 
         // Erc20 token program
         let erc20_account = Account {
@@ -268,70 +267,40 @@ impl Bank {
         };
 
         self.accounts
-            .store_slow(true, &token_program::id(), &erc20_account);
+            .store_slow(&token_program::id(), &erc20_account);
     }
 
     /// Return the last entry ID registered.
     pub fn last_id(&self) -> Hash {
-        self.last_id_queue
+        self.last_ids
             .read()
             .unwrap()
             .last_id
             .expect("no last_id has been set")
     }
 
-    pub fn get_storage_entry_height(&self) -> u64 {
-        match self.get_account(&storage_program::system_id()) {
-            Some(storage_system_account) => {
-                let state = deserialize(&storage_system_account.userdata);
-                if let Ok(state) = state {
-                    let state: storage_program::StorageProgramState = state;
-                    return state.entry_height;
-                }
-            }
-            None => {
-                info!("error in reading entry_height");
-            }
-        }
-        0
-    }
-
-    pub fn get_storage_last_id(&self) -> Hash {
-        if let Some(storage_system_account) = self.get_account(&storage_program::system_id()) {
-            let state = deserialize(&storage_system_account.userdata);
-            if let Ok(state) = state {
-                let state: storage_program::StorageProgramState = state;
-                return state.id;
-            }
-        }
-        Hash::default()
+    pub fn get_pubkeys_for_entry_height(&self, entry_height: u64) -> Vec<Pubkey> {
+        self.storage_state
+            .get_pubkeys_for_entry_height(entry_height)
     }
 
     /// Forget all signatures. Useful for benchmarking.
     pub fn clear_signatures(&self) {
-        self.status_cache.write().unwrap().clear();
+        self.last_ids.write().unwrap().clear_signatures();
     }
 
-    fn update_subscriptions(&self, txs: &[Transaction], res: &[Result<()>]) {
-        for (i, tx) in txs.iter().enumerate() {
-            self.subscriptions
-                .read()
-                .unwrap()
-                .check_signature(&tx.signatures[0], &res[i]);
-        }
-    }
     fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
-        let mut status_cache = self.status_cache.write().unwrap();
+        let mut last_ids = self.last_ids.write().unwrap();
         for (i, tx) in txs.iter().enumerate() {
-            match &res[i] {
-                Ok(_) => status_cache.add(&tx.signatures[0]),
-                Err(BankError::LastIdNotFound) => (),
-                Err(BankError::DuplicateSignature) => (),
-                Err(BankError::AccountNotFound) => (),
-                Err(e) => {
-                    status_cache.add(&tx.signatures[0]);
-                    status_cache.save_failure_status(&tx.signatures[0], e.clone());
-                }
+            last_ids.update_signature_status_with_last_id(&tx.signatures[0], &res[i], &tx.last_id);
+            let status = match res[i] {
+                Ok(_) => RpcSignatureStatus::Confirmed,
+                Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
+                Err(BankError::ProgramError(_, _)) => RpcSignatureStatus::ProgramRuntimeError,
+                Err(_) => RpcSignatureStatus::GenericFailure,
+            };
+            if status != RpcSignatureStatus::SignatureNotFound {
+                self.check_signature_subscriptions(&tx.signatures[0], status);
             }
         }
     }
@@ -343,7 +312,7 @@ impl Bank {
         ticks_and_stakes: &mut [(u64, u64)],
         supermajority_stake: u64,
     ) -> Option<u64> {
-        let last_ids = self.last_id_queue.read().unwrap();
+        let last_ids = self.last_ids.read().unwrap();
         last_ids.get_confirmation_timestamp(ticks_and_stakes, supermajority_stake)
     }
 
@@ -352,9 +321,9 @@ impl Bank {
     /// the oldest ones once its internal cache is full. Once boot, the
     /// bank will reject transactions using that `last_id`.
     pub fn register_tick(&self, last_id: &Hash) {
-        let mut last_id_queue = self.last_id_queue.write().unwrap();
+        let mut last_ids = self.last_ids.write().unwrap();
         inc_new_counter_info!("bank-register_tick-registered", 1);
-        last_id_queue.register_tick(last_id)
+        last_ids.register_tick(last_id)
     }
 
     /// Process a Transaction. This is used for unit tests and simply calls the vector Bank::process_transactions method.
@@ -387,38 +356,26 @@ impl Bank {
         // same account state
         let lock_results = self.lock_accounts(txs);
         let lock_time = now.elapsed();
-
         let now = Instant::now();
         // Use a shorter maximum age when adding transactions into the pipeline.  This will reduce
         // the likelihood of any single thread getting starved and processing old ids.
         // TODO: Banking stage threads should be prioritized to complete faster then this queue
         // expires.
-        let (loaded_accounts, results) =
-            self.load_and_execute_transactions(txs, lock_results, MAX_ENTRY_IDS as usize / 2);
-        let load_execute_time = now.elapsed();
-
-        let record_time = {
-            let now = Instant::now();
-            self.record_transactions(txs, &results, poh)?;
-            now.elapsed()
-        };
-
-        let commit_time = {
-            let now = Instant::now();
-            self.commit_transactions(txs, &loaded_accounts, &results);
-            now.elapsed()
-        };
-
+        let results =
+            self.execute_and_commit_transactions(txs, lock_results, MAX_ENTRY_IDS as usize / 2);
+        let process_time = now.elapsed();
+        let now = Instant::now();
+        self.record_transactions(txs, &results, poh)?;
+        let record_time = now.elapsed();
         let now = Instant::now();
         // Once the accounts are new transactions can enter the pipeline to process them
         self.unlock_accounts(&txs, &results);
         let unlock_time = now.elapsed();
         debug!(
-            "lock: {}us load_execute: {}us record: {}us commit: {}us unlock: {}us txs_len: {}",
+            "lock: {}us process: {}us record: {}us unlock: {}us txs_len={}",
             duration_as_us(&lock_time),
-            duration_as_us(&load_execute_time),
+            duration_as_us(&process_time),
             duration_as_us(&record_time),
-            duration_as_us(&commit_time),
             duration_as_us(&unlock_time),
             txs.len(),
         );
@@ -436,29 +393,20 @@ impl Bank {
             .zip(txs.iter())
             .filter_map(|(r, x)| match r {
                 Ok(_) => Some(x.clone()),
-                Err(BankError::ProgramError(index, err)) => {
-                    info!("program error {:?}, {:?}", index, err);
-                    Some(x.clone())
-                }
                 Err(ref e) => {
                     debug!("process transaction failed {:?}", e);
                     None
                 }
             })
             .collect();
-        debug!("processed: {} ", processed_transactions.len());
         // unlock all the accounts with errors which are filtered by the above `filter_map`
         if !processed_transactions.is_empty() {
             let hash = Transaction::hash(&processed_transactions);
+            debug!("processed ok: {} {}", processed_transactions.len(), hash);
             // record and unlock will unlock all the successfull transactions
             poh.record(hash, processed_transactions).map_err(|e| {
                 warn!("record failure: {:?}", e);
-                match e {
-                    Error::PohRecorderError(PohRecorderError::MaxHeightReached) => {
-                        BankError::MaxHeightReached
-                    }
-                    _ => BankError::RecordFailure,
-                }
+                BankError::RecordFailure
             })?;
         }
         Ok(())
@@ -467,66 +415,28 @@ impl Bank {
     fn load_accounts(
         &self,
         txs: &[Transaction],
-        results: Vec<Result<()>>,
+        lock_results: Vec<Result<()>>,
+        max_age: usize,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
-        Accounts::load_accounts(&[&self.accounts], txs, results, error_counters)
+        let mut last_ids = self.last_ids.write().unwrap();
+        self.accounts
+            .load_accounts(txs, &mut last_ids, lock_results, max_age, error_counters)
     }
-    fn check_age(
+
+    /// Process a batch of transactions.
+    #[must_use]
+    pub fn execute_and_commit_transactions(
         &self,
         txs: &[Transaction],
         lock_results: Vec<Result<()>>,
         max_age: usize,
-        error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
-        let last_ids = self.last_id_queue.read().unwrap();
-        txs.iter()
-            .zip(lock_results.into_iter())
-            .map(|(tx, lock_res)| {
-                if lock_res.is_ok() && !last_ids.check_entry_id_age(tx.last_id, max_age) {
-                    error_counters.reserve_last_id += 1;
-                    Err(BankError::LastIdNotFound)
-                } else {
-                    lock_res
-                }
-            })
-            .collect()
-    }
-    fn check_signatures(
-        &self,
-        txs: &[Transaction],
-        lock_results: Vec<Result<()>>,
-        error_counters: &mut ErrorCounters,
-    ) -> Vec<Result<()>> {
-        let status_cache = self.status_cache.read().unwrap();
-        txs.iter()
-            .zip(lock_results.into_iter())
-            .map(|(tx, lock_res)| {
-                if lock_res.is_ok() && status_cache.has_signature(&tx.signatures[0]) {
-                    error_counters.duplicate_signature += 1;
-                    Err(BankError::DuplicateSignature)
-                } else {
-                    lock_res
-                }
-            })
-            .collect()
-    }
-    #[allow(clippy::type_complexity)]
-    fn load_and_execute_transactions(
-        &self,
-        txs: &[Transaction],
-        lock_results: Vec<Result<()>>,
-        max_age: usize,
-    ) -> (
-        Vec<Result<(InstructionAccounts, InstructionLoaders)>>,
-        Vec<Result<()>>,
-    ) {
         debug!("processing transactions: {}", txs.len());
         let mut error_counters = ErrorCounters::default();
         let now = Instant::now();
-        let age_results = self.check_age(txs, lock_results, max_age, &mut error_counters);
-        let sig_results = self.check_signatures(txs, age_results, &mut error_counters);
-        let mut loaded_accounts = self.load_accounts(txs, sig_results, &mut error_counters);
+        let mut loaded_accounts =
+            self.load_accounts(txs, lock_results, max_age, &mut error_counters);
         let tick_height = self.tick_height();
 
         let load_elapsed = now.elapsed();
@@ -547,13 +457,23 @@ impl Bank {
             .collect();
 
         let execution_elapsed = now.elapsed();
+        let now = Instant::now();
+        self.accounts
+            .store_accounts(txs, &executed, &loaded_accounts);
 
+        // Check account subscriptions and send notifications
+        self.send_account_notifications(txs, &executed, &loaded_accounts);
+
+        // once committed there is no way to unroll
+        let write_elapsed = now.elapsed();
         debug!(
-            "load: {}us execute: {}us txs_len={}",
+            "load: {}us execute: {}us store: {}us txs_len={}",
             duration_as_us(&load_elapsed),
             duration_as_us(&execution_elapsed),
+            duration_as_us(&write_elapsed),
             txs.len(),
         );
+        self.update_transaction_statuses(txs, &executed);
         let mut tx_count = 0;
         let mut err_count = 0;
         for (r, tx) in executed.iter().zip(txs.iter()) {
@@ -602,52 +522,13 @@ impl Bank {
                 error_counters.insufficient_funds
             );
         }
-        (loaded_accounts, executed)
-    }
-
-    fn commit_transactions(
-        &self,
-        txs: &[Transaction],
-        loaded_accounts: &[Result<(InstructionAccounts, InstructionLoaders)>],
-        executed: &[Result<()>],
-    ) {
-        let now = Instant::now();
-        self.accounts
-            .store_accounts(true, txs, executed, loaded_accounts);
-
-        // Check account subscriptions and send notifications
-        self.send_account_notifications(txs, executed, loaded_accounts);
-
-        // once committed there is no way to unroll
-        let write_elapsed = now.elapsed();
-        debug!(
-            "store: {}us txs_len={}",
-            duration_as_us(&write_elapsed),
-            txs.len(),
-        );
-        self.update_transaction_statuses(txs, &executed);
-        self.update_subscriptions(txs, &executed);
-    }
-
-    /// Process a batch of transactions.
-    #[must_use]
-    pub fn load_execute_and_commit_transactions(
-        &self,
-        txs: &[Transaction],
-        lock_results: Vec<Result<()>>,
-        max_age: usize,
-    ) -> Vec<Result<()>> {
-        let (loaded_accounts, executed) =
-            self.load_and_execute_transactions(txs, lock_results, max_age);
-
-        self.commit_transactions(txs, &loaded_accounts, &executed);
         executed
     }
 
     #[must_use]
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let lock_results = self.lock_accounts(txs);
-        let results = self.load_execute_and_commit_transactions(txs, lock_results, MAX_ENTRY_IDS);
+        let results = self.execute_and_commit_transactions(txs, lock_results, MAX_ENTRY_IDS);
         self.unlock_accounts(txs, &results);
         results
     }
@@ -655,12 +536,7 @@ impl Bank {
     pub fn process_entry(&self, entry: &Entry) -> Result<()> {
         if !entry.is_tick() {
             for result in self.process_transactions(&entry.transactions) {
-                match result {
-                    // Entries that result in a ProgramError are still valid and are written in the
-                    // ledger so map them to an ok return value
-                    Err(BankError::ProgramError(_, _)) => Ok(()),
-                    _ => result,
-                }?;
+                result?;
             }
         } else {
             self.register_tick(&entry.id);
@@ -684,34 +560,16 @@ impl Bank {
         }
         Ok(())
     }
-
-    fn ignore_program_errors(results: Vec<Result<()>>) -> Vec<Result<()>> {
-        results
-            .into_iter()
-            .map(|result| match result {
-                // Entries that result in a ProgramError are still valid and are written in the
-                // ledger so map them to an ok return value
-                Err(BankError::ProgramError(index, err)) => {
-                    info!("program error {:?}, {:?}", index, err);
-                    inc_new_counter_info!("bank-ignore_program_err", 1);
-                    Ok(())
-                }
-                _ => result,
-            })
-            .collect()
-    }
-
-    fn par_execute_entries(&self, entries: &[(&Entry, Vec<Result<()>>)]) -> Result<()> {
+    pub fn par_execute_entries(&self, entries: &[(&Entry, Vec<Result<()>>)]) -> Result<()> {
         inc_new_counter_info!("bank-par_execute_entries-count", entries.len());
         let results: Vec<Result<()>> = entries
             .into_par_iter()
             .map(|(e, lock_results)| {
-                let old_results = self.load_execute_and_commit_transactions(
+                let results = self.execute_and_commit_transactions(
                     &e.transactions,
                     lock_results.to_vec(),
                     MAX_ENTRY_IDS,
                 );
-                let results = Bank::ignore_program_errors(old_results);
                 self.unlock_accounts(&e.transactions, &results);
                 Self::first_err(&results)
             })
@@ -768,14 +626,20 @@ impl Bank {
         Ok(())
     }
 
-    /// Starting from the genesis block, append the provided entries to the ledger verifying them
-    /// along the way.
-    pub fn process_ledger<I>(&mut self, entries: I) -> Result<(u64, Hash)>
+    /// Append entry blocks to the ledger, verifying them along the way.
+    fn process_ledger_blocks<I>(
+        &self,
+        start_hash: Hash,
+        entry_height: u64,
+        entries: I,
+    ) -> Result<(u64, Hash)>
     where
         I: IntoIterator<Item = Entry>,
     {
-        let mut entry_height = 0;
-        let mut last_id = self.last_id();
+        // these magic numbers are from genesis of the mint, could pull them
+        //  back out of this loop.
+        let mut entry_height = entry_height;
+        let mut last_id = start_hash;
 
         // Ledger verification needs to be parallelized, but we can't pull the whole
         // thing into memory. We therefore chunk it.
@@ -793,6 +657,96 @@ impl Bank {
             entry_height += block.len() as u64;
         }
         Ok((entry_height, last_id))
+    }
+
+    /// Process a full ledger.
+    pub fn process_ledger<I>(&self, entries: I) -> Result<(u64, Hash)>
+    where
+        I: IntoIterator<Item = Entry>,
+    {
+        let mut entries = entries.into_iter();
+
+        // The first item in the ledger is required to be an entry with zero num_hashes,
+        // which implies its id can be used as the ledger's seed.
+        let entry0 = entries.next().expect("invalid ledger: empty");
+
+        // The second item in the ledger consists of a transaction with
+        // two special instructions:
+        // 1) The first is a special move instruction where the to and from
+        // fields are the same. That entry should be treated as a deposit, not a
+        // transfer to oneself.
+        // 2) The second is a move instruction that acts as a payment to the first
+        // leader from the mint. This bootstrap leader will stay in power during the
+        // bootstrapping period of the network
+        let entry1 = entries
+            .next()
+            .expect("invalid ledger: need at least 2 entries");
+
+        // genesis should conform to PoH
+        assert!(entry1.verify(&entry0.id));
+
+        {
+            // Process the first transaction
+            let tx = &entry1.transactions[0];
+            assert!(system_program::check_id(tx.program_id(0)), "Invalid ledger");
+            assert!(system_program::check_id(tx.program_id(1)), "Invalid ledger");
+            let mut instruction: SystemInstruction = deserialize(tx.userdata(0)).unwrap();
+            let mint_deposit = if let SystemInstruction::Move { tokens } = instruction {
+                Some(tokens)
+            } else {
+                None
+            }
+            .expect("invalid ledger, needs to start with mint deposit");
+
+            instruction = deserialize(tx.userdata(1)).unwrap();
+            let leader_payment = if let SystemInstruction::Move { tokens } = instruction {
+                Some(tokens)
+            } else {
+                None
+            }
+            .expect("invalid ledger, bootstrap leader payment expected");
+
+            assert!(leader_payment <= mint_deposit);
+            assert!(leader_payment > 0);
+
+            {
+                // 1) Deposit into the mint
+                let mut account = self
+                    .accounts
+                    .load_slow(&tx.account_keys[0])
+                    .unwrap_or_default();
+                account.tokens += mint_deposit - leader_payment;
+                self.accounts.store_slow(&tx.account_keys[0], &account);
+                trace!(
+                    "applied genesis payment {:?} => {:?}",
+                    mint_deposit - leader_payment,
+                    account
+                );
+
+                // 2) Transfer tokens to the bootstrap leader. The first two
+                // account keys will both be the mint (because the mint is the source
+                // for this transaction and the first move instruction is to the the
+                // mint itself), so we look at the third account key to find the first
+                // leader id.
+                let bootstrap_leader_id = tx.account_keys[2];
+                let mut account = self
+                    .accounts
+                    .load_slow(&bootstrap_leader_id)
+                    .unwrap_or_default();
+                account.tokens += leader_payment;
+                self.accounts.store_slow(&bootstrap_leader_id, &account);
+
+                self.leader_scheduler.write().unwrap().bootstrap_leader = bootstrap_leader_id;
+
+                trace!(
+                    "applied genesis payment to bootstrap leader {:?} => {:?}",
+                    leader_payment,
+                    account
+                );
+            }
+        }
+
+        Ok(self.process_ledger_blocks(entry1.id, 2, entries)?)
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
@@ -826,23 +780,40 @@ impl Bank {
             .unwrap_or(0)
     }
 
+    /// TODO: Need to implement a real staking program to hold node stake.
+    /// Right now this just gets the account balances. See github issue #1655.
+    pub fn get_stake(&self, pubkey: &Pubkey) -> u64 {
+        self.get_balance(pubkey)
+    }
+
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
-        Accounts::load_slow(&[&self.accounts], pubkey)
+        self.accounts.load_slow(pubkey)
     }
 
     pub fn transaction_count(&self) -> u64 {
         self.accounts.transaction_count()
     }
 
-    pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
-        self.status_cache
+    pub fn get_signature_status(&self, signature: &Signature) -> Option<Status<Result<()>>> {
+        self.last_ids
             .read()
             .unwrap()
             .get_signature_status(signature)
     }
 
     pub fn has_signature(&self, signature: &Signature) -> bool {
-        self.status_cache.read().unwrap().has_signature(signature)
+        self.last_ids.read().unwrap().has_signature(signature)
+    }
+
+    pub fn get_signature(
+        &self,
+        last_id: &Hash,
+        signature: &Signature,
+    ) -> Option<Status<Result<()>>> {
+        self.last_ids
+            .read()
+            .unwrap()
+            .get_signature(last_id, signature)
     }
 
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
@@ -874,12 +845,39 @@ impl Bank {
             let tx = &txs[i];
             let accs = raccs.as_ref().unwrap();
             for (key, account) in tx.account_keys.iter().zip(accs.0.iter()) {
-                self.subscriptions
-                    .read()
-                    .unwrap()
-                    .check_account(&key, account);
+                self.check_account_subscriptions(&key, account);
             }
         }
+    }
+
+    pub fn add_account_subscription(
+        &self,
+        bank_sub_id: Pubkey,
+        pubkey: Pubkey,
+        sink: Sink<Account>,
+    ) {
+        let mut subscriptions = self.account_subscriptions.write().unwrap();
+        if let Some(current_hashmap) = subscriptions.get_mut(&pubkey) {
+            current_hashmap.insert(bank_sub_id, sink);
+            return;
+        }
+        let mut hashmap = HashMap::new();
+        hashmap.insert(bank_sub_id, sink);
+        subscriptions.insert(pubkey, hashmap);
+    }
+
+    pub fn remove_account_subscription(&self, bank_sub_id: &Pubkey, pubkey: &Pubkey) -> bool {
+        let mut subscriptions = self.account_subscriptions.write().unwrap();
+        match subscriptions.get_mut(pubkey) {
+            Some(ref current_hashmap) if current_hashmap.len() == 1 => {}
+            Some(current_hashmap) => {
+                return current_hashmap.remove(bank_sub_id).is_some();
+            }
+            None => {
+                return false;
+            }
+        }
+        subscriptions.remove(pubkey).is_some()
     }
 
     pub fn get_current_leader(&self) -> Option<(Pubkey, u64)> {
@@ -890,12 +888,60 @@ impl Bank {
     }
 
     pub fn tick_height(&self) -> u64 {
-        self.last_id_queue.read().unwrap().tick_height
+        self.last_ids.read().unwrap().tick_height
     }
 
-    #[cfg(test)]
-    pub fn last_ids(&self) -> &RwLock<LastIdQueue> {
-        &self.last_id_queue
+    fn check_account_subscriptions(&self, pubkey: &Pubkey, account: &Account) {
+        let subscriptions = self.account_subscriptions.read().unwrap();
+        if let Some(hashmap) = subscriptions.get(pubkey) {
+            for (_bank_sub_id, sink) in hashmap.iter() {
+                sink.notify(Ok(account.clone())).wait().unwrap();
+            }
+        }
+    }
+
+    pub fn add_signature_subscription(
+        &self,
+        bank_sub_id: Pubkey,
+        signature: Signature,
+        sink: Sink<RpcSignatureStatus>,
+    ) {
+        let mut subscriptions = self.signature_subscriptions.write().unwrap();
+        if let Some(current_hashmap) = subscriptions.get_mut(&signature) {
+            current_hashmap.insert(bank_sub_id, sink);
+            return;
+        }
+        let mut hashmap = HashMap::new();
+        hashmap.insert(bank_sub_id, sink);
+        subscriptions.insert(signature, hashmap);
+    }
+
+    pub fn remove_signature_subscription(
+        &self,
+        bank_sub_id: &Pubkey,
+        signature: &Signature,
+    ) -> bool {
+        let mut subscriptions = self.signature_subscriptions.write().unwrap();
+        match subscriptions.get_mut(signature) {
+            Some(ref current_hashmap) if current_hashmap.len() == 1 => {}
+            Some(current_hashmap) => {
+                return current_hashmap.remove(bank_sub_id).is_some();
+            }
+            None => {
+                return false;
+            }
+        }
+        subscriptions.remove(signature).is_some()
+    }
+
+    fn check_signature_subscriptions(&self, signature: &Signature, status: RpcSignatureStatus) {
+        let mut subscriptions = self.signature_subscriptions.write().unwrap();
+        if let Some(hashmap) = subscriptions.get(signature) {
+            for (_bank_sub_id, sink) in hashmap.iter() {
+                sink.notify(Ok(status)).wait().unwrap();
+            }
+        }
+        subscriptions.remove(&signature);
     }
 }
 
@@ -903,50 +949,50 @@ impl Bank {
 mod tests {
     use super::*;
     use crate::entry::{next_entries, next_entry, Entry};
-    use crate::gen_keys::GenKeys;
+    use crate::jsonrpc_macros::pubsub::{Subscriber, SubscriptionId};
+    use crate::signature::GenKeys;
+    use crate::status_deque;
+    use crate::status_deque::StatusDequeError;
     use bincode::serialize;
     use hashbrown::HashSet;
     use solana_sdk::hash::hash;
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::Keypair;
     use solana_sdk::signature::KeypairUtil;
-    use solana_sdk::storage_program::{StorageTransaction, ENTRIES_PER_SEGMENT};
-    use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Instruction;
     use std;
-    use std::sync::mpsc::channel;
+    use tokio::prelude::{Async, Stream};
 
     #[test]
     fn test_bank_new() {
-        let (genesis_block, _) = GenesisBlock::new(10_000);
-        let bank = Bank::new(&genesis_block);
-        assert_eq!(bank.get_balance(&genesis_block.mint_id), 10_000);
+        let mint = Mint::new(10_000);
+        let bank = Bank::new(&mint);
+        assert_eq!(bank.get_balance(&mint.pubkey()), 10_000);
     }
 
     #[test]
     fn test_bank_new_with_leader() {
         let dummy_leader_id = Keypair::new().pubkey();
         let dummy_leader_tokens = 1;
-        let (genesis_block, _) =
-            GenesisBlock::new_with_leader(10_000, dummy_leader_id, dummy_leader_tokens);
-        let bank = Bank::new(&genesis_block);
-        assert_eq!(bank.get_balance(&genesis_block.mint_id), 9999);
+        let mint = Mint::new_with_leader(10_000, dummy_leader_id, dummy_leader_tokens);
+        let bank = Bank::new(&mint);
+        assert_eq!(bank.get_balance(&mint.pubkey()), 9999);
         assert_eq!(bank.get_balance(&dummy_leader_id), 1);
     }
 
     #[test]
     fn test_two_payments_to_one_party() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
+        let mint = Mint::new(10_000);
         let pubkey = Keypair::new().pubkey();
-        let bank = Bank::new(&genesis_block);
-        assert_eq!(bank.last_id(), genesis_block.last_id());
+        let bank = Bank::new(&mint);
+        assert_eq!(bank.last_id(), mint.last_id());
 
-        bank.transfer(1_000, &mint_keypair, pubkey, genesis_block.last_id())
+        bank.transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
         assert_eq!(bank.get_balance(&pubkey), 1_000);
 
-        bank.transfer(500, &mint_keypair, pubkey, genesis_block.last_id())
+        bank.transfer(500, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
         assert_eq!(bank.get_balance(&pubkey), 1_500);
         assert_eq!(bank.transaction_count(), 2);
@@ -954,35 +1000,38 @@ mod tests {
 
     #[test]
     fn test_one_source_two_tx_one_batch() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
+        let mint = Mint::new(1);
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
-        let bank = Bank::new(&genesis_block);
-        assert_eq!(bank.last_id(), genesis_block.last_id());
+        let bank = Bank::new(&mint);
+        assert_eq!(bank.last_id(), mint.last_id());
 
-        let t1 = Transaction::system_move(&mint_keypair, key1, 1, genesis_block.last_id(), 0);
-        let t2 = Transaction::system_move(&mint_keypair, key2, 1, genesis_block.last_id(), 0);
+        let t1 = Transaction::system_move(&mint.keypair(), key1, 1, mint.last_id(), 0);
+        let t2 = Transaction::system_move(&mint.keypair(), key2, 1, mint.last_id(), 0);
         let res = bank.process_transactions(&vec![t1.clone(), t2.clone()]);
         assert_eq!(res.len(), 2);
         assert_eq!(res[0], Ok(()));
         assert_eq!(res[1], Err(BankError::AccountInUse));
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 0);
+        assert_eq!(bank.get_balance(&mint.pubkey()), 0);
         assert_eq!(bank.get_balance(&key1), 1);
         assert_eq!(bank.get_balance(&key2), 0);
-        assert_eq!(bank.get_signature_status(&t1.signatures[0]), Some(Ok(())));
+        assert_eq!(
+            bank.get_signature(&t1.last_id, &t1.signatures[0]),
+            Some(Status::Complete(Ok(())))
+        );
         // TODO: Transactions that fail to pay a fee could be dropped silently
         assert_eq!(
-            bank.get_signature_status(&t2.signatures[0]),
-            Some(Err(BankError::AccountInUse))
+            bank.get_signature(&t2.last_id, &t2.signatures[0]),
+            Some(Status::Complete(Err(BankError::AccountInUse)))
         );
     }
 
     #[test]
     fn test_one_tx_two_out_atomic_fail() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
+        let mint = Mint::new(1);
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
-        let bank = Bank::new(&genesis_block);
+        let bank = Bank::new(&mint);
         let spend = SystemInstruction::Move { tokens: 1 };
         let instructions = vec![
             Instruction {
@@ -998,9 +1047,9 @@ mod tests {
         ];
 
         let t1 = Transaction::new_with_instructions(
-            &[&mint_keypair],
+            &[&mint.keypair()],
             &[key1, key2],
-            genesis_block.last_id(),
+            mint.last_id(),
             0,
             vec![system_program::id()],
             instructions,
@@ -1014,52 +1063,55 @@ mod tests {
                 ProgramError::ResultWithNegativeTokens
             ))
         );
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 1);
+        assert_eq!(bank.get_balance(&mint.pubkey()), 1);
         assert_eq!(bank.get_balance(&key1), 0);
         assert_eq!(bank.get_balance(&key2), 0);
         assert_eq!(
-            bank.get_signature_status(&t1.signatures[0]),
-            Some(Err(BankError::ProgramError(
+            bank.get_signature(&t1.last_id, &t1.signatures[0]),
+            Some(Status::Complete(Err(BankError::ProgramError(
                 1,
                 ProgramError::ResultWithNegativeTokens
-            )))
+            ))))
         );
     }
 
     #[test]
     fn test_one_tx_two_out_atomic_pass() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let mint = Mint::new(2);
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
-        let bank = Bank::new(&genesis_block);
+        let bank = Bank::new(&mint);
         let t1 = Transaction::system_move_many(
-            &mint_keypair,
+            &mint.keypair(),
             &[(key1, 1), (key2, 1)],
-            genesis_block.last_id(),
+            mint.last_id(),
             0,
         );
         let res = bank.process_transactions(&vec![t1.clone()]);
         assert_eq!(res.len(), 1);
         assert_eq!(res[0], Ok(()));
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 0);
+        assert_eq!(bank.get_balance(&mint.pubkey()), 0);
         assert_eq!(bank.get_balance(&key1), 1);
         assert_eq!(bank.get_balance(&key2), 1);
-        assert_eq!(bank.get_signature_status(&t1.signatures[0]), Some(Ok(())));
+        assert_eq!(
+            bank.get_signature(&t1.last_id, &t1.signatures[0]),
+            Some(Status::Complete(Ok(())))
+        );
     }
 
     // TODO: This test demonstrates that fees are not paid when a program fails.
     // See github issue 1157 (https://github.com/solana-labs/solana/issues/1157)
     #[test]
     fn test_detect_failed_duplicate_transactions_issue_1157() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
-        let bank = Bank::new(&genesis_block);
+        let mint = Mint::new(1);
+        let bank = Bank::new(&mint);
         let dest = Keypair::new();
 
         // source with 0 program context
         let tx = Transaction::system_create(
-            &mint_keypair,
+            &mint.keypair(),
             dest.pubkey(),
-            genesis_block.last_id(),
+            mint.last_id(),
             2,
             0,
             Pubkey::default(),
@@ -1074,26 +1126,26 @@ mod tests {
         assert!(bank.has_signature(&signature));
         assert_matches!(
             bank.get_signature_status(&signature),
-            Some(Err(BankError::ProgramError(
+            Some(Status::Complete(Err(BankError::ProgramError(
                 0,
                 ProgramError::ResultWithNegativeTokens
-            )))
+            ))))
         );
 
         // The tokens didn't move, but the from address paid the transaction fee.
         assert_eq!(bank.get_balance(&dest.pubkey()), 0);
 
         // BUG: This should be the original balance minus the transaction fee.
-        //assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 0);
+        //assert_eq!(bank.get_balance(&mint.pubkey()), 0);
     }
 
     #[test]
     fn test_account_not_found() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
-        let bank = Bank::new(&genesis_block);
+        let mint = Mint::new(1);
+        let bank = Bank::new(&mint);
         let keypair = Keypair::new();
         assert_eq!(
-            bank.transfer(1, &keypair, mint_keypair.pubkey(), genesis_block.last_id()),
+            bank.transfer(1, &keypair, mint.pubkey(), mint.last_id()),
             Err(BankError::AccountNotFound)
         );
         assert_eq!(bank.transaction_count(), 0);
@@ -1101,15 +1153,15 @@ mod tests {
 
     #[test]
     fn test_insufficient_funds() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(11_000);
-        let bank = Bank::new(&genesis_block);
+        let mint = Mint::new(11_000);
+        let bank = Bank::new(&mint);
         let pubkey = Keypair::new().pubkey();
-        bank.transfer(1_000, &mint_keypair, pubkey, genesis_block.last_id())
+        bank.transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
         assert_eq!(bank.transaction_count(), 1);
         assert_eq!(bank.get_balance(&pubkey), 1_000);
         assert_matches!(
-            bank.transfer(10_001, &mint_keypair, pubkey, genesis_block.last_id()),
+            bank.transfer(10_001, &mint.keypair(), pubkey, mint.last_id()),
             Err(BankError::ProgramError(
                 0,
                 ProgramError::ResultWithNegativeTokens
@@ -1117,30 +1169,28 @@ mod tests {
         );
         assert_eq!(bank.transaction_count(), 1);
 
-        let mint_pubkey = mint_keypair.pubkey();
+        let mint_pubkey = mint.keypair().pubkey();
         assert_eq!(bank.get_balance(&mint_pubkey), 10_000);
         assert_eq!(bank.get_balance(&pubkey), 1_000);
     }
 
     #[test]
     fn test_transfer_to_newb() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
-        let bank = Bank::new(&genesis_block);
+        let mint = Mint::new(10_000);
+        let bank = Bank::new(&mint);
         let pubkey = Keypair::new().pubkey();
-        bank.transfer(500, &mint_keypair, pubkey, genesis_block.last_id())
+        bank.transfer(500, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
         assert_eq!(bank.get_balance(&pubkey), 500);
     }
 
     #[test]
     fn test_debits_before_credits() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
-        let bank = Bank::new(&genesis_block);
+        let mint = Mint::new(2);
+        let bank = Bank::new(&mint);
         let keypair = Keypair::new();
-        let tx0 =
-            Transaction::system_new(&mint_keypair, keypair.pubkey(), 2, genesis_block.last_id());
-        let tx1 =
-            Transaction::system_new(&keypair, mint_keypair.pubkey(), 1, genesis_block.last_id());
+        let tx0 = Transaction::system_new(&mint.keypair(), keypair.pubkey(), 2, mint.last_id());
+        let tx1 = Transaction::system_new(&keypair, mint.pubkey(), 1, mint.last_id());
         let txs = vec![tx0, tx1];
         let results = bank.process_transactions(&txs);
         assert!(results[1].is_err());
@@ -1151,11 +1201,11 @@ mod tests {
 
     #[test]
     fn test_process_empty_entry_is_registered() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
-        let bank = Bank::new(&genesis_block);
+        let mint = Mint::new(1);
+        let bank = Bank::new(&mint);
         let keypair = Keypair::new();
-        let entry = next_entry(&genesis_block.last_id(), 1, vec![]);
-        let tx = Transaction::system_new(&mint_keypair, keypair.pubkey(), 1, entry.id);
+        let entry = next_entry(&mint.last_id(), 1, vec![]);
+        let tx = Transaction::system_new(&mint.keypair(), keypair.pubkey(), 1, entry.id);
 
         // First, ensure the TX is rejected because of the unregistered last ID
         assert_eq!(
@@ -1172,39 +1222,29 @@ mod tests {
     fn test_process_genesis() {
         let dummy_leader_id = Keypair::new().pubkey();
         let dummy_leader_tokens = 1;
-        let (genesis_block, _) =
-            GenesisBlock::new_with_leader(5, dummy_leader_id, dummy_leader_tokens);
+        let mint = Mint::new_with_leader(5, dummy_leader_id, dummy_leader_tokens);
+        let genesis = mint.create_entries();
         let bank = Bank::default();
-        bank.process_genesis_block(&genesis_block);
-        assert_eq!(bank.get_balance(&genesis_block.mint_id), 4);
+        bank.process_ledger(genesis).unwrap();
+        assert_eq!(bank.get_balance(&mint.pubkey()), 4);
         assert_eq!(bank.get_balance(&dummy_leader_id), 1);
-        // TODO: Restore next assert_eq() once leader scheduler configuration is stored in the
-        // genesis block
-        /*
         assert_eq!(
             bank.leader_scheduler.read().unwrap().bootstrap_leader,
             dummy_leader_id
         );
-        */
     }
 
     fn create_sample_block_with_next_entries_using_keypairs(
-        genesis_block: &GenesisBlock,
-        mint_keypair: &Keypair,
+        mint: &Mint,
         keypairs: &[Keypair],
     ) -> impl Iterator<Item = Entry> {
+        let mut last_id = mint.last_id();
+        let mut hash = mint.last_id();
         let mut entries: Vec<Entry> = vec![];
-
-        // Start off the ledger with a tick linked to the genesis block
-        let tick = Entry::new(&genesis_block.last_id(), 0, 1, vec![]);
-        let mut hash = tick.id;
-        let mut last_id = tick.id;
-        entries.push(tick);
-
         let num_hashes = 1;
         for k in keypairs {
             let txs = vec![Transaction::system_new(
-                mint_keypair,
+                &mint.keypair(),
                 k.pubkey(),
                 1,
                 last_id,
@@ -1220,39 +1260,23 @@ mod tests {
         entries.into_iter()
     }
 
-    // create a ledger with a tick every `tick_interval` entries and a couple other transactions
+    // create a ledger with tick entries every `ticks` entries
     fn create_sample_block_with_ticks(
-        genesis_block: &GenesisBlock,
-        mint_keypair: &Keypair,
-        num_entries: usize,
-        tick_interval: usize,
+        mint: &Mint,
+        length: usize,
+        ticks: usize,
     ) -> impl Iterator<Item = Entry> {
-        assert!(num_entries > 0);
-        let mut entries = Vec::with_capacity(num_entries);
-
-        // Start off the ledger with a tick linked to the genesis block
-        let tick = Entry::new(&genesis_block.last_id(), 0, 1, vec![]);
-        let mut hash = tick.id;
-        let mut last_id = tick.id;
-        entries.push(tick);
-
+        let mut entries = Vec::with_capacity(length);
+        let mut hash = mint.last_id();
+        let mut last_id = mint.last_id();
         let num_hashes = 1;
-        for i in 1..num_entries {
+        for i in 0..length {
             let keypair = Keypair::new();
-            let tx = Transaction::system_new(mint_keypair, keypair.pubkey(), 1, last_id);
+            let tx = Transaction::system_new(&mint.keypair(), keypair.pubkey(), 1, last_id);
             let entry = Entry::new(&hash, 0, num_hashes, vec![tx]);
             hash = entry.id;
             entries.push(entry);
-
-            // Add a second Transaction that will produce a
-            // ProgramError<0, ResultWithNegativeTokens> error when processed
-            let keypair2 = Keypair::new();
-            let tx = Transaction::system_new(&keypair, keypair2.pubkey(), 42, last_id);
-            let entry = Entry::new(&hash, 0, num_hashes, vec![tx]);
-            hash = entry.id;
-            entries.push(entry);
-
-            if (i + 1) % tick_interval == 0 {
+            if (i + 1) % ticks == 0 {
                 let tick = Entry::new(&hash, 0, num_hashes, vec![]);
                 hash = tick.id;
                 last_id = hash;
@@ -1262,66 +1286,57 @@ mod tests {
         entries.into_iter()
     }
 
-    fn create_sample_ledger(
-        tokens: u64,
-        num_entries: usize,
-    ) -> (GenesisBlock, Keypair, impl Iterator<Item = Entry>) {
-        let mint_keypair = Keypair::new();
-        let genesis_block = GenesisBlock {
-            bootstrap_leader_id: Keypair::new().pubkey(),
-            bootstrap_leader_tokens: 1,
-            mint_id: mint_keypair.pubkey(),
-            tokens,
-        };
-        let block =
-            create_sample_block_with_ticks(&genesis_block, &mint_keypair, num_entries, num_entries);
-        (genesis_block, mint_keypair, block)
+    fn create_sample_ledger(length: usize) -> (impl Iterator<Item = Entry>, Pubkey) {
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 1;
+        let mint = Mint::new_with_leader(
+            length as u64 + 1 + dummy_leader_tokens,
+            dummy_leader_id,
+            dummy_leader_tokens,
+        );
+        let genesis = mint.create_entries();
+        let block = create_sample_block_with_ticks(&mint, length, length);
+        (genesis.into_iter().chain(block), mint.pubkey())
+    }
+
+    fn create_sample_ledger_with_mint_and_keypairs(
+        mint: &Mint,
+        keypairs: &[Keypair],
+    ) -> impl Iterator<Item = Entry> {
+        let genesis = mint.create_entries();
+        let block = create_sample_block_with_next_entries_using_keypairs(mint, keypairs);
+        genesis.into_iter().chain(block)
     }
 
     #[test]
     fn test_process_ledger_simple() {
-        let (genesis_block, mint_keypair, ledger) = create_sample_ledger(100, 2);
-        let mut bank = Bank::default();
-        bank.process_genesis_block(&genesis_block);
-        assert_eq!(bank.tick_height(), 0);
+        let (ledger, pubkey) = create_sample_ledger(1);
+        let bank = Bank::default();
         bank.add_system_program();
         let (ledger_height, last_id) = bank.process_ledger(ledger).unwrap();
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 98);
-        assert_eq!(ledger_height, 4);
+        assert_eq!(bank.get_balance(&pubkey), 1);
+        assert_eq!(ledger_height, 5);
         assert_eq!(bank.tick_height(), 2);
         assert_eq!(bank.last_id(), last_id);
     }
 
     #[test]
     fn test_hash_internal_state() {
-        let mint_keypair = Keypair::new();
-        let genesis_block = GenesisBlock {
-            bootstrap_leader_id: Keypair::new().pubkey(),
-            bootstrap_leader_tokens: 1,
-            mint_id: mint_keypair.pubkey(),
-            tokens: 2_000,
-        };
+        let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_tokens = 1;
+        let mint = Mint::new_with_leader(2_000, dummy_leader_id, dummy_leader_tokens);
+
         let seed = [0u8; 32];
         let mut rnd = GenKeys::new(seed);
         let keypairs = rnd.gen_n_keypairs(5);
-        let ledger0 = create_sample_block_with_next_entries_using_keypairs(
-            &genesis_block,
-            &mint_keypair,
-            &keypairs,
-        );
-        let ledger1 = create_sample_block_with_next_entries_using_keypairs(
-            &genesis_block,
-            &mint_keypair,
-            &keypairs,
-        );
+        let ledger0 = create_sample_ledger_with_mint_and_keypairs(&mint, &keypairs);
+        let ledger1 = create_sample_ledger_with_mint_and_keypairs(&mint, &keypairs);
 
-        let mut bank0 = Bank::default();
+        let bank0 = Bank::default();
         bank0.add_system_program();
-        bank0.process_genesis_block(&genesis_block);
         bank0.process_ledger(ledger0).unwrap();
-        let mut bank1 = Bank::default();
+        let bank1 = Bank::default();
         bank1.add_system_program();
-        bank1.process_genesis_block(&genesis_block);
         bank1.process_ledger(ledger1).unwrap();
 
         let initial_state = bank0.hash_internal_state();
@@ -1330,11 +1345,11 @@ mod tests {
 
         let pubkey = keypairs[0].pubkey();
         bank0
-            .transfer(1_000, &mint_keypair, pubkey, bank0.last_id())
+            .transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
         assert_ne!(bank0.hash_internal_state(), initial_state);
         bank1
-            .transfer(1_000, &mint_keypair, pubkey, bank1.last_id())
+            .transfer(1_000, &mint.keypair(), pubkey, mint.last_id())
             .unwrap();
         assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
     }
@@ -1347,40 +1362,122 @@ mod tests {
     }
     #[test]
     fn test_interleaving_locks() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(3);
-        let bank = Bank::new(&genesis_block);
+        let mint = Mint::new(3);
+        let bank = Bank::new(&mint);
         let alice = Keypair::new();
         let bob = Keypair::new();
 
-        let tx1 =
-            Transaction::system_new(&mint_keypair, alice.pubkey(), 1, genesis_block.last_id());
+        let tx1 = Transaction::system_new(&mint.keypair(), alice.pubkey(), 1, mint.last_id());
         let pay_alice = vec![tx1];
 
         let lock_result = bank.lock_accounts(&pay_alice);
         let results_alice =
-            bank.load_execute_and_commit_transactions(&pay_alice, lock_result, MAX_ENTRY_IDS);
+            bank.execute_and_commit_transactions(&pay_alice, lock_result, MAX_ENTRY_IDS);
         assert_eq!(results_alice[0], Ok(()));
 
         // try executing an interleaved transfer twice
         assert_eq!(
-            bank.transfer(1, &mint_keypair, bob.pubkey(), genesis_block.last_id()),
+            bank.transfer(1, &mint.keypair(), bob.pubkey(), mint.last_id()),
             Err(BankError::AccountInUse)
         );
         // the second time should fail as well
         // this verifies that `unlock_accounts` doesn't unlock `AccountInUse` accounts
         assert_eq!(
-            bank.transfer(1, &mint_keypair, bob.pubkey(), genesis_block.last_id()),
+            bank.transfer(1, &mint.keypair(), bob.pubkey(), mint.last_id()),
             Err(BankError::AccountInUse)
         );
 
         bank.unlock_accounts(&pay_alice, &results_alice);
 
         assert_matches!(
-            bank.transfer(2, &mint_keypair, bob.pubkey(), genesis_block.last_id()),
+            bank.transfer(2, &mint.keypair(), bob.pubkey(), mint.last_id()),
             Ok(_)
         );
     }
+    #[test]
+    fn test_bank_account_subscribe() {
+        let mint = Mint::new(100);
+        let bank = Bank::new(&mint);
+        let alice = Keypair::new();
+        let bank_sub_id = Keypair::new().pubkey();
+        let last_id = bank.last_id();
+        let tx = Transaction::system_create(
+            &mint.keypair(),
+            alice.pubkey(),
+            last_id,
+            1,
+            16,
+            budget_program::id(),
+            0,
+        );
+        bank.process_transaction(&tx).unwrap();
 
+        let (subscriber, _id_receiver, mut transport_receiver) =
+            Subscriber::new_test("accountNotification");
+        let sub_id = SubscriptionId::Number(0 as u64);
+        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
+        bank.add_account_subscription(bank_sub_id, alice.pubkey(), sink);
+
+        assert!(bank
+            .account_subscriptions
+            .write()
+            .unwrap()
+            .contains_key(&alice.pubkey()));
+
+        let account = bank.get_account(&alice.pubkey()).unwrap();
+        bank.check_account_subscriptions(&alice.pubkey(), &account);
+        let string = transport_receiver.poll();
+        assert!(string.is_ok());
+        if let Async::Ready(Some(response)) = string.unwrap() {
+            let expected = format!(r#"{{"jsonrpc":"2.0","method":"accountNotification","params":{{"result":{{"executable":false,"loader":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"owner":[129,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}},"subscription":0}}}}"#);
+            assert_eq!(expected, response);
+        }
+
+        bank.remove_account_subscription(&bank_sub_id, &alice.pubkey());
+        assert!(!bank
+            .account_subscriptions
+            .write()
+            .unwrap()
+            .contains_key(&alice.pubkey()));
+    }
+    #[test]
+    fn test_bank_signature_subscribe() {
+        let mint = Mint::new(100);
+        let bank = Bank::new(&mint);
+        let alice = Keypair::new();
+        let bank_sub_id = Keypair::new().pubkey();
+        let last_id = bank.last_id();
+        let tx = Transaction::system_move(&mint.keypair(), alice.pubkey(), 20, last_id, 0);
+        let signature = tx.signatures[0];
+        bank.process_transaction(&tx).unwrap();
+
+        let (subscriber, _id_receiver, mut transport_receiver) =
+            Subscriber::new_test("signatureNotification");
+        let sub_id = SubscriptionId::Number(0 as u64);
+        let sink = subscriber.assign_id(sub_id.clone()).unwrap();
+        bank.add_signature_subscription(bank_sub_id, signature, sink);
+
+        assert!(bank
+            .signature_subscriptions
+            .write()
+            .unwrap()
+            .contains_key(&signature));
+
+        bank.check_signature_subscriptions(&signature, RpcSignatureStatus::Confirmed);
+        let string = transport_receiver.poll();
+        assert!(string.is_ok());
+        if let Async::Ready(Some(response)) = string.unwrap() {
+            let expected = format!(r#"{{"jsonrpc":"2.0","method":"signatureNotification","params":{{"result":"Confirmed","subscription":0}}}}"#);
+            assert_eq!(expected, response);
+        }
+
+        bank.remove_signature_subscription(&bank_sub_id, &signature);
+        assert!(!bank
+            .signature_subscriptions
+            .write()
+            .unwrap()
+            .contains_key(&signature));
+    }
     #[test]
     fn test_first_err() {
         assert_eq!(Bank::first_err(&[Ok(())]), Ok(()));
@@ -1415,27 +1512,27 @@ mod tests {
     }
     #[test]
     fn test_par_process_entries_tick() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(1000);
-        let bank = Bank::new(&genesis_block);
+        let mint = Mint::new(1000);
+        let bank = Bank::new(&mint);
 
         // ensure bank can process a tick
-        let tick = next_entry(&genesis_block.last_id(), 1, vec![]);
+        let tick = next_entry(&mint.last_id(), 1, vec![]);
         assert_eq!(bank.par_process_entries(&[tick.clone()]), Ok(()));
         assert_eq!(bank.last_id(), tick.id);
     }
     #[test]
     fn test_par_process_entries_2_entries_collision() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
-        let bank = Bank::new(&genesis_block);
+        let mint = Mint::new(1000);
+        let bank = Bank::new(&mint);
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
 
         let last_id = bank.last_id();
 
         // ensure bank can process 2 entries that have a common account and no tick is registered
-        let tx = Transaction::system_new(&mint_keypair, keypair1.pubkey(), 2, bank.last_id());
+        let tx = Transaction::system_new(&mint.keypair(), keypair1.pubkey(), 2, bank.last_id());
         let entry_1 = next_entry(&last_id, 1, vec![tx]);
-        let tx = Transaction::system_new(&mint_keypair, keypair2.pubkey(), 2, bank.last_id());
+        let tx = Transaction::system_new(&mint.keypair(), keypair2.pubkey(), 2, bank.last_id());
         let entry_2 = next_entry(&entry_1.id, 1, vec![tx]);
         assert_eq!(bank.par_process_entries(&[entry_1, entry_2]), Ok(()));
         assert_eq!(bank.get_balance(&keypair1.pubkey()), 2);
@@ -1444,19 +1541,23 @@ mod tests {
     }
     #[test]
     fn test_par_process_entries_2_txes_collision() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
-        let bank = Bank::new(&genesis_block);
+        let mint = Mint::new(1000);
+        let bank = Bank::new(&mint);
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
+        println!("KP1 {:?}", keypair1.pubkey());
+        println!("KP2 {:?}", keypair2.pubkey());
+        println!("KP3 {:?}", keypair3.pubkey());
+        println!("Mint {:?}", mint.keypair().pubkey());
 
         // fund: put 4 in each of 1 and 2
         assert_matches!(
-            bank.transfer(4, &mint_keypair, keypair1.pubkey(), bank.last_id()),
+            bank.transfer(4, &mint.keypair(), keypair1.pubkey(), bank.last_id()),
             Ok(_)
         );
         assert_matches!(
-            bank.transfer(4, &mint_keypair, keypair2.pubkey(), bank.last_id()),
+            bank.transfer(4, &mint.keypair(), keypair2.pubkey(), bank.last_id()),
             Ok(_)
         );
 
@@ -1466,7 +1567,7 @@ mod tests {
             1,
             vec![Transaction::system_new(
                 &keypair1,
-                mint_keypair.pubkey(),
+                mint.keypair().pubkey(),
                 1,
                 bank.last_id(),
             )],
@@ -1477,7 +1578,7 @@ mod tests {
             1,
             vec![
                 Transaction::system_new(&keypair2, keypair3.pubkey(), 2, bank.last_id()), // should be fine
-                Transaction::system_new(&keypair1, mint_keypair.pubkey(), 2, bank.last_id()), // will collide
+                Transaction::system_new(&keypair1, mint.keypair().pubkey(), 2, bank.last_id()), // will collide
             ],
         );
 
@@ -1492,17 +1593,17 @@ mod tests {
     }
     #[test]
     fn test_par_process_entries_2_entries_par() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
-        let bank = Bank::new(&genesis_block);
+        let mint = Mint::new(1000);
+        let bank = Bank::new(&mint);
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
         let keypair4 = Keypair::new();
 
         //load accounts
-        let tx = Transaction::system_new(&mint_keypair, keypair1.pubkey(), 1, bank.last_id());
+        let tx = Transaction::system_new(&mint.keypair(), keypair1.pubkey(), 1, bank.last_id());
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        let tx = Transaction::system_new(&mint_keypair, keypair2.pubkey(), 1, bank.last_id());
+        let tx = Transaction::system_new(&mint.keypair(), keypair2.pubkey(), 1, bank.last_id());
         assert_eq!(bank.process_transaction(&tx), Ok(()));
 
         // ensure bank can process 2 entries that do not have a common account and no tick is registered
@@ -1518,17 +1619,17 @@ mod tests {
     }
     #[test]
     fn test_par_process_entries_2_entries_tick() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
-        let bank = Bank::new(&genesis_block);
+        let mint = Mint::new(1000);
+        let bank = Bank::new(&mint);
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
         let keypair3 = Keypair::new();
         let keypair4 = Keypair::new();
 
         //load accounts
-        let tx = Transaction::system_new(&mint_keypair, keypair1.pubkey(), 1, bank.last_id());
+        let tx = Transaction::system_new(&mint.keypair(), keypair1.pubkey(), 1, bank.last_id());
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        let tx = Transaction::system_new(&mint_keypair, keypair2.pubkey(), 1, bank.last_id());
+        let tx = Transaction::system_new(&mint.keypair(), keypair2.pubkey(), 1, bank.last_id());
         assert_eq!(bank.process_transaction(&tx), Ok(()));
 
         let last_id = bank.last_id();
@@ -1540,17 +1641,15 @@ mod tests {
         let tx = Transaction::system_new(&keypair1, keypair4.pubkey(), 1, tick.id);
         let entry_2 = next_entry(&tick.id, 1, vec![tx]);
         assert_eq!(
-            bank.par_process_entries(&[entry_1.clone(), tick.clone(), entry_2.clone()]),
+            bank.par_process_entries(&[entry_1.clone(), tick.clone(), entry_2]),
             Ok(())
         );
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
         assert_eq!(bank.get_balance(&keypair4.pubkey()), 1);
         assert_eq!(bank.last_id(), tick.id);
-        // ensure that an error is returned for an empty account (keypair2)
-        let tx = Transaction::system_new(&keypair2, keypair3.pubkey(), 1, tick.id);
-        let entry_3 = next_entry(&entry_2.id, 1, vec![tx]);
+        // ensure that errors are returned
         assert_eq!(
-            bank.par_process_entries(&[entry_3]),
+            bank.par_process_entries(&[entry_1]),
             Err(BankError::AccountNotFound)
         );
     }
@@ -1585,10 +1684,6 @@ mod tests {
             132, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0,
         ]);
-        let storage_system = Pubkey::new(&[
-            133, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0,
-        ]);
 
         assert_eq!(system_program::id(), system);
         assert_eq!(solana_native_loader::id(), native);
@@ -1597,7 +1692,6 @@ mod tests {
         assert_eq!(storage_program::id(), storage);
         assert_eq!(token_program::id(), token);
         assert_eq!(vote_program::id(), vote);
-        assert_eq!(storage_program::system_id(), storage_system);
     }
 
     #[test]
@@ -1611,172 +1705,178 @@ mod tests {
             storage_program::id(),
             token_program::id(),
             vote_program::id(),
-            storage_program::system_id(),
         ];
         assert!(ids.into_iter().all(move |id| unique.insert(id)));
     }
 
     #[test]
-    fn test_bank_record_transactions() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
-        let bank = Arc::new(Bank::new(&genesis_block));
-        let (entry_sender, entry_receiver) = channel();
-        let poh_recorder = PohRecorder::new(bank.clone(), entry_sender, bank.last_id(), None);
-        let pubkey = Keypair::new().pubkey();
-
-        let transactions = vec![
-            Transaction::system_move(&mint_keypair, pubkey, 1, genesis_block.last_id(), 0),
-            Transaction::system_move(&mint_keypair, pubkey, 1, genesis_block.last_id(), 0),
-        ];
-
-        let mut results = vec![Ok(()), Ok(())];
-        bank.record_transactions(&transactions, &results, &poh_recorder)
-            .unwrap();
-        let entries = entry_receiver.recv().unwrap();
-        assert_eq!(entries[0].transactions.len(), transactions.len());
-
-        // ProgramErrors should still be recorded
-        results[0] = Err(BankError::ProgramError(
-            1,
-            ProgramError::ResultWithNegativeTokens,
-        ));
-        bank.record_transactions(&transactions, &results, &poh_recorder)
-            .unwrap();
-        let entries = entry_receiver.recv().unwrap();
-        assert_eq!(entries[0].transactions.len(), transactions.len());
-
-        // Other BankErrors should not be recorded
-        results[0] = Err(BankError::AccountNotFound);
-        bank.record_transactions(&transactions, &results, &poh_recorder)
-            .unwrap();
-        let entries = entry_receiver.recv().unwrap();
-        assert_eq!(entries[0].transactions.len(), transactions.len() - 1);
-    }
-
-    #[test]
-    fn test_bank_ignore_program_errors() {
-        let expected_results = vec![Ok(()), Ok(())];
-        let results = vec![Ok(()), Ok(())];
-        let updated_results = Bank::ignore_program_errors(results);
-        assert_eq!(updated_results, expected_results);
-
-        let results = vec![
-            Err(BankError::ProgramError(
-                1,
-                ProgramError::ResultWithNegativeTokens,
-            )),
-            Ok(()),
-        ];
-        let updated_results = Bank::ignore_program_errors(results);
-        assert_eq!(updated_results, expected_results);
-
-        // Other BankErrors should not be ignored
-        let results = vec![Err(BankError::AccountNotFound), Ok(())];
-        let updated_results = Bank::ignore_program_errors(results);
-        assert_ne!(updated_results, expected_results);
-    }
-
-    #[test]
-    fn test_bank_storage() {
-        solana_logger::setup();
-        let (genesis_block, alice) = GenesisBlock::new(1000);
-        let bank = Bank::new(&genesis_block);
-
+    fn test_bank_purge() {
+        let alice = Mint::new(10_000);
+        let bank = Bank::new(&alice);
         let bob = Keypair::new();
-        let jack = Keypair::new();
-        let jill = Keypair::new();
+        let charlie = Keypair::new();
 
-        let x = 42;
-        let last_id = hash(&[x]);
-        let x2 = x * 2;
-        let storage_last_id = hash(&[x2]);
+        // bob should have 500
+        bank.transfer(500, &alice.keypair(), bob.pubkey(), alice.last_id())
+            .unwrap();
+        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
 
-        bank.register_tick(&last_id);
+        bank.transfer(500, &alice.keypair(), charlie.pubkey(), alice.last_id())
+            .unwrap();
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
 
-        bank.transfer(10, &alice, jill.pubkey(), last_id).unwrap();
+        bank.checkpoint();
+        bank.checkpoint();
+        assert_eq!(bank.checkpoint_depth(), 2);
+        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
+        assert_eq!(bank.get_balance(&alice.pubkey()), 9_000);
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+        assert_eq!(bank.transaction_count(), 2);
 
-        bank.transfer(10, &alice, bob.pubkey(), last_id).unwrap();
-        bank.transfer(10, &alice, jack.pubkey(), last_id).unwrap();
+        // transfer money back, so bob has zero
+        bank.transfer(500, &bob, alice.keypair().pubkey(), alice.last_id())
+            .unwrap();
+        // this has to be stored as zero in the top accounts hashmap ;)
+        assert!(bank.accounts.load_slow(&bob.pubkey()).is_some());
+        assert_eq!(bank.get_balance(&bob.pubkey()), 0);
+        // double-checks
+        assert_eq!(bank.get_balance(&alice.pubkey()), 9_500);
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+        assert_eq!(bank.transaction_count(), 3);
+        bank.purge(1);
 
-        let tx = Transaction::storage_new_advertise_last_id(
-            &bob,
-            storage_last_id,
-            last_id,
-            ENTRIES_PER_SEGMENT,
-        );
+        assert_eq!(bank.get_balance(&bob.pubkey()), 0);
+        // double-checks
+        assert_eq!(bank.get_balance(&alice.pubkey()), 9_500);
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+        assert_eq!(bank.transaction_count(), 3);
+        assert_eq!(bank.checkpoint_depth(), 1);
 
-        bank.process_transaction(&tx).unwrap();
+        bank.purge(0);
 
-        let entry_height = 0;
-
-        let tx = Transaction::storage_new_mining_proof(
-            &jack,
-            Hash::default(),
-            last_id,
-            entry_height,
-            Signature::default(),
-        );
-
-        bank.process_transaction(&tx).unwrap();
-
-        assert_eq!(bank.get_storage_entry_height(), ENTRIES_PER_SEGMENT);
-        assert_eq!(bank.get_storage_last_id(), storage_last_id);
+        // bob should still have 0, alice should have 10_000
+        assert_eq!(bank.get_balance(&bob.pubkey()), 0);
+        assert!(bank.accounts.load_slow(&bob.pubkey()).is_none());
+        // double-checks
+        assert_eq!(bank.get_balance(&alice.pubkey()), 9_500);
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+        assert_eq!(bank.transaction_count(), 3);
+        assert_eq!(bank.checkpoint_depth(), 0);
     }
 
     #[test]
-    fn test_bank_process_and_record_transactions() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
-        let bank = Arc::new(Bank::new(&genesis_block));
-        let pubkey = Keypair::new().pubkey();
+    fn test_bank_checkpoint_zero_balance() {
+        let alice = Mint::new(1_000);
+        let bank = Bank::new(&alice);
+        let bob = Keypair::new();
+        let charlie = Keypair::new();
 
-        let transactions = vec![Transaction::system_move(
-            &mint_keypair,
-            pubkey,
-            1,
-            genesis_block.last_id(),
-            0,
-        )];
-
-        let (entry_sender, entry_receiver) = channel();
-        let mut poh_recorder = PohRecorder::new(
-            bank.clone(),
-            entry_sender,
-            bank.last_id(),
-            Some(bank.tick_height() + 1),
-        );
-
-        bank.process_and_record_transactions(&transactions, &poh_recorder)
+        // bob should have 500
+        bank.transfer(500, &alice.keypair(), bob.pubkey(), alice.last_id())
             .unwrap();
-        poh_recorder.tick().unwrap();
+        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
+        assert_eq!(bank.checkpoint_depth(), 0);
 
-        let mut need_tick = true;
-        // read entries until I find mine, might be ticks...
-        while need_tick {
-            let entries = entry_receiver.recv().unwrap();
-            for entry in entries {
-                if !entry.is_tick() {
-                    assert_eq!(entry.transactions.len(), transactions.len());
-                    assert_eq!(bank.get_balance(&pubkey), 1);
-                } else {
-                    need_tick = false;
-                }
-            }
+        let account = bank.get_account(&alice.pubkey()).unwrap();
+        let default_account = Account::default();
+        assert_eq!(account.userdata, default_account.userdata);
+        assert_eq!(account.owner, default_account.owner);
+        assert_eq!(account.executable, default_account.executable);
+        assert_eq!(account.loader, default_account.loader);
+
+        bank.checkpoint();
+        assert_eq!(bank.checkpoint_depth(), 1);
+
+        // charlie should have 500, alice should have 0
+        bank.transfer(500, &alice.keypair(), charlie.pubkey(), alice.last_id())
+            .unwrap();
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+        assert_eq!(bank.get_balance(&alice.pubkey()), 0);
+
+        let account = bank.get_account(&alice.pubkey()).unwrap();
+        assert_eq!(account.tokens, default_account.tokens);
+        assert_eq!(account.userdata, default_account.userdata);
+        assert_eq!(account.owner, default_account.owner);
+        assert_eq!(account.executable, default_account.executable);
+        assert_eq!(account.loader, default_account.loader);
+    }
+
+    fn reserve_signature_with_last_id_test(
+        bank: &Bank,
+        sig: &Signature,
+        last_id: &Hash,
+    ) -> status_deque::Result<()> {
+        let mut last_ids = bank.last_ids.write().unwrap();
+        last_ids.reserve_signature_with_last_id(last_id, sig)
+    }
+
+    #[test]
+    fn test_bank_checkpoint_rollback() {
+        let alice = Mint::new(10_000);
+        let bank = Bank::new(&alice);
+        let bob = Keypair::new();
+        let charlie = Keypair::new();
+
+        // bob should have 500
+        bank.transfer(500, &alice.keypair(), bob.pubkey(), alice.last_id())
+            .unwrap();
+        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
+        bank.transfer(500, &alice.keypair(), charlie.pubkey(), alice.last_id())
+            .unwrap();
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+        assert_eq!(bank.checkpoint_depth(), 0);
+
+        bank.checkpoint();
+        bank.checkpoint();
+        assert_eq!(bank.checkpoint_depth(), 2);
+        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+        assert_eq!(bank.transaction_count(), 2);
+
+        // transfer money back, so bob has zero
+        bank.transfer(500, &bob, alice.keypair().pubkey(), alice.last_id())
+            .unwrap();
+        // this has to be stored as zero in the top accounts hashmap ;)
+        assert_eq!(bank.get_balance(&bob.pubkey()), 0);
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+        assert_eq!(bank.transaction_count(), 3);
+        bank.rollback();
+
+        // bob should have 500 again
+        assert_eq!(bank.get_balance(&bob.pubkey()), 500);
+        assert_eq!(bank.get_balance(&charlie.pubkey()), 500);
+        assert_eq!(bank.transaction_count(), 2);
+        assert_eq!(bank.checkpoint_depth(), 1);
+
+        let signature = Signature::default();
+        for i in 0..MAX_ENTRY_IDS + 1 {
+            let last_id = hash(&serialize(&i).unwrap()); // Unique hash
+            bank.register_tick(&last_id);
         }
-
-        let transactions = vec![Transaction::system_move(
-            &mint_keypair,
-            pubkey,
-            2,
-            genesis_block.last_id(),
-            0,
-        )];
-
+        assert_eq!(bank.tick_height(), MAX_ENTRY_IDS as u64 + 2);
         assert_eq!(
-            bank.process_and_record_transactions(&transactions, &poh_recorder),
-            Err(BankError::MaxHeightReached)
+            reserve_signature_with_last_id_test(&bank, &signature, &alice.last_id()),
+            Err(StatusDequeError::LastIdNotFound)
         );
+        bank.rollback();
+        assert_eq!(bank.tick_height(), 1);
+        assert_eq!(
+            reserve_signature_with_last_id_test(&bank, &signature, &alice.last_id()),
+            Ok(())
+        );
+        bank.checkpoint();
+        assert_eq!(
+            reserve_signature_with_last_id_test(&bank, &signature, &alice.last_id()),
+            Err(StatusDequeError::DuplicateSignature)
+        );
+    }
 
-        assert_eq!(bank.get_balance(&pubkey), 1);
+    #[test]
+    #[should_panic]
+    fn test_bank_rollback_panic() {
+        let alice = Mint::new(10_000);
+        let bank = Bank::new(&alice);
+        bank.rollback();
     }
 
 }

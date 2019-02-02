@@ -1,7 +1,7 @@
 //! The `fetch_stage` batches input from a UDP socket and sends it to a channel.
 
 use crate::service::Service;
-use crate::streamer::{self, PacketReceiver, PacketSender};
+use crate::streamer::{self, PacketReceiver};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
@@ -16,28 +16,20 @@ pub struct FetchStage {
 impl FetchStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(sockets: Vec<UdpSocket>, exit: Arc<AtomicBool>) -> (Self, PacketReceiver) {
-        let (sender, receiver) = channel();
-        (Self::new_with_sender(sockets, exit, &sender), receiver)
-    }
-    pub fn new_with_sender(
-        sockets: Vec<UdpSocket>,
-        exit: Arc<AtomicBool>,
-        sender: &PacketSender,
-    ) -> Self {
         let tx_sockets = sockets.into_iter().map(Arc::new).collect();
-        Self::new_multi_socket(tx_sockets, exit, &sender)
+        Self::new_multi_socket(tx_sockets, exit)
     }
-    fn new_multi_socket(
+    pub fn new_multi_socket(
         sockets: Vec<Arc<UdpSocket>>,
         exit: Arc<AtomicBool>,
-        sender: &PacketSender,
-    ) -> Self {
+    ) -> (Self, PacketReceiver) {
+        let (sender, receiver) = channel();
         let thread_hdls: Vec<_> = sockets
             .into_iter()
             .map(|socket| streamer::receiver(socket, exit.clone(), sender.clone(), "fetch-stage"))
             .collect();
 
-        Self { exit, thread_hdls }
+        (Self { exit, thread_hdls }, receiver)
     }
 
     pub fn close(&self) {

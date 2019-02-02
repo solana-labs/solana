@@ -371,7 +371,7 @@ mod test {
             // there is a chance of a false positive with bloom filters
             // assert that purged value is still in the set
             // chance of 30 consecutive false positives is 0.1^30
-            let filter = node.build_crds_filter(&node_crds);
+            let mut filter = node.build_crds_filter(&node_crds);
             assert!(filter.contains(&value_hash));
         }
 

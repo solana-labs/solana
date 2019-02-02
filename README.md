@@ -87,7 +87,7 @@ $ ./ci/run-local.sh
 Local Testnet
 ---
 
-Start your own testnet locally, instructions are in the book [Solana: Blockchain Rebuild for Scale: Getting Started](https://solana-labs.github.io/book/getting-started.html).
+Start your own testnet locally, instructions are in the book [Solana: Blockchain Rebuild for Scale: Getting Started](https://solana-labs.github.io/solana/getting-started.html).
 
 Remote Testnets
 ---

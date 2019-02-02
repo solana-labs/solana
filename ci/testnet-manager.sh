@@ -184,6 +184,7 @@ start() {
   testnet-edge)
     (
       set -x
+      NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
         ci/testnet-deploy.sh edge-testnet-solana-com ec2 us-west-1a \
@@ -207,6 +208,7 @@ start() {
   testnet-beta)
     (
       set -x
+      NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
         ci/testnet-deploy.sh beta-testnet-solana-com ec2 us-west-1a \
@@ -231,6 +233,7 @@ start() {
   testnet)
     (
       set -x
+      NO_LEDGER_VERIFY=1 \
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
         ci/testnet-deploy.sh testnet-solana-com ec2 us-west-1a \

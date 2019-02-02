@@ -20,9 +20,6 @@ ci/affects-files.sh \
   exit 0
 }
 
-# Run all BPF C tests
-make -C programs/bpf/c tests
-
 # Must be built out of band
 make -C programs/bpf/rust/noop/ all
 
@@ -37,4 +34,3 @@ else
 fi
 
 exec ci/test-stable.sh "$FEATURES"
-

@@ -29,12 +29,6 @@ pub struct Vote {
     pub tick_height: u64,
 }
 
-impl Vote {
-    pub fn new(tick_height: u64) -> Self {
-        Self { tick_height }
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub enum VoteInstruction {
     /// Register a new "vote account" to represent a particular validator in the Vote Contract,
@@ -61,11 +55,6 @@ pub fn get_max_size() -> usize {
 }
 
 impl VoteProgram {
-    pub fn new(node_id: Pubkey) -> Self {
-        let votes = VecDeque::new();
-        Self { votes, node_id }
-    }
-
     pub fn deserialize(input: &[u8]) -> Result<VoteProgram, ProgramError> {
         deserialize(input).map_err(|_| ProgramError::InvalidUserdata)
     }

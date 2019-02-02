@@ -1,6 +1,6 @@
 use crate::pubkey::Pubkey;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum SystemInstruction {
     /// Create a new account
     /// * Transaction::keys[0] - source

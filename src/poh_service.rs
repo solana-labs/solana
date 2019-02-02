@@ -1,12 +1,9 @@
 //! The `poh_service` module implements a service that records the passing of
 //! "ticks", a measure of time in the PoH stream
 
-use crate::fullnode::TpuRotationSender;
-use crate::poh_recorder::{PohRecorder, PohRecorderError};
-use crate::result::Error;
+use crate::poh_recorder::PohRecorder;
 use crate::result::Result;
 use crate::service::Service;
-use crate::tpu::TpuReturnType;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
@@ -45,11 +42,7 @@ impl PohService {
         self.join()
     }
 
-    pub fn new(
-        poh_recorder: PohRecorder,
-        config: Config,
-        to_validator_sender: TpuRotationSender,
-    ) -> Self {
+    pub fn new(poh_recorder: PohRecorder, config: Config) -> Self {
         // PohService is a headless producer, so when it exits it should notify the banking stage.
         // Since channel are not used to talk between these threads an AtomicBool is used as a
         // signal.
@@ -60,12 +53,7 @@ impl PohService {
             .name("solana-poh-service-tick_producer".to_string())
             .spawn(move || {
                 let mut poh_recorder_ = poh_recorder;
-                let return_value = Self::tick_producer(
-                    &mut poh_recorder_,
-                    config,
-                    &poh_exit_,
-                    &to_validator_sender,
-                );
+                let return_value = Self::tick_producer(&mut poh_recorder_, config, &poh_exit_);
                 poh_exit_.store(true, Ordering::Relaxed);
                 return_value
             })
@@ -77,45 +65,21 @@ impl PohService {
         }
     }
 
-    fn tick_producer(
-        poh: &mut PohRecorder,
-        config: Config,
-        poh_exit: &AtomicBool,
-        to_validator_sender: &TpuRotationSender,
-    ) -> Result<()> {
-        let max_tick_height = poh.max_tick_height();
+    fn tick_producer(poh: &mut PohRecorder, config: Config, poh_exit: &AtomicBool) -> Result<()> {
         loop {
             match config {
                 Config::Tick(num) => {
                     for _ in 1..num {
-                        let res = poh.hash();
-                        if let Err(e) = res {
-                            if let Error::PohRecorderError(PohRecorderError::MaxHeightReached) = e {
-                                // Leader rotation should only happen if a max_tick_height was specified
-                                assert!(max_tick_height.is_some());
-                                to_validator_sender.send(TpuReturnType::LeaderRotation(
-                                    max_tick_height.unwrap(),
-                                ))?;
-                            }
-                            return Err(e);
-                        }
+                        poh.hash()?;
                     }
                 }
                 Config::Sleep(duration) => {
                     sleep(duration);
                 }
             }
-            let res = poh.tick();
-            if let Err(e) = res {
-                if let Error::PohRecorderError(PohRecorderError::MaxHeightReached) = e {
-                    // Leader rotation should only happen if a max_tick_height was specified
-                    assert!(max_tick_height.is_some());
-                    to_validator_sender
-                        .send(TpuReturnType::LeaderRotation(max_tick_height.unwrap()))?;
-                }
-                return Err(e);
-            }
+            poh.tick()?;
             if poh_exit.load(Ordering::Relaxed) {
+                debug!("tick service exited");
                 return Ok(());
             }
         }
@@ -134,7 +98,7 @@ impl Service for PohService {
 mod tests {
     use super::{Config, PohService};
     use crate::bank::Bank;
-    use crate::genesis_block::GenesisBlock;
+    use crate::mint::Mint;
     use crate::poh_recorder::PohRecorder;
     use crate::result::Result;
     use crate::service::Service;
@@ -147,8 +111,8 @@ mod tests {
 
     #[test]
     fn test_poh_service() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(1);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let mint = Mint::new(1);
+        let bank = Arc::new(Bank::new(&mint));
         let prev_id = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
         let poh_recorder = PohRecorder::new(bank, entry_sender, prev_id, None);
@@ -165,7 +129,7 @@ mod tests {
                         // send some data
                         let h1 = hash(b"hello world!");
                         let tx = test_tx();
-                        poh_recorder.record(h1, vec![tx]).unwrap();
+                        assert!(poh_recorder.record(h1, vec![tx]).is_ok());
 
                         if exit.load(Ordering::Relaxed) {
                             break Ok(());
@@ -176,9 +140,7 @@ mod tests {
         };
 
         const HASHES_PER_TICK: u64 = 2;
-        let (sender, _) = channel();
-        let poh_service =
-            PohService::new(poh_recorder, Config::Tick(HASHES_PER_TICK as usize), sender);
+        let poh_service = PohService::new(poh_recorder, Config::Tick(HASHES_PER_TICK as usize));
 
         // get some events
         let mut hashes = 0;
@@ -211,8 +173,8 @@ mod tests {
         }
         exit.store(true, Ordering::Relaxed);
         poh_service.exit();
-        let _ = poh_service.join().unwrap();
-        let _ = entry_producer.join().unwrap();
+        assert!(poh_service.join().is_ok());
+        assert!(entry_producer.join().is_ok());
     }
 
 }

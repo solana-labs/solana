@@ -22,7 +22,6 @@ ci/affects-files.sh \
 
 source ci/upload-ci-artifact.sh
 ci/version-check-with-upgrade.sh nightly
-scripts/ulimit-n.sh
 
 scripts/coverage.sh
 

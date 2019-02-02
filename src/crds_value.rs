@@ -10,7 +10,8 @@ use std::fmt;
 pub enum CrdsValue {
     /// * Merge Strategy - Latest wallclock is picked
     ContactInfo(ContactInfo),
-    /// * Merge Strategy - Latest wallclock is picked
+    /// TODO, Votes need a height potentially in the userdata
+    /// * Merge Strategy - Latest height is picked
     Vote(Vote),
     /// * Merge Strategy - Latest wallclock is picked
     LeaderId(LeaderId),
@@ -28,6 +29,7 @@ pub struct LeaderId {
 pub struct Vote {
     pub transaction: Transaction,
     pub signature: Signature,
+    pub height: u64,
     pub wallclock: u64,
 }
 
@@ -69,10 +71,12 @@ impl Signable for Vote {
         #[derive(Serialize)]
         struct SignData {
             transaction: Transaction,
+            height: u64,
             wallclock: u64,
         }
         let data = SignData {
             transaction: self.transaction.clone(),
+            height: self.height,
             wallclock: self.wallclock,
         };
         serialize(&data).expect("unable to serialize Vote")
@@ -128,11 +132,11 @@ impl LeaderId {
 }
 
 impl Vote {
-    // TODO: it might make sense for the transaction to encode the wallclock in the userdata
-    pub fn new(transaction: Transaction, wallclock: u64) -> Self {
+    pub fn new(transaction: Transaction, height: u64, wallclock: u64) -> Self {
         Vote {
             transaction,
             signature: Signature::default(),
+            height,
             wallclock,
         }
     }
@@ -256,7 +260,7 @@ mod test {
         let key = v.clone().contact_info().unwrap().id;
         assert_eq!(v.label(), CrdsValueLabel::ContactInfo(key));
 
-        let v = CrdsValue::Vote(Vote::new(test_tx(), 0));
+        let v = CrdsValue::Vote(Vote::new(test_tx(), 1, 0));
         assert_eq!(v.wallclock(), 0);
         let key = v.clone().vote().unwrap().transaction.account_keys[0];
         assert_eq!(v.label(), CrdsValueLabel::Vote(key));

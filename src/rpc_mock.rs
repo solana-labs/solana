@@ -24,13 +24,14 @@ impl MockRpcClient {
     pub fn new(addr: String) -> Self {
         MockRpcClient { addr }
     }
+}
 
-    pub fn retry_make_rpc_request(
+impl RpcRequestHandler for MockRpcClient {
+    fn make_rpc_request(
         &self,
         _id: u64,
-        request: &RpcRequest,
+        request: RpcRequest,
         params: Option<Value>,
-        mut _retries: usize,
     ) -> Result<Value, Box<dyn error::Error>> {
         if self.addr == "fails" {
             return Ok(Value::Null);
@@ -67,17 +68,6 @@ impl MockRpcClient {
             _ => Value::Null,
         };
         Ok(val)
-    }
-}
-
-impl RpcRequestHandler for MockRpcClient {
-    fn make_rpc_request(
-        &self,
-        id: u64,
-        request: RpcRequest,
-        params: Option<Value>,
-    ) -> Result<Value, Box<dyn error::Error>> {
-        self.retry_make_rpc_request(id, &request, params, 0)
     }
 }
 

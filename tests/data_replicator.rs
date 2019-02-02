@@ -102,7 +102,7 @@ fn gossip_ring_large() -> result::Result<()> {
 #[test]
 fn gossip_star() {
     solana_logger::setup();
-    run_gossip_topo(10, |listen| {
+    run_gossip_topo(50, |listen| {
         let num = listen.len();
         for n in 0..(num - 1) {
             let x = 0;
@@ -121,7 +121,7 @@ fn gossip_star() {
 #[test]
 fn gossip_rstar() {
     solana_logger::setup();
-    run_gossip_topo(10, |listen| {
+    run_gossip_topo(50, |listen| {
         let num = listen.len();
         let xd = {
             let xv = listen[0].0.read().unwrap();

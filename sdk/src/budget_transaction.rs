@@ -158,20 +158,11 @@ impl BudgetTransaction for Transaction {
     ) -> Self {
         let expr = if let Some(from) = cancelable {
             BudgetExpr::Or(
-                (
-                    Condition::Timestamp(dt, dt_pubkey),
-                    Box::new(BudgetExpr::new_payment(tokens, to)),
-                ),
-                (
-                    Condition::Signature(from),
-                    Box::new(BudgetExpr::new_payment(tokens, from)),
-                ),
+                (Condition::Timestamp(dt, dt_pubkey), Payment { tokens, to }),
+                (Condition::Signature(from), Payment { tokens, to: from }),
             )
         } else {
-            BudgetExpr::After(
-                Condition::Timestamp(dt, dt_pubkey),
-                Box::new(BudgetExpr::new_payment(tokens, to)),
-            )
+            BudgetExpr::After(Condition::Timestamp(dt, dt_pubkey), Payment { tokens, to })
         };
         let instruction = Instruction::NewBudget(expr);
         Self::new(
@@ -195,20 +186,11 @@ impl BudgetTransaction for Transaction {
     ) -> Self {
         let expr = if let Some(from) = cancelable {
             BudgetExpr::Or(
-                (
-                    Condition::Signature(witness),
-                    Box::new(BudgetExpr::new_payment(tokens, to)),
-                ),
-                (
-                    Condition::Signature(from),
-                    Box::new(BudgetExpr::new_payment(tokens, from)),
-                ),
+                (Condition::Signature(witness), Payment { tokens, to }),
+                (Condition::Signature(from), Payment { tokens, to: from }),
             )
         } else {
-            BudgetExpr::After(
-                Condition::Signature(witness),
-                Box::new(BudgetExpr::new_payment(tokens, to)),
-            )
+            BudgetExpr::After(Condition::Signature(witness), Payment { tokens, to })
         };
         let instruction = Instruction::NewBudget(expr);
         Self::new(

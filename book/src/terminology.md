@@ -19,17 +19,13 @@ A fraction of a [block](#block); the smallest unit sent between
 #### block
 
 A contiguous set of [entries](#entry) on the ledger covered by a
-[vote](#ledger-vote). A [leader](#leader) produces at most one block per
-[slot](#slot).
+[vote](#ledger-vote).  The duration of a block is some cluster-configured
+number of [ticks](#tick).  Also called [voting period](#voting-period).
 
 #### block height
 
-The number of [blocks](#block) beneath the current block. The first block after
-the [genesis block](#genesis block) has height zero.
-
-#### block id
-
-The [entry id](#entry-id) of the last entry in a [block](#block).
+The number of [blocks](#block) beneath the current block plus one. The [genesis
+block](#genesis-block), for example, has block height 1.
 
 #### bootstrap leader
 
@@ -68,13 +64,6 @@ typically serves to validate and sign transactions.
 An entry on the [ledger](#ledger) either a [tick](#tick) or a [transactions
 entry](#transactions-entry).
 
-#### entry id
-
-A globally unique identifier that is also a proof that the [entry](#entry) was
-generated after a duration of time, all [transactions](#transaction) included
-in the entry, and all previous entries on the [ledger](#ledger). See [Proof of
-History](#proof-of-history).
-
 #### epoch
 
 The time, i.e. number of [slots](#slot), for which a [leader
@@ -97,7 +86,7 @@ holding nonzero [native tokens](#native-tokens).
 
 #### genesis block
 
-The configuration file that prepares the [ledger](#ledger) for the first [block](#block).
+The first [block](#block) of the [ledger](#ledger).
 
 #### hash
 
@@ -177,7 +166,7 @@ See [Proof of History](#proof-of-history).
 
 The code that interprets [instructions](#instruction).
 
-#### program id
+#### program ID
 
 The public key of the [account](#account) containing a [program](#program).
 
@@ -203,8 +192,8 @@ The private key of a [keypair](#keypair).
 
 #### slot
 
-The period of time for which a [leader](#leader) ingests transactions and
-produces a [block](#block).
+The time (i.e. number of [blocks](#block)) for which a [leader](#leader)
+ingests transactions and produces [entries](#entry).
 
 #### sol
 
@@ -263,3 +252,7 @@ that it ran, which can then be verified in less time than it took to produce.
 #### vote
 
 See [ledger vote](#ledger-vote).
+
+#### voting period
+
+The duration of a [block](#block).

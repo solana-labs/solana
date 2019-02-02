@@ -21,7 +21,9 @@ used to reference the program in subsequent transactions.
 A program may be written in any programming language that can target the
 Berkley Packet Filter (BPF) safe execution environment. The Solana SDK offers
 the best support for C programs, which is compiled to BPF using the [LLVM
-compiler infrastructure](https://llvm.org).
+compiler infrastructure](https://llvm.org). Alternatively, a client might
+choose to bypass LLVM and use Python, Lua or C++ to generate BPF directly via
+the [BPF Compiler Collection](https://github.com/iovisor/bcc) (BCC).
 
 ## Storing State between Transactions
 

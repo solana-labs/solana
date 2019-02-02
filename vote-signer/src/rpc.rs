@@ -156,7 +156,10 @@ impl VoteSigner for LocalVoteSigner {
     fn sign(&self, pubkey: Pubkey, sig: &Signature, msg: &[u8]) -> Result<Signature> {
         verify_signature(&sig, &pubkey, &msg)?;
         match self.nodes.read().unwrap().get(&pubkey) {
-            Some(voting_keypair) => Ok(voting_keypair.sign_message(&msg)),
+            Some(voting_keypair) => {
+                let sig = Signature::new(&voting_keypair.sign(&msg).as_ref());
+                Ok(sig)
+            }
             None => Err(Error::invalid_request()),
         }
     }
@@ -198,7 +201,7 @@ mod tests {
         let node_keypair = Keypair::new();
         let node_pubkey = node_keypair.pubkey();
         let msg = "This is a test";
-        let sig = node_keypair.sign_message(msg.as_bytes());
+        let sig = Signature::new(&node_keypair.sign(msg.as_bytes()).as_ref());
         let req = json!({
            "jsonrpc": "2.0",
            "id": 1,
@@ -235,7 +238,7 @@ mod tests {
         let node_pubkey = node_keypair.pubkey();
         let msg = "This is a test";
         let msg1 = "This is a Test1";
-        let sig = node_keypair.sign_message(msg.as_bytes());
+        let sig = Signature::new(&node_keypair.sign(msg.as_bytes()).as_ref());
         let req = json!({
            "jsonrpc": "2.0",
            "id": 1,
@@ -266,7 +269,7 @@ mod tests {
         let node_keypair = Keypair::new();
         let node_pubkey = node_keypair.pubkey();
         let msg = "This is a test";
-        let sig = node_keypair.sign_message(msg.as_bytes());
+        let sig = Signature::new(&node_keypair.sign(msg.as_bytes()).as_ref());
         let req = json!({
            "jsonrpc": "2.0",
            "id": 1,
@@ -298,7 +301,7 @@ mod tests {
         let node_pubkey = node_keypair.pubkey();
         let msg = "This is a test";
         let msg1 = "This is a Test1";
-        let sig = node_keypair.sign_message(msg.as_bytes());
+        let sig = Signature::new(&node_keypair.sign(msg.as_bytes()).as_ref());
         let req = json!({
            "jsonrpc": "2.0",
            "id": 1,
@@ -329,7 +332,7 @@ mod tests {
         let node_keypair = Keypair::new();
         let node_pubkey = node_keypair.pubkey();
         let msg = "This is a test";
-        let sig = node_keypair.sign_message(msg.as_bytes());
+        let sig = Signature::new(&node_keypair.sign(msg.as_bytes()).as_ref());
 
         let req = json!({
            "jsonrpc": "2.0",
@@ -393,7 +396,7 @@ mod tests {
         let node_keypair = Keypair::new();
         let node_pubkey = node_keypair.pubkey();
         let msg = "This is a test";
-        let sig = node_keypair.sign_message(msg.as_bytes());
+        let sig = Signature::new(&node_keypair.sign(msg.as_bytes()).as_ref());
         let req = json!({
            "jsonrpc": "2.0",
            "id": 1,
@@ -424,7 +427,7 @@ mod tests {
         let node_keypair = Keypair::new();
         let node_pubkey = node_keypair.pubkey();
         let msg = "This is a test";
-        let sig = node_keypair.sign_message(msg.as_bytes());
+        let sig = Signature::new(&node_keypair.sign(msg.as_bytes()).as_ref());
 
         let req = json!({
            "jsonrpc": "2.0",
@@ -473,7 +476,7 @@ mod tests {
         let node_pubkey = node_keypair.pubkey();
         let msg = "This is a test";
         let msg1 = "This is a Test";
-        let sig = node_keypair.sign_message(msg.as_bytes());
+        let sig = Signature::new(&node_keypair.sign(msg.as_bytes()).as_ref());
 
         let req = json!({
            "jsonrpc": "2.0",

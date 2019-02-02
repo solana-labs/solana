@@ -51,7 +51,7 @@ fn main() {
         println!("cargo:warning=(not a warning) Compiling C-based BPF programs");
         let status = Command::new("make")
             .current_dir("../../bpf/c")
-            .arg("programs")
+            .arg("all")
             .arg(&out_dir)
             .status()
             .expect("Failed to build C-based BPF programs");

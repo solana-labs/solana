@@ -62,7 +62,7 @@ fn retransmit(
         //find my index (my ix is the same as the first node with smaller stake)
         let my_index = peers
             .iter()
-            .position(|ci| bank.get_balance(&ci.id) <= bank.get_balance(&my_id));
+            .position(|ci| bank.get_stake(&ci.id) <= bank.get_stake(&my_id));
         //find my layer
         let locality = ClusterInfo::localize(
             &layer_indices,
@@ -123,7 +123,7 @@ pub struct RetransmitStage {
 }
 
 impl RetransmitStage {
-    #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(
         bank: &Arc<Bank>,
         db_ledger: Arc<DbLedger>,
@@ -134,7 +134,6 @@ impl RetransmitStage {
         repair_socket: Arc<UdpSocket>,
         fetch_stage_receiver: BlobReceiver,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
-        exit: Arc<AtomicBool>,
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (retransmit_sender, retransmit_receiver) = channel();
 
@@ -158,7 +157,6 @@ impl RetransmitStage {
             repair_socket,
             leader_scheduler,
             done,
-            exit,
         );
 
         let thread_hdls = vec![t_retransmit, t_window];

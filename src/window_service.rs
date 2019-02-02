@@ -15,7 +15,7 @@ use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, RwLock};
 use std::thread::{Builder, JoinHandle};
@@ -86,7 +86,7 @@ fn recv_window(
     for b in dq {
         let (pix, meta_size) = {
             let p = b.read().unwrap();
-            (p.index(), p.meta.size)
+            (p.index()?, p.meta.size)
         };
 
         trace!("{} window pix: {} size: {}", id, pix, meta_size);
@@ -129,7 +129,6 @@ pub fn window_service(
     repair_socket: Arc<UdpSocket>,
     leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     done: Arc<AtomicBool>,
-    exit: Arc<AtomicBool>,
 ) -> JoinHandle<()> {
     Builder::new()
         .name("solana-window".to_string())
@@ -140,9 +139,6 @@ pub fn window_service(
             let id = cluster_info.read().unwrap().id();
             trace!("{}: RECV_WINDOW started", id);
             loop {
-                if exit.load(Ordering::Relaxed) {
-                    break;
-                }
                 if let Err(e) = recv_window(
                     &db_ledger,
                     &id,
@@ -221,6 +217,7 @@ mod test {
     use crate::entry::{make_consecutive_blobs, Entry};
     use crate::leader_scheduler::LeaderScheduler;
 
+    use crate::packet::{SharedBlob, PACKET_DATA_SIZE};
     use crate::streamer::{blob_receiver, responder};
     use crate::window_service::{repair_backoff, window_service};
     use solana_sdk::hash::Hash;
@@ -277,7 +274,6 @@ mod test {
             Arc::new(tn.sockets.repair),
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(me_id))),
             done,
-            exit.clone(),
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
@@ -347,7 +343,6 @@ mod test {
             Arc::new(tn.sockets.repair),
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(me_id))),
             done,
-            exit.clone(),
         );
         let t_responder = {
             let (s_responder, r_responder) = channel();
@@ -355,12 +350,18 @@ mod test {
                 tn.sockets.tvu.into_iter().map(Arc::new).collect();
             let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
             let mut msgs = Vec::new();
-            let blobs =
-                make_consecutive_blobs(&me_id, 14u64, 0, Default::default(), &tn.info.gossip);
-
             for v in 0..10 {
                 let i = 9 - v;
-                msgs.push(blobs[i].clone());
+                let b = SharedBlob::default();
+                {
+                    let mut w = b.write().unwrap();
+                    w.set_index(i).unwrap();
+                    w.set_id(&me_id).unwrap();
+                    assert_eq!(i, w.index().unwrap());
+                    w.meta.size = PACKET_DATA_SIZE;
+                    w.meta.set_addr(&tn.info.gossip);
+                }
+                msgs.push(b);
             }
             s_responder.send(msgs).expect("send");
 
@@ -368,7 +369,16 @@ mod test {
             let mut msgs1 = Vec::new();
             for v in 1..5 {
                 let i = 9 + v;
-                msgs1.push(blobs[i].clone());
+                let b = SharedBlob::default();
+                {
+                    let mut w = b.write().unwrap();
+                    w.set_index(i).unwrap();
+                    w.set_id(&me_id).unwrap();
+                    assert_eq!(i, w.index().unwrap());
+                    w.meta.size = PACKET_DATA_SIZE;
+                    w.meta.set_addr(&tn.info.gossip);
+                }
+                msgs1.push(b);
             }
             s_responder.send(msgs1).expect("send");
             t_responder

@@ -38,5 +38,4 @@ if [[ $(sysctl -n net.core.wmem_max) -lt 1610612736 ]]; then
 fi
 
 set -x
-export SOLANA_DYNAMIC_NODES=120
 exec cargo test --release --features=erasure test_multi_node_dynamic_network -- --ignored

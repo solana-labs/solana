@@ -21,7 +21,7 @@ impl RpcClient {
     }
 
     pub fn new_with_timeout(addr: SocketAddr, timeout: Duration) -> Self {
-        let addr = get_rpc_request_str(addr, false);
+        let addr = get_rpc_request_str(addr);
         let client = reqwest::Client::builder()
             .timeout(timeout)
             .build()
@@ -30,7 +30,11 @@ impl RpcClient {
     }
 
     pub fn new_from_socket(addr: SocketAddr) -> Self {
-        Self::new(get_rpc_request_str(addr, false))
+        let addr = get_rpc_request_str(addr);
+        RpcClient {
+            client: reqwest::Client::new(),
+            addr,
+        }
     }
 
     pub fn retry_make_rpc_request(
@@ -77,12 +81,8 @@ impl RpcClient {
     }
 }
 
-pub fn get_rpc_request_str(rpc_addr: SocketAddr, tls: bool) -> String {
-    if tls {
-        format!("https://{}", rpc_addr)
-    } else {
-        format!("http://{}", rpc_addr)
-    }
+pub fn get_rpc_request_str(rpc_addr: SocketAddr) -> String {
+    format!("http://{}", rpc_addr)
 }
 
 pub trait RpcRequestHandler {
@@ -269,9 +269,11 @@ mod tests {
             RpcRequest::GetBalance,
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])),
         );
+        assert!(balance.is_ok());
         assert_eq!(balance.unwrap().as_u64().unwrap(), 50);
 
         let last_id = rpc_client.make_rpc_request(2, RpcRequest::GetLastId, None);
+        assert!(last_id.is_ok());
         assert_eq!(
             last_id.unwrap().as_str().unwrap(),
             "deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"
@@ -319,6 +321,7 @@ mod tests {
             Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhw"])),
             10,
         );
+        assert!(balance.is_ok());
         assert_eq!(balance.unwrap().as_u64().unwrap(), 5);
     }
 }

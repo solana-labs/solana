@@ -15,8 +15,8 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "id": 193,
-  "iteration": 1547500097655,
+  "id": 79,
+  "iteration": 1544546712840,
   "links": [
     {
       "asDropdown": true,
@@ -1201,230 +1201,6 @@
       "valueName": "avg"
     },
     {
-      "cacheTimeout": null,
-      "colorBackground": false,
-      "colorValue": false,
-      "colors": [
-        "#299c46",
-        "rgba(237, 129, 40, 0.89)",
-        "#d44a3a"
-      ],
-      "datasource": "Solana Metrics (read-only)",
-      "format": "none",
-      "gauge": {
-        "maxValue": 100,
-        "minValue": 0,
-        "show": false,
-        "thresholdLabels": false,
-        "thresholdMarkers": true
-      },
-      "gridPos": {
-        "h": 2,
-        "w": 8,
-        "x": 0,
-        "y": 4
-      },
-      "id": 44,
-      "interval": null,
-      "links": [],
-      "mappingType": 1,
-      "mappingTypes": [
-        {
-          "name": "value to text",
-          "value": 1
-        },
-        {
-          "name": "range to text",
-          "value": 2
-        }
-      ],
-      "maxDataPoints": 100,
-      "nullPointMode": "connected",
-      "nullText": null,
-      "postfix": "",
-      "postfixFontSize": "50%",
-      "prefix": "",
-      "prefixFontSize": "50%",
-      "rangeMaps": [
-        {
-          "from": "null",
-          "text": "N/A",
-          "to": "null"
-        }
-      ],
-      "sparkline": {
-        "fillColor": "rgba(31, 118, 189, 0.18)",
-        "full": false,
-        "lineColor": "rgb(31, 120, 193)",
-        "show": false
-      },
-      "tableColumn": "last",
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "hide": false,
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT last(\"host_id\") FROM \"$testnet\".\"autogen\".\"counter-replay_stage-new_leader\" WHERE $timeFilter \n",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "table",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "thresholds": "",
-      "title": "Current Leader",
-      "type": "singlestat",
-      "valueFontSize": "70%",
-      "valueMaps": [
-        {
-          "op": "=",
-          "text": "N/A",
-          "value": "null"
-        }
-      ],
-      "valueName": "avg"
-    },
-    {
-      "cacheTimeout": null,
-      "colorBackground": false,
-      "colorValue": false,
-      "colors": [
-        "#299c46",
-        "rgba(237, 129, 40, 0.89)",
-        "#d44a3a"
-      ],
-      "datasource": "Solana Metrics (read-only)",
-      "format": "none",
-      "gauge": {
-        "maxValue": 100,
-        "minValue": 0,
-        "show": false,
-        "thresholdLabels": false,
-        "thresholdMarkers": true
-      },
-      "gridPos": {
-        "h": 2,
-        "w": 6,
-        "x": 8,
-        "y": 4
-      },
-      "id": 45,
-      "interval": null,
-      "links": [],
-      "mappingType": 1,
-      "mappingTypes": [
-        {
-          "name": "value to text",
-          "value": 1
-        },
-        {
-          "name": "range to text",
-          "value": 2
-        }
-      ],
-      "maxDataPoints": 100,
-      "nullPointMode": "connected",
-      "nullText": null,
-      "postfix": "",
-      "postfixFontSize": "50%",
-      "prefix": "",
-      "prefixFontSize": "50%",
-      "rangeMaps": [
-        {
-          "from": "null",
-          "text": "N/A",
-          "to": "null"
-        }
-      ],
-      "sparkline": {
-        "fillColor": "rgba(31, 118, 189, 0.18)",
-        "full": false,
-        "lineColor": "rgb(31, 120, 193)",
-        "show": false
-      },
-      "tableColumn": "last",
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "hide": false,
-          "orderByTime": "ASC",
-          "policy": "default",
-          "query": "SELECT last(\"count\") FROM \"$testnet\".\"autogen\".\"counter-replay_stage-new_leader\" WHERE $timeFilter \n",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "table",
-          "select": [
-            [
-              {
-                "params": [
-                  "value"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "mean"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "thresholds": "",
-      "title": "Last Leader Rotation Tick",
-      "type": "singlestat",
-      "valueFontSize": "70%",
-      "valueMaps": [
-        {
-          "op": "=",
-          "text": "N/A",
-          "value": "null"
-        }
-      ],
-      "valueName": "avg"
-    },
-    {
       "aliasColors": {},
       "bars": true,
       "dashLength": 10,
@@ -1432,10 +1208,10 @@
       "datasource": "Solana Metrics (read-only)",
       "fill": 1,
       "gridPos": {
-        "h": 8,
+        "h": 10,
         "w": 14,
         "x": 0,
-        "y": 6
+        "y": 4
       },
       "id": 11,
       "legend": {
@@ -5660,7 +5436,7 @@
         "x": 0,
         "y": 71
       },
-      "id": 40,
+      "id": 42,
       "legend": {
         "alignAsTable": false,
         "avg": false,
@@ -5838,127 +5614,6 @@
       }
     },
     {
-      "aliasColors": {
-        "cluster-info.repair": "#ba43a9",
-        "counter-replay_stage-new_leader.last": "#00ffbb",
-        "window-service.receive": "#b7dbab",
-        "window-stage.consumed": "#5195ce"
-      },
-      "bars": false,
-      "dashLength": 10,
-      "dashes": false,
-      "datasource": "Solana Metrics (read-only)",
-      "fill": 1,
-      "gridPos": {
-        "h": 5,
-        "w": 12,
-        "x": 12,
-        "y": 71
-      },
-      "id": 43,
-      "legend": {
-        "alignAsTable": false,
-        "avg": false,
-        "current": false,
-        "max": false,
-        "min": false,
-        "show": true,
-        "total": false,
-        "values": false
-      },
-      "lines": false,
-      "linewidth": 1,
-      "links": [],
-      "nullPointMode": "null",
-      "percentage": false,
-      "pointradius": 2,
-      "points": true,
-      "renderer": "flot",
-      "seriesOverrides": [],
-      "spaceLength": 10,
-      "stack": false,
-      "steppedLine": false,
-      "targets": [
-        {
-          "groupBy": [
-            {
-              "params": [
-                "$__interval"
-              ],
-              "type": "time"
-            },
-            {
-              "params": [
-                "null"
-              ],
-              "type": "fill"
-            }
-          ],
-          "measurement": "counter-cluster_info-vote-count",
-          "orderByTime": "ASC",
-          "policy": "autogen",
-          "query": "SELECT last(\"count\") FROM \"$testnet\".\"autogen\".\"counter-replay_stage-new_leader\" WHERE $timeFilter GROUP BY time($__interval)",
-          "rawQuery": true,
-          "refId": "A",
-          "resultFormat": "time_series",
-          "select": [
-            [
-              {
-                "params": [
-                  "count"
-                ],
-                "type": "field"
-              },
-              {
-                "params": [],
-                "type": "sum"
-              }
-            ]
-          ],
-          "tags": []
-        }
-      ],
-      "thresholds": [],
-      "timeFrom": null,
-      "timeShift": null,
-      "title": "Leader Change",
-      "tooltip": {
-        "shared": true,
-        "sort": 0,
-        "value_type": "individual"
-      },
-      "type": "graph",
-      "xaxis": {
-        "buckets": null,
-        "mode": "time",
-        "name": null,
-        "show": true,
-        "values": []
-      },
-      "yaxes": [
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        },
-        {
-          "format": "short",
-          "label": null,
-          "logBase": 1,
-          "max": null,
-          "min": null,
-          "show": true
-        }
-      ],
-      "yaxis": {
-        "align": false,
-        "alignLevel": null
-      }
-    },
-    {
       "collapsed": false,
       "gridPos": {
         "h": 1,
@@ -5966,7 +5621,7 @@
         "x": 0,
         "y": 76
       },
-      "id": 41,
+      "id": 40,
       "panels": [],
       "title": "Signature Verification",
       "type": "row"
@@ -5984,7 +5639,7 @@
         "x": 0,
         "y": 77
       },
-      "id": 42,
+      "id": 41,
       "legend": {
         "avg": false,
         "current": false,
@@ -6090,7 +5745,6 @@
   "refresh": "60s",
   "schemaVersion": 16,
   "style": "dark",
-  "tags": [],
   "templating": {
     "list": [
       {
@@ -6120,12 +5774,12 @@
         "allValue": null,
         "datasource": "Solana Metrics (read-only)",
         "hide": 0,
-        "includeAll": true,
+        "includeAll": false,
         "label": "HostID",
         "multi": false,
         "name": "hostid",
         "options": [],
-        "query": "SELECT DISTINCT(\"host_id\") FROM \"$testnet\".\"autogen\".\"counter-fullnode-new\" ",
+        "query": "SELECT DISTINCT(\"host_id\") FROM \"$testnet\".\"autogen\".\"counter-bank-process_transactions-txs\" ",
         "refresh": 2,
         "regex": "",
         "sort": 1,
@@ -6169,5 +5823,5 @@
   "timezone": "",
   "title": "Testnet Monitor (edge)",
   "uid": "testnet-edge",
-  "version": 114
+  "version": 113
 }

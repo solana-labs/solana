@@ -2,6 +2,7 @@
 #
 # Send a metrics datapoint
 #
+set -e
 
 point=$1
 if [[ -z $point ]]; then
@@ -17,4 +18,3 @@ fi
 
 echo "https://metrics.solana.com:8086/write?db=${INFLUX_DATABASE}&u=${INFLUX_USERNAME}&p=${INFLUX_PASSWORD}" \
   | xargs curl --max-time 5 -XPOST --data-binary "$point"
-exit 0

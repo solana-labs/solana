@@ -19,17 +19,17 @@ fn bench_write_blobs(bench: &mut Bencher, blobs: &mut Vec<Blob>, ledger_path: &s
 
     bench.iter(move || {
         for blob in blobs.iter_mut() {
-            let index = blob.index();
+            let index = blob.index().unwrap();
 
             db_ledger
                 .put_data_blob_bytes(
-                    blob.slot(),
+                    blob.slot().unwrap(),
                     index,
-                    &blob.data[..BLOB_HEADER_SIZE + blob.size()],
+                    &blob.data[..BLOB_HEADER_SIZE + blob.size().unwrap()],
                 )
                 .unwrap();
 
-            blob.set_index(index + num_blobs as u64);
+            blob.set_index(index + num_blobs as u64).unwrap();
         }
     });
 
@@ -50,8 +50,8 @@ fn setup_read_bench(
     // Convert the entries to blobs, write the blobs to the ledger
     let mut blobs = entries.to_blobs();
     for (index, b) in blobs.iter_mut().enumerate() {
-        b.set_index(index as u64);
-        b.set_slot(slot);
+        b.set_index(index as u64).unwrap();
+        b.set_slot(slot).unwrap();
     }
     db_ledger
         .write_blobs(&blobs)
@@ -67,7 +67,7 @@ fn bench_write_small(bench: &mut Bencher) {
     let entries = make_tiny_test_entries(num_entries);
     let mut blobs = entries.to_blobs();
     for (index, b) in blobs.iter_mut().enumerate() {
-        b.set_index(index as u64);
+        b.set_index(index as u64).unwrap();
     }
     bench_write_blobs(bench, &mut blobs, &ledger_path);
 }
@@ -81,7 +81,7 @@ fn bench_write_big(bench: &mut Bencher) {
     let entries = make_large_test_entries(num_entries);
     let mut blobs = entries.to_blobs();
     for (index, b) in blobs.iter_mut().enumerate() {
-        b.set_index(index as u64);
+        b.set_index(index as u64).unwrap();
     }
 
     bench_write_blobs(bench, &mut blobs, &ledger_path);
@@ -159,8 +159,8 @@ fn bench_insert_data_blob_small(bench: &mut Bencher) {
 
     bench.iter(move || {
         for blob in blobs.iter_mut() {
-            let index = blob.index();
-            blob.set_index(index + num_entries as u64);
+            let index = blob.index().unwrap();
+            blob.set_index(index + num_entries as u64).unwrap();
         }
         db_ledger.write_blobs(&blobs).unwrap();
     });
@@ -181,9 +181,12 @@ fn bench_insert_data_blob_big(bench: &mut Bencher) {
 
     bench.iter(move || {
         for blob in shared_blobs.iter_mut() {
-            let index = blob.read().unwrap().index();
+            let index = blob.read().unwrap().index().unwrap();
             db_ledger.write_shared_blobs(vec![blob.clone()]).unwrap();
-            blob.write().unwrap().set_index(index + num_entries as u64);
+            blob.write()
+                .unwrap()
+                .set_index(index + num_entries as u64)
+                .unwrap();
         }
     });
 

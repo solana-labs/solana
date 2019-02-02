@@ -54,7 +54,6 @@ loadConfigFile() {
   [[ -n $leaderRotation ]] || usage "Config file invalid, leaderRotation unspecified: $configFile"
   [[ ${#fullnodeIpList[@]} -gt 0 ]] || usage "Config file invalid, fullnodeIpList unspecified: $configFile"
   [[ ${#fullnodeIpListPrivate[@]} -gt 0 ]] || usage "Config file invalid, fullnodeIpListPrivate unspecified: $configFile"
-  [[ ${#fullnodeIpList[@]} -eq ${#fullnodeIpListPrivate[@]} ]] || usage "Config file invalid, fullnodeIpList/fullnodeIpListPrivate length mismatch: $configFile"
 
   if $publicNetwork; then
     entrypointIp=${fullnodeIpList[0]}

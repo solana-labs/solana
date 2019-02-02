@@ -9,23 +9,21 @@ use bincode::deserialize;
 use solana::client::mk_client;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
 use solana::db_ledger::DbLedger;
-use solana::db_ledger::{create_tmp_sample_ledger, get_tmp_ledger_path, tmp_copy_ledger};
+use solana::db_ledger::{create_tmp_genesis, get_tmp_ledger_path, tmp_copy_ledger};
 use solana::entry::Entry;
-use solana::fullnode::{Fullnode, FullnodeConfig};
+use solana::fullnode::Fullnode;
 use solana::leader_scheduler::LeaderScheduler;
 use solana::replicator::Replicator;
-use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana::streamer::blob_receiver;
-use solana::voting_keypair::VotingKeypair;
-use solana_sdk::hash::Hash;
+use solana::vote_signer_proxy::VoteSignerProxy;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::transaction::Transaction;
+use solana_vote_signer::rpc::LocalVoteSigner;
 use std::fs::remove_dir_all;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
-use std::sync::{Arc, RwLock};
-use std::thread::sleep;
+use std::sync::Arc;
 use std::time::Duration;
 
 #[test]
@@ -40,80 +38,65 @@ fn test_replicator_startup() {
     let leader_info = leader_node.info.clone();
 
     let leader_ledger_path = "replicator_test_leader_ledger";
-    let (mint_keypair, leader_ledger_path, _last_entry_height, _last_entry_id) =
-        create_tmp_sample_ledger(leader_ledger_path, 1_000_000_000, 0, leader_info.id, 1);
+    let (mint, leader_ledger_path) = create_tmp_genesis(leader_ledger_path, 100, leader_info.id, 1);
 
     let validator_ledger_path =
         tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");
 
     {
-        let voting_keypair = VotingKeypair::new_local(&leader_keypair);
+        let signer_proxy =
+            VoteSignerProxy::new(&leader_keypair, Box::new(LocalVoteSigner::default()));
 
-        let mut fullnode_config = FullnodeConfig::default();
-        fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
         let leader = Fullnode::new(
             leader_node,
-            &leader_keypair,
             &leader_ledger_path,
-            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-                leader_info.id.clone(),
-            ))),
-            voting_keypair,
+            leader_keypair,
+            Arc::new(signer_proxy),
             None,
-            &fullnode_config,
+            false,
+            LeaderScheduler::from_bootstrap_leader(leader_info.id.clone()),
+            None,
         );
 
         let validator_keypair = Arc::new(Keypair::new());
-        let voting_keypair = VotingKeypair::new_local(&validator_keypair);
-
-        let mut leader_client = mk_client(&leader_info);
-
-        let last_id = leader_client.get_last_id();
-        let mut leader_client = mk_client(&leader_info);
-
-        leader_client
-            .transfer(10, &mint_keypair, validator_keypair.pubkey(), &last_id)
-            .unwrap();
-
+        let signer_proxy =
+            VoteSignerProxy::new(&validator_keypair, Box::new(LocalVoteSigner::default()));
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
         #[cfg(feature = "chacha")]
         let validator_node_info = validator_node.info.clone();
 
         let validator = Fullnode::new(
             validator_node,
-            &validator_keypair,
             &validator_ledger_path,
-            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-                leader_info.id,
-            ))),
-            voting_keypair,
-            Some(&leader_info),
-            &fullnode_config,
+            validator_keypair,
+            Arc::new(signer_proxy),
+            Some(leader_info.gossip),
+            false,
+            LeaderScheduler::from_bootstrap_leader(leader_info.id),
+            None,
         );
+
+        let mut leader_client = mk_client(&leader_info);
 
         let bob = Keypair::new();
 
-        info!("starting transfers..");
-
-        for _ in 0..64 {
-            let last_id = leader_client.get_last_id();
-            leader_client
-                .transfer(1, &mint_keypair, bob.pubkey(), &last_id)
-                .unwrap();
-            sleep(Duration::from_millis(200));
-        }
+        let last_id = leader_client.get_last_id();
+        leader_client
+            .transfer(1, &mint.keypair(), bob.pubkey(), &last_id)
+            .unwrap();
 
         let replicator_keypair = Keypair::new();
 
-        info!("giving replicator tokens..");
-
-        let last_id = leader_client.get_last_id();
         // Give the replicator some tokens
         let amount = 1;
-        let mut tx =
-            Transaction::system_new(&mint_keypair, replicator_keypair.pubkey(), amount, last_id);
+        let mut tx = Transaction::system_new(
+            &mint.keypair(),
+            replicator_keypair.pubkey(),
+            amount,
+            last_id,
+        );
         leader_client
-            .retry_transfer(&mint_keypair, &mut tx, 5)
+            .retry_transfer(&mint.keypair(), &mut tx, 5)
             .unwrap();
 
         info!("starting replicator node");
@@ -123,21 +106,18 @@ fn test_replicator_startup() {
         let leader_info = NodeInfo::new_entry_point(&leader_info.gossip);
 
         let replicator = Replicator::new(
-            replicator_ledger_path,
+            Some(replicator_ledger_path),
             replicator_node,
             &leader_info,
             &replicator_keypair,
-            None,
         )
         .unwrap();
-
-        info!("started replicator..");
 
         // Create a client which downloads from the replicator and see that it
         // can respond with blobs.
         let tn = Node::new_localhost();
         let cluster_info = ClusterInfo::new(tn.info.clone());
-        let repair_index = replicator.entry_height();
+        let repair_index = 1;
         let req = cluster_info
             .window_index_request_bytes(repair_index)
             .unwrap();
@@ -152,7 +132,7 @@ fn test_replicator_startup() {
             tn.info.id, replicator_info.gossip
         );
 
-        let mut received_blob = false;
+        let mut num_txs = 0;
         for _ in 0..5 {
             repair_socket.send_to(&req, replicator_info.gossip).unwrap();
 
@@ -161,19 +141,16 @@ fn test_replicator_startup() {
             if let Ok(blobs) = x {
                 for b in blobs {
                     let br = b.read().unwrap();
-                    assert!(br.index() == repair_index);
+                    assert!(br.index().unwrap() == repair_index);
                     let entry: Entry = deserialize(&br.data()[..br.meta.size]).unwrap();
                     info!("entry: {:?}", entry);
-                    assert_ne!(entry.id, Hash::default());
-                    received_blob = true;
+                    num_txs = entry.transactions.len();
                 }
                 break;
             }
         }
         exit.store(true, Ordering::Relaxed);
         t_receiver.join().unwrap();
-
-        assert!(received_blob);
 
         // The replicator will not submit storage proofs if
         // chacha is not enabled
@@ -182,14 +159,10 @@ fn test_replicator_startup() {
             use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
             use std::thread::sleep;
 
-            info!(
-                "looking for pubkeys for entry: {}",
-                replicator.entry_height()
-            );
             let rpc_client = RpcClient::new_from_socket(validator_node_info.rpc);
             let mut non_zero_pubkeys = false;
-            for _ in 0..60 {
-                let params = json!([replicator.entry_height()]);
+            for _ in 0..30 {
+                let params = json!([0]);
                 let pubkeys = rpc_client
                     .make_rpc_request(1, RpcRequest::GetStoragePubkeysForEntryHeight, Some(params))
                     .unwrap();
@@ -203,6 +176,9 @@ fn test_replicator_startup() {
             assert!(non_zero_pubkeys);
         }
 
+        // Check that some ledger was downloaded
+        assert!(num_txs != 0);
+
         replicator.close();
         validator.exit();
         leader.close().expect("Expected successful node closure");
@@ -210,120 +186,6 @@ fn test_replicator_startup() {
 
     DbLedger::destroy(&leader_ledger_path).expect("Expected successful database destruction");
     DbLedger::destroy(&replicator_ledger_path).expect("Expected successful database destruction");
-    let _ignored = remove_dir_all(&leader_ledger_path);
-    let _ignored = remove_dir_all(&replicator_ledger_path);
-}
-
-#[test]
-fn test_replicator_startup_leader_hang() {
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    use std::time::Duration;
-
-    solana_logger::setup();
-    info!("starting replicator test");
-
-    let replicator_ledger_path = &get_tmp_ledger_path("replicator_test_replicator_ledger");
-    let leader_ledger_path = "replicator_test_leader_ledger";
-
-    {
-        let replicator_keypair = Keypair::new();
-
-        info!("starting replicator node");
-        let replicator_node = Node::new_localhost_with_pubkey(replicator_keypair.pubkey());
-
-        let fake_gossip = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
-        let leader_info = NodeInfo::new_entry_point(&fake_gossip);
-
-        let replicator_res = Replicator::new(
-            replicator_ledger_path,
-            replicator_node,
-            &leader_info,
-            &replicator_keypair,
-            Some(Duration::from_secs(3)),
-        );
-
-        assert!(replicator_res.is_err());
-    }
-
-    let _ignored = DbLedger::destroy(&leader_ledger_path);
-    let _ignored = DbLedger::destroy(&replicator_ledger_path);
-    let _ignored = remove_dir_all(&leader_ledger_path);
-    let _ignored = remove_dir_all(&replicator_ledger_path);
-}
-
-#[test]
-fn test_replicator_startup_ledger_hang() {
-    use std::net::UdpSocket;
-
-    solana_logger::setup();
-    info!("starting replicator test");
-    let replicator_ledger_path = &get_tmp_ledger_path("replicator_test_replicator_ledger");
-
-    info!("starting leader node");
-    let leader_keypair = Arc::new(Keypair::new());
-    let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-    let leader_info = leader_node.info.clone();
-
-    let leader_ledger_path = "replicator_test_leader_ledger";
-    let (_mint_keypair, leader_ledger_path, _last_entry_height, _last_entry_id) =
-        create_tmp_sample_ledger(leader_ledger_path, 100, 0, leader_info.id, 1);
-
-    let validator_ledger_path =
-        tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");
-
-    {
-        let voting_keypair = VotingKeypair::new_local(&leader_keypair);
-
-        let _ = Fullnode::new(
-            leader_node,
-            &leader_keypair,
-            &leader_ledger_path,
-            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-                leader_info.id.clone(),
-            ))),
-            voting_keypair,
-            None,
-            &FullnodeConfig::default(),
-        );
-
-        let validator_keypair = Arc::new(Keypair::new());
-        let voting_keypair = VotingKeypair::new_local(&validator_keypair);
-        let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
-
-        let _ = Fullnode::new(
-            validator_node,
-            &validator_keypair,
-            &validator_ledger_path,
-            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-                leader_info.id,
-            ))),
-            voting_keypair,
-            Some(&leader_info),
-            &FullnodeConfig::default(),
-        );
-
-        info!("starting replicator node");
-        let bad_keys = Keypair::new();
-        let mut replicator_node = Node::new_localhost_with_pubkey(bad_keys.pubkey());
-
-        // Pass bad TVU sockets to prevent successful ledger download
-        replicator_node.sockets.tvu = vec![UdpSocket::bind("0.0.0.0:0").unwrap()];
-
-        let leader_info = NodeInfo::new_entry_point(&leader_info.gossip);
-
-        let replicator_res = Replicator::new(
-            replicator_ledger_path,
-            replicator_node,
-            &leader_info,
-            &bad_keys,
-            Some(Duration::from_secs(3)),
-        );
-
-        assert!(replicator_res.is_err());
-    }
-
-    let _ignored = DbLedger::destroy(&leader_ledger_path);
-    let _ignored = DbLedger::destroy(&replicator_ledger_path);
     let _ignored = remove_dir_all(&leader_ledger_path);
     let _ignored = remove_dir_all(&replicator_ledger_path);
 }

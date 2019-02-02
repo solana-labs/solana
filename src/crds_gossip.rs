@@ -540,7 +540,7 @@ mod test {
         assert_eq!(res.err(), Some(CrdsGossipError::BadPruneDestination));
         //correct dest
         res = crds_gossip.process_prune_msg(ci.id, id, &[prune_pubkey], now, now);
-        res.unwrap();
+        assert!(res.is_ok());
         //test timeout
         let timeout = now + crds_gossip.push.prune_timeout * 2;
         res = crds_gossip.process_prune_msg(ci.id, id, &[prune_pubkey], now, timeout);
