@@ -11,7 +11,7 @@ ci/version-check-with-upgrade.sh stable
 export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
 
-_ scripts/ulimit-n.sh
+source scripts/ulimit-n.sh
 _ cargo build --all --verbose --features="$FEATURES"
 _ cargo test --all --verbose --features="$FEATURES" --lib -- --nocapture --test-threads=1
 

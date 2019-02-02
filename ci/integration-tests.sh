@@ -7,7 +7,7 @@ FEATURES="$1"
 cd "$(dirname "$0")/.."
 source ci/_
 export RUST_BACKTRACE=1
-scripts/ulimit-n.sh
+source scripts/ulimit-n.sh
 
 for test in {,*/}tests/*.rs; do
   test=${test##*/} # basename x
