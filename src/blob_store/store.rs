@@ -34,10 +34,7 @@ pub struct Store {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Key {
-    pub upper: u64,
-    pub lower: Option<u64>,
-}
+pub struct Key(pub u64, pub u64);
 
 #[derive(Debug)]
 pub struct SlotCache {
@@ -86,80 +83,66 @@ impl Store {
         })
     }
 
-    pub fn put_dyn<K, T>(&mut self, column: &str, key: K, obj: T) -> Result<()>
+    pub fn put_dyn<T>(&mut self, column: &str, key: Key, obj: T) -> Result<()>
     where
-        Key: From<K>,
-        K: Copy,
         T: Storable,
     {
         let iter = std::iter::once((key, obj));
         simpl::insert_blobs(&self.root, column, &mut self.cache, iter)
     }
 
-    pub fn put_dyn_no_copy<K, T>(&mut self, column: &str, key: K, obj: T) -> Result<()>
+    pub fn put_dyn_no_copy<T>(&mut self, column: &str, key: Key, obj: T) -> Result<()>
     where
-        Key: From<K>,
-        K: Copy,
         T: StorableNoCopy,
     {
         let iter = std::iter::once((key, obj));
         simpl::insert_blobs_no_copy(&self.root, column, &mut self.cache, iter)
     }
 
-    pub fn put_no_copy<K, T>(&mut self, key: K, obj: T) -> Result<()>
+    pub fn put_no_copy<T>(&mut self, key: Key, obj: T) -> Result<()>
     where
-        Key: From<K>,
-        K: Copy,
         T: ColumnNoCopy,
     {
         self.put_dyn_no_copy(T::COLUMN, key, obj)
     }
 
     #[inline]
-    pub fn put<K, T>(&mut self, key: K, obj: T) -> Result<()>
+    pub fn put<T>(&mut self, key: Key, obj: T) -> Result<()>
     where
-        Key: From<K>,
-        K: Copy,
         T: Column,
     {
         self.put_dyn(T::COLUMN, key, obj)
     }
 
-    pub fn put_many<K, T, I>(&mut self, iter: I) -> Result<()>
+    pub fn put_many<T, I>(&mut self, iter: I) -> Result<()>
     where
-        Key: From<K>,
-        K: Copy,
         T: Column,
-        I: IntoIterator<Item = (K, T)>,
+        I: IntoIterator<Item = (Key, T)>,
     {
         simpl::insert_blobs(&self.root, T::COLUMN, &mut self.cache, iter)
     }
 
-    pub fn put_many_no_copy<K, T, I>(&mut self, iter: I) -> Result<()>
+    pub fn put_many_no_copy<T, I>(&mut self, iter: I) -> Result<()>
     where
-        Key: From<K>,
         T: ColumnNoCopy,
-        K: Copy,
-        I: IntoIterator<Item = (K, T)>,
+        I: IntoIterator<Item = (Key, T)>,
     {
         simpl::insert_blobs_no_copy(&self.root, T::COLUMN, &mut self.cache, iter)
     }
 
-    pub fn get<K, T>(&self, key: K) -> Result<T::Output>
+    pub fn get<T>(&self, key: Key) -> Result<T::Output>
     where
-        Key: From<K>,
         T: Column,
     {
-        self.get_dyn::<_, T>(T::COLUMN, key)
+        self.get_dyn::<T>(T::COLUMN, key)
     }
 
     // TODO: move to slotio + columnio impl, this is broken
-    pub fn get_dyn<K, T>(&self, _column: &str, key: K) -> Result<T::Output>
+    pub fn get_dyn<T>(&self, column: &str, key: Key) -> Result<T::Output>
     where
-        Key: From<K>,
         T: Retrievable,
     {
-        simpl::get::<T>(&self.root, _column, &self.cache, Key::from(key))
+        simpl::get::<T>(&self.root, column, &self.cache, key)
     }
 
     pub fn get_single<T>(&self, slot: u64) -> Result<T::Output>
@@ -407,10 +390,7 @@ where
 }
 impl From<(u64, u64)> for Key {
     fn from((hi, lo): (u64, u64)) -> Key {
-        Key {
-            upper: hi,
-            lower: Some(lo),
-        }
+        Key(hi, lo)
     }
 }
 
@@ -419,25 +399,7 @@ impl From<([u8; 8], [u8; 8])> for Key {
         let upper = BigEndian::read_u64(&upper_bytes);
         let lower = BigEndian::read_u64(&lower_bytes);
 
-        Key {
-            upper,
-            lower: Some(lower),
-        }
-    }
-}
-
-impl From<(u64, Option<u64>)> for Key {
-    fn from((upper, lower): (u64, Option<u64>)) -> Key {
-        Key { upper, lower }
-    }
-}
-
-impl From<([u8; 8], Option<[u8; 8]>)> for Key {
-    fn from((upper_bytes, lower_bytes): ([u8; 8], Option<[u8; 8]>)) -> Key {
-        let upper = BigEndian::read_u64(&upper_bytes);
-        let lower = lower_bytes.map(|lower_bytes| BigEndian::read_u64(&lower_bytes));
-
-        Key { upper, lower }
+        Key(upper, lower)
     }
 }
 

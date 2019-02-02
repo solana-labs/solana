@@ -63,26 +63,20 @@ impl SlotIO {
         })
     }
 
-    pub fn get<K, T>(&self, column: &str, k: K) -> Result<T::Output>
+    pub fn get<T>(&self, column: &str, key: Key) -> Result<T::Output>
     where
-        Key: From<K>,
-        K: Copy,
         T: Retrievable,
     {
         match self.columns.get(column) {
-            Some(cio) => cio.get::<_, T>(k),
+            Some(cio) => cio.get::<T>(key),
             None => {
                 let cio = ColumnIO::open(&self.slot_path, column)?;
-                cio.get::<_, T>(k)
+                cio.get::<T>(key)
             }
         }
     }
 
-    pub fn insert<K>(&mut self, column: &str, blobs: &[(K, Vec<u8>)]) -> Result<()>
-    where
-        Key: From<K>,
-        K: Copy,
-    {
+    pub fn insert(&mut self, column: &str, blobs: &[(Key, Vec<u8>)]) -> Result<()> {
         match self.columns.get_mut(column) {
             Some(cio) => cio.insert(blobs),
             None => {
@@ -94,10 +88,8 @@ impl SlotIO {
         }
     }
 
-    pub fn insert_no_copy<K, T>(&mut self, column: &str, blobs: &[(K, T)]) -> Result<()>
+    pub fn insert_no_copy<T>(&mut self, column: &str, blobs: &[(Key, T)]) -> Result<()>
     where
-        Key: From<K>,
-        K: Copy,
         T: StorableNoCopy,
     {
         match self.columns.get_mut(column) {
@@ -134,30 +126,23 @@ impl ColumnIO {
         Ok(ColumnIO { paths, files })
     }
 
-    pub fn insert<K>(&mut self, blobs: &[(K, Vec<u8>)]) -> Result<()>
-    where
-        Key: From<K>,
-        K: Copy,
-    {
+    pub fn insert(&mut self, blobs: &[(Key, Vec<u8>)]) -> Result<()>
+where {
         insert(&mut self.files, blobs)
     }
 
-    pub fn insert_no_copy<K, T>(&mut self, blobs: &[(K, T)]) -> Result<()>
+    pub fn insert_no_copy<T>(&mut self, blobs: &[(Key, T)]) -> Result<()>
     where
-        Key: From<K>,
-        K: Copy,
         T: StorableNoCopy,
     {
         insert_no_copy(&mut self.files, blobs)
     }
 
-    pub fn get<K, T>(&self, key: K) -> Result<T::Output>
+    pub fn get<T>(&self, key: Key) -> Result<T::Output>
     where
-        Key: From<K>,
         T: Retrievable,
     {
-        let key = Key::from(key);
-        let blob_idx = self.index(key.upper, key.lower.unwrap())?;
+        let blob_idx = self.index(key.0, key.1)?;
 
         let mut data_rdr = File::open(&self.paths.data)?;
         data_rdr.seek(SeekFrom::Start(blob_idx.offset))?;
@@ -284,7 +269,7 @@ where
 
     for (key, blob) in blobs {
         let key = Key::from(*key);
-        let blob_index = key.lower.expect("Single items should never get here");
+        let blob_index = key.1;
 
         let serialized_blob_data = &blob[..];
 
@@ -332,7 +317,7 @@ where
 
     for (key, blob) in blobs {
         let key = Key::from(*key);
-        let blob_index = key.lower.expect("Single items should never get here");
+        let blob_index = key.1;
 
         let serialized_blob_data = blob
             .as_data()

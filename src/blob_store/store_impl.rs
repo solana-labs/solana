@@ -23,37 +23,28 @@ pub fn mk_slot_path(root: &Path, slot: u64) -> PathBuf {
 }
 
 #[allow(clippy::range_plus_one)]
-pub fn insert_blobs<I, K, T>(
-    root: &Path,
-    column: &str,
-    cache: &mut SlotCache,
-    iter: I,
-) -> Result<()>
+pub fn insert_blobs<I, T>(root: &Path, column: &str, cache: &mut SlotCache, iter: I) -> Result<()>
 where
-    I: IntoIterator<Item = (K, T)>,
+    I: IntoIterator<Item = (Key, T)>,
     T: Storable,
-    K: Copy,
-    Key: From<K>,
 {
-    let blobs: StdRes<Vec<(K, Vec<u8>)>, _> = iter
+    let blobs: StdRes<Vec<(Key, Vec<u8>)>, _> = iter
         .into_iter()
         .map(|(k, v)| v.to_data().map(|data| (k, data)))
         .collect();
+
     let mut blobs: Vec<_> =
         blobs.map_err(|_| StoreError::Serialization("Bad ToData Impl".into()))?;
     assert!(!blobs.is_empty());
 
     // sort on lexi order (slot_idx, blob_idx)
-    blobs.sort_unstable_by_key(|(k, _)| {
-        let key: Key = k.into();
-        key
-    });
+    blobs.sort_unstable_by_key(|(k, _)| *k);
 
     // contains the indices into blobs of the first blob for that slot
     let mut slot_ranges = HashMap::new();
 
     for (index, (k, _)) in blobs.iter().enumerate() {
-        let slot = Key::from(*k).upper;
+        let slot = k.0;
         slot_ranges
             .entry(slot)
             .and_modify(|r: &mut Range<usize>| {
@@ -90,32 +81,27 @@ where
 }
 
 #[allow(clippy::range_plus_one)]
-pub fn insert_blobs_no_copy<I, K, T>(
+pub fn insert_blobs_no_copy<I, T>(
     root: &Path,
     column: &str,
     cache: &mut SlotCache,
     iter: I,
 ) -> Result<()>
 where
-    I: IntoIterator<Item = (K, T)>,
+    I: IntoIterator<Item = (Key, T)>,
     T: StorableNoCopy,
-    K: Copy,
-    Key: From<K>,
 {
     let mut blobs: Vec<_> = iter.into_iter().collect();
     assert!(!blobs.is_empty());
 
     // sort on lexi order (slot_idx, blob_idx)
-    blobs.sort_unstable_by_key(|(k, _)| {
-        let key: Key = k.into();
-        key
-    });
+    blobs.sort_unstable_by_key(|(k, _)| *k);
 
     // contains the indices into blobs of the first blob for that slot
     let mut slot_ranges = HashMap::new();
 
     for (index, (k, _)) in blobs.iter().enumerate() {
-        let slot = Key::from(*k).upper;
+        let slot = k.0;
         slot_ranges
             .entry(slot)
             .and_modify(|r: &mut Range<usize>| {
@@ -155,12 +141,12 @@ pub fn get<T>(root: &Path, column: &str, cache: &SlotCache, key: Key) -> Result<
 where
     T: Retrievable,
 {
-    match cache.get(key.upper) {
-        Some(sio) => sio.get::<_, T>(column, key),
+    match cache.get(key.0) {
+        Some(sio) => sio.get::<T>(column, key),
         None => {
-            let slot_path = mk_slot_path(root, key.upper);
-            let sio = SlotIO::open(key.upper, slot_path)?;
-            sio.get::<_, T>(column, key)
+            let slot_path = mk_slot_path(root, key.0);
+            let sio = SlotIO::open(key.0, slot_path)?;
+            sio.get::<T>(column, key)
         }
     }
 }

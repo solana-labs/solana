@@ -132,8 +132,9 @@ impl BlobStore {
 
     pub fn get_blob_data(&self, slot: u64, index: u64) -> Result<Vec<u8>> {
         use store::Named;
-        self.store
-            .get_dyn::<_, Vec<u8>>(Blob::COLUMN, &(slot, index))
+
+        let key = Key::from((slot, index));
+        self.store.get_dyn::<Vec<u8>>(Blob::COLUMN, key)
     }
 
     pub fn get_blob(&self, slot: u64, index: u64) -> Result<Blob> {
@@ -143,14 +144,13 @@ impl BlobStore {
     }
 
     pub fn get_erasure(&self, slot: u64, index: u64) -> Result<Vec<u8>> {
-        self.store
-            .get_dyn::<_, Vec<u8>>(ERASURE_COLUMN, &(slot, index))
+        let key = Key::from((slot, index));
+        self.store.get_dyn::<Vec<u8>>(ERASURE_COLUMN, key)
     }
 
     pub fn put_erasure(&mut self, slot: u64, index: u64, erasure: &[u8]) -> Result<()> {
         let key = Key::from((slot, index));
-
-        self.store.put_dyn_no_copy(ERASURE_COLUMN, &key, erasure)
+        self.store.put_dyn_no_copy(ERASURE_COLUMN, key, erasure)
     }
 
     pub fn put_blobs<'a, I>(&'a mut self, iter: I) -> Result<()>
