@@ -365,21 +365,20 @@ export class Transaction {
     shortvec.encodeLength(signatureCount, signatures.length);
     const transactionLength =
       signatureCount.length + signatures.length * 64 + signData.length;
-    const wireTransaction = Buffer.alloc(8 + transactionLength);
-    wireTransaction.writeUInt32LE(transactionLength, 0);
+    const wireTransaction = Buffer.alloc(transactionLength);
     invariant(signatures.length < 256);
-    Buffer.from(signatureCount).copy(wireTransaction, 8);
+    Buffer.from(signatureCount).copy(wireTransaction, 0);
     signatures.forEach(({signature}, index) => {
       invariant(signature !== null, `null signature`);
       invariant(signature.length === 64, `signature has invalid length`);
       Buffer.from(signature).copy(
         wireTransaction,
-        8 + signatureCount.length + index * 64,
+        signatureCount.length + index * 64,
       );
     });
     signData.copy(
       wireTransaction,
-      8 + signatureCount.length + signatures.length * 64,
+      signatureCount.length + signatures.length * 64,
     );
     invariant(
       wireTransaction.length <= PACKET_DATA_SIZE,
@@ -426,11 +425,6 @@ export class Transaction {
 
     // Slice up wire data
     let byteArray = [...buffer];
-
-    const transactionLength = byteArray.slice(0, 8);
-    byteArray = byteArray.slice(8);
-    const len = Buffer.from(transactionLength).readIntLE(0, 4);
-    invariant(len == byteArray.length);
 
     const signatureCount = shortvec.decodeLength(byteArray);
     let signatures = [];

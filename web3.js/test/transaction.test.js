@@ -51,14 +51,6 @@ test('parse wire format and serialize', () => {
   expectedTransaction.sign(sender);
 
   const wireTransaction = Buffer.from([
-    221,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
     1,
     50,
     238,

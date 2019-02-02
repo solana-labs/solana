@@ -431,8 +431,15 @@ export class Connection {
   async sendRawTransaction(
     rawTransaction: Buffer,
   ): Promise<TransactionSignature> {
+
+    // sendTransaction RPC API requires a u64 length field prepended to the raw
+    // Transaction bytes
+    const rpcTransaction = Buffer.alloc(8 + rawTransaction.length);
+    rpcTransaction.writeUInt32LE(rawTransaction.length, 0);
+    rawTransaction.copy(rpcTransaction, 8);
+
     const unsafeRes = await this._rpcRequest('sendTransaction', [
-      [...rawTransaction],
+      [...rpcTransaction],
     ]);
     const res = SendTransactionRpcResult(unsafeRes);
     if (res.error) {
