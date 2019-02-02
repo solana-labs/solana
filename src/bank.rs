@@ -756,6 +756,7 @@ mod tests {
         let (genesis_block, _) =
             GenesisBlock::new_with_leader(5, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::default();
+        bank.init_root(&genesis_block.last_id());
         bank.process_genesis_block(&genesis_block);
         assert_eq!(
             bank.live_bank_state()
@@ -863,6 +864,7 @@ mod tests {
     fn test_process_ledger_simple() {
         let (genesis_block, mint_keypair, ledger) = create_sample_ledger(100, 2);
         let mut bank = Bank::default();
+        bank.init_root(&genesis_block.last_id());
         bank.process_genesis_block(&genesis_block);
         assert_eq!(bank.live_bank_state().tick_height(), 0);
         bank.add_system_program();
