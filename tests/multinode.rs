@@ -1064,7 +1064,7 @@ fn test_leader_to_validator_transition() {
     }
 
     // Wait for leader to shut down tpu and restart tvu
-    match leader.handle_role_transition().unwrap() {
+    match leader.handle_role_transition() {
         Some(FullnodeReturnType::LeaderToValidatorRotation) => (),
         _ => panic!("Expected reason for exit to be leader rotation"),
     }
@@ -1201,13 +1201,13 @@ fn test_leader_validator_basic() {
     }
 
     // Wait for validator to shut down tvu and restart tpu
-    match validator.handle_role_transition().unwrap() {
+    match validator.handle_role_transition() {
         Some(FullnodeReturnType::ValidatorToLeaderRotation) => (),
         _ => panic!("Expected reason for exit to be leader rotation"),
     }
 
     // Wait for the leader to shut down tpu and restart tvu
-    match leader.handle_role_transition().unwrap() {
+    match leader.handle_role_transition() {
         Some(FullnodeReturnType::LeaderToValidatorRotation) => (),
         _ => panic!("Expected reason for exit to be leader rotation"),
     }
@@ -1267,9 +1267,7 @@ fn run_node(id: Pubkey, mut fullnode: Fullnode, should_exit: Arc<AtomicBool>) ->
                 }
                 Err(_) => match should_be_fwdr {
                     Ok(TpuReturnType::LeaderRotation(tick_height)) => {
-                        fullnode
-                            .leader_to_validator(tick_height)
-                            .expect("failed when transitioning to validator");
+                        fullnode.leader_to_validator(tick_height);
                     }
                     Err(_) => {
                         sleep(Duration::new(1, 0));
@@ -1394,7 +1392,7 @@ fn test_dropped_handoff_recovery() {
     assert_eq!(num_converged, N);
 
     info!("Wait for bootstrap_leader to transition to a validator",);
-    match nodes[0].handle_role_transition().unwrap() {
+    match nodes[0].handle_role_transition() {
         Some(FullnodeReturnType::LeaderToValidatorRotation) => (),
         _ => panic!("Expected reason for exit to be leader rotation"),
     }
@@ -1416,7 +1414,7 @@ fn test_dropped_handoff_recovery() {
     error!("TODO: FIX https://github.com/solana-labs/solana/issues/2482");
     // TODO: Once fixed restore the commented out code below
     /*
-    match next_leader.handle_role_transition().unwrap() {
+    match next_leader.handle_role_transition() {
         Some(FullnodeReturnType::ValidatorToLeaderRotation) => (),
         _ => panic!("Expected reason for exit to be leader rotation"),
     }
