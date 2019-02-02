@@ -106,7 +106,6 @@ fn create_and_fund_vote_account(
                     info!("Failed to send vote_account_new transaction: {:?}", e);
                 }
             };
-            sleep(Duration::from_secs(2));
         }
     }
 
