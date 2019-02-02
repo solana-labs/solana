@@ -3,7 +3,7 @@
 //! access read to a persistent file-based ledger.
 
 use crate::entry::Entry;
-use crate::leader_scheduler::{DEFAULT_BOOTSTRAP_HEIGHT, TICKS_PER_BLOCK};
+use crate::leader_scheduler::DEFAULT_BOOTSTRAP_HEIGHT;
 use crate::packet::{self, Blob};
 
 use serde::Serialize;
@@ -29,6 +29,7 @@ type Result<T> = StdRes<T, StoreError>;
 
 pub const DEFAULT_BLOCKS_PER_SLOT: u64 = 1;
 const ERASURE_COLUMN: &str = "erasure";
+const TICKS_PER_BLOCK: u64 = 32;
 
 #[derive(Debug)]
 pub struct BlobStore {
