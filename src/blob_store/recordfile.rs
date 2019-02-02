@@ -78,18 +78,12 @@ impl<T: Record> RecordFile<T> {
         let mut file = &self.file;
         file.seek(SeekFrom::Start(Self::_SIZE as u64 * idx))?;
 
-        match file.read_exact(&mut buf) {
-            Ok(_) => {}
-            Err(e) => {
-                if e.kind() == io::ErrorKind::UnexpectedEof {
-                    return Ok(None);
-                } else {
-                    return Err(e);
-                }
-            }
-        };
-
-        Ok(Some(T::read(&buf[1..])))
+        file.read_exact(&mut buf)?;
+        if buf[0] != 0 {
+            Ok(Some(T::read(&buf[1..])))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn records(&self, range: Range<u64>) -> Records<T> {
@@ -110,18 +104,17 @@ impl<'a, T: Record> Iterator for Records<'a, T> {
             if self.done || self.pos < self.bounds.start || self.pos >= self.bounds.end {
                 return None;
             }
-            if let Ok(x) = self.rf.get(self.pos) {
-                self.pos += 1;
-                if x.is_some() {
-                    return x;
-                } else {
-                    // hit EOF
-                    self.done = true;
-                    break;
+
+            match self.rf.get(self.pos) {
+                Ok(Some(x)) => {
+                    self.pos += 1;
+                    return Some(x);
                 }
-            } else {
-                // real error
-                break;
+                Ok(None) => {
+                    self.pos += 1;
+                    continue;
+                }
+                Err(_) => break,
             }
         }
 
