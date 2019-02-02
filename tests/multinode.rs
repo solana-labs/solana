@@ -1732,7 +1732,7 @@ fn test_broadcast_last_tick() {
     // Start up the bootstrap leader fullnode
     let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
     let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
-    let mut bootstrap_leader = Fullnode::new(
+    let bootstrap_leader = Fullnode::new(
         bootstrap_leader_node,
         &bootstrap_leader_keypair,
         &bootstrap_leader_ledger_path,
@@ -1747,24 +1747,37 @@ fn test_broadcast_last_tick() {
     assert_eq!(servers.len(), N + 1);
 
     info!("Waiting for leader rotation...");
-    match bootstrap_leader.handle_role_transition().unwrap() {
-        Some(FullnodeReturnType::LeaderToValidatorRotation) => (),
-        _ => panic!("Expected reason for exit to be leader rotation"),
+    // manually intercept the role transition to accurately arrest tick generation
+    loop {
+        let should_be_forwarder = bootstrap_leader.role_notifiers.1.try_recv();
+        let should_be_leader = bootstrap_leader.role_notifiers.0.try_recv();
+        match should_be_leader {
+            Ok(TvuReturnType::LeaderRotation(_, _, _)) => {
+                panic!("Expected rotation to validator");
+            }
+            _ => match should_be_forwarder {
+                Ok(TpuReturnType::LeaderRotation(_)) => {
+                    break;
+                }
+                _ => continue,
+            },
+        }
     }
 
     info!("Shutting down the leader...");
     bootstrap_leader.close().unwrap();
 
-    let last_tick_entry_height = bootstrap_height - genesis_ledger_len as u64;
+    //index of the last tick is always bootstrap_height - 1
+    let last_tick_entry_index = bootstrap_height - 1;
     let entries = read_ledger(&bootstrap_leader_ledger_path);
     assert!(
-        entries.len() >= last_tick_entry_height as usize,
-        "entries: {:?} less than last_tick_entry_height: {:?}",
+        entries.len() >= bootstrap_height as usize,
+        "entries: {:?} less than last_tick_entry_index: {:?}",
         entries.len(),
-        last_tick_entry_height as usize
+        last_tick_entry_index as usize
     );
-    let expected_last_tick = &entries[last_tick_entry_height as usize - 2];
-    debug!("last_tick_entry_height: {:?}", last_tick_entry_height);
+    let expected_last_tick = &entries[last_tick_entry_index as usize];
+    debug!("last_tick_entry_index: {:?}", last_tick_entry_index);
     debug!("expected_last_tick: {:?}", expected_last_tick);
 
     info!("Check that the nodes got the last broadcasted blob");
@@ -1774,7 +1787,7 @@ fn test_broadcast_last_tick() {
         while let Ok(new_blobs) = receiver.try_recv() {
             let last_blob = new_blobs
                 .into_iter()
-                .find(|b| b.read().unwrap().index() == last_tick_entry_height - 2);
+                .find(|b| b.read().unwrap().index() == last_tick_entry_index);
             if let Some(last_blob) = last_blob {
                 last_tick_blob = last_blob;
                 break;

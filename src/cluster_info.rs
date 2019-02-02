@@ -314,14 +314,16 @@ impl ClusterInfo {
             .collect()
     }
 
-    /// compute broadcast table (includes own tvu)
+    /// compute broadcast table
     pub fn tvu_peers(&self) -> Vec<NodeInfo> {
+        let me = self.my_data().id;
         self.gossip
             .crds
             .table
             .values()
             .filter_map(|x| x.value.contact_info())
             .filter(|x| ContactInfo::is_valid_address(&x.tvu))
+            .filter(|x| x.id != me)
             .cloned()
             .collect()
     }
