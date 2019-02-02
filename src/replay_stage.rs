@@ -62,7 +62,6 @@ impl ReplayStage {
         mut entries: Vec<Entry>,
         bank: &Arc<Bank>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        my_id: Pubkey,
         voting_keypair: Option<&Arc<VotingKeypair>>,
         ledger_entry_sender: &EntrySender,
         entry_height: &Arc<RwLock<u64>>,
@@ -93,11 +92,9 @@ impl ReplayStage {
             duration_as_ms(&now.elapsed()) as usize
         );
 
-        let (mut current_leader, _) = bank
+        let (current_leader, _) = bank
             .get_current_leader()
             .expect("Scheduled leader should be calculated by this point");
-        let already_leader = my_id == current_leader;
-        let mut did_rotate = false;
 
         // Next vote tick is ceiling of (current tick/ticks per block)
         let mut num_ticks_to_next_vote =
@@ -151,15 +148,11 @@ impl ReplayStage {
 
                 // TODO: Remove this soon once we boot the leader from ClusterInfo
                 if scheduled_leader != current_leader {
-                    did_rotate = true;
                     cluster_info.write().unwrap().set_leader(scheduled_leader);
-                    current_leader = scheduled_leader
-                }
-
-                if !already_leader && my_id == scheduled_leader && did_rotate {
                     num_entries_to_write = i + 1;
                     break;
                 }
+
                 start_entry_index = i + 1;
                 num_ticks_to_next_vote = DEFAULT_TICKS_PER_SLOT;
             }
@@ -231,40 +224,42 @@ impl ReplayStage {
                 let (mut last_leader_id, _) = bank
                     .get_current_leader()
                     .expect("Scheduled leader should be calculated by this point");
-                'outer: loop {
-                    // Loop through db_ledger MAX_ENTRY_RECV_PER_ITER entries at a time for each
-                    // relevant slot to see if there are any available updates
-                    loop {
-                        // Stop getting entries if we get exit signal
-                        if exit_.load(Ordering::Relaxed) {
-                            break 'outer;
-                        }
+                // Loop through db_ledger MAX_ENTRY_RECV_PER_ITER entries at a time for each
+                // relevant slot to see if there are any available updates
+                loop {
+                    // Stop getting entries if we get exit signal
+                    if exit_.load(Ordering::Relaxed) {
+                        break;
+                    }
 
-                        let current_entry_height = *entry_height.read().unwrap();
-                        // Fetch the next entries from the database
+                    let current_entry_height = *entry_height.read().unwrap();
+
+                    let entries = {
                         if let Ok(entries) = db_ledger.get_slot_entries(
                             current_slot,
                             current_entry_height,
                             Some(MAX_ENTRY_RECV_PER_ITER as u64),
                         ) {
-                            if entries.is_empty() {
-                                break;
-                            }
-                            if let Err(e) = Self::process_entries(
-                                entries,
-                                &bank,
-                                &cluster_info,
-                                my_id,
-                                voting_keypair.as_ref(),
-                                &ledger_entry_sender,
-                                &entry_height,
-                                &last_entry_id,
-                                entry_stream.as_mut(),
-                            ) {
-                                error!("{:?}", e);
-                            }
+                            entries
                         } else {
-                            break;
+                            vec![]
+                        }
+                    };
+
+                    let entry_len = entries.len();
+                    // Fetch the next entries from the database
+                    if !entries.is_empty() {
+                        if let Err(e) = Self::process_entries(
+                            entries,
+                            &bank,
+                            &cluster_info,
+                            voting_keypair.as_ref(),
+                            &ledger_entry_sender,
+                            &entry_height,
+                            &last_entry_id,
+                            entry_stream.as_mut(),
+                        ) {
+                            error!("{:?}", e);
                         }
 
                         let current_tick_height = bank.tick_height();
@@ -291,16 +286,14 @@ impl ReplayStage {
                                 .unwrap()
                                 .max_tick_height_for_slot(current_slot);
                             last_leader_id = leader_id;
-                            continue;
                         }
                     }
 
                     // Block until there are updates again
+                    if entry_len < MAX_ENTRY_RECV_PER_ITER && ledger_signal_receiver.recv().is_err()
                     {
-                        if ledger_signal_receiver.recv().is_err() {
-                            // Update disconnected, exit
-                            break 'outer;
-                        }
+                        // Update disconnected, exit
+                        break;
                     }
                 }
             })
@@ -373,7 +366,6 @@ mod test {
     use std::sync::{Arc, RwLock};
 
     #[test]
-    #[ignore]
     pub fn test_replay_stage_leader_rotation_exit() {
         solana_logger::setup();
 
@@ -783,7 +775,6 @@ mod test {
             entries.clone(),
             &Arc::new(Bank::default()),
             &cluster_info_me,
-            my_id,
             Some(&voting_keypair),
             &ledger_entry_sender,
             &Arc::new(RwLock::new(entry_height)),
@@ -806,7 +797,6 @@ mod test {
             entries.clone(),
             &Arc::new(Bank::default()),
             &cluster_info_me,
-            Keypair::new().pubkey(),
             Some(&voting_keypair),
             &ledger_entry_sender,
             &Arc::new(RwLock::new(entry_height)),
@@ -856,7 +846,6 @@ mod test {
             entries.clone(),
             &Arc::new(Bank::default()),
             &cluster_info_me,
-            my_id,
             Some(&voting_keypair),
             &ledger_entry_sender,
             &Arc::new(RwLock::new(entry_height)),
