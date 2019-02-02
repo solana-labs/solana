@@ -4,7 +4,8 @@ use crate::bank_checkpoint::BankCheckpoint;
 use crate::counter::Counter;
 use crate::entry::Entry;
 use crate::last_id_queue::MAX_ENTRY_IDS;
-use crate::poh_recorder::PohRecorder;
+use crate::poh_recorder::{PohRecorder, PohRecorderError};
+use crate::result::Error;
 use crate::rpc_pubsub::RpcSubscriptions;
 use crate::runtime::{self, RuntimeError};
 use log::Level;
@@ -290,7 +291,12 @@ impl BankState {
             // record and unlock will unlock all the successfull transactions
             poh.record(hash, processed_transactions).map_err(|e| {
                 warn!("record failure: {:?}", e);
-                BankError::RecordFailure
+                match e {
+                    Error::PohRecorderError(PohRecorderError::MaxHeightReached) => {
+                        BankError::MaxHeightReached
+                    }
+                    _ => BankError::RecordFailure,
+                }
             })?;
         }
         Ok(())
