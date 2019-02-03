@@ -102,13 +102,15 @@ loop {
     // the generator will exit immediatly if tick_height == my_slot.start
     assert!(last_fork.tick_height <= my_slot.start,
         "start is out of sync, replay the ledger!");
-    let generator = PohGenerator::new(last_fork.id, last_fork.tick_height, my_slot.start, exit_signal);
+    let generator = PohGenerator::new(last_fork.id, last_fork.tick_height,
+        my_slot.start, exit_signal);
 
     // operate the validator, this runs until my_slot.start is reached by the
     // generator
     let validator = Validator::new(forks, bank, generator, //other params);
 
-    // wait for validator to finish exit_receiver.recv(); validator.exit().
+    // wait for validator to finish exit_receiver.recv();
+    validator.exit().
 
     // these entries connect to my_slot
     let poh_entries = generator.entries();
@@ -124,9 +126,11 @@ loop {
     let bank_state = forks.init(my_slot.slot_id, starting_slot);
 
     // operate as leader
-    let recorder = PohRecorder::new(poh_entries, my_slot.end, bank_state, exit_signal);
+    let recorder = PohRecorder::new(poh_entries, my_slot.end, bank_state,
+        exit_signal);
     let leader = Leader::new(bank_state, //other params);
-    exit_receiver.recv(); leader.exit();
+    exit_receiver.recv();
+    leader.exit();
 
     // Finalize the bank_state, send the vote as a validator.
     bank_state.finalize();
