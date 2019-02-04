@@ -443,6 +443,12 @@ ul#searchresults span.teaser em {
     border-top-right-radius: inherit;
 }
 
+.content p {
+    line-height: 1.6;
+    margin-top: 0;
+    padding: 0 28px;
+}
+
 .content h1 {
     font-size: 25px;
     font-weight: 300;
@@ -457,14 +463,10 @@ ul#searchresults span.teaser em {
     font-family: Poppins, sans-serif;
     
 }
-.content p {
-    line-height: 1.6;
-    margin-top: 0;
-    padding: 0 28px;
-}
+
 .content h2 {
     font-family: Poppins, sans-serif;
-    font-size: 15px;
+    font-size: 20px;
     font-weight: 300;
     margin-top: 2em;
     margin-bottom: 0;
@@ -473,12 +475,13 @@ ul#searchresults span.teaser em {
     padding-bottom: 1.2em;
 }
 
-.content h3 {
-    font-size: 20px;
+.content h3, h4, h5 {
+    font-size: 15px;
     margin-top: 2.5em;
     margin-bottom: 0.8em;
     padding: 0 28px;
 }
+
 .content code {
     background-color: rgba(0,0,0,0.05);
     padding: 3px;
@@ -499,15 +502,6 @@ ul#searchresults span.teaser em {
     padding-top: 2em;
     padding-bottom: 2em;
     padding: 2em 28px;
-}
-
-
-.content h4,
-.content h5 {
-    font-size: 15px;
-    margin-top: 2.5em;
-    margin-bottom: 0.8em;
-    padding: 0 28px;
 }
 
 .content table {
