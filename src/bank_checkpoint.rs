@@ -24,7 +24,7 @@ pub struct BankCheckpoint {
     last_id_queue: RwLock<LastIdQueue>,
     /// status cache
     status_cache: RwLock<BankStatusCache>,
-    finalized: AtomicBool,
+    frozen: AtomicBool,
     fork_id: AtomicUsize,
 }
 
@@ -40,7 +40,7 @@ impl Default for BankCheckpoint {
             accounts: Accounts::default(),
             last_id_queue: RwLock::new(LastIdQueue::default()),
             status_cache: RwLock::new(BankStatusCache::default()),
-            finalized: AtomicBool::new(false),
+            frozen: AtomicBool::new(false),
             fork_id: AtomicUsize::new(0 as usize),
         }
     }
@@ -53,7 +53,7 @@ impl BankCheckpoint {
             accounts: Accounts::default(),
             last_id_queue: RwLock::new(LastIdQueue::default()),
             status_cache: RwLock::new(StatusCache::new(last_id)),
-            finalized: AtomicBool::new(false),
+            frozen: AtomicBool::new(false),
             fork_id: AtomicUsize::new(fork_id as usize),
         }
     }
@@ -66,13 +66,13 @@ impl BankCheckpoint {
         bank_state
     }
     pub fn store_slow(&self, purge: bool, pubkey: &Pubkey, account: &Account) {
-        assert!(!self.finalized());
+        assert!(!self.frozen());
         self.accounts.store_slow(purge, pubkey, account)
     }
 
     /// Forget all signatures. Useful for benchmarking.
     pub fn clear_signatures(&self) {
-        assert!(!self.finalized());
+        assert!(!self.frozen());
         self.status_cache.write().unwrap().clear();
     }
     /// Return the last entry ID registered.
@@ -88,10 +88,10 @@ impl BankCheckpoint {
         self.accounts.transaction_count()
     }
     pub fn finalize(&self) {
-        self.finalized.store(true, Ordering::Relaxed);
+        self.frozen.store(true, Ordering::Relaxed);
     }
-    pub fn finalized(&self) -> bool {
-        self.finalized.load(Ordering::Relaxed)
+    pub fn frozen(&self) -> bool {
+        self.frozen.load(Ordering::Relaxed)
     }
 
     /// Looks through a list of tick heights and stakes, and finds the latest
@@ -123,7 +123,7 @@ impl BankCheckpoint {
     /// the oldest ones once its internal cache is full. Once boot, the
     /// bank will reject transactions using that `last_id`.
     pub fn register_tick(&self, last_id: &Hash) {
-        assert!(!self.finalized());
+        assert!(!self.frozen());
         let mut last_id_queue = self.last_id_queue.write().unwrap();
         inc_new_counter_info!("bank-register_tick-registered", 1);
         last_id_queue.register_tick(last_id)
@@ -188,7 +188,7 @@ impl BankCheckpoint {
         loaded_accounts: &[Result<(InstructionAccounts, InstructionLoaders)>],
         executed: &[Result<()>],
     ) {
-        assert!(!self.finalized());
+        assert!(!self.frozen());
         let now = Instant::now();
         self.accounts
             .store_accounts(true, txs, executed, loaded_accounts);
@@ -239,7 +239,7 @@ impl BankCheckpoint {
     }
 
     fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
-        assert!(!self.finalized());
+        assert!(!self.frozen());
         let mut status_cache = self.status_cache.write().unwrap();
         for (i, tx) in txs.iter().enumerate() {
             match &res[i] {
@@ -259,7 +259,7 @@ impl BankCheckpoint {
         self.accounts.hash_internal_state()
     }
     pub fn set_genesis_last_id(&self, last_id: &Hash) {
-        assert!(!self.finalized());
+        assert!(!self.frozen());
         self.last_id_queue.write().unwrap().genesis_last_id(last_id)
     }
 
@@ -272,15 +272,15 @@ impl BankCheckpoint {
             accounts: Accounts::default(),
             last_id_queue: RwLock::new(self.last_id_queue.read().unwrap().fork()),
             status_cache: RwLock::new(StatusCache::new(last_id)),
-            finalized: AtomicBool::new(false),
+            frozen: AtomicBool::new(false),
             fork_id: AtomicUsize::new(fork_id as usize),
         }
     }
     /// consume the checkpoint into the root state
     /// self becomes the new root and its fork_id is updated
     pub fn merge_into_root(&self, other: Self) {
-        assert!(self.finalized());
-        assert!(other.finalized());
+        assert!(self.frozen());
+        assert!(other.frozen());
         let (accounts, last_id_queue, status_cache, fork_id) = {
             (
                 other.accounts,

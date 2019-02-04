@@ -80,10 +80,10 @@ pub enum BankError {
     InvalidTrunk,
 
     /// Specified base checkpoint is still live
-    CheckpointNotFinalized,
+    CheckpointNotFrozen,
 
     /// Requested live checkpoint is finalized
-    CheckpointIsFinalized,
+    CheckpointIsFrozen,
 }
 
 pub type Result<T> = result::Result<T, BankError>;
