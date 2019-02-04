@@ -8,6 +8,9 @@ repository = "https://github.com/solana-labs/solana"
 license = "Apache-2.0"
 homepage = "https://solana.com/"
 
+[features]
+cuda = []
+
 [dependencies]
 clap = "2.32.0"
 dirs = "1.0.2"
