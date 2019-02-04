@@ -70,11 +70,11 @@ impl Forks {
                 let old_root = active_chain[len - 1];
                 let new_root = active_chain[len - 2];
                 if !new_root.1.frozen() {
-                    println!("new_root id {}", new_root.1.fork_id());
+                    trace!("new_root id {}", new_root.1.fork_id());
                     return Err(BankError::CheckpointNotFrozen);
                 }
                 if !old_root.1.frozen() {
-                    println!("old id {}", old_root.1.fork_id());
+                    trace!("old id {}", old_root.1.fork_id());
                     return Err(BankError::CheckpointNotFrozen);
                 }
                 //stupid sanity checks
