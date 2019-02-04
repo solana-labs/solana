@@ -34,9 +34,7 @@ use std::thread::{sleep, Builder, JoinHandle};
 use std::time::{Duration, Instant};
 
 fn read_ledger(ledger_path: &str) -> Vec<Entry> {
-    let ledger = DbLedger::open(&ledger_path)
-        .expect("Unable to open ledger")
-        .0;
+    let ledger = DbLedger::open(&ledger_path).expect("Unable to open ledger");
     ledger
         .read_ledger()
         .expect("Unable to read ledger")
@@ -149,7 +147,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     // and force it to respond to repair from the ledger window
     {
         let entries = make_tiny_test_entries(last_entry_id, 100);
-        let db_ledger = DbLedger::open(&leader_ledger_path).unwrap().0;
+        let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
         db_ledger
             .write_entries(DEFAULT_SLOT_HEIGHT, last_entry_height, &entries)
             .unwrap();
@@ -989,7 +987,7 @@ fn test_leader_to_validator_transition() {
     let (bootstrap_entries, _) =
         make_active_set_entries(&validator_keypair, &mint_keypair, &last_id, &last_id, 0);
     {
-        let db_ledger = DbLedger::open(&leader_ledger_path).unwrap().0;
+        let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
         db_ledger
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
@@ -1136,7 +1134,7 @@ fn test_leader_validator_basic() {
     let (active_set_entries, _) =
         make_active_set_entries(&validator_keypair, &mint_keypair, &last_id, &last_id, 0);
     {
-        let db_ledger = DbLedger::open(&leader_ledger_path).unwrap().0;
+        let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
         db_ledger
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
@@ -1322,7 +1320,7 @@ fn test_dropped_handoff_recovery() {
 
     // Write the entries
     {
-        let db_ledger = DbLedger::open(&genesis_ledger_path).unwrap().0;
+        let db_ledger = DbLedger::open(&genesis_ledger_path).unwrap();
         db_ledger
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
@@ -1496,7 +1494,7 @@ fn test_full_leader_validator_network() {
             .expect("expected at least one genesis entry")
             .id;
         {
-            let db_ledger = DbLedger::open(&bootstrap_leader_ledger_path).unwrap().0;
+            let db_ledger = DbLedger::open(&bootstrap_leader_ledger_path).unwrap();
             db_ledger
                 .write_entries(DEFAULT_SLOT_HEIGHT, index, &bootstrap_entries)
                 .unwrap();

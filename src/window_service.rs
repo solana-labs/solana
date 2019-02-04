@@ -242,9 +242,7 @@ mod test {
         let done = Arc::new(AtomicBool::new(false));
         let db_ledger_path = get_tmp_ledger_path("window_send_test");
         let db_ledger = Arc::new(
-            DbLedger::open(&db_ledger_path)
-                .expect("Expected to be able to open database ledger")
-                .0,
+            DbLedger::open(&db_ledger_path).expect("Expected to be able to open database ledger"),
         );
         let t_window = window_service(
             db_ledger,
@@ -324,9 +322,7 @@ mod test {
         let done = Arc::new(AtomicBool::new(false));
         let db_ledger_path = get_tmp_ledger_path("window_send_late_leader_test");
         let db_ledger = Arc::new(
-            DbLedger::open(&db_ledger_path)
-                .expect("Expected to be able to open database ledger")
-                .0,
+            DbLedger::open(&db_ledger_path).expect("Expected to be able to open database ledger"),
         );
         let t_window = window_service(
             db_ledger,

@@ -298,7 +298,7 @@ pub const ERASURE_CF: &str = "erasure";
 
 impl DbLedger {
     // Opens a Ledger in directory, provides "infinite" window of blobs
-    pub fn open(ledger_path: &str) -> Result<(Self, SyncSender<bool>, Receiver<bool>)> {
+    pub fn open(ledger_path: &str) -> Result<Self> {
         fs::create_dir_all(&ledger_path)?;
         let ledger_path = Path::new(ledger_path).join(DB_LEDGER_DIRECTORY);
 
@@ -327,20 +327,21 @@ impl DbLedger {
         // Create the erasure column family
         let erasure_cf = ErasureCf::new(db.clone());
 
-        let (signal_sender, signal_receiver) = sync_channel(1);
-        let new_blobs_signals = vec![signal_sender.clone()];
+        Ok(DbLedger {
+            db,
+            meta_cf,
+            data_cf,
+            erasure_cf,
+            new_blobs_signals: vec![],
+        })
+    }
 
-        Ok((
-            DbLedger {
-                db,
-                meta_cf,
-                data_cf,
-                erasure_cf,
-                new_blobs_signals,
-            },
-            signal_sender,
-            signal_receiver,
-        ))
+    pub fn open_with_signal(ledger_path: &str) -> Result<(Self, SyncSender<bool>, Receiver<bool>)> {
+        let mut db_ledger = Self::open(ledger_path)?;
+        let (signal_sender, signal_receiver) = sync_channel(1);
+        db_ledger.new_blobs_signals = vec![signal_sender.clone()];
+
+        Ok((db_ledger, signal_sender, signal_receiver))
     }
 
     /// Returns the entry vector for the slot starting with `blob_start_index`
@@ -901,7 +902,7 @@ pub fn create_new_ledger(ledger_path: &str, genesis_block: &GenesisBlock) -> Res
     genesis_block.write(&ledger_path)?;
 
     // Add a single tick linked back to the genesis_block to bootstrap the ledger
-    let (db_ledger, _, _) = DbLedger::open(ledger_path)?;
+    let db_ledger = DbLedger::open(ledger_path)?;
     let entries = crate::entry::create_ticks(1, genesis_block.last_id());
     db_ledger.write_entries(DEFAULT_SLOT_HEIGHT, 0, &entries)?;
 
@@ -912,7 +913,7 @@ pub fn genesis<'a, I>(ledger_path: &str, keypair: &Keypair, entries: I) -> Resul
 where
     I: IntoIterator<Item = &'a Entry>,
 {
-    let (db_ledger, _, _) = DbLedger::open(ledger_path)?;
+    let db_ledger = DbLedger::open(ledger_path)?;
 
     // TODO sign these blobs with keypair
     let blobs: Vec<_> = entries
@@ -965,7 +966,7 @@ pub fn create_tmp_sample_ledger(
     if num_extra_ticks > 0 {
         let entries = crate::entry::create_ticks(num_extra_ticks, last_id);
 
-        let (db_ledger, _, _) = DbLedger::open(&ledger_path).unwrap();
+        let db_ledger = DbLedger::open(&ledger_path).unwrap();
         db_ledger
             .write_entries(DEFAULT_SLOT_HEIGHT, entry_height, &entries)
             .unwrap();
@@ -978,12 +979,12 @@ pub fn create_tmp_sample_ledger(
 pub fn tmp_copy_ledger(from: &str, name: &str) -> String {
     let path = get_tmp_ledger_path(name);
 
-    let (db_ledger, _, _) = DbLedger::open(from).unwrap();
+    let db_ledger = DbLedger::open(from).unwrap();
     let ledger_entries = db_ledger.read_ledger().unwrap();
     let genesis_block = GenesisBlock::load(from).unwrap();
 
     DbLedger::destroy(&path).expect("Expected successful database destruction");
-    let (db_ledger, _, _) = DbLedger::open(&path).unwrap();
+    let db_ledger = DbLedger::open(&path).unwrap();
     db_ledger
         .write_entries(DEFAULT_SLOT_HEIGHT, 0, ledger_entries)
         .unwrap();
@@ -1002,7 +1003,7 @@ mod tests {
     #[test]
     fn test_put_get_simple() {
         let ledger_path = get_tmp_ledger_path("test_put_get_simple");
-        let (ledger, _, _) = DbLedger::open(&ledger_path).unwrap();
+        let ledger = DbLedger::open(&ledger_path).unwrap();
 
         // Test meta column family
         let meta = SlotMeta::new();
@@ -1057,7 +1058,7 @@ mod tests {
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
 
         let ledger_path = get_tmp_ledger_path("test_read_blobs_bytes");
-        let (ledger, _, _) = DbLedger::open(&ledger_path).unwrap();
+        let ledger = DbLedger::open(&ledger_path).unwrap();
         ledger.write_blobs(&blobs).unwrap();
 
         let mut buf = [0; 1024];
@@ -1125,7 +1126,7 @@ mod tests {
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
 
         let ledger_path = get_tmp_ledger_path("test_insert_data_blobs_basic");
-        let (ledger, _, _) = DbLedger::open(&ledger_path).unwrap();
+        let ledger = DbLedger::open(&ledger_path).unwrap();
 
         // Insert second blob, we're missing the first blob, so should return nothing
         let result = ledger.insert_data_blobs(vec![blobs[1]]).unwrap();
@@ -1176,7 +1177,7 @@ mod tests {
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
 
         let ledger_path = get_tmp_ledger_path("test_insert_data_blobs_multiple");
-        let (ledger, _, _) = DbLedger::open(&ledger_path).unwrap();
+        let ledger = DbLedger::open(&ledger_path).unwrap();
 
         // Insert blobs in reverse, check for consecutive returned blobs
         for i in (0..num_blobs).rev() {
@@ -1216,7 +1217,7 @@ mod tests {
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
 
         let ledger_path = get_tmp_ledger_path("test_insert_data_blobs_slots");
-        let (ledger, _, _) = DbLedger::open(&ledger_path).unwrap();
+        let ledger = DbLedger::open(&ledger_path).unwrap();
 
         // Insert last blob into next slot
         let result = ledger
@@ -1251,7 +1252,7 @@ mod tests {
         let slot = 0;
         let db_ledger_path = get_tmp_ledger_path("test_iteration_order");
         {
-            let (db_ledger, _, _) = DbLedger::open(&db_ledger_path).unwrap();
+            let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
 
             // Write entries
             let num_entries = 8;
@@ -1294,7 +1295,7 @@ mod tests {
     pub fn test_get_slot_entries1() {
         let db_ledger_path = get_tmp_ledger_path("test_get_slot_entries1");
         {
-            let (db_ledger, _, _) = DbLedger::open(&db_ledger_path).unwrap();
+            let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
             let entries = make_tiny_test_entries(8);
             let mut blobs = entries.clone().to_blobs();
             for (i, b) in blobs.iter_mut().enumerate() {
@@ -1326,7 +1327,7 @@ mod tests {
     pub fn test_get_slot_entries2() {
         let db_ledger_path = get_tmp_ledger_path("test_get_slot_entries2");
         {
-            let (db_ledger, _, _) = DbLedger::open(&db_ledger_path).unwrap();
+            let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
 
             // Write entries
             let num_slots = 5 as u64;
@@ -1358,7 +1359,7 @@ mod tests {
     pub fn test_insert_data_blobs_bulk() {
         let db_ledger_path = get_tmp_ledger_path("test_insert_data_blobs_bulk");
         {
-            let (db_ledger, _, _) = DbLedger::open(&db_ledger_path).unwrap();
+            let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
 
             // Write entries
             let num_entries = 20 as u64;
@@ -1399,7 +1400,7 @@ mod tests {
         // Create RocksDb ledger
         let db_ledger_path = get_tmp_ledger_path("test_insert_data_blobs_duplicate");
         {
-            let (db_ledger, _, _) = DbLedger::open(&db_ledger_path).unwrap();
+            let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
 
             // Write entries
             let num_entries = 10 as u64;
@@ -1455,7 +1456,7 @@ mod tests {
     pub fn test_write_consecutive_blobs() {
         let db_ledger_path = get_tmp_ledger_path("test_write_consecutive_blobs");
         {
-            let (db_ledger, _, _) = DbLedger::open(&db_ledger_path).unwrap();
+            let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
 
             // Write entries
             let num_entries = 20 as u64;
@@ -1505,7 +1506,7 @@ mod tests {
         {
             genesis(&ledger_path, &Keypair::new(), &entries).unwrap();
 
-            let (ledger, _, _) = DbLedger::open(&ledger_path).expect("open failed");
+            let ledger = DbLedger::open(&ledger_path).expect("open failed");
 
             let read_entries: Vec<Entry> =
                 ledger.read_ledger().expect("read_ledger failed").collect();
@@ -1523,7 +1524,7 @@ mod tests {
             // put entries except last 2 into ledger
             genesis(&ledger_path, &Keypair::new(), &entries[..entries.len() - 2]).unwrap();
 
-            let (ledger, _, _) = DbLedger::open(&ledger_path).expect("open failed");
+            let ledger = DbLedger::open(&ledger_path).expect("open failed");
 
             // now write the last entry, ledger has a hole in it one before the end
             // +-+-+-+-+-+-+-+    +-+

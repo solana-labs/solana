@@ -416,7 +416,8 @@ mod test {
             let leader_scheduler =
                 Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
 
-            let (db_ledger, l_sender, l_receiver) = DbLedger::open(&my_ledger_path).unwrap();
+            let (db_ledger, l_sender, l_receiver) =
+                DbLedger::open_with_signal(&my_ledger_path).unwrap();
             let db_ledger = Arc::new(db_ledger);
             db_ledger
                 .write_entries(
@@ -548,7 +549,8 @@ mod test {
         let voting_keypair = Arc::new(VotingKeypair::new_local(&my_keypair));
         let (to_leader_sender, _) = channel();
         {
-            let (db_ledger, l_sender, l_receiver) = DbLedger::open(&my_ledger_path).unwrap();
+            let (db_ledger, l_sender, l_receiver) =
+                DbLedger::open_with_signal(&my_ledger_path).unwrap();
             let db_ledger = Arc::new(db_ledger);
             // Set up the bank
             let genesis_block = GenesisBlock::load(&my_ledger_path)
@@ -653,7 +655,8 @@ mod test {
         let (rotation_tx, rotation_rx) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         {
-            let (db_ledger, l_sender, l_receiver) = DbLedger::open(&my_ledger_path).unwrap();
+            let (db_ledger, l_sender, l_receiver) =
+                DbLedger::open_with_signal(&my_ledger_path).unwrap();
             let db_ledger = Arc::new(db_ledger);
             db_ledger
                 .write_entries(

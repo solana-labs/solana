@@ -171,7 +171,7 @@ impl Tvu {
     }
 
     pub fn exit(&self) {
-        // Call exit to make sure replay stage is unblocked from it's condition variable.
+        // Call exit to make sure replay stage is unblocked from a channel it may be blocked on.
         // Then replay stage will set the self.exit variable and cause the rest of the
         // pipeline to exit
         self.replay_stage.exit();
@@ -257,8 +257,8 @@ pub mod tests {
 
         let cur_hash = Hash::default();
         let db_ledger_path = get_tmp_ledger_path("test_replay");
-        let (db_ledger, l_sender, l_receiver) =
-            DbLedger::open(&db_ledger_path).expect("Expected to successfully open ledger");
+        let (db_ledger, l_sender, l_receiver) = DbLedger::open_with_signal(&db_ledger_path)
+            .expect("Expected to successfully open ledger");
         let vote_account_keypair = Arc::new(Keypair::new());
         let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
         let (sender, _receiver) = channel();
@@ -348,8 +348,8 @@ pub mod tests {
 
         let mut cur_hash = Hash::default();
         let db_ledger_path = get_tmp_ledger_path("test_replay");
-        let (db_ledger, l_sender, l_receiver) =
-            DbLedger::open(&db_ledger_path).expect("Expected to successfully open ledger");
+        let (db_ledger, l_sender, l_receiver) = DbLedger::open_with_signal(&db_ledger_path)
+            .expect("Expected to successfully open ledger");
         let vote_account_keypair = Arc::new(Keypair::new());
         let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
         let (sender, _) = channel();

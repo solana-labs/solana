@@ -443,8 +443,8 @@ impl Fullnode {
         SyncSender<bool>,
         Receiver<bool>,
     ) {
-        let (db_ledger, l_sender, l_receiver) =
-            DbLedger::open(ledger_path).expect("Expected to successfully open database ledger");
+        let (db_ledger, l_sender, l_receiver) = DbLedger::open_with_signal(ledger_path)
+            .expect("Expected to successfully open database ledger");
         let genesis_block =
             GenesisBlock::load(ledger_path).expect("Expected to successfully open genesis block");
         (genesis_block, Arc::new(db_ledger), l_sender, l_receiver)
@@ -909,7 +909,7 @@ mod tests {
             num_ending_ticks,
         );
 
-        let db_ledger = DbLedger::open(&ledger_path).unwrap().0;
+        let db_ledger = DbLedger::open(&ledger_path).unwrap();
         db_ledger
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,

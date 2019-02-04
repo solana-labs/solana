@@ -501,7 +501,7 @@ mod tests {
         );
 
         let entries = make_tiny_test_entries(64);
-        let db_ledger = DbLedger::open(&ledger_path).unwrap().0;
+        let db_ledger = DbLedger::open(&ledger_path).unwrap();
         db_ledger
             .write_entries(DEFAULT_SLOT_HEIGHT, genesis_entry_height, &entries)
             .unwrap();
@@ -569,7 +569,7 @@ mod tests {
         );
 
         let entries = make_tiny_test_entries(128);
-        let db_ledger = DbLedger::open(&ledger_path).unwrap().0;
+        let db_ledger = DbLedger::open(&ledger_path).unwrap();
         db_ledger
             .write_entries(DEFAULT_SLOT_HEIGHT, genesis_entry_height, &entries)
             .unwrap();
