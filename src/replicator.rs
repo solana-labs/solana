@@ -136,9 +136,10 @@ impl Replicator {
         // DbLedger. Note for now, this ledger will not contain any of the existing entries
         // in the ledger located at ledger_path, and will only append on newly received
         // entries after being passed to window_service
-        let db_ledger = Arc::new(
-            DbLedger::open(ledger_path).expect("Expected to be able to open database ledger"),
-        );
+        let db_ledger =
+            DbLedger::open(ledger_path).expect("Expected to be able to open database ledger");
+
+        let db_ledger = Arc::new(db_ledger);
 
         let gossip_service = GossipService::new(
             &cluster_info,
@@ -172,8 +173,6 @@ impl Replicator {
         // todo: pull blobs off the retransmit_receiver and recycle them?
         let (retransmit_sender, retransmit_receiver) = channel();
 
-        let (entry_sender, entry_receiver) = channel();
-
         let t_window = window_service(
             db_ledger.clone(),
             cluster_info.clone(),
@@ -181,7 +180,6 @@ impl Replicator {
             entry_height,
             max_entry_height,
             blob_fetch_receiver,
-            Some(entry_sender),
             retransmit_sender,
             repair_socket,
             Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
@@ -192,10 +190,10 @@ impl Replicator {
         );
 
         info!("window created, waiting for ledger download done");
-        let start = Instant::now();
-        let mut received_so_far = 0;
+        let _start = Instant::now();
+        let mut _received_so_far = 0;
 
-        while !done.load(Ordering::Relaxed) {
+        /*while !done.load(Ordering::Relaxed) {
             sleep(Duration::from_millis(100));
 
             let elapsed = start.elapsed();
@@ -207,7 +205,7 @@ impl Replicator {
                     "Timed out waiting to receive any blocks",
                 )));
             }
-        }
+        }*/
 
         info!("Done receiving entries from window_service");
 
