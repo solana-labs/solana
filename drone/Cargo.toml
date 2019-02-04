@@ -8,6 +8,9 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 edition = "2018"
 
+[features]
+cuda = []
+
 [dependencies]
 bincode = "1.0.0"
 bytes = "0.4"
