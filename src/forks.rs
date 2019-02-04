@@ -69,13 +69,13 @@ impl Forks {
             if len > max_depth {
                 let old_root = active_chain[len - 1];
                 let new_root = active_chain[len - 2];
-                if !new_root.1.finalized() {
+                if !new_root.1.frozen() {
                     println!("new_root id {}", new_root.1.fork_id());
-                    return Err(BankError::CheckpointNotFinalized);
+                    return Err(BankError::CheckpointNotFrozen);
                 }
-                if !old_root.1.finalized() {
+                if !old_root.1.frozen() {
                     println!("old id {}", old_root.1.fork_id());
-                    return Err(BankError::CheckpointNotFinalized);
+                    return Err(BankError::CheckpointNotFrozen);
                 }
                 //stupid sanity checks
                 assert_eq!(new_root.1.fork_id(), new_root.0);
@@ -127,7 +127,7 @@ impl Forks {
 
     pub fn is_active_fork(&self, fork: u64) -> bool {
         if let Some(state) = self.checkpoints.load(fork) {
-            !state.0.finalized() && self.live_bank_state == fork
+            !state.0.frozen() && self.live_bank_state == fork
         } else {
             false
         }
@@ -135,8 +135,8 @@ impl Forks {
     /// Initialize the `current` fork that is a direct descendant of the `base` fork.
     pub fn init_fork(&mut self, current: u64, last_id: &Hash, base: u64) -> Result<()> {
         if let Some(state) = self.checkpoints.load(base) {
-            if !state.0.finalized() {
-                return Err(BankError::CheckpointNotFinalized);
+            if !state.0.frozen() {
+                return Err(BankError::CheckpointNotFrozen);
             }
             let new = state.0.fork(current, last_id);
             self.checkpoints.store(current, Arc::new(new), base);
@@ -175,7 +175,7 @@ mod tests {
         assert_eq!(forks.init_fork(1, &last_id, 1), Err(BankError::UnknownFork));
         assert_eq!(
             forks.init_fork(1, &last_id, 0),
-            Err(BankError::CheckpointNotFinalized)
+            Err(BankError::CheckpointNotFrozen)
         );
         forks.root_bank_state().head().finalize();
         assert_eq!(forks.init_fork(1, &last_id, 0), Ok(()));
