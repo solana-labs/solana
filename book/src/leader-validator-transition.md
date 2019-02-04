@@ -160,7 +160,7 @@ let main(forks: Forks, leader_scheduler: LeaderScheduler, cluster_info: Arc<RwLo
 ## BankState
 
 BankState is tracking changes to the runtime over a specific slot.  Once the
-final tick has been registered the state becomes finalized and further writes
+final tick has been registered the state becomes frozen and further writes
 will error out.
 
 Validators operate over a bunch of different BankStates that represent live
