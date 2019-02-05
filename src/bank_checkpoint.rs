@@ -34,18 +34,7 @@ impl std::fmt::Debug for BankCheckpoint {
     }
 }
 
-impl Default for BankCheckpoint {
-    fn default() -> Self {
-        Self {
-            accounts: Accounts::default(),
-            last_id_queue: RwLock::new(LastIdQueue::default()),
-            status_cache: RwLock::new(BankStatusCache::default()),
-            frozen: AtomicBool::new(false),
-            fork_id: AtomicUsize::new(0 as usize),
-        }
-    }
-}
-
+#[derive(Default)]
 impl BankCheckpoint {
     // last_id id is used by the status_cache to filter duplicate signatures
     pub fn new(fork_id: u64, last_id: &Hash) -> Self {
@@ -87,7 +76,7 @@ impl BankCheckpoint {
     pub fn transaction_count(&self) -> u64 {
         self.accounts.transaction_count()
     }
-    pub fn finalize(&self) {
+    pub fn freeze(&self) {
         info!(
             "checkpoint {} frozen at {}",
             self.fork_id.load(Ordering::Relaxed),

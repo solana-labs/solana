@@ -73,16 +73,16 @@ pub enum BankError {
 
     // Poh recorder hit the maximum tick height before leader rotation
     MaxHeightReached,
-    /// Fork is not in the Checkpoints dag
+    /// Fork is not in the Checkpoints DAG
     UnknownFork,
 
-    /// The specified trunk is nmot in the Checkpoints dag
+    /// The specified trunk is not in the Checkpoints DAG
     InvalidTrunk,
 
     /// Specified base checkpoint is still live
     CheckpointNotFrozen,
 
-    /// Requested live checkpoint is finalized
+    /// Requested live checkpoint is frozen
     CheckpointIsFrozen,
 }
 
@@ -346,7 +346,7 @@ impl Bank {
                 {
                     info!("finalizing from ledger at {}", base);
                     let base_state = self.bank_state(base).expect("base fork");
-                    base_state.head().finalize();
+                    base_state.head().freeze();
                 }
                 self.init_fork(slot, &block[0].id, base)
                     .expect("init new fork");
