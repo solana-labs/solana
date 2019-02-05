@@ -95,13 +95,14 @@ impl ReplayStage {
 
         // this code to guard against consuming more ticks in a slot than are actually
         //  allowed by protocol.  entries beyond max_tick_height are silently discarded
-        //  TODO: slash somebody?
-        let mut ticks_left = max_tick_height - bank.live_bank_state().tick_height() + 1;
+        // TODO: slash somebody?
+        let mut ticks_left = max_tick_height - bank.live_bank_state().tick_height();
         entries.retain(|e| {
+            let retain = ticks_left > 0;
             if ticks_left > 0 && e.is_tick() {
                 ticks_left -= 1;
             }
-            ticks_left > 0
+            retain
         });
         info!(
             "max_tick_height: {} entries.len() up to max_tick_height: {}",
@@ -298,7 +299,12 @@ impl ReplayStage {
                         if max_tick_height_for_slot == current_tick_height {
                             // check for leader rotation
                             let leader_id = Self::get_leader(&bank, &cluster_info);
+                            info!(
+                                "leader_id: {} last_leader_id: {} my_id: {}",
+                                leader_id, last_leader_id, my_id
+                            );
                             if leader_id != last_leader_id && my_id == leader_id {
+                                info!("triggering leader rotation");
                                 to_leader_sender
                                     .send(TvuReturnType::LeaderRotation(
                                         bank.live_bank_state().tick_height(),
