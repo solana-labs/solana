@@ -2,13 +2,14 @@
 
 use crate::bank::{self, Bank, BankError};
 use crate::cluster_info::ClusterInfo;
-use crate::jsonrpc_core::*;
-use crate::jsonrpc_http_server::*;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::service::Service;
 use crate::storage_stage::StorageState;
 use bincode::{deserialize, serialize};
 use bs58;
+use jsonrpc_core::{Error, ErrorCode, MetaIoHandler, Metadata, Result};
+use jsonrpc_derive::rpc;
+use jsonrpc_http_server::{hyper, AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
 use solana_drone::drone::request_airdrop_transaction;
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
@@ -139,46 +140,49 @@ impl FromStr for RpcSignatureStatus {
     }
 }
 
-build_rpc_trait! {
-    pub trait RpcSol {
-        type Metadata;
+#[rpc]
+pub trait RpcSol {
+    type Metadata;
 
-        #[rpc(meta, name = "confirmTransaction")]
-        fn confirm_transaction(&self, Self::Metadata, String) -> Result<bool>;
+    #[rpc(meta, name = "confirmTransaction")]
+    fn confirm_transaction(&self, _: Self::Metadata, _: String) -> Result<bool>;
 
-        #[rpc(meta, name = "getAccountInfo")]
-        fn get_account_info(&self, Self::Metadata, String) -> Result<Account>;
+    #[rpc(meta, name = "getAccountInfo")]
+    fn get_account_info(&self, _: Self::Metadata, _: String) -> Result<Account>;
 
-        #[rpc(meta, name = "getBalance")]
-        fn get_balance(&self, Self::Metadata, String) -> Result<u64>;
+    #[rpc(meta, name = "getBalance")]
+    fn get_balance(&self, _: Self::Metadata, _: String) -> Result<u64>;
 
-        #[rpc(meta, name = "getConfirmationTime")]
-        fn get_confirmation_time(&self, Self::Metadata) -> Result<usize>;
+    #[rpc(meta, name = "getConfirmationTime")]
+    fn get_confirmation_time(&self, _: Self::Metadata) -> Result<usize>;
 
-        #[rpc(meta, name = "getLastId")]
-        fn get_last_id(&self, Self::Metadata) -> Result<String>;
+    #[rpc(meta, name = "getLastId")]
+    fn get_last_id(&self, _: Self::Metadata) -> Result<String>;
 
-        #[rpc(meta, name = "getSignatureStatus")]
-        fn get_signature_status(&self, Self::Metadata, String) -> Result<RpcSignatureStatus>;
+    #[rpc(meta, name = "getSignatureStatus")]
+    fn get_signature_status(&self, _: Self::Metadata, _: String) -> Result<RpcSignatureStatus>;
 
-        #[rpc(meta, name = "getTransactionCount")]
-        fn get_transaction_count(&self, Self::Metadata) -> Result<u64>;
+    #[rpc(meta, name = "getTransactionCount")]
+    fn get_transaction_count(&self, _: Self::Metadata) -> Result<u64>;
 
-        #[rpc(meta, name= "requestAirdrop")]
-        fn request_airdrop(&self, Self::Metadata, String, u64) -> Result<String>;
+    #[rpc(meta, name = "requestAirdrop")]
+    fn request_airdrop(&self, _: Self::Metadata, _: String, _: u64) -> Result<String>;
 
-        #[rpc(meta, name = "sendTransaction")]
-        fn send_transaction(&self, Self::Metadata, Vec<u8>) -> Result<String>;
+    #[rpc(meta, name = "sendTransaction")]
+    fn send_transaction(&self, _: Self::Metadata, _: Vec<u8>) -> Result<String>;
 
-        #[rpc(meta, name = "getStorageMiningLastId")]
-        fn get_storage_mining_last_id(&self, Self::Metadata) -> Result<String>;
+    #[rpc(meta, name = "getStorageMiningLastId")]
+    fn get_storage_mining_last_id(&self, _: Self::Metadata) -> Result<String>;
 
-        #[rpc(meta, name = "getStorageMiningEntryHeight")]
-        fn get_storage_mining_entry_height(&self, Self::Metadata) -> Result<u64>;
+    #[rpc(meta, name = "getStorageMiningEntryHeight")]
+    fn get_storage_mining_entry_height(&self, _: Self::Metadata) -> Result<u64>;
 
-        #[rpc(meta, name = "getStoragePubkeysForEntryHeight")]
-        fn get_storage_pubkeys_for_entry_height(&self, Self::Metadata, u64) -> Result<Vec<Pubkey>>;
-    }
+    #[rpc(meta, name = "getStoragePubkeysForEntryHeight")]
+    fn get_storage_pubkeys_for_entry_height(
+        &self,
+        _: Self::Metadata,
+        _: u64,
+    ) -> Result<Vec<Pubkey>>;
 }
 
 pub struct RpcSolImpl;
@@ -449,7 +453,7 @@ mod tests {
     use crate::bank::Bank;
     use crate::cluster_info::NodeInfo;
     use crate::genesis_block::GenesisBlock;
-    use crate::jsonrpc_core::Response;
+    use jsonrpc_core::Response;
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;

@@ -181,8 +181,8 @@ impl error::Error for RpcError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::jsonrpc_core::*;
-    use crate::jsonrpc_http_server::*;
+    use jsonrpc_core::{Error, IoHandler, Params};
+    use jsonrpc_http_server::{AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
     use serde_json::Number;
     use std::net::{Ipv4Addr, SocketAddr};
     use std::sync::mpsc::channel;

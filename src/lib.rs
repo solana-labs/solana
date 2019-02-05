@@ -88,13 +88,6 @@ extern crate serde_derive;
 #[macro_use]
 extern crate serde_json;
 
-use solana_jsonrpc_core as jsonrpc_core;
-use solana_jsonrpc_http_server as jsonrpc_http_server;
-#[macro_use]
-extern crate solana_jsonrpc_macros as jsonrpc_macros;
-use solana_jsonrpc_pubsub as jsonrpc_pubsub;
-use solana_jsonrpc_ws_server as jsonrpc_ws_server;
-
 #[cfg(test)]
 #[macro_use]
 extern crate matches;

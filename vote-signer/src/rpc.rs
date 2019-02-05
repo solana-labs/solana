@@ -178,7 +178,7 @@ impl Default for LocalVoteSigner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::jsonrpc_core::Response;
+    use jsonrpc_core::{types::*, Response};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::mem;
 
