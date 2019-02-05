@@ -486,7 +486,6 @@ mod tests {
         sleep(Duration::from_millis(900));
 
         let mut client = mk_client(&leader_data);
-
         let transaction_count = client.transaction_count();
         assert_eq!(transaction_count, 0);
         let confirmation = client.get_confirmation_time();

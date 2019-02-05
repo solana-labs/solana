@@ -88,6 +88,12 @@ impl BankCheckpoint {
         self.accounts.transaction_count()
     }
     pub fn finalize(&self) {
+        info!(
+            "checkpoint {} frozen at {}",
+            self.fork_id.load(Ordering::Relaxed),
+            self.last_id_queue.read().unwrap().tick_height
+        );
+
         self.frozen.store(true, Ordering::Relaxed);
     }
     pub fn frozen(&self) -> bool {
