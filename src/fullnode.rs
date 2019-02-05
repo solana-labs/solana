@@ -11,7 +11,6 @@ use crate::rpc::JsonRpcService;
 use crate::rpc_pubsub::PubSubService;
 use crate::service::Service;
 use crate::storage_stage::StorageState;
-use crate::streamer::BlobSender;
 use crate::tpu::{Tpu, TpuReturnType};
 use crate::tvu::{Sockets, Tvu, TvuReturnType};
 use crate::voting_keypair::VotingKeypair;
@@ -97,13 +96,13 @@ pub struct Fullnode {
     rpc_pubsub_service: Option<PubSubService>,
     gossip_service: GossipService,
     bank: Arc<Bank>,
+    db_ledger: Arc<DbLedger>,
     cluster_info: Arc<RwLock<ClusterInfo>>,
     sigverify_disabled: bool,
     tpu_sockets: Vec<UdpSocket>,
     broadcast_socket: UdpSocket,
     pub node_services: NodeServices,
     pub role_notifiers: (TvuRotationReceiver, TpuRotationReceiver),
-    blob_sender: BlobSender,
 }
 
 impl Fullnode {
@@ -224,7 +223,7 @@ impl Fullnode {
         let (to_leader_sender, to_leader_receiver) = channel();
         let (to_validator_sender, to_validator_receiver) = channel();
 
-        let (tvu, blob_sender) = Tvu::new(
+        let tvu = Tvu::new(
             voting_keypair_option,
             &bank,
             entry_height,
@@ -264,7 +263,7 @@ impl Fullnode {
             id,
             scheduled_leader == id,
             &to_validator_sender,
-            &blob_sender,
+            &db_ledger,
         );
 
         inc_new_counter_info!("fullnode-new", 1);
@@ -273,6 +272,7 @@ impl Fullnode {
             id,
             cluster_info,
             bank,
+            db_ledger,
             sigverify_disabled: config.sigverify_disabled,
             gossip_service,
             rpc_service: Some(rpc_service),
@@ -282,7 +282,6 @@ impl Fullnode {
             tpu_sockets: node.sockets.tpu,
             broadcast_socket: node.sockets.broadcast,
             role_notifiers: (to_leader_receiver, to_validator_receiver),
-            blob_sender,
         }
     }
 
@@ -353,7 +352,7 @@ impl Fullnode {
             &last_id,
             self.id,
             &to_validator_sender,
-            &self.blob_sender,
+            &self.db_ledger,
         )
     }
 
@@ -559,6 +558,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_leader_to_leader_transition() {
         // Create the leader node information
         let bootstrap_leader_keypair = Keypair::new();
@@ -695,6 +695,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_validator_to_leader_transition() {
         // Make leader and validator node
         let leader_keypair = Arc::new(Keypair::new());
@@ -806,6 +807,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_tvu_behind() {
         // Make leader node
         let leader_keypair = Arc::new(Keypair::new());
@@ -853,7 +855,6 @@ mod tests {
             let (rn_sender, rn_receiver) = channel();
             rn_sender.send(signal).expect("send");
             leader.role_notifiers = (leader.role_notifiers.0, rn_receiver);
-
             // Make sure the tvu bank is behind
             assert!(w_last_ids.tick_height < bootstrap_height);
         }

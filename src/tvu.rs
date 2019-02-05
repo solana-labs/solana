@@ -21,7 +21,6 @@ use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
 use crate::service::Service;
 use crate::storage_stage::{StorageStage, StorageState};
-use crate::streamer::BlobSender;
 use crate::voting_keypair::VotingKeypair;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -77,7 +76,7 @@ impl Tvu {
         entry_stream: Option<&String>,
         ledger_signal_sender: SyncSender<bool>,
         ledger_signal_receiver: Receiver<bool>,
-    ) -> (Self, BlobSender) {
+    ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
         let keypair: Arc<Keypair> = cluster_info
             .read()
@@ -145,18 +144,15 @@ impl Tvu {
             &cluster_info,
         );
 
-        (
-            Tvu {
-                fetch_stage,
-                retransmit_stage,
-                replay_stage,
-                storage_stage,
-                exit,
-                last_entry_id: l_last_entry_id,
-                entry_height: l_entry_height,
-            },
-            blob_fetch_sender,
-        )
+        Tvu {
+            fetch_stage,
+            retransmit_stage,
+            replay_stage,
+            storage_stage,
+            exit,
+            last_entry_id: l_last_entry_id,
+            entry_height: l_entry_height,
+        }
     }
 
     pub fn get_state(&self) -> (Hash, u64) {
@@ -353,7 +349,7 @@ pub mod tests {
         let vote_account_keypair = Arc::new(Keypair::new());
         let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
         let (sender, _) = channel();
-        let (tvu, _) = Tvu::new(
+        let tvu = Tvu::new(
             Some(Arc::new(voting_keypair)),
             &bank,
             0,
