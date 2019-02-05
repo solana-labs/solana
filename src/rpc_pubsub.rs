@@ -2,15 +2,15 @@
 
 use crate::bank;
 use crate::bank::{Bank, BankError, BankSubscriptions};
-use crate::jsonrpc_core::futures::Future;
-use crate::jsonrpc_core::*;
-use crate::jsonrpc_macros::pubsub;
-use crate::jsonrpc_macros::pubsub::Sink;
-use crate::jsonrpc_pubsub::{PubSubHandler, Session, SubscriptionId};
-use crate::jsonrpc_ws_server::{RequestContext, Sender, ServerBuilder};
 use crate::rpc::RpcSignatureStatus;
 use crate::service::Service;
 use bs58;
+use jsonrpc_core::futures::Future;
+use jsonrpc_core::{Error, ErrorCode, Result};
+use jsonrpc_derive::rpc;
+use jsonrpc_pubsub::typed::{Sink, Subscriber};
+use jsonrpc_pubsub::{PubSubHandler, Session, SubscriptionId};
+use jsonrpc_ws_server::{RequestContext, ServerBuilder};
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
@@ -21,11 +21,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{atomic, Arc, RwLock};
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
-
-pub enum ClientState {
-    Uninitialized,
-    Init(Sender),
-}
 
 pub struct PubSubService {
     thread_hdl: JoinHandle<()>,
@@ -100,31 +95,43 @@ impl PubSubService {
     }
 }
 
-build_rpc_trait! {
-    pub trait RpcSolPubSub {
-        type Metadata;
+#[rpc]
+pub trait RpcSolPubSub {
+    type Metadata;
 
-        #[pubsub(name = "accountNotification")] {
-            // Get notification every time account userdata is changed
-            // Accepts pubkey parameter as base-58 encoded string
-            #[rpc(name = "accountSubscribe")]
-            fn account_subscribe(&self, Self::Metadata, pubsub::Subscriber<Account>, String);
+    // Get notification every time account userdata is changed
+    // Accepts pubkey parameter as base-58 encoded string
+    #[pubsub(
+        subscription = "accountNotification",
+        subscribe,
+        name = "accountSubscribe"
+    )]
+    fn account_subscribe(&self, _: Self::Metadata, _: Subscriber<Account>, _: String);
 
-            // Unsubscribe from account notification subscription.
-            #[rpc(name = "accountUnsubscribe")]
-            fn account_unsubscribe(&self, SubscriptionId) -> Result<bool>;
-        }
-        #[pubsub(name = "signatureNotification")] {
-            // Get notification when signature is verified
-            // Accepts signature parameter as base-58 encoded string
-            #[rpc(name = "signatureSubscribe")]
-            fn signature_subscribe(&self, Self::Metadata, pubsub::Subscriber<RpcSignatureStatus>, String);
+    // Unsubscribe from account notification subscription.
+    #[pubsub(
+        subscription = "accountNotification",
+        unsubscribe,
+        name = "accountUnsubscribe"
+    )]
+    fn account_unsubscribe(&self, _: Option<Self::Metadata>, _: SubscriptionId) -> Result<bool>;
 
-            // Unsubscribe from signature notification subscription.
-            #[rpc(name = "signatureUnsubscribe")]
-            fn signature_unsubscribe(&self, SubscriptionId) -> Result<bool>;
-        }
-    }
+    // Get notification when signature is verified
+    // Accepts signature parameter as base-58 encoded string
+    #[pubsub(
+        subscription = "signatureNotification",
+        subscribe,
+        name = "signatureSubscribe"
+    )]
+    fn signature_subscribe(&self, _: Self::Metadata, _: Subscriber<RpcSignatureStatus>, _: String);
+
+    // Unsubscribe from signature notification subscription.
+    #[pubsub(
+        subscription = "signatureNotification",
+        unsubscribe,
+        name = "signatureUnsubscribe"
+    )]
+    fn signature_unsubscribe(&self, _: Option<Self::Metadata>, _: SubscriptionId) -> Result<bool>;
 }
 
 struct RpcPubSubBank {
@@ -259,11 +266,7 @@ impl RpcSolPubSubImpl {
         }
     }
 
-    fn subscribe_to_account_updates(
-        &self,
-        subscriber: pubsub::Subscriber<Account>,
-        pubkey_str: String,
-    ) {
+    fn subscribe_to_account_updates(&self, subscriber: Subscriber<Account>, pubkey_str: String) {
         let pubkey_vec = bs58::decode(pubkey_str).into_vec().unwrap();
         if pubkey_vec.len() != mem::size_of::<Pubkey>() {
             subscriber
@@ -288,7 +291,7 @@ impl RpcSolPubSubImpl {
 
     fn subscribe_to_signature_updates(
         &self,
-        subscriber: pubsub::Subscriber<RpcSignatureStatus>,
+        subscriber: Subscriber<RpcSignatureStatus>,
         signature_str: String,
     ) {
         info!("signature_subscribe");
@@ -339,13 +342,17 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     fn account_subscribe(
         &self,
         _meta: Self::Metadata,
-        subscriber: pubsub::Subscriber<Account>,
+        subscriber: Subscriber<Account>,
         pubkey_str: String,
     ) {
         self.subscribe_to_account_updates(subscriber, pubkey_str)
     }
 
-    fn account_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
+    fn account_unsubscribe(
+        &self,
+        _meta: Option<Self::Metadata>,
+        id: SubscriptionId,
+    ) -> Result<bool> {
         info!("account_unsubscribe: id={:?}", id);
         if self.subscription.remove_account_subscription(&id) {
             Ok(true)
@@ -361,13 +368,17 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
     fn signature_subscribe(
         &self,
         _meta: Self::Metadata,
-        subscriber: pubsub::Subscriber<RpcSignatureStatus>,
+        subscriber: Subscriber<RpcSignatureStatus>,
         signature_str: String,
     ) {
         self.subscribe_to_signature_updates(subscriber, signature_str)
     }
 
-    fn signature_unsubscribe(&self, id: SubscriptionId) -> Result<bool> {
+    fn signature_unsubscribe(
+        &self,
+        _meta: Option<Self::Metadata>,
+        id: SubscriptionId,
+    ) -> Result<bool> {
         info!("signature_unsubscribe");
         if self.subscription.remove_signature_subscription(&id) {
             Ok(true)
@@ -385,8 +396,8 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 mod tests {
     use super::*;
     use crate::genesis_block::GenesisBlock;
-    use crate::jsonrpc_core::futures::sync::mpsc;
-    use crate::jsonrpc_macros::pubsub::{Subscriber, SubscriptionId};
+    use jsonrpc_core::futures::sync::mpsc;
+    use jsonrpc_core::Response;
     use solana_sdk::budget_program;
     use solana_sdk::budget_transaction::BudgetTransaction;
     use solana_sdk::signature::{Keypair, KeypairUtil};

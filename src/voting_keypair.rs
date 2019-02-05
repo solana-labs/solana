@@ -1,7 +1,7 @@
 //! The `vote_signer_proxy` votes on the `last_id` of the bank at a regular cadence
 
-use crate::jsonrpc_core;
 use crate::rpc_request::{RpcClient, RpcRequest};
+use jsonrpc_core;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_vote_signer::rpc::LocalVoteSigner;
