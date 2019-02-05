@@ -1,7 +1,8 @@
 //! The `rpc` module implements the Vote signing service RPC interface.
 
-use crate::jsonrpc_core::*;
-use crate::jsonrpc_http_server::*;
+use jsonrpc_core::{Error, MetaIoHandler, Metadata, Result};
+use jsonrpc_derive::rpc;
+use jsonrpc_http_server::{hyper, AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use std::collections::HashMap;
@@ -68,19 +69,18 @@ pub struct Meta {
 }
 impl Metadata for Meta {}
 
-build_rpc_trait! {
-    pub trait VoteSignerRpc {
-        type Metadata;
+#[rpc]
+pub trait VoteSignerRpc {
+    type Metadata;
 
-        #[rpc(meta, name = "registerNode")]
-        fn register(&self, Self::Metadata, Pubkey, Signature, Vec<u8>) -> Result<Pubkey>;
+    #[rpc(meta, name = "registerNode")]
+    fn register(&self, _: Self::Metadata, _: Pubkey, _: Signature, _: Vec<u8>) -> Result<Pubkey>;
 
-        #[rpc(meta, name = "signVote")]
-        fn sign(&self, Self::Metadata, Pubkey, Signature, Vec<u8>) -> Result<Signature>;
+    #[rpc(meta, name = "signVote")]
+    fn sign(&self, _: Self::Metadata, _: Pubkey, _: Signature, _: Vec<u8>) -> Result<Signature>;
 
-        #[rpc(meta, name = "deregisterNode")]
-        fn deregister(&self, Self::Metadata, Pubkey, Signature, Vec<u8>) -> Result<()>;
-    }
+    #[rpc(meta, name = "deregisterNode")]
+    fn deregister(&self, _: Self::Metadata, _: Pubkey, _: Signature, _: Vec<u8>) -> Result<()>;
 }
 
 pub struct VoteSignerRpcImpl;
