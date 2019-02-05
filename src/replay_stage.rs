@@ -56,29 +56,14 @@ pub struct ReplayStage {
 }
 
 impl ReplayStage {
-    fn entries_to_blocks(entries: Vec<Entry>) -> Vec<(Vec<Entry>, u64, u64)> {
-        let mut blocks = vec![];
-        for e in entries {
-            let current = e.tick_height / DEFAULT_TICKS_PER_SLOT;
-            let prev = if current == 0 { 0 } else { current - 1 };
-            if blocks.is_empty() {
-                blocks.push((vec![], current, prev));
-            }
-            if blocks.last().unwrap().1 != current {
-                blocks.push((vec![], current, prev));
-            }
-            blocks.last_mut().unwrap().0.push(e);
-        }
-        blocks
-    }
-
     /// Process entry blobs, already in order
     #[allow(clippy::too_many_arguments)]
     fn process_entries(
         entries: Vec<Entry>,
+        current_slot: u64,
+        base_slot: u64,
         bank: &Arc<Bank>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        my_id: Pubkey,
         voting_keypair: Option<&Arc<VotingKeypair>>,
         ledger_entry_sender: &EntrySender,
         entry_height: &Arc<RwLock<u64>>,
@@ -97,7 +82,6 @@ impl ReplayStage {
                 .to_owned(),
         );
 
-        let mut res = Ok(());
         let now = Instant::now();
         if !entries.as_slice().verify(&last_entry_id.read().unwrap()) {
             inc_new_counter_info!("replicate_stage-verify-fail", entries.len());
@@ -111,93 +95,83 @@ impl ReplayStage {
         let (current_leader, _) = bank
             .get_current_leader()
             .expect("Scheduled leader should be calculated by this point");
-        let already_leader = my_id == current_leader;
-        let mut did_rotate = false;
 
-        let start_slot = entries[0].tick_height / DEFAULT_TICKS_PER_SLOT;
-        let blocks = Self::entries_to_blocks(entries);
-        for (entries, current_slot, base_slot) in blocks {
+        inc_new_counter_info!(
+            "replicate-stage_bank-tick",
+            bank.live_bank_state().tick_height() as usize
+        );
+        if bank.bank_state(current_slot).is_none() {
+            bank.init_fork(current_slot, &entries[0].id, base_slot)
+                .expect("init fork");
+        }
+        let res = bank
+            .bank_state(current_slot)
+            .unwrap()
+            .process_entries(&entries);
+
+        if res.is_err() {
+            // TODO: This will return early from the first entry that has an erroneous
+            // transaction, instead of processing the rest of the entries in the vector
+            // of received entries. This is in line with previous behavior when
+            // bank.process_entries() was used to process the entries, but doesn't solve the
+            // issue that the bank state was still changed, leading to inconsistencies with the
+            // leader as the leader currently should not be publishing erroneous transactions
             inc_new_counter_info!(
-                "replicate-stage_bank-tick",
-                bank.live_bank_state().tick_height() as usize
+                "replicate-stage_failed_process_entries",
+                current_slot as usize
             );
-            if bank.bank_state(current_slot).is_none() {
-                bank.init_fork(current_slot, &entries[0].id, base_slot)
-                    .expect("init fork");
-            }
-            res = bank
-                .bank_state(current_slot)
-                .unwrap()
-                .process_entries(&entries);
 
-            if res.is_err() {
-                // TODO: This will return early from the first entry that has an erroneous
-                // transaction, instead of processing the rest of the entries in the vector
-                // of received entries. This is in line with previous behavior when
-                // bank.process_entries() was used to process the entries, but doesn't solve the
-                // issue that the bank state was still changed, leading to inconsistencies with the
-                // leader as the leader currently should not be publishing erroneous transactions
-                inc_new_counter_info!(
-                    "replicate-stage_failed_process_entries",
-                    (current_slot - start_slot) as usize
-                );
+            res?;
+        }
 
-                break;
-            }
-            {
-                let bank_state = bank.bank_state(current_slot).expect("current bank state");
-                let next_tick_slot = (bank_state.tick_height() + 1) / DEFAULT_TICKS_PER_SLOT;
-                if next_tick_slot != current_slot {
-                    info!("finalizing {} from replay_stage", current_slot);
-                    bank_state.head().freeze();
-                    bank.merge_into_root(current_slot);
-                    if let Some(voting_keypair) = voting_keypair {
-                        let keypair = voting_keypair.as_ref();
-                        let vote = VoteTransaction::new_vote(
-                            keypair,
-                            bank_state.tick_height(),
-                            bank_state.last_id(),
-                            0,
-                        );
-                        cluster_info.write().unwrap().push_vote(vote);
-                    }
+        {
+            let bank_state = bank.bank_state(current_slot).expect("current bank state");
+            let next_tick_slot = (bank_state.tick_height() + 1) / DEFAULT_TICKS_PER_SLOT;
+            if next_tick_slot != current_slot {
+                info!("finalizing {} from replay_stage", current_slot);
+                bank_state.head().freeze();
+                bank.merge_into_root(current_slot);
+                if let Some(voting_keypair) = voting_keypair {
+                    let keypair = voting_keypair.as_ref();
+                    let vote = VoteTransaction::new_vote(
+                        keypair,
+                        bank_state.tick_height(),
+                        bank_state.last_id(),
+                        0,
+                    );
+                    cluster_info.write().unwrap().push_vote(vote);
                 }
-            }
-            // If leader rotation happened, only write the entries up to leader rotation.
-            *last_entry_id.write().unwrap() = entries
-                .last()
-                .expect("Entries cannot be empty at this point")
-                .id;
-            inc_new_counter_info!(
-                "replicate-transactions",
-                entries.iter().map(|x| x.transactions.len()).sum()
-            );
-
-            let entries_len = entries.len() as u64;
-            // TODO: In line with previous behavior, this will write all the entries even if
-            // an error occurred processing one of the entries (causing the rest of the entries to
-            // not be processed).
-            if entries_len != 0 {
-                ledger_entry_sender.send(entries)?;
-            }
-
-            *entry_height.write().unwrap() += entries_len;
-            let (scheduled_leader, _) = bank
-                .get_current_leader()
-                .expect("Scheduled leader should be calculated by this point");
-
-            // TODO: Remove this soon once we boot the leader from ClusterInfo
-            if scheduled_leader != current_leader {
-                did_rotate = true;
-                cluster_info.write().unwrap().set_leader(scheduled_leader);
-            }
-
-            if !already_leader && my_id == scheduled_leader && did_rotate {
-                break;
             }
         }
 
-        res?;
+        // If leader rotation happened, only write the entries up to leader rotation.
+        *last_entry_id.write().unwrap() = entries
+            .last()
+            .expect("Entries cannot be empty at this point")
+            .id;
+        inc_new_counter_info!(
+            "replicate-transactions",
+            entries.iter().map(|x| x.transactions.len()).sum()
+        );
+
+        let entries_len = entries.len() as u64;
+        // TODO: In line with previous behavior, this will write all the entries even if
+        // an error occurred processing one of the entries (causing the rest of the entries to
+        // not be processed).
+        if entries_len != 0 {
+            ledger_entry_sender.send(entries)?;
+        }
+
+        *entry_height.write().unwrap() += entries_len;
+        let (scheduled_leader, _) = bank
+            .get_current_leader()
+            .expect("Scheduled leader should be calculated by this point");
+
+        // TODO: Remove this soon once we boot the leader from ClusterInfo
+        if scheduled_leader != current_leader {
+            cluster_info.write().unwrap().set_leader(scheduled_leader);
+        }
+
         inc_new_counter_info!(
             "replicate_stage-duration",
             duration_as_ms(&now.elapsed()) as usize
@@ -262,15 +236,22 @@ impl ReplayStage {
                             vec![]
                         }
                     };
+                    // TODO: ledger provides from get_slot_entries()
+                    let base_slot = if current_slot == 0 {
+                        0
+                    } else {
+                        current_slot - 1
+                    };
 
                     let entry_len = entries.len();
                     // Fetch the next entries from the database
                     if !entries.is_empty() {
                         if let Err(e) = Self::process_entries(
                             entries,
+                            current_slot,
+                            base_slot,
                             &bank,
                             &cluster_info,
-                            my_id,
                             voting_keypair.as_ref(),
                             &ledger_entry_sender,
                             &entry_height,
@@ -807,9 +788,10 @@ mod test {
         let voting_keypair = Arc::new(VotingKeypair::new_local(&my_keypair));
         let res = ReplayStage::process_entries(
             entries.clone(),
+            0,
+            0,
             &Arc::new(Bank::default()),
             &cluster_info_me,
-            my_id,
             Some(&voting_keypair),
             &ledger_entry_sender,
             &Arc::new(RwLock::new(entry_height)),
@@ -830,9 +812,10 @@ mod test {
 
         let res = ReplayStage::process_entries(
             entries.clone(),
+            0,
+            0,
             &Arc::new(Bank::default()),
             &cluster_info_me,
-            my_id,
             Some(&voting_keypair),
             &ledger_entry_sender,
             &Arc::new(RwLock::new(entry_height)),
@@ -882,9 +865,10 @@ mod test {
         let voting_keypair = Arc::new(VotingKeypair::new_local(&my_keypair));
         ReplayStage::process_entries(
             entries.clone(),
+            0,
+            0,
             &Arc::new(bank),
             &cluster_info_me,
-            my_id,
             Some(&voting_keypair),
             &ledger_entry_sender,
             &Arc::new(RwLock::new(entry_height)),
