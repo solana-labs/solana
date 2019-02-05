@@ -1,24 +1,20 @@
-#[macro_use]
-extern crate log;
-
+use log::*;
 use solana::blob_fetch_stage::BlobFetchStage;
+use solana::client::mk_client;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
-use solana::contact_info::ContactInfo;
 use solana::db_ledger::{create_tmp_sample_ledger, tmp_copy_ledger};
 use solana::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
 use solana::entry::{reconstruct_entries_from_blobs, Entry};
 use solana::fullnode::{Fullnode, FullnodeConfig, FullnodeReturnType};
 use solana::gossip_service::GossipService;
-use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
+use solana::leader_scheduler::{make_active_set_entries, LeaderSchedulerConfig};
 use solana::packet::SharedBlob;
-use solana::poh_service::NUM_TICKS_PER_SECOND;
 use solana::result;
 use solana::service::Service;
-use solana::thin_client::{poll_gossip_for_leader, retry_get_balance, ThinClient};
+use solana::thin_client::{poll_gossip_for_leader, retry_get_balance};
 use solana::tpu::TpuReturnType;
 use solana::tvu::TvuReturnType;
 use solana::voting_keypair::VotingKeypair;
-use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
@@ -26,11 +22,10 @@ use solana_sdk::timing::duration_as_s;
 use std::collections::{HashSet, VecDeque};
 use std::env;
 use std::fs::remove_dir_all;
-use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
-use std::thread::{sleep, Builder, JoinHandle};
+use std::thread::{sleep, Builder};
 use std::time::{Duration, Instant};
 
 fn read_ledger(ledger_path: &str) -> Vec<Entry> {
@@ -89,20 +84,21 @@ fn make_listening_node(
     (gossip_service, new_node_cluster_info_ref, new_node, id)
 }
 
-fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
+fn converge(node: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
+    info!("Wait for convergence with {} nodes", num_nodes);
     // Let's spy on the network
-    let (gossip_service, spy_ref, id) = make_spy_node(leader);
+    let (gossip_service, spy_ref, id) = make_spy_node(node);
     trace!(
         "converge spy_node {} looking for at least {} nodes",
         id,
         num_nodes
     );
 
-    // Wait for the network to converge
+    // Wait for the cluster to converge
     for _ in 0..15 {
         let rpc_peers = spy_ref.read().unwrap().rpc_peers();
-        if rpc_peers.len() >= num_nodes {
-            debug!("converge found {} nodes", rpc_peers.len());
+        if rpc_peers.len() == num_nodes {
+            debug!("converge found {} nodes: {:?}", rpc_peers.len(), rpc_peers);
             gossip_service.close().unwrap();
             return rpc_peers;
         }
@@ -116,26 +112,17 @@ fn converge(leader: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     panic!("Failed to converge");
 }
 
-fn make_tiny_test_entries(start_hash: Hash, num: usize) -> Vec<Entry> {
-    let mut id = start_hash;
-    let mut num_hashes = 0;
-    (0..num)
-        .map(|_| Entry::new_mut(&mut id, &mut num_hashes, vec![]))
-        .collect()
-}
-
 #[test]
 fn test_multi_node_ledger_window() -> result::Result<()> {
     solana_logger::setup();
 
     let leader_keypair = Arc::new(Keypair::new());
-    let leader_pubkey = leader_keypair.pubkey().clone();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_data = leader.info.clone();
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (alice, leader_ledger_path, last_entry_height, last_entry_id) =
+    let (alice, leader_ledger_path, mut last_entry_height, mut last_entry_id) =
         create_tmp_sample_ledger("multi_node_ledger_window", 10_000, 0, leader_data.id, 500);
     ledger_paths.push(leader_ledger_path.clone());
 
@@ -143,14 +130,39 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     let zero_ledger_path = tmp_copy_ledger(&leader_ledger_path, "multi_node_ledger_window");
     ledger_paths.push(zero_ledger_path.clone());
 
-    // write a bunch more ledger into leader's ledger, this should populate the leader's window
+    let fullnode_config = FullnodeConfig::default();
+    info!(
+        "leader_rotation_interval: {}",
+        fullnode_config
+            .leader_scheduler_config
+            .leader_rotation_interval
+    );
+
+    // Write some into leader's ledger, this should populate the leader's window
     // and force it to respond to repair from the ledger window
+    // TODO: write out more than slot 0
     {
-        let entries = make_tiny_test_entries(last_entry_id, 100);
         let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
+
+        let entries = solana::entry::create_ticks(
+            fullnode_config
+                .leader_scheduler_config
+                .leader_rotation_interval
+                - last_entry_height
+                - 2,
+            last_entry_id,
+        );
         db_ledger
-            .write_entries(DEFAULT_SLOT_HEIGHT, last_entry_height, &entries)
+            .write_entries(0, last_entry_height, &entries)
             .unwrap();
+
+        last_entry_height += entries.len() as u64;
+        last_entry_id = entries.last().unwrap().id;
+
+        info!(
+            "Final last_entry_height: {}, last_entry_id: {:?}",
+            last_entry_height, last_entry_id
+        );
     }
 
     let voting_keypair = VotingKeypair::new_local(&leader_keypair);
@@ -158,18 +170,22 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         leader,
         &leader_keypair,
         &leader_ledger_path,
-        Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_pubkey,
-        ))),
         voting_keypair,
         None,
-        &FullnodeConfig::default(),
+        &fullnode_config,
     );
+    let leader_exit = leader.run(None);
 
-    // start up another validator from zero, converge and then check
-    // balances
+    // Give validator some tokens for voting
     let keypair = Arc::new(Keypair::new());
     let validator_pubkey = keypair.pubkey().clone();
+    info!("validator id: {:?}", validator_pubkey);
+    let validator_balance =
+        send_tx_and_retry_get_balance(&leader_data, &alice, &validator_pubkey, 500, None).unwrap();
+    info!("validator balance {}", validator_balance);
+
+    // Start up another validator from zero, converge and then check
+    // balances
     let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
     let validator_data = validator.info.clone();
     let voting_keypair = VotingKeypair::new_local(&keypair);
@@ -177,34 +193,31 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         validator,
         &keypair,
         &zero_ledger_path,
-        Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_pubkey,
-        ))),
         voting_keypair,
         Some(&leader_data),
         &FullnodeConfig::default(),
     );
+    let validator_exit = validator.run(None);
 
-    // Send validator some tokens to vote
-    let validator_balance =
-        send_tx_and_retry_get_balance(&leader_data, &alice, &validator_pubkey, 500, None).unwrap();
-    info!("validator balance {}", validator_balance);
+    converge(&leader_data, 2);
 
-    // contains the leader and new node
-    info!("converging....");
-    let _servers = converge(&leader_data, 2);
-    info!("converged.");
-
-    // another transaction with leader
+    // Another transaction with leader
     let bob_balance =
         send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, 1, None).unwrap();
     info!("bob balance on leader {}", bob_balance);
     let mut checks = 1;
     loop {
-        let mut client = mk_client(&validator_data);
-        let bal = client.poll_get_balance(&bob_pubkey);
+        let mut leader_client = mk_client(&leader_data);
+        let bal = leader_client.poll_get_balance(&bob_pubkey);
         info!(
-            "bob balance on validator {:?} after {} checks...",
+            "Bob balance on leader is {:?} after {} checks...",
+            bal, checks
+        );
+
+        let mut validator_client = mk_client(&validator_data);
+        let bal = validator_client.poll_get_balance(&bob_pubkey);
+        info!(
+            "Bob balance on validator is {:?} after {} checks...",
             bal, checks
         );
         if bal.unwrap_or(0) == bob_balance {
@@ -212,10 +225,10 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         }
         checks += 1;
     }
-    info!("done!");
 
-    validator.close()?;
-    leader.close()?;
+    info!("Done!");
+    validator_exit();
+    leader_exit();
 
     for path in ledger_paths {
         remove_dir_all(path).unwrap();
@@ -230,7 +243,6 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     const N: usize = 2;
     trace!("test_multi_node_validator_catchup_from_zero");
     let leader_keypair = Arc::new(Keypair::new());
-    let leader_pubkey = leader_keypair.pubkey().clone();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_data = leader.info.clone();
     let bob_pubkey = Keypair::new().pubkey();
@@ -261,15 +273,12 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
         leader,
         &leader_keypair,
         &leader_ledger_path,
-        Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_pubkey,
-        ))),
         voting_keypair,
         None,
         &FullnodeConfig::default(),
     );
 
-    let mut nodes = vec![server];
+    let mut node_exits = vec![server.run(None)];
     for _ in 0..N {
         let keypair = Arc::new(Keypair::new());
         let validator_pubkey = keypair.pubkey().clone();
@@ -290,21 +299,17 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
         );
 
         let voting_keypair = VotingKeypair::new_local(&keypair);
-        let val = Fullnode::new(
+        let validator = Fullnode::new(
             validator,
             &keypair,
             &ledger_path,
-            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-                leader_pubkey,
-            ))),
             voting_keypair,
             Some(&leader_data),
             &FullnodeConfig::default(),
         );
-        nodes.push(val);
+        node_exits.push(validator.run(None));
     }
-    let servers = converge(&leader_data, N + 1); // contains the leader addr as well
-    assert_eq!(servers.len(), N + 1);
+    let nodes = converge(&leader_data, N + 1); // contains the leader addr as well
 
     // Verify leader can transfer from alice to bob
     let leader_balance =
@@ -313,7 +318,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
 
     // Verify validators all have the same balance for bob
     let mut success = 0usize;
-    for server in servers.iter() {
+    for server in nodes.iter() {
         let id = server.id;
         info!("0server: {}", id);
         let mut client = mk_client(server);
@@ -340,7 +345,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
         }
         assert!(found);
     }
-    assert_eq!(success, servers.len());
+    assert_eq!(success, nodes.len());
 
     success = 0;
 
@@ -352,19 +357,17 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     let voting_keypair = VotingKeypair::new_local(&keypair);
     info!("created start from zero validator {:?}", validator_pubkey);
 
-    let val = Fullnode::new(
+    let validator = Fullnode::new(
         validator,
         &keypair,
         &zero_ledger_path,
-        Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_pubkey,
-        ))),
         voting_keypair,
         Some(&leader_data),
         &FullnodeConfig::default(),
     );
-    nodes.push(val);
-    let servers = converge(&leader_data, N + 2); // contains the leader and new node
+
+    node_exits.push(validator.run(None));
+    let nodes = converge(&leader_data, N + 2); // contains the leader and new node
 
     // Transfer a little more from alice to bob
     let mut leader_balance =
@@ -380,7 +383,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     }
     assert_eq!(leader_balance, 456);
 
-    for server in servers.iter() {
+    for server in nodes.iter() {
         let id = server.id;
         info!("1server: {}", id);
         let mut client = mk_client(server);
@@ -402,16 +405,16 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
                     id, i, result
                 );
             }
-            sleep(Duration::new(1, 0));
+            sleep(Duration::new(2, 0));
         }
         assert!(found);
     }
-    assert_eq!(success, servers.len());
+    assert_eq!(success, nodes.len());
 
     trace!("done!");
 
-    for node in nodes {
-        node.close()?;
+    for node_exit in node_exits {
+        node_exit();
     }
 
     for path in ledger_paths {
@@ -426,8 +429,9 @@ fn test_multi_node_basic() {
     solana_logger::setup();
     const N: usize = 5;
     trace!("test_multi_node_basic");
+
+    let fullnode_config = FullnodeConfig::default();
     let leader_keypair = Arc::new(Keypair::new());
-    let leader_pubkey = leader_keypair.pubkey().clone();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_data = leader.info.clone();
     let bob_pubkey = Keypair::new().pubkey();
@@ -445,16 +449,13 @@ fn test_multi_node_basic() {
         leader,
         &leader_keypair,
         &leader_ledger_path,
-        Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_pubkey,
-        ))),
         voting_keypair,
         None,
-        &FullnodeConfig::default(),
+        &fullnode_config,
     );
 
-    let mut nodes = vec![server];
-    for _ in 0..N {
+    let mut exit_signals = vec![server.run(None)];
+    for i in 0..N {
         let keypair = Arc::new(Keypair::new());
         let validator_pubkey = keypair.pubkey().clone();
         let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
@@ -466,25 +467,21 @@ fn test_multi_node_basic() {
             send_tx_and_retry_get_balance(&leader_data, &alice, &validator_pubkey, 500, None)
                 .unwrap();
         info!(
-            "validator {}, balance {}",
-            validator_pubkey, validator_balance
+            "validator #{} - {}, balance {}",
+            i, validator_pubkey, validator_balance
         );
         let voting_keypair = VotingKeypair::new_local(&keypair);
         let val = Fullnode::new(
             validator,
             &keypair,
             &ledger_path,
-            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-                leader_pubkey,
-            ))),
             voting_keypair,
             Some(&leader_data),
-            &FullnodeConfig::default(),
+            &fullnode_config,
         );
-        nodes.push(val);
+        exit_signals.push(val.run(None));
     }
-    let servers = converge(&leader_data, N + 1);
-    assert_eq!(servers.len(), N + 1); // contains the leader as well
+    let nodes = converge(&leader_data, N + 1);
 
     // Verify leader can do transfer from alice to bob
     let leader_bob_balance =
@@ -493,7 +490,7 @@ fn test_multi_node_basic() {
 
     // Verify validators all have the same balance for bob
     let mut success = 0usize;
-    for server in servers.iter() {
+    for server in nodes.iter() {
         let id = server.id;
         info!("mk_client for {}", id);
         let mut client = mk_client(server);
@@ -519,11 +516,11 @@ fn test_multi_node_basic() {
         }
         assert!(found);
     }
-    assert_eq!(success, servers.len());
+    assert_eq!(success, nodes.len());
     trace!("done!");
 
-    for node in nodes {
-        node.close().unwrap();
+    for exit_signal in exit_signals {
+        exit_signal()
     }
 
     for path in ledger_paths {
@@ -553,9 +550,6 @@ fn test_boot_validator_from_file() -> result::Result<()> {
         leader,
         &leader_keypair,
         &leader_ledger_path,
-        Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_pubkey,
-        ))),
         voting_keypair,
         None,
         &FullnodeConfig::default(),
@@ -577,9 +571,6 @@ fn test_boot_validator_from_file() -> result::Result<()> {
         validator,
         &keypair,
         &ledger_path,
-        Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_pubkey,
-        ))),
         voting_keypair,
         Some(&leader_data),
         &FullnodeConfig::default(),
@@ -609,9 +600,6 @@ fn create_leader(
         leader,
         &leader_keypair,
         &ledger_path,
-        Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_data.id,
-        ))),
         voting_keypair,
         None,
         &FullnodeConfig::default(),
@@ -687,9 +675,6 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
         validator,
         &keypair,
         &stale_ledger_path,
-        Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_data.id,
-        ))),
         voting_keypair,
         Some(&leader_data),
         &FullnodeConfig::default(),
@@ -760,34 +745,32 @@ fn test_multi_node_dynamic_network() {
         leader,
         &leader_keypair,
         &leader_ledger_path,
-        Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_pubkey,
-        ))),
         voting_keypair,
         None,
         &FullnodeConfig::default(),
     );
+    let server_exit = server.run(None);
     info!(
         "found leader: {:?}",
         poll_gossip_for_leader(leader_data.gossip, Some(5)).unwrap()
     );
 
-    let leader_balance = retry_send_tx_and_retry_get_balance(
+    let bob_balance = retry_send_tx_and_retry_get_balance(
         &leader_data,
         &alice_arc.read().unwrap(),
         &bob_pubkey,
         Some(500),
     )
     .unwrap();
-    assert_eq!(leader_balance, 500);
-    let leader_balance = retry_send_tx_and_retry_get_balance(
+    assert_eq!(bob_balance, 500);
+    let bob_balance = retry_send_tx_and_retry_get_balance(
         &leader_data,
         &alice_arc.read().unwrap(),
         &bob_pubkey,
         Some(1000),
     )
     .unwrap();
-    assert_eq!(leader_balance, 1000);
+    assert_eq!(bob_balance, 1000);
 
     let t1: Vec<_> = (0..num_nodes)
         .into_iter()
@@ -826,22 +809,20 @@ fn test_multi_node_dynamic_network() {
                 .name("validator-launch-thread".to_string())
                 .spawn(move || {
                     let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
-                    let rd = validator.info.clone();
-                    info!("starting {} {}", keypair.pubkey(), rd.id);
+                    let validator_info = validator.info.clone();
+                    info!("starting {}", keypair.pubkey());
                     let keypair = Arc::new(keypair);
                     let voting_keypair = VotingKeypair::new_local(&keypair);
-                    let val = Fullnode::new(
+                    let validator = Fullnode::new(
                         validator,
                         &keypair,
                         &ledger_path,
-                        Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-                            leader_pubkey,
-                        ))),
                         voting_keypair,
                         Some(&leader_data),
                         &FullnodeConfig::default(),
                     );
-                    (rd, val)
+                    let validator_exit = validator.run(None);
+                    (validator_info, validator_exit)
                 })
                 .unwrap()
         })
@@ -852,10 +833,10 @@ fn test_multi_node_dynamic_network() {
     let mut client = mk_client(&leader_data);
     let start = Instant::now();
     let mut consecutive_success = 0;
-    let mut expected_balance = leader_balance;
+    let mut expected_balance = bob_balance;
     let mut last_id = client.get_last_id();
     for i in 0..std::cmp::max(20, num_nodes) {
-        trace!("Getting last_id...");
+        trace!("Getting last_id (iteration {})...", i);
         let mut retries = 30;
         loop {
             let new_last_id = client.get_last_id();
@@ -872,29 +853,15 @@ fn test_multi_node_dynamic_network() {
         }
         debug!("last_id: {}", last_id);
         trace!("Executing leader transfer of 100");
+
+        let mut transaction =
+            SystemTransaction::new_move(&alice_arc.read().unwrap(), bob_pubkey, 100, last_id, 0);
         let sig = client
-            .transfer(100, &alice_arc.read().unwrap(), bob_pubkey, &last_id)
+            .retry_transfer(&alice_arc.read().unwrap(), &mut transaction, 5)
             .unwrap();
+        trace!("transfer sig: {:?}", sig);
 
         expected_balance += 100;
-
-        let mut retries = 30;
-        loop {
-            let e = client.poll_for_signature(&sig);
-            if e.is_ok() {
-                break;
-            }
-            debug!(
-                "signature not found yet: {}: {:?}, retries={}",
-                sig, e, retries
-            );
-            retries -= 1;
-            if retries == 0 {
-                assert!(e.is_ok(), "err: {:?}", e);
-            }
-            sleep(Duration::from_millis(100));
-        }
-
         let mut retries = 30;
         loop {
             let balance = retry_get_balance(&mut client, &bob_pubkey, Some(expected_balance));
@@ -928,7 +895,6 @@ fn test_multi_node_dynamic_network() {
                 let mut client = mk_client(&server.0);
                 trace!("{} checking signature", server.0.id);
                 num_nodes_behind += if client.check_signature(&sig) { 0 } else { 1 };
-                server.1.exit();
                 true
             });
 
@@ -943,14 +909,10 @@ fn test_multi_node_dynamic_network() {
 
     info!("done!");
     assert_eq!(consecutive_success, 10);
-    for (_, node) in &validators {
-        node.exit();
+    for (_, validator_exit) in validators {
+        validator_exit();
     }
-    server.exit();
-    for (_, node) in validators {
-        node.join().unwrap();
-    }
-    server.join().unwrap();
+    server_exit();
 
     for path in ledger_paths {
         remove_dir_all(path).unwrap();
@@ -960,7 +922,6 @@ fn test_multi_node_dynamic_network() {
 #[test]
 fn test_leader_to_validator_transition() {
     solana_logger::setup();
-    let leader_rotation_interval = 20;
 
     // Make a dummy validator id to be the next leader
     let validator_keypair = Arc::new(Keypair::new());
@@ -970,22 +931,39 @@ fn test_leader_to_validator_transition() {
     let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_info = leader_node.info.clone();
 
+    let mut fullnode_config = FullnodeConfig::default();
+    let leader_rotation_interval = 5;
+    fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
+        leader_rotation_interval,
+        leader_rotation_interval,
+        // Setup window length to exclude the genesis bootstrap leader vote at tick height 0, so
+        // that when the leader schedule is recomputed for epoch 1 only the validator vote at tick
+        // height 1 will be considered.
+        leader_rotation_interval,
+    );
+
     // Initialize the leader ledger. Make a mint and a genesis entry
     // in the leader ledger
-    let num_ending_ticks = 1;
     let (mint_keypair, leader_ledger_path, genesis_entry_height, last_id) =
         create_tmp_sample_ledger(
             "test_leader_to_validator_transition",
             10_000,
-            num_ending_ticks,
+            0,
             leader_info.id,
             500,
         );
 
-    // Write the bootstrap entries to the ledger that will cause leader rotation
-    // after the bootstrap height
-    let (bootstrap_entries, _) =
-        make_active_set_entries(&validator_keypair, &mint_keypair, &last_id, &last_id, 0);
+    // Write the votes entries to the ledger that will cause leader rotation
+    // to validator_keypair at slot 2
+    let (bootstrap_entries, _) = make_active_set_entries(
+        &validator_keypair,
+        &mint_keypair,
+        100,
+        leader_rotation_interval,
+        &last_id,
+        &last_id,
+        0,
+    );
     {
         let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
         db_ledger
@@ -996,111 +974,64 @@ fn test_leader_to_validator_transition() {
             )
             .unwrap();
     }
+    info!("leader id: {}", leader_keypair.pubkey());
+    info!("validator id: {}", validator_keypair.pubkey());
 
     // Start the leader node
-    let bootstrap_height = leader_rotation_interval;
-    let leader_scheduler_config = LeaderSchedulerConfig::new(
-        bootstrap_height,
-        leader_rotation_interval,
-        leader_rotation_interval * 2,
-        bootstrap_height,
-    );
-
     let voting_keypair = VotingKeypair::new_local(&leader_keypair);
-    let mut leader = Fullnode::new(
+    let leader = Fullnode::new(
         leader_node,
         &leader_keypair,
         &leader_ledger_path,
-        Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         voting_keypair,
         Some(&leader_info),
-        &FullnodeConfig::default(),
+        &fullnode_config,
     );
+    let (rotation_sender, rotation_receiver) = channel();
+    let leader_exit = leader.run(Some(rotation_sender));
 
-    // Make an extra node for our leader to broadcast to,
-    // who won't vote and mess with our leader's entry count
-    let (gossip_service, spy_node, _) = make_spy_node(&leader_info);
+    // There will be two rotations:
+    // slot 0 -> slot 1: bootstrap leader remains the leader
+    // slot 1 -> slot 2: bootstrap leader to the validator
+    let expected_rotations = vec![
+        (
+            FullnodeReturnType::LeaderToLeaderRotation,
+            leader_rotation_interval,
+        ),
+        (
+            FullnodeReturnType::LeaderToValidatorRotation,
+            2 * leader_rotation_interval,
+        ),
+    ];
 
-    // Wait for the leader to see the spy node
-    let mut converged = false;
-    for _ in 0..30 {
-        let num = spy_node.read().unwrap().convergence();
-        let v: Vec<NodeInfo> = spy_node.read().unwrap().rpc_peers();
-        // There's only one person excluding the spy node (the leader) who should see
-        // two nodes on the network
-        if num >= 2 && v.len() >= 1 {
-            converged = true;
+    for expected_rotation in expected_rotations {
+        loop {
+            let transition = rotation_receiver.recv().unwrap();
+            info!("leader transition: {:?}", transition);
+            assert_eq!(transition, expected_rotation);
             break;
         }
-        sleep(Duration::new(1, 0));
     }
 
-    assert!(converged);
+    info!("Shut down...");
+    leader_exit();
 
-    // Account that will be the sink for all the test's transactions
-    let bob_pubkey = Keypair::new().pubkey();
+    info!("Check the ledger to make sure it's the right height...");
+    let (bank, _, _) = Fullnode::new_bank_from_ledger(&leader_ledger_path, None);
 
-    // Push transactions until we detect an exit
-    let mut i = 1;
-    loop {
-        // Poll to see that the bank state is updated after every transaction
-        // to ensure that each transaction is packaged as a single entry,
-        // so that we can be sure leader rotation is triggered
-        let result = send_tx_and_retry_get_balance(
-            &leader_info,
-            &mint_keypair,
-            &bob_pubkey,
-            1,
-            Some(i as u64),
-        );
-
-        // If the transaction wasn't reflected in the node, then we assume
-        // the node has transitioned already
-        if result != Some(i as u64) {
-            break;
-        }
-
-        i += 1;
-    }
-
-    // Wait for leader to shut down tpu and restart tvu
-    match leader.handle_role_transition() {
-        Some(FullnodeReturnType::LeaderToValidatorRotation) => (),
-        _ => panic!("Expected reason for exit to be leader rotation"),
-    }
-
-    // Query newly transitioned validator to make sure that they have the proper balances in
-    // the after the transitions
-    let mut leader_client = mk_client(&leader_info);
-
-    // Leader could have executed transactions in bank but not recorded them, so
-    // we only have an upper bound on the balance
-    if let Ok(bal) = leader_client.poll_get_balance(&bob_pubkey) {
-        assert!(bal <= i);
-    }
-
-    // Shut down
-    gossip_service.close().unwrap();
-    leader.close().unwrap();
-
-    // Check the ledger to make sure it's the right height, we should've
-    // transitioned after tick_height == bootstrap_height
-    let (bank, _, _) = Fullnode::new_bank_from_ledger(
-        &leader_ledger_path,
-        Arc::new(RwLock::new(LeaderScheduler::default())),
+    assert_eq!(
+        bank.tick_height(),
+        2 * fullnode_config
+            .leader_scheduler_config
+            .leader_rotation_interval
+            - 1
     );
-
-    assert_eq!(bank.tick_height(), bootstrap_height);
     remove_dir_all(leader_ledger_path).unwrap();
 }
 
 #[test]
 fn test_leader_validator_basic() {
     solana_logger::setup();
-    let leader_rotation_interval = 10;
-
-    // Account that will be the sink for all the test's transactions
-    let bob_pubkey = Keypair::new().pubkey();
 
     // Create the leader node information
     let leader_keypair = Arc::new(Keypair::new());
@@ -1111,28 +1042,29 @@ fn test_leader_validator_basic() {
     let validator_keypair = Arc::new(Keypair::new());
     let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
+    info!("leader id: {}", leader_keypair.pubkey());
+    info!("validator id: {}", validator_keypair.pubkey());
+
     // Make a common mint and a genesis entry for both leader + validator ledgers
-    let num_ending_ticks = 1;
     let (mint_keypair, leader_ledger_path, genesis_entry_height, last_id) =
         create_tmp_sample_ledger(
             "test_leader_validator_basic",
             10_000,
-            num_ending_ticks,
+            0,
             leader_info.id,
             500,
         );
 
-    let validator_ledger_path = tmp_copy_ledger(&leader_ledger_path, "test_leader_validator_basic");
-
-    // Initialize both leader + validator ledger
-    let mut ledger_paths = Vec::new();
-    ledger_paths.push(leader_ledger_path.clone());
-    ledger_paths.push(validator_ledger_path.clone());
-
-    // Write the bootstrap entries to the ledger that will cause leader rotation
-    // after the bootstrap height
-    let (active_set_entries, _) =
-        make_active_set_entries(&validator_keypair, &mint_keypair, &last_id, &last_id, 0);
+    // Add validator vote on tick height 1
+    let (active_set_entries, _) = make_active_set_entries(
+        &validator_keypair,
+        &mint_keypair,
+        100,
+        1,
+        &last_id,
+        &last_id,
+        0,
+    );
     {
         let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
         db_ledger
@@ -1144,92 +1076,79 @@ fn test_leader_validator_basic() {
             .unwrap();
     }
 
+    // Initialize both leader + validator ledger
+    let mut ledger_paths = Vec::new();
+    ledger_paths.push(leader_ledger_path.clone());
+    let validator_ledger_path = tmp_copy_ledger(&leader_ledger_path, "test_leader_validator_basic");
+    ledger_paths.push(validator_ledger_path.clone());
+
     // Create the leader scheduler config
-    let num_bootstrap_slots = 2;
-    let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
-    let leader_scheduler_config = LeaderSchedulerConfig::new(
-        bootstrap_height,
+    let mut fullnode_config = FullnodeConfig::default();
+    let leader_rotation_interval = 5;
+    fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
         leader_rotation_interval,
-        leader_rotation_interval * 2,
-        bootstrap_height,
+        leader_rotation_interval, // 1 slot per epoch
+        leader_rotation_interval,
     );
 
     // Start the validator node
     let voting_keypair = VotingKeypair::new_local(&validator_keypair);
-    let mut validator = Fullnode::new(
+    let validator = Fullnode::new(
         validator_node,
         &validator_keypair,
         &validator_ledger_path,
-        Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         voting_keypair,
         Some(&leader_info),
-        &FullnodeConfig::default(),
+        &fullnode_config,
     );
+    let (validator_rotation_sender, validator_rotation_receiver) = channel();
+    let validator_exit = validator.run(Some(validator_rotation_sender));
 
     // Start the leader fullnode
     let voting_keypair = VotingKeypair::new_local(&leader_keypair);
-    let mut leader = Fullnode::new(
+    let leader = Fullnode::new(
         leader_node,
         &leader_keypair,
         &leader_ledger_path,
-        Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         voting_keypair,
         Some(&leader_info),
-        &FullnodeConfig::default(),
+        &fullnode_config,
+    );
+    let (leader_rotation_sender, leader_rotation_receiver) = channel();
+    let leader_exit = leader.run(Some(leader_rotation_sender));
+
+    converge(&leader_info, 2);
+
+    info!("Waiting for slot 0 -> slot 1: bootstrap leader will remain the leader");
+    assert_eq!(
+        leader_rotation_receiver.recv().unwrap(),
+        (
+            FullnodeReturnType::LeaderToLeaderRotation,
+            leader_rotation_interval,
+        )
     );
 
-    // Wait for convergence
-    let servers = converge(&leader_info, 2);
-    assert_eq!(servers.len(), 2);
+    info!("Waiting for slot 1 -> slot 2: bootstrap leader becomes a validator");
+    assert_eq!(
+        leader_rotation_receiver.recv().unwrap(),
+        (
+            FullnodeReturnType::LeaderToValidatorRotation,
+            leader_rotation_interval * 2,
+        )
+    );
 
-    // Push transactions until we detect the nodes exit
-    let mut i = 1;
-    loop {
-        // Poll to see that the bank state is updated after every transaction
-        // to ensure that each transaction is packaged as a single entry,
-        // so that we can be sure leader rotation is triggered
-        let result =
-            send_tx_and_retry_get_balance(&leader_info, &mint_keypair, &bob_pubkey, 1, None);
+    info!("Waiting for slot 1 -> slot 2: validator becomes the leader");
+    assert_eq!(
+        validator_rotation_receiver.recv().unwrap(),
+        (
+            FullnodeReturnType::ValidatorToLeaderRotation,
+            leader_rotation_interval * 2,
+        )
+    );
 
-        // If the transaction wasn't reflected in the node, then we assume
-        // the node has transitioned already
-        if result != Some(i as u64) {
-            break;
-        }
-
-        i += 1;
-    }
-
-    // Wait for validator to shut down tvu and restart tpu
-    match validator.handle_role_transition() {
-        Some(FullnodeReturnType::ValidatorToLeaderRotation) => (),
-        _ => panic!("Expected reason for exit to be leader rotation"),
-    }
-
-    // Wait for the leader to shut down tpu and restart tvu
-    match leader.handle_role_transition() {
-        Some(FullnodeReturnType::LeaderToValidatorRotation) => (),
-        _ => panic!("Expected reason for exit to be leader rotation"),
-    }
-
-    // Query newly transitioned validator to make sure they have the proper balances
-    // in the bank after the transitions
-    let mut leader_client = mk_client(&leader_info);
-
-    // Leader could have executed transactions in bank but not recorded them, so
-    // we only have an upper bound on the balance
-    if let Ok(bal) = leader_client.poll_get_balance(&bob_pubkey) {
-        assert!(bal <= i);
-    }
-
-    // Shut down
-    // stop the leader first so no more ticks/txs are created
-    leader.exit();
-    validator.exit();
-    leader.join().expect("Expected successful leader close");
-    validator
-        .join()
-        .expect("Expected successful validator close");
+    info!("Shut down");
+    validator_exit();
+    leader_exit();
 
     // Check the ledger of the validator to make sure the entry height is correct
     // and that the old leader and the new leader's ledgers agree up to the point
@@ -1237,8 +1156,7 @@ fn test_leader_validator_basic() {
     let validator_entries: Vec<Entry> = read_ledger(&validator_ledger_path);
 
     let leader_entries = read_ledger(&leader_ledger_path);
-
-    assert!(leader_entries.len() as u64 >= bootstrap_height);
+    assert!(leader_entries.len() as u64 >= leader_rotation_interval);
 
     for (v, l) in validator_entries.iter().zip(leader_entries) {
         assert_eq!(*v, l);
@@ -1249,33 +1167,6 @@ fn test_leader_validator_basic() {
         DbLedger::destroy(&path).expect("Expected successful database destruction");
         remove_dir_all(path).unwrap();
     }
-}
-
-fn run_node(id: Pubkey, mut fullnode: Fullnode, should_exit: Arc<AtomicBool>) -> JoinHandle<()> {
-    Builder::new()
-        .name(format!("run_node-{:?}", id).to_string())
-        .spawn(move || loop {
-            if should_exit.load(Ordering::Relaxed) {
-                fullnode.close().expect("failed to close");
-                return;
-            }
-            let should_be_fwdr = fullnode.role_notifiers.1.try_recv();
-            let should_be_leader = fullnode.role_notifiers.0.try_recv();
-            match should_be_leader {
-                Ok(TvuReturnType::LeaderRotation(tick_height, entry_height, last_entry_id)) => {
-                    fullnode.validator_to_leader(tick_height, entry_height, last_entry_id);
-                }
-                Err(_) => match should_be_fwdr {
-                    Ok(TpuReturnType::LeaderRotation(tick_height)) => {
-                        fullnode.leader_to_validator(tick_height);
-                    }
-                    Err(_) => {
-                        sleep(Duration::new(1, 0));
-                    }
-                },
-            }
-        })
-        .unwrap()
 }
 
 #[test]
@@ -1290,6 +1181,17 @@ fn test_dropped_handoff_recovery() {
     let bootstrap_leader_keypair = Arc::new(Keypair::new());
     let bootstrap_leader_node = Node::new_localhost_with_pubkey(bootstrap_leader_keypair.pubkey());
     let bootstrap_leader_info = bootstrap_leader_node.info.clone();
+
+    // Create the common leader scheduling configuration
+    let num_slots_per_epoch = (N + 1) as u64;
+    let leader_rotation_interval = 5;
+    let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
+    let mut fullnode_config = FullnodeConfig::default();
+    fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
+        leader_rotation_interval,
+        seed_rotation_interval,
+        seed_rotation_interval,
+    );
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
     let num_ending_ticks = 1;
@@ -1313,8 +1215,15 @@ fn test_dropped_handoff_recovery() {
 
     // Make the entries to give the next_leader validator some stake so that they will be in
     // leader election active set
-    let (active_set_entries, _) =
-        make_active_set_entries(&next_leader_keypair, &mint_keypair, &last_id, &last_id, 0);
+    let (active_set_entries, _) = make_active_set_entries(
+        &next_leader_keypair,
+        &mint_keypair,
+        100,
+        leader_rotation_interval,
+        &last_id,
+        &last_id,
+        0,
+    );
 
     // Write the entries
     {
@@ -1332,18 +1241,6 @@ fn test_dropped_handoff_recovery() {
         tmp_copy_ledger(&genesis_ledger_path, "test_dropped_handoff_recovery");
     ledger_paths.push(next_leader_ledger_path.clone());
 
-    // Create the common leader scheduling configuration
-    let initial_tick_height = genesis_entry_height;
-    let num_slots_per_epoch = (N + 1) as u64;
-    let leader_rotation_interval = 5;
-    let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
-    let bootstrap_height = initial_tick_height + 1;
-    let leader_scheduler_config = LeaderSchedulerConfig::new(
-        bootstrap_height,
-        leader_rotation_interval,
-        seed_rotation_interval,
-        leader_rotation_interval,
-    );
     info!("bootstrap_leader: {}", bootstrap_leader_keypair.pubkey());
     info!("'next leader': {}", next_leader_keypair.pubkey());
 
@@ -1352,17 +1249,18 @@ fn test_dropped_handoff_recovery() {
     let bootstrap_leader_ledger_path =
         tmp_copy_ledger(&genesis_ledger_path, "test_dropped_handoff_recovery");
     ledger_paths.push(bootstrap_leader_ledger_path.clone());
+
     let bootstrap_leader = Fullnode::new(
         bootstrap_leader_node,
         &bootstrap_leader_keypair,
         &bootstrap_leader_ledger_path,
-        Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         voting_keypair,
         Some(&bootstrap_leader_info),
-        &FullnodeConfig::default(),
+        &fullnode_config,
     );
 
-    let mut nodes = vec![bootstrap_leader];
+    let (rotation_sender, rotation_receiver) = channel();
+    let mut node_exits = vec![bootstrap_leader.run(Some(rotation_sender))];
 
     // Start up the validators other than the "next_leader" validator
     for i in 0..(N - 1) {
@@ -1378,52 +1276,55 @@ fn test_dropped_handoff_recovery() {
             validator_node,
             &keypair,
             &validator_ledger_path,
-            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
             voting_keypair,
             Some(&bootstrap_leader_info),
-            &FullnodeConfig::default(),
+            &fullnode_config,
         );
 
-        nodes.push(validator);
+        node_exits.push(validator.run(None));
     }
 
-    // Wait for convergence
-    let num_converged = converge(&bootstrap_leader_info, N).len();
-    assert_eq!(num_converged, N);
+    converge(&bootstrap_leader_info, N);
 
     info!("Wait for bootstrap_leader to transition to a validator",);
-    match nodes[0].handle_role_transition() {
-        Some(FullnodeReturnType::LeaderToValidatorRotation) => (),
-        _ => panic!("Expected reason for exit to be leader rotation"),
+    loop {
+        let transition = rotation_receiver.recv().unwrap();
+        info!("bootstrap leader transition event: {:?}", transition);
+        if transition.0 == FullnodeReturnType::LeaderToValidatorRotation {
+            break;
+        }
     }
 
-    info!("Starting the 'next leader' node");
+    info!("Starting the 'next leader' node *after* rotation has occurred");
     let next_leader_node = Node::new_localhost_with_pubkey(next_leader_keypair.pubkey());
     let voting_keypair = VotingKeypair::new_local(&next_leader_keypair);
     let next_leader = Fullnode::new(
         next_leader_node,
         &next_leader_keypair,
         &next_leader_ledger_path,
-        Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         voting_keypair,
         Some(&bootstrap_leader_info),
         &FullnodeConfig::default(),
     );
+    let (rotation_sender, _rotation_receiver) = channel();
+    node_exits.push(next_leader.run(Some(rotation_sender)));
 
     info!("Wait for 'next leader' to assume leader role");
     error!("TODO: FIX https://github.com/solana-labs/solana/issues/2482");
     // TODO: Once fixed restore the commented out code below
     /*
-    match next_leader.handle_role_transition() {
-        Some(FullnodeReturnType::ValidatorToLeaderRotation) => (),
-        _ => panic!("Expected reason for exit to be leader rotation"),
+    loop {
+        let transition = _rotation_receiver.recv().unwrap();
+        info!("next leader transition event: {:?}", transition);
+        if transition == FullnodeReturnType::ValidatorToLeaderRotation {
+            break;
+        }
     }
     */
-    nodes.push(next_leader);
 
     info!("done!");
-    for node in nodes {
-        node.close().unwrap();
+    for exit in node_exits {
+        exit();
     }
 
     for path in ledger_paths {
@@ -1435,16 +1336,15 @@ fn test_dropped_handoff_recovery() {
 fn test_full_leader_validator_network() {
     solana_logger::setup();
     // The number of validators
-    const N: usize = 5;
-    solana_logger::setup();
+    const N: usize = 2;
 
     // Create the bootstrap leader node information
-    let bootstrap_leader_keypair = Keypair::new();
+    let bootstrap_leader_keypair = Arc::new(Keypair::new());
+    info!("bootstrap leader: {:?}", bootstrap_leader_keypair.pubkey());
     let bootstrap_leader_node = Node::new_localhost_with_pubkey(bootstrap_leader_keypair.pubkey());
     let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
     let mut node_keypairs = VecDeque::new();
-    node_keypairs.push_back(Arc::new(bootstrap_leader_keypair));
 
     // Create the validator keypairs
     for _ in 0..N {
@@ -1467,20 +1367,19 @@ fn test_full_leader_validator_network() {
     let mut last_entry_id = last_id;
 
     // Create a common ledger with entries in the beginnging that will add all the validators
-    // to the active set for leader election. TODO: Leader rotation does not support dynamic
-    // stakes for safe leader -> validator transitions due to the unpredictability of
-    // bank state due to transactions being in-flight during leader seed calculation in
-    // write stage.
+    // to the active set for leader election.
     let mut ledger_paths = Vec::new();
     ledger_paths.push(bootstrap_leader_ledger_path.clone());
 
     let mut index = genesis_entry_height;
     for node_keypair in node_keypairs.iter() {
-        // Make entries to give each node some stake so that they will be in the
+        // Make entries to give each validator node some stake so that they will be in the
         // leader election active set
         let (bootstrap_entries, _) = make_active_set_entries(
             node_keypair,
             &mint_keypair,
+            100,
+            1,
             &last_entry_id,
             &last_tick_id,
             0,
@@ -1502,27 +1401,16 @@ fn test_full_leader_validator_network() {
 
     // Create the common leader scheduling configuration
     let num_slots_per_epoch = (N + 1) as u64;
-    let num_bootstrap_slots = 2;
     let leader_rotation_interval = 5;
     let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
-    let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
-    let leader_scheduler_config = LeaderSchedulerConfig::new(
-        bootstrap_height,
+    let mut fullnode_config = FullnodeConfig::default();
+    fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
         leader_rotation_interval,
         seed_rotation_interval,
-        100,
+        seed_rotation_interval,
     );
 
-    let exit = Arc::new(AtomicBool::new(false));
-
-    // Postpone starting the leader until after the validators are up and running
-    // to avoid
-    // 1) Scenario where leader rotates before validators can start up
-    // 2) Modifying the leader ledger which validators are going to be copying
-    // during startup
-    let leader_keypair = node_keypairs.pop_front().unwrap();
-    let mut schedules: Vec<Arc<RwLock<LeaderScheduler>>> = vec![];
-    let mut t_nodes = vec![];
+    let mut nodes = vec![];
 
     info!("Start up the validators");
     for kp in node_keypairs.into_iter() {
@@ -1536,76 +1424,65 @@ fn test_full_leader_validator_network() {
         let validator_id = kp.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(validator_id);
         let voting_keypair = VotingKeypair::new_local(&kp);
-        let leader_scheduler =
-            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
+        info!("validator: {:?}", validator_id);
         let validator = Fullnode::new(
             validator_node,
             &kp,
             &validator_ledger_path,
-            leader_scheduler.clone(),
             voting_keypair,
             Some(&bootstrap_leader_info),
-            &FullnodeConfig::default(),
+            &fullnode_config,
         );
 
-        schedules.push(leader_scheduler);
-        t_nodes.push(run_node(validator_id, validator, exit.clone()));
+        let (rotation_sender, rotation_receiver) = channel();
+        nodes.push((
+            validator_id,
+            validator.run(Some(rotation_sender)),
+            rotation_receiver,
+        ));
     }
 
     info!("Start up the bootstrap leader");
-    let voting_keypair = VotingKeypair::new_local(&leader_keypair);
-    let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
+    let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
     let bootstrap_leader = Fullnode::new(
         bootstrap_leader_node,
-        &leader_keypair,
+        &bootstrap_leader_keypair,
         &bootstrap_leader_ledger_path,
-        leader_scheduler.clone(),
         voting_keypair,
         Some(&bootstrap_leader_info),
-        &FullnodeConfig::default(),
+        &fullnode_config,
     );
+    let (bootstrap_leader_rotation_sender, bootstrap_leader_rotation_receiver) = channel();
+    let bootstrap_leader_exit = bootstrap_leader.run(Some(bootstrap_leader_rotation_sender));
 
-    schedules.push(leader_scheduler);
-    t_nodes.push(run_node(
-        bootstrap_leader_info.id,
-        bootstrap_leader,
-        exit.clone(),
-    ));
+    converge(&bootstrap_leader_info, N + 1);
 
-    info!("Wait for convergence");
-    let num_converged = converge(&bootstrap_leader_info, N + 1).len();
-    assert_eq!(num_converged, N + 1);
-
-    // Wait for each node to hit a specific target height in the leader schedule.
-    // Once all the nodes hit that height, exit them all together. They must
-    // only quit once they've all confirmed to reach that specific target height.
-    // Otherwise, some nodes may never reach the target height if a critical
-    // next leader node exits first, and stops generating entries. (We don't
-    // have a timeout mechanism).
-    let target_height = bootstrap_height + seed_rotation_interval;
-    let mut num_reached_target_height = 0;
-
-    while num_reached_target_height != N + 1 {
-        num_reached_target_height = 0;
-        for n in schedules.iter() {
-            let ls_lock = n.read().unwrap().last_seed_height;
-            if let Some(sh) = ls_lock {
-                if sh >= target_height {
-                    num_reached_target_height += 1;
-                }
-            }
-            drop(ls_lock);
+    // Wait for the bootstrap_leader to transition to a validator
+    loop {
+        let transition = bootstrap_leader_rotation_receiver.recv().unwrap();
+        info!("bootstrap leader transition event: {:?}", transition);
+        if transition.0 == FullnodeReturnType::LeaderToValidatorRotation {
+            break;
         }
-
-        sleep(Duration::new(1, 0));
     }
 
-    exit.store(true, Ordering::Relaxed);
-
-    info!("Wait for threads running the nodes to exit");
-    for t in t_nodes {
-        t.join().unwrap();
+    // Ensure each node in the cluster rotates into the leader role
+    for (id, _, rotation_receiver) in &nodes {
+        info!("Waiting for {:?} to become the leader", id);
+        loop {
+            let transition = rotation_receiver.recv().unwrap();
+            info!("node {:?} transition event: {:?}", id, transition);
+            if transition.0 == FullnodeReturnType::ValidatorToLeaderRotation {
+                break;
+            }
+        }
     }
+
+    info!("Exit all nodes");
+    for node in nodes {
+        node.1();
+    }
+    bootstrap_leader_exit();
 
     let mut node_entries = vec![];
     info!("Check that all the ledgers match");
@@ -1661,9 +1538,15 @@ fn test_full_leader_validator_network() {
         length += 1;
     }
 
-    assert!(shortest.unwrap() >= target_height);
+    let shortest = shortest.unwrap();
+    assert!(
+        shortest
+            >= fullnode_config
+                .leader_scheduler_config
+                .leader_rotation_interval
+                * 3,
+    );
 
-    info!("done!");
     for path in ledger_paths {
         DbLedger::destroy(&path).expect("Expected successful database destruction");
         remove_dir_all(path).unwrap();
@@ -1687,7 +1570,7 @@ fn test_broadcast_last_tick() {
         create_tmp_sample_ledger(
             "test_broadcast_last_tick",
             10_000,
-            1,
+            0,
             bootstrap_leader_info.id,
             500,
         );
@@ -1716,33 +1599,29 @@ fn test_broadcast_last_tick() {
         })
         .collect();
 
-    // Create fullnode, should take 10 seconds to reach end of bootstrap period
-    let bootstrap_height = (NUM_TICKS_PER_SECOND * 10) as u64;
-    let leader_rotation_interval = 100;
-    let seed_rotation_interval = 200;
-    let leader_scheduler_config = LeaderSchedulerConfig::new(
-        bootstrap_height,
-        leader_rotation_interval,
-        seed_rotation_interval,
-        leader_rotation_interval,
-    );
+    let leader_rotation_interval = 40;
+    let seed_rotation_interval = 2 * leader_rotation_interval;
 
     // Start up the bootstrap leader fullnode
     let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
     let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
+    let mut fullnode_config = FullnodeConfig::default();
+    fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
+        leader_rotation_interval,
+        seed_rotation_interval,
+        seed_rotation_interval,
+    );
     let bootstrap_leader = Fullnode::new(
         bootstrap_leader_node,
         &bootstrap_leader_keypair,
         &bootstrap_leader_ledger_path,
-        Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
         voting_keypair,
         Some(&bootstrap_leader_info),
-        &FullnodeConfig::default(),
+        &fullnode_config,
     );
 
     // Wait for convergence
-    let servers = converge(&bootstrap_leader_info, N + 1);
-    assert_eq!(servers.len(), N + 1);
+    converge(&bootstrap_leader_info, N + 1);
 
     info!("Waiting for leader rotation...");
     // manually intercept the role transition to accurately arrest tick generation
@@ -1754,7 +1633,8 @@ fn test_broadcast_last_tick() {
                 panic!("Expected rotation to validator");
             }
             _ => match should_be_forwarder {
-                Ok(TpuReturnType::LeaderRotation(_)) => {
+                Ok(TpuReturnType::LeaderRotation(tick_height)) => {
+                    info!("rotation occurred at tick_height {:?}", tick_height);
                     break;
                 }
                 _ => continue,
@@ -1765,16 +1645,11 @@ fn test_broadcast_last_tick() {
     info!("Shutting down the leader...");
     bootstrap_leader.close().unwrap();
 
-    //index of the last tick is always bootstrap_height - 1
-    let last_tick_entry_index = bootstrap_height - 1;
+    // Index of the last tick is always leader_rotation_interval - 1
+    let last_tick_entry_index = leader_rotation_interval as usize - 2;
     let entries = read_ledger(&bootstrap_leader_ledger_path);
-    assert!(
-        entries.len() >= bootstrap_height as usize,
-        "entries: {:?} less than last_tick_entry_index: {:?}",
-        entries.len(),
-        last_tick_entry_index as usize
-    );
-    let expected_last_tick = &entries[last_tick_entry_index as usize];
+    assert_eq!(entries.len(), last_tick_entry_index + 1);
+    let expected_last_tick = &entries[last_tick_entry_index];
     debug!("last_tick_entry_index: {:?}", last_tick_entry_index);
     debug!("expected_last_tick: {:?}", expected_last_tick);
 
@@ -1785,7 +1660,7 @@ fn test_broadcast_last_tick() {
         while let Ok(new_blobs) = receiver.try_recv() {
             let last_blob = new_blobs
                 .into_iter()
-                .find(|b| b.read().unwrap().index() == last_tick_entry_index);
+                .find(|b| b.read().unwrap().index() == last_tick_entry_index as u64);
             if let Some(last_blob) = last_blob {
                 last_tick_blob = last_blob;
                 break;
@@ -1814,12 +1689,6 @@ fn test_broadcast_last_tick() {
     remove_dir_all(bootstrap_leader_ledger_path).unwrap();
 }
 
-fn mk_client(leader: &NodeInfo) -> ThinClient {
-    let transactions_socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    assert!(ContactInfo::is_valid_address(&leader.tpu));
-    ThinClient::new(leader.rpc, leader.tpu, transactions_socket)
-}
-
 fn send_tx_and_retry_get_balance(
     leader: &NodeInfo,
     alice: &Keypair,
@@ -1837,8 +1706,11 @@ fn send_tx_and_retry_get_balance(
         alice.pubkey(),
         *bob_pubkey
     );
-    let _res = client.retry_transfer(&alice, &mut tx, 30);
-    retry_get_balance(&mut client, bob_pubkey, expected)
+    if client.retry_transfer(&alice, &mut tx, 5).is_err() {
+        None
+    } else {
+        retry_get_balance(&mut client, bob_pubkey, expected)
+    }
 }
 
 fn retry_send_tx_and_retry_get_balance(

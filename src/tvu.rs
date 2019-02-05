@@ -203,10 +203,8 @@ pub mod tests {
     use crate::db_ledger::get_tmp_ledger_path;
     use crate::db_ledger::DbLedger;
     use crate::entry::Entry;
-    use crate::gossip_service::GossipService;
-    use crate::leader_scheduler::LeaderScheduler;
-
     use crate::genesis_block::GenesisBlock;
+    use crate::gossip_service::GossipService;
     use crate::packet::SharedBlob;
     use crate::service::Service;
     use crate::storage_stage::{StorageState, STORAGE_ROTATE_TEST_COUNT};
@@ -241,13 +239,7 @@ pub mod tests {
 
         let starting_balance = 10_000;
         let (genesis_block, _mint_keypair) = GenesisBlock::new(starting_balance);
-        let leader_id = leader.info.id;
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_id,
-        )));
-        let mut bank = Bank::new(&genesis_block);
-        bank.leader_scheduler = leader_scheduler;
-        let bank = Arc::new(bank);
+        let bank = Arc::new(Bank::new(&genesis_block));
 
         //start cluster_info1
         let mut cluster_info1 = ClusterInfo::new(target1.info.clone());
@@ -332,12 +324,7 @@ pub mod tests {
         let starting_balance = 10_000;
         let (genesis_block, mint_keypair) = GenesisBlock::new(starting_balance);
         let tvu_addr = target1.info.tvu;
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_id,
-        )));
-        let mut bank = Bank::new(&genesis_block);
-        bank.leader_scheduler = leader_scheduler;
-        let bank = Arc::new(bank);
+        let bank = Arc::new(Bank::new(&genesis_block));
 
         //start cluster_info1
         let mut cluster_info1 = ClusterInfo::new(target1.info.clone());

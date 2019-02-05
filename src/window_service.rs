@@ -244,6 +244,8 @@ mod test {
         let db_ledger = Arc::new(
             DbLedger::open(&db_ledger_path).expect("Expected to be able to open database ledger"),
         );
+        let mut leader_schedule = LeaderScheduler::default();
+        leader_schedule.set_leader_schedule(vec![me_id]);
         let t_window = window_service(
             db_ledger,
             subs,
@@ -253,7 +255,7 @@ mod test {
             r_reader,
             s_retransmit,
             Arc::new(leader_node.sockets.repair),
-            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(me_id))),
+            Arc::new(RwLock::new(leader_schedule)),
             done,
             exit.clone(),
         );
@@ -324,6 +326,8 @@ mod test {
         let db_ledger = Arc::new(
             DbLedger::open(&db_ledger_path).expect("Expected to be able to open database ledger"),
         );
+        let mut leader_schedule = LeaderScheduler::default();
+        leader_schedule.set_leader_schedule(vec![me_id]);
         let t_window = window_service(
             db_ledger,
             subs.clone(),
@@ -333,7 +337,7 @@ mod test {
             r_reader,
             s_retransmit,
             Arc::new(leader_node.sockets.repair),
-            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(me_id))),
+            Arc::new(RwLock::new(leader_schedule)),
             done,
             exit.clone(),
         );

@@ -33,7 +33,7 @@ pub enum BroadcastServiceReturnType {
 
 struct Broadcast {
     id: Pubkey,
-    max_tick_height: Option<u64>,
+    max_tick_height: u64,
     blob_index: u64,
 
     #[cfg(feature = "erasure")]
@@ -60,15 +60,12 @@ impl Broadcast {
             num_entries += entries.len();
             ventries.push(entries);
         }
-        let last_tick = match self.max_tick_height {
-            Some(max_tick_height) => {
-                if let Some(Some(last)) = ventries.last().map(|entries| entries.last()) {
-                    last.tick_height == max_tick_height
-                } else {
-                    false
-                }
+        let last_tick = {
+            if let Some(Some(last)) = ventries.last().map(|entries| entries.last()) {
+                last.tick_height == self.max_tick_height
+            } else {
+                false
             }
-            None => false,
         };
 
         inc_new_counter_info!("broadcast_service-entries_received", num_entries);
@@ -151,10 +148,7 @@ fn generate_slots(
                     } else {
                         e.tick_height + 1
                     };
-                    let (_, slot) = r_leader_scheduler
-                        .get_scheduled_leader(tick_height)
-                        .expect("Leader schedule should never be unknown while indexing blobs");
-                    slot
+                    r_leader_scheduler.tick_height_to_slot(tick_height)
                 })
                 .collect();
 
@@ -193,7 +187,7 @@ impl BroadcastService {
         entry_height: u64,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
         receiver: &Receiver<Vec<Entry>>,
-        max_tick_height: Option<u64>,
+        max_tick_height: u64,
         exit_signal: &Arc<AtomicBool>,
         blob_sender: &BlobSender,
     ) -> BroadcastServiceReturnType {
@@ -259,7 +253,7 @@ impl BroadcastService {
         entry_height: u64,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         receiver: Receiver<Vec<Entry>>,
-        max_tick_height: Option<u64>,
+        max_tick_height: u64,
         exit_sender: Arc<AtomicBool>,
         blob_sender: &BlobSender,
     ) -> Self {
@@ -352,7 +346,7 @@ mod test {
             entry_height,
             leader_scheduler,
             entry_receiver,
-            Some(max_tick_height),
+            max_tick_height,
             exit_sender,
             &blob_fetch_sender,
         );
@@ -371,15 +365,12 @@ mod test {
         {
             // Create the leader scheduler
             let leader_keypair = Keypair::new();
-            let mut leader_scheduler =
-                LeaderScheduler::from_bootstrap_leader(leader_keypair.pubkey());
+            let mut leader_scheduler = LeaderScheduler::default();
 
             // Mock the tick height to look like the tick height right after a leader transition
-            leader_scheduler.last_seed_height = Some(leader_scheduler.bootstrap_height);
             leader_scheduler.set_leader_schedule(vec![leader_keypair.pubkey()]);
-            leader_scheduler.use_only_bootstrap_leader = false;
-            let start_tick_height = leader_scheduler.bootstrap_height;
-            let max_tick_height = start_tick_height + leader_scheduler.last_seed_height.unwrap();
+            let start_tick_height = 0;
+            let max_tick_height = start_tick_height + leader_scheduler.seed_rotation_interval;
             let entry_height = 2 * start_tick_height;
 
             let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
@@ -405,11 +396,10 @@ mod test {
             sleep(Duration::from_millis(2000));
             let db_ledger = broadcast_service.db_ledger;
             for i in 0..max_tick_height - start_tick_height {
-                let (_, slot) = leader_scheduler
+                let slot = leader_scheduler
                     .read()
                     .unwrap()
-                    .get_scheduled_leader(start_tick_height + i + 1)
-                    .expect("Leader should exist");
+                    .tick_height_to_slot(start_tick_height + i + 1);
                 let result = db_ledger.get_data_blob(slot, entry_height + i).unwrap();
 
                 assert!(result.is_some());

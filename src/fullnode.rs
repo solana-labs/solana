@@ -6,7 +6,7 @@ use crate::counter::Counter;
 use crate::db_ledger::DbLedger;
 use crate::genesis_block::GenesisBlock;
 use crate::gossip_service::GossipService;
-use crate::leader_scheduler::LeaderScheduler;
+use crate::leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig};
 use crate::rpc::JsonRpcService;
 use crate::rpc_pubsub::PubSubService;
 use crate::service::Service;
@@ -25,8 +25,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, Sender, SyncSender};
 use std::sync::{Arc, RwLock};
-use std::thread::{sleep, spawn, Result};
-use std::time::Duration;
+use std::thread::{spawn, Result};
 use std::time::Instant;
 
 pub type TvuRotationSender = Sender<TvuReturnType>;
@@ -73,6 +72,7 @@ pub struct FullnodeConfig {
     pub voting_disabled: bool,
     pub entry_stream: Option<String>,
     pub storage_rotate_count: u64,
+    pub leader_scheduler_config: LeaderSchedulerConfig,
 }
 impl Default for FullnodeConfig {
     fn default() -> Self {
@@ -85,6 +85,7 @@ impl Default for FullnodeConfig {
             voting_disabled: false,
             entry_stream: None,
             storage_rotate_count: NUM_HASHES_FOR_STORAGE_ROTATE,
+            leader_scheduler_config: Default::default(),
         }
     }
 }
@@ -110,7 +111,6 @@ impl Fullnode {
         mut node: Node,
         keypair: &Arc<Keypair>,
         ledger_path: &str,
-        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         voting_keypair: VotingKeypair,
         entrypoint_info_option: Option<&NodeInfo>,
         config: &FullnodeConfig,
@@ -118,9 +118,11 @@ impl Fullnode {
         let id = keypair.pubkey();
         let (genesis_block, db_ledger, ledger_signal_sender, ledger_signal_receiver) =
             Self::make_db_ledger(ledger_path);
-        let (bank, entry_height, last_entry_id) =
-            Self::new_bank_from_db_ledger(&genesis_block, &db_ledger, leader_scheduler);
-
+        let (bank, entry_height, last_entry_id) = Self::new_bank_from_db_ledger(
+            &genesis_block,
+            &db_ledger,
+            Some(&config.leader_scheduler_config),
+        );
         info!("node info: {:?}", node.info);
         info!("node entrypoint_info: {:?}", entrypoint_info_option);
         info!(
@@ -186,10 +188,24 @@ impl Fullnode {
         }
 
         // Get the scheduled leader
-        let (scheduled_leader, _) = bank
-            .get_current_leader()
-            .expect("Leader not known after processing bank");
+        let (scheduled_leader, max_tpu_tick_height) = {
+            let tick_height = bank.tick_height();
 
+            let leader_scheduler = bank.leader_scheduler.read().unwrap();
+            let slot = leader_scheduler.tick_height_to_slot(tick_height);
+            (
+                leader_scheduler
+                    .get_leader_for_slot(slot)
+                    .expect("Leader not known after processing bank"),
+                tick_height + leader_scheduler.num_ticks_left_in_slot(tick_height),
+            )
+        };
+
+        trace!(
+            "scheduled_leader: {} until tick_height {}",
+            scheduled_leader,
+            max_tpu_tick_height
+        );
         cluster_info.write().unwrap().set_leader(scheduled_leader);
 
         // TODO: always start leader and validator, keep leader side switching between tpu
@@ -238,11 +254,6 @@ impl Fullnode {
             ledger_signal_sender,
             ledger_signal_receiver,
         );
-        let max_tick_height = {
-            let ls_lock = bank.leader_scheduler.read().unwrap();
-            ls_lock.max_height_for_leader(bank.tick_height() + 1)
-        };
-
         let tpu = Tpu::new(
             &Arc::new(bank.copy_for_tpu()),
             Default::default(),
@@ -258,7 +269,7 @@ impl Fullnode {
             cluster_info.clone(),
             entry_height,
             config.sigverify_disabled,
-            max_tick_height,
+            max_tpu_tick_height,
             &last_entry_id,
             id,
             scheduled_leader == id,
@@ -286,30 +297,35 @@ impl Fullnode {
     }
 
     pub fn leader_to_validator(&mut self, tick_height: u64) -> FullnodeReturnType {
-        trace!("leader_to_validator: tick_height={}", tick_height);
+        trace!(
+            "leader_to_validator({:?}): tick_height={}",
+            self.id,
+            tick_height,
+        );
 
-        while self.bank.tick_height() < tick_height {
-            sleep(Duration::from_millis(10));
-        }
+        let scheduled_leader = {
+            let mut leader_scheduler = self.bank.leader_scheduler.write().unwrap();
 
-        let (scheduled_leader, _) = self
-            .bank
-            .leader_scheduler
-            .read()
-            .unwrap()
-            .get_scheduled_leader(tick_height + 1)
-            .unwrap();
+            // A transition is only permitted on the final tick of a slot
+            assert_eq!(leader_scheduler.num_ticks_left_in_slot(tick_height), 0);
+            let first_tick_of_next_slot = tick_height + 1;
 
+            leader_scheduler.update_tick_height(first_tick_of_next_slot, &self.bank);
+            let slot = leader_scheduler.tick_height_to_slot(first_tick_of_next_slot);
+            leader_scheduler.get_leader_for_slot(slot).unwrap()
+        };
         self.cluster_info
             .write()
             .unwrap()
             .set_leader(scheduled_leader);
 
         if scheduled_leader == self.id {
+            debug!("node is still the leader");
             let (last_entry_id, entry_height) = self.node_services.tvu.get_state();
             self.validator_to_leader(tick_height, entry_height, last_entry_id);
             FullnodeReturnType::LeaderToLeaderRotation
         } else {
+            debug!("new leader is {}", scheduled_leader);
             self.node_services.tpu.switch_to_forwarder(
                 self.tpu_sockets
                     .iter()
@@ -321,14 +337,43 @@ impl Fullnode {
         }
     }
 
-    pub fn validator_to_leader(&mut self, tick_height: u64, entry_height: u64, last_id: Hash) {
-        trace!("validator_to_leader");
+    pub fn validator_to_leader(
+        &mut self,
+        tick_height: u64,
+        entry_height: u64,
+        last_entry_id: Hash,
+    ) {
+        trace!(
+            "validator_to_leader({:?}): tick_height={} entry_height={} last_entry_id={}",
+            self.id,
+            tick_height,
+            entry_height,
+            last_entry_id,
+        );
+
+        let (scheduled_leader, max_tick_height) = {
+            let mut leader_scheduler = self.bank.leader_scheduler.write().unwrap();
+
+            // A transition is only permitted on the final tick of a slot
+            assert_eq!(leader_scheduler.num_ticks_left_in_slot(tick_height), 0);
+            let first_tick_of_next_slot = tick_height + 1;
+
+            leader_scheduler.update_tick_height(first_tick_of_next_slot, &self.bank);
+            let slot = leader_scheduler.tick_height_to_slot(first_tick_of_next_slot);
+            (
+                leader_scheduler.get_leader_for_slot(slot).unwrap(),
+                first_tick_of_next_slot
+                    + leader_scheduler.num_ticks_left_in_slot(first_tick_of_next_slot),
+            )
+        };
+        assert_eq!(scheduled_leader, self.id, "node is not the leader");
         self.cluster_info.write().unwrap().set_leader(self.id);
 
-        let max_tick_height = {
-            let ls_lock = self.bank.leader_scheduler.read().unwrap();
-            ls_lock.max_height_for_leader(tick_height + 1)
-        };
+        debug!(
+            "node scheduled as leader for ticks [{}, {})",
+            tick_height + 1,
+            max_tick_height
+        );
 
         let (to_validator_sender, to_validator_receiver) = channel();
         self.role_notifiers.1 = to_validator_receiver;
@@ -346,14 +391,14 @@ impl Fullnode {
             self.sigverify_disabled,
             max_tick_height,
             entry_height,
-            &last_id,
+            &last_entry_id,
             self.id,
             &to_validator_sender,
             &self.blob_sender,
         )
     }
 
-    pub fn handle_role_transition(&mut self) -> Option<FullnodeReturnType> {
+    fn handle_role_transition(&mut self) -> Option<(FullnodeReturnType, u64)> {
         loop {
             if self.exit.load(Ordering::Relaxed) {
                 return None;
@@ -363,11 +408,14 @@ impl Fullnode {
             match should_be_leader {
                 Ok(TvuReturnType::LeaderRotation(tick_height, entry_height, last_entry_id)) => {
                     self.validator_to_leader(tick_height, entry_height, last_entry_id);
-                    return Some(FullnodeReturnType::ValidatorToLeaderRotation);
+                    return Some((
+                        FullnodeReturnType::ValidatorToLeaderRotation,
+                        tick_height + 1,
+                    ));
                 }
                 _ => match should_be_forwarder {
                     Ok(TpuReturnType::LeaderRotation(tick_height)) => {
-                        return Some(self.leader_to_validator(tick_height))
+                        return Some((self.leader_to_validator(tick_height), tick_height + 1))
                     }
                     _ => {
                         continue;
@@ -379,7 +427,10 @@ impl Fullnode {
 
     // Runs a thread to manage node role transitions.  The returned closure can be used to signal the
     // node to exit.
-    pub fn run(mut self, rotation_notifier: Option<Sender<FullnodeReturnType>>) -> impl FnOnce() {
+    pub fn run(
+        mut self,
+        rotation_notifier: Option<Sender<(FullnodeReturnType, u64)>>,
+    ) -> impl FnOnce() {
         let (sender, receiver) = channel();
         let exit = self.exit.clone();
         spawn(move || loop {
@@ -426,11 +477,10 @@ impl Fullnode {
     pub fn new_bank_from_db_ledger(
         genesis_block: &GenesisBlock,
         db_ledger: &DbLedger,
-        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+        leader_scheduler_config: Option<&LeaderSchedulerConfig>,
     ) -> (Bank, u64, Hash) {
-        let mut bank = Bank::new(genesis_block);
-        leader_scheduler.write().unwrap().bootstrap_leader = genesis_block.bootstrap_leader_id;
-        bank.leader_scheduler = leader_scheduler;
+        let mut bank =
+            Bank::new_with_leader_scheduler_config(genesis_block, leader_scheduler_config);
 
         let now = Instant::now();
         let entries = db_ledger.read_ledger().expect("opening ledger");
@@ -440,19 +490,20 @@ impl Fullnode {
         // entry_height is the network-wide agreed height of the ledger.
         //  initialize it from the input ledger
         info!(
-            "processed {} ledger entries in {}ms...",
+            "processed {} ledger entries in {}ms, tick_height={}...",
             entry_height,
-            duration_as_ms(&now.elapsed())
+            duration_as_ms(&now.elapsed()),
+            bank.tick_height()
         );
         (bank, entry_height, last_entry_id)
     }
 
     pub fn new_bank_from_ledger(
         ledger_path: &str,
-        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+        leader_scheduler_config: Option<&LeaderSchedulerConfig>,
     ) -> (Bank, u64, Hash) {
         let (genesis_block, db_ledger, _, _) = Self::make_db_ledger(ledger_path);
-        Self::new_bank_from_db_ledger(&genesis_block, &db_ledger, leader_scheduler)
+        Self::new_bank_from_db_ledger(&genesis_block, &db_ledger, leader_scheduler_config)
     }
 
     pub fn get_leader_scheduler(&self) -> &Arc<RwLock<LeaderScheduler>> {
@@ -498,22 +549,16 @@ mod tests {
     use crate::cluster_info::Node;
     use crate::db_ledger::*;
     use crate::entry::make_consecutive_blobs;
-    use crate::leader_scheduler::{
-        make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
-    };
-    use crate::poh_service::NUM_TICKS_PER_SECOND;
+    use crate::leader_scheduler::{make_active_set_entries, LeaderSchedulerConfig};
     use crate::service::Service;
     use crate::streamer::responder;
-    use crate::tpu::TpuReturnType;
-    use crate::tvu::TvuReturnType;
     use crate::voting_keypair::VotingKeypair;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use std::cmp;
     use std::fs::remove_dir_all;
     use std::net::UdpSocket;
     use std::sync::mpsc::channel;
-    use std::sync::{Arc, RwLock};
+    use std::sync::Arc;
 
     #[test]
     fn validator_exit() {
@@ -529,7 +574,6 @@ mod tests {
             validator_node,
             &Arc::new(validator_keypair),
             &validator_ledger_path,
-            Arc::new(RwLock::new(LeaderScheduler::new(&Default::default()))),
             VotingKeypair::new(),
             Some(&leader_node.info),
             &FullnodeConfig::default(),
@@ -556,12 +600,10 @@ mod tests {
                     1000,
                 );
                 ledger_paths.push(validator_ledger_path.clone());
-
                 Fullnode::new(
                     validator_node,
                     &Arc::new(validator_keypair),
                     &validator_ledger_path,
-                    Arc::new(RwLock::new(LeaderScheduler::new(&Default::default()))),
                     VotingKeypair::new(),
                     Some(&leader_node.info),
                     &FullnodeConfig::default(),
@@ -584,13 +626,12 @@ mod tests {
 
     #[test]
     fn test_leader_to_leader_transition() {
-        // Create the leader node information
+        solana_logger::setup();
+
         let bootstrap_leader_keypair = Keypair::new();
         let bootstrap_leader_node =
             Node::new_localhost_with_pubkey(bootstrap_leader_keypair.pubkey());
-        let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
-        // Make a mint and a genesis entries for leader ledger
         let (_mint_keypair, bootstrap_leader_ledger_path, _genesis_entry_height, _last_id) =
             create_tmp_sample_ledger(
                 "test_leader_to_leader_transition",
@@ -600,19 +641,14 @@ mod tests {
                 500,
             );
 
-        // Create the common leader scheduling configuration
-        let num_slots_per_epoch = 3;
+        // Once the bootstrap leader hits the second epoch, because there are no other choices in
+        // the active set, this leader will remain the leader in the second epoch. In the second
+        // epoch, check that the same leader knows to shut down and restart as a leader again.
         let leader_rotation_interval = 5;
+        let num_slots_per_epoch = 2;
         let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
-        let active_window_length = 5;
-
-        // Set the bootstrap height to be bigger than the initial tick height.
-        // Once the leader hits the bootstrap height ticks, because there are no other
-        // choices in the active set, this leader will remain the leader in the next
-        // epoch. In the next epoch, check that the same leader knows to shut down and
-        // restart as a leader again.
+        let active_window_length = 10 * seed_rotation_interval;
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            2,
             leader_rotation_interval,
             seed_rotation_interval,
             active_window_length,
@@ -620,15 +656,16 @@ mod tests {
 
         let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
         let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
-        // Start up the leader
+        // Start the bootstrap leader
+        let mut fullnode_config = FullnodeConfig::default();
+        fullnode_config.leader_scheduler_config = leader_scheduler_config;
         let bootstrap_leader = Fullnode::new(
             bootstrap_leader_node,
             &bootstrap_leader_keypair,
             &bootstrap_leader_ledger_path,
-            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
             voting_keypair,
-            Some(&bootstrap_leader_info),
-            &FullnodeConfig::default(),
+            None,
+            &fullnode_config,
         );
 
         let (rotation_sender, rotation_receiver) = channel();
@@ -638,7 +675,10 @@ mod tests {
         // cluster it will continue to be the leader
         assert_eq!(
             rotation_receiver.recv().unwrap(),
-            FullnodeReturnType::LeaderToLeaderRotation
+            (
+                FullnodeReturnType::LeaderToLeaderRotation,
+                leader_rotation_interval
+            )
         );
         bootstrap_leader_exit();
     }
@@ -646,6 +686,14 @@ mod tests {
     #[test]
     fn test_wrong_role_transition() {
         solana_logger::setup();
+
+        let mut fullnode_config = FullnodeConfig::default();
+        let leader_rotation_interval = 16;
+        fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
+            leader_rotation_interval,
+            leader_rotation_interval * 2,
+            leader_rotation_interval * 2,
+        );
 
         // Create the leader and validator nodes
         let bootstrap_leader_keypair = Arc::new(Keypair::new());
@@ -655,7 +703,9 @@ mod tests {
                 &bootstrap_leader_keypair,
                 &validator_keypair,
                 0,
-                10,
+                // Generate enough ticks for two epochs to flush the bootstrap_leader's vote at
+                // tick_height = 0 from the leader scheduler's active window
+                leader_rotation_interval * 4,
                 "test_wrong_role_transition",
             );
         let bootstrap_leader_info = bootstrap_leader_node.info.clone();
@@ -668,29 +718,15 @@ mod tests {
             validator_ledger_path.clone(),
         ];
 
-        // Create the common leader scheduling configuration
-        let leader_rotation_interval = 3;
-
-        // Set the bootstrap height exactly the current tick height, so that we can
-        // test if the bootstrap leader knows to immediately transition to a validator
-        // after parsing the ledger during startup
-        let leader_scheduler_config = LeaderSchedulerConfig::new(
-            1,
-            leader_rotation_interval,
-            leader_rotation_interval,
-            leader_rotation_interval * 10,
-        );
-
         {
             // Test that a node knows to transition to a validator based on parsing the ledger
             let bootstrap_leader = Fullnode::new(
                 bootstrap_leader_node,
                 &bootstrap_leader_keypair,
                 &bootstrap_leader_ledger_path,
-                Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
                 VotingKeypair::new(),
                 Some(&bootstrap_leader_info),
-                &FullnodeConfig::default(),
+                &fullnode_config,
             );
 
             assert!(!bootstrap_leader.node_services.tpu.is_leader());
@@ -700,10 +736,9 @@ mod tests {
                 validator_node,
                 &validator_keypair,
                 &validator_ledger_path,
-                Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
                 VotingKeypair::new(),
                 Some(&bootstrap_leader_info),
-                &FullnodeConfig::default(),
+                &fullnode_config,
             );
 
             assert!(validator.node_services.tpu.is_leader());
@@ -720,15 +755,15 @@ mod tests {
 
     #[test]
     fn test_validator_to_leader_transition() {
+        solana_logger::setup();
         // Make leader and validator node
         let leader_keypair = Arc::new(Keypair::new());
         let validator_keypair = Arc::new(Keypair::new());
-        let num_genesis_ticks = 1;
         let (leader_node, validator_node, validator_ledger_path, ledger_initial_len, last_id) =
             setup_leader_validator(
                 &leader_keypair,
                 &validator_keypair,
-                num_genesis_ticks,
+                0,
                 0,
                 "test_validator_to_leader_transition",
             );
@@ -736,16 +771,17 @@ mod tests {
         let leader_id = leader_keypair.pubkey();
         let validator_info = validator_node.info.clone();
 
-        // Set the leader scheduler for the validator
-        let leader_rotation_interval = 16;
-        let num_bootstrap_slots = 2;
-        let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
+        info!("leader: {:?}", leader_id);
+        info!("validator: {:?}", validator_info.id);
 
-        let leader_scheduler_config = LeaderSchedulerConfig::new(
-            bootstrap_height,
+        // Set the leader scheduler for the validator
+        let leader_rotation_interval = 10;
+
+        let mut fullnode_config = FullnodeConfig::default();
+        fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
             leader_rotation_interval,
-            leader_rotation_interval * 2,
-            bootstrap_height,
+            leader_rotation_interval * 4,
+            leader_rotation_interval * 4,
         );
 
         let voting_keypair = VotingKeypair::new_local(&validator_keypair);
@@ -754,11 +790,17 @@ mod tests {
             validator_node,
             &validator_keypair,
             &validator_ledger_path,
-            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
             voting_keypair,
             Some(&leader_node.info),
-            &FullnodeConfig::default(),
+            &fullnode_config,
         );
+
+        let blobs_to_send = fullnode_config
+            .leader_scheduler_config
+            .seed_rotation_interval
+            + fullnode_config
+                .leader_scheduler_config
+                .leader_rotation_interval;
 
         // Send blobs to the validator from our mock leader
         let t_responder = {
@@ -771,14 +813,11 @@ mod tests {
                 r_responder,
             );
 
-            // Send the blobs out of order, in reverse. Also send an extra
-            // "extra_blobs" number of blobs to make sure the window stops in the right place.
-            let extra_blobs = cmp::max(leader_rotation_interval / 3, 1);
-            let total_blobs_to_send = bootstrap_height + extra_blobs;
             let tvu_address = &validator_info.tvu;
+
             let msgs = make_consecutive_blobs(
                 &leader_id,
-                total_blobs_to_send,
+                blobs_to_send,
                 ledger_initial_len,
                 last_id,
                 &tvu_address,
@@ -790,37 +829,28 @@ mod tests {
             t_responder
         };
 
-        assert_ne!(validator.bank.get_current_leader().unwrap().0, validator.id);
-        loop {
-            let should_be_forwarder = validator.role_notifiers.1.try_recv();
-            let should_be_leader = validator.role_notifiers.0.try_recv();
-            match should_be_leader {
-                Ok(TvuReturnType::LeaderRotation(tick_height, entry_height, _)) => {
-                    assert_eq!(validator.node_services.tvu.get_state().1, entry_height);
-                    assert_eq!(validator.bank.tick_height(), tick_height);
-                    assert_eq!(tick_height, bootstrap_height);
-                    break;
-                }
-                _ => match should_be_forwarder {
-                    Ok(TpuReturnType::LeaderRotation(_)) => {
-                        panic!("shouldn't be rotating to forwarder")
-                    }
-                    _ => continue,
-                },
-            }
-        }
-
-        //close the validator so that rocksdb has locks available
-        validator.close().unwrap();
-        let (bank, entry_height, _) = Fullnode::new_bank_from_ledger(
-            &validator_ledger_path,
-            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
+        info!("waiting for validator to rotate into the leader role");
+        let (rotation_sender, rotation_receiver) = channel();
+        let validator_exit = validator.run(Some(rotation_sender));
+        let rotation = rotation_receiver.recv().unwrap();
+        assert_eq!(
+            rotation,
+            (FullnodeReturnType::ValidatorToLeaderRotation, blobs_to_send)
         );
 
-        assert!(bank.tick_height() >= bootstrap_height);
-        // Only the first genesis entry has num_hashes = 0, every other entry
-        // had num_hashes = 1
-        assert!(entry_height >= bootstrap_height + ledger_initial_len - num_genesis_ticks);
+        // Close the validator so that rocksdb has locks available
+        //        validator.close().unwrap();
+        validator_exit();
+        let (bank, entry_height, _) = Fullnode::new_bank_from_ledger(&validator_ledger_path, None);
+
+        assert!(
+            bank.tick_height()
+                >= fullnode_config
+                    .leader_scheduler_config
+                    .seed_rotation_interval
+        );
+
+        assert!(entry_height >= ledger_initial_len);
 
         // Shut down
         t_responder.join().expect("responder thread join");
@@ -830,10 +860,16 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // TODO: Make this test less hacky
     fn test_tvu_behind() {
+        solana_logger::setup();
+
         // Make leader node
         let leader_keypair = Arc::new(Keypair::new());
         let validator_keypair = Arc::new(Keypair::new());
+
+        info!("leader: {:?}", leader_keypair.pubkey());
+        info!("validator: {:?}", validator_keypair.pubkey());
 
         let (leader_node, _, leader_ledger_path, _, _) =
             setup_leader_validator(&leader_keypair, &validator_keypair, 1, 0, "test_tvu_behind");
@@ -841,33 +877,31 @@ mod tests {
         let leader_node_info = leader_node.info.clone();
 
         // Set the leader scheduler for the validator
-        let leader_rotation_interval = NUM_TICKS_PER_SECOND as u64 * 5;
-        let bootstrap_height = leader_rotation_interval;
+        let leader_rotation_interval = 5;
 
-        let leader_scheduler_config = LeaderSchedulerConfig::new(
-            bootstrap_height,
+        let mut fullnode_config = FullnodeConfig::default();
+        fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
             leader_rotation_interval,
             leader_rotation_interval * 2,
-            bootstrap_height,
+            leader_rotation_interval * 2,
         );
 
         let voting_keypair = VotingKeypair::new_local(&leader_keypair);
-        // Start the bootstrap leader
+        info!("Start the bootstrap leader");
         let mut leader = Fullnode::new(
             leader_node,
             &leader_keypair,
             &leader_ledger_path,
-            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config))),
             voting_keypair,
             Some(&leader_node_info),
-            &FullnodeConfig::default(),
+            &fullnode_config,
         );
 
-        // Hold Tvu bank lock to prevent tvu from making progress
+        info!("Hold Tvu bank lock to prevent tvu from making progress");
         {
             let w_last_ids = leader.bank.last_ids().write().unwrap();
 
-            // Wait for leader -> validator transition
+            info!("Wait for leader -> validator transition");
             let signal = leader
                 .role_notifiers
                 .1
@@ -877,26 +911,42 @@ mod tests {
             rn_sender.send(signal).expect("send");
             leader.role_notifiers = (leader.role_notifiers.0, rn_receiver);
 
-            // Make sure the tvu bank is behind
-            assert!(w_last_ids.tick_height < bootstrap_height);
+            info!("Make sure the tvu bank is behind");
+            assert_eq!(w_last_ids.tick_height, 2);
         }
 
-        // Release tvu bank lock, tvu should start making progress again and
-        // handle_role_transition should successfully rotate the leader to a validator
-        assert_eq!(
-            leader.handle_role_transition().unwrap(),
-            FullnodeReturnType::LeaderToValidatorRotation
-        );
-        assert_eq!(
-            leader.cluster_info.read().unwrap().leader_id(),
-            validator_keypair.pubkey(),
-        );
-        assert!(!leader.node_services.tpu.is_leader());
-        // Confirm the bank actually made progress
-        assert_eq!(leader.bank.tick_height(), bootstrap_height);
+        // Release tvu bank lock, tvu should start making progress again and should signal a
+        // rotate.   After rotation it will still be the slot leader as a new leader schedule has
+        // not been computed yet (still in epoch 0)
+        info!("Release tvu bank lock");
+        let (rotation_sender, rotation_receiver) = channel();
+        let leader_exit = leader.run(Some(rotation_sender));
+        let expected_rotations = vec![
+            (
+                FullnodeReturnType::LeaderToLeaderRotation,
+                leader_rotation_interval,
+            ),
+            (
+                FullnodeReturnType::LeaderToLeaderRotation,
+                2 * leader_rotation_interval,
+            ),
+            (
+                FullnodeReturnType::LeaderToValidatorRotation,
+                3 * leader_rotation_interval,
+            ),
+        ];
 
-        // Shut down
-        leader.close().expect("leader shutdown");
+        for expected_rotation in expected_rotations {
+            loop {
+                let transition = rotation_receiver.recv().unwrap();
+                info!("leader transition: {:?}", transition);
+                assert_eq!(expected_rotation, transition);
+                break;
+            }
+        }
+
+        info!("Shut down");
+        leader_exit();
         DbLedger::destroy(&leader_ledger_path).expect("Expected successful database destruction");
         let _ignored = remove_dir_all(&leader_ledger_path).unwrap();
     }
@@ -910,11 +960,15 @@ mod tests {
     ) -> (Node, Node, String, u64, Hash) {
         // Make a leader identity
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let leader_id = leader_node.info.id;
 
         // Create validator identity
-        let (mint_keypair, ledger_path, genesis_entry_height, last_id) =
-            create_tmp_sample_ledger(test_name, 10_000, num_genesis_ticks, leader_id, 500);
+        let (mint_keypair, ledger_path, genesis_entry_height, last_id) = create_tmp_sample_ledger(
+            test_name,
+            10_000,
+            num_genesis_ticks,
+            leader_node.info.id,
+            500,
+        );
 
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
@@ -928,6 +982,8 @@ mod tests {
         let (active_set_entries, _) = make_active_set_entries(
             validator_keypair,
             &mint_keypair,
+            10,
+            1,
             &last_id,
             &last_id,
             num_ending_ticks,

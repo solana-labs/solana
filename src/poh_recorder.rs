@@ -21,11 +21,11 @@ pub struct PohRecorder {
     poh: Arc<Mutex<Poh>>,
     bank: Arc<Bank>,
     sender: Sender<Vec<Entry>>,
-    max_tick_height: Option<u64>,
+    max_tick_height: u64,
 }
 
 impl PohRecorder {
-    pub fn max_tick_height(&self) -> Option<u64> {
+    pub fn max_tick_height(&self) -> u64 {
         self.max_tick_height
     }
 
@@ -69,7 +69,7 @@ impl PohRecorder {
         bank: Arc<Bank>,
         sender: Sender<Vec<Entry>>,
         last_entry_id: Hash,
-        max_tick_height: Option<u64>,
+        max_tick_height: u64,
     ) -> Self {
         let poh = Arc::new(Mutex::new(Poh::new(last_entry_id, bank.tick_height())));
         PohRecorder {
@@ -81,11 +81,10 @@ impl PohRecorder {
     }
 
     fn check_tick_height(&self, poh: &Poh) -> Result<()> {
-        match self.max_tick_height {
-            Some(max_tick_height) if poh.tick_height >= max_tick_height => {
-                Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
-            }
-            _ => Ok(()),
+        if poh.tick_height >= self.max_tick_height {
+            Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
+        } else {
+            Ok(())
         }
     }
 
@@ -127,11 +126,11 @@ mod tests {
 
     #[test]
     fn test_poh_recorder() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(1);
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let prev_id = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
-        let mut poh_recorder = PohRecorder::new(bank, entry_sender, prev_id, Some(2));
+        let mut poh_recorder = PohRecorder::new(bank, entry_sender, prev_id, 2);
 
         //send some data
         let h1 = hash(b"hello world!");
