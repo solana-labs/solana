@@ -107,6 +107,7 @@ members = [
     "programs/native/erc20",
     "programs/native/native_loader",
     "programs/native/noop",
+    "programs/native/rewards",
     "programs/native/storage",
     "programs/native/system",
     "programs/native/vote",
