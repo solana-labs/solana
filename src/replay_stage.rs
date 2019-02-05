@@ -11,7 +11,6 @@ use crate::entry_stream::EntryStreamHandler;
 #[cfg(test)]
 use crate::entry_stream::MockEntryStream as EntryStream;
 use crate::fullnode::TvuRotationSender;
-use crate::leader_scheduler::DEFAULT_TICKS_PER_SLOT;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -59,7 +58,7 @@ impl ReplayStage {
     /// Process entry blobs, already in order
     #[allow(clippy::too_many_arguments)]
     fn process_entries(
-        entries: Vec<Entry>,
+        mut entries: Vec<Entry>,
         current_slot: u64,
         base_slot: u64,
         bank: &Arc<Bank>,
@@ -80,6 +79,34 @@ impl ReplayStage {
             influxdb::Point::new("replicate-stage")
                 .add_field("count", influxdb::Value::Integer(entries.len() as i64))
                 .to_owned(),
+        );
+
+        let max_tick_height = bank
+            .leader_scheduler
+            .write()
+            .unwrap()
+            .max_tick_height_for_slot(current_slot);
+
+        info!(
+            "entries.len(): {}, bank.tick_height(): {}",
+            entries.len(),
+            bank.live_bank_state().tick_height()
+        );
+
+        // this code to guard against consuming more ticks in a slot than are actually
+        //  allowed by protocol.  entries beyond max_tick_height are silently discarded
+        //  TODO: slash somebody?
+        let mut ticks_left = max_tick_height - bank.live_bank_state().tick_height() + 1;
+        entries.retain(|e| {
+            if ticks_left > 0 && e.is_tick() {
+                ticks_left -= 1;
+            }
+            ticks_left > 0
+        });
+        info!(
+            "max_tick_height: {} entries.len() up to max_tick_height: {}",
+            max_tick_height,
+            entries.len(),
         );
 
         let now = Instant::now();
@@ -126,9 +153,8 @@ impl ReplayStage {
 
         {
             let bank_state = bank.bank_state(current_slot).expect("current bank state");
-            let next_tick_slot = (bank_state.tick_height() + 1) / DEFAULT_TICKS_PER_SLOT;
-            if next_tick_slot != current_slot {
-                info!("finalizing {} from replay_stage", current_slot);
+            if bank_state.tick_height() == max_tick_height {
+                info!("freezing {} from replay_stage", current_slot);
                 bank_state.head().freeze();
                 bank.merge_into_root(current_slot);
                 if let Some(voting_keypair) = voting_keypair {
@@ -263,10 +289,14 @@ impl ReplayStage {
 
                         let current_tick_height = bank.live_bank_state().tick_height();
 
-                        // We've reached the end of a slot, reset our state and check
+                        // we've reached the end of a slot, reset our state and check
                         // for leader rotation
+                        info!(
+                            "max_tick_height_for_slot: {} current_tick_height: {}",
+                            max_tick_height_for_slot, current_tick_height
+                        );
                         if max_tick_height_for_slot == current_tick_height {
-                            // Check for leader rotation
+                            // check for leader rotation
                             let leader_id = Self::get_leader(&bank, &cluster_info);
                             if leader_id != last_leader_id && my_id == leader_id {
                                 to_leader_sender

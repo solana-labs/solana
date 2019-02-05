@@ -344,7 +344,7 @@ impl Bank {
                 //TODO: EntryTree should provide base slot
                 let base = slot - 1;
                 {
-                    info!("finalizing from ledger at {}", base);
+                    info!("freezing from ledger at {}", base);
                     let base_state = self.bank_state(base).expect("base fork");
                     base_state.head().freeze();
                 }

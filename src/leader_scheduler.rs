@@ -272,6 +272,7 @@ impl LeaderScheduler {
             } else {
                 // If there's been no schedule generated yet before we reach the end of the
                 // bootstrapping period, then the leader is unknown
+                info!("no schedule for height: {}", height);
                 return None;
             }
         }
@@ -282,6 +283,7 @@ impl LeaderScheduler {
         let last_seed_height = self.last_seed_height.unwrap();
 
         if height > last_seed_height + self.seed_rotation_interval || height <= last_seed_height {
+            info!("((height > last_seed_height + self.seed_rotation_interval || height <= last_seed_height))... height: {} last_seed_height: {} self.seed_rotation_interval: {}", height, last_seed_height, self.seed_rotation_interval);
             return None;
         }
 
