@@ -258,7 +258,7 @@ pub mod tests {
         let vote_account_keypair = Arc::new(Keypair::new());
         let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
         let (sender, _receiver) = channel();
-        let (tvu, _blob_sender) = Tvu::new(
+        let tvu = Tvu::new(
             Some(Arc::new(voting_keypair)),
             &bank,
             0,

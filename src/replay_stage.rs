@@ -75,9 +75,10 @@ impl ReplayStage {
     /// Process entry blobs, already in order
     #[allow(clippy::too_many_arguments)]
     fn process_entries(
-        mut entries: Vec<Entry>,
+        entries: Vec<Entry>,
         bank: &Arc<Bank>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
+        my_id: Pubkey,
         voting_keypair: Option<&Arc<VotingKeypair>>,
         ledger_entry_sender: &EntrySender,
         entry_height: &Arc<RwLock<u64>>,
@@ -110,6 +111,8 @@ impl ReplayStage {
         let (current_leader, _) = bank
             .get_current_leader()
             .expect("Scheduled leader should be calculated by this point");
+        let already_leader = my_id == current_leader;
+        let mut did_rotate = false;
 
         let start_slot = entries[0].tick_height / DEFAULT_TICKS_PER_SLOT;
         let blocks = Self::entries_to_blocks(entries);
@@ -267,6 +270,7 @@ impl ReplayStage {
                             entries,
                             &bank,
                             &cluster_info,
+                            my_id,
                             voting_keypair.as_ref(),
                             &ledger_entry_sender,
                             &entry_height,
@@ -276,7 +280,7 @@ impl ReplayStage {
                             error!("{:?}", e);
                         }
 
-                        let current_tick_height = bank.tick_height();
+                        let current_tick_height = bank.live_bank_state().tick_height();
 
                         // We've reached the end of a slot, reset our state and check
                         // for leader rotation
@@ -805,6 +809,7 @@ mod test {
             entries.clone(),
             &Arc::new(Bank::default()),
             &cluster_info_me,
+            my_id,
             Some(&voting_keypair),
             &ledger_entry_sender,
             &Arc::new(RwLock::new(entry_height)),
@@ -827,6 +832,7 @@ mod test {
             entries.clone(),
             &Arc::new(Bank::default()),
             &cluster_info_me,
+            my_id,
             Some(&voting_keypair),
             &ledger_entry_sender,
             &Arc::new(RwLock::new(entry_height)),
@@ -878,6 +884,7 @@ mod test {
             entries.clone(),
             &Arc::new(bank),
             &cluster_info_me,
+            my_id,
             Some(&voting_keypair),
             &ledger_entry_sender,
             &Arc::new(RwLock::new(entry_height)),

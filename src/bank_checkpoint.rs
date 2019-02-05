@@ -17,6 +17,7 @@ use std::time::Instant;
 
 type BankStatusCache = StatusCache<BankError>;
 
+#[derive(Default)]
 pub struct BankCheckpoint {
     /// accounts database
     pub accounts: Accounts,
@@ -34,7 +35,6 @@ impl std::fmt::Debug for BankCheckpoint {
     }
 }
 
-#[derive(Default)]
 impl BankCheckpoint {
     // last_id id is used by the status_cache to filter duplicate signatures
     pub fn new(fork_id: u64, last_id: &Hash) -> Self {
