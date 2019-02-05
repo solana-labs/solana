@@ -2,6 +2,8 @@ use crate::blob_store::slot::{SlotData, SlotIO};
 use crate::blob_store::store::{Key, Retrievable, SlotCache, Storable, StorableNoCopy};
 use crate::blob_store::{Result, StoreError};
 
+use byteorder::{BigEndian, ByteOrder};
+
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::ops::Range;
@@ -12,7 +14,8 @@ pub const DATA_FILE_BUF_SIZE: usize = 64 * 1024;
 pub const INDEX_RECORD_SIZE: u64 = 3 * 8;
 
 pub fn mk_slot_path(root: &Path, slot: u64) -> PathBuf {
-    let splat = slot.to_be_bytes();
+    let mut splat = [0u8; 8];
+    BigEndian::write_u64(&mut splat, slot);
     let mut path = root.join(format!("{:#04x}", splat[0]));
 
     for byte in &splat[1..] {

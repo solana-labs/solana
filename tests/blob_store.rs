@@ -16,9 +16,7 @@ fn test_get_put_simple() {
 
     // simple metadata insert
     let meta = SlotMeta::new(slot, 1);
-    store
-        .put_meta(0, meta.clone())
-        .expect("couldn't insert slotmeta");
+    store.put_meta(0, &meta).expect("couldn't insert slotmeta");
     let meta2 = store.get_meta(0).expect("couldn't retrieve slotmeta");
 
     assert_eq!(meta, meta2);

@@ -248,7 +248,7 @@ impl Store {
 
     fn record_slots(&mut self, slots: &[u64]) -> Result<()> {
         for slot in slots {
-            self.slots_rec.set(*slot, *slot)?;
+            self.slots_rec.set(*slot, slot)?;
         }
 
         Ok(())
@@ -487,6 +487,7 @@ impl From<([u8; 8], [u8; 8])> for Key {
     }
 }
 
+#[allow(clippy::needless_pass_by_value)]
 pub fn _str<S: ToString>(s: S) -> StoreError {
     StoreError::Serialization(s.to_string())
 }

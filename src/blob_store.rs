@@ -2,6 +2,7 @@
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
 
+use crate::blob_store::store::{Key, Named};
 use crate::entry::Entry;
 use crate::leader_scheduler::DEFAULT_BOOTSTRAP_HEIGHT;
 use crate::packet::{self, Blob};
@@ -17,8 +18,6 @@ use std::io;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::result::Result as StdRes;
-
-use store::Key;
 
 mod recordfile;
 mod slot;
@@ -105,8 +104,8 @@ impl BlobStore {
         self.store.config()
     }
 
-    pub fn put_meta(&mut self, slot: u64, meta: SlotMeta) -> Result<()> {
-        self.store.put_single(slot, &meta)
+    pub fn put_meta(&mut self, slot: u64, meta: &SlotMeta) -> Result<()> {
+        self.store.put_single(slot, meta)
     }
 
     pub fn get_meta(&self, slot: u64) -> Result<SlotMeta> {
@@ -132,8 +131,6 @@ impl BlobStore {
     }
 
     pub fn get_blob_data(&self, slot: u64, index: u64) -> Result<Vec<u8>> {
-        use store::Named;
-
         let key = Key::from((slot, index));
         self.store.get_dyn::<Vec<u8>>(Blob::COLUMN, key)
     }
@@ -198,7 +195,7 @@ impl BlobStore {
                     meta.is_trunk = meta.contains_all_ticks(self.config());
                 }
             }
-            self.put_meta(slot, meta)?;
+            self.put_meta(slot, &meta)?;
         }
 
         ret
@@ -217,7 +214,6 @@ impl BlobStore {
         slot: u64,
         range: Range<u64>,
     ) -> Result<impl Iterator<Item = Result<Vec<u8>>> + '_> {
-        use store::Named;
         self.store.slot_range(Blob::COLUMN, slot, range)
     }
 

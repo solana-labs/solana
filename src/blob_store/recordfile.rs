@@ -46,7 +46,7 @@ impl<T: Record> RecordFile<T> {
         })
     }
 
-    pub fn set(&mut self, idx: u64, elem: T) -> io::Result<()> {
+    pub fn set(&mut self, idx: u64, elem: &T) -> io::Result<()> {
         let mut buf = self.buf.borrow_mut();
         buf[0] = 1;
         elem.write(&mut buf[1..]);
