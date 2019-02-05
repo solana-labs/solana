@@ -16,9 +16,12 @@ use solana_sdk::vote_transaction::VoteTransaction;
 use std::io::Cursor;
 use std::sync::Arc;
 
+/*
 // At 10 ticks/s, 8 ticks per slot implies that leader rotation and voting will happen
 // every 800 ms. A fast voting cadence ensures faster finality and convergence
 pub const DEFAULT_TICKS_PER_SLOT: u64 = 8;
+*/
+pub const DEFAULT_TICKS_PER_SLOT: u64 = 32; // TODO: DEFAULT_TICKS_PER_SLOT = 8 causes instability in the integration tests.
 pub const DEFAULT_SLOTS_PER_EPOCH: u64 = 64;
 pub const DEFAULT_SEED_ROTATION_INTERVAL: u64 = DEFAULT_SLOTS_PER_EPOCH * DEFAULT_TICKS_PER_SLOT;
 pub const DEFAULT_ACTIVE_WINDOW_LENGTH: u64 = DEFAULT_SEED_ROTATION_INTERVAL;
