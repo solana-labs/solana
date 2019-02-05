@@ -45,7 +45,7 @@ pub struct BankingStage {
     bank_thread_hdls: Vec<JoinHandle<Option<BankingStageReturnType>>>,
     poh_service: PohService,
     compute_confirmation_service: ComputeLeaderConfirmationService,
-    max_tick_height: Option<u64>,
+    max_tick_height: u64,
 }
 
 impl BankingStage {
@@ -56,7 +56,7 @@ impl BankingStage {
         verified_receiver: Receiver<VerifiedPackets>,
         config: Config,
         last_entry_id: &Hash,
-        max_tick_height: Option<u64>,
+        max_tick_height: u64,
         leader_id: Pubkey,
         to_validator_sender: &TpuRotationSender,
     ) -> (Self, Receiver<Vec<Entry>>) {
@@ -116,8 +116,6 @@ impl BankingStage {
                                         break Some(BankingStageReturnType::RecordFailure);
                                     }
                                     Error::PohRecorderError(PohRecorderError::MaxHeightReached) => {
-                                        assert!(max_tick_height.is_some());
-                                        let max_tick_height = max_tick_height.unwrap();
                                         if !thread_did_notify_rotation.load(Ordering::Relaxed) {
                                             // Leader rotation should only happen if a max_tick_height was specified
                                             let _ = thread_sender.send(
@@ -279,9 +277,7 @@ impl Service for BankingStage {
         match poh_return_value {
             Ok(_) => (),
             Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) => {
-                return_value = Some(BankingStageReturnType::LeaderRotation(
-                    self.max_tick_height.unwrap(),
-                ));
+                return_value = Some(BankingStageReturnType::LeaderRotation(self.max_tick_height));
             }
             Err(Error::SendError) => {
                 return_value = Some(BankingStageReturnType::ChannelDisconnected);
@@ -299,7 +295,7 @@ mod tests {
     use crate::bank::Bank;
     use crate::banking_stage::BankingStageReturnType;
     use crate::entry::EntrySlice;
-    use crate::genesis_block::GenesisBlock;
+    use crate::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_TOKENS};
     use crate::packet::to_packets;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
@@ -307,9 +303,8 @@ mod tests {
 
     #[test]
     fn test_banking_stage_shutdown1() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let dummy_leader_id = Keypair::new().pubkey();
         let (verified_sender, verified_receiver) = channel();
         let (to_validator_sender, _) = channel();
         let (banking_stage, _entry_receiver) = BankingStage::new(
@@ -317,8 +312,8 @@ mod tests {
             verified_receiver,
             Default::default(),
             &bank.last_id(),
-            None,
-            dummy_leader_id,
+            std::u64::MAX,
+            genesis_block.bootstrap_leader_id,
             &to_validator_sender,
         );
         drop(verified_sender);
@@ -330,9 +325,8 @@ mod tests {
 
     #[test]
     fn test_banking_stage_shutdown2() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let dummy_leader_id = Keypair::new().pubkey();
         let (_verified_sender, verified_receiver) = channel();
         let (to_validator_sender, _) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
@@ -340,8 +334,8 @@ mod tests {
             verified_receiver,
             Default::default(),
             &bank.last_id(),
-            None,
-            dummy_leader_id,
+            std::u64::MAX,
+            genesis_block.bootstrap_leader_id,
             &to_validator_sender,
         );
         drop(entry_receiver);
@@ -353,9 +347,8 @@ mod tests {
 
     #[test]
     fn test_banking_stage_tick() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let dummy_leader_id = Keypair::new().pubkey();
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
         let (to_validator_sender, _) = channel();
@@ -364,8 +357,8 @@ mod tests {
             verified_receiver,
             Config::Sleep(Duration::from_millis(1)),
             &bank.last_id(),
-            None,
-            dummy_leader_id,
+            std::u64::MAX,
+            genesis_block.bootstrap_leader_id,
             &to_validator_sender,
         );
         sleep(Duration::from_millis(500));
@@ -383,9 +376,8 @@ mod tests {
 
     #[test]
     fn test_banking_stage_entries_only() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let dummy_leader_id = Keypair::new().pubkey();
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
         let (to_validator_sender, _) = channel();
@@ -394,8 +386,8 @@ mod tests {
             verified_receiver,
             Default::default(),
             &bank.last_id(),
-            None,
-            dummy_leader_id,
+            std::u64::MAX,
+            genesis_block.bootstrap_leader_id,
             &to_validator_sender,
         );
 
@@ -443,9 +435,8 @@ mod tests {
         // In this attack we'll demonstrate that a verifier can interpret the ledger
         // differently if either the server doesn't signal the ledger to add an
         // Entry OR if the verifier tries to parallelize across multiple Entries.
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let dummy_leader_id = Keypair::new().pubkey();
         let (verified_sender, verified_receiver) = channel();
         let (to_validator_sender, _) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
@@ -453,8 +444,8 @@ mod tests {
             verified_receiver,
             Default::default(),
             &bank.last_id(),
-            None,
-            dummy_leader_id,
+            std::u64::MAX,
+            genesis_block.bootstrap_leader_id,
             &to_validator_sender,
         );
 
@@ -512,9 +503,8 @@ mod tests {
     // with reason BankingStageReturnType::LeaderRotation
     #[test]
     fn test_max_tick_height_shutdown() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let dummy_leader_id = Keypair::new().pubkey();
         let (_verified_sender_, verified_receiver) = channel();
         let (to_validator_sender, _to_validator_receiver) = channel();
         let max_tick_height = 10;
@@ -523,8 +513,8 @@ mod tests {
             verified_receiver,
             Default::default(),
             &bank.last_id(),
-            Some(max_tick_height),
-            dummy_leader_id,
+            max_tick_height,
+            genesis_block.bootstrap_leader_id,
             &to_validator_sender,
         );
         assert_eq!(

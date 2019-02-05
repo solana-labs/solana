@@ -12,7 +12,6 @@ use solana::db_ledger::DbLedger;
 use solana::db_ledger::{create_tmp_sample_ledger, get_tmp_ledger_path, tmp_copy_ledger};
 use solana::entry::Entry;
 use solana::fullnode::{Fullnode, FullnodeConfig};
-use solana::leader_scheduler::LeaderScheduler;
 use solana::replicator::Replicator;
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana::streamer::blob_receiver;
@@ -23,13 +22,12 @@ use solana_sdk::system_transaction::SystemTransaction;
 use std::fs::remove_dir_all;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
-use std::sync::{Arc, RwLock};
-use std::thread::sleep;
+use std::sync::Arc;
 use std::time::Duration;
 
 #[test]
 #[ignore]
-fn test_replicator_startup() {
+fn test_replicator_startup_basic() {
     solana_logger::setup();
     info!("starting replicator test");
     let replicator_ledger_path = &get_tmp_ledger_path("replicator_test_replicator_ledger");
@@ -41,7 +39,7 @@ fn test_replicator_startup() {
 
     let leader_ledger_path = "replicator_test_leader_ledger";
     let (mint_keypair, leader_ledger_path, _last_entry_height, _last_entry_id) =
-        create_tmp_sample_ledger(leader_ledger_path, 1_000_000_000, 0, leader_info.id, 1);
+        create_tmp_sample_ledger(leader_ledger_path, 1_000_000_000, 0, leader_info.id, 42);
 
     let validator_ledger_path =
         tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");
@@ -55,21 +53,23 @@ fn test_replicator_startup() {
             leader_node,
             &leader_keypair,
             &leader_ledger_path,
-            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-                leader_info.id.clone(),
-            ))),
             voting_keypair,
             None,
             &fullnode_config,
+        );
+        let leader_exit = leader.run(None);
+
+        debug!(
+            "leader: {:?}",
+            solana::thin_client::poll_gossip_for_leader(leader_info.gossip, Some(5)).unwrap()
         );
 
         let validator_keypair = Arc::new(Keypair::new());
         let voting_keypair = VotingKeypair::new_local(&validator_keypair);
 
         let mut leader_client = mk_client(&leader_info);
-
         let last_id = leader_client.get_last_id();
-        let mut leader_client = mk_client(&leader_info);
+        debug!("last_id: {:?}", last_id);
 
         leader_client
             .transfer(10, &mint_keypair, validator_keypair.pubkey(), &last_id)
@@ -83,24 +83,29 @@ fn test_replicator_startup() {
             validator_node,
             &validator_keypair,
             &validator_ledger_path,
-            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-                leader_info.id,
-            ))),
             voting_keypair,
             Some(&leader_info),
             &fullnode_config,
         );
+        let validator_exit = validator.run(None);
 
         let bob = Keypair::new();
 
         info!("starting transfers..");
-
-        for _ in 0..64 {
+        for i in 0..64 {
+            debug!("transfer {}", i);
             let last_id = leader_client.get_last_id();
+            let mut transaction =
+                SystemTransaction::new_account(&mint_keypair, bob.pubkey(), 1, last_id, 0);
             leader_client
-                .transfer(1, &mint_keypair, bob.pubkey(), &last_id)
+                .retry_transfer(&mint_keypair, &mut transaction, 5)
                 .unwrap();
-            sleep(Duration::from_millis(200));
+            debug!(
+                "transfer {}: mint balance={:?}, bob balance={:?}",
+                i,
+                leader_client.get_balance(&mint_keypair.pubkey()),
+                leader_client.get_balance(&bob.pubkey()),
+            );
         }
 
         let replicator_keypair = Keypair::new();
@@ -109,11 +114,10 @@ fn test_replicator_startup() {
 
         let last_id = leader_client.get_last_id();
         // Give the replicator some tokens
-        let amount = 1;
         let mut tx = SystemTransaction::new_account(
             &mint_keypair,
             replicator_keypair.pubkey(),
-            amount,
+            1,
             last_id,
             0,
         );
@@ -209,10 +213,11 @@ fn test_replicator_startup() {
         }
 
         replicator.close();
-        validator.exit();
-        leader.close().expect("Expected successful node closure");
+        validator_exit();
+        leader_exit();
     }
 
+    info!("cleanup");
     DbLedger::destroy(&leader_ledger_path).expect("Expected successful database destruction");
     DbLedger::destroy(&replicator_ledger_path).expect("Expected successful database destruction");
     let _ignored = remove_dir_all(&leader_ledger_path);
@@ -271,7 +276,7 @@ fn test_replicator_startup_ledger_hang() {
 
     let leader_ledger_path = "replicator_test_leader_ledger";
     let (_mint_keypair, leader_ledger_path, _last_entry_height, _last_entry_id) =
-        create_tmp_sample_ledger(leader_ledger_path, 100, 0, leader_info.id, 1);
+        create_tmp_sample_ledger(leader_ledger_path, 100, 0, leader_info.id, 42);
 
     let validator_ledger_path =
         tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");
@@ -283,9 +288,6 @@ fn test_replicator_startup_ledger_hang() {
             leader_node,
             &leader_keypair,
             &leader_ledger_path,
-            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-                leader_info.id.clone(),
-            ))),
             voting_keypair,
             None,
             &FullnodeConfig::default(),
@@ -299,9 +301,6 @@ fn test_replicator_startup_ledger_hang() {
             validator_node,
             &validator_keypair,
             &validator_ledger_path,
-            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-                leader_info.id,
-            ))),
             voting_keypair,
             Some(&leader_info),
             &FullnodeConfig::default(),

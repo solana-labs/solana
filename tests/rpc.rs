@@ -17,6 +17,7 @@ fn test_rpc_send_tx() {
     solana_logger::setup();
 
     let (server, leader_data, alice, ledger_path) = new_fullnode("test_rpc_send_tx");
+    let server_exit = server.run(None);
     let bob_pubkey = Keypair::new().pubkey();
 
     let client = reqwest::Client::new();
@@ -92,6 +93,6 @@ fn test_rpc_send_tx() {
 
     assert_eq!(confirmed_tx, true);
 
-    server.close().unwrap();
+    server_exit();
     remove_dir_all(ledger_path).unwrap();
 }

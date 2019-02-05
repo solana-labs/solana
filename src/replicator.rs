@@ -128,7 +128,7 @@ impl Replicator {
         {
             let mut cluster_info_w = cluster_info.write().unwrap();
             cluster_info_w.insert_info(leader_info.clone());
-            cluster_info_w.set_leader(leader_info.id);
+            cluster_info_w.set_leader(leader_pubkey);
         }
 
         // Create DbLedger, eventually will simply repurpose the input
@@ -182,9 +182,7 @@ impl Replicator {
             blob_fetch_receiver,
             retransmit_sender,
             repair_socket,
-            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-                leader_pubkey,
-            ))),
+            Arc::new(RwLock::new(LeaderScheduler::default())),
             done.clone(),
             exit.clone(),
         );

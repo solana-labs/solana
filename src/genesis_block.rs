@@ -7,10 +7,16 @@ use std::fs::File;
 use std::io::Write;
 use std::path::Path;
 
+// The default (and minimal) amount of tokens given to the bootstrap leader:
+// * 1 token for the bootstrap leader ID account
+// * 1 token for the bootstrap leader vote account
+pub const BOOTSTRAP_LEADER_TOKENS: u64 = 2;
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GenesisBlock {
     pub bootstrap_leader_id: Pubkey,
     pub bootstrap_leader_tokens: u64,
+    pub bootstrap_leader_vote_account_id: Pubkey,
     pub mint_id: Pubkey,
     pub tokens: u64,
 }
@@ -18,11 +24,15 @@ pub struct GenesisBlock {
 impl GenesisBlock {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(tokens: u64) -> (Self, Keypair) {
+        assert!(tokens >= 2);
         let mint_keypair = Keypair::new();
+        let bootstrap_leader_keypair = Keypair::new();
+        let bootstrap_leader_vote_account_keypair = Keypair::new();
         (
             Self {
-                bootstrap_leader_id: Pubkey::default(),
-                bootstrap_leader_tokens: 0,
+                bootstrap_leader_id: bootstrap_leader_keypair.pubkey(),
+                bootstrap_leader_tokens: BOOTSTRAP_LEADER_TOKENS,
+                bootstrap_leader_vote_account_id: bootstrap_leader_vote_account_keypair.pubkey(),
                 mint_id: mint_keypair.pubkey(),
                 tokens,
             },
@@ -36,10 +46,12 @@ impl GenesisBlock {
         bootstrap_leader_tokens: u64,
     ) -> (Self, Keypair) {
         let mint_keypair = Keypair::new();
+        let bootstrap_leader_vote_account_keypair = Keypair::new();
         (
             Self {
                 bootstrap_leader_id,
                 bootstrap_leader_tokens,
+                bootstrap_leader_vote_account_id: bootstrap_leader_vote_account_keypair.pubkey(),
                 mint_id: mint_keypair.pubkey(),
                 tokens,
             },
@@ -74,8 +86,12 @@ mod tests {
         let (genesis_block, mint) = GenesisBlock::new(10_000);
         assert_eq!(genesis_block.tokens, 10_000);
         assert_eq!(genesis_block.mint_id, mint.pubkey());
-        assert_eq!(genesis_block.bootstrap_leader_id, Pubkey::default());
-        assert_eq!(genesis_block.bootstrap_leader_tokens, 0);
+        assert!(genesis_block.bootstrap_leader_id != Pubkey::default());
+        assert!(genesis_block.bootstrap_leader_vote_account_id != Pubkey::default());
+        assert_eq!(
+            genesis_block.bootstrap_leader_tokens,
+            BOOTSTRAP_LEADER_TOKENS
+        );
     }
 
     #[test]

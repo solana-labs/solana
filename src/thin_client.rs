@@ -20,7 +20,7 @@ use solana_metrics::influxdb;
 use solana_sdk::account::Account;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, Signature};
+use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
@@ -136,6 +136,13 @@ impl ThinClient {
         to: Pubkey,
         last_id: &Hash,
     ) -> io::Result<Signature> {
+        debug!(
+            "transfer: n={} from={:?} to={:?} last_id={:?}",
+            n,
+            keypair.pubkey(),
+            to,
+            last_id
+        );
         let now = Instant::now();
         let tx = SystemTransaction::new_account(keypair, to, n, *last_id, 0);
         let result = self.transfer_signed(&tx);
@@ -439,7 +446,7 @@ pub fn retry_get_balance(
 pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, String) {
     use crate::cluster_info::Node;
     use crate::db_ledger::create_tmp_sample_ledger;
-    use crate::leader_scheduler::LeaderScheduler;
+    use crate::fullnode::Fullnode;
     use crate::voting_keypair::VotingKeypair;
     use solana_sdk::signature::KeypairUtil;
 
@@ -450,14 +457,12 @@ pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, 
     let (mint_keypair, ledger_path, _, _) =
         create_tmp_sample_ledger(ledger_name, 10_000, 0, node_info.id, 42);
 
-    let leader_scheduler = LeaderScheduler::from_bootstrap_leader(node_info.id);
     let vote_account_keypair = Arc::new(Keypair::new());
     let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
     let node = Fullnode::new(
         node,
         &node_keypair,
         &ledger_path,
-        Arc::new(RwLock::new(leader_scheduler)),
         voting_keypair,
         None,
         &FullnodeConfig::default(),
@@ -478,41 +483,52 @@ mod tests {
     use std::fs::remove_dir_all;
 
     #[test]
-    fn test_thin_client() {
+    fn test_thin_client_basic() {
         solana_logger::setup();
         let (server, leader_data, alice, ledger_path) = new_fullnode("thin_client");
+        let server_exit = server.run(None);
         let bob_pubkey = Keypair::new().pubkey();
 
-        sleep(Duration::from_millis(900));
+        info!(
+            "found leader: {:?}",
+            poll_gossip_for_leader(leader_data.gossip, Some(5)).unwrap()
+        );
 
         let mut client = mk_client(&leader_data);
 
         let transaction_count = client.transaction_count();
         assert_eq!(transaction_count, 0);
+
         let confirmation = client.get_confirmation_time();
         assert_eq!(confirmation, 18446744073709551615);
+
         let last_id = client.get_last_id();
+        info!("test_thin_client last_id: {:?}", last_id);
+
         let signature = client.transfer(500, &alice, bob_pubkey, &last_id).unwrap();
+        info!("test_thin_client signature: {:?}", signature);
         client.poll_for_signature(&signature).unwrap();
+
         let balance = client.get_balance(&bob_pubkey);
         assert_eq!(balance.unwrap(), 500);
+
         let transaction_count = client.transaction_count();
         assert_eq!(transaction_count, 1);
-        server.close().unwrap();
+        server_exit();
         remove_dir_all(ledger_path).unwrap();
     }
 
-    // sleep(Duration::from_millis(300)); is unstable
     #[test]
     #[ignore]
     fn test_bad_sig() {
         solana_logger::setup();
-
         let (server, leader_data, alice, ledger_path) = new_fullnode("bad_sig");
+        let server_exit = server.run(None);
         let bob_pubkey = Keypair::new().pubkey();
-
-        //TODO: remove this sleep, or add a retry so CI is stable
-        sleep(Duration::from_millis(300));
+        info!(
+            "found leader: {:?}",
+            poll_gossip_for_leader(leader_data.gossip, Some(5)).unwrap()
+        );
 
         let mut client = mk_client(&leader_data);
 
@@ -534,24 +550,8 @@ mod tests {
         client.poll_for_signature(&signature).unwrap();
 
         let balance = client.get_balance(&bob_pubkey);
-        assert_eq!(balance.unwrap(), 500);
-        server.close().unwrap();
-        remove_dir_all(ledger_path).unwrap();
-    }
-
-    #[test]
-    fn test_client_check_signature() {
-        solana_logger::setup();
-        let (server, leader_data, alice, ledger_path) = new_fullnode("thin_client");
-        let bob_pubkey = Keypair::new().pubkey();
-
-        let mut client = mk_client(&leader_data);
-        let last_id = client.get_last_id();
-        let signature = client.transfer(500, &alice, bob_pubkey, &last_id).unwrap();
-
-        client.poll_for_signature(&signature).unwrap();
-
-        server.close().unwrap();
+        assert_eq!(balance.unwrap(), 1001);
+        server_exit();
         remove_dir_all(ledger_path).unwrap();
     }
 
@@ -559,6 +559,11 @@ mod tests {
     fn test_register_vote_account() {
         solana_logger::setup();
         let (server, leader_data, alice, ledger_path) = new_fullnode("thin_client");
+        let server_exit = server.run(None);
+        info!(
+            "found leader: {:?}",
+            poll_gossip_for_leader(leader_data.gossip, Some(5)).unwrap()
+        );
 
         let mut client = mk_client(&leader_data);
 
@@ -604,7 +609,7 @@ mod tests {
             sleep(Duration::from_millis(900));
         }
 
-        server.close().unwrap();
+        server_exit();
         remove_dir_all(ledger_path).unwrap();
     }
 
@@ -623,7 +628,13 @@ mod tests {
     fn test_zero_balance_after_nonzero() {
         solana_logger::setup();
         let (server, leader_data, alice, ledger_path) = new_fullnode("thin_client");
+        let server_exit = server.run(None);
         let bob_keypair = Keypair::new();
+
+        info!(
+            "found leader: {:?}",
+            poll_gossip_for_leader(leader_data.gossip, Some(5)).unwrap()
+        );
 
         let mut client = mk_client(&leader_data);
         let last_id = client.get_last_id();
@@ -651,7 +662,7 @@ mod tests {
         let balance = client.poll_get_balance(&bob_keypair.pubkey());
         assert!(balance.is_err());
 
-        server.close().unwrap();
+        server_exit();
         remove_dir_all(ledger_path).unwrap();
     }
 }

@@ -12,7 +12,7 @@ use solana::last_id_queue::MAX_ENTRY_IDS;
 use solana::packet::to_packets_chunked;
 use solana_sdk::hash::hash;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
+use solana_sdk::signature::{KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
 use std::iter;
 use std::sync::mpsc::{channel, Receiver};
@@ -48,7 +48,6 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
 
     let (verified_sender, verified_receiver) = channel();
     let bank = Arc::new(Bank::new(&genesis_block));
-    let dummy_leader_id = Keypair::new().pubkey();
     let dummy = SystemTransaction::new_move(
         &mint_keypair,
         mint_keypair.pubkey(),
@@ -106,8 +105,8 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         verified_receiver,
         Default::default(),
         &genesis_block.last_id(),
-        None,
-        dummy_leader_id,
+        std::u64::MAX,
+        genesis_block.bootstrap_leader_id,
         &to_leader_sender,
     );
 
@@ -143,7 +142,6 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
 
     let (verified_sender, verified_receiver) = channel();
     let bank = Arc::new(Bank::new(&genesis_block));
-    let dummy_leader_id = Keypair::new().pubkey();
     let dummy = SystemTransaction::new_move(
         &mint_keypair,
         mint_keypair.pubkey(),
@@ -216,8 +214,8 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         verified_receiver,
         Default::default(),
         &genesis_block.last_id(),
-        None,
-        dummy_leader_id,
+        std::u64::MAX,
+        genesis_block.bootstrap_leader_id,
         &to_leader_sender,
     );
 
