@@ -39,19 +39,8 @@ fn process_vote(keyed_accounts: &mut [KeyedAccount], vote: Vote) -> Result<(), P
     }
 
     let mut vote_state = VoteState::deserialize(&keyed_accounts[0].account.userdata)?;
-
-    // TODO: Integrity checks
-    // a) Verify the vote's bank hash matches what is expected
-    // b) Verify vote is older than previous votes
-
-    // Only keep around the most recent MAX_VOTE_HISTORY votes
-    if vote_state.votes.len() == vote_program::MAX_VOTE_HISTORY {
-        vote_state.votes.pop_front();
-    }
-
-    vote_state.votes.push_back(vote);
+    vote_state.process_vote(vote);
     vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
-
     Ok(())
 }
 
@@ -152,6 +141,7 @@ mod tests {
         let vote = Vote::new(1);
         let vote_state = vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();
         assert_eq!(vote_state.votes, vec![vote]);
+        assert_eq!(vote_state.credits(), 0);
     }
 
     #[test]
