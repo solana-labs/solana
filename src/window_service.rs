@@ -257,17 +257,17 @@ mod test {
             done,
             exit.clone(),
         );
+        let num_blobs = 7;
         let t_responder = {
             let (s_responder, r_responder) = channel();
             let blob_sockets: Vec<Arc<UdpSocket>> =
                 leader_node.sockets.tvu.into_iter().map(Arc::new).collect();
 
             let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
-            let num_blobs_to_make = 10;
             let gossip_address = &leader_node.info.gossip;
             let msgs = make_consecutive_blobs(
                 &me_id,
-                num_blobs_to_make,
+                num_blobs as u64,
                 0,
                 Hash::default(),
                 &gossip_address,
@@ -279,21 +279,20 @@ mod test {
             t_responder
         };
 
-        let max_attempts = 10;
         let mut num_attempts = 0;
-        loop {
-            assert!(num_attempts != max_attempts);
+        let mut received = 0;
+        while num_attempts < 10 && received < num_blobs {
             let mut q = r_retransmit.recv().unwrap();
             while let Ok(mut nq) = r_retransmit.try_recv() {
                 q.append(&mut nq);
             }
-            if q.len() != 10 {
+            received += q.len();
+            if received < num_blobs {
                 sleep(Duration::from_millis(100));
-            } else {
-                break;
             }
             num_attempts += 1;
         }
+        assert_eq!(received, num_blobs);
 
         exit.store(true, Ordering::Relaxed);
         t_receiver.join().expect("join");
