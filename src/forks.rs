@@ -177,7 +177,7 @@ mod tests {
             forks.init_fork(1, &last_id, 0),
             Err(BankError::CheckpointNotFrozen)
         );
-        forks.root_bank_state().head().finalize();
+        forks.root_bank_state().head().freeze();
         assert_eq!(forks.init_fork(1, &last_id, 0), Ok(()));
 
         assert_eq!(forks.root_bank_state().head().fork_id(), 0);
@@ -193,10 +193,10 @@ mod tests {
         cp.register_tick(&last_id);
         forks.init_root_bank_state(cp);
         let last_id = hash(last_id.as_ref());
-        forks.root_bank_state().head().finalize();
+        forks.root_bank_state().head().freeze();
         assert_eq!(forks.init_fork(1, &last_id, 0), Ok(()));
         forks.live_bank_state().head().register_tick(&last_id);
-        forks.live_bank_state().head().finalize();
+        forks.live_bank_state().head().freeze();
         assert_eq!(forks.merge_into_root(2, 1), Ok(None));
         assert_eq!(forks.merge_into_root(1, 1), Ok(Some(1)));
 
@@ -212,7 +212,7 @@ mod tests {
         cp.register_tick(&last_id);
         forks.init_root_bank_state(cp);
         let last_id = hash(last_id.as_ref());
-        forks.root_bank_state().head().finalize();
+        forks.root_bank_state().head().freeze();
         assert_eq!(forks.init_fork(1, &last_id, 0), Ok(()));
         assert_eq!(forks.bank_state(1).unwrap().checkpoints.len(), 2);
         forks.bank_state(1).unwrap().head().register_tick(&last_id);
@@ -224,7 +224,7 @@ mod tests {
         assert_eq!(forks.bank_state(2).unwrap().checkpoints.len(), 2);
         forks.bank_state(2).unwrap().head().register_tick(&last_id);
 
-        forks.bank_state(1).unwrap().head().finalize();
+        forks.bank_state(1).unwrap().head().freeze();
         // fork 1 is the new root, only forks that are descendant from 1 are valid
         assert_eq!(forks.merge_into_root(1, 1), Ok(Some(1)));
 

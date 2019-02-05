@@ -146,7 +146,7 @@ impl ReplayStage {
                 let next_tick_slot = (bank_state.tick_height() + 1) / DEFAULT_TICKS_PER_SLOT;
                 if next_tick_slot != current_slot {
                     info!("finalizing {} from replay_stage", current_slot);
-                    bank_state.head().finalize();
+                    bank_state.head().freeze();
                     bank.merge_into_root(current_slot);
                     if let Some(voting_keypair) = voting_keypair {
                         let keypair = voting_keypair.as_ref();

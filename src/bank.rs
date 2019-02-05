@@ -82,7 +82,7 @@ pub enum BankError {
     /// Specified base checkpoint is still live
     CheckpointNotFrozen,
 
-    /// Requested live checkpoint is finalized
+    /// Requested live checkpoint is frozen
     CheckpointIsFrozen,
 }
 
@@ -344,9 +344,9 @@ impl Bank {
                 //TODO: EntryTree should provide base slot
                 let base = slot - 1;
                 {
-                    info!("finalizing from ledger at {}", base);
+                    info!("freezing from ledger at {}", base);
                     let base_state = self.bank_state(base).expect("base fork");
-                    base_state.head().finalize();
+                    base_state.head().freeze();
                 }
                 self.init_fork(slot, &block[0].id, base)
                     .expect("init new fork");

@@ -87,7 +87,7 @@ impl BankCheckpoint {
     pub fn transaction_count(&self) -> u64 {
         self.accounts.transaction_count()
     }
-    pub fn finalize(&self) {
+    pub fn freeze(&self) {
         info!(
             "checkpoint {} frozen at {}",
             self.fork_id.load(Ordering::Relaxed),
