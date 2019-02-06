@@ -64,6 +64,7 @@ impl BankDelta {
         assert!(!self.frozen());
         self.status_cache.write().unwrap().clear();
     }
+
     /// Return the last entry ID registered.
     pub fn last_id(&self) -> Hash {
         self.last_id_queue

@@ -54,6 +54,10 @@ impl BankFork {
         self.head().get_signature_status(signature)
     }
 
+    pub fn clear_signatures(&self) {
+        self.head().clear_signatures();
+    }
+
     /// Each program would need to be able to introspect its own state
     /// this is hard-coded to the Budget language
     pub fn get_balance_slow(&self, pubkey: &Pubkey) -> u64 {
