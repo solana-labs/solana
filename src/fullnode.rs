@@ -753,7 +753,10 @@ mod tests {
         }
     }
 
+    // TODO: Rework this test or TVU (make_consecutive_blobs sends blobs that can't be handled by
+    //       the replay_stage)
     #[test]
+    #[ignore]
     fn test_validator_to_leader_transition() {
         solana_logger::setup();
         // Make leader and validator node
