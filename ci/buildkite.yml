@@ -16,7 +16,7 @@ steps:
     timeout_in_minutes: 30
   - command: "ci/docker-run.sh solanalabs/rust:1.31.0 ci/test-stable.sh"
     name: "stable"
-    timeout_in_minutes: 30
+    timeout_in_minutes: 40
   - command: "ci/docker-run.sh solanalabs/rust-nightly:2019-01-31 ci/test-coverage.sh"
     name: "coverage"
     timeout_in_minutes: 40
