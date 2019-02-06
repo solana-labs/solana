@@ -1150,6 +1150,7 @@ pub mod tests {
         // Check that the generate_schedule() function is being called by the
         // update_height() function at the correct entry heights.
         let bank = Bank::default();
+        bank.init_root(&Hash::default());
         leader_scheduler.update_height(bootstrap_height - 1, &bank);
         assert_eq!(leader_scheduler.last_seed_height, None);
         leader_scheduler.update_height(bootstrap_height, &bank);
