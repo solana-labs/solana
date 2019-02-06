@@ -268,6 +268,7 @@ impl LeaderScheduler {
         // This covers cases where the schedule isn't yet generated.
         if self.last_seed_height == None {
             if height <= self.bootstrap_height {
+                info!("bootstrap leader: {}", self.bootstrap_leader);
                 return Some((self.bootstrap_leader, 0));
             } else {
                 // If there's been no schedule generated yet before we reach the end of the
@@ -297,6 +298,10 @@ impl LeaderScheduler {
         let leader_slot = (height - self.bootstrap_height - 1) / self.leader_rotation_interval + 1;
         let index = (height - last_seed_height - 1) / self.leader_rotation_interval;
         let validator_index = index as usize % self.leader_schedule.len();
+        info!(
+            "leader: {} slot: {}",
+            self.leader_schedule[validator_index], leader_slot
+        );
         Some((self.leader_schedule[validator_index], leader_slot))
     }
 
