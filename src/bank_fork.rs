@@ -1,6 +1,6 @@
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::bank::{BankError, Result};
-use crate::bank_checkpoint::BankCheckpoint;
+use crate::bank_delta::BankDelta;
 use crate::counter::Counter;
 use crate::entry::Entry;
 use crate::last_id_queue::MAX_ENTRY_IDS;
@@ -21,14 +21,14 @@ use std::sync::Arc;
 use std::time::Instant;
 
 pub struct BankFork {
-    pub checkpoints: Vec<Arc<BankCheckpoint>>,
+    pub deltas: Vec<Arc<BankDelta>>,
 }
 
 impl BankFork {
-    pub fn head(&self) -> &Arc<BankCheckpoint> {
-        self.checkpoints
+    pub fn head(&self) -> &Arc<BankDelta> {
+        self.deltas
             .first()
-            .expect("at least 1 checkpoint needs to be available for the state")
+            .expect("at least 1 delta needs to be available for the state")
     }
     fn load_accounts(
         &self,
@@ -36,7 +36,7 @@ impl BankFork {
         results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
-        let accounts: Vec<&Accounts> = self.checkpoints.iter().map(|c| &c.accounts).collect();
+        let accounts: Vec<&Accounts> = self.deltas.iter().map(|c| &c.accounts).collect();
         Accounts::load_accounts(&accounts, txs, results, error_counters)
     }
     pub fn hash_internal_state(&self) -> Hash {
@@ -76,7 +76,7 @@ impl BankFork {
     }
 
     pub fn load_slow(&self, pubkey: &Pubkey) -> Option<Account> {
-        let accounts: Vec<&Accounts> = self.checkpoints.iter().map(|c| &c.accounts).collect();
+        let accounts: Vec<&Accounts> = self.deltas.iter().map(|c| &c.accounts).collect();
         Accounts::load_slow(&accounts, pubkey)
     }
 
@@ -98,7 +98,7 @@ impl BankFork {
         Vec<Result<(InstructionAccounts, InstructionLoaders)>>,
         Vec<Result<()>>,
     ) {
-        let head = &self.checkpoints[0];
+        let head = &self.deltas[0];
         debug!("processing transactions: {}", txs.len());
         let mut error_counters = ErrorCounters::default();
         let now = Instant::now();
@@ -193,7 +193,7 @@ impl BankFork {
         lock_results: &[Result<()>],
         max_age: usize,
     ) -> Result<Vec<Result<()>>> {
-        let head = &self.checkpoints[0];
+        let head = &self.deltas[0];
         let (loaded_accounts, executed) =
             self.load_and_execute_transactions(txs, lock_results, max_age);
         if let Some(poh) = recorder {
@@ -219,7 +219,7 @@ impl BankFork {
         txs: &[Transaction],
         poh: Option<&PohRecorder>,
     ) -> Result<Vec<Result<()>>> {
-        let head = &self.checkpoints[0];
+        let head = &self.deltas[0];
         let now = Instant::now();
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
@@ -318,7 +318,7 @@ impl BankFork {
     }
 
     fn par_execute_entries(&self, entries: &[(&Entry, Vec<Result<()>>)]) -> Result<()> {
-        let head = &self.checkpoints[0];
+        let head = &self.deltas[0];
         inc_new_counter_info!("bank-par_execute_entries-count", entries.len());
         let results: Vec<Result<()>> = entries
             .into_par_iter()
@@ -328,10 +328,10 @@ impl BankFork {
                     .expect("no record failures");
                 let results = Self::ignore_program_errors(old_results);
                 head.unlock_accounts(&e.transactions, &results);
-                BankCheckpoint::first_err(&results)
+                BankDelta::first_err(&results)
             })
             .collect();
-        BankCheckpoint::first_err(&results)
+        BankDelta::first_err(&results)
     }
 
     /// process entries in parallel
@@ -339,7 +339,7 @@ impl BankFork {
     /// 2. Process the locked group in parallel
     /// 3. Register the `Tick` if it's available, goto 1
     pub fn process_entries(&self, entries: &[Entry]) -> Result<()> {
-        let head = &self.checkpoints[0];
+        let head = &self.deltas[0];
         // accumulator for entries that can be processed in parallel
         let mut mt_group = vec![];
         for entry in entries {
@@ -354,7 +354,7 @@ impl BankFork {
             let lock_results = head.lock_accounts(&entry.transactions);
             // if any of the locks error out
             // execute the current group
-            if BankCheckpoint::first_err(&lock_results).is_err() {
+            if BankDelta::first_err(&lock_results).is_err() {
                 self.par_execute_entries(&mt_group)?;
                 mt_group = vec![];
                 //reset the lock and push the entry
@@ -401,13 +401,11 @@ mod test {
 
     fn new_state(mint: &Keypair, tokens: u64, last_id: &Hash) -> BankFork {
         let accounts = [(mint.pubkey(), Account::new(tokens, 0, Pubkey::default()))];
-        let bank = Arc::new(BankCheckpoint::new_from_accounts(0, &accounts, &last_id));
-        BankFork {
-            checkpoints: vec![bank],
-        }
+        let bank = Arc::new(BankDelta::new_from_accounts(0, &accounts, &last_id));
+        BankFork { deltas: vec![bank] }
     }
 
-    fn add_system_program(checkpoint: &BankCheckpoint) {
+    fn add_system_program(delta: &BankDelta) {
         let system_program_account = Account {
             tokens: 1,
             owner: system_program::id(),
@@ -415,7 +413,7 @@ mod test {
             executable: true,
             loader: solana_native_loader::id(),
         };
-        checkpoint.store_slow(false, &system_program::id(), &system_program_account);
+        delta.store_slow(false, &system_program::id(), &system_program_account);
     }
 
     #[test]

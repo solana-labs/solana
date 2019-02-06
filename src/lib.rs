@@ -11,7 +11,7 @@
 pub mod counter;
 pub mod accounts;
 pub mod bank;
-pub mod bank_checkpoint;
+pub mod bank_delta;
 pub mod bank_fork;
 pub mod banking_stage;
 pub mod blob_fetch_stage;

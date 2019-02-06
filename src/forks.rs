@@ -1,4 +1,4 @@
-use crate::bank_checkpoint::BankCheckpoint;
+use crate::bank_delta::BankDelta;
 /// This module tracks the forks in the bank
 use crate::bank_fork::BankFork;
 use std::sync::Arc;
@@ -12,7 +12,7 @@ pub const ROLLBACK_DEPTH: usize = 32usize;
 
 #[derive(Default)]
 pub struct Forks {
-    pub checkpoints: Checkpoints<Arc<BankCheckpoint>>,
+    pub deltas: Checkpoints<Arc<BankDelta>>,
 
     /// Last fork to be initialized
     /// This should be the last fork to be replayed or the TPU fork
@@ -32,7 +32,7 @@ impl Forks {
 
     pub fn fork(&self, fork: u64) -> Option<BankFork> {
         let cp: Vec<_> = self
-            .checkpoints
+            .deltas
             .collect(ROLLBACK_DEPTH + 1, fork)
             .into_iter()
             .map(|x| x.1)
@@ -41,10 +41,10 @@ impl Forks {
         if cp.is_empty() {
             None
         } else {
-            Some(BankFork { checkpoints: cp })
+            Some(BankFork { deltas: cp })
         }
     }
-    /// Collapse the bottom two checkpoints.
+    /// Collapse the bottom two deltas.
     /// The tree is computed from the `leaf` to the `root`
     /// The path from `leaf` to the `root` is the active chain.
     /// The leaf is the last possible fork, it should have no descendants.
@@ -57,9 +57,9 @@ impl Forks {
         // `old` root, should have `root` as its fork_id
         // `new` root is a direct descendant of old and has new_root_id as its fork_id
         // new is merged into old
-        // and old is swapped into the checkpoint under new_root_id
+        // and old is swapped into the delta under new_root_id
         let merge_root = {
-            let active_chain = self.checkpoints.collect(ROLLBACK_DEPTH + 1, leaf);
+            let active_chain = self.deltas.collect(ROLLBACK_DEPTH + 1, leaf);
             let leaf_id = active_chain
                 .first()
                 .map(|x| x.0)
@@ -71,11 +71,11 @@ impl Forks {
                 let new_root = active_chain[len - 2];
                 if !new_root.1.frozen() {
                     trace!("new_root id {}", new_root.1.fork_id());
-                    return Err(BankError::CheckpointNotFrozen);
+                    return Err(BankError::DeltaNotFrozen);
                 }
                 if !old_root.1.frozen() {
                     trace!("old id {}", old_root.1.fork_id());
-                    return Err(BankError::CheckpointNotFrozen);
+                    return Err(BankError::DeltaNotFrozen);
                 }
                 //stupid sanity checks
                 assert_eq!(new_root.1.fork_id(), new_root.0);
@@ -86,26 +86,26 @@ impl Forks {
             }
         };
         if let Some((old_root, new_root, new_root_id)) = merge_root {
-            let idag = self.checkpoints.invert();
-            let new_checkpoints = self.checkpoints.prune(new_root_id, &idag);
+            let idag = self.deltas.invert();
+            let new_deltas = self.deltas.prune(new_root_id, &idag);
             let old_root_id = old_root.fork_id();
-            self.checkpoints = new_checkpoints;
+            self.deltas = new_deltas;
             self.root = new_root_id;
             self.active_fork = leaf;
             // old should have been pruned
-            assert!(self.checkpoints.load(old_root_id).is_none());
+            assert!(self.deltas.load(old_root_id).is_none());
             // new_root id should be in the new tree
-            assert!(!self.checkpoints.load(new_root_id).is_none());
+            assert!(!self.deltas.load(new_root_id).is_none());
 
             // swap in the old instance under the new_root id
             // this should be the last external ref to `new_root`
-            self.checkpoints
+            self.deltas
                 .insert(new_root_id, old_root.clone(), old_root_id);
 
             // merge all the new changes into the old instance under the new id
             // this should consume `new`
             // new should have no other references
-            let new_root: BankCheckpoint = Arc::try_unwrap(new_root).unwrap();
+            let new_root: BankDelta = Arc::try_unwrap(new_root).unwrap();
             old_root.merge_into_root(new_root);
             assert_eq!(old_root.fork_id(), new_root_id);
             Ok(Some(new_root_id))
@@ -115,18 +115,18 @@ impl Forks {
     }
 
     /// Initialize the first root
-    pub fn init_root(&mut self, checkpoint: BankCheckpoint) {
-        assert!(self.checkpoints.is_empty());
-        self.active_fork = checkpoint.fork_id();
-        self.root = checkpoint.fork_id();
-        //TODO: using u64::MAX as the impossible checkpoint
+    pub fn init_root(&mut self, delta: BankDelta) {
+        assert!(self.deltas.is_empty());
+        self.active_fork = delta.fork_id();
+        self.root = delta.fork_id();
+        //TODO: using u64::MAX as the impossible delta
         //this should be a None instead
-        self.checkpoints
-            .store(self.active_fork, Arc::new(checkpoint), std::u64::MAX);
+        self.deltas
+            .store(self.active_fork, Arc::new(delta), std::u64::MAX);
     }
 
     pub fn is_active_fork(&self, fork: u64) -> bool {
-        if let Some(state) = self.checkpoints.load(fork) {
+        if let Some(state) = self.deltas.load(fork) {
             !state.0.frozen() && self.active_fork == fork
         } else {
             false
@@ -134,12 +134,12 @@ impl Forks {
     }
     /// Initialize the `current` fork that is a direct descendant of the `base` fork.
     pub fn init_fork(&mut self, current: u64, last_id: &Hash, base: u64) -> Result<()> {
-        if let Some(state) = self.checkpoints.load(base) {
+        if let Some(state) = self.deltas.load(base) {
             if !state.0.frozen() {
-                return Err(BankError::CheckpointNotFrozen);
+                return Err(BankError::DeltaNotFrozen);
             }
             let new = state.0.fork(current, last_id);
-            self.checkpoints.store(current, Arc::new(new), base);
+            self.deltas.store(current, Arc::new(new), base);
             self.active_fork = current;
             Ok(())
         } else {
@@ -156,10 +156,10 @@ mod tests {
     #[test]
     fn forks_init_root() {
         let mut forks = Forks::default();
-        let cp = BankCheckpoint::new(0, &Hash::default());
+        let cp = BankDelta::new(0, &Hash::default());
         forks.init_root(cp);
         assert!(forks.is_active_fork(0));
-        assert_eq!(forks.root().checkpoints.len(), 1);
+        assert_eq!(forks.root().deltas.len(), 1);
         assert_eq!(forks.root().head().fork_id(), 0);
         assert_eq!(forks.active_fork().head().fork_id(), 0);
     }
@@ -168,28 +168,28 @@ mod tests {
     fn forks_init_fork() {
         let mut forks = Forks::default();
         let last_id = Hash::default();
-        let cp = BankCheckpoint::new(0, &last_id);
+        let cp = BankDelta::new(0, &last_id);
         cp.register_tick(&last_id);
         forks.init_root(cp);
         let last_id = hash(last_id.as_ref());
         assert_eq!(forks.init_fork(1, &last_id, 1), Err(BankError::UnknownFork));
         assert_eq!(
             forks.init_fork(1, &last_id, 0),
-            Err(BankError::CheckpointNotFrozen)
+            Err(BankError::DeltaNotFrozen)
         );
         forks.root().head().freeze();
         assert_eq!(forks.init_fork(1, &last_id, 0), Ok(()));
 
         assert_eq!(forks.root().head().fork_id(), 0);
         assert_eq!(forks.active_fork().head().fork_id(), 1);
-        assert_eq!(forks.active_fork().checkpoints.len(), 2);
+        assert_eq!(forks.active_fork().deltas.len(), 2);
     }
 
     #[test]
     fn forks_merge() {
         let mut forks = Forks::default();
         let last_id = Hash::default();
-        let cp = BankCheckpoint::new(0, &last_id);
+        let cp = BankDelta::new(0, &last_id);
         cp.register_tick(&last_id);
         forks.init_root(cp);
         let last_id = hash(last_id.as_ref());
@@ -200,7 +200,7 @@ mod tests {
         assert_eq!(forks.merge_into_root(2, 1), Ok(None));
         assert_eq!(forks.merge_into_root(1, 1), Ok(Some(1)));
 
-        assert_eq!(forks.active_fork().checkpoints.len(), 1);
+        assert_eq!(forks.active_fork().deltas.len(), 1);
         assert_eq!(forks.root().head().fork_id(), 1);
         assert_eq!(forks.active_fork().head().fork_id(), 1);
     }
@@ -208,20 +208,20 @@ mod tests {
     fn forks_merge_prune() {
         let mut forks = Forks::default();
         let last_id = Hash::default();
-        let cp = BankCheckpoint::new(0, &last_id);
+        let cp = BankDelta::new(0, &last_id);
         cp.register_tick(&last_id);
         forks.init_root(cp);
         let last_id = hash(last_id.as_ref());
         forks.root().head().freeze();
         assert_eq!(forks.init_fork(1, &last_id, 0), Ok(()));
-        assert_eq!(forks.fork(1).unwrap().checkpoints.len(), 2);
+        assert_eq!(forks.fork(1).unwrap().deltas.len(), 2);
         forks.fork(1).unwrap().head().register_tick(&last_id);
 
         // add a fork 2 to be pruned
         // fork 2 connects to 0
         let last_id = hash(last_id.as_ref());
         assert_eq!(forks.init_fork(2, &last_id, 0), Ok(()));
-        assert_eq!(forks.fork(2).unwrap().checkpoints.len(), 2);
+        assert_eq!(forks.fork(2).unwrap().deltas.len(), 2);
         forks.fork(2).unwrap().head().register_tick(&last_id);
 
         forks.fork(1).unwrap().head().freeze();
@@ -231,7 +231,7 @@ mod tests {
         // fork 2 is gone since it does not connect to 1
         assert!(forks.fork(2).is_none());
 
-        assert_eq!(forks.active_fork().checkpoints.len(), 1);
+        assert_eq!(forks.active_fork().deltas.len(), 1);
         assert_eq!(forks.root().head().fork_id(), 1);
         assert_eq!(forks.active_fork().head().fork_id(), 1);
     }

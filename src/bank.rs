@@ -3,7 +3,7 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 
-use crate::bank_checkpoint::BankCheckpoint;
+use crate::bank_delta::BankDelta;
 use crate::bank_fork::BankFork;
 use crate::entry::Entry;
 use crate::entry::EntrySlice;
@@ -73,17 +73,17 @@ pub enum BankError {
 
     // Poh recorder hit the maximum tick height before leader rotation
     MaxHeightReached,
-    /// Fork is not in the Checkpoints DAG
+    /// Fork is not in the Deltas DAG
     UnknownFork,
 
-    /// The specified trunk is not in the Checkpoints DAG
+    /// The specified trunk is not in the Deltas DAG
     InvalidTrunk,
 
-    /// Specified base checkpoint is still live
-    CheckpointNotFrozen,
+    /// Specified base delta is still live
+    DeltaNotFrozen,
 
-    /// Requested live checkpoint is frozen
-    CheckpointIsFrozen,
+    /// Requested live delta is frozen
+    DeltaIsFrozen,
 }
 
 pub type Result<T> = result::Result<T, BankError>;
@@ -157,7 +157,7 @@ impl Bank {
         self.forks
             .write()
             .unwrap()
-            .init_root(BankCheckpoint::new(0, &last_id));
+            .init_root(BankDelta::new(0, &last_id));
     }
 
     fn process_genesis_block(&self, genesis_block: &GenesisBlock) {

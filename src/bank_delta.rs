@@ -18,7 +18,7 @@ use std::time::Instant;
 type BankStatusCache = StatusCache<BankError>;
 
 #[derive(Default)]
-pub struct BankCheckpoint {
+pub struct BankDelta {
     /// accounts database
     pub accounts: Accounts,
     /// entries
@@ -29,16 +29,16 @@ pub struct BankCheckpoint {
     fork_id: AtomicUsize,
 }
 
-impl std::fmt::Debug for BankCheckpoint {
+impl std::fmt::Debug for BankDelta {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "BankCheckpoint {{ fork_id: {} }}", self.fork_id())
+        write!(f, "BankDelta {{ fork_id: {} }}", self.fork_id())
     }
 }
 
-impl BankCheckpoint {
+impl BankDelta {
     // last_id id is used by the status_cache to filter duplicate signatures
     pub fn new(fork_id: u64, last_id: &Hash) -> Self {
-        BankCheckpoint {
+        BankDelta {
             accounts: Accounts::default(),
             last_id_queue: RwLock::new(LastIdQueue::default()),
             status_cache: RwLock::new(StatusCache::new(last_id)),
@@ -48,7 +48,7 @@ impl BankCheckpoint {
     }
     /// Create an Bank using a deposit.
     pub fn new_from_accounts(fork: u64, accounts: &[(Pubkey, Account)], last_id: &Hash) -> Self {
-        let bank_state = BankCheckpoint::new(fork, last_id);
+        let bank_state = BankDelta::new(fork, last_id);
         for (to, account) in accounts {
             bank_state.accounts.store_slow(false, &to, &account);
         }
@@ -78,7 +78,7 @@ impl BankCheckpoint {
     }
     pub fn freeze(&self) {
         info!(
-            "checkpoint {} frozen at {}",
+            "delta {} frozen at {}",
             self.fork_id.load(Ordering::Relaxed),
             self.last_id_queue.read().unwrap().tick_height
         );
@@ -271,7 +271,7 @@ impl BankCheckpoint {
             fork_id: AtomicUsize::new(fork_id as usize),
         }
     }
-    /// consume the checkpoint into the root state
+    /// consume the delta into the root state
     /// self becomes the new root and its fork_id is updated
     pub fn merge_into_root(&self, other: Self) {
         assert!(self.frozen());
@@ -310,13 +310,13 @@ mod test {
 
     #[test]
     fn test_first_err() {
-        assert_eq!(BankCheckpoint::first_err(&[Ok(())]), Ok(()));
+        assert_eq!(BankDelta::first_err(&[Ok(())]), Ok(()));
         assert_eq!(
-            BankCheckpoint::first_err(&[Ok(()), Err(BankError::DuplicateSignature)]),
+            BankDelta::first_err(&[Ok(()), Err(BankError::DuplicateSignature)]),
             Err(BankError::DuplicateSignature)
         );
         assert_eq!(
-            BankCheckpoint::first_err(&[
+            BankDelta::first_err(&[
                 Ok(()),
                 Err(BankError::DuplicateSignature),
                 Err(BankError::AccountInUse)
@@ -324,7 +324,7 @@ mod test {
             Err(BankError::DuplicateSignature)
         );
         assert_eq!(
-            BankCheckpoint::first_err(&[
+            BankDelta::first_err(&[
                 Ok(()),
                 Err(BankError::AccountInUse),
                 Err(BankError::DuplicateSignature)
@@ -332,7 +332,7 @@ mod test {
             Err(BankError::AccountInUse)
         );
         assert_eq!(
-            BankCheckpoint::first_err(&[
+            BankDelta::first_err(&[
                 Err(BankError::AccountInUse),
                 Ok(()),
                 Err(BankError::DuplicateSignature)
