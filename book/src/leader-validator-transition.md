@@ -1,4 +1,4 @@
-# Leader and Validator Transition
+# Leader-to-Validator Transition
 
 A fullnode operates in two modes, leader and validator.  The modes overlap in
 code and in function, but have different behaviors.  The goal for this design is
