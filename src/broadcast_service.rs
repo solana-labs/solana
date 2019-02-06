@@ -36,7 +36,7 @@ struct Broadcast {
     max_tick_height: u64,
     blob_index: u64,
     // Slot of the last indexed blob
-    slot_index: u64,
+    slot_height: u64,
 
     #[cfg(feature = "erasure")]
     coding_generator: CodingGenerator,
@@ -88,7 +88,7 @@ impl Broadcast {
             &blobs,
             &self.id,
             &mut self.blob_index,
-            &mut self.slot_index,
+            &mut self.slot_height,
             &slots,
         );
 
@@ -190,7 +190,7 @@ impl BroadcastService {
         bank: &Arc<Bank>,
         sock: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        slot_index: u64,
+        slot_height: u64,
         blob_index: u64,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
         receiver: &Receiver<Vec<Entry>>,
@@ -203,7 +203,7 @@ impl BroadcastService {
         let mut broadcast = Broadcast {
             id: me.id,
             max_tick_height,
-            slot_index,
+            slot_height,
             blob_index,
             #[cfg(feature = "erasure")]
             coding_generator: CodingGenerator::new(),
@@ -259,7 +259,7 @@ impl BroadcastService {
         bank: Arc<Bank>,
         sock: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        slot_index: u64,
+        slot_height: u64,
         blob_index: u64,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         receiver: Receiver<Vec<Entry>>,
@@ -277,7 +277,7 @@ impl BroadcastService {
                     &bank,
                     &sock,
                     &cluster_info,
-                    slot_index,
+                    slot_height,
                     blob_index,
                     &leader_scheduler,
                     &receiver,
@@ -326,7 +326,7 @@ mod test {
         ledger_path: &str,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         entry_receiver: Receiver<Vec<Entry>>,
-        slot_index: u64,
+        slot_height: u64,
         blob_index: u64,
         max_tick_height: u64,
     ) -> MockBroadcastService {
@@ -355,7 +355,7 @@ mod test {
             bank.clone(),
             leader_info.sockets.broadcast,
             cluster_info,
-            slot_index,
+            slot_height,
             blob_index,
             leader_scheduler,
             entry_receiver,

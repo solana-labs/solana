@@ -155,14 +155,14 @@ impl SlotMeta {
         db_ledger.ticks_per_block * self.num_blocks
     }
 
-    fn new(slot_index: u64, num_blocks: u64) -> Self {
+    fn new(slot_height: u64, num_blocks: u64) -> Self {
         SlotMeta {
             consumed: 0,
             received: 0,
             consumed_ticks: 0,
             num_blocks,
             next_slots: vec![],
-            is_trunk: slot_index == 0,
+            is_trunk: slot_height == 0,
         }
     }
 }
@@ -427,8 +427,8 @@ impl DbLedger {
         Ok((db_ledger, signal_sender, signal_receiver))
     }
 
-    pub fn meta(&self, slot_index: u64) -> Result<Option<SlotMeta>> {
-        self.meta_cf.get(&MetaCf::key(slot_index))
+    pub fn meta(&self, slot_height: u64) -> Result<Option<SlotMeta>> {
+        self.meta_cf.get(&MetaCf::key(slot_height))
     }
 
     pub fn destroy(ledger_path: &str) -> Result<()> {
@@ -685,11 +685,11 @@ impl DbLedger {
         self.data_cf.put_by_slot_index(slot, index, bytes)
     }
 
-    pub fn get_data_blob(&self, slot_index: u64, blob_index: u64) -> Result<Option<Blob>> {
-        let bytes = self.get_data_blob_bytes(slot_index, blob_index)?;
+    pub fn get_data_blob(&self, slot_height: u64, blob_index: u64) -> Result<Option<Blob>> {
+        let bytes = self.get_data_blob_bytes(slot_height, blob_index)?;
         Ok(bytes.map(|bytes| {
             let blob = Blob::new(&bytes);
-            assert!(blob.slot() == slot_index);
+            assert!(blob.slot() == slot_height);
             assert!(blob.index() == blob_index);
             blob
         }))
@@ -817,14 +817,13 @@ impl DbLedger {
     /// Returns the entry vector for the slot starting with `blob_start_index`
     pub fn get_slot_entries(
         &self,
-        slot_index: u64,
+        slot_height: u64,
         blob_start_index: u64,
         max_entries: Option<u64>,
     ) -> Result<Vec<Entry>> {
-        trace!("get_slot_entries {} {}", slot_index, blob_start_index);
         // Find the next consecutive block of blobs.
         let consecutive_blobs = self.get_slot_consecutive_blobs(
-            slot_index,
+            slot_height,
             &HashMap::new(),
             blob_start_index,
             max_entries,
@@ -832,13 +831,13 @@ impl DbLedger {
         Ok(Self::deserialize_blobs(&consecutive_blobs))
     }
 
-    // Returns slots connecting to any element of the list `slot_indexes`.
-    pub fn get_slots_since(&self, slot_indexes: &[u64]) -> Result<Vec<u64>> {
+    // Returns slots connecting to any element of the list `slot_heights`.
+    pub fn get_slots_since(&self, slot_heights: &[u64]) -> Result<Vec<u64>> {
         // Return error if there was a database error during lookup of any of the
         // slot indexes
-        let slots: Result<Vec<Option<SlotMeta>>> = slot_indexes
+        let slots: Result<Vec<Option<SlotMeta>>> = slot_heights
             .into_iter()
-            .map(|slot_index| self.meta_cf.get_slot_meta(*slot_index))
+            .map(|slot_height| self.meta_cf.get_slot_meta(*slot_height))
             .collect();
 
         let slots = slots?;
@@ -944,14 +943,14 @@ impl DbLedger {
             // 2) slot_height != 0
             // then try to chain this slot to a previous slot
             if slot_height != 0 {
-                let prev_slot_index = slot_height - slot_meta.num_blocks;
+                let prev_slot_height = slot_height - slot_meta.num_blocks;
 
                 // Check if slot_meta is a new slot
                 if meta_backup.is_none() {
                     let prev_slot = self.find_slot_meta_else_create(
                         working_set,
                         new_chained_slots,
-                        prev_slot_index,
+                        prev_slot_height,
                     )?;
 
                     // This is a newly inserted slot so:
@@ -1036,22 +1035,22 @@ impl DbLedger {
     // create a dummy placeholder slot in the database
     fn find_slot_meta_in_db_else_create<'a>(
         &self,
-        slot_index: u64,
+        slot_height: u64,
         insert_map: &'a mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
     ) -> Result<Rc<RefCell<SlotMeta>>> {
-        if let Some(slot) = self.meta_cf.get_slot_meta(slot_index)? {
-            insert_map.insert(slot_index, Rc::new(RefCell::new(slot)));
-            Ok(insert_map.get(&slot_index).unwrap().clone())
+        if let Some(slot) = self.meta_cf.get_slot_meta(slot_height)? {
+            insert_map.insert(slot_height, Rc::new(RefCell::new(slot)));
+            Ok(insert_map.get(&slot_height).unwrap().clone())
         } else {
             // If this slot doesn't exist, make a dummy placeholder slot (denoted by passing
             // 0 for the num_blocks argument to the SlotMeta constructor). This way we
             // remember which slots chained to this one when we eventually get a real blob
             // for this slot
             insert_map.insert(
-                slot_index,
-                Rc::new(RefCell::new(SlotMeta::new(slot_index, 0))),
+                slot_height,
+                Rc::new(RefCell::new(SlotMeta::new(slot_height, 0))),
             );
-            Ok(insert_map.get(&slot_index).unwrap().clone())
+            Ok(insert_map.get(&slot_height).unwrap().clone())
         }
     }
 
@@ -1060,11 +1059,11 @@ impl DbLedger {
         &self,
         working_set: &'a HashMap<u64, (Rc<RefCell<SlotMeta>>, Option<SlotMeta>)>,
         chained_slots: &'a HashMap<u64, Rc<RefCell<SlotMeta>>>,
-        slot_index: u64,
+        slot_height: u64,
     ) -> Result<Option<Rc<RefCell<SlotMeta>>>> {
-        if let Some((entry, _)) = working_set.get(&slot_index) {
+        if let Some((entry, _)) = working_set.get(&slot_height) {
             Ok(Some(entry.clone()))
-        } else if let Some(entry) = chained_slots.get(&slot_index) {
+        } else if let Some(entry) = chained_slots.get(&slot_height) {
             Ok(Some(entry.clone()))
         } else {
             Ok(None)
@@ -1151,7 +1150,7 @@ impl DbLedger {
     /// range
     fn get_slot_consecutive_blobs<'a>(
         &self,
-        slot_index: u64,
+        slot_height: u64,
         prev_inserted_blob_datas: &HashMap<(u64, u64), &'a [u8]>,
         mut current_index: u64,
         max_blobs: Option<u64>,
@@ -1162,11 +1161,12 @@ impl DbLedger {
                 break;
             }
             // Try to find the next blob we're looking for in the prev_inserted_blob_datas
-            if let Some(prev_blob_data) = prev_inserted_blob_datas.get(&(slot_index, current_index))
+            if let Some(prev_blob_data) =
+                prev_inserted_blob_datas.get(&(slot_height, current_index))
             {
                 blobs.push(Cow::Borrowed(*prev_blob_data));
             } else if let Some(blob_data) =
-                self.data_cf.get_by_slot_index(slot_index, current_index)?
+                self.data_cf.get_by_slot_index(slot_height, current_index)?
             {
                 // Try to find the next blob we're looking for in the database
                 blobs.push(Cow::Owned(blob_data));
