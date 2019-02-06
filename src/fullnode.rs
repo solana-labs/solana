@@ -399,28 +399,25 @@ impl Fullnode {
     }
 
     fn handle_role_transition(&mut self) -> Option<(FullnodeReturnType, u64)> {
-        loop {
-            if self.exit.load(Ordering::Relaxed) {
-                return None;
+        if self.node_services.tpu.is_leader() {
+            let should_be_forwarder = self.role_notifiers.1.recv();
+            match should_be_forwarder {
+                Ok(TpuReturnType::LeaderRotation(tick_height)) => {
+                    Some((self.leader_to_validator(tick_height), tick_height + 1))
+                }
+                Err(_) => None,
             }
-            let should_be_forwarder = self.role_notifiers.1.try_recv();
-            let should_be_leader = self.role_notifiers.0.try_recv();
+        } else {
+            let should_be_leader = self.role_notifiers.0.recv();
             match should_be_leader {
                 Ok(TvuReturnType::LeaderRotation(tick_height, entry_height, last_entry_id)) => {
                     self.validator_to_leader(tick_height, entry_height, last_entry_id);
-                    return Some((
+                    Some((
                         FullnodeReturnType::ValidatorToLeaderRotation,
                         tick_height + 1,
-                    ));
+                    ))
                 }
-                _ => match should_be_forwarder {
-                    Ok(TpuReturnType::LeaderRotation(tick_height)) => {
-                        return Some((self.leader_to_validator(tick_height), tick_height + 1))
-                    }
-                    _ => {
-                        continue;
-                    }
-                },
+                Err(_) => None,
             }
         }
     }
@@ -434,6 +431,12 @@ impl Fullnode {
         let (sender, receiver) = channel();
         let exit = self.exit.clone();
         spawn(move || loop {
+            if self.exit.load(Ordering::Relaxed) {
+                debug!("node shutdown requested");
+                self.close().expect("Unable to close node");
+                sender.send(true).expect("Unable to signal exit");
+                break;
+            }
             let status = self.handle_role_transition();
             match status {
                 None => {
