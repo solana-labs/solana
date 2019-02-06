@@ -202,7 +202,7 @@ impl LeaderScheduler {
             return None;
         }
 
-        let result = {
+        let resul = {
             if height <= self.bootstrap_height || self.leader_schedule.len() > 1 {
                 // Two cases to consider:
                 //
@@ -232,7 +232,7 @@ impl LeaderScheduler {
             }
         };
 
-        Some(result)
+        Some(resul)
     }
 
     pub fn reset(&mut self) {
