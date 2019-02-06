@@ -16,7 +16,8 @@ The basic design idea is to maintain a DAG of forks.  Each fork points back to a
 An *active fork* is a direct list of connected forks that descend from the current root to a specific fork without any descendants.
 
 For example:
-```
+
+```art
       1
      / \
     2   \
@@ -41,7 +42,7 @@ A validator votes for a finalized fork.  The *active fork* connecting the fork t
 
 For example:
 
-```
+```art
       1
      / \
     2   \
@@ -55,7 +56,7 @@ For example:
 
 * ROLLBACK\_DEPTH=2, vote=5, *active fork*={5,2,1}
 
-```
+```art
     2
    /|
   / |
@@ -67,7 +68,7 @@ The new root is 2, and any active forks that are not descendants from 2 are prun
 
 * ROLLBACK\_DEPTH=2, vote=6, *active fork*={6,1}
 
-```
+```art
       1
      / \
     2   \
