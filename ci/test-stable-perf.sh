@@ -24,9 +24,9 @@ ci/affects-files.sh \
 make -C programs/bpf/c tests
 
 # Must be built out of band
-make -C programs/bpf/rust/noop/ all
+#make -C programs/bpf/rust/noop/ all
 
-FEATURES=bpf_c,bpf_rust,erasure,chacha
+FEATURES=bpf_c,erasure,chacha
 if [[ $(uname) = Darwin ]]; then
   ./build-perf-libs.sh
 else
