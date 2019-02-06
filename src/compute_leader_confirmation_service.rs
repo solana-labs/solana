@@ -39,7 +39,7 @@ impl ComputeLeaderConfirmationService {
         // Hold an accounts_db read lock as briefly as possible, just long enough to collect all
         // the vote states
         let vote_states: Vec<VoteState> = bank
-            .root_bank_state()
+            .root()
             .head()
             .accounts
             .accounts_db
@@ -62,7 +62,7 @@ impl ComputeLeaderConfirmationService {
         let mut ticks_and_stakes: Vec<(u64, u64)> = vote_states
             .iter()
             .filter_map(|vote_state| {
-                let validator_stake = bank.live_bank_state().get_balance_slow(&vote_state.node_id);
+                let validator_stake = bank.active_fork().get_balance_slow(&vote_state.node_id);
                 total_stake += validator_stake;
                 // Filter out any validators that don't have at least one vote
                 // by returning None
@@ -76,7 +76,7 @@ impl ComputeLeaderConfirmationService {
         let super_majority_stake = (2 * total_stake) / 3;
 
         if let Some(last_valid_validator_timestamp) = bank
-            .live_bank_state()
+            .active_fork()
             .head()
             .get_confirmation_timestamp(&mut ticks_and_stakes, super_majority_stake)
         {
@@ -186,7 +186,7 @@ pub mod tests {
         let ids: Vec<_> = (0..10)
             .map(|i| {
                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-                bank.live_bank_state().register_tick(&last_id);
+                bank.active_fork().register_tick(&last_id);
                 // sleep to get a different timestamp in the bank
                 sleep(Duration::from_millis(1));
                 last_id

@@ -20,11 +20,11 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::time::Instant;
 
-pub struct BankState {
+pub struct BankFork {
     pub checkpoints: Vec<Arc<BankCheckpoint>>,
 }
 
-impl BankState {
+impl BankFork {
     pub fn head(&self) -> &Arc<BankCheckpoint> {
         self.checkpoints
             .first()
@@ -382,7 +382,7 @@ mod test {
     /// Create, sign, and process a Transaction from `keypair` to `to` of
     /// `n` tokens where `last_id` is the last Entry ID observed by the client.
     pub fn transfer(
-        bank: &BankState,
+        bank: &BankFork,
         n: u64,
         keypair: &Keypair,
         to: Pubkey,
@@ -399,10 +399,10 @@ mod test {
         }
     }
 
-    fn new_state(mint: &Keypair, tokens: u64, last_id: &Hash) -> BankState {
+    fn new_state(mint: &Keypair, tokens: u64, last_id: &Hash) -> BankFork {
         let accounts = [(mint.pubkey(), Account::new(tokens, 0, Pubkey::default()))];
         let bank = Arc::new(BankCheckpoint::new_from_accounts(0, &accounts, &last_id));
-        BankState {
+        BankFork {
             checkpoints: vec![bank],
         }
     }
@@ -458,7 +458,7 @@ mod test {
     fn test_bank_ignore_program_errors() {
         let expected_results = vec![Ok(()), Ok(())];
         let results = vec![Ok(()), Ok(())];
-        let updated_results = BankState::ignore_program_errors(results);
+        let updated_results = BankFork::ignore_program_errors(results);
         assert_eq!(updated_results, expected_results);
 
         let results = vec![
@@ -468,12 +468,12 @@ mod test {
             )),
             Ok(()),
         ];
-        let updated_results = BankState::ignore_program_errors(results);
+        let updated_results = BankFork::ignore_program_errors(results);
         assert_eq!(updated_results, expected_results);
 
         // Other BankErrors should not be ignored
         let results = vec![Err(BankError::AccountNotFound), Ok(())];
-        let updated_results = BankState::ignore_program_errors(results);
+        let updated_results = BankFork::ignore_program_errors(results);
         assert_ne!(updated_results, expected_results);
     }
 }

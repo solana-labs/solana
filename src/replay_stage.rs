@@ -90,13 +90,13 @@ impl ReplayStage {
         info!(
             "entries.len(): {}, bank.tick_height(): {}",
             entries.len(),
-            bank.live_bank_state().tick_height()
+            bank.active_fork().tick_height()
         );
 
         // this code to guard against consuming more ticks in a slot than are actually
         //  allowed by protocol.  entries beyond max_tick_height are silently discarded
         // TODO: slash somebody?
-        let mut ticks_left = max_tick_height - bank.live_bank_state().tick_height();
+        let mut ticks_left = max_tick_height - bank.active_fork().tick_height();
         entries.retain(|e| {
             let retain = ticks_left > 0;
             if ticks_left > 0 && e.is_tick() {
@@ -126,16 +126,13 @@ impl ReplayStage {
 
         inc_new_counter_info!(
             "replicate-stage_bank-tick",
-            bank.live_bank_state().tick_height() as usize
+            bank.active_fork().tick_height() as usize
         );
-        if bank.bank_state(current_slot).is_none() {
+        if bank.fork(current_slot).is_none() {
             bank.init_fork(current_slot, &entries[0].id, base_slot)
                 .expect("init fork");
         }
-        let res = bank
-            .bank_state(current_slot)
-            .unwrap()
-            .process_entries(&entries);
+        let res = bank.fork(current_slot).unwrap().process_entries(&entries);
 
         if res.is_err() {
             // TODO: This will return early from the first entry that has an erroneous
@@ -153,19 +150,15 @@ impl ReplayStage {
         }
 
         {
-            let bank_state = bank.bank_state(current_slot).expect("current bank state");
-            if bank_state.tick_height() == max_tick_height {
+            let fork = bank.fork(current_slot).expect("current bank state");
+            if fork.tick_height() == max_tick_height {
                 info!("freezing {} from replay_stage", current_slot);
-                bank_state.head().freeze();
+                fork.head().freeze();
                 bank.merge_into_root(current_slot);
                 if let Some(voting_keypair) = voting_keypair {
                     let keypair = voting_keypair.as_ref();
-                    let vote = VoteTransaction::new_vote(
-                        keypair,
-                        bank_state.tick_height(),
-                        bank_state.last_id(),
-                        0,
-                    );
+                    let vote =
+                        VoteTransaction::new_vote(keypair, fork.tick_height(), fork.last_id(), 0);
                     cluster_info.write().unwrap().push_vote(vote);
                 }
             }
@@ -288,7 +281,7 @@ impl ReplayStage {
                             error!("{:?}", e);
                         }
 
-                        let current_tick_height = bank.live_bank_state().tick_height();
+                        let current_tick_height = bank.active_fork().tick_height();
 
                         // we've reached the end of a slot, reset our state and check
                         // for leader rotation
@@ -307,7 +300,7 @@ impl ReplayStage {
                                 info!("triggering leader rotation");
                                 to_leader_sender
                                     .send(TvuReturnType::LeaderRotation(
-                                        bank.live_bank_state().tick_height(),
+                                        bank.active_fork().tick_height(),
                                         *entry_height.read().unwrap(),
                                         *last_entry_id.read().unwrap(),
                                     ))
@@ -611,8 +604,8 @@ mod test {
             let keypair = voting_keypair.as_ref();
             let vote = VoteTransaction::new_vote(
                 keypair,
-                bank.live_bank_state().tick_height(),
-                bank.live_bank_state().last_id(),
+                bank.active_fork().tick_height(),
+                bank.active_fork().last_id(),
                 0,
             );
 
@@ -737,8 +730,8 @@ mod test {
             let keypair = voting_keypair.as_ref();
             let vote = VoteTransaction::new_vote(
                 keypair,
-                bank.live_bank_state().tick_height(),
-                bank.live_bank_state().last_id(),
+                bank.active_fork().tick_height(),
+                bank.active_fork().last_id(),
                 0,
             );
             cluster_info_me.write().unwrap().push_vote(vote);

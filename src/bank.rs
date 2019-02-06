@@ -4,7 +4,7 @@
 //! already been signed and verified.
 
 use crate::bank_checkpoint::BankCheckpoint;
-use crate::bank_state::BankState;
+use crate::bank_fork::BankFork;
 use crate::entry::Entry;
 use crate::entry::EntrySlice;
 use crate::forks::{self, Forks};
@@ -137,14 +137,14 @@ impl Bank {
             .unwrap()
             .init_fork(current, last_id, base)
     }
-    pub fn live_bank_state(&self) -> BankState {
-        self.forks.read().unwrap().live_bank_state()
+    pub fn active_fork(&self) -> BankFork {
+        self.forks.read().unwrap().active_fork()
     }
-    pub fn root_bank_state(&self) -> BankState {
-        self.forks.read().unwrap().root_bank_state()
+    pub fn root(&self) -> BankFork {
+        self.forks.read().unwrap().root()
     }
-    pub fn bank_state(&self, slot: u64) -> Option<BankState> {
-        self.forks.read().unwrap().bank_state(slot)
+    pub fn fork(&self, slot: u64) -> Option<BankFork> {
+        self.forks.read().unwrap().fork(slot)
     }
 
     pub fn set_subscriptions(&self, subscriptions: Arc<RpcSubscriptions>) {
@@ -157,7 +157,7 @@ impl Bank {
         self.forks
             .write()
             .unwrap()
-            .init_root_bank_state(BankCheckpoint::new(0, &last_id));
+            .init_root(BankCheckpoint::new(0, &last_id));
     }
 
     fn process_genesis_block(&self, genesis_block: &GenesisBlock) {
@@ -171,18 +171,18 @@ impl Bank {
         if genesis_block.bootstrap_leader_id != Pubkey::default() {
             mint_account.tokens -= genesis_block.bootstrap_leader_tokens;
             bootstrap_leader_account.tokens += genesis_block.bootstrap_leader_tokens;
-            self.root_bank_state().head().store_slow(
+            self.root().head().store_slow(
                 true,
                 &genesis_block.bootstrap_leader_id,
                 &bootstrap_leader_account,
             );
         };
 
-        self.root_bank_state()
+        self.root()
             .head()
             .store_slow(true, &genesis_block.mint_id, &mint_account);
 
-        self.root_bank_state()
+        self.root()
             .head()
             .set_genesis_last_id(&genesis_block.last_id());
     }
@@ -195,11 +195,9 @@ impl Bank {
             executable: true,
             loader: solana_native_loader::id(),
         };
-        self.root_bank_state().head().store_slow(
-            true,
-            &system_program::id(),
-            &system_program_account,
-        );
+        self.root()
+            .head()
+            .store_slow(true, &system_program::id(), &system_program_account);
     }
 
     fn add_builtin_programs(&self) {
@@ -213,7 +211,7 @@ impl Bank {
             executable: true,
             loader: solana_native_loader::id(),
         };
-        self.root_bank_state()
+        self.root()
             .head()
             .store_slow(true, &vote_program::id(), &vote_program_account);
 
@@ -225,11 +223,9 @@ impl Bank {
             executable: true,
             loader: solana_native_loader::id(),
         };
-        self.root_bank_state().head().store_slow(
-            true,
-            &storage_program::id(),
-            &storage_program_account,
-        );
+        self.root()
+            .head()
+            .store_slow(true, &storage_program::id(), &storage_program_account);
 
         let storage_system_account = Account {
             tokens: 1,
@@ -238,11 +234,9 @@ impl Bank {
             executable: false,
             loader: Pubkey::default(),
         };
-        self.root_bank_state().head().store_slow(
-            true,
-            &storage_program::system_id(),
-            &storage_system_account,
-        );
+        self.root()
+            .head()
+            .store_slow(true, &storage_program::system_id(), &storage_system_account);
 
         // Bpf Loader
         let bpf_loader_account = Account {
@@ -253,7 +247,7 @@ impl Bank {
             loader: solana_native_loader::id(),
         };
 
-        self.root_bank_state()
+        self.root()
             .head()
             .store_slow(true, &bpf_loader::id(), &bpf_loader_account);
 
@@ -265,11 +259,9 @@ impl Bank {
             executable: true,
             loader: solana_native_loader::id(),
         };
-        self.root_bank_state().head().store_slow(
-            true,
-            &budget_program::id(),
-            &budget_program_account,
-        );
+        self.root()
+            .head()
+            .store_slow(true, &budget_program::id(), &budget_program_account);
 
         // Erc20 token program
         let erc20_account = Account {
@@ -280,7 +272,7 @@ impl Bank {
             loader: solana_native_loader::id(),
         };
 
-        self.root_bank_state()
+        self.root()
             .head()
             .store_slow(true, &token_program::id(), &erc20_account);
     }
@@ -288,7 +280,7 @@ impl Bank {
     pub fn get_storage_entry_height(&self) -> u64 {
         //TODO: root or live?
         match self
-            .live_bank_state()
+            .active_fork()
             .get_account_slow(&storage_program::system_id())
         {
             Some(storage_system_account) => {
@@ -307,7 +299,7 @@ impl Bank {
 
     pub fn get_storage_last_id(&self) -> Hash {
         if let Some(storage_system_account) = self
-            .live_bank_state()
+            .active_fork()
             .get_account_slow(&storage_program::system_id())
         {
             let state = deserialize(&storage_system_account.userdata);
@@ -327,7 +319,7 @@ impl Bank {
     {
         let mut entry_height = 0;
         // assumes this function is starting from genesis
-        let mut last_id = self.root_bank_state().last_id();
+        let mut last_id = self.root().last_id();
 
         // Ledger verification needs to be parallelized, but we can't pull the whole
         // thing into memory. We therefore chunk it.
@@ -345,7 +337,7 @@ impl Bank {
                 let base = slot - 1;
                 {
                     info!("freezing from ledger at {}", base);
-                    let base_state = self.bank_state(base).expect("base fork");
+                    let base_state = self.fork(base).expect("base fork");
                     base_state.head().freeze();
                 }
                 self.init_fork(slot, &block[0].id, base)
@@ -353,7 +345,7 @@ impl Bank {
                 self.merge_into_root(slot);
             }
 
-            let bank_state = self.bank_state(slot).unwrap();
+            let bank_state = self.fork(slot).unwrap();
             bank_state.process_entries(&block)?;
             last_id = block.last().unwrap().id;
             entry_height += block.len() as u64;
@@ -368,7 +360,7 @@ impl Bank {
         poh: Option<&PohRecorder>,
     ) -> Result<Vec<Result<()>>> {
         let sub = self.subscriptions.read().unwrap();
-        self.live_bank_state()
+        self.active_fork()
             .process_and_record_transactions(&sub, txs, poh)
     }
 
@@ -414,7 +406,7 @@ impl Bank {
     }
 
     pub fn get_current_leader(&self) -> Option<(Pubkey, u64)> {
-        let live_height = self.live_bank_state().tick_height();
+        let live_height = self.active_fork().tick_height();
         self.leader_scheduler
             .read()
             .unwrap()
@@ -431,7 +423,7 @@ impl Bank {
             .unwrap()
             .merge_into_root(forks::ROLLBACK_DEPTH, leaf_slot)
             .expect("merge into root");
-        let height = self.root_bank_state().tick_height();
+        let height = self.root().tick_height();
         self.leader_scheduler
             .write()
             .unwrap()
@@ -442,7 +434,7 @@ impl Bank {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bank_state::BankState;
+    use crate::bank_fork::BankFork;
     use crate::entry::{next_entries, next_entry, Entry};
     use crate::gen_keys::GenKeys;
     use crate::poh_recorder::PohRecorder;
@@ -464,8 +456,7 @@ mod tests {
         let (genesis_block, _) = GenesisBlock::new(10_000);
         let bank = Bank::new(&genesis_block);
         assert_eq!(
-            bank.live_bank_state()
-                .get_balance_slow(&genesis_block.mint_id),
+            bank.active_fork().get_balance_slow(&genesis_block.mint_id),
             10_000
         );
     }
@@ -478,11 +469,10 @@ mod tests {
             GenesisBlock::new_with_leader(10_000, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&genesis_block);
         assert_eq!(
-            bank.live_bank_state()
-                .get_balance_slow(&genesis_block.mint_id),
+            bank.active_fork().get_balance_slow(&genesis_block.mint_id),
             9999
         );
-        assert_eq!(bank.live_bank_state().get_balance_slow(&dummy_leader_id), 1);
+        assert_eq!(bank.active_fork().get_balance_slow(&dummy_leader_id), 1);
     }
 
     #[test]
@@ -490,16 +480,16 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
         let pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
-        assert_eq!(bank.live_bank_state().last_id(), genesis_block.last_id());
+        assert_eq!(bank.active_fork().last_id(), genesis_block.last_id());
 
         bank.transfer(1_000, &mint_keypair, pubkey, genesis_block.last_id())
             .unwrap();
-        assert_eq!(bank.live_bank_state().get_balance_slow(&pubkey), 1_000);
+        assert_eq!(bank.active_fork().get_balance_slow(&pubkey), 1_000);
 
         bank.transfer(500, &mint_keypair, pubkey, genesis_block.last_id())
             .unwrap();
-        assert_eq!(bank.live_bank_state().get_balance_slow(&pubkey), 1_500);
-        assert_eq!(bank.live_bank_state().transaction_count(), 2);
+        assert_eq!(bank.active_fork().get_balance_slow(&pubkey), 1_500);
+        assert_eq!(bank.active_fork().transaction_count(), 2);
     }
 
     #[test]
@@ -508,7 +498,7 @@ mod tests {
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
-        assert_eq!(bank.live_bank_state().last_id(), genesis_block.last_id());
+        assert_eq!(bank.active_fork().last_id(), genesis_block.last_id());
 
         let t1 = SystemTransaction::new_move(&mint_keypair, key1, 1, genesis_block.last_id(), 0);
         let t2 = SystemTransaction::new_move(&mint_keypair, key2, 1, genesis_block.last_id(), 0);
@@ -517,21 +507,18 @@ mod tests {
         assert_eq!(res[0], Ok(()));
         assert_eq!(res[1], Err(BankError::AccountInUse));
         assert_eq!(
-            bank.live_bank_state()
-                .get_balance_slow(&mint_keypair.pubkey()),
+            bank.active_fork().get_balance_slow(&mint_keypair.pubkey()),
             0
         );
-        assert_eq!(bank.live_bank_state().get_balance_slow(&key1), 1);
-        assert_eq!(bank.live_bank_state().get_balance_slow(&key2), 0);
+        assert_eq!(bank.active_fork().get_balance_slow(&key1), 1);
+        assert_eq!(bank.active_fork().get_balance_slow(&key2), 0);
         assert_eq!(
-            bank.live_bank_state()
-                .get_signature_status(&t1.signatures[0]),
+            bank.active_fork().get_signature_status(&t1.signatures[0]),
             Some(Ok(()))
         );
         // TODO: Transactions that fail to pay a fee could be dropped silently
         assert_eq!(
-            bank.live_bank_state()
-                .get_signature_status(&t2.signatures[0]),
+            bank.active_fork().get_signature_status(&t2.signatures[0]),
             Some(Err(BankError::AccountInUse))
         );
     }
@@ -574,15 +561,13 @@ mod tests {
             ))
         );
         assert_eq!(
-            bank.live_bank_state()
-                .get_balance_slow(&mint_keypair.pubkey()),
+            bank.active_fork().get_balance_slow(&mint_keypair.pubkey()),
             1
         );
-        assert_eq!(bank.live_bank_state().get_balance_slow(&key1), 0);
-        assert_eq!(bank.live_bank_state().get_balance_slow(&key2), 0);
+        assert_eq!(bank.active_fork().get_balance_slow(&key1), 0);
+        assert_eq!(bank.active_fork().get_balance_slow(&key2), 0);
         assert_eq!(
-            bank.live_bank_state()
-                .get_signature_status(&t1.signatures[0]),
+            bank.active_fork().get_signature_status(&t1.signatures[0]),
             Some(Err(BankError::ProgramError(
                 1,
                 ProgramError::ResultWithNegativeTokens
@@ -606,15 +591,13 @@ mod tests {
         assert_eq!(res.len(), 1);
         assert_eq!(res[0], Ok(()));
         assert_eq!(
-            bank.live_bank_state()
-                .get_balance_slow(&mint_keypair.pubkey()),
+            bank.active_fork().get_balance_slow(&mint_keypair.pubkey()),
             0
         );
-        assert_eq!(bank.live_bank_state().get_balance_slow(&key1), 1);
-        assert_eq!(bank.live_bank_state().get_balance_slow(&key2), 1);
+        assert_eq!(bank.active_fork().get_balance_slow(&key1), 1);
+        assert_eq!(bank.active_fork().get_balance_slow(&key2), 1);
         assert_eq!(
-            bank.live_bank_state()
-                .get_signature_status(&t1.signatures[0]),
+            bank.active_fork().get_signature_status(&t1.signatures[0]),
             Some(Ok(()))
         );
     }
@@ -636,14 +619,14 @@ mod tests {
             1,
         );
         let signature = tx.signatures[0];
-        assert!(!bank.live_bank_state().head().has_signature(&signature));
+        assert!(!bank.active_fork().head().has_signature(&signature));
         let res = bank.process_transaction(&tx);
 
         // Result failed, but signature is registered
         assert!(res.is_err());
-        assert!(bank.live_bank_state().head().has_signature(&signature));
+        assert!(bank.active_fork().head().has_signature(&signature));
         assert_matches!(
-            bank.live_bank_state().get_signature_status(&signature),
+            bank.active_fork().get_signature_status(&signature),
             Some(Err(BankError::ProgramError(
                 0,
                 ProgramError::ResultWithNegativeTokens
@@ -651,10 +634,10 @@ mod tests {
         );
 
         // The tokens didn't move, but the from address paid the transaction fee.
-        assert_eq!(bank.live_bank_state().get_balance_slow(&dest.pubkey()), 0);
+        assert_eq!(bank.active_fork().get_balance_slow(&dest.pubkey()), 0);
 
         // BUG: This should be the original balance minus the transaction fee.
-        //assert_eq!(bank.live_bank_state().get_balance_slow(&mint_keypair.pubkey()), 0);
+        //assert_eq!(bank.active_fork().get_balance_slow(&mint_keypair.pubkey()), 0);
     }
 
     #[test]
@@ -666,7 +649,7 @@ mod tests {
             bank.transfer(1, &keypair, mint_keypair.pubkey(), genesis_block.last_id()),
             Err(BankError::AccountNotFound)
         );
-        assert_eq!(bank.live_bank_state().transaction_count(), 0);
+        assert_eq!(bank.active_fork().transaction_count(), 0);
     }
 
     #[test]
@@ -676,8 +659,8 @@ mod tests {
         let pubkey = Keypair::new().pubkey();
         bank.transfer(1_000, &mint_keypair, pubkey, genesis_block.last_id())
             .unwrap();
-        assert_eq!(bank.live_bank_state().transaction_count(), 1);
-        assert_eq!(bank.live_bank_state().get_balance_slow(&pubkey), 1_000);
+        assert_eq!(bank.active_fork().transaction_count(), 1);
+        assert_eq!(bank.active_fork().get_balance_slow(&pubkey), 1_000);
         assert_matches!(
             bank.transfer(10_001, &mint_keypair, pubkey, genesis_block.last_id()),
             Err(BankError::ProgramError(
@@ -685,14 +668,11 @@ mod tests {
                 ProgramError::ResultWithNegativeTokens
             ))
         );
-        assert_eq!(bank.live_bank_state().transaction_count(), 1);
+        assert_eq!(bank.active_fork().transaction_count(), 1);
 
         let mint_pubkey = mint_keypair.pubkey();
-        assert_eq!(
-            bank.live_bank_state().get_balance_slow(&mint_pubkey),
-            10_000
-        );
-        assert_eq!(bank.live_bank_state().get_balance_slow(&pubkey), 1_000);
+        assert_eq!(bank.active_fork().get_balance_slow(&mint_pubkey), 10_000);
+        assert_eq!(bank.active_fork().get_balance_slow(&pubkey), 1_000);
     }
 
     #[test]
@@ -702,7 +682,7 @@ mod tests {
         let pubkey = Keypair::new().pubkey();
         bank.transfer(500, &mint_keypair, pubkey, genesis_block.last_id())
             .unwrap();
-        assert_eq!(bank.live_bank_state().get_balance_slow(&pubkey), 500);
+        assert_eq!(bank.active_fork().get_balance_slow(&pubkey), 500);
     }
 
     #[test]
@@ -729,7 +709,7 @@ mod tests {
         assert!(results[1].is_err());
 
         // Assert bad transactions aren't counted.
-        assert_eq!(bank.live_bank_state().transaction_count(), 1);
+        assert_eq!(bank.active_fork().transaction_count(), 1);
     }
 
     #[test]
@@ -747,7 +727,7 @@ mod tests {
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
-        bank.live_bank_state().process_entries(&[entry]).unwrap();
+        bank.active_fork().process_entries(&[entry]).unwrap();
         assert_eq!(bank.process_transaction(&tx), Ok(()));
     }
 
@@ -761,11 +741,10 @@ mod tests {
         bank.init_root(&genesis_block.last_id());
         bank.process_genesis_block(&genesis_block);
         assert_eq!(
-            bank.live_bank_state()
-                .get_balance_slow(&genesis_block.mint_id),
+            bank.active_fork().get_balance_slow(&genesis_block.mint_id),
             4
         );
-        assert_eq!(bank.live_bank_state().get_balance_slow(&dummy_leader_id), 1);
+        assert_eq!(bank.active_fork().get_balance_slow(&dummy_leader_id), 1);
         // TODO: Restore next assert_eq() once leader scheduler configuration is stored in the
         // genesis block
         /*
@@ -868,17 +847,16 @@ mod tests {
         let mut bank = Bank::default();
         bank.init_root(&genesis_block.last_id());
         bank.process_genesis_block(&genesis_block);
-        assert_eq!(bank.live_bank_state().tick_height(), 0);
+        assert_eq!(bank.active_fork().tick_height(), 0);
         bank.add_system_program();
         let (ledger_height, last_id) = bank.process_ledger(ledger).unwrap();
         assert_eq!(
-            bank.live_bank_state()
-                .get_balance_slow(&mint_keypair.pubkey()),
+            bank.active_fork().get_balance_slow(&mint_keypair.pubkey()),
             98
         );
         assert_eq!(ledger_height, 4);
-        assert_eq!(bank.live_bank_state().tick_height(), 2);
-        assert_eq!(bank.live_bank_state().last_id(), last_id);
+        assert_eq!(bank.active_fork().tick_height(), 2);
+        assert_eq!(bank.active_fork().last_id(), last_id);
     }
 
     #[test]
@@ -915,31 +893,21 @@ mod tests {
         bank1.process_genesis_block(&genesis_block);
         bank1.process_ledger(ledger1).unwrap();
 
-        let initial_state = bank0.live_bank_state().hash_internal_state();
+        let initial_state = bank0.active_fork().hash_internal_state();
 
-        assert_eq!(bank1.live_bank_state().hash_internal_state(), initial_state);
+        assert_eq!(bank1.active_fork().hash_internal_state(), initial_state);
 
         let pubkey = keypairs[0].pubkey();
         bank0
-            .transfer(
-                1_000,
-                &mint_keypair,
-                pubkey,
-                bank0.live_bank_state().last_id(),
-            )
+            .transfer(1_000, &mint_keypair, pubkey, bank0.active_fork().last_id())
             .unwrap();
-        assert_ne!(bank0.live_bank_state().hash_internal_state(), initial_state);
+        assert_ne!(bank0.active_fork().hash_internal_state(), initial_state);
         bank1
-            .transfer(
-                1_000,
-                &mint_keypair,
-                pubkey,
-                bank1.live_bank_state().last_id(),
-            )
+            .transfer(1_000, &mint_keypair, pubkey, bank1.active_fork().last_id())
             .unwrap();
         assert_eq!(
-            bank0.live_bank_state().hash_internal_state(),
-            bank1.live_bank_state().hash_internal_state()
+            bank0.active_fork().hash_internal_state(),
+            bank1.active_fork().hash_internal_state()
         );
     }
     #[test]
@@ -956,11 +924,8 @@ mod tests {
 
         // ensure bank can process a tick
         let tick = next_entry(&genesis_block.last_id(), 1, vec![]);
-        assert_eq!(
-            bank.live_bank_state().process_entries(&[tick.clone()]),
-            Ok(())
-        );
-        assert_eq!(bank.live_bank_state().last_id(), tick.id);
+        assert_eq!(bank.active_fork().process_entries(&[tick.clone()]), Ok(()));
+        assert_eq!(bank.active_fork().last_id(), tick.id);
     }
     #[test]
     fn test_par_process_entries_2_entries_collision() {
@@ -969,14 +934,14 @@ mod tests {
         let keypair1 = Keypair::new();
         let keypair2 = Keypair::new();
 
-        let last_id = bank.live_bank_state().last_id();
+        let last_id = bank.active_fork().last_id();
 
         // ensure bank can process 2 entries that have a common account and no tick is registered
         let tx = SystemTransaction::new_account(
             &mint_keypair,
             keypair1.pubkey(),
             2,
-            bank.live_bank_state().last_id(),
+            bank.active_fork().last_id(),
             0,
         );
         let entry_1 = next_entry(&last_id, 1, vec![tx]);
@@ -984,23 +949,17 @@ mod tests {
             &mint_keypair,
             keypair2.pubkey(),
             2,
-            bank.live_bank_state().last_id(),
+            bank.active_fork().last_id(),
             0,
         );
         let entry_2 = next_entry(&entry_1.id, 1, vec![tx]);
         assert_eq!(
-            bank.live_bank_state().process_entries(&[entry_1, entry_2]),
+            bank.active_fork().process_entries(&[entry_1, entry_2]),
             Ok(())
         );
-        assert_eq!(
-            bank.live_bank_state().get_balance_slow(&keypair1.pubkey()),
-            2
-        );
-        assert_eq!(
-            bank.live_bank_state().get_balance_slow(&keypair2.pubkey()),
-            2
-        );
-        assert_eq!(bank.live_bank_state().last_id(), last_id);
+        assert_eq!(bank.active_fork().get_balance_slow(&keypair1.pubkey()), 2);
+        assert_eq!(bank.active_fork().get_balance_slow(&keypair2.pubkey()), 2);
+        assert_eq!(bank.active_fork().last_id(), last_id);
     }
     #[test]
     fn test_par_process_entries_2_txes_collision() {
@@ -1016,7 +975,7 @@ mod tests {
                 4,
                 &mint_keypair,
                 keypair1.pubkey(),
-                bank.live_bank_state().last_id()
+                bank.active_fork().last_id()
             ),
             Ok(_)
         );
@@ -1025,20 +984,20 @@ mod tests {
                 4,
                 &mint_keypair,
                 keypair2.pubkey(),
-                bank.live_bank_state().last_id()
+                bank.active_fork().last_id()
             ),
             Ok(_)
         );
 
         // construct an Entry whose 2nd transaction would cause a lock conflict with previous entry
         let entry_1_to_mint = next_entry(
-            &bank.live_bank_state().last_id(),
+            &bank.active_fork().last_id(),
             1,
             vec![SystemTransaction::new_account(
                 &keypair1,
                 mint_keypair.pubkey(),
                 1,
-                bank.live_bank_state().last_id(),
+                bank.active_fork().last_id(),
                 0,
             )],
         );
@@ -1051,37 +1010,28 @@ mod tests {
                     &keypair2,
                     keypair3.pubkey(),
                     2,
-                    bank.live_bank_state().last_id(),
+                    bank.active_fork().last_id(),
                     0,
                 ), // should be fine
                 SystemTransaction::new_account(
                     &keypair1,
                     mint_keypair.pubkey(),
                     2,
-                    bank.live_bank_state().last_id(),
+                    bank.active_fork().last_id(),
                     0,
                 ), // will collide
             ],
         );
 
         assert_eq!(
-            bank.live_bank_state()
+            bank.active_fork()
                 .process_entries(&[entry_1_to_mint, entry_2_to_3_mint_to_1]),
             Ok(())
         );
 
-        assert_eq!(
-            bank.live_bank_state().get_balance_slow(&keypair1.pubkey()),
-            1
-        );
-        assert_eq!(
-            bank.live_bank_state().get_balance_slow(&keypair2.pubkey()),
-            2
-        );
-        assert_eq!(
-            bank.live_bank_state().get_balance_slow(&keypair3.pubkey()),
-            2
-        );
+        assert_eq!(bank.active_fork().get_balance_slow(&keypair1.pubkey()), 1);
+        assert_eq!(bank.active_fork().get_balance_slow(&keypair2.pubkey()), 2);
+        assert_eq!(bank.active_fork().get_balance_slow(&keypair3.pubkey()), 2);
     }
     #[test]
     fn test_par_process_entries_2_entries_par() {
@@ -1097,7 +1047,7 @@ mod tests {
             &mint_keypair,
             keypair1.pubkey(),
             1,
-            bank.live_bank_state().last_id(),
+            bank.active_fork().last_id(),
             0,
         );
         assert_eq!(bank.process_transaction(&tx), Ok(()));
@@ -1105,18 +1055,18 @@ mod tests {
             &mint_keypair,
             keypair2.pubkey(),
             1,
-            bank.live_bank_state().last_id(),
+            bank.active_fork().last_id(),
             0,
         );
         assert_eq!(bank.process_transaction(&tx), Ok(()));
 
         // ensure bank can process 2 entries that do not have a common account and no tick is registered
-        let last_id = bank.live_bank_state().last_id();
+        let last_id = bank.active_fork().last_id();
         let tx = SystemTransaction::new_account(
             &keypair1,
             keypair3.pubkey(),
             1,
-            bank.live_bank_state().last_id(),
+            bank.active_fork().last_id(),
             0,
         );
         let entry_1 = next_entry(&last_id, 1, vec![tx]);
@@ -1124,23 +1074,17 @@ mod tests {
             &keypair2,
             keypair4.pubkey(),
             1,
-            bank.live_bank_state().last_id(),
+            bank.active_fork().last_id(),
             0,
         );
         let entry_2 = next_entry(&entry_1.id, 1, vec![tx]);
         assert_eq!(
-            bank.live_bank_state().process_entries(&[entry_1, entry_2]),
+            bank.active_fork().process_entries(&[entry_1, entry_2]),
             Ok(())
         );
-        assert_eq!(
-            bank.live_bank_state().get_balance_slow(&keypair3.pubkey()),
-            1
-        );
-        assert_eq!(
-            bank.live_bank_state().get_balance_slow(&keypair4.pubkey()),
-            1
-        );
-        assert_eq!(bank.live_bank_state().last_id(), last_id);
+        assert_eq!(bank.active_fork().get_balance_slow(&keypair3.pubkey()), 1);
+        assert_eq!(bank.active_fork().get_balance_slow(&keypair4.pubkey()), 1);
+        assert_eq!(bank.active_fork().last_id(), last_id);
     }
     #[test]
     fn test_par_process_entries_2_entries_tick() {
@@ -1156,7 +1100,7 @@ mod tests {
             &mint_keypair,
             keypair1.pubkey(),
             1,
-            bank.live_bank_state().last_id(),
+            bank.active_fork().last_id(),
             0,
         );
         assert_eq!(bank.process_transaction(&tx), Ok(()));
@@ -1164,19 +1108,19 @@ mod tests {
             &mint_keypair,
             keypair2.pubkey(),
             1,
-            bank.live_bank_state().last_id(),
+            bank.active_fork().last_id(),
             0,
         );
         assert_eq!(bank.process_transaction(&tx), Ok(()));
 
-        let last_id = bank.live_bank_state().last_id();
+        let last_id = bank.active_fork().last_id();
 
         // ensure bank can process 2 entries that do not have a common account and tick is registered
         let tx = SystemTransaction::new_account(
             &keypair2,
             keypair3.pubkey(),
             1,
-            bank.live_bank_state().last_id(),
+            bank.active_fork().last_id(),
             0,
         );
         let entry_1 = next_entry(&last_id, 1, vec![tx]);
@@ -1184,27 +1128,18 @@ mod tests {
         let tx = SystemTransaction::new_account(&keypair1, keypair4.pubkey(), 1, tick.id, 0);
         let entry_2 = next_entry(&tick.id, 1, vec![tx]);
         assert_eq!(
-            bank.live_bank_state().process_entries(&[
-                entry_1.clone(),
-                tick.clone(),
-                entry_2.clone()
-            ]),
+            bank.active_fork()
+                .process_entries(&[entry_1.clone(), tick.clone(), entry_2.clone()]),
             Ok(())
         );
-        assert_eq!(
-            bank.live_bank_state().get_balance_slow(&keypair3.pubkey()),
-            1
-        );
-        assert_eq!(
-            bank.live_bank_state().get_balance_slow(&keypair4.pubkey()),
-            1
-        );
-        assert_eq!(bank.live_bank_state().last_id(), tick.id);
+        assert_eq!(bank.active_fork().get_balance_slow(&keypair3.pubkey()), 1);
+        assert_eq!(bank.active_fork().get_balance_slow(&keypair4.pubkey()), 1);
+        assert_eq!(bank.active_fork().last_id(), tick.id);
         // ensure that an error is returned for an empty account (keypair2)
         let tx = SystemTransaction::new_account(&keypair2, keypair3.pubkey(), 1, tick.id, 0);
         let entry_3 = next_entry(&entry_2.id, 1, vec![tx]);
         assert_eq!(
-            bank.live_bank_state().process_entries(&[entry_3]),
+            bank.active_fork().process_entries(&[entry_3]),
             Err(BankError::AccountNotFound)
         );
     }
@@ -1278,7 +1213,7 @@ mod tests {
         let poh_recorder = PohRecorder::new(
             bank.clone(),
             entry_sender,
-            bank.live_bank_state().last_id(),
+            bank.active_fork().last_id(),
             None,
         );
         let pubkey = Keypair::new().pubkey();
@@ -1289,7 +1224,7 @@ mod tests {
         ];
 
         let mut results = vec![Ok(()), Ok(())];
-        BankState::record_transactions(&transactions, &results, &poh_recorder).unwrap();
+        BankFork::record_transactions(&transactions, &results, &poh_recorder).unwrap();
         let entries = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].transactions.len(), transactions.len());
 
@@ -1298,13 +1233,13 @@ mod tests {
             1,
             ProgramError::ResultWithNegativeTokens,
         ));
-        BankState::record_transactions(&transactions, &results, &poh_recorder).unwrap();
+        BankFork::record_transactions(&transactions, &results, &poh_recorder).unwrap();
         let entries = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].transactions.len(), transactions.len());
 
         // Other BankErrors should not be recorded
         results[0] = Err(BankError::AccountNotFound);
-        BankState::record_transactions(&transactions, &results, &poh_recorder).unwrap();
+        BankFork::record_transactions(&transactions, &results, &poh_recorder).unwrap();
         let entries = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].transactions.len(), transactions.len() - 1);
     }
@@ -1324,7 +1259,7 @@ mod tests {
         let x2 = x * 2;
         let storage_last_id = hash(&[x2]);
 
-        bank.live_bank_state().register_tick(&last_id);
+        bank.active_fork().register_tick(&last_id);
 
         bank.transfer(10, &alice, jill.pubkey(), last_id).unwrap();
 
@@ -1374,8 +1309,8 @@ mod tests {
         let mut poh_recorder = PohRecorder::new(
             bank.clone(),
             entry_sender,
-            bank.live_bank_state().last_id(),
-            Some(bank.live_bank_state().tick_height() + 1),
+            bank.active_fork().last_id(),
+            Some(bank.active_fork().tick_height() + 1),
         );
 
         bank.process_and_record_transactions(&transactions, Some(&poh_recorder))
@@ -1389,7 +1324,7 @@ mod tests {
             for entry in entries {
                 if !entry.is_tick() {
                     assert_eq!(entry.transactions.len(), transactions.len());
-                    assert_eq!(bank.live_bank_state().get_balance_slow(&pubkey), 1);
+                    assert_eq!(bank.active_fork().get_balance_slow(&pubkey), 1);
                 } else {
                     need_tick = false;
                 }
@@ -1409,6 +1344,6 @@ mod tests {
             Err(BankError::MaxHeightReached)
         );
 
-        assert_eq!(bank.live_bank_state().get_balance_slow(&pubkey), 1);
+        assert_eq!(bank.active_fork().get_balance_slow(&pubkey), 1);
     }
 }

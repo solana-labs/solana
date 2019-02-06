@@ -333,7 +333,7 @@ impl LeaderScheduler {
         let lower_bound = height.saturating_sub(self.active_window_length);
 
         {
-            let bank_state = bank.root_bank_state();
+            let bank_state = bank.root();
             let accounts = bank_state.head().accounts.accounts_db.read().unwrap();
             // TODO: iterate through checkpoints, too
             accounts
@@ -431,7 +431,7 @@ impl LeaderScheduler {
     {
         let mut active_accounts: Vec<(&'a Pubkey, u64)> = active
             .filter_map(|pk| {
-                let stake = bank.root_bank_state().get_balance_slow(pk);
+                let stake = bank.root().get_balance_slow(pk);
                 if stake > 0 {
                     Some((pk, stake as u64))
                 } else {

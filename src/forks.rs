@@ -1,6 +1,6 @@
 use crate::bank_checkpoint::BankCheckpoint;
 /// This module tracks the forks in the bank
-use crate::bank_state::BankState;
+use crate::bank_fork::BankFork;
 use std::sync::Arc;
 //TODO: own module error
 use crate::bank::{BankError, Result};
@@ -16,21 +16,21 @@ pub struct Forks {
 
     /// Last fork to be initialized
     /// This should be the last fork to be replayed or the TPU fork
-    pub live_bank_state: u64,
+    pub active_fork: u64,
 
     /// Fork that is root
-    pub root_bank_state: u64,
+    pub root: u64,
 }
 
 impl Forks {
-    pub fn live_bank_state(&self) -> BankState {
-        self.bank_state(self.live_bank_state).expect("live fork")
+    pub fn active_fork(&self) -> BankFork {
+        self.fork(self.active_fork).expect("live fork")
     }
-    pub fn root_bank_state(&self) -> BankState {
-        self.bank_state(self.root_bank_state).expect("root fork")
+    pub fn root(&self) -> BankFork {
+        self.fork(self.root).expect("root fork")
     }
 
-    pub fn bank_state(&self, fork: u64) -> Option<BankState> {
+    pub fn fork(&self, fork: u64) -> Option<BankFork> {
         let cp: Vec<_> = self
             .checkpoints
             .collect(ROLLBACK_DEPTH + 1, fork)
@@ -41,7 +41,7 @@ impl Forks {
         if cp.is_empty() {
             None
         } else {
-            Some(BankState { checkpoints: cp })
+            Some(BankFork { checkpoints: cp })
         }
     }
     /// Collapse the bottom two checkpoints.
@@ -50,8 +50,8 @@ impl Forks {
     /// The leaf is the last possible fork, it should have no descendants.
     /// The direct child of the root that leads the leaf becomes the new root.
     /// The forks that are not a descendant of the new root -> leaf path are pruned.
-    /// live_bank_state is the leaf.
-    /// root_bank_state is the new root.
+    /// active_fork is the leaf.
+    /// root is the new root.
     /// Return the new root id.
     pub fn merge_into_root(&mut self, max_depth: usize, leaf: u64) -> Result<Option<u64>> {
         // `old` root, should have `root` as its fork_id
@@ -90,8 +90,8 @@ impl Forks {
             let new_checkpoints = self.checkpoints.prune(new_root_id, &idag);
             let old_root_id = old_root.fork_id();
             self.checkpoints = new_checkpoints;
-            self.root_bank_state = new_root_id;
-            self.live_bank_state = leaf;
+            self.root = new_root_id;
+            self.active_fork = leaf;
             // old should have been pruned
             assert!(self.checkpoints.load(old_root_id).is_none());
             // new_root id should be in the new tree
@@ -115,19 +115,19 @@ impl Forks {
     }
 
     /// Initialize the first root
-    pub fn init_root_bank_state(&mut self, checkpoint: BankCheckpoint) {
+    pub fn init_root(&mut self, checkpoint: BankCheckpoint) {
         assert!(self.checkpoints.is_empty());
-        self.live_bank_state = checkpoint.fork_id();
-        self.root_bank_state = checkpoint.fork_id();
+        self.active_fork = checkpoint.fork_id();
+        self.root = checkpoint.fork_id();
         //TODO: using u64::MAX as the impossible checkpoint
         //this should be a None instead
         self.checkpoints
-            .store(self.live_bank_state, Arc::new(checkpoint), std::u64::MAX);
+            .store(self.active_fork, Arc::new(checkpoint), std::u64::MAX);
     }
 
     pub fn is_active_fork(&self, fork: u64) -> bool {
         if let Some(state) = self.checkpoints.load(fork) {
-            !state.0.frozen() && self.live_bank_state == fork
+            !state.0.frozen() && self.active_fork == fork
         } else {
             false
         }
@@ -140,7 +140,7 @@ impl Forks {
             }
             let new = state.0.fork(current, last_id);
             self.checkpoints.store(current, Arc::new(new), base);
-            self.live_bank_state = current;
+            self.active_fork = current;
             Ok(())
         } else {
             return Err(BankError::UnknownFork);
@@ -157,11 +157,11 @@ mod tests {
     fn forks_init_root() {
         let mut forks = Forks::default();
         let cp = BankCheckpoint::new(0, &Hash::default());
-        forks.init_root_bank_state(cp);
+        forks.init_root(cp);
         assert!(forks.is_active_fork(0));
-        assert_eq!(forks.root_bank_state().checkpoints.len(), 1);
-        assert_eq!(forks.root_bank_state().head().fork_id(), 0);
-        assert_eq!(forks.live_bank_state().head().fork_id(), 0);
+        assert_eq!(forks.root().checkpoints.len(), 1);
+        assert_eq!(forks.root().head().fork_id(), 0);
+        assert_eq!(forks.active_fork().head().fork_id(), 0);
     }
 
     #[test]
@@ -170,19 +170,19 @@ mod tests {
         let last_id = Hash::default();
         let cp = BankCheckpoint::new(0, &last_id);
         cp.register_tick(&last_id);
-        forks.init_root_bank_state(cp);
+        forks.init_root(cp);
         let last_id = hash(last_id.as_ref());
         assert_eq!(forks.init_fork(1, &last_id, 1), Err(BankError::UnknownFork));
         assert_eq!(
             forks.init_fork(1, &last_id, 0),
             Err(BankError::CheckpointNotFrozen)
         );
-        forks.root_bank_state().head().freeze();
+        forks.root().head().freeze();
         assert_eq!(forks.init_fork(1, &last_id, 0), Ok(()));
 
-        assert_eq!(forks.root_bank_state().head().fork_id(), 0);
-        assert_eq!(forks.live_bank_state().head().fork_id(), 1);
-        assert_eq!(forks.live_bank_state().checkpoints.len(), 2);
+        assert_eq!(forks.root().head().fork_id(), 0);
+        assert_eq!(forks.active_fork().head().fork_id(), 1);
+        assert_eq!(forks.active_fork().checkpoints.len(), 2);
     }
 
     #[test]
@@ -191,18 +191,18 @@ mod tests {
         let last_id = Hash::default();
         let cp = BankCheckpoint::new(0, &last_id);
         cp.register_tick(&last_id);
-        forks.init_root_bank_state(cp);
+        forks.init_root(cp);
         let last_id = hash(last_id.as_ref());
-        forks.root_bank_state().head().freeze();
+        forks.root().head().freeze();
         assert_eq!(forks.init_fork(1, &last_id, 0), Ok(()));
-        forks.live_bank_state().head().register_tick(&last_id);
-        forks.live_bank_state().head().freeze();
+        forks.active_fork().head().register_tick(&last_id);
+        forks.active_fork().head().freeze();
         assert_eq!(forks.merge_into_root(2, 1), Ok(None));
         assert_eq!(forks.merge_into_root(1, 1), Ok(Some(1)));
 
-        assert_eq!(forks.live_bank_state().checkpoints.len(), 1);
-        assert_eq!(forks.root_bank_state().head().fork_id(), 1);
-        assert_eq!(forks.live_bank_state().head().fork_id(), 1);
+        assert_eq!(forks.active_fork().checkpoints.len(), 1);
+        assert_eq!(forks.root().head().fork_id(), 1);
+        assert_eq!(forks.active_fork().head().fork_id(), 1);
     }
     #[test]
     fn forks_merge_prune() {
@@ -210,29 +210,29 @@ mod tests {
         let last_id = Hash::default();
         let cp = BankCheckpoint::new(0, &last_id);
         cp.register_tick(&last_id);
-        forks.init_root_bank_state(cp);
+        forks.init_root(cp);
         let last_id = hash(last_id.as_ref());
-        forks.root_bank_state().head().freeze();
+        forks.root().head().freeze();
         assert_eq!(forks.init_fork(1, &last_id, 0), Ok(()));
-        assert_eq!(forks.bank_state(1).unwrap().checkpoints.len(), 2);
-        forks.bank_state(1).unwrap().head().register_tick(&last_id);
+        assert_eq!(forks.fork(1).unwrap().checkpoints.len(), 2);
+        forks.fork(1).unwrap().head().register_tick(&last_id);
 
         // add a fork 2 to be pruned
         // fork 2 connects to 0
         let last_id = hash(last_id.as_ref());
         assert_eq!(forks.init_fork(2, &last_id, 0), Ok(()));
-        assert_eq!(forks.bank_state(2).unwrap().checkpoints.len(), 2);
-        forks.bank_state(2).unwrap().head().register_tick(&last_id);
+        assert_eq!(forks.fork(2).unwrap().checkpoints.len(), 2);
+        forks.fork(2).unwrap().head().register_tick(&last_id);
 
-        forks.bank_state(1).unwrap().head().freeze();
+        forks.fork(1).unwrap().head().freeze();
         // fork 1 is the new root, only forks that are descendant from 1 are valid
         assert_eq!(forks.merge_into_root(1, 1), Ok(Some(1)));
 
         // fork 2 is gone since it does not connect to 1
-        assert!(forks.bank_state(2).is_none());
+        assert!(forks.fork(2).is_none());
 
-        assert_eq!(forks.live_bank_state().checkpoints.len(), 1);
-        assert_eq!(forks.root_bank_state().head().fork_id(), 1);
-        assert_eq!(forks.live_bank_state().head().fork_id(), 1);
+        assert_eq!(forks.active_fork().checkpoints.len(), 1);
+        assert_eq!(forks.root().head().fork_id(), 1);
+        assert_eq!(forks.active_fork().head().fork_id(), 1);
     }
 }
