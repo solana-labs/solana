@@ -800,6 +800,7 @@ mod test {
 
     #[test]
     fn test_replay_stage_poh_error_entry_receiver() {
+        solana_logger::setup();
         // Set up dummy node to host a ReplayStage
         let my_keypair = Keypair::new();
         let my_id = my_keypair.pubkey();
@@ -810,14 +811,16 @@ mod test {
         let last_entry_id = Hash::default();
 
         let entry_height = 0;
-        let mut last_id = Hash::default();
-        let bank = Bank::default();
-        bank.init_root(&last_id);
+        let bank = Arc::new(Bank::default());
+        bank.init_root(&last_entry_id);
         let mut entries = Vec::new();
-        for _ in 0..5 {
-            let entry = Entry::new(&mut last_id, 0, 1, vec![]); //just ticks
-            last_id = entry.id;
-            entries.push(entry);
+        {
+            let mut last_id = last_entry_id;
+            for _ in 0..5 {
+                let entry = Entry::new(&last_id, 0, 1, vec![]); //just ticks
+                last_id = entry.id;
+                entries.push(entry);
+            }
         }
 
         let my_keypair = Arc::new(my_keypair);
@@ -826,7 +829,7 @@ mod test {
             entries.clone(),
             0,
             0,
-            &Arc::new(Bank::default()),
+            &bank,
             &cluster_info_me,
             Some(&voting_keypair),
             &ledger_entry_sender,
@@ -850,7 +853,7 @@ mod test {
             entries.clone(),
             0,
             0,
-            &Arc::new(Bank::default()),
+            &bank,
             &cluster_info_me,
             Some(&voting_keypair),
             &ledger_entry_sender,
