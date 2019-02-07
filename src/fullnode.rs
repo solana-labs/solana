@@ -85,7 +85,7 @@ impl Default for FullnodeConfig {
 
 impl FullnodeConfig {
     pub fn set_leader_scheduler_config(&mut self, config: LeaderSchedulerConfig) {
-        self.ledger_config.ticks_per_block = config.ticks_per_slot;
+        self.ledger_config.ticks_per_slot = config.ticks_per_slot;
         self.leader_scheduler_config = config;
     }
 }

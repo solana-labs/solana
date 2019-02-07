@@ -163,7 +163,7 @@ impl SlotMeta {
     }
 
     pub fn num_expected_ticks(&self, db_ledger: &DbLedger) -> u64 {
-        db_ledger.ticks_per_block * self.num_blocks
+        db_ledger.ticks_per_slot * self.num_blocks
     }
 
     fn new(slot_height: u64, num_blocks: u64) -> Self {
@@ -332,12 +332,12 @@ impl LedgerColumnFamilyRaw for ErasureCf {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct DbLedgerConfig {
-    pub ticks_per_block: u64,
+    pub ticks_per_slot: u64,
 }
 
 impl DbLedgerConfig {
-    pub fn new(ticks_per_block: u64) -> Self {
-        DbLedgerConfig { ticks_per_block }
+    pub fn new(ticks_per_slot: u64) -> Self {
+        DbLedgerConfig { ticks_per_slot }
     }
 }
 
@@ -355,7 +355,7 @@ pub struct DbLedger {
     data_cf: DataCf,
     erasure_cf: ErasureCf,
     new_blobs_signals: Vec<SyncSender<bool>>,
-    ticks_per_block: u64,
+    ticks_per_slot: u64,
 }
 
 // TODO: Once we support a window that knows about different leader
@@ -402,14 +402,14 @@ impl DbLedger {
 
         // TODO: make these constructor arguments
         // Issue: https://github.com/solana-labs/solana/issues/2458
-        let ticks_per_block = DEFAULT_TICKS_PER_SLOT;
+        let ticks_per_slot = DEFAULT_TICKS_PER_SLOT;
         Ok(DbLedger {
             db,
             meta_cf,
             data_cf,
             erasure_cf,
             new_blobs_signals: vec![],
-            ticks_per_block,
+            ticks_per_slot,
         })
     }
 
@@ -423,7 +423,7 @@ impl DbLedger {
 
     pub fn open_config(ledger_path: &str, config: &DbLedgerConfig) -> Result<Self> {
         let mut db_ledger = Self::open(ledger_path)?;
-        db_ledger.ticks_per_block = config.ticks_per_block;
+        db_ledger.ticks_per_slot = config.ticks_per_slot;
         Ok(db_ledger)
     }
 
@@ -434,7 +434,7 @@ impl DbLedger {
         let mut db_ledger = Self::open(ledger_path)?;
         let (signal_sender, signal_receiver) = sync_channel(1);
         db_ledger.new_blobs_signals = vec![signal_sender.clone()];
-        db_ledger.ticks_per_block = config.ticks_per_block;
+        db_ledger.ticks_per_slot = config.ticks_per_slot;
 
         Ok((db_ledger, signal_sender, signal_receiver))
     }
@@ -1857,13 +1857,13 @@ mod tests {
     pub fn test_new_blobs_signal() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path("test_new_blobs_signal");
-        let ticks_per_block = 10;
-        let config = DbLedgerConfig::new(ticks_per_block);
+        let ticks_per_slot = 10;
+        let config = DbLedgerConfig::new(ticks_per_slot);
         let (ledger, _, recvr) = DbLedger::open_with_config_signal(&ledger_path, &config).unwrap();
         let ledger = Arc::new(ledger);
 
         // Create ticks for slot 0
-        let entries = create_ticks(ticks_per_block, Hash::default());
+        let entries = create_ticks(ticks_per_slot, Hash::default());
         let mut blobs = entries.to_blobs();
 
         for (i, b) in blobs.iter_mut().enumerate() {
@@ -1882,7 +1882,7 @@ mod tests {
         assert!(recvr.try_recv().is_err());
         // Insert the rest of the ticks
         ledger
-            .insert_data_blobs(&blobs[1..ticks_per_block as usize])
+            .insert_data_blobs(&blobs[1..ticks_per_slot as usize])
             .unwrap();
         // Wait to get notified of update, should only be one update
         assert!(recvr.recv_timeout(timer).is_ok());
@@ -1891,7 +1891,7 @@ mod tests {
         // Create some other slots, and send batches of ticks for each slot such that each slot
         // is missing the tick at blob index == slot index - 1. Thus, no consecutive blocks
         // will be formed
-        let num_slots = ticks_per_block;
+        let num_slots = ticks_per_slot;
         let mut all_blobs = vec![];
         for slot_index in 1..num_slots + 1 {
             let entries = create_ticks(num_slots, Hash::default());
@@ -2033,15 +2033,15 @@ mod tests {
         {
             let mut db_ledger = DbLedger::open(&db_ledger_path).unwrap();
             let num_slots = 30;
-            let ticks_per_block = 2;
-            db_ledger.ticks_per_block = ticks_per_block as u64;
+            let ticks_per_slot = 2;
+            db_ledger.ticks_per_slot = ticks_per_slot as u64;
 
-            let ticks = create_ticks((num_slots / 2) * ticks_per_block, Hash::default());
+            let ticks = create_ticks((num_slots / 2) * ticks_per_slot, Hash::default());
             let mut blobs = ticks.to_blobs();
 
             // Leave a gap for every other slot
             for (i, ref mut b) in blobs.iter_mut().enumerate() {
-                b.set_index(i as u64 % ticks_per_block);
+                b.set_index(i as u64 % ticks_per_slot);
                 b.set_slot(((i / 2) * 2 + 1) as u64);
             }
 
@@ -2059,7 +2059,7 @@ mod tests {
                     assert_eq!(s.consumed_ticks, 0);
                 } else {
                     assert!(s.next_slots.is_empty());
-                    assert_eq!(s.consumed_ticks, ticks_per_block as u64);
+                    assert_eq!(s.consumed_ticks, ticks_per_slot as u64);
                 }
 
                 if i == 0 {
@@ -2071,7 +2071,7 @@ mod tests {
 
             // Fill in the gaps
             for (i, ref mut b) in blobs.iter_mut().enumerate() {
-                b.set_index(i as u64 % ticks_per_block);
+                b.set_index(i as u64 % ticks_per_slot);
                 b.set_slot(((i / 2) * 2) as u64);
             }
 
@@ -2087,9 +2087,9 @@ mod tests {
                     assert!(s.next_slots.is_empty());
                 }
                 if i == 0 {
-                    assert_eq!(s.consumed_ticks, ticks_per_block - 1);
+                    assert_eq!(s.consumed_ticks, ticks_per_slot - 1);
                 } else {
-                    assert_eq!(s.consumed_ticks, ticks_per_block);
+                    assert_eq!(s.consumed_ticks, ticks_per_slot);
                 }
                 assert!(s.is_trunk);
             }
@@ -2104,25 +2104,25 @@ mod tests {
         {
             let mut db_ledger = DbLedger::open(&db_ledger_path).unwrap();
             let num_slots = 15;
-            let ticks_per_block = 2;
-            db_ledger.ticks_per_block = ticks_per_block as u64;
+            let ticks_per_slot = 2;
+            db_ledger.ticks_per_slot = ticks_per_slot as u64;
 
-            let entries = create_ticks(num_slots * ticks_per_block, Hash::default());
+            let entries = create_ticks(num_slots * ticks_per_slot, Hash::default());
             let mut blobs = entries.to_blobs();
             for (i, ref mut b) in blobs.iter_mut().enumerate() {
-                b.set_index(i as u64 % ticks_per_block);
-                b.set_slot(i as u64 / ticks_per_block);
+                b.set_index(i as u64 % ticks_per_slot);
+                b.set_slot(i as u64 / ticks_per_slot);
             }
 
             // Write the blobs such that every 3rd block has a gap in the beginning
-            for (slot_index, slot_ticks) in blobs.chunks(ticks_per_block as usize).enumerate() {
+            for (slot_index, slot_ticks) in blobs.chunks(ticks_per_slot as usize).enumerate() {
                 if slot_index % 3 == 0 {
                     db_ledger
-                        .write_blobs(&slot_ticks[1..ticks_per_block as usize])
+                        .write_blobs(&slot_ticks[1..ticks_per_slot as usize])
                         .unwrap();
                 } else {
                     db_ledger
-                        .write_blobs(&slot_ticks[..ticks_per_block as usize])
+                        .write_blobs(&slot_ticks[..ticks_per_slot as usize])
                         .unwrap();
                 }
             }
@@ -2140,7 +2140,7 @@ mod tests {
                 if i % 3 == 0 {
                     assert_eq!(s.consumed_ticks, 0);
                 } else {
-                    assert_eq!(s.consumed_ticks, ticks_per_block as u64);
+                    assert_eq!(s.consumed_ticks, ticks_per_slot as u64);
                 }
 
                 // Other than slot 0, no slots should be part of the trunk
@@ -2153,7 +2153,7 @@ mod tests {
 
             // Iteratively finish every 3rd slot, and check that all slots up to and including
             // slot_index + 3 become part of the trunk
-            for (slot_index, slot_ticks) in blobs.chunks(ticks_per_block as usize).enumerate() {
+            for (slot_index, slot_ticks) in blobs.chunks(ticks_per_slot as usize).enumerate() {
                 if slot_index % 3 == 0 {
                     db_ledger.write_blobs(&slot_ticks[0..1]).unwrap();
 
