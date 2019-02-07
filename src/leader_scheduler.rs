@@ -523,8 +523,7 @@ pub mod tests {
         let num_vote_account_tokens = 1;
         let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
         info!("bootstrap_leader_id: {}", genesis_block.bootstrap_leader_id);
-        let bank =
-            Bank::new_with_leader_scheduler_config(&genesis_block, Some(&leader_scheduler_config));
+        let bank = Bank::new_with_leader_scheduler_config(&genesis_block, &leader_scheduler_config);
         let mut validators = vec![];
         let last_id = genesis_block.last_id();
         for i in 0..num_validators {
@@ -652,8 +651,7 @@ pub mod tests {
         let active_window_length = 1000;
         let leader_scheduler_config = LeaderSchedulerConfig::new(100, 100, active_window_length);
         let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10000, leader_id, 500);
-        let bank =
-            Bank::new_with_leader_scheduler_config(&genesis_block, Some(&leader_scheduler_config));
+        let bank = Bank::new_with_leader_scheduler_config(&genesis_block, &leader_scheduler_config);
 
         let bootstrap_ids = to_hashset_owned(&vec![genesis_block.bootstrap_leader_id]);
 
@@ -971,8 +969,7 @@ pub mod tests {
                 + ((((num_validators + 1) / 2) * (num_validators + 1))
                     + (num_vote_account_tokens * num_validators)) as u64,
         );
-        let bank =
-            Bank::new_with_leader_scheduler_config(&genesis_block, Some(&leader_scheduler_config));
+        let bank = Bank::new_with_leader_scheduler_config(&genesis_block, &leader_scheduler_config);
         let mut validators = vec![];
         let last_id = genesis_block.last_id();
         for i in 0..num_validators {
@@ -1042,8 +1039,7 @@ pub mod tests {
         let active_window_length = 1000;
         let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10000, leader_id, 500);
         let leader_scheduler_config = LeaderSchedulerConfig::new(100, 100, active_window_length);
-        let bank =
-            Bank::new_with_leader_scheduler_config(&genesis_block, Some(&leader_scheduler_config));
+        let bank = Bank::new_with_leader_scheduler_config(&genesis_block, &leader_scheduler_config);
 
         // Bootstrap leader should be in the active set even without explicit votes
         {
@@ -1113,8 +1109,7 @@ pub mod tests {
         // Check that the generate_schedule() function is being called by the
         // update_tick_height() function at the correct entry heights.
         let (genesis_block, _) = GenesisBlock::new(10_000);
-        let bank =
-            Bank::new_with_leader_scheduler_config(&genesis_block, Some(&leader_scheduler_config));
+        let bank = Bank::new_with_leader_scheduler_config(&genesis_block, &leader_scheduler_config);
         let mut leader_scheduler = bank.leader_scheduler.write().unwrap();
         info!(
             "bootstrap_leader_id: {:?}",
@@ -1268,8 +1263,7 @@ pub mod tests {
         // Create mint and bank
         let (genesis_block, mint_keypair) =
             GenesisBlock::new_with_leader(10_000, bootstrap_leader_id, BOOTSTRAP_LEADER_TOKENS);
-        let bank =
-            Bank::new_with_leader_scheduler_config(&genesis_block, Some(&leader_scheduler_config));
+        let bank = Bank::new_with_leader_scheduler_config(&genesis_block, &leader_scheduler_config);
         let last_id = genesis_block.last_id();
         let initial_vote_height = 1;
 
