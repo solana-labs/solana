@@ -443,17 +443,6 @@ mod tests {
         Accounts::load_accounts(&[&accounts], &[tx], vec![Ok(())], error_counters)
     }
 
-    fn assert_counters(error_counters: &ErrorCounters, expected: [usize; 8]) {
-        assert_eq!(error_counters.account_not_found, expected[0]);
-        assert_eq!(error_counters.account_in_use, expected[1]);
-        assert_eq!(error_counters.last_id_not_found, expected[2]);
-        assert_eq!(error_counters.reserve_last_id, expected[3]);
-        assert_eq!(error_counters.insufficient_funds, expected[4]);
-        assert_eq!(error_counters.duplicate_signature, expected[5]);
-        assert_eq!(error_counters.call_chain_too_deep, expected[6]);
-        assert_eq!(error_counters.missing_signature_for_fee, expected[7]);
-    }
-
     #[test]
     fn test_load_accounts_no_key() {
         let accounts: Vec<(Pubkey, Account)> = Vec::new();
@@ -471,7 +460,7 @@ mod tests {
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
     }
@@ -495,7 +484,7 @@ mod tests {
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
     }
@@ -527,7 +516,7 @@ mod tests {
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
     }
@@ -555,7 +544,7 @@ mod tests {
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_counters(&error_counters, [0, 0, 0, 0, 1, 0, 0, 0]);
+        assert_eq!(error_counters.insufficient_funds, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(loaded_accounts[0], Err(BankError::InsufficientFundsForFee));
     }
@@ -587,7 +576,7 @@ mod tests {
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_counters(&error_counters, [0, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
             Ok((a, l)) => {
@@ -659,7 +648,7 @@ mod tests {
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_counters(&error_counters, [0, 0, 0, 0, 0, 0, 1, 0]);
+        assert_eq!(error_counters.call_chain_too_deep, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(loaded_accounts[0], Err(BankError::CallChainTooDeep));
     }
@@ -693,7 +682,7 @@ mod tests {
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
     }
@@ -726,7 +715,7 @@ mod tests {
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
     }
@@ -775,7 +764,7 @@ mod tests {
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_counters(&error_counters, [0, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
             Ok((a, l)) => {
