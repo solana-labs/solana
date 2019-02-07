@@ -416,7 +416,7 @@ mod test {
         {
             // Set up the bank
             let (bank, _entry_height, last_entry_id, db_ledger, l_sender, l_receiver) =
-                Fullnode::new_bank_from_ledger(&my_ledger_path, Some(&leader_scheduler_config));
+                Fullnode::new_bank_from_ledger(&my_ledger_path, &leader_scheduler_config);
 
             // Set up the replay stage
             let (rotation_sender, rotation_receiver) = channel();
@@ -520,7 +520,7 @@ mod test {
         let (to_leader_sender, _) = channel();
         {
             let (bank, entry_height, last_entry_id, db_ledger, l_sender, l_receiver) =
-                Fullnode::new_bank_from_ledger(&my_ledger_path, None);
+                Fullnode::new_bank_from_ledger(&my_ledger_path, &LeaderSchedulerConfig::default());
 
             let bank = Arc::new(bank);
             let db_ledger = Arc::new(db_ledger);
@@ -629,7 +629,7 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         {
             let (bank, _entry_height, last_entry_id, db_ledger, l_sender, l_receiver) =
-                Fullnode::new_bank_from_ledger(&my_ledger_path, Some(&leader_scheduler_config));
+                Fullnode::new_bank_from_ledger(&my_ledger_path, &leader_scheduler_config);
 
             let meta = db_ledger
                 .meta()

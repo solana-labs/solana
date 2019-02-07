@@ -125,7 +125,7 @@ impl Fullnode {
             db_ledger,
             ledger_signal_sender,
             ledger_signal_receiver,
-        ) = Self::new_bank_from_ledger(ledger_path, Some(&config.leader_scheduler_config));
+        ) = Self::new_bank_from_ledger(ledger_path, &config.leader_scheduler_config);
 
         info!("node info: {:?}", node.info);
         info!("node entrypoint_info: {:?}", entrypoint_info_option);
@@ -480,7 +480,7 @@ impl Fullnode {
 
     pub fn new_bank_from_ledger(
         ledger_path: &str,
-        leader_scheduler_config: Option<&LeaderSchedulerConfig>,
+        leader_scheduler_config: &LeaderSchedulerConfig,
     ) -> (Bank, u64, Hash, DbLedger, SyncSender<bool>, Receiver<bool>) {
         let (db_ledger, ledger_signal_sender, ledger_signal_receiver) =
             DbLedger::open_with_signal(ledger_path)
@@ -829,8 +829,10 @@ mod tests {
 
         // Close the validator so that rocksdb has locks available
         validator_exit();
-        let (bank, entry_height, _, _, _, _) =
-            Fullnode::new_bank_from_ledger(&validator_ledger_path, None);
+        let (bank, entry_height, _, _, _, _) = Fullnode::new_bank_from_ledger(
+            &validator_ledger_path,
+            &LeaderSchedulerConfig::default(),
+        );
 
         assert!(
             bank.tick_height()

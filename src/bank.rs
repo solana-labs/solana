@@ -130,7 +130,7 @@ impl Default for Bank {
             last_id_queue: RwLock::new(LastIdQueue::default()),
             status_cache: RwLock::new(BankStatusCache::default()),
             confirmation_time: AtomicUsize::new(std::usize::MAX),
-            leader_scheduler: Arc::new(RwLock::new(Default::default())),
+            leader_scheduler: Arc::new(RwLock::new(LeaderScheduler::default())),
             subscriptions: RwLock::new(Box::new(Arc::new(LocalSubscriptions::default()))),
         }
     }
@@ -139,21 +139,20 @@ impl Default for Bank {
 impl Bank {
     pub fn new_with_leader_scheduler_config(
         genesis_block: &GenesisBlock,
-        leader_scheduler_config_option: Option<&LeaderSchedulerConfig>,
+        leader_scheduler_config: &LeaderSchedulerConfig,
     ) -> Self {
         let mut bank = Self::default();
-        if let Some(leader_scheduler_config) = leader_scheduler_config_option {
-            bank.leader_scheduler =
-                Arc::new(RwLock::new(LeaderScheduler::new(leader_scheduler_config)));
-        }
+        bank.leader_scheduler =
+            Arc::new(RwLock::new(LeaderScheduler::new(leader_scheduler_config)));
         bank.process_genesis_block(genesis_block);
         bank.add_builtin_programs();
         bank
     }
 
     pub fn new(genesis_block: &GenesisBlock) -> Self {
-        Self::new_with_leader_scheduler_config(genesis_block, None)
+        Self::new_with_leader_scheduler_config(genesis_block, &LeaderSchedulerConfig::default())
     }
+
     pub fn set_subscriptions(&self, subscriptions: Box<Arc<BankSubscriptions + Send + Sync>>) {
         let mut sub = self.subscriptions.write().unwrap();
         *sub = subscriptions
