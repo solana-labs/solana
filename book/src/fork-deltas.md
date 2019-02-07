@@ -33,7 +33,7 @@ The following *active forks* are in the deltas DAG
 
 ## Merging into root
 
-A validator votes for a finalized fork.  The *active fork* connecting the fork
+A validator votes for a frozen fork.  The *active fork* connecting the fork
 to the root is merged.  If the *active fork* is longer than
 `Forks::ROLLBACK_DEPTH` the oldest two forks are merged.  The oldest fork in
 the *active fork* is the current root, so the second oldest is a direct
