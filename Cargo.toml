@@ -106,7 +106,6 @@ members = [
     "programs/native/bpf_loader",
     "programs/native/budget",
     "programs/native/erc20",
-    "programs/native/lua_loader",
     "programs/native/native_loader",
     "programs/native/noop",
     "programs/native/storage",
