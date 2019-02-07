@@ -214,7 +214,7 @@ mod test {
         {
             let num_ticks_per_slot = 1;
             let db_ledger_config = DbLedgerConfig::new(num_ticks_per_slot);
-            let db_ledger = DbLedger::open_config(&db_ledger_path, &db_ledger_config).unwrap();
+            let db_ledger = DbLedger::open_config(&db_ledger_path, db_ledger_config).unwrap();
 
             let mut blobs = create_ticks(1, Hash::default()).to_blobs();
             blobs[0].set_index(0);
@@ -263,7 +263,7 @@ mod test {
         {
             let num_ticks_per_slot = 10;
             let db_ledger_config = DbLedgerConfig::new(num_ticks_per_slot);
-            let db_ledger = DbLedger::open_config(&db_ledger_path, &db_ledger_config).unwrap();
+            let db_ledger = DbLedger::open_config(&db_ledger_path, db_ledger_config).unwrap();
 
             let mut blobs = make_tiny_test_entries(1).to_blobs();
             blobs[0].set_index(1);
@@ -289,7 +289,7 @@ mod test {
         {
             let num_ticks_per_slot = 10;
             let db_ledger_config = DbLedgerConfig::new(num_ticks_per_slot);
-            let db_ledger = DbLedger::open_config(&db_ledger_path, &db_ledger_config).unwrap();
+            let db_ledger = DbLedger::open_config(&db_ledger_path, db_ledger_config).unwrap();
 
             let num_entries_per_slot = 10;
             let num_slots = 2;

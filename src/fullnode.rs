@@ -130,7 +130,7 @@ impl Fullnode {
             ledger_signal_receiver,
         ) = new_bank_from_ledger(
             ledger_path,
-            &config.ledger_config,
+            config.ledger_config,
             &config.leader_scheduler_config,
         );
 
@@ -505,11 +505,11 @@ impl Fullnode {
 
 pub fn new_bank_from_ledger(
     ledger_path: &str,
-    ledger_config: &DbLedgerConfig,
+    ledger_config: DbLedgerConfig,
     leader_scheduler_config: &LeaderSchedulerConfig,
 ) -> (Bank, u64, Hash, DbLedger, SyncSender<bool>, Receiver<bool>) {
     let (db_ledger, ledger_signal_sender, ledger_signal_receiver) =
-        DbLedger::open_with_config_signal(ledger_path, &ledger_config)
+        DbLedger::open_with_config_signal(ledger_path, ledger_config)
             .expect("Expected to successfully open database ledger");
     let genesis_block =
         GenesisBlock::load(ledger_path).expect("Expected to successfully open genesis block");
@@ -840,7 +840,7 @@ mod tests {
         validator_exit();
         let (bank, entry_height, _, _, _, _) = new_bank_from_ledger(
             &validator_ledger_path,
-            &DbLedgerConfig::default(),
+            DbLedgerConfig::default(),
             &LeaderSchedulerConfig::default(),
         );
 

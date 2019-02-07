@@ -421,7 +421,7 @@ impl DbLedger {
         Ok((db_ledger, signal_sender, signal_receiver))
     }
 
-    pub fn open_config(ledger_path: &str, config: &DbLedgerConfig) -> Result<Self> {
+    pub fn open_config(ledger_path: &str, config: DbLedgerConfig) -> Result<Self> {
         let mut db_ledger = Self::open(ledger_path)?;
         db_ledger.ticks_per_slot = config.ticks_per_slot;
         Ok(db_ledger)
@@ -429,7 +429,7 @@ impl DbLedger {
 
     pub fn open_with_config_signal(
         ledger_path: &str,
-        config: &DbLedgerConfig,
+        config: DbLedgerConfig,
     ) -> Result<(Self, SyncSender<bool>, Receiver<bool>)> {
         let mut db_ledger = Self::open(ledger_path)?;
         let (signal_sender, signal_receiver) = sync_channel(1);
@@ -1859,7 +1859,7 @@ mod tests {
         let ledger_path = get_tmp_ledger_path("test_new_blobs_signal");
         let ticks_per_slot = 10;
         let config = DbLedgerConfig::new(ticks_per_slot);
-        let (ledger, _, recvr) = DbLedger::open_with_config_signal(&ledger_path, &config).unwrap();
+        let (ledger, _, recvr) = DbLedger::open_with_config_signal(&ledger_path, config).unwrap();
         let ledger = Arc::new(ledger);
 
         // Create ticks for slot 0
@@ -1966,7 +1966,7 @@ mod tests {
         {
             let ticks_per_slot = 2;
             let config = DbLedgerConfig::new(ticks_per_slot);
-            let db_ledger = DbLedger::open_config(&db_ledger_path, &config).unwrap();
+            let db_ledger = DbLedger::open_config(&db_ledger_path, config).unwrap();
 
             let entries = create_ticks(6, Hash::default());
             let mut blobs = entries.to_blobs();

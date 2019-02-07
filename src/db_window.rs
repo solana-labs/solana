@@ -488,7 +488,7 @@ mod test {
         let db_ledger_path = get_tmp_ledger_path("test_generate_repairs");
         let num_ticks_per_slot = 10;
         let db_ledger_config = DbLedgerConfig::new(num_ticks_per_slot);
-        let db_ledger = DbLedger::open_config(&db_ledger_path, &db_ledger_config).unwrap();
+        let db_ledger = DbLedger::open_config(&db_ledger_path, db_ledger_config).unwrap();
 
         let num_entries_per_slot = 10;
         let num_slots = 2;
