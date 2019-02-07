@@ -1,6 +1,7 @@
 use solana::bank::Bank;
 use solana::genesis_block::GenesisBlock;
 use solana_sdk::loader_transaction::LoaderTransaction;
+use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
@@ -52,7 +53,7 @@ fn test_program_native_noop() {
     let bank = Bank::new(&genesis_block);
 
     let program = "noop".as_bytes().to_vec();
-    let program_id = load_program(&bank, &mint_keypair, solana_native_loader::id(), program);
+    let program_id = load_program(&bank, &mint_keypair, native_loader::id(), program);
 
     // Call user program
     let tx = Transaction::new(&mint_keypair, &[], program_id, &1u8, bank.last_id(), 0);
@@ -68,7 +69,7 @@ fn test_program_lua_move_funds() {
     let loader_id = load_program(
         &bank,
         &mint_keypair,
-        solana_native_loader::id(),
+        native_loader::id(),
         "solana_lua_loader".as_bytes().to_vec(),
     );
 
@@ -191,7 +192,7 @@ fn test_program_bpf_c() {
         let loader_id = load_program(
             &bank,
             &mint_keypair,
-            solana_native_loader::id(),
+            native_loader::id(),
             "solana_bpf_loader".as_bytes().to_vec(),
         );
 
@@ -230,7 +231,7 @@ fn test_program_bpf_rust() {
         let loader_id = load_program(
             &bank,
             &mint_keypair,
-            solana_native_loader::id(),
+            native_loader::id(),
             "solana_bpf_loader".as_bytes().to_vec(),
         );
 

@@ -7,9 +7,7 @@ use libloading::os::windows::*;
 use log::*;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::loader_instruction::LoaderInstruction;
-pub use solana_sdk::native_loader::*;
-use solana_sdk::native_program;
-use solana_sdk::native_program::ProgramError;
+use solana_sdk::native_program::{self, ProgramError};
 use solana_sdk::pubkey::Pubkey;
 use std::env;
 use std::path::PathBuf;
@@ -46,10 +44,6 @@ fn create_path(name: &str) -> PathBuf {
         // `cargo build` places dependent libraries in the deps/ subdirectory
         current_exe_directory.join("deps").join(library_file_name)
     }
-}
-
-pub fn check_id(program_id: &Pubkey) -> bool {
-    program_id.as_ref() == NATIVE_LOADER_PROGRAM_ID
 }
 
 pub fn entrypoint(
