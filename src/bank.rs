@@ -12,12 +12,12 @@ use crate::last_id_queue::{LastIdQueue, MAX_ENTRY_IDS};
 use crate::leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig};
 use crate::poh_recorder::{PohRecorder, PohRecorderError};
 use crate::result::Error;
-use crate::runtime::{self, RuntimeError};
 use crate::status_cache::StatusCache;
 use bincode::deserialize;
 use itertools::Itertools;
 use log::Level;
 use rayon::prelude::*;
+use solana_runtime::{self, RuntimeError};
 use solana_sdk::account::Account;
 use solana_sdk::bpf_loader;
 use solana_sdk::budget_program;
@@ -578,7 +578,7 @@ impl Bank {
             .map(|(accs, tx)| match accs {
                 Err(e) => Err(e.clone()),
                 Ok((ref mut accounts, ref mut loaders)) => {
-                    runtime::execute_transaction(tx, loaders, accounts, tick_height).map_err(
+                    solana_runtime::execute_transaction(tx, loaders, accounts, tick_height).map_err(
                         |RuntimeError::ProgramError(index, err)| {
                             BankError::ProgramError(index, err)
                         },

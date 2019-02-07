@@ -24,6 +24,7 @@ CRATES=(
   genesis
   ledger-tool
   wallet
+  runtime
 )
 
 
