@@ -47,7 +47,7 @@ echo --- program/native/bpf_loader bench --features=bpf_c
 (
   set -x
   cd programs/native/bpf_loader
-  cargo +nightly bench --verbose --features="bpf_c" \
+  cargo +nightly bench ${V:+--verbose} --features="bpf_c" \
     -- -Z unstable-options --format=json --nocapture | tee -a ../../../"$BENCH_FILE"
 )
 
