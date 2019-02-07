@@ -12,8 +12,8 @@ use crate::rpc_pubsub::PubSubService;
 use crate::service::Service;
 use crate::storage_stage::StorageState;
 use crate::streamer::BlobSender;
-use crate::tpu::{Tpu, TpuReturnType};
-use crate::tvu::{Sockets, Tvu, TvuReturnType};
+use crate::tpu::{Tpu, TpuReturnType, TpuRotationReceiver};
+use crate::tvu::{Sockets, Tvu, TvuReturnType, TvuRotationReceiver};
 use crate::voting_keypair::VotingKeypair;
 use log::Level;
 use solana_sdk::hash::Hash;
@@ -27,11 +27,6 @@ use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender, SyncSender};
 use std::sync::{Arc, RwLock};
 use std::thread::{spawn, Result};
 use std::time::{Duration, Instant};
-
-pub type TvuRotationSender = Sender<TvuReturnType>;
-pub type TpuRotationSender = Sender<TpuReturnType>;
-type TvuRotationReceiver = Receiver<TvuReturnType>;
-type TpuRotationReceiver = Receiver<TpuReturnType>;
 
 struct NodeServices {
     tpu: Tpu,

@@ -10,11 +10,10 @@ use crate::entry_stream::EntryStream;
 use crate::entry_stream::EntryStreamHandler;
 #[cfg(test)]
 use crate::entry_stream::MockEntryStream as EntryStream;
-use crate::fullnode::TvuRotationSender;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
 use crate::service::Service;
-use crate::tvu::TvuReturnType;
+use crate::tvu::{TvuReturnType, TvuRotationSender};
 use crate::voting_keypair::VotingKeypair;
 use log::Level;
 use solana_metrics::{influxdb, submit};
