@@ -38,7 +38,6 @@ pub struct ThinClient {
     rpc_addr: SocketAddr,
     transactions_addr: SocketAddr,
     transactions_socket: UdpSocket,
-    last_id: Option<Hash>,
     transaction_count: u64,
     balances: HashMap<Pubkey, Account>,
     signature_status: bool,
@@ -83,7 +82,6 @@ impl ThinClient {
             rpc_addr,
             transactions_addr,
             transactions_socket,
-            last_id: None,
             transaction_count: 0,
             balances: HashMap::new(),
             signature_status: false,
@@ -248,25 +246,20 @@ impl ThinClient {
     /// Request the last Entry ID from the server. This method blocks
     /// until the server sends a response.
     pub fn get_last_id(&mut self) -> Hash {
-        trace!("get_last_id");
-        let mut done = false;
-        while !done {
-            debug!("get_last_id send_to {}", &self.rpc_addr);
+        loop {
+            trace!("get_last_id send_to {}", &self.rpc_addr);
             let resp = self
                 .rpc_client
                 .make_rpc_request(1, RpcRequest::GetLastId, None);
 
             if let Ok(value) = resp {
-                done = true;
                 let last_id_str = value.as_str().unwrap();
                 let last_id_vec = bs58::decode(last_id_str).into_vec().unwrap();
-                let last_id = Hash::new(&last_id_vec);
-                self.last_id = Some(last_id);
+                return Hash::new(&last_id_vec);
             } else {
                 debug!("thin_client get_last_id error: {:?}", resp);
             }
         }
-        self.last_id.expect("some last_id")
     }
 
     pub fn submit_poll_balance_metrics(elapsed: &Duration) {
