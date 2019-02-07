@@ -60,60 +60,6 @@ fn test_program_native_noop() {
     bank.process_transaction(&tx).unwrap();
 }
 
-#[test]
-fn test_program_lua_move_funds() {
-    solana_logger::setup();
-
-    let (genesis_block, mint_keypair) = GenesisBlock::new(50);
-    let bank = Bank::new(&genesis_block);
-    let loader_id = load_program(
-        &bank,
-        &mint_keypair,
-        native_loader::id(),
-        "solana_lua_loader".as_bytes().to_vec(),
-    );
-
-    let program = r#"
-            print("Lua Script!")
-            local tokens, _ = string.unpack("I", data)
-            accounts[1].tokens = accounts[1].tokens - tokens
-            accounts[2].tokens = accounts[2].tokens + tokens
-        "#
-    .as_bytes()
-    .to_vec();
-    let program_id = load_program(&bank, &mint_keypair, loader_id, program);
-    let from = Keypair::new();
-    let to = Keypair::new().pubkey();
-
-    // Call user program with two accounts
-    let tx = SystemTransaction::new_program_account(
-        &mint_keypair,
-        from.pubkey(),
-        bank.last_id(),
-        10,
-        0,
-        program_id,
-        0,
-    );
-    bank.process_transaction(&tx).unwrap();
-
-    let tx = SystemTransaction::new_program_account(
-        &mint_keypair,
-        to,
-        bank.last_id(),
-        1,
-        0,
-        program_id,
-        0,
-    );
-    bank.process_transaction(&tx).unwrap();
-
-    let tx = Transaction::new(&from, &[to], program_id, &10, bank.last_id(), 0);
-    bank.process_transaction(&tx).unwrap();
-    assert_eq!(bank.get_balance(&from.pubkey()), 0);
-    assert_eq!(bank.get_balance(&to), 11);
-}
-
 #[cfg(feature = "bpf_c")]
 use solana_sdk::bpf_loader;
 #[cfg(any(feature = "bpf_c", feature = "bpf_rust"))]
