@@ -101,7 +101,7 @@ pub struct Fullnode {
     sigverify_disabled: bool,
     tpu_sockets: Vec<UdpSocket>,
     broadcast_socket: UdpSocket,
-    pub node_services: NodeServices,
+    node_services: NodeServices,
     pub role_notifiers: (TvuRotationReceiver, TpuRotationReceiver),
     blob_sender: BlobSender,
 }
@@ -125,7 +125,7 @@ impl Fullnode {
             db_ledger,
             ledger_signal_sender,
             ledger_signal_receiver,
-        ) = Self::new_bank_from_ledger(ledger_path, &config.leader_scheduler_config);
+        ) = new_bank_from_ledger(ledger_path, &config.leader_scheduler_config);
 
         info!("node info: {:?}", node.info);
         info!("node entrypoint_info: {:?}", entrypoint_info_option);
@@ -300,7 +300,7 @@ impl Fullnode {
         }
     }
 
-    pub fn leader_to_validator(&mut self, tick_height: u64) -> FullnodeReturnType {
+    fn leader_to_validator(&mut self, tick_height: u64) -> FullnodeReturnType {
         trace!(
             "leader_to_validator({:?}): tick_height={}",
             self.id,
@@ -341,12 +341,7 @@ impl Fullnode {
         }
     }
 
-    pub fn validator_to_leader(
-        &mut self,
-        tick_height: u64,
-        entry_height: u64,
-        last_entry_id: Hash,
-    ) {
+    fn validator_to_leader(&mut self, tick_height: u64, entry_height: u64, last_entry_id: Hash) {
         trace!(
             "validator_to_leader({:?}): tick_height={} entry_height={} last_entry_id={}",
             self.id,
@@ -468,7 +463,7 @@ impl Fullnode {
     }
 
     // Used for notifying many nodes in parallel to exit
-    pub fn exit(&self) {
+    fn exit(&self) {
         self.exit.store(true, Ordering::Relaxed);
         if let Some(ref rpc_service) = self.rpc_service {
             rpc_service.exit();
@@ -483,39 +478,38 @@ impl Fullnode {
         self.exit();
         self.join()
     }
+}
 
-    pub fn new_bank_from_ledger(
-        ledger_path: &str,
-        leader_scheduler_config: &LeaderSchedulerConfig,
-    ) -> (Bank, u64, Hash, DbLedger, SyncSender<bool>, Receiver<bool>) {
-        let (db_ledger, ledger_signal_sender, ledger_signal_receiver) =
-            DbLedger::open_with_signal(ledger_path)
-                .expect("Expected to successfully open database ledger");
-        let genesis_block =
-            GenesisBlock::load(ledger_path).expect("Expected to successfully open genesis block");
-        let mut bank =
-            Bank::new_with_leader_scheduler_config(&genesis_block, leader_scheduler_config);
+pub fn new_bank_from_ledger(
+    ledger_path: &str,
+    leader_scheduler_config: &LeaderSchedulerConfig,
+) -> (Bank, u64, Hash, DbLedger, SyncSender<bool>, Receiver<bool>) {
+    let (db_ledger, ledger_signal_sender, ledger_signal_receiver) =
+        DbLedger::open_with_signal(ledger_path)
+            .expect("Expected to successfully open database ledger");
+    let genesis_block =
+        GenesisBlock::load(ledger_path).expect("Expected to successfully open genesis block");
+    let mut bank = Bank::new_with_leader_scheduler_config(&genesis_block, leader_scheduler_config);
 
-        let now = Instant::now();
-        let entries = db_ledger.read_ledger().expect("opening ledger");
-        info!("processing ledger...");
-        let (entry_height, last_entry_id) = bank.process_ledger(entries).expect("process_ledger");
-        info!(
-            "processed {} ledger entries in {}ms, tick_height={}...",
-            entry_height,
-            duration_as_ms(&now.elapsed()),
-            bank.tick_height()
-        );
+    let now = Instant::now();
+    let entries = db_ledger.read_ledger().expect("opening ledger");
+    info!("processing ledger...");
+    let (entry_height, last_entry_id) = bank.process_ledger(entries).expect("process_ledger");
+    info!(
+        "processed {} ledger entries in {}ms, tick_height={}...",
+        entry_height,
+        duration_as_ms(&now.elapsed()),
+        bank.tick_height()
+    );
 
-        (
-            bank,
-            entry_height,
-            last_entry_id,
-            db_ledger,
-            ledger_signal_sender,
-            ledger_signal_receiver,
-        )
-    }
+    (
+        bank,
+        entry_height,
+        last_entry_id,
+        db_ledger,
+        ledger_signal_sender,
+        ledger_signal_receiver,
+    )
 }
 
 impl Service for Fullnode {
@@ -835,10 +829,8 @@ mod tests {
 
         // Close the validator so that rocksdb has locks available
         validator_exit();
-        let (bank, entry_height, _, _, _, _) = Fullnode::new_bank_from_ledger(
-            &validator_ledger_path,
-            &LeaderSchedulerConfig::default(),
-        );
+        let (bank, entry_height, _, _, _, _) =
+            new_bank_from_ledger(&validator_ledger_path, &LeaderSchedulerConfig::default());
 
         assert!(
             bank.tick_height()
