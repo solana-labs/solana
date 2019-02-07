@@ -1852,5 +1852,19 @@ mod tests {
 
         assert_eq!(bank.get_balance(&pubkey), 1);
     }
+    #[test]
+    fn test_bank_pay_to_self() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1 + BOOTSTRAP_LEADER_TOKENS);
+        let key1 = Keypair::new();
+        let bank = Bank::new(&genesis_block);
 
+        bank.transfer(1, &mint_keypair, key1.pubkey(), genesis_block.last_id())
+            .unwrap();
+        assert_eq!(bank.get_balance(&key1.pubkey()), 1);
+        let tx = SystemTransaction::new_move(&key1, key1.pubkey(), 1, genesis_block.last_id(), 0);
+        let res = bank.process_transactions(&vec![tx.clone()]);
+        assert_eq!(res.len(), 1);
+        assert_eq!(bank.get_balance(&key1.pubkey()), 1);
+        res[0].clone().unwrap_err();
+    }
 }

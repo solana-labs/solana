@@ -784,4 +784,32 @@ mod tests {
             Err(e) => Err(e).unwrap(),
         }
     }
+
+    #[test]
+    fn test_load_account_pay_to_self() {
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
+        let mut error_counters = ErrorCounters::default();
+
+        let keypair = Keypair::new();
+        let pubkey = keypair.pubkey();
+
+        let account = Account::new(10, 1, Pubkey::default());
+        accounts.push((pubkey, account));
+
+        let instructions = vec![Instruction::new(0, &(), vec![0, 1])];
+        // Simulate pay-to-self transaction, which loads the same account twice
+        let tx = Transaction::new_with_instructions(
+            &[&keypair],
+            &[pubkey],
+            Hash::default(),
+            0,
+            vec![native_loader::id()],
+            instructions,
+        );
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+
+        assert_counters(&error_counters, [0, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(loaded_accounts.len(), 1);
+        loaded_accounts[0].clone().unwrap_err();
+    }
 }
