@@ -615,15 +615,12 @@ mod tests {
         // Once the bootstrap leader hits the second epoch, because there are no other choices in
         // the active set, this leader will remain the leader in the second epoch. In the second
         // epoch, check that the same leader knows to shut down and restart as a leader again.
-        let leader_rotation_interval = 5;
-        let num_slots_per_epoch = 2;
-        let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
-        let active_window_length = 10 * seed_rotation_interval;
-        let leader_scheduler_config = LeaderSchedulerConfig::new(
-            leader_rotation_interval,
-            seed_rotation_interval,
-            active_window_length,
-        );
+        let ticks_per_slot = 5;
+        let slots_per_epoch = 2;
+        let ticks_per_epoch = slots_per_epoch * ticks_per_slot;
+        let active_window_length = 10 * ticks_per_epoch;
+        let leader_scheduler_config =
+            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_length);
 
         let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
         let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
@@ -646,10 +643,7 @@ mod tests {
         // cluster it will continue to be the leader
         assert_eq!(
             rotation_receiver.recv().unwrap(),
-            (
-                FullnodeReturnType::LeaderToLeaderRotation,
-                leader_rotation_interval
-            )
+            (FullnodeReturnType::LeaderToLeaderRotation, ticks_per_slot)
         );
         bootstrap_leader_exit();
     }
@@ -659,11 +653,12 @@ mod tests {
         solana_logger::setup();
 
         let mut fullnode_config = FullnodeConfig::default();
-        let leader_rotation_interval = 16;
+        let ticks_per_slot = 16;
+        let slots_per_epoch = 2;
         fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
-            leader_rotation_interval,
-            leader_rotation_interval * 2,
-            leader_rotation_interval * 2,
+            ticks_per_slot,
+            slots_per_epoch,
+            ticks_per_slot * slots_per_epoch,
         );
 
         // Create the leader and validator nodes
@@ -676,7 +671,7 @@ mod tests {
                 0,
                 // Generate enough ticks for two epochs to flush the bootstrap_leader's vote at
                 // tick_height = 0 from the leader scheduler's active window
-                leader_rotation_interval * 4,
+                ticks_per_slot * 4,
                 "test_wrong_role_transition",
             );
         let bootstrap_leader_info = bootstrap_leader_node.info.clone();
@@ -749,13 +744,14 @@ mod tests {
         info!("validator: {:?}", validator_info.id);
 
         // Set the leader scheduler for the validator
-        let leader_rotation_interval = 10;
+        let ticks_per_slot = 10;
+        let slots_per_epoch = 4;
 
         let mut fullnode_config = FullnodeConfig::default();
         fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
-            leader_rotation_interval,
-            leader_rotation_interval * 4,
-            leader_rotation_interval * 4,
+            ticks_per_slot,
+            slots_per_epoch,
+            ticks_per_slot * slots_per_epoch,
         );
 
         let voting_keypair = VotingKeypair::new_local(&validator_keypair);
@@ -769,12 +765,7 @@ mod tests {
             &fullnode_config,
         );
 
-        let blobs_to_send = fullnode_config
-            .leader_scheduler_config
-            .seed_rotation_interval
-            + fullnode_config
-                .leader_scheduler_config
-                .leader_rotation_interval;
+        let blobs_to_send = slots_per_epoch * ticks_per_slot + ticks_per_slot;
 
         // Send blobs to the validator from our mock leader
         let t_responder = {
@@ -817,12 +808,7 @@ mod tests {
         let (bank, entry_height, _, _, _, _) =
             new_bank_from_ledger(&validator_ledger_path, &LeaderSchedulerConfig::default());
 
-        assert!(
-            bank.tick_height()
-                >= fullnode_config
-                    .leader_scheduler_config
-                    .seed_rotation_interval
-        );
+        assert!(bank.tick_height() >= bank.leader_scheduler.read().unwrap().ticks_per_epoch);
 
         assert!(entry_height >= ledger_initial_len);
 
@@ -851,13 +837,14 @@ mod tests {
         let leader_node_info = leader_node.info.clone();
 
         // Set the leader scheduler for the validator
-        let leader_rotation_interval = 5;
+        let ticks_per_slot = 5;
+        let slots_per_epoch = 2;
 
         let mut fullnode_config = FullnodeConfig::default();
         fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
-            leader_rotation_interval,
-            leader_rotation_interval * 2,
-            leader_rotation_interval * 2,
+            ticks_per_slot,
+            slots_per_epoch,
+            ticks_per_slot * slots_per_epoch,
         );
 
         let voting_keypair = VotingKeypair::new_local(&leader_keypair);
@@ -895,17 +882,14 @@ mod tests {
         let (rotation_sender, rotation_receiver) = channel();
         let leader_exit = leader.run(Some(rotation_sender));
         let expected_rotations = vec![
+            (FullnodeReturnType::LeaderToLeaderRotation, ticks_per_slot),
             (
                 FullnodeReturnType::LeaderToLeaderRotation,
-                leader_rotation_interval,
-            ),
-            (
-                FullnodeReturnType::LeaderToLeaderRotation,
-                2 * leader_rotation_interval,
+                2 * ticks_per_slot,
             ),
             (
                 FullnodeReturnType::LeaderToValidatorRotation,
-                3 * leader_rotation_interval,
+                3 * ticks_per_slot,
             ),
         ];
 

@@ -23,34 +23,25 @@ pub const DEFAULT_TICKS_PER_SLOT: u64 = 8;
 */
 pub const DEFAULT_TICKS_PER_SLOT: u64 = 64; // TODO: DEFAULT_TICKS_PER_SLOT = 8 causes instability in the integration tests.
 pub const DEFAULT_SLOTS_PER_EPOCH: u64 = 64;
-pub const DEFAULT_SEED_ROTATION_INTERVAL: u64 = DEFAULT_SLOTS_PER_EPOCH * DEFAULT_TICKS_PER_SLOT;
-pub const DEFAULT_ACTIVE_WINDOW_LENGTH: u64 = DEFAULT_SEED_ROTATION_INTERVAL;
+pub const DEFAULT_ACTIVE_WINDOW_TICK_LENGTH: u64 = DEFAULT_SLOTS_PER_EPOCH * DEFAULT_TICKS_PER_SLOT;
 
 #[derive(Clone)]
 pub struct LeaderSchedulerConfig {
-    // The interval at which to rotate the leader, should be much less than
-    // seed_rotation_interval
-    pub leader_rotation_interval: u64,
+    pub ticks_per_slot: u64,
+    pub slots_per_epoch: u64,
 
-    // The interval at which to generate the seed used for ranking the validators
-    pub seed_rotation_interval: u64,
-
-    // The length of the acceptable window for determining live validators
-    pub active_window_length: u64,
+    // The tick length of the acceptable window for determining live validators
+    pub active_window_tick_length: u64,
 }
 
 // Used to toggle leader rotation in fullnode so that tests that don't
 // need leader rotation don't break
 impl LeaderSchedulerConfig {
-    pub fn new(
-        leader_rotation_interval: u64,
-        seed_rotation_interval: u64,
-        active_window_length: u64,
-    ) -> Self {
+    pub fn new(ticks_per_slot: u64, slots_per_epoch: u64, active_window_tick_length: u64) -> Self {
         LeaderSchedulerConfig {
-            leader_rotation_interval,
-            seed_rotation_interval,
-            active_window_length,
+            ticks_per_slot,
+            slots_per_epoch,
+            active_window_tick_length,
         }
     }
 }
@@ -58,9 +49,9 @@ impl LeaderSchedulerConfig {
 impl Default for LeaderSchedulerConfig {
     fn default() -> Self {
         Self {
-            leader_rotation_interval: DEFAULT_TICKS_PER_SLOT,
-            seed_rotation_interval: DEFAULT_SEED_ROTATION_INTERVAL,
-            active_window_length: DEFAULT_ACTIVE_WINDOW_LENGTH,
+            ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
+            slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
+            active_window_tick_length: DEFAULT_ACTIVE_WINDOW_TICK_LENGTH,
         }
     }
 }
@@ -68,15 +59,15 @@ impl Default for LeaderSchedulerConfig {
 #[derive(Clone, Debug)]
 pub struct LeaderScheduler {
     // A leader slot duration in ticks
-    pub leader_rotation_interval: u64,
+    pub ticks_per_slot: u64,
 
     // Duration of an epoch (one or more slots) in ticks.
-    // This value must be divisible by leader_rotation_interval
-    pub seed_rotation_interval: u64,
+    // This value must be divisible by ticks_per_slot
+    pub ticks_per_epoch: u64,
 
     // The length of time in ticks for which a vote qualifies a candidate for leader
     // selection
-    pub active_window_length: u64,
+    active_window_tick_length: u64,
 
     // Round-robin ordering of the validators for the current epoch at epoch_schedule[0], and the
     // previous epoch at epoch_schedule[1]
@@ -92,31 +83,33 @@ pub struct LeaderScheduler {
 // The LeaderScheduler implements a schedule for leaders as follows:
 //
 // 1) After the first seed is generated, this signals the beginning of actual leader rotation.
-// From this point on, every seed_rotation_interval PoH counts we generate the seed based
+// From this point on, every ticks_per_epoch PoH counts we generate the seed based
 // on the PoH height, and use it to do a weighted sample from the set
 // of validators based on current stake weight. This gets you the bootstrap leader A for
-// the next leader_rotation_interval PoH counts. On the same PoH count we generate the seed,
+// the next ticks_per_slot PoH counts. On the same PoH count we generate the seed,
 // we also order the validators based on their current stake weight, and starting
-// from leader A, we then pick the next leader sequentially every leader_rotation_interval
+// from leader A, we then pick the next leader sequentially every ticks_per_slot
 // PoH counts based on this fixed ordering, so the next
-// seed_rotation_interval / leader_rotation_interval leaders are determined.
+// ticks_per_epoch / ticks_per_slot leaders are determined.
 //
 // 2) When we we hit the next seed rotation PoH height, step 1) is executed again to
-// calculate the leader schedule for the upcoming seed_rotation_interval PoH counts.
+// calculate the leader schedule for the upcoming ticks_per_epoch PoH counts.
 impl LeaderScheduler {
     pub fn new(config: &LeaderSchedulerConfig) -> Self {
-        let leader_rotation_interval = config.leader_rotation_interval;
-        let seed_rotation_interval = config.seed_rotation_interval;
-        let active_window_length = config.active_window_length;
+        let ticks_per_slot = config.ticks_per_slot;
+        let ticks_per_epoch = config.ticks_per_slot * config.slots_per_epoch;
+        let active_window_tick_length = config.active_window_tick_length;
 
         // Enforced invariants
-        assert!(seed_rotation_interval >= leader_rotation_interval);
-        assert!(seed_rotation_interval % leader_rotation_interval == 0);
+        assert!(ticks_per_slot > 0);
+        assert!(ticks_per_epoch >= ticks_per_slot);
+        assert!(ticks_per_epoch % ticks_per_slot == 0);
+        assert!(active_window_tick_length > 0);
 
         LeaderScheduler {
-            leader_rotation_interval,
-            seed_rotation_interval,
-            active_window_length,
+            ticks_per_slot,
+            ticks_per_epoch,
+            active_window_tick_length,
             seed: 0,
             epoch_schedule: [Vec::new(), Vec::new()],
             current_epoch: 0,
@@ -124,17 +117,17 @@ impl LeaderScheduler {
     }
 
     pub fn tick_height_to_slot(&self, tick_height: u64) -> u64 {
-        tick_height / self.leader_rotation_interval
+        tick_height / self.ticks_per_slot
     }
 
     fn tick_height_to_epoch(&self, tick_height: u64) -> u64 {
-        tick_height / self.seed_rotation_interval
+        tick_height / self.ticks_per_epoch
     }
 
     // Returns the number of ticks remaining from the specified tick_height to the end of the
     // current slot
     pub fn num_ticks_left_in_slot(&self, tick_height: u64) -> u64 {
-        self.leader_rotation_interval - tick_height % self.leader_rotation_interval - 1
+        self.ticks_per_slot - tick_height % self.ticks_per_slot - 1
     }
 
     // Inform the leader scheduler about the current tick height of the cluster.  It may generate a
@@ -154,7 +147,7 @@ impl LeaderScheduler {
         // the current slot, so that generally the schedule applies to the range [slot N tick 1,
         // slot N+1 tick 0). The schedule is shifted right 1 tick from the slot rotation interval so that
         // the next leader is always known *before* a rotation occurs
-        if tick_height == 0 || tick_height % self.seed_rotation_interval == 1 {
+        if tick_height == 0 || tick_height % self.ticks_per_epoch == 1 {
             self.generate_schedule(tick_height, bank);
         }
     }
@@ -162,7 +155,7 @@ impl LeaderScheduler {
     // Returns the leader for the requested slot, or None if the slot is out of the schedule bounds
     pub fn get_leader_for_slot(&self, slot: u64) -> Option<Pubkey> {
         trace!("get_leader_for_slot: slot {}", slot);
-        let tick_height = slot * self.leader_rotation_interval;
+        let tick_height = slot * self.ticks_per_slot;
         let epoch = self.tick_height_to_epoch(tick_height);
         trace!(
             "get_leader_for_slot: tick_height={} slot={} epoch={} (ce={})",
@@ -191,8 +184,8 @@ impl LeaderScheduler {
                 panic!("leader_schedule is empty"); // Should never happen
             }
 
-            let first_tick_in_epoch = epoch * self.seed_rotation_interval;
-            let slot_index = (tick_height - first_tick_in_epoch) / self.leader_rotation_interval;
+            let first_tick_in_epoch = epoch * self.ticks_per_epoch;
+            let slot_index = (tick_height - first_tick_in_epoch) / self.ticks_per_slot;
 
             // Round robin through each node in the schedule
             Some(schedule[slot_index as usize % schedule.len()])
@@ -204,7 +197,7 @@ impl LeaderScheduler {
     // process_transaction(), case VoteInstruction::RegisterAccount), we can use a vector.
     fn get_active_set(&mut self, tick_height: u64, bank: &Bank) -> HashSet<Pubkey> {
         let upper_bound = tick_height;
-        let lower_bound = tick_height.saturating_sub(self.active_window_length);
+        let lower_bound = tick_height.saturating_sub(self.active_window_tick_length);
         trace!(
             "get_active_set: vote bounds ({}, {})",
             lower_bound,
@@ -303,8 +296,7 @@ impl LeaderScheduler {
                 let next_slot_leader = validator_rankings[0];
 
                 if last_slot_leader == next_slot_leader {
-                    let slots_per_epoch =
-                        self.seed_rotation_interval / self.leader_rotation_interval;
+                    let slots_per_epoch = self.ticks_per_epoch / self.ticks_per_slot;
                     if slots_per_epoch == 1 {
                         // If there is only one slot per epoch, and the same leader as the last slot
                         // of the previous epoch was chosen, then pick the next leader in the
@@ -326,7 +318,7 @@ impl LeaderScheduler {
         trace!(
             "generate_schedule: schedule for ticks ({}, {}): {:?} ",
             tick_height,
-            tick_height + self.seed_rotation_interval,
+            tick_height + self.ticks_per_epoch,
             self.epoch_schedule[0]
         );
     }
@@ -490,23 +482,19 @@ pub mod tests {
         bank.process_transaction(&new_vote_tx).unwrap();
     }
 
-    fn run_scheduler_test(
-        num_validators: usize,
-        leader_rotation_interval: u64,
-        seed_rotation_interval: u64,
-    ) {
+    fn run_scheduler_test(num_validators: usize, ticks_per_slot: u64, ticks_per_epoch: u64) {
         info!(
             "run_scheduler_test({}, {}, {})",
-            num_validators, leader_rotation_interval, seed_rotation_interval
+            num_validators, ticks_per_slot, ticks_per_epoch
         );
         // Allow the validators to be in the active window for the entire test
-        let active_window_length = seed_rotation_interval;
+        let active_window_tick_length = ticks_per_epoch;
 
         // Set up the LeaderScheduler struct
         let leader_scheduler_config = LeaderSchedulerConfig::new(
-            leader_rotation_interval,
-            seed_rotation_interval,
-            active_window_length,
+            ticks_per_slot,
+            ticks_per_epoch / ticks_per_slot,
+            active_window_tick_length,
         );
 
         // Create the bank and validators, which are inserted in order of account balance
@@ -537,11 +525,11 @@ pub mod tests {
             );
 
             // Vote to make the validator part of the active set for the entire test
-            // (we made the active_window_length large enough at the beginning of the test)
+            // (we made the active_window_tick_length large enough at the beginning of the test)
             push_vote(
                 &voting_keypair,
                 &bank,
-                seed_rotation_interval,
+                ticks_per_epoch,
                 genesis_block.last_id(),
             );
         }
@@ -551,7 +539,7 @@ pub mod tests {
         leader_scheduler.generate_schedule(0, &bank);
 
         // The leader outside of the newly generated schedule window:
-        // (0, seed_rotation_interval]
+        // (0, ticks_per_epoch]
         info!("yyy");
         assert_eq!(
             leader_scheduler.get_leader_for_slot(0),
@@ -560,7 +548,7 @@ pub mod tests {
         info!("xxxx");
         assert_eq!(
             leader_scheduler
-                .get_leader_for_slot(leader_scheduler.tick_height_to_slot(seed_rotation_interval)),
+                .get_leader_for_slot(leader_scheduler.tick_height_to_slot(ticks_per_epoch)),
             None
         );
 
@@ -571,15 +559,15 @@ pub mod tests {
         // Generate schedule for third epoch to ensure the bootstrap leader will not be added to
         // the schedule, as the bootstrap leader did not vote in the second epoch but all other
         // validators did
-        leader_scheduler.generate_schedule(seed_rotation_interval + 1, &bank);
+        leader_scheduler.generate_schedule(ticks_per_epoch + 1, &bank);
 
-        // For the next seed_rotation_interval entries, call get_leader_for_slot every
-        // leader_rotation_interval entries, and the next leader should be the next validator
+        // For the next ticks_per_epoch entries, call get_leader_for_slot every
+        // ticks_per_slot entries, and the next leader should be the next validator
         // in order of stake
-        let num_slots = seed_rotation_interval / leader_rotation_interval;
+        let num_slots = ticks_per_epoch / ticks_per_slot;
         let mut start_leader_index = None;
         for i in 0..num_slots {
-            let tick_height = 2 * seed_rotation_interval + i * leader_rotation_interval;
+            let tick_height = 2 * ticks_per_epoch + i * ticks_per_slot;
             info!("iteration {}: tick_height={}", i, tick_height);
             let slot = leader_scheduler.tick_height_to_slot(tick_height);
             let current_leader = leader_scheduler
@@ -605,11 +593,11 @@ pub mod tests {
             assert_eq!(current_leader, expected_leader);
             assert_eq!(
                 slot,
-                leader_scheduler.tick_height_to_slot(2 * seed_rotation_interval) + i
+                leader_scheduler.tick_height_to_slot(2 * ticks_per_epoch) + i
             );
             assert_eq!(
                 slot,
-                leader_scheduler.tick_height_to_slot(tick_height + leader_rotation_interval - 1)
+                leader_scheduler.tick_height_to_slot(tick_height + ticks_per_slot - 1)
             );
             assert_eq!(
                 leader_scheduler.get_leader_for_slot(slot),
@@ -620,7 +608,7 @@ pub mod tests {
 
     #[test]
     fn test_num_ticks_left_in_slot() {
-        let leader_scheduler = LeaderScheduler::new(&LeaderSchedulerConfig::new(10, 20, 0));
+        let leader_scheduler = LeaderScheduler::new(&LeaderSchedulerConfig::new(10, 2, 1));
 
         assert_eq!(leader_scheduler.num_ticks_left_in_slot(0), 9);
         assert_eq!(leader_scheduler.num_ticks_left_in_slot(1), 8);
@@ -638,8 +626,8 @@ pub mod tests {
         solana_logger::setup();
 
         let leader_id = Keypair::new().pubkey();
-        let active_window_length = 1000;
-        let leader_scheduler_config = LeaderSchedulerConfig::new(100, 100, active_window_length);
+        let active_window_tick_length = 1000;
+        let leader_scheduler_config = LeaderSchedulerConfig::new(100, 1, active_window_tick_length);
         let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10000, leader_id, 500);
         let bank = Bank::new_with_leader_scheduler_config(&genesis_block, &leader_scheduler_config);
 
@@ -677,7 +665,7 @@ pub mod tests {
             );
         }
 
-        // Insert a bunch of votes at height "start_height + active_window_length"
+        // Insert a bunch of votes at height "start_height + active_window_tick_length"
         let num_new_ids = 10;
         let mut new_ids = HashSet::new();
         for _ in 0..num_new_ids {
@@ -701,7 +689,7 @@ pub mod tests {
             push_vote(
                 &voting_keypair,
                 &bank,
-                start_height + active_window_length + 1,
+                start_height + active_window_tick_length + 1,
                 genesis_block.last_id(),
             );
         }
@@ -716,26 +704,27 @@ pub mod tests {
         assert_eq!(result, bootstrap_ids);
 
         let result =
-            leader_scheduler.get_active_set(active_window_length + start_height - 1, &bank);
-        assert_eq!(result, old_ids);
-
-        let result = leader_scheduler.get_active_set(active_window_length + start_height, &bank);
+            leader_scheduler.get_active_set(active_window_tick_length + start_height - 1, &bank);
         assert_eq!(result, old_ids);
 
         let result =
-            leader_scheduler.get_active_set(active_window_length + start_height + 1, &bank);
+            leader_scheduler.get_active_set(active_window_tick_length + start_height, &bank);
+        assert_eq!(result, old_ids);
+
+        let result =
+            leader_scheduler.get_active_set(active_window_tick_length + start_height + 1, &bank);
         assert_eq!(result, new_ids);
 
         let result =
-            leader_scheduler.get_active_set(2 * active_window_length + start_height, &bank);
+            leader_scheduler.get_active_set(2 * active_window_tick_length + start_height, &bank);
         assert_eq!(result, new_ids);
 
-        let result =
-            leader_scheduler.get_active_set(2 * active_window_length + start_height + 1, &bank);
+        let result = leader_scheduler
+            .get_active_set(2 * active_window_tick_length + start_height + 1, &bank);
         assert_eq!(result, new_ids);
 
-        let result =
-            leader_scheduler.get_active_set(2 * active_window_length + start_height + 2, &bank);
+        let result = leader_scheduler
+            .get_active_set(2 * active_window_tick_length + start_height + 2, &bank);
         assert!(result.is_empty());
     }
 
@@ -885,52 +874,36 @@ pub mod tests {
     fn test_scheduler_basic() {
         solana_logger::setup();
         // Test when the number of validators equals
-        // seed_rotation_interval / leader_rotation_interval, so each validator
+        // ticks_per_epoch / ticks_per_slot, so each validator
         // is selected once
         let mut num_validators = 100;
-        let mut leader_rotation_interval = 100;
-        let mut seed_rotation_interval = leader_rotation_interval * num_validators as u64;
+        let mut ticks_per_slot = 100;
+        let mut ticks_per_epoch = ticks_per_slot * num_validators as u64;
 
-        run_scheduler_test(
-            num_validators,
-            leader_rotation_interval,
-            seed_rotation_interval,
-        );
+        run_scheduler_test(num_validators, ticks_per_slot, ticks_per_epoch);
 
         // Test when there are fewer validators than
-        // seed_rotation_interval / leader_rotation_interval, so each validator
+        // ticks_per_epoch / ticks_per_slot, so each validator
         // is selected multiple times
         num_validators = 3;
-        leader_rotation_interval = 100;
-        seed_rotation_interval = 1000;
-        run_scheduler_test(
-            num_validators,
-            leader_rotation_interval,
-            seed_rotation_interval,
-        );
+        ticks_per_slot = 100;
+        ticks_per_epoch = 1000;
+        run_scheduler_test(num_validators, ticks_per_slot, ticks_per_epoch);
 
         // Test when there are fewer number of validators than
-        // seed_rotation_interval / leader_rotation_interval, so each validator
+        // ticks_per_epoch / ticks_per_slot, so each validator
         // may not be selected
         num_validators = 10;
-        leader_rotation_interval = 100;
-        seed_rotation_interval = 200;
-        run_scheduler_test(
-            num_validators,
-            leader_rotation_interval,
-            seed_rotation_interval,
-        );
+        ticks_per_slot = 100;
+        ticks_per_epoch = 200;
+        run_scheduler_test(num_validators, ticks_per_slot, ticks_per_epoch);
 
-        // Test when seed_rotation_interval == leader_rotation_interval,
+        // Test when ticks_per_epoch == ticks_per_slot,
         // only one validator should be selected
         num_validators = 10;
-        leader_rotation_interval = 2;
-        seed_rotation_interval = 2;
-        run_scheduler_test(
-            num_validators,
-            leader_rotation_interval,
-            seed_rotation_interval,
-        );
+        ticks_per_slot = 2;
+        ticks_per_epoch = 2;
+        run_scheduler_test(num_validators, ticks_per_slot, ticks_per_epoch);
     }
 
     #[test]
@@ -940,18 +913,15 @@ pub mod tests {
         let num_validators = 10;
         let num_vote_account_tokens = 1;
 
-        // Make sure seed_rotation_interval is big enough so we select all the
+        // Make sure ticks_per_epoch is big enough so we select all the
         // validators as part of the schedule each time (we need to check the active window
         // is the cause of validators being truncated later)
-        let leader_rotation_interval = 100;
-        let seed_rotation_interval = leader_rotation_interval * num_validators;
-        let active_window_length = seed_rotation_interval;
+        let ticks_per_slot = 100;
+        let slots_per_epoch = num_validators;
+        let active_window_tick_length = ticks_per_slot * slots_per_epoch;
 
-        let leader_scheduler_config = LeaderSchedulerConfig::new(
-            leader_rotation_interval,
-            seed_rotation_interval,
-            active_window_length,
-        );
+        let leader_scheduler_config =
+            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_tick_length);
 
         // Create the bank and validators
         let (genesis_block, mint_keypair) = GenesisBlock::new(
@@ -988,12 +958,12 @@ pub mod tests {
             push_vote(
                 &voting_keypair,
                 &bank,
-                (i + 2) * active_window_length - 1,
+                (i + 2) * active_window_tick_length - 1,
                 genesis_block.last_id(),
             );
         }
 
-        // Generate schedule every active_window_length entries and check that
+        // Generate schedule every active_window_tick_length entries and check that
         // validators are falling out of the rotation as they fall out of the
         // active set
         let mut leader_scheduler = bank.leader_scheduler.write().unwrap();
@@ -1006,7 +976,7 @@ pub mod tests {
         assert_eq!(leader_scheduler.current_epoch, 1);
         for i in 0..=num_validators {
             info!("i === {}", i);
-            leader_scheduler.generate_schedule((i + 1) * active_window_length, &bank);
+            leader_scheduler.generate_schedule((i + 1) * active_window_tick_length, &bank);
             assert_eq!(leader_scheduler.current_epoch, i + 2);
             if i == 0 {
                 assert_eq!(
@@ -1026,9 +996,9 @@ pub mod tests {
     fn test_multiple_vote() {
         let leader_keypair = Arc::new(Keypair::new());
         let leader_id = leader_keypair.pubkey();
-        let active_window_length = 1000;
+        let active_window_tick_length = 1000;
         let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10000, leader_id, 500);
-        let leader_scheduler_config = LeaderSchedulerConfig::new(100, 100, active_window_length);
+        let leader_scheduler_config = LeaderSchedulerConfig::new(100, 1, active_window_tick_length);
         let bank = Bank::new_with_leader_scheduler_config(&genesis_block, &leader_scheduler_config);
 
         // Bootstrap leader should be in the active set even without explicit votes
@@ -1037,10 +1007,10 @@ pub mod tests {
             let result = leader_scheduler.get_active_set(0, &bank);
             assert_eq!(result, to_hashset_owned(&vec![leader_id]));
 
-            let result = leader_scheduler.get_active_set(active_window_length, &bank);
+            let result = leader_scheduler.get_active_set(active_window_tick_length, &bank);
             assert_eq!(result, to_hashset_owned(&vec![leader_id]));
 
-            let result = leader_scheduler.get_active_set(active_window_length + 1, &bank);
+            let result = leader_scheduler.get_active_set(active_window_tick_length + 1, &bank);
             assert!(result.is_empty());
         }
 
@@ -1062,10 +1032,10 @@ pub mod tests {
 
         {
             let mut leader_scheduler = bank.leader_scheduler.write().unwrap();
-            let result = leader_scheduler.get_active_set(active_window_length + 1, &bank);
+            let result = leader_scheduler.get_active_set(active_window_tick_length + 1, &bank);
             assert_eq!(result, to_hashset_owned(&vec![leader_id]));
 
-            let result = leader_scheduler.get_active_set(active_window_length + 2, &bank);
+            let result = leader_scheduler.get_active_set(active_window_tick_length + 2, &bank);
             assert!(result.is_empty());
         }
 
@@ -1074,10 +1044,10 @@ pub mod tests {
 
         {
             let mut leader_scheduler = bank.leader_scheduler.write().unwrap();
-            let result = leader_scheduler.get_active_set(active_window_length + 2, &bank);
+            let result = leader_scheduler.get_active_set(active_window_tick_length + 2, &bank);
             assert_eq!(result, to_hashset_owned(&vec![leader_id]));
 
-            let result = leader_scheduler.get_active_set(active_window_length + 3, &bank);
+            let result = leader_scheduler.get_active_set(active_window_tick_length + 3, &bank);
             assert!(result.is_empty());
         }
     }
@@ -1086,15 +1056,13 @@ pub mod tests {
     fn test_update_tick_height() {
         solana_logger::setup();
 
-        let leader_rotation_interval = 100;
-        let seed_rotation_interval = 2 * leader_rotation_interval;
-        let active_window_length = 1;
+        let ticks_per_slot = 100;
+        let slots_per_epoch = 2;
+        let ticks_per_epoch = ticks_per_slot * slots_per_epoch;
+        let active_window_tick_length = 1;
 
-        let leader_scheduler_config = LeaderSchedulerConfig::new(
-            leader_rotation_interval,
-            seed_rotation_interval,
-            active_window_length,
-        );
+        let leader_scheduler_config =
+            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_tick_length);
 
         // Check that the generate_schedule() function is being called by the
         // update_tick_height() function at the correct entry heights.
@@ -1129,10 +1097,10 @@ pub mod tests {
         //
         for tick_height in &[
             1,
-            leader_rotation_interval,
-            leader_rotation_interval + 1,
-            seed_rotation_interval - 1,
-            seed_rotation_interval,
+            ticks_per_slot,
+            ticks_per_slot + 1,
+            ticks_per_epoch - 1,
+            ticks_per_epoch,
         ] {
             info!("Checking tick_height {}", *tick_height);
             leader_scheduler.update_tick_height(*tick_height, &bank);
@@ -1163,11 +1131,11 @@ pub mod tests {
         // Check various tick heights in epoch 1, and tick 0 of epoch 2
         //
         for tick_height in &[
-            seed_rotation_interval + 1,
-            seed_rotation_interval + leader_rotation_interval,
-            seed_rotation_interval + leader_rotation_interval + 1,
-            seed_rotation_interval + seed_rotation_interval - 1,
-            seed_rotation_interval + seed_rotation_interval,
+            ticks_per_epoch + 1,
+            ticks_per_epoch + ticks_per_slot,
+            ticks_per_epoch + ticks_per_slot + 1,
+            ticks_per_epoch + ticks_per_epoch - 1,
+            ticks_per_epoch + ticks_per_epoch,
         ] {
             info!("Checking tick_height {}", *tick_height);
             leader_scheduler.update_tick_height(*tick_height, &bank);
@@ -1205,50 +1173,37 @@ pub mod tests {
 
         let leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
 
+        assert_eq!(leader_scheduler.ticks_per_slot, DEFAULT_TICKS_PER_SLOT);
         assert_eq!(
-            leader_scheduler.leader_rotation_interval,
-            DEFAULT_TICKS_PER_SLOT
-        );
-        assert_eq!(
-            leader_scheduler.seed_rotation_interval,
-            DEFAULT_SEED_ROTATION_INTERVAL
+            leader_scheduler.ticks_per_epoch,
+            DEFAULT_TICKS_PER_SLOT * DEFAULT_SLOTS_PER_EPOCH
         );
 
         // Check actual arguments for LeaderScheduler
-        let leader_rotation_interval = 100;
-        let seed_rotation_interval = 200;
-        let active_window_length = 1;
+        let ticks_per_slot = 100;
+        let slots_per_epoch = 2;
+        let active_window_tick_length = 1;
 
-        let leader_scheduler_config = LeaderSchedulerConfig::new(
-            leader_rotation_interval,
-            seed_rotation_interval,
-            active_window_length,
-        );
+        let leader_scheduler_config =
+            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_tick_length);
 
         let leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
 
+        assert_eq!(leader_scheduler.ticks_per_slot, ticks_per_slot);
         assert_eq!(
-            leader_scheduler.leader_rotation_interval,
-            leader_rotation_interval
-        );
-        assert_eq!(
-            leader_scheduler.seed_rotation_interval,
-            seed_rotation_interval
+            leader_scheduler.ticks_per_epoch,
+            ticks_per_slot * slots_per_epoch
         );
     }
 
-    fn run_consecutive_leader_test(num_slots_per_epoch: u64, add_validator: bool) {
+    fn run_consecutive_leader_test(slots_per_epoch: u64, add_validator: bool) {
         let bootstrap_leader_keypair = Arc::new(Keypair::new());
         let bootstrap_leader_id = bootstrap_leader_keypair.pubkey();
-        let leader_rotation_interval = 100;
-        let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
-        let active_window_length = seed_rotation_interval;
+        let ticks_per_slot = 100;
+        let active_window_tick_length = slots_per_epoch * ticks_per_slot;
 
-        let leader_scheduler_config = LeaderSchedulerConfig::new(
-            leader_rotation_interval,
-            seed_rotation_interval,
-            active_window_length,
-        );
+        let leader_scheduler_config =
+            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_tick_length);
 
         // Create mint and bank
         let (genesis_block, mint_keypair) =

@@ -130,10 +130,8 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
 
     let fullnode_config = FullnodeConfig::default();
     info!(
-        "leader_rotation_interval: {}",
-        fullnode_config
-            .leader_scheduler_config
-            .leader_rotation_interval
+        "ticks_per_slot: {}",
+        fullnode_config.leader_scheduler_config.ticks_per_slot
     );
 
     // Write some into leader's ledger, this should populate the leader's window
@@ -143,11 +141,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
 
         let entries = solana::entry::create_ticks(
-            fullnode_config
-                .leader_scheduler_config
-                .leader_rotation_interval
-                - last_entry_height
-                - 2,
+            fullnode_config.leader_scheduler_config.ticks_per_slot - last_entry_height - 2,
             last_entry_id,
         );
         db_ledger
@@ -931,14 +925,14 @@ fn test_leader_to_validator_transition() {
     let leader_info = leader_node.info.clone();
 
     let mut fullnode_config = FullnodeConfig::default();
-    let leader_rotation_interval = 5;
+    let ticks_per_slot = 5;
     fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
-        leader_rotation_interval,
-        leader_rotation_interval,
+        ticks_per_slot,
+        1,
         // Setup window length to exclude the genesis bootstrap leader vote at tick height 0, so
         // that when the leader schedule is recomputed for epoch 1 only the validator vote at tick
         // height 1 will be considered.
-        leader_rotation_interval,
+        ticks_per_slot,
     );
 
     // Initialize the leader ledger. Make a mint and a genesis entry
@@ -958,7 +952,7 @@ fn test_leader_to_validator_transition() {
         &validator_keypair,
         &mint_keypair,
         100,
-        leader_rotation_interval,
+        ticks_per_slot,
         &last_id,
         &last_id,
         0,
@@ -993,13 +987,10 @@ fn test_leader_to_validator_transition() {
     // slot 0 -> slot 1: bootstrap leader remains the leader
     // slot 1 -> slot 2: bootstrap leader to the validator
     let expected_rotations = vec![
-        (
-            FullnodeReturnType::LeaderToLeaderRotation,
-            leader_rotation_interval,
-        ),
+        (FullnodeReturnType::LeaderToLeaderRotation, ticks_per_slot),
         (
             FullnodeReturnType::LeaderToValidatorRotation,
-            2 * leader_rotation_interval,
+            2 * ticks_per_slot,
         ),
     ];
 
@@ -1020,10 +1011,7 @@ fn test_leader_to_validator_transition() {
 
     assert_eq!(
         bank.tick_height(),
-        2 * fullnode_config
-            .leader_scheduler_config
-            .leader_rotation_interval
-            - 1
+        2 * fullnode_config.leader_scheduler_config.ticks_per_slot - 1
     );
     remove_dir_all(leader_ledger_path).unwrap();
 }
@@ -1083,11 +1071,11 @@ fn test_leader_validator_basic() {
 
     // Create the leader scheduler config
     let mut fullnode_config = FullnodeConfig::default();
-    let leader_rotation_interval = 5;
+    let ticks_per_slot = 5;
     fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
-        leader_rotation_interval,
-        leader_rotation_interval, // 1 slot per epoch
-        leader_rotation_interval,
+        ticks_per_slot,
+        1, // 1 slot per epoch
+        ticks_per_slot,
     );
 
     // Start the validator node
@@ -1121,10 +1109,7 @@ fn test_leader_validator_basic() {
     info!("Waiting for slot 0 -> slot 1: bootstrap leader will remain the leader");
     assert_eq!(
         leader_rotation_receiver.recv().unwrap(),
-        (
-            FullnodeReturnType::LeaderToLeaderRotation,
-            leader_rotation_interval,
-        )
+        (FullnodeReturnType::LeaderToLeaderRotation, ticks_per_slot,)
     );
 
     info!("Waiting for slot 1 -> slot 2: bootstrap leader becomes a validator");
@@ -1132,7 +1117,7 @@ fn test_leader_validator_basic() {
         leader_rotation_receiver.recv().unwrap(),
         (
             FullnodeReturnType::LeaderToValidatorRotation,
-            leader_rotation_interval * 2,
+            ticks_per_slot * 2,
         )
     );
 
@@ -1141,7 +1126,7 @@ fn test_leader_validator_basic() {
         validator_rotation_receiver.recv().unwrap(),
         (
             FullnodeReturnType::ValidatorToLeaderRotation,
-            leader_rotation_interval * 2,
+            ticks_per_slot * 2,
         )
     );
 
@@ -1155,7 +1140,7 @@ fn test_leader_validator_basic() {
     let validator_entries: Vec<Entry> = read_ledger(&validator_ledger_path);
 
     let leader_entries = read_ledger(&leader_ledger_path);
-    assert!(leader_entries.len() as u64 >= leader_rotation_interval);
+    assert!(leader_entries.len() as u64 >= ticks_per_slot);
 
     for (v, l) in validator_entries.iter().zip(leader_entries) {
         assert_eq!(*v, l);
@@ -1182,15 +1167,12 @@ fn test_dropped_handoff_recovery() {
     let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
     // Create the common leader scheduling configuration
-    let num_slots_per_epoch = (N + 1) as u64;
-    let leader_rotation_interval = 5;
-    let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
+    let slots_per_epoch = (N + 1) as u64;
+    let ticks_per_slot = 5;
+    let ticks_per_epoch = slots_per_epoch * ticks_per_slot;
     let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
-        leader_rotation_interval,
-        seed_rotation_interval,
-        seed_rotation_interval,
-    );
+    fullnode_config.leader_scheduler_config =
+        LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, ticks_per_epoch);
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
     let num_ending_ticks = 1;
@@ -1218,7 +1200,7 @@ fn test_dropped_handoff_recovery() {
         &next_leader_keypair,
         &mint_keypair,
         100,
-        leader_rotation_interval,
+        ticks_per_slot,
         &last_id,
         &last_id,
         0,
@@ -1399,15 +1381,12 @@ fn test_full_leader_validator_network() {
     }
 
     // Create the common leader scheduling configuration
-    let num_slots_per_epoch = (N + 1) as u64;
-    let leader_rotation_interval = 5;
-    let seed_rotation_interval = num_slots_per_epoch * leader_rotation_interval;
+    let slots_per_epoch = (N + 1) as u64;
+    let ticks_per_slot = 5;
+    let ticks_per_epoch = slots_per_epoch * ticks_per_slot;
     let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
-        leader_rotation_interval,
-        seed_rotation_interval,
-        seed_rotation_interval,
-    );
+    fullnode_config.leader_scheduler_config =
+        LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, ticks_per_epoch);
 
     let mut nodes = vec![];
 
@@ -1538,13 +1517,7 @@ fn test_full_leader_validator_network() {
     }
 
     let shortest = shortest.unwrap();
-    assert!(
-        shortest
-            >= fullnode_config
-                .leader_scheduler_config
-                .leader_rotation_interval
-                * 3,
-    );
+    assert!(shortest >= fullnode_config.leader_scheduler_config.ticks_per_slot * 3,);
 
     for path in ledger_paths {
         DbLedger::destroy(&path).expect("Expected successful database destruction");
@@ -1598,18 +1571,16 @@ fn test_broadcast_last_tick() {
         })
         .collect();
 
-    let leader_rotation_interval = 40;
-    let seed_rotation_interval = 2 * leader_rotation_interval;
+    let ticks_per_slot = 40;
+    let slots_per_epoch = 2;
+    let ticks_per_epoch = slots_per_epoch * ticks_per_slot;
 
     // Start up the bootstrap leader fullnode
     let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
     let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
     let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
-        leader_rotation_interval,
-        seed_rotation_interval,
-        seed_rotation_interval,
-    );
+    fullnode_config.leader_scheduler_config =
+        LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, ticks_per_epoch);
     let bootstrap_leader = Fullnode::new(
         bootstrap_leader_node,
         &bootstrap_leader_keypair,
@@ -1638,8 +1609,8 @@ fn test_broadcast_last_tick() {
     info!("Shutting down the leader...");
     bootstrap_leader_exit();
 
-    // Index of the last tick must be at least leader_rotation_interval - 1
-    let last_tick_entry_index = leader_rotation_interval as usize - 2;
+    // Index of the last tick must be at least ticks_per_slot - 1
+    let last_tick_entry_index = ticks_per_slot as usize - 2;
     let entries = read_ledger(&bootstrap_leader_ledger_path);
     assert!(entries.len() >= last_tick_entry_index + 1);
     let expected_last_tick = &entries[last_tick_entry_index];

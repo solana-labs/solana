@@ -100,11 +100,7 @@ impl ReplayStage {
             inc_new_counter_info!("replicate-stage_bank-tick", bank.tick_height() as usize);
             if entry.is_tick() {
                 if num_ticks_to_next_vote == 0 {
-                    num_ticks_to_next_vote = bank
-                        .leader_scheduler
-                        .read()
-                        .unwrap()
-                        .leader_rotation_interval;
+                    num_ticks_to_next_vote = bank.leader_scheduler.read().unwrap().ticks_per_slot;
                 }
                 num_ticks_to_next_vote -= 1;
             }
@@ -205,8 +201,7 @@ impl ReplayStage {
                     let tick_height = bank.tick_height();
                     let leader_scheduler = bank.leader_scheduler.read().unwrap();
                     let current_slot = leader_scheduler.tick_height_to_slot(tick_height + 1);
-                    let first_tick_in_current_slot =
-                        current_slot * leader_scheduler.leader_rotation_interval;
+                    let first_tick_in_current_slot = current_slot * leader_scheduler.ticks_per_slot;
                     (
                         current_slot,
                         first_tick_in_current_slot
@@ -274,11 +269,8 @@ impl ReplayStage {
                             }
 
                             current_slot += 1;
-                            max_tick_height_for_slot += bank
-                                .leader_scheduler
-                                .read()
-                                .unwrap()
-                                .leader_rotation_interval;
+                            max_tick_height_for_slot +=
+                                bank.leader_scheduler.read().unwrap().ticks_per_slot;
                             last_leader_id = leader_id;
                         }
                     }
@@ -383,19 +375,15 @@ mod test {
         info!("old_leader_id: {:?}", old_leader_id);
 
         // Set up the LeaderScheduler so that my_id becomes the leader for epoch 1
-        let leader_rotation_interval = 16;
-        let leader_scheduler_config = LeaderSchedulerConfig::new(
-            leader_rotation_interval,
-            leader_rotation_interval,
-            leader_rotation_interval,
-        );
+        let ticks_per_slot = 16;
+        let leader_scheduler_config = LeaderSchedulerConfig::new(ticks_per_slot, 1, ticks_per_slot);
 
         let my_keypair = Arc::new(my_keypair);
         let (active_set_entries, voting_keypair) = make_active_set_entries(
             &my_keypair,
             &mint_keypair,
             100,
-            leader_rotation_interval, // add a vote for tick_height = leader_rotation_interval
+            ticks_per_slot, // add a vote for tick_height = ticks_per_slot
             &last_id,
             &last_id,
             0,
@@ -438,7 +426,7 @@ mod test {
                 l_receiver,
             );
 
-            let total_entries_to_send = 2 * leader_rotation_interval as usize - 2;
+            let total_entries_to_send = 2 * ticks_per_slot as usize - 2;
             let mut entries_to_send = vec![];
             while entries_to_send.len() < total_entries_to_send {
                 let entry = Entry::new(&mut last_id, 0, 1, vec![]);
@@ -457,7 +445,7 @@ mod test {
             info!("Wait for replay_stage to exit and check return value is correct");
             assert_eq!(
                 Some(TvuReturnType::LeaderRotation(
-                    2 * leader_rotation_interval - 1,
+                    2 * ticks_per_slot - 1,
                     expected_entry_height,
                     expected_last_id,
                 )),
@@ -607,18 +595,11 @@ mod test {
                 .unwrap();
         }
 
-        // Set up the LeaderScheduler so that this this node becomes the leader at
-        // bootstrap_height = num_bootstrap_slots * leader_rotation_interval
-        // Set up the LeaderScheduler so that this this node becomes the leader at
-        // bootstrap_height = num_bootstrap_slots * leader_rotation_interval
-        let leader_rotation_interval = 10;
-        let num_bootstrap_slots = 2;
-        let bootstrap_height = num_bootstrap_slots * leader_rotation_interval;
-        let leader_scheduler_config = LeaderSchedulerConfig::new(
-            leader_rotation_interval,
-            leader_rotation_interval * 2,
-            bootstrap_height,
-        );
+        let ticks_per_slot = 10;
+        let slots_per_epoch = 2;
+        let active_window_tick_length = ticks_per_slot * slots_per_epoch;
+        let leader_scheduler_config =
+            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_tick_length);
 
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
@@ -658,14 +639,15 @@ mod test {
             cluster_info_me.write().unwrap().push_vote(vote);
 
             // Send enough ticks to trigger leader rotation
-            let total_entries_to_send = (bootstrap_height - initial_tick_height) as usize;
+            let total_entries_to_send = (active_window_tick_length - initial_tick_height) as usize;
             let num_hashes = 1;
 
             // Add on the only entries that weren't ticks to the bootstrap height to get the
             // total expected entry length
             let expected_entry_height =
-                bootstrap_height + initial_non_tick_height + active_set_entries_len;
-            let leader_rotation_index = (bootstrap_height - initial_tick_height - 1) as usize;
+                active_window_tick_length + initial_non_tick_height + active_set_entries_len;
+            let leader_rotation_index =
+                (active_window_tick_length - initial_tick_height - 1) as usize;
             let mut expected_last_id = Hash::default();
             for i in 0..total_entries_to_send {
                 let entry = Entry::new(&mut last_id, 0, num_hashes, vec![]);
@@ -691,7 +673,7 @@ mod test {
             // Wait for replay_stage to exit and check return value is correct
             assert_eq!(
                 Some(TvuReturnType::LeaderRotation(
-                    bootstrap_height,
+                    active_window_tick_length,
                     expected_entry_height,
                     expected_last_id,
                 )),

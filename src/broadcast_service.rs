@@ -370,7 +370,7 @@ mod test {
             // Mock the tick height to look like the tick height right after a leader transition
             leader_scheduler.set_leader_schedule(vec![leader_keypair.pubkey()]);
             let start_tick_height = 0;
-            let max_tick_height = start_tick_height + leader_scheduler.seed_rotation_interval;
+            let max_tick_height = start_tick_height + leader_scheduler.ticks_per_epoch;
             let entry_height = 2 * start_tick_height;
 
             let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
