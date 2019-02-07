@@ -17,6 +17,7 @@ pub const MAX_REPAIR_LENGTH: usize = 16;
 pub const REPAIR_MS: u64 = 100;
 pub const MAX_REPAIR_TRIES: u64 = 128;
 
+#[derive(Default)]
 struct RepairInfo {
     max_slot: u64,
     repair_tries: u64,
