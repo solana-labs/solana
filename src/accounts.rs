@@ -1,6 +1,7 @@
 use crate::bank::BankError;
 use crate::bank::Result;
 use crate::counter::Counter;
+use crate::runtime::has_duplicates;
 use bincode::serialize;
 use hashbrown::{HashMap, HashSet};
 use log::Level;
@@ -139,17 +140,15 @@ impl AccountsDB {
             Err(BankError::MissingSignatureForFee)
         } else {
             // Check for unique account keys
-            let mut unique_keys: Vec<Pubkey> = vec![];
+            if has_duplicates(&tx.account_keys) {
+                error_counters.account_loaded_twice += 1;
+                return Err(BankError::AccountLoadedTwice);
+            }
 
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
             let mut called_accounts: Vec<Account> = vec![];
             for key in &tx.account_keys {
-                if unique_keys.contains(key) {
-                    error_counters.account_loaded_twice += 1;
-                    return Err(BankError::AccountLoadedTwice);
-                }
-                unique_keys.push(key.clone());
                 called_accounts.push(Self::load(checkpoints, key).unwrap_or_default());
             }
             if called_accounts.is_empty() || called_accounts[0].tokens == 0 {
