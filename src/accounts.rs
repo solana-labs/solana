@@ -6,6 +6,7 @@ use hashbrown::{HashMap, HashSet};
 use log::Level;
 use solana_sdk::account::Account;
 use solana_sdk::hash::{hash, Hash};
+use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::Transaction;
 use std::collections::BTreeMap;
@@ -166,7 +167,7 @@ impl AccountsDB {
         let mut accounts = Vec::new();
         let mut depth = 0;
         loop {
-            if solana_native_loader::check_id(&program_id) {
+            if native_loader::check_id(&program_id) {
                 // at the root of the chain, ready to dispatch
                 break;
             }
@@ -454,7 +455,7 @@ mod tests {
             &[],
             Hash::default(),
             0,
-            vec![solana_native_loader::id()],
+            vec![native_loader::id()],
             instructions,
         );
 
@@ -478,7 +479,7 @@ mod tests {
             &[],
             Hash::default(),
             0,
-            vec![solana_native_loader::id()],
+            vec![native_loader::id()],
             instructions,
         );
 
@@ -538,7 +539,7 @@ mod tests {
             &[],
             Hash::default(),
             10,
-            vec![solana_native_loader::id()],
+            vec![native_loader::id()],
             instructions,
         );
 
@@ -570,7 +571,7 @@ mod tests {
             &[key1],
             Hash::default(),
             0,
-            vec![solana_native_loader::id()],
+            vec![native_loader::id()],
             instructions,
         );
 
@@ -608,7 +609,7 @@ mod tests {
 
         let mut account = Account::new(40, 1, Pubkey::default());
         account.executable = true;
-        account.loader = solana_native_loader::id();
+        account.loader = native_loader::id();
         accounts.push((key1, account));
 
         let mut account = Account::new(41, 1, Pubkey::default());
@@ -700,7 +701,7 @@ mod tests {
         accounts.push((key0, account));
 
         let mut account = Account::new(40, 1, Pubkey::default());
-        account.loader = solana_native_loader::id();
+        account.loader = native_loader::id();
         accounts.push((key1, account));
 
         let instructions = vec![Instruction::new(0, &(), vec![0])];
@@ -736,7 +737,7 @@ mod tests {
 
         let mut account = Account::new(40, 1, Pubkey::default());
         account.executable = true;
-        account.loader = solana_native_loader::id();
+        account.loader = native_loader::id();
         accounts.push((key1, account));
 
         let mut account = Account::new(41, 1, Pubkey::default());

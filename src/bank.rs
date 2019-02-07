@@ -18,11 +18,11 @@ use bincode::deserialize;
 use itertools::Itertools;
 use log::Level;
 use rayon::prelude::*;
-use solana_native_loader;
 use solana_sdk::account::Account;
 use solana_sdk::bpf_loader;
 use solana_sdk::budget_program;
 use solana_sdk::hash::Hash;
+use solana_sdk::native_loader;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
@@ -232,7 +232,7 @@ impl Bank {
             owner: system_program::id(),
             userdata: b"solana_system_program".to_vec(),
             executable: true,
-            loader: solana_native_loader::id(),
+            loader: native_loader::id(),
         };
         self.accounts
             .store_slow(true, &system_program::id(), &system_program_account);
@@ -243,7 +243,7 @@ impl Bank {
             owner: vote_program::id(),
             userdata: b"solana_vote_program".to_vec(),
             executable: true,
-            loader: solana_native_loader::id(),
+            loader: native_loader::id(),
         };
         self.accounts
             .store_slow(true, &vote_program::id(), &vote_program_account);
@@ -254,7 +254,7 @@ impl Bank {
             owner: storage_program::id(),
             userdata: b"solana_storage_program".to_vec(),
             executable: true,
-            loader: solana_native_loader::id(),
+            loader: native_loader::id(),
         };
         self.accounts
             .store_slow(true, &storage_program::id(), &storage_program_account);
@@ -275,7 +275,7 @@ impl Bank {
             owner: bpf_loader::id(),
             userdata: b"solana_bpf_loader".to_vec(),
             executable: true,
-            loader: solana_native_loader::id(),
+            loader: native_loader::id(),
         };
 
         self.accounts
@@ -287,7 +287,7 @@ impl Bank {
             owner: budget_program::id(),
             userdata: b"solana_budget_program".to_vec(),
             executable: true,
-            loader: solana_native_loader::id(),
+            loader: native_loader::id(),
         };
         self.accounts
             .store_slow(true, &budget_program::id(), &budget_program_account);
@@ -298,7 +298,7 @@ impl Bank {
             owner: token_program::id(),
             userdata: b"solana_erc20".to_vec(),
             executable: true,
-            loader: solana_native_loader::id(),
+            loader: native_loader::id(),
         };
 
         self.accounts
@@ -1664,7 +1664,7 @@ mod tests {
         ]);
 
         assert_eq!(system_program::id(), system);
-        assert_eq!(solana_native_loader::id(), native);
+        assert_eq!(native_loader::id(), native);
         assert_eq!(bpf_loader::id(), bpf);
         assert_eq!(budget_program::id(), budget);
         assert_eq!(storage_program::id(), storage);
@@ -1678,7 +1678,7 @@ mod tests {
         let mut unique = HashSet::new();
         let ids = vec![
             system_program::id(),
-            solana_native_loader::id(),
+            native_loader::id(),
             bpf_loader::id(),
             budget_program::id(),
             storage_program::id(),
