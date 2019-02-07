@@ -12,8 +12,8 @@ export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
 
 source scripts/ulimit-n.sh
-_ cargo build --all --verbose --features="$FEATURES"
-_ cargo test --all --verbose --features="$FEATURES" --lib -- --nocapture --test-threads=1
+_ cargo build --all ${V:+--verbose} --features="$FEATURES"
+_ cargo test --all ${V:+--verbose} --features="$FEATURES" --lib -- --nocapture --test-threads=1
 
 # Run native program tests (without $FEATURES)
 for program in programs/native/*; do
