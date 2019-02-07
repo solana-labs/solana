@@ -433,7 +433,7 @@ mod test {
 
         {
             // Set up the bank
-            let db_ledger_config = Some(DbLedgerConfig::new(ticks_per_slot));
+            let db_ledger_config = DbLedgerConfig::new(ticks_per_slot);
             let (bank, _entry_height, last_entry_id, db_ledger, l_sender, l_receiver) =
                 new_bank_from_ledger(&my_ledger_path, &db_ledger_config, &leader_scheduler_config);
 
@@ -537,7 +537,11 @@ mod test {
         let (to_leader_sender, _) = channel();
         {
             let (bank, entry_height, last_entry_id, db_ledger, l_sender, l_receiver) =
-                new_bank_from_ledger(&my_ledger_path, &None, &LeaderSchedulerConfig::default());
+                new_bank_from_ledger(
+                    &my_ledger_path,
+                    &DbLedgerConfig::default(),
+                    &LeaderSchedulerConfig::default(),
+                );
 
             let bank = Arc::new(bank);
             let db_ledger = Arc::new(db_ledger);
@@ -636,7 +640,7 @@ mod test {
         let (rotation_tx, rotation_rx) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         {
-            let db_ledger_config = Some(DbLedgerConfig::new(ticks_per_slot));
+            let db_ledger_config = DbLedgerConfig::new(ticks_per_slot);
             let (bank, _entry_height, last_entry_id, db_ledger, l_sender, l_receiver) =
                 new_bank_from_ledger(&my_ledger_path, &db_ledger_config, &leader_scheduler_config);
 

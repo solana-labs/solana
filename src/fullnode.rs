@@ -64,6 +64,7 @@ pub struct FullnodeConfig {
     pub entry_stream: Option<String>,
     pub storage_rotate_count: u64,
     pub leader_scheduler_config: LeaderSchedulerConfig,
+    pub ledger_config: DbLedgerConfig,
 }
 impl Default for FullnodeConfig {
     fn default() -> Self {
@@ -77,7 +78,15 @@ impl Default for FullnodeConfig {
             entry_stream: None,
             storage_rotate_count: NUM_HASHES_FOR_STORAGE_ROTATE,
             leader_scheduler_config: Default::default(),
+            ledger_config: Default::default(),
         }
+    }
+}
+
+impl FullnodeConfig {
+    pub fn set_leader_scheduler_config(&mut self, config: LeaderSchedulerConfig) {
+        self.ledger_config.ticks_per_block = config.ticks_per_slot;
+        self.leader_scheduler_config = config;
     }
 }
 
@@ -102,18 +111,11 @@ impl Fullnode {
     pub fn new(
         mut node: Node,
         keypair: &Arc<Keypair>,
-        ledger_config: Option<DbLedgerConfig>,
         ledger_path: &str,
         voting_keypair: VotingKeypair,
         entrypoint_info_option: Option<&NodeInfo>,
         config: &FullnodeConfig,
     ) -> Self {
-        let ledger_config = if ledger_config.is_none() {
-            Some(DbLedgerConfig::default())
-        } else {
-            ledger_config
-        };
-
         info!("creating bank...");
 
         let id = keypair.pubkey();
@@ -126,7 +128,11 @@ impl Fullnode {
             db_ledger,
             ledger_signal_sender,
             ledger_signal_receiver,
-        ) = new_bank_from_ledger(ledger_path, &ledger_config, &config.leader_scheduler_config);
+        ) = new_bank_from_ledger(
+            ledger_path,
+            &config.ledger_config,
+            &config.leader_scheduler_config,
+        );
 
         info!("node info: {:?}", node.info);
         info!("node entrypoint_info: {:?}", entrypoint_info_option);
@@ -499,18 +505,12 @@ impl Fullnode {
 
 pub fn new_bank_from_ledger(
     ledger_path: &str,
-    ledger_config: &Option<DbLedgerConfig>,
+    ledger_config: &DbLedgerConfig,
     leader_scheduler_config: &LeaderSchedulerConfig,
 ) -> (Bank, u64, Hash, DbLedger, SyncSender<bool>, Receiver<bool>) {
-    let (db_ledger, ledger_signal_sender, ledger_signal_receiver) = {
-        if let Some(ledger_config) = ledger_config {
-            DbLedger::open_with_config_signal(ledger_path, &ledger_config)
-                .expect("Expected to successfully open database ledger")
-        } else {
-            DbLedger::open_with_signal(ledger_path)
-                .expect("Expected to successfully open database ledger")
-        }
-    };
+    let (db_ledger, ledger_signal_sender, ledger_signal_receiver) =
+        DbLedger::open_with_config_signal(ledger_path, &ledger_config)
+            .expect("Expected to successfully open database ledger");
     let genesis_block =
         GenesisBlock::load(ledger_path).expect("Expected to successfully open genesis block");
     let mut bank = Bank::new_with_leader_scheduler_config(&genesis_block, leader_scheduler_config);
@@ -575,7 +575,6 @@ mod tests {
         let validator = Fullnode::new(
             validator_node,
             &Arc::new(validator_keypair),
-            None,
             &validator_ledger_path,
             VotingKeypair::new(),
             Some(&leader_node.info),
@@ -606,7 +605,6 @@ mod tests {
                 Fullnode::new(
                     validator_node,
                     &Arc::new(validator_keypair),
-                    None,
                     &validator_ledger_path,
                     VotingKeypair::new(),
                     Some(&leader_node.info),
@@ -659,12 +657,10 @@ mod tests {
         let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
         // Start the bootstrap leader
         let mut fullnode_config = FullnodeConfig::default();
-        fullnode_config.leader_scheduler_config = leader_scheduler_config;
-        let db_ledger_config = DbLedgerConfig::new(ticks_per_slot);
+        fullnode_config.set_leader_scheduler_config(leader_scheduler_config);
         let bootstrap_leader = Fullnode::new(
             bootstrap_leader_node,
             &bootstrap_leader_keypair,
-            Some(db_ledger_config),
             &bootstrap_leader_ledger_path,
             voting_keypair,
             None,
@@ -690,11 +686,11 @@ mod tests {
         let mut fullnode_config = FullnodeConfig::default();
         let ticks_per_slot = 16;
         let slots_per_epoch = 2;
-        fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
+        fullnode_config.set_leader_scheduler_config(LeaderSchedulerConfig::new(
             ticks_per_slot,
             slots_per_epoch,
             ticks_per_slot * slots_per_epoch,
-        );
+        ));
 
         // Create the leader and validator nodes
         let bootstrap_leader_keypair = Arc::new(Keypair::new());
@@ -720,13 +716,11 @@ mod tests {
             validator_ledger_path.clone(),
         ];
 
-        let db_ledger_config = DbLedgerConfig::new(ticks_per_slot);
         {
             // Test that a node knows to transition to a validator based on parsing the ledger
             let bootstrap_leader = Fullnode::new(
                 bootstrap_leader_node,
                 &bootstrap_leader_keypair,
-                Some(db_ledger_config),
                 &bootstrap_leader_ledger_path,
                 VotingKeypair::new(),
                 Some(&bootstrap_leader_info),
@@ -739,7 +733,6 @@ mod tests {
             let validator = Fullnode::new(
                 validator_node,
                 &validator_keypair,
-                Some(db_ledger_config),
                 &validator_ledger_path,
                 VotingKeypair::new(),
                 Some(&bootstrap_leader_info),
@@ -787,21 +780,18 @@ mod tests {
 
         // Set the leader scheduler for the validator
         let mut fullnode_config = FullnodeConfig::default();
-        fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
+        fullnode_config.set_leader_scheduler_config(LeaderSchedulerConfig::new(
             ticks_per_slot,
             slots_per_epoch,
             ticks_per_slot * slots_per_epoch,
-        );
+        ));
 
         let voting_keypair = VotingKeypair::new_local(&validator_keypair);
-
-        let db_ledger_config = DbLedgerConfig::default();
 
         // Start the validator
         let validator = Fullnode::new(
             validator_node,
             &validator_keypair,
-            Some(db_ledger_config),
             &validator_ledger_path,
             voting_keypair,
             Some(&leader_node.info),
@@ -850,7 +840,7 @@ mod tests {
         validator_exit();
         let (bank, entry_height, _, _, _, _) = new_bank_from_ledger(
             &validator_ledger_path,
-            &None,
+            &DbLedgerConfig::default(),
             &LeaderSchedulerConfig::default(),
         );
 
@@ -892,19 +882,17 @@ mod tests {
 
         // Set the leader scheduler for the validator
         let mut fullnode_config = FullnodeConfig::default();
-        fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
+        fullnode_config.set_leader_scheduler_config(LeaderSchedulerConfig::new(
             ticks_per_slot,
             slots_per_epoch,
             ticks_per_slot * slots_per_epoch,
-        );
+        ));
 
         let voting_keypair = VotingKeypair::new_local(&leader_keypair);
-        let db_ledger_config = DbLedgerConfig::new(ticks_per_slot);
         info!("Start the bootstrap leader");
         let mut leader = Fullnode::new(
             leader_node,
             &leader_keypair,
-            Some(db_ledger_config),
             &leader_ledger_path,
             voting_keypair,
             Some(&leader_node_info),

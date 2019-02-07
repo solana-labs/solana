@@ -265,7 +265,6 @@ fn main() {
     let fullnode = Fullnode::new(
         node,
         &keypair,
-        None,
         ledger_path,
         vote_signer,
         cluster_entrypoint

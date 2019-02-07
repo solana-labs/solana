@@ -54,7 +54,6 @@ fn test_replicator_startup_basic() {
         let leader = Fullnode::new(
             leader_node,
             &leader_keypair,
-            None,
             &leader_ledger_path,
             voting_keypair,
             None,
@@ -85,7 +84,6 @@ fn test_replicator_startup_basic() {
         let validator = Fullnode::new(
             validator_node,
             &validator_keypair,
-            None,
             &validator_ledger_path,
             voting_keypair,
             Some(&leader_info),
@@ -291,7 +289,6 @@ fn test_replicator_startup_ledger_hang() {
         let _ = Fullnode::new(
             leader_node,
             &leader_keypair,
-            None,
             &leader_ledger_path,
             voting_keypair,
             None,
@@ -305,7 +302,6 @@ fn test_replicator_startup_ledger_hang() {
         let _ = Fullnode::new(
             validator_node,
             &validator_keypair,
-            None,
             &validator_ledger_path,
             voting_keypair,
             Some(&leader_info),
