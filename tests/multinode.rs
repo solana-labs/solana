@@ -12,8 +12,6 @@ use solana::packet::SharedBlob;
 use solana::result;
 use solana::service::Service;
 use solana::thin_client::{poll_gossip_for_leader, retry_get_balance};
-use solana::tpu::TpuReturnType;
-use solana::tvu::TvuReturnType;
 use solana::voting_keypair::VotingKeypair;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -1621,35 +1619,29 @@ fn test_broadcast_last_tick() {
         &fullnode_config,
     );
 
+    let (bootstrap_leader_rotation_sender, bootstrap_leader_rotation_receiver) = channel();
+    let bootstrap_leader_exit = bootstrap_leader.run(Some(bootstrap_leader_rotation_sender));
+
     // Wait for convergence
     converge(&bootstrap_leader_info, N + 1);
 
     info!("Waiting for leader rotation...");
-    // manually intercept the role transition to accurately arrest tick generation
+
+    // Wait for the bootstrap_leader to move beyond slot 0
     loop {
-        let should_be_forwarder = bootstrap_leader.role_notifiers.1.try_recv();
-        let should_be_leader = bootstrap_leader.role_notifiers.0.try_recv();
-        match should_be_leader {
-            Ok(TvuReturnType::LeaderRotation(_, _, _)) => {
-                panic!("Expected rotation to validator");
-            }
-            _ => match should_be_forwarder {
-                Ok(TpuReturnType::LeaderRotation(tick_height)) => {
-                    info!("rotation occurred at tick_height {:?}", tick_height);
-                    break;
-                }
-                _ => continue,
-            },
+        let transition = bootstrap_leader_rotation_receiver.recv().unwrap();
+        info!("bootstrap leader transition event: {:?}", transition);
+        if transition.0 == FullnodeReturnType::LeaderToLeaderRotation {
+            break;
         }
     }
-
     info!("Shutting down the leader...");
-    bootstrap_leader.close().unwrap();
+    bootstrap_leader_exit();
 
-    // Index of the last tick is always leader_rotation_interval - 1
+    // Index of the last tick must be at least leader_rotation_interval - 1
     let last_tick_entry_index = leader_rotation_interval as usize - 2;
     let entries = read_ledger(&bootstrap_leader_ledger_path);
-    assert_eq!(entries.len(), last_tick_entry_index + 1);
+    assert!(entries.len() >= last_tick_entry_index + 1);
     let expected_last_tick = &entries[last_tick_entry_index];
     debug!("last_tick_entry_index: {:?}", last_tick_entry_index);
     debug!("expected_last_tick: {:?}", expected_last_tick);

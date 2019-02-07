@@ -102,7 +102,7 @@ pub struct Fullnode {
     tpu_sockets: Vec<UdpSocket>,
     broadcast_socket: UdpSocket,
     node_services: NodeServices,
-    pub role_notifiers: (TvuRotationReceiver, TpuRotationReceiver),
+    role_notifiers: (TvuRotationReceiver, TpuRotationReceiver),
     blob_sender: BlobSender,
 }
 
