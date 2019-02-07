@@ -29,11 +29,11 @@ use std::thread::{spawn, Result};
 use std::time::{Duration, Instant};
 
 pub type TvuRotationSender = Sender<TvuReturnType>;
-pub type TvuRotationReceiver = Receiver<TvuReturnType>;
 pub type TpuRotationSender = Sender<TpuReturnType>;
-pub type TpuRotationReceiver = Receiver<TpuReturnType>;
+type TvuRotationReceiver = Receiver<TvuReturnType>;
+type TpuRotationReceiver = Receiver<TpuReturnType>;
 
-pub struct NodeServices {
+struct NodeServices {
     tpu: Tpu,
     tvu: Tvu,
 }
@@ -43,18 +43,14 @@ impl NodeServices {
         NodeServices { tpu, tvu }
     }
 
-    pub fn join(self) -> Result<()> {
+    fn join(self) -> Result<()> {
         self.tpu.join()?;
         //tvu will never stop unless exit is signaled
         self.tvu.join()?;
         Ok(())
     }
 
-    pub fn is_exited(&self) -> bool {
-        self.tpu.is_exited() && self.tvu.is_exited()
-    }
-
-    pub fn exit(&self) {
+    fn exit(&self) {
         self.tpu.exit();
         self.tvu.exit();
     }
