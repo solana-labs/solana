@@ -1018,7 +1018,7 @@ fn test_leader_to_validator_transition() {
     leader_exit();
 
     info!("Check the ledger to make sure it's the right height...");
-    let (bank, _, _) = Fullnode::new_bank_from_ledger(&leader_ledger_path, None);
+    let bank = Fullnode::new_bank_from_ledger(&leader_ledger_path, None).0;
 
     assert_eq!(
         bank.tick_height(),
