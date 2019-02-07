@@ -1,14 +1,8 @@
 //! The `window` module defines data structure for storing the tail of the ledger.
 //!
-use crate::cluster_info::ClusterInfo;
-use crate::counter::Counter;
-use crate::leader_scheduler::LeaderScheduler;
 use crate::packet::SharedBlob;
-use log::Level;
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
-use std::net::SocketAddr;
-use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
 
 #[derive(Default, Clone)]
@@ -45,18 +39,6 @@ pub trait WindowUtil {
     fn clear_slots(&mut self, consumed: u64, received: u64) -> Vec<u64>;
 
     fn window_size(&self) -> u64;
-
-    fn repair(
-        &mut self,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
-        id: &Pubkey,
-        times: usize,
-        consumed: u64,
-        received: u64,
-        tick_height: u64,
-        max_entry_height: u64,
-        leader_scheduler_option: &Arc<RwLock<LeaderScheduler>>,
-    ) -> Vec<(SocketAddr, Vec<u8>)>;
 
     fn print(&self, id: &Pubkey, consumed: u64) -> String;
 
@@ -114,86 +96,6 @@ impl WindowUtil for Window {
 
     fn window_size(&self) -> u64 {
         self.len() as u64
-    }
-
-    fn repair(
-        &mut self,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
-        id: &Pubkey,
-        times: usize,
-        consumed: u64,
-        received: u64,
-        tick_height: u64,
-        max_entry_height: u64,
-        leader_scheduler_option: &Arc<RwLock<LeaderScheduler>>,
-    ) -> Vec<(SocketAddr, Vec<u8>)> {
-        let rcluster_info = cluster_info.read().unwrap();
-        // Check if we are the next next slot leader
-        let is_next_leader = {
-            let leader_scheduler = leader_scheduler_option.read().unwrap();
-            let next_slot = leader_scheduler.tick_height_to_slot(tick_height) + 1;
-            match leader_scheduler.get_leader_for_slot(next_slot) {
-                Some(leader_id) if leader_id == *id => true,
-                // In the case that we are not in the current scope of the leader schedule
-                // window then either:
-                //
-                // 1) The replay stage hasn't caught up to the "consumed" entries we sent,
-                // in which case it will eventually catch up
-                //
-                // 2) We are on the border between ticks_per_epochs, so the
-                // schedule won't be known until the entry on that cusp is received
-                // by the replay stage (which comes after this stage). Hence, the next
-                // leader at the beginning of that next epoch will not know they are the
-                // leader until they receive that last "cusp" entry. The leader also won't ask for repairs
-                // for that entry because "is_next_leader" won't be set here. In this case,
-                // everybody will be blocking waiting for that "cusp" entry instead of repairing,
-                // until the leader hits "times" >= the max times in calculate_max_repair().
-                // The impact of this, along with the similar problem from broadcast for the transitioning
-                // leader, can be observed in the multinode test, test_full_leader_validator_network(),
-                None => false,
-                _ => false,
-            }
-        };
-
-        let num_peers = rcluster_info.repair_peers().len() as u64;
-        let max_repair = if max_entry_height == 0 {
-            calculate_max_repair(
-                num_peers,
-                consumed,
-                received,
-                times,
-                is_next_leader,
-                self.window_size(),
-            )
-        } else {
-            max_entry_height + 1
-        };
-
-        let idxs = self.clear_slots(consumed, max_repair);
-        let reqs: Vec<_> = idxs
-            .into_iter()
-            .filter_map(|pix| rcluster_info.window_index_request(pix).ok())
-            .collect();
-
-        drop(rcluster_info);
-
-        inc_new_counter_info!("streamer-repair_window-repair", reqs.len());
-
-        if log_enabled!(Level::Trace) {
-            trace!(
-                "{}: repair_window counter times: {} consumed: {} received: {} max_repair: {} missing: {}",
-                id,
-                times,
-                consumed,
-                received,
-                max_repair,
-                reqs.len()
-            );
-            for (to, _) in &reqs {
-                trace!("{}: repair_window request to {}", id, to);
-            }
-        }
-        reqs
     }
 
     fn print(&self, id: &Pubkey, consumed: u64) -> String {

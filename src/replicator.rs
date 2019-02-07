@@ -12,7 +12,7 @@ use crate::service::Service;
 use crate::storage_stage::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
 use crate::streamer::BlobReceiver;
 use crate::thin_client::{retry_get_balance, ThinClient};
-use crate::window_service::window_service;
+use crate::window_service::WindowService;
 use rand::thread_rng;
 use rand::Rng;
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
@@ -33,13 +33,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
-use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 pub struct Replicator {
     gossip_service: GossipService,
     fetch_stage: BlobFetchStage,
-    t_window: JoinHandle<()>,
+    window_service: WindowService,
     pub retransmit_receiver: BlobReceiver,
     exit: Arc<AtomicBool>,
     entry_height: u64,
@@ -173,11 +172,10 @@ impl Replicator {
         // todo: pull blobs off the retransmit_receiver and recycle them?
         let (retransmit_sender, retransmit_receiver) = channel();
 
-        let t_window = window_service(
+        let window_service = WindowService::new(
             db_ledger.clone(),
             cluster_info.clone(),
             0,
-            entry_height,
             max_entry_height,
             blob_fetch_receiver,
             retransmit_sender,
@@ -274,7 +272,7 @@ impl Replicator {
         Ok(Self {
             gossip_service,
             fetch_stage,
-            t_window,
+            window_service,
             retransmit_receiver,
             exit,
             entry_height,
@@ -289,7 +287,7 @@ impl Replicator {
     pub fn join(self) {
         self.gossip_service.join().unwrap();
         self.fetch_stage.join().unwrap();
-        self.t_window.join().unwrap();
+        self.window_service.join().unwrap();
 
         // Drain the queue here to prevent self.retransmit_receiver from being dropped
         // before the window_service thread is joined

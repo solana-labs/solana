@@ -21,8 +21,49 @@ use std::sync::{Arc, RwLock};
 
 pub const MAX_REPAIR_LENGTH: usize = 128;
 
+pub fn generate_repairs(db_ledger: &DbLedger, max_repairs: usize) -> Result<Vec<(u64, u64)>> {
+    // Slot height and blob indexes for blobs we want to repair
+    let mut repairs: Vec<(u64, u64)> = vec![];
+    let mut slots = vec![0];
+    while repairs.len() < max_repairs && !slots.is_empty() {
+        let slot_height = slots.pop().unwrap();
+        let slot = db_ledger.meta(slot_height)?;
+        if slot.is_none() {
+            continue;
+        }
+        let slot = slot.unwrap();
+        slots.extend(slot.next_slots.clone());
+
+        if slot.contains_all_ticks(db_ledger) {
+            continue;
+        } else {
+            let num_unreceived_ticks = {
+                if slot.consumed == slot.received {
+                    slot.num_expected_ticks(db_ledger) - slot.consumed_ticks
+                } else {
+                    0
+                }
+            };
+
+            let upper = slot.received + num_unreceived_ticks;
+
+            let reqs = db_ledger.find_missing_data_indexes(
+                0,
+                slot.consumed,
+                upper,
+                max_repairs - repairs.len(),
+            );
+
+            repairs.extend(reqs.into_iter().map(|i| (slot_height, i)))
+        }
+    }
+
+    Ok(repairs)
+}
+
 pub fn repair(
     db_ledger: &DbLedger,
+    slot_index: u64,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
     id: &Pubkey,
     times: usize,
@@ -31,7 +72,8 @@ pub fn repair(
     leader_scheduler_option: &Arc<RwLock<LeaderScheduler>>,
 ) -> Result<Vec<(SocketAddr, Vec<u8>)>> {
     let rcluster_info = cluster_info.read().unwrap();
-    let meta = db_ledger.meta()?;
+    let is_next_leader = false;
+    let meta = db_ledger.meta(slot_index)?;
     if meta.is_none() {
         return Ok(vec![]);
     }
@@ -44,7 +86,7 @@ pub fn repair(
     assert!(received > consumed);
 
     // Check if we are the next next slot leader
-    let is_next_leader = {
+    {
         let leader_scheduler = leader_scheduler_option.read().unwrap();
         let next_slot = leader_scheduler.tick_height_to_slot(tick_height) + 1;
         match leader_scheduler.get_leader_for_slot(next_slot) {
@@ -88,7 +130,7 @@ pub fn repair(
 
     let reqs: Vec<_> = idxs
         .into_iter()
-        .filter_map(|pix| rcluster_info.window_index_request(pix).ok())
+        .filter_map(|pix| rcluster_info.window_index_request(slot_index, pix).ok())
         .collect();
 
     drop(rcluster_info);
@@ -210,7 +252,9 @@ pub fn process_blob(
         // If write_shared_blobs() of these recovered blobs fails fails, don't return
         // because consumed_entries might be nonempty from earlier, and tick height needs to
         // be updated. Hopefully we can recover these blobs next time successfully.
-        if let Err(e) = try_erasure(db_ledger, &mut consumed_entries) {
+
+        // TODO: Support per-slot erasure. Issue: https://github.com/solana-labs/solana/issues/2441
+        if let Err(e) = try_erasure(db_ledger, &mut consumed_entries, 0) {
             trace!(
                 "erasure::recover failed to write recovered coding blobs. Err: {:?}",
                 e
@@ -227,7 +271,7 @@ pub fn process_blob(
     // then stop
     if max_ix != 0 && !consumed_entries.is_empty() {
         let meta = db_ledger
-            .meta()?
+            .meta(0)?
             .expect("Expect metadata to exist if consumed entries is nonzero");
 
         let consumed = meta.consumed;
@@ -267,15 +311,19 @@ pub fn calculate_max_repair_entry_height(
 }
 
 #[cfg(feature = "erasure")]
-fn try_erasure(db_ledger: &Arc<DbLedger>, consume_queue: &mut Vec<Entry>) -> Result<()> {
-    let meta = db_ledger.meta()?;
+fn try_erasure(
+    db_ledger: &Arc<DbLedger>,
+    consume_queue: &mut Vec<Entry>,
+    slot_index: u64,
+) -> Result<()> {
+    let meta = db_ledger.meta(slot_index)?;
 
     if let Some(meta) = meta {
-        let (data, coding) = erasure::recover(db_ledger, meta.consumed_slot, meta.consumed)?;
+        let (data, coding) = erasure::recover(db_ledger, slot_index, meta.consumed)?;
         for c in coding {
             let c = c.read().unwrap();
             db_ledger.put_coding_blob_bytes(
-                meta.consumed_slot,
+                0,
                 c.index(),
                 &c.data[..BLOB_HEADER_SIZE + c.size()],
             )?;
@@ -436,6 +484,79 @@ mod test {
     }
 
     #[test]
+    pub fn test_generate_repairs() {
+        let db_ledger_path = get_tmp_ledger_path("test_generate_repairs");
+        let num_ticks_per_slot = 10;
+        let db_ledger_config = DbLedgerConfig::new(num_ticks_per_slot);
+        let db_ledger = DbLedger::open_config(&db_ledger_path, db_ledger_config).unwrap();
+
+        let num_entries_per_slot = 10;
+        let num_slots = 2;
+        let mut blobs = make_tiny_test_entries(num_slots * num_entries_per_slot).to_blobs();
+
+        // Insert every nth entry for each slot
+        let nth = 3;
+        for (i, b) in blobs.iter_mut().enumerate() {
+            b.set_index(((i % num_entries_per_slot) * nth) as u64);
+            b.set_slot((i / num_entries_per_slot) as u64);
+        }
+
+        db_ledger.write_blobs(&blobs).unwrap();
+
+        let missing_indexes_per_slot: Vec<u64> = (0..num_entries_per_slot - 1)
+            .flat_map(|x| ((nth * x + 1) as u64..(nth * x + nth) as u64))
+            .collect();
+
+        let expected: Vec<(u64, u64)> = (0..num_slots)
+            .flat_map(|slot_height| {
+                missing_indexes_per_slot
+                    .iter()
+                    .map(move |blob_index| (slot_height as u64, *blob_index))
+            })
+            .collect();
+
+        // Across all slots, find all missing indexes in the range [0, num_entries_per_slot * nth]
+        assert_eq!(
+            generate_repairs(&db_ledger, std::usize::MAX).unwrap(),
+            expected
+        );
+
+        assert_eq!(
+            generate_repairs(&db_ledger, expected.len() - 2).unwrap()[..],
+            expected[0..expected.len() - 2]
+        );
+
+        // Now fill in all the holes for each slot such that for each slot, consumed == received.
+        // Because none of the slots contain ticks, we should see that the repair requests
+        // ask for ticks, starting from the last received index for that slot
+        for (slot_height, blob_index) in expected {
+            let mut b = make_tiny_test_entries(1).to_blobs().pop().unwrap();
+            b.set_index(blob_index);
+            b.set_slot(slot_height);
+            db_ledger.write_blobs(&vec![b]).unwrap();
+        }
+
+        let last_index_per_slot = ((num_entries_per_slot - 1) * nth) as u64;
+        let missing_indexes_per_slot: Vec<u64> =
+            (last_index_per_slot + 1..last_index_per_slot + 1 + num_ticks_per_slot).collect();
+        let expected: Vec<(u64, u64)> = (0..num_slots)
+            .flat_map(|slot_height| {
+                missing_indexes_per_slot
+                    .iter()
+                    .map(move |blob_index| (slot_height as u64, *blob_index))
+            })
+            .collect();
+        assert_eq!(
+            generate_repairs(&db_ledger, std::usize::MAX).unwrap(),
+            expected
+        );
+        assert_eq!(
+            generate_repairs(&db_ledger, expected.len() - 2).unwrap()[..],
+            expected[0..expected.len() - 2]
+        );
+    }
+
+    #[test]
     pub fn test_find_missing_data_indexes_sanity() {
         let slot = DEFAULT_SLOT_HEIGHT;
 
@@ -565,6 +686,74 @@ mod test {
     }
 
     #[test]
+    pub fn test_find_missing_data_indexes_slots() {
+        let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes_slots");
+        let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+
+        let num_entries_per_slot = 10;
+        let num_slots = 2;
+        let mut blobs = make_tiny_test_entries(num_slots * num_entries_per_slot).to_blobs();
+
+        // Insert every nth entry for each slot
+        let nth = 3;
+        for (i, b) in blobs.iter_mut().enumerate() {
+            b.set_index(((i % num_entries_per_slot) * nth) as u64);
+            b.set_slot((i / num_entries_per_slot) as u64);
+        }
+
+        db_ledger.write_blobs(&blobs).unwrap();
+
+        let mut expected: Vec<u64> = (0..num_entries_per_slot)
+            .flat_map(|x| ((nth * x + 1) as u64..(nth * x + nth) as u64))
+            .collect();
+
+        // For each slot, find all missing indexes in the range [0, num_entries_per_slot * nth]
+        for slot_height in 0..num_slots {
+            assert_eq!(
+                db_ledger.find_missing_data_indexes(
+                    slot_height as u64,
+                    0,
+                    (num_entries_per_slot * nth) as u64,
+                    num_entries_per_slot * nth as usize
+                ),
+                expected,
+            );
+        }
+
+        // Test with a limit on the number of returned entries
+        for slot_height in 0..num_slots {
+            assert_eq!(
+                db_ledger.find_missing_data_indexes(
+                    slot_height as u64,
+                    0,
+                    (num_entries_per_slot * nth) as u64,
+                    num_entries_per_slot * (nth - 1)
+                )[..],
+                expected[..num_entries_per_slot * (nth - 1)],
+            );
+        }
+
+        // Try to find entries in the range [num_entries_per_slot * nth..num_entries_per_slot * (nth + 1)
+        // that don't exist in the ledger.
+        let extra_entries =
+            (num_entries_per_slot * nth) as u64..(num_entries_per_slot * (nth + 1)) as u64;
+        expected.extend(extra_entries);
+
+        // For each slot, find all missing indexes in the range [0, num_entries_per_slot * nth]
+        for slot_height in 0..num_slots {
+            assert_eq!(
+                db_ledger.find_missing_data_indexes(
+                    slot_height as u64,
+                    0,
+                    (num_entries_per_slot * (nth + 1)) as u64,
+                    num_entries_per_slot * (nth + 1),
+                ),
+                expected,
+            );
+        }
+    }
+
+    #[test]
     pub fn test_no_missing_blob_indexes() {
         let slot = DEFAULT_SLOT_HEIGHT;
         let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes");
@@ -577,13 +766,13 @@ mod test {
         index_blobs(
             &shared_blobs,
             &Keypair::new().pubkey(),
-            0,
+            &mut 0,
             &vec![slot; num_entries],
         );
 
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
-        db_ledger.write_blobs(&blobs).unwrap();
+        db_ledger.write_blobs(blobs).unwrap();
 
         let empty: Vec<u64> = vec![];
         for i in 0..num_entries as u64 {
@@ -625,7 +814,8 @@ mod test {
         let db_ledger = Arc::new(generate_db_ledger_from_window(&ledger_path, &window, false));
 
         let mut consume_queue = vec![];
-        try_erasure(&db_ledger, &mut consume_queue).expect("Expected successful erasure attempt");
+        try_erasure(&db_ledger, &mut consume_queue, DEFAULT_SLOT_HEIGHT)
+            .expect("Expected successful erasure attempt");
         window[erased_index].data = erased_data;
 
         {
@@ -668,7 +858,7 @@ mod test {
         index_blobs(
             &shared_blobs,
             &Keypair::new().pubkey(),
-            0,
+            &mut 0,
             &vec![DEFAULT_SLOT_HEIGHT; num_entries],
         );
 

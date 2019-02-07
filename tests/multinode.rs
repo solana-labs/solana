@@ -3,7 +3,7 @@ use solana::blob_fetch_stage::BlobFetchStage;
 use solana::client::mk_client;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
 use solana::db_ledger::{create_tmp_sample_ledger, tmp_copy_ledger};
-use solana::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
+use solana::db_ledger::{DbLedger, DbLedgerConfig, DEFAULT_SLOT_HEIGHT};
 use solana::entry::{reconstruct_entries_from_blobs, Entry};
 use solana::fullnode::{new_bank_from_ledger, Fullnode, FullnodeConfig, FullnodeReturnType};
 use solana::gossip_service::GossipService;
@@ -728,10 +728,11 @@ fn test_multi_node_dynamic_network() {
     let mut ledger_paths = Vec::new();
     ledger_paths.push(genesis_ledger_path.clone());
 
+    let leader_ledger_path = tmp_copy_ledger(&genesis_ledger_path, "multi_node_dynamic_network");
+
     let alice_arc = Arc::new(RwLock::new(alice));
     let leader_data = leader.info.clone();
 
-    let leader_ledger_path = tmp_copy_ledger(&genesis_ledger_path, "multi_node_dynamic_network");
     ledger_paths.push(leader_ledger_path.clone());
     let voting_keypair = VotingKeypair::new_local(&leader_keypair);
     let server = Fullnode::new(
@@ -926,14 +927,14 @@ fn test_leader_to_validator_transition() {
 
     let mut fullnode_config = FullnodeConfig::default();
     let ticks_per_slot = 5;
-    fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
+    fullnode_config.set_leader_scheduler_config(LeaderSchedulerConfig::new(
         ticks_per_slot,
         1,
         // Setup window length to exclude the genesis bootstrap leader vote at tick height 0, so
         // that when the leader schedule is recomputed for epoch 1 only the validator vote at tick
         // height 1 will be considered.
         ticks_per_slot,
-    );
+    ));
 
     // Initialize the leader ledger. Make a mint and a genesis entry
     // in the leader ledger
@@ -1007,7 +1008,12 @@ fn test_leader_to_validator_transition() {
     leader_exit();
 
     info!("Check the ledger to make sure it's the right height...");
-    let bank = new_bank_from_ledger(&leader_ledger_path, &LeaderSchedulerConfig::default()).0;
+    let bank = new_bank_from_ledger(
+        &leader_ledger_path,
+        DbLedgerConfig::default(),
+        &LeaderSchedulerConfig::default(),
+    )
+    .0;
 
     assert_eq!(
         bank.tick_height(),
@@ -1072,11 +1078,11 @@ fn test_leader_validator_basic() {
     // Create the leader scheduler config
     let mut fullnode_config = FullnodeConfig::default();
     let ticks_per_slot = 5;
-    fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
+    fullnode_config.set_leader_scheduler_config(LeaderSchedulerConfig::new(
         ticks_per_slot,
         1, // 1 slot per epoch
         ticks_per_slot,
-    );
+    ));
 
     // Start the validator node
     let voting_keypair = VotingKeypair::new_local(&validator_keypair);
@@ -1171,8 +1177,11 @@ fn test_dropped_handoff_recovery() {
     let ticks_per_slot = 5;
     let ticks_per_epoch = slots_per_epoch * ticks_per_slot;
     let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.leader_scheduler_config =
-        LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, ticks_per_epoch);
+    fullnode_config.set_leader_scheduler_config(LeaderSchedulerConfig::new(
+        ticks_per_slot,
+        slots_per_epoch,
+        ticks_per_epoch,
+    ));
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
     let num_ending_ticks = 1;
@@ -1385,12 +1394,16 @@ fn test_full_leader_validator_network() {
     let ticks_per_slot = 5;
     let ticks_per_epoch = slots_per_epoch * ticks_per_slot;
     let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.leader_scheduler_config =
-        LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, ticks_per_epoch);
+    fullnode_config.set_leader_scheduler_config(LeaderSchedulerConfig::new(
+        ticks_per_slot,
+        slots_per_epoch,
+        ticks_per_epoch * 3,
+    ));
 
     let mut nodes = vec![];
 
     info!("Start up the validators");
+    // Start up the validators
     for kp in node_keypairs.into_iter() {
         let validator_ledger_path = tmp_copy_ledger(
             &bootstrap_leader_ledger_path,
@@ -1579,8 +1592,11 @@ fn test_broadcast_last_tick() {
     let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
     let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
     let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.leader_scheduler_config =
-        LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, ticks_per_epoch);
+    fullnode_config.set_leader_scheduler_config(LeaderSchedulerConfig::new(
+        ticks_per_slot,
+        slots_per_epoch,
+        ticks_per_epoch,
+    ));
     let bootstrap_leader = Fullnode::new(
         bootstrap_leader_node,
         &bootstrap_leader_keypair,

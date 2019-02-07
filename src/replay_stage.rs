@@ -62,7 +62,7 @@ impl ReplayStage {
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         voting_keypair: Option<&Arc<VotingKeypair>>,
         ledger_entry_sender: &EntrySender,
-        entry_height: &Arc<RwLock<u64>>,
+        current_blob_index: &mut u64,
         last_entry_id: &Arc<RwLock<Hash>>,
         entry_stream: Option<&mut EntryStream>,
     ) -> Result<()> {
@@ -162,8 +162,7 @@ impl ReplayStage {
             ledger_entry_sender.send(entries)?;
         }
 
-        *entry_height.write().unwrap() += entries_len;
-
+        *current_blob_index += entries_len;
         res?;
         inc_new_counter_info!(
             "replicate_stage-duration",
@@ -180,7 +179,7 @@ impl ReplayStage {
         bank: Arc<Bank>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         exit: Arc<AtomicBool>,
-        entry_height: Arc<RwLock<u64>>,
+        mut current_blob_index: u64,
         last_entry_id: Arc<RwLock<Hash>>,
         to_leader_sender: TvuRotationSender,
         entry_stream: Option<&String>,
@@ -196,14 +195,14 @@ impl ReplayStage {
             .spawn(move || {
                 let _exit = Finalizer::new(exit_.clone());
                 let mut last_leader_id = Self::get_leader_for_next_tick(&bank);
-
+                let mut prev_slot = None;
                 let (mut current_slot, mut max_tick_height_for_slot) = {
                     let tick_height = bank.tick_height();
                     let leader_scheduler = bank.leader_scheduler.read().unwrap();
                     let current_slot = leader_scheduler.tick_height_to_slot(tick_height + 1);
                     let first_tick_in_current_slot = current_slot * leader_scheduler.ticks_per_slot;
                     (
-                        current_slot,
+                        Some(current_slot),
                         first_tick_in_current_slot
                             + leader_scheduler.num_ticks_left_in_slot(first_tick_in_current_slot),
                     )
@@ -217,15 +216,35 @@ impl ReplayStage {
                         break;
                     }
 
-                    let current_entry_height = *entry_height.read().unwrap();
+                    if current_slot.is_none() {
+                        let new_slot = Self::get_next_slot(
+                            &db_ledger,
+                            prev_slot.expect("prev_slot must exist"),
+                        );
+                        if new_slot.is_some() {
+                            // Reset the state
+                            current_slot = new_slot;
+                            current_blob_index = 0;
+                            let leader_scheduler = bank.leader_scheduler.read().unwrap();
+                            let first_tick_in_current_slot =
+                                current_slot.unwrap() * leader_scheduler.ticks_per_slot;
+                            max_tick_height_for_slot = first_tick_in_current_slot
+                                + leader_scheduler
+                                    .num_ticks_left_in_slot(first_tick_in_current_slot);
+                        }
+                    }
 
                     let entries = {
-                        if let Ok(entries) = db_ledger.get_slot_entries(
-                            current_slot,
-                            current_entry_height,
-                            Some(MAX_ENTRY_RECV_PER_ITER as u64),
-                        ) {
-                            entries
+                        if let Some(slot) = current_slot {
+                            if let Ok(entries) = db_ledger.get_slot_entries(
+                                slot,
+                                current_blob_index,
+                                Some(MAX_ENTRY_RECV_PER_ITER as u64),
+                            ) {
+                                entries
+                            } else {
+                                vec![]
+                            }
                         } else {
                             vec![]
                         }
@@ -240,7 +259,7 @@ impl ReplayStage {
                             &cluster_info,
                             voting_keypair.as_ref(),
                             &ledger_entry_sender,
-                            &entry_height,
+                            &mut current_blob_index,
                             &last_entry_id,
                             entry_stream.as_mut(),
                         ) {
@@ -262,16 +281,16 @@ impl ReplayStage {
                                 to_leader_sender
                                     .send(TvuReturnType::LeaderRotation(
                                         current_tick_height,
-                                        *entry_height.read().unwrap(),
                                         *last_entry_id.read().unwrap(),
                                     ))
                                     .unwrap();
                             }
 
-                            current_slot += 1;
-                            max_tick_height_for_slot +=
-                                bank.leader_scheduler.read().unwrap().ticks_per_slot;
+                            // Check for any slots that chain to this one
+                            prev_slot = current_slot;
+                            current_slot = None;
                             last_leader_id = leader_id;
+                            continue;
                         }
                     }
 
@@ -313,6 +332,12 @@ impl ReplayStage {
             .get_leader_for_slot(slot)
             .expect("Scheduled leader should be calculated by this point")
     }
+
+    fn get_next_slot(db_ledger: &DbLedger, slot_index: u64) -> Option<u64> {
+        // Find the next slot that chains to the old slot
+        let next_slots = db_ledger.get_slots_since(&[slot_index]).expect("Db error");
+        next_slots.first().cloned()
+    }
 }
 
 impl Service for ReplayStage {
@@ -328,8 +353,9 @@ mod test {
     use super::*;
     use crate::bank::Bank;
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::db_ledger::create_tmp_sample_ledger;
-    use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
+    use crate::db_ledger::{
+        create_tmp_sample_ledger, DbLedger, DbLedgerConfig, DEFAULT_SLOT_HEIGHT,
+    };
     use crate::entry::create_ticks;
     use crate::entry::Entry;
     use crate::fullnode::new_bank_from_ledger;
@@ -389,6 +415,7 @@ mod test {
             0,
         );
         last_id = active_set_entries.last().unwrap().id;
+
         {
             let db_ledger = DbLedger::open(&my_ledger_path).unwrap();
             db_ledger
@@ -402,12 +429,13 @@ mod test {
 
         {
             // Set up the bank
+            let db_ledger_config = DbLedgerConfig::new(ticks_per_slot);
             let (bank, _entry_height, last_entry_id, db_ledger, l_sender, l_receiver) =
-                new_bank_from_ledger(&my_ledger_path, &leader_scheduler_config);
+                new_bank_from_ledger(&my_ledger_path, db_ledger_config, &leader_scheduler_config);
 
             // Set up the replay stage
             let (rotation_sender, rotation_receiver) = channel();
-            let meta = db_ledger.meta().unwrap().unwrap();
+            let meta = db_ledger.meta(0).unwrap().unwrap();
             let exit = Arc::new(AtomicBool::new(false));
             let bank = Arc::new(bank);
             let db_ledger = Arc::new(db_ledger);
@@ -418,7 +446,7 @@ mod test {
                 bank.clone(),
                 Arc::new(RwLock::new(cluster_info_me)),
                 exit.clone(),
-                Arc::new(RwLock::new(meta.consumed)),
+                meta.consumed,
                 Arc::new(RwLock::new(last_entry_id)),
                 rotation_sender,
                 None,
@@ -434,7 +462,6 @@ mod test {
                 entries_to_send.push(entry);
             }
 
-            let expected_entry_height = (active_set_entries.len() + total_entries_to_send) as u64;
             let expected_last_id = entries_to_send.last().unwrap().id;
 
             // Write the entries to the ledger, replay_stage should get notified of changes
@@ -446,7 +473,6 @@ mod test {
             assert_eq!(
                 Some(TvuReturnType::LeaderRotation(
                     2 * ticks_per_slot - 1,
-                    expected_entry_height,
                     expected_last_id,
                 )),
                 {
@@ -507,7 +533,11 @@ mod test {
         let (to_leader_sender, _) = channel();
         {
             let (bank, entry_height, last_entry_id, db_ledger, l_sender, l_receiver) =
-                new_bank_from_ledger(&my_ledger_path, &LeaderSchedulerConfig::default());
+                new_bank_from_ledger(
+                    &my_ledger_path,
+                    DbLedgerConfig::default(),
+                    &LeaderSchedulerConfig::default(),
+                );
 
             let bank = Arc::new(bank);
             let db_ledger = Arc::new(db_ledger);
@@ -518,7 +548,7 @@ mod test {
                 bank.clone(),
                 cluster_info_me.clone(),
                 exit.clone(),
-                Arc::new(RwLock::new(entry_height)),
+                entry_height,
                 Arc::new(RwLock::new(last_entry_id)),
                 to_leader_sender,
                 None,
@@ -581,8 +611,6 @@ mod test {
             make_active_set_entries(&my_keypair, &mint_keypair, 100, 1, &last_id, &last_id, 0);
         let mut last_id = active_set_entries.last().unwrap().id;
         let initial_tick_height = genesis_entry_height;
-        let active_set_entries_len = active_set_entries.len() as u64;
-        let initial_non_tick_height = genesis_entry_height - initial_tick_height;
 
         {
             let db_ledger = DbLedger::open(&my_ledger_path).unwrap();
@@ -608,11 +636,12 @@ mod test {
         let (rotation_tx, rotation_rx) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         {
+            let db_ledger_config = DbLedgerConfig::new(ticks_per_slot);
             let (bank, _entry_height, last_entry_id, db_ledger, l_sender, l_receiver) =
-                new_bank_from_ledger(&my_ledger_path, &leader_scheduler_config);
+                new_bank_from_ledger(&my_ledger_path, db_ledger_config, &leader_scheduler_config);
 
             let meta = db_ledger
-                .meta()
+                .meta(0)
                 .unwrap()
                 .expect("First slot metadata must exist");
 
@@ -626,7 +655,7 @@ mod test {
                 bank.clone(),
                 cluster_info_me.clone(),
                 exit.clone(),
-                Arc::new(RwLock::new(meta.consumed)),
+                meta.consumed,
                 Arc::new(RwLock::new(last_entry_id)),
                 rotation_tx,
                 None,
@@ -642,10 +671,6 @@ mod test {
             let total_entries_to_send = (active_window_tick_length - initial_tick_height) as usize;
             let num_hashes = 1;
 
-            // Add on the only entries that weren't ticks to the bootstrap height to get the
-            // total expected entry length
-            let expected_entry_height =
-                active_window_tick_length + initial_non_tick_height + active_set_entries_len;
             let leader_rotation_index =
                 (active_window_tick_length - initial_tick_height - 1) as usize;
             let mut expected_last_id = Hash::default();
@@ -674,7 +699,6 @@ mod test {
             assert_eq!(
                 Some(TvuReturnType::LeaderRotation(
                     active_window_tick_length,
-                    expected_entry_height,
                     expected_last_id,
                 )),
                 {
@@ -704,8 +728,7 @@ mod test {
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
         let (ledger_entry_sender, _ledger_entry_receiver) = channel();
         let last_entry_id = Hash::default();
-
-        let entry_height = 0;
+        let mut current_blob_index = 0;
         let mut last_id = Hash::default();
         let mut entries = Vec::new();
         for _ in 0..5 {
@@ -722,7 +745,7 @@ mod test {
             &cluster_info_me,
             Some(&voting_keypair),
             &ledger_entry_sender,
-            &Arc::new(RwLock::new(entry_height)),
+            &mut current_blob_index,
             &Arc::new(RwLock::new(last_entry_id)),
             None,
         );
@@ -744,7 +767,7 @@ mod test {
             &cluster_info_me,
             Some(&voting_keypair),
             &ledger_entry_sender,
-            &Arc::new(RwLock::new(entry_height)),
+            &mut current_blob_index,
             &Arc::new(RwLock::new(last_entry_id)),
             None,
         );
@@ -774,7 +797,7 @@ mod test {
         let (ledger_entry_sender, _ledger_entry_receiver) = channel();
         let last_entry_id = Hash::default();
 
-        let entry_height = 0;
+        let mut entry_height = 0;
         let mut last_id = Hash::default();
         let mut entries = Vec::new();
         let mut expected_entries = Vec::new();
@@ -794,7 +817,7 @@ mod test {
             &cluster_info_me,
             Some(&voting_keypair),
             &ledger_entry_sender,
-            &Arc::new(RwLock::new(entry_height)),
+            &mut entry_height,
             &Arc::new(RwLock::new(last_entry_id)),
             Some(&mut entry_stream),
         )

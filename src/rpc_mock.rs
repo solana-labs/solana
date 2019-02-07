@@ -1,7 +1,7 @@
 // Implementation of RpcRequestHandler trait for testing Rpc requests without i/o
 
 use crate::rpc_request::{RpcRequest, RpcRequestHandler};
-use serde_json::{self, Number, Value};
+use serde_json::{Number, Value};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
