@@ -35,8 +35,6 @@ struct Broadcast {
     id: Pubkey,
     max_tick_height: u64,
     blob_index: u64,
-    // Slot of the last indexed blob
-    slot_height: u64,
 
     #[cfg(feature = "erasure")]
     coding_generator: CodingGenerator,
@@ -84,13 +82,7 @@ impl Broadcast {
             .collect();
 
         // TODO: blob_index should be slot-relative...
-        index_blobs(
-            &blobs,
-            &self.id,
-            &mut self.blob_index,
-            &mut self.slot_height,
-            &slots,
-        );
+        index_blobs(&blobs, &self.id, &mut self.blob_index, &slots);
 
         let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
 
@@ -190,7 +182,6 @@ impl BroadcastService {
         bank: &Arc<Bank>,
         sock: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        slot_height: u64,
         blob_index: u64,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
         receiver: &Receiver<Vec<Entry>>,
@@ -203,7 +194,6 @@ impl BroadcastService {
         let mut broadcast = Broadcast {
             id: me.id,
             max_tick_height,
-            slot_height,
             blob_index,
             #[cfg(feature = "erasure")]
             coding_generator: CodingGenerator::new(),
@@ -259,7 +249,6 @@ impl BroadcastService {
         bank: Arc<Bank>,
         sock: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        slot_height: u64,
         blob_index: u64,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         receiver: Receiver<Vec<Entry>>,
@@ -277,7 +266,6 @@ impl BroadcastService {
                     &bank,
                     &sock,
                     &cluster_info,
-                    slot_height,
                     blob_index,
                     &leader_scheduler,
                     &receiver,
@@ -326,7 +314,6 @@ mod test {
         ledger_path: &str,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         entry_receiver: Receiver<Vec<Entry>>,
-        slot_height: u64,
         blob_index: u64,
         max_tick_height: u64,
     ) -> MockBroadcastService {
@@ -355,7 +342,6 @@ mod test {
             bank.clone(),
             leader_info.sockets.broadcast,
             cluster_info,
-            slot_height,
             blob_index,
             leader_scheduler,
             entry_receiver,
@@ -383,7 +369,7 @@ mod test {
             // Mock the tick height to look like the tick height right after a leader transition
             leader_scheduler.set_leader_schedule(vec![leader_keypair.pubkey()]);
             let start_tick_height = 0;
-            let max_tick_height = start_tick_height + leader_scheduler.ticks_per_epoch;
+            let max_tick_height = start_tick_height + leader_scheduler.ticks_per_slot;
 
             let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
             let (entry_sender, entry_receiver) = channel();
@@ -392,7 +378,6 @@ mod test {
                 &ledger_path,
                 leader_scheduler.clone(),
                 entry_receiver,
-                1,
                 0,
                 max_tick_height,
             );
@@ -408,7 +393,6 @@ mod test {
 
             sleep(Duration::from_millis(2000));
             let db_ledger = broadcast_service.db_ledger;
-            let mut prev_slot = 1;
             let mut blob_index = 0;
             for i in 0..max_tick_height - start_tick_height {
                 let slot = leader_scheduler
@@ -416,14 +400,9 @@ mod test {
                     .unwrap()
                     .tick_height_to_slot(start_tick_height + i + 1);
 
-                if slot != prev_slot {
-                    blob_index = 0;
-                }
-
                 let result = db_ledger.get_data_blob(slot, blob_index).unwrap();
 
                 blob_index += 1;
-                prev_slot = slot;
                 assert!(result.is_some());
             }
 

@@ -282,7 +282,6 @@ impl Fullnode {
                 .try_clone()
                 .expect("Failed to clone broadcast socket"),
             cluster_info.clone(),
-            slot_height,
             blob_index,
             config.sigverify_disabled,
             max_tpu_tick_height,
@@ -362,7 +361,7 @@ impl Fullnode {
             last_entry_id,
         );
 
-        let (scheduled_leader, slot_height, max_tick_height) = {
+        let (scheduled_leader, max_tick_height) = {
             let mut leader_scheduler = self.bank.leader_scheduler.write().unwrap();
 
             // A transition is only permitted on the final tick of a slot
@@ -373,7 +372,6 @@ impl Fullnode {
             let slot = leader_scheduler.tick_height_to_slot(first_tick_of_next_slot);
             (
                 leader_scheduler.get_leader_for_slot(slot).unwrap(),
-                slot,
                 first_tick_of_next_slot
                     + leader_scheduler.num_ticks_left_in_slot(first_tick_of_next_slot),
             )
@@ -402,7 +400,6 @@ impl Fullnode {
             self.cluster_info.clone(),
             self.sigverify_disabled,
             max_tick_height,
-            slot_height,
             0,
             &last_entry_id,
             self.id,

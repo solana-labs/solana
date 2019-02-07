@@ -767,7 +767,6 @@ mod test {
             &shared_blobs,
             &Keypair::new().pubkey(),
             &mut 0,
-            &mut 0,
             &vec![slot; num_entries],
         );
 
@@ -859,7 +858,6 @@ mod test {
         index_blobs(
             &shared_blobs,
             &Keypair::new().pubkey(),
-            &mut 0,
             &mut 0,
             &vec![DEFAULT_SLOT_HEIGHT; num_entries],
         );

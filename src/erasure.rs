@@ -894,7 +894,6 @@ pub mod test {
             &blobs,
             &Keypair::new().pubkey(),
             &mut (offset as u64),
-            &mut (slot as u64),
             &vec![slot; blobs.len()],
         );
 
@@ -913,7 +912,6 @@ pub mod test {
             &blobs,
             &Keypair::new().pubkey(),
             &mut (offset as u64),
-            &mut DEFAULT_SLOT_HEIGHT,
             &vec![DEFAULT_SLOT_HEIGHT; blobs.len()],
         );
         blobs
