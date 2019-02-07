@@ -137,10 +137,18 @@ impl AccountsDB {
         if tx.signatures.is_empty() && tx.fee != 0 {
             Err(BankError::MissingSignatureForFee)
         } else {
+            // Check for unique account keys
+            let mut unique_keys: Vec<Pubkey> = vec![];
+
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
             let mut called_accounts: Vec<Account> = vec![];
             for key in &tx.account_keys {
+                if unique_keys.contains(key) {
+                    error_counters.account_in_use += 1;
+                    return Err(BankError::AccountInUse);
+                }
+                unique_keys.push(key.clone());
                 called_accounts.push(Self::load(checkpoints, key).unwrap_or_default());
             }
             if called_accounts.is_empty() || called_accounts[0].tokens == 0 {
@@ -808,8 +816,9 @@ mod tests {
         );
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_counters(&error_counters, [0, 0, 0, 0, 0, 0, 0, 0]);
+        assert_counters(&error_counters, [0, 1, 0, 0, 0, 0, 0, 0]);
         assert_eq!(loaded_accounts.len(), 1);
         loaded_accounts[0].clone().unwrap_err();
+        assert_eq!(loaded_accounts[0], Err(BankError::AccountInUse));
     }
 }
