@@ -125,6 +125,7 @@ pub trait LedgerColumnFamilyRaw {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, Eq, PartialEq)]
 // The Meta column family
 pub struct SlotMeta {
+    pub slot_height: u64,
     // The total number of consecutive blob starting from index 0
     // we have received for this slot.
     pub consumed: u64,
@@ -149,7 +150,15 @@ impl SlotMeta {
             // A placeholder slot does not contain all the ticks
             false
         } else {
-            self.num_expected_ticks(db_ledger) <= self.consumed_ticks
+            let num_expected_ticks = {
+                let num = self.num_expected_ticks(db_ledger);
+                if self.slot_height == 0 {
+                    num - 1
+                } else {
+                    num
+                }
+            };
+            num_expected_ticks <= self.consumed_ticks
         }
     }
 
@@ -159,6 +168,7 @@ impl SlotMeta {
 
     fn new(slot_height: u64, num_blocks: u64) -> Self {
         SlotMeta {
+            slot_height,
             consumed: 0,
             received: 0,
             consumed_ticks: 0,
@@ -1954,44 +1964,51 @@ mod tests {
     pub fn test_handle_chaining_basic() {
         let db_ledger_path = get_tmp_ledger_path("test_handle_chaining_basic");
         {
-            let config = DbLedgerConfig::new(1);
+            let ticks_per_slot = 2;
+            let config = DbLedgerConfig::new(ticks_per_slot);
             let db_ledger = DbLedger::open_config(&db_ledger_path, &config).unwrap();
 
-            let entries = create_ticks(3, Hash::default());
+            let entries = create_ticks(6, Hash::default());
             let mut blobs = entries.to_blobs();
             for (i, ref mut b) in blobs.iter_mut().enumerate() {
-                b.set_index(0 as u64);
-                b.set_slot(i as u64);
+                b.set_index(i as u64 % ticks_per_slot);
+                b.set_slot(i as u64 / ticks_per_slot);
             }
 
             // 1) Write to the first slot
-            db_ledger.write_blobs(&blobs[1..2]).unwrap();
+            db_ledger
+                .write_blobs(&blobs[ticks_per_slot as usize..2 * ticks_per_slot as usize])
+                .unwrap();
             let s1 = db_ledger.meta_cf.get_slot_meta(1).unwrap().unwrap();
             assert!(s1.next_slots.is_empty());
             // Slot 1 is not trunk because slot 0 hasn't been inserted yet
             assert!(!s1.is_trunk);
             assert_eq!(s1.num_blocks, 1);
-            assert_eq!(s1.consumed_ticks, 1);
+            assert_eq!(s1.consumed_ticks, ticks_per_slot);
 
             // 2) Write to the second slot
-            db_ledger.write_blobs(&blobs[2..3]).unwrap();
+            db_ledger
+                .write_blobs(&blobs[2 * ticks_per_slot as usize..3 * ticks_per_slot as usize])
+                .unwrap();
             let s2 = db_ledger.meta_cf.get_slot_meta(2).unwrap().unwrap();
             assert!(s2.next_slots.is_empty());
             // Slot 2 is not trunk because slot 0 hasn't been inserted yet
             assert!(!s2.is_trunk);
             assert_eq!(s2.num_blocks, 1);
-            assert_eq!(s2.consumed_ticks, 1);
+            assert_eq!(s2.consumed_ticks, ticks_per_slot);
 
             // Check the first slot again, it should chain to the second slot,
             // but still isn't part of the trunk
             let s1 = db_ledger.meta_cf.get_slot_meta(1).unwrap().unwrap();
             assert_eq!(s1.next_slots, vec![2]);
             assert!(!s1.is_trunk);
-            assert_eq!(s1.consumed_ticks, 1);
+            assert_eq!(s1.consumed_ticks, ticks_per_slot);
 
             // 3) Write to the zeroth slot, check that every slot
             // is now part of the trunk
-            db_ledger.write_blobs(&blobs[0..1]).unwrap();
+            db_ledger
+                .write_blobs(&blobs[0..ticks_per_slot as usize])
+                .unwrap();
             for i in 0..3 {
                 let s = db_ledger.meta_cf.get_slot_meta(i).unwrap().unwrap();
                 // The last slot will not chain to any other slots
@@ -1999,7 +2016,11 @@ mod tests {
                     assert_eq!(s.next_slots, vec![i + 1]);
                 }
                 assert_eq!(s.num_blocks, 1);
-                assert_eq!(s.consumed_ticks, 1);
+                if i == 0 {
+                    assert_eq!(s.consumed_ticks, ticks_per_slot - 1);
+                } else {
+                    assert_eq!(s.consumed_ticks, ticks_per_slot);
+                }
                 assert!(s.is_trunk);
             }
         }
@@ -2065,7 +2086,11 @@ mod tests {
                 } else {
                     assert!(s.next_slots.is_empty());
                 }
-                assert_eq!(s.consumed_ticks, ticks_per_block as u64);
+                if i == 0 {
+                    assert_eq!(s.consumed_ticks, ticks_per_block - 1);
+                } else {
+                    assert_eq!(s.consumed_ticks, ticks_per_block);
+                }
                 assert!(s.is_trunk);
             }
         }
