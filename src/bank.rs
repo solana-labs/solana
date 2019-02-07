@@ -46,6 +46,10 @@ pub enum BankError {
     /// This Pubkey is being processed in another transaction
     AccountInUse,
 
+    /// Pubkey appears twice in the same transaction, typically in a pay-to-self
+    /// transaction.
+    AccountLoadedTwice,
+
     /// Attempt to debit from `Pubkey`, but no found no record of a prior credit.
     AccountNotFound,
 
@@ -641,6 +645,12 @@ impl Bank {
             inc_new_counter_info!(
                 "bank-process_transactions-error-insufficient_funds",
                 error_counters.insufficient_funds
+            );
+        }
+        if 0 != error_counters.account_loaded_twice {
+            inc_new_counter_info!(
+                "bank-process_transactions-account_loaded_twice",
+                error_counters.account_loaded_twice
             );
         }
         (loaded_accounts, executed)

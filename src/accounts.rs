@@ -21,6 +21,7 @@ pub type InstructionLoaders = Vec<Vec<(Pubkey, Account)>>;
 pub struct ErrorCounters {
     pub account_not_found: usize,
     pub account_in_use: usize,
+    pub account_loaded_twice: usize,
     pub last_id_not_found: usize,
     pub last_id_too_old: usize,
     pub reserve_last_id: usize,
@@ -145,8 +146,8 @@ impl AccountsDB {
             let mut called_accounts: Vec<Account> = vec![];
             for key in &tx.account_keys {
                 if unique_keys.contains(key) {
-                    error_counters.account_in_use += 1;
-                    return Err(BankError::AccountInUse);
+                    error_counters.account_loaded_twice += 1;
+                    return Err(BankError::AccountLoadedTwice);
                 }
                 unique_keys.push(key.clone());
                 called_accounts.push(Self::load(checkpoints, key).unwrap_or_default());
@@ -816,9 +817,9 @@ mod tests {
         );
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_counters(&error_counters, [0, 1, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(error_counters.account_loaded_twice, 1);
         assert_eq!(loaded_accounts.len(), 1);
         loaded_accounts[0].clone().unwrap_err();
-        assert_eq!(loaded_accounts[0], Err(BankError::AccountInUse));
+        assert_eq!(loaded_accounts[0], Err(BankError::AccountLoadedTwice));
     }
 }
