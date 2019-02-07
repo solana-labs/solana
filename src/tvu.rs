@@ -34,7 +34,6 @@ use std::thread;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TvuReturnType {
     LeaderRotation(u64, u64, Hash),
-    Abort,
 }
 
 pub struct Tvu {
