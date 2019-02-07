@@ -1,6 +1,7 @@
 use crate::bank::BankError;
 use crate::bank::Result;
 use crate::counter::Counter;
+use crate::runtime::has_duplicates;
 use bincode::serialize;
 use hashbrown::{HashMap, HashSet};
 use log::Level;
@@ -21,6 +22,7 @@ pub type InstructionLoaders = Vec<Vec<(Pubkey, Account)>>;
 pub struct ErrorCounters {
     pub account_not_found: usize,
     pub account_in_use: usize,
+    pub account_loaded_twice: usize,
     pub last_id_not_found: usize,
     pub last_id_too_old: usize,
     pub reserve_last_id: usize,
@@ -137,6 +139,12 @@ impl AccountsDB {
         if tx.signatures.is_empty() && tx.fee != 0 {
             Err(BankError::MissingSignatureForFee)
         } else {
+            // Check for unique account keys
+            if has_duplicates(&tx.account_keys) {
+                error_counters.account_loaded_twice += 1;
+                return Err(BankError::AccountLoadedTwice);
+            }
+
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
             let mut called_accounts: Vec<Account> = vec![];
@@ -783,5 +791,34 @@ mod tests {
             }
             Err(e) => Err(e).unwrap(),
         }
+    }
+
+    #[test]
+    fn test_load_account_pay_to_self() {
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
+        let mut error_counters = ErrorCounters::default();
+
+        let keypair = Keypair::new();
+        let pubkey = keypair.pubkey();
+
+        let account = Account::new(10, 1, Pubkey::default());
+        accounts.push((pubkey, account));
+
+        let instructions = vec![Instruction::new(0, &(), vec![0, 1])];
+        // Simulate pay-to-self transaction, which loads the same account twice
+        let tx = Transaction::new_with_instructions(
+            &[&keypair],
+            &[pubkey],
+            Hash::default(),
+            0,
+            vec![native_loader::id()],
+            instructions,
+        );
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+
+        assert_eq!(error_counters.account_loaded_twice, 1);
+        assert_eq!(loaded_accounts.len(), 1);
+        loaded_accounts[0].clone().unwrap_err();
+        assert_eq!(loaded_accounts[0], Err(BankError::AccountLoadedTwice));
     }
 }

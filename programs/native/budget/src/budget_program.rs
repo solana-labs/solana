@@ -149,6 +149,14 @@ impl BudgetProgram {
         }
 
         if let Some(payment) = final_payment {
+            if let Some(key) = keyed_accounts[0].signer_key() {
+                if &payment.to == key {
+                    self.pending_budget = None;
+                    keyed_accounts[1].account.tokens -= payment.tokens;
+                    keyed_accounts[0].account.tokens += payment.tokens;
+                    return Ok(());
+                }
+            }
             if &payment.to != keyed_accounts[2].unsigned_key() {
                 trace!("destination missing");
                 return Err(BudgetError::DestinationMissing);
@@ -494,7 +502,7 @@ mod test {
         // nothing should be changed because apply witness didn't finalize a payment
         assert_eq!(accounts[from_account].tokens, 0);
         assert_eq!(accounts[contract_account].tokens, 1);
-        // this would be the `to.pubkey()` account
+        // this is the `to.pubkey()` account
         assert_eq!(accounts[pay_account].tokens, 0);
 
         // Now, cancel the transaction. from gets her funds back
@@ -505,11 +513,11 @@ mod test {
             Hash::default(),
         );
         process_transaction(&tx, &mut accounts).unwrap();
-        assert_eq!(accounts[from_account].tokens, 0);
+        assert_eq!(accounts[from_account].tokens, 1);
         assert_eq!(accounts[contract_account].tokens, 0);
-        assert_eq!(accounts[pay_account].tokens, 1);
+        assert_eq!(accounts[pay_account].tokens, 0);
 
-        // try to replay the signature contract
+        // try to replay the cancel contract
         let tx = BudgetTransaction::new_signature(
             &from,
             contract.pubkey(),
@@ -520,9 +528,9 @@ mod test {
             process_transaction(&tx, &mut accounts),
             Err(BudgetError::ContractNotPending)
         );
-        assert_eq!(accounts[from_account].tokens, 0);
+        assert_eq!(accounts[from_account].tokens, 1);
         assert_eq!(accounts[contract_account].tokens, 0);
-        assert_eq!(accounts[pay_account].tokens, 1);
+        assert_eq!(accounts[pay_account].tokens, 0);
     }
 
     #[test]
