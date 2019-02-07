@@ -7,8 +7,8 @@ export CI_BUILD_START
 #
 (
   containers=$(docker ps -q)
-  if [[ -n $containers ]]; then
-    echo "Killing stale docker containers"
+  if [[ $(hostname) != metrics-solana-com && -n $containers ]]; then
+    echo "+++ Killing stale docker containers"
     docker ps
 
     # shellcheck disable=SC2086 # Don't want to double quote $containers
