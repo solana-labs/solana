@@ -556,7 +556,7 @@ impl Service for Fullnode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db_ledger::{create_tmp_sample_ledger, tmp_copy_ledger, DEFAULT_SLOT_HEIGHT};
+    use crate::db_ledger::{create_tmp_sample_ledger, tmp_copy_ledger};
     use crate::entry::make_consecutive_blobs;
     use crate::leader_scheduler::make_active_set_entries;
     use crate::streamer::responder;
@@ -708,6 +708,7 @@ mod tests {
                 // tick_height = 0 from the leader scheduler's active window
                 ticks_per_slot * 4,
                 "test_wrong_role_transition",
+                ticks_per_slot,
             );
         let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
@@ -764,6 +765,8 @@ mod tests {
     fn test_validator_to_leader_transition() {
         solana_logger::setup();
         // Make leader and validator node
+        let ticks_per_slot = 10;
+        let slots_per_epoch = 4;
         let leader_keypair = Arc::new(Keypair::new());
         let validator_keypair = Arc::new(Keypair::new());
         let (leader_node, validator_node, validator_ledger_path, ledger_initial_len, last_id) =
@@ -773,6 +776,7 @@ mod tests {
                 0,
                 0,
                 "test_validator_to_leader_transition",
+                ticks_per_slot,
             );
 
         let leader_id = leader_keypair.pubkey();
@@ -782,9 +786,6 @@ mod tests {
         info!("validator: {:?}", validator_info.id);
 
         // Set the leader scheduler for the validator
-        let ticks_per_slot = 10;
-        let slots_per_epoch = 4;
-
         let mut fullnode_config = FullnodeConfig::default();
         fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
             ticks_per_slot,
@@ -870,21 +871,26 @@ mod tests {
         solana_logger::setup();
 
         // Make leader node
+        let ticks_per_slot = 5;
+        let slots_per_epoch = 2;
         let leader_keypair = Arc::new(Keypair::new());
         let validator_keypair = Arc::new(Keypair::new());
 
         info!("leader: {:?}", leader_keypair.pubkey());
         info!("validator: {:?}", validator_keypair.pubkey());
 
-        let (leader_node, _, leader_ledger_path, _, _) =
-            setup_leader_validator(&leader_keypair, &validator_keypair, 1, 0, "test_tvu_behind");
+        let (leader_node, _, leader_ledger_path, _, _) = setup_leader_validator(
+            &leader_keypair,
+            &validator_keypair,
+            1,
+            0,
+            "test_tvu_behind",
+            ticks_per_slot,
+        );
 
         let leader_node_info = leader_node.info.clone();
 
         // Set the leader scheduler for the validator
-        let ticks_per_slot = 5;
-        let slots_per_epoch = 2;
-
         let mut fullnode_config = FullnodeConfig::default();
         fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
             ticks_per_slot,
@@ -961,11 +967,13 @@ mod tests {
         num_genesis_ticks: u64,
         num_ending_ticks: u64,
         test_name: &str,
+        ticks_per_block: u64,
     ) -> (Node, Node, String, u64, Hash) {
         // Make a leader identity
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         // Create validator identity
+        assert!(num_genesis_ticks <= ticks_per_block);
         let (mint_keypair, ledger_path, genesis_entry_height, last_id) = create_tmp_sample_ledger(
             test_name,
             10_000,
@@ -993,14 +1001,33 @@ mod tests {
             num_ending_ticks,
         );
 
+        let non_tick_active_entries_len = active_set_entries.len() - num_ending_ticks as usize;
+        let remaining_ticks_in_zeroth_slot = ticks_per_block - num_genesis_ticks;
+        let entries_for_zeroth_slot =
+            non_tick_active_entries_len + remaining_ticks_in_zeroth_slot as usize;
+        let entry_chunks: Vec<_> = active_set_entries[entries_for_zeroth_slot..]
+            .chunks(ticks_per_block as usize)
+            .collect();
+
         let db_ledger = DbLedger::open(&ledger_path).unwrap();
-        db_ledger
-            .write_entries(
-                DEFAULT_SLOT_HEIGHT,
-                genesis_entry_height,
-                &active_set_entries,
-            )
-            .unwrap();
+
+        // Iterate writing slots through 0..entry_chunks.len()
+        for i in 0..entry_chunks.len() + 1 {
+            let (start_height, entries) = {
+                if i == 0 {
+                    (
+                        genesis_entry_height,
+                        &active_set_entries[..entries_for_zeroth_slot],
+                    )
+                } else {
+                    (0, entry_chunks[i - 1])
+                }
+            };
+
+            db_ledger
+                .write_entries(i as u64, start_height, entries)
+                .unwrap();
+        }
 
         let entry_height = genesis_entry_height + active_set_entries.len() as u64;
         (

@@ -773,7 +773,7 @@ mod test {
 
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
-        db_ledger.write_blobs(&blobs).unwrap();
+        db_ledger.write_blobs(blobs).unwrap();
 
         let empty: Vec<u64> = vec![];
         for i in 0..num_entries as u64 {

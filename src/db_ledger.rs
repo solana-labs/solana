@@ -10,7 +10,9 @@ use crate::result::{Error, Result};
 use bincode::{deserialize, serialize};
 use byteorder::{BigEndian, ByteOrder, ReadBytesExt};
 use hashbrown::HashMap;
-use rocksdb::{ColumnFamily, ColumnFamilyDescriptor, DBRawIterator, Options, WriteBatch, DB};
+use rocksdb::{
+    ColumnFamily, ColumnFamilyDescriptor, DBRawIterator, IteratorMode, Options, WriteBatch, DB,
+};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use solana_sdk::hash::Hash;
@@ -468,12 +470,12 @@ impl DbLedger {
         Ok(new_entries)
     }
 
-    pub fn write_blobs<'a, I>(&self, blobs: I) -> Result<Vec<Entry>>
+    pub fn write_blobs<I>(&self, blobs: I) -> Result<Vec<Entry>>
     where
         I: IntoIterator,
-        I::Item: Borrow<&'a Blob>,
+        I::Item: Borrow<Blob>,
     {
-        let blobs = blobs.into_iter().map(|b| *b.borrow());
+        //let blobs = blobs.into_iter().map(|b| *b.borrow());
         let entries = self.insert_data_blobs(blobs)?;
         Ok(entries)
     }
@@ -668,6 +670,13 @@ impl DbLedger {
         })
     }
 
+    pub fn read_ledger_blobs(&self) -> impl Iterator<Item = Blob> {
+        self.db
+            .iterator_cf(self.data_cf.handle(), IteratorMode::Start)
+            .unwrap()
+            .map(|(_, blob_data)| Blob::new(&blob_data))
+    }
+
     pub fn get_coding_blob_bytes(&self, slot: u64, index: u64) -> Result<Option<Vec<u8>>> {
         self.erasure_cf.get_by_slot_index(slot, index)
     }
@@ -679,6 +688,10 @@ impl DbLedger {
     }
     pub fn put_coding_blob_bytes(&self, slot: u64, index: u64, bytes: &[u8]) -> Result<()> {
         self.erasure_cf.put_by_slot_index(slot, index, bytes)
+    }
+
+    pub fn put_data_raw(&self, key: &[u8], value: &[u8]) -> Result<()> {
+        self.data_cf.put(key, value)
     }
 
     pub fn put_data_blob_bytes(&self, slot: u64, index: u64, bytes: &[u8]) -> Result<()> {
@@ -1335,14 +1348,12 @@ pub fn tmp_copy_ledger(from: &str, name: &str) -> String {
     let path = get_tmp_ledger_path(name);
 
     let db_ledger = DbLedger::open(from).unwrap();
-    let ledger_entries = db_ledger.read_ledger().unwrap();
+    let blobs = db_ledger.read_ledger_blobs();
     let genesis_block = GenesisBlock::load(from).unwrap();
 
     DbLedger::destroy(&path).expect("Expected successful database destruction");
     let db_ledger = DbLedger::open(&path).unwrap();
-    db_ledger
-        .write_entries(DEFAULT_SLOT_HEIGHT, 0, ledger_entries)
-        .unwrap();
+    db_ledger.write_blobs(blobs).unwrap();
     genesis_block.write(&path).unwrap();
 
     path
@@ -1423,7 +1434,7 @@ mod tests {
 
         let ledger_path = get_tmp_ledger_path("test_read_blobs_bytes");
         let ledger = DbLedger::open(&ledger_path).unwrap();
-        ledger.write_blobs(&blobs).unwrap();
+        ledger.write_blobs(blobs.clone()).unwrap();
 
         let mut buf = [0; 1024];
         let (num_blobs, bytes) = ledger.read_blobs_bytes(0, 1, &mut buf, slot).unwrap();
