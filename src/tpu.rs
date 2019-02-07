@@ -23,7 +23,6 @@ use std::thread;
 
 pub enum TpuReturnType {
     LeaderRotation(u64),
-    Abort,
 }
 
 pub enum TpuMode {
