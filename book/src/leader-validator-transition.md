@@ -127,6 +127,3 @@ loop:
 BankFork tracks changes to the bank state over a specific slot.  Once the
 final tick has been registered the state is frozen. Any attempts to write
 to are rejected.
-
-Validators operate over multiple BankForks, each reprsenting a live
-active chain.  A Leader only operates over a single BankFork.
