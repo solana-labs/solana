@@ -24,7 +24,7 @@
 
 - [Proposed Architectural Changes](proposals.md)
   - [Ledger Replication](ledger-replication.md)
-  - [Secure Enclave](enclave.md)
+  - [Secure Vote Signing](vote-signer.md)
   - [Staking Rewards](staking-rewards.md)
   - [Fork Selection](fork-selection.md)
   - [Blocktree](blocktree.md)
