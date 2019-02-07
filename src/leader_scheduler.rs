@@ -456,20 +456,10 @@ pub fn make_active_set_entries(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::bank::Bank;
     use crate::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_TOKENS};
-    use crate::leader_scheduler::{
-        LeaderScheduler, LeaderSchedulerConfig, DEFAULT_SEED_ROTATION_INTERVAL,
-        DEFAULT_TICKS_PER_SLOT,
-    };
-    use crate::voting_keypair::VotingKeypair;
     use hashbrown::HashSet;
-    use solana_sdk::hash::Hash;
-    use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::hash::Hash as StdHash;
     use std::iter::FromIterator;
-    use std::sync::Arc;
 
     fn to_hashset_owned<T>(slice: &[T]) -> HashSet<T>
     where

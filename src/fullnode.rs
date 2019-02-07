@@ -528,19 +528,11 @@ impl Service for Fullnode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cluster_info::Node;
-    use crate::db_ledger::*;
+    use crate::db_ledger::{create_tmp_sample_ledger, tmp_copy_ledger, DEFAULT_SLOT_HEIGHT};
     use crate::entry::make_consecutive_blobs;
-    use crate::leader_scheduler::{make_active_set_entries, LeaderSchedulerConfig};
-    use crate::service::Service;
+    use crate::leader_scheduler::make_active_set_entries;
     use crate::streamer::responder;
-    use crate::voting_keypair::VotingKeypair;
-    use solana_sdk::hash::Hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
-    use std::net::UdpSocket;
-    use std::sync::mpsc::channel;
-    use std::sync::Arc;
 
     #[test]
     fn validator_exit() {
