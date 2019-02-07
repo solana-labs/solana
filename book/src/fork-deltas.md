@@ -17,17 +17,7 @@ An *active fork* is a direct list of connected forks that descend from the curre
 
 For example:
 
-```art
-      1
-     / \
-    2   \
-   /|   |
-  / |   |
- 4  |   |
-    5   /\
-       6  \
-           7
-```
+<img alt="Forks" src="img/forks.svg" class="center"/>
 
 The following *active forks* are in the deltas DAG
 
@@ -42,42 +32,16 @@ A validator votes for a finalized fork.  The *active fork* connecting the fork t
 
 For example:
 
-```art
-      1
-     / \
-    2   \
-   /|   |
-  / |   |
- 4  |   |
-    5   /\
-       6  \
-           7
-```
+<img alt="Forks" src="img/forks.svg" class="center"/>
 
 * ROLLBACK\_DEPTH=2, vote=5, *active fork*={5,2,1}
 
-```art
-    2
-   /|
-  / |
- 4  |
-    5
-```
+<img alt="Forks after pruning" src="img/forks-pruned.svg" class="center"/>
 
 The new root is 2, and any active forks that are not descendants from 2 are pruned.
 
 * ROLLBACK\_DEPTH=2, vote=6, *active fork*={6,1}
 
-```art
-      1
-     / \
-    2   \
-   /|   |
-  / |   |
- 4  |   |
-    5   /\
-       6  \
-           7
-```
+<img alt="Forks" src="img/forks.svg" class="center"/>
 
 The tree remains with `root=1`, since the *active fork* starting at 6 is only 2 forks long.
