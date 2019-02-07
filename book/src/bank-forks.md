@@ -1,4 +1,4 @@
-# Fork Deltas
+# Bank Fork
 
 This design describes a way to checkpoint the bank state such that it can track
 multiple forks without duplicating data.  It addresses the following
@@ -11,9 +11,8 @@ challenges:
 
 ## Architecture
 
-The basic design idea is to maintain a DAG of forks.  Each fork points back to
-a single ancestor.  The DAG is initialized with a root.  Each subsequent fork
-must descend from the root.
+The basic design idea is to maintain a DAG of forks. The DAG is initialized with
+a *root*.  Each subsequent fork must descend from the root.
 
 ## Active Forks
 
@@ -24,7 +23,7 @@ For example:
 
 <img alt="Forks" src="img/forks.svg" class="center"/>
 
-The following *active forks* are in the deltas DAG
+The following *active forks* are in the forks DAG
 
 * 4,2,1
 * 5,2,1
