@@ -7,7 +7,6 @@ use crate::broadcast_service::BroadcastService;
 use crate::cluster_info::ClusterInfo;
 use crate::cluster_info_vote_listener::ClusterInfoVoteListener;
 use crate::fetch_stage::FetchStage;
-use crate::fullnode::TpuRotationSender;
 use crate::poh_service::Config;
 use crate::service::Service;
 use crate::sigverify_stage::SigVerifyStage;
@@ -17,13 +16,16 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::channel;
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread;
 
 pub enum TpuReturnType {
     LeaderRotation(u64),
 }
+
+pub type TpuRotationSender = Sender<TpuReturnType>;
+pub type TpuRotationReceiver = Receiver<TpuReturnType>;
 
 pub enum TpuMode {
     Leader(LeaderServices),

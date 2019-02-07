@@ -16,7 +16,6 @@ use crate::bank::Bank;
 use crate::blob_fetch_stage::BlobFetchStage;
 use crate::cluster_info::ClusterInfo;
 use crate::db_ledger::DbLedger;
-use crate::fullnode::TvuRotationSender;
 use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
 use crate::service::Service;
@@ -27,7 +26,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, SyncSender};
+use std::sync::mpsc::{channel, Receiver, Sender, SyncSender};
 use std::sync::{Arc, RwLock};
 use std::thread;
 
@@ -35,6 +34,9 @@ use std::thread;
 pub enum TvuReturnType {
     LeaderRotation(u64, u64, Hash),
 }
+
+pub type TvuRotationSender = Sender<TvuReturnType>;
+pub type TvuRotationReceiver = Receiver<TvuReturnType>;
 
 pub struct Tvu {
     fetch_stage: BlobFetchStage,
