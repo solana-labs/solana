@@ -37,71 +37,76 @@ pub struct RepairService {
 }
 
 impl RepairService {
+    fn run(
+        db_ledger: &Arc<DbLedger>,
+        exit: &Arc<AtomicBool>,
+        repair_socket: &Arc<UdpSocket>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+    ) {
+        let mut repair_info = RepairInfo::new();
+        let id = cluster_info.read().unwrap().id();
+        loop {
+            if exit.load(Ordering::Relaxed) {
+                break;
+            }
+
+            let repairs = Self::generate_repairs(db_ledger, MAX_REPAIR_LENGTH, &mut repair_info);
+
+            if let Ok(repairs) = repairs {
+                let reqs: Vec<_> = repairs
+                    .into_iter()
+                    .filter_map(|(slot_height, blob_index)| {
+                        cluster_info
+                            .read()
+                            .unwrap()
+                            .window_index_request(slot_height, blob_index)
+                            .map(|result| (result, slot_height, blob_index))
+                            .ok()
+                    })
+                    .collect();
+
+                for ((to, req), slot_height, blob_index) in reqs {
+                    if let Ok(local_addr) = repair_socket.local_addr() {
+                        submit(
+                            influxdb::Point::new("repair_service")
+                                .add_field(
+                                    "repair_slot",
+                                    influxdb::Value::Integer(slot_height as i64),
+                                )
+                                .to_owned()
+                                .add_field(
+                                    "repair_blob",
+                                    influxdb::Value::Integer(blob_index as i64),
+                                )
+                                .to_owned()
+                                .add_field("to", influxdb::Value::String(to.to_string()))
+                                .to_owned()
+                                .add_field("from", influxdb::Value::String(local_addr.to_string()))
+                                .to_owned()
+                                .add_field("id", influxdb::Value::String(id.to_string()))
+                                .to_owned(),
+                        );
+                    }
+
+                    repair_socket.send_to(&req, to).unwrap_or_else(|e| {
+                        info!("{} repair req send_to({}) error {:?}", id, to, e);
+                        0
+                    });
+                }
+            }
+            sleep(Duration::from_millis(REPAIR_MS));
+        }
+    }
+
     pub fn new(
         db_ledger: Arc<DbLedger>,
         exit: Arc<AtomicBool>,
         repair_socket: Arc<UdpSocket>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
     ) -> Self {
-        let mut repair_info = RepairInfo::new();
-        let id = cluster_info.read().unwrap().id();
         let t_repair = Builder::new()
             .name("solana-repair-service".to_string())
-            .spawn(move || loop {
-                if exit.load(Ordering::Relaxed) {
-                    break;
-                }
-
-                let repairs =
-                    Self::generate_repairs(&db_ledger, MAX_REPAIR_LENGTH, &mut repair_info);
-
-                if let Ok(repairs) = repairs {
-                    let reqs: Vec<_> = repairs
-                        .into_iter()
-                        .filter_map(|(slot_height, blob_index)| {
-                            cluster_info
-                                .read()
-                                .unwrap()
-                                .window_index_request(slot_height, blob_index)
-                                .map(|result| (result, slot_height, blob_index))
-                                .ok()
-                        })
-                        .collect();
-
-                    for ((to, req), slot_height, blob_index) in reqs {
-                        if let Ok(local_addr) = repair_socket.local_addr() {
-                            submit(
-                                influxdb::Point::new("repair_service")
-                                    .add_field(
-                                        "repair_slot",
-                                        influxdb::Value::Integer(slot_height as i64),
-                                    )
-                                    .to_owned()
-                                    .add_field(
-                                        "repair_blob",
-                                        influxdb::Value::Integer(blob_index as i64),
-                                    )
-                                    .to_owned()
-                                    .add_field("to", influxdb::Value::String(to.to_string()))
-                                    .to_owned()
-                                    .add_field(
-                                        "from",
-                                        influxdb::Value::String(local_addr.to_string()),
-                                    )
-                                    .to_owned()
-                                    .add_field("id", influxdb::Value::String(id.to_string()))
-                                    .to_owned(),
-                            );
-                        }
-
-                        repair_socket.send_to(&req, to).unwrap_or_else(|e| {
-                            info!("{} repair req send_to({}) error {:?}", id, to, e);
-                            0
-                        });
-                    }
-                }
-                sleep(Duration::from_millis(REPAIR_MS));
-            })
+            .spawn(move || Self::run(&db_ledger, &exit, &repair_socket, &cluster_info))
             .unwrap();
 
         RepairService { t_repair }
