@@ -111,9 +111,9 @@ loop:
 
 5. Start the TPU. Point it to the last fork the TVU voted on.
 
-7. Wait for the PoH recorder to finish.
+6. Wait for the PoH recorder to finish.
 
    1. TPU will freeze BankFork.  The vote will be sent in 2.
 
-8. Goto 1.
+7. Goto 1.
 
