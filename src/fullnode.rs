@@ -116,13 +116,17 @@ impl Fullnode {
         config: &FullnodeConfig,
     ) -> Self {
         let id = keypair.pubkey();
-        let (genesis_block, db_ledger, ledger_signal_sender, ledger_signal_receiver) =
-            Self::make_db_ledger(ledger_path);
-        let (bank, entry_height, last_entry_id) = Self::new_bank_from_db_ledger(
-            &genesis_block,
-            &db_ledger,
-            Some(&config.leader_scheduler_config),
-        );
+        assert_eq!(id, node.info.id);
+
+        let (
+            bank,
+            entry_height,
+            last_entry_id,
+            db_ledger,
+            ledger_signal_sender,
+            ledger_signal_receiver,
+        ) = Self::new_bank_from_ledger(ledger_path, Some(&config.leader_scheduler_config));
+
         info!("node info: {:?}", node.info);
         info!("node entrypoint_info: {:?}", entrypoint_info_option);
         info!(
@@ -132,9 +136,9 @@ impl Fullnode {
 
         let exit = Arc::new(AtomicBool::new(false));
         let bank = Arc::new(bank);
+        let db_ledger = Arc::new(db_ledger);
 
         node.info.wallclock = timestamp();
-        assert_eq!(id, node.info.id);
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_keypair(
             node.info.clone(),
             keypair.clone(),
@@ -474,51 +478,37 @@ impl Fullnode {
         self.join()
     }
 
-    pub fn new_bank_from_db_ledger(
-        genesis_block: &GenesisBlock,
-        db_ledger: &DbLedger,
+    pub fn new_bank_from_ledger(
+        ledger_path: &str,
         leader_scheduler_config: Option<&LeaderSchedulerConfig>,
-    ) -> (Bank, u64, Hash) {
+    ) -> (Bank, u64, Hash, DbLedger, SyncSender<bool>, Receiver<bool>) {
+        let (db_ledger, ledger_signal_sender, ledger_signal_receiver) =
+            DbLedger::open_with_signal(ledger_path)
+                .expect("Expected to successfully open database ledger");
+        let genesis_block =
+            GenesisBlock::load(ledger_path).expect("Expected to successfully open genesis block");
         let mut bank =
-            Bank::new_with_leader_scheduler_config(genesis_block, leader_scheduler_config);
+            Bank::new_with_leader_scheduler_config(&genesis_block, leader_scheduler_config);
 
         let now = Instant::now();
         let entries = db_ledger.read_ledger().expect("opening ledger");
         info!("processing ledger...");
-
         let (entry_height, last_entry_id) = bank.process_ledger(entries).expect("process_ledger");
-        // entry_height is the network-wide agreed height of the ledger.
-        //  initialize it from the input ledger
         info!(
             "processed {} ledger entries in {}ms, tick_height={}...",
             entry_height,
             duration_as_ms(&now.elapsed()),
             bank.tick_height()
         );
-        (bank, entry_height, last_entry_id)
-    }
 
-    pub fn new_bank_from_ledger(
-        ledger_path: &str,
-        leader_scheduler_config: Option<&LeaderSchedulerConfig>,
-    ) -> (Bank, u64, Hash) {
-        let (genesis_block, db_ledger, _, _) = Self::make_db_ledger(ledger_path);
-        Self::new_bank_from_db_ledger(&genesis_block, &db_ledger, leader_scheduler_config)
-    }
-
-    fn make_db_ledger(
-        ledger_path: &str,
-    ) -> (
-        GenesisBlock,
-        Arc<DbLedger>,
-        SyncSender<bool>,
-        Receiver<bool>,
-    ) {
-        let (db_ledger, l_sender, l_receiver) = DbLedger::open_with_signal(ledger_path)
-            .expect("Expected to successfully open database ledger");
-        let genesis_block =
-            GenesisBlock::load(ledger_path).expect("Expected to successfully open genesis block");
-        (genesis_block, Arc::new(db_ledger), l_sender, l_receiver)
+        (
+            bank,
+            entry_height,
+            last_entry_id,
+            db_ledger,
+            ledger_signal_sender,
+            ledger_signal_receiver,
+        )
     }
 }
 
@@ -838,9 +828,9 @@ mod tests {
         );
 
         // Close the validator so that rocksdb has locks available
-        //        validator.close().unwrap();
         validator_exit();
-        let (bank, entry_height, _) = Fullnode::new_bank_from_ledger(&validator_ledger_path, None);
+        let (bank, entry_height, _, _, _, _) =
+            Fullnode::new_bank_from_ledger(&validator_ledger_path, None);
 
         assert!(
             bank.tick_height()

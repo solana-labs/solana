@@ -403,9 +403,7 @@ mod test {
         );
         last_id = active_set_entries.last().unwrap().id;
         {
-            let (db_ledger, l_sender, l_receiver) =
-                DbLedger::open_with_signal(&my_ledger_path).unwrap();
-            let db_ledger = Arc::new(db_ledger);
+            let db_ledger = DbLedger::open(&my_ledger_path).unwrap();
             db_ledger
                 .write_entries(
                     DEFAULT_SLOT_HEIGHT,
@@ -413,22 +411,19 @@ mod test {
                     &active_set_entries,
                 )
                 .unwrap();
+        }
 
-            let genesis_block = GenesisBlock::load(&my_ledger_path)
-                .expect("Expected to successfully open genesis block");
-
+        {
             // Set up the bank
-            let (bank, _, last_entry_id) = Fullnode::new_bank_from_db_ledger(
-                &genesis_block,
-                &db_ledger,
-                Some(&leader_scheduler_config),
-            );
+            let (bank, _entry_height, last_entry_id, db_ledger, l_sender, l_receiver) =
+                Fullnode::new_bank_from_ledger(&my_ledger_path, Some(&leader_scheduler_config));
 
             // Set up the replay stage
             let (rotation_sender, rotation_receiver) = channel();
             let meta = db_ledger.meta().unwrap().unwrap();
             let exit = Arc::new(AtomicBool::new(false));
             let bank = Arc::new(bank);
+            let db_ledger = Arc::new(db_ledger);
             let (replay_stage, ledger_writer_recv) = ReplayStage::new(
                 my_id,
                 Some(Arc::new(voting_keypair)),
@@ -524,15 +519,11 @@ mod test {
         let voting_keypair = Arc::new(VotingKeypair::new_local(&my_keypair));
         let (to_leader_sender, _) = channel();
         {
-            let (db_ledger, l_sender, l_receiver) =
-                DbLedger::open_with_signal(&my_ledger_path).unwrap();
-            let db_ledger = Arc::new(db_ledger);
-            // Set up the bank
-            let genesis_block = GenesisBlock::load(&my_ledger_path)
-                .expect("Expected to successfully open genesis block");
-            let (bank, entry_height, last_entry_id) =
-                Fullnode::new_bank_from_db_ledger(&genesis_block, &db_ledger, None);
+            let (bank, entry_height, last_entry_id, db_ledger, l_sender, l_receiver) =
+                Fullnode::new_bank_from_ledger(&my_ledger_path, None);
+
             let bank = Arc::new(bank);
+            let db_ledger = Arc::new(db_ledger);
             let (replay_stage, ledger_writer_recv) = ReplayStage::new(
                 my_keypair.pubkey(),
                 Some(voting_keypair.clone()),
@@ -606,6 +597,17 @@ mod test {
         let active_set_entries_len = active_set_entries.len() as u64;
         let initial_non_tick_height = genesis_entry_height - initial_tick_height;
 
+        {
+            let db_ledger = DbLedger::open(&my_ledger_path).unwrap();
+            db_ledger
+                .write_entries(
+                    DEFAULT_SLOT_HEIGHT,
+                    genesis_entry_height,
+                    &active_set_entries,
+                )
+                .unwrap();
+        }
+
         // Set up the LeaderScheduler so that this this node becomes the leader at
         // bootstrap_height = num_bootstrap_slots * leader_rotation_interval
         // Set up the LeaderScheduler so that this this node becomes the leader at
@@ -626,32 +628,17 @@ mod test {
         let (rotation_tx, rotation_rx) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         {
-            let (db_ledger, l_sender, l_receiver) =
-                DbLedger::open_with_signal(&my_ledger_path).unwrap();
-            let db_ledger = Arc::new(db_ledger);
-            db_ledger
-                .write_entries(
-                    DEFAULT_SLOT_HEIGHT,
-                    genesis_entry_height,
-                    &active_set_entries,
-                )
-                .unwrap();
+            let (bank, _entry_height, last_entry_id, db_ledger, l_sender, l_receiver) =
+                Fullnode::new_bank_from_ledger(&my_ledger_path, Some(&leader_scheduler_config));
+
             let meta = db_ledger
                 .meta()
                 .unwrap()
                 .expect("First slot metadata must exist");
 
-            // Set up the bank
-            let genesis_block = GenesisBlock::load(&my_ledger_path)
-                .expect("Expected to successfully open genesis block");
-            let (bank, _, last_entry_id) = Fullnode::new_bank_from_db_ledger(
-                &genesis_block,
-                &db_ledger,
-                Some(&leader_scheduler_config),
-            );
-
             let voting_keypair = Arc::new(voting_keypair);
             let bank = Arc::new(bank);
+            let db_ledger = Arc::new(db_ledger);
             let (replay_stage, ledger_writer_recv) = ReplayStage::new(
                 my_keypair.pubkey(),
                 Some(voting_keypair.clone()),
