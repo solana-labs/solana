@@ -103,6 +103,7 @@ pub struct Fullnode {
     broadcast_socket: UdpSocket,
     pub node_services: NodeServices,
     pub role_notifiers: (TvuRotationReceiver, TpuRotationReceiver),
+    role_senders: (TvuRotationSender, TpuRotationSender),
     blob_sender: BlobSender,
 }
 
@@ -252,7 +253,7 @@ impl Fullnode {
             sockets,
             db_ledger.clone(),
             config.storage_rotate_count,
-            to_leader_sender,
+            to_leader_sender.clone(),
             &storage_state,
             config.entry_stream.as_ref(),
             ledger_signal_sender,
@@ -277,7 +278,7 @@ impl Fullnode {
             &last_entry_id,
             id,
             scheduled_leader == id,
-            &to_validator_sender,
+            &to_validator_sender.clone(),
             &blob_sender,
         );
 
@@ -296,6 +297,7 @@ impl Fullnode {
             tpu_sockets: node.sockets.tpu,
             broadcast_socket: node.sockets.broadcast,
             role_notifiers: (to_leader_receiver, to_validator_receiver),
+            role_senders: (to_leader_sender, to_validator_sender),
             blob_sender,
         }
     }
@@ -409,7 +411,7 @@ impl Fullnode {
                 Ok(TpuReturnType::LeaderRotation(tick_height)) => {
                     Some((self.leader_to_validator(tick_height), tick_height + 1))
                 }
-                Err(_) => None,
+                _ => None,
             }
         } else {
             let should_be_leader = self.role_notifiers.0.recv();
@@ -421,7 +423,7 @@ impl Fullnode {
                         tick_height + 1,
                     ))
                 }
-                Err(_) => None,
+                _ => None,
             }
         }
     }
@@ -434,6 +436,7 @@ impl Fullnode {
     ) -> impl FnOnce() {
         let (sender, receiver) = channel();
         let exit = self.exit.clone();
+        let senders = (self.role_senders.0.clone(), self.role_senders.1.clone());
         spawn(move || loop {
             if self.exit.load(Ordering::Relaxed) {
                 debug!("node shutdown requested");
@@ -459,6 +462,8 @@ impl Fullnode {
         });
         move || {
             exit.store(true, Ordering::Relaxed);
+            let _ = senders.0.send(TvuReturnType::Abort);
+            let _ = senders.1.send(TpuReturnType::Abort);
             receiver.recv().unwrap();
             debug!("node shutdown complete");
         }
