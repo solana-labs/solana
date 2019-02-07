@@ -6,7 +6,7 @@ use crate::counter::Counter;
 use crate::db_ledger::DbLedger;
 use crate::genesis_block::GenesisBlock;
 use crate::gossip_service::GossipService;
-use crate::leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig};
+use crate::leader_scheduler::LeaderSchedulerConfig;
 use crate::rpc::JsonRpcService;
 use crate::rpc_pubsub::PubSubService;
 use crate::service::Service;
@@ -504,10 +504,6 @@ impl Fullnode {
     ) -> (Bank, u64, Hash) {
         let (genesis_block, db_ledger, _, _) = Self::make_db_ledger(ledger_path);
         Self::new_bank_from_db_ledger(&genesis_block, &db_ledger, leader_scheduler_config)
-    }
-
-    pub fn get_leader_scheduler(&self) -> &Arc<RwLock<LeaderScheduler>> {
-        &self.bank.leader_scheduler
     }
 
     fn make_db_ledger(
