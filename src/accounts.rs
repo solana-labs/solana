@@ -1,10 +1,10 @@
 use crate::bank::BankError;
 use crate::bank::Result;
 use crate::counter::Counter;
-use crate::runtime::has_duplicates;
 use bincode::serialize;
 use hashbrown::{HashMap, HashSet};
 use log::Level;
+use solana_runtime::has_duplicates;
 use solana_sdk::account::Account;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::native_loader;
