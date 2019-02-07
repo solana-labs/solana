@@ -341,7 +341,7 @@ mod test {
     use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
     use crate::entry::create_ticks;
     use crate::entry::Entry;
-    use crate::fullnode::Fullnode;
+    use crate::fullnode::new_bank_from_ledger;
     use crate::genesis_block::GenesisBlock;
     use crate::leader_scheduler::{make_active_set_entries, LeaderSchedulerConfig};
     use crate::replay_stage::ReplayStage;
@@ -416,7 +416,7 @@ mod test {
         {
             // Set up the bank
             let (bank, _entry_height, last_entry_id, db_ledger, l_sender, l_receiver) =
-                Fullnode::new_bank_from_ledger(&my_ledger_path, &leader_scheduler_config);
+                new_bank_from_ledger(&my_ledger_path, &leader_scheduler_config);
 
             // Set up the replay stage
             let (rotation_sender, rotation_receiver) = channel();
@@ -520,7 +520,7 @@ mod test {
         let (to_leader_sender, _) = channel();
         {
             let (bank, entry_height, last_entry_id, db_ledger, l_sender, l_receiver) =
-                Fullnode::new_bank_from_ledger(&my_ledger_path, &LeaderSchedulerConfig::default());
+                new_bank_from_ledger(&my_ledger_path, &LeaderSchedulerConfig::default());
 
             let bank = Arc::new(bank);
             let db_ledger = Arc::new(db_ledger);
@@ -629,7 +629,7 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         {
             let (bank, _entry_height, last_entry_id, db_ledger, l_sender, l_receiver) =
-                Fullnode::new_bank_from_ledger(&my_ledger_path, &leader_scheduler_config);
+                new_bank_from_ledger(&my_ledger_path, &leader_scheduler_config);
 
             let meta = db_ledger
                 .meta()

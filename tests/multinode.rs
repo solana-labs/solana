@@ -5,7 +5,7 @@ use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
 use solana::db_ledger::{create_tmp_sample_ledger, tmp_copy_ledger};
 use solana::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
 use solana::entry::{reconstruct_entries_from_blobs, Entry};
-use solana::fullnode::{Fullnode, FullnodeConfig, FullnodeReturnType};
+use solana::fullnode::{new_bank_from_ledger, Fullnode, FullnodeConfig, FullnodeReturnType};
 use solana::gossip_service::GossipService;
 use solana::leader_scheduler::{make_active_set_entries, LeaderSchedulerConfig};
 use solana::packet::SharedBlob;
@@ -1018,8 +1018,7 @@ fn test_leader_to_validator_transition() {
     leader_exit();
 
     info!("Check the ledger to make sure it's the right height...");
-    let bank =
-        Fullnode::new_bank_from_ledger(&leader_ledger_path, &LeaderSchedulerConfig::default()).0;
+    let bank = new_bank_from_ledger(&leader_ledger_path, &LeaderSchedulerConfig::default()).0;
 
     assert_eq!(
         bank.tick_height(),
