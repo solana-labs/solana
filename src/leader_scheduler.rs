@@ -612,7 +612,7 @@ pub mod tests {
     }
 
     #[test]
-    fn test_num_ticks_left_in_slot() {
+    fn test_num_ticks_left_in_block() {
         let leader_scheduler = LeaderScheduler::new(&LeaderSchedulerConfig::new(10, 2, 1));
 
         assert_eq!(leader_scheduler.num_ticks_left_in_block(0, 0), 9);
@@ -625,7 +625,11 @@ pub mod tests {
         assert_eq!(leader_scheduler.num_ticks_left_in_block(1, 19), 0);
         assert_eq!(leader_scheduler.num_ticks_left_in_block(2, 20), 9);
         assert_eq!(leader_scheduler.num_ticks_left_in_block(2, 21), 8);
+    }
 
+    #[test]
+    fn test_num_ticks_left_in_slot() {
+        let leader_scheduler = LeaderScheduler::new(&LeaderSchedulerConfig::new(10, 2, 1));
         assert_eq!(leader_scheduler.num_ticks_left_in_slot(0), 9);
         assert_eq!(leader_scheduler.num_ticks_left_in_slot(1), 8);
         assert_eq!(leader_scheduler.num_ticks_left_in_slot(8), 1);
