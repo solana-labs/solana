@@ -98,7 +98,8 @@ pub struct Fullnode {
     tpu_sockets: Vec<UdpSocket>,
     broadcast_socket: UdpSocket,
     node_services: NodeServices,
-    role_notifiers: (TvuRotationReceiver, TpuRotationReceiver),
+    to_leader_receiver: TvuRotationReceiver,
+    to_validator_receiver: TpuRotationReceiver,
     blob_sender: BlobSender,
 }
 
@@ -291,7 +292,8 @@ impl Fullnode {
             exit,
             tpu_sockets: node.sockets.tpu,
             broadcast_socket: node.sockets.broadcast,
-            role_notifiers: (to_leader_receiver, to_validator_receiver),
+            to_leader_receiver,
+            to_validator_receiver,
             blob_sender,
         }
     }
@@ -371,7 +373,7 @@ impl Fullnode {
         );
 
         let (to_validator_sender, to_validator_receiver) = channel();
-        self.role_notifiers.1 = to_validator_receiver;
+        self.to_validator_receiver = to_validator_receiver;
         self.node_services.tpu.switch_to_leader(
             &Arc::new(self.bank.copy_for_tpu()),
             Default::default(),
@@ -401,7 +403,7 @@ impl Fullnode {
             }
 
             if self.node_services.tpu.is_leader() {
-                let should_be_forwarder = self.role_notifiers.1.recv_timeout(timeout);
+                let should_be_forwarder = self.to_validator_receiver.recv_timeout(timeout);
                 match should_be_forwarder {
                     Ok(TpuReturnType::LeaderRotation(tick_height)) => {
                         return Some((self.leader_to_validator(tick_height), tick_height + 1));
@@ -410,7 +412,7 @@ impl Fullnode {
                     _ => return None,
                 }
             } else {
-                let should_be_leader = self.role_notifiers.0.recv_timeout(timeout);
+                let should_be_leader = self.to_leader_receiver.recv_timeout(timeout);
                 match should_be_leader {
                     Ok(TvuReturnType::LeaderRotation(tick_height, entry_height, last_entry_id)) => {
                         self.validator_to_leader(tick_height, entry_height, last_entry_id);
@@ -880,13 +882,12 @@ mod tests {
 
             info!("Wait for leader -> validator transition");
             let signal = leader
-                .role_notifiers
-                .1
+                .to_validator_receiver
                 .recv()
                 .expect("signal for leader -> validator transition");
             let (rn_sender, rn_receiver) = channel();
             rn_sender.send(signal).expect("send");
-            leader.role_notifiers = (leader.role_notifiers.0, rn_receiver);
+            leader.to_validator_receiver = rn_receiver;
 
             info!("Make sure the tvu bank is behind");
             assert_eq!(w_last_ids.tick_height, 2);
