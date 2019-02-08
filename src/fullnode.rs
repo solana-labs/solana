@@ -26,6 +26,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender, SyncSender};
 use std::sync::{Arc, RwLock};
+use std::thread::sleep;
 use std::thread::{spawn, Result};
 use std::time::{Duration, Instant};
 
@@ -319,6 +320,10 @@ impl Fullnode {
             self.id,
             tick_height,
         );
+
+        while self.bank.tick_height() < tick_height {
+            sleep(Duration::from_millis(10));
+        }
 
         let scheduled_leader = {
             let mut leader_scheduler = self.bank.leader_scheduler.write().unwrap();
