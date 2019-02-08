@@ -2,7 +2,6 @@
 use crate::blocktree::*;
 use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
-use crate::entry::Entry;
 #[cfg(feature = "erasure")]
 use crate::erasure;
 use crate::leader_scheduler::LeaderScheduler;
@@ -243,12 +242,8 @@ pub fn process_blob(
 
     #[cfg(feature = "erasure")]
     {
-        // If write_shared_blobs() of these recovered blobs fails fails, don't return
-        // because consumed_entries might be nonempty from earlier, and tick height needs to
-        // be updated. Hopefully we can recover these blobs next time successfully.
-
         // TODO: Support per-slot erasure. Issue: https://github.com/solana-labs/solana/issues/2441
-        if let Err(e) = try_erasure(blocktree, &mut consumed_entries, 0) {
+        if let Err(e) = try_erasure(blocktree, 0) {
             trace!(
                 "erasure::recover failed to write recovered coding blobs. Err: {:?}",
                 e
@@ -271,7 +266,7 @@ pub fn calculate_max_repair_entry_height(
     // the data to their peer nodes. So there's a possibility that a blob (with index lower
     // than current received index) is being retransmitted by a peer node.
     if times >= 8 || is_next_leader {
-        // if repair backoff is getting high, or if we are the next leader,
+        // If repair backoff is getting high, or if we are the next leader,
         // don't wait for avalanche. received - 1 is the index of the highest blob.
         received
     } else {
@@ -280,11 +275,7 @@ pub fn calculate_max_repair_entry_height(
 }
 
 #[cfg(feature = "erasure")]
-fn try_erasure(
-    blocktree: &Arc<Blocktree>,
-    consume_queue: &mut Vec<Entry>,
-    slot_index: u64,
-) -> Result<()> {
+fn try_erasure(blocktree: &Arc<Blocktree>, slot_index: u64) -> Result<()> {
     let meta = blocktree.meta(slot_index)?;
 
     if let Some(meta) = meta {
@@ -298,11 +289,10 @@ fn try_erasure(
             )?;
         }
 
-        let entries = blocktree.write_shared_blobs(data)?;
-        consume_queue.extend(entries);
+        blocktree.write_shared_blobs(data)
+    } else {
+        Ok(())
     }
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -782,8 +772,7 @@ mod test {
         let ledger_path = get_tmp_ledger_path("test_try_erasure");
         let blocktree = Arc::new(generate_blocktree_from_window(&ledger_path, &window, false));
 
-        try_erasure(&blocktree, &mut consume_queue, DEFAULT_SLOT_HEIGHT)
-            .expect("Expected successful erasure attempt");
+        try_erasure(&blocktree, DEFAULT_SLOT_HEIGHT).expect("Expected successful erasure attempt");
         window[erased_index].data = erased_data;
 
         {
@@ -797,6 +786,17 @@ mod test {
             let locked_data: Vec<&Blob> = locks.iter().map(|lock| &**lock).collect();
 
             let (expected, _) = reconstruct_entries_from_blobs(locked_data).unwrap();
+
+            assert_eq!(
+                blocktree
+                    .get_slot_entries(
+                        0,
+                        erased_index as u64,
+                        Some((end_index - erased_index) as u64)
+                    )
+                    .unwrap(),
+                expected
+            );
         }
 
         let erased_coding_l = erased_coding.read().unwrap();
@@ -833,6 +833,11 @@ mod test {
             process_blob(&leader_scheduler, &blocktree, blob)
                 .expect("Expect successful processing of blob");
         }
+
+        assert_eq!(
+            blocktree.get_slot_entries(0, 0, None).unwrap(),
+            original_entries
+        );
 
         drop(blocktree);
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
