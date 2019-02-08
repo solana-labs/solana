@@ -31,7 +31,6 @@ impl ComputeLeaderConfirmationService {
     fn get_last_supermajority_timestamp(
         bank: &Arc<Bank>,
         leader_id: Pubkey,
-        now: u64,
         last_valid_validator_timestamp: u64,
     ) -> result::Result<u64, ConfirmationError> {
         let mut total_stake = 0;
@@ -80,6 +79,7 @@ impl ComputeLeaderConfirmationService {
         }
 
         if last_valid_validator_timestamp != 0 {
+            let now = timing::timestamp();
             submit(
                 influxdb::Point::new(&"leader-confirmation")
                     .add_field(
@@ -98,17 +98,14 @@ impl ComputeLeaderConfirmationService {
         leader_id: Pubkey,
         last_valid_validator_timestamp: &mut u64,
     ) {
-        let now = timing::timestamp();
-        if let Ok(super_majority_timestamp) = Self::get_last_supermajority_timestamp(
-            bank,
-            leader_id,
-            now,
-            *last_valid_validator_timestamp,
-        ) {
+        if let Ok(super_majority_timestamp) =
+            Self::get_last_supermajority_timestamp(bank, leader_id, *last_valid_validator_timestamp)
+        {
+            let now = timing::timestamp();
             let confirmation_ms = now - super_majority_timestamp;
 
             *last_valid_validator_timestamp = super_majority_timestamp;
-            bank.set_confirmation_time((now - *last_valid_validator_timestamp) as usize);
+            bank.set_confirmation_time(confirmation_ms as usize);
 
             submit(
                 influxdb::Point::new(&"leader-confirmation")
