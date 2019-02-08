@@ -19,7 +19,6 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
-use std::net::SocketAddr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
@@ -148,16 +147,11 @@ impl BankingStage {
         sys_info::cpu_num().unwrap_or(NUM_THREADS)
     }
 
-    /// Convert the transactions from a blob of binary data to a vector of transactions and
-    /// an unused `SocketAddr` that could be used to send a response.
-    fn deserialize_transactions(p: &Packets) -> Vec<Option<(Transaction, SocketAddr)>> {
+    /// Convert the transactions from a blob of binary data to a vector of transactions
+    fn deserialize_transactions(p: &Packets) -> Vec<Option<Transaction>> {
         p.packets
             .iter()
-            .map(|x| {
-                deserialize(&x.data[0..x.meta.size])
-                    .map(|req| (req, x.meta.addr()))
-                    .ok()
-            })
+            .map(|x| deserialize(&x.data[0..x.meta.size]).ok())
             .collect()
     }
 
@@ -213,7 +207,7 @@ impl BankingStage {
                 .zip(vers)
                 .filter_map(|(tx, ver)| match tx {
                     None => None,
-                    Some((tx, _addr)) => {
+                    Some(tx) => {
                         if tx.verify_refs() && ver != 0 {
                             Some(tx)
                         } else {
