@@ -1,13 +1,13 @@
 # Blocktree
 
-After a validator votes on a block, all blocks from that one on down
+After a block reaches finality, all blocks from that one on down
 to the genesis block form a linear chain with the familiar name
-blockchain. Until that vote, however, the validator must maintain all
+blockchain. Until that point, however, the validator must maintain all
 potentially valid chains, called *forks*. The process by which forks
 naturally form as a result of leader rotation is described in
 [fork generation](fork-generation.md). The *blocktree* data structure
-described here is how a validator copes with those forks until it is
-time to cast its vote and select one.
+described here is how a validator copes with those forks until blocks
+are finalized.
 
 The blocktree allows a validator to record every blob it observes
 on the network, in any order, as long as the blob is signed by the expected
