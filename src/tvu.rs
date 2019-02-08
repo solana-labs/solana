@@ -194,28 +194,19 @@ impl Service for Tvu {
 
 #[cfg(test)]
 pub mod tests {
+    use super::*;
     use crate::bank::Bank;
     use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::Blocktree;
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::Entry;
     use crate::genesis_block::GenesisBlock;
     use crate::gossip_service::GossipService;
     use crate::packet::SharedBlob;
-    use crate::service::Service;
-    use crate::storage_stage::{StorageState, STORAGE_ROTATE_TEST_COUNT};
+    use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
     use crate::streamer;
-    use crate::tvu::{Sockets, Tvu};
-    use crate::voting_keypair::VotingKeypair;
     use bincode::serialize;
-    use solana_sdk::hash::Hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
     use std::fs::remove_dir_all;
-    use std::net::UdpSocket;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::mpsc::channel;
-    use std::sync::{Arc, RwLock};
     use std::time::Duration;
 
     fn new_gossip(
