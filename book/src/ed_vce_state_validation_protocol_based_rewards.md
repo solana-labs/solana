@@ -39,7 +39,7 @@ Over time, the interest rate, at any network staked percentage, will drop as des
 
 <!-- ![== Validation Client Interest Rates Figure ==](validation_client_interest_rates.png =250x) -->
 
-<p style="text-align:center;"><img src="validation_client_interest_rates.png" alt="drawing" width="800"/></p>
+<p style="text-align:center;"><img src="img/validation_client_interest_rates.png" alt="drawing" width="800"/></p>
 
 **Figure 2:** In this example schedule, the annual interest rate [%] reduces at around 16.7% per year, until it reaches the long-term, fixed, 4% rate.
 

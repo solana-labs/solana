@@ -1,9 +1,9 @@
 use crate::blob_fetch_stage::BlobFetchStage;
+use crate::blocktree::Blocktree;
 #[cfg(feature = "chacha")]
 use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
 use crate::client::mk_client;
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
-use crate::db_ledger::DbLedger;
 use crate::gossip_service::GossipService;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::result::{self, Result};
@@ -12,7 +12,7 @@ use crate::service::Service;
 use crate::storage_stage::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
 use crate::streamer::BlobReceiver;
 use crate::thin_client::{retry_get_balance, ThinClient};
-use crate::window_service::window_service;
+use crate::window_service::WindowService;
 use rand::thread_rng;
 use rand::Rng;
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
@@ -33,13 +33,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
-use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 pub struct Replicator {
     gossip_service: GossipService,
     fetch_stage: BlobFetchStage,
-    t_window: JoinHandle<()>,
+    window_service: WindowService,
     pub retransmit_receiver: BlobReceiver,
     exit: Arc<AtomicBool>,
     entry_height: u64,
@@ -128,22 +127,22 @@ impl Replicator {
         {
             let mut cluster_info_w = cluster_info.write().unwrap();
             cluster_info_w.insert_info(leader_info.clone());
-            cluster_info_w.set_leader(leader_info.id);
+            cluster_info_w.set_leader(leader_pubkey);
         }
 
-        // Create DbLedger, eventually will simply repurpose the input
-        // ledger path as the DbLedger path once we replace the ledger with
-        // DbLedger. Note for now, this ledger will not contain any of the existing entries
+        // Create Blocktree, eventually will simply repurpose the input
+        // ledger path as the Blocktree path once we replace the ledger with
+        // Blocktree. Note for now, this ledger will not contain any of the existing entries
         // in the ledger located at ledger_path, and will only append on newly received
         // entries after being passed to window_service
-        let db_ledger =
-            DbLedger::open(ledger_path).expect("Expected to be able to open database ledger");
+        let blocktree =
+            Blocktree::open(ledger_path).expect("Expected to be able to open database ledger");
 
-        let db_ledger = Arc::new(db_ledger);
+        let blocktree = Arc::new(blocktree);
 
         let gossip_service = GossipService::new(
             &cluster_info,
-            Some(db_ledger.clone()),
+            Some(blocktree.clone()),
             node.sockets.gossip,
             exit.clone(),
         );
@@ -173,18 +172,15 @@ impl Replicator {
         // todo: pull blobs off the retransmit_receiver and recycle them?
         let (retransmit_sender, retransmit_receiver) = channel();
 
-        let t_window = window_service(
-            db_ledger.clone(),
+        let window_service = WindowService::new(
+            blocktree.clone(),
             cluster_info.clone(),
             0,
-            entry_height,
             max_entry_height,
             blob_fetch_receiver,
             retransmit_sender,
             repair_socket,
-            Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-                leader_pubkey,
-            ))),
+            Arc::new(RwLock::new(LeaderScheduler::default())),
             done.clone(),
             exit.clone(),
         );
@@ -238,7 +234,7 @@ impl Replicator {
             ivec.copy_from_slice(signature.as_ref());
 
             let num_encrypted_bytes = chacha_cbc_encrypt_ledger(
-                &db_ledger,
+                &blocktree,
                 entry_height,
                 &ledger_data_file_encrypted,
                 &mut ivec,
@@ -276,7 +272,7 @@ impl Replicator {
         Ok(Self {
             gossip_service,
             fetch_stage,
-            t_window,
+            window_service,
             retransmit_receiver,
             exit,
             entry_height,
@@ -291,7 +287,7 @@ impl Replicator {
     pub fn join(self) {
         self.gossip_service.join().unwrap();
         self.fetch_stage.join().unwrap();
-        self.t_window.join().unwrap();
+        self.window_service.join().unwrap();
 
         // Drain the queue here to prevent self.retransmit_receiver from being dropped
         // before the window_service thread is joined

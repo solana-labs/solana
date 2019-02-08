@@ -1,6 +1,6 @@
 use clap::{crate_version, App, Arg, SubCommand};
 use solana::bank::Bank;
-use solana::db_ledger::DbLedger;
+use solana::blocktree::Blocktree;
 use solana::genesis_block::GenesisBlock;
 use std::io::{stdout, Write};
 use std::process::exit;
@@ -55,15 +55,15 @@ fn main() {
         exit(1);
     });
 
-    let db_ledger = match DbLedger::open(ledger_path) {
-        Ok(db_ledger) => db_ledger,
+    let blocktree = match Blocktree::open(ledger_path) {
+        Ok(blocktree) => blocktree,
         Err(err) => {
             eprintln!("Failed to open ledger at {}: {}", ledger_path, err);
             exit(1);
         }
     };
 
-    let entries = match db_ledger.read_ledger() {
+    let entries = match blocktree.read_ledger() {
         Ok(entries) => entries,
         Err(err) => {
             eprintln!("Failed to read ledger at {}: {}", ledger_path, err);

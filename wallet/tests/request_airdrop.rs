@@ -10,7 +10,7 @@ use std::sync::mpsc::channel;
 #[test]
 fn test_wallet_request_airdrop() {
     let (server, leader_data, alice, ledger_path) = new_fullnode("test_wallet_request_airdrop");
-
+    let server_exit = server.run(None);
     let (sender, receiver) = channel();
     run_local_drone(alice, sender);
     let drone_addr = receiver.recv().unwrap();
@@ -33,6 +33,6 @@ fn test_wallet_request_airdrop() {
         .unwrap();
     assert_eq!(balance, 50);
 
-    server.close().unwrap();
+    server_exit();
     remove_dir_all(ledger_path).unwrap();
 }

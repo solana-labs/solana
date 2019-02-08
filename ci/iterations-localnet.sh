@@ -26,8 +26,7 @@ build() {
   $genPipeline && return
   ci/version-check-with-upgrade.sh stable
   _ scripts/ulimit-n.sh
-  FEATURES=""
-  _ cargo build --all --features="$FEATURES"
+  _ cargo build --all
 }
 
 runTest() {

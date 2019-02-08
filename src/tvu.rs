@@ -14,9 +14,8 @@
 
 use crate::bank::Bank;
 use crate::blob_fetch_stage::BlobFetchStage;
+use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
-use crate::db_ledger::DbLedger;
-use crate::fullnode::TvuRotationSender;
 use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
 use crate::service::Service;
@@ -27,14 +26,17 @@ use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, SyncSender};
+use std::sync::mpsc::{channel, Receiver, Sender, SyncSender};
 use std::sync::{Arc, RwLock};
 use std::thread;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TvuReturnType {
-    LeaderRotation(u64, u64, Hash),
+    LeaderRotation(u64, Hash),
 }
+
+pub type TvuRotationSender = Sender<TvuReturnType>;
+pub type TvuRotationReceiver = Receiver<TvuReturnType>;
 
 pub struct Tvu {
     fetch_stage: BlobFetchStage,
@@ -43,7 +45,6 @@ pub struct Tvu {
     storage_stage: StorageStage,
     exit: Arc<AtomicBool>,
     last_entry_id: Arc<RwLock<Hash>>,
-    entry_height: Arc<RwLock<u64>>,
 }
 
 pub struct Sockets {
@@ -58,19 +59,21 @@ impl Tvu {
     /// # Arguments
     /// * `bank` - The bank state.
     /// * `entry_height` - Initial ledger height
+    /// * `blob_index` - Index of last processed blob
     /// * `last_entry_id` - Hash of the last entry
     /// * `cluster_info` - The cluster_info state.
     /// * `sockets` - My fetch, repair, and restransmit sockets
-    /// * `db_ledger` - the ledger itself
+    /// * `blocktree` - the ledger itself
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new(
         voting_keypair: Option<Arc<VotingKeypair>>,
         bank: &Arc<Bank>,
+        blob_index: u64,
         entry_height: u64,
         last_entry_id: Hash,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sockets: Sockets,
-        db_ledger: Arc<DbLedger>,
+        blocktree: Arc<Blocktree>,
         storage_rotate_count: u64,
         to_leader_sender: TvuRotationSender,
         storage_state: &StorageState,
@@ -105,10 +108,9 @@ impl Tvu {
         //then sent to the window, which does the erasure coding reconstruction
         let retransmit_stage = RetransmitStage::new(
             bank,
-            db_ledger.clone(),
+            blocktree.clone(),
             &cluster_info,
             bank.tick_height(),
-            entry_height,
             Arc::new(retransmit_socket),
             repair_socket,
             blob_fetch_receiver,
@@ -116,17 +118,16 @@ impl Tvu {
             exit.clone(),
         );
 
-        let l_entry_height = Arc::new(RwLock::new(entry_height));
         let l_last_entry_id = Arc::new(RwLock::new(last_entry_id));
 
         let (replay_stage, ledger_entry_receiver) = ReplayStage::new(
             keypair.pubkey(),
             voting_keypair,
-            db_ledger.clone(),
+            blocktree.clone(),
             bank.clone(),
             cluster_info.clone(),
             exit.clone(),
-            l_entry_height.clone(),
+            blob_index,
             l_last_entry_id.clone(),
             to_leader_sender,
             entry_stream,
@@ -137,7 +138,7 @@ impl Tvu {
         let storage_stage = StorageStage::new(
             storage_state,
             ledger_entry_receiver,
-            Some(db_ledger),
+            Some(blocktree),
             &keypair,
             &exit.clone(),
             entry_height,
@@ -153,17 +154,13 @@ impl Tvu {
                 storage_stage,
                 exit,
                 last_entry_id: l_last_entry_id,
-                entry_height: l_entry_height,
             },
             blob_fetch_sender,
         )
     }
 
-    pub fn get_state(&self) -> (Hash, u64) {
-        (
-            *self.last_entry_id.read().unwrap(),
-            *self.entry_height.read().unwrap(),
-        )
+    pub fn get_state(&self) -> Hash {
+        *self.last_entry_id.read().unwrap()
     }
 
     pub fn is_exited(&self) -> bool {
@@ -177,51 +174,39 @@ impl Tvu {
         self.replay_stage.exit();
     }
 
-    pub fn close(self) -> thread::Result<Option<TvuReturnType>> {
+    pub fn close(self) -> thread::Result<()> {
         self.exit();
         self.join()
     }
 }
 
 impl Service for Tvu {
-    type JoinReturnType = Option<TvuReturnType>;
+    type JoinReturnType = ();
 
-    fn join(self) -> thread::Result<Option<TvuReturnType>> {
+    fn join(self) -> thread::Result<()> {
         self.retransmit_stage.join()?;
         self.fetch_stage.join()?;
         self.storage_stage.join()?;
-        match self.replay_stage.join()? {
-            _ => Ok(None),
-        }
+        self.replay_stage.join()?;
+        Ok(())
     }
 }
 
 #[cfg(test)]
 pub mod tests {
+    use super::*;
     use crate::bank::Bank;
+    use crate::blocktree::get_tmp_ledger_path;
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::db_ledger::get_tmp_ledger_path;
-    use crate::db_ledger::DbLedger;
     use crate::entry::Entry;
-    use crate::gossip_service::GossipService;
-    use crate::leader_scheduler::LeaderScheduler;
-
     use crate::genesis_block::GenesisBlock;
+    use crate::gossip_service::GossipService;
     use crate::packet::SharedBlob;
-    use crate::service::Service;
-    use crate::storage_stage::{StorageState, STORAGE_ROTATE_TEST_COUNT};
+    use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
     use crate::streamer;
-    use crate::tvu::{Sockets, Tvu};
-    use crate::voting_keypair::VotingKeypair;
     use bincode::serialize;
-    use solana_sdk::hash::Hash;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
     use std::fs::remove_dir_all;
-    use std::net::UdpSocket;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::mpsc::channel;
-    use std::sync::{Arc, RwLock};
     use std::time::Duration;
 
     fn new_gossip(
@@ -241,13 +226,7 @@ pub mod tests {
 
         let starting_balance = 10_000;
         let (genesis_block, _mint_keypair) = GenesisBlock::new(starting_balance);
-        let leader_id = leader.info.id;
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_id,
-        )));
-        let mut bank = Bank::new(&genesis_block);
-        bank.leader_scheduler = leader_scheduler;
-        let bank = Arc::new(bank);
+        let bank = Arc::new(Bank::new(&genesis_block));
 
         //start cluster_info1
         let mut cluster_info1 = ClusterInfo::new(target1.info.clone());
@@ -256,8 +235,8 @@ pub mod tests {
         let cref1 = Arc::new(RwLock::new(cluster_info1));
 
         let cur_hash = Hash::default();
-        let db_ledger_path = get_tmp_ledger_path("test_replay");
-        let (db_ledger, l_sender, l_receiver) = DbLedger::open_with_signal(&db_ledger_path)
+        let blocktree_path = get_tmp_ledger_path("test_replay");
+        let (blocktree, l_sender, l_receiver) = Blocktree::open_with_signal(&blocktree_path)
             .expect("Expected to successfully open ledger");
         let vote_account_keypair = Arc::new(Keypair::new());
         let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
@@ -265,6 +244,7 @@ pub mod tests {
         let (tvu, _blob_sender) = Tvu::new(
             Some(Arc::new(voting_keypair)),
             &bank,
+            0,
             0,
             cur_hash,
             &cref1,
@@ -275,7 +255,7 @@ pub mod tests {
                     fetch: target1.sockets.tvu,
                 }
             },
-            Arc::new(db_ledger),
+            Arc::new(blocktree),
             STORAGE_ROTATE_TEST_COUNT,
             sender,
             &StorageState::default(),
@@ -332,12 +312,7 @@ pub mod tests {
         let starting_balance = 10_000;
         let (genesis_block, mint_keypair) = GenesisBlock::new(starting_balance);
         let tvu_addr = target1.info.tvu;
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::from_bootstrap_leader(
-            leader_id,
-        )));
-        let mut bank = Bank::new(&genesis_block);
-        bank.leader_scheduler = leader_scheduler;
-        let bank = Arc::new(bank);
+        let bank = Arc::new(Bank::new(&genesis_block));
 
         //start cluster_info1
         let mut cluster_info1 = ClusterInfo::new(target1.info.clone());
@@ -347,8 +322,8 @@ pub mod tests {
         let dr_1 = new_gossip(cref1.clone(), target1.sockets.gossip, exit.clone());
 
         let mut cur_hash = Hash::default();
-        let db_ledger_path = get_tmp_ledger_path("test_replay");
-        let (db_ledger, l_sender, l_receiver) = DbLedger::open_with_signal(&db_ledger_path)
+        let blocktree_path = get_tmp_ledger_path("test_replay");
+        let (blocktree, l_sender, l_receiver) = Blocktree::open_with_signal(&blocktree_path)
             .expect("Expected to successfully open ledger");
         let vote_account_keypair = Arc::new(Keypair::new());
         let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
@@ -356,6 +331,7 @@ pub mod tests {
         let (tvu, _) = Tvu::new(
             Some(Arc::new(voting_keypair)),
             &bank,
+            0,
             0,
             cur_hash,
             &cref1,
@@ -366,7 +342,7 @@ pub mod tests {
                     fetch: target1.sockets.tvu,
                 }
             },
-            Arc::new(db_ledger),
+            Arc::new(blocktree),
             STORAGE_ROTATE_TEST_COUNT,
             sender,
             &StorageState::default(),
@@ -446,7 +422,7 @@ pub mod tests {
         dr_1.join().expect("join");
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
-        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
-        let _ignored = remove_dir_all(&db_ledger_path);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        let _ignored = remove_dir_all(&blocktree_path);
     }
 }

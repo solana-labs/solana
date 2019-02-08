@@ -104,7 +104,7 @@ $(OUT_DIR)/%.ll: $(SRC_DIR)/*
 	@echo "[cargo] $@ ($<)"
 	$(_@)mkdir -p $(OUT_DIR)
 	$(_@)rm -f $(CARGO_OUT_DIR)/deps/$(TARGET_NAME)-*.ll
-	$(_@)$(CARGO) $(CARGO_FLAGS)
+	$(_@)export CARGO_INCREMENTAL=0; $(CARGO) $(CARGO_FLAGS)
 	$(_@)cp $(CARGO_OUT_DIR)/deps/$(TARGET_NAME)-*.ll $(OUT_DIR)/$(TARGET_NAME).ll
 
 .PRECIOUS: $(OUT_DIR)/%.o

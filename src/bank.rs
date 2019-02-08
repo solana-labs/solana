@@ -9,20 +9,20 @@ use crate::entry::Entry;
 use crate::entry::EntrySlice;
 use crate::genesis_block::GenesisBlock;
 use crate::last_id_queue::{LastIdQueue, MAX_ENTRY_IDS};
-use crate::leader_scheduler::LeaderScheduler;
+use crate::leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig};
 use crate::poh_recorder::{PohRecorder, PohRecorderError};
 use crate::result::Error;
-use crate::runtime::{self, RuntimeError};
 use crate::status_cache::StatusCache;
 use bincode::deserialize;
 use itertools::Itertools;
 use log::Level;
 use rayon::prelude::*;
-use solana_native_loader;
+use solana_runtime::{self, RuntimeError};
 use solana_sdk::account::Account;
 use solana_sdk::bpf_loader;
 use solana_sdk::budget_program;
 use solana_sdk::hash::Hash;
+use solana_sdk::native_loader;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
@@ -45,6 +45,10 @@ use std::time::Instant;
 pub enum BankError {
     /// This Pubkey is being processed in another transaction
     AccountInUse,
+
+    /// Pubkey appears twice in the same transaction, typically in a pay-to-self
+    /// transaction.
+    AccountLoadedTwice,
 
     /// Attempt to debit from `Pubkey`, but no found no record of a prior credit.
     AccountNotFound,
@@ -137,12 +141,22 @@ impl Default for Bank {
 }
 
 impl Bank {
-    pub fn new(genesis_block: &GenesisBlock) -> Self {
-        let bank = Self::default();
+    pub fn new_with_leader_scheduler_config(
+        genesis_block: &GenesisBlock,
+        leader_scheduler_config: &LeaderSchedulerConfig,
+    ) -> Self {
+        let mut bank = Self::default();
+        bank.leader_scheduler =
+            Arc::new(RwLock::new(LeaderScheduler::new(leader_scheduler_config)));
         bank.process_genesis_block(genesis_block);
         bank.add_builtin_programs();
         bank
     }
+
+    pub fn new(genesis_block: &GenesisBlock) -> Self {
+        Self::new_with_leader_scheduler_config(genesis_block, &LeaderSchedulerConfig::default())
+    }
+
     pub fn set_subscriptions(&self, subscriptions: Box<Arc<BankSubscriptions + Send + Sync>>) {
         let mut sub = self.subscriptions.write().unwrap();
         *sub = subscriptions
@@ -163,24 +177,52 @@ impl Bank {
 
     fn process_genesis_block(&self, genesis_block: &GenesisBlock) {
         assert!(genesis_block.mint_id != Pubkey::default());
+        assert!(genesis_block.bootstrap_leader_id != Pubkey::default());
+        assert!(genesis_block.bootstrap_leader_vote_account_id != Pubkey::default());
         assert!(genesis_block.tokens >= genesis_block.bootstrap_leader_tokens);
+        assert!(genesis_block.bootstrap_leader_tokens >= 2);
 
         let mut mint_account = Account::default();
-        let mut bootstrap_leader_account = Account::default();
-        mint_account.tokens += genesis_block.tokens;
-
-        if genesis_block.bootstrap_leader_id != Pubkey::default() {
-            mint_account.tokens -= genesis_block.bootstrap_leader_tokens;
-            bootstrap_leader_account.tokens += genesis_block.bootstrap_leader_tokens;
-            self.accounts.store_slow(
-                true,
-                &genesis_block.bootstrap_leader_id,
-                &bootstrap_leader_account,
-            );
-        };
-
+        mint_account.tokens = genesis_block.tokens - genesis_block.bootstrap_leader_tokens;
         self.accounts
             .store_slow(true, &genesis_block.mint_id, &mint_account);
+
+        let mut bootstrap_leader_account = Account::default();
+        bootstrap_leader_account.tokens = genesis_block.bootstrap_leader_tokens - 1;
+        self.accounts.store_slow(
+            true,
+            &genesis_block.bootstrap_leader_id,
+            &bootstrap_leader_account,
+        );
+
+        // Construct a vote account for the bootstrap_leader such that the leader_scheduler
+        // will be forced to select it as the leader for height 0
+        let mut bootstrap_leader_vote_account = Account {
+            tokens: 1,
+            userdata: vec![0; vote_program::get_max_size() as usize],
+            owner: vote_program::id(),
+            executable: false,
+            loader: Pubkey::default(),
+        };
+
+        let mut vote_state = vote_program::VoteState::new(
+            genesis_block.bootstrap_leader_id,
+            genesis_block.bootstrap_leader_id,
+        );
+        vote_state.votes.push_back(vote_program::Vote::new(0));
+        vote_state
+            .serialize(&mut bootstrap_leader_vote_account.userdata)
+            .unwrap();
+
+        self.accounts.store_slow(
+            true,
+            &genesis_block.bootstrap_leader_vote_account_id,
+            &bootstrap_leader_vote_account,
+        );
+        self.leader_scheduler
+            .write()
+            .unwrap()
+            .update_tick_height(0, self);
 
         self.last_id_queue
             .write()
@@ -188,20 +230,16 @@ impl Bank {
             .genesis_last_id(&genesis_block.last_id());
     }
 
-    fn add_system_program(&self) {
+    fn add_builtin_programs(&self) {
         let system_program_account = Account {
             tokens: 1,
             owner: system_program::id(),
             userdata: b"solana_system_program".to_vec(),
             executable: true,
-            loader: solana_native_loader::id(),
+            loader: native_loader::id(),
         };
         self.accounts
             .store_slow(true, &system_program::id(), &system_program_account);
-    }
-
-    fn add_builtin_programs(&self) {
-        self.add_system_program();
 
         // Vote program
         let vote_program_account = Account {
@@ -209,7 +247,7 @@ impl Bank {
             owner: vote_program::id(),
             userdata: b"solana_vote_program".to_vec(),
             executable: true,
-            loader: solana_native_loader::id(),
+            loader: native_loader::id(),
         };
         self.accounts
             .store_slow(true, &vote_program::id(), &vote_program_account);
@@ -220,7 +258,7 @@ impl Bank {
             owner: storage_program::id(),
             userdata: b"solana_storage_program".to_vec(),
             executable: true,
-            loader: solana_native_loader::id(),
+            loader: native_loader::id(),
         };
         self.accounts
             .store_slow(true, &storage_program::id(), &storage_program_account);
@@ -241,7 +279,7 @@ impl Bank {
             owner: bpf_loader::id(),
             userdata: b"solana_bpf_loader".to_vec(),
             executable: true,
-            loader: solana_native_loader::id(),
+            loader: native_loader::id(),
         };
 
         self.accounts
@@ -253,7 +291,7 @@ impl Bank {
             owner: budget_program::id(),
             userdata: b"solana_budget_program".to_vec(),
             executable: true,
-            loader: solana_native_loader::id(),
+            loader: native_loader::id(),
         };
         self.accounts
             .store_slow(true, &budget_program::id(), &budget_program_account);
@@ -264,7 +302,7 @@ impl Bank {
             owner: token_program::id(),
             userdata: b"solana_erc20".to_vec(),
             executable: true,
-            loader: solana_native_loader::id(),
+            loader: native_loader::id(),
         };
 
         self.accounts
@@ -352,9 +390,16 @@ impl Bank {
     /// the oldest ones once its internal cache is full. Once boot, the
     /// bank will reject transactions using that `last_id`.
     pub fn register_tick(&self, last_id: &Hash) {
-        let mut last_id_queue = self.last_id_queue.write().unwrap();
-        inc_new_counter_info!("bank-register_tick-registered", 1);
-        last_id_queue.register_tick(last_id)
+        let current_tick_height = {
+            let mut last_id_queue = self.last_id_queue.write().unwrap();
+            inc_new_counter_info!("bank-register_tick-registered", 1);
+            last_id_queue.register_tick(last_id);
+            last_id_queue.tick_height
+        };
+        self.leader_scheduler
+            .write()
+            .unwrap()
+            .update_tick_height(current_tick_height, self);
     }
 
     /// Process a Transaction. This is used for unit tests and simply calls the vector Bank::process_transactions method.
@@ -537,7 +582,7 @@ impl Bank {
             .map(|(accs, tx)| match accs {
                 Err(e) => Err(e.clone()),
                 Ok((ref mut accounts, ref mut loaders)) => {
-                    runtime::execute_transaction(tx, loaders, accounts, tick_height).map_err(
+                    solana_runtime::execute_transaction(tx, loaders, accounts, tick_height).map_err(
                         |RuntimeError::ProgramError(index, err)| {
                             BankError::ProgramError(index, err)
                         },
@@ -602,6 +647,12 @@ impl Bank {
                 error_counters.insufficient_funds
             );
         }
+        if 0 != error_counters.account_loaded_twice {
+            inc_new_counter_info!(
+                "bank-process_transactions-account_loaded_twice",
+                error_counters.account_loaded_twice
+            );
+        }
         (loaded_accounts, executed)
     }
 
@@ -664,10 +715,6 @@ impl Bank {
             }
         } else {
             self.register_tick(&entry.id);
-            self.leader_scheduler
-                .write()
-                .unwrap()
-                .update_height(self.tick_height(), self);
         }
 
         Ok(())
@@ -731,10 +778,6 @@ impl Bank {
                 // if its a tick, execute the group and register the tick
                 self.par_execute_entries(&mt_group)?;
                 self.register_tick(&entry.id);
-                self.leader_scheduler
-                    .write()
-                    .unwrap()
-                    .update_height(self.tick_height(), self);
                 mt_group = vec![];
                 continue;
             }
@@ -882,11 +925,12 @@ impl Bank {
         }
     }
 
-    pub fn get_current_leader(&self) -> Option<(Pubkey, u64)> {
-        self.leader_scheduler
-            .read()
-            .unwrap()
-            .get_scheduled_leader(self.tick_height() + 1)
+    #[cfg(test)]
+    fn get_current_leader(&self) -> Option<Pubkey> {
+        let tick_height = self.tick_height();
+        let leader_scheduler = self.leader_scheduler.read().unwrap();
+        let slot = leader_scheduler.tick_height_to_slot(tick_height);
+        leader_scheduler.get_leader_for_slot(slot)
     }
 
     pub fn tick_height(&self) -> u64 {
@@ -904,6 +948,7 @@ mod tests {
     use super::*;
     use crate::entry::{next_entries, next_entry, Entry};
     use crate::gen_keys::GenKeys;
+    use crate::genesis_block::BOOTSTRAP_LEADER_TOKENS;
     use bincode::serialize;
     use hashbrown::HashSet;
     use solana_sdk::hash::hash;
@@ -921,18 +966,28 @@ mod tests {
     fn test_bank_new() {
         let (genesis_block, _) = GenesisBlock::new(10_000);
         let bank = Bank::new(&genesis_block);
-        assert_eq!(bank.get_balance(&genesis_block.mint_id), 10_000);
+        assert_eq!(
+            bank.get_balance(&genesis_block.mint_id),
+            10_000 - genesis_block.bootstrap_leader_tokens
+        );
     }
 
     #[test]
     fn test_bank_new_with_leader() {
         let dummy_leader_id = Keypair::new().pubkey();
-        let dummy_leader_tokens = 1;
+        let dummy_leader_tokens = BOOTSTRAP_LEADER_TOKENS;
         let (genesis_block, _) =
             GenesisBlock::new_with_leader(10_000, dummy_leader_id, dummy_leader_tokens);
+        assert_eq!(genesis_block.bootstrap_leader_tokens, dummy_leader_tokens);
         let bank = Bank::new(&genesis_block);
-        assert_eq!(bank.get_balance(&genesis_block.mint_id), 9999);
-        assert_eq!(bank.get_balance(&dummy_leader_id), 1);
+        assert_eq!(
+            bank.get_balance(&genesis_block.mint_id),
+            10_000 - dummy_leader_tokens
+        );
+        assert_eq!(
+            bank.get_balance(&dummy_leader_id),
+            dummy_leader_tokens - 1 /* 1 token goes to the vote account associated with dummy_leader_tokens */
+        );
     }
 
     #[test]
@@ -954,7 +1009,7 @@ mod tests {
 
     #[test]
     fn test_one_source_two_tx_one_batch() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1 + BOOTSTRAP_LEADER_TOKENS);
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
@@ -979,7 +1034,7 @@ mod tests {
 
     #[test]
     fn test_one_tx_two_out_atomic_fail() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1 + BOOTSTRAP_LEADER_TOKENS);
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
@@ -1028,7 +1083,7 @@ mod tests {
 
     #[test]
     fn test_one_tx_two_out_atomic_pass() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
@@ -1051,7 +1106,7 @@ mod tests {
     // See github issue 1157 (https://github.com/solana-labs/solana/issues/1157)
     #[test]
     fn test_detect_failed_duplicate_transactions_issue_1157() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
         let bank = Bank::new(&genesis_block);
         let dest = Keypair::new();
 
@@ -1087,7 +1142,7 @@ mod tests {
 
     #[test]
     fn test_account_not_found() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(BOOTSTRAP_LEADER_TOKENS);
         let bank = Bank::new(&genesis_block);
         let keypair = Keypair::new();
         assert_eq!(
@@ -1099,7 +1154,7 @@ mod tests {
 
     #[test]
     fn test_insufficient_funds() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(11_000);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(11_000 + BOOTSTRAP_LEADER_TOKENS);
         let bank = Bank::new(&genesis_block);
         let pubkey = Keypair::new().pubkey();
         bank.transfer(1_000, &mint_keypair, pubkey, genesis_block.last_id())
@@ -1132,7 +1187,7 @@ mod tests {
 
     #[test]
     fn test_debits_before_credits() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
         let bank = Bank::new(&genesis_block);
         let keypair = Keypair::new();
         let tx0 = SystemTransaction::new_account(
@@ -1159,7 +1214,7 @@ mod tests {
 
     #[test]
     fn test_process_empty_entry_is_registered() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
         let bank = Bank::new(&genesis_block);
         let keypair = Keypair::new();
         let entry = next_entry(&genesis_block.last_id(), 1, vec![]);
@@ -1178,22 +1233,15 @@ mod tests {
 
     #[test]
     fn test_process_genesis() {
+        solana_logger::setup();
         let dummy_leader_id = Keypair::new().pubkey();
-        let dummy_leader_tokens = 1;
+        let dummy_leader_tokens = 2;
         let (genesis_block, _) =
             GenesisBlock::new_with_leader(5, dummy_leader_id, dummy_leader_tokens);
-        let bank = Bank::default();
-        bank.process_genesis_block(&genesis_block);
-        assert_eq!(bank.get_balance(&genesis_block.mint_id), 4);
+        let bank = Bank::new(&genesis_block);
+        assert_eq!(bank.get_balance(&genesis_block.mint_id), 3);
         assert_eq!(bank.get_balance(&dummy_leader_id), 1);
-        // TODO: Restore next assert_eq() once leader scheduler configuration is stored in the
-        // genesis block
-        /*
-        assert_eq!(
-            bank.leader_scheduler.read().unwrap().bootstrap_leader,
-            dummy_leader_id
-        );
-        */
+        assert_eq!(bank.get_current_leader(), Some(dummy_leader_id));
     }
 
     fn create_sample_block_with_next_entries_using_keypairs(
@@ -1228,11 +1276,10 @@ mod tests {
     fn create_sample_block_with_ticks(
         genesis_block: &GenesisBlock,
         mint_keypair: &Keypair,
-        num_entries: usize,
+        num_one_token_transfers: usize,
         tick_interval: usize,
     ) -> impl Iterator<Item = Entry> {
-        assert!(num_entries > 0);
-        let mut entries = Vec::with_capacity(num_entries);
+        let mut entries = vec![];
 
         // Start off the ledger with a tick linked to the genesis block
         let tick = Entry::new(&genesis_block.last_id(), 0, 1, vec![]);
@@ -1240,11 +1287,11 @@ mod tests {
         let mut last_id = tick.id;
         entries.push(tick);
 
-        let num_hashes = 1;
-        for i in 1..num_entries {
+        for i in 0..num_one_token_transfers {
+            // Transfer one token from the mint to a random account
             let keypair = Keypair::new();
             let tx = SystemTransaction::new_account(mint_keypair, keypair.pubkey(), 1, last_id, 0);
-            let entry = Entry::new(&hash, 0, num_hashes, vec![tx]);
+            let entry = Entry::new(&hash, 0, 1, vec![tx]);
             hash = entry.id;
             entries.push(entry);
 
@@ -1252,12 +1299,12 @@ mod tests {
             // ProgramError<0, ResultWithNegativeTokens> error when processed
             let keypair2 = Keypair::new();
             let tx = SystemTransaction::new_account(&keypair, keypair2.pubkey(), 42, last_id, 0);
-            let entry = Entry::new(&hash, 0, num_hashes, vec![tx]);
+            let entry = Entry::new(&hash, 0, 1, vec![tx]);
             hash = entry.id;
             entries.push(entry);
 
             if (i + 1) % tick_interval == 0 {
-                let tick = Entry::new(&hash, 0, num_hashes, vec![]);
+                let tick = Entry::new(&hash, 0, 1, vec![]);
                 hash = tick.id;
                 last_id = hash;
                 entries.push(tick);
@@ -1268,30 +1315,42 @@ mod tests {
 
     fn create_sample_ledger(
         tokens: u64,
-        num_entries: usize,
+        num_one_token_transfers: usize,
     ) -> (GenesisBlock, Keypair, impl Iterator<Item = Entry>) {
         let mint_keypair = Keypair::new();
+        let bootstrap_leader_vote_account_keypair = Keypair::new();
         let genesis_block = GenesisBlock {
             bootstrap_leader_id: Keypair::new().pubkey(),
-            bootstrap_leader_tokens: 1,
+            bootstrap_leader_tokens: BOOTSTRAP_LEADER_TOKENS,
+            bootstrap_leader_vote_account_id: bootstrap_leader_vote_account_keypair.pubkey(),
             mint_id: mint_keypair.pubkey(),
             tokens,
         };
-        let block =
-            create_sample_block_with_ticks(&genesis_block, &mint_keypair, num_entries, num_entries);
+        let block = create_sample_block_with_ticks(
+            &genesis_block,
+            &mint_keypair,
+            num_one_token_transfers,
+            num_one_token_transfers,
+        );
         (genesis_block, mint_keypair, block)
     }
 
     #[test]
     fn test_process_ledger_simple() {
-        let (genesis_block, mint_keypair, ledger) = create_sample_ledger(100, 2);
+        let (genesis_block, mint_keypair, ledger) =
+            create_sample_ledger(100 + BOOTSTRAP_LEADER_TOKENS, 3);
         let mut bank = Bank::default();
+        bank.add_builtin_programs();
         bank.process_genesis_block(&genesis_block);
         assert_eq!(bank.tick_height(), 0);
-        bank.add_system_program();
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100);
+        assert_eq!(
+            bank.get_current_leader(),
+            Some(genesis_block.bootstrap_leader_id)
+        );
         let (ledger_height, last_id) = bank.process_ledger(ledger).unwrap();
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 98);
-        assert_eq!(ledger_height, 4);
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 3);
+        assert_eq!(ledger_height, 8);
         assert_eq!(bank.tick_height(), 2);
         assert_eq!(bank.last_id(), last_id);
     }
@@ -1299,9 +1358,11 @@ mod tests {
     #[test]
     fn test_hash_internal_state() {
         let mint_keypair = Keypair::new();
+        let bootstrap_leader_vote_account_keypair = Keypair::new();
         let genesis_block = GenesisBlock {
             bootstrap_leader_id: Keypair::new().pubkey(),
-            bootstrap_leader_tokens: 1,
+            bootstrap_leader_tokens: BOOTSTRAP_LEADER_TOKENS,
+            bootstrap_leader_vote_account_id: bootstrap_leader_vote_account_keypair.pubkey(),
             mint_id: mint_keypair.pubkey(),
             tokens: 2_000,
         };
@@ -1320,11 +1381,11 @@ mod tests {
         );
 
         let mut bank0 = Bank::default();
-        bank0.add_system_program();
+        bank0.add_builtin_programs();
         bank0.process_genesis_block(&genesis_block);
         bank0.process_ledger(ledger0).unwrap();
         let mut bank1 = Bank::default();
-        bank1.add_system_program();
+        bank1.add_builtin_programs();
         bank1.process_genesis_block(&genesis_block);
         bank1.process_ledger(ledger1).unwrap();
 
@@ -1351,7 +1412,7 @@ mod tests {
     }
     #[test]
     fn test_interleaving_locks() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(3);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(3 + BOOTSTRAP_LEADER_TOKENS);
         let bank = Bank::new(&genesis_block);
         let alice = Keypair::new();
         let bob = Keypair::new();
@@ -1613,7 +1674,7 @@ mod tests {
         ]);
 
         assert_eq!(system_program::id(), system);
-        assert_eq!(solana_native_loader::id(), native);
+        assert_eq!(native_loader::id(), native);
         assert_eq!(bpf_loader::id(), bpf);
         assert_eq!(budget_program::id(), budget);
         assert_eq!(storage_program::id(), storage);
@@ -1627,7 +1688,7 @@ mod tests {
         let mut unique = HashSet::new();
         let ids = vec![
             system_program::id(),
-            solana_native_loader::id(),
+            native_loader::id(),
             bpf_loader::id(),
             budget_program::id(),
             storage_program::id(),
@@ -1643,7 +1704,8 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
         let bank = Arc::new(Bank::new(&genesis_block));
         let (entry_sender, entry_receiver) = channel();
-        let poh_recorder = PohRecorder::new(bank.clone(), entry_sender, bank.last_id(), None);
+        let poh_recorder =
+            PohRecorder::new(bank.clone(), entry_sender, bank.last_id(), std::u64::MAX);
         let pubkey = Keypair::new().pubkey();
 
         let transactions = vec![
@@ -1764,7 +1826,7 @@ mod tests {
             bank.clone(),
             entry_sender,
             bank.last_id(),
-            Some(bank.tick_height() + 1),
+            bank.tick_height() + 1,
         );
 
         bank.process_and_record_transactions(&transactions, &poh_recorder)
@@ -1800,5 +1862,19 @@ mod tests {
 
         assert_eq!(bank.get_balance(&pubkey), 1);
     }
+    #[test]
+    fn test_bank_pay_to_self() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1 + BOOTSTRAP_LEADER_TOKENS);
+        let key1 = Keypair::new();
+        let bank = Bank::new(&genesis_block);
 
+        bank.transfer(1, &mint_keypair, key1.pubkey(), genesis_block.last_id())
+            .unwrap();
+        assert_eq!(bank.get_balance(&key1.pubkey()), 1);
+        let tx = SystemTransaction::new_move(&key1, key1.pubkey(), 1, genesis_block.last_id(), 0);
+        let res = bank.process_transactions(&vec![tx.clone()]);
+        assert_eq!(res.len(), 1);
+        assert_eq!(bank.get_balance(&key1.pubkey()), 1);
+        res[0].clone().unwrap_err();
+    }
 }

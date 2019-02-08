@@ -103,7 +103,9 @@ impl LastIdQueue {
         let current_tick_height = self.tick_height;
         let mut total = 0;
         for (tick_height, stake) in ticks_and_stakes.iter() {
-            if ((current_tick_height - tick_height) as usize) < MAX_ENTRY_IDS {
+            if current_tick_height >= *tick_height
+                && ((current_tick_height - tick_height) as usize) < MAX_ENTRY_IDS
+            {
                 total += stake;
                 if total > supermajority_stake {
                     return self.tick_height_to_timestamp(*tick_height);

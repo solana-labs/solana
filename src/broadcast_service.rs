@@ -33,7 +33,7 @@ pub enum BroadcastServiceReturnType {
 
 struct Broadcast {
     id: Pubkey,
-    max_tick_height: Option<u64>,
+    max_tick_height: u64,
     blob_index: u64,
 
     #[cfg(feature = "erasure")]
@@ -60,15 +60,12 @@ impl Broadcast {
             num_entries += entries.len();
             ventries.push(entries);
         }
-        let last_tick = match self.max_tick_height {
-            Some(max_tick_height) => {
-                if let Some(Some(last)) = ventries.last().map(|entries| entries.last()) {
-                    last.tick_height == max_tick_height
-                } else {
-                    false
-                }
+        let last_tick = {
+            if let Some(Some(last)) = ventries.last().map(|entries| entries.last()) {
+                last.tick_height == self.max_tick_height
+            } else {
+                false
             }
-            None => false,
         };
 
         inc_new_counter_info!("broadcast_service-entries_received", num_entries);
@@ -85,7 +82,7 @@ impl Broadcast {
             .collect();
 
         // TODO: blob_index should be slot-relative...
-        index_blobs(&blobs, &self.id, self.blob_index, &slots);
+        index_blobs(&blobs, &self.id, &mut self.blob_index, &slots);
 
         let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
 
@@ -94,9 +91,6 @@ impl Broadcast {
         inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
 
         blob_sender.send(blobs.clone())?;
-
-        // don't count coding blobs in the blob indexes
-        self.blob_index += blobs.len() as u64;
 
         // Send out data
         ClusterInfo::broadcast(&self.id, last_tick, &broadcast_table, sock, &blobs)?;
@@ -151,10 +145,7 @@ fn generate_slots(
                     } else {
                         e.tick_height + 1
                     };
-                    let (_, slot) = r_leader_scheduler
-                        .get_scheduled_leader(tick_height)
-                        .expect("Leader schedule should never be unknown while indexing blobs");
-                    slot
+                    r_leader_scheduler.tick_height_to_slot(tick_height)
                 })
                 .collect();
 
@@ -186,14 +177,15 @@ pub struct BroadcastService {
 }
 
 impl BroadcastService {
+    #[allow(clippy::too_many_arguments)]
     fn run(
         bank: &Arc<Bank>,
         sock: &UdpSocket,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        entry_height: u64,
+        blob_index: u64,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
         receiver: &Receiver<Vec<Entry>>,
-        max_tick_height: Option<u64>,
+        max_tick_height: u64,
         exit_signal: &Arc<AtomicBool>,
         blob_sender: &BlobSender,
     ) -> BroadcastServiceReturnType {
@@ -202,7 +194,7 @@ impl BroadcastService {
         let mut broadcast = Broadcast {
             id: me.id,
             max_tick_height,
-            blob_index: entry_height,
+            blob_index,
             #[cfg(feature = "erasure")]
             coding_generator: CodingGenerator::new(),
         };
@@ -252,14 +244,15 @@ impl BroadcastService {
     /// WriteStage is the last stage in the pipeline), which will then close Broadcast service,
     /// which will then close FetchStage in the Tpu, and then the rest of the Tpu,
     /// completing the cycle.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         bank: Arc<Bank>,
         sock: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        entry_height: u64,
+        blob_index: u64,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         receiver: Receiver<Vec<Entry>>,
-        max_tick_height: Option<u64>,
+        max_tick_height: u64,
         exit_sender: Arc<AtomicBool>,
         blob_sender: &BlobSender,
     ) -> Self {
@@ -273,7 +266,7 @@ impl BroadcastService {
                     &bank,
                     &sock,
                     &cluster_info,
-                    entry_height,
+                    blob_index,
                     &leader_scheduler,
                     &receiver,
                     max_tick_height,
@@ -298,9 +291,9 @@ impl Service for BroadcastService {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::blocktree::get_tmp_ledger_path;
+    use crate::blocktree::Blocktree;
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::db_ledger::get_tmp_ledger_path;
-    use crate::db_ledger::DbLedger;
     use crate::entry::create_ticks;
     use crate::service::Service;
     use solana_sdk::hash::Hash;
@@ -312,7 +305,7 @@ mod test {
     use std::time::Duration;
 
     struct MockBroadcastService {
-        db_ledger: Arc<DbLedger>,
+        blocktree: Arc<Blocktree>,
         broadcast_service: BroadcastService,
     }
 
@@ -321,11 +314,11 @@ mod test {
         ledger_path: &str,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         entry_receiver: Receiver<Vec<Entry>>,
-        entry_height: u64,
+        blob_index: u64,
         max_tick_height: u64,
     ) -> MockBroadcastService {
         // Make the database ledger
-        let db_ledger = Arc::new(DbLedger::open(ledger_path).unwrap());
+        let blocktree = Arc::new(Blocktree::open(ledger_path).unwrap());
 
         // Make the leader node and scheduler
         let leader_info = Node::new_localhost_with_pubkey(leader_pubkey);
@@ -349,16 +342,16 @@ mod test {
             bank.clone(),
             leader_info.sockets.broadcast,
             cluster_info,
-            entry_height,
+            blob_index,
             leader_scheduler,
             entry_receiver,
-            Some(max_tick_height),
+            max_tick_height,
             exit_sender,
             &blob_fetch_sender,
         );
 
         MockBroadcastService {
-            db_ledger,
+            blocktree,
             broadcast_service,
         }
     }
@@ -367,20 +360,16 @@ mod test {
     #[ignore]
     //TODO this test won't work since broadcast stage no longer edits the ledger
     fn test_broadcast_ledger() {
-        let ledger_path = get_tmp_ledger_path("test_broadcast");
+        let ledger_path = get_tmp_ledger_path("test_broadcast_ledger");
         {
             // Create the leader scheduler
             let leader_keypair = Keypair::new();
-            let mut leader_scheduler =
-                LeaderScheduler::from_bootstrap_leader(leader_keypair.pubkey());
+            let mut leader_scheduler = LeaderScheduler::default();
 
             // Mock the tick height to look like the tick height right after a leader transition
-            leader_scheduler.last_seed_height = Some(leader_scheduler.bootstrap_height);
             leader_scheduler.set_leader_schedule(vec![leader_keypair.pubkey()]);
-            leader_scheduler.use_only_bootstrap_leader = false;
-            let start_tick_height = leader_scheduler.bootstrap_height;
-            let max_tick_height = start_tick_height + leader_scheduler.last_seed_height.unwrap();
-            let entry_height = 2 * start_tick_height;
+            let start_tick_height = 0;
+            let max_tick_height = start_tick_height + leader_scheduler.ticks_per_slot;
 
             let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
             let (entry_sender, entry_receiver) = channel();
@@ -389,7 +378,7 @@ mod test {
                 &ledger_path,
                 leader_scheduler.clone(),
                 entry_receiver,
-                entry_height,
+                0,
                 max_tick_height,
             );
 
@@ -403,15 +392,17 @@ mod test {
             }
 
             sleep(Duration::from_millis(2000));
-            let db_ledger = broadcast_service.db_ledger;
+            let blocktree = broadcast_service.blocktree;
+            let mut blob_index = 0;
             for i in 0..max_tick_height - start_tick_height {
-                let (_, slot) = leader_scheduler
+                let slot = leader_scheduler
                     .read()
                     .unwrap()
-                    .get_scheduled_leader(start_tick_height + i + 1)
-                    .expect("Leader should exist");
-                let result = db_ledger.get_data_blob(slot, entry_height + i).unwrap();
+                    .tick_height_to_slot(start_tick_height + i + 1);
 
+                let result = blocktree.get_data_blob(slot, blob_index).unwrap();
+
+                blob_index += 1;
                 assert!(result.is_some());
             }
 
@@ -422,6 +413,6 @@ mod test {
                 .expect("Expect successful join of broadcast service");
         }
 
-        DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 }

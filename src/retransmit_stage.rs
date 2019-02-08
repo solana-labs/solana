@@ -1,14 +1,14 @@
 //! The `retransmit_stage` retransmits blobs between validators
 
 use crate::bank::Bank;
+use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, DATA_PLANE_FANOUT, GROW_LAYER_CAPACITY, NEIGHBORHOOD_SIZE};
 use crate::counter::Counter;
-use crate::db_ledger::DbLedger;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::streamer::BlobReceiver;
-use crate::window_service::window_service;
+use crate::window_service::WindowService;
 use log::Level;
 use solana_metrics::{influxdb, submit};
 use std::net::UdpSocket;
@@ -119,16 +119,16 @@ fn retransmitter(
 
 pub struct RetransmitStage {
     thread_hdls: Vec<JoinHandle<()>>,
+    window_service: WindowService,
 }
 
 impl RetransmitStage {
-    #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(
         bank: &Arc<Bank>,
-        db_ledger: Arc<DbLedger>,
+        blocktree: Arc<Blocktree>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         tick_height: u64,
-        entry_height: u64,
         retransmit_socket: Arc<UdpSocket>,
         repair_socket: Arc<UdpSocket>,
         fetch_stage_receiver: BlobReceiver,
@@ -144,11 +144,10 @@ impl RetransmitStage {
             retransmit_receiver,
         );
         let done = Arc::new(AtomicBool::new(false));
-        let t_window = window_service(
-            db_ledger,
+        let window_service = WindowService::new(
+            blocktree,
             cluster_info.clone(),
             tick_height,
-            entry_height,
             0,
             fetch_stage_receiver,
             retransmit_sender,
@@ -158,8 +157,11 @@ impl RetransmitStage {
             exit,
         );
 
-        let thread_hdls = vec![t_retransmit, t_window];
-        Self { thread_hdls }
+        let thread_hdls = vec![t_retransmit];
+        Self {
+            thread_hdls,
+            window_service,
+        }
     }
 }
 
@@ -170,6 +172,7 @@ impl Service for RetransmitStage {
         for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }
+        self.window_service.join()?;
         Ok(())
     }
 }

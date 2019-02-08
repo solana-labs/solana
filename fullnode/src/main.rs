@@ -3,7 +3,7 @@ use log::*;
 use solana::client::mk_client;
 use solana::cluster_info::{Node, NodeInfo, FULLNODE_PORT_RANGE};
 use solana::fullnode::{Fullnode, FullnodeConfig};
-use solana::leader_scheduler::LeaderScheduler;
+use solana::genesis_block::GenesisBlock;
 use solana::local_vote_signer_service::LocalVoteSignerService;
 use solana::socketaddr;
 use solana::thin_client::{poll_gossip_for_leader, ThinClient};
@@ -17,10 +17,8 @@ use std::fs::File;
 use std::io::{Error, ErrorKind, Result};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::process::exit;
+use std::sync::mpsc::channel;
 use std::sync::Arc;
-use std::sync::RwLock;
-use std::thread::sleep;
-use std::time::Duration;
 
 fn parse_identity(matches: &ArgMatches<'_>) -> (Keypair, SocketAddr) {
     if let Some(i) = matches.value_of("identity") {
@@ -105,7 +103,6 @@ fn create_and_fund_vote_account(
                     info!("Failed to send vote_account_new transaction: {:?}", e);
                 }
             };
-            sleep(Duration::from_secs(2));
         }
     }
 
@@ -248,13 +245,16 @@ fn main() {
     node.info.rpc.set_port(rpc_port);
     node.info.rpc_pubsub.set_port(rpc_pubsub_port);
 
-    let mut leader_scheduler = LeaderScheduler::default();
-    leader_scheduler.use_only_bootstrap_leader = use_only_bootstrap_leader;
+    let genesis_block = GenesisBlock::load(ledger_path).expect("Unable to load genesis block");
+    if use_only_bootstrap_leader && node.info.id != genesis_block.bootstrap_leader_id {
+        fullnode_config.voting_disabled = true;
+    }
 
     let vote_signer: Box<dyn VoteSigner + Sync + Send> = if !no_signer {
-        info!("Signer service address: {:?}", signer_addr);
+        info!("Vote signer service address: {:?}", signer_addr);
         Box::new(RemoteVoteSigner::new(signer_addr))
     } else {
+        info!("Node will not vote");
         Box::new(LocalVoteSigner::default())
     };
     let vote_signer = VotingKeypair::new_with_signer(&keypair, vote_signer);
@@ -262,11 +262,10 @@ fn main() {
     info!("New vote account ID is {:?}", vote_account_id);
 
     let gossip_addr = node.info.gossip;
-    let mut fullnode = Fullnode::new(
+    let fullnode = Fullnode::new(
         node,
         &keypair,
         ledger_path,
-        Arc::new(RwLock::new(leader_scheduler)),
         vote_signer,
         cluster_entrypoint
             .map(|i| NodeInfo::new_entry_point(&i))
@@ -274,7 +273,10 @@ fn main() {
         &fullnode_config,
     );
 
-    if !no_signer {
+    let (rotation_sender, rotation_receiver) = channel();
+    fullnode.run(Some(rotation_sender));
+
+    if !fullnode_config.voting_disabled {
         let leader_node_info = loop {
             info!("Looking for leader...");
             match poll_gossip_for_leader(gossip_addr, Some(10)) {
@@ -299,17 +301,9 @@ fn main() {
     }
     info!("Node initialized");
     loop {
-        let status = fullnode.handle_role_transition();
-        match status {
-            Ok(Some(transition)) => {
-                info!("role_transition complete: {:?}", transition);
-            }
-            _ => {
-                panic!(
-                    "Fullnode TPU/TVU exited for some unexpected reason: {:?}",
-                    status
-                );
-            }
-        };
+        info!(
+            "Node rotation event: {:?}",
+            rotation_receiver.recv().unwrap()
+        );
     }
 }

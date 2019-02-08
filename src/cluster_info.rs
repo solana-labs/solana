@@ -13,6 +13,7 @@
 //!
 //! Bank needs to provide an interface for us to query the stake weight
 use crate::bank::Bank;
+use crate::blocktree::Blocktree;
 use crate::bloom::Bloom;
 use crate::contact_info::ContactInfo;
 use crate::counter::Counter;
@@ -20,7 +21,6 @@ use crate::crds_gossip::CrdsGossip;
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
 use crate::crds_value::{CrdsValue, CrdsValueLabel, LeaderId, Vote};
-use crate::db_ledger::DbLedger;
 use crate::packet::{to_shared_blob, Blob, SharedBlob, BLOB_SIZE};
 use crate::result::Result;
 use crate::rpc::RPC_PORT;
@@ -145,7 +145,7 @@ enum Protocol {
 
     /// Window protocol messages
     /// TODO: move this message to a different module
-    RequestWindowIndex(NodeInfo, u64),
+    RequestWindowIndex(NodeInfo, u64, u64),
 }
 
 impl ClusterInfo {
@@ -692,13 +692,17 @@ impl ClusterInfo {
         orders
     }
 
-    pub fn window_index_request_bytes(&self, ix: u64) -> Result<Vec<u8>> {
-        let req = Protocol::RequestWindowIndex(self.my_data().clone(), ix);
+    pub fn window_index_request_bytes(&self, slot_height: u64, blob_index: u64) -> Result<Vec<u8>> {
+        let req = Protocol::RequestWindowIndex(self.my_data().clone(), slot_height, blob_index);
         let out = serialize(&req)?;
         Ok(out)
     }
 
-    pub fn window_index_request(&self, ix: u64) -> Result<(SocketAddr, Vec<u8>)> {
+    pub fn window_index_request(
+        &self,
+        slot_height: u64,
+        blob_index: u64,
+    ) -> Result<(SocketAddr, Vec<u8>)> {
         // find a peer that appears to be accepting replication, as indicated
         //  by a valid tvu port location
         let valid: Vec<_> = self.repair_peers();
@@ -707,11 +711,11 @@ impl ClusterInfo {
         }
         let n = thread_rng().gen::<usize>() % valid.len();
         let addr = valid[n].gossip; // send the request to the peer's gossip port
-        let out = self.window_index_request_bytes(ix)?;
+        let out = self.window_index_request_bytes(slot_height, blob_index)?;
 
         submit(
             influxdb::Point::new("cluster-info")
-                .add_field("repair-ix", influxdb::Value::Integer(ix as i64))
+                .add_field("repair-ix", influxdb::Value::Integer(blob_index as i64))
                 .to_owned(),
         );
 
@@ -835,34 +839,38 @@ impl ClusterInfo {
             })
             .unwrap()
     }
+
+    // TODO: To support repairing multiple slots, broadcast needs to reset
+    // blob index for every slot, and window requests should be by slot + index.
+    // Issue: https://github.com/solana-labs/solana/issues/2440
     fn run_window_request(
         from: &NodeInfo,
         from_addr: &SocketAddr,
-        db_ledger: Option<&Arc<DbLedger>>,
+        blocktree: Option<&Arc<Blocktree>>,
         me: &NodeInfo,
-        ix: u64,
+        slot_height: u64,
+        blob_index: u64,
     ) -> Vec<SharedBlob> {
-        if let Some(db_ledger) = db_ledger {
-            let meta = db_ledger.meta();
+        if let Some(blocktree) = blocktree {
+            // Try to find the requested index in one of the slots
+            let blob = blocktree.get_data_blob(slot_height, blob_index);
 
-            if let Ok(Some(meta)) = meta {
-                let max_slot = meta.received_slot;
-                // Try to find the requested index in one of the slots
-                for i in 0..=max_slot {
-                    let blob = db_ledger.get_data_blob(i, ix);
+            if let Ok(Some(mut blob)) = blob {
+                inc_new_counter_info!("cluster_info-window-request-ledger", 1);
+                blob.meta.set_addr(from_addr);
 
-                    if let Ok(Some(mut blob)) = blob {
-                        inc_new_counter_info!("cluster_info-window-request-ledger", 1);
-                        blob.meta.set_addr(from_addr);
-
-                        return vec![Arc::new(RwLock::new(blob))];
-                    }
-                }
+                return vec![Arc::new(RwLock::new(blob))];
             }
         }
 
         inc_new_counter_info!("cluster_info-window-request-fail", 1);
-        trace!("{}: failed RequestWindowIndex {} {}", me.id, from.id, ix,);
+        trace!(
+            "{}: failed RequestWindowIndex {} {} {}",
+            me.id,
+            from.id,
+            slot_height,
+            blob_index,
+        );
 
         vec![]
     }
@@ -870,13 +878,13 @@ impl ClusterInfo {
     //TODO we should first coalesce all the requests
     fn handle_blob(
         obj: &Arc<RwLock<Self>>,
-        db_ledger: Option<&Arc<DbLedger>>,
+        blocktree: Option<&Arc<Blocktree>>,
         blob: &Blob,
     ) -> Vec<SharedBlob> {
         deserialize(&blob.data[..blob.meta.size])
             .into_iter()
             .flat_map(|request| {
-                ClusterInfo::handle_protocol(obj, &blob.meta.addr(), db_ledger, request)
+                ClusterInfo::handle_protocol(obj, &blob.meta.addr(), blocktree, request)
             })
             .collect()
     }
@@ -986,8 +994,9 @@ impl ClusterInfo {
     fn handle_request_window_index(
         me: &Arc<RwLock<Self>>,
         from: &ContactInfo,
-        db_ledger: Option<&Arc<DbLedger>>,
-        ix: u64,
+        blocktree: Option<&Arc<Blocktree>>,
+        slot_height: u64,
+        blob_index: u64,
         from_addr: &SocketAddr,
     ) -> Vec<SharedBlob> {
         let now = Instant::now();
@@ -999,8 +1008,8 @@ impl ClusterInfo {
         let self_id = me.read().unwrap().gossip.id;
         if from.id == me.read().unwrap().gossip.id {
             warn!(
-                "{}: Ignored received RequestWindowIndex from ME {} {} ",
-                self_id, from.id, ix,
+                "{}: Ignored received RequestWindowIndex from ME {} {} {} ",
+                self_id, from.id, slot_height, blob_index,
             );
             inc_new_counter_info!("cluster_info-window-request-address-eq", 1);
             return vec![];
@@ -1010,23 +1019,31 @@ impl ClusterInfo {
         let my_info = me.read().unwrap().my_data().clone();
         inc_new_counter_info!("cluster_info-window-request-recv", 1);
         trace!(
-            "{}: received RequestWindowIndex from: {} index: {} ",
+            "{}: received RequestWindowIndex from: {} slot_height: {}, blob_index: {}",
             self_id,
             from.id,
-            ix,
+            slot_height,
+            blob_index,
         );
-        let res = Self::run_window_request(&from, &from_addr, db_ledger, &my_info, ix);
+        let res = Self::run_window_request(
+            &from,
+            &from_addr,
+            blocktree,
+            &my_info,
+            slot_height,
+            blob_index,
+        );
         report_time_spent(
             "RequestWindowIndex",
             &now.elapsed(),
-            &format!(" ix: {}", ix),
+            &format!("slot_height {}, blob_index: {}", slot_height, blob_index),
         );
         res
     }
     fn handle_protocol(
         me: &Arc<RwLock<Self>>,
         from_addr: &SocketAddr,
-        db_ledger: Option<&Arc<DbLedger>>,
+        blocktree: Option<&Arc<Blocktree>>,
         request: Protocol,
     ) -> Vec<SharedBlob> {
         match request {
@@ -1081,8 +1098,15 @@ impl ClusterInfo {
                 }
                 vec![]
             }
-            Protocol::RequestWindowIndex(from, ix) => {
-                Self::handle_request_window_index(me, &from, db_ledger, ix, from_addr)
+            Protocol::RequestWindowIndex(from, slot_height, blob_index) => {
+                Self::handle_request_window_index(
+                    me,
+                    &from,
+                    blocktree,
+                    slot_height,
+                    blob_index,
+                    from_addr,
+                )
             }
         }
     }
@@ -1090,7 +1114,7 @@ impl ClusterInfo {
     /// Process messages from the network
     fn run_listen(
         obj: &Arc<RwLock<Self>>,
-        db_ledger: Option<&Arc<DbLedger>>,
+        blocktree: Option<&Arc<Blocktree>>,
         requests_receiver: &BlobReceiver,
         response_sender: &BlobSender,
     ) -> Result<()> {
@@ -1102,7 +1126,7 @@ impl ClusterInfo {
         }
         let mut resps = Vec::new();
         for req in reqs {
-            let mut resp = Self::handle_blob(obj, db_ledger, &req.read().unwrap());
+            let mut resp = Self::handle_blob(obj, blocktree, &req.read().unwrap());
             resps.append(&mut resp);
         }
         response_sender.send(resps)?;
@@ -1110,7 +1134,7 @@ impl ClusterInfo {
     }
     pub fn listen(
         me: Arc<RwLock<Self>>,
-        db_ledger: Option<Arc<DbLedger>>,
+        blocktree: Option<Arc<Blocktree>>,
         requests_receiver: BlobReceiver,
         response_sender: BlobSender,
         exit: Arc<AtomicBool>,
@@ -1120,7 +1144,7 @@ impl ClusterInfo {
             .spawn(move || loop {
                 let e = Self::run_listen(
                     &me,
-                    db_ledger.as_ref(),
+                    blocktree.as_ref(),
                     &requests_receiver,
                     &response_sender,
                 );
@@ -1278,9 +1302,9 @@ fn report_time_spent(label: &str, time: &Duration, extra: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::blocktree::get_tmp_ledger_path;
+    use crate::blocktree::Blocktree;
     use crate::crds_value::CrdsValueLabel;
-    use crate::db_ledger::get_tmp_ledger_path;
-    use crate::db_ledger::DbLedger;
     use crate::packet::BLOB_HEADER_SIZE;
     use crate::result::Error;
     use crate::test_tx::test_tx;
@@ -1330,7 +1354,7 @@ mod tests {
     fn window_index_request() {
         let me = NodeInfo::new_localhost(Keypair::new().pubkey(), timestamp());
         let mut cluster_info = ClusterInfo::new(me);
-        let rv = cluster_info.window_index_request(0);
+        let rv = cluster_info.window_index_request(0, 0);
         assert_matches!(rv, Err(Error::ClusterInfoError(ClusterInfoError::NoPeers)));
 
         let gossip_addr = socketaddr!([127, 0, 0, 1], 1234);
@@ -1345,7 +1369,7 @@ mod tests {
             0,
         );
         cluster_info.insert_info(nxt.clone());
-        let rv = cluster_info.window_index_request(0).unwrap();
+        let rv = cluster_info.window_index_request(0, 0).unwrap();
         assert_eq!(nxt.gossip, gossip_addr);
         assert_eq!(rv.0, nxt.gossip);
 
@@ -1365,7 +1389,7 @@ mod tests {
         let mut two = false;
         while !one || !two {
             //this randomly picks an option, so eventually it should pick both
-            let rv = cluster_info.window_index_request(0).unwrap();
+            let rv = cluster_info.window_index_request(0, 0).unwrap();
             if rv.0 == gossip_addr {
                 one = true;
             }
@@ -1382,7 +1406,7 @@ mod tests {
         solana_logger::setup();
         let ledger_path = get_tmp_ledger_path("run_window_request");
         {
-            let db_ledger = Arc::new(DbLedger::open(&ledger_path).unwrap());
+            let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
             let me = NodeInfo::new(
                 Keypair::new().pubkey(),
                 socketaddr!("127.0.0.1:1234"),
@@ -1393,8 +1417,14 @@ mod tests {
                 socketaddr!("127.0.0.1:1239"),
                 0,
             );
-            let rv =
-                ClusterInfo::run_window_request(&me, &socketaddr_any!(), Some(&db_ledger), &me, 0);
+            let rv = ClusterInfo::run_window_request(
+                &me,
+                &socketaddr_any!(),
+                Some(&blocktree),
+                &me,
+                0,
+                0,
+            );
             assert!(rv.is_empty());
             let data_size = 1;
             let blob = SharedBlob::default();
@@ -1406,12 +1436,18 @@ mod tests {
                 w_blob.meta.size = data_size + BLOB_HEADER_SIZE;
             }
 
-            db_ledger
+            blocktree
                 .write_shared_blobs(vec![&blob])
                 .expect("Expect successful ledger write");
 
-            let rv =
-                ClusterInfo::run_window_request(&me, &socketaddr_any!(), Some(&db_ledger), &me, 1);
+            let rv = ClusterInfo::run_window_request(
+                &me,
+                &socketaddr_any!(),
+                Some(&blocktree),
+                &me,
+                2,
+                1,
+            );
             assert!(!rv.is_empty());
             let v = rv[0].clone();
             assert_eq!(v.read().unwrap().index(), 1);
@@ -1419,7 +1455,7 @@ mod tests {
             assert_eq!(v.read().unwrap().meta.size, BLOB_HEADER_SIZE + data_size);
         }
 
-        DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]

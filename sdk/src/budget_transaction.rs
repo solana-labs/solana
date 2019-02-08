@@ -85,9 +85,13 @@ impl BudgetTransaction {
         last_id: Hash,
     ) -> Transaction {
         let instruction = Instruction::ApplySignature;
+        let mut keys = vec![contract];
+        if from_keypair.pubkey() != to {
+            keys.push(to);
+        }
         Transaction::new(
             from_keypair,
-            &[contract, to],
+            &keys,
             budget_program::id(),
             &instruction,
             last_id,

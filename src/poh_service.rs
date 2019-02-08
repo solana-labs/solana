@@ -1,25 +1,26 @@
 //! The `poh_service` module implements a service that records the passing of
 //! "ticks", a measure of time in the PoH stream
 
-use crate::fullnode::TpuRotationSender;
 use crate::poh_recorder::{PohRecorder, PohRecorderError};
 use crate::result::Error;
 use crate::result::Result;
 use crate::service::Service;
-use crate::tpu::TpuReturnType;
+use crate::tpu::{TpuReturnType, TpuRotationSender};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
+
 pub const NUM_TICKS_PER_SECOND: usize = 10;
 
 #[derive(Copy, Clone)]
 pub enum Config {
-    /// * `Tick` - Run full PoH thread.  Tick is a rough estimate of how many hashes to roll before transmitting a new entry.
+    /// * `Tick` - Run full PoH thread.  Tick is a rough estimate of how many hashes to roll before
+    ///            transmitting a new entry.
     Tick(usize),
-    /// * `Sleep`- Low power mode.  Sleep is a rough estimate of how long to sleep before rolling 1 poh once and producing 1
-    /// tick.
+    /// * `Sleep`- Low power mode.  Sleep is a rough estimate of how long to sleep before rolling 1
+    ///            PoH once and producing 1 tick.
     Sleep(Duration),
 }
 
@@ -91,11 +92,8 @@ impl PohService {
                         let res = poh.hash();
                         if let Err(e) = res {
                             if let Error::PohRecorderError(PohRecorderError::MaxHeightReached) = e {
-                                // Leader rotation should only happen if a max_tick_height was specified
-                                assert!(max_tick_height.is_some());
-                                to_validator_sender.send(TpuReturnType::LeaderRotation(
-                                    max_tick_height.unwrap(),
-                                ))?;
+                                to_validator_sender
+                                    .send(TpuReturnType::LeaderRotation(max_tick_height))?;
                             }
                             return Err(e);
                         }
@@ -109,9 +107,7 @@ impl PohService {
             if let Err(e) = res {
                 if let Error::PohRecorderError(PohRecorderError::MaxHeightReached) = e {
                     // Leader rotation should only happen if a max_tick_height was specified
-                    assert!(max_tick_height.is_some());
-                    to_validator_sender
-                        .send(TpuReturnType::LeaderRotation(max_tick_height.unwrap()))?;
+                    to_validator_sender.send(TpuReturnType::LeaderRotation(max_tick_height))?;
                 }
                 return Err(e);
             }
@@ -147,11 +143,11 @@ mod tests {
 
     #[test]
     fn test_poh_service() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(1);
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let prev_id = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
-        let poh_recorder = PohRecorder::new(bank, entry_sender, prev_id, None);
+        let poh_recorder = PohRecorder::new(bank, entry_sender, prev_id, std::u64::MAX);
         let exit = Arc::new(AtomicBool::new(false));
 
         let entry_producer: JoinHandle<Result<()>> = {

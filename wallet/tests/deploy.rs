@@ -11,6 +11,8 @@ use std::sync::mpsc::channel;
 
 #[test]
 fn test_wallet_deploy_program() {
+    solana_logger::setup();
+
     let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     pathbuf.push("tests");
     pathbuf.push("fixtures");
@@ -18,6 +20,7 @@ fn test_wallet_deploy_program() {
     pathbuf.set_extension("so");
 
     let (server, leader_data, alice, ledger_path) = new_fullnode("test_wallet_deploy_program");
+    let server_exit = server.run(None);
 
     let (sender, receiver) = channel();
     run_local_drone(alice, sender);
@@ -73,6 +76,6 @@ fn test_wallet_deploy_program() {
         &elf
     );
 
-    server.close().unwrap();
+    server_exit();
     remove_dir_all(ledger_path).unwrap();
 }

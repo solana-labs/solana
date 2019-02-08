@@ -3,7 +3,6 @@
 //! messages to the network directly. The binary encoding of its messages are
 //! unstable and may change in future releases.
 
-use crate::bank::Bank;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo};
 use crate::fullnode::{Fullnode, FullnodeConfig};
 use crate::gossip_service::GossipService;
@@ -12,7 +11,6 @@ use crate::result::{Error, Result};
 use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
 use bincode::serialize_into;
 use bs58;
-use hashbrown::HashMap;
 use log::Level;
 use serde_json;
 use solana_metrics;
@@ -20,7 +18,7 @@ use solana_metrics::influxdb;
 use solana_sdk::account::Account;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, Signature};
+use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
@@ -38,11 +36,6 @@ pub struct ThinClient {
     rpc_addr: SocketAddr,
     transactions_addr: SocketAddr,
     transactions_socket: UdpSocket,
-    last_id: Option<Hash>,
-    transaction_count: u64,
-    balances: HashMap<Pubkey, Account>,
-    signature_status: bool,
-    confirmation: Option<usize>,
     rpc_client: RpcClient,
 }
 
@@ -83,42 +76,39 @@ impl ThinClient {
             rpc_addr,
             transactions_addr,
             transactions_socket,
-            last_id: None,
-            transaction_count: 0,
-            balances: HashMap::new(),
-            signature_status: false,
-            confirmation: None,
         }
     }
 
     /// Send a signed Transaction to the server for processing. This method
     /// does not wait for a response.
-    pub fn transfer_signed(&self, tx: &Transaction) -> io::Result<Signature> {
-        let mut buf = vec![0; tx.serialized_size().unwrap() as usize];
+    pub fn transfer_signed(&self, transaction: &Transaction) -> io::Result<Signature> {
+        let mut buf = vec![0; transaction.serialized_size().unwrap() as usize];
         let mut wr = std::io::Cursor::new(&mut buf[..]);
-        serialize_into(&mut wr, &tx).expect("serialize Transaction in pub fn transfer_signed");
+        serialize_into(&mut wr, &transaction)
+            .expect("serialize Transaction in pub fn transfer_signed");
         assert!(buf.len() < PACKET_DATA_SIZE);
         self.transactions_socket
             .send_to(&buf[..], &self.transactions_addr)?;
-        Ok(tx.signatures[0])
+        Ok(transaction.signatures[0])
     }
 
     /// Retry a sending a signed Transaction to the server for processing.
     pub fn retry_transfer(
         &mut self,
         keypair: &Keypair,
-        tx: &mut Transaction,
+        transaction: &mut Transaction,
         tries: usize,
     ) -> io::Result<Signature> {
         for x in 0..tries {
-            tx.sign(&[keypair], self.get_last_id());
-            let mut buf = vec![0; tx.serialized_size().unwrap() as usize];
+            transaction.sign(&[keypair], self.get_last_id());
+            let mut buf = vec![0; transaction.serialized_size().unwrap() as usize];
             let mut wr = std::io::Cursor::new(&mut buf[..]);
-            serialize_into(&mut wr, &tx).expect("serialize Transaction in pub fn transfer_signed");
+            serialize_into(&mut wr, &transaction)
+                .expect("serialize Transaction in pub fn transfer_signed");
             self.transactions_socket
                 .send_to(&buf[..], &self.transactions_addr)?;
-            if self.poll_for_signature(&tx.signatures[0]).is_ok() {
-                return Ok(tx.signatures[0]);
+            if self.poll_for_signature(&transaction.signatures[0]).is_ok() {
+                return Ok(transaction.signatures[0]);
             }
             info!("{} tries failed transfer to {}", x, self.transactions_addr);
         }
@@ -131,14 +121,21 @@ impl ThinClient {
     /// Creates, signs, and processes a Transaction. Useful for writing unit-tests.
     pub fn transfer(
         &self,
-        n: u64,
+        tokens: u64,
         keypair: &Keypair,
         to: Pubkey,
         last_id: &Hash,
     ) -> io::Result<Signature> {
+        debug!(
+            "transfer: tokens={} from={:?} to={:?} last_id={:?}",
+            tokens,
+            keypair.pubkey(),
+            to,
+            last_id
+        );
         let now = Instant::now();
-        let tx = SystemTransaction::new_account(keypair, to, n, *last_id, 0);
-        let result = self.transfer_signed(&tx);
+        let transaction = SystemTransaction::new_account(keypair, to, tokens, *last_id, 0);
+        let result = self.transfer_signed(&transaction);
         solana_metrics::submit(
             influxdb::Point::new("thinclient")
                 .add_tag("op", influxdb::Value::String("transfer".to_string()))
@@ -153,18 +150,23 @@ impl ThinClient {
 
     pub fn get_account_userdata(&mut self, pubkey: &Pubkey) -> io::Result<Option<Vec<u8>>> {
         let params = json!([format!("{}", pubkey)]);
-        let resp = self
-            .rpc_client
-            .make_rpc_request(1, RpcRequest::GetAccountInfo, Some(params));
-        if let Ok(account_json) = resp {
-            let account: Account =
-                serde_json::from_value(account_json).expect("deserialize account");
-            return Ok(Some(account.userdata));
+        let response =
+            self.rpc_client
+                .make_rpc_request(1, RpcRequest::GetAccountInfo, Some(params));
+        match response {
+            Ok(account_json) => {
+                let account: Account =
+                    serde_json::from_value(account_json).expect("deserialize account");
+                Ok(Some(account.userdata))
+            }
+            Err(error) => {
+                debug!("get_account_userdata failed: {:?}", error);
+                Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "get_account_userdata failed",
+                ))
+            }
         }
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            "get_account_userdata failed",
-        ))
     }
 
     /// Request the balance of the user holding `pubkey`. This method blocks
@@ -173,93 +175,102 @@ impl ThinClient {
     pub fn get_balance(&mut self, pubkey: &Pubkey) -> io::Result<u64> {
         trace!("get_balance sending request to {}", self.rpc_addr);
         let params = json!([format!("{}", pubkey)]);
-        let resp = self
-            .rpc_client
-            .make_rpc_request(1, RpcRequest::GetAccountInfo, Some(params));
-        if let Ok(account_json) = resp {
-            let account: Account =
-                serde_json::from_value(account_json).expect("deserialize account");
-            trace!("Response account {:?} {:?}", pubkey, account);
-            self.balances.insert(*pubkey, account.clone());
-        } else {
-            debug!("Response account {}: None ", pubkey);
-            self.balances.remove(&pubkey);
-        }
-        trace!("get_balance {:?}", self.balances.get(pubkey));
+        let response =
+            self.rpc_client
+                .make_rpc_request(1, RpcRequest::GetAccountInfo, Some(params));
 
-        // TODO: This is a hard coded call to introspect the balance of a budget_dsl contract
-        // In the future custom contracts would need their own introspection
-        self.balances
-            .get(pubkey)
-            .map(Bank::read_balance)
-            .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "AccountNotFound"))
+        response
+            .and_then(|account_json| {
+                let account: Account =
+                    serde_json::from_value(account_json).expect("deserialize account");
+                trace!("Response account {:?} {:?}", pubkey, account);
+                trace!("get_balance {:?}", account.tokens);
+                Ok(account.tokens)
+            })
+            .map_err(|error| {
+                debug!("Response account {}: None (error: {:?})", pubkey, error);
+                io::Error::new(io::ErrorKind::Other, "AccountNotFound")
+            })
     }
 
     /// Request the confirmation time from the leader node
     pub fn get_confirmation_time(&mut self) -> usize {
         trace!("get_confirmation_time");
-        let mut done = false;
-        while !done {
+        loop {
             debug!("get_confirmation_time send_to {}", &self.rpc_addr);
-            let resp = self
-                .rpc_client
-                .make_rpc_request(1, RpcRequest::GetConfirmationTime, None);
 
-            if let Ok(value) = resp {
-                done = true;
-                let confirmation = value.as_u64().unwrap() as usize;
-                self.confirmation = Some(confirmation);
-            } else {
-                debug!("thin_client get_confirmation_time error: {:?}", resp);
-            }
+            let response =
+                self.rpc_client
+                    .make_rpc_request(1, RpcRequest::GetConfirmationTime, None);
+
+            match response {
+                Ok(value) => {
+                    let confirmation = value.as_u64().unwrap() as usize;
+                    return confirmation;
+                }
+                Err(error) => {
+                    debug!("thin_client get_confirmation_time error: {:?}", error);
+                }
+            };
         }
-        self.confirmation.expect("some confirmation")
     }
 
     /// Request the transaction count.  If the response packet is dropped by the network,
     /// this method will try again 5 times.
     pub fn transaction_count(&mut self) -> u64 {
         debug!("transaction_count");
-        let mut tries_left = 5;
-        while tries_left > 0 {
-            let resp = self
-                .rpc_client
-                .make_rpc_request(1, RpcRequest::GetTransactionCount, None);
+        for _tries in 0..5 {
+            let response =
+                self.rpc_client
+                    .make_rpc_request(1, RpcRequest::GetTransactionCount, None);
 
-            if let Ok(value) = resp {
-                debug!("transaction_count recv_response: {:?}", value);
-                tries_left = 0;
-                let transaction_count = value.as_u64().unwrap();
-                self.transaction_count = transaction_count;
-            } else {
-                tries_left -= 1;
-            }
+            match response {
+                Ok(value) => {
+                    debug!("transaction_count response: {:?}", value);
+                    let transaction_count = value.as_u64().unwrap();
+                    return transaction_count;
+                }
+                Err(error) => {
+                    debug!("transaction_count failed: {:?}", error);
+                }
+            };
         }
-        self.transaction_count
+        0
     }
 
     /// Request the last Entry ID from the server. This method blocks
     /// until the server sends a response.
     pub fn get_last_id(&mut self) -> Hash {
-        trace!("get_last_id");
-        let mut done = false;
-        while !done {
-            debug!("get_last_id send_to {}", &self.rpc_addr);
-            let resp = self
+        loop {
+            trace!("get_last_id send_to {}", &self.rpc_addr);
+            let response = self
                 .rpc_client
                 .make_rpc_request(1, RpcRequest::GetLastId, None);
 
-            if let Ok(value) = resp {
-                done = true;
-                let last_id_str = value.as_str().unwrap();
-                let last_id_vec = bs58::decode(last_id_str).into_vec().unwrap();
-                let last_id = Hash::new(&last_id_vec);
-                self.last_id = Some(last_id);
-            } else {
-                debug!("thin_client get_last_id error: {:?}", resp);
-            }
+            match response {
+                Ok(value) => {
+                    let last_id_str = value.as_str().unwrap();
+                    let last_id_vec = bs58::decode(last_id_str).into_vec().unwrap();
+                    return Hash::new(&last_id_vec);
+                }
+                Err(error) => {
+                    debug!("thin_client get_last_id error: {:?}", error);
+                }
+            };
         }
-        self.last_id.expect("some last_id")
+    }
+
+    /// Request a new last Entry ID from the server. This method blocks
+    /// until the server sends a response.
+    pub fn get_next_last_id(&mut self, previous_last_id: &Hash) -> Hash {
+        loop {
+            let last_id = self.get_last_id();
+            if last_id != *previous_last_id {
+                break last_id;
+            }
+            debug!("Got same last_id ({:?}), will retry...", last_id);
+            sleep(Duration::from_millis(100));
+        }
     }
 
     pub fn submit_poll_balance_metrics(elapsed: &Duration) {
@@ -318,37 +329,43 @@ impl ThinClient {
     /// Check a signature in the bank. This method blocks
     /// until the server sends a response.
     pub fn check_signature(&mut self, signature: &Signature) -> bool {
-        trace!("check_signature");
+        trace!("check_signature: {:?}", signature);
         let params = json!([format!("{}", signature)]);
         let now = Instant::now();
-        let mut done = false;
-        while !done {
-            let resp = self.rpc_client.make_rpc_request(
+
+        loop {
+            let response = self.rpc_client.make_rpc_request(
                 1,
                 RpcRequest::ConfirmTransaction,
                 Some(params.clone()),
             );
 
-            if let Ok(confirmation) = resp {
-                done = true;
-                self.signature_status = confirmation.as_bool().unwrap();
-                if self.signature_status {
-                    trace!("Response found signature");
-                } else {
-                    trace!("Response signature not found");
+            match response {
+                Ok(confirmation) => {
+                    let signature_status = confirmation.as_bool().unwrap();
+                    if signature_status {
+                        trace!("Response found signature");
+                    } else {
+                        trace!("Response signature not found");
+                    }
+                    solana_metrics::submit(
+                        influxdb::Point::new("thinclient")
+                            .add_tag("op", influxdb::Value::String("check_signature".to_string()))
+                            .add_field(
+                                "duration_ms",
+                                influxdb::Value::Integer(
+                                    timing::duration_as_ms(&now.elapsed()) as i64
+                                ),
+                            )
+                            .to_owned(),
+                    );
+                    return signature_status;
                 }
-            }
+                Err(err) => {
+                    debug!("check_signature request failed: {:?}", err);
+                }
+            };
         }
-        solana_metrics::submit(
-            influxdb::Point::new("thinclient")
-                .add_tag("op", influxdb::Value::String("check_signature".to_string()))
-                .add_field(
-                    "duration_ms",
-                    influxdb::Value::Integer(timing::duration_as_ms(&now.elapsed()) as i64),
-                )
-                .to_owned(),
-        );
-        self.signature_status
     }
 }
 
@@ -437,9 +454,9 @@ pub fn retry_get_balance(
 }
 
 pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, String) {
+    use crate::blocktree::create_tmp_sample_ledger;
     use crate::cluster_info::Node;
-    use crate::db_ledger::create_tmp_sample_ledger;
-    use crate::leader_scheduler::LeaderScheduler;
+    use crate::fullnode::Fullnode;
     use crate::voting_keypair::VotingKeypair;
     use solana_sdk::signature::KeypairUtil;
 
@@ -450,14 +467,12 @@ pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, 
     let (mint_keypair, ledger_path, _, _) =
         create_tmp_sample_ledger(ledger_name, 10_000, 0, node_info.id, 42);
 
-    let leader_scheduler = LeaderScheduler::from_bootstrap_leader(node_info.id);
     let vote_account_keypair = Arc::new(Keypair::new());
     let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
     let node = Fullnode::new(
         node,
         &node_keypair,
         &ledger_path,
-        Arc::new(RwLock::new(leader_scheduler)),
         voting_keypair,
         None,
         &FullnodeConfig::default(),
@@ -471,48 +486,58 @@ mod tests {
     use super::*;
     use crate::client::mk_client;
     use bincode::{deserialize, serialize};
-    use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::vote_program::VoteState;
     use solana_sdk::vote_transaction::VoteTransaction;
     use std::fs::remove_dir_all;
 
     #[test]
-    fn test_thin_client() {
+    fn test_thin_client_basic() {
         solana_logger::setup();
         let (server, leader_data, alice, ledger_path) = new_fullnode("thin_client");
+        let server_exit = server.run(None);
         let bob_pubkey = Keypair::new().pubkey();
 
-        sleep(Duration::from_millis(900));
+        info!(
+            "found leader: {:?}",
+            poll_gossip_for_leader(leader_data.gossip, Some(5)).unwrap()
+        );
 
         let mut client = mk_client(&leader_data);
 
         let transaction_count = client.transaction_count();
         assert_eq!(transaction_count, 0);
+
         let confirmation = client.get_confirmation_time();
         assert_eq!(confirmation, 18446744073709551615);
+
         let last_id = client.get_last_id();
+        info!("test_thin_client last_id: {:?}", last_id);
+
         let signature = client.transfer(500, &alice, bob_pubkey, &last_id).unwrap();
+        info!("test_thin_client signature: {:?}", signature);
         client.poll_for_signature(&signature).unwrap();
+
         let balance = client.get_balance(&bob_pubkey);
         assert_eq!(balance.unwrap(), 500);
+
         let transaction_count = client.transaction_count();
         assert_eq!(transaction_count, 1);
-        server.close().unwrap();
+        server_exit();
         remove_dir_all(ledger_path).unwrap();
     }
 
-    // sleep(Duration::from_millis(300)); is unstable
     #[test]
     #[ignore]
     fn test_bad_sig() {
         solana_logger::setup();
-
         let (server, leader_data, alice, ledger_path) = new_fullnode("bad_sig");
+        let server_exit = server.run(None);
         let bob_pubkey = Keypair::new().pubkey();
-
-        //TODO: remove this sleep, or add a retry so CI is stable
-        sleep(Duration::from_millis(300));
+        info!(
+            "found leader: {:?}",
+            poll_gossip_for_leader(leader_data.gossip, Some(5)).unwrap()
+        );
 
         let mut client = mk_client(&leader_data);
 
@@ -534,24 +559,8 @@ mod tests {
         client.poll_for_signature(&signature).unwrap();
 
         let balance = client.get_balance(&bob_pubkey);
-        assert_eq!(balance.unwrap(), 500);
-        server.close().unwrap();
-        remove_dir_all(ledger_path).unwrap();
-    }
-
-    #[test]
-    fn test_client_check_signature() {
-        solana_logger::setup();
-        let (server, leader_data, alice, ledger_path) = new_fullnode("thin_client");
-        let bob_pubkey = Keypair::new().pubkey();
-
-        let mut client = mk_client(&leader_data);
-        let last_id = client.get_last_id();
-        let signature = client.transfer(500, &alice, bob_pubkey, &last_id).unwrap();
-
-        client.poll_for_signature(&signature).unwrap();
-
-        server.close().unwrap();
+        assert_eq!(balance.unwrap(), 1001);
+        server_exit();
         remove_dir_all(ledger_path).unwrap();
     }
 
@@ -559,6 +568,11 @@ mod tests {
     fn test_register_vote_account() {
         solana_logger::setup();
         let (server, leader_data, alice, ledger_path) = new_fullnode("thin_client");
+        let server_exit = server.run(None);
+        info!(
+            "found leader: {:?}",
+            poll_gossip_for_leader(leader_data.gossip, Some(5)).unwrap()
+        );
 
         let mut client = mk_client(&leader_data);
 
@@ -604,7 +618,7 @@ mod tests {
             sleep(Duration::from_millis(900));
         }
 
-        server.close().unwrap();
+        server_exit();
         remove_dir_all(ledger_path).unwrap();
     }
 
@@ -623,7 +637,13 @@ mod tests {
     fn test_zero_balance_after_nonzero() {
         solana_logger::setup();
         let (server, leader_data, alice, ledger_path) = new_fullnode("thin_client");
+        let server_exit = server.run(None);
         let bob_keypair = Keypair::new();
+
+        info!(
+            "found leader: {:?}",
+            poll_gossip_for_leader(leader_data.gossip, Some(5)).unwrap()
+        );
 
         let mut client = mk_client(&leader_data);
         let last_id = client.get_last_id();
@@ -651,7 +671,7 @@ mod tests {
         let balance = client.poll_get_balance(&bob_keypair.pubkey());
         assert!(balance.is_err());
 
-        server.close().unwrap();
+        server_exit();
         remove_dir_all(ledger_path).unwrap();
     }
 }

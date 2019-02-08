@@ -1,9 +1,9 @@
 //! A command-line executable for generating the chain's genesis block.
 
 use clap::{crate_version, value_t_or_exit, App, Arg};
-use solana::db_ledger::create_new_ledger;
+use solana::blocktree::create_new_ledger;
 use solana::genesis_block::GenesisBlock;
-use solana_sdk::signature::{read_keypair, KeypairUtil};
+use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use std::error;
 
 /**
@@ -66,11 +66,13 @@ fn main() -> Result<(), Box<dyn error::Error>> {
     let bootstrap_leader_keypair = read_keypair(bootstrap_leader_keypair_file)?;
     let mint_keypair = read_keypair(mint_keypair_file)?;
 
+    let bootstrap_leader_vote_account_keypair = Keypair::new();
     let genesis_block = GenesisBlock {
         mint_id: mint_keypair.pubkey(),
         tokens: num_tokens,
         bootstrap_leader_id: bootstrap_leader_keypair.pubkey(),
         bootstrap_leader_tokens: BOOTSTRAP_LEADER_TOKENS,
+        bootstrap_leader_vote_account_id: bootstrap_leader_vote_account_keypair.pubkey(),
     };
 
     create_new_ledger(ledger_path, &genesis_block)?;

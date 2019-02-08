@@ -176,7 +176,6 @@ pub mod tests {
         solana_logger::setup();
 
         let (genesis_block, mint_keypair) = GenesisBlock::new(1234);
-        let dummy_leader_id = Keypair::new().pubkey();
         let bank = Arc::new(Bank::new(&genesis_block));
         // generate 10 validators, but only vote for the first 6 validators
         let ids: Vec<_> = (0..10)
@@ -216,7 +215,7 @@ pub mod tests {
         let mut last_confirmation_time = 0;
         ComputeLeaderConfirmationService::compute_confirmation(
             &bank,
-            dummy_leader_id,
+            genesis_block.bootstrap_leader_id,
             &mut last_confirmation_time,
         );
         assert_eq!(bank.confirmation_time(), std::usize::MAX);
@@ -228,7 +227,7 @@ pub mod tests {
 
         ComputeLeaderConfirmationService::compute_confirmation(
             &bank,
-            dummy_leader_id,
+            genesis_block.bootstrap_leader_id,
             &mut last_confirmation_time,
         );
         assert!(bank.confirmation_time() != std::usize::MAX);

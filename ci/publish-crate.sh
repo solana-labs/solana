@@ -17,13 +17,14 @@ CRATES=(
   keygen
   metrics
   drone
-  programs/native/{budget,bpf_loader,lua_loader,native_loader,noop,system,vote}
+  programs/native/{budget,bpf_loader,native_loader,noop,system,vote}
   .
   fullnode-config
   fullnode
   genesis
   ledger-tool
   wallet
+  runtime
 )
 
 

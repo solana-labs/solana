@@ -19,7 +19,7 @@ for test in {,*/}tests/*.rs; do
   (
     export RUST_LOG="$test"=trace,$RUST_LOG
     # shellcheck disable=SC2086 # Don't want to double quote $maybeFeatures
-    _ cargo test --all --verbose $maybeFeatures --test="$test" \
+    _ cargo test --all ${V:+--verbose} $maybeFeatures --test="$test" \
       -- --test-threads=1 --nocapture
   )
 done

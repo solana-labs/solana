@@ -120,6 +120,7 @@ impl Metadata for Meta {}
 #[derive(Copy, Clone, PartialEq, Serialize, Debug)]
 pub enum RpcSignatureStatus {
     AccountInUse,
+    AccountLoadedTwice,
     Confirmed,
     GenericFailure,
     ProgramRuntimeError,
@@ -131,6 +132,7 @@ impl FromStr for RpcSignatureStatus {
     fn from_str(s: &str) -> Result<RpcSignatureStatus> {
         match s {
             "AccountInUse" => Ok(RpcSignatureStatus::AccountInUse),
+            "AccountLoadedTwice" => Ok(RpcSignatureStatus::AccountLoadedTwice),
             "Confirmed" => Ok(RpcSignatureStatus::Confirmed),
             "GenericFailure" => Ok(RpcSignatureStatus::GenericFailure),
             "ProgramRuntimeError" => Ok(RpcSignatureStatus::ProgramRuntimeError),
@@ -235,6 +237,7 @@ impl RpcSol for RpcSolImpl {
                 match res.unwrap() {
                     Ok(_) => RpcSignatureStatus::Confirmed,
                     Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
+                    Err(BankError::AccountLoadedTwice) => RpcSignatureStatus::AccountLoadedTwice,
                     Err(BankError::ProgramError(_, _)) => RpcSignatureStatus::ProgramRuntimeError,
                     Err(err) => {
                         trace!("mapping {:?} to GenericFailure", err);
@@ -493,7 +496,8 @@ mod tests {
 
     #[test]
     fn test_rpc_new() {
-        let (genesis_block, alice) = GenesisBlock::new(10_000);
+        let (genesis_block, alice) =
+            GenesisBlock::new(10_000 + crate::genesis_block::BOOTSTRAP_LEADER_TOKENS);
         let bank = Bank::new(&genesis_block);
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default())));
         let rpc_addr = SocketAddr::new(

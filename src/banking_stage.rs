@@ -6,14 +6,13 @@ use crate::bank::{Bank, BankError};
 use crate::compute_leader_confirmation_service::ComputeLeaderConfirmationService;
 use crate::counter::Counter;
 use crate::entry::Entry;
-use crate::fullnode::TpuRotationSender;
 use crate::packet::Packets;
 use crate::poh_recorder::{PohRecorder, PohRecorderError};
 use crate::poh_service::{Config, PohService};
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::sigverify_stage::VerifiedPackets;
-use crate::tpu::TpuReturnType;
+use crate::tpu::TpuRotationSender;
 use bincode::deserialize;
 use log::Level;
 use solana_sdk::hash::Hash;
@@ -21,7 +20,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
 use solana_sdk::transaction::Transaction;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
@@ -33,7 +32,6 @@ use sys_info;
 pub enum BankingStageReturnType {
     LeaderRotation(u64),
     ChannelDisconnected,
-    RecordFailure,
 }
 
 // number of threads is 1 until mt bank is ready
@@ -45,7 +43,7 @@ pub struct BankingStage {
     bank_thread_hdls: Vec<JoinHandle<Option<BankingStageReturnType>>>,
     poh_service: PohService,
     compute_confirmation_service: ComputeLeaderConfirmationService,
-    max_tick_height: Option<u64>,
+    max_tick_height: u64,
 }
 
 impl BankingStage {
@@ -56,7 +54,7 @@ impl BankingStage {
         verified_receiver: Receiver<VerifiedPackets>,
         config: Config,
         last_entry_id: &Hash,
-        max_tick_height: Option<u64>,
+        max_tick_height: u64,
         leader_id: Pubkey,
         to_validator_sender: &TpuRotationSender,
     ) -> (Self, Receiver<Vec<Entry>>) {
@@ -78,9 +76,6 @@ impl BankingStage {
             poh_service.poh_exit.clone(),
         );
 
-        // Used to send a rotation notification just once from the first thread to exit
-        let did_notify = Arc::new(AtomicBool::new(false));
-
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<Option<BankingStageReturnType>>> = (0
             ..Self::num_threads())
@@ -89,8 +84,6 @@ impl BankingStage {
                 let thread_verified_receiver = shared_verified_receiver.clone();
                 let thread_poh_recorder = poh_recorder.clone();
                 let thread_banking_exit = poh_service.poh_exit.clone();
-                let thread_sender = to_validator_sender.clone();
-                let thread_did_notify_rotation = did_notify.clone();
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
@@ -100,7 +93,7 @@ impl BankingStage {
                                 &thread_verified_receiver,
                                 &thread_poh_recorder,
                             ) {
-                                debug!("got error {:?}", e);
+                                debug!("process_packets error: {:?}", e);
                                 match e {
                                     Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
                                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => {
@@ -113,33 +106,28 @@ impl BankingStage {
                                         break Some(BankingStageReturnType::ChannelDisconnected);
                                     }
                                     Error::BankError(BankError::RecordFailure) => {
-                                        break Some(BankingStageReturnType::RecordFailure);
+                                        warn!("Bank failed to record");
+                                        break Some(BankingStageReturnType::ChannelDisconnected);
                                     }
-                                    Error::PohRecorderError(PohRecorderError::MaxHeightReached) => {
-                                        assert!(max_tick_height.is_some());
-                                        let max_tick_height = max_tick_height.unwrap();
-                                        if !thread_did_notify_rotation.load(Ordering::Relaxed) {
-                                            // Leader rotation should only happen if a max_tick_height was specified
-                                            let _ = thread_sender.send(
-                                                TpuReturnType::LeaderRotation(max_tick_height),
-                                            );
-                                            thread_did_notify_rotation
-                                                .store(true, Ordering::Relaxed);
-                                        }
-
-                                        //should get restarted from the channel receiver
-                                        break Some(BankingStageReturnType::LeaderRotation(
-                                            max_tick_height,
-                                        ));
+                                    Error::BankError(BankError::MaxHeightReached) => {
+                                        // Bank has reached its max tick height.  Exit quietly
+                                        // and wait for the PohRecorder to start leader rotation
+                                        break None;
                                     }
-                                    _ => error!("solana-banking-stage-tx {:?}", e),
+                                    _ => {
+                                        error!("solana-banking-stage-tx: unhandled error: {:?}", e)
+                                    }
                                 }
                             }
                             if thread_banking_exit.load(Ordering::Relaxed) {
                                 break None;
                             }
                         };
-                        thread_banking_exit.store(true, Ordering::Relaxed);
+
+                        // Signal exit only on "Some" error
+                        if return_result.is_some() {
+                            thread_banking_exit.store(true, Ordering::Relaxed);
+                        }
                         return_result
                     })
                     .unwrap()
@@ -191,8 +179,7 @@ impl BankingStage {
         Ok(())
     }
 
-    /// Process the incoming packets and send output `Signal` messages to `signal_sender`.
-    /// Discard packets via `packet_recycler`.
+    /// Process the incoming packets
     pub fn process_packets(
         bank: &Arc<Bank>,
         verified_receiver: &Arc<Mutex<Receiver<VerifiedPackets>>>,
@@ -279,9 +266,7 @@ impl Service for BankingStage {
         match poh_return_value {
             Ok(_) => (),
             Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) => {
-                return_value = Some(BankingStageReturnType::LeaderRotation(
-                    self.max_tick_height.unwrap(),
-                ));
+                return_value = Some(BankingStageReturnType::LeaderRotation(self.max_tick_height));
             }
             Err(Error::SendError) => {
                 return_value = Some(BankingStageReturnType::ChannelDisconnected);
@@ -299,7 +284,7 @@ mod tests {
     use crate::bank::Bank;
     use crate::banking_stage::BankingStageReturnType;
     use crate::entry::EntrySlice;
-    use crate::genesis_block::GenesisBlock;
+    use crate::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_TOKENS};
     use crate::packet::to_packets;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
@@ -307,9 +292,8 @@ mod tests {
 
     #[test]
     fn test_banking_stage_shutdown1() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let dummy_leader_id = Keypair::new().pubkey();
         let (verified_sender, verified_receiver) = channel();
         let (to_validator_sender, _) = channel();
         let (banking_stage, _entry_receiver) = BankingStage::new(
@@ -317,8 +301,8 @@ mod tests {
             verified_receiver,
             Default::default(),
             &bank.last_id(),
-            None,
-            dummy_leader_id,
+            std::u64::MAX,
+            genesis_block.bootstrap_leader_id,
             &to_validator_sender,
         );
         drop(verified_sender);
@@ -330,9 +314,8 @@ mod tests {
 
     #[test]
     fn test_banking_stage_shutdown2() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let dummy_leader_id = Keypair::new().pubkey();
         let (_verified_sender, verified_receiver) = channel();
         let (to_validator_sender, _) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
@@ -340,8 +323,8 @@ mod tests {
             verified_receiver,
             Default::default(),
             &bank.last_id(),
-            None,
-            dummy_leader_id,
+            std::u64::MAX,
+            genesis_block.bootstrap_leader_id,
             &to_validator_sender,
         );
         drop(entry_receiver);
@@ -353,9 +336,8 @@ mod tests {
 
     #[test]
     fn test_banking_stage_tick() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let dummy_leader_id = Keypair::new().pubkey();
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
         let (to_validator_sender, _) = channel();
@@ -364,8 +346,8 @@ mod tests {
             verified_receiver,
             Config::Sleep(Duration::from_millis(1)),
             &bank.last_id(),
-            None,
-            dummy_leader_id,
+            std::u64::MAX,
+            genesis_block.bootstrap_leader_id,
             &to_validator_sender,
         );
         sleep(Duration::from_millis(500));
@@ -383,9 +365,8 @@ mod tests {
 
     #[test]
     fn test_banking_stage_entries_only() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let dummy_leader_id = Keypair::new().pubkey();
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
         let (to_validator_sender, _) = channel();
@@ -394,8 +375,8 @@ mod tests {
             verified_receiver,
             Default::default(),
             &bank.last_id(),
-            None,
-            dummy_leader_id,
+            std::u64::MAX,
+            genesis_block.bootstrap_leader_id,
             &to_validator_sender,
         );
 
@@ -443,9 +424,8 @@ mod tests {
         // In this attack we'll demonstrate that a verifier can interpret the ledger
         // differently if either the server doesn't signal the ledger to add an
         // Entry OR if the verifier tries to parallelize across multiple Entries.
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let dummy_leader_id = Keypair::new().pubkey();
         let (verified_sender, verified_receiver) = channel();
         let (to_validator_sender, _) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
@@ -453,8 +433,8 @@ mod tests {
             verified_receiver,
             Default::default(),
             &bank.last_id(),
-            None,
-            dummy_leader_id,
+            std::u64::MAX,
+            genesis_block.bootstrap_leader_id,
             &to_validator_sender,
         );
 
@@ -512,9 +492,8 @@ mod tests {
     // with reason BankingStageReturnType::LeaderRotation
     #[test]
     fn test_max_tick_height_shutdown() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let dummy_leader_id = Keypair::new().pubkey();
         let (_verified_sender_, verified_receiver) = channel();
         let (to_validator_sender, _to_validator_receiver) = channel();
         let max_tick_height = 10;
@@ -523,8 +502,8 @@ mod tests {
             verified_receiver,
             Default::default(),
             &bank.last_id(),
-            Some(max_tick_height),
-            dummy_leader_id,
+            max_tick_height,
+            genesis_block.bootstrap_leader_id,
             &to_validator_sender,
         );
         assert_eq!(

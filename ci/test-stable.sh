@@ -12,8 +12,14 @@ export RUST_BACKTRACE=1
 export RUSTFLAGS="-D warnings"
 
 source scripts/ulimit-n.sh
-_ cargo build --all --verbose --features="$FEATURES"
-_ cargo test --all --verbose --features="$FEATURES" --lib -- --nocapture --test-threads=1
+maybeFeatures=
+if [[ -n $FEATURES ]]; then
+  maybeFeatures="--features=$FEATURES"
+fi
+# shellcheck disable=SC2086 # Don't want to double quote $maybeFeatures
+_ cargo build --all ${V:+--verbose} $maybeFeatures
+# shellcheck disable=SC2086 # Don't want to double quote $maybeFeatures
+_ cargo test --all ${V:+--verbose} $maybeFeatures --lib -- --nocapture --test-threads=1
 
 # Run native program tests (without $FEATURES)
 for program in programs/native/*; do

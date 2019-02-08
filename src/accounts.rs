@@ -4,8 +4,10 @@ use crate::counter::Counter;
 use bincode::serialize;
 use hashbrown::{HashMap, HashSet};
 use log::Level;
+use solana_runtime::has_duplicates;
 use solana_sdk::account::Account;
 use solana_sdk::hash::{hash, Hash};
+use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::Transaction;
 use std::collections::BTreeMap;
@@ -20,6 +22,7 @@ pub type InstructionLoaders = Vec<Vec<(Pubkey, Account)>>;
 pub struct ErrorCounters {
     pub account_not_found: usize,
     pub account_in_use: usize,
+    pub account_loaded_twice: usize,
     pub last_id_not_found: usize,
     pub last_id_too_old: usize,
     pub reserve_last_id: usize,
@@ -136,6 +139,12 @@ impl AccountsDB {
         if tx.signatures.is_empty() && tx.fee != 0 {
             Err(BankError::MissingSignatureForFee)
         } else {
+            // Check for unique account keys
+            if has_duplicates(&tx.account_keys) {
+                error_counters.account_loaded_twice += 1;
+                return Err(BankError::AccountLoadedTwice);
+            }
+
             // There is no way to predict what program will execute without an error
             // If a fee can pay for execution then the program will be scheduled
             let mut called_accounts: Vec<Account> = vec![];
@@ -166,7 +175,7 @@ impl AccountsDB {
         let mut accounts = Vec::new();
         let mut depth = 0;
         loop {
-            if solana_native_loader::check_id(&program_id) {
+            if native_loader::check_id(&program_id) {
                 // at the root of the chain, ready to dispatch
                 break;
             }
@@ -443,17 +452,6 @@ mod tests {
         Accounts::load_accounts(&[&accounts], &[tx], vec![Ok(())], error_counters)
     }
 
-    fn assert_counters(error_counters: &ErrorCounters, expected: [usize; 8]) {
-        assert_eq!(error_counters.account_not_found, expected[0]);
-        assert_eq!(error_counters.account_in_use, expected[1]);
-        assert_eq!(error_counters.last_id_not_found, expected[2]);
-        assert_eq!(error_counters.reserve_last_id, expected[3]);
-        assert_eq!(error_counters.insufficient_funds, expected[4]);
-        assert_eq!(error_counters.duplicate_signature, expected[5]);
-        assert_eq!(error_counters.call_chain_too_deep, expected[6]);
-        assert_eq!(error_counters.missing_signature_for_fee, expected[7]);
-    }
-
     #[test]
     fn test_load_accounts_no_key() {
         let accounts: Vec<(Pubkey, Account)> = Vec::new();
@@ -465,13 +463,13 @@ mod tests {
             &[],
             Hash::default(),
             0,
-            vec![solana_native_loader::id()],
+            vec![native_loader::id()],
             instructions,
         );
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
     }
@@ -489,13 +487,13 @@ mod tests {
             &[],
             Hash::default(),
             0,
-            vec![solana_native_loader::id()],
+            vec![native_loader::id()],
             instructions,
         );
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
     }
@@ -527,7 +525,7 @@ mod tests {
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
     }
@@ -549,13 +547,13 @@ mod tests {
             &[],
             Hash::default(),
             10,
-            vec![solana_native_loader::id()],
+            vec![native_loader::id()],
             instructions,
         );
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_counters(&error_counters, [0, 0, 0, 0, 1, 0, 0, 0]);
+        assert_eq!(error_counters.insufficient_funds, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(loaded_accounts[0], Err(BankError::InsufficientFundsForFee));
     }
@@ -581,13 +579,13 @@ mod tests {
             &[key1],
             Hash::default(),
             0,
-            vec![solana_native_loader::id()],
+            vec![native_loader::id()],
             instructions,
         );
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_counters(&error_counters, [0, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
             Ok((a, l)) => {
@@ -619,7 +617,7 @@ mod tests {
 
         let mut account = Account::new(40, 1, Pubkey::default());
         account.executable = true;
-        account.loader = solana_native_loader::id();
+        account.loader = native_loader::id();
         accounts.push((key1, account));
 
         let mut account = Account::new(41, 1, Pubkey::default());
@@ -659,7 +657,7 @@ mod tests {
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_counters(&error_counters, [0, 0, 0, 0, 0, 0, 1, 0]);
+        assert_eq!(error_counters.call_chain_too_deep, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(loaded_accounts[0], Err(BankError::CallChainTooDeep));
     }
@@ -693,7 +691,7 @@ mod tests {
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
     }
@@ -711,7 +709,7 @@ mod tests {
         accounts.push((key0, account));
 
         let mut account = Account::new(40, 1, Pubkey::default());
-        account.loader = solana_native_loader::id();
+        account.loader = native_loader::id();
         accounts.push((key1, account));
 
         let instructions = vec![Instruction::new(0, &(), vec![0])];
@@ -726,7 +724,7 @@ mod tests {
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_counters(&error_counters, [1, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(error_counters.account_not_found, 1);
         assert_eq!(loaded_accounts.len(), 1);
         assert_eq!(loaded_accounts[0], Err(BankError::AccountNotFound));
     }
@@ -747,7 +745,7 @@ mod tests {
 
         let mut account = Account::new(40, 1, Pubkey::default());
         account.executable = true;
-        account.loader = solana_native_loader::id();
+        account.loader = native_loader::id();
         accounts.push((key1, account));
 
         let mut account = Account::new(41, 1, Pubkey::default());
@@ -775,7 +773,7 @@ mod tests {
 
         let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
 
-        assert_counters(&error_counters, [0, 0, 0, 0, 0, 0, 0, 0]);
+        assert_eq!(error_counters.account_not_found, 0);
         assert_eq!(loaded_accounts.len(), 1);
         match &loaded_accounts[0] {
             Ok((a, l)) => {
@@ -793,5 +791,34 @@ mod tests {
             }
             Err(e) => Err(e).unwrap(),
         }
+    }
+
+    #[test]
+    fn test_load_account_pay_to_self() {
+        let mut accounts: Vec<(Pubkey, Account)> = Vec::new();
+        let mut error_counters = ErrorCounters::default();
+
+        let keypair = Keypair::new();
+        let pubkey = keypair.pubkey();
+
+        let account = Account::new(10, 1, Pubkey::default());
+        accounts.push((pubkey, account));
+
+        let instructions = vec![Instruction::new(0, &(), vec![0, 1])];
+        // Simulate pay-to-self transaction, which loads the same account twice
+        let tx = Transaction::new_with_instructions(
+            &[&keypair],
+            &[pubkey],
+            Hash::default(),
+            0,
+            vec![native_loader::id()],
+            instructions,
+        );
+        let loaded_accounts = load_accounts(tx, &accounts, &mut error_counters);
+
+        assert_eq!(error_counters.account_loaded_twice, 1);
+        assert_eq!(loaded_accounts.len(), 1);
+        loaded_accounts[0].clone().unwrap_err();
+        assert_eq!(loaded_accounts[0], Err(BankError::AccountLoadedTwice));
     }
 }

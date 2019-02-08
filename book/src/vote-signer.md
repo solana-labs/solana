@@ -1,9 +1,14 @@
-# Signing using Secure Enclave
+# Secure Vote Signing
 
-This document defines the security mechanism of signing keys used by the
-fullnodes. Every node contains an asymmetric key that's used for signing
-and verifying the votes. The node signs the vote transactions using its private
-key. Other entities can verify the signature using the node's public key.
+The goal of this design is to address the following challenges with voting:
+
+* A validator execute untrusted code in a potentially insecure VM.
+* A validator signs the result of its work and votes on a fork.
+* Votes that violate consensus rules could be used to slash the stake used in the vote.
+
+Every node contains an asymmetric key that's used for signing and verifying the
+votes. The node signs the vote transactions using its private key. Other
+entities can verify the signature using the node's public key.
 
 The node's stake or its resources could be compromised if its private key is
 used to sign incorrect data (e.g. voting on multiple forks of the ledger). So,
@@ -13,6 +18,47 @@ Secure Enclaves (such as SGX) provide a layer of memory and computation
 protection. An enclave can be used to generate an asymmetric key and keep the
 private key in its protected memory. It can expose an API that user (untrusted)
 code can use for signing the transactions.
+
+## Vote Signers, Validators and Stakeholders
+
+A validator is a role of a fullnode and validates transactions.
+When it receives multiple blocks for the same slot, the validator
+tracks all possible forks until it can determine a "best" one.
+A validator selects the best fork by submitting a vote to it. When
+voting it utilizes a *vote signer* to minimize the possibility of
+its vote inadvertently violating a consensus rule and getting the
+stakeholder's stake slashed.
+
+A vote signer evaluates the vote proposed by the validator and signs
+the vote only if it does not violate a slashing condition.  A vote
+signer only needs to maintain minimal state regarding the votes it
+signed, and the votes signed by the rest of the cluster.  It doesn't
+need to process a full set of transactions.
+
+A stakeholder is an identity that has control of the staked capital.
+The stakeholder can delegate its stake to the vote signer.  Once
+a stake is delegated, the vote signer votes represent the voting
+weight of all the delegated stakes, and produce rewards for all the
+delegated stakes.
+
+A single validator could operate on behalf of multiple vote signers.
+If a single vote signer observes votes from multiple validators, it
+may choose to vote only if some percentage agree. A single vote
+signer may be delegated multiple stakes.  A single stakeholder may
+delegate portions of its stake to multiple vote signers.
+
+For simplicity, the initial rollout should focus on the following
+configuration:
+
+* 1:1 relationship between validator and vote signer.  The validator
+can use the vote signer's public key as its identity.  This key
+should have some sols to pay for execution of votes.
+
+* Stakeholder can delegate the entire stake to a single vote signer.
+And a vote signer may have more than 1 stake delegated to them.
+The vote signer may need to submit multiple votes to register a
+vote with a stake public key that does not fit into a single
+transaction.
 
 ## Message Flow
 
@@ -26,8 +72,8 @@ code can use for signing the transactions.
 2. The node performs attestation of the enclave (e.g using Intel's IAS APIs)
     * The node ensures that the Secure Enclave is running on a TPM and is
       signed by a trusted party
-3. The owner of the node grants ephemeral key permission to use its stake. This
-   process is TBD.
+3. The stakeholder of the node grants ephemeral key permission to use its stake.
+   This process is TBD.
 4. The node's untrusted, non-enclave software calls trusted enclave software
    using its interface to sign transactions and other data.
     * In case of vote signing, the node needs to verify the PoH. The PoH

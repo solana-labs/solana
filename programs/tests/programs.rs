@@ -1,6 +1,7 @@
 use solana::bank::Bank;
 use solana::genesis_block::GenesisBlock;
 use solana_sdk::loader_transaction::LoaderTransaction;
+use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
@@ -52,65 +53,11 @@ fn test_program_native_noop() {
     let bank = Bank::new(&genesis_block);
 
     let program = "noop".as_bytes().to_vec();
-    let program_id = load_program(&bank, &mint_keypair, solana_native_loader::id(), program);
+    let program_id = load_program(&bank, &mint_keypair, native_loader::id(), program);
 
     // Call user program
     let tx = Transaction::new(&mint_keypair, &[], program_id, &1u8, bank.last_id(), 0);
     bank.process_transaction(&tx).unwrap();
-}
-
-#[test]
-fn test_program_lua_move_funds() {
-    solana_logger::setup();
-
-    let (genesis_block, mint_keypair) = GenesisBlock::new(50);
-    let bank = Bank::new(&genesis_block);
-    let loader_id = load_program(
-        &bank,
-        &mint_keypair,
-        solana_native_loader::id(),
-        "solana_lua_loader".as_bytes().to_vec(),
-    );
-
-    let program = r#"
-            print("Lua Script!")
-            local tokens, _ = string.unpack("I", data)
-            accounts[1].tokens = accounts[1].tokens - tokens
-            accounts[2].tokens = accounts[2].tokens + tokens
-        "#
-    .as_bytes()
-    .to_vec();
-    let program_id = load_program(&bank, &mint_keypair, loader_id, program);
-    let from = Keypair::new();
-    let to = Keypair::new().pubkey();
-
-    // Call user program with two accounts
-    let tx = SystemTransaction::new_program_account(
-        &mint_keypair,
-        from.pubkey(),
-        bank.last_id(),
-        10,
-        0,
-        program_id,
-        0,
-    );
-    bank.process_transaction(&tx).unwrap();
-
-    let tx = SystemTransaction::new_program_account(
-        &mint_keypair,
-        to,
-        bank.last_id(),
-        1,
-        0,
-        program_id,
-        0,
-    );
-    bank.process_transaction(&tx).unwrap();
-
-    let tx = Transaction::new(&from, &[to], program_id, &10, bank.last_id(), 0);
-    bank.process_transaction(&tx).unwrap();
-    assert_eq!(bank.get_balance(&from.pubkey()), 0);
-    assert_eq!(bank.get_balance(&to), 11);
 }
 
 #[cfg(feature = "bpf_c")]
@@ -191,7 +138,7 @@ fn test_program_bpf_c() {
         let loader_id = load_program(
             &bank,
             &mint_keypair,
-            solana_native_loader::id(),
+            native_loader::id(),
             "solana_bpf_loader".as_bytes().to_vec(),
         );
 
@@ -230,7 +177,7 @@ fn test_program_bpf_rust() {
         let loader_id = load_program(
             &bank,
             &mint_keypair,
-            solana_native_loader::id(),
+            native_loader::id(),
             "solana_bpf_loader".as_bytes().to_vec(),
         );
 
