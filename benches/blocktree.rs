@@ -5,15 +5,15 @@ extern crate test;
 
 use rand::seq::SliceRandom;
 use rand::{thread_rng, Rng};
-use solana::db_ledger::{get_tmp_ledger_path, DbLedger};
+use solana::blocktree::{get_tmp_ledger_path, Blocktree};
 use solana::entry::{make_large_test_entries, make_tiny_test_entries, EntrySlice};
 use solana::packet::{Blob, BLOB_HEADER_SIZE};
 use test::Bencher;
 
 // Given some blobs and a ledger at ledger_path, benchmark writing the blobs to the ledger
 fn bench_write_blobs(bench: &mut Bencher, blobs: &mut Vec<Blob>, ledger_path: &str) {
-    let db_ledger =
-        DbLedger::open(&ledger_path).expect("Expected to be able to open database ledger");
+    let blocktree =
+        Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
 
     let num_blobs = blobs.len();
 
@@ -21,7 +21,7 @@ fn bench_write_blobs(bench: &mut Bencher, blobs: &mut Vec<Blob>, ledger_path: &s
         for blob in blobs.iter_mut() {
             let index = blob.index();
 
-            db_ledger
+            blocktree
                 .put_data_blob_bytes(
                     blob.slot(),
                     index,
@@ -33,12 +33,12 @@ fn bench_write_blobs(bench: &mut Bencher, blobs: &mut Vec<Blob>, ledger_path: &s
         }
     });
 
-    DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
+    Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
 }
 
 // Insert some blobs into the ledger in preparation for read benchmarks
 fn setup_read_bench(
-    db_ledger: &mut DbLedger,
+    blocktree: &mut Blocktree,
     num_small_blobs: u64,
     num_large_blobs: u64,
     slot: u64,
@@ -53,7 +53,7 @@ fn setup_read_bench(
         b.set_index(index as u64);
         b.set_slot(slot);
     }
-    db_ledger
+    blocktree
         .write_blobs(&blobs)
         .expect("Expectd successful insertion of blobs into ledger");
 }
@@ -91,15 +91,15 @@ fn bench_write_big(bench: &mut Bencher) {
 #[ignore]
 fn bench_read_sequential(bench: &mut Bencher) {
     let ledger_path = get_tmp_ledger_path("bench_read_sequential");
-    let mut db_ledger =
-        DbLedger::open(&ledger_path).expect("Expected to be able to open database ledger");
+    let mut blocktree =
+        Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
 
     // Insert some big and small blobs into the ledger
     let num_small_blobs = 32 * 1024;
     let num_large_blobs = 32 * 1024;
     let total_blobs = num_small_blobs + num_large_blobs;
     let slot = 0;
-    setup_read_bench(&mut db_ledger, num_small_blobs, num_large_blobs, slot);
+    setup_read_bench(&mut blocktree, num_small_blobs, num_large_blobs, slot);
 
     let num_reads = total_blobs / 15;
     let mut rng = rand::thread_rng();
@@ -107,26 +107,26 @@ fn bench_read_sequential(bench: &mut Bencher) {
         // Generate random starting point in the range [0, total_blobs - 1], read num_reads blobs sequentially
         let start_index = rng.gen_range(0, num_small_blobs + num_large_blobs);
         for i in start_index..start_index + num_reads {
-            let _ = db_ledger.get_data_blob(slot, i as u64 % total_blobs);
+            let _ = blocktree.get_data_blob(slot, i as u64 % total_blobs);
         }
     });
 
-    DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
+    Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
 }
 
 #[bench]
 #[ignore]
 fn bench_read_random(bench: &mut Bencher) {
     let ledger_path = get_tmp_ledger_path("bench_read_random");
-    let mut db_ledger =
-        DbLedger::open(&ledger_path).expect("Expected to be able to open database ledger");
+    let mut blocktree =
+        Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
 
     // Insert some big and small blobs into the ledger
     let num_small_blobs = 32 * 1024;
     let num_large_blobs = 32 * 1024;
     let total_blobs = num_small_blobs + num_large_blobs;
     let slot = 0;
-    setup_read_bench(&mut db_ledger, num_small_blobs, num_large_blobs, slot);
+    setup_read_bench(&mut blocktree, num_small_blobs, num_large_blobs, slot);
 
     let num_reads = total_blobs / 15;
 
@@ -138,19 +138,19 @@ fn bench_read_random(bench: &mut Bencher) {
         .collect();
     bench.iter(move || {
         for i in indexes.iter() {
-            let _ = db_ledger.get_data_blob(slot, *i as u64);
+            let _ = blocktree.get_data_blob(slot, *i as u64);
         }
     });
 
-    DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
+    Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
 }
 
 #[bench]
 #[ignore]
 fn bench_insert_data_blob_small(bench: &mut Bencher) {
     let ledger_path = get_tmp_ledger_path("bench_insert_data_blob_small");
-    let db_ledger =
-        DbLedger::open(&ledger_path).expect("Expected to be able to open database ledger");
+    let blocktree =
+        Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
     let num_entries = 32 * 1024;
     let entries = make_tiny_test_entries(num_entries);
     let mut blobs = entries.to_blobs();
@@ -162,18 +162,18 @@ fn bench_insert_data_blob_small(bench: &mut Bencher) {
             let index = blob.index();
             blob.set_index(index + num_entries as u64);
         }
-        db_ledger.write_blobs(&blobs).unwrap();
+        blocktree.write_blobs(&blobs).unwrap();
     });
 
-    DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
+    Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
 }
 
 #[bench]
 #[ignore]
 fn bench_insert_data_blob_big(bench: &mut Bencher) {
     let ledger_path = get_tmp_ledger_path("bench_insert_data_blob_big");
-    let db_ledger =
-        DbLedger::open(&ledger_path).expect("Expected to be able to open database ledger");
+    let blocktree =
+        Blocktree::open(&ledger_path).expect("Expected to be able to open database ledger");
     let num_entries = 32 * 1024;
     let entries = make_large_test_entries(num_entries);
     let mut shared_blobs = entries.to_shared_blobs();
@@ -182,10 +182,10 @@ fn bench_insert_data_blob_big(bench: &mut Bencher) {
     bench.iter(move || {
         for blob in shared_blobs.iter_mut() {
             let index = blob.read().unwrap().index();
-            db_ledger.write_shared_blobs(vec![blob.clone()]).unwrap();
+            blocktree.write_shared_blobs(vec![blob.clone()]).unwrap();
             blob.write().unwrap().set_index(index + num_entries as u64);
         }
     });
 
-    DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
+    Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
 }

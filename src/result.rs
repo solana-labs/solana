@@ -1,8 +1,8 @@
 //! The `result` module exposes a Result type that propagates one of many different Error types.
 
 use crate::bank;
+use crate::blocktree;
 use crate::cluster_info;
-use crate::db_ledger;
 #[cfg(feature = "erasure")]
 use crate::erasure;
 use crate::packet;
@@ -28,7 +28,7 @@ pub enum Error {
     ErasureError(erasure::ErasureError),
     SendError,
     PohRecorderError(poh_recorder::PohRecorderError),
-    DbLedgerError(db_ledger::DbLedgerError),
+    BlocktreeError(blocktree::BlocktreeError),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -102,9 +102,9 @@ impl std::convert::From<poh_recorder::PohRecorderError> for Error {
         Error::PohRecorderError(e)
     }
 }
-impl std::convert::From<db_ledger::DbLedgerError> for Error {
-    fn from(e: db_ledger::DbLedgerError) -> Error {
-        Error::DbLedgerError(e)
+impl std::convert::From<blocktree::BlocktreeError> for Error {
+    fn from(e: blocktree::BlocktreeError) -> Error {
+        Error::BlocktreeError(e)
     }
 }
 

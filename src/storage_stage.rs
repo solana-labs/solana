@@ -2,11 +2,11 @@
 // for storage mining. Replicators submit storage proofs, validator then bundles them
 // to submit its proof for mining to be rewarded.
 
+use crate::blocktree::Blocktree;
 #[cfg(all(feature = "chacha", feature = "cuda"))]
 use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
 use crate::client::mk_client;
 use crate::cluster_info::ClusterInfo;
-use crate::db_ledger::DbLedger;
 use crate::entry::EntryReceiver;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -140,7 +140,7 @@ impl StorageStage {
     pub fn new(
         storage_state: &StorageState,
         storage_entry_receiver: EntryReceiver,
-        db_ledger: Option<Arc<DbLedger>>,
+        blocktree: Option<Arc<Blocktree>>,
         keypair: &Arc<Keypair>,
         exit: &Arc<AtomicBool>,
         entry_height: u64,
@@ -162,12 +162,12 @@ impl StorageStage {
                 let mut current_key = 0;
                 let mut entry_height = entry_height;
                 loop {
-                    if let Some(ref some_db_ledger) = db_ledger {
+                    if let Some(ref some_blocktree) = blocktree {
                         if let Err(e) = Self::process_entries(
                             &keypair0,
                             &storage_state_inner,
                             &storage_entry_receiver,
-                            &some_db_ledger,
+                            &some_blocktree,
                             &mut poh_height,
                             &mut entry_height,
                             &mut current_key,
@@ -264,7 +264,7 @@ impl StorageStage {
     pub fn process_entry_crossing(
         state: &Arc<RwLock<StorageStateInner>>,
         keypair: &Arc<Keypair>,
-        _db_ledger: &Arc<DbLedger>,
+        _blocktree: &Arc<Blocktree>,
         entry_id: Hash,
         entry_height: u64,
         tx_sender: &TransactionSender,
@@ -318,7 +318,7 @@ impl StorageStage {
             let mut statew = state.write().unwrap();
 
             match chacha_cbc_encrypt_file_many_keys(
-                _db_ledger,
+                _blocktree,
                 segment as u64,
                 &mut statew.storage_keys,
                 &samples,
@@ -342,7 +342,7 @@ impl StorageStage {
         keypair: &Arc<Keypair>,
         storage_state: &Arc<RwLock<StorageStateInner>>,
         entry_receiver: &EntryReceiver,
-        db_ledger: &Arc<DbLedger>,
+        blocktree: &Arc<Blocktree>,
         poh_height: &mut u64,
         entry_height: &mut u64,
         current_key_idx: &mut usize,
@@ -408,7 +408,7 @@ impl StorageStage {
                 Self::process_entry_crossing(
                     &storage_state,
                     &keypair,
-                    &db_ledger,
+                    &blocktree,
                     entry.id,
                     *entry_height,
                     tx_sender,
@@ -432,8 +432,8 @@ impl Service for StorageStage {
 
 #[cfg(test)]
 mod tests {
-    use crate::db_ledger::create_tmp_sample_ledger;
-    use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
+    use crate::blocktree::create_tmp_sample_ledger;
+    use crate::blocktree::{Blocktree, DEFAULT_SLOT_HEIGHT};
     use crate::entry::{make_tiny_test_entries, Entry};
 
     use crate::cluster_info::{ClusterInfo, NodeInfo};
@@ -501,8 +501,8 @@ mod tests {
         );
 
         let entries = make_tiny_test_entries(64);
-        let db_ledger = DbLedger::open(&ledger_path).unwrap();
-        db_ledger
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        blocktree
             .write_entries(DEFAULT_SLOT_HEIGHT, genesis_entry_height, &entries)
             .unwrap();
 
@@ -513,7 +513,7 @@ mod tests {
         let storage_stage = StorageStage::new(
             &storage_state,
             storage_entry_receiver,
-            Some(Arc::new(db_ledger)),
+            Some(Arc::new(blocktree)),
             &keypair,
             &exit.clone(),
             0,
@@ -569,8 +569,8 @@ mod tests {
         );
 
         let entries = make_tiny_test_entries(128);
-        let db_ledger = DbLedger::open(&ledger_path).unwrap();
-        db_ledger
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        blocktree
             .write_entries(DEFAULT_SLOT_HEIGHT, genesis_entry_height, &entries)
             .unwrap();
 
@@ -581,7 +581,7 @@ mod tests {
         let storage_stage = StorageStage::new(
             &storage_state,
             storage_entry_receiver,
-            Some(Arc::new(db_ledger)),
+            Some(Arc::new(blocktree)),
             &keypair,
             &exit.clone(),
             0,

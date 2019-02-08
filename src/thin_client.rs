@@ -454,8 +454,8 @@ pub fn retry_get_balance(
 }
 
 pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, String) {
+    use crate::blocktree::create_tmp_sample_ledger;
     use crate::cluster_info::Node;
-    use crate::db_ledger::create_tmp_sample_ledger;
     use crate::fullnode::Fullnode;
     use crate::voting_keypair::VotingKeypair;
     use solana_sdk::signature::KeypairUtil;

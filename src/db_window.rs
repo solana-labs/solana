@@ -1,7 +1,7 @@
 //! Set of functions for emulating windowing functions from a database ledger implementation
+use crate::blocktree::*;
 use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
-use crate::db_ledger::*;
 use crate::entry::Entry;
 #[cfg(feature = "erasure")]
 use crate::erasure;
@@ -21,25 +21,25 @@ use std::sync::{Arc, RwLock};
 
 pub const MAX_REPAIR_LENGTH: usize = 128;
 
-pub fn generate_repairs(db_ledger: &DbLedger, max_repairs: usize) -> Result<Vec<(u64, u64)>> {
+pub fn generate_repairs(blocktree: &Blocktree, max_repairs: usize) -> Result<Vec<(u64, u64)>> {
     // Slot height and blob indexes for blobs we want to repair
     let mut repairs: Vec<(u64, u64)> = vec![];
     let mut slots = vec![0];
     while repairs.len() < max_repairs && !slots.is_empty() {
         let slot_height = slots.pop().unwrap();
-        let slot = db_ledger.meta(slot_height)?;
+        let slot = blocktree.meta(slot_height)?;
         if slot.is_none() {
             continue;
         }
         let slot = slot.unwrap();
         slots.extend(slot.next_slots.clone());
 
-        if slot.contains_all_ticks(db_ledger) {
+        if slot.contains_all_ticks(blocktree) {
             continue;
         } else {
             let num_unreceived_ticks = {
                 if slot.consumed == slot.received {
-                    slot.num_expected_ticks(db_ledger) - slot.consumed_ticks
+                    slot.num_expected_ticks(blocktree) - slot.consumed_ticks
                 } else {
                     0
                 }
@@ -47,7 +47,7 @@ pub fn generate_repairs(db_ledger: &DbLedger, max_repairs: usize) -> Result<Vec<
 
             let upper = slot.received + num_unreceived_ticks;
 
-            let reqs = db_ledger.find_missing_data_indexes(
+            let reqs = blocktree.find_missing_data_indexes(
                 0,
                 slot.consumed,
                 upper,
@@ -62,7 +62,7 @@ pub fn generate_repairs(db_ledger: &DbLedger, max_repairs: usize) -> Result<Vec<
 }
 
 pub fn repair(
-    db_ledger: &DbLedger,
+    blocktree: &Blocktree,
     slot_index: u64,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
     id: &Pubkey,
@@ -73,7 +73,7 @@ pub fn repair(
 ) -> Result<Vec<(SocketAddr, Vec<u8>)>> {
     let rcluster_info = cluster_info.read().unwrap();
     let is_next_leader = false;
-    let meta = db_ledger.meta(slot_index)?;
+    let meta = blocktree.meta(slot_index)?;
     if meta.is_none() {
         return Ok(vec![]);
     }
@@ -121,7 +121,7 @@ pub fn repair(
         max_entry_height + 2
     };
 
-    let idxs = db_ledger.find_missing_data_indexes(
+    let idxs = blocktree.find_missing_data_indexes(
         DEFAULT_SLOT_HEIGHT,
         consumed,
         max_repair_entry_height - 1,
@@ -212,7 +212,7 @@ pub fn add_blob_to_retransmit_queue(
 /// range of blobs to a queue to be sent on to the next stage.
 pub fn process_blob(
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-    db_ledger: &Arc<DbLedger>,
+    blocktree: &Arc<Blocktree>,
     blob: &SharedBlob,
     max_ix: u64,
     consume_queue: &mut Vec<Entry>,
@@ -241,10 +241,10 @@ pub fn process_blob(
     // Insert the new blob into the window
     let mut consumed_entries = if is_coding {
         let blob = &blob.read().unwrap();
-        db_ledger.put_coding_blob_bytes(slot, pix, &blob.data[..BLOB_HEADER_SIZE + blob.size()])?;
+        blocktree.put_coding_blob_bytes(slot, pix, &blob.data[..BLOB_HEADER_SIZE + blob.size()])?;
         vec![]
     } else {
-        db_ledger.insert_data_blobs(vec![(*blob.read().unwrap()).borrow()])?
+        blocktree.insert_data_blobs(vec![(*blob.read().unwrap()).borrow()])?
     };
 
     #[cfg(feature = "erasure")]
@@ -254,7 +254,7 @@ pub fn process_blob(
         // be updated. Hopefully we can recover these blobs next time successfully.
 
         // TODO: Support per-slot erasure. Issue: https://github.com/solana-labs/solana/issues/2441
-        if let Err(e) = try_erasure(db_ledger, &mut consumed_entries, 0) {
+        if let Err(e) = try_erasure(blocktree, &mut consumed_entries, 0) {
             trace!(
                 "erasure::recover failed to write recovered coding blobs. Err: {:?}",
                 e
@@ -270,7 +270,7 @@ pub fn process_blob(
     // we only want up to a certain index
     // then stop
     if max_ix != 0 && !consumed_entries.is_empty() {
-        let meta = db_ledger
+        let meta = blocktree
             .meta(0)?
             .expect("Expect metadata to exist if consumed entries is nonzero");
 
@@ -312,24 +312,24 @@ pub fn calculate_max_repair_entry_height(
 
 #[cfg(feature = "erasure")]
 fn try_erasure(
-    db_ledger: &Arc<DbLedger>,
+    blocktree: &Arc<Blocktree>,
     consume_queue: &mut Vec<Entry>,
     slot_index: u64,
 ) -> Result<()> {
-    let meta = db_ledger.meta(slot_index)?;
+    let meta = blocktree.meta(slot_index)?;
 
     if let Some(meta) = meta {
-        let (data, coding) = erasure::recover(db_ledger, slot_index, meta.consumed)?;
+        let (data, coding) = erasure::recover(blocktree, slot_index, meta.consumed)?;
         for c in coding {
             let c = c.read().unwrap();
-            db_ledger.put_coding_blob_bytes(
+            blocktree.put_coding_blob_bytes(
                 0,
                 c.index(),
                 &c.data[..BLOB_HEADER_SIZE + c.size()],
             )?;
         }
 
-        let entries = db_ledger.write_shared_blobs(data)?;
+        let entries = blocktree.write_shared_blobs(data)?;
         consume_queue.extend(entries);
     }
 
@@ -339,12 +339,12 @@ fn try_erasure(
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::db_ledger::get_tmp_ledger_path;
+    use crate::blocktree::get_tmp_ledger_path;
     #[cfg(all(feature = "erasure", test))]
     use crate::entry::reconstruct_entries_from_blobs;
     use crate::entry::{make_tiny_test_entries, EntrySlice};
     #[cfg(all(feature = "erasure", test))]
-    use crate::erasure::test::{generate_db_ledger_from_window, setup_window_ledger};
+    use crate::erasure::test::{generate_blocktree_from_window, setup_window_ledger};
     #[cfg(all(feature = "erasure", test))]
     use crate::erasure::{NUM_CODING, NUM_DATA};
     use crate::packet::{index_blobs, Blob, Packet, Packets, SharedBlob, PACKET_DATA_SIZE};
@@ -485,10 +485,10 @@ mod test {
 
     #[test]
     pub fn test_generate_repairs() {
-        let db_ledger_path = get_tmp_ledger_path("test_generate_repairs");
+        let blocktree_path = get_tmp_ledger_path("test_generate_repairs");
         let num_ticks_per_slot = 10;
-        let db_ledger_config = DbLedgerConfig::new(num_ticks_per_slot);
-        let db_ledger = DbLedger::open_config(&db_ledger_path, db_ledger_config).unwrap();
+        let blocktree_config = BlocktreeConfig::new(num_ticks_per_slot);
+        let blocktree = Blocktree::open_config(&blocktree_path, blocktree_config).unwrap();
 
         let num_entries_per_slot = 10;
         let num_slots = 2;
@@ -501,7 +501,7 @@ mod test {
             b.set_slot((i / num_entries_per_slot) as u64);
         }
 
-        db_ledger.write_blobs(&blobs).unwrap();
+        blocktree.write_blobs(&blobs).unwrap();
 
         let missing_indexes_per_slot: Vec<u64> = (0..num_entries_per_slot - 1)
             .flat_map(|x| ((nth * x + 1) as u64..(nth * x + nth) as u64))
@@ -517,12 +517,12 @@ mod test {
 
         // Across all slots, find all missing indexes in the range [0, num_entries_per_slot * nth]
         assert_eq!(
-            generate_repairs(&db_ledger, std::usize::MAX).unwrap(),
+            generate_repairs(&blocktree, std::usize::MAX).unwrap(),
             expected
         );
 
         assert_eq!(
-            generate_repairs(&db_ledger, expected.len() - 2).unwrap()[..],
+            generate_repairs(&blocktree, expected.len() - 2).unwrap()[..],
             expected[0..expected.len() - 2]
         );
 
@@ -533,7 +533,7 @@ mod test {
             let mut b = make_tiny_test_entries(1).to_blobs().pop().unwrap();
             b.set_index(blob_index);
             b.set_slot(slot_height);
-            db_ledger.write_blobs(&vec![b]).unwrap();
+            blocktree.write_blobs(&vec![b]).unwrap();
         }
 
         let last_index_per_slot = ((num_entries_per_slot - 1) * nth) as u64;
@@ -547,11 +547,11 @@ mod test {
             })
             .collect();
         assert_eq!(
-            generate_repairs(&db_ledger, std::usize::MAX).unwrap(),
+            generate_repairs(&blocktree, std::usize::MAX).unwrap(),
             expected
         );
         assert_eq!(
-            generate_repairs(&db_ledger, expected.len() - 2).unwrap()[..],
+            generate_repairs(&blocktree, expected.len() - 2).unwrap()[..],
             expected[0..expected.len() - 2]
         );
     }
@@ -560,15 +560,15 @@ mod test {
     pub fn test_find_missing_data_indexes_sanity() {
         let slot = DEFAULT_SLOT_HEIGHT;
 
-        let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes_sanity");
-        let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+        let blocktree_path = get_tmp_ledger_path("test_find_missing_data_indexes_sanity");
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
         // Early exit conditions
         let empty: Vec<u64> = vec![];
-        assert_eq!(db_ledger.find_missing_data_indexes(slot, 0, 0, 1), empty);
-        assert_eq!(db_ledger.find_missing_data_indexes(slot, 5, 5, 1), empty);
-        assert_eq!(db_ledger.find_missing_data_indexes(slot, 4, 3, 1), empty);
-        assert_eq!(db_ledger.find_missing_data_indexes(slot, 1, 2, 0), empty);
+        assert_eq!(blocktree.find_missing_data_indexes(slot, 0, 0, 1), empty);
+        assert_eq!(blocktree.find_missing_data_indexes(slot, 5, 5, 1), empty);
+        assert_eq!(blocktree.find_missing_data_indexes(slot, 4, 3, 1), empty);
+        assert_eq!(blocktree.find_missing_data_indexes(slot, 1, 2, 0), empty);
 
         let mut blobs = make_tiny_test_entries(2).to_blobs();
 
@@ -579,7 +579,7 @@ mod test {
         blobs[1].set_index(OTHER);
 
         // Insert one blob at index = first_index
-        db_ledger.write_blobs(&blobs).unwrap();
+        blocktree.write_blobs(&blobs).unwrap();
 
         const STARTS: u64 = OTHER * 2;
         const END: u64 = OTHER * 3;
@@ -588,7 +588,7 @@ mod test {
         // given the input range of [i, first_index], the missing indexes should be
         // [i, first_index - 1]
         for start in 0..STARTS {
-            let result = db_ledger.find_missing_data_indexes(
+            let result = blocktree.find_missing_data_indexes(
                 slot, start, // start
                 END,   //end
                 MAX,   //max
@@ -597,15 +597,15 @@ mod test {
             assert_eq!(result, expected);
         }
 
-        drop(db_ledger);
-        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_find_missing_data_indexes() {
         let slot = DEFAULT_SLOT_HEIGHT;
-        let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes");
-        let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+        let blocktree_path = get_tmp_ledger_path("test_find_missing_data_indexes");
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
         // Write entries
         let gap = 10;
@@ -616,7 +616,7 @@ mod test {
             b.set_index(i as u64 * gap);
             b.set_slot(slot);
         }
-        db_ledger.write_blobs(&blobs).unwrap();
+        blocktree.write_blobs(&blobs).unwrap();
 
         // Index of the first blob is 0
         // Index of the second blob is "gap"
@@ -624,27 +624,27 @@ mod test {
         // range of [0, gap)
         let expected: Vec<u64> = (1..gap).collect();
         assert_eq!(
-            db_ledger.find_missing_data_indexes(slot, 0, gap, gap as usize),
+            blocktree.find_missing_data_indexes(slot, 0, gap, gap as usize),
             expected
         );
         assert_eq!(
-            db_ledger.find_missing_data_indexes(slot, 1, gap, (gap - 1) as usize),
+            blocktree.find_missing_data_indexes(slot, 1, gap, (gap - 1) as usize),
             expected,
         );
         assert_eq!(
-            db_ledger.find_missing_data_indexes(slot, 0, gap - 1, (gap - 1) as usize),
+            blocktree.find_missing_data_indexes(slot, 0, gap - 1, (gap - 1) as usize),
             &expected[..expected.len() - 1],
         );
         assert_eq!(
-            db_ledger.find_missing_data_indexes(slot, gap - 2, gap, gap as usize),
+            blocktree.find_missing_data_indexes(slot, gap - 2, gap, gap as usize),
             vec![gap - 2, gap - 1],
         );
         assert_eq!(
-            db_ledger.find_missing_data_indexes(slot, gap - 2, gap, 1),
+            blocktree.find_missing_data_indexes(slot, gap - 2, gap, 1),
             vec![gap - 2],
         );
         assert_eq!(
-            db_ledger.find_missing_data_indexes(slot, 0, gap, 1),
+            blocktree.find_missing_data_indexes(slot, 0, gap, 1),
             vec![1],
         );
 
@@ -652,11 +652,11 @@ mod test {
         let mut expected: Vec<u64> = (1..gap).collect();
         expected.push(gap + 1);
         assert_eq!(
-            db_ledger.find_missing_data_indexes(slot, 0, gap + 2, (gap + 2) as usize),
+            blocktree.find_missing_data_indexes(slot, 0, gap + 2, (gap + 2) as usize),
             expected,
         );
         assert_eq!(
-            db_ledger.find_missing_data_indexes(slot, 0, gap + 2, (gap - 1) as usize),
+            blocktree.find_missing_data_indexes(slot, 0, gap + 2, (gap - 1) as usize),
             &expected[..expected.len() - 1],
         );
 
@@ -670,7 +670,7 @@ mod test {
                     })
                     .collect();
                 assert_eq!(
-                    db_ledger.find_missing_data_indexes(
+                    blocktree.find_missing_data_indexes(
                         slot,
                         j * gap,
                         i * gap,
@@ -681,14 +681,14 @@ mod test {
             }
         }
 
-        drop(db_ledger);
-        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_find_missing_data_indexes_slots() {
-        let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes_slots");
-        let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+        let blocktree_path = get_tmp_ledger_path("test_find_missing_data_indexes_slots");
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
         let num_entries_per_slot = 10;
         let num_slots = 2;
@@ -701,7 +701,7 @@ mod test {
             b.set_slot((i / num_entries_per_slot) as u64);
         }
 
-        db_ledger.write_blobs(&blobs).unwrap();
+        blocktree.write_blobs(&blobs).unwrap();
 
         let mut expected: Vec<u64> = (0..num_entries_per_slot)
             .flat_map(|x| ((nth * x + 1) as u64..(nth * x + nth) as u64))
@@ -710,7 +710,7 @@ mod test {
         // For each slot, find all missing indexes in the range [0, num_entries_per_slot * nth]
         for slot_height in 0..num_slots {
             assert_eq!(
-                db_ledger.find_missing_data_indexes(
+                blocktree.find_missing_data_indexes(
                     slot_height as u64,
                     0,
                     (num_entries_per_slot * nth) as u64,
@@ -723,7 +723,7 @@ mod test {
         // Test with a limit on the number of returned entries
         for slot_height in 0..num_slots {
             assert_eq!(
-                db_ledger.find_missing_data_indexes(
+                blocktree.find_missing_data_indexes(
                     slot_height as u64,
                     0,
                     (num_entries_per_slot * nth) as u64,
@@ -742,7 +742,7 @@ mod test {
         // For each slot, find all missing indexes in the range [0, num_entries_per_slot * nth]
         for slot_height in 0..num_slots {
             assert_eq!(
-                db_ledger.find_missing_data_indexes(
+                blocktree.find_missing_data_indexes(
                     slot_height as u64,
                     0,
                     (num_entries_per_slot * (nth + 1)) as u64,
@@ -756,8 +756,8 @@ mod test {
     #[test]
     pub fn test_no_missing_blob_indexes() {
         let slot = DEFAULT_SLOT_HEIGHT;
-        let db_ledger_path = get_tmp_ledger_path("test_find_missing_data_indexes");
-        let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+        let blocktree_path = get_tmp_ledger_path("test_find_missing_data_indexes");
+        let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
         // Write entries
         let num_entries = 10;
@@ -772,20 +772,20 @@ mod test {
 
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
-        db_ledger.write_blobs(blobs).unwrap();
+        blocktree.write_blobs(blobs).unwrap();
 
         let empty: Vec<u64> = vec![];
         for i in 0..num_entries as u64 {
             for j in 0..i {
                 assert_eq!(
-                    db_ledger.find_missing_data_indexes(slot, j, i, (i - j) as usize),
+                    blocktree.find_missing_data_indexes(slot, j, i, (i - j) as usize),
                     empty
                 );
             }
         }
 
-        drop(db_ledger);
-        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
     #[cfg(all(feature = "erasure", test))]
@@ -809,12 +809,12 @@ mod test {
         window[erased_index].data = None;
         window[erased_index].coding = None;
 
-        // Generate the db_ledger from the window
+        // Generate the blocktree from the window
         let ledger_path = get_tmp_ledger_path("test_try_erasure");
-        let db_ledger = Arc::new(generate_db_ledger_from_window(&ledger_path, &window, false));
+        let blocktree = Arc::new(generate_blocktree_from_window(&ledger_path, &window, false));
 
         let mut consume_queue = vec![];
-        try_erasure(&db_ledger, &mut consume_queue, DEFAULT_SLOT_HEIGHT)
+        try_erasure(&blocktree, &mut consume_queue, DEFAULT_SLOT_HEIGHT)
             .expect("Expected successful erasure attempt");
         window[erased_index].data = erased_data;
 
@@ -834,7 +834,7 @@ mod test {
 
         let erased_coding_l = erased_coding.read().unwrap();
         assert_eq!(
-            &db_ledger
+            &blocktree
                 .get_coding_blob_bytes(slot_height, erased_index as u64)
                 .unwrap()
                 .unwrap()[BLOB_HEADER_SIZE..],
@@ -847,8 +847,8 @@ mod test {
         let mut leader_scheduler = LeaderScheduler::default();
         leader_scheduler.set_leader_schedule(vec![Keypair::new().pubkey()]);
 
-        let db_ledger_path = get_tmp_ledger_path("test_process_blob");
-        let db_ledger = Arc::new(DbLedger::open(&db_ledger_path).unwrap());
+        let blocktree_path = get_tmp_ledger_path("test_process_blob");
+        let blocktree = Arc::new(Blocktree::open(&blocktree_path).unwrap());
 
         let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
         let num_entries = 10;
@@ -869,7 +869,7 @@ mod test {
         for blob in shared_blobs.iter().rev() {
             process_blob(
                 &leader_scheduler,
-                &db_ledger,
+                &blocktree,
                 blob,
                 0,
                 &mut consume_queue,
@@ -881,7 +881,7 @@ mod test {
 
         assert_eq!(consume_queue, original_entries);
 
-        drop(db_ledger);
-        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
+        drop(blocktree);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 }

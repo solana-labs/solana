@@ -1,4 +1,4 @@
-use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
+use crate::blocktree::{Blocktree, DEFAULT_SLOT_HEIGHT};
 use std::fs::File;
 use std::io;
 use std::io::{BufWriter, Write};
@@ -34,7 +34,7 @@ pub fn chacha_cbc_encrypt(input: &[u8], output: &mut [u8], key: &[u8], ivec: &mu
 }
 
 pub fn chacha_cbc_encrypt_ledger(
-    db_ledger: &Arc<DbLedger>,
+    blocktree: &Arc<Blocktree>,
     slice: u64,
     out_path: &Path,
     ivec: &mut [u8; CHACHA_BLOCK_SIZE],
@@ -50,7 +50,7 @@ pub fn chacha_cbc_encrypt_ledger(
     let mut entry = slice;
 
     loop {
-        match db_ledger.read_blobs_bytes(
+        match blocktree.read_blobs_bytes(
             entry,
             ENTRIES_PER_SEGMENT - total_entries,
             &mut buffer,
@@ -94,9 +94,9 @@ pub fn chacha_cbc_encrypt_ledger(
 
 #[cfg(test)]
 mod tests {
+    use crate::blocktree::get_tmp_ledger_path;
+    use crate::blocktree::{Blocktree, DEFAULT_SLOT_HEIGHT};
     use crate::chacha::chacha_cbc_encrypt_ledger;
-    use crate::db_ledger::get_tmp_ledger_path;
-    use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
     use crate::entry::Entry;
     use ring::signature::Ed25519KeyPair;
     use solana_sdk::budget_transaction::BudgetTransaction;
@@ -144,11 +144,11 @@ mod tests {
         solana_logger::setup();
         let ledger_dir = "chacha_test_encrypt_file";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
-        let db_ledger = Arc::new(DbLedger::open(&ledger_path).unwrap());
+        let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
         let out_path = Path::new("test_chacha_encrypt_file_output.txt.enc");
 
         let entries = make_tiny_deterministic_test_entries(32);
-        db_ledger
+        blocktree
             .write_entries(DEFAULT_SLOT_HEIGHT, 0, &entries)
             .unwrap();
 
@@ -156,7 +156,7 @@ mod tests {
             "abcd1234abcd1234abcd1234abcd1234 abcd1234abcd1234abcd1234abcd1234
                             abcd1234abcd1234abcd1234abcd1234 abcd1234abcd1234abcd1234abcd1234"
         );
-        chacha_cbc_encrypt_ledger(&db_ledger, 0, out_path, &mut key).unwrap();
+        chacha_cbc_encrypt_ledger(&blocktree, 0, out_path, &mut key).unwrap();
         let mut out_file = File::open(out_path).unwrap();
         let mut buf = vec![];
         let size = out_file.read_to_end(&mut buf).unwrap();

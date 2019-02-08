@@ -1,9 +1,9 @@
 use crate::blob_fetch_stage::BlobFetchStage;
+use crate::blocktree::Blocktree;
 #[cfg(feature = "chacha")]
 use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
 use crate::client::mk_client;
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
-use crate::db_ledger::DbLedger;
 use crate::gossip_service::GossipService;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::result::{self, Result};
@@ -130,19 +130,19 @@ impl Replicator {
             cluster_info_w.set_leader(leader_pubkey);
         }
 
-        // Create DbLedger, eventually will simply repurpose the input
-        // ledger path as the DbLedger path once we replace the ledger with
-        // DbLedger. Note for now, this ledger will not contain any of the existing entries
+        // Create Blocktree, eventually will simply repurpose the input
+        // ledger path as the Blocktree path once we replace the ledger with
+        // Blocktree. Note for now, this ledger will not contain any of the existing entries
         // in the ledger located at ledger_path, and will only append on newly received
         // entries after being passed to window_service
-        let db_ledger =
-            DbLedger::open(ledger_path).expect("Expected to be able to open database ledger");
+        let blocktree =
+            Blocktree::open(ledger_path).expect("Expected to be able to open database ledger");
 
-        let db_ledger = Arc::new(db_ledger);
+        let blocktree = Arc::new(blocktree);
 
         let gossip_service = GossipService::new(
             &cluster_info,
-            Some(db_ledger.clone()),
+            Some(blocktree.clone()),
             node.sockets.gossip,
             exit.clone(),
         );
@@ -173,7 +173,7 @@ impl Replicator {
         let (retransmit_sender, retransmit_receiver) = channel();
 
         let window_service = WindowService::new(
-            db_ledger.clone(),
+            blocktree.clone(),
             cluster_info.clone(),
             0,
             max_entry_height,
@@ -234,7 +234,7 @@ impl Replicator {
             ivec.copy_from_slice(signature.as_ref());
 
             let num_encrypted_bytes = chacha_cbc_encrypt_ledger(
-                &db_ledger,
+                &blocktree,
                 entry_height,
                 &ledger_data_file_encrypted,
                 &mut ivec,
