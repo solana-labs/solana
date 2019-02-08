@@ -81,14 +81,14 @@ impl Tpu {
         transactions_sockets: Vec<UdpSocket>,
         broadcast_socket: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        blob_index: u64,
         sigverify_disabled: bool,
         max_tick_height: u64,
+        blob_index: u64,
         last_entry_id: &Hash,
         leader_id: Pubkey,
-        is_leader: bool,
         to_validator_sender: &TpuRotationSender,
         blob_sender: &BlobSender,
+        is_leader: bool,
     ) -> Self {
         let mut tpu = Self {
             tpu_mode: None,

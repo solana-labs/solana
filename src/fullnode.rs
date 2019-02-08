@@ -282,14 +282,14 @@ impl Fullnode {
                 .try_clone()
                 .expect("Failed to clone broadcast socket"),
             cluster_info.clone(),
-            blob_index,
             config.sigverify_disabled,
             max_tpu_tick_height,
+            blob_index,
             &last_entry_id,
             id,
-            scheduled_leader == id,
             &to_validator_sender,
             &blob_sender,
+            scheduled_leader == id,
         );
 
         inc_new_counter_info!("fullnode-new", 1);
