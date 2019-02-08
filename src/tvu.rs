@@ -14,8 +14,8 @@
 
 use crate::bank::Bank;
 use crate::blob_fetch_stage::BlobFetchStage;
+use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
-use crate::db_ledger::DbLedger;
 use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
 use crate::service::Service;
@@ -63,7 +63,7 @@ impl Tvu {
     /// * `last_entry_id` - Hash of the last entry
     /// * `cluster_info` - The cluster_info state.
     /// * `sockets` - My fetch, repair, and restransmit sockets
-    /// * `db_ledger` - the ledger itself
+    /// * `blocktree` - the ledger itself
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new(
         voting_keypair: Option<Arc<VotingKeypair>>,
@@ -73,7 +73,7 @@ impl Tvu {
         last_entry_id: Hash,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sockets: Sockets,
-        db_ledger: Arc<DbLedger>,
+        blocktree: Arc<Blocktree>,
         storage_rotate_count: u64,
         to_leader_sender: TvuRotationSender,
         storage_state: &StorageState,
@@ -108,7 +108,7 @@ impl Tvu {
         //then sent to the window, which does the erasure coding reconstruction
         let retransmit_stage = RetransmitStage::new(
             bank,
-            db_ledger.clone(),
+            blocktree.clone(),
             &cluster_info,
             bank.tick_height(),
             Arc::new(retransmit_socket),
@@ -123,7 +123,7 @@ impl Tvu {
         let (replay_stage, ledger_entry_receiver) = ReplayStage::new(
             keypair.pubkey(),
             voting_keypair,
-            db_ledger.clone(),
+            blocktree.clone(),
             bank.clone(),
             cluster_info.clone(),
             exit.clone(),
@@ -138,7 +138,7 @@ impl Tvu {
         let storage_stage = StorageStage::new(
             storage_state,
             ledger_entry_receiver,
-            Some(db_ledger),
+            Some(blocktree),
             &keypair,
             &exit.clone(),
             entry_height,
@@ -196,9 +196,9 @@ impl Service for Tvu {
 #[cfg(test)]
 pub mod tests {
     use crate::bank::Bank;
+    use crate::blocktree::get_tmp_ledger_path;
+    use crate::blocktree::Blocktree;
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::db_ledger::get_tmp_ledger_path;
-    use crate::db_ledger::DbLedger;
     use crate::entry::Entry;
     use crate::genesis_block::GenesisBlock;
     use crate::gossip_service::GossipService;
@@ -245,8 +245,8 @@ pub mod tests {
         let cref1 = Arc::new(RwLock::new(cluster_info1));
 
         let cur_hash = Hash::default();
-        let db_ledger_path = get_tmp_ledger_path("test_replay");
-        let (db_ledger, l_sender, l_receiver) = DbLedger::open_with_signal(&db_ledger_path)
+        let blocktree_path = get_tmp_ledger_path("test_replay");
+        let (blocktree, l_sender, l_receiver) = Blocktree::open_with_signal(&blocktree_path)
             .expect("Expected to successfully open ledger");
         let vote_account_keypair = Arc::new(Keypair::new());
         let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
@@ -265,7 +265,7 @@ pub mod tests {
                     fetch: target1.sockets.tvu,
                 }
             },
-            Arc::new(db_ledger),
+            Arc::new(blocktree),
             STORAGE_ROTATE_TEST_COUNT,
             sender,
             &StorageState::default(),
@@ -332,8 +332,8 @@ pub mod tests {
         let dr_1 = new_gossip(cref1.clone(), target1.sockets.gossip, exit.clone());
 
         let mut cur_hash = Hash::default();
-        let db_ledger_path = get_tmp_ledger_path("test_replay");
-        let (db_ledger, l_sender, l_receiver) = DbLedger::open_with_signal(&db_ledger_path)
+        let blocktree_path = get_tmp_ledger_path("test_replay");
+        let (blocktree, l_sender, l_receiver) = Blocktree::open_with_signal(&blocktree_path)
             .expect("Expected to successfully open ledger");
         let vote_account_keypair = Arc::new(Keypair::new());
         let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
@@ -352,7 +352,7 @@ pub mod tests {
                     fetch: target1.sockets.tvu,
                 }
             },
-            Arc::new(db_ledger),
+            Arc::new(blocktree),
             STORAGE_ROTATE_TEST_COUNT,
             sender,
             &StorageState::default(),
@@ -432,7 +432,7 @@ pub mod tests {
         dr_1.join().expect("join");
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
-        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
-        let _ignored = remove_dir_all(&db_ledger_path);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        let _ignored = remove_dir_all(&blocktree_path);
     }
 }

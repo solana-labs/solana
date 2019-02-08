@@ -1,9 +1,9 @@
 //! The `fullnode` module hosts all the fullnode microservices.
 
 use crate::bank::Bank;
+use crate::blocktree::{Blocktree, BlocktreeConfig};
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
 use crate::counter::Counter;
-use crate::db_ledger::{DbLedger, DbLedgerConfig};
 use crate::genesis_block::GenesisBlock;
 use crate::gossip_service::GossipService;
 use crate::leader_scheduler::LeaderSchedulerConfig;
@@ -64,7 +64,7 @@ pub struct FullnodeConfig {
     pub entry_stream: Option<String>,
     pub storage_rotate_count: u64,
     pub leader_scheduler_config: LeaderSchedulerConfig,
-    pub ledger_config: DbLedgerConfig,
+    pub ledger_config: BlocktreeConfig,
 }
 impl Default for FullnodeConfig {
     fn default() -> Self {
@@ -125,7 +125,7 @@ impl Fullnode {
             bank,
             entry_height,
             last_entry_id,
-            db_ledger,
+            blocktree,
             ledger_signal_sender,
             ledger_signal_receiver,
         ) = new_bank_from_ledger(
@@ -143,7 +143,7 @@ impl Fullnode {
 
         let exit = Arc::new(AtomicBool::new(false));
         let bank = Arc::new(bank);
-        let db_ledger = Arc::new(db_ledger);
+        let blocktree = Arc::new(blocktree);
 
         node.info.wallclock = timestamp();
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_keypair(
@@ -184,7 +184,7 @@ impl Fullnode {
 
         let gossip_service = GossipService::new(
             &cluster_info,
-            Some(db_ledger.clone()),
+            Some(blocktree.clone()),
             node.sockets.gossip,
             exit.clone(),
         );
@@ -251,7 +251,7 @@ impl Fullnode {
         let (to_leader_sender, to_leader_receiver) = channel();
         let (to_validator_sender, to_validator_receiver) = channel();
 
-        let blob_index = Self::get_consumed_for_slot(&db_ledger, slot_height);
+        let blob_index = Self::get_consumed_for_slot(&blocktree, slot_height);
 
         let (tvu, blob_sender) = Tvu::new(
             voting_keypair_option,
@@ -261,7 +261,7 @@ impl Fullnode {
             last_entry_id,
             &cluster_info,
             sockets,
-            db_ledger.clone(),
+            blocktree.clone(),
             config.storage_rotate_count,
             to_leader_sender,
             &storage_state,
@@ -490,8 +490,8 @@ impl Fullnode {
         self.join()
     }
 
-    fn get_consumed_for_slot(db_ledger: &DbLedger, slot_index: u64) -> u64 {
-        let meta = db_ledger.meta(slot_index).expect("Database error");
+    fn get_consumed_for_slot(blocktree: &Blocktree, slot_index: u64) -> u64 {
+        let meta = blocktree.meta(slot_index).expect("Database error");
         if let Some(meta) = meta {
             meta.consumed
         } else {
@@ -502,18 +502,18 @@ impl Fullnode {
 
 pub fn new_bank_from_ledger(
     ledger_path: &str,
-    ledger_config: DbLedgerConfig,
+    ledger_config: BlocktreeConfig,
     leader_scheduler_config: &LeaderSchedulerConfig,
-) -> (Bank, u64, Hash, DbLedger, SyncSender<bool>, Receiver<bool>) {
-    let (db_ledger, ledger_signal_sender, ledger_signal_receiver) =
-        DbLedger::open_with_config_signal(ledger_path, ledger_config)
+) -> (Bank, u64, Hash, Blocktree, SyncSender<bool>, Receiver<bool>) {
+    let (blocktree, ledger_signal_sender, ledger_signal_receiver) =
+        Blocktree::open_with_config_signal(ledger_path, ledger_config)
             .expect("Expected to successfully open database ledger");
     let genesis_block =
         GenesisBlock::load(ledger_path).expect("Expected to successfully open genesis block");
     let mut bank = Bank::new_with_leader_scheduler_config(&genesis_block, leader_scheduler_config);
 
     let now = Instant::now();
-    let entries = db_ledger.read_ledger().expect("opening ledger");
+    let entries = blocktree.read_ledger().expect("opening ledger");
     info!("processing ledger...");
     let (entry_height, last_entry_id) = bank.process_ledger(entries).expect("process_ledger");
     info!(
@@ -527,7 +527,7 @@ pub fn new_bank_from_ledger(
         bank,
         entry_height,
         last_entry_id,
-        db_ledger,
+        blocktree,
         ledger_signal_sender,
         ledger_signal_receiver,
     )
@@ -553,7 +553,7 @@ impl Service for Fullnode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db_ledger::{create_tmp_sample_ledger, tmp_copy_ledger};
+    use crate::blocktree::{create_tmp_sample_ledger, tmp_copy_ledger};
     use crate::entry::make_consecutive_blobs;
     use crate::leader_scheduler::make_active_set_entries;
     use crate::streamer::responder;
@@ -743,7 +743,7 @@ mod tests {
                 .expect("Expected validator node to close");
         }
         for path in ledger_paths {
-            DbLedger::destroy(&path).expect("Expected successful database destruction");
+            Blocktree::destroy(&path).expect("Expected successful database destruction");
             let _ignored = remove_dir_all(&path);
         }
     }
@@ -837,7 +837,7 @@ mod tests {
         validator_exit();
         let (bank, entry_height, _, _, _, _) = new_bank_from_ledger(
             &validator_ledger_path,
-            DbLedgerConfig::default(),
+            BlocktreeConfig::default(),
             &LeaderSchedulerConfig::default(),
         );
 
@@ -847,7 +847,7 @@ mod tests {
 
         // Shut down
         t_responder.join().expect("responder thread join");
-        DbLedger::destroy(&validator_ledger_path)
+        Blocktree::destroy(&validator_ledger_path)
             .expect("Expected successful database destruction");
         let _ignored = remove_dir_all(&validator_ledger_path).unwrap();
     }
@@ -942,7 +942,7 @@ mod tests {
 
         info!("Shut down");
         leader_exit();
-        DbLedger::destroy(&leader_ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&leader_ledger_path).expect("Expected successful database destruction");
         let _ignored = remove_dir_all(&leader_ledger_path).unwrap();
     }
 
@@ -994,7 +994,7 @@ mod tests {
             .chunks(ticks_per_block as usize)
             .collect();
 
-        let db_ledger = DbLedger::open(&ledger_path).unwrap();
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
 
         // Iterate writing slots through 0..entry_chunks.len()
         for i in 0..entry_chunks.len() + 1 {
@@ -1009,7 +1009,7 @@ mod tests {
                 }
             };
 
-            db_ledger
+            blocktree
                 .write_entries(i as u64, start_height, entries)
                 .unwrap();
         }

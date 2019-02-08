@@ -291,9 +291,9 @@ impl Service for BroadcastService {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::blocktree::get_tmp_ledger_path;
+    use crate::blocktree::Blocktree;
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::db_ledger::get_tmp_ledger_path;
-    use crate::db_ledger::DbLedger;
     use crate::entry::create_ticks;
     use crate::service::Service;
     use solana_sdk::hash::Hash;
@@ -305,7 +305,7 @@ mod test {
     use std::time::Duration;
 
     struct MockBroadcastService {
-        db_ledger: Arc<DbLedger>,
+        blocktree: Arc<Blocktree>,
         broadcast_service: BroadcastService,
     }
 
@@ -318,7 +318,7 @@ mod test {
         max_tick_height: u64,
     ) -> MockBroadcastService {
         // Make the database ledger
-        let db_ledger = Arc::new(DbLedger::open(ledger_path).unwrap());
+        let blocktree = Arc::new(Blocktree::open(ledger_path).unwrap());
 
         // Make the leader node and scheduler
         let leader_info = Node::new_localhost_with_pubkey(leader_pubkey);
@@ -351,7 +351,7 @@ mod test {
         );
 
         MockBroadcastService {
-            db_ledger,
+            blocktree,
             broadcast_service,
         }
     }
@@ -392,7 +392,7 @@ mod test {
             }
 
             sleep(Duration::from_millis(2000));
-            let db_ledger = broadcast_service.db_ledger;
+            let blocktree = broadcast_service.blocktree;
             let mut blob_index = 0;
             for i in 0..max_tick_height - start_tick_height {
                 let slot = leader_scheduler
@@ -400,7 +400,7 @@ mod test {
                     .unwrap()
                     .tick_height_to_slot(start_tick_height + i + 1);
 
-                let result = db_ledger.get_data_blob(slot, blob_index).unwrap();
+                let result = blocktree.get_data_blob(slot, blob_index).unwrap();
 
                 blob_index += 1;
                 assert!(result.is_some());
@@ -413,6 +413,6 @@ mod test {
                 .expect("Expect successful join of broadcast service");
         }
 
-        DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 }

@@ -1,9 +1,9 @@
 //! The `replay_stage` replays transactions broadcast by the leader.
 
 use crate::bank::Bank;
+use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
-use crate::db_ledger::DbLedger;
 use crate::entry::{Entry, EntryReceiver, EntrySender, EntrySlice};
 #[cfg(not(test))]
 use crate::entry_stream::EntryStream;
@@ -175,7 +175,7 @@ impl ReplayStage {
     pub fn new(
         my_id: Pubkey,
         voting_keypair: Option<Arc<VotingKeypair>>,
-        db_ledger: Arc<DbLedger>,
+        blocktree: Arc<Blocktree>,
         bank: Arc<Bank>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         exit: Arc<AtomicBool>,
@@ -208,7 +208,7 @@ impl ReplayStage {
                     )
                 };
 
-                // Loop through db_ledger MAX_ENTRY_RECV_PER_ITER entries at a time for each
+                // Loop through blocktree MAX_ENTRY_RECV_PER_ITER entries at a time for each
                 // relevant slot to see if there are any available updates
                 loop {
                     // Stop getting entries if we get exit signal
@@ -218,7 +218,7 @@ impl ReplayStage {
 
                     if current_slot.is_none() {
                         let new_slot = Self::get_next_slot(
-                            &db_ledger,
+                            &blocktree,
                             prev_slot.expect("prev_slot must exist"),
                         );
                         if new_slot.is_some() {
@@ -236,7 +236,7 @@ impl ReplayStage {
 
                     let entries = {
                         if let Some(slot) = current_slot {
-                            if let Ok(entries) = db_ledger.get_slot_entries(
+                            if let Ok(entries) = blocktree.get_slot_entries(
                                 slot,
                                 current_blob_index,
                                 Some(MAX_ENTRY_RECV_PER_ITER as u64),
@@ -333,9 +333,9 @@ impl ReplayStage {
             .expect("Scheduled leader should be calculated by this point")
     }
 
-    fn get_next_slot(db_ledger: &DbLedger, slot_index: u64) -> Option<u64> {
+    fn get_next_slot(blocktree: &Blocktree, slot_index: u64) -> Option<u64> {
         // Find the next slot that chains to the old slot
-        let next_slots = db_ledger.get_slots_since(&[slot_index]).expect("Db error");
+        let next_slots = blocktree.get_slots_since(&[slot_index]).expect("Db error");
         next_slots.first().cloned()
     }
 }
@@ -352,10 +352,10 @@ impl Service for ReplayStage {
 mod test {
     use super::*;
     use crate::bank::Bank;
-    use crate::cluster_info::{ClusterInfo, Node};
-    use crate::db_ledger::{
-        create_tmp_sample_ledger, DbLedger, DbLedgerConfig, DEFAULT_SLOT_HEIGHT,
+    use crate::blocktree::{
+        create_tmp_sample_ledger, Blocktree, BlocktreeConfig, DEFAULT_SLOT_HEIGHT,
     };
+    use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::create_ticks;
     use crate::entry::Entry;
     use crate::fullnode::new_bank_from_ledger;
@@ -417,8 +417,8 @@ mod test {
         last_id = active_set_entries.last().unwrap().id;
 
         {
-            let db_ledger = DbLedger::open(&my_ledger_path).unwrap();
-            db_ledger
+            let blocktree = Blocktree::open(&my_ledger_path).unwrap();
+            blocktree
                 .write_entries(
                     DEFAULT_SLOT_HEIGHT,
                     genesis_entry_height,
@@ -429,20 +429,20 @@ mod test {
 
         {
             // Set up the bank
-            let db_ledger_config = DbLedgerConfig::new(ticks_per_slot);
-            let (bank, _entry_height, last_entry_id, db_ledger, l_sender, l_receiver) =
-                new_bank_from_ledger(&my_ledger_path, db_ledger_config, &leader_scheduler_config);
+            let blocktree_config = BlocktreeConfig::new(ticks_per_slot);
+            let (bank, _entry_height, last_entry_id, blocktree, l_sender, l_receiver) =
+                new_bank_from_ledger(&my_ledger_path, blocktree_config, &leader_scheduler_config);
 
             // Set up the replay stage
             let (rotation_sender, rotation_receiver) = channel();
-            let meta = db_ledger.meta(0).unwrap().unwrap();
+            let meta = blocktree.meta(0).unwrap().unwrap();
             let exit = Arc::new(AtomicBool::new(false));
             let bank = Arc::new(bank);
-            let db_ledger = Arc::new(db_ledger);
+            let blocktree = Arc::new(blocktree);
             let (replay_stage, ledger_writer_recv) = ReplayStage::new(
                 my_id,
                 Some(Arc::new(voting_keypair)),
-                db_ledger.clone(),
+                blocktree.clone(),
                 bank.clone(),
                 Arc::new(RwLock::new(cluster_info_me)),
                 exit.clone(),
@@ -465,7 +465,7 @@ mod test {
             let expected_last_id = entries_to_send.last().unwrap().id;
 
             // Write the entries to the ledger, replay_stage should get notified of changes
-            db_ledger
+            blocktree
                 .write_entries(DEFAULT_SLOT_HEIGHT, meta.consumed, &entries_to_send)
                 .unwrap();
 
@@ -532,19 +532,19 @@ mod test {
         let voting_keypair = Arc::new(VotingKeypair::new_local(&my_keypair));
         let (to_leader_sender, _) = channel();
         {
-            let (bank, entry_height, last_entry_id, db_ledger, l_sender, l_receiver) =
+            let (bank, entry_height, last_entry_id, blocktree, l_sender, l_receiver) =
                 new_bank_from_ledger(
                     &my_ledger_path,
-                    DbLedgerConfig::default(),
+                    BlocktreeConfig::default(),
                     &LeaderSchedulerConfig::default(),
                 );
 
             let bank = Arc::new(bank);
-            let db_ledger = Arc::new(db_ledger);
+            let blocktree = Arc::new(blocktree);
             let (replay_stage, ledger_writer_recv) = ReplayStage::new(
                 my_keypair.pubkey(),
                 Some(voting_keypair.clone()),
-                db_ledger.clone(),
+                blocktree.clone(),
                 bank.clone(),
                 cluster_info_me.clone(),
                 exit.clone(),
@@ -563,7 +563,7 @@ mod test {
             // Send ReplayStage an entry, should see it on the ledger writer receiver
             let next_tick = create_ticks(1, last_entry_id);
 
-            db_ledger
+            blocktree
                 .write_entries(DEFAULT_SLOT_HEIGHT, entry_height, next_tick.clone())
                 .unwrap();
 
@@ -613,8 +613,8 @@ mod test {
         let initial_tick_height = genesis_entry_height;
 
         {
-            let db_ledger = DbLedger::open(&my_ledger_path).unwrap();
-            db_ledger
+            let blocktree = Blocktree::open(&my_ledger_path).unwrap();
+            blocktree
                 .write_entries(
                     DEFAULT_SLOT_HEIGHT,
                     genesis_entry_height,
@@ -636,22 +636,22 @@ mod test {
         let (rotation_tx, rotation_rx) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         {
-            let db_ledger_config = DbLedgerConfig::new(ticks_per_slot);
-            let (bank, _entry_height, last_entry_id, db_ledger, l_sender, l_receiver) =
-                new_bank_from_ledger(&my_ledger_path, db_ledger_config, &leader_scheduler_config);
+            let blocktree_config = BlocktreeConfig::new(ticks_per_slot);
+            let (bank, _entry_height, last_entry_id, blocktree, l_sender, l_receiver) =
+                new_bank_from_ledger(&my_ledger_path, blocktree_config, &leader_scheduler_config);
 
-            let meta = db_ledger
+            let meta = blocktree
                 .meta(0)
                 .unwrap()
                 .expect("First slot metadata must exist");
 
             let voting_keypair = Arc::new(voting_keypair);
             let bank = Arc::new(bank);
-            let db_ledger = Arc::new(db_ledger);
+            let blocktree = Arc::new(blocktree);
             let (replay_stage, ledger_writer_recv) = ReplayStage::new(
                 my_keypair.pubkey(),
                 Some(voting_keypair.clone()),
-                db_ledger.clone(),
+                blocktree.clone(),
                 bank.clone(),
                 cluster_info_me.clone(),
                 exit.clone(),
@@ -677,7 +677,7 @@ mod test {
             for i in 0..total_entries_to_send {
                 let entry = Entry::new(&mut last_id, 0, num_hashes, vec![]);
                 last_id = entry.id;
-                db_ledger
+                blocktree
                     .write_entries(
                         DEFAULT_SLOT_HEIGHT,
                         meta.consumed + i as u64,

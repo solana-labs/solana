@@ -6,12 +6,12 @@ extern crate log;
 extern crate serde_json;
 
 use bincode::deserialize;
-use solana::client::mk_client;
-use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
-use solana::db_ledger::DbLedger;
-use solana::db_ledger::{
+use solana::blocktree::Blocktree;
+use solana::blocktree::{
     create_tmp_sample_ledger, get_tmp_ledger_path, tmp_copy_ledger, DEFAULT_SLOT_HEIGHT,
 };
+use solana::client::mk_client;
+use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
 use solana::entry::Entry;
 use solana::fullnode::{Fullnode, FullnodeConfig};
 use solana::replicator::Replicator;
@@ -220,8 +220,8 @@ fn test_replicator_startup_basic() {
     }
 
     info!("cleanup");
-    DbLedger::destroy(&leader_ledger_path).expect("Expected successful database destruction");
-    DbLedger::destroy(&replicator_ledger_path).expect("Expected successful database destruction");
+    Blocktree::destroy(&leader_ledger_path).expect("Expected successful database destruction");
+    Blocktree::destroy(&replicator_ledger_path).expect("Expected successful database destruction");
     let _ignored = remove_dir_all(&leader_ledger_path);
     let _ignored = remove_dir_all(&replicator_ledger_path);
 }
@@ -257,8 +257,8 @@ fn test_replicator_startup_leader_hang() {
         assert!(replicator_res.is_err());
     }
 
-    let _ignored = DbLedger::destroy(&leader_ledger_path);
-    let _ignored = DbLedger::destroy(&replicator_ledger_path);
+    let _ignored = Blocktree::destroy(&leader_ledger_path);
+    let _ignored = Blocktree::destroy(&replicator_ledger_path);
     let _ignored = remove_dir_all(&leader_ledger_path);
     let _ignored = remove_dir_all(&replicator_ledger_path);
 }
@@ -328,8 +328,8 @@ fn test_replicator_startup_ledger_hang() {
         assert!(replicator_res.is_err());
     }
 
-    let _ignored = DbLedger::destroy(&leader_ledger_path);
-    let _ignored = DbLedger::destroy(&replicator_ledger_path);
+    let _ignored = Blocktree::destroy(&leader_ledger_path);
+    let _ignored = Blocktree::destroy(&replicator_ledger_path);
     let _ignored = remove_dir_all(&leader_ledger_path);
     let _ignored = remove_dir_all(&replicator_ledger_path);
 }

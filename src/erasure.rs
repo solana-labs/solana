@@ -1,5 +1,5 @@
 // Support erasure coding
-use crate::db_ledger::DbLedger;
+use crate::blocktree::Blocktree;
 use crate::packet::{Blob, SharedBlob, BLOB_DATA_SIZE, BLOB_HEADER_SIZE, BLOB_SIZE};
 use crate::result::{Error, Result};
 use std::cmp;
@@ -364,7 +364,7 @@ impl CodingGenerator {
 // Recover the missing data and coding blobs from the input ledger. Returns a vector
 // of the recovered missing data blobs and a vector of the recovered coding blobs
 pub fn recover(
-    db_ledger: &Arc<DbLedger>,
+    blocktree: &Arc<Blocktree>,
     slot: u64,
     start_idx: u64,
 ) -> Result<(Vec<SharedBlob>, Vec<SharedBlob>)> {
@@ -380,10 +380,10 @@ pub fn recover(
         block_end_idx
     );
 
-    let data_missing = db_ledger
+    let data_missing = blocktree
         .find_missing_data_indexes(slot, block_start_idx, block_end_idx, NUM_DATA)
         .len();
-    let coding_missing = db_ledger
+    let coding_missing = blocktree
         .find_missing_coding_indexes(slot, coding_start_idx, block_end_idx, NUM_CODING)
         .len();
 
@@ -418,7 +418,7 @@ pub fn recover(
 
     // Add the data blobs we have into the recovery vector, mark the missing ones
     for i in block_start_idx..block_end_idx {
-        let result = db_ledger.get_data_blob_bytes(slot, i)?;
+        let result = blocktree.get_data_blob_bytes(slot, i)?;
 
         categorize_blob(
             &result,
@@ -432,7 +432,7 @@ pub fn recover(
     let mut size = None;
     // Add the coding blobs we have into the recovery vector, mark the missing ones
     for i in coding_start_idx..block_end_idx {
-        let result = db_ledger.get_coding_blob_bytes(slot, i)?;
+        let result = blocktree.get_coding_blob_bytes(slot, i)?;
 
         categorize_blob(
             &result,
@@ -464,7 +464,7 @@ pub fn recover(
         // Remove the corrupted coding blobs so there's no effort wasted in trying to
         // reconstruct the blobs again
         for i in coding_start_idx..block_end_idx {
-            db_ledger.delete_coding_blob(slot, i)?;
+            blocktree.delete_coding_blob(slot, i)?;
         }
         return Ok((vec![], vec![]));
     }
@@ -501,8 +501,8 @@ fn categorize_blob(
 #[cfg(test)]
 pub mod test {
     use super::*;
-    use crate::db_ledger::get_tmp_ledger_path;
-    use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
+    use crate::blocktree::get_tmp_ledger_path;
+    use crate::blocktree::{Blocktree, DEFAULT_SLOT_HEIGHT};
     use crate::entry::{make_tiny_test_entries, EntrySlice};
 
     use crate::packet::{index_blobs, SharedBlob, BLOB_DATA_SIZE, BLOB_SIZE};
@@ -632,22 +632,22 @@ pub mod test {
 
     // TODO: Temprorary function used in tests to generate a database ledger
     // from the window (which is used to generate the erasure coding)
-    // until we also transition generate_coding() and BroadcastStage to use DbLedger
+    // until we also transition generate_coding() and BroadcastStage to use Blocktree
     // Github issue: https://github.com/solana-labs/solana/issues/1899.
-    pub fn generate_db_ledger_from_window(
+    pub fn generate_blocktree_from_window(
         ledger_path: &str,
         window: &[WindowSlot],
         use_random: bool,
-    ) -> DbLedger {
-        let db_ledger =
-            DbLedger::open(ledger_path).expect("Expected to be able to open database ledger");
+    ) -> Blocktree {
+        let blocktree =
+            Blocktree::open(ledger_path).expect("Expected to be able to open database ledger");
         for slot in window {
             if let Some(ref data) = slot.data {
                 // If we're using gibberish blobs, skip validation checks and insert
                 // directly into the ledger
                 if use_random {
                     let data = data.read().unwrap();
-                    db_ledger
+                    blocktree
                         .put_data_blob_bytes(
                             data.slot(),
                             data.index(),
@@ -655,7 +655,7 @@ pub mod test {
                         )
                         .expect("Expected successful put into data column of ledger");
                 } else {
-                    db_ledger
+                    blocktree
                         .write_shared_blobs(vec![data].into_iter())
                         .unwrap();
                 }
@@ -668,7 +668,7 @@ pub mod test {
 
                 let data_size = coding_lock.size();
 
-                db_ledger
+                blocktree
                     .put_coding_blob_bytes(
                         coding_lock.slot(),
                         index,
@@ -678,7 +678,7 @@ pub mod test {
             }
         }
 
-        db_ledger
+        blocktree
     }
 
     fn generate_coding(
@@ -970,12 +970,12 @@ pub mod test {
         let refwindow = window[erase_offset].data.clone();
         window[erase_offset].data = None;
 
-        // Generate the db_ledger from the window
+        // Generate the blocktree from the window
         let ledger_path = get_tmp_ledger_path("test_window_recover_basic");
-        let db_ledger = Arc::new(generate_db_ledger_from_window(&ledger_path, &window, true));
+        let blocktree = Arc::new(generate_blocktree_from_window(&ledger_path, &window, true));
 
         // Recover it from coding
-        let (recovered_data, recovered_coding) = recover(&db_ledger, 0, offset as u64)
+        let (recovered_data, recovered_coding) = recover(&blocktree, 0, offset as u64)
             .expect("Expected successful recovery of erased blobs");
 
         assert!(recovered_coding.is_empty());
@@ -996,8 +996,8 @@ pub mod test {
             assert_eq!(result.index(), offset as u64);
             assert_eq!(result.slot(), DEFAULT_SLOT_HEIGHT as u64);
         }
-        drop(db_ledger);
-        DbLedger::destroy(&ledger_path)
+        drop(blocktree);
+        Blocktree::destroy(&ledger_path)
             .expect("Expected successful destruction of database ledger");
     }
 
@@ -1021,10 +1021,10 @@ pub mod test {
         window[erase_offset].data = None;
         window[erase_offset].coding = None;
         let ledger_path = get_tmp_ledger_path("test_window_recover_basic2");
-        let db_ledger = Arc::new(generate_db_ledger_from_window(&ledger_path, &window, true));
+        let blocktree = Arc::new(generate_blocktree_from_window(&ledger_path, &window, true));
 
         // Recover it from coding
-        let (recovered_data, recovered_coding) = recover(&db_ledger, 0, offset as u64)
+        let (recovered_data, recovered_coding) = recover(&blocktree, 0, offset as u64)
             .expect("Expected successful recovery of erased blobs");
 
         {
@@ -1062,8 +1062,8 @@ pub mod test {
             assert_eq!(result.index(), coding_start as u64);
             assert_eq!(result.slot(), DEFAULT_SLOT_HEIGHT as u64);
         }
-        drop(db_ledger);
-        DbLedger::destroy(&ledger_path)
+        drop(blocktree);
+        Blocktree::destroy(&ledger_path)
             .expect("Expected successful destruction of database ledger");
     }
 }

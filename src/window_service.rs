@@ -1,8 +1,8 @@
 //! The `window_service` provides a thread for maintaining a window (tail of the ledger).
 //!
+use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
-use crate::db_ledger::DbLedger;
 use crate::db_window::*;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::repair_service::RepairService;
@@ -29,7 +29,7 @@ pub enum WindowServiceReturnType {
 
 #[allow(clippy::too_many_arguments)]
 fn recv_window(
-    db_ledger: &Arc<DbLedger>,
+    blocktree: &Arc<Blocktree>,
     id: &Pubkey,
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     tick_height: &mut u64,
@@ -70,7 +70,7 @@ fn recv_window(
 
         let _ = process_blob(
             leader_scheduler,
-            db_ledger,
+            blocktree,
             &b,
             max_ix,
             &mut consume_queue,
@@ -113,7 +113,7 @@ pub struct WindowService {
 impl WindowService {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
-        db_ledger: Arc<DbLedger>,
+        blocktree: Arc<Blocktree>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         tick_height: u64,
         max_entry_height: u64,
@@ -126,7 +126,7 @@ impl WindowService {
     ) -> WindowService {
         let exit_ = exit.clone();
         let repair_service = RepairService::new(
-            db_ledger.clone(),
+            blocktree.clone(),
             exit.clone(),
             repair_socket,
             cluster_info.clone(),
@@ -143,7 +143,7 @@ impl WindowService {
                         break;
                     }
                     if let Err(e) = recv_window(
-                        &db_ledger,
+                        &blocktree,
                         &id,
                         &leader_scheduler,
                         &mut tick_height_,
@@ -183,9 +183,9 @@ impl Service for WindowService {
 
 #[cfg(test)]
 mod test {
+    use crate::blocktree::get_tmp_ledger_path;
+    use crate::blocktree::Blocktree;
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::db_ledger::get_tmp_ledger_path;
-    use crate::db_ledger::DbLedger;
     use crate::entry::make_consecutive_blobs;
     use crate::leader_scheduler::LeaderScheduler;
     use crate::service::Service;
@@ -218,14 +218,14 @@ mod test {
             blob_receiver(Arc::new(leader_node.sockets.gossip), exit.clone(), s_reader);
         let (s_retransmit, r_retransmit) = channel();
         let done = Arc::new(AtomicBool::new(false));
-        let db_ledger_path = get_tmp_ledger_path("window_send_test");
-        let db_ledger = Arc::new(
-            DbLedger::open(&db_ledger_path).expect("Expected to be able to open database ledger"),
+        let blocktree_path = get_tmp_ledger_path("window_send_test");
+        let blocktree = Arc::new(
+            Blocktree::open(&blocktree_path).expect("Expected to be able to open database ledger"),
         );
         let mut leader_schedule = LeaderScheduler::default();
         leader_schedule.set_leader_schedule(vec![me_id]);
         let t_window = WindowService::new(
-            db_ledger,
+            blocktree,
             subs,
             0,
             0,
@@ -278,8 +278,8 @@ mod test {
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
         t_window.join().expect("join");
-        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
-        let _ignored = remove_dir_all(&db_ledger_path);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        let _ignored = remove_dir_all(&blocktree_path);
     }
 
     #[test]
@@ -299,14 +299,14 @@ mod test {
             blob_receiver(Arc::new(leader_node.sockets.gossip), exit.clone(), s_reader);
         let (s_retransmit, r_retransmit) = channel();
         let done = Arc::new(AtomicBool::new(false));
-        let db_ledger_path = get_tmp_ledger_path("window_send_late_leader_test");
-        let db_ledger = Arc::new(
-            DbLedger::open(&db_ledger_path).expect("Expected to be able to open database ledger"),
+        let blocktree_path = get_tmp_ledger_path("window_send_late_leader_test");
+        let blocktree = Arc::new(
+            Blocktree::open(&blocktree_path).expect("Expected to be able to open database ledger"),
         );
         let mut leader_schedule = LeaderScheduler::default();
         leader_schedule.set_leader_schedule(vec![me_id]);
         let t_window = WindowService::new(
-            db_ledger,
+            blocktree,
             subs.clone(),
             0,
             0,
@@ -355,7 +355,7 @@ mod test {
         t_receiver.join().expect("join");
         t_responder.join().expect("join");
         t_window.join().expect("join");
-        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
-        let _ignored = remove_dir_all(&db_ledger_path);
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+        let _ignored = remove_dir_all(&blocktree_path);
     }
 }

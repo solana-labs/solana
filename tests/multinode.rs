@@ -1,9 +1,9 @@
 use log::*;
 use solana::blob_fetch_stage::BlobFetchStage;
+use solana::blocktree::{create_tmp_sample_ledger, tmp_copy_ledger};
+use solana::blocktree::{Blocktree, BlocktreeConfig, DEFAULT_SLOT_HEIGHT};
 use solana::client::mk_client;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
-use solana::db_ledger::{create_tmp_sample_ledger, tmp_copy_ledger};
-use solana::db_ledger::{DbLedger, DbLedgerConfig, DEFAULT_SLOT_HEIGHT};
 use solana::entry::{reconstruct_entries_from_blobs, Entry};
 use solana::fullnode::{new_bank_from_ledger, Fullnode, FullnodeConfig, FullnodeReturnType};
 use solana::gossip_service::GossipService;
@@ -27,7 +27,7 @@ use std::thread::{sleep, Builder};
 use std::time::{Duration, Instant};
 
 fn read_ledger(ledger_path: &str) -> Vec<Entry> {
-    let ledger = DbLedger::open(&ledger_path).expect("Unable to open ledger");
+    let ledger = Blocktree::open(&ledger_path).expect("Unable to open ledger");
     ledger
         .read_ledger()
         .expect("Unable to read ledger")
@@ -138,13 +138,13 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     // and force it to respond to repair from the ledger window
     // TODO: write out more than slot 0
     {
-        let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
+        let blocktree = Blocktree::open(&leader_ledger_path).unwrap();
 
         let entries = solana::entry::create_ticks(
             fullnode_config.leader_scheduler_config.ticks_per_slot - last_entry_height - 2,
             last_entry_id,
         );
-        db_ledger
+        blocktree
             .write_entries(0, last_entry_height, &entries)
             .unwrap();
 
@@ -959,8 +959,8 @@ fn test_leader_to_validator_transition() {
         0,
     );
     {
-        let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
-        db_ledger
+        let blocktree = Blocktree::open(&leader_ledger_path).unwrap();
+        blocktree
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
                 genesis_entry_height,
@@ -1010,7 +1010,7 @@ fn test_leader_to_validator_transition() {
     info!("Check the ledger to make sure it's the right height...");
     let bank = new_bank_from_ledger(
         &leader_ledger_path,
-        DbLedgerConfig::default(),
+        BlocktreeConfig::default(),
         &LeaderSchedulerConfig::default(),
     )
     .0;
@@ -1059,8 +1059,8 @@ fn test_leader_validator_basic() {
         0,
     );
     {
-        let db_ledger = DbLedger::open(&leader_ledger_path).unwrap();
-        db_ledger
+        let blocktree = Blocktree::open(&leader_ledger_path).unwrap();
+        blocktree
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
                 genesis_entry_height,
@@ -1154,7 +1154,7 @@ fn test_leader_validator_basic() {
 
     info!("done!");
     for path in ledger_paths {
-        DbLedger::destroy(&path).expect("Expected successful database destruction");
+        Blocktree::destroy(&path).expect("Expected successful database destruction");
         remove_dir_all(path).unwrap();
     }
 }
@@ -1217,8 +1217,8 @@ fn test_dropped_handoff_recovery() {
 
     // Write the entries
     {
-        let db_ledger = DbLedger::open(&genesis_ledger_path).unwrap();
-        db_ledger
+        let blocktree = Blocktree::open(&genesis_ledger_path).unwrap();
+        blocktree
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
                 genesis_entry_height,
@@ -1381,8 +1381,8 @@ fn test_full_leader_validator_network() {
             .expect("expected at least one genesis entry")
             .id;
         {
-            let db_ledger = DbLedger::open(&bootstrap_leader_ledger_path).unwrap();
-            db_ledger
+            let blocktree = Blocktree::open(&bootstrap_leader_ledger_path).unwrap();
+            blocktree
                 .write_entries(DEFAULT_SLOT_HEIGHT, index, &bootstrap_entries)
                 .unwrap();
             index += bootstrap_entries.len() as u64;
@@ -1533,7 +1533,7 @@ fn test_full_leader_validator_network() {
     assert!(shortest >= fullnode_config.leader_scheduler_config.ticks_per_slot * 3,);
 
     for path in ledger_paths {
-        DbLedger::destroy(&path).expect("Expected successful database destruction");
+        Blocktree::destroy(&path).expect("Expected successful database destruction");
         remove_dir_all(path).unwrap();
     }
 }

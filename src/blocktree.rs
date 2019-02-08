@@ -1,4 +1,4 @@
-//! The `db_ledger` module provides functions for parallel verification of the
+//! The `block_tree` module provides functions for parallel verification of the
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
 
@@ -29,15 +29,15 @@ use std::rc::Rc;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::sync::Arc;
 
-pub type DbLedgerRawIterator = rocksdb::DBRawIterator;
+pub type BlocktreeRawIterator = rocksdb::DBRawIterator;
 
-pub const DB_LEDGER_DIRECTORY: &str = "rocksdb";
+pub const BLOCKTREE_DIRECTORY: &str = "rocksdb";
 // A good value for this is the number of cores on the machine
 const TOTAL_THREADS: i32 = 8;
 const MAX_WRITE_BUFFER_SIZE: usize = 512 * 1024 * 1024;
 
 #[derive(Debug)]
-pub enum DbLedgerError {
+pub enum BlocktreeError {
     BlobForIndexExists,
     InvalidBlobData,
     RocksDb(rocksdb::Error),
@@ -45,7 +45,7 @@ pub enum DbLedgerError {
 
 impl std::convert::From<rocksdb::Error> for Error {
     fn from(e: rocksdb::Error) -> Error {
-        Error::DbLedgerError(DbLedgerError::RocksDb(e))
+        Error::BlocktreeError(BlocktreeError::RocksDb(e))
     }
 }
 
@@ -112,7 +112,7 @@ pub trait LedgerColumnFamilyRaw {
         Ok(())
     }
 
-    fn raw_iterator(&self) -> DbLedgerRawIterator {
+    fn raw_iterator(&self) -> BlocktreeRawIterator {
         let db = self.db();
         db.raw_iterator_cf(self.handle())
             .expect("Expected to be able to open database iterator")
@@ -145,13 +145,13 @@ pub struct SlotMeta {
 }
 
 impl SlotMeta {
-    pub fn contains_all_ticks(&self, db_ledger: &DbLedger) -> bool {
+    pub fn contains_all_ticks(&self, blocktree: &Blocktree) -> bool {
         if self.num_blocks == 0 {
             // A placeholder slot does not contain all the ticks
             false
         } else {
             let num_expected_ticks = {
-                let num = self.num_expected_ticks(db_ledger);
+                let num = self.num_expected_ticks(blocktree);
                 if self.slot_height == 0 {
                     num - 1
                 } else {
@@ -162,8 +162,8 @@ impl SlotMeta {
         }
     }
 
-    pub fn num_expected_ticks(&self, db_ledger: &DbLedger) -> u64 {
-        db_ledger.ticks_per_slot * self.num_blocks
+    pub fn num_expected_ticks(&self, blocktree: &Blocktree) -> u64 {
+        blocktree.ticks_per_slot * self.num_blocks
     }
 
     fn new(slot_height: u64, num_blocks: u64) -> Self {
@@ -331,24 +331,24 @@ impl LedgerColumnFamilyRaw for ErasureCf {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
-pub struct DbLedgerConfig {
+pub struct BlocktreeConfig {
     pub ticks_per_slot: u64,
 }
 
-impl DbLedgerConfig {
+impl BlocktreeConfig {
     pub fn new(ticks_per_slot: u64) -> Self {
-        DbLedgerConfig { ticks_per_slot }
+        BlocktreeConfig { ticks_per_slot }
     }
 }
 
-impl Default for DbLedgerConfig {
+impl Default for BlocktreeConfig {
     fn default() -> Self {
         Self::new(DEFAULT_TICKS_PER_SLOT)
     }
 }
 
 // ledger window
-pub struct DbLedger {
+pub struct Blocktree {
     // Underlying database is automatically closed in the Drop implementation of DB
     db: Arc<DB>,
     meta_cf: MetaCf,
@@ -369,11 +369,11 @@ pub const DATA_CF: &str = "data";
 // Column family for erasure data
 pub const ERASURE_CF: &str = "erasure";
 
-impl DbLedger {
+impl Blocktree {
     // Opens a Ledger in directory, provides "infinite" window of blobs
     pub fn open(ledger_path: &str) -> Result<Self> {
         fs::create_dir_all(&ledger_path)?;
-        let ledger_path = Path::new(ledger_path).join(DB_LEDGER_DIRECTORY);
+        let ledger_path = Path::new(ledger_path).join(BLOCKTREE_DIRECTORY);
 
         // Use default database options
         let db_options = Self::get_db_options();
@@ -403,7 +403,7 @@ impl DbLedger {
         // TODO: make these constructor arguments
         // Issue: https://github.com/solana-labs/solana/issues/2458
         let ticks_per_slot = DEFAULT_TICKS_PER_SLOT;
-        Ok(DbLedger {
+        Ok(Blocktree {
             db,
             meta_cf,
             data_cf,
@@ -414,29 +414,29 @@ impl DbLedger {
     }
 
     pub fn open_with_signal(ledger_path: &str) -> Result<(Self, SyncSender<bool>, Receiver<bool>)> {
-        let mut db_ledger = Self::open(ledger_path)?;
+        let mut blocktree = Self::open(ledger_path)?;
         let (signal_sender, signal_receiver) = sync_channel(1);
-        db_ledger.new_blobs_signals = vec![signal_sender.clone()];
+        blocktree.new_blobs_signals = vec![signal_sender.clone()];
 
-        Ok((db_ledger, signal_sender, signal_receiver))
+        Ok((blocktree, signal_sender, signal_receiver))
     }
 
-    pub fn open_config(ledger_path: &str, config: DbLedgerConfig) -> Result<Self> {
-        let mut db_ledger = Self::open(ledger_path)?;
-        db_ledger.ticks_per_slot = config.ticks_per_slot;
-        Ok(db_ledger)
+    pub fn open_config(ledger_path: &str, config: BlocktreeConfig) -> Result<Self> {
+        let mut blocktree = Self::open(ledger_path)?;
+        blocktree.ticks_per_slot = config.ticks_per_slot;
+        Ok(blocktree)
     }
 
     pub fn open_with_config_signal(
         ledger_path: &str,
-        config: DbLedgerConfig,
+        config: BlocktreeConfig,
     ) -> Result<(Self, SyncSender<bool>, Receiver<bool>)> {
-        let mut db_ledger = Self::open(ledger_path)?;
+        let mut blocktree = Self::open(ledger_path)?;
         let (signal_sender, signal_receiver) = sync_channel(1);
-        db_ledger.new_blobs_signals = vec![signal_sender.clone()];
-        db_ledger.ticks_per_slot = config.ticks_per_slot;
+        blocktree.new_blobs_signals = vec![signal_sender.clone()];
+        blocktree.ticks_per_slot = config.ticks_per_slot;
 
-        Ok((db_ledger, signal_sender, signal_receiver))
+        Ok((blocktree, signal_sender, signal_receiver))
     }
 
     pub fn meta(&self, slot_height: u64) -> Result<Option<SlotMeta>> {
@@ -446,7 +446,7 @@ impl DbLedger {
     pub fn destroy(ledger_path: &str) -> Result<()> {
         // DB::destroy() fails if `ledger_path` doesn't exist
         fs::create_dir_all(&ledger_path)?;
-        let ledger_path = Path::new(ledger_path).join(DB_LEDGER_DIRECTORY);
+        let ledger_path = Path::new(ledger_path).join(BLOCKTREE_DIRECTORY);
         DB::destroy(&Options::default(), &ledger_path)?;
         Ok(())
     }
@@ -599,7 +599,7 @@ impl DbLedger {
             }
         }
 
-        // TODO: Delete returning these entries and instead have replay_stage query db_ledger
+        // TODO: Delete returning these entries and instead have replay_stage query blocktree
         // for updates. Returning these entries is to temporarily support current API as to
         // not break functionality in db_window.
         // Issue: https://github.com/solana-labs/solana/issues/2444
@@ -731,7 +731,7 @@ impl DbLedger {
     // indexes in the ledger in the range [start_index, end_index)
     // for the slot with slot_height == slot
     fn find_missing_indexes(
-        db_iterator: &mut DbLedgerRawIterator,
+        db_iterator: &mut BlocktreeRawIterator,
         slot: u64,
         start_index: u64,
         end_index: u64,
@@ -1108,7 +1108,7 @@ impl DbLedger {
         if blob_index < slot_meta.consumed
             || prev_inserted_blob_datas.contains_key(&(blob_slot, blob_index))
         {
-            return Err(Error::DbLedgerError(DbLedgerError::BlobForIndexExists));
+            return Err(Error::BlocktreeError(BlocktreeError::BlobForIndexExists));
         }
 
         let (new_consumed, new_consumed_ticks, blob_datas) = {
@@ -1162,7 +1162,7 @@ impl DbLedger {
         slot_meta.received = cmp::max(blob_index + 1, slot_meta.received);
         slot_meta.consumed = new_consumed;
         slot_meta.consumed_ticks += new_consumed_ticks;
-        // TODO: Remove returning these entries and instead have replay_stage query db_ledger
+        // TODO: Remove returning these entries and instead have replay_stage query blocktree
         // for updates. Returning these entries is to temporarily support current API as to
         // not break functionality in db_window.
         // Issue: https://github.com/solana-labs/solana/issues/2444
@@ -1245,12 +1245,12 @@ struct EntryIterator {
     //    can do this in parallel
     last_id: Option<Hash>,
     // https://github.com/rust-rocksdb/rust-rocksdb/issues/234
-    //   rocksdb issue: the _db_ledger member must be lower in the struct to prevent a crash
+    //   rocksdb issue: the _blocktree member must be lower in the struct to prevent a crash
     //   when the db_iterator member above is dropped.
-    //   _db_ledger is unused, but dropping _db_ledger results in a broken db_iterator
+    //   _blocktree is unused, but dropping _blocktree results in a broken db_iterator
     //   you have to hold the database open in order to iterate over it, and in order
     //   for db_iterator to be able to run Drop
-    //    _db_ledger: DbLedger,
+    //    _blocktree: Blocktree,
 }
 
 impl Iterator for EntryIterator {
@@ -1276,13 +1276,13 @@ impl Iterator for EntryIterator {
 }
 
 pub fn create_new_ledger(ledger_path: &str, genesis_block: &GenesisBlock) -> Result<(u64, Hash)> {
-    DbLedger::destroy(ledger_path)?;
+    Blocktree::destroy(ledger_path)?;
     genesis_block.write(&ledger_path)?;
 
     // Add a single tick linked back to the genesis_block to bootstrap the ledger
-    let db_ledger = DbLedger::open(ledger_path)?;
+    let blocktree = Blocktree::open(ledger_path)?;
     let entries = crate::entry::create_ticks(1, genesis_block.last_id());
-    db_ledger.write_entries(DEFAULT_SLOT_HEIGHT, 0, &entries)?;
+    blocktree.write_entries(DEFAULT_SLOT_HEIGHT, 0, &entries)?;
 
     Ok((1, entries[0].id))
 }
@@ -1291,7 +1291,7 @@ pub fn genesis<'a, I>(ledger_path: &str, keypair: &Keypair, entries: I) -> Resul
 where
     I: IntoIterator<Item = &'a Entry>,
 {
-    let db_ledger = DbLedger::open(ledger_path)?;
+    let blocktree = Blocktree::open(ledger_path)?;
 
     // TODO sign these blobs with keypair
     let blobs: Vec<_> = entries
@@ -1306,7 +1306,7 @@ where
         })
         .collect();
 
-    db_ledger.write_genesis_blobs(&blobs[..])?;
+    blocktree.write_genesis_blobs(&blobs[..])?;
     Ok(())
 }
 
@@ -1344,8 +1344,8 @@ pub fn create_tmp_sample_ledger(
     if num_extra_ticks > 0 {
         let entries = crate::entry::create_ticks(num_extra_ticks, last_id);
 
-        let db_ledger = DbLedger::open(&ledger_path).unwrap();
-        db_ledger
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        blocktree
             .write_entries(DEFAULT_SLOT_HEIGHT, entry_height, &entries)
             .unwrap();
         entry_height += entries.len() as u64;
@@ -1357,13 +1357,13 @@ pub fn create_tmp_sample_ledger(
 pub fn tmp_copy_ledger(from: &str, name: &str) -> String {
     let path = get_tmp_ledger_path(name);
 
-    let db_ledger = DbLedger::open(from).unwrap();
-    let blobs = db_ledger.read_ledger_blobs();
+    let blocktree = Blocktree::open(from).unwrap();
+    let blobs = blocktree.read_ledger_blobs();
     let genesis_block = GenesisBlock::load(from).unwrap();
 
-    DbLedger::destroy(&path).expect("Expected successful database destruction");
-    let db_ledger = DbLedger::open(&path).unwrap();
-    db_ledger.write_blobs(blobs).unwrap();
+    Blocktree::destroy(&path).expect("Expected successful database destruction");
+    let blocktree = Blocktree::open(&path).unwrap();
+    blocktree.write_blobs(blobs).unwrap();
     genesis_block.write(&path).unwrap();
 
     path
@@ -1382,7 +1382,7 @@ mod tests {
     #[test]
     fn test_put_get_simple() {
         let ledger_path = get_tmp_ledger_path("test_put_get_simple");
-        let ledger = DbLedger::open(&ledger_path).unwrap();
+        let ledger = Blocktree::open(&ledger_path).unwrap();
 
         // Test meta column family
         let meta = SlotMeta::new(DEFAULT_SLOT_HEIGHT, 1);
@@ -1424,7 +1424,7 @@ mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -1437,7 +1437,7 @@ mod tests {
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
 
         let ledger_path = get_tmp_ledger_path("test_read_blobs_bytes");
-        let ledger = DbLedger::open(&ledger_path).unwrap();
+        let ledger = Blocktree::open(&ledger_path).unwrap();
         ledger.write_blobs(blobs.clone()).unwrap();
 
         let mut buf = [0; 1024];
@@ -1489,7 +1489,7 @@ mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -1506,7 +1506,7 @@ mod tests {
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
 
         let ledger_path = get_tmp_ledger_path("test_insert_data_blobs_basic");
-        let ledger = DbLedger::open(&ledger_path).unwrap();
+        let ledger = Blocktree::open(&ledger_path).unwrap();
 
         // Insert second blob, we're missing the first blob, so no consecutive
         // blobs starting from slot 0, index 0 should exist.
@@ -1542,7 +1542,7 @@ mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -1558,7 +1558,7 @@ mod tests {
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
 
         let ledger_path = get_tmp_ledger_path("test_insert_data_blobs_multiple");
-        let ledger = DbLedger::open(&ledger_path).unwrap();
+        let ledger = Blocktree::open(&ledger_path).unwrap();
 
         // Insert blobs in reverse, check for consecutive returned blobs
         for i in (0..num_blobs).rev() {
@@ -1581,7 +1581,7 @@ mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -1593,9 +1593,9 @@ mod tests {
     #[test]
     pub fn test_iteration_order() {
         let slot = 0;
-        let db_ledger_path = get_tmp_ledger_path("test_iteration_order");
+        let blocktree_path = get_tmp_ledger_path("test_iteration_order");
         {
-            let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
             // Write entries
             let num_entries = 8;
@@ -1608,13 +1608,13 @@ mod tests {
                 w_b.set_slot(DEFAULT_SLOT_HEIGHT);
             }
 
-            db_ledger
+            blocktree
                 .write_shared_blobs(&shared_blobs)
                 .expect("Expected successful write of blobs");
 
-            let mut db_iterator = db_ledger
+            let mut db_iterator = blocktree
                 .db
-                .raw_iterator_cf(db_ledger.data_cf.handle())
+                .raw_iterator_cf(blocktree.data_cf.handle())
                 .expect("Expected to be able to open database iterator");
 
             db_iterator.seek(&DataCf::key(slot, 1));
@@ -1629,14 +1629,14 @@ mod tests {
                 db_iterator.next();
             }
         }
-        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_get_slot_entries1() {
-        let db_ledger_path = get_tmp_ledger_path("test_get_slot_entries1");
+        let blocktree_path = get_tmp_ledger_path("test_get_slot_entries1");
         {
-            let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
             let entries = make_tiny_test_entries(8);
             let mut blobs = entries.clone().to_blobs();
             for (i, b) in blobs.iter_mut().enumerate() {
@@ -1647,28 +1647,28 @@ mod tests {
                     b.set_index(8 + i as u64);
                 }
             }
-            db_ledger
+            blocktree
                 .write_blobs(&blobs)
                 .expect("Expected successful write of blobs");
 
             assert_eq!(
-                db_ledger.get_slot_entries(1, 2, None).unwrap()[..],
+                blocktree.get_slot_entries(1, 2, None).unwrap()[..],
                 entries[2..4],
             );
 
             assert_eq!(
-                db_ledger.get_slot_entries(1, 12, None).unwrap()[..],
+                blocktree.get_slot_entries(1, 12, None).unwrap()[..],
                 entries[4..],
             );
         }
-        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_get_slot_entries2() {
-        let db_ledger_path = get_tmp_ledger_path("test_get_slot_entries2");
+        let blocktree_path = get_tmp_ledger_path("test_get_slot_entries2");
         {
-            let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
             // Write entries
             let num_slots = 5 as u64;
@@ -1682,25 +1682,25 @@ mod tests {
                     b.set_slot(slot_height as u64);
                     index += 1;
                 }
-                db_ledger
+                blocktree
                     .write_blobs(&blobs)
                     .expect("Expected successful write of blobs");
                 assert_eq!(
-                    db_ledger
+                    blocktree
                         .get_slot_entries(slot_height, index - 1, None)
                         .unwrap(),
                     vec![last_entry],
                 );
             }
         }
-        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_insert_data_blobs_consecutive() {
-        let db_ledger_path = get_tmp_ledger_path("test_insert_data_blobs_consecutive");
+        let blocktree_path = get_tmp_ledger_path("test_insert_data_blobs_consecutive");
         {
-            let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
             let slot = 0;
 
             // Write entries
@@ -1713,43 +1713,43 @@ mod tests {
                 w_b.set_slot(slot);
             }
 
-            db_ledger
+            blocktree
                 .write_shared_blobs(shared_blobs.iter().skip(1).step_by(2))
                 .unwrap();
 
-            assert_eq!(db_ledger.get_slot_entries(0, 0, None).unwrap(), vec![]);
+            assert_eq!(blocktree.get_slot_entries(0, 0, None).unwrap(), vec![]);
 
             let meta_key = MetaCf::key(slot);
-            let meta = db_ledger.meta_cf.get(&meta_key).unwrap().unwrap();
+            let meta = blocktree.meta_cf.get(&meta_key).unwrap().unwrap();
             assert_eq!(meta.received, num_entries);
             assert_eq!(meta.consumed, 0);
             assert_eq!(meta.consumed_ticks, 0);
 
-            db_ledger
+            blocktree
                 .write_shared_blobs(shared_blobs.iter().step_by(2))
                 .unwrap();
 
             assert_eq!(
-                db_ledger.get_slot_entries(0, 0, None).unwrap(),
+                blocktree.get_slot_entries(0, 0, None).unwrap(),
                 original_entries,
             );
 
             let meta_key = MetaCf::key(slot);
-            let meta = db_ledger.meta_cf.get(&meta_key).unwrap().unwrap();
+            let meta = blocktree.meta_cf.get(&meta_key).unwrap().unwrap();
             assert_eq!(meta.received, num_entries);
             assert_eq!(meta.consumed, num_entries);
             assert_eq!(meta.consumed_ticks, num_entries);
         }
 
-        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_insert_data_blobs_duplicate() {
         // Create RocksDb ledger
-        let db_ledger_path = get_tmp_ledger_path("test_insert_data_blobs_duplicate");
+        let blocktree_path = get_tmp_ledger_path("test_insert_data_blobs_duplicate");
         {
-            let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
             // Write entries
             let num_entries = 10 as u64;
@@ -1766,7 +1766,7 @@ mod tests {
                 w_b.set_index(index);
             }
 
-            db_ledger
+            blocktree
                 .write_shared_blobs(
                     shared_blobs
                         .iter()
@@ -1775,9 +1775,9 @@ mod tests {
                 )
                 .unwrap();
 
-            assert_eq!(db_ledger.get_slot_entries(0, 0, None).unwrap(), vec![]);
+            assert_eq!(blocktree.get_slot_entries(0, 0, None).unwrap(), vec![]);
 
-            db_ledger
+            blocktree
                 .write_shared_blobs(shared_blobs.iter().step_by(num_duplicates * 2))
                 .unwrap();
 
@@ -1786,14 +1786,14 @@ mod tests {
                 .step_by(num_duplicates)
                 .collect();
 
-            assert_eq!(db_ledger.get_slot_entries(0, 0, None).unwrap(), expected,);
+            assert_eq!(blocktree.get_slot_entries(0, 0, None).unwrap(), expected,);
 
             let meta_key = MetaCf::key(DEFAULT_SLOT_HEIGHT);
-            let meta = db_ledger.meta_cf.get(&meta_key).unwrap().unwrap();
+            let meta = blocktree.meta_cf.get(&meta_key).unwrap().unwrap();
             assert_eq!(meta.consumed, num_entries);
             assert_eq!(meta.received, num_entries);
         }
-        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -1804,7 +1804,7 @@ mod tests {
         {
             genesis(&ledger_path, &Keypair::new(), &entries).unwrap();
 
-            let ledger = DbLedger::open(&ledger_path).expect("open failed");
+            let ledger = Blocktree::open(&ledger_path).expect("open failed");
 
             let read_entries: Vec<Entry> =
                 ledger.read_ledger().expect("read_ledger failed").collect();
@@ -1812,7 +1812,7 @@ mod tests {
             assert_eq!(entries, read_entries);
         }
 
-        DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
     }
     #[test]
     pub fn test_entry_iterator_up_to_consumed() {
@@ -1822,7 +1822,7 @@ mod tests {
             // put entries except last 2 into ledger
             genesis(&ledger_path, &Keypair::new(), &entries[..entries.len() - 2]).unwrap();
 
-            let ledger = DbLedger::open(&ledger_path).expect("open failed");
+            let ledger = Blocktree::open(&ledger_path).expect("open failed");
 
             // now write the last entry, ledger has a hole in it one before the end
             // +-+-+-+-+-+-+-+    +-+
@@ -1844,7 +1844,7 @@ mod tests {
             assert_eq!(entries[..entries.len() - 2].to_vec(), read_entries);
         }
 
-        DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
@@ -1852,8 +1852,8 @@ mod tests {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path("test_new_blobs_signal");
         let ticks_per_slot = 10;
-        let config = DbLedgerConfig::new(ticks_per_slot);
-        let (ledger, _, recvr) = DbLedger::open_with_config_signal(&ledger_path, config).unwrap();
+        let config = BlocktreeConfig::new(ticks_per_slot);
+        let (ledger, _, recvr) = Blocktree::open_with_config_signal(&ledger_path, config).unwrap();
         let ledger = Arc::new(ledger);
 
         // Create ticks for slot 0
@@ -1951,16 +1951,16 @@ mod tests {
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
-        DbLedger::destroy(&ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_handle_chaining_basic() {
-        let db_ledger_path = get_tmp_ledger_path("test_handle_chaining_basic");
+        let blocktree_path = get_tmp_ledger_path("test_handle_chaining_basic");
         {
             let ticks_per_slot = 2;
-            let config = DbLedgerConfig::new(ticks_per_slot);
-            let db_ledger = DbLedger::open_config(&db_ledger_path, config).unwrap();
+            let config = BlocktreeConfig::new(ticks_per_slot);
+            let blocktree = Blocktree::open_config(&blocktree_path, config).unwrap();
 
             let entries = create_ticks(6, Hash::default());
             let mut blobs = entries.to_blobs();
@@ -1970,10 +1970,10 @@ mod tests {
             }
 
             // 1) Write to the first slot
-            db_ledger
+            blocktree
                 .write_blobs(&blobs[ticks_per_slot as usize..2 * ticks_per_slot as usize])
                 .unwrap();
-            let s1 = db_ledger.meta_cf.get_slot_meta(1).unwrap().unwrap();
+            let s1 = blocktree.meta_cf.get_slot_meta(1).unwrap().unwrap();
             assert!(s1.next_slots.is_empty());
             // Slot 1 is not trunk because slot 0 hasn't been inserted yet
             assert!(!s1.is_trunk);
@@ -1981,10 +1981,10 @@ mod tests {
             assert_eq!(s1.consumed_ticks, ticks_per_slot);
 
             // 2) Write to the second slot
-            db_ledger
+            blocktree
                 .write_blobs(&blobs[2 * ticks_per_slot as usize..3 * ticks_per_slot as usize])
                 .unwrap();
-            let s2 = db_ledger.meta_cf.get_slot_meta(2).unwrap().unwrap();
+            let s2 = blocktree.meta_cf.get_slot_meta(2).unwrap().unwrap();
             assert!(s2.next_slots.is_empty());
             // Slot 2 is not trunk because slot 0 hasn't been inserted yet
             assert!(!s2.is_trunk);
@@ -1993,18 +1993,18 @@ mod tests {
 
             // Check the first slot again, it should chain to the second slot,
             // but still isn't part of the trunk
-            let s1 = db_ledger.meta_cf.get_slot_meta(1).unwrap().unwrap();
+            let s1 = blocktree.meta_cf.get_slot_meta(1).unwrap().unwrap();
             assert_eq!(s1.next_slots, vec![2]);
             assert!(!s1.is_trunk);
             assert_eq!(s1.consumed_ticks, ticks_per_slot);
 
             // 3) Write to the zeroth slot, check that every slot
             // is now part of the trunk
-            db_ledger
+            blocktree
                 .write_blobs(&blobs[0..ticks_per_slot as usize])
                 .unwrap();
             for i in 0..3 {
-                let s = db_ledger.meta_cf.get_slot_meta(i).unwrap().unwrap();
+                let s = blocktree.meta_cf.get_slot_meta(i).unwrap().unwrap();
                 // The last slot will not chain to any other slots
                 if i != 2 {
                     assert_eq!(s.next_slots, vec![i + 1]);
@@ -2018,17 +2018,17 @@ mod tests {
                 assert!(s.is_trunk);
             }
         }
-        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_handle_chaining_missing_slots() {
-        let db_ledger_path = get_tmp_ledger_path("test_handle_chaining_missing_slots");
+        let blocktree_path = get_tmp_ledger_path("test_handle_chaining_missing_slots");
         {
-            let mut db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+            let mut blocktree = Blocktree::open(&blocktree_path).unwrap();
             let num_slots = 30;
             let ticks_per_slot = 2;
-            db_ledger.ticks_per_slot = ticks_per_slot as u64;
+            blocktree.ticks_per_slot = ticks_per_slot as u64;
 
             let ticks = create_ticks((num_slots / 2) * ticks_per_slot, Hash::default());
             let mut blobs = ticks.to_blobs();
@@ -2039,7 +2039,7 @@ mod tests {
                 b.set_slot(((i / 2) * 2 + 1) as u64);
             }
 
-            db_ledger.write_blobs(&blobs[..]).unwrap();
+            blocktree.write_blobs(&blobs[..]).unwrap();
 
             // Check metadata
             for i in 0..num_slots {
@@ -2047,7 +2047,7 @@ mod tests {
                 // because no slots chain to it yet because we left a gap. However, if it's
                 // a slot we haven't inserted, aka one of the gaps, then one of the slots
                 // we just inserted will chain to that gap
-                let s = db_ledger.meta_cf.get_slot_meta(i as u64).unwrap().unwrap();
+                let s = blocktree.meta_cf.get_slot_meta(i as u64).unwrap().unwrap();
                 if i % 2 == 0 {
                     assert_eq!(s.next_slots, vec![i as u64 + 1]);
                     assert_eq!(s.consumed_ticks, 0);
@@ -2069,12 +2069,12 @@ mod tests {
                 b.set_slot(((i / 2) * 2) as u64);
             }
 
-            db_ledger.write_blobs(&blobs[..]).unwrap();
+            blocktree.write_blobs(&blobs[..]).unwrap();
 
             for i in 0..num_slots {
                 // Check that all the slots chain correctly once the missing slots
                 // have been filled
-                let s = db_ledger.meta_cf.get_slot_meta(i as u64).unwrap().unwrap();
+                let s = blocktree.meta_cf.get_slot_meta(i as u64).unwrap().unwrap();
                 if i != num_slots - 1 {
                     assert_eq!(s.next_slots, vec![i as u64 + 1]);
                 } else {
@@ -2089,17 +2089,17 @@ mod tests {
             }
         }
 
-        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_forward_chaining_is_trunk() {
-        let db_ledger_path = get_tmp_ledger_path("test_forward_chaining_is_trunk");
+        let blocktree_path = get_tmp_ledger_path("test_forward_chaining_is_trunk");
         {
-            let mut db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+            let mut blocktree = Blocktree::open(&blocktree_path).unwrap();
             let num_slots = 15;
             let ticks_per_slot = 2;
-            db_ledger.ticks_per_slot = ticks_per_slot as u64;
+            blocktree.ticks_per_slot = ticks_per_slot as u64;
 
             let entries = create_ticks(num_slots * ticks_per_slot, Hash::default());
             let mut blobs = entries.to_blobs();
@@ -2111,11 +2111,11 @@ mod tests {
             // Write the blobs such that every 3rd block has a gap in the beginning
             for (slot_index, slot_ticks) in blobs.chunks(ticks_per_slot as usize).enumerate() {
                 if slot_index % 3 == 0 {
-                    db_ledger
+                    blocktree
                         .write_blobs(&slot_ticks[1..ticks_per_slot as usize])
                         .unwrap();
                 } else {
-                    db_ledger
+                    blocktree
                         .write_blobs(&slot_ticks[..ticks_per_slot as usize])
                         .unwrap();
                 }
@@ -2123,7 +2123,7 @@ mod tests {
 
             // Check metadata
             for i in 0..num_slots {
-                let s = db_ledger.meta_cf.get_slot_meta(i as u64).unwrap().unwrap();
+                let s = blocktree.meta_cf.get_slot_meta(i as u64).unwrap().unwrap();
                 // The last slot will not chain to any other slots
                 if i as u64 != num_slots - 1 {
                     assert_eq!(s.next_slots, vec![i as u64 + 1]);
@@ -2149,10 +2149,10 @@ mod tests {
             // slot_index + 3 become part of the trunk
             for (slot_index, slot_ticks) in blobs.chunks(ticks_per_slot as usize).enumerate() {
                 if slot_index % 3 == 0 {
-                    db_ledger.write_blobs(&slot_ticks[0..1]).unwrap();
+                    blocktree.write_blobs(&slot_ticks[0..1]).unwrap();
 
                     for i in 0..num_slots {
-                        let s = db_ledger.meta_cf.get_slot_meta(i as u64).unwrap().unwrap();
+                        let s = blocktree.meta_cf.get_slot_meta(i as u64).unwrap().unwrap();
                         if i != num_slots - 1 {
                             assert_eq!(s.next_slots, vec![i as u64 + 1]);
                         } else {
@@ -2167,47 +2167,47 @@ mod tests {
                 }
             }
         }
-        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
     #[test]
     pub fn test_get_slots_since() {
-        let db_ledger_path = get_tmp_ledger_path("test_get_slots_since");
+        let blocktree_path = get_tmp_ledger_path("test_get_slots_since");
 
         {
-            let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
             // Slot doesn't exist
-            assert!(db_ledger.get_slots_since(&vec![0]).unwrap().is_empty());
+            assert!(blocktree.get_slots_since(&vec![0]).unwrap().is_empty());
 
             let mut meta0 = SlotMeta::new(0, 1);
-            db_ledger.meta_cf.put_slot_meta(0, &meta0).unwrap();
+            blocktree.meta_cf.put_slot_meta(0, &meta0).unwrap();
 
             // Slot exists, chains to nothing
-            assert!(db_ledger.get_slots_since(&vec![0]).unwrap().is_empty());
+            assert!(blocktree.get_slots_since(&vec![0]).unwrap().is_empty());
             meta0.next_slots = vec![1, 2];
-            db_ledger.meta_cf.put_slot_meta(0, &meta0).unwrap();
+            blocktree.meta_cf.put_slot_meta(0, &meta0).unwrap();
 
             // Slot exists, chains to some other slots
-            assert_eq!(db_ledger.get_slots_since(&vec![0]).unwrap(), vec![1, 2]);
-            assert_eq!(db_ledger.get_slots_since(&vec![0, 1]).unwrap(), vec![1, 2]);
+            assert_eq!(blocktree.get_slots_since(&vec![0]).unwrap(), vec![1, 2]);
+            assert_eq!(blocktree.get_slots_since(&vec![0, 1]).unwrap(), vec![1, 2]);
 
             let mut meta3 = SlotMeta::new(3, 1);
             meta3.next_slots = vec![10, 5];
-            db_ledger.meta_cf.put_slot_meta(3, &meta3).unwrap();
+            blocktree.meta_cf.put_slot_meta(3, &meta3).unwrap();
             assert_eq!(
-                db_ledger.get_slots_since(&vec![0, 1, 3]).unwrap(),
+                blocktree.get_slots_since(&vec![0, 1, 3]).unwrap(),
                 vec![1, 2, 10, 5]
             );
         }
 
-        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
     fn test_insert_data_blobs_slots(name: &str, should_bulk_write: bool) {
-        let db_ledger_path = get_tmp_ledger_path(name);
+        let blocktree_path = get_tmp_ledger_path(name);
         {
-            let db_ledger = DbLedger::open(&db_ledger_path).unwrap();
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
             // Write entries
             let num_entries = 20 as u64;
@@ -2220,11 +2220,11 @@ mod tests {
             }
 
             if should_bulk_write {
-                db_ledger.write_shared_blobs(shared_blobs.iter()).unwrap();
+                blocktree.write_shared_blobs(shared_blobs.iter()).unwrap();
             } else {
                 for i in 0..num_entries {
                     let i = i as usize;
-                    db_ledger
+                    blocktree
                         .write_shared_blobs(&shared_blobs[i..i + 1])
                         .unwrap();
                 }
@@ -2232,12 +2232,12 @@ mod tests {
 
             for i in 0..num_entries - 1 {
                 assert_eq!(
-                    db_ledger.get_slot_entries(i, i, None).unwrap()[0],
+                    blocktree.get_slot_entries(i, i, None).unwrap()[0],
                     original_entries[i as usize]
                 );
 
                 let meta_key = MetaCf::key(i);
-                let meta = db_ledger.meta_cf.get(&meta_key).unwrap().unwrap();
+                let meta = blocktree.meta_cf.get(&meta_key).unwrap().unwrap();
                 assert_eq!(meta.received, i + 1);
                 if i != 0 {
                     assert!(meta.consumed == 0);
@@ -2246,6 +2246,6 @@ mod tests {
                 }
             }
         }
-        DbLedger::destroy(&db_ledger_path).expect("Expected successful database destruction");
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 }

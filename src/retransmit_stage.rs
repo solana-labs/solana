@@ -1,9 +1,9 @@
 //! The `retransmit_stage` retransmits blobs between validators
 
 use crate::bank::Bank;
+use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, DATA_PLANE_FANOUT, GROW_LAYER_CAPACITY, NEIGHBORHOOD_SIZE};
 use crate::counter::Counter;
-use crate::db_ledger::DbLedger;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -126,7 +126,7 @@ impl RetransmitStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         bank: &Arc<Bank>,
-        db_ledger: Arc<DbLedger>,
+        blocktree: Arc<Blocktree>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         tick_height: u64,
         retransmit_socket: Arc<UdpSocket>,
@@ -145,7 +145,7 @@ impl RetransmitStage {
         );
         let done = Arc::new(AtomicBool::new(false));
         let window_service = WindowService::new(
-            db_ledger,
+            blocktree,
             cluster_info.clone(),
             tick_height,
             0,

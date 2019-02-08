@@ -1,8 +1,8 @@
 // Module used by validators to approve storage mining proofs
 // // in parallel using the GPU
 
+use crate::blocktree::{Blocktree, DEFAULT_SLOT_HEIGHT};
 use crate::chacha::{CHACHA_BLOCK_SIZE, CHACHA_KEY_SIZE};
-use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
 use crate::sigverify::{
     chacha_cbc_encrypt_many_sample, chacha_end_sha_state, chacha_init_sha_state,
 };
@@ -18,7 +18,7 @@ use crate::storage_stage::ENTRIES_PER_SEGMENT;
 // Then sample each block at the offsets provided by samples argument with sha256
 // and return the vec of sha states
 pub fn chacha_cbc_encrypt_file_many_keys(
-    db_ledger: &Arc<DbLedger>,
+    blocktree: &Arc<Blocktree>,
     segment: u64,
     ivecs: &mut [u8],
     samples: &[u64],
@@ -47,7 +47,7 @@ pub fn chacha_cbc_encrypt_file_many_keys(
         chacha_init_sha_state(int_sha_states.as_mut_ptr(), num_keys as u32);
     }
     loop {
-        match db_ledger.read_blobs_bytes(
+        match blocktree.read_blobs_bytes(
             entry,
             ENTRIES_PER_SEGMENT - total_entries,
             &mut buffer,
@@ -109,10 +109,10 @@ pub fn chacha_cbc_encrypt_file_many_keys(
 
 #[cfg(test)]
 mod tests {
+    use crate::blocktree::get_tmp_ledger_path;
+    use crate::blocktree::{Blocktree, DEFAULT_SLOT_HEIGHT};
     use crate::chacha::chacha_cbc_encrypt_ledger;
     use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
-    use crate::db_ledger::get_tmp_ledger_path;
-    use crate::db_ledger::{DbLedger, DEFAULT_SLOT_HEIGHT};
     use crate::entry::make_tiny_test_entries;
     use crate::replicator::sample_file;
     use solana_sdk::hash::Hash;
@@ -127,8 +127,8 @@ mod tests {
         let entries = make_tiny_test_entries(32);
         let ledger_dir = "test_encrypt_file_many_keys_single";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
-        let db_ledger = Arc::new(DbLedger::open(&ledger_path).unwrap());
-        db_ledger
+        let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
+        blocktree
             .write_entries(DEFAULT_SLOT_HEIGHT, 0, &entries)
             .unwrap();
 
@@ -141,12 +141,12 @@ mod tests {
         );
 
         let mut cpu_iv = ivecs.clone();
-        chacha_cbc_encrypt_ledger(&db_ledger, 0, out_path, &mut cpu_iv).unwrap();
+        chacha_cbc_encrypt_ledger(&blocktree, 0, out_path, &mut cpu_iv).unwrap();
 
         let ref_hash = sample_file(&out_path, &samples).unwrap();
 
         let hashes =
-            chacha_cbc_encrypt_file_many_keys(&db_ledger, 0, &mut ivecs, &samples).unwrap();
+            chacha_cbc_encrypt_file_many_keys(&blocktree, 0, &mut ivecs, &samples).unwrap();
 
         assert_eq!(hashes[0], ref_hash);
 
@@ -161,8 +161,8 @@ mod tests {
         let entries = make_tiny_test_entries(32);
         let ledger_dir = "test_encrypt_file_many_keys_multiple";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
-        let db_ledger = Arc::new(DbLedger::open(&ledger_path).unwrap());
-        db_ledger
+        let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
+        blocktree
             .write_entries(DEFAULT_SLOT_HEIGHT, 0, &entries)
             .unwrap();
 
@@ -178,7 +178,7 @@ mod tests {
             );
             ivec[0] = i;
             ivecs.extend(ivec.clone().iter());
-            chacha_cbc_encrypt_ledger(&db_ledger.clone(), 0, out_path, &mut ivec).unwrap();
+            chacha_cbc_encrypt_ledger(&blocktree.clone(), 0, out_path, &mut ivec).unwrap();
 
             ref_hashes.push(sample_file(&out_path, &samples).unwrap());
             info!(
@@ -190,7 +190,7 @@ mod tests {
         }
 
         let hashes =
-            chacha_cbc_encrypt_file_many_keys(&db_ledger, 0, &mut ivecs, &samples).unwrap();
+            chacha_cbc_encrypt_file_many_keys(&blocktree, 0, &mut ivecs, &samples).unwrap();
 
         assert_eq!(hashes, ref_hashes);
 
@@ -204,7 +204,7 @@ mod tests {
         let ledger_dir = "test_encrypt_file_many_keys_bad_key_length";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
         let samples = [0];
-        let db_ledger = Arc::new(DbLedger::open(&ledger_path).unwrap());
-        assert!(chacha_cbc_encrypt_file_many_keys(&db_ledger, 0, &mut keys, &samples,).is_err());
+        let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
+        assert!(chacha_cbc_encrypt_file_many_keys(&blocktree, 0, &mut keys, &samples,).is_err());
     }
 }

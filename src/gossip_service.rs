@@ -1,7 +1,7 @@
 //! The `gossip_service` module implements the network control plane.
 
+use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
-use crate::db_ledger::DbLedger;
 use crate::service::Service;
 use crate::streamer;
 use std::net::UdpSocket;
@@ -18,7 +18,7 @@ pub struct GossipService {
 impl GossipService {
     pub fn new(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        db_ledger: Option<Arc<DbLedger>>,
+        blocktree: Option<Arc<Blocktree>>,
         gossip_socket: UdpSocket,
         exit: Arc<AtomicBool>,
     ) -> Self {
@@ -35,7 +35,7 @@ impl GossipService {
         let t_responder = streamer::responder("gossip", gossip_socket, response_receiver);
         let t_listen = ClusterInfo::listen(
             cluster_info.clone(),
-            db_ledger,
+            blocktree,
             request_receiver,
             response_sender.clone(),
             exit.clone(),
