@@ -365,7 +365,7 @@ mod test {
         let mut matched_entries = 0;
         let mut matched_slots = 0;
         let mut matched_blocks = 0;
-        let mut expect_slot = 0;
+        let expect_slot = 0;
         let mut expect_block = 0;
 
         for item in entry_stream.entries() {
