@@ -2,7 +2,7 @@
 //! multi-stage transaction processing pipeline in software.
 
 use crate::bank::Bank;
-use crate::banking_stage::{BankingStage, BankingStageReturnType};
+use crate::banking_stage::BankingStage;
 use crate::broadcast_service::BroadcastService;
 use crate::cluster_info::ClusterInfo;
 use crate::cluster_info_vote_listener::ClusterInfoVoteListener;
@@ -217,34 +217,29 @@ impl Tpu {
         self.exit.load(Ordering::Relaxed)
     }
 
-    pub fn close(self) -> thread::Result<Option<TpuReturnType>> {
+    pub fn close(self) -> thread::Result<()> {
         self.tpu_mode_close();
         self.join()
     }
 }
 
 impl Service for Tpu {
-    type JoinReturnType = Option<TpuReturnType>;
+    type JoinReturnType = ();
 
-    fn join(self) -> thread::Result<(Option<TpuReturnType>)> {
+    fn join(self) -> thread::Result<()> {
         match self.tpu_mode {
             Some(TpuMode::Leader(svcs)) => {
                 svcs.broadcast_service.join()?;
                 svcs.fetch_stage.join()?;
                 svcs.sigverify_stage.join()?;
                 svcs.cluster_info_vote_listener.join()?;
-                match svcs.banking_stage.join()? {
-                    Some(BankingStageReturnType::LeaderRotation(tick_height)) => {
-                        Ok(Some(TpuReturnType::LeaderRotation(tick_height)))
-                    }
-                    _ => Ok(None),
-                }
+                svcs.banking_stage.join()?;
             }
             Some(TpuMode::Forwarder(svcs)) => {
                 svcs.tpu_forwarder.join()?;
-                Ok(None)
             }
-            None => Ok(None),
+            None => (),
         }
+        Ok(())
     }
 }
