@@ -124,8 +124,14 @@ impl LeaderScheduler {
         tick_height / self.ticks_per_epoch
     }
 
+    // Returns the number of ticks remaining from the specified tick_height to
+    // the end of the specified block (i.e. the end of corresponding slot)
+    pub fn num_ticks_left_in_block(&self, block: u64, tick_height: u64) -> u64 {
+        ((block + 1) * self.ticks_per_slot - tick_height) - 1
+    }
+
     // Returns the number of ticks remaining from the specified tick_height to the end of the
-    // current slot
+    // slot implied by the tick_height
     pub fn num_ticks_left_in_slot(&self, tick_height: u64) -> u64 {
         self.ticks_per_slot - tick_height % self.ticks_per_slot - 1
     }
@@ -206,7 +212,6 @@ impl LeaderScheduler {
 
         {
             let accounts = bank.accounts.accounts_db.read().unwrap();
-
             // TODO: iterate through checkpoints, too
             accounts
                 .accounts
@@ -607,9 +612,24 @@ pub mod tests {
     }
 
     #[test]
-    fn test_num_ticks_left_in_slot() {
+    fn test_num_ticks_left_in_block() {
         let leader_scheduler = LeaderScheduler::new(&LeaderSchedulerConfig::new(10, 2, 1));
 
+        assert_eq!(leader_scheduler.num_ticks_left_in_block(0, 0), 9);
+        assert_eq!(leader_scheduler.num_ticks_left_in_block(1, 0), 19);
+        assert_eq!(leader_scheduler.num_ticks_left_in_block(0, 1), 8);
+        assert_eq!(leader_scheduler.num_ticks_left_in_block(0, 8), 1);
+        assert_eq!(leader_scheduler.num_ticks_left_in_block(0, 9), 0);
+        assert_eq!(leader_scheduler.num_ticks_left_in_block(1, 10), 9);
+        assert_eq!(leader_scheduler.num_ticks_left_in_block(1, 11), 8);
+        assert_eq!(leader_scheduler.num_ticks_left_in_block(1, 19), 0);
+        assert_eq!(leader_scheduler.num_ticks_left_in_block(2, 20), 9);
+        assert_eq!(leader_scheduler.num_ticks_left_in_block(2, 21), 8);
+    }
+
+    #[test]
+    fn test_num_ticks_left_in_slot() {
+        let leader_scheduler = LeaderScheduler::new(&LeaderSchedulerConfig::new(10, 2, 1));
         assert_eq!(leader_scheduler.num_ticks_left_in_slot(0), 9);
         assert_eq!(leader_scheduler.num_ticks_left_in_slot(1), 8);
         assert_eq!(leader_scheduler.num_ticks_left_in_slot(8), 1);
