@@ -462,7 +462,7 @@ impl Blocktree {
         }
     }
 
-    pub fn write_shared_blobs<I>(&self, shared_blobs: I) -> Result<Vec<Entry>>
+    pub fn write_shared_blobs<I>(&self, shared_blobs: I) -> Result<()>
     where
         I: IntoIterator,
         I::Item: Borrow<SharedBlob>,
@@ -476,21 +476,18 @@ impl Blocktree {
 
         let blobs = r_blobs.iter().map(|s| &**s);
 
-        let new_entries = self.insert_data_blobs(blobs)?;
-        Ok(new_entries)
+        self.insert_data_blobs(blobs)
     }
 
-    pub fn write_blobs<I>(&self, blobs: I) -> Result<Vec<Entry>>
+    pub fn write_blobs<I>(&self, blobs: I) -> Result<()>
     where
         I: IntoIterator,
         I::Item: Borrow<Blob>,
     {
-        //let blobs = blobs.into_iter().map(|b| *b.borrow());
-        let entries = self.insert_data_blobs(blobs)?;
-        Ok(entries)
+        self.insert_data_blobs(blobs)
     }
 
-    pub fn write_entries<I>(&self, slot: u64, index: u64, entries: I) -> Result<Vec<Entry>>
+    pub fn write_entries<I>(&self, slot: u64, index: u64, entries: I) -> Result<()>
     where
         I: IntoIterator,
         I::Item: Borrow<Entry>,
@@ -509,7 +506,7 @@ impl Blocktree {
         self.write_blobs(&blobs)
     }
 
-    pub fn insert_data_blobs<I>(&self, new_blobs: I) -> Result<Vec<Entry>>
+    pub fn insert_data_blobs<I>(&self, new_blobs: I) -> Result<()>
     where
         I: IntoIterator,
         I::Item: Borrow<Blob>,
@@ -521,7 +518,6 @@ impl Blocktree {
         let new_blobs: Vec<_> = new_blobs.into_iter().collect();
         let mut prev_inserted_blob_datas = HashMap::new();
 
-        let mut consecutive_entries = vec![];
         for blob in new_blobs.iter() {
             let blob = blob.borrow();
             let blob_slot = blob.slot();
@@ -562,15 +558,12 @@ impl Blocktree {
                 continue;
             }
 
-            let entries = self.insert_data_blob(
+            let _ = self.insert_data_blob(
                 blob,
                 &mut prev_inserted_blob_datas,
                 slot_meta,
                 &mut write_batch,
             );
-            if let Ok(entries) = entries {
-                consecutive_entries.extend(entries);
-            }
         }
 
         // Handle chaining for the working set
@@ -599,11 +592,7 @@ impl Blocktree {
             }
         }
 
-        // TODO: Delete returning these entries and instead have replay_stage query blocktree
-        // for updates. Returning these entries is to temporarily support current API as to
-        // not break functionality in db_window.
-        // Issue: https://github.com/solana-labs/solana/issues/2444
-        Ok(consecutive_entries)
+        Ok(())
     }
 
     // Fill 'buf' with num_blobs or most number of consecutive
@@ -859,7 +848,7 @@ impl Blocktree {
         // Return error if there was a database error during lookup of any of the
         // slot indexes
         let slots: Result<Vec<Option<SlotMeta>>> = slot_heights
-            .into_iter()
+            .iter()
             .map(|slot_height| self.meta_cf.get_slot_meta(*slot_height))
             .collect();
 
@@ -1100,7 +1089,7 @@ impl Blocktree {
         prev_inserted_blob_datas: &mut HashMap<(u64, u64), &'a [u8]>,
         slot_meta: &mut SlotMeta,
         write_batch: &mut WriteBatch,
-    ) -> Result<Vec<Entry>> {
+    ) -> Result<()> {
         let blob_index = blob_to_insert.index();
         let blob_slot = blob_to_insert.slot();
         let blob_size = blob_to_insert.size();
@@ -1111,7 +1100,7 @@ impl Blocktree {
             return Err(Error::BlocktreeError(BlocktreeError::BlobForIndexExists));
         }
 
-        let (new_consumed, new_consumed_ticks, blob_datas) = {
+        let (new_consumed, new_consumed_ticks) = {
             if slot_meta.consumed == blob_index {
                 let blob_datas = self.get_slot_consecutive_blobs(
                     blob_slot,
@@ -1125,7 +1114,6 @@ impl Blocktree {
 
                 let blob_to_insert = Cow::Borrowed(&blob_to_insert.data[..]);
                 let mut new_consumed_ticks = 0;
-                let mut entries = vec![];
                 // Check all the consecutive blobs for ticks
                 for blob_data in once(&blob_to_insert).chain(blob_datas.iter()) {
                     let serialized_entry_data = &blob_data[BLOB_HEADER_SIZE..];
@@ -1135,7 +1123,6 @@ impl Blocktree {
                     if entry.is_tick() {
                         new_consumed_ticks += 1;
                     }
-                    entries.push(entry);
                 }
 
                 (
@@ -1143,10 +1130,9 @@ impl Blocktree {
                     // get_slot_consecutive_blobs() earlier
                     slot_meta.consumed + blob_datas.len() as u64 + 1,
                     new_consumed_ticks,
-                    entries,
                 )
             } else {
-                (slot_meta.consumed, 0, vec![])
+                (slot_meta.consumed, 0)
             }
         };
 
@@ -1162,11 +1148,7 @@ impl Blocktree {
         slot_meta.received = cmp::max(blob_index + 1, slot_meta.received);
         slot_meta.consumed = new_consumed;
         slot_meta.consumed_ticks += new_consumed_ticks;
-        // TODO: Remove returning these entries and instead have replay_stage query blocktree
-        // for updates. Returning these entries is to temporarily support current API as to
-        // not break functionality in db_window.
-        // Issue: https://github.com/solana-labs/solana/issues/2444
-        Ok(blob_datas)
+        Ok(())
     }
 
     /// Returns the next consumed index and the number of ticks in the new consumed

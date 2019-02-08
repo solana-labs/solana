@@ -154,7 +154,7 @@ pub fn generate_offsets(batches: &[SharedPackets]) -> Result<TxOffsets> {
     let mut msg_sizes: Vec<_> = Vec::new();
     let mut current_packet = 0;
     let mut v_sig_lens = Vec::new();
-    batches.into_iter().for_each(|p| {
+    batches.iter().for_each(|p| {
         let mut sig_lens = Vec::new();
         p.read().unwrap().packets.iter().for_each(|packet| {
             let current_offset = current_packet as u32 * size_of::<Packet>() as u32;

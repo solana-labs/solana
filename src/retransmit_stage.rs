@@ -128,7 +128,6 @@ impl RetransmitStage {
         bank: &Arc<Bank>,
         blocktree: Arc<Blocktree>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        tick_height: u64,
         retransmit_socket: Arc<UdpSocket>,
         repair_socket: Arc<UdpSocket>,
         fetch_stage_receiver: BlobReceiver,
@@ -143,17 +142,13 @@ impl RetransmitStage {
             cluster_info.clone(),
             retransmit_receiver,
         );
-        let done = Arc::new(AtomicBool::new(false));
         let window_service = WindowService::new(
             blocktree,
             cluster_info.clone(),
-            tick_height,
-            0,
             fetch_stage_receiver,
             retransmit_sender,
             repair_socket,
             leader_scheduler,
-            done,
             exit,
         );
 
