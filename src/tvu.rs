@@ -174,22 +174,21 @@ impl Tvu {
         self.replay_stage.exit();
     }
 
-    pub fn close(self) -> thread::Result<Option<TvuReturnType>> {
+    pub fn close(self) -> thread::Result<()> {
         self.exit();
         self.join()
     }
 }
 
 impl Service for Tvu {
-    type JoinReturnType = Option<TvuReturnType>;
+    type JoinReturnType = ();
 
-    fn join(self) -> thread::Result<Option<TvuReturnType>> {
+    fn join(self) -> thread::Result<()> {
         self.retransmit_stage.join()?;
         self.fetch_stage.join()?;
         self.storage_stage.join()?;
-        match self.replay_stage.join()? {
-            _ => Ok(None),
-        }
+        self.replay_stage.join()?;
+        Ok(())
     }
 }
 
