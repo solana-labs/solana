@@ -69,9 +69,12 @@ impl ReplayStage {
         entry_stream: Option<&mut EntryStream>,
     ) -> Result<()> {
         if let Some(stream) = entry_stream {
-            stream.stream_entries(&entries).unwrap_or_else(|e| {
-                error!("Entry Stream error: {:?}, {:?}", e, stream.socket);
-            });
+            let leader_scheduler = bank.leader_scheduler.read().unwrap();
+            stream
+                .emit_entry_events(&leader_scheduler, &entries)
+                .unwrap_or_else(|e| {
+                    error!("Entry Stream error: {:?}, {:?}", e, stream);
+                });
         }
         //coalesce all the available entries into a single vote
         submit(
@@ -857,18 +860,22 @@ mod test {
         )
         .unwrap();
 
-        assert_eq!(entry_stream.socket.len(), 5);
+        assert_eq!(entry_stream.entries().len(), 6);
 
-        for (i, item) in entry_stream.socket.iter().enumerate() {
+        for (i, item) in entry_stream.entries().iter().enumerate() {
             let json: Value = serde_json::from_str(&item).unwrap();
             let dt_str = json["dt"].as_str().unwrap();
 
             // Ensure `ts` field parses as valid DateTime
             let _dt: DateTime<FixedOffset> = DateTime::parse_from_rfc3339(dt_str).unwrap();
 
+            let item_type = json["t"].as_str().unwrap();
+            if item_type != "entry" {
+                continue;
+            }
             let entry_obj = json["entry"].clone();
             let entry: Entry = serde_json::from_value(entry_obj).unwrap();
-            assert_eq!(entry, expected_entries[i]);
+            assert_eq!(entry, expected_entries[i + 1]);
         }
     }
 }
