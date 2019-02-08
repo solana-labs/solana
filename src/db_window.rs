@@ -11,51 +11,10 @@ use log::Level;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
 use std::borrow::Borrow;
-use std::cmp;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
 
 pub const MAX_REPAIR_LENGTH: usize = 128;
-
-pub fn generate_repairs(blocktree: &Blocktree, max_repairs: usize) -> Result<Vec<(u64, u64)>> {
-    // Slot height and blob indexes for blobs we want to repair
-    let mut repairs: Vec<(u64, u64)> = vec![];
-    let mut slots = vec![0];
-    while repairs.len() < max_repairs && !slots.is_empty() {
-        let slot_height = slots.pop().unwrap();
-        let slot = blocktree.meta(slot_height)?;
-        if slot.is_none() {
-            continue;
-        }
-        let slot = slot.unwrap();
-        slots.extend(slot.next_slots.clone());
-
-        if slot.contains_all_ticks(blocktree) {
-            continue;
-        } else {
-            let num_unreceived_ticks = {
-                if slot.consumed == slot.received {
-                    slot.num_expected_ticks(blocktree) - slot.consumed_ticks
-                } else {
-                    0
-                }
-            };
-
-            let upper = slot.received + num_unreceived_ticks;
-
-            let reqs = blocktree.find_missing_data_indexes(
-                0,
-                slot.consumed,
-                upper,
-                max_repairs - repairs.len(),
-            );
-
-            repairs.extend(reqs.into_iter().map(|i| (slot_height, i)))
-        }
-    }
-
-    Ok(repairs)
-}
 
 pub fn retransmit_all_leader_blocks(
     dq: &[SharedBlob],
@@ -154,26 +113,6 @@ pub fn process_blob(
     }
 
     Ok(())
-}
-
-pub fn calculate_max_repair_entry_height(
-    num_peers: u64,
-    consumed: u64,
-    received: u64,
-    times: usize,
-    is_next_leader: bool,
-) -> u64 {
-    // Calculate the highest blob index that this node should have already received
-    // via avalanche. The avalanche splits data stream into nodes and each node retransmits
-    // the data to their peer nodes. So there's a possibility that a blob (with index lower
-    // than current received index) is being retransmitted by a peer node.
-    if times >= 8 || is_next_leader {
-        // If repair backoff is getting high, or if we are the next leader,
-        // don't wait for avalanche. received - 1 is the index of the highest blob.
-        received
-    } else {
-        cmp::max(consumed, received.saturating_sub(num_peers))
-    }
 }
 
 #[cfg(feature = "erasure")]
@@ -280,23 +219,6 @@ mod test {
     }
 
     #[test]
-    pub fn test_calculate_max_repair_entry_height() {
-        assert_eq!(calculate_max_repair_entry_height(20, 4, 11, 0, false), 4);
-        assert_eq!(calculate_max_repair_entry_height(0, 10, 90, 0, false), 90);
-        assert_eq!(calculate_max_repair_entry_height(15, 10, 90, 32, false), 90);
-        assert_eq!(calculate_max_repair_entry_height(15, 10, 90, 0, false), 75);
-        assert_eq!(calculate_max_repair_entry_height(90, 10, 90, 0, false), 10);
-        assert_eq!(calculate_max_repair_entry_height(90, 10, 50, 0, false), 10);
-        assert_eq!(calculate_max_repair_entry_height(90, 10, 99, 0, false), 10);
-        assert_eq!(calculate_max_repair_entry_height(90, 10, 101, 0, false), 11);
-        assert_eq!(calculate_max_repair_entry_height(90, 10, 101, 0, true), 101);
-        assert_eq!(
-            calculate_max_repair_entry_height(90, 10, 101, 30, true),
-            101
-        );
-    }
-
-    #[test]
     pub fn test_retransmit() {
         let leader = Keypair::new().pubkey();
         let nonleader = Keypair::new().pubkey();
@@ -342,79 +264,6 @@ mod test {
         retransmit_all_leader_blocks(&vec![blob], &leader_scheduler, &blob_sender, &leader)
             .expect("Expect successful retransmit");
         assert!(blob_receiver.try_recv().is_err());
-    }
-
-    #[test]
-    pub fn test_generate_repairs() {
-        let blocktree_path = get_tmp_ledger_path("test_generate_repairs");
-        let num_ticks_per_slot = 10;
-        let blocktree_config = BlocktreeConfig::new(num_ticks_per_slot);
-        let blocktree = Blocktree::open_config(&blocktree_path, blocktree_config).unwrap();
-
-        let num_entries_per_slot = 10;
-        let num_slots = 2;
-        let mut blobs = make_tiny_test_entries(num_slots * num_entries_per_slot).to_blobs();
-
-        // Insert every nth entry for each slot
-        let nth = 3;
-        for (i, b) in blobs.iter_mut().enumerate() {
-            b.set_index(((i % num_entries_per_slot) * nth) as u64);
-            b.set_slot((i / num_entries_per_slot) as u64);
-        }
-
-        blocktree.write_blobs(&blobs).unwrap();
-
-        let missing_indexes_per_slot: Vec<u64> = (0..num_entries_per_slot - 1)
-            .flat_map(|x| ((nth * x + 1) as u64..(nth * x + nth) as u64))
-            .collect();
-
-        let expected: Vec<(u64, u64)> = (0..num_slots)
-            .flat_map(|slot_height| {
-                missing_indexes_per_slot
-                    .iter()
-                    .map(move |blob_index| (slot_height as u64, *blob_index))
-            })
-            .collect();
-
-        // Across all slots, find all missing indexes in the range [0, num_entries_per_slot * nth]
-        assert_eq!(
-            generate_repairs(&blocktree, std::usize::MAX).unwrap(),
-            expected
-        );
-
-        assert_eq!(
-            generate_repairs(&blocktree, expected.len() - 2).unwrap()[..],
-            expected[0..expected.len() - 2]
-        );
-
-        // Now fill in all the holes for each slot such that for each slot, consumed == received.
-        // Because none of the slots contain ticks, we should see that the repair requests
-        // ask for ticks, starting from the last received index for that slot
-        for (slot_height, blob_index) in expected {
-            let mut b = make_tiny_test_entries(1).to_blobs().pop().unwrap();
-            b.set_index(blob_index);
-            b.set_slot(slot_height);
-            blocktree.write_blobs(&vec![b]).unwrap();
-        }
-
-        let last_index_per_slot = ((num_entries_per_slot - 1) * nth) as u64;
-        let missing_indexes_per_slot: Vec<u64> =
-            (last_index_per_slot + 1..last_index_per_slot + 1 + num_ticks_per_slot).collect();
-        let expected: Vec<(u64, u64)> = (0..num_slots)
-            .flat_map(|slot_height| {
-                missing_indexes_per_slot
-                    .iter()
-                    .map(move |blob_index| (slot_height as u64, *blob_index))
-            })
-            .collect();
-        assert_eq!(
-            generate_repairs(&blocktree, std::usize::MAX).unwrap(),
-            expected
-        );
-        assert_eq!(
-            generate_repairs(&blocktree, expected.len() - 2).unwrap()[..],
-            expected[0..expected.len() - 2]
-        );
     }
 
     #[test]

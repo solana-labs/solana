@@ -484,7 +484,6 @@ impl Blocktree {
         I: IntoIterator,
         I::Item: Borrow<Blob>,
     {
-        //let blobs = blobs.into_iter().map(|b| *b.borrow());
         self.insert_data_blobs(blobs)
     }
 
