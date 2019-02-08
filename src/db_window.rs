@@ -16,7 +16,6 @@ use std::borrow::Borrow;
 use std::cmp;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 
 pub const MAX_REPAIR_LENGTH: usize = 128;
@@ -214,10 +213,6 @@ pub fn process_blob(
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     blocktree: &Arc<Blocktree>,
     blob: &SharedBlob,
-    max_ix: u64,
-    consume_queue: &mut Vec<Entry>,
-    tick_height: &mut u64,
-    done: &Arc<AtomicBool>,
 ) -> Result<()> {
     let is_coding = blob.read().unwrap().is_coding();
 
@@ -239,13 +234,12 @@ pub fn process_blob(
     }
 
     // Insert the new blob into the window
-    let mut consumed_entries = if is_coding {
+    if is_coding {
         let blob = &blob.read().unwrap();
         blocktree.put_coding_blob_bytes(slot, pix, &blob.data[..BLOB_HEADER_SIZE + blob.size()])?;
-        vec![]
     } else {
-        blocktree.insert_data_blobs(vec![(*blob.read().unwrap()).borrow()])?
-    };
+        blocktree.insert_data_blobs(vec![(*blob.read().unwrap()).borrow()])?;
+    }
 
     #[cfg(feature = "erasure")]
     {
@@ -262,31 +256,6 @@ pub fn process_blob(
         }
     }
 
-    for entry in &consumed_entries {
-        *tick_height += entry.is_tick() as u64;
-    }
-
-    // For downloading storage blobs,
-    // we only want up to a certain index
-    // then stop
-    if max_ix != 0 && !consumed_entries.is_empty() {
-        let meta = blocktree
-            .meta(0)?
-            .expect("Expect metadata to exist if consumed entries is nonzero");
-
-        let consumed = meta.consumed;
-
-        // Check if we ran over the last wanted entry
-        if consumed > max_ix {
-            let consumed_entries_len = consumed_entries.len();
-            let extra_unwanted_entries_len =
-                cmp::min(consumed_entries_len, (consumed - (max_ix + 1)) as usize);
-            consumed_entries.truncate(consumed_entries_len - extra_unwanted_entries_len);
-            done.store(true, Ordering::Relaxed);
-        }
-    }
-
-    consume_queue.extend(consumed_entries);
     Ok(())
 }
 
@@ -813,7 +782,6 @@ mod test {
         let ledger_path = get_tmp_ledger_path("test_try_erasure");
         let blocktree = Arc::new(generate_blocktree_from_window(&ledger_path, &window, false));
 
-        let mut consume_queue = vec![];
         try_erasure(&blocktree, &mut consume_queue, DEFAULT_SLOT_HEIGHT)
             .expect("Expected successful erasure attempt");
         window[erased_index].data = erased_data;
@@ -829,7 +797,6 @@ mod test {
             let locked_data: Vec<&Blob> = locks.iter().map(|lock| &**lock).collect();
 
             let (expected, _) = reconstruct_entries_from_blobs(locked_data).unwrap();
-            assert_eq!(consume_queue, expected);
         }
 
         let erased_coding_l = erased_coding.read().unwrap();
@@ -862,24 +829,10 @@ mod test {
             &vec![DEFAULT_SLOT_HEIGHT; num_entries],
         );
 
-        let mut consume_queue = vec![];
-        let mut tick_height = 2;
-        let done = Arc::new(AtomicBool::new(false));
-
         for blob in shared_blobs.iter().rev() {
-            process_blob(
-                &leader_scheduler,
-                &blocktree,
-                blob,
-                0,
-                &mut consume_queue,
-                &mut tick_height,
-                &done,
-            )
-            .expect("Expect successful processing of blob");
+            process_blob(&leader_scheduler, &blocktree, blob)
+                .expect("Expect successful processing of blob");
         }
-
-        assert_eq!(consume_queue, original_entries);
 
         drop(blocktree);
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");

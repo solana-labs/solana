@@ -116,7 +116,6 @@ impl Replicator {
         timeout: Option<Duration>,
     ) -> Result<Self> {
         let exit = Arc::new(AtomicBool::new(false));
-        let done = Arc::new(AtomicBool::new(false));
         let timeout = timeout.unwrap_or_else(|| Duration::new(30, 0));
 
         info!("Replicator: id: {}", keypair.pubkey());
@@ -156,7 +155,7 @@ impl Replicator {
             Self::poll_for_last_id_and_entry_height(&cluster_info)?;
 
         let signature = keypair.sign(storage_last_id.as_ref());
-        let (entry_height, max_entry_height) =
+        let (entry_height, _max_entry_height) =
             get_entry_heights_from_last_id(&signature, storage_entry_height);
 
         info!("replicating entry_height: {}", entry_height);
@@ -175,13 +174,10 @@ impl Replicator {
         let window_service = WindowService::new(
             blocktree.clone(),
             cluster_info.clone(),
-            0,
-            max_entry_height,
             blob_fetch_receiver,
             retransmit_sender,
             repair_socket,
             Arc::new(RwLock::new(LeaderScheduler::default())),
-            done.clone(),
             exit.clone(),
         );
 

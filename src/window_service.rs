@@ -32,11 +32,8 @@ fn recv_window(
     blocktree: &Arc<Blocktree>,
     id: &Pubkey,
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-    tick_height: &mut u64,
-    max_ix: u64,
     r: &BlobReceiver,
     retransmit: &BlobSender,
-    done: &Arc<AtomicBool>,
 ) -> Result<()> {
     let timer = Duration::from_millis(200);
     let mut dq = r.recv_timeout(timer)?;
@@ -56,8 +53,6 @@ fn recv_window(
     retransmit_all_leader_blocks(&dq, leader_scheduler, retransmit, id)?;
 
     //send a contiguous set of blocks
-    let mut consume_queue = Vec::new();
-
     trace!("{} num blobs received: {}", id, dq.len());
 
     for b in dq {
@@ -68,15 +63,7 @@ fn recv_window(
 
         trace!("{} window pix: {} size: {}", id, pix, meta_size);
 
-        let _ = process_blob(
-            leader_scheduler,
-            blocktree,
-            &b,
-            max_ix,
-            &mut consume_queue,
-            tick_height,
-            done,
-        );
+        let _ = process_blob(leader_scheduler, blocktree, &b);
     }
 
     trace!(
@@ -115,13 +102,10 @@ impl WindowService {
     pub fn new(
         blocktree: Arc<Blocktree>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
-        tick_height: u64,
-        max_entry_height: u64,
         r: BlobReceiver,
         retransmit: BlobSender,
         repair_socket: Arc<UdpSocket>,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
-        done: Arc<AtomicBool>,
         exit: Arc<AtomicBool>,
     ) -> WindowService {
         let exit_ = exit.clone();
@@ -135,23 +119,14 @@ impl WindowService {
             .name("solana-window".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit_);
-                let mut tick_height_ = tick_height;
                 let id = cluster_info.read().unwrap().id();
                 trace!("{}: RECV_WINDOW started", id);
                 loop {
                     if exit.load(Ordering::Relaxed) {
                         break;
                     }
-                    if let Err(e) = recv_window(
-                        &blocktree,
-                        &id,
-                        &leader_scheduler,
-                        &mut tick_height_,
-                        max_entry_height,
-                        &r,
-                        &retransmit,
-                        &done,
-                    ) {
+                    if let Err(e) = recv_window(&blocktree, &id, &leader_scheduler, &r, &retransmit)
+                    {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                             Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
@@ -217,7 +192,6 @@ mod test {
         let t_receiver =
             blob_receiver(Arc::new(leader_node.sockets.gossip), exit.clone(), s_reader);
         let (s_retransmit, r_retransmit) = channel();
-        let done = Arc::new(AtomicBool::new(false));
         let blocktree_path = get_tmp_ledger_path("window_send_test");
         let blocktree = Arc::new(
             Blocktree::open(&blocktree_path).expect("Expected to be able to open database ledger"),
@@ -227,13 +201,10 @@ mod test {
         let t_window = WindowService::new(
             blocktree,
             subs,
-            0,
-            0,
             r_reader,
             s_retransmit,
             Arc::new(leader_node.sockets.repair),
             Arc::new(RwLock::new(leader_schedule)),
-            done,
             exit.clone(),
         );
         let t_responder = {
@@ -298,7 +269,6 @@ mod test {
         let t_receiver =
             blob_receiver(Arc::new(leader_node.sockets.gossip), exit.clone(), s_reader);
         let (s_retransmit, r_retransmit) = channel();
-        let done = Arc::new(AtomicBool::new(false));
         let blocktree_path = get_tmp_ledger_path("window_send_late_leader_test");
         let blocktree = Arc::new(
             Blocktree::open(&blocktree_path).expect("Expected to be able to open database ledger"),
@@ -308,13 +278,10 @@ mod test {
         let t_window = WindowService::new(
             blocktree,
             subs.clone(),
-            0,
-            0,
             r_reader,
             s_retransmit,
             Arc::new(leader_node.sockets.repair),
             Arc::new(RwLock::new(leader_schedule)),
-            done,
             exit.clone(),
         );
         let t_responder = {
