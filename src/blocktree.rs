@@ -849,7 +849,7 @@ impl Blocktree {
         // Return error if there was a database error during lookup of any of the
         // slot indexes
         let slots: Result<Vec<Option<SlotMeta>>> = slot_heights
-            .into_iter()
+            .iter()
             .map(|slot_height| self.meta_cf.get_slot_meta(*slot_height))
             .collect();
 

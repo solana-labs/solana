@@ -1,6 +1,5 @@
 //! Set of functions for emulating windowing functions from a database ledger implementation
 use crate::blocktree::*;
-use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
 #[cfg(feature = "erasure")]
 use crate::erasure;
@@ -13,7 +12,6 @@ use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
 use std::borrow::Borrow;
 use std::cmp;
-use std::net::SocketAddr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
 
@@ -57,100 +55,6 @@ pub fn generate_repairs(blocktree: &Blocktree, max_repairs: usize) -> Result<Vec
     }
 
     Ok(repairs)
-}
-
-pub fn repair(
-    blocktree: &Blocktree,
-    slot_index: u64,
-    cluster_info: &Arc<RwLock<ClusterInfo>>,
-    id: &Pubkey,
-    times: usize,
-    tick_height: u64,
-    max_entry_height: u64,
-    leader_scheduler_option: &Arc<RwLock<LeaderScheduler>>,
-) -> Result<Vec<(SocketAddr, Vec<u8>)>> {
-    let rcluster_info = cluster_info.read().unwrap();
-    let is_next_leader = false;
-    let meta = blocktree.meta(slot_index)?;
-    if meta.is_none() {
-        return Ok(vec![]);
-    }
-    let meta = meta.unwrap();
-
-    let consumed = meta.consumed;
-    let received = meta.received;
-
-    // Repair should only be called when received > consumed, enforced in window_service
-    assert!(received > consumed);
-
-    // Check if we are the next next slot leader
-    {
-        let leader_scheduler = leader_scheduler_option.read().unwrap();
-        let next_slot = leader_scheduler.tick_height_to_slot(tick_height) + 1;
-        match leader_scheduler.get_leader_for_slot(next_slot) {
-            Some(leader_id) if leader_id == *id => true,
-            // In the case that we are not in the current scope of the leader schedule
-            // window then either:
-            //
-            // 1) The replay stage hasn't caught up to the "consumed" entries we sent,
-            // in which case it will eventually catch up
-            //
-            // 2) We are on the border between ticks_per_epochs, so the
-            // schedule won't be known until the entry on that cusp is received
-            // by the replay stage (which comes after this stage). Hence, the next
-            // leader at the beginning of that next epoch will not know they are the
-            // leader until they receive that last "cusp" entry. The leader also won't ask for repairs
-            // for that entry because "is_next_leader" won't be set here. In this case,
-            // everybody will be blocking waiting for that "cusp" entry instead of repairing,
-            // until the leader hits "times" >= the max times in calculate_max_repair_entry_height().
-            // The impact of this, along with the similar problem from broadcast for the transitioning
-            // leader, can be observed in the multinode test, test_full_leader_validator_network(),
-            None => false,
-            _ => false,
-        }
-    };
-
-    let num_peers = rcluster_info.repair_peers().len() as u64;
-
-    // Check if there's a max_entry_height limitation
-    let max_repair_entry_height = if max_entry_height == 0 {
-        calculate_max_repair_entry_height(num_peers, consumed, received, times, is_next_leader)
-    } else {
-        max_entry_height + 2
-    };
-
-    let idxs = blocktree.find_missing_data_indexes(
-        DEFAULT_SLOT_HEIGHT,
-        consumed,
-        max_repair_entry_height - 1,
-        MAX_REPAIR_LENGTH,
-    );
-
-    let reqs: Vec<_> = idxs
-        .into_iter()
-        .filter_map(|pix| rcluster_info.window_index_request(slot_index, pix).ok())
-        .collect();
-
-    drop(rcluster_info);
-
-    inc_new_counter_info!("streamer-repair_window-repair", reqs.len());
-
-    if log_enabled!(Level::Trace) {
-        trace!(
-            "{}: repair_window counter times: {} consumed: {} received: {} max_repair_entry_height: {} missing: {}",
-            id,
-            times,
-            consumed,
-            received,
-            max_repair_entry_height,
-            reqs.len()
-        );
-        for (to, _) in &reqs {
-            trace!("{}: repair_window request to {}", id, to);
-        }
-    }
-
-    Ok(reqs)
 }
 
 pub fn retransmit_all_leader_blocks(
@@ -205,9 +109,7 @@ pub fn add_blob_to_retransmit_queue(
     }
 }
 
-/// Process a blob: Add blob to the ledger window. If a continuous set of blobs
-/// starting from consumed is thereby formed, add that continuous
-/// range of blobs to a queue to be sent on to the next stage.
+/// Process a blob: Add blob to the ledger window.
 pub fn process_blob(
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     blocktree: &Arc<Blocktree>,
@@ -232,7 +134,7 @@ pub fn process_blob(
         return Ok(()); // Occurs as a leader is rotating into a validator
     }
 
-    // Insert the new blob into the window
+    // Insert the new blob into block tree
     if is_coding {
         let blob = &blob.read().unwrap();
         blocktree.put_coding_blob_bytes(slot, pix, &blob.data[..BLOB_HEADER_SIZE + blob.size()])?;

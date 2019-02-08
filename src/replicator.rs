@@ -82,7 +82,7 @@ pub fn sample_file(in_path: &Path, sample_offsets: &[u64]) -> io::Result<Hash> {
 fn get_entry_heights_from_last_id(
     signature: &ring::signature::Signature,
     storage_entry_height: u64,
-) -> (u64, u64) {
+) -> u64 {
     let signature_vec = signature.as_ref();
     let mut segment_index = u64::from(signature_vec[0])
         | (u64::from(signature_vec[1]) << 8)
@@ -90,10 +90,7 @@ fn get_entry_heights_from_last_id(
         | (u64::from(signature_vec[2]) << 24);
     let max_segment_index = get_segment_from_entry(storage_entry_height);
     segment_index %= max_segment_index as u64;
-    let entry_height = segment_index * ENTRIES_PER_SEGMENT;
-    let max_entry_height = entry_height + ENTRIES_PER_SEGMENT;
-
-    (entry_height, max_entry_height)
+    segment_index * ENTRIES_PER_SEGMENT
 }
 
 impl Replicator {
@@ -155,8 +152,7 @@ impl Replicator {
             Self::poll_for_last_id_and_entry_height(&cluster_info)?;
 
         let signature = keypair.sign(storage_last_id.as_ref());
-        let (entry_height, _max_entry_height) =
-            get_entry_heights_from_last_id(&signature, storage_entry_height);
+        let entry_height = get_entry_heights_from_last_id(&signature, storage_entry_height);
 
         info!("replicating entry_height: {}", entry_height);
 
