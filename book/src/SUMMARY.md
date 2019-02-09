@@ -22,6 +22,11 @@
   - [Gossip Service](gossip.md)
   - [The Runtime](runtime.md)
 
+- [API Reference](api-reference.md)
+  - [JSON RPC API](jsonrpc-api.md)
+  - [JavaScript API](javascript-api.md)
+  - [solana-wallet CLI](wallet.md)
+
 - [Proposed Architectural Changes](proposals.md)
   - [Ledger Replication](ledger-replication.md)
   - [Secure Vote Signing](vote-signer.md)
@@ -43,10 +48,3 @@
     - [Economic Sustainability](ed_economic_sustainability.md)
     - [Attack Vectors](ed_attack_vectors.md)
     - [References](ed_references.md)
-
-## Appendix
-
-- [Appendix](appendix.md)
-  - [JSON RPC API](jsonrpc-api.md)
-  - [JavaScript API](javascript-api.md)
-  - [solana-wallet CLI](wallet.md)
