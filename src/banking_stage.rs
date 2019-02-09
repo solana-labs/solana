@@ -8,7 +8,7 @@ use crate::counter::Counter;
 use crate::entry::Entry;
 use crate::packet::Packets;
 use crate::poh_recorder::{PohRecorder, PohRecorderError};
-use crate::poh_service::{Config, PohService};
+use crate::poh_service::{PohService, PohServiceConfig};
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::sigverify_stage::VerifiedPackets;
@@ -51,7 +51,7 @@ impl BankingStage {
     pub fn new(
         bank: &Arc<Bank>,
         verified_receiver: Receiver<VerifiedPackets>,
-        config: Config,
+        config: PohServiceConfig,
         last_entry_id: &Hash,
         max_tick_height: u64,
         leader_id: Pubkey,
@@ -338,7 +338,7 @@ mod tests {
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
-            Config::Sleep(Duration::from_millis(1)),
+            PohServiceConfig::Sleep(Duration::from_millis(1)),
             &bank.last_id(),
             std::u64::MAX,
             genesis_block.bootstrap_leader_id,
