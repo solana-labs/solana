@@ -7,7 +7,7 @@ use crate::broadcast_service::BroadcastService;
 use crate::cluster_info::ClusterInfo;
 use crate::cluster_info_vote_listener::ClusterInfoVoteListener;
 use crate::fetch_stage::FetchStage;
-use crate::poh_service::Config;
+use crate::poh_service::PohServiceConfig;
 use crate::service::Service;
 use crate::sigverify_stage::SigVerifyStage;
 use crate::streamer::BlobSender;
@@ -77,7 +77,7 @@ impl Tpu {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         bank: &Arc<Bank>,
-        tick_duration: Config,
+        tick_duration: PohServiceConfig,
         transactions_sockets: Vec<UdpSocket>,
         broadcast_socket: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,
@@ -143,7 +143,7 @@ impl Tpu {
     pub fn switch_to_leader(
         &mut self,
         bank: &Arc<Bank>,
-        tick_duration: Config,
+        tick_duration: PohServiceConfig,
         transactions_sockets: Vec<UdpSocket>,
         broadcast_socket: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,

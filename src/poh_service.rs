@@ -15,7 +15,7 @@ use std::time::Duration;
 pub const NUM_TICKS_PER_SECOND: usize = 10;
 
 #[derive(Copy, Clone)]
-pub enum Config {
+pub enum PohServiceConfig {
     /// * `Tick` - Run full PoH thread.  Tick is a rough estimate of how many hashes to roll before
     ///            transmitting a new entry.
     Tick(usize),
@@ -24,10 +24,10 @@ pub enum Config {
     Sleep(Duration),
 }
 
-impl Default for Config {
-    fn default() -> Config {
+impl Default for PohServiceConfig {
+    fn default() -> PohServiceConfig {
         // TODO: Change this to Tick to enable PoH
-        Config::Sleep(Duration::from_millis(1000 / NUM_TICKS_PER_SECOND as u64))
+        PohServiceConfig::Sleep(Duration::from_millis(1000 / NUM_TICKS_PER_SECOND as u64))
     }
 }
 
@@ -48,7 +48,7 @@ impl PohService {
 
     pub fn new(
         poh_recorder: PohRecorder,
-        config: Config,
+        config: PohServiceConfig,
         to_validator_sender: TpuRotationSender,
     ) -> Self {
         // PohService is a headless producer, so when it exits it should notify the banking stage.
@@ -80,14 +80,14 @@ impl PohService {
 
     fn tick_producer(
         poh: &mut PohRecorder,
-        config: Config,
+        config: PohServiceConfig,
         poh_exit: &AtomicBool,
         to_validator_sender: &TpuRotationSender,
     ) -> Result<()> {
         let max_tick_height = poh.max_tick_height();
         loop {
             match config {
-                Config::Tick(num) => {
+                PohServiceConfig::Tick(num) => {
                     for _ in 1..num {
                         let res = poh.hash();
                         if let Err(e) = res {
@@ -99,7 +99,7 @@ impl PohService {
                         }
                     }
                 }
-                Config::Sleep(duration) => {
+                PohServiceConfig::Sleep(duration) => {
                     sleep(duration);
                 }
             }
@@ -128,18 +128,12 @@ impl Service for PohService {
 
 #[cfg(test)]
 mod tests {
-    use super::{Config, PohService};
+    use super::*;
     use crate::bank::Bank;
     use crate::genesis_block::GenesisBlock;
-    use crate::poh_recorder::PohRecorder;
-    use crate::result::Result;
-    use crate::service::Service;
     use crate::test_tx::test_tx;
     use solana_sdk::hash::hash;
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
-    use std::sync::Arc;
-    use std::thread::{Builder, JoinHandle};
 
     #[test]
     fn test_poh_service() {
@@ -173,8 +167,11 @@ mod tests {
 
         const HASHES_PER_TICK: u64 = 2;
         let (sender, _) = channel();
-        let poh_service =
-            PohService::new(poh_recorder, Config::Tick(HASHES_PER_TICK as usize), sender);
+        let poh_service = PohService::new(
+            poh_recorder,
+            PohServiceConfig::Tick(HASHES_PER_TICK as usize),
+            sender,
+        );
 
         // get some events
         let mut hashes = 0;
