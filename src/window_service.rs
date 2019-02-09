@@ -290,13 +290,8 @@ mod test {
                 leader_node.sockets.tvu.into_iter().map(Arc::new).collect();
             let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
             let mut msgs = Vec::new();
-            let blobs = make_consecutive_blobs(
-                &me_id,
-                14u64,
-                0,
-                Default::default(),
-                &leader_node.info.gossip,
-            );
+            let blobs =
+                make_consecutive_blobs(&me_id, 14u64, 0, Hash::default(), &leader_node.info.gossip);
 
             for v in 0..10 {
                 let i = 9 - v;

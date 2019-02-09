@@ -232,13 +232,13 @@ mod tests {
     fn test_serialize_claim() {
         let expr = BudgetExpr::Pay(Payment {
             tokens: 0,
-            to: Default::default(),
+            to: Pubkey::default(),
         });
         let instruction = Instruction::NewBudget(expr);
         let instructions = vec![transaction::Instruction::new(0, &instruction, vec![])];
         let claim0 = Transaction {
             account_keys: vec![],
-            last_id: Default::default(),
+            last_id: Hash::default(),
             signatures: vec![],
             program_ids: vec![],
             instructions,

@@ -7,6 +7,7 @@ use crate::counter::Counter;
 use crate::genesis_block::GenesisBlock;
 use crate::gossip_service::GossipService;
 use crate::leader_scheduler::LeaderSchedulerConfig;
+use crate::poh_service::PohServiceConfig;
 use crate::rpc::JsonRpcService;
 use crate::rpc_pubsub::PubSubService;
 use crate::service::Service;
@@ -77,8 +78,8 @@ impl Default for FullnodeConfig {
             voting_disabled: false,
             entry_stream: None,
             storage_rotate_count: NUM_HASHES_FOR_STORAGE_ROTATE,
-            leader_scheduler_config: Default::default(),
-            ledger_config: Default::default(),
+            leader_scheduler_config: LeaderSchedulerConfig::default(),
+            ledger_config: BlocktreeConfig::default(),
         }
     }
 }
@@ -271,7 +272,7 @@ impl Fullnode {
         );
         let tpu = Tpu::new(
             &Arc::new(bank.copy_for_tpu()),
-            Default::default(),
+            PohServiceConfig::default(),
             node.sockets
                 .tpu
                 .iter()
@@ -389,7 +390,7 @@ impl Fullnode {
         self.to_validator_receiver = to_validator_receiver;
         self.node_services.tpu.switch_to_leader(
             &Arc::new(self.bank.copy_for_tpu()),
-            Default::default(),
+            PohServiceConfig::default(),
             self.tpu_sockets
                 .iter()
                 .map(|s| s.try_clone().expect("Failed to clone TPU sockets"))

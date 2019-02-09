@@ -135,7 +135,7 @@ mod tests {
 
     #[test]
     fn test_has_signature() {
-        let sig = Default::default();
+        let sig = Signature::default();
         let last_id = hash(Hash::default().as_ref());
         let mut status_cache = BankStatusCache::new(&last_id);
         assert_eq!(status_cache.has_signature(&sig), false);
@@ -147,7 +147,7 @@ mod tests {
 
     #[test]
     fn test_has_signature_checkpoint() {
-        let sig = Default::default();
+        let sig = Signature::default();
         let last_id = hash(Hash::default().as_ref());
         let mut first = BankStatusCache::new(&last_id);
         first.add(&sig);
@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn test_has_signature_merged1() {
-        let sig = Default::default();
+        let sig = Signature::default();
         let last_id = hash(Hash::default().as_ref());
         let mut first = BankStatusCache::new(&last_id);
         first.add(&sig);
@@ -178,7 +178,7 @@ mod tests {
 
     #[test]
     fn test_has_signature_merged2() {
-        let sig = Default::default();
+        let sig = Signature::default();
         let last_id = hash(Hash::default().as_ref());
         let mut first = BankStatusCache::new(&last_id);
         first.add(&sig);
@@ -192,7 +192,7 @@ mod tests {
 
     #[test]
     fn test_failure_status() {
-        let sig = Default::default();
+        let sig = Signature::default();
         let last_id = hash(Hash::default().as_ref());
         let mut first = StatusCache::new(&last_id);
         first.add(&sig);
@@ -206,7 +206,7 @@ mod tests {
 
     #[test]
     fn test_clear_signatures() {
-        let sig = Default::default();
+        let sig = Signature::default();
         let last_id = hash(Hash::default().as_ref());
         let mut first = StatusCache::new(&last_id);
         first.add(&sig);
@@ -222,7 +222,7 @@ mod tests {
     }
     #[test]
     fn test_clear_signatures_all() {
-        let sig = Default::default();
+        let sig = Signature::default();
         let last_id = hash(Hash::default().as_ref());
         let mut first = StatusCache::new(&last_id);
         first.add(&sig);

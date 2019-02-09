@@ -442,7 +442,7 @@ mod tests {
                     .write()
                     .unwrap()
                     .packets
-                    .resize(0, Default::default());
+                    .resize(0, Packet::default());
                 for _ in 0..num_packets_per_batch {
                     packets.write().unwrap().packets.push(packet.clone());
                 }

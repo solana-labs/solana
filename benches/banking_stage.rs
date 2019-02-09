@@ -10,6 +10,7 @@ use solana::entry::Entry;
 use solana::genesis_block::GenesisBlock;
 use solana::last_id_queue::MAX_ENTRY_IDS;
 use solana::packet::to_packets_chunked;
+use solana::poh_service::PohServiceConfig;
 use solana_sdk::hash::hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{KeypairUtil, Signature};
@@ -103,7 +104,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let (_stage, signal_receiver) = BankingStage::new(
         &bank,
         verified_receiver,
-        Default::default(),
+        PohServiceConfig::default(),
         &genesis_block.last_id(),
         std::u64::MAX,
         genesis_block.bootstrap_leader_id,
@@ -212,7 +213,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     let (_stage, signal_receiver) = BankingStage::new(
         &bank,
         verified_receiver,
-        Default::default(),
+        PohServiceConfig::default(),
         &genesis_block.last_id(),
         std::u64::MAX,
         genesis_block.bootstrap_leader_id,

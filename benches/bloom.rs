@@ -15,7 +15,7 @@ use test::Bencher;
 #[ignore]
 fn bench_bits_set(bencher: &mut Bencher) {
     let mut bits: BitVec<u8> = BitVec::new_fill(false, 38_340_234 as u64);
-    let mut hasher: FnvHasher = Default::default();
+    let mut hasher = FnvHasher::default();
 
     bencher.iter(|| {
         let idx = hasher.finish() % bits.len();
@@ -30,7 +30,7 @@ fn bench_bits_set(bencher: &mut Bencher) {
 #[ignore]
 fn bench_bits_set_hasher(bencher: &mut Bencher) {
     let bits: BitVec<u8> = BitVec::new_fill(false, 38_340_234 as u64);
-    let mut hasher: FnvHasher = Default::default();
+    let mut hasher = FnvHasher::default();
 
     bencher.iter(|| {
         let idx = hasher.finish() % bits.len();

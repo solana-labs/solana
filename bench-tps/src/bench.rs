@@ -342,7 +342,7 @@ pub fn fund_keys(client: &mut ThinClient, source: &Keypair, dests: &[Keypair], t
                 .map(|(k, m)| {
                     (
                         k.clone(),
-                        SystemTransaction::new_move_many(k, &m, Default::default(), 0),
+                        SystemTransaction::new_move_many(k, &m, Hash::default(), 0),
                     )
                 })
                 .collect();
