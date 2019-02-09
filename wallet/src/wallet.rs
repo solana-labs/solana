@@ -313,7 +313,360 @@ pub fn parse_command(
     Ok(response)
 }
 
-pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::Error>> {
+type ProcessResult = Result<String, Box<dyn error::Error>>;
+
+fn process_airdrop(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    drone_addr: SocketAddr,
+    tokens: u64,
+) -> ProcessResult {
+    println!(
+        "Requesting airdrop of {:?} tokens from {}",
+        tokens, drone_addr
+    );
+    let params = json!([format!("{}", config.id.pubkey())]);
+    let previous_balance = match rpc_client
+        .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
+        .as_u64()
+    {
+        Some(tokens) => tokens,
+        None => Err(WalletError::RpcRequestError(
+            "Received result of an unexpected type".to_string(),
+        ))?,
+    };
+
+    request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id, tokens)?;
+
+    let params = json!([format!("{}", config.id.pubkey())]);
+    let current_balance = rpc_client
+        .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
+        .as_u64()
+        .unwrap_or(previous_balance);
+
+    if current_balance < previous_balance {
+        Err(format!(
+            "Airdrop failed: current_balance({}) < previous_balance({})",
+            current_balance, previous_balance
+        ))?;
+    }
+    if current_balance - previous_balance < tokens {
+        Err(format!(
+            "Airdrop failed: Account balance increased by {} instead of {}",
+            current_balance - previous_balance,
+            tokens
+        ))?;
+    }
+    Ok(format!("Your balance is: {:?}", current_balance))
+}
+
+fn process_balance(config: &WalletConfig, rpc_client: &RpcClient) -> ProcessResult {
+    let params = json!([format!("{}", config.id.pubkey())]);
+    let balance = rpc_client
+        .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
+        .as_u64();
+    match balance {
+        Some(0) => Ok("No account found! Request an airdrop to get started.".to_string()),
+        Some(tokens) => Ok(format!("Your balance is: {:?}", tokens)),
+        None => Err(WalletError::RpcRequestError(
+            "Received result of an unexpected type".to_string(),
+        ))?,
+    }
+}
+
+fn process_confirm(rpc_client: &RpcClient, signature: Signature) -> ProcessResult {
+    let params = json!([format!("{}", signature)]);
+    let confirmation = rpc_client
+        .retry_make_rpc_request(1, &RpcRequest::ConfirmTransaction, Some(params), 5)?
+        .as_bool();
+    match confirmation {
+        Some(b) => {
+            if b {
+                Ok("Confirmed".to_string())
+            } else {
+                Ok("Not found".to_string())
+            }
+        }
+        None => Err(WalletError::RpcRequestError(
+            "Received result of an unexpected type".to_string(),
+        ))?,
+    }
+}
+
+fn process_deploy(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    program_location: &str,
+) -> ProcessResult {
+    let params = json!([format!("{}", config.id.pubkey())]);
+    let balance = rpc_client
+        .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
+        .as_u64();
+    if let Some(tokens) = balance {
+        if tokens < 1 {
+            Err(WalletError::DynamicProgramError(
+                "Insufficient funds".to_string(),
+            ))?
+        }
+    }
+
+    let last_id = get_last_id(&rpc_client)?;
+    let program_id = Keypair::new();
+    let mut file = File::open(program_location).map_err(|err| {
+        WalletError::DynamicProgramError(
+            format!("Unable to open program file: {}", err).to_string(),
+        )
+    })?;
+    let mut program_userdata = Vec::new();
+    file.read_to_end(&mut program_userdata).map_err(|err| {
+        WalletError::DynamicProgramError(
+            format!("Unable to read program file: {}", err).to_string(),
+        )
+    })?;
+
+    let mut tx = SystemTransaction::new_program_account(
+        &config.id,
+        program_id.pubkey(),
+        last_id,
+        1,
+        program_userdata.len() as u64,
+        bpf_loader::id(),
+        0,
+    );
+    send_and_confirm_tx(&rpc_client, &mut tx, &config.id).map_err(|_| {
+        WalletError::DynamicProgramError("Program allocate space failed".to_string())
+    })?;
+
+    let mut offset = 0;
+    for chunk in program_userdata.chunks(USERDATA_CHUNK_SIZE) {
+        let mut tx = LoaderTransaction::new_write(
+            &program_id,
+            bpf_loader::id(),
+            offset,
+            chunk.to_vec(),
+            last_id,
+            0,
+        );
+        send_and_confirm_tx(&rpc_client, &mut tx, &program_id).map_err(|_| {
+            WalletError::DynamicProgramError(format!("Program write failed at offset {:?}", offset))
+        })?;
+        offset += USERDATA_CHUNK_SIZE as u32;
+    }
+
+    let last_id = get_last_id(&rpc_client)?;
+    let mut tx = LoaderTransaction::new_finalize(&program_id, bpf_loader::id(), last_id, 0);
+    send_and_confirm_tx(&rpc_client, &mut tx, &program_id).map_err(|_| {
+        WalletError::DynamicProgramError("Program finalize transaction failed".to_string())
+    })?;
+
+    let mut tx = SystemTransaction::new_spawn(&program_id, last_id, 0);
+    send_and_confirm_tx(&rpc_client, &mut tx, &program_id)
+        .map_err(|_| WalletError::DynamicProgramError("Program spawn failed".to_string()))?;
+
+    Ok(json!({
+        "programId": format!("{}", program_id.pubkey()),
+    })
+    .to_string())
+}
+
+fn process_pay(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    tokens: u64,
+    to: Pubkey,
+    timestamp: Option<DateTime<Utc>>,
+    timestamp_pubkey: Option<Pubkey>,
+    witnesses: &Option<Vec<Pubkey>>,
+    cancelable: Option<Pubkey>,
+) -> ProcessResult {
+    let last_id = get_last_id(&rpc_client)?;
+
+    if timestamp == None && *witnesses == None {
+        let mut tx = SystemTransaction::new_account(&config.id, to, tokens, last_id, 0);
+        let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
+        Ok(signature_str.to_string())
+    } else if *witnesses == None {
+        let dt = timestamp.unwrap();
+        let dt_pubkey = match timestamp_pubkey {
+            Some(pubkey) => pubkey,
+            None => config.id.pubkey(),
+        };
+
+        let contract_funds = Keypair::new();
+        let contract_state = Keypair::new();
+        let budget_program_id = budget_program::id();
+
+        // Create account for contract funds
+        let mut tx = SystemTransaction::new_program_account(
+            &config.id,
+            contract_funds.pubkey(),
+            last_id,
+            tokens,
+            0,
+            budget_program_id,
+            0,
+        );
+        send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
+
+        // Create account for contract state
+        let mut tx = SystemTransaction::new_program_account(
+            &config.id,
+            contract_state.pubkey(),
+            last_id,
+            1,
+            196,
+            budget_program_id,
+            0,
+        );
+        send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
+
+        // Initializing contract
+        let mut tx = BudgetTransaction::new_on_date(
+            &contract_funds,
+            to,
+            contract_state.pubkey(),
+            dt,
+            dt_pubkey,
+            cancelable,
+            tokens,
+            last_id,
+        );
+        let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
+
+        Ok(json!({
+            "signature": signature_str,
+            "processId": format!("{}", contract_state.pubkey()),
+        })
+        .to_string())
+    } else if timestamp == None {
+        let last_id = get_last_id(&rpc_client)?;
+
+        let witness = if let Some(ref witness_vec) = *witnesses {
+            witness_vec[0]
+        } else {
+            Err(WalletError::BadParameter(
+                "Could not parse required signature pubkey(s)".to_string(),
+            ))?
+        };
+
+        let contract_funds = Keypair::new();
+        let contract_state = Keypair::new();
+        let budget_program_id = budget_program::id();
+
+        // Create account for contract funds
+        let mut tx = SystemTransaction::new_program_account(
+            &config.id,
+            contract_funds.pubkey(),
+            last_id,
+            tokens,
+            0,
+            budget_program_id,
+            0,
+        );
+        send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
+
+        // Create account for contract state
+        let mut tx = SystemTransaction::new_program_account(
+            &config.id,
+            contract_state.pubkey(),
+            last_id,
+            1,
+            196,
+            budget_program_id,
+            0,
+        );
+        send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
+
+        // Initializing contract
+        let mut tx = BudgetTransaction::new_when_signed(
+            &contract_funds,
+            to,
+            contract_state.pubkey(),
+            witness,
+            cancelable,
+            tokens,
+            last_id,
+        );
+        let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
+
+        Ok(json!({
+            "signature": signature_str,
+            "processId": format!("{}", contract_state.pubkey()),
+        })
+        .to_string())
+    } else {
+        Ok("Combo transactions not yet handled".to_string())
+    }
+}
+
+fn process_cancel(rpc_client: &RpcClient, config: &WalletConfig, pubkey: Pubkey) -> ProcessResult {
+    let last_id = get_last_id(&rpc_client)?;
+    let mut tx = BudgetTransaction::new_signature(&config.id, pubkey, config.id.pubkey(), last_id);
+    let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
+    Ok(signature_str.to_string())
+}
+
+fn process_get_transaction_count(rpc_client: &RpcClient) -> ProcessResult {
+    let transaction_count = rpc_client
+        .retry_make_rpc_request(1, &RpcRequest::GetTransactionCount, None, 5)?
+        .as_u64();
+    match transaction_count {
+        Some(count) => Ok(count.to_string()),
+        None => Err(WalletError::RpcRequestError(
+            "Received result of an unexpected type".to_string(),
+        ))?,
+    }
+}
+
+fn process_time_elapsed(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    drone_addr: SocketAddr,
+    to: Pubkey,
+    pubkey: Pubkey,
+    dt: DateTime<Utc>,
+) -> ProcessResult {
+    let params = json!([format!("{}", config.id.pubkey())]);
+    let balance = rpc_client
+        .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
+        .as_u64();
+
+    if let Some(0) = balance {
+        request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id, 1)?;
+    }
+
+    let last_id = get_last_id(&rpc_client)?;
+
+    let mut tx = BudgetTransaction::new_timestamp(&config.id, pubkey, to, dt, last_id);
+    let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
+
+    Ok(signature_str.to_string())
+}
+
+fn process_witness(
+    rpc_client: &RpcClient,
+    config: &WalletConfig,
+    drone_addr: SocketAddr,
+    to: Pubkey,
+    pubkey: Pubkey,
+) -> ProcessResult {
+    let params = json!([format!("{}", config.id.pubkey())]);
+    let balance = rpc_client
+        .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
+        .as_u64();
+
+    if let Some(0) = balance {
+        request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id, 1)?;
+    }
+
+    let last_id = get_last_id(&rpc_client)?;
+    let mut tx = BudgetTransaction::new_signature(&config.id, pubkey, to, last_id);
+    let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
+
+    Ok(signature_str.to_string())
+}
+
+pub fn process_command(config: &WalletConfig) -> ProcessResult {
     if let WalletCommand::Address = config.command {
         // Get address of this client
         return Ok(format!("{}", config.id.pubkey()));
@@ -331,329 +684,48 @@ pub fn process_command(config: &WalletConfig) -> Result<String, Box<dyn error::E
     match config.command {
         // Get address of this client
         WalletCommand::Address => unreachable!(),
+
         // Request an airdrop from Solana Drone;
-        WalletCommand::Airdrop(tokens) => {
-            println!(
-                "Requesting airdrop of {:?} tokens from {}",
-                tokens, drone_addr
-            );
-            let params = json!([format!("{}", config.id.pubkey())]);
-            let previous_balance = match rpc_client
-                .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
-                .as_u64()
-            {
-                Some(tokens) => tokens,
-                None => Err(WalletError::RpcRequestError(
-                    "Received result of an unexpected type".to_string(),
-                ))?,
-            };
+        WalletCommand::Airdrop(tokens) => process_airdrop(&rpc_client, config, drone_addr, tokens),
 
-            request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id, tokens)?;
-
-            let params = json!([format!("{}", config.id.pubkey())]);
-            let current_balance = rpc_client
-                .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
-                .as_u64()
-                .unwrap_or(previous_balance);
-
-            if current_balance < previous_balance {
-                Err(format!(
-                    "Airdrop failed: current_balance({}) < previous_balance({})",
-                    current_balance, previous_balance
-                ))?;
-            }
-            if current_balance - previous_balance < tokens {
-                Err(format!(
-                    "Airdrop failed: Account balance increased by {} instead of {}",
-                    current_balance - previous_balance,
-                    tokens
-                ))?;
-            }
-            Ok(format!("Your balance is: {:?}", current_balance))
-        }
         // Check client balance
-        WalletCommand::Balance => {
-            let params = json!([format!("{}", config.id.pubkey())]);
-            let balance = rpc_client
-                .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
-                .as_u64();
-            match balance {
-                Some(0) => Ok("No account found! Request an airdrop to get started.".to_string()),
-                Some(tokens) => Ok(format!("Your balance is: {:?}", tokens)),
-                None => Err(WalletError::RpcRequestError(
-                    "Received result of an unexpected type".to_string(),
-                ))?,
-            }
-        }
+        WalletCommand::Balance => process_balance(config, &rpc_client),
+
         // Cancel a contract by contract Pubkey
-        WalletCommand::Cancel(pubkey) => {
-            let last_id = get_last_id(&rpc_client)?;
-            let mut tx =
-                BudgetTransaction::new_signature(&config.id, pubkey, config.id.pubkey(), last_id);
-            let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
-            Ok(signature_str.to_string())
-        }
+        WalletCommand::Cancel(pubkey) => process_cancel(&rpc_client, config, pubkey),
+
         // Confirm the last client transaction by signature
-        WalletCommand::Confirm(signature) => {
-            let params = json!([format!("{}", signature)]);
-            let confirmation = rpc_client
-                .retry_make_rpc_request(1, &RpcRequest::ConfirmTransaction, Some(params), 5)?
-                .as_bool();
-            match confirmation {
-                Some(b) => {
-                    if b {
-                        Ok("Confirmed".to_string())
-                    } else {
-                        Ok("Not found".to_string())
-                    }
-                }
-                None => Err(WalletError::RpcRequestError(
-                    "Received result of an unexpected type".to_string(),
-                ))?,
-            }
-        }
+        WalletCommand::Confirm(signature) => process_confirm(&rpc_client, signature),
+
         // Deploy a custom program to the chain
         WalletCommand::Deploy(ref program_location) => {
-            let params = json!([format!("{}", config.id.pubkey())]);
-            let balance = rpc_client
-                .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
-                .as_u64();
-            if let Some(tokens) = balance {
-                if tokens < 1 {
-                    Err(WalletError::DynamicProgramError(
-                        "Insufficient funds".to_string(),
-                    ))?
-                }
-            }
-
-            let last_id = get_last_id(&rpc_client)?;
-            let program_id = Keypair::new();
-            let mut file = File::open(program_location).map_err(|err| {
-                WalletError::DynamicProgramError(
-                    format!("Unable to open program file: {}", err).to_string(),
-                )
-            })?;
-            let mut program_userdata = Vec::new();
-            file.read_to_end(&mut program_userdata).map_err(|err| {
-                WalletError::DynamicProgramError(
-                    format!("Unable to read program file: {}", err).to_string(),
-                )
-            })?;
-
-            let mut tx = SystemTransaction::new_program_account(
-                &config.id,
-                program_id.pubkey(),
-                last_id,
-                1,
-                program_userdata.len() as u64,
-                bpf_loader::id(),
-                0,
-            );
-            send_and_confirm_tx(&rpc_client, &mut tx, &config.id).map_err(|_| {
-                WalletError::DynamicProgramError("Program allocate space failed".to_string())
-            })?;
-
-            let mut offset = 0;
-            for chunk in program_userdata.chunks(USERDATA_CHUNK_SIZE) {
-                let mut tx = LoaderTransaction::new_write(
-                    &program_id,
-                    bpf_loader::id(),
-                    offset,
-                    chunk.to_vec(),
-                    last_id,
-                    0,
-                );
-                send_and_confirm_tx(&rpc_client, &mut tx, &program_id).map_err(|_| {
-                    WalletError::DynamicProgramError(format!(
-                        "Program write failed at offset {:?}",
-                        offset
-                    ))
-                })?;
-                offset += USERDATA_CHUNK_SIZE as u32;
-            }
-
-            let last_id = get_last_id(&rpc_client)?;
-            let mut tx = LoaderTransaction::new_finalize(&program_id, bpf_loader::id(), last_id, 0);
-            send_and_confirm_tx(&rpc_client, &mut tx, &program_id).map_err(|_| {
-                WalletError::DynamicProgramError("Program finalize transaction failed".to_string())
-            })?;
-
-            let mut tx = SystemTransaction::new_spawn(&program_id, last_id, 0);
-            send_and_confirm_tx(&rpc_client, &mut tx, &program_id).map_err(|_| {
-                WalletError::DynamicProgramError("Program spawn failed".to_string())
-            })?;
-
-            Ok(json!({
-                "programId": format!("{}", program_id.pubkey()),
-            })
-            .to_string())
+            process_deploy(&rpc_client, config, program_location)
         }
-        WalletCommand::GetTransactionCount => {
-            let transaction_count = rpc_client
-                .retry_make_rpc_request(1, &RpcRequest::GetTransactionCount, None, 5)?
-                .as_u64();
-            match transaction_count {
-                Some(count) => Ok(count.to_string()),
-                None => Err(WalletError::RpcRequestError(
-                    "Received result of an unexpected type".to_string(),
-                ))?,
-            }
-        }
+
+        WalletCommand::GetTransactionCount => process_get_transaction_count(&rpc_client),
+
         // If client has positive balance, pay tokens to another address
         WalletCommand::Pay(tokens, to, timestamp, timestamp_pubkey, ref witnesses, cancelable) => {
-            let last_id = get_last_id(&rpc_client)?;
-
-            if timestamp == None && *witnesses == None {
-                let mut tx = SystemTransaction::new_account(&config.id, to, tokens, last_id, 0);
-                let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
-                Ok(signature_str.to_string())
-            } else if *witnesses == None {
-                let dt = timestamp.unwrap();
-                let dt_pubkey = match timestamp_pubkey {
-                    Some(pubkey) => pubkey,
-                    None => config.id.pubkey(),
-                };
-
-                let contract_funds = Keypair::new();
-                let contract_state = Keypair::new();
-                let budget_program_id = budget_program::id();
-
-                // Create account for contract funds
-                let mut tx = SystemTransaction::new_program_account(
-                    &config.id,
-                    contract_funds.pubkey(),
-                    last_id,
-                    tokens,
-                    0,
-                    budget_program_id,
-                    0,
-                );
-                send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
-
-                // Create account for contract state
-                let mut tx = SystemTransaction::new_program_account(
-                    &config.id,
-                    contract_state.pubkey(),
-                    last_id,
-                    1,
-                    196,
-                    budget_program_id,
-                    0,
-                );
-                send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
-
-                // Initializing contract
-                let mut tx = BudgetTransaction::new_on_date(
-                    &contract_funds,
-                    to,
-                    contract_state.pubkey(),
-                    dt,
-                    dt_pubkey,
-                    cancelable,
-                    tokens,
-                    last_id,
-                );
-                let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
-
-                Ok(json!({
-                    "signature": signature_str,
-                    "processId": format!("{}", contract_state.pubkey()),
-                })
-                .to_string())
-            } else if timestamp == None {
-                let last_id = get_last_id(&rpc_client)?;
-
-                let witness = if let Some(ref witness_vec) = *witnesses {
-                    witness_vec[0]
-                } else {
-                    Err(WalletError::BadParameter(
-                        "Could not parse required signature pubkey(s)".to_string(),
-                    ))?
-                };
-
-                let contract_funds = Keypair::new();
-                let contract_state = Keypair::new();
-                let budget_program_id = budget_program::id();
-
-                // Create account for contract funds
-                let mut tx = SystemTransaction::new_program_account(
-                    &config.id,
-                    contract_funds.pubkey(),
-                    last_id,
-                    tokens,
-                    0,
-                    budget_program_id,
-                    0,
-                );
-                send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
-
-                // Create account for contract state
-                let mut tx = SystemTransaction::new_program_account(
-                    &config.id,
-                    contract_state.pubkey(),
-                    last_id,
-                    1,
-                    196,
-                    budget_program_id,
-                    0,
-                );
-                send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
-
-                // Initializing contract
-                let mut tx = BudgetTransaction::new_when_signed(
-                    &contract_funds,
-                    to,
-                    contract_state.pubkey(),
-                    witness,
-                    cancelable,
-                    tokens,
-                    last_id,
-                );
-                let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
-
-                Ok(json!({
-                    "signature": signature_str,
-                    "processId": format!("{}", contract_state.pubkey()),
-                })
-                .to_string())
-            } else {
-                Ok("Combo transactions not yet handled".to_string())
-            }
+            process_pay(
+                &rpc_client,
+                config,
+                tokens,
+                to,
+                timestamp,
+                timestamp_pubkey,
+                witnesses,
+                cancelable,
+            )
         }
+
         // Apply time elapsed to contract
         WalletCommand::TimeElapsed(to, pubkey, dt) => {
-            let params = json!([format!("{}", config.id.pubkey())]);
-            let balance = rpc_client
-                .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
-                .as_u64();
-
-            if let Some(0) = balance {
-                request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id, 1)?;
-            }
-
-            let last_id = get_last_id(&rpc_client)?;
-
-            let mut tx = BudgetTransaction::new_timestamp(&config.id, pubkey, to, dt, last_id);
-            let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
-
-            Ok(signature_str.to_string())
+            process_time_elapsed(&rpc_client, config, drone_addr, to, pubkey, dt)
         }
+
         // Apply witness signature to contract
         WalletCommand::Witness(to, pubkey) => {
-            let params = json!([format!("{}", config.id.pubkey())]);
-            let balance = rpc_client
-                .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
-                .as_u64();
-
-            if let Some(0) = balance {
-                request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id, 1)?;
-            }
-
-            let last_id = get_last_id(&rpc_client)?;
-            let mut tx = BudgetTransaction::new_signature(&config.id, pubkey, to, last_id);
-            let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
-
-            Ok(signature_str.to_string())
+            process_witness(&rpc_client, config, drone_addr, to, pubkey)
         }
     }
 }
