@@ -86,19 +86,15 @@ These components are passed in into the loop from the outside.
 loop:
 
 1. Query the leader\_scheduler for the next assigned slot.
-
 2. Run the TVU over all the forks.
-
    1. TVU will send votes to what it believes is the "best" fork.
    2. After each vote, restart the PoH Recorder to run until the next assigned
 slot.
-
 3. When time to be a slot leader, start the TPU. Point it to the last fork the
    TVU voted on.
-
 4. Produce entries until the end of the slot.
-
-   1. TPU will freeze BankFork.  The vote will be sent in 2.
-
+   1. For the duration of the slot, the TVU must not vote on other forks.
+   2. After the slot ends, the TPU freezes its BankFork. After freezing,
+      the TVU may resume voting.
 5. Goto 1.
 
