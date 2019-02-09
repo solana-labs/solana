@@ -399,7 +399,7 @@ impl LeaderScheduler {
 
 impl Default for LeaderScheduler {
     fn default() -> Self {
-        let config = Default::default();
+        let config = LeaderSchedulerConfig::default();
         Self::new(&config)
     }
 }

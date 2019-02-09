@@ -293,7 +293,7 @@ mod tests {
         let (banking_stage, _entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
-            Default::default(),
+            PohServiceConfig::default(),
             &bank.last_id(),
             std::u64::MAX,
             genesis_block.bootstrap_leader_id,
@@ -315,7 +315,7 @@ mod tests {
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
-            Default::default(),
+            PohServiceConfig::default(),
             &bank.last_id(),
             std::u64::MAX,
             genesis_block.bootstrap_leader_id,
@@ -367,7 +367,7 @@ mod tests {
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
-            Default::default(),
+            PohServiceConfig::default(),
             &bank.last_id(),
             std::u64::MAX,
             genesis_block.bootstrap_leader_id,
@@ -425,7 +425,7 @@ mod tests {
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
-            Default::default(),
+            PohServiceConfig::default(),
             &bank.last_id(),
             std::u64::MAX,
             genesis_block.bootstrap_leader_id,
@@ -494,7 +494,7 @@ mod tests {
         let (banking_stage, _entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
-            Default::default(),
+            PohServiceConfig::default(),
             &bank.last_id(),
             max_tick_height,
             genesis_block.bootstrap_leader_id,

@@ -412,7 +412,7 @@ mod tests {
         let tx = Transaction::new_with_instructions(
             &[&key],
             &[key1, key2],
-            Default::default(),
+            Hash::default(),
             0,
             vec![prog1, prog2],
             instructions,
@@ -447,7 +447,7 @@ mod tests {
         let tx = Transaction::new_with_instructions(
             &[&key],
             &[],
-            Default::default(),
+            Hash::default(),
             0,
             vec![],
             instructions,
@@ -461,12 +461,12 @@ mod tests {
         let tx = Transaction::new_with_instructions(
             &[&key],
             &[],
-            Default::default(),
+            Hash::default(),
             0,
-            vec![Default::default()],
+            vec![Pubkey::default()],
             instructions,
         );
-        assert_eq!(*tx.program_id(0), Default::default());
+        assert_eq!(*tx.program_id(0), Pubkey::default());
         assert!(!tx.verify_refs());
     }
 

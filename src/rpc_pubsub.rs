@@ -144,17 +144,19 @@ impl RpcPubSubBank {
     }
 }
 
+type RpcAccountSubscriptions = RwLock<HashMap<Pubkey, HashMap<SubscriptionId, Sink<Account>>>>;
+type RpcSignatureSubscriptions =
+    RwLock<HashMap<Signature, HashMap<SubscriptionId, Sink<RpcSignatureStatus>>>>;
 pub struct RpcSubscriptions {
-    account_subscriptions: RwLock<HashMap<Pubkey, HashMap<SubscriptionId, Sink<Account>>>>,
-    signature_subscriptions:
-        RwLock<HashMap<Signature, HashMap<SubscriptionId, Sink<RpcSignatureStatus>>>>,
+    account_subscriptions: RpcAccountSubscriptions,
+    signature_subscriptions: RpcSignatureSubscriptions,
 }
 
 impl Default for RpcSubscriptions {
     fn default() -> Self {
         RpcSubscriptions {
-            account_subscriptions: Default::default(),
-            signature_subscriptions: Default::default(),
+            account_subscriptions: RpcAccountSubscriptions::default(),
+            signature_subscriptions: RpcSignatureSubscriptions::default(),
         }
     }
 }
@@ -260,9 +262,9 @@ struct RpcSolPubSubImpl {
 impl RpcSolPubSubImpl {
     fn new(bank: Arc<RwLock<RpcPubSubBank>>) -> Self {
         RpcSolPubSubImpl {
-            uid: Default::default(),
+            uid: Arc::new(atomic::AtomicUsize::default()),
             bank,
-            subscription: Arc::new(Default::default()),
+            subscription: Arc::new(RpcSubscriptions::default()),
         }
     }
 

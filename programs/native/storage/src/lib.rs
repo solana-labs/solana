@@ -226,7 +226,7 @@ mod test {
     #[test]
     fn test_storage_tx() {
         let keypair = Keypair::new();
-        let mut accounts = [(keypair.pubkey(), Default::default())];
+        let mut accounts = [(keypair.pubkey(), Account::default())];
         let mut keyed_accounts = create_keyed_accounts(&mut accounts);
         assert!(entrypoint(&id(), &mut keyed_accounts, &[], 42).is_err());
     }
@@ -258,7 +258,7 @@ mod test {
     #[test]
     fn test_invalid_accounts_len() {
         let keypair = Keypair::new();
-        let mut accounts = [Default::default()];
+        let mut accounts = [Account::default()];
 
         let tx = StorageTransaction::new_mining_proof(
             &keypair,
@@ -269,7 +269,7 @@ mod test {
         );
         assert!(test_transaction(&tx, &mut accounts).is_err());
 
-        let mut accounts = [Default::default(), Default::default(), Default::default()];
+        let mut accounts = [Account::default(), Account::default(), Account::default()];
 
         assert!(test_transaction(&tx, &mut accounts).is_err());
     }

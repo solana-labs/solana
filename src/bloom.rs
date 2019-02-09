@@ -25,7 +25,7 @@ impl<T: BloomHashIndex> Bloom<T> {
         Bloom {
             keys,
             bits,
-            _phantom: Default::default(),
+            _phantom: PhantomData::default(),
         }
     }
     /// create filter optimal for num size given the `false_rate`

@@ -224,7 +224,7 @@ pub fn to_packets_chunked<T: Serialize>(xs: &[T], chunks: usize) -> Vec<SharedPa
         p.write()
             .unwrap()
             .packets
-            .resize(x.len(), Default::default());
+            .resize(x.len(), Packet::default());
         for (i, o) in x.iter().zip(p.write().unwrap().packets.iter_mut()) {
             let mut wr = io::Cursor::new(&mut o.data[..]);
             serialize_into(&mut wr, &i).expect("serialize request");

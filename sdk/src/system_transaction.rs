@@ -133,7 +133,7 @@ mod tests {
         let t2 = Keypair::new();
         let moves = vec![(t1.pubkey(), 1), (t2.pubkey(), 2)];
 
-        let tx = SystemTransaction::new_move_many(&from, &moves, Default::default(), 0);
+        let tx = SystemTransaction::new_move_many(&from, &moves, Hash::default(), 0);
         assert_eq!(tx.account_keys[0], from.pubkey());
         assert_eq!(tx.account_keys[1], t1.pubkey());
         assert_eq!(tx.account_keys[2], t2.pubkey());
