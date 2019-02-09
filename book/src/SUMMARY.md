@@ -19,6 +19,7 @@
 - [Anatomy of a Fullnode](fullnode.md)
   - [TPU](tpu.md)
   - [TVU](tvu.md)
+    - [Blocktree](blocktree.md)
   - [Gossip Service](gossip.md)
   - [The Runtime](runtime.md)
 
@@ -32,7 +33,6 @@
   - [Secure Vote Signing](vote-signer.md)
   - [Staking Rewards](staking-rewards.md)
   - [Fork Selection](fork-selection.md)
-  - [Blocktree](blocktree.md)
   - [Data Plane Fanout](data-plane-fanout.md)
   - [Reliable Vote Transmission](reliable-vote-transmission.md)
   - [Bank Forks](bank-forks.md)

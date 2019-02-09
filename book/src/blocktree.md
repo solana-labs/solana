@@ -1,69 +1,17 @@
 # Blocktree
 
-This document proposes a change to ledger and window to support Solana's [fork
-generation](fork-generation.md) behavior.
+After a block reaches finality, all blocks from that one on down
+to the genesis block form a linear chain with the familiar name
+blockchain. Until that point, however, the validator must maintain all
+potentially valid chains, called *forks*. The process by which forks
+naturally form as a result of leader rotation is described in
+[fork generation](fork-generation.md). The *blocktree* data structure
+described here is how a validator copes with those forks until blocks
+are finalized.
 
-## Current Design
-
-### Functionality of Window And Ledger
-
-The basic responsibilities of the window and the ledger in a Solana fullnode
-are:
-
- 1. Window: serve as a temporary, RAM-backed store of blobs of the PoH chain
-    for reordering and assembly into contiguous blocks to be sent to the bank
-    for verification.
- 2. Window: serve as a RAM-backed repair facility for other validator nodes,
-    which may query the network for as-yet unreceived blobs.
- 3. Ledger: provide disk-based storage of the PoH chain in case of node
-    restart.
- 4. Ledger: provide disk-backed repair facility for when the (smaller)
-    RAM-backed window doesn't cover the repair request.
-
-The window is at the front of a validator node's processing pipeline, blobs are
-received, cached, re-ordered before being deserialized into Entries, passed to
-the bank for verification, and finally on to the ledger, which is at the back
-of a validator node's pipeline.
-
-The window holds blobs (the over-the-air format, serialized Entries,
-one-per-blob).  The ledger holds serialized Entries without any blob
-information.
-
-### Limitations
-
-#### One-dimensional key space
-
-The window and the ledger are indexed by ledger height, which is number of
-Entries ever generated in the PoH chain until the current blob.  This
-limitation prevents the window and the ledger from storing the overlapping
-histories possible in Solana's consensus protocol.
-
-#### Limited caching
-
-The window is a circular buffer.  It cannot accept blobs that are farther in
-the future than the window is currently working.  If a blob arrives that is too
-far ahead, it is dropped and will subsequently need to be repaired, incurring
-further delay for the node.
-
-#### Loss of blob signatures
-
-Because the blob signatures are stripped before being stored by the ledger,
-repair requests served from the ledger can't be verified to the original
-leader.
-
-#### Rollback and checkpoint, switching forks, separate functions
-
-The window and the ledger can't handle replay of alternate forks.  Once a Blob
-has passed through the window, it's in the past.  The replay stage of a
-validator will need to roll back to a previous checkpoint and decode an
-alternate set of Blobs to the Bank.  The separated and one-way nature of window
-and ledger makes this hard.
-
-## New Design
-
-A unified window and ledger allows a validator to record every blob it observes
-on the network, in any order, as long as the blob is consistent with the
-network's leader schedule.
+The blocktree allows a validator to record every blob it observes
+on the network, in any order, as long as the blob is signed by the expected
+leader for a given slot.
 
 Blobs are moved to a fork-able key space the tuple of `leader slot` + `blob
 index` (within the slot).  This permits the skip-list structure of the Solana
