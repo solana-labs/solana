@@ -7,7 +7,7 @@ set -e
 cd "$(dirname "$0")/.."
 source ci/_
 
-# please don't print from --lib...
+# Logging hygiene: Please don't print from --lib, use the `log` crate instead
 declare prints=(
   'print!'
   'println!'
@@ -15,7 +15,16 @@ declare prints=(
   'eprintln!'
 )
 
-if _ git grep "${prints[@]/#/-e }" src
-then
+if _ git grep "${prints[@]/#/-e }" src; then
     exit 1
 fi
+
+
+# Code readability: please be explicit about the type instead of using
+# Default::default()
+#
+# Ref: https://github.com/solana-labs/solana/issues/2630
+if _ git grep 'Default::default()' -- '*.rs'; then
+    exit 1
+fi
+
