@@ -158,6 +158,11 @@ impl Tvu {
         )
     }
 
+    #[cfg(test)]
+    pub fn get_pause(&self) -> Arc<AtomicBool> {
+        self.replay_stage.get_pause()
+    }
+
     pub fn get_state(&self) -> Hash {
         *self.last_entry_id.read().unwrap()
     }

@@ -24,7 +24,11 @@ use solana_sdk::vote_transaction::VoteTransaction;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, SyncSender};
 use std::sync::{Arc, RwLock};
+#[cfg(test)]
+use std::thread::sleep;
 use std::thread::{self, Builder, JoinHandle};
+#[cfg(test)]
+use std::time::Duration;
 use std::time::Instant;
 
 pub const MAX_ENTRY_RECV_PER_ITER: usize = 512;
@@ -51,6 +55,8 @@ pub struct ReplayStage {
     t_replay: JoinHandle<()>,
     exit: Arc<AtomicBool>,
     ledger_signal_sender: SyncSender<bool>,
+    #[cfg(test)]
+    pause: Arc<AtomicBool>,
 }
 
 impl ReplayStage {
@@ -90,11 +96,12 @@ impl ReplayStage {
             duration_as_ms(&now.elapsed()) as usize
         );
 
+        let num_ticks = bank.tick_height();
         let mut num_ticks_to_next_vote = bank
             .leader_scheduler
             .read()
             .unwrap()
-            .num_ticks_left_in_slot(bank.tick_height());
+            .num_ticks_left_in_slot(num_ticks);
 
         for (i, entry) in entries.iter().enumerate() {
             inc_new_counter_info!("replicate-stage_bank-tick", bank.tick_height() as usize);
@@ -188,7 +195,12 @@ impl ReplayStage {
     ) -> (Self, EntryReceiver) {
         let (ledger_entry_sender, ledger_entry_receiver) = channel();
         let mut entry_stream = entry_stream.cloned().map(EntryStream::new);
-
+        #[cfg(test)]
+        let (pause, pause_) = {
+            let pause = Arc::new(AtomicBool::new(false));
+            let pause_ = pause.clone();
+            (pause, pause_)
+        };
         let exit_ = exit.clone();
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
@@ -214,6 +226,10 @@ impl ReplayStage {
                     // Stop getting entries if we get exit signal
                     if exit_.load(Ordering::Relaxed) {
                         break;
+                    }
+                    #[cfg(test)]
+                    while pause_.load(Ordering::Relaxed) {
+                        sleep(Duration::from_millis(200));
                     }
 
                     if current_slot.is_none() {
@@ -309,9 +325,16 @@ impl ReplayStage {
                 t_replay,
                 exit,
                 ledger_signal_sender,
+                #[cfg(test)]
+                pause,
             },
             ledger_entry_receiver,
         )
+    }
+
+    #[cfg(test)]
+    pub fn get_pause(&self) -> Arc<AtomicBool> {
+        self.pause.clone()
     }
 
     pub fn close(self) -> thread::Result<()> {
