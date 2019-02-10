@@ -1,5 +1,4 @@
-use serde_json::json;
-use solana::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
+use solana::rpc_request::RpcClient;
 use solana::thin_client::new_fullnode;
 use solana_drone::drone::run_local_drone;
 use solana_sdk::signature::KeypairUtil;
@@ -25,11 +24,9 @@ fn test_wallet_request_airdrop() {
 
     let rpc_client = RpcClient::new_from_socket(leader_data.rpc);
 
-    let params = json!([format!("{}", bob_config.id.pubkey())]);
     let balance = rpc_client
-        .make_rpc_request(1, RpcRequest::GetBalance, Some(params))
+        .retry_get_balance(1, bob_config.id.pubkey(), 1)
         .unwrap()
-        .as_u64()
         .unwrap();
     assert_eq!(balance, 50);
 
