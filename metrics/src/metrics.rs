@@ -49,12 +49,12 @@ struct InfluxDbMetricsWriter {
 impl InfluxDbMetricsWriter {
     fn new() -> Self {
         InfluxDbMetricsWriter {
-            client: Self::build_client(),
+            client: Self::build_client().ok(),
         }
     }
 
-    fn build_client() -> Option<influxdb::Client> {
-        let (host, db, username, password) = get_env_settings();
+    fn build_client() -> Result<influxdb::Client, env::VarError> {
+        let (host, db, username, password) = get_env_settings()?;
 
         debug!("InfluxDB host={} db={} username={}", host, db, username);
         let mut client = influxdb::Client::new_with_option(host, db, None)
@@ -64,7 +64,7 @@ impl InfluxDbMetricsWriter {
         client.set_write_timeout(1 /*second*/);
 
         debug!("InfluxDB version: {:?}", client.get_version());
-        Some(client)
+        Ok(client)
     }
 }
 
@@ -191,17 +191,17 @@ pub fn submit(point: influxdb::Point) {
     agent.submit(point);
 }
 
-fn get_env_settings() -> (String, String, String, String) {
+fn get_env_settings() -> Result<(String, String, String, String), env::VarError> {
     let host =
         env::var("INFLUX_HOST").unwrap_or_else(|_| "https://metrics.solana.com:8086".to_string());
-    let db = env::var("INFLUX_DATABASE").unwrap_or_else(|_| "scratch".to_string());
-    let username = env::var("INFLUX_USERNAME").unwrap_or_else(|_| "scratch_writer".to_string());
-    let password = env::var("INFLUX_PASSWORD").unwrap_or_else(|_| "topsecret".to_string());
-    (host, db, username, password)
+    let db = env::var("INFLUX_DATABASE")?.to_string();
+    let username = env::var("INFLUX_USERNAME")?.to_string();
+    let password = env::var("INFLUX_PASSWORD")?.to_string();
+    Ok((host, db, username, password))
 }
 
 pub fn query(q: &str) -> Result<String, String> {
-    let (host, _, username, password) = get_env_settings();
+    let (host, _db, username, password) = get_env_settings().map_err(|err| err.to_string())?;
     let query = format!("{}/query?u={}&p={}&q={}", &host, &username, &password, &q);
 
     let response = reqwest::get(query.as_str())
@@ -209,7 +209,7 @@ pub fn query(q: &str) -> Result<String, String> {
         .text()
         .map_err(|err| err.to_string())?;
 
-    Result::Ok(response)
+    Ok(response)
 }
 
 /// Blocks until all pending points from previous calls to `submit` have been
