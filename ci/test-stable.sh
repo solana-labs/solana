@@ -27,7 +27,7 @@ for program in programs/native/*; do
   (
     set -x
     cd "$program"
-    cargo test --verbose -- --nocapture
+    cargo test ${V:+--verbose} -- --nocapture
   )
 done
 
