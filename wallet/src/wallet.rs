@@ -325,11 +325,7 @@ fn process_airdrop(
         "Requesting airdrop of {:?} tokens from {}",
         tokens, drone_addr
     );
-    let params = json!([format!("{}", config.id.pubkey())]);
-    let previous_balance = match rpc_client
-        .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
-        .as_u64()
-    {
+    let previous_balance = match rpc_client.retry_get_balance(1, config.id.pubkey(), 5)? {
         Some(tokens) => tokens,
         None => Err(WalletError::RpcRequestError(
             "Received result of an unexpected type".to_string(),
@@ -338,10 +334,8 @@ fn process_airdrop(
 
     request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id, tokens)?;
 
-    let params = json!([format!("{}", config.id.pubkey())]);
     let current_balance = rpc_client
-        .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
-        .as_u64()
+        .retry_get_balance(1, config.id.pubkey(), 5)?
         .unwrap_or(previous_balance);
 
     if current_balance < previous_balance {
@@ -361,10 +355,7 @@ fn process_airdrop(
 }
 
 fn process_balance(config: &WalletConfig, rpc_client: &RpcClient) -> ProcessResult {
-    let params = json!([format!("{}", config.id.pubkey())]);
-    let balance = rpc_client
-        .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
-        .as_u64();
+    let balance = rpc_client.retry_get_balance(1, config.id.pubkey(), 5)?;
     match balance {
         Some(0) => Ok("No account found! Request an airdrop to get started.".to_string()),
         Some(tokens) => Ok(format!("Your balance is: {:?}", tokens)),
@@ -398,10 +389,7 @@ fn process_deploy(
     config: &WalletConfig,
     program_location: &str,
 ) -> ProcessResult {
-    let params = json!([format!("{}", config.id.pubkey())]);
-    let balance = rpc_client
-        .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
-        .as_u64();
+    let balance = rpc_client.retry_get_balance(1, config.id.pubkey(), 5)?;
     if let Some(tokens) = balance {
         if tokens < 1 {
             Err(WalletError::DynamicProgramError(
@@ -626,10 +614,7 @@ fn process_time_elapsed(
     pubkey: Pubkey,
     dt: DateTime<Utc>,
 ) -> ProcessResult {
-    let params = json!([format!("{}", config.id.pubkey())]);
-    let balance = rpc_client
-        .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
-        .as_u64();
+    let balance = rpc_client.retry_get_balance(1, config.id.pubkey(), 5)?;
 
     if let Some(0) = balance {
         request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id, 1)?;
@@ -650,10 +635,7 @@ fn process_witness(
     to: Pubkey,
     pubkey: Pubkey,
 ) -> ProcessResult {
-    let params = json!([format!("{}", config.id.pubkey())]);
-    let balance = rpc_client
-        .retry_make_rpc_request(1, &RpcRequest::GetBalance, Some(params), 5)?
-        .as_u64();
+    let balance = rpc_client.retry_get_balance(1, config.id.pubkey(), 5)?;
 
     if let Some(0) = balance {
         request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id, 1)?;

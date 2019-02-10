@@ -6,6 +6,8 @@ use std::thread::sleep;
 use std::time::Duration;
 use std::{error, fmt};
 
+use solana_sdk::pubkey::Pubkey;
+
 #[derive(Clone)]
 pub struct RpcClient {
     pub client: reqwest::Client,
@@ -31,6 +33,19 @@ impl RpcClient {
 
     pub fn new_from_socket(addr: SocketAddr) -> Self {
         Self::new(get_rpc_request_str(addr, false))
+    }
+
+    pub fn retry_get_balance(
+        &self,
+        id: u64,
+        pubkey: Pubkey,
+        retries: usize,
+    ) -> Result<Option<u64>, Box<dyn error::Error>> {
+        let params = json!([format!("{}", pubkey)]);
+        let res = self
+            .retry_make_rpc_request(id, &RpcRequest::GetBalance, Some(params), retries)?
+            .as_u64();
+        Ok(res)
     }
 
     pub fn retry_make_rpc_request(
@@ -191,21 +206,13 @@ mod tests {
     #[test]
     fn test_build_request_json() {
         let test_request = RpcRequest::GetAccountInfo;
-        let request = test_request.build_request_json(
-            1,
-            Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])),
-        );
+        let addr = json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"]);
+        let request = test_request.build_request_json(1, Some(addr.clone()));
         assert_eq!(request["method"], "getAccountInfo");
-        assert_eq!(
-            request["params"],
-            json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])
-        );
+        assert_eq!(request["params"], addr,);
 
         let test_request = RpcRequest::GetBalance;
-        let request = test_request.build_request_json(
-            1,
-            Some(json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"])),
-        );
+        let request = test_request.build_request_json(1, Some(addr));
         assert_eq!(request["method"], "getBalance");
 
         let test_request = RpcRequest::GetConfirmationTime;
