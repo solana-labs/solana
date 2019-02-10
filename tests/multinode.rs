@@ -44,7 +44,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (alice, leader_ledger_path, mut last_entry_height, mut last_entry_id) =
+    let (alice, leader_ledger_path, mut last_entry_height, _last_id, mut last_entry_id) =
         create_tmp_sample_ledger("multi_node_ledger_window", 10_000, 0, leader_data.id, 500);
     ledger_paths.push(leader_ledger_path.clone());
 
@@ -65,7 +65,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
         let blocktree = Blocktree::open(&leader_ledger_path).unwrap();
 
         let entries = solana::entry::create_ticks(
-            fullnode_config.leader_scheduler_config.ticks_per_slot - last_entry_height - 2,
+            fullnode_config.leader_scheduler_config.ticks_per_slot - last_entry_height - 1,
             last_entry_id,
         );
         blocktree
@@ -164,13 +164,14 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (alice, genesis_ledger_path, _last_entry_height, _last_entry_id) = create_tmp_sample_ledger(
-        "multi_node_validator_catchup_from_zero",
-        10_000,
-        0,
-        leader_data.id,
-        500,
-    );
+    let (alice, genesis_ledger_path, _last_entry_height, _last_id, _last_entry_id) =
+        create_tmp_sample_ledger(
+            "multi_node_validator_catchup_from_zero",
+            10_000,
+            0,
+            leader_data.id,
+            500,
+        );
     ledger_paths.push(genesis_ledger_path.clone());
 
     let zero_ledger_path = tmp_copy_ledger(
@@ -353,7 +354,7 @@ fn test_multi_node_basic() {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (alice, genesis_ledger_path, _last_entry_height, _last_entry_id) =
+    let (alice, genesis_ledger_path, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_ledger("multi_node_basic", 10_000, 0, leader_data.id, 500);
     ledger_paths.push(genesis_ledger_path.clone());
 
@@ -453,7 +454,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (alice, genesis_ledger_path, _last_entry_height, _last_entry_id) =
+    let (alice, genesis_ledger_path, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_ledger("boot_validator_from_file", 100_000, 0, leader_pubkey, 1000);
     ledger_paths.push(genesis_ledger_path.clone());
 
@@ -532,13 +533,14 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
 
     let leader_keypair = Arc::new(Keypair::new());
     let initial_leader_balance = 500;
-    let (alice, ledger_path, _last_entry_height, _last_entry_id) = create_tmp_sample_ledger(
-        "leader_restart_validator_start_from_old_ledger",
-        100_000 + 500 * solana::window_service::MAX_REPAIR_BACKOFF as u64,
-        0,
-        leader_keypair.pubkey(),
-        initial_leader_balance,
-    );
+    let (alice, ledger_path, _last_entry_height, _last_id, _last_entry_id) =
+        create_tmp_sample_ledger(
+            "leader_restart_validator_start_from_old_ledger",
+            100_000 + 500 * solana::window_service::MAX_REPAIR_BACKOFF as u64,
+            0,
+            leader_keypair.pubkey(),
+            initial_leader_balance,
+        );
     let bob_pubkey = Keypair::new().pubkey();
 
     {
@@ -641,13 +643,14 @@ fn test_multi_node_dynamic_network() {
     let leader_pubkey = leader_keypair.pubkey().clone();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let bob_pubkey = Keypair::new().pubkey();
-    let (alice, genesis_ledger_path, _last_entry_height, _last_entry_id) = create_tmp_sample_ledger(
-        "multi_node_dynamic_network",
-        10_000_000,
-        0,
-        leader_pubkey,
-        500,
-    );
+    let (alice, genesis_ledger_path, _last_entry_height, _last_id, _last_entry_id) =
+        create_tmp_sample_ledger(
+            "multi_node_dynamic_network",
+            10_000_000,
+            0,
+            leader_pubkey,
+            500,
+        );
 
     let mut ledger_paths = Vec::new();
     ledger_paths.push(genesis_ledger_path.clone());
@@ -862,7 +865,7 @@ fn test_leader_to_validator_transition() {
 
     // Initialize the leader ledger. Make a mint and a genesis entry
     // in the leader ledger
-    let (mint_keypair, leader_ledger_path, genesis_entry_height, last_id) =
+    let (mint_keypair, leader_ledger_path, genesis_entry_height, last_id, last_entry_id) =
         create_tmp_sample_ledger(
             "test_leader_to_validator_transition",
             10_000,
@@ -878,7 +881,7 @@ fn test_leader_to_validator_transition() {
         &mint_keypair,
         100,
         ticks_per_slot,
-        &last_id,
+        &last_entry_id,
         &last_id,
         0,
     );
@@ -963,7 +966,7 @@ fn test_leader_validator_basic() {
     info!("validator id: {}", validator_keypair.pubkey());
 
     // Make a common mint and a genesis entry for both leader + validator ledgers
-    let (mint_keypair, leader_ledger_path, genesis_entry_height, last_id) =
+    let (mint_keypair, leader_ledger_path, genesis_entry_height, last_id, last_entry_id) =
         create_tmp_sample_ledger(
             "test_leader_validator_basic",
             10_000,
@@ -978,7 +981,7 @@ fn test_leader_validator_basic() {
         &mint_keypair,
         100,
         1,
-        &last_id,
+        &last_entry_id,
         &last_id,
         0,
     );
@@ -1036,27 +1039,37 @@ fn test_leader_validator_basic() {
 
     converge(&leader_info, 2);
 
-    info!("Waiting for slot 0 -> slot 1: bootstrap leader will remain the leader");
-    assert_eq!(
-        leader_rotation_receiver.recv().unwrap(),
-        (FullnodeReturnType::LeaderToLeaderRotation, ticks_per_slot,)
-    );
-
-    info!("Waiting for slot 1 -> slot 2: bootstrap leader becomes a validator");
+    info!("Waiting for slot 0 -> slot 1: bootstrap leader and the validator rotate");
     assert_eq!(
         leader_rotation_receiver.recv().unwrap(),
         (
             FullnodeReturnType::LeaderToValidatorRotation,
-            ticks_per_slot * 2,
+            ticks_per_slot,
         )
     );
-
-    info!("Waiting for slot 1 -> slot 2: validator becomes the leader");
     assert_eq!(
         validator_rotation_receiver.recv().unwrap(),
         (
             FullnodeReturnType::ValidatorToLeaderRotation,
+            ticks_per_slot,
+        )
+    );
+
+    info!("Waiting for slot 1 -> slot 2: validator remains the slot leader due to no votes");
+    assert_eq!(
+        validator_rotation_receiver.recv().unwrap(),
+        (
+            FullnodeReturnType::LeaderToLeaderRotation,
             ticks_per_slot * 2,
+        )
+    );
+
+    info!("Waiting for slot 2 -> slot 3: validator remains the slot leader due to no votes");
+    assert_eq!(
+        validator_rotation_receiver.recv().unwrap(),
+        (
+            FullnodeReturnType::LeaderToLeaderRotation,
+            ticks_per_slot * 3,
         )
     );
 
@@ -1109,7 +1122,7 @@ fn test_dropped_handoff_recovery() {
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
     let num_ending_ticks = 1;
-    let (mint_keypair, genesis_ledger_path, genesis_entry_height, last_id) =
+    let (mint_keypair, genesis_ledger_path, genesis_entry_height, last_id, last_entry_id) =
         create_tmp_sample_ledger(
             "test_dropped_handoff_recovery",
             10_000,
@@ -1134,7 +1147,7 @@ fn test_dropped_handoff_recovery() {
         &mint_keypair,
         100,
         ticks_per_slot,
-        &last_id,
+        &last_entry_id,
         &last_id,
         0,
     );
@@ -1268,17 +1281,19 @@ fn test_full_leader_validator_network() {
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
     let num_ending_ticks = 1;
-    let (mint_keypair, bootstrap_leader_ledger_path, genesis_entry_height, last_id) =
-        create_tmp_sample_ledger(
-            "test_full_leader_validator_network",
-            10_000,
-            num_ending_ticks,
-            bootstrap_leader_info.id,
-            500,
-        );
-
-    let last_tick_id = last_id;
-    let mut last_entry_id = last_id;
+    let (
+        mint_keypair,
+        bootstrap_leader_ledger_path,
+        genesis_entry_height,
+        last_id,
+        mut last_entry_id,
+    ) = create_tmp_sample_ledger(
+        "test_full_leader_validator_network",
+        10_000,
+        num_ending_ticks,
+        bootstrap_leader_info.id,
+        500,
+    );
 
     // Create a common ledger with entries in the beginnging that will add all the validators
     // to the active set for leader election.
@@ -1295,7 +1310,7 @@ fn test_full_leader_validator_network() {
             100,
             1,
             &last_entry_id,
-            &last_tick_id,
+            &last_id,
             0,
         );
 
@@ -1475,14 +1490,19 @@ fn test_broadcast_last_tick() {
     let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
     // Create leader ledger
-    let (_mint_keypair, bootstrap_leader_ledger_path, genesis_entry_height, _last_id) =
-        create_tmp_sample_ledger(
-            "test_broadcast_last_tick",
-            10_000,
-            0,
-            bootstrap_leader_info.id,
-            500,
-        );
+    let (
+        _mint_keypair,
+        bootstrap_leader_ledger_path,
+        genesis_entry_height,
+        _last_id,
+        _last_entry_id,
+    ) = create_tmp_sample_ledger(
+        "test_broadcast_last_tick",
+        10_000,
+        0,
+        bootstrap_leader_info.id,
+        500,
+    );
 
     let genesis_ledger_len = genesis_entry_height;
     debug!("genesis_ledger_len: {}", genesis_ledger_len);
@@ -1550,7 +1570,7 @@ fn test_broadcast_last_tick() {
     bootstrap_leader_exit();
 
     // Index of the last tick must be at least ticks_per_slot - 1
-    let last_tick_entry_index = ticks_per_slot as usize - 2;
+    let last_tick_entry_index = ticks_per_slot as usize - 1;
     let entries = read_ledger(&bootstrap_leader_ledger_path);
     assert!(entries.len() >= last_tick_entry_index + 1);
     let expected_last_tick = &entries[last_tick_entry_index];

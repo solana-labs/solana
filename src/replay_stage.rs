@@ -87,6 +87,7 @@ impl ReplayStage {
         let mut res = Ok(());
         let mut num_entries_to_write = entries.len();
         let now = Instant::now();
+
         if !entries.as_slice().verify(&last_entry_id.read().unwrap()) {
             inc_new_counter_info!("replicate_stage-verify-fail", entries.len());
             return Err(Error::BlobError(BlobError::VerificationFailed));
@@ -411,7 +412,7 @@ mod test {
         let old_leader_id = Keypair::new().pubkey();
 
         // Create a ledger
-        let (mint_keypair, my_ledger_path, genesis_entry_height, mut last_id) =
+        let (mint_keypair, my_ledger_path, genesis_entry_height, mut last_id, last_entry_id) =
             create_tmp_sample_ledger(
                 "test_replay_stage_leader_rotation_exit",
                 10_000,
@@ -433,7 +434,7 @@ mod test {
             &mint_keypair,
             100,
             ticks_per_slot, // add a vote for tick_height = ticks_per_slot
-            &last_id,
+            &last_entry_id,
             &last_id,
             0,
         );
@@ -538,13 +539,14 @@ mod test {
         // Create keypair for the leader
         let leader_id = Keypair::new().pubkey();
 
-        let (_, my_ledger_path, _, _) = create_tmp_sample_ledger(
-            "test_vote_error_replay_stage_correctness",
-            10_000,
-            1,
-            leader_id,
-            500,
-        );
+        let (_mint_keypair, my_ledger_path, _last_entry_height, _last_id, _last_entry_id) =
+            create_tmp_sample_ledger(
+                "test_vote_error_replay_stage_correctness",
+                10_000,
+                1,
+                leader_id,
+                500,
+            );
 
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
@@ -583,7 +585,7 @@ mod test {
             let vote = VoteTransaction::new_vote(keypair, bank.tick_height(), bank.last_id(), 0);
             cluster_info_me.write().unwrap().push_vote(vote);
 
-            // Send ReplayStage an entry, should see it on the ledger writer receiver
+            info!("Send ReplayStage an entry, should see it on the ledger writer receiver");
             let next_tick = create_ticks(1, last_entry_id);
 
             blocktree
@@ -592,7 +594,7 @@ mod test {
 
             let received_tick = ledger_writer_recv
                 .recv()
-                .expect("Expected to recieve an entry on the ledger writer receiver");
+                .expect("Expected to receive an entry on the ledger writer receiver");
 
             assert_eq!(next_tick, received_tick);
 
@@ -617,7 +619,7 @@ mod test {
         let leader_id = Keypair::new().pubkey();
 
         // Create the ledger
-        let (mint_keypair, my_ledger_path, genesis_entry_height, last_id) =
+        let (mint_keypair, my_ledger_path, genesis_entry_height, last_id, last_entry_id) =
             create_tmp_sample_ledger(
                 "test_vote_error_replay_stage_leader_rotation",
                 10_000,
@@ -630,8 +632,15 @@ mod test {
         // Write two entries to the ledger so that the validator is in the active set:
         // 1) Give the validator a nonzero number of tokens 2) A vote from the validator.
         // This will cause leader rotation after the bootstrap height
-        let (active_set_entries, voting_keypair) =
-            make_active_set_entries(&my_keypair, &mint_keypair, 100, 1, &last_id, &last_id, 0);
+        let (active_set_entries, voting_keypair) = make_active_set_entries(
+            &my_keypair,
+            &mint_keypair,
+            100,
+            1,
+            &last_entry_id,
+            &last_id,
+            0,
+        );
         let mut last_id = active_set_entries.last().unwrap().id;
         let initial_tick_height = genesis_entry_height;
 

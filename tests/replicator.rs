@@ -40,7 +40,7 @@ fn test_replicator_startup_basic() {
     let leader_info = leader_node.info.clone();
 
     let leader_ledger_path = "replicator_test_leader_ledger";
-    let (mint_keypair, leader_ledger_path, _last_entry_height, _last_entry_id) =
+    let (mint_keypair, leader_ledger_path, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_ledger(leader_ledger_path, 1_000_000_000, 0, leader_info.id, 42);
 
     let validator_ledger_path =
@@ -277,7 +277,7 @@ fn test_replicator_startup_ledger_hang() {
     let leader_info = leader_node.info.clone();
 
     let leader_ledger_path = "replicator_test_leader_ledger";
-    let (_mint_keypair, leader_ledger_path, _last_entry_height, _last_entry_id) =
+    let (_mint_keypair, leader_ledger_path, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_ledger(leader_ledger_path, 100, 0, leader_info.id, 42);
 
     let validator_ledger_path =
