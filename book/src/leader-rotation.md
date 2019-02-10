@@ -13,13 +13,14 @@ Each validator selects the expected leader using the same algorithm, described
 below. When the validator receives a new signed ledger entry, it can be certain
 that entry was produced by the expected leader.
 
-## Leader Schedule Generation at Epoch
+## Leader Schedule Rotation
 
-Leader schedule is generated at a predefined time, using a root fork.
+Leader schedule is generated every epoch when the root fork crosses the
+epoch boundary.
 
-1. The root checkpoint is updated as a validator votes for new forks.
+1. The root fork is updated as a validator votes for new forks.
 
-2. When the root checkpoint slot height crosses the epoch boundary, the leader
+2. When the root fork slot height crosses the epoch boundary, the leader
 schedule is updated for the next epoch.
 
 For example:
@@ -31,7 +32,7 @@ from slot 200 until it is updated.
 
 If the next slot skips an epoch, it is due to a considerable network failure,
 and the leader schedule from the previous epoch is still valid until the root
-checkpoint is updated.
+fork is updated.
 
 ## Leader Schedule Generation at Genesis
 
