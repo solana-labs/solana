@@ -150,15 +150,7 @@ impl SlotMeta {
             // A placeholder slot does not contain all the ticks
             false
         } else {
-            let num_expected_ticks = {
-                let num = self.num_expected_ticks(blocktree);
-                if self.slot_height == 0 {
-                    num - 1
-                } else {
-                    num
-                }
-            };
-            num_expected_ticks <= self.consumed_ticks
+            self.num_expected_ticks(blocktree) <= self.consumed_ticks
         }
     }
 
@@ -1305,35 +1297,38 @@ pub fn get_tmp_ledger_path(name: &str) -> String {
     path
 }
 
-pub fn create_tmp_ledger(name: &str, genesis_block: &GenesisBlock) -> String {
-    let ledger_path = get_tmp_ledger_path(name);
-    create_new_ledger(&ledger_path, genesis_block).unwrap();
-    ledger_path
-}
-
 pub fn create_tmp_sample_ledger(
     name: &str,
     num_tokens: u64,
     num_extra_ticks: u64,
     bootstrap_leader_id: Pubkey,
     bootstrap_leader_tokens: u64,
-) -> (Keypair, String, u64, Hash) {
+) -> (Keypair, String, u64, Hash, Hash) {
     let (genesis_block, mint_keypair) =
         GenesisBlock::new_with_leader(num_tokens, bootstrap_leader_id, bootstrap_leader_tokens);
     let ledger_path = get_tmp_ledger_path(name);
-    let (mut entry_height, mut last_id) = create_new_ledger(&ledger_path, &genesis_block).unwrap();
+    let (mut entry_height, mut last_entry_id) =
+        create_new_ledger(&ledger_path, &genesis_block).unwrap();
 
+    let mut last_id = genesis_block.last_id();
     if num_extra_ticks > 0 {
-        let entries = crate::entry::create_ticks(num_extra_ticks, last_id);
+        let entries = crate::entry::create_ticks(num_extra_ticks, last_entry_id);
 
         let blocktree = Blocktree::open(&ledger_path).unwrap();
         blocktree
             .write_entries(DEFAULT_SLOT_HEIGHT, entry_height, &entries)
             .unwrap();
         entry_height += entries.len() as u64;
-        last_id = entries.last().unwrap().id
+        last_id = entries.last().unwrap().id;
+        last_entry_id = last_id;
     }
-    (mint_keypair, ledger_path, entry_height, last_id)
+    (
+        mint_keypair,
+        ledger_path,
+        entry_height,
+        last_id,
+        last_entry_id,
+    )
 }
 
 pub fn tmp_copy_ledger(from: &str, name: &str) -> String {
@@ -1992,11 +1987,7 @@ mod tests {
                     assert_eq!(s.next_slots, vec![i + 1]);
                 }
                 assert_eq!(s.num_blocks, 1);
-                if i == 0 {
-                    assert_eq!(s.consumed_ticks, ticks_per_slot - 1);
-                } else {
-                    assert_eq!(s.consumed_ticks, ticks_per_slot);
-                }
+                assert_eq!(s.consumed_ticks, ticks_per_slot);
                 assert!(s.is_trunk);
             }
         }
@@ -2062,11 +2053,7 @@ mod tests {
                 } else {
                     assert!(s.next_slots.is_empty());
                 }
-                if i == 0 {
-                    assert_eq!(s.consumed_ticks, ticks_per_slot - 1);
-                } else {
-                    assert_eq!(s.consumed_ticks, ticks_per_slot);
-                }
+                assert_eq!(s.consumed_ticks, ticks_per_slot);
                 assert!(s.is_trunk);
             }
         }

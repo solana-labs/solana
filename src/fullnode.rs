@@ -567,7 +567,7 @@ mod tests {
 
         let validator_keypair = Keypair::new();
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
-        let (_, validator_ledger_path, _, _) =
+        let (_mint_keypair, validator_ledger_path, _last_entry_height, _last_id, _last_entry_id) =
             create_tmp_sample_ledger("validator_exit", 10_000, 0, leader_keypair.pubkey(), 1000);
 
         let validator = Fullnode::new(
@@ -592,7 +592,13 @@ mod tests {
             .map(|i| {
                 let validator_keypair = Keypair::new();
                 let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
-                let (_, validator_ledger_path, _, _) = create_tmp_sample_ledger(
+                let (
+                    _mint_keypair,
+                    validator_ledger_path,
+                    _last_entry_height,
+                    _last_id,
+                    _last_entry_id,
+                ) = create_tmp_sample_ledger(
                     &format!("validator_parallel_exit_{}", i),
                     10_000,
                     0,
@@ -632,14 +638,19 @@ mod tests {
         let bootstrap_leader_node =
             Node::new_localhost_with_pubkey(bootstrap_leader_keypair.pubkey());
 
-        let (_mint_keypair, bootstrap_leader_ledger_path, _genesis_entry_height, _last_id) =
-            create_tmp_sample_ledger(
-                "test_leader_to_leader_transition",
-                10_000,
-                1,
-                bootstrap_leader_keypair.pubkey(),
-                500,
-            );
+        let (
+            _mint_keypair,
+            bootstrap_leader_ledger_path,
+            _genesis_entry_height,
+            _last_id,
+            _last_entry_id,
+        ) = create_tmp_sample_ledger(
+            "test_leader_to_leader_transition",
+            10_000,
+            1,
+            bootstrap_leader_keypair.pubkey(),
+            500,
+        );
 
         // Once the bootstrap leader hits the second epoch, because there are no other choices in
         // the active set, this leader will remain the leader in the second epoch. In the second
@@ -960,13 +971,14 @@ mod tests {
 
         // Create validator identity
         assert!(num_genesis_ticks <= ticks_per_block);
-        let (mint_keypair, ledger_path, genesis_entry_height, last_id) = create_tmp_sample_ledger(
-            test_name,
-            10_000,
-            num_genesis_ticks,
-            leader_node.info.id,
-            500,
-        );
+        let (mint_keypair, ledger_path, genesis_entry_height, last_id, last_entry_id) =
+            create_tmp_sample_ledger(
+                test_name,
+                10_000,
+                num_genesis_ticks,
+                leader_node.info.id,
+                500,
+            );
 
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
@@ -982,7 +994,7 @@ mod tests {
             &mint_keypair,
             10,
             1,
-            &last_id,
+            &last_entry_id,
             &last_id,
             num_ending_ticks,
         );

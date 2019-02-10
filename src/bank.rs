@@ -817,25 +817,40 @@ impl Bank {
     where
         I: IntoIterator<Item = Entry>,
     {
-        let mut entry_height = 0;
-        let mut last_id = self.last_id();
+        let mut last_entry_id = self.last_id();
+        let mut entries_iter = entries.into_iter();
+
+        trace!("genesis last_id={}", last_entry_id);
+
+        // The first entry in the ledger is a pseudo-tick used only to ensure the number of ticks
+        // in slot 0 is the same as the number of ticks in all subsequent slots.  It is not
+        // registered as a tick and thus cannot be used as a last_id
+        let entry0 = entries_iter
+            .next()
+            .ok_or(BankError::LedgerVerificationFailed)?;
+        if !(entry0.is_tick() && entry0.verify(&last_entry_id)) {
+            warn!("Ledger proof of history failed at entry0");
+            return Err(BankError::LedgerVerificationFailed);
+        }
+        last_entry_id = entry0.id;
+        let mut entry_height = 1;
 
         // Ledger verification needs to be parallelized, but we can't pull the whole
         // thing into memory. We therefore chunk it.
-        for block in &entries.into_iter().chunks(VERIFY_BLOCK_SIZE) {
+        for block in &entries_iter.chunks(VERIFY_BLOCK_SIZE) {
             let block: Vec<_> = block.collect();
 
-            if !block.verify(&last_id) {
+            if !block.verify(&last_entry_id) {
                 warn!("Ledger proof of history failed at entry: {}", entry_height);
                 return Err(BankError::LedgerVerificationFailed);
             }
 
             self.process_block(&block)?;
 
-            last_id = block.last().unwrap().id;
+            last_entry_id = block.last().unwrap().id;
             entry_height += block.len() as u64;
         }
-        Ok((entry_height, last_id))
+        Ok((entry_height, last_entry_id))
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
@@ -1251,10 +1266,12 @@ mod tests {
     ) -> impl Iterator<Item = Entry> {
         let mut entries: Vec<Entry> = vec![];
 
-        // Start off the ledger with a tick linked to the genesis block
+        let mut last_id = genesis_block.last_id();
+
+        // Start off the ledger with the psuedo-tick linked to the genesis block
+        // (see entry0 in `process_ledger`)
         let tick = Entry::new(&genesis_block.last_id(), 0, 1, vec![]);
         let mut hash = tick.id;
-        let mut last_id = tick.id;
         entries.push(tick);
 
         let num_hashes = 1;
@@ -1281,10 +1298,12 @@ mod tests {
     ) -> impl Iterator<Item = Entry> {
         let mut entries = vec![];
 
-        // Start off the ledger with a tick linked to the genesis block
+        let mut last_id = genesis_block.last_id();
+
+        // Start off the ledger with the psuedo-tick linked to the genesis block
+        // (see entry0 in `process_ledger`)
         let tick = Entry::new(&genesis_block.last_id(), 0, 1, vec![]);
         let mut hash = tick.id;
-        let mut last_id = tick.id;
         entries.push(tick);
 
         for i in 0..num_one_token_transfers {
@@ -1351,7 +1370,7 @@ mod tests {
         let (ledger_height, last_id) = bank.process_ledger(ledger).unwrap();
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 3);
         assert_eq!(ledger_height, 8);
-        assert_eq!(bank.tick_height(), 2);
+        assert_eq!(bank.tick_height(), 1);
         assert_eq!(bank.last_id(), last_id);
     }
 
