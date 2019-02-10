@@ -77,9 +77,6 @@ pub fn process_blob(
     let is_coding = blob.read().unwrap().is_coding();
 
     // Check if the blob is in the range of our known leaders. If not, we return.
-    // TODO: Need to update slot in broadcast, otherwise this check will fail with
-    // leader rotation enabled
-    // Github issue: https://github.com/solana-labs/solana/issues/1899.
     let (slot, pix) = {
         let r_blob = blob.read().unwrap();
         (r_blob.slot(), r_blob.index())
