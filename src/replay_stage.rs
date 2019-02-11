@@ -176,7 +176,6 @@ impl ReplayStage {
         bank: Arc<Bank>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         exit: Arc<AtomicBool>,
-        mut current_blob_index: u64,
         last_entry_id: Arc<RwLock<Hash>>,
         to_leader_sender: &TvuRotationSender,
         ledger_signal_sender: SyncSender<bool>,
@@ -197,7 +196,7 @@ impl ReplayStage {
                 let _exit = Finalizer::new(exit_.clone());
                 let mut last_leader_id = Self::get_leader_for_next_tick(&bank);
                 let mut prev_slot = None;
-                let (mut current_slot, mut max_tick_height_for_slot) = {
+                let (mut current_slot, mut max_tick_height_for_slot, mut current_blob_index) = {
                     let tick_height = bank.tick_height();
                     let leader_scheduler = bank.leader_scheduler.read().unwrap();
                     let current_slot = leader_scheduler.tick_height_to_slot(tick_height + 1);
@@ -206,6 +205,14 @@ impl ReplayStage {
                         Some(current_slot),
                         first_tick_in_current_slot
                             + leader_scheduler.num_ticks_left_in_slot(first_tick_in_current_slot),
+                        {
+                            let meta = blocktree.meta(current_slot).expect("Database error");
+                            if let Some(meta) = meta {
+                                meta.consumed
+                            } else {
+                                0
+                            }
+                        },
                     )
                 };
 
@@ -449,7 +456,6 @@ mod test {
                 bank.clone(),
                 Arc::new(RwLock::new(cluster_info_me)),
                 exit.clone(),
-                meta.consumed,
                 Arc::new(RwLock::new(last_entry_id)),
                 &rotation_sender,
                 l_sender,
@@ -542,7 +548,6 @@ mod test {
                 bank.clone(),
                 cluster_info_me.clone(),
                 exit.clone(),
-                entry_height,
                 Arc::new(RwLock::new(last_entry_id)),
                 &to_leader_sender,
                 l_sender,
@@ -655,7 +660,6 @@ mod test {
                 bank.clone(),
                 cluster_info_me.clone(),
                 exit.clone(),
-                meta.consumed,
                 Arc::new(RwLock::new(last_entry_id)),
                 &rotation_tx,
                 l_sender,

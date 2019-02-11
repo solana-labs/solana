@@ -252,12 +252,9 @@ impl Fullnode {
         // Setup channel for rotation indications
         let (rotation_sender, rotation_receiver) = channel();
 
-        let blob_index = Self::get_consumed_for_slot(&blocktree, slot_height);
-
         let (tvu, blob_sender) = Tvu::new(
             voting_keypair_option,
             &bank,
-            blob_index,
             entry_height,
             last_entry_id,
             &cluster_info,
@@ -270,6 +267,7 @@ impl Fullnode {
             ledger_signal_sender,
             ledger_signal_receiver,
         );
+
         let tpu = Tpu::new(
             &Arc::new(bank.copy_for_tpu()),
             PohServiceConfig::default(),
@@ -285,7 +283,7 @@ impl Fullnode {
             cluster_info.clone(),
             config.sigverify_disabled,
             max_tpu_tick_height,
-            blob_index,
+            Self::get_consumed_for_slot(&blocktree, slot_height),
             &last_entry_id,
             id,
             &rotation_sender,
