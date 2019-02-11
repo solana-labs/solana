@@ -23,6 +23,9 @@ epoch boundary.
 2. When the root fork slot height crosses the epoch boundary, the leader
 schedule is updated for the next epoch.
 
+3. Since the schedule is for the next epoch, any new stakes committed to the
+root fork will not be active until the next epoch.
+
 For example:
 
 The epoch is 100 slots. The root fork is updated from fork computed at slot 99
@@ -33,6 +36,9 @@ from slot 200 until it is updated.
 If the next slot skips an epoch, it is due to a considerable network failure,
 and the leader schedule from the previous epoch is still valid until the root
 fork is updated.
+
+No skews can exist because *everyone* that is voting with the network has
+skipped 100 and 101 when their root reaches 102.
 
 ## Leader Schedule Generation at Genesis
 
