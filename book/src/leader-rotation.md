@@ -21,7 +21,8 @@ epoch boundary.
 1. The root fork is updated as a validator votes for new forks.
 
 2. When the root fork slot height crosses the epoch boundary, the leader
-schedule is updated for the next epoch.
+schedule is updated for the next epoch given the live fork that caused the
+update.
 
 3. Since the schedule is for the next epoch, any new stakes committed to the
 root fork will not be active until the next epoch.
@@ -33,12 +34,24 @@ to a fork computed at slot 102. Slot 100,101 forks were skipped because of
 failures.  The new leader schedule is computed using fork 102.  It is active
 from slot 200 until it is updated.
 
+No skews can exist because *everyone* that is voting with the network has
+skipped 100 and 101 when their root reaches 102.
+
+### Leader Schedule Rotation Across Epochs
+
 If the next slot skips an epoch, it is due to a considerable network failure,
 and the leader schedule from the previous epoch is still valid until the root
 fork is updated.
 
-No skews can exist because *everyone* that is voting with the network has
-skipped 100 and 101 when their root reaches 102.
+For example:
+
+1. Large network timeout occurs.
+2. Vote occurs on fork 201
+3. Root checkpoint moves from 99 to 102
+4. Leader scheduler is updated for epoch 300+, using fork 102.
+
+The vote at 201 cannot be rolled back until the fork selection timeout occurs,
+and voting on a previous fork is a slashing condition.
 
 ## Leader Schedule Generation at Genesis
 
