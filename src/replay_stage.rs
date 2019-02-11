@@ -5,11 +5,11 @@ use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
 use crate::entry::{Entry, EntryReceiver, EntrySender, EntrySlice};
-#[cfg(not(test))]
-use crate::entry_stream::SocketEntryStream as EntryStream;
 use crate::entry_stream::EntryStreamHandler;
 #[cfg(test)]
 use crate::entry_stream::MockEntryStream as EntryStream;
+#[cfg(not(test))]
+use crate::entry_stream::SocketEntryStream as EntryStream;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -134,19 +134,16 @@ impl ReplayStage {
                         let keypair = voting_keypair.as_ref();
                         let tick_height = bank.tick_height();
                         let last_id = bank.last_id();
-                        let vote = VoteTransaction::new_vote(
-                            keypair,
-                            tick_height,
-                            last_id,
-                            0,
-                        );
+                        let vote = VoteTransaction::new_vote(keypair, tick_height, last_id, 0);
                         cluster_info.write().unwrap().push_vote(vote);
 
                         if let Some(estream) = entry_stream {
                             let leader_scheduler = bank.leader_scheduler.read().unwrap();
-                            estream.emit_block_event(&leader_scheduler, tick_height, last_id).unwrap_or_else(|e| {
-                                error!("Entry Stream error: {:?}, {:?}", e, estream);
-                            });
+                            estream
+                                .emit_block_event(&leader_scheduler, tick_height, last_id)
+                                .unwrap_or_else(|e| {
+                                    error!("Entry Stream error: {:?}, {:?}", e, estream);
+                                });
                         }
                     }
                 }
@@ -835,8 +832,6 @@ mod test {
             &mut entry_stream_opt,
         )
         .unwrap();
-
-//        assert_eq!(entry_stream_opt.unwrap().entries().len(), 6 as usize);
 
         for (i, item) in entry_stream_opt.unwrap().entries().iter().enumerate() {
             let json: Value = serde_json::from_str(&item).unwrap();

@@ -7,17 +7,17 @@ use crate::leader_scheduler::LeaderScheduler;
 use crate::result::Result;
 use chrono::{SecondsFormat, Utc};
 use solana_sdk::hash::Hash;
+use std::cell::RefCell;
 use std::io::prelude::*;
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
-use std::cell::RefCell;
 
 pub trait Output: std::fmt::Display + std::fmt::Debug {
     fn write(&self, payload: String) -> Result<()>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct VecOutput {
     values: RefCell<Vec<String>>,
 }
@@ -37,7 +37,9 @@ impl std::fmt::Display for VecOutput {
 
 impl VecOutput {
     pub fn new() -> Self {
-        VecOutput { values: RefCell::new(Vec::new()) }
+        VecOutput {
+            values: RefCell::new(Vec::new()),
+        }
     }
 
     pub fn entries(&self) -> Vec<String> {
@@ -75,7 +77,7 @@ pub trait EntryStreamHandler {
         &self,
         leader_scheduler: &LeaderScheduler,
         tick_height: u64,
-        last_id: Hash
+        last_id: Hash,
     ) -> Result<()>;
 }
 
@@ -85,18 +87,17 @@ pub struct EntryStream<T: Output> {
 }
 
 impl<T> EntryStreamHandler for EntryStream<T>
-where T:Output {
+where
+    T: Output,
+{
     fn emit_entry_events(
         &self,
         leader_scheduler: &LeaderScheduler,
         entries: &[Entry],
     ) -> Result<()> {
         for entry in entries {
-            let slot = leader_scheduler
-                .tick_height_to_slot(entry.tick_height);
-            let leader_id = leader_scheduler
-                .get_leader_for_slot(slot)
-                .unwrap();
+            let slot = leader_scheduler.tick_height_to_slot(entry.tick_height);
+            let leader_id = leader_scheduler.get_leader_for_slot(slot).unwrap();
 
             let json_leader_id = serde_json::to_string(&leader_id)?;
             let json_entry = serde_json::to_string(&entry)?;
@@ -113,12 +114,14 @@ where T:Output {
         Ok(())
     }
 
-    fn emit_block_event(&self, leader_scheduler: &LeaderScheduler, tick_height: u64, last_id: Hash) -> Result<()> {
-        let slot = leader_scheduler
-            .tick_height_to_slot(tick_height);
-        let leader_id = leader_scheduler
-            .get_leader_for_slot(slot)
-            .unwrap();
+    fn emit_block_event(
+        &self,
+        leader_scheduler: &LeaderScheduler,
+        tick_height: u64,
+        last_id: Hash,
+    ) -> Result<()> {
+        let slot = leader_scheduler.tick_height_to_slot(tick_height);
+        let leader_id = leader_scheduler.get_leader_for_slot(slot).unwrap();
         let json_leader_id = serde_json::to_string(&leader_id)?;
         let json_last_id = serde_json::to_string(&last_id)?;
         let payload = format!(
@@ -148,7 +151,7 @@ impl SocketEntryStream {
 pub type MockEntryStream = EntryStream<VecOutput>;
 
 impl MockEntryStream {
-    pub fn new(_:String) -> Self {
+    pub fn new(_: String) -> Self {
         EntryStream {
             output: VecOutput::new(),
         }
@@ -172,16 +175,16 @@ mod test {
     use std::collections::HashSet;
     use std::os::unix::net::UnixListener;
     use std::result::Result::Err;
-    use std::thread;
     use std::sync::Arc;
-    use std::sync::Mutex;
     use std::sync::Barrier;
+    use std::sync::Mutex;
+    use std::thread;
 
     #[test]
     fn test_entry_stream() -> () {
         // Set up entry stream
         let entry_stream = MockEntryStream::new("test_stream".to_string());
-        let leader_scheduler_config = LeaderSchedulerConfig::new(5, 2,10);
+        let leader_scheduler_config = LeaderSchedulerConfig::new(5, 2, 10);
         let (genesis_block, _mint_keypair) = GenesisBlock::new(1_000_000);
         let bank = Bank::new_with_leader_scheduler_config(&genesis_block, &leader_scheduler_config);
         let mut leader_scheduler = bank.leader_scheduler.write().unwrap();
@@ -198,9 +201,11 @@ mod test {
             leader_scheduler.update_tick_height(tick_height, &bank);
             let curr_slot = leader_scheduler.tick_height_to_slot(tick_height);
             if curr_slot != last_slot {
-                entry_stream.emit_block_event(&leader_scheduler, tick_height - 1, last_id).unwrap_or_else(|e| {
-                    error!("Entry Stream error: {:?}, {:?}", e, entry_stream);
-                });
+                entry_stream
+                    .emit_block_event(&leader_scheduler, tick_height - 1, last_id)
+                    .unwrap_or_else(|e| {
+                        error!("Entry Stream error: {:?}, {:?}", e, entry_stream);
+                    });
             }
             let entry = Entry::new(&mut last_id, tick_height, 1, vec![]); //just ticks
             last_id = entry.id;
@@ -276,7 +281,7 @@ mod test {
     }
 
     struct SocketCleanup {
-        socket_path: String
+        socket_path: String,
     }
 
     impl Drop for SocketCleanup {
@@ -288,7 +293,7 @@ mod test {
     impl SocketCleanup {
         fn new(socket_path: String) -> Self {
             match std::fs::remove_file(Path::new(&socket_path)) {
-                _ => ()
+                _ => (),
             }
 
             SocketCleanup { socket_path }
@@ -306,30 +311,29 @@ mod test {
         let barrier = Arc::new(Barrier::new(3));
 
         {
-            let output= Arc::new(Mutex::new(Vec::<String>::new()));
+            let output = Arc::new(Mutex::new(Vec::<String>::new()));
 
-            let reader = |x: u64, barrier: Arc<Barrier>, output : Arc<Mutex<Vec<String>>>| {
+            let reader = |x: u64, barrier: Arc<Barrier>, output: Arc<Mutex<Vec<String>>>| {
                 move || {
-                    println!("reader starting: {}", x);
+                    info!("reader starting: {}", x);
                     let cloned_output = output.clone();
                     let n = x.clone();
 
                     let socket_path = Path::new(socket.clone());
-                    println!("reader listening: {}", x);
+                    info!("reader listening: {}", x);
                     let listener = UnixListener::bind(socket_path).unwrap();
-                    println!("reader notifying: {}", x);
+                    info!("reader notifying: {}", x);
 
                     barrier.wait();
                     let mut i = 0;
 
                     loop {
-
-                        println!("reader accepting: {}", x);
+                        info!("reader accepting: {}", x);
                         match listener.accept() {
                             Ok((mut sock, _addr)) => {
                                 let mut response = String::new();
                                 sock.read_to_string(&mut response).unwrap();
-                                println!("reader received: {}", response.clone());
+                                info!("reader received: {}", response.clone());
                                 {
                                     cloned_output.lock().unwrap().push(response.clone());
                                 }
@@ -337,33 +341,30 @@ mod test {
                                 i += 1;
 
                                 if i == n {
-                                    break
+                                    break;
                                 }
-                            },
-                            Err(e) => panic!(e)
+                            }
+                            Err(e) => panic!(e),
                         }
                     }
 
-                    println!("reader finished: {}", x);
+                    info!("reader finished: {}", x);
                     socket_cleanup.ping();
                 }
             };
 
             let writer = |x: String, barrier: Arc<Barrier>| {
                 move || {
-                    println!("writer starting: {}", x);
-
-
+                    info!("writer starting: {}", x);
                     let y = x.clone();
-                    println!("writer waiting: {}", x);
+                    info!("writer waiting: {}", x);
                     barrier.clone().wait();
-
-                    println!("writer sleeping: {}", x);
-//                    thread::sleep(Duration::from_millis(400));
-                    println!("writer writing: {}", x);
-                    let socket_output = SocketOutput { socket: socket.clone().to_string() };
+                    info!("writer writing: {}", x);
+                    let socket_output = SocketOutput {
+                        socket: socket.clone().to_string(),
+                    };
                     socket_output.write(y.to_string()).unwrap();
-                    println!("writer finished: {}", x);
+                    info!("writer finished: {}", x);
                 }
             };
 
@@ -383,8 +384,14 @@ mod test {
 
             {
                 let entries = output.lock().unwrap();
-                assert!(entries.contains(&"hello".to_string()), "doesn't contain 'hello'");
-                assert!(entries.contains(&"goodbye".to_string()), "doesn't contain 'goodbye'");
+                assert!(
+                    entries.contains(&"hello".to_string()),
+                    "doesn't contain 'hello'"
+                );
+                assert!(
+                    entries.contains(&"goodbye".to_string()),
+                    "doesn't contain 'goodbye'"
+                );
             }
         }
     }
