@@ -16,6 +16,7 @@ use crate::bank::Bank;
 use crate::blob_fetch_stage::BlobFetchStage;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
+use crate::entry_stream_stage::EntryStreamStage;
 use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
 use crate::service::Service;
@@ -39,6 +40,7 @@ pub struct Tvu {
     fetch_stage: BlobFetchStage,
     retransmit_stage: RetransmitStage,
     replay_stage: ReplayStage,
+    entry_stream_stage: EntryStreamStage,
     storage_stage: StorageStage,
     exit: Arc<AtomicBool>,
     last_entry_id: Arc<RwLock<Hash>>,
@@ -126,14 +128,20 @@ impl Tvu {
             blob_index,
             l_last_entry_id.clone(),
             to_leader_sender,
-            entry_stream,
             ledger_signal_sender,
             ledger_signal_receiver,
         );
 
+        let (entry_stream_stage, entry_stream_receiver) = EntryStreamStage::new(
+            ledger_entry_receiver,
+            entry_stream,
+            bank.leader_scheduler.clone(),
+            exit.clone(),
+        );
+
         let storage_stage = StorageStage::new(
             storage_state,
-            ledger_entry_receiver,
+            entry_stream_receiver,
             Some(blocktree),
             &keypair,
             &exit.clone(),
@@ -147,6 +155,7 @@ impl Tvu {
                 fetch_stage,
                 retransmit_stage,
                 replay_stage,
+                entry_stream_stage,
                 storage_stage,
                 exit,
                 last_entry_id: l_last_entry_id,
@@ -188,6 +197,7 @@ impl Service for Tvu {
         self.retransmit_stage.join()?;
         self.fetch_stage.join()?;
         self.storage_stage.join()?;
+        self.entry_stream_stage.join()?;
         self.replay_stage.join()?;
         Ok(())
     }

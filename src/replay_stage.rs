@@ -5,11 +5,6 @@ use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
 use crate::entry::{Entry, EntryReceiver, EntrySender, EntrySlice};
-#[cfg(not(test))]
-use crate::entry_stream::EntryStream;
-use crate::entry_stream::EntryStreamHandler;
-#[cfg(test)]
-use crate::entry_stream::MockEntryStream as EntryStream;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -70,13 +65,7 @@ impl ReplayStage {
         ledger_entry_sender: &EntrySender,
         current_blob_index: &mut u64,
         last_entry_id: &Arc<RwLock<Hash>>,
-        entry_stream: Option<&mut EntryStream>,
     ) -> Result<()> {
-        if let Some(stream) = entry_stream {
-            stream.stream_entries(&entries).unwrap_or_else(|e| {
-                error!("Entry Stream error: {:?}, {:?}", e, stream.socket);
-            });
-        }
         // Coalesce all the available entries into a single vote
         submit(
             influxdb::Point::new("replicate-stage")
@@ -190,12 +179,10 @@ impl ReplayStage {
         mut current_blob_index: u64,
         last_entry_id: Arc<RwLock<Hash>>,
         to_leader_sender: &TvuRotationSender,
-        entry_stream: Option<&String>,
         ledger_signal_sender: SyncSender<bool>,
         ledger_signal_receiver: Receiver<bool>,
     ) -> (Self, EntryReceiver) {
         let (ledger_entry_sender, ledger_entry_receiver) = channel();
-        let mut entry_stream = entry_stream.cloned().map(EntryStream::new);
         #[cfg(test)]
         let (pause, pause_) = {
             let pause = Arc::new(AtomicBool::new(false));
@@ -279,7 +266,6 @@ impl ReplayStage {
                             &ledger_entry_sender,
                             &mut current_blob_index,
                             &last_entry_id,
-                            entry_stream.as_mut(),
                         ) {
                             error!("process_entries failed: {:?}", e);
                         }
@@ -383,8 +369,6 @@ mod test {
     use crate::leader_scheduler::{make_active_set_entries, LeaderSchedulerConfig};
     use crate::replay_stage::ReplayStage;
     use crate::voting_keypair::VotingKeypair;
-    use chrono::{DateTime, FixedOffset};
-    use serde_json::Value;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
@@ -468,7 +452,6 @@ mod test {
                 meta.consumed,
                 Arc::new(RwLock::new(last_entry_id)),
                 &rotation_sender,
-                None,
                 l_sender,
                 l_receiver,
             );
@@ -562,7 +545,6 @@ mod test {
                 entry_height,
                 Arc::new(RwLock::new(last_entry_id)),
                 &to_leader_sender,
-                None,
                 l_sender,
                 l_receiver,
             );
@@ -676,7 +658,6 @@ mod test {
                 meta.consumed,
                 Arc::new(RwLock::new(last_entry_id)),
                 &rotation_tx,
-                None,
                 l_sender,
                 l_receiver,
             );
@@ -759,7 +740,6 @@ mod test {
             &ledger_entry_sender,
             &mut current_blob_index,
             &Arc::new(RwLock::new(last_entry_id)),
-            None,
         );
 
         match res {
@@ -781,7 +761,6 @@ mod test {
             &ledger_entry_sender,
             &mut current_blob_index,
             &Arc::new(RwLock::new(last_entry_id)),
-            None,
         );
 
         match res {
@@ -792,61 +771,6 @@ mod test {
                 "Should have failed because with blob error, instead, got {:?}",
                 e
             ),
-        }
-    }
-
-    #[test]
-    fn test_replay_stage_stream_entries() {
-        // Set up entry stream
-        let mut entry_stream = EntryStream::new("test_stream".to_string());
-
-        // Set up dummy node to host a ReplayStage
-        let my_keypair = Keypair::new();
-        let my_id = my_keypair.pubkey();
-        let my_node = Node::new_localhost_with_pubkey(my_id);
-        // Set up the cluster info
-        let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
-        let (ledger_entry_sender, _ledger_entry_receiver) = channel();
-        let last_entry_id = Hash::default();
-
-        let mut entry_height = 0;
-        let mut last_id = Hash::default();
-        let mut entries = Vec::new();
-        let mut expected_entries = Vec::new();
-        for _ in 0..5 {
-            let entry = Entry::new(&mut last_id, 0, 1, vec![]); //just ticks
-            last_id = entry.id;
-            expected_entries.push(entry.clone());
-            entries.push(entry);
-        }
-
-        let my_keypair = Arc::new(my_keypair);
-        let voting_keypair = Arc::new(VotingKeypair::new_local(&my_keypair));
-        let bank = Bank::new(&GenesisBlock::new(123).0);
-        ReplayStage::process_entries(
-            entries.clone(),
-            &Arc::new(bank),
-            &cluster_info_me,
-            Some(&voting_keypair),
-            &ledger_entry_sender,
-            &mut entry_height,
-            &Arc::new(RwLock::new(last_entry_id)),
-            Some(&mut entry_stream),
-        )
-        .unwrap();
-
-        assert_eq!(entry_stream.socket.len(), 5);
-
-        for (i, item) in entry_stream.socket.iter().enumerate() {
-            let json: Value = serde_json::from_str(&item).unwrap();
-            let dt_str = json["dt"].as_str().unwrap();
-
-            // Ensure `ts` field parses as valid DateTime
-            let _dt: DateTime<FixedOffset> = DateTime::parse_from_rfc3339(dt_str).unwrap();
-
-            let entry_obj = json["entry"].clone();
-            let entry: Entry = serde_json::from_value(entry_obj).unwrap();
-            assert_eq!(entry, expected_entries[i]);
         }
     }
 }
