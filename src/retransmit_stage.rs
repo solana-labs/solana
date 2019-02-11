@@ -221,7 +221,8 @@ mod tests {
 
     fn run_simulation(num_nodes: u64, fanout: usize, hood_size: usize) {
         let num_threads = num_threads();
-        let timeout = 60;
+        // set timeout to 5 minutes
+        let timeout = 60 * 5;
 
         // math yo
         let required_balance = num_nodes * (num_nodes + 1) / 2;
