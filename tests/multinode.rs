@@ -1654,3 +1654,91 @@ fn retry_send_tx_and_retry_get_balance(
     }
     None
 }
+
+fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64) {
+    solana_logger::setup();
+    info!(
+        "fullnode_rotate_fast: ticks_per_slot={} slots_per_epoch={}",
+        ticks_per_slot, slots_per_epoch
+    );
+
+    let leader_keypair = Arc::new(Keypair::new());
+    let leader_pubkey = leader_keypair.pubkey().clone();
+    let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+    let leader_info = leader.info.clone();
+    let (_mint, leader_ledger_path, _last_entry_height, _last_id, last_entry_id) =
+        create_tmp_sample_ledger(
+            "fullnode_transact_while_rotating_fast",
+            1_000_000_000_000_000_000,
+            0,
+            leader_pubkey,
+            123,
+        );
+    info!("ledger is {}", leader_ledger_path);
+
+    // Setup the cluster with a single node
+    let mut fullnode_config = FullnodeConfig::default();
+    fullnode_config.leader_scheduler_config.ticks_per_slot = ticks_per_slot;
+    fullnode_config.leader_scheduler_config.slots_per_epoch = slots_per_epoch;
+
+    let mut tick_height_of_next_rotation = ticks_per_slot;
+    if fullnode_config.leader_scheduler_config.ticks_per_slot == 1 {
+        // Add another tick to the ledger if the cluster has been configured for 1 tick_per_slot.
+        // The "pseudo-tick" entry0 currently added by bank::process_ledger cannot be rotated on
+        // since it has no last id (so at 1 ticks_per_slot rotation must start at a tick_height of
+        // 2)
+        let entries = solana::entry::create_ticks(1, last_entry_id);
+
+        let blocktree = solana::blocktree::Blocktree::open_config(
+            &leader_ledger_path,
+            fullnode_config.ledger_config(),
+        )
+        .unwrap();
+        blocktree.write_entries(1, 0, &entries).unwrap();
+        tick_height_of_next_rotation += 1;
+    }
+
+    let leader_fullnode = Fullnode::new(
+        leader,
+        &leader_keypair,
+        &leader_ledger_path,
+        VotingKeypair::new_local(&leader_keypair),
+        None,
+        &fullnode_config,
+    );
+    let (leader_rotation_sender, leader_rotation_receiver) = channel();
+    let leader_fullnode_exit = leader_fullnode.run(Some(leader_rotation_sender));
+    info!(
+        "found leader: {:?}",
+        poll_gossip_for_leader(leader_info.gossip, Some(5)).unwrap()
+    );
+
+    const N: usize = 10;
+    for i in 1..=N {
+        info!("waiting for rotation #{}/{}", i, N);
+        match leader_rotation_receiver.recv_timeout(Duration::from_secs(5)) {
+            Ok((rotation_type, tick_height)) => {
+                info!(
+                    "leader rotation event {:?} at tick_height={}",
+                    rotation_type, tick_height
+                );
+                assert_eq!(tick_height_of_next_rotation, tick_height);
+                tick_height_of_next_rotation += ticks_per_slot;
+            }
+            err => panic!("Unexpected response: {:?}", err),
+        };
+    }
+
+    info!("Shutting down");
+    leader_fullnode_exit();
+}
+
+#[test]
+fn test_fullnode_rotate_every_tick() {
+    test_fullnode_rotate(1, 1);
+}
+
+#[test]
+fn test_fullnode_rotate_every_second_tick() {
+    test_fullnode_rotate(2, 1);
+}
