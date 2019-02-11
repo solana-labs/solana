@@ -315,19 +315,21 @@ impl Fullnode {
         }
     }
 
-    fn leader_to_validator(&mut self, tick_height: u64) -> FullnodeReturnType {
-        trace!(
-            "leader_to_validator({:?}): tick_height={}, bt: {}",
-            self.id,
-            tick_height,
-            self.bank.tick_height()
-        );
-
-        while self.bank.tick_height() < tick_height {
+    fn get_next_leader(&self, tick_height: u64) -> (Pubkey, u64) {
+        loop {
+            let bank_tick_height = self.bank.tick_height();
+            if bank_tick_height >= tick_height {
+                break;
+            }
+            trace!(
+                "Waiting for bank tick_height to catch up from {} to {}",
+                bank_tick_height,
+                tick_height
+            );
             sleep(Duration::from_millis(10));
         }
 
-        let scheduled_leader = {
+        let (scheduled_leader, max_tick_height) = {
             let mut leader_scheduler = self.bank.leader_scheduler.write().unwrap();
 
             // A transition is only permitted on the final tick of a slot
@@ -336,12 +338,36 @@ impl Fullnode {
 
             leader_scheduler.update_tick_height(first_tick_of_next_slot, &self.bank);
             let slot = leader_scheduler.tick_height_to_slot(first_tick_of_next_slot);
-            leader_scheduler.get_leader_for_slot(slot).unwrap()
+            (
+                leader_scheduler.get_leader_for_slot(slot).unwrap(),
+                first_tick_of_next_slot
+                    + leader_scheduler.num_ticks_left_in_slot(first_tick_of_next_slot),
+            )
         };
+
+        debug!(
+            "node {:?} scheduled as leader for ticks [{}, {})",
+            scheduled_leader,
+            tick_height + 1,
+            max_tick_height
+        );
+
         self.cluster_info
             .write()
             .unwrap()
             .set_leader(scheduled_leader);
+
+        (scheduled_leader, max_tick_height)
+    }
+
+    fn leader_to_validator(&mut self, tick_height: u64) -> FullnodeReturnType {
+        trace!(
+            "leader_to_validator({:?}): tick_height={}",
+            self.id,
+            tick_height,
+        );
+
+        let (scheduled_leader, _max_tick_height) = self.get_next_leader(tick_height);
 
         if scheduled_leader == self.id {
             debug!("node is still the leader");
@@ -349,7 +375,6 @@ impl Fullnode {
             self.validator_to_leader(tick_height, last_entry_id);
             FullnodeReturnType::LeaderToLeaderRotation
         } else {
-            debug!("new leader is {}", scheduled_leader);
             self.node_services.tpu.switch_to_forwarder(
                 self.tpu_sockets
                     .iter()
@@ -369,29 +394,8 @@ impl Fullnode {
             last_entry_id,
         );
 
-        let (scheduled_leader, max_tick_height) = {
-            let mut leader_scheduler = self.bank.leader_scheduler.write().unwrap();
-
-            // A transition is only permitted on the final tick of a slot
-            assert_eq!(leader_scheduler.num_ticks_left_in_slot(tick_height), 0);
-            let first_tick_of_next_slot = tick_height + 1;
-
-            leader_scheduler.update_tick_height(first_tick_of_next_slot, &self.bank);
-            let slot = leader_scheduler.tick_height_to_slot(first_tick_of_next_slot);
-            (
-                leader_scheduler.get_leader_for_slot(slot).unwrap(),
-                first_tick_of_next_slot
-                    + leader_scheduler.num_ticks_left_in_slot(first_tick_of_next_slot),
-            )
-        };
+        let (scheduled_leader, max_tick_height) = self.get_next_leader(tick_height);
         assert_eq!(scheduled_leader, self.id, "node is not the leader");
-        self.cluster_info.write().unwrap().set_leader(self.id);
-
-        debug!(
-            "node scheduled as leader for ticks [{}, {})",
-            tick_height + 1,
-            max_tick_height
-        );
 
         let (to_validator_sender, to_validator_receiver) = channel();
         self.to_validator_receiver = to_validator_receiver;
