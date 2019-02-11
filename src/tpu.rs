@@ -20,10 +20,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread;
 
-pub enum TpuReturnType {
-    LeaderRotation(u64),
-}
-
+pub type TpuReturnType = u64; // tick_height to initiate a rotation
 pub type TpuRotationSender = Sender<TpuReturnType>;
 pub type TpuRotationReceiver = Receiver<TpuReturnType>;
 
