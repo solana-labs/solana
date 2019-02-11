@@ -83,6 +83,16 @@ older than `5 * GOSSIP_PULL_CRDS_TIMEOUT_MS`.
 An eclipse attack is an attempt to take over the set of node connections with
 adversarial endpoints.
 
+This is relevant to our implementation in the following ways.
+
+* Pull messages select a random node from the network.  An eclipse attack on
+*pull* would require an attacker to influence the random selection in such a way
+that only adversarial nodes are selected for pull.
+
+* Push messages maintain an active set of nodes and select a random fanout for
+every push message.  An eclipse attack on *push* would influence the active set
+selection, or the random fanout selection.
+
 ### Pull Message
 
 A node is selected as a pull target based on local time since last selection and
