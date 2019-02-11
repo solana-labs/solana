@@ -77,3 +77,35 @@ Nodes retain prior versions of values (those updated by a pull or push) and
 expired values (those older than `GOSSIP_PULL_CRDS_TIMEOUT_MS`) in
 `purged_values` (things I recently had).  Nodes purge `purged_values` that are
 older than `5 * GOSSIP_PULL_CRDS_TIMEOUT_MS`.
+
+## Eclipse Attacks
+
+An eclipse attack is an attempt to take over the set of node connections with
+adversarial endpoints.
+
+### Pull Message
+
+A node is selected as a pull target based on local time since last selection and
+the stake weight.  There is no way for an adversary to influence those
+parameters.
+
+### Push Message
+
+A prune message can only remove an adversary from a potential connection.
+
+Just like *pull message*, nodes are selected into the active set based on local
+time since last selection and the stake weight.  There is no way for an
+adversary to influence those parameters.
+
+## Notable differences from PlumTree
+
+The active push protocol described here is based on (Plum
+Tree)[https://haslab.uminho.pt/jop/files/lpr07a.pdf].  The main differences are:
+
+* Push messages have a wallclock that is signed by the originator.  Once the
+wallclock expires the message is dropped.  A hop limit is difficult to implement
+in an adversarial setting.
+
+* Lazy Push is not implemented because its not obvious how to prevent an
+adversary from forging the message fingerprint.  A naive approach would allow an
+adversary to be prioritized for pull based on their input.
