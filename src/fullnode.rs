@@ -936,13 +936,10 @@ mod tests {
         // transition to a validator.
         info!("Unpause the Tvu");
         pause_tvu.store(false, Ordering::Relaxed);
-        let expected_rotations = vec![
-            (FullnodeReturnType::LeaderToLeaderRotation, ticks_per_slot),
-            (
-                FullnodeReturnType::LeaderToValidatorRotation,
-                2 * ticks_per_slot,
-            ),
-        ];
+        let expected_rotations = vec![(
+            FullnodeReturnType::LeaderToValidatorRotation,
+            ticks_per_slot,
+        )];
 
         for expected_rotation in expected_rotations {
             loop {

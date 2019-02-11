@@ -911,16 +911,10 @@ fn test_leader_to_validator_transition() {
     let (rotation_sender, rotation_receiver) = channel();
     let leader_exit = leader.run(Some(rotation_sender));
 
-    // There will be two rotations:
-    // slot 0 -> slot 1: bootstrap leader remains the leader
-    // slot 1 -> slot 2: bootstrap leader to the validator
-    let expected_rotations = vec![
-        (FullnodeReturnType::LeaderToLeaderRotation, ticks_per_slot),
-        (
-            FullnodeReturnType::LeaderToValidatorRotation,
-            2 * ticks_per_slot,
-        ),
-    ];
+    let expected_rotations = vec![(
+        FullnodeReturnType::LeaderToValidatorRotation,
+        ticks_per_slot,
+    )];
 
     for expected_rotation in expected_rotations {
         loop {
@@ -944,7 +938,7 @@ fn test_leader_to_validator_transition() {
 
     assert_eq!(
         bank.tick_height(),
-        2 * fullnode_config.leader_scheduler_config.ticks_per_slot - 1
+        fullnode_config.leader_scheduler_config.ticks_per_slot - 1
     );
     remove_dir_all(leader_ledger_path).unwrap();
 }

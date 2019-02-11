@@ -145,16 +145,16 @@ impl LeaderScheduler {
             tick_height,
             epoch,
         );
-        if epoch < self.current_epoch {
-            return;
+
+        if tick_height == 0 {
+            // Special case: tick_height starts at 0 instead of -1, so generate_schedule() for 0
+            // here before moving on to tick_height + 1
+            self.generate_schedule(0, bank);
         }
 
-        // Leader schedule is computed at tick 0 (for bootstrap) and then on the second tick 1 for
-        // the current slot, so that generally the schedule applies to the range [slot N tick 1,
-        // slot N+1 tick 0). The schedule is shifted right 1 tick from the slot rotation interval so that
-        // the next leader is always known *before* a rotation occurs
-        if tick_height == 0 || tick_height % self.ticks_per_epoch == 1 {
-            self.generate_schedule(tick_height, bank);
+        // If we're about to cross an epoch boundary generate the schedule for the next epoch
+        if self.tick_height_to_epoch(tick_height + 1) == epoch + 1 {
+            self.generate_schedule(tick_height + 1, bank);
         }
     }
 
@@ -239,11 +239,7 @@ impl LeaderScheduler {
 
     // Updates the leader schedule to include ticks from tick_height to the first tick of the next epoch
     fn generate_schedule(&mut self, tick_height: u64, bank: &Bank) {
-        let epoch = if tick_height == 0 {
-            0
-        } else {
-            self.tick_height_to_epoch(tick_height) + 1
-        };
+        let epoch = self.tick_height_to_epoch(tick_height);
         trace!(
             "generate_schedule: tick_height={} (epoch={})",
             tick_height,
@@ -545,12 +541,10 @@ pub mod tests {
 
         // The leader outside of the newly generated schedule window:
         // (0, ticks_per_epoch]
-        info!("yyy");
         assert_eq!(
             leader_scheduler.get_leader_for_slot(0),
             Some(genesis_block.bootstrap_leader_id)
         );
-        info!("xxxx");
         assert_eq!(
             leader_scheduler
                 .get_leader_for_slot(leader_scheduler.tick_height_to_slot(ticks_per_epoch)),
@@ -559,12 +553,12 @@ pub mod tests {
 
         // Generate schedule for second epoch.  This schedule won't be used but the schedule for
         // the third epoch cannot be generated without an existing schedule for the second epoch
-        leader_scheduler.generate_schedule(1, &bank);
+        leader_scheduler.generate_schedule(ticks_per_epoch, &bank);
 
         // Generate schedule for third epoch to ensure the bootstrap leader will not be added to
         // the schedule, as the bootstrap leader did not vote in the second epoch but all other
         // validators did
-        leader_scheduler.generate_schedule(ticks_per_epoch + 1, &bank);
+        leader_scheduler.generate_schedule(2 * ticks_per_epoch, &bank);
 
         // For the next ticks_per_epoch entries, call get_leader_for_slot every
         // ticks_per_slot entries, and the next leader should be the next validator
@@ -993,11 +987,11 @@ pub mod tests {
         }
         assert_eq!(leader_scheduler.current_epoch, 0);
         leader_scheduler.generate_schedule(1, &bank);
-        assert_eq!(leader_scheduler.current_epoch, 1);
+        assert_eq!(leader_scheduler.current_epoch, 0);
         for i in 0..=num_validators {
             info!("i === {}", i);
             leader_scheduler.generate_schedule((i + 1) * active_window_tick_length, &bank);
-            assert_eq!(leader_scheduler.current_epoch, i + 2);
+            assert_eq!(leader_scheduler.current_epoch, i + 1);
             if i == 0 {
                 assert_eq!(
                     vec![genesis_block.bootstrap_leader_id],
@@ -1096,31 +1090,42 @@ pub mod tests {
         assert_eq!(bank.tick_height(), 0);
 
         //
-        // tick_height == 0 is a special case
-        //
-        leader_scheduler.update_tick_height(0, &bank);
-        assert_eq!(leader_scheduler.current_epoch, 0);
-        // The schedule for epoch 0 is known
-        assert_eq!(
-            leader_scheduler.get_leader_for_slot(0),
-            Some(genesis_block.bootstrap_leader_id)
-        );
-        assert_eq!(
-            leader_scheduler.get_leader_for_slot(1),
-            Some(genesis_block.bootstrap_leader_id)
-        );
-        // The schedule for epoch 1 is unknown
-        assert_eq!(leader_scheduler.get_leader_for_slot(2), None,);
-
-        //
-        // Check various tick heights in epoch 0, and tick 0 of epoch 1
+        // Check various tick heights in epoch 0 up to the last tick
         //
         for tick_height in &[
+            0,
             1,
             ticks_per_slot,
             ticks_per_slot + 1,
+            ticks_per_epoch - 2,
+        ] {
+            info!("Checking tick_height {}", *tick_height);
+            leader_scheduler.update_tick_height(*tick_height, &bank);
+            assert_eq!(leader_scheduler.current_epoch, 0);
+            // The schedule for epoch 0 is known
+            assert_eq!(
+                leader_scheduler.get_leader_for_slot(0),
+                Some(genesis_block.bootstrap_leader_id)
+            );
+            assert_eq!(
+                leader_scheduler.get_leader_for_slot(1),
+                Some(genesis_block.bootstrap_leader_id)
+            );
+            // The schedule for epoch 1 is unknown
+            assert_eq!(leader_scheduler.get_leader_for_slot(2), None);
+        }
+
+        //
+        // Check the last tick of epoch 0, various tick heights in epoch 1 up to the last tick
+        //
+        for tick_height in &[
             ticks_per_epoch - 1,
             ticks_per_epoch,
+            ticks_per_epoch + 1,
+            ticks_per_epoch + ticks_per_slot,
+            ticks_per_epoch + ticks_per_slot + 1,
+            ticks_per_epoch + ticks_per_epoch - 2,
+            //  ticks_per_epoch + ticks_per_epoch,
         ] {
             info!("Checking tick_height {}", *tick_height);
             leader_scheduler.update_tick_height(*tick_height, &bank);
@@ -1134,6 +1139,7 @@ pub mod tests {
                 leader_scheduler.get_leader_for_slot(1),
                 Some(genesis_block.bootstrap_leader_id)
             );
+
             // The schedule for epoch 1 is known
             assert_eq!(
                 leader_scheduler.get_leader_for_slot(2),
@@ -1144,46 +1150,34 @@ pub mod tests {
                 Some(genesis_block.bootstrap_leader_id)
             );
             // The schedule for epoch 2 is unknown
-            assert_eq!(leader_scheduler.get_leader_for_slot(4), None);
-        }
-
-        //
-        // Check various tick heights in epoch 1, and tick 0 of epoch 2
-        //
-        for tick_height in &[
-            ticks_per_epoch + 1,
-            ticks_per_epoch + ticks_per_slot,
-            ticks_per_epoch + ticks_per_slot + 1,
-            ticks_per_epoch + ticks_per_epoch - 1,
-            ticks_per_epoch + ticks_per_epoch,
-        ] {
-            info!("Checking tick_height {}", *tick_height);
-            leader_scheduler.update_tick_height(*tick_height, &bank);
-            assert_eq!(leader_scheduler.current_epoch, 2);
-            // The schedule for epoch 0 is unknown
-            assert_eq!(leader_scheduler.get_leader_for_slot(0), None);
-            assert_eq!(leader_scheduler.get_leader_for_slot(1), None);
-            // The schedule for epoch 1 is known
-            assert_eq!(
-                leader_scheduler.get_leader_for_slot(2),
-                Some(genesis_block.bootstrap_leader_id)
-            );
-            assert_eq!(
-                leader_scheduler.get_leader_for_slot(3),
-                Some(genesis_block.bootstrap_leader_id)
-            );
-            // The schedule for epoch 2 is known
-            assert_eq!(
-                leader_scheduler.get_leader_for_slot(4),
-                Some(genesis_block.bootstrap_leader_id)
-            );
-            assert_eq!(
-                leader_scheduler.get_leader_for_slot(5),
-                Some(genesis_block.bootstrap_leader_id)
-            );
-            // The schedule for epoch 3 is unknown
             assert_eq!(leader_scheduler.get_leader_for_slot(6), None);
         }
+
+        leader_scheduler.update_tick_height(ticks_per_epoch + ticks_per_epoch - 1, &bank);
+        assert_eq!(leader_scheduler.current_epoch, 2);
+        // The schedule for epoch 0 is unknown
+        assert_eq!(leader_scheduler.get_leader_for_slot(0), None);
+        assert_eq!(leader_scheduler.get_leader_for_slot(1), None);
+        // The schedule for epoch 1 is known
+        assert_eq!(
+            leader_scheduler.get_leader_for_slot(2),
+            Some(genesis_block.bootstrap_leader_id)
+        );
+        assert_eq!(
+            leader_scheduler.get_leader_for_slot(3),
+            Some(genesis_block.bootstrap_leader_id)
+        );
+        // The schedule for epoch 2 is known
+        assert_eq!(
+            leader_scheduler.get_leader_for_slot(4),
+            Some(genesis_block.bootstrap_leader_id)
+        );
+        assert_eq!(
+            leader_scheduler.get_leader_for_slot(5),
+            Some(genesis_block.bootstrap_leader_id)
+        );
+        // The schedule for epoch 3 is unknown
+        assert_eq!(leader_scheduler.get_leader_for_slot(6), None);
     }
 
     #[test]
@@ -1299,7 +1293,7 @@ pub mod tests {
         // Make sure the validator, not the leader is selected on the first slot of the
         // next epoch
         leader_scheduler.generate_schedule(1, &bank);
-        assert_eq!(leader_scheduler.current_epoch, 1);
+        assert_eq!(leader_scheduler.current_epoch, 0);
         if add_validator {
             assert_eq!(leader_scheduler.epoch_schedule[0][0], validator_id);
         } else {
