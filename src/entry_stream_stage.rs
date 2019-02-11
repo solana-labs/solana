@@ -25,14 +25,12 @@ impl EntryStreamStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         ledger_entry_receiver: EntryReceiver,
-        entry_stream: Option<&String>,
+        entry_stream_socket: String,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         exit: Arc<AtomicBool>,
     ) -> (Self, EntryReceiver) {
         let (entry_stream_sender, entry_stream_receiver) = channel();
-        let mut entry_stream = entry_stream
-            .cloned()
-            .map(|socket| EntryStream::new(socket, leader_scheduler));
+        let mut entry_stream = EntryStream::new(entry_stream_socket, leader_scheduler);
         let t_entry_stream = Builder::new()
             .name("solana-entry-stream".to_string())
             .spawn(move || loop {
@@ -42,7 +40,7 @@ impl EntryStreamStage {
                 if let Err(e) = Self::process_entries(
                     &ledger_entry_receiver,
                     &entry_stream_sender,
-                    entry_stream.as_mut(),
+                    &mut entry_stream,
                 ) {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
@@ -57,15 +55,13 @@ impl EntryStreamStage {
     fn process_entries(
         ledger_entry_receiver: &EntryReceiver,
         entry_stream_sender: &EntrySender,
-        entry_stream: Option<&mut EntryStream>,
+        entry_stream: &mut EntryStream,
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
         let entries = ledger_entry_receiver.recv_timeout(timeout)?;
-        if let Some(stream) = entry_stream {
-            stream.stream_entries(&entries).unwrap_or_else(|e| {
-                error!("Entry Stream error: {:?}, {:?}", e, stream.socket);
-            });
-        }
+        entry_stream.stream_entries(&entries).unwrap_or_else(|e| {
+            error!("Entry Stream error: {:?}, {:?}", e, entry_stream.socket);
+        });
         entry_stream_sender.send(entries)?;
         Ok(())
     }
@@ -117,7 +113,7 @@ mod test {
         EntryStreamStage::process_entries(
             &ledger_entry_receiver,
             &entry_stream_sender,
-            Some(&mut entry_stream),
+            &mut entry_stream,
         )
         .unwrap();
         assert_eq!(entry_stream.socket.len(), 5);

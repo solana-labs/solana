@@ -40,7 +40,7 @@ pub struct Tvu {
     fetch_stage: BlobFetchStage,
     retransmit_stage: RetransmitStage,
     replay_stage: ReplayStage,
-    entry_stream_stage: EntryStreamStage,
+    entry_stream_stage: Option<EntryStreamStage>,
     storage_stage: StorageStage,
     exit: Arc<AtomicBool>,
     last_entry_id: Arc<RwLock<Hash>>,
@@ -118,7 +118,7 @@ impl Tvu {
 
         let l_last_entry_id = Arc::new(RwLock::new(last_entry_id));
 
-        let (replay_stage, ledger_entry_receiver) = ReplayStage::new(
+        let (replay_stage, mut previous_receiver) = ReplayStage::new(
             keypair.pubkey(),
             voting_keypair,
             blocktree.clone(),
@@ -132,16 +132,22 @@ impl Tvu {
             ledger_signal_receiver,
         );
 
-        let (entry_stream_stage, entry_stream_receiver) = EntryStreamStage::new(
-            ledger_entry_receiver,
-            entry_stream,
-            bank.leader_scheduler.clone(),
-            exit.clone(),
-        );
+        let entry_stream_stage = if entry_stream.is_some() {
+            let (entry_stream_stage, entry_stream_receiver) = EntryStreamStage::new(
+                previous_receiver,
+                entry_stream.unwrap().to_string(),
+                bank.leader_scheduler.clone(),
+                exit.clone(),
+            );
+            previous_receiver = entry_stream_receiver;
+            Some(entry_stream_stage)
+        } else {
+            None
+        };
 
         let storage_stage = StorageStage::new(
             storage_state,
-            entry_stream_receiver,
+            previous_receiver,
             Some(blocktree),
             &keypair,
             &exit.clone(),
@@ -197,7 +203,9 @@ impl Service for Tvu {
         self.retransmit_stage.join()?;
         self.fetch_stage.join()?;
         self.storage_stage.join()?;
-        self.entry_stream_stage.join()?;
+        if self.entry_stream_stage.is_some() {
+            self.entry_stream_stage.unwrap().join()?;
+        }
         self.replay_stage.join()?;
         Ok(())
     }
