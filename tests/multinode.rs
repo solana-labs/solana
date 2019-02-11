@@ -3,10 +3,10 @@ use solana::blob_fetch_stage::BlobFetchStage;
 use solana::blocktree::{create_tmp_sample_ledger, tmp_copy_ledger};
 use solana::blocktree::{Blocktree, BlocktreeConfig, DEFAULT_SLOT_HEIGHT};
 use solana::client::mk_client;
-use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
+use solana::cluster_info::{Node, NodeInfo};
 use solana::entry::{reconstruct_entries_from_blobs, Entry};
 use solana::fullnode::{new_bank_from_ledger, Fullnode, FullnodeConfig, FullnodeReturnType};
-use solana::gossip_service::GossipService;
+use solana::gossip_service::{converge, make_listening_node};
 use solana::leader_scheduler::{make_active_set_entries, LeaderSchedulerConfig};
 use solana::packet::SharedBlob;
 use solana::result;
@@ -32,82 +32,6 @@ fn read_ledger(ledger_path: &str) -> Vec<Entry> {
         .read_ledger()
         .expect("Unable to read ledger")
         .collect()
-}
-
-fn make_spy_node(leader: &NodeInfo) -> (GossipService, Arc<RwLock<ClusterInfo>>, Pubkey) {
-    let keypair = Keypair::new();
-    let exit = Arc::new(AtomicBool::new(false));
-    let mut spy = Node::new_localhost_with_pubkey(keypair.pubkey());
-    let id = spy.info.id.clone();
-    let daddr = "0.0.0.0:0".parse().unwrap();
-    spy.info.tvu = daddr;
-    spy.info.rpc = daddr;
-    let mut spy_cluster_info = ClusterInfo::new_with_keypair(spy.info, Arc::new(keypair));
-    spy_cluster_info.insert_info(leader.clone());
-    spy_cluster_info.set_leader(leader.id);
-    let spy_cluster_info_ref = Arc::new(RwLock::new(spy_cluster_info));
-    let gossip_service = GossipService::new(
-        &spy_cluster_info_ref,
-        None,
-        spy.sockets.gossip,
-        exit.clone(),
-    );
-
-    (gossip_service, spy_cluster_info_ref, id)
-}
-
-fn make_listening_node(
-    leader: &NodeInfo,
-) -> (GossipService, Arc<RwLock<ClusterInfo>>, Node, Pubkey) {
-    let keypair = Keypair::new();
-    let exit = Arc::new(AtomicBool::new(false));
-    let new_node = Node::new_localhost_with_pubkey(keypair.pubkey());
-    let new_node_info = new_node.info.clone();
-    let id = new_node.info.id.clone();
-    let mut new_node_cluster_info = ClusterInfo::new_with_keypair(new_node_info, Arc::new(keypair));
-    new_node_cluster_info.insert_info(leader.clone());
-    new_node_cluster_info.set_leader(leader.id);
-    let new_node_cluster_info_ref = Arc::new(RwLock::new(new_node_cluster_info));
-    let gossip_service = GossipService::new(
-        &new_node_cluster_info_ref,
-        None,
-        new_node
-            .sockets
-            .gossip
-            .try_clone()
-            .expect("Failed to clone gossip"),
-        exit.clone(),
-    );
-
-    (gossip_service, new_node_cluster_info_ref, new_node, id)
-}
-
-fn converge(node: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
-    info!("Wait for convergence with {} nodes", num_nodes);
-    // Let's spy on the network
-    let (gossip_service, spy_ref, id) = make_spy_node(node);
-    trace!(
-        "converge spy_node {} looking for at least {} nodes",
-        id,
-        num_nodes
-    );
-
-    // Wait for the cluster to converge
-    for _ in 0..15 {
-        let rpc_peers = spy_ref.read().unwrap().rpc_peers();
-        if rpc_peers.len() == num_nodes {
-            debug!("converge found {} nodes: {:?}", rpc_peers.len(), rpc_peers);
-            gossip_service.close().unwrap();
-            return rpc_peers;
-        }
-        debug!(
-            "converge found {} nodes, need {} more",
-            rpc_peers.len(),
-            num_nodes - rpc_peers.len()
-        );
-        sleep(Duration::new(1, 0));
-    }
-    panic!("Failed to converge");
 }
 
 #[test]
