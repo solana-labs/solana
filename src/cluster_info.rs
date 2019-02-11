@@ -38,6 +38,7 @@ use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};
 use solana_sdk::timing::{duration_as_ms, timestamp};
 use solana_sdk::transaction::Transaction;
 use std::cmp::min;
+use std::fmt;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -66,7 +67,7 @@ pub enum ClusterInfoError {
     BadNodeInfo,
     BadGossipAddress,
 }
-
+#[derive(Clone)]
 pub struct ClusterInfo {
     /// The network
     pub gossip: CrdsGossip,
@@ -86,6 +87,16 @@ pub struct Locality {
     pub child_layer_bounds: Option<(usize, usize)>,
     /// The indices of the nodes that should be contacted in next layer
     pub child_layer_peers: Vec<usize>,
+}
+
+impl fmt::Debug for Locality {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Packet {{ neighborhood_bounds: {:?}, current_layer: {:?}, child_layer_bounds: {:?} child_layer_peers: {:?} }}",
+            self.neighbor_bounds, self.layer_ix, self.child_layer_bounds, self.child_layer_peers
+        )
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -358,6 +369,7 @@ impl ClusterInfo {
             .map(|c| (bank.get_balance(&c.id), c.clone()))
             .collect();
         peers_with_stakes.sort_unstable();
+        peers_with_stakes.reverse();
         peers_with_stakes
     }
 
@@ -655,11 +667,14 @@ impl ClusterInfo {
             .collect()
     }
 
-    fn create_broadcast_orders<'a>(
+    pub fn create_broadcast_orders<'a, T>(
         contains_last_tick: bool,
-        blobs: &[SharedBlob],
+        blobs: &[T],
         broadcast_table: &'a [NodeInfo],
-    ) -> Vec<(SharedBlob, Vec<&'a NodeInfo>)> {
+    ) -> Vec<(T, Vec<&'a NodeInfo>)>
+    where
+        T: Clone,
+    {
         // enumerate all the blobs in the window, those are the indices
         // transmit them to nodes, starting from a different node.
         if blobs.is_empty() {

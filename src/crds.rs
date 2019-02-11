@@ -31,6 +31,7 @@ use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
 
+#[derive(Clone)]
 pub struct Crds {
     /// Stores the map of labels and values
     pub table: IndexMap<CrdsValueLabel, VersionedCrdsValue>,
@@ -44,7 +45,7 @@ pub enum CrdsError {
 /// This structure stores some local metadata associated with the CrdsValue
 /// The implementation of PartialOrd ensures that the "highest" version is always picked to be
 /// stored in the Crds
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct VersionedCrdsValue {
     pub value: CrdsValue,
     /// local time when inserted

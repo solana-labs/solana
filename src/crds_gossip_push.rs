@@ -29,6 +29,7 @@ pub const CRDS_GOSSIP_PUSH_FANOUT: usize = 6;
 pub const CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS: u64 = 5000;
 pub const CRDS_GOSSIP_PRUNE_MSG_TIMEOUT_MS: u64 = 500;
 
+#[derive(Clone)]
 pub struct CrdsGossipPush {
     /// max bytes per message
     pub max_bytes: usize,
