@@ -854,14 +854,14 @@ fn test_leader_to_validator_transition() {
 
     let mut fullnode_config = FullnodeConfig::default();
     let ticks_per_slot = 5;
-    fullnode_config.set_leader_scheduler_config(LeaderSchedulerConfig::new(
+    fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
         ticks_per_slot,
         1,
         // Setup window length to exclude the genesis bootstrap leader vote at tick height 0, so
         // that when the leader schedule is recomputed for epoch 1 only the validator vote at tick
         // height 1 will be considered.
         ticks_per_slot,
-    ));
+    );
 
     // Initialize the leader ledger. Make a mint and a genesis entry
     // in the leader ledger
@@ -1005,11 +1005,11 @@ fn test_leader_validator_basic() {
     // Create the leader scheduler config
     let mut fullnode_config = FullnodeConfig::default();
     let ticks_per_slot = 5;
-    fullnode_config.set_leader_scheduler_config(LeaderSchedulerConfig::new(
+    fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
         ticks_per_slot,
         1, // 1 slot per epoch
         ticks_per_slot,
-    ));
+    );
 
     // Start the validator node
     let voting_keypair = VotingKeypair::new_local(&validator_keypair);
@@ -1114,11 +1114,8 @@ fn test_dropped_handoff_recovery() {
     let ticks_per_slot = 5;
     let ticks_per_epoch = slots_per_epoch * ticks_per_slot;
     let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.set_leader_scheduler_config(LeaderSchedulerConfig::new(
-        ticks_per_slot,
-        slots_per_epoch,
-        ticks_per_epoch,
-    ));
+    fullnode_config.leader_scheduler_config =
+        LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, ticks_per_epoch);
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
     let num_ending_ticks = 1;
@@ -1333,11 +1330,8 @@ fn test_full_leader_validator_network() {
     let ticks_per_slot = 5;
     let ticks_per_epoch = slots_per_epoch * ticks_per_slot;
     let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.set_leader_scheduler_config(LeaderSchedulerConfig::new(
-        ticks_per_slot,
-        slots_per_epoch,
-        ticks_per_epoch * 3,
-    ));
+    fullnode_config.leader_scheduler_config =
+        LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, ticks_per_epoch * 3);
 
     let mut nodes = vec![];
 
@@ -1536,11 +1530,8 @@ fn test_broadcast_last_tick() {
     let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
     let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
     let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.set_leader_scheduler_config(LeaderSchedulerConfig::new(
-        ticks_per_slot,
-        slots_per_epoch,
-        ticks_per_epoch,
-    ));
+    fullnode_config.leader_scheduler_config =
+        LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, ticks_per_epoch);
     let bootstrap_leader = Fullnode::new(
         bootstrap_leader_node,
         &bootstrap_leader_keypair,

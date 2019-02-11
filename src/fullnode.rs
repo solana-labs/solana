@@ -65,7 +65,6 @@ pub struct FullnodeConfig {
     pub entry_stream: Option<String>,
     pub storage_rotate_count: u64,
     pub leader_scheduler_config: LeaderSchedulerConfig,
-    pub ledger_config: BlocktreeConfig,
     pub tick_config: PohServiceConfig,
 }
 impl Default for FullnodeConfig {
@@ -80,16 +79,16 @@ impl Default for FullnodeConfig {
             entry_stream: None,
             storage_rotate_count: NUM_HASHES_FOR_STORAGE_ROTATE,
             leader_scheduler_config: LeaderSchedulerConfig::default(),
-            ledger_config: BlocktreeConfig::default(),
             tick_config: PohServiceConfig::default(),
         }
     }
 }
 
 impl FullnodeConfig {
-    pub fn set_leader_scheduler_config(&mut self, config: LeaderSchedulerConfig) {
-        self.ledger_config.ticks_per_slot = config.ticks_per_slot;
-        self.leader_scheduler_config = config;
+    pub fn ledger_config(&self) -> BlocktreeConfig {
+        // TODO: Refactor LeaderSchedulerConfig and BlocktreeConfig to avoid the duplicated
+        //       `ticks_per_slot` field that must be identical between the two
+        BlocktreeConfig::new(self.leader_scheduler_config.ticks_per_slot)
     }
 }
 
@@ -133,7 +132,7 @@ impl Fullnode {
             ledger_signal_receiver,
         ) = new_bank_from_ledger(
             ledger_path,
-            config.ledger_config,
+            config.ledger_config(),
             &config.leader_scheduler_config,
         );
 
@@ -645,7 +644,7 @@ mod tests {
         let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
         // Start the bootstrap leader
         let mut fullnode_config = FullnodeConfig::default();
-        fullnode_config.set_leader_scheduler_config(leader_scheduler_config);
+        fullnode_config.leader_scheduler_config = leader_scheduler_config;
         let bootstrap_leader = Fullnode::new(
             bootstrap_leader_node,
             &bootstrap_leader_keypair,
@@ -674,11 +673,11 @@ mod tests {
         let mut fullnode_config = FullnodeConfig::default();
         let ticks_per_slot = 16;
         let slots_per_epoch = 2;
-        fullnode_config.set_leader_scheduler_config(LeaderSchedulerConfig::new(
+        fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
             ticks_per_slot,
             slots_per_epoch,
             ticks_per_slot * slots_per_epoch,
-        ));
+        );
 
         // Create the leader and validator nodes
         let bootstrap_leader_keypair = Arc::new(Keypair::new());
@@ -768,11 +767,11 @@ mod tests {
 
         // Set the leader scheduler for the validator
         let mut fullnode_config = FullnodeConfig::default();
-        fullnode_config.set_leader_scheduler_config(LeaderSchedulerConfig::new(
+        fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
             ticks_per_slot,
             slots_per_epoch,
             ticks_per_slot * slots_per_epoch,
-        ));
+        );
 
         let voting_keypair = VotingKeypair::new_local(&validator_keypair);
 
@@ -869,11 +868,11 @@ mod tests {
 
         // Set the leader scheduler for the validator
         let mut fullnode_config = FullnodeConfig::default();
-        fullnode_config.set_leader_scheduler_config(LeaderSchedulerConfig::new(
+        fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
             ticks_per_slot,
             slots_per_epoch,
             ticks_per_slot * slots_per_epoch,
-        ));
+        );
         let config = PohServiceConfig::Sleep(Duration::from_millis(200));
         fullnode_config.tick_config = config;
 
