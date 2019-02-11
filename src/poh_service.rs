@@ -5,7 +5,7 @@ use crate::poh_recorder::{PohRecorder, PohRecorderError};
 use crate::result::Error;
 use crate::result::Result;
 use crate::service::Service;
-use crate::tpu::{TpuReturnType, TpuRotationSender};
+use crate::tpu::TpuRotationSender;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
@@ -92,8 +92,7 @@ impl PohService {
                         let res = poh.hash();
                         if let Err(e) = res {
                             if let Error::PohRecorderError(PohRecorderError::MaxHeightReached) = e {
-                                to_validator_sender
-                                    .send(TpuReturnType::LeaderRotation(max_tick_height))?;
+                                to_validator_sender.send(max_tick_height)?;
                             }
                             return Err(e);
                         }
@@ -106,8 +105,7 @@ impl PohService {
             let res = poh.tick();
             if let Err(e) = res {
                 if let Error::PohRecorderError(PohRecorderError::MaxHeightReached) = e {
-                    // Leader rotation should only happen if a max_tick_height was specified
-                    to_validator_sender.send(TpuReturnType::LeaderRotation(max_tick_height))?;
+                    to_validator_sender.send(max_tick_height)?;
                 }
                 return Err(e);
             }

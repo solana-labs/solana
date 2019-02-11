@@ -21,22 +21,19 @@ use crate::retransmit_stage::RetransmitStage;
 use crate::service::Service;
 use crate::storage_stage::{StorageStage, StorageState};
 use crate::streamer::BlobSender;
+use crate::tpu::{TpuReturnType, TpuRotationReceiver, TpuRotationSender};
 use crate::voting_keypair::VotingKeypair;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, Sender, SyncSender};
+use std::sync::mpsc::{channel, Receiver, SyncSender};
 use std::sync::{Arc, RwLock};
 use std::thread;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum TvuReturnType {
-    LeaderRotation(u64, Hash),
-}
-
-pub type TvuRotationSender = Sender<TvuReturnType>;
-pub type TvuRotationReceiver = Receiver<TvuReturnType>;
+pub type TvuReturnType = TpuReturnType;
+pub type TvuRotationSender = TpuRotationSender;
+pub type TvuRotationReceiver = TpuRotationReceiver;
 
 pub struct Tvu {
     fetch_stage: BlobFetchStage,
@@ -75,7 +72,7 @@ impl Tvu {
         sockets: Sockets,
         blocktree: Arc<Blocktree>,
         storage_rotate_count: u64,
-        to_leader_sender: TvuRotationSender,
+        to_leader_sender: &TvuRotationSender,
         storage_state: &StorageState,
         entry_stream: Option<&String>,
         ledger_signal_sender: SyncSender<bool>,
@@ -261,7 +258,7 @@ pub mod tests {
             },
             Arc::new(blocktree),
             STORAGE_ROTATE_TEST_COUNT,
-            sender,
+            &sender,
             &StorageState::default(),
             None,
             l_sender,
@@ -348,7 +345,7 @@ pub mod tests {
             },
             Arc::new(blocktree),
             STORAGE_ROTATE_TEST_COUNT,
-            sender,
+            &sender,
             &StorageState::default(),
             None,
             l_sender,

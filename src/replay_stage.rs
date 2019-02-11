@@ -13,7 +13,7 @@ use crate::entry_stream::MockEntryStream as EntryStream;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
 use crate::service::Service;
-use crate::tvu::{TvuReturnType, TvuRotationSender};
+use crate::tvu::TvuRotationSender;
 use crate::voting_keypair::VotingKeypair;
 use log::Level;
 use solana_metrics::{influxdb, submit};
@@ -189,7 +189,7 @@ impl ReplayStage {
         exit: Arc<AtomicBool>,
         mut current_blob_index: u64,
         last_entry_id: Arc<RwLock<Hash>>,
-        to_leader_sender: TvuRotationSender,
+        to_leader_sender: &TvuRotationSender,
         entry_stream: Option<&String>,
         ledger_signal_sender: SyncSender<bool>,
         ledger_signal_receiver: Receiver<bool>,
@@ -203,6 +203,7 @@ impl ReplayStage {
             (pause, pause_)
         };
         let exit_ = exit.clone();
+        let to_leader_sender = to_leader_sender.clone();
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
@@ -295,12 +296,7 @@ impl ReplayStage {
                             cluster_info.write().unwrap().set_leader(leader_id);
 
                             if leader_id != last_leader_id && my_id == leader_id {
-                                to_leader_sender
-                                    .send(TvuReturnType::LeaderRotation(
-                                        current_tick_height,
-                                        *last_entry_id.read().unwrap(),
-                                    ))
-                                    .unwrap();
+                                to_leader_sender.send(current_tick_height).unwrap();
                             }
 
                             // Check for any slots that chain to this one
@@ -386,7 +382,6 @@ mod test {
     use crate::genesis_block::GenesisBlock;
     use crate::leader_scheduler::{make_active_set_entries, LeaderSchedulerConfig};
     use crate::replay_stage::ReplayStage;
-    use crate::tvu::TvuReturnType;
     use crate::voting_keypair::VotingKeypair;
     use chrono::{DateTime, FixedOffset};
     use serde_json::Value;
@@ -472,7 +467,7 @@ mod test {
                 exit.clone(),
                 meta.consumed,
                 Arc::new(RwLock::new(last_entry_id)),
-                rotation_sender,
+                &rotation_sender,
                 None,
                 l_sender,
                 l_receiver,
@@ -486,8 +481,6 @@ mod test {
                 entries_to_send.push(entry);
             }
 
-            let expected_last_id = entries_to_send.last().unwrap().id;
-
             // Write the entries to the ledger, replay_stage should get notified of changes
             blocktree
                 .write_entries(DEFAULT_SLOT_HEIGHT, meta.consumed, &entries_to_send)
@@ -495,17 +488,10 @@ mod test {
 
             info!("Wait for replay_stage to exit and check return value is correct");
             assert_eq!(
-                Some(TvuReturnType::LeaderRotation(
-                    2 * ticks_per_slot - 1,
-                    expected_last_id,
-                )),
-                {
-                    Some(
-                        rotation_receiver
-                            .recv()
-                            .expect("should have signaled leader rotation"),
-                    )
-                }
+                2 * ticks_per_slot - 1,
+                rotation_receiver
+                    .recv()
+                    .expect("should have signaled leader rotation"),
             );
 
             info!("Check that the entries on the ledger writer channel are correct");
@@ -575,7 +561,7 @@ mod test {
                 exit.clone(),
                 entry_height,
                 Arc::new(RwLock::new(last_entry_id)),
-                to_leader_sender,
+                &to_leader_sender,
                 None,
                 l_sender,
                 l_receiver,
@@ -689,7 +675,7 @@ mod test {
                 exit.clone(),
                 meta.consumed,
                 Arc::new(RwLock::new(last_entry_id)),
-                rotation_tx,
+                &rotation_tx,
                 None,
                 l_sender,
                 l_receiver,
@@ -729,18 +715,12 @@ mod test {
 
             // Wait for replay_stage to exit and check return value is correct
             assert_eq!(
-                Some(TvuReturnType::LeaderRotation(
-                    active_window_tick_length,
-                    expected_last_id,
-                )),
-                {
-                    Some(
-                        rotation_rx
-                            .recv()
-                            .expect("should have signaled leader rotation"),
-                    )
-                }
+                active_window_tick_length,
+                rotation_rx
+                    .recv()
+                    .expect("should have signaled leader rotation")
             );
+
             assert_ne!(expected_last_id, Hash::default());
             //replay stage should continue running even after rotation has happened (tvu never goes down)
             replay_stage
