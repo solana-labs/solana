@@ -12,6 +12,7 @@ use crate::last_id_queue::{LastIdQueue, MAX_ENTRY_IDS};
 use crate::leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig};
 use crate::poh_recorder::{PohRecorder, PohRecorderError};
 use crate::result::Error;
+use crate::rpc_pubsub::RpcSubscriptions;
 use crate::status_cache::StatusCache;
 use bincode::deserialize;
 use itertools::Itertools;
@@ -93,18 +94,6 @@ pub trait BankSubscriptions {
     fn check_signature(&self, signature: &Signature, status: &Result<()>);
 }
 
-struct LocalSubscriptions {}
-impl Default for LocalSubscriptions {
-    fn default() -> Self {
-        LocalSubscriptions {}
-    }
-}
-
-impl BankSubscriptions for LocalSubscriptions {
-    fn check_account(&self, _pubkey: &Pubkey, _account: &Account) {}
-    fn check_signature(&self, _signature: &Signature, _status: &Result<()>) {}
-}
-
 type BankStatusCache = StatusCache<BankError>;
 
 /// Manager for the state of all accounts and programs after processing its entries.
@@ -124,7 +113,7 @@ pub struct Bank {
     /// processed by the bank
     pub leader_scheduler: Arc<RwLock<LeaderScheduler>>,
 
-    subscriptions: RwLock<Box<Arc<BankSubscriptions + Send + Sync>>>,
+    subscriptions: RwLock<Option<Arc<RpcSubscriptions>>>,
 }
 
 impl Default for Bank {
@@ -135,7 +124,7 @@ impl Default for Bank {
             status_cache: RwLock::new(BankStatusCache::default()),
             confirmation_time: AtomicUsize::new(std::usize::MAX),
             leader_scheduler: Arc::new(RwLock::new(LeaderScheduler::default())),
-            subscriptions: RwLock::new(Box::new(Arc::new(LocalSubscriptions::default()))),
+            subscriptions: RwLock::new(None),
         }
     }
 }
@@ -157,9 +146,9 @@ impl Bank {
         Self::new_with_leader_scheduler_config(genesis_block, &LeaderSchedulerConfig::default())
     }
 
-    pub fn set_subscriptions(&self, subscriptions: Box<Arc<BankSubscriptions + Send + Sync>>) {
+    pub fn set_subscriptions(&self, subscriptions: Arc<RpcSubscriptions>) {
         let mut sub = self.subscriptions.write().unwrap();
-        *sub = subscriptions
+        *sub = Some(subscriptions)
     }
 
     pub fn copy_for_tpu(&self) -> Self {
@@ -171,7 +160,7 @@ impl Bank {
             last_id_queue: RwLock::new(self.last_id_queue.read().unwrap().clone()),
             confirmation_time: AtomicUsize::new(self.confirmation_time()),
             leader_scheduler: self.leader_scheduler.clone(),
-            subscriptions: RwLock::new(Box::new(Arc::new(LocalSubscriptions::default()))),
+            subscriptions: RwLock::new(None),
         }
     }
 
@@ -352,10 +341,9 @@ impl Bank {
 
     fn update_subscriptions(&self, txs: &[Transaction], res: &[Result<()>]) {
         for (i, tx) in txs.iter().enumerate() {
-            self.subscriptions
-                .read()
-                .unwrap()
-                .check_signature(&tx.signatures[0], &res[i]);
+            if let Some(ref subs) = *self.subscriptions.read().unwrap() {
+                subs.check_signature(&tx.signatures[0], &res[i]);
+            }
         }
     }
     fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
@@ -932,10 +920,9 @@ impl Bank {
             let tx = &txs[i];
             let accs = raccs.as_ref().unwrap();
             for (key, account) in tx.account_keys.iter().zip(accs.0.iter()) {
-                self.subscriptions
-                    .read()
-                    .unwrap()
-                    .check_account(&key, account);
+                if let Some(ref subs) = *self.subscriptions.read().unwrap() {
+                    subs.check_account(&key, account)
+                }
             }
         }
     }

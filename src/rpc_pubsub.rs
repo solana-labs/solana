@@ -43,7 +43,7 @@ impl PubSubService {
         let rpc_bank = Arc::new(RwLock::new(RpcPubSubBank::new(bank.clone())));
         let rpc = RpcSolPubSubImpl::new(rpc_bank.clone());
         let subscription = rpc.subscription.clone();
-        bank.set_subscriptions(Box::new(subscription.clone()));
+        bank.set_subscriptions(subscription.clone());
         let exit = Arc::new(AtomicBool::new(false));
         let exit_ = exit.clone();
         let thread_hdl = Builder::new()
@@ -82,7 +82,7 @@ impl PubSubService {
 
     pub fn set_bank(&self, bank: &Arc<Bank>) {
         self.rpc_bank.write().unwrap().bank = bank.clone();
-        bank.set_subscriptions(Box::new(self.subscription.clone()));
+        bank.set_subscriptions(self.subscription.clone());
     }
 
     pub fn exit(&self) {
@@ -429,7 +429,7 @@ mod tests {
         let rpc_bank = Arc::new(RwLock::new(RpcPubSubBank::new(arc_bank.clone())));
         let rpc = RpcSolPubSubImpl::new(rpc_bank.clone());
         let subscription = rpc.subscription.clone();
-        arc_bank.set_subscriptions(Box::new(subscription));
+        arc_bank.set_subscriptions(subscription);
 
         // Test signature subscription
         let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
@@ -516,7 +516,7 @@ mod tests {
         let rpc_bank = Arc::new(RwLock::new(RpcPubSubBank::new(arc_bank.clone())));
         let rpc = RpcSolPubSubImpl::new(rpc_bank.clone());
         let subscription = rpc.subscription.clone();
-        arc_bank.set_subscriptions(Box::new(subscription));
+        arc_bank.set_subscriptions(subscription);
 
         let (subscriber, _id_receiver, mut receiver) = Subscriber::new_test("accountNotification");
         rpc.subscribe_to_account_updates(subscriber, contract_state.pubkey().to_string());
