@@ -413,12 +413,14 @@ impl Blocktree {
         Ok((blocktree, signal_sender, signal_receiver))
     }
 
+    #[allow(clippy::trivially_copy_pass_by_ref)]
     pub fn open_config(ledger_path: &str, config: &BlocktreeConfig) -> Result<Self> {
         let mut blocktree = Self::open(ledger_path)?;
         blocktree.ticks_per_slot = config.ticks_per_slot;
         Ok(blocktree)
     }
 
+    #[allow(clippy::trivially_copy_pass_by_ref)]
     pub fn open_with_config_signal(
         ledger_path: &str,
         config: &BlocktreeConfig,
@@ -1275,6 +1277,7 @@ impl Iterator for EntryIterator {
 // Returns a tuple (entry_height, tick_height, last_id), corresponding to the
 // total number of entries, the number of ticks, and the last id generated in the
 // new ledger
+#[allow(clippy::trivially_copy_pass_by_ref)]
 pub fn create_new_ledger(
     ledger_path: &str,
     genesis_block: &GenesisBlock,
@@ -1327,6 +1330,7 @@ pub fn get_tmp_ledger_path(name: &str) -> String {
     path
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
 pub fn create_tmp_sample_ledger(
     name: &str,
     num_tokens: u64,
@@ -1372,6 +1376,7 @@ pub fn create_tmp_sample_ledger(
     )
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
 pub fn tmp_copy_ledger(from: &str, name: &str, config: &BlocktreeConfig) -> String {
     let path = get_tmp_ledger_path(name);
 

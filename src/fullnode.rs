@@ -467,6 +467,7 @@ impl Fullnode {
     }
 }
 
+#[allow(clippy::trivially_copy_pass_by_ref)]
 pub fn new_bank_from_ledger(
     ledger_path: &str,
     ledger_config: &BlocktreeConfig,
