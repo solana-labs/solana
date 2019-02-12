@@ -230,8 +230,6 @@ impl Fullnode {
         );
         cluster_info.write().unwrap().set_leader(scheduled_leader);
 
-        // TODO: always start leader and validator, keep leader side switching between tpu
-        // forwarder and regular tpu.
         let sockets = Sockets {
             repair: node
                 .sockets
