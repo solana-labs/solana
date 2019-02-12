@@ -131,7 +131,7 @@ impl Fullnode {
             ledger_signal_receiver,
         ) = new_bank_from_ledger(
             ledger_path,
-            config.ledger_config(),
+            &config.ledger_config(),
             &config.leader_scheduler_config,
         );
 
@@ -469,7 +469,7 @@ impl Fullnode {
 
 pub fn new_bank_from_ledger(
     ledger_path: &str,
-    ledger_config: BlocktreeConfig,
+    ledger_config: &BlocktreeConfig,
     leader_scheduler_config: &LeaderSchedulerConfig,
 ) -> (Bank, u64, Hash, Blocktree, SyncSender<bool>, Receiver<bool>) {
     let (blocktree, ledger_signal_sender, ledger_signal_receiver) =
@@ -832,7 +832,7 @@ mod tests {
         validator_exit();
         let (bank, entry_height, _, _, _, _) = new_bank_from_ledger(
             &validator_ledger_path,
-            BlocktreeConfig::default(),
+            &BlocktreeConfig::default(),
             &LeaderSchedulerConfig::default(),
         );
 

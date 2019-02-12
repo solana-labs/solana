@@ -985,7 +985,7 @@ fn test_leader_to_validator_transition() {
     info!("Check the ledger to make sure it's the right height...");
     let bank = new_bank_from_ledger(
         &leader_ledger_path,
-        BlocktreeConfig::default(),
+        &BlocktreeConfig::default(),
         &LeaderSchedulerConfig::default(),
     )
     .0;
@@ -1778,7 +1778,7 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64) {
 
         let blocktree = solana::blocktree::Blocktree::open_config(
             &leader_ledger_path,
-            fullnode_config.ledger_config(),
+            &fullnode_config.ledger_config(),
         )
         .unwrap();
         blocktree
