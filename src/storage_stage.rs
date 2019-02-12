@@ -432,11 +432,11 @@ impl Service for StorageStage {
 
 #[cfg(test)]
 mod tests {
-    use crate::blocktree::create_tmp_sample_ledger;
-    use crate::blocktree::{Blocktree, DEFAULT_SLOT_HEIGHT};
-    use crate::entry::{make_tiny_test_entries, Entry};
-
+    use crate::blocktree::{
+        create_tmp_sample_ledger, Blocktree, BlocktreeConfig, DEFAULT_SLOT_HEIGHT,
+    };
     use crate::cluster_info::{ClusterInfo, NodeInfo};
+    use crate::entry::{make_tiny_test_entries, Entry};
     use crate::service::Service;
     use crate::storage_stage::StorageState;
     use crate::storage_stage::NUM_IDENTITIES;
@@ -493,6 +493,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let ticks_per_slot = std::u64::MAX;
 
+        let blocktree_config = BlocktreeConfig::default();
         let (_mint, ledger_path, tick_height, genesis_entry_height, _last_id, _last_entry_id) =
             create_tmp_sample_ledger(
                 "storage_stage_process_entries",
@@ -500,11 +501,11 @@ mod tests {
                 1,
                 Keypair::new().pubkey(),
                 1,
-                ticks_per_slot,
+                &blocktree_config,
             );
 
         let entries = make_tiny_test_entries(64);
-        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let blocktree = Blocktree::open_config(&ledger_path, &blocktree_config).unwrap();
         blocktree
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
@@ -570,6 +571,7 @@ mod tests {
         let exit = Arc::new(AtomicBool::new(false));
         let ticks_per_slot = std::u64::MAX;
 
+        let blocktree_config = BlocktreeConfig::default();
         let (_mint, ledger_path, tick_height, genesis_entry_height, _last_id, _last_entry_id) =
             create_tmp_sample_ledger(
                 "storage_stage_process_entries",
@@ -577,11 +579,11 @@ mod tests {
                 1,
                 Keypair::new().pubkey(),
                 1,
-                ticks_per_slot,
+                &blocktree_config,
             );
 
         let entries = make_tiny_test_entries(128);
-        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let blocktree = Blocktree::open_config(&ledger_path, &blocktree_config).unwrap();
         blocktree
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,

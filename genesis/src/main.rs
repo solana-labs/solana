@@ -75,6 +75,10 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         bootstrap_leader_vote_account_id: bootstrap_leader_vote_account_keypair.pubkey(),
     };
 
-    create_new_ledger(ledger_path, &genesis_block)?;
+    create_new_ledger(
+        ledger_path,
+        &genesis_block,
+        &solana::blocktree::BlocktreeConfig::default(),
+    )?;
     Ok(())
 }

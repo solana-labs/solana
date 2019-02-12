@@ -387,12 +387,12 @@ mod test {
         let my_node = Node::new_localhost_with_pubkey(my_id);
         let cluster_info_me = ClusterInfo::new(my_node.info.clone());
 
+        // Create keypair for the old leader
+        let old_leader_id = Keypair::new().pubkey();
+
         // Set up the LeaderScheduler so that my_id becomes the leader for epoch 1
         let ticks_per_slot = 16;
         let leader_scheduler_config = LeaderSchedulerConfig::new(ticks_per_slot, 1, ticks_per_slot);
-
-        // Create keypair for the old leader
-        let old_leader_id = Keypair::new().pubkey();
 
         // Create a ledger
         let (
@@ -408,7 +408,7 @@ mod test {
             0,
             old_leader_id,
             500,
-            ticks_per_slot,
+            &BlocktreeConfig::new(ticks_per_slot),
         );
 
         info!("my_id: {:?}", my_id);
@@ -539,7 +539,7 @@ mod test {
             1,
             leader_id,
             500,
-            ticks_per_slot,
+            &BlocktreeConfig::default(),
         );
 
         // Set up the cluster info
@@ -608,6 +608,10 @@ mod test {
     fn test_vote_error_replay_stage_leader_rotation() {
         solana_logger::setup();
 
+        let ticks_per_slot = 10;
+        let slots_per_epoch = 2;
+        let active_window_tick_length = ticks_per_slot * slots_per_epoch;
+
         // Set up dummy node to host a ReplayStage
         let my_keypair = Keypair::new();
         let my_id = my_keypair.pubkey();
@@ -616,8 +620,8 @@ mod test {
         // Create keypair for the leader
         let leader_id = Keypair::new().pubkey();
 
-        let ticks_per_slot = 10;
         // Create the ledger
+        let blocktree_config = BlocktreeConfig::new(ticks_per_slot);
         let (
             mint_keypair,
             my_ledger_path,
@@ -631,7 +635,7 @@ mod test {
             1,
             leader_id,
             500,
-            ticks_per_slot,
+            &blocktree_config,
         );
 
         let my_keypair = Arc::new(my_keypair);
@@ -649,7 +653,7 @@ mod test {
         );
         let mut last_id = active_set_entries.last().unwrap().id;
         {
-            let blocktree = Blocktree::open(&my_ledger_path).unwrap();
+            let blocktree = Blocktree::open_config(&my_ledger_path, &blocktree_config).unwrap();
             blocktree
                 .write_entries(
                     DEFAULT_SLOT_HEIGHT,
@@ -661,8 +665,6 @@ mod test {
                 .unwrap();
         }
 
-        let slots_per_epoch = 2;
-        let active_window_tick_length = ticks_per_slot * slots_per_epoch;
         let leader_scheduler_config =
             LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_tick_length);
 
@@ -673,7 +675,6 @@ mod test {
         let (rotation_tx, rotation_rx) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         {
-            let blocktree_config = BlocktreeConfig::new(ticks_per_slot);
             let (bank, _entry_height, last_entry_id, blocktree, l_sender, l_receiver) =
                 new_bank_from_ledger(&my_ledger_path, &blocktree_config, &leader_scheduler_config);
 
