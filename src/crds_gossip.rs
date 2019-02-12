@@ -15,6 +15,7 @@ use solana_sdk::pubkey::Pubkey;
 ///The min size for bloom filters
 pub const CRDS_GOSSIP_BLOOM_SIZE: usize = 1000;
 
+#[derive(Clone)]
 pub struct CrdsGossip {
     pub crds: Crds,
     pub id: Pubkey,

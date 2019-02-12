@@ -26,6 +26,7 @@ use std::collections::VecDeque;
 
 pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
 
+#[derive(Clone)]
 pub struct CrdsGossipPull {
     /// timestamp of last request
     pub pull_request_time: HashMap<Pubkey, u64>,
