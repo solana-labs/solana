@@ -890,12 +890,7 @@ pub mod test {
         }
 
         // Make some dummy slots
-        index_blobs(
-            &blobs,
-            &Keypair::new().pubkey(),
-            &mut (offset as u64),
-            &vec![slot; blobs.len()],
-        );
+        index_blobs(&blobs, &mut (offset as u64), &vec![slot; blobs.len()]);
 
         for b in blobs {
             let idx = b.read().unwrap().index() as usize % WINDOW_SIZE;
@@ -910,7 +905,6 @@ pub mod test {
 
         index_blobs(
             &blobs,
-            &Keypair::new().pubkey(),
             &mut (offset as u64),
             &vec![DEFAULT_SLOT_HEIGHT; blobs.len()],
         );
