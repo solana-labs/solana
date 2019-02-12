@@ -15,8 +15,13 @@ that entry was produced by the expected leader.
 
 ## Leader Schedule Rotation
 
-Leader schedule is generated every epoch when the root fork crosses the
-epoch boundary.
+Leader schedule is generated every epoch when a fork crosses the epoch boundary.
+
+The LS is active at the next epoch.  The epoch should be long enough such that
+by the time next epoch is reached, the LS is based on a fork that has been
+committed as root.
+
+Without an epoch-scale partition, the network will work as follows:
 
 1. The root fork is updated as a validator votes for new forks.
 
@@ -37,21 +42,20 @@ from slot 200 until it is updated.
 No skews can exist because *everyone* that is voting with the network has
 skipped 100 and 101 when their root reaches 102.
 
-### Leader Schedule Rotation Across Epochs
+### Leader Schedule Rotation with Epoch-Scale partitions.
 
-If the next slot skips an epoch, it is due to a considerable network failure,
-and the leader schedule from the previous epoch is still valid until the root
-fork is updated.
+Consider the following scenario.  Two partitions that are generating half of the
+blocks each.  Neither is coming to a definitive supermajority branch.  Both will
+cross epoch 100 and 200 without actually committing to a root and therefore a
+new Leader Schedule.
 
-For example:
+In this unstable scenario multiple valid leader schedules exist.
 
-1. Large network timeout occurs.
-2. Vote occurs on fork 201
-3. Root checkpoint moves from 99 to 102
-4. Leader scheduler is updated for epoch 300+, using fork 102.
+* An LS is generated for every fork whose direct parent is in the previous
+epoch.
 
-The vote at 201 cannot be rolled back until the fork selection timeout occurs,
-and voting on a previous fork is a slashing condition.
+* The LS is valid after the start of the next epoch for descendant forks until
+it is updated.
 
 ## Leader Schedule Generation at Genesis
 
