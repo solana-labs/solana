@@ -1781,7 +1781,7 @@ fn retry_send_tx_and_retry_get_balance(
     None
 }
 
-fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64) {
+fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64, include_validator: bool) {
     solana_logger::setup();
     info!(
         "fullnode_rotate_fast: ticks_per_slot={} slots_per_epoch={}",
@@ -1792,36 +1792,149 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64) {
     fullnode_config.leader_scheduler_config.ticks_per_slot = ticks_per_slot;
     fullnode_config.leader_scheduler_config.slots_per_epoch = slots_per_epoch;
     let blocktree_config = fullnode_config.ledger_config();
+    fullnode_config
+        .leader_scheduler_config
+        .active_window_tick_length = std::u64::MAX;
 
+    // Create the leader node information
     let leader_keypair = Arc::new(Keypair::new());
-    let leader_pubkey = leader_keypair.pubkey().clone();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_info = leader.info.clone();
-    let (_mint, leader_ledger_path, _tick_height, _last_entry_height, _last_id, last_entry_id) =
-        create_tmp_sample_ledger(
-            "fullnode_transact_while_rotating_fast",
-            1_000_000_000_000_000_000,
-            0,
-            leader_pubkey,
-            123,
-            &blocktree_config,
-        );
+
+    // Create the validator node information
+    let validator_keypair = Arc::new(Keypair::new());
+    let validator = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
+
+    info!("leader id: {}", leader_keypair.pubkey());
+    info!("validator id: {}", validator_keypair.pubkey());
+
+    // Make a common mint and a genesis entry for both leader + validator ledgers
+    let (
+        mint_keypair,
+        leader_ledger_path,
+        mut tick_height,
+        mut last_entry_height,
+        last_id,
+        mut last_entry_id,
+    ) = create_tmp_sample_ledger(
+        "test_fullnode_rotate",
+        1_000_000_000_000_000_000,
+        0,
+        leader_keypair.pubkey(),
+        123,
+        &blocktree_config,
+    );
+    assert_eq!(tick_height, 1);
+
+    let mut ledger_paths = Vec::new();
+    ledger_paths.push(leader_ledger_path.clone());
     info!("ledger is {}", leader_ledger_path);
 
+    let mut entries = vec![];
+
     // Setup the cluster with a single node
+    if include_validator {
+        // Add validator vote on tick height 1
+        let (active_set_entries, _) = make_active_set_entries(
+            &validator_keypair,
+            &mint_keypair,
+            100,
+            1,
+            &last_entry_id,
+            &last_id,
+            0,
+        );
+        entries.extend(active_set_entries);
+        last_entry_id = entries.last().unwrap().id;
+    }
+
     let mut tick_height_of_next_rotation = ticks_per_slot;
+    let mut should_be_leader = true;
     if fullnode_config.leader_scheduler_config.ticks_per_slot == 1 {
         // Add another tick to the ledger if the cluster has been configured for 1 tick_per_slot.
         // The "pseudo-tick" entry0 currently added by bank::process_ledger cannot be rotated on
         // since it has no last id (so at 1 ticks_per_slot rotation must start at a tick_height of
         // 2)
-        let entries = solana::entry::create_ticks(1, last_entry_id);
+        let tick = solana::entry::create_ticks(1, last_entry_id);
+        entries.extend(tick);
+        last_entry_id = entries.last().unwrap().id;
 
-        let blocktree = Blocktree::open_config(&leader_ledger_path, &blocktree_config).unwrap();
-        blocktree.write_entries(1, 0, 0, &entries).unwrap();
-        tick_height_of_next_rotation += 1;
+        tick_height_of_next_rotation += 2;
+        if include_validator {
+            should_be_leader = false;
+        }
     }
 
+    // Write additional ledger entires
+    {
+        trace!("last_entry_id: {:?}", last_entry_id);
+        trace!("entries: {:?}", entries);
+
+        let mut start_slot = 0;
+        if fullnode_config.leader_scheduler_config.ticks_per_slot == 1 {
+            start_slot = 1;
+            tick_height = 0;
+            last_entry_height = 0;
+        }
+        let blocktree = Blocktree::open_config(&leader_ledger_path, &blocktree_config).unwrap();
+        blocktree
+            .write_entries(start_slot, tick_height, last_entry_height, &entries)
+            .unwrap();
+    }
+
+    // Start up the node(s)
+    let mut node_exits = vec![];
+
+    if include_validator {
+        let validator_ledger_path = tmp_copy_ledger(
+            &leader_ledger_path,
+            "test_fullnode_rotate",
+            &blocktree_config,
+        );
+        ledger_paths.push(validator_ledger_path.clone());
+        let validator_fullnode = Fullnode::new(
+            validator,
+            &validator_keypair,
+            &validator_ledger_path,
+            VotingKeypair::new_local(&validator_keypair),
+            Some(&leader_info),
+            &fullnode_config,
+        );
+
+        let (validator_rotation_sender, validator_rotation_receiver) = channel();
+        node_exits.push(validator_fullnode.run(Some(validator_rotation_sender)));
+
+        let mut validator_tick_height_of_next_rotation = tick_height_of_next_rotation;
+        let mut validator_should_be_leader = !should_be_leader;
+        Builder::new()
+            .name("validator_rotation_receiver".to_string())
+            .spawn(move || loop {
+                match validator_rotation_receiver.recv() {
+                    Ok((rotation_type, tick_height)) => {
+                        info!(
+                            "validator rotation event {:?} at tick_height={}",
+                            rotation_type, tick_height
+                        );
+                        info!("validator should be leader? {}", validator_should_be_leader);
+                        assert_eq!(validator_tick_height_of_next_rotation, tick_height);
+                        assert_eq!(
+                            rotation_type,
+                            if validator_should_be_leader {
+                                FullnodeReturnType::LeaderToValidatorRotation
+                            } else {
+                                FullnodeReturnType::ValidatorToLeaderRotation
+                            }
+                        );
+                        validator_should_be_leader = !validator_should_be_leader;
+                        validator_tick_height_of_next_rotation += ticks_per_slot;
+                    }
+                    Err(_) => break,
+                };
+            })
+            .unwrap();
+    }
+
+    let (leader_rotation_sender, leader_rotation_receiver) = channel();
     let leader_fullnode = Fullnode::new(
         leader,
         &leader_keypair,
@@ -1830,8 +1943,10 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64) {
         None,
         &fullnode_config,
     );
-    let (leader_rotation_sender, leader_rotation_receiver) = channel();
-    let leader_fullnode_exit = leader_fullnode.run(Some(leader_rotation_sender));
+
+    node_exits.push(leader_fullnode.run(Some(leader_rotation_sender)));
+
+    converge(&leader_info, node_exits.len());
     info!(
         "found leader: {:?}",
         poll_gossip_for_leader(leader_info.gossip, Some(5)).unwrap()
@@ -1847,6 +1962,19 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64) {
                     rotation_type, tick_height
                 );
                 assert_eq!(tick_height_of_next_rotation, tick_height);
+                if include_validator {
+                    assert_eq!(
+                        rotation_type,
+                        if should_be_leader {
+                            FullnodeReturnType::LeaderToValidatorRotation
+                        } else {
+                            FullnodeReturnType::ValidatorToLeaderRotation
+                        }
+                    );
+                    should_be_leader = !should_be_leader;
+                } else {
+                    assert_eq!(rotation_type, FullnodeReturnType::LeaderToLeaderRotation);
+                }
                 tick_height_of_next_rotation += ticks_per_slot;
             }
             err => panic!("Unexpected response: {:?}", err),
@@ -1854,15 +1982,33 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64) {
     }
 
     info!("Shutting down");
-    leader_fullnode_exit();
+    for node_exit in node_exits {
+        node_exit();
+    }
+
+    for path in ledger_paths {
+        Blocktree::destroy(&path)
+            .unwrap_or_else(|err| warn!("Expected successful database destruction: {:?}", err));
+        remove_dir_all(path).unwrap();
+    }
 }
 
 #[test]
-fn test_fullnode_rotate_every_tick() {
-    test_fullnode_rotate(1, 1);
+fn test_one_fullnode_rotate_every_tick() {
+    test_fullnode_rotate(1, 1, false);
 }
 
 #[test]
-fn test_fullnode_rotate_every_second_tick() {
-    test_fullnode_rotate(2, 1);
+fn test_one_fullnode_rotate_every_second_tick() {
+    test_fullnode_rotate(2, 1, false);
+}
+
+#[test]
+fn test_two_fullnodes_rotate_every_tick() {
+    test_fullnode_rotate(1, 1, true);
+}
+
+#[test]
+fn test_two_fullnodes_rotate_every_second_tick() {
+    test_fullnode_rotate(2, 1, true);
 }

@@ -324,7 +324,8 @@ impl Fullnode {
                 break;
             }
             trace!(
-                "Waiting for bank tick_height to catch up from {} to {}",
+                "{:?}: Waiting for bank tick_height to catch up from {} to {}",
+                self.id,
                 bank_tick_height,
                 tick_height
             );
