@@ -485,7 +485,6 @@ impl Blocktree {
         &self,
         start_slot: u64,
         num_ticks_in_start_slot: u64,
-        ticks_per_slot: u64,
         start_index: u64,
         entries: I,
     ) -> Result<()>
@@ -493,6 +492,8 @@ impl Blocktree {
         I: IntoIterator,
         I::Item: Borrow<Entry>,
     {
+        let ticks_per_slot = self.ticks_per_slot;
+
         assert!(num_ticks_in_start_slot < ticks_per_slot);
         let mut remaining_ticks_in_slot = ticks_per_slot - num_ticks_in_start_slot;
 
@@ -1289,7 +1290,7 @@ pub fn create_new_ledger(
     // Add a single tick linked back to the genesis_block to bootstrap the ledger
     let blocktree = Blocktree::open_config(ledger_path, config)?;
     let entries = crate::entry::create_ticks(1, genesis_block.last_id());
-    blocktree.write_entries(DEFAULT_SLOT_HEIGHT, 0, std::u64::MAX, 0, &entries)?;
+    blocktree.write_entries(DEFAULT_SLOT_HEIGHT, 0, 0, &entries)?;
 
     Ok((1, 1, entries[0].id))
 }
@@ -1354,13 +1355,7 @@ pub fn create_tmp_sample_ledger(
         // create_new_ledger creates one beginning tick
         tick_height += num_extra_ticks;
         blocktree
-            .write_entries(
-                DEFAULT_SLOT_HEIGHT,
-                tick_height,
-                config.ticks_per_slot,
-                entry_height,
-                &entries,
-            )
+            .write_entries(DEFAULT_SLOT_HEIGHT, tick_height, entry_height, &entries)
             .unwrap();
         entry_height += entries.len() as u64;
         last_id = entries.last().unwrap().id;
@@ -1855,7 +1850,6 @@ mod tests {
                 .write_entries(
                     0u64,
                     0,
-                    std::u64::MAX,
                     (entries.len() - 1) as u64,
                     &entries[entries.len() - 1..],
                 )

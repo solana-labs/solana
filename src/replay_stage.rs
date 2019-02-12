@@ -433,7 +433,6 @@ mod test {
                 .write_entries(
                     DEFAULT_SLOT_HEIGHT,
                     tick_height,
-                    ticks_per_slot,
                     entry_height,
                     active_set_entries,
                 )
@@ -480,7 +479,6 @@ mod test {
                 .write_entries(
                     DEFAULT_SLOT_HEIGHT,
                     tick_height,
-                    ticks_per_slot,
                     meta.consumed,
                     &entries_to_send,
                 )
@@ -525,7 +523,6 @@ mod test {
         // Create keypair for the leader
         let leader_id = Keypair::new().pubkey();
 
-        let ticks_per_slot = std::u64::MAX;
         let (
             _mint_keypair,
             my_ledger_path,
@@ -584,7 +581,6 @@ mod test {
                 .write_entries(
                     DEFAULT_SLOT_HEIGHT,
                     tick_height,
-                    ticks_per_slot,
                     entry_height,
                     next_tick.clone(),
                 )
@@ -658,7 +654,6 @@ mod test {
                 .write_entries(
                     DEFAULT_SLOT_HEIGHT,
                     tick_height,
-                    ticks_per_slot,
                     genesis_entry_height,
                     &active_set_entries,
                 )
@@ -717,7 +712,6 @@ mod test {
                     .write_entries(
                         DEFAULT_SLOT_HEIGHT,
                         tick_height + i as u64,
-                        ticks_per_slot,
                         meta.consumed + i as u64,
                         vec![entry.clone()],
                     )

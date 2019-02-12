@@ -91,7 +91,6 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
                 tick_height,
-                blocktree_config.ticks_per_slot,
                 last_entry_height,
                 &entries,
             )
@@ -969,7 +968,6 @@ fn test_leader_to_validator_transition() {
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
                 tick_height,
-                ticks_per_slot,
                 genesis_entry_height,
                 &active_set_entries,
             )
@@ -1082,7 +1080,6 @@ fn test_leader_validator_basic() {
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
                 tick_height,
-                ticks_per_slot,
                 genesis_entry_height,
                 &active_set_entries,
             )
@@ -1252,7 +1249,6 @@ fn test_dropped_handoff_recovery() {
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
                 tick_height,
-                ticks_per_slot,
                 genesis_entry_height,
                 &active_set_entries,
             )
@@ -1440,7 +1436,6 @@ fn test_full_leader_validator_network() {
                 .write_entries(
                     DEFAULT_SLOT_HEIGHT,
                     tick_height,
-                    ticks_per_slot,
                     entry_height,
                     &active_set_entries,
                 )
@@ -1823,9 +1818,7 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64) {
         let entries = solana::entry::create_ticks(1, last_entry_id);
 
         let blocktree = Blocktree::open_config(&leader_ledger_path, &blocktree_config).unwrap();
-        blocktree
-            .write_entries(1, 0, blocktree_config.ticks_per_slot, 0, &entries)
-            .unwrap();
+        blocktree.write_entries(1, 0, 0, &entries).unwrap();
         tick_height_of_next_rotation += 1;
     }
 
