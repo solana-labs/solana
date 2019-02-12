@@ -491,20 +491,28 @@ mod tests {
         solana_logger::setup();
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
+        let ticks_per_slot = std::u64::MAX;
 
-        let (_mint, ledger_path, genesis_entry_height, _last_id, _last_entry_id) =
+        let (_mint, ledger_path, tick_height, genesis_entry_height, _last_id, _last_entry_id) =
             create_tmp_sample_ledger(
                 "storage_stage_process_entries",
                 1000,
                 1,
                 Keypair::new().pubkey(),
                 1,
+                ticks_per_slot,
             );
 
         let entries = make_tiny_test_entries(64);
         let blocktree = Blocktree::open(&ledger_path).unwrap();
         blocktree
-            .write_entries(DEFAULT_SLOT_HEIGHT, genesis_entry_height, &entries)
+            .write_entries(
+                DEFAULT_SLOT_HEIGHT,
+                tick_height,
+                ticks_per_slot,
+                genesis_entry_height,
+                &entries,
+            )
             .unwrap();
 
         let cluster_info = test_cluster_info(keypair.pubkey());
@@ -560,20 +568,28 @@ mod tests {
         solana_logger::setup();
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
+        let ticks_per_slot = std::u64::MAX;
 
-        let (_mint, ledger_path, genesis_entry_height, _last_id, _last_entry_id) =
+        let (_mint, ledger_path, tick_height, genesis_entry_height, _last_id, _last_entry_id) =
             create_tmp_sample_ledger(
                 "storage_stage_process_entries",
                 1000,
                 1,
                 Keypair::new().pubkey(),
                 1,
+                ticks_per_slot,
             );
 
         let entries = make_tiny_test_entries(128);
         let blocktree = Blocktree::open(&ledger_path).unwrap();
         blocktree
-            .write_entries(DEFAULT_SLOT_HEIGHT, genesis_entry_height, &entries)
+            .write_entries(
+                DEFAULT_SLOT_HEIGHT,
+                tick_height,
+                ticks_per_slot,
+                genesis_entry_height,
+                &entries,
+            )
             .unwrap();
 
         let cluster_info = test_cluster_info(keypair.pubkey());

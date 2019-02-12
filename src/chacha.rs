@@ -148,8 +148,9 @@ mod tests {
         let out_path = Path::new("test_chacha_encrypt_file_output.txt.enc");
 
         let entries = make_tiny_deterministic_test_entries(32);
+        let ticks_per_slot = 16;
         blocktree
-            .write_entries(DEFAULT_SLOT_HEIGHT, 0, &entries)
+            .write_entries(DEFAULT_SLOT_HEIGHT, 0, ticks_per_slot, 0, &entries)
             .unwrap();
 
         let mut key = hex!(

@@ -40,8 +40,22 @@ fn test_replicator_startup_basic() {
     let leader_info = leader_node.info.clone();
 
     let leader_ledger_path = "replicator_test_leader_ledger";
-    let (mint_keypair, leader_ledger_path, _last_entry_height, _last_id, _last_entry_id) =
-        create_tmp_sample_ledger(leader_ledger_path, 1_000_000_000, 0, leader_info.id, 42);
+    let mut fullnode_config = FullnodeConfig::default();
+    let (
+        mint_keypair,
+        leader_ledger_path,
+        _tick_height,
+        _last_entry_height,
+        _last_id,
+        _last_entry_id,
+    ) = create_tmp_sample_ledger(
+        leader_ledger_path,
+        1_000_000_000,
+        0,
+        leader_info.id,
+        42,
+        fullnode_config.leader_scheduler_config.ticks_per_slot,
+    );
 
     let validator_ledger_path =
         tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");
@@ -49,7 +63,6 @@ fn test_replicator_startup_basic() {
     {
         let voting_keypair = VotingKeypair::new_local(&leader_keypair);
 
-        let mut fullnode_config = FullnodeConfig::default();
         fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
         let leader = Fullnode::new(
             leader_node,
@@ -277,8 +290,22 @@ fn test_replicator_startup_ledger_hang() {
     let leader_info = leader_node.info.clone();
 
     let leader_ledger_path = "replicator_test_leader_ledger";
-    let (_mint_keypair, leader_ledger_path, _last_entry_height, _last_id, _last_entry_id) =
-        create_tmp_sample_ledger(leader_ledger_path, 100, 0, leader_info.id, 42);
+    let fullnode_config = FullnodeConfig::default();
+    let (
+        _mint_keypair,
+        leader_ledger_path,
+        _tick_height,
+        _last_entry_height,
+        _last_id,
+        _last_entry_id,
+    ) = create_tmp_sample_ledger(
+        leader_ledger_path,
+        100,
+        0,
+        leader_info.id,
+        42,
+        fullnode_config.leader_scheduler_config.ticks_per_slot,
+    );
 
     let validator_ledger_path =
         tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");
@@ -292,7 +319,7 @@ fn test_replicator_startup_ledger_hang() {
             &leader_ledger_path,
             voting_keypair,
             None,
-            &FullnodeConfig::default(),
+            &fullnode_config,
         );
 
         let validator_keypair = Arc::new(Keypair::new());
