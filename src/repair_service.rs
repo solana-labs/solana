@@ -219,7 +219,7 @@ mod test {
         {
             let num_ticks_per_slot = 1;
             let blocktree_config = BlocktreeConfig::new(num_ticks_per_slot);
-            let blocktree = Blocktree::open_config(&blocktree_path, blocktree_config).unwrap();
+            let blocktree = Blocktree::open_config(&blocktree_path, &blocktree_config).unwrap();
 
             let mut blobs = create_ticks(1, Hash::default()).to_blobs();
             blobs[0].set_index(0);
@@ -268,7 +268,7 @@ mod test {
         {
             let num_ticks_per_slot = 10;
             let blocktree_config = BlocktreeConfig::new(num_ticks_per_slot);
-            let blocktree = Blocktree::open_config(&blocktree_path, blocktree_config).unwrap();
+            let blocktree = Blocktree::open_config(&blocktree_path, &blocktree_config).unwrap();
 
             let mut blobs = make_tiny_test_entries(1).to_blobs();
             blobs[0].set_index(1);
@@ -294,7 +294,7 @@ mod test {
         {
             let num_ticks_per_slot = 10;
             let blocktree_config = BlocktreeConfig::new(num_ticks_per_slot);
-            let blocktree = Blocktree::open_config(&blocktree_path, blocktree_config).unwrap();
+            let blocktree = Blocktree::open_config(&blocktree_path, &blocktree_config).unwrap();
 
             let num_entries_per_slot = 10;
             let num_slots = 2;

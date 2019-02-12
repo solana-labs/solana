@@ -445,7 +445,7 @@ mod test {
             // Set up the bank
             let blocktree_config = BlocktreeConfig::new(ticks_per_slot);
             let (bank, _entry_height, last_entry_id, blocktree, l_sender, l_receiver) =
-                new_bank_from_ledger(&my_ledger_path, blocktree_config, &leader_scheduler_config);
+                new_bank_from_ledger(&my_ledger_path, &blocktree_config, &leader_scheduler_config);
 
             // Set up the replay stage
             let (rotation_sender, rotation_receiver) = channel();
@@ -554,7 +554,7 @@ mod test {
             let (bank, entry_height, last_entry_id, blocktree, l_sender, l_receiver) =
                 new_bank_from_ledger(
                     &my_ledger_path,
-                    BlocktreeConfig::default(),
+                    &BlocktreeConfig::default(),
                     &LeaderSchedulerConfig::default(),
                 );
 
@@ -675,7 +675,7 @@ mod test {
         {
             let blocktree_config = BlocktreeConfig::new(ticks_per_slot);
             let (bank, _entry_height, last_entry_id, blocktree, l_sender, l_receiver) =
-                new_bank_from_ledger(&my_ledger_path, blocktree_config, &leader_scheduler_config);
+                new_bank_from_ledger(&my_ledger_path, &blocktree_config, &leader_scheduler_config);
 
             let meta = blocktree
                 .meta(0)
