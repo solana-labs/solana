@@ -213,24 +213,8 @@ pub mod tests {
     use crate::bank::Bank;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::entry::Entry;
     use crate::genesis_block::GenesisBlock;
-    use crate::gossip_service::GossipService;
-    use crate::packet::SharedBlob;
     use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
-    use crate::streamer;
-    use bincode::serialize;
-    use solana_sdk::system_transaction::SystemTransaction;
-    use std::fs::remove_dir_all;
-    use std::time::Duration;
-
-    fn new_gossip(
-        cluster_info: Arc<RwLock<ClusterInfo>>,
-        gossip: UdpSocket,
-        exit: Arc<AtomicBool>,
-    ) -> GossipService {
-        GossipService::new(&cluster_info, None, gossip, exit)
-    }
 
     #[test]
     fn test_tvu_exit() {
