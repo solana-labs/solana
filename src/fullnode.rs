@@ -1044,7 +1044,6 @@ mod tests {
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
                 tick_height,
-                ticks_per_slot,
                 entry_height,
                 active_set_entries,
             )

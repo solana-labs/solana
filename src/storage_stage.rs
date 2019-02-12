@@ -491,7 +491,6 @@ mod tests {
         solana_logger::setup();
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
-        let ticks_per_slot = std::u64::MAX;
 
         let blocktree_config = BlocktreeConfig::default();
         let (_mint, ledger_path, tick_height, genesis_entry_height, _last_id, _last_entry_id) =
@@ -510,7 +509,6 @@ mod tests {
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
                 tick_height,
-                ticks_per_slot,
                 genesis_entry_height,
                 &entries,
             )
@@ -569,7 +567,6 @@ mod tests {
         solana_logger::setup();
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
-        let ticks_per_slot = std::u64::MAX;
 
         let blocktree_config = BlocktreeConfig::default();
         let (_mint, ledger_path, tick_height, genesis_entry_height, _last_id, _last_entry_id) =
@@ -588,7 +585,6 @@ mod tests {
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
                 tick_height,
-                ticks_per_slot,
                 genesis_entry_height,
                 &entries,
             )

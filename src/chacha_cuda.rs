@@ -110,7 +110,7 @@ pub fn chacha_cbc_encrypt_file_many_keys(
 #[cfg(test)]
 mod tests {
     use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::{Blocktree, DEFAULT_SLOT_HEIGHT};
+    use crate::blocktree::{Blocktree, BlocktreeConfig, DEFAULT_SLOT_HEIGHT};
     use crate::chacha::chacha_cbc_encrypt_ledger;
     use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
     use crate::entry::make_tiny_test_entries;
@@ -127,11 +127,13 @@ mod tests {
         let entries = make_tiny_test_entries(32);
         let ledger_dir = "test_encrypt_file_many_keys_single";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
-        let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
         let ticks_per_slot = 16;
+        let blocktree = Arc::new(
+            Blocktree::open_config(&ledger_path, &BlocktreeConfig::new(ticks_per_slot)).unwrap(),
+        );
 
         blocktree
-            .write_entries(DEFAULT_SLOT_HEIGHT, 0, ticks_per_slot, 0, &entries)
+            .write_entries(DEFAULT_SLOT_HEIGHT, 0, 0, &entries)
             .unwrap();
 
         let out_path = Path::new("test_chacha_encrypt_file_many_keys_single_output.txt.enc");
@@ -163,10 +165,12 @@ mod tests {
         let entries = make_tiny_test_entries(32);
         let ledger_dir = "test_encrypt_file_many_keys_multiple";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
-        let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
         let ticks_per_slot = 16;
+        let blocktree = Arc::new(
+            Blocktree::open_config(&ledger_path, &BlocktreeConfig::new(ticks_per_slot)).unwrap(),
+        );
         blocktree
-            .write_entries(DEFAULT_SLOT_HEIGHT, 0, ticks_per_slot, 0, &entries)
+            .write_entries(DEFAULT_SLOT_HEIGHT, 0, 0, &entries)
             .unwrap();
 
         let out_path = Path::new("test_chacha_encrypt_file_many_keys_multiple_output.txt.enc");
