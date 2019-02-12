@@ -326,8 +326,6 @@ pub mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(starting_balance);
         let tvu_addr = target1.info.tvu;
         let bank = Arc::new(Bank::new(&genesis_block));
-        // 2 tokens are consumed by the genesis
-        let starting_balance = starting_balance - 2;
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), starting_balance);
 
         //start cluster_info1

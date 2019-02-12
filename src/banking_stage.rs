@@ -278,7 +278,7 @@ mod tests {
     use crate::bank::Bank;
     use crate::banking_stage::BankingStageReturnType;
     use crate::entry::EntrySlice;
-    use crate::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_TOKENS};
+    use crate::genesis_block::GenesisBlock;
     use crate::packet::to_packets;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
@@ -286,7 +286,7 @@ mod tests {
 
     #[test]
     fn test_banking_stage_shutdown1() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let (verified_sender, verified_receiver) = channel();
         let (to_validator_sender, _) = channel();
@@ -308,7 +308,7 @@ mod tests {
 
     #[test]
     fn test_banking_stage_shutdown2() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let (_verified_sender, verified_receiver) = channel();
         let (to_validator_sender, _) = channel();
@@ -330,7 +330,7 @@ mod tests {
 
     #[test]
     fn test_banking_stage_tick() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
@@ -359,7 +359,7 @@ mod tests {
 
     #[test]
     fn test_banking_stage_entries_only() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
@@ -418,7 +418,7 @@ mod tests {
         // In this attack we'll demonstrate that a verifier can interpret the ledger
         // differently if either the server doesn't signal the ledger to add an
         // Entry OR if the verifier tries to parallelize across multiple Entries.
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let (verified_sender, verified_receiver) = channel();
         let (to_validator_sender, _) = channel();
@@ -486,7 +486,7 @@ mod tests {
     // with reason BankingStageReturnType::LeaderRotation
     #[test]
     fn test_max_tick_height_shutdown() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let (_verified_sender_, verified_receiver) = channel();
         let (to_validator_sender, _to_validator_receiver) = channel();
