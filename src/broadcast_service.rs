@@ -90,7 +90,7 @@ impl Broadcast {
 
         inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
 
-        blocktree.write_shared_blobs(blobs.clone())?;
+        blocktree.write_shared_blobs(&blobs)?;
 
         // Send out data
         ClusterInfo::broadcast(&self.id, last_tick, &broadcast_table, sock, &blobs)?;
