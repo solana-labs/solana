@@ -200,25 +200,33 @@ impl Fullnode {
                 .insert_info(entrypoint_info.clone());
         }
 
-        // Get the scheduled leader
-        let (scheduled_leader, slot_height, max_tpu_tick_height) = {
+        let (scheduled_leader, tick_height, max_tick_height, blob_index) = {
             let tick_height = bank.tick_height();
 
             let leader_scheduler = bank.leader_scheduler.read().unwrap();
-            let slot = leader_scheduler.tick_height_to_slot(tick_height);
+            let slot = leader_scheduler.tick_height_to_slot(tick_height + 1);
             (
                 leader_scheduler
                     .get_leader_for_slot(slot)
                     .expect("Leader not known after processing bank"),
-                slot,
+                tick_height,
                 tick_height + leader_scheduler.num_ticks_left_in_slot(tick_height),
+                {
+                    if let Some(meta) = blocktree.meta(slot).expect("Database error") {
+                        meta.consumed
+                    } else {
+                        0
+                    }
+                },
             )
         };
 
         trace!(
-            "scheduled_leader: {} until tick_height {}",
+            "scheduled_leader {:?} for ticks ({}, {}), starting blob_index={}",
             scheduled_leader,
-            max_tpu_tick_height
+            tick_height,
+            max_tick_height,
+            blob_index,
         );
         cluster_info.write().unwrap().set_leader(scheduled_leader);
 
@@ -252,8 +260,6 @@ impl Fullnode {
         // Setup channel for rotation indications
         let (rotation_sender, rotation_receiver) = channel();
 
-        let blob_index = Self::get_consumed_for_slot(&blocktree, slot_height);
-
         let (tvu, blob_sender) = Tvu::new(
             voting_keypair_option,
             &bank,
@@ -284,7 +290,7 @@ impl Fullnode {
                 .expect("Failed to clone broadcast socket"),
             cluster_info.clone(),
             config.sigverify_disabled,
-            max_tpu_tick_height,
+            max_tick_height,
             blob_index,
             &last_entry_id,
             id,
@@ -461,15 +467,6 @@ impl Fullnode {
     pub fn close(self) -> Result<()> {
         self.exit();
         self.join()
-    }
-
-    fn get_consumed_for_slot(blocktree: &Blocktree, slot_index: u64) -> u64 {
-        let meta = blocktree.meta(slot_index).expect("Database error");
-        if let Some(meta) = meta {
-            meta.consumed
-        } else {
-            0
-        }
     }
 }
 
