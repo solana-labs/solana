@@ -387,27 +387,35 @@ mod test {
         let my_node = Node::new_localhost_with_pubkey(my_id);
         let cluster_info_me = ClusterInfo::new(my_node.info.clone());
 
-        // Create keypair for the old leader
-        let old_leader_id = Keypair::new().pubkey();
-
-        // Create a ledger
-        let (mint_keypair, my_ledger_path, genesis_entry_height, mut last_id, last_entry_id) =
-            create_tmp_sample_ledger(
-                "test_replay_stage_leader_rotation_exit",
-                10_000,
-                0,
-                old_leader_id,
-                500,
-            );
-
-        info!("my_id: {:?}", my_id);
-        info!("old_leader_id: {:?}", old_leader_id);
-
         // Set up the LeaderScheduler so that my_id becomes the leader for epoch 1
         let ticks_per_slot = 16;
         let leader_scheduler_config = LeaderSchedulerConfig::new(ticks_per_slot, 1, ticks_per_slot);
 
+        // Create keypair for the old leader
+        let old_leader_id = Keypair::new().pubkey();
+
+        // Create a ledger
+        let (
+            mint_keypair,
+            my_ledger_path,
+            mut tick_height,
+            entry_height,
+            mut last_id,
+            last_entry_id,
+        ) = create_tmp_sample_ledger(
+            "test_replay_stage_leader_rotation_exit",
+            10_000,
+            0,
+            old_leader_id,
+            500,
+            ticks_per_slot,
+        );
+
+        info!("my_id: {:?}", my_id);
+        info!("old_leader_id: {:?}", old_leader_id);
+
         let my_keypair = Arc::new(my_keypair);
+        let num_ending_ticks = 0;
         let (active_set_entries, voting_keypair) = make_active_set_entries(
             &my_keypair,
             &mint_keypair,
@@ -415,7 +423,7 @@ mod test {
             ticks_per_slot, // add a vote for tick_height = ticks_per_slot
             &last_entry_id,
             &last_id,
-            0,
+            num_ending_ticks,
         );
         last_id = active_set_entries.last().unwrap().id;
 
@@ -424,10 +432,13 @@ mod test {
             blocktree
                 .write_entries(
                     DEFAULT_SLOT_HEIGHT,
-                    genesis_entry_height,
-                    &active_set_entries,
+                    tick_height,
+                    ticks_per_slot,
+                    entry_height,
+                    active_set_entries,
                 )
                 .unwrap();
+            tick_height += num_ending_ticks;
         }
 
         {
@@ -466,7 +477,13 @@ mod test {
 
             // Write the entries to the ledger, replay_stage should get notified of changes
             blocktree
-                .write_entries(DEFAULT_SLOT_HEIGHT, meta.consumed, &entries_to_send)
+                .write_entries(
+                    DEFAULT_SLOT_HEIGHT,
+                    tick_height,
+                    ticks_per_slot,
+                    meta.consumed,
+                    &entries_to_send,
+                )
                 .unwrap();
 
             info!("Wait for replay_stage to exit and check return value is correct");
@@ -508,14 +525,22 @@ mod test {
         // Create keypair for the leader
         let leader_id = Keypair::new().pubkey();
 
-        let (_mint_keypair, my_ledger_path, _last_entry_height, _last_id, _last_entry_id) =
-            create_tmp_sample_ledger(
-                "test_vote_error_replay_stage_correctness",
-                10_000,
-                1,
-                leader_id,
-                500,
-            );
+        let ticks_per_slot = std::u64::MAX;
+        let (
+            _mint_keypair,
+            my_ledger_path,
+            tick_height,
+            _last_entry_height,
+            _last_id,
+            _last_entry_id,
+        ) = create_tmp_sample_ledger(
+            "test_vote_error_replay_stage_correctness",
+            10_000,
+            1,
+            leader_id,
+            500,
+            ticks_per_slot,
+        );
 
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
@@ -555,9 +580,14 @@ mod test {
 
             info!("Send ReplayStage an entry, should see it on the ledger writer receiver");
             let next_tick = create_ticks(1, last_entry_id);
-
             blocktree
-                .write_entries(DEFAULT_SLOT_HEIGHT, entry_height, next_tick.clone())
+                .write_entries(
+                    DEFAULT_SLOT_HEIGHT,
+                    tick_height,
+                    ticks_per_slot,
+                    entry_height,
+                    next_tick.clone(),
+                )
                 .unwrap();
 
             let received_tick = ledger_writer_recv
@@ -586,15 +616,23 @@ mod test {
         // Create keypair for the leader
         let leader_id = Keypair::new().pubkey();
 
+        let ticks_per_slot = 10;
         // Create the ledger
-        let (mint_keypair, my_ledger_path, genesis_entry_height, last_id, last_entry_id) =
-            create_tmp_sample_ledger(
-                "test_vote_error_replay_stage_leader_rotation",
-                10_000,
-                1,
-                leader_id,
-                500,
-            );
+        let (
+            mint_keypair,
+            my_ledger_path,
+            tick_height,
+            genesis_entry_height,
+            last_id,
+            last_entry_id,
+        ) = create_tmp_sample_ledger(
+            "test_vote_error_replay_stage_leader_rotation",
+            10_000,
+            1,
+            leader_id,
+            500,
+            ticks_per_slot,
+        );
 
         let my_keypair = Arc::new(my_keypair);
         // Write two entries to the ledger so that the validator is in the active set:
@@ -610,20 +648,19 @@ mod test {
             0,
         );
         let mut last_id = active_set_entries.last().unwrap().id;
-        let initial_tick_height = genesis_entry_height;
-
         {
             let blocktree = Blocktree::open(&my_ledger_path).unwrap();
             blocktree
                 .write_entries(
                     DEFAULT_SLOT_HEIGHT,
+                    tick_height,
+                    ticks_per_slot,
                     genesis_entry_height,
                     &active_set_entries,
                 )
                 .unwrap();
         }
 
-        let ticks_per_slot = 10;
         let slots_per_epoch = 2;
         let active_window_tick_length = ticks_per_slot * slots_per_epoch;
         let leader_scheduler_config =
@@ -667,11 +704,10 @@ mod test {
             cluster_info_me.write().unwrap().push_vote(vote);
 
             // Send enough ticks to trigger leader rotation
-            let total_entries_to_send = (active_window_tick_length - initial_tick_height) as usize;
+            let total_entries_to_send = (active_window_tick_length - tick_height) as usize;
             let num_hashes = 1;
 
-            let leader_rotation_index =
-                (active_window_tick_length - initial_tick_height - 1) as usize;
+            let leader_rotation_index = (active_window_tick_length - tick_height - 1) as usize;
             let mut expected_last_id = Hash::default();
             for i in 0..total_entries_to_send {
                 let entry = Entry::new(&mut last_id, 0, num_hashes, vec![]);
@@ -679,6 +715,8 @@ mod test {
                 blocktree
                     .write_entries(
                         DEFAULT_SLOT_HEIGHT,
+                        tick_height + i as u64,
+                        ticks_per_slot,
                         meta.consumed + i as u64,
                         vec![entry.clone()],
                     )

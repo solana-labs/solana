@@ -44,19 +44,31 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (alice, leader_ledger_path, mut last_entry_height, _last_id, mut last_entry_id) =
-        create_tmp_sample_ledger("multi_node_ledger_window", 10_000, 0, leader_data.id, 500);
+    let fullnode_config = FullnodeConfig::default();
+    let ticks_per_slot = fullnode_config.leader_scheduler_config.ticks_per_slot;
+
+    let (
+        alice,
+        leader_ledger_path,
+        tick_height,
+        mut last_entry_height,
+        _last_id,
+        mut last_entry_id,
+    ) = create_tmp_sample_ledger(
+        "multi_node_ledger_window",
+        10_000,
+        0,
+        leader_data.id,
+        500,
+        ticks_per_slot,
+    );
     ledger_paths.push(leader_ledger_path.clone());
 
     // make a copy at zero
     let zero_ledger_path = tmp_copy_ledger(&leader_ledger_path, "multi_node_ledger_window");
     ledger_paths.push(zero_ledger_path.clone());
 
-    let fullnode_config = FullnodeConfig::default();
-    info!(
-        "ticks_per_slot: {}",
-        fullnode_config.leader_scheduler_config.ticks_per_slot
-    );
+    info!("ticks_per_slot: {}", ticks_per_slot,);
 
     // Write some into leader's ledger, this should populate the leader's window
     // and force it to respond to repair from the ledger window
@@ -69,7 +81,13 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
             last_entry_id,
         );
         blocktree
-            .write_entries(0, last_entry_height, &entries)
+            .write_entries(
+                DEFAULT_SLOT_HEIGHT,
+                tick_height,
+                ticks_per_slot,
+                last_entry_height,
+                &entries,
+            )
             .unwrap();
 
         last_entry_height += entries.len() as u64;
@@ -164,13 +182,17 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (alice, genesis_ledger_path, _last_entry_height, _last_id, _last_entry_id) =
+    let fullnode_config = FullnodeConfig::default();
+    let ticks_per_slot = fullnode_config.leader_scheduler_config.ticks_per_slot;
+
+    let (alice, genesis_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_ledger(
             "multi_node_validator_catchup_from_zero",
             10_000,
             0,
             leader_data.id,
             500,
+            ticks_per_slot,
         );
     ledger_paths.push(genesis_ledger_path.clone());
 
@@ -192,7 +214,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
         &leader_ledger_path,
         voting_keypair,
         None,
-        &FullnodeConfig::default(),
+        &fullnode_config,
     );
 
     let mut node_exits = vec![server.run(None)];
@@ -347,15 +369,24 @@ fn test_multi_node_basic() {
     const N: usize = 5;
     trace!("test_multi_node_basic");
 
-    let fullnode_config = FullnodeConfig::default();
     let leader_keypair = Arc::new(Keypair::new());
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_data = leader.info.clone();
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (alice, genesis_ledger_path, _last_entry_height, _last_id, _last_entry_id) =
-        create_tmp_sample_ledger("multi_node_basic", 10_000, 0, leader_data.id, 500);
+    let fullnode_config = FullnodeConfig::default();
+    let ticks_per_slot = fullnode_config.leader_scheduler_config.ticks_per_slot;
+
+    let (alice, genesis_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
+        create_tmp_sample_ledger(
+            "multi_node_basic",
+            10_000,
+            0,
+            leader_data.id,
+            500,
+            ticks_per_slot,
+        );
     ledger_paths.push(genesis_ledger_path.clone());
 
     let leader_ledger_path = tmp_copy_ledger(&genesis_ledger_path, "multi_node_basic");
@@ -454,8 +485,17 @@ fn test_boot_validator_from_file() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (alice, genesis_ledger_path, _last_entry_height, _last_id, _last_entry_id) =
-        create_tmp_sample_ledger("boot_validator_from_file", 100_000, 0, leader_pubkey, 1000);
+    let fullnode_config = FullnodeConfig::default();
+    let ticks_per_slot = fullnode_config.leader_scheduler_config.ticks_per_slot;
+    let (alice, genesis_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
+        create_tmp_sample_ledger(
+            "boot_validator_from_file",
+            100_000,
+            0,
+            leader_pubkey,
+            1000,
+            ticks_per_slot,
+        );
     ledger_paths.push(genesis_ledger_path.clone());
 
     let leader_ledger_path = tmp_copy_ledger(&genesis_ledger_path, "multi_node_basic");
@@ -469,7 +509,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
         &leader_ledger_path,
         voting_keypair,
         None,
-        &FullnodeConfig::default(),
+        &fullnode_config,
     );
     let leader_balance =
         send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, 500, Some(500)).unwrap();
@@ -490,7 +530,7 @@ fn test_boot_validator_from_file() -> result::Result<()> {
         &ledger_path,
         voting_keypair,
         Some(&leader_data),
-        &FullnodeConfig::default(),
+        &fullnode_config,
     );
     let mut client = mk_client(&validator_data);
     let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
@@ -533,13 +573,16 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
 
     let leader_keypair = Arc::new(Keypair::new());
     let initial_leader_balance = 500;
-    let (alice, ledger_path, _last_entry_height, _last_id, _last_entry_id) =
+    let fullnode_config = FullnodeConfig::default();
+    let ticks_per_slot = fullnode_config.leader_scheduler_config.ticks_per_slot;
+    let (alice, ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_ledger(
             "leader_restart_validator_start_from_old_ledger",
             100_000 + 500 * solana::window_service::MAX_REPAIR_BACKOFF as u64,
             0,
             leader_keypair.pubkey(),
             initial_leader_balance,
+            ticks_per_slot,
         );
     let bob_pubkey = Keypair::new().pubkey();
 
@@ -595,7 +638,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
         &stale_ledger_path,
         voting_keypair,
         Some(&leader_data),
-        &FullnodeConfig::default(),
+        &fullnode_config,
     );
 
     // trigger broadcast, validator should catch up from leader, whose window contains
@@ -643,13 +686,16 @@ fn test_multi_node_dynamic_network() {
     let leader_pubkey = leader_keypair.pubkey().clone();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let bob_pubkey = Keypair::new().pubkey();
-    let (alice, genesis_ledger_path, _last_entry_height, _last_id, _last_entry_id) =
+    let fullnode_config = FullnodeConfig::default();
+    let ticks_per_slot = fullnode_config.leader_scheduler_config.ticks_per_slot;
+    let (alice, genesis_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_ledger(
             "multi_node_dynamic_network",
             10_000_000,
             0,
             leader_pubkey,
             500,
+            ticks_per_slot,
         );
 
     let mut ledger_paths = Vec::new();
@@ -668,7 +714,7 @@ fn test_multi_node_dynamic_network() {
         &leader_ledger_path,
         voting_keypair,
         None,
-        &FullnodeConfig::default(),
+        &fullnode_config,
     );
     let server_exit = server.run(None);
     info!(
@@ -865,18 +911,25 @@ fn test_leader_to_validator_transition() {
 
     // Initialize the leader ledger. Make a mint and a genesis entry
     // in the leader ledger
-    let (mint_keypair, leader_ledger_path, genesis_entry_height, last_id, last_entry_id) =
-        create_tmp_sample_ledger(
-            "test_leader_to_validator_transition",
-            10_000,
-            0,
-            leader_info.id,
-            500,
-        );
+    let (
+        mint_keypair,
+        leader_ledger_path,
+        tick_height,
+        genesis_entry_height,
+        last_id,
+        last_entry_id,
+    ) = create_tmp_sample_ledger(
+        "test_leader_to_validator_transition",
+        10_000,
+        0,
+        leader_info.id,
+        500,
+        ticks_per_slot,
+    );
 
     // Write the votes entries to the ledger that will cause leader rotation
     // to validator_keypair at slot 2
-    let (bootstrap_entries, _) = make_active_set_entries(
+    let (active_set_entries, _) = make_active_set_entries(
         &validator_keypair,
         &mint_keypair,
         100,
@@ -890,8 +943,10 @@ fn test_leader_to_validator_transition() {
         blocktree
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
+                tick_height,
+                ticks_per_slot,
                 genesis_entry_height,
-                &bootstrap_entries,
+                &active_set_entries,
             )
             .unwrap();
     }
@@ -965,15 +1020,31 @@ fn test_leader_validator_basic() {
     info!("leader id: {}", leader_keypair.pubkey());
     info!("validator id: {}", validator_keypair.pubkey());
 
+    // Create the leader scheduler config
+    let mut fullnode_config = FullnodeConfig::default();
+    let ticks_per_slot = 5;
+    fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
+        ticks_per_slot,
+        1, // 1 slot per epoch
+        ticks_per_slot,
+    );
+
     // Make a common mint and a genesis entry for both leader + validator ledgers
-    let (mint_keypair, leader_ledger_path, genesis_entry_height, last_id, last_entry_id) =
-        create_tmp_sample_ledger(
-            "test_leader_validator_basic",
-            10_000,
-            0,
-            leader_info.id,
-            500,
-        );
+    let (
+        mint_keypair,
+        leader_ledger_path,
+        tick_height,
+        genesis_entry_height,
+        last_id,
+        last_entry_id,
+    ) = create_tmp_sample_ledger(
+        "test_leader_validator_basic",
+        10_000,
+        0,
+        leader_info.id,
+        500,
+        ticks_per_slot,
+    );
 
     // Add validator vote on tick height 1
     let (active_set_entries, _) = make_active_set_entries(
@@ -990,6 +1061,8 @@ fn test_leader_validator_basic() {
         blocktree
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
+                tick_height,
+                ticks_per_slot,
                 genesis_entry_height,
                 &active_set_entries,
             )
@@ -1001,15 +1074,6 @@ fn test_leader_validator_basic() {
     ledger_paths.push(leader_ledger_path.clone());
     let validator_ledger_path = tmp_copy_ledger(&leader_ledger_path, "test_leader_validator_basic");
     ledger_paths.push(validator_ledger_path.clone());
-
-    // Create the leader scheduler config
-    let mut fullnode_config = FullnodeConfig::default();
-    let ticks_per_slot = 5;
-    fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
-        ticks_per_slot,
-        1, // 1 slot per epoch
-        ticks_per_slot,
-    );
 
     // Start the validator node
     let voting_keypair = VotingKeypair::new_local(&validator_keypair);
@@ -1119,14 +1183,21 @@ fn test_dropped_handoff_recovery() {
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
     let num_ending_ticks = 1;
-    let (mint_keypair, genesis_ledger_path, genesis_entry_height, last_id, last_entry_id) =
-        create_tmp_sample_ledger(
-            "test_dropped_handoff_recovery",
-            10_000,
-            num_ending_ticks,
-            bootstrap_leader_info.id,
-            500,
-        );
+    let (
+        mint_keypair,
+        genesis_ledger_path,
+        tick_height,
+        genesis_entry_height,
+        last_id,
+        last_entry_id,
+    ) = create_tmp_sample_ledger(
+        "test_dropped_handoff_recovery",
+        10_000,
+        num_ending_ticks,
+        bootstrap_leader_info.id,
+        500,
+        ticks_per_slot,
+    );
 
     // Create the validator keypair that will be the next leader in line
     let next_leader_keypair = Arc::new(Keypair::new());
@@ -1155,6 +1226,8 @@ fn test_dropped_handoff_recovery() {
         blocktree
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
+                tick_height,
+                ticks_per_slot,
                 genesis_entry_height,
                 &active_set_entries,
             )
@@ -1262,6 +1335,14 @@ fn test_full_leader_validator_network() {
     // The number of validators
     const N: usize = 2;
 
+    // Create the common leader scheduling configuration
+    let slots_per_epoch = (N + 1) as u64;
+    let ticks_per_slot = 5;
+    let ticks_per_epoch = slots_per_epoch * ticks_per_slot;
+    let mut fullnode_config = FullnodeConfig::default();
+    fullnode_config.leader_scheduler_config =
+        LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, ticks_per_epoch * 3);
+
     // Create the bootstrap leader node information
     let bootstrap_leader_keypair = Arc::new(Keypair::new());
     info!("bootstrap leader: {:?}", bootstrap_leader_keypair.pubkey());
@@ -1281,7 +1362,8 @@ fn test_full_leader_validator_network() {
     let (
         mint_keypair,
         bootstrap_leader_ledger_path,
-        genesis_entry_height,
+        tick_height,
+        mut entry_height,
         last_id,
         mut last_entry_id,
     ) = create_tmp_sample_ledger(
@@ -1290,6 +1372,7 @@ fn test_full_leader_validator_network() {
         num_ending_ticks,
         bootstrap_leader_info.id,
         500,
+        ticks_per_slot,
     );
 
     // Create a common ledger with entries in the beginnging that will add all the validators
@@ -1297,11 +1380,10 @@ fn test_full_leader_validator_network() {
     let mut ledger_paths = Vec::new();
     ledger_paths.push(bootstrap_leader_ledger_path.clone());
 
-    let mut index = genesis_entry_height;
     for node_keypair in node_keypairs.iter() {
         // Make entries to give each validator node some stake so that they will be in the
         // leader election active set
-        let (bootstrap_entries, _) = make_active_set_entries(
+        let (active_set_entries, _) = make_active_set_entries(
             node_keypair,
             &mint_keypair,
             100,
@@ -1312,26 +1394,24 @@ fn test_full_leader_validator_network() {
         );
 
         // Write the entries
-        last_entry_id = bootstrap_entries
+        last_entry_id = active_set_entries
             .last()
             .expect("expected at least one genesis entry")
             .id;
         {
             let blocktree = Blocktree::open(&bootstrap_leader_ledger_path).unwrap();
             blocktree
-                .write_entries(DEFAULT_SLOT_HEIGHT, index, &bootstrap_entries)
+                .write_entries(
+                    DEFAULT_SLOT_HEIGHT,
+                    tick_height,
+                    ticks_per_slot,
+                    entry_height,
+                    &active_set_entries,
+                )
                 .unwrap();
-            index += bootstrap_entries.len() as u64;
+            entry_height += active_set_entries.len() as u64;
         }
     }
-
-    // Create the common leader scheduling configuration
-    let slots_per_epoch = (N + 1) as u64;
-    let ticks_per_slot = 5;
-    let ticks_per_epoch = slots_per_epoch * ticks_per_slot;
-    let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.leader_scheduler_config =
-        LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, ticks_per_epoch * 3);
 
     let mut nodes = vec![];
 
@@ -1483,10 +1563,20 @@ fn test_broadcast_last_tick() {
     let bootstrap_leader_node = Node::new_localhost_with_pubkey(bootstrap_leader_keypair.pubkey());
     let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
+    // Create the fullnode configuration
+    let ticks_per_slot = 40;
+    let slots_per_epoch = 2;
+    let ticks_per_epoch = slots_per_epoch * ticks_per_slot;
+
+    let mut fullnode_config = FullnodeConfig::default();
+    fullnode_config.leader_scheduler_config =
+        LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, ticks_per_epoch);
+
     // Create leader ledger
     let (
         _mint_keypair,
         bootstrap_leader_ledger_path,
+        _tick_height,
         genesis_entry_height,
         _last_id,
         _last_entry_id,
@@ -1496,6 +1586,7 @@ fn test_broadcast_last_tick() {
         0,
         bootstrap_leader_info.id,
         500,
+        ticks_per_slot,
     );
 
     let genesis_ledger_len = genesis_entry_height;
@@ -1522,16 +1613,10 @@ fn test_broadcast_last_tick() {
         })
         .collect();
 
-    let ticks_per_slot = 40;
-    let slots_per_epoch = 2;
-    let ticks_per_epoch = slots_per_epoch * ticks_per_slot;
-
     // Start up the bootstrap leader fullnode
     let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
     let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
-    let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.leader_scheduler_config =
-        LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, ticks_per_epoch);
+
     let bootstrap_leader = Fullnode::new(
         bootstrap_leader_node,
         &bootstrap_leader_keypair,

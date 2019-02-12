@@ -479,21 +479,44 @@ impl Blocktree {
         self.insert_data_blobs(blobs)
     }
 
-    pub fn write_entries<I>(&self, slot: u64, index: u64, entries: I) -> Result<()>
+    pub fn write_entries<I>(
+        &self,
+        start_slot: u64,
+        num_ticks_in_start_slot: u64,
+        ticks_per_slot: u64,
+        start_index: u64,
+        entries: I,
+    ) -> Result<()>
     where
         I: IntoIterator,
         I::Item: Borrow<Entry>,
     {
-        let blobs: Vec<_> = entries
-            .into_iter()
-            .enumerate()
-            .map(|(idx, entry)| {
-                let mut b = entry.borrow().to_blob();
-                b.set_index(idx as u64 + index);
-                b.set_slot(slot);
-                b
-            })
-            .collect();
+        assert!(num_ticks_in_start_slot < ticks_per_slot);
+        let mut remaining_ticks_in_slot = ticks_per_slot - num_ticks_in_start_slot;
+
+        let mut blobs = vec![];
+        let mut current_index = start_index;
+        let mut current_slot = start_slot;
+
+        // Find all the entries for start_slot
+        for entry in entries {
+            if remaining_ticks_in_slot == 0 {
+                current_slot += 1;
+                current_index = 0;
+                remaining_ticks_in_slot = ticks_per_slot;
+            }
+
+            let mut b = entry.borrow().to_blob();
+            b.set_index(current_index);
+            b.set_slot(current_slot);
+            blobs.push(b);
+
+            current_index += 1;
+
+            if entry.borrow().is_tick() {
+                remaining_ticks_in_slot -= 1;
+            }
+        }
 
         self.write_blobs(&blobs)
     }
@@ -1249,16 +1272,22 @@ impl Iterator for EntryIterator {
     }
 }
 
-pub fn create_new_ledger(ledger_path: &str, genesis_block: &GenesisBlock) -> Result<(u64, Hash)> {
+// Returns a tuple (entry_height, tick_height, last_id), corresponding to the
+// total number of entries, the number of ticks, and the last id generated in the
+// new ledger
+pub fn create_new_ledger(
+    ledger_path: &str,
+    genesis_block: &GenesisBlock,
+) -> Result<(u64, u64, Hash)> {
     Blocktree::destroy(ledger_path)?;
     genesis_block.write(&ledger_path)?;
 
     // Add a single tick linked back to the genesis_block to bootstrap the ledger
     let blocktree = Blocktree::open(ledger_path)?;
     let entries = crate::entry::create_ticks(1, genesis_block.last_id());
-    blocktree.write_entries(DEFAULT_SLOT_HEIGHT, 0, &entries)?;
+    blocktree.write_entries(DEFAULT_SLOT_HEIGHT, 0, std::u64::MAX, 0, &entries)?;
 
-    Ok((1, entries[0].id))
+    Ok((1, 1, entries[0].id))
 }
 
 pub fn genesis<'a, I>(ledger_path: &str, keypair: &Keypair, entries: I) -> Result<()>
@@ -1303,11 +1332,12 @@ pub fn create_tmp_sample_ledger(
     num_extra_ticks: u64,
     bootstrap_leader_id: Pubkey,
     bootstrap_leader_tokens: u64,
-) -> (Keypair, String, u64, Hash, Hash) {
+    ticks_per_slot: u64,
+) -> (Keypair, String, u64, u64, Hash, Hash) {
     let (genesis_block, mint_keypair) =
         GenesisBlock::new_with_leader(num_tokens, bootstrap_leader_id, bootstrap_leader_tokens);
     let ledger_path = get_tmp_ledger_path(name);
-    let (mut entry_height, mut last_entry_id) =
+    let (mut entry_height, mut tick_height, mut last_entry_id) =
         create_new_ledger(&ledger_path, &genesis_block).unwrap();
 
     let mut last_id = genesis_block.last_id();
@@ -1315,8 +1345,17 @@ pub fn create_tmp_sample_ledger(
         let entries = crate::entry::create_ticks(num_extra_ticks, last_entry_id);
 
         let blocktree = Blocktree::open(&ledger_path).unwrap();
+
+        //create_new_ledger creates one beginning tick
+        tick_height += num_extra_ticks;
         blocktree
-            .write_entries(DEFAULT_SLOT_HEIGHT, entry_height, &entries)
+            .write_entries(
+                DEFAULT_SLOT_HEIGHT,
+                tick_height,
+                ticks_per_slot,
+                entry_height,
+                &entries,
+            )
             .unwrap();
         entry_height += entries.len() as u64;
         last_id = entries.last().unwrap().id;
@@ -1325,6 +1364,7 @@ pub fn create_tmp_sample_ledger(
     (
         mint_keypair,
         ledger_path,
+        tick_height,
         entry_height,
         last_id,
         last_entry_id,
@@ -1808,6 +1848,8 @@ mod tests {
             ledger
                 .write_entries(
                     0u64,
+                    0,
+                    std::u64::MAX,
                     (entries.len() - 1) as u64,
                     &entries[entries.len() - 1..],
                 )

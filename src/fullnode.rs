@@ -527,13 +527,12 @@ impl Service for Fullnode {
 mod tests {
     use super::*;
     use crate::blob_fetch_stage::BlobFetchStage;
-    use crate::blocktree::{create_tmp_sample_ledger, tmp_copy_ledger};
+    use crate::blocktree::{create_tmp_sample_ledger, tmp_copy_ledger, DEFAULT_SLOT_HEIGHT};
     use crate::entry::make_consecutive_blobs;
     use crate::entry::EntrySlice;
     use crate::gossip_service::{converge, make_listening_node};
     use crate::leader_scheduler::make_active_set_entries;
     use crate::streamer::responder;
-    use std::cmp::min;
     use std::fs::remove_dir_all;
     use std::sync::atomic::Ordering;
     use std::thread::sleep;
@@ -545,8 +544,21 @@ mod tests {
 
         let validator_keypair = Keypair::new();
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
-        let (_mint_keypair, validator_ledger_path, _last_entry_height, _last_id, _last_entry_id) =
-            create_tmp_sample_ledger("validator_exit", 10_000, 0, leader_keypair.pubkey(), 1000);
+        let (
+            _mint_keypair,
+            validator_ledger_path,
+            _tick_height,
+            _last_entry_height,
+            _last_id,
+            _last_entry_id,
+        ) = create_tmp_sample_ledger(
+            "validator_exit",
+            10_000,
+            0,
+            leader_keypair.pubkey(),
+            1000,
+            std::u64::MAX,
+        );
 
         let validator = Fullnode::new(
             validator_node,
@@ -573,6 +585,7 @@ mod tests {
                 let (
                     _mint_keypair,
                     validator_ledger_path,
+                    _tick_height,
                     _last_entry_height,
                     _last_id,
                     _last_entry_id,
@@ -582,6 +595,7 @@ mod tests {
                     0,
                     leader_keypair.pubkey(),
                     1000,
+                    std::u64::MAX,
                 );
                 ledger_paths.push(validator_ledger_path.clone());
                 Fullnode::new(
@@ -616,20 +630,6 @@ mod tests {
         let bootstrap_leader_node =
             Node::new_localhost_with_pubkey(bootstrap_leader_keypair.pubkey());
 
-        let (
-            _mint_keypair,
-            bootstrap_leader_ledger_path,
-            _genesis_entry_height,
-            _last_id,
-            _last_entry_id,
-        ) = create_tmp_sample_ledger(
-            "test_leader_to_leader_transition",
-            10_000,
-            1,
-            bootstrap_leader_keypair.pubkey(),
-            500,
-        );
-
         // Once the bootstrap leader hits the second epoch, because there are no other choices in
         // the active set, this leader will remain the leader in the second epoch. In the second
         // epoch, check that the same leader knows to shut down and restart as a leader again.
@@ -639,6 +639,22 @@ mod tests {
         let active_window_length = 10 * ticks_per_epoch;
         let leader_scheduler_config =
             LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_length);
+
+        let (
+            _mint_keypair,
+            bootstrap_leader_ledger_path,
+            _tick_height,
+            _genesis_entry_height,
+            _last_id,
+            _last_entry_id,
+        ) = create_tmp_sample_ledger(
+            "test_leader_to_leader_transition",
+            10_000,
+            1,
+            bootstrap_leader_keypair.pubkey(),
+            500,
+            ticks_per_slot,
+        );
 
         let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
         let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
@@ -987,20 +1003,21 @@ mod tests {
         num_genesis_ticks: u64,
         num_ending_ticks: u64,
         test_name: &str,
-        ticks_per_block: u64,
+        ticks_per_slot: u64,
     ) -> (Node, Node, String, u64, Hash) {
         // Make a leader identity
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         // Create validator identity
-        assert!(num_genesis_ticks <= ticks_per_block);
-        let (mint_keypair, ledger_path, genesis_entry_height, last_id, last_entry_id) =
+        assert!(num_genesis_ticks <= ticks_per_slot);
+        let (mint_keypair, ledger_path, tick_height, mut entry_height, last_id, last_entry_id) =
             create_tmp_sample_ledger(
                 test_name,
                 10_000,
                 num_genesis_ticks,
                 leader_node.info.id,
                 500,
+                ticks_per_slot,
             );
 
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
@@ -1022,43 +1039,28 @@ mod tests {
             num_ending_ticks,
         );
 
-        let non_tick_active_entries_len = active_set_entries.len() - num_ending_ticks as usize;
-        let remaining_ticks_in_zeroth_slot = ticks_per_block - num_genesis_ticks;
-        let entries_for_zeroth_slot = min(
-            active_set_entries.len(),
-            non_tick_active_entries_len + remaining_ticks_in_zeroth_slot as usize,
-        );
-        let entry_chunks: Vec<_> = active_set_entries[entries_for_zeroth_slot..]
-            .chunks(ticks_per_block as usize)
-            .collect();
-
         let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let active_set_entries_len = active_set_entries.len() as u64;
+        let last_id = active_set_entries.last().unwrap().id;
 
-        // Iterate writing slots through 0..entry_chunks.len()
-        for i in 0..entry_chunks.len() + 1 {
-            let (start_height, entries) = {
-                if i == 0 {
-                    (
-                        genesis_entry_height,
-                        &active_set_entries[..entries_for_zeroth_slot],
-                    )
-                } else {
-                    (0, entry_chunks[i - 1])
-                }
-            };
+        blocktree
+            .write_entries(
+                DEFAULT_SLOT_HEIGHT,
+                tick_height,
+                ticks_per_slot,
+                entry_height,
+                active_set_entries,
+            )
+            .unwrap();
 
-            blocktree
-                .write_entries(i as u64, start_height, entries)
-                .unwrap();
-        }
+        entry_height += active_set_entries_len;
 
-        let entry_height = genesis_entry_height + active_set_entries.len() as u64;
         (
             leader_node,
             validator_node,
             ledger_path,
             entry_height,
-            active_set_entries.last().unwrap().id,
+            last_id,
         )
     }
 }

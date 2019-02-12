@@ -464,8 +464,16 @@ pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, 
     let node = Node::new_localhost_with_pubkey(node_keypair.pubkey());
     let node_info = node.info.clone();
 
-    let (mint_keypair, ledger_path, _last_entry_height, _last_id, _last_entry_id) =
-        create_tmp_sample_ledger(ledger_name, 10_000, 0, node_info.id, 42);
+    let fullnode_config = &FullnodeConfig::default();
+    let (mint_keypair, ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
+        create_tmp_sample_ledger(
+            ledger_name,
+            10_000,
+            0,
+            node_info.id,
+            42,
+            fullnode_config.leader_scheduler_config.ticks_per_slot,
+        );
 
     let vote_account_keypair = Arc::new(Keypair::new());
     let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
