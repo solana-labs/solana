@@ -521,7 +521,9 @@ impl Service for Fullnode {
 mod tests {
     use super::*;
     use crate::blob_fetch_stage::BlobFetchStage;
-    use crate::blocktree::{create_tmp_sample_ledger, tmp_copy_ledger, DEFAULT_SLOT_HEIGHT};
+    use crate::blocktree::{
+        create_tmp_sample_ledger, tmp_copy_ledger, BlocktreeConfig, DEFAULT_SLOT_HEIGHT,
+    };
     use crate::entry::make_consecutive_blobs;
     use crate::entry::EntrySlice;
     use crate::gossip_service::{converge, make_listening_node};
@@ -551,7 +553,7 @@ mod tests {
             0,
             leader_keypair.pubkey(),
             1000,
-            std::u64::MAX,
+            &BlocktreeConfig::default(),
         );
 
         let validator = Fullnode::new(
@@ -589,7 +591,7 @@ mod tests {
                     0,
                     leader_keypair.pubkey(),
                     1000,
-                    std::u64::MAX,
+                    &BlocktreeConfig::default(),
                 );
                 ledger_paths.push(validator_ledger_path.clone());
                 Fullnode::new(
@@ -634,6 +636,11 @@ mod tests {
         let leader_scheduler_config =
             LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_length);
 
+        let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
+        let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
+        let mut fullnode_config = FullnodeConfig::default();
+        fullnode_config.leader_scheduler_config = leader_scheduler_config;
+
         let (
             _mint_keypair,
             bootstrap_leader_ledger_path,
@@ -647,14 +654,10 @@ mod tests {
             1,
             bootstrap_leader_keypair.pubkey(),
             500,
-            ticks_per_slot,
+            &fullnode_config.ledger_config(),
         );
 
-        let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
-        let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
         // Start the bootstrap leader
-        let mut fullnode_config = FullnodeConfig::default();
-        fullnode_config.leader_scheduler_config = leader_scheduler_config;
         let bootstrap_leader = Fullnode::new(
             bootstrap_leader_node,
             &bootstrap_leader_keypair,
@@ -688,6 +691,7 @@ mod tests {
             slots_per_epoch,
             ticks_per_slot * slots_per_epoch,
         );
+        let blocktree_config = &fullnode_config.ledger_config();
 
         // Create the leader and validator nodes
         let bootstrap_leader_keypair = Arc::new(Keypair::new());
@@ -702,11 +706,15 @@ mod tests {
                 ticks_per_slot * 4,
                 "test_wrong_role_transition",
                 ticks_per_slot,
+                &blocktree_config,
             );
         let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
-        let validator_ledger_path =
-            tmp_copy_ledger(&bootstrap_leader_ledger_path, "test_wrong_role_transition");
+        let validator_ledger_path = tmp_copy_ledger(
+            &bootstrap_leader_ledger_path,
+            "test_wrong_role_transition",
+            &blocktree_config,
+        );
 
         let ledger_paths = vec![
             bootstrap_leader_ledger_path.clone(),
@@ -759,6 +767,12 @@ mod tests {
         let slots_per_epoch = 4;
         let leader_keypair = Arc::new(Keypair::new());
         let validator_keypair = Arc::new(Keypair::new());
+        let mut fullnode_config = FullnodeConfig::default();
+        fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
+            ticks_per_slot,
+            slots_per_epoch,
+            ticks_per_slot * slots_per_epoch,
+        );
         let (leader_node, validator_node, validator_ledger_path, ledger_initial_len, last_id) =
             setup_leader_validator(
                 &leader_keypair,
@@ -767,6 +781,7 @@ mod tests {
                 0,
                 "test_validator_to_leader_transition",
                 ticks_per_slot,
+                &fullnode_config.ledger_config(),
             );
 
         let leader_id = leader_keypair.pubkey();
@@ -774,14 +789,6 @@ mod tests {
 
         info!("leader: {:?}", leader_id);
         info!("validator: {:?}", validator_info.id);
-
-        // Set the leader scheduler for the validator
-        let mut fullnode_config = FullnodeConfig::default();
-        fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
-            ticks_per_slot,
-            slots_per_epoch,
-            ticks_per_slot * slots_per_epoch,
-        );
 
         let voting_keypair = VotingKeypair::new_local(&validator_keypair);
 
@@ -860,18 +867,6 @@ mod tests {
         info!("leader: {:?}", leader_keypair.pubkey());
         info!("validator: {:?}", validator_keypair.pubkey());
 
-        let (leader_node, _, leader_ledger_path, _, _) = setup_leader_validator(
-            &leader_keypair,
-            &validator_keypair,
-            1,
-            0,
-            "test_tvu_behind",
-            ticks_per_slot,
-        );
-
-        let leader_node_info = leader_node.info.clone();
-
-        // Set the leader scheduler for the validator
         let mut fullnode_config = FullnodeConfig::default();
         fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
             ticks_per_slot,
@@ -880,6 +875,18 @@ mod tests {
         );
         let config = PohServiceConfig::Sleep(Duration::from_millis(200));
         fullnode_config.tick_config = config;
+
+        let (leader_node, _, leader_ledger_path, _, _) = setup_leader_validator(
+            &leader_keypair,
+            &validator_keypair,
+            1,
+            0,
+            "test_tvu_behind",
+            ticks_per_slot,
+            &fullnode_config.ledger_config(),
+        );
+
+        let leader_node_info = leader_node.info.clone();
 
         info!("Start up a listener");
         let blob_receiver_exit = Arc::new(AtomicBool::new(false));
@@ -968,7 +975,9 @@ mod tests {
 
         // Check the ledger to make sure the PoH chains
         {
-            let blocktree = Blocktree::open(&leader_ledger_path).unwrap();
+            let blocktree =
+                Blocktree::open_config(&leader_ledger_path, &fullnode_config.ledger_config())
+                    .unwrap();
             let entries: Vec<_> = (0..3)
                 .flat_map(|slot_height| blocktree.get_slot_entries(slot_height, 0, None).unwrap())
                 .collect();
@@ -990,6 +999,7 @@ mod tests {
         num_ending_ticks: u64,
         test_name: &str,
         ticks_per_slot: u64,
+        config: &BlocktreeConfig,
     ) -> (Node, Node, String, u64, Hash) {
         // Make a leader identity
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
@@ -1003,7 +1013,7 @@ mod tests {
                 num_genesis_ticks,
                 leader_node.info.id,
                 500,
-                ticks_per_slot,
+                config,
             );
 
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
@@ -1025,7 +1035,7 @@ mod tests {
             num_ending_ticks,
         );
 
-        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let blocktree = Blocktree::open_config(&ledger_path, config).unwrap();
         let active_set_entries_len = active_set_entries.len() as u64;
         let last_id = active_set_entries.last().unwrap().id;
 

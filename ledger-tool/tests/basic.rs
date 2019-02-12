@@ -1,4 +1,4 @@
-use solana::blocktree::create_tmp_sample_ledger;
+use solana::blocktree::{create_tmp_sample_ledger, BlocktreeConfig};
 use solana_sdk::signature::{Keypair, KeypairUtil};
 
 use assert_cmd::prelude::*;
@@ -39,7 +39,7 @@ fn nominal() {
             9,
             keypair.pubkey(),
             50,
-            std::u64::MAX,
+            &BlocktreeConfig::default(),
         );
 
     // Basic validation

@@ -6,9 +6,8 @@ extern crate log;
 extern crate serde_json;
 
 use bincode::deserialize;
-use solana::blocktree::Blocktree;
 use solana::blocktree::{
-    create_tmp_sample_ledger, get_tmp_ledger_path, tmp_copy_ledger, DEFAULT_SLOT_HEIGHT,
+    create_tmp_sample_ledger, get_tmp_ledger_path, tmp_copy_ledger, Blocktree, DEFAULT_SLOT_HEIGHT,
 };
 use solana::client::mk_client;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
@@ -41,6 +40,8 @@ fn test_replicator_startup_basic() {
 
     let leader_ledger_path = "replicator_test_leader_ledger";
     let mut fullnode_config = FullnodeConfig::default();
+    let blocktree_config = fullnode_config.ledger_config();
+
     let (
         mint_keypair,
         leader_ledger_path,
@@ -54,11 +55,14 @@ fn test_replicator_startup_basic() {
         0,
         leader_info.id,
         42,
-        fullnode_config.leader_scheduler_config.ticks_per_slot,
+        &blocktree_config,
     );
 
-    let validator_ledger_path =
-        tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");
+    let validator_ledger_path = tmp_copy_ledger(
+        &leader_ledger_path,
+        "replicator_test_validator_ledger",
+        &blocktree_config,
+    );
 
     {
         let voting_keypair = VotingKeypair::new_local(&leader_keypair);
@@ -291,6 +295,7 @@ fn test_replicator_startup_ledger_hang() {
 
     let leader_ledger_path = "replicator_test_leader_ledger";
     let fullnode_config = FullnodeConfig::default();
+    let blocktree_config = fullnode_config.ledger_config();
     let (
         _mint_keypair,
         leader_ledger_path,
@@ -304,11 +309,14 @@ fn test_replicator_startup_ledger_hang() {
         0,
         leader_info.id,
         42,
-        fullnode_config.leader_scheduler_config.ticks_per_slot,
+        &blocktree_config,
     );
 
-    let validator_ledger_path =
-        tmp_copy_ledger(&leader_ledger_path, "replicator_test_validator_ledger");
+    let validator_ledger_path = tmp_copy_ledger(
+        &leader_ledger_path,
+        "replicator_test_validator_ledger",
+        &blocktree_config,
+    );
 
     {
         let voting_keypair = VotingKeypair::new_local(&leader_keypair);

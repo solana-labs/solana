@@ -1278,12 +1278,13 @@ impl Iterator for EntryIterator {
 pub fn create_new_ledger(
     ledger_path: &str,
     genesis_block: &GenesisBlock,
+    config: &BlocktreeConfig,
 ) -> Result<(u64, u64, Hash)> {
     Blocktree::destroy(ledger_path)?;
     genesis_block.write(&ledger_path)?;
 
     // Add a single tick linked back to the genesis_block to bootstrap the ledger
-    let blocktree = Blocktree::open(ledger_path)?;
+    let blocktree = Blocktree::open_config(ledger_path, config)?;
     let entries = crate::entry::create_ticks(1, genesis_block.last_id());
     blocktree.write_entries(DEFAULT_SLOT_HEIGHT, 0, std::u64::MAX, 0, &entries)?;
 
@@ -1332,19 +1333,19 @@ pub fn create_tmp_sample_ledger(
     num_extra_ticks: u64,
     bootstrap_leader_id: Pubkey,
     bootstrap_leader_tokens: u64,
-    ticks_per_slot: u64,
+    config: &BlocktreeConfig,
 ) -> (Keypair, String, u64, u64, Hash, Hash) {
     let (genesis_block, mint_keypair) =
         GenesisBlock::new_with_leader(num_tokens, bootstrap_leader_id, bootstrap_leader_tokens);
     let ledger_path = get_tmp_ledger_path(name);
     let (mut entry_height, mut tick_height, mut last_entry_id) =
-        create_new_ledger(&ledger_path, &genesis_block).unwrap();
+        create_new_ledger(&ledger_path, &genesis_block, config).unwrap();
 
     let mut last_id = genesis_block.last_id();
     if num_extra_ticks > 0 {
         let entries = crate::entry::create_ticks(num_extra_ticks, last_entry_id);
 
-        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let blocktree = Blocktree::open_config(&ledger_path, config).unwrap();
 
         // create_new_ledger creates one beginning tick
         tick_height += num_extra_ticks;
@@ -1352,7 +1353,7 @@ pub fn create_tmp_sample_ledger(
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
                 tick_height,
-                ticks_per_slot,
+                config.ticks_per_slot,
                 entry_height,
                 &entries,
             )
@@ -1371,15 +1372,15 @@ pub fn create_tmp_sample_ledger(
     )
 }
 
-pub fn tmp_copy_ledger(from: &str, name: &str) -> String {
+pub fn tmp_copy_ledger(from: &str, name: &str, config: &BlocktreeConfig) -> String {
     let path = get_tmp_ledger_path(name);
 
-    let blocktree = Blocktree::open(from).unwrap();
+    let blocktree = Blocktree::open_config(from, config).unwrap();
     let blobs = blocktree.read_ledger_blobs();
     let genesis_block = GenesisBlock::load(from).unwrap();
 
     Blocktree::destroy(&path).expect("Expected successful database destruction");
-    let blocktree = Blocktree::open(&path).unwrap();
+    let blocktree = Blocktree::open_config(&path, config).unwrap();
     blocktree.write_blobs(blobs).unwrap();
     genesis_block.write(&path).unwrap();
 
