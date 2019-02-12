@@ -12,7 +12,6 @@ use crate::rpc::JsonRpcService;
 use crate::rpc_pubsub::PubSubService;
 use crate::service::Service;
 use crate::storage_stage::StorageState;
-use crate::streamer::BlobSender;
 use crate::tpu::{Tpu, TpuRotationReceiver, TpuRotationSender};
 use crate::tvu::{Sockets, Tvu};
 use crate::voting_keypair::VotingKeypair;
@@ -106,7 +105,7 @@ pub struct Fullnode {
     node_services: NodeServices,
     rotation_sender: TpuRotationSender,
     rotation_receiver: TpuRotationReceiver,
-    blob_sender: BlobSender,
+    blocktree: Arc<Blocktree>,
 }
 
 impl Fullnode {
@@ -258,7 +257,7 @@ impl Fullnode {
         // Setup channel for rotation indications
         let (rotation_sender, rotation_receiver) = channel();
 
-        let (tvu, blob_sender) = Tvu::new(
+        let tvu = Tvu::new(
             voting_keypair_option,
             &bank,
             blob_index,
@@ -293,7 +292,7 @@ impl Fullnode {
             &last_entry_id,
             id,
             &rotation_sender,
-            &blob_sender,
+            &blocktree,
             scheduled_leader == id,
         );
 
@@ -313,7 +312,7 @@ impl Fullnode {
             broadcast_socket: node.sockets.broadcast,
             rotation_sender,
             rotation_receiver,
-            blob_sender,
+            blocktree,
         }
     }
 
@@ -395,7 +394,7 @@ impl Fullnode {
                 &last_entry_id,
                 self.id,
                 &self.rotation_sender,
-                &self.blob_sender,
+                &self.blocktree,
             );
 
             transition

@@ -1,6 +1,7 @@
 //! The `broadcast_service` broadcasts data from a leader node to validators
 //!
 use crate::bank::Bank;
+use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo, DATA_PLANE_FANOUT};
 use crate::counter::Counter;
 use crate::entry::Entry;
@@ -11,7 +12,6 @@ use crate::leader_scheduler::LeaderScheduler;
 use crate::packet::index_blobs;
 use crate::result::{Error, Result};
 use crate::service::Service;
-use crate::streamer::BlobSender;
 use log::Level;
 use rayon::prelude::*;
 use solana_metrics::{influxdb, submit};
@@ -47,7 +47,7 @@ impl Broadcast {
         receiver: &Receiver<Vec<Entry>>,
         sock: &UdpSocket,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-        blob_sender: &BlobSender,
+        blocktree: &Arc<Blocktree>,
     ) -> Result<()> {
         let timer = Duration::new(1, 0);
         let entries = receiver.recv_timeout(timer)?;
@@ -90,7 +90,7 @@ impl Broadcast {
 
         inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
 
-        blob_sender.send(blobs.clone())?;
+        blocktree.write_shared_blobs(blobs.clone())?;
 
         // Send out data
         ClusterInfo::broadcast(&self.id, last_tick, &broadcast_table, sock, &blobs)?;
@@ -187,7 +187,7 @@ impl BroadcastService {
         receiver: &Receiver<Vec<Entry>>,
         max_tick_height: u64,
         exit_signal: &Arc<AtomicBool>,
-        blob_sender: &BlobSender,
+        blocktree: &Arc<Blocktree>,
     ) -> BroadcastServiceReturnType {
         let me = cluster_info.read().unwrap().my_data().clone();
 
@@ -212,7 +212,7 @@ impl BroadcastService {
                 receiver,
                 sock,
                 leader_scheduler,
-                blob_sender,
+                blocktree,
             ) {
                 match e {
                     Error::RecvTimeoutError(RecvTimeoutError::Disconnected) | Error::SendError => {
@@ -254,10 +254,10 @@ impl BroadcastService {
         receiver: Receiver<Vec<Entry>>,
         max_tick_height: u64,
         exit_sender: Arc<AtomicBool>,
-        blob_sender: &BlobSender,
+        blocktree: &Arc<Blocktree>,
     ) -> Self {
         let exit_signal = Arc::new(AtomicBool::new(false));
-        let blob_sender = blob_sender.clone();
+        let blocktree = blocktree.clone();
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
@@ -271,7 +271,7 @@ impl BroadcastService {
                     &receiver,
                     max_tick_height,
                     &exit_signal,
-                    &blob_sender,
+                    &blocktree,
                 )
             })
             .unwrap();
@@ -335,8 +335,6 @@ mod test {
         let exit_sender = Arc::new(AtomicBool::new(false));
         let bank = Arc::new(Bank::default());
 
-        let (blob_fetch_sender, _) = channel();
-
         // Start up the broadcast stage
         let broadcast_service = BroadcastService::new(
             bank.clone(),
@@ -347,7 +345,7 @@ mod test {
             entry_receiver,
             max_tick_height,
             exit_sender,
-            &blob_fetch_sender,
+            &blocktree,
         );
 
         MockBroadcastService {
