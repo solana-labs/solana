@@ -24,7 +24,9 @@ pub struct GenesisBlock {
 impl GenesisBlock {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(tokens: u64) -> (Self, Keypair) {
-        assert!(tokens >= 2);
+        let tokens = tokens
+            .checked_add(BOOTSTRAP_LEADER_TOKENS)
+            .unwrap_or(tokens);
         let mint_keypair = Keypair::new();
         let bootstrap_leader_keypair = Keypair::new();
         let bootstrap_leader_vote_account_keypair = Keypair::new();
@@ -84,7 +86,7 @@ mod tests {
     #[test]
     fn test_genesis_block_new() {
         let (genesis_block, mint) = GenesisBlock::new(10_000);
-        assert_eq!(genesis_block.tokens, 10_000);
+        assert_eq!(genesis_block.tokens, 10_000 + BOOTSTRAP_LEADER_TOKENS);
         assert_eq!(genesis_block.mint_id, mint.pubkey());
         assert!(genesis_block.bootstrap_leader_id != Pubkey::default());
         assert!(genesis_block.bootstrap_leader_vote_account_id != Pubkey::default());

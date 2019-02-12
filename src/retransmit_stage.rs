@@ -245,7 +245,7 @@ mod tests {
         let required_balance = num_nodes * (num_nodes + 1) / 2;
 
         // create a genesis block
-        let (genesis_block, mint_keypair) = GenesisBlock::new(required_balance + 2);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(required_balance);
 
         // describe the leader
         let leader_info = ContactInfo::new_localhost(Keypair::new().pubkey(), 0);

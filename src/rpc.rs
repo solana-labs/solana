@@ -496,8 +496,7 @@ mod tests {
 
     #[test]
     fn test_rpc_new() {
-        let (genesis_block, alice) =
-            GenesisBlock::new(10_000 + crate::genesis_block::BOOTSTRAP_LEADER_TOKENS);
+        let (genesis_block, alice) = GenesisBlock::new(10_000);
         let bank = Bank::new(&genesis_block);
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default())));
         let rpc_addr = SocketAddr::new(

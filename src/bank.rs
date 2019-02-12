@@ -950,7 +950,6 @@ mod tests {
     use super::*;
     use crate::entry::{next_entries, next_entry, Entry};
     use crate::gen_keys::GenKeys;
-    use crate::genesis_block::BOOTSTRAP_LEADER_TOKENS;
     use bincode::serialize;
     use hashbrown::HashSet;
     use solana_sdk::hash::hash;
@@ -968,16 +967,13 @@ mod tests {
     fn test_bank_new() {
         let (genesis_block, _) = GenesisBlock::new(10_000);
         let bank = Bank::new(&genesis_block);
-        assert_eq!(
-            bank.get_balance(&genesis_block.mint_id),
-            10_000 - genesis_block.bootstrap_leader_tokens
-        );
+        assert_eq!(bank.get_balance(&genesis_block.mint_id), 10_000);
     }
 
     #[test]
     fn test_bank_new_with_leader() {
         let dummy_leader_id = Keypair::new().pubkey();
-        let dummy_leader_tokens = BOOTSTRAP_LEADER_TOKENS;
+        let dummy_leader_tokens = crate::genesis_block::BOOTSTRAP_LEADER_TOKENS;
         let (genesis_block, _) =
             GenesisBlock::new_with_leader(10_000, dummy_leader_id, dummy_leader_tokens);
         assert_eq!(genesis_block.bootstrap_leader_tokens, dummy_leader_tokens);
@@ -1011,7 +1007,7 @@ mod tests {
 
     #[test]
     fn test_one_source_two_tx_one_batch() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1 + BOOTSTRAP_LEADER_TOKENS);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
@@ -1036,7 +1032,7 @@ mod tests {
 
     #[test]
     fn test_one_tx_two_out_atomic_fail() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1 + BOOTSTRAP_LEADER_TOKENS);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
@@ -1085,7 +1081,7 @@ mod tests {
 
     #[test]
     fn test_one_tx_two_out_atomic_pass() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
@@ -1108,7 +1104,7 @@ mod tests {
     // See github issue 1157 (https://github.com/solana-labs/solana/issues/1157)
     #[test]
     fn test_detect_failed_duplicate_transactions_issue_1157() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let bank = Bank::new(&genesis_block);
         let dest = Keypair::new();
 
@@ -1144,7 +1140,7 @@ mod tests {
 
     #[test]
     fn test_account_not_found() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(BOOTSTRAP_LEADER_TOKENS);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(0);
         let bank = Bank::new(&genesis_block);
         let keypair = Keypair::new();
         assert_eq!(
@@ -1156,7 +1152,7 @@ mod tests {
 
     #[test]
     fn test_insufficient_funds() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(11_000 + BOOTSTRAP_LEADER_TOKENS);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(11_000);
         let bank = Bank::new(&genesis_block);
         let pubkey = Keypair::new().pubkey();
         bank.transfer(1_000, &mint_keypair, pubkey, genesis_block.last_id())
@@ -1189,7 +1185,7 @@ mod tests {
 
     #[test]
     fn test_debits_before_credits() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let bank = Bank::new(&genesis_block);
         let keypair = Keypair::new();
         let tx0 = SystemTransaction::new_account(
@@ -1216,7 +1212,7 @@ mod tests {
 
     #[test]
     fn test_process_empty_entry_is_registered() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2 + BOOTSTRAP_LEADER_TOKENS);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let bank = Bank::new(&genesis_block);
         let keypair = Keypair::new();
         let entry = next_entry(&genesis_block.last_id(), 1, vec![]);
@@ -1323,15 +1319,7 @@ mod tests {
         tokens: u64,
         num_one_token_transfers: usize,
     ) -> (GenesisBlock, Keypair, impl Iterator<Item = Entry>) {
-        let mint_keypair = Keypair::new();
-        let bootstrap_leader_vote_account_keypair = Keypair::new();
-        let genesis_block = GenesisBlock {
-            bootstrap_leader_id: Keypair::new().pubkey(),
-            bootstrap_leader_tokens: BOOTSTRAP_LEADER_TOKENS,
-            bootstrap_leader_vote_account_id: bootstrap_leader_vote_account_keypair.pubkey(),
-            mint_id: mint_keypair.pubkey(),
-            tokens,
-        };
+        let (genesis_block, mint_keypair) = GenesisBlock::new(tokens);
         let block = create_sample_block_with_ticks(
             &genesis_block,
             &mint_keypair,
@@ -1343,8 +1331,7 @@ mod tests {
 
     #[test]
     fn test_process_ledger_simple() {
-        let (genesis_block, mint_keypair, ledger) =
-            create_sample_ledger(100 + BOOTSTRAP_LEADER_TOKENS, 3);
+        let (genesis_block, mint_keypair, ledger) = create_sample_ledger(100, 3);
         let mut bank = Bank::default();
         bank.add_builtin_programs();
         bank.process_genesis_block(&genesis_block);
@@ -1363,15 +1350,7 @@ mod tests {
 
     #[test]
     fn test_hash_internal_state() {
-        let mint_keypair = Keypair::new();
-        let bootstrap_leader_vote_account_keypair = Keypair::new();
-        let genesis_block = GenesisBlock {
-            bootstrap_leader_id: Keypair::new().pubkey(),
-            bootstrap_leader_tokens: BOOTSTRAP_LEADER_TOKENS,
-            bootstrap_leader_vote_account_id: bootstrap_leader_vote_account_keypair.pubkey(),
-            mint_id: mint_keypair.pubkey(),
-            tokens: 2_000,
-        };
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2_000);
         let seed = [0u8; 32];
         let mut rnd = GenKeys::new(seed);
         let keypairs = rnd.gen_n_keypairs(5);
@@ -1418,7 +1397,7 @@ mod tests {
     }
     #[test]
     fn test_interleaving_locks() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(3 + BOOTSTRAP_LEADER_TOKENS);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(3);
         let bank = Bank::new(&genesis_block);
         let alice = Keypair::new();
         let bob = Keypair::new();
@@ -1870,7 +1849,7 @@ mod tests {
     }
     #[test]
     fn test_bank_pay_to_self() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1 + BOOTSTRAP_LEADER_TOKENS);
+        let (genesis_block, mint_keypair) = GenesisBlock::new(1);
         let key1 = Keypair::new();
         let bank = Bank::new(&genesis_block);
 

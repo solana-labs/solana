@@ -758,9 +758,8 @@ pub mod tests {
     fn test_rank_active_set() {
         let num_validators: usize = 101;
         // Give genesis_block sum(1..num_validators) tokens
-        let (genesis_block, mint_keypair) = GenesisBlock::new(
-            BOOTSTRAP_LEADER_TOKENS + (((num_validators + 1) / 2) * (num_validators + 1)) as u64,
-        );
+        let (genesis_block, mint_keypair) =
+            GenesisBlock::new((((num_validators + 1) / 2) * (num_validators + 1)) as u64);
         let bank = Bank::new(&genesis_block);
         let mut validators = vec![];
         let last_id = genesis_block.last_id();
@@ -818,8 +817,7 @@ pub mod tests {
         }
 
         // Break ties between validators with the same balances using public key
-        let (genesis_block, mint_keypair) =
-            GenesisBlock::new(BOOTSTRAP_LEADER_TOKENS + (num_validators + 1) as u64);
+        let (genesis_block, mint_keypair) = GenesisBlock::new((num_validators + 1) as u64);
         let bank = Bank::new(&genesis_block);
         let mut tied_validators_pk = vec![];
         let last_id = genesis_block.last_id();
@@ -939,9 +937,8 @@ pub mod tests {
 
         // Create the bank and validators
         let (genesis_block, mint_keypair) = GenesisBlock::new(
-            BOOTSTRAP_LEADER_TOKENS
-                + ((((num_validators + 1) / 2) * (num_validators + 1))
-                    + (num_vote_account_tokens * num_validators)) as u64,
+            ((((num_validators + 1) / 2) * (num_validators + 1))
+                + (num_vote_account_tokens * num_validators)) as u64,
         );
         let bank = Bank::new_with_leader_scheduler_config(&genesis_block, &leader_scheduler_config);
         let mut validators = vec![];
