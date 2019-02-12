@@ -269,20 +269,9 @@ impl ThinClient {
     pub fn get_last_id(&mut self) -> Hash {
         loop {
             trace!("get_last_id send_to {}", &self.rpc_addr);
-            let response = self
-                .rpc_client
-                .make_rpc_request(1, RpcRequest::GetLastId, None);
-
-            match response {
-                Ok(value) => {
-                    let last_id_str = value.as_str().unwrap();
-                    let last_id_vec = bs58::decode(last_id_str).into_vec().unwrap();
-                    return Hash::new(&last_id_vec);
-                }
-                Err(error) => {
-                    debug!("thin_client get_last_id error: {:?}", error);
-                }
-            };
+            if let Some(hash) = self.try_get_last_id(10) {
+                return hash;
+            }
         }
     }
 
