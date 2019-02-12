@@ -509,7 +509,6 @@ pub mod test {
     use crate::window::WindowSlot;
     use rand::{thread_rng, Rng};
     use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::sync::Arc;
 
     #[test]
