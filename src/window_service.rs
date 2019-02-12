@@ -50,7 +50,7 @@ fn recv_window(
             .to_owned(),
     );
 
-    retransmit_all_leader_blocks(&dq, leader_scheduler, retransmit, id)?;
+    retransmit_blobs(&dq, leader_scheduler, retransmit, id)?;
 
     //send a contiguous set of blocks
     trace!("{} num blobs received: {}", id, dq.len());
@@ -215,16 +215,11 @@ mod test {
             let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
             let num_blobs_to_make = 10;
             let gossip_address = &leader_node.info.gossip;
-            let msgs = make_consecutive_blobs(
-                &me_id,
-                num_blobs_to_make,
-                0,
-                Hash::default(),
-                &gossip_address,
-            )
-            .into_iter()
-            .rev()
-            .collect();;
+            let msgs =
+                make_consecutive_blobs(num_blobs_to_make, 0, Hash::default(), &gossip_address)
+                    .into_iter()
+                    .rev()
+                    .collect();;
             s_responder.send(msgs).expect("send");
             t_responder
         };
@@ -290,8 +285,7 @@ mod test {
                 leader_node.sockets.tvu.into_iter().map(Arc::new).collect();
             let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
             let mut msgs = Vec::new();
-            let blobs =
-                make_consecutive_blobs(&me_id, 14u64, 0, Hash::default(), &leader_node.info.gossip);
+            let blobs = make_consecutive_blobs(14u64, 0, Hash::default(), &leader_node.info.gossip);
 
             for v in 0..10 {
                 let i = 9 - v;

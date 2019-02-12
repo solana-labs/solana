@@ -7,6 +7,7 @@ use crate::cluster_info::{
 };
 use crate::counter::Counter;
 use crate::leader_scheduler::LeaderScheduler;
+use crate::packet::SharedBlob;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::streamer::BlobReceiver;
@@ -34,7 +35,7 @@ fn compute_retransmit_peers(
     fanout: usize,
     hood_size: usize,
     grow: bool,
-) -> Vec<NodeInfo> {
+) -> (Vec<NodeInfo>, Vec<NodeInfo>) {
     let peers = cluster_info.read().unwrap().sorted_retransmit_peers(bank);
     let my_id = cluster_info.read().unwrap().id();
     //calc num_layers and num_neighborhoods using the total number of nodes
@@ -43,7 +44,7 @@ fn compute_retransmit_peers(
 
     if num_layers <= 1 {
         /* single layer data plane */
-        peers
+        (peers, vec![])
     } else {
         //find my index (my ix is the same as the first node with smaller stake)
         let my_index = peers
@@ -56,15 +57,16 @@ fn compute_retransmit_peers(
             my_index.unwrap_or(peers.len() - 1),
         );
         let upper_bound = cmp::min(locality.neighbor_bounds.1, peers.len());
-        let mut retransmit_peers = peers[locality.neighbor_bounds.0..upper_bound].to_vec();
+        let neighbors = peers[locality.neighbor_bounds.0..upper_bound].to_vec();
+        let mut children = Vec::new();
         for ix in locality.child_layer_peers {
             if let Some(peer) = peers.get(ix) {
-                retransmit_peers.push(peer.clone());
+                children.push(peer.clone());
                 continue;
             }
             break;
         }
-        retransmit_peers
+        (neighbors, children)
     }
 }
 
@@ -85,17 +87,30 @@ fn retransmit(
             .add_field("count", influxdb::Value::Integer(dq.len() as i64))
             .to_owned(),
     );
-    let retransmit_peers = compute_retransmit_peers(
+    let (neighbors, children) = compute_retransmit_peers(
         &bank,
         cluster_info,
         DATA_PLANE_FANOUT,
         NEIGHBORHOOD_SIZE,
         GROW_LAYER_CAPACITY,
     );
-    for b in &mut dq {
-        ClusterInfo::retransmit_to(&cluster_info, &retransmit_peers, b, sock)?;
+    for b in &dq {
+        if b.read().unwrap().should_forward() {
+            ClusterInfo::retransmit_to(&cluster_info, &neighbors, &for_neighbors(b), sock)?;
+        }
+        // Always send blobs to children
+        ClusterInfo::retransmit_to(&cluster_info, &children, b, sock)?;
     }
     Ok(())
+}
+
+/// Modifies a blob for neighbors nodes
+#[inline]
+fn for_neighbors(b: &SharedBlob) -> SharedBlob {
+    let mut blob = b.read().unwrap().clone();
+    // Disable blob forwarding for neighbors
+    blob.forward(false);
+    Arc::new(RwLock::new(blob))
 }
 
 /// Service to retransmit messages from the leader or layer 1 to relevant peer nodes.
@@ -301,14 +316,15 @@ mod tests {
                     assert!(now.elapsed().as_secs() < timeout, "Timed out");
                     cluster.gossip.set_self(*id);
                     if !mapped_peers.contains_key(id) {
-                        let peers = compute_retransmit_peers(
+                        let (mut neighbors, mut children) = compute_retransmit_peers(
                             &bank,
                             &Arc::new(RwLock::new(cluster.clone())),
                             fanout,
                             hood_size,
                             GROW_LAYER_CAPACITY,
                         );
-
+                        neighbors.append(&mut children);
+                        let peers = neighbors;
                         let vec_peers: Vec<_> = peers
                             .iter()
                             .map(|p| {
@@ -348,6 +364,8 @@ mod tests {
         });
     }
 
+    //todo add tests with network failures
+
     // Run with a single layer
     #[test]
     fn test_retransmit_small() {
@@ -372,5 +390,13 @@ mod tests {
         run_simulation(num_nodes, DATA_PLANE_FANOUT / 10, NEIGHBORHOOD_SIZE / 10);
     }
 
-    //todo add tests with network failures
+    // Test that blobs always come out with forward unset for neighbors
+    #[test]
+    fn test_blob_for_neighbors() {
+        let blob = SharedBlob::default();
+        blob.write().unwrap().forward(true);
+        let for_hoodies = for_neighbors(&blob);
+        assert!(!for_hoodies.read().unwrap().should_forward());
+    }
+
 }

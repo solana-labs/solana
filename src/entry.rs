@@ -447,7 +447,6 @@ pub fn make_large_test_entries(num_entries: usize) -> Vec<Entry> {
 
 #[cfg(test)]
 pub fn make_consecutive_blobs(
-    id: &Pubkey,
     num_blobs_to_make: u64,
     start_height: u64,
     start_hash: Hash,
@@ -460,7 +459,7 @@ pub fn make_consecutive_blobs(
     for blob in &blobs {
         let mut blob = blob.write().unwrap();
         blob.set_index(index);
-        blob.set_id(id);
+        blob.forward(true);
         blob.meta.set_addr(addr);
         index += 1;
     }
