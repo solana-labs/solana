@@ -1261,7 +1261,7 @@ pub fn create_new_ledger(ledger_path: &str, genesis_block: &GenesisBlock) -> Res
     Ok((1, entries[0].id))
 }
 
-pub fn genesis<'a, I>(ledger_path: &str, keypair: &Keypair, entries: I) -> Result<()>
+pub fn genesis<'a, I>(ledger_path: &str, entries: I) -> Result<()>
 where
     I: IntoIterator<Item = &'a Entry>,
 {
@@ -1274,7 +1274,7 @@ where
         .map(|(idx, entry)| {
             let mut b = entry.borrow().to_blob();
             b.set_index(idx as u64);
-            b.set_id(&keypair.pubkey());
+            b.forward(true);
             b.set_slot(DEFAULT_SLOT_HEIGHT);
             b
         })
@@ -1408,7 +1408,7 @@ mod tests {
     fn test_read_blobs_bytes() {
         let shared_blobs = make_tiny_test_entries(10).to_shared_blobs();
         let slot = DEFAULT_SLOT_HEIGHT;
-        index_blobs(&shared_blobs, &Keypair::new().pubkey(), &mut 0, &[slot; 10]);
+        index_blobs(&shared_blobs, &mut 0, &[slot; 10]);
 
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
@@ -1779,7 +1779,7 @@ mod tests {
 
         let ledger_path = get_tmp_ledger_path("test_genesis_and_entry_iterator");
         {
-            genesis(&ledger_path, &Keypair::new(), &entries).unwrap();
+            genesis(&ledger_path, &entries).unwrap();
 
             let ledger = Blocktree::open(&ledger_path).expect("open failed");
 
@@ -1797,7 +1797,7 @@ mod tests {
         let ledger_path = get_tmp_ledger_path("test_genesis_and_entry_iterator");
         {
             // put entries except last 2 into ledger
-            genesis(&ledger_path, &Keypair::new(), &entries[..entries.len() - 2]).unwrap();
+            genesis(&ledger_path, &entries[..entries.len() - 2]).unwrap();
 
             let ledger = Blocktree::open(&ledger_path).expect("open failed");
 

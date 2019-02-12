@@ -82,7 +82,7 @@ impl Broadcast {
             .collect();
 
         // TODO: blob_index should be slot-relative...
-        index_blobs(&blobs, &self.id, &mut self.blob_index, &slots);
+        index_blobs(&blobs, &mut self.blob_index, &slots);
 
         let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
 

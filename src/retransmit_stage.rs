@@ -7,6 +7,7 @@ use crate::cluster_info::{
 };
 use crate::counter::Counter;
 use crate::leader_scheduler::LeaderScheduler;
+use crate::packet::SharedBlob;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::streamer::BlobReceiver;
@@ -28,13 +29,15 @@ use std::time::Duration;
 ///      1 - using the layer 1 index, broadcast to all layer 2 nodes assuming you know neighborhood size
 /// 1.2 - If no, then figure out what layer the node is in and who the neighbors are and only broadcast to them
 ///      1 - also check if there are nodes in lower layers and repeat the layer 1 to layer 2 logic
+
+/// Returns Neighbor Nodes and Children Nodes `(neighbors, children)` for a given node based on its stake (Bank Balance)
 fn compute_retransmit_peers(
     bank: &Arc<Bank>,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
     fanout: usize,
     hood_size: usize,
     grow: bool,
-) -> Vec<NodeInfo> {
+) -> (Vec<NodeInfo>, Vec<NodeInfo>) {
     let peers = cluster_info.read().unwrap().sorted_retransmit_peers(bank);
     let my_id = cluster_info.read().unwrap().id();
     //calc num_layers and num_neighborhoods using the total number of nodes
@@ -43,7 +46,7 @@ fn compute_retransmit_peers(
 
     if num_layers <= 1 {
         /* single layer data plane */
-        peers
+        (peers, vec![])
     } else {
         //find my index (my ix is the same as the first node with smaller stake)
         let my_index = peers
@@ -56,15 +59,16 @@ fn compute_retransmit_peers(
             my_index.unwrap_or(peers.len() - 1),
         );
         let upper_bound = cmp::min(locality.neighbor_bounds.1, peers.len());
-        let mut retransmit_peers = peers[locality.neighbor_bounds.0..upper_bound].to_vec();
+        let neighbors = peers[locality.neighbor_bounds.0..upper_bound].to_vec();
+        let mut children = Vec::new();
         for ix in locality.child_layer_peers {
             if let Some(peer) = peers.get(ix) {
-                retransmit_peers.push(peer.clone());
+                children.push(peer.clone());
                 continue;
             }
             break;
         }
-        retransmit_peers
+        (neighbors, children)
     }
 }
 
@@ -85,17 +89,30 @@ fn retransmit(
             .add_field("count", influxdb::Value::Integer(dq.len() as i64))
             .to_owned(),
     );
-    let retransmit_peers = compute_retransmit_peers(
+    let (neighbors, children) = compute_retransmit_peers(
         &bank,
         cluster_info,
         DATA_PLANE_FANOUT,
         NEIGHBORHOOD_SIZE,
         GROW_LAYER_CAPACITY,
     );
-    for b in &mut dq {
-        ClusterInfo::retransmit_to(&cluster_info, &retransmit_peers, b, sock)?;
+    for b in &dq {
+        if b.read().unwrap().should_forward() {
+            ClusterInfo::retransmit_to(&cluster_info, &neighbors, &copy_for_neighbors(b), sock)?;
+        }
+        // Always send blobs to children
+        ClusterInfo::retransmit_to(&cluster_info, &children, b, sock)?;
     }
     Ok(())
+}
+
+/// Modifies a blob for neighbors nodes
+#[inline]
+fn copy_for_neighbors(b: &SharedBlob) -> SharedBlob {
+    let mut blob = b.read().unwrap().clone();
+    // Disable blob forwarding for neighbors
+    blob.forward(false);
+    Arc::new(RwLock::new(blob))
 }
 
 /// Service to retransmit messages from the leader or layer 1 to relevant peer nodes.
@@ -204,7 +221,7 @@ mod tests {
     use std::sync::Mutex;
     use std::time::Instant;
 
-    type Nodes = HashMap<Pubkey, (HashSet<i32>, Receiver<i32>)>;
+    type Nodes = HashMap<Pubkey, (HashSet<i32>, Receiver<(i32, bool)>)>;
 
     fn num_threads() -> usize {
         sys_info::cpu_num().unwrap_or(10) as usize
@@ -240,7 +257,7 @@ mod tests {
 
         // setup accounts for all nodes (leader has 0 bal)
         let (s, r) = channel();
-        let senders: Arc<Mutex<HashMap<Pubkey, Sender<i32>>>> =
+        let senders: Arc<Mutex<HashMap<Pubkey, Sender<(i32, bool)>>>> =
             Arc::new(Mutex::new(HashMap::new()));
         senders.lock().unwrap().insert(leader_info.id, s);
         let mut batches: Vec<Nodes> = Vec::with_capacity(num_threads);
@@ -273,7 +290,7 @@ mod tests {
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 0);
 
         // create some "blobs".
-        let blobs: Vec<_> = (0..100).into_par_iter().map(|i| i as i32).collect();
+        let blobs: Vec<(_, _)> = (0..100).into_par_iter().map(|i| (i as i32, true)).collect();
 
         // pretend to broadcast from leader - cluster_info::create_broadcast_orders
         let mut broadcast_table = cluster_info.sorted_tvu_peers(&bank);
@@ -283,7 +300,7 @@ mod tests {
         // send blobs to layer 1 nodes
         orders.iter().for_each(|(b, vc)| {
             vc.iter().for_each(|c| {
-                find_insert_blob(&c.id, *b, &mut batches);
+                find_insert_blob(&c.id, b.0, &mut batches);
             })
         });
         assert!(!batches.is_empty());
@@ -295,43 +312,62 @@ mod tests {
             let batch_size = batch.len();
             let mut remaining = batch_size;
             let senders: HashMap<_, _> = senders.lock().unwrap().clone();
-            let mut mapped_peers: HashMap<Pubkey, Vec<Sender<i32>>> = HashMap::new();
+            // A map that holds neighbors and children senders for a given node
+            let mut mapped_peers: HashMap<
+                Pubkey,
+                (Vec<Sender<(i32, bool)>>, Vec<Sender<(i32, bool)>>),
+            > = HashMap::new();
             while remaining > 0 {
                 for (id, (recv, r)) in batch.iter_mut() {
                     assert!(now.elapsed().as_secs() < timeout, "Timed out");
                     cluster.gossip.set_self(*id);
                     if !mapped_peers.contains_key(id) {
-                        let peers = compute_retransmit_peers(
+                        let (neighbors, children) = compute_retransmit_peers(
                             &bank,
                             &Arc::new(RwLock::new(cluster.clone())),
                             fanout,
                             hood_size,
                             GROW_LAYER_CAPACITY,
                         );
-
-                        let vec_peers: Vec<_> = peers
+                        let vec_children: Vec<_> = children
                             .iter()
                             .map(|p| {
                                 let s = senders.get(&p.id).unwrap();
                                 recv.iter().for_each(|i| {
-                                    let _ = s.send(*i);
+                                    let _ = s.send((*i, true));
                                 });
                                 s.clone()
                             })
                             .collect();
-                        mapped_peers.insert(*id, vec_peers);
+
+                        let vec_neighbors: Vec<_> = neighbors
+                            .iter()
+                            .map(|p| {
+                                let s = senders.get(&p.id).unwrap();
+                                recv.iter().for_each(|i| {
+                                    let _ = s.send((*i, false));
+                                });
+                                s.clone()
+                            })
+                            .collect();
+                        mapped_peers.insert(*id, (vec_neighbors, vec_children));
                     }
-                    let vec_peers = mapped_peers.get(id).unwrap().to_vec();
+                    let (vec_neighbors, vec_children) = mapped_peers.get(id).unwrap();
 
                     //send and recv
                     if recv.len() < blobs.len() {
                         loop {
                             match r.try_recv() {
-                                Ok(i) => {
-                                    if recv.insert(i) {
-                                        vec_peers.iter().for_each(|s| {
-                                            let _ = s.send(i);
+                                Ok((data, retransmit)) => {
+                                    if recv.insert(data) {
+                                        vec_children.iter().for_each(|s| {
+                                            let _ = s.send((data, retransmit));
                                         });
+                                        if retransmit {
+                                            vec_neighbors.iter().for_each(|s| {
+                                                let _ = s.send((data, false));
+                                            })
+                                        }
                                         if recv.len() == blobs.len() {
                                             remaining -= 1;
                                             break;
@@ -347,6 +383,8 @@ mod tests {
             }
         });
     }
+
+    //todo add tests with network failures
 
     // Run with a single layer
     #[test]
@@ -372,5 +410,13 @@ mod tests {
         run_simulation(num_nodes, DATA_PLANE_FANOUT / 10, NEIGHBORHOOD_SIZE / 10);
     }
 
-    //todo add tests with network failures
+    // Test that blobs always come out with forward unset for neighbors
+    #[test]
+    fn test_blob_for_neighbors() {
+        let blob = SharedBlob::default();
+        blob.write().unwrap().forward(true);
+        let for_hoodies = copy_for_neighbors(&blob);
+        assert!(!for_hoodies.read().unwrap().should_forward());
+    }
+
 }

@@ -303,7 +303,6 @@ pub mod tests {
         let mut cluster_info2 = ClusterInfo::new(target2.info.clone());
         cluster_info2.insert_info(leader.info.clone());
         cluster_info2.set_leader(leader.info.id);
-        let leader_id = leader.info.id;
         let cref2 = Arc::new(RwLock::new(cluster_info2));
         let dr_2 = new_gossip(cref2, target2.sockets.gossip, exit.clone());
 
@@ -402,7 +401,7 @@ pub mod tests {
                     let mut w = b.write().unwrap();
                     w.set_index(blob_idx);
                     blob_idx += 1;
-                    w.set_id(&leader_id);
+                    w.forward(true);
 
                     let serialized_entry = serialize(&entry).unwrap();
 

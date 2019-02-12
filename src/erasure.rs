@@ -329,14 +329,14 @@ impl CodingGenerator {
             for data_blob in &data_locks[NUM_DATA - NUM_CODING..NUM_DATA] {
                 let index = data_blob.index();
                 let slot = data_blob.slot();
-                let id = data_blob.id();
+                let should_forward = data_blob.should_forward();
 
                 let coding_blob = SharedBlob::default();
                 {
                     let mut coding_blob = coding_blob.write().unwrap();
                     coding_blob.set_index(index);
                     coding_blob.set_slot(slot);
-                    coding_blob.set_id(&id);
+                    coding_blob.forward(should_forward);
                     coding_blob.set_size(max_data_size);
                     coding_blob.set_coding();
                 }
@@ -509,7 +509,6 @@ pub mod test {
     use crate::window::WindowSlot;
     use rand::{thread_rng, Rng};
     use solana_sdk::pubkey::Pubkey;
-    use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::sync::Arc;
 
     #[test]
@@ -756,23 +755,23 @@ pub mod test {
                 for i in 0..max_data_size {
                     coding_wl.data[i] = 0;
                 }
-                // copy index and id from the data blob
+                // copy index and forward flag from the data blob
                 if let Some(data) = &window[n].data {
                     let data_rl = data.read().unwrap();
 
                     let index = data_rl.index();
                     let slot = data_rl.slot();
-                    let id = data_rl.id();
+                    let should_forward = data_rl.should_forward();
 
                     trace!(
-                        "{} copying index {} id {:?} from data to coding",
-                        id,
+                        "{} copying index {} should_forward {:?} from data to coding",
+                        should_forward,
                         index,
-                        id
+                        should_forward
                     );
                     coding_wl.set_index(index);
                     coding_wl.set_slot(slot);
-                    coding_wl.set_id(&id);
+                    coding_wl.forward(should_forward);
                 }
                 coding_wl.set_size(max_data_size);
                 coding_wl.set_coding();
@@ -890,12 +889,7 @@ pub mod test {
         }
 
         // Make some dummy slots
-        index_blobs(
-            &blobs,
-            &Keypair::new().pubkey(),
-            &mut (offset as u64),
-            &vec![slot; blobs.len()],
-        );
+        index_blobs(&blobs, &mut (offset as u64), &vec![slot; blobs.len()]);
 
         for b in blobs {
             let idx = b.read().unwrap().index() as usize % WINDOW_SIZE;
@@ -910,7 +904,6 @@ pub mod test {
 
         index_blobs(
             &blobs,
-            &Keypair::new().pubkey(),
             &mut (offset as u64),
             &vec![DEFAULT_SLOT_HEIGHT; blobs.len()],
         );

@@ -583,7 +583,6 @@ impl ClusterInfo {
             let s = obj.read().unwrap();
             (s.my_data().clone(), peers)
         };
-        blob.write().unwrap().set_id(&me.id);
         let rblob = blob.read().unwrap();
         trace!("retransmit orders {}", orders.len());
         let errs: Vec<_> = orders

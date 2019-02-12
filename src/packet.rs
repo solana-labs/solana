@@ -7,7 +7,6 @@ use byteorder::{ByteOrder, LittleEndian};
 use log::Level;
 use serde::Serialize;
 pub use solana_sdk::packet::PACKET_DATA_SIZE;
-use solana_sdk::pubkey::Pubkey;
 use std::cmp;
 use std::fmt;
 use std::io;
@@ -281,8 +280,8 @@ macro_rules! range {
 const PARENT_RANGE: std::ops::Range<usize> = range!(0, u64);
 const SLOT_RANGE: std::ops::Range<usize> = range!(PARENT_RANGE.end, u64);
 const INDEX_RANGE: std::ops::Range<usize> = range!(SLOT_RANGE.end, u64);
-const ID_RANGE: std::ops::Range<usize> = range!(INDEX_RANGE.end, Pubkey);
-const FLAGS_RANGE: std::ops::Range<usize> = range!(ID_RANGE.end, u32);
+const FORWARD_RANGE: std::ops::Range<usize> = range!(INDEX_RANGE.end, bool);
+const FLAGS_RANGE: std::ops::Range<usize> = range!(FORWARD_RANGE.end, u32);
 const SIZE_RANGE: std::ops::Range<usize> = range!(FLAGS_RANGE.end, u64);
 
 macro_rules! align {
@@ -324,14 +323,15 @@ impl Blob {
         LittleEndian::write_u64(&mut self.data[INDEX_RANGE], ix);
     }
 
-    /// sender id, we use this for identifying if its a blob from the leader that we should
-    /// retransmit.  eventually blobs should have a signature that we can use for spam filtering
-    pub fn id(&self) -> Pubkey {
-        Pubkey::new(&self.data[ID_RANGE])
+    /// Used to determine whether or not this blob should be forwarded in retransmit
+    /// A bool is used here instead of a flag because this item is not intended to be signed when
+    /// blob signatures are introduced
+    pub fn should_forward(&self) -> bool {
+        self.data[FORWARD_RANGE][0] & 0x1 == 1
     }
 
-    pub fn set_id(&mut self, id: &Pubkey) {
-        self.data[ID_RANGE].copy_from_slice(id.as_ref())
+    pub fn forward(&mut self, forward: bool) {
+        self.data[FORWARD_RANGE][0] = u8::from(forward)
     }
 
     pub fn flags(&self) -> u32 {
@@ -442,14 +442,14 @@ impl Blob {
     }
 }
 
-pub fn index_blobs(blobs: &[SharedBlob], id: &Pubkey, blob_index: &mut u64, slots: &[u64]) {
+pub fn index_blobs(blobs: &[SharedBlob], blob_index: &mut u64, slots: &[u64]) {
     // enumerate all the blobs, those are the indices
     for (blob, slot) in blobs.iter().zip(slots) {
         let mut blob = blob.write().unwrap();
 
         blob.set_index(*blob_index);
         blob.set_slot(*slot);
-        blob.set_id(id);
+        blob.forward(true);
         *blob_index += 1;
     }
 }
@@ -566,6 +566,13 @@ mod tests {
         assert_eq!(b.data()[0], 1);
         assert_eq!(b.index(), <u64>::max_value());
         assert_eq!(b.meta, Meta::default());
+    }
+    #[test]
+    fn test_blob_forward() {
+        let mut b = Blob::default();
+        assert!(!b.should_forward());
+        b.forward(true);
+        assert!(b.should_forward());
     }
 
 }
