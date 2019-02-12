@@ -60,7 +60,7 @@ impl Broadcast {
             num_entries += entries.len();
             ventries.push(entries);
         }
-        let last_tick = {
+        let contains_last_tick = {
             if let Some(Some(last)) = ventries.last().map(|entries| entries.last()) {
                 last.tick_height == self.max_tick_height
             } else {
@@ -90,10 +90,14 @@ impl Broadcast {
 
         inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
 
+        if contains_last_tick {
+            blobs.last().unwrap().write().unwrap().set_is_last_blob();
+        }
+
         blocktree.write_shared_blobs(&blobs)?;
 
         // Send out data
-        ClusterInfo::broadcast(&self.id, last_tick, &broadcast_table, sock, &blobs)?;
+        ClusterInfo::broadcast(&self.id, contains_last_tick, &broadcast_table, sock, &blobs)?;
 
         // Fill in the coding blob data from the window data blobs
         #[cfg(feature = "erasure")]

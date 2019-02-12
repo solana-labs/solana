@@ -292,6 +292,8 @@ macro_rules! align {
 
 pub const BLOB_HEADER_SIZE: usize = align!(SIZE_RANGE.end, 8);
 
+pub const BLOB_FLAG_IS_LAST: u32 = 0x2;
+
 pub const BLOB_FLAG_IS_CODING: u32 = 0x1;
 
 impl Blob {
@@ -348,6 +350,15 @@ impl Blob {
     pub fn set_coding(&mut self) {
         let flags = self.flags();
         self.set_flags(flags | BLOB_FLAG_IS_CODING);
+    }
+
+    pub fn set_is_last_blob(&mut self) {
+        let flags = self.flags();
+        self.set_flags(flags | BLOB_FLAG_IS_LAST);
+    }
+
+    pub fn is_last_blob(&self) -> bool {
+        (self.flags() & BLOB_FLAG_IS_LAST) != 0
     }
 
     pub fn data_size(&self) -> u64 {

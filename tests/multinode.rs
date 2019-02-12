@@ -1751,13 +1751,14 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64) {
     let leader_pubkey = leader_keypair.pubkey().clone();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_info = leader.info.clone();
-    let (_mint, leader_ledger_path, _last_entry_height, _last_id, last_entry_id) =
+    let (_mint, leader_ledger_path, _tick_height, _last_entry_height, _last_id, last_entry_id) =
         create_tmp_sample_ledger(
             "fullnode_transact_while_rotating_fast",
             1_000_000_000_000_000_000,
             0,
             leader_pubkey,
             123,
+            ticks_per_slot,
         );
     info!("ledger is {}", leader_ledger_path);
 
@@ -1779,7 +1780,9 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64) {
             fullnode_config.ledger_config(),
         )
         .unwrap();
-        blocktree.write_entries(1, 0, &entries).unwrap();
+        blocktree
+            .write_entries(1, 0, ticks_per_slot, 0, &entries)
+            .unwrap();
         tick_height_of_next_rotation += 1;
     }
 
