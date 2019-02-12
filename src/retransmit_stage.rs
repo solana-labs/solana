@@ -29,6 +29,8 @@ use std::time::Duration;
 ///      1 - using the layer 1 index, broadcast to all layer 2 nodes assuming you know neighborhood size
 /// 1.2 - If no, then figure out what layer the node is in and who the neighbors are and only broadcast to them
 ///      1 - also check if there are nodes in lower layers and repeat the layer 1 to layer 2 logic
+
+/// Returns Neighbor Nodes and Children Nodes `(neighbors, children)` for a given node based on its stake (Bank Balance)
 fn compute_retransmit_peers(
     bank: &Arc<Bank>,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -96,7 +98,7 @@ fn retransmit(
     );
     for b in &dq {
         if b.read().unwrap().should_forward() {
-            ClusterInfo::retransmit_to(&cluster_info, &neighbors, &for_neighbors(b), sock)?;
+            ClusterInfo::retransmit_to(&cluster_info, &neighbors, &copy_for_neighbors(b), sock)?;
         }
         // Always send blobs to children
         ClusterInfo::retransmit_to(&cluster_info, &children, b, sock)?;
@@ -106,7 +108,7 @@ fn retransmit(
 
 /// Modifies a blob for neighbors nodes
 #[inline]
-fn for_neighbors(b: &SharedBlob) -> SharedBlob {
+fn copy_for_neighbors(b: &SharedBlob) -> SharedBlob {
     let mut blob = b.read().unwrap().clone();
     // Disable blob forwarding for neighbors
     blob.forward(false);
@@ -413,7 +415,7 @@ mod tests {
     fn test_blob_for_neighbors() {
         let blob = SharedBlob::default();
         blob.write().unwrap().forward(true);
-        let for_hoodies = for_neighbors(&blob);
+        let for_hoodies = copy_for_neighbors(&blob);
         assert!(!for_hoodies.read().unwrap().should_forward());
     }
 
