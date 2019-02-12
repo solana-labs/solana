@@ -235,25 +235,25 @@ impl StorageStage {
                 }
             }
 
-            let last_id = client.get_last_id();
+            if let Some(last_id) = client.try_get_last_id(10) {
+                tx.sign(&[keypair.as_ref()], last_id);
 
-            tx.sign(&[keypair.as_ref()], last_id);
+                if exit.load(Ordering::Relaxed) {
+                    Err(io::Error::new(io::ErrorKind::Other, "exit signaled"))?;
+                }
 
-            if exit.load(Ordering::Relaxed) {
-                Err(io::Error::new(io::ErrorKind::Other, "exit signaled"))?;
-            }
+                if let Ok(signature) = client.transfer_signed(&tx) {
+                    for _ in 0..10 {
+                        if client.check_signature(&signature) {
+                            return Ok(());
+                        }
 
-            if let Ok(signature) = client.transfer_signed(&tx) {
-                for _ in 0..10 {
-                    if client.check_signature(&signature) {
-                        return Ok(());
+                        if exit.load(Ordering::Relaxed) {
+                            Err(io::Error::new(io::ErrorKind::Other, "exit signaled"))?;
+                        }
+
+                        sleep(Duration::from_millis(200));
                     }
-
-                    if exit.load(Ordering::Relaxed) {
-                        Err(io::Error::new(io::ErrorKind::Other, "exit signaled"))?;
-                    }
-
-                    sleep(Duration::from_millis(200));
                 }
             }
         }
