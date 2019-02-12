@@ -1661,6 +1661,7 @@ fn test_broadcast_last_tick() {
             }
         }
         debug!("last_tick_blob: {:?}", last_tick_blob);
+        assert!(last_tick_blob.read().unwrap().is_last_blob());
         let actual_last_tick =
             &reconstruct_entries_from_blobs(vec![&*last_tick_blob.read().unwrap()])
                 .expect("Expected to be able to reconstruct entries from blob")
