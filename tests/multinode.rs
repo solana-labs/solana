@@ -8,7 +8,6 @@ use solana::entry::{reconstruct_entries_from_blobs, Entry};
 use solana::fullnode::{new_bank_from_ledger, Fullnode, FullnodeConfig, FullnodeReturnType};
 use solana::gossip_service::{converge, make_listening_node};
 use solana::leader_scheduler::{make_active_set_entries, LeaderSchedulerConfig};
-use solana::packet::SharedBlob;
 use solana::result;
 use solana::service::Service;
 use solana::thin_client::{poll_gossip_for_leader, retry_get_balance};
@@ -1650,23 +1649,24 @@ fn test_broadcast_last_tick() {
     info!("Check that the nodes got the last broadcasted blob");
     for (_, receiver) in blob_fetch_stages.iter() {
         info!("Checking a node...");
-        let mut last_tick_blob: SharedBlob = SharedBlob::default();
+        let mut blobs = vec![];
         while let Ok(new_blobs) = receiver.try_recv() {
-            let last_blob = new_blobs
-                .into_iter()
-                .find(|b| b.read().unwrap().index() == last_tick_entry_index as u64);
-            if let Some(last_blob) = last_blob {
-                last_tick_blob = last_blob;
-                break;
+            blobs.extend(new_blobs);
+        }
+
+        for b in blobs {
+            let b_r = b.read().unwrap();
+            if b_r.index() == last_tick_entry_index as u64 {
+                assert!(b_r.is_last_blob());
+                debug!("last_tick_blob: {:?}", b_r);
+                let actual_last_tick = &reconstruct_entries_from_blobs(vec![&*b_r])
+                    .expect("Expected to be able to reconstruct entries from blob")
+                    .0[0];
+                assert_eq!(actual_last_tick, expected_last_tick);
+            } else {
+                assert!(!b_r.is_last_blob());
             }
         }
-        debug!("last_tick_blob: {:?}", last_tick_blob);
-        assert!(last_tick_blob.read().unwrap().is_last_blob());
-        let actual_last_tick =
-            &reconstruct_entries_from_blobs(vec![&*last_tick_blob.read().unwrap()])
-                .expect("Expected to be able to reconstruct entries from blob")
-                .0[0];
-        assert_eq!(actual_last_tick, expected_last_tick);
     }
 
     info!("done!");
