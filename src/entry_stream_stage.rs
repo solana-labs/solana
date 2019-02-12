@@ -3,11 +3,11 @@
 //! real-time access to entries.
 
 use crate::entry::{EntryReceiver, EntrySender};
-#[cfg(not(test))]
-use crate::entry_stream::EntryStream;
 use crate::entry_stream::EntryStreamHandler;
 #[cfg(test)]
 use crate::entry_stream::MockEntryStream as EntryStream;
+#[cfg(not(test))]
+use crate::entry_stream::SocketEntryStream as EntryStream;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -59,9 +59,11 @@ impl EntryStreamStage {
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
         let entries = ledger_entry_receiver.recv_timeout(timeout)?;
-        entry_stream.stream_entries(&entries).unwrap_or_else(|e| {
-            error!("Entry Stream error: {:?}, {:?}", e, entry_stream.socket);
-        });
+        entry_stream
+            .emit_entry_events(&entries)
+            .unwrap_or_else(|e| {
+                error!("Entry Stream error: {:?}, {:?}", e, entry_stream.output);
+            });
         entry_stream_sender.send(entries)?;
         Ok(())
     }
@@ -116,9 +118,9 @@ mod test {
             &mut entry_stream,
         )
         .unwrap();
-        assert_eq!(entry_stream.socket.len(), 5);
+        assert_eq!(entry_stream.entries().len(), 5);
 
-        for (i, item) in entry_stream.socket.iter().enumerate() {
+        for (i, item) in entry_stream.entries().iter().enumerate() {
             let json: Value = serde_json::from_str(&item).unwrap();
             let dt_str = json["dt"].as_str().unwrap();
 
