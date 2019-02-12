@@ -27,58 +27,88 @@ entrypoint.
 
 ## Execution
 
-Transactions are batched and processed in a pipeline
+Transactions are batched and processed in a pipeline.  The TPU and TVU follow a
+slightly different path.  The TPU runtime ensures that PoH record occurs before
+memory is committed.
 
+The TVU runtime ensures that PoH verification occurs before the runtime
+processes any transactions.
+ 
 <img alt="Runtime pipeline" src="img/runtime.svg" class="center"/>
 
-At the *execute* stage, the loaded pages have no data dependencies, so all the
+At the *execute* stage, the loaded accounts have no data dependencies, so all the
 programs can be executed in parallel.
 
 The runtime enforces the following rules:
 
 1. Only the *owner* program may modify the contents of an account.  This means
-   that upon assignment userdata vector is guaranteed to be zero.
+that upon assignment userdata vector is guaranteed to be zero.
+
 2. Total balances on all the accounts is equal before and after execution of a
-   transaction.
+transaction.
+
 3. After the transaction is executed, balances of credit-only accounts must be
-   greater than or equal to the balances before the transaction.
+greater than or equal to the balances before the transaction.
+
 4. All instructions in the transaction executed atomically. If one fails, all
-   account modifications are discarded.
-5. Before committing the accounts, the transactions are tagged with a count
-   from the PoH service, indicating the time transaction processing completed.
-   If that time falls outside the leader's allotted slot, the transactions
-   are discarded.
+account modifications are discarded.
 
 Execution of the program involves mapping the program's public key to an
 entrypoint which takes a pointer to the transaction, and an array of loaded
-pages.
+accounts.
 
 ## SystemProgram Interface
 
 The interface is best described by the `Instruction::userdata` that the user
 encodes.
 
-* `CreateAccount` - This allows the user to create and assign an account to a
-  Program.
-* `Assign` - allows the user to assign an existing account to a program.
-* `Move`  - moves tokens between accounts.
+* `CreateAccount` - This allows the user to create an account with an allocated
+userdata array and assign it to a Program.
+
+* `Assign` - Allows the user to assign an existing account to a program.
+
+* `Move`  - Moves tokens between accounts.
+
+## Program State Security
+
+For blockchain to function correctly, the program code must be resilient to user
+inputs.  That is why in this design the program specific code is the only code
+that can change the state of the userdata byte array in the Accounts that are
+assigned to it.  It is also the reason why `Assign` or `CreateAccount` must zero
+out the userdata.  Otherwise there would be no possible way for the program to
+distinguish the recently assigned account userdata from a natively generated
+state transition without some additional metadata from the runtime to indicate
+that this memory is assigned instead of natively generated.
+
+To pass messages between programs, the receiving program must accept the message
+and copy the state over.  But in practice a copy isn't needed and is
+undesirable. The receiving program can read the state belonging to other
+Accounts without copying it, and during the read it has a guarantee of the
+sender program's state.
 
 ## Notes
 
-1. There is no dynamic memory allocation.  Client's need to use `CreateAccount`
+* There is no dynamic memory allocation.  Client's need to use `CreateAccount`
 instructions to create memory before passing it to another program.  This
 instruction can be composed into a single transaction with the call to the
 program itself.
-2. Runtime guarantees that when memory is assigned to the program it is zero
-initialized.
-3. Runtime guarantees that a program's code is the only thing that can modify
-memory that its assigned to
-4. Runtime guarantees that the program can only spend tokens that are in
-accounts that are assigned to it
-5. Runtime guarantees the balances belonging to accounts are balanced before
-and after the transaction
-6. Runtime guarantees that multiple instructions all executed successfully when
-a transaction is committed.
+
+* `CreateAccount` and `Assign` guarantee that when account is assigned to the
+program, the Account's userdata is zero initialized.
+
+* Once assigned to program an Account cannot be reassigned.
+
+* Runtime guarantees that a program's code is the only code that can modify
+Account userdata that the Account is assigned to.
+
+* Runtime guarantees that the program can only spend tokens that are in
+accounts that are assigned to it.
+
+* Runtime guarantees the balances belonging to accounts are balanced before
+and after the transaction.
+
+* Runtime guarantees that instructions all executed successfully when a
+transaction is committed.
 
 # Future Work
 
