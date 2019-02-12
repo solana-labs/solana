@@ -91,7 +91,7 @@ impl Broadcast {
         inc_new_counter_info!("streamer-broadcast-sent", blobs.len());
 
         if contains_last_tick {
-            blobs.last().unwrap().write().unwrap().set_is_last_blob();
+            blobs.last().unwrap().write().unwrap().set_is_last_in_slot();
         }
 
         blocktree.write_shared_blobs(&blobs)?;

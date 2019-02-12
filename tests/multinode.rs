@@ -1657,14 +1657,14 @@ fn test_broadcast_last_tick() {
         for b in blobs {
             let b_r = b.read().unwrap();
             if b_r.index() == last_tick_entry_index as u64 {
-                assert!(b_r.is_last_blob());
+                assert!(b_r.is_last_in_slot());
                 debug!("last_tick_blob: {:?}", b_r);
                 let actual_last_tick = &reconstruct_entries_from_blobs(vec![&*b_r])
                     .expect("Expected to be able to reconstruct entries from blob")
                     .0[0];
                 assert_eq!(actual_last_tick, expected_last_tick);
             } else {
-                assert!(!b_r.is_last_blob());
+                assert!(!b_r.is_last_in_slot());
             }
         }
     }
