@@ -250,7 +250,7 @@ pub mod tests {
         let cref1 = Arc::new(RwLock::new(cluster_info1));
 
         let cur_hash = Hash::default();
-        let blocktree_path = get_tmp_ledger_path("test_replay");
+        let blocktree_path = get_tmp_ledger_path("test_tvu_exit");
         let (blocktree, l_sender, l_receiver) = Blocktree::open_with_signal(&blocktree_path)
             .expect("Expected to successfully open ledger");
         let vote_account_keypair = Arc::new(Keypair::new());
