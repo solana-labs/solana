@@ -238,11 +238,11 @@ impl ThinClient {
         0
     }
 
-    /// Request the last Entry ID from the server. This method blocks
-    /// until the server sends a response.
-    pub fn get_last_id(&mut self) -> Hash {
+    /// Request the last Entry ID from the server without blocking.
+    /// Returns the last_id Hash or None if there was no response from the server.
+    pub fn try_get_last_id(&mut self, mut num_retries: u64) -> Option<Hash> {
         loop {
-            trace!("get_last_id send_to {}", &self.rpc_addr);
+            trace!("try_get_last_id send_to {}", &self.rpc_addr);
             let response = self
                 .rpc_client
                 .make_rpc_request(1, RpcRequest::GetLastId, None);
@@ -251,12 +251,27 @@ impl ThinClient {
                 Ok(value) => {
                     let last_id_str = value.as_str().unwrap();
                     let last_id_vec = bs58::decode(last_id_str).into_vec().unwrap();
-                    return Hash::new(&last_id_vec);
+                    return Some(Hash::new(&last_id_vec));
                 }
                 Err(error) => {
                     debug!("thin_client get_last_id error: {:?}", error);
+                    num_retries -= 1;
+                    if num_retries == 0 {
+                        return None;
+                    }
                 }
-            };
+            }
+        }
+    }
+
+    /// Request the last Entry ID from the server. This method blocks
+    /// until the server sends a response.
+    pub fn get_last_id(&mut self) -> Hash {
+        loop {
+            trace!("get_last_id send_to {}", &self.rpc_addr);
+            if let Some(hash) = self.try_get_last_id(10) {
+                return hash;
+            }
         }
     }
 

@@ -250,7 +250,7 @@ pub mod tests {
         let cref1 = Arc::new(RwLock::new(cluster_info1));
 
         let cur_hash = Hash::default();
-        let blocktree_path = get_tmp_ledger_path("test_replay");
+        let blocktree_path = get_tmp_ledger_path("test_tvu_exit");
         let (blocktree, l_sender, l_receiver) = Blocktree::open_with_signal(&blocktree_path)
             .expect("Expected to successfully open ledger");
         let vote_account_keypair = Arc::new(Keypair::new());
@@ -283,7 +283,6 @@ pub mod tests {
 
     /// Test that message sent from leader to target1 and replayed to target2
     #[test]
-    #[ignore]
     fn test_replay() {
         solana_logger::setup();
         let leader = Node::new_localhost();
@@ -327,6 +326,9 @@ pub mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(starting_balance);
         let tvu_addr = target1.info.tvu;
         let bank = Arc::new(Bank::new(&genesis_block));
+        // 2 tokens are consumed by the genesis
+        let starting_balance = starting_balance - 2;
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), starting_balance);
 
         //start cluster_info1
         let mut cluster_info1 = ClusterInfo::new(target1.info.clone());
@@ -374,7 +376,6 @@ pub mod tests {
         for i in 0..num_transfers {
             let entry0 = Entry::new(&cur_hash, 0, i, vec![]);
             cur_hash = entry0.id;
-            bank.register_tick(&cur_hash);
             let entry_tick0 = Entry::new(&cur_hash, 0, i + 1, vec![]);
             cur_hash = entry_tick0.id;
 
@@ -385,11 +386,9 @@ pub mod tests {
                 cur_hash,
                 0,
             );
-            bank.register_tick(&cur_hash);
             let entry_tick1 = Entry::new(&cur_hash, 0, i + 1, vec![]);
             cur_hash = entry_tick1.id;
             let entry1 = Entry::new(&cur_hash, 0, i + num_transfers, vec![tx0]);
-            bank.register_tick(&entry1.id);
             let entry_tick2 = Entry::new(&entry1.id, 0, i + 1, vec![]);
             cur_hash = entry_tick2.id;
 
