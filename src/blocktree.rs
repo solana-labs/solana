@@ -1346,7 +1346,7 @@ pub fn create_tmp_sample_ledger(
 
         let blocktree = Blocktree::open(&ledger_path).unwrap();
 
-        //create_new_ledger creates one beginning tick
+        // create_new_ledger creates one beginning tick
         tick_height += num_extra_ticks;
         blocktree
             .write_entries(
