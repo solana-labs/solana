@@ -166,11 +166,11 @@ mod tests {
         use bs58;
         //  golden needs to be updated if blob stuff changes....
         let golden = Hash::new(
-            &bs58::decode("nzxMWDQVsftBZbMGA1ika8X6bAKy7vya1jfXnVZSErt")
+            &bs58::decode("8NMJBwpXoBoA7YrA5CemRtGtfAqoY15bvnCqVjh4LYpS")
                 .into_vec()
                 .unwrap(),
         );
-        assert_eq!(hasher.result(), golden,);
+        assert_eq!(hasher.result(), golden);
         remove_file(out_path).unwrap();
     }
 }
