@@ -27,9 +27,9 @@ In old architecture, the RetransmitStage and ReplayStage are contained in the TV
 
 This document proposes the following change to the architecture.
 
-1. Split TVU into Peer Transaction Receiver (contains BlobFetchStage, and RetransmitStage)
+1. Split TVU into BlobFetchStage, and ReplayStage
 2. Add Blocktree (ledger) to the diagram
-3. The Blocktree is updated by Broadcast Stage and Peer Transaction Receiver
+3. The Blocktree is updated by Broadcast Service and BlobFetchStage
 4. Replay Stage gets notified by Blocktree when someone writes to it
 5. Replay Stage submits votes via Gossip Service
 6. Replace Bank with BankForks

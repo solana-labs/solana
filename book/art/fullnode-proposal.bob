@@ -8,13 +8,13 @@
  `----+---`  |  `------------------`            |
       |      |     ^                            |
       |      |     |    .----------------.      | .------------------.
-      |      |     |    | Gossip Service |<------>| Validators       |
+      |      |     |    | Gossip Service |<-------| Validators       |
       |      |     |    `----------------`      | |                  |
       |      |     |         ^                  | |                  |
       |      |     |         |                  | |  .------------.  |
       |      |  .--+---.  .--+---.  .---------. | |  |            |  |
-      |      |  | Bank |<-|Replay|  | Peer TX |<-----+ Upstream   |  |
-      |      |  | Forks|  |Stage |  | Receiver| | |  | Validators |  |
+      |      |  | Bank |<-|Replay|  |BlobFetch|<-----+ Upstream   |  |
+      |      |  | Forks|  |Stage |  | Stage   | | |  | Validators |  |
       |      |  `------`  `------`  `-+-------` | |  |            |  |
       |      |     ^            ^     |         | |  `------------`  |
       |      |     |            |     v         | |                  |
