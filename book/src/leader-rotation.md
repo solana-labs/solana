@@ -68,7 +68,9 @@ forks until it is updated.
 Each partition's schedule will diverge after the partition lasts more than an
 epoch.  For this reason, the epoch duration should be selected to be much much
 larger then slot time and the expected length for a fork to be committed to
-root.
+root.  If the epoch time is 6 standard deviations longer than the median
+partition time, then the likelyhood of a partition longer than an epoch is 1:1
+million.
 
 ## Leader Schedule Generation at Genesis
 
