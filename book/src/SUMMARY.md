@@ -48,3 +48,4 @@
     - [Economic Sustainability](ed_economic_sustainability.md)
     - [Attack Vectors](ed_attack_vectors.md)
     - [References](ed_references.md)
+  - [Leader-to-Validator Transition](leader-validator-transition.md)
