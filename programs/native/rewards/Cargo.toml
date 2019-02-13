@@ -17,6 +17,9 @@ solana-logger = { path = "../../../logger", version = "0.12.0" }
 solana-metrics = { path = "../../../metrics", version = "0.12.0" }
 solana-sdk = { path = "../../../sdk", version = "0.12.0" }
 
+[dev-dependencies]
+solana-vote-program = { path = "../vote", version = "0.12.0" }
+
 [lib]
 name = "solana_rewards_program"
 crate-type = ["cdylib"]

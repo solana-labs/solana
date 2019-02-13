@@ -20,7 +20,7 @@ pub fn id() -> Pubkey {
 }
 
 // Maximum number of votes to keep around
-const MAX_VOTE_HISTORY: usize = 32;
+pub const MAX_VOTE_HISTORY: usize = 32;
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Vote {
