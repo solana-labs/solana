@@ -55,17 +55,22 @@ impl VoteTransaction {
         )
     }
 
-    pub fn get_votes(tx: &Transaction) -> Vec<(Pubkey, Vote, Hash)> {
-        let mut votes = vec![];
-        for i in 0..tx.instructions.len() {
-            let tx_program_id = tx.program_id(i);
-            if vote_program::check_id(&tx_program_id) {
-                if let Ok(VoteInstruction::Vote(vote)) = deserialize(&tx.userdata(i)) {
-                    votes.push((tx.account_keys[0], vote, tx.last_id))
-                }
-            }
+    fn get_vote(tx: &Transaction, ix_index: usize) -> Option<(Pubkey, Vote, Hash)> {
+        if !vote_program::check_id(&tx.program_id(ix_index)) {
+            return None;
         }
-        votes
+        let instruction = deserialize(&tx.userdata(ix_index)).unwrap();
+        if let VoteInstruction::Vote(vote) = instruction {
+            Some((tx.account_keys[0], vote, tx.last_id))
+        } else {
+            None
+        }
+    }
+
+    pub fn get_votes(tx: &Transaction) -> Vec<(Pubkey, Vote, Hash)> {
+        (0..tx.instructions.len())
+            .filter_map(|i| Self::get_vote(tx, i))
+            .collect()
     }
 }
 
