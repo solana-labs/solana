@@ -537,8 +537,7 @@ impl Blocktree {
             let entry = slot_meta_working_set.entry(blob_slot).or_insert_with(|| {
                 // Store a 2-tuple of the metadata (working copy, backup copy)
                 if let Some(mut meta) = self
-                    .meta_cf
-                    .get_slot_meta(blob_slot)
+                    .meta(blob_slot)
                     .expect("Expect database get to succeed")
                 {
                     // If parent_slot == std::u64::MAX, then this is one of the dummy metadatas inserted
@@ -859,7 +858,7 @@ impl Blocktree {
         // slot indexes
         let slots: Result<Vec<Option<SlotMeta>>> = slot_heights
             .iter()
-            .map(|slot_height| self.meta_cf.get_slot_meta(*slot_height))
+            .map(|slot_height| self.meta(*slot_height))
             .collect();
 
         let slots = slots?;
@@ -1059,7 +1058,7 @@ impl Blocktree {
         slot_height: u64,
         insert_map: &'a mut HashMap<u64, Rc<RefCell<SlotMeta>>>,
     ) -> Result<Rc<RefCell<SlotMeta>>> {
-        if let Some(slot) = self.meta_cf.get_slot_meta(slot_height)? {
+        if let Some(slot) = self.meta(slot_height)? {
             insert_map.insert(slot_height, Rc::new(RefCell::new(slot)));
             Ok(insert_map.get(&slot_height).unwrap().clone())
         } else {
@@ -1371,11 +1370,13 @@ pub fn tmp_copy_ledger(from: &str, name: &str, config: &BlocktreeConfig) -> Stri
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entry::{
-        create_ticks, make_tiny_test_entries, make_tiny_test_entries_from_id, Entry, EntrySlice,
-    };
+    use crate::entry::{make_tiny_test_entries, make_tiny_test_entries_from_id, Entry, EntrySlice};
     use crate::packet::index_blobs;
+    use rand::seq::SliceRandom;
+    use rand::thread_rng;
     use solana_sdk::hash::Hash;
+    use std::cmp::min;
+    use std::collections::HashSet;
     use std::iter::once;
     use std::time::Duration;
 
@@ -1937,7 +1938,7 @@ mod tests {
             blocktree
                 .write_blobs(&blobs[entries_per_slot as usize..2 * entries_per_slot as usize])
                 .unwrap();
-            let s1 = blocktree.meta_cf.get_slot_meta(1).unwrap().unwrap();
+            let s1 = blocktree.meta(1).unwrap().unwrap();
             assert!(s1.next_slots.is_empty());
             // Slot 1 is not trunk because slot 0 hasn't been inserted yet
             assert!(!s1.is_trunk);
@@ -1948,7 +1949,7 @@ mod tests {
             blocktree
                 .write_blobs(&blobs[2 * entries_per_slot as usize..3 * entries_per_slot as usize])
                 .unwrap();
-            let s2 = blocktree.meta_cf.get_slot_meta(2).unwrap().unwrap();
+            let s2 = blocktree.meta(2).unwrap().unwrap();
             assert!(s2.next_slots.is_empty());
             // Slot 2 is not trunk because slot 0 hasn't been inserted yet
             assert!(!s2.is_trunk);
@@ -1957,7 +1958,7 @@ mod tests {
 
             // Check the first slot again, it should chain to the second slot,
             // but still isn't part of the trunk
-            let s1 = blocktree.meta_cf.get_slot_meta(1).unwrap().unwrap();
+            let s1 = blocktree.meta(1).unwrap().unwrap();
             assert_eq!(s1.next_slots, vec![2]);
             assert!(!s1.is_trunk);
             assert_eq!(s1.parent_slot, 0);
@@ -1969,7 +1970,7 @@ mod tests {
                 .write_blobs(&blobs[0..entries_per_slot as usize])
                 .unwrap();
             for i in 0..3 {
-                let s = blocktree.meta_cf.get_slot_meta(i).unwrap().unwrap();
+                let s = blocktree.meta(i).unwrap().unwrap();
                 // The last slot will not chain to any other slots
                 if i != 2 {
                     assert_eq!(s.next_slots, vec![i + 1]);
@@ -2024,7 +2025,7 @@ mod tests {
                 // However, if it's a slot we haven't inserted, aka one of the gaps, then one of the slots
                 // we just inserted will chain to that gap, so next_slots for that placeholder
                 // slot won't be empty, but the parent slot is unknown so should equal std::u64::MAX.
-                let s = blocktree.meta_cf.get_slot_meta(i as u64).unwrap().unwrap();
+                let s = blocktree.meta(i as u64).unwrap().unwrap();
                 if i % 2 == 0 {
                     assert_eq!(s.next_slots, vec![i as u64 + 1]);
                     assert_eq!(s.parent_slot, std::u64::MAX);
@@ -2046,7 +2047,7 @@ mod tests {
             for i in 0..num_slots {
                 // Check that all the slots chain correctly once the missing slots
                 // have been filled
-                let s = blocktree.meta_cf.get_slot_meta(i as u64).unwrap().unwrap();
+                let s = blocktree.meta(i as u64).unwrap().unwrap();
                 if i != num_slots - 1 {
                     assert_eq!(s.next_slots, vec![i as u64 + 1]);
                 } else {
@@ -2092,7 +2093,7 @@ mod tests {
 
             // Check metadata
             for i in 0..num_slots {
-                let s = blocktree.meta_cf.get_slot_meta(i as u64).unwrap().unwrap();
+                let s = blocktree.meta(i as u64).unwrap().unwrap();
                 // The last slot will not chain to any other slots
                 if i as u64 != num_slots - 1 {
                     assert_eq!(s.next_slots, vec![i as u64 + 1]);
@@ -2123,7 +2124,7 @@ mod tests {
                     blocktree.write_blobs(&slot_ticks[0..1]).unwrap();
 
                     for i in 0..num_slots {
-                        let s = blocktree.meta_cf.get_slot_meta(i as u64).unwrap().unwrap();
+                        let s = blocktree.meta(i as u64).unwrap().unwrap();
                         if i != num_slots - 1 {
                             assert_eq!(s.next_slots, vec![i as u64 + 1]);
                         } else {
@@ -2146,6 +2147,86 @@ mod tests {
                 }
             }
         }
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    pub fn test_chaining_tree() {
+        let blocktree_path = get_tmp_ledger_path("test_chaining_forks");
+        {
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let num_tree_levels = 6;
+            assert!(num_tree_levels > 1);
+            let branching_factor: u64 = 4;
+            // Number of slots that will be in the tree
+            let num_slots = (branching_factor.pow(num_tree_levels) - 1) / (branching_factor - 1);
+            let entries_per_slot = 2;
+            assert!(entries_per_slot > 1);
+
+            let (mut blobs, _) = make_many_slot_entries(0, num_slots, entries_per_slot);
+
+            // Insert tree one slot at a time in a random order
+            let mut slots: Vec<_> = (0..num_slots).collect();
+
+            // Get blobs for the slot
+            slots.shuffle(&mut thread_rng());
+            for slot_height in slots {
+                // Get blobs for the slot "slot_height"
+                let slot_blobs = &mut blobs[(slot_height * entries_per_slot) as usize
+                    ..((slot_height + 1) * entries_per_slot) as usize];
+                for blob in slot_blobs.iter_mut() {
+                    // Get the parent slot of the slot in the tree
+                    let slot_parent = {
+                        if slot_height == 0 {
+                            0
+                        } else {
+                            (slot_height - 1) / branching_factor
+                        }
+                    };
+                    blob.set_parent(slot_parent);
+                }
+
+                blocktree.write_blobs(slot_blobs).unwrap();
+            }
+
+            // Make sure everything chains correctly
+            let last_level =
+                (branching_factor.pow(num_tree_levels - 1) - 1) / (branching_factor - 1);
+            for slot_height in 0..num_slots {
+                let slot_meta = blocktree.meta(slot_height).unwrap().unwrap();
+                assert_eq!(slot_meta.consumed, entries_per_slot);
+                assert_eq!(slot_meta.received, entries_per_slot);
+                let slot_parent = {
+                    if slot_height == 0 {
+                        0
+                    } else {
+                        (slot_height - 1) / branching_factor
+                    }
+                };
+                assert_eq!(slot_meta.parent_slot, slot_parent);
+
+                let expected_children: HashSet<_> = {
+                    if slot_height >= last_level {
+                        HashSet::new()
+                    } else {
+                        let first_child_slot =
+                            min(num_slots - 1, slot_height * branching_factor + 1);
+                        let last_child_slot =
+                            min(num_slots - 1, (slot_height + 1) * branching_factor);
+                        (first_child_slot..last_child_slot + 1).collect()
+                    }
+                };
+
+                let result: HashSet<_> = slot_meta.next_slots.iter().cloned().collect();
+                if expected_children.len() != 0 {
+                    assert_eq!(slot_meta.next_slots.len(), branching_factor as usize);
+                } else {
+                    assert_eq!(slot_meta.next_slots.len(), 0);
+                }
+                assert_eq!(expected_children, result);
+            }
+        }
+
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
