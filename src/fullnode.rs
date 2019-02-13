@@ -199,34 +199,35 @@ impl Fullnode {
                 .insert_info(entrypoint_info.clone());
         }
 
-        let (scheduled_leader, tick_height, max_tick_height, blob_index) = {
-            let tick_height = bank.tick_height();
+        // Figure which node should generate the next tick
+        let (scheduled_leader, max_tick_height, blob_index) = {
+            let next_tick = bank.tick_height() + 1;
 
             let leader_scheduler = bank.leader_scheduler.read().unwrap();
-            let slot = leader_scheduler.tick_height_to_slot(tick_height + 1);
-            (
-                leader_scheduler
-                    .get_leader_for_slot(slot)
-                    .expect("Leader not known after processing bank"),
-                tick_height,
-                tick_height + leader_scheduler.num_ticks_left_in_slot(tick_height),
-                {
-                    if let Some(meta) = blocktree.meta(slot).expect("Database error") {
-                        meta.consumed
-                    } else {
-                        0
-                    }
-                },
-            )
+            let slot_at_next_tick = leader_scheduler.tick_height_to_slot(next_tick);
+
+            let scheduled_leader = leader_scheduler
+                .get_leader_for_slot(slot_at_next_tick)
+                .expect("Leader not known after processing bank");
+            let max_tick_height = next_tick + leader_scheduler.num_ticks_left_in_slot(next_tick);
+            let blob_index =
+                if let Some(meta) = blocktree.meta(slot_at_next_tick).expect("Database error") {
+                    meta.consumed
+                } else {
+                    0
+                };
+
+            trace!(
+                "node {:?} scheduled as leader for ticks ({},{}), starting blob_index={}",
+                scheduled_leader,
+                next_tick,
+                max_tick_height,
+                blob_index,
+            );
+
+            (scheduled_leader, max_tick_height, blob_index)
         };
 
-        trace!(
-            "scheduled_leader {:?} for ticks ({}, {}), starting blob_index={}",
-            scheduled_leader,
-            tick_height,
-            max_tick_height,
-            blob_index,
-        );
         cluster_info.write().unwrap().set_leader(scheduled_leader);
 
         let sockets = Sockets {
