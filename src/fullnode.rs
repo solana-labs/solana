@@ -704,9 +704,8 @@ mod tests {
                 0,
                 // Generate enough ticks for two epochs to flush the bootstrap_leader's vote at
                 // tick_height = 0 from the leader scheduler's active window
-                ticks_per_slot * 4,
+                ticks_per_slot * slots_per_epoch * 2,
                 "test_wrong_role_transition",
-                ticks_per_slot,
                 &blocktree_config,
             );
         let bootstrap_leader_info = bootstrap_leader_node.info.clone();
@@ -781,7 +780,6 @@ mod tests {
                 0,
                 0,
                 "test_validator_to_leader_transition",
-                ticks_per_slot,
                 &fullnode_config.ledger_config(),
             );
 
@@ -883,7 +881,6 @@ mod tests {
             1,
             0,
             "test_tvu_behind",
-            ticks_per_slot,
             &fullnode_config.ledger_config(),
         );
 
@@ -999,14 +996,13 @@ mod tests {
         num_genesis_ticks: u64,
         num_ending_ticks: u64,
         test_name: &str,
-        ticks_per_slot: u64,
-        config: &BlocktreeConfig,
+        blocktree_config: &BlocktreeConfig,
     ) -> (Node, Node, String, u64, Hash) {
         // Make a leader identity
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         // Create validator identity
-        assert!(num_genesis_ticks <= ticks_per_slot);
+        assert!(num_genesis_ticks <= blocktree_config.ticks_per_slot);
         let (mint_keypair, ledger_path, tick_height, mut entry_height, last_id, last_entry_id) =
             create_tmp_sample_ledger(
                 test_name,
@@ -1014,18 +1010,12 @@ mod tests {
                 num_genesis_ticks,
                 leader_node.info.id,
                 500,
-                config,
+                blocktree_config,
             );
 
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
         // Write two entries so that the validator is in the active set:
-        //
-        // 1) Give the validator a nonzero number of tokens
-        // Write the bootstrap entries to the ledger that will cause leader rotation
-        // after the bootstrap height
-        //
-        // 2) A vote from the validator
         let (active_set_entries, _) = make_active_set_entries(
             validator_keypair,
             &mint_keypair,
@@ -1036,7 +1026,7 @@ mod tests {
             num_ending_ticks,
         );
 
-        let blocktree = Blocktree::open_config(&ledger_path, config).unwrap();
+        let blocktree = Blocktree::open_config(&ledger_path, blocktree_config).unwrap();
         let active_set_entries_len = active_set_entries.len() as u64;
         let last_id = active_set_entries.last().unwrap().id;
 
