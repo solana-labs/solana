@@ -14,25 +14,25 @@ use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 
-pub trait Output: std::fmt::Debug {
+pub trait EntryWriter: std::fmt::Debug {
     fn write(&self, payload: String) -> Result<()>;
 }
 
 #[derive(Debug, Default)]
-pub struct VecOutput {
+pub struct EntryVec {
     values: RefCell<Vec<String>>,
 }
 
-impl Output for VecOutput {
+impl EntryWriter for EntryVec {
     fn write(&self, payload: String) -> Result<()> {
         self.values.borrow_mut().push(payload);
         Ok(())
     }
 }
 
-impl VecOutput {
+impl EntryVec {
     pub fn new() -> Self {
-        VecOutput {
+        EntryVec {
             values: RefCell::new(Vec::new()),
         }
     }
@@ -43,11 +43,11 @@ impl VecOutput {
 }
 
 #[derive(Debug)]
-pub struct SocketOutput {
+pub struct EntrySocket {
     socket: String,
 }
 
-impl Output for SocketOutput {
+impl EntryWriter for EntrySocket {
     fn write(&self, payload: String) -> Result<()> {
         let mut socket = UnixStream::connect(Path::new(&self.socket))?;
         socket.write_all(payload.as_bytes())?;
@@ -68,7 +68,7 @@ pub trait EntryStreamHandler {
 }
 
 #[derive(Debug)]
-pub struct EntryStream<T: Output> {
+pub struct EntryStream<T: EntryWriter> {
     pub output: T,
     pub leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     pub queued_block: Option<EntryStreamBlock>,
@@ -76,7 +76,7 @@ pub struct EntryStream<T: Output> {
 
 impl<T> EntryStreamHandler for EntryStream<T>
 where
-    T: Output,
+    T: EntryWriter,
 {
     fn emit_entry_event(&self, slot: u64, leader_id: &str, entry: &Entry) -> Result<()> {
         let json_entry = serde_json::to_string(&entry)?;
@@ -111,24 +111,24 @@ where
     }
 }
 
-pub type SocketEntryStream = EntryStream<SocketOutput>;
+pub type SocketEntryStream = EntryStream<EntrySocket>;
 
 impl SocketEntryStream {
     pub fn new(socket: String, leader_scheduler: Arc<RwLock<LeaderScheduler>>) -> Self {
         EntryStream {
-            output: SocketOutput { socket },
+            output: EntrySocket { socket },
             leader_scheduler,
             queued_block: None,
         }
     }
 }
 
-pub type MockEntryStream = EntryStream<VecOutput>;
+pub type MockEntryStream = EntryStream<EntryVec>;
 
 impl MockEntryStream {
     pub fn new(_: String, leader_scheduler: Arc<RwLock<LeaderScheduler>>) -> Self {
         EntryStream {
-            output: VecOutput::new(),
+            output: EntryVec::new(),
             leader_scheduler,
             queued_block: None,
         }
