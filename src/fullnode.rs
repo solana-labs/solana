@@ -286,7 +286,7 @@ impl Fullnode {
                 .broadcast
                 .try_clone()
                 .expect("Failed to clone broadcast socket"),
-            cluster_info.clone(),
+            &cluster_info,
             config.sigverify_disabled,
             max_tick_height,
             blob_index,
@@ -389,7 +389,6 @@ impl Fullnode {
                 self.broadcast_socket
                     .try_clone()
                     .expect("Failed to clone broadcast socket"),
-                self.cluster_info.clone(),
                 self.sigverify_disabled,
                 max_tick_height,
                 0,
@@ -407,7 +406,6 @@ impl Fullnode {
                     .iter()
                     .map(|s| s.try_clone().expect("Failed to clone TPU sockets"))
                     .collect(),
-                self.cluster_info.clone(),
             );
             FullnodeReturnType::LeaderToValidatorRotation
         }

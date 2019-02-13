@@ -68,6 +68,7 @@ impl ForwarderServices {
 pub struct Tpu {
     tpu_mode: Option<TpuMode>,
     exit: Arc<AtomicBool>,
+    cluster_info: Arc<RwLock<ClusterInfo>>,
 }
 
 impl Tpu {
@@ -77,7 +78,7 @@ impl Tpu {
         tick_duration: PohServiceConfig,
         transactions_sockets: Vec<UdpSocket>,
         broadcast_socket: UdpSocket,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
         sigverify_disabled: bool,
         max_tick_height: u64,
         blob_index: u64,
@@ -90,6 +91,7 @@ impl Tpu {
         let mut tpu = Self {
             tpu_mode: None,
             exit: Arc::new(AtomicBool::new(false)),
+            cluster_info: cluster_info.clone(),
         };
 
         if is_leader {
@@ -98,7 +100,6 @@ impl Tpu {
                 tick_duration,
                 transactions_sockets,
                 broadcast_socket,
-                cluster_info,
                 sigverify_disabled,
                 max_tick_height,
                 blob_index,
@@ -108,7 +109,7 @@ impl Tpu {
                 blocktree,
             );
         } else {
-            tpu.switch_to_forwarder(transactions_sockets, cluster_info);
+            tpu.switch_to_forwarder(transactions_sockets);
         }
 
         tpu
@@ -126,13 +127,9 @@ impl Tpu {
         }
     }
 
-    pub fn switch_to_forwarder(
-        &mut self,
-        transactions_sockets: Vec<UdpSocket>,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
-    ) {
+    pub fn switch_to_forwarder(&mut self, transactions_sockets: Vec<UdpSocket>) {
         self.tpu_mode_close();
-        let tpu_forwarder = TpuForwarder::new(transactions_sockets, cluster_info);
+        let tpu_forwarder = TpuForwarder::new(transactions_sockets, self.cluster_info.clone());
         self.tpu_mode = Some(TpuMode::Forwarder(ForwarderServices::new(tpu_forwarder)));
     }
 
@@ -143,7 +140,6 @@ impl Tpu {
         tick_duration: PohServiceConfig,
         transactions_sockets: Vec<UdpSocket>,
         broadcast_socket: UdpSocket,
-        cluster_info: Arc<RwLock<ClusterInfo>>,
         sigverify_disabled: bool,
         max_tick_height: u64,
         blob_index: u64,
@@ -161,8 +157,11 @@ impl Tpu {
             self.exit.clone(),
             &packet_sender.clone(),
         );
-        let cluster_info_vote_listener =
-            ClusterInfoVoteListener::new(self.exit.clone(), cluster_info.clone(), packet_sender);
+        let cluster_info_vote_listener = ClusterInfoVoteListener::new(
+            self.exit.clone(),
+            self.cluster_info.clone(),
+            packet_sender,
+        );
 
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
@@ -180,7 +179,7 @@ impl Tpu {
         let broadcast_service = BroadcastService::new(
             bank.clone(),
             broadcast_socket,
-            cluster_info,
+            self.cluster_info.clone(),
             blob_index,
             bank.leader_scheduler.clone(),
             entry_receiver,
