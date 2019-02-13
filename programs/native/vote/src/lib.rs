@@ -3,7 +3,7 @@
 
 use bincode::deserialize;
 use log::*;
-use solana_sdk::account::KeyedAccount;
+use solana_sdk::account::{Account, KeyedAccount};
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::solana_entrypoint;
@@ -76,43 +76,41 @@ fn entrypoint(
     }
 }
 
+pub fn create_vote_account(tokens: u64) -> Account {
+    let space = vote_program::get_max_size();
+    Account::new(tokens, space, vote_program::id())
+}
+
+pub fn register_and_deserialize(
+    from_id: &Pubkey,
+    from_account: &mut Account,
+    vote_id: &Pubkey,
+    vote_account: &mut Account,
+) -> Result<VoteState, ProgramError> {
+    let mut keyed_accounts = [
+        KeyedAccount::new(from_id, true, from_account),
+        KeyedAccount::new(vote_id, false, vote_account),
+    ];
+    register(&mut keyed_accounts)?;
+    let vote_state = VoteState::deserialize(&vote_account.userdata).unwrap();
+    Ok(vote_state)
+}
+
+pub fn vote_and_deserialize(
+    vote_id: &Pubkey,
+    vote_account: &mut Account,
+    vote: Vote,
+) -> Result<VoteState, ProgramError> {
+    let mut keyed_accounts = [KeyedAccount::new(vote_id, true, vote_account)];
+    process_vote(&mut keyed_accounts, vote)?;
+    let vote_state = VoteState::deserialize(&vote_account.userdata).unwrap();
+    Ok(vote_state)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::account::Account;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::vote_program;
-
-    fn create_vote_account(tokens: u64) -> Account {
-        let space = vote_program::get_max_size();
-        Account::new(tokens, space, vote_program::id())
-    }
-
-    fn register_and_deserialize(
-        from_id: &Pubkey,
-        from_account: &mut Account,
-        vote_id: &Pubkey,
-        vote_account: &mut Account,
-    ) -> Result<VoteState, ProgramError> {
-        let mut keyed_accounts = [
-            KeyedAccount::new(from_id, true, from_account),
-            KeyedAccount::new(vote_id, false, vote_account),
-        ];
-        register(&mut keyed_accounts)?;
-        let vote_state = VoteState::deserialize(&vote_account.userdata).unwrap();
-        Ok(vote_state)
-    }
-
-    fn vote_and_deserialize(
-        vote_id: &Pubkey,
-        vote_account: &mut Account,
-        vote: Vote,
-    ) -> Result<VoteState, ProgramError> {
-        let mut keyed_accounts = [KeyedAccount::new(vote_id, true, vote_account)];
-        process_vote(&mut keyed_accounts, vote)?;
-        let vote_state = VoteState::deserialize(&vote_account.userdata).unwrap();
-        Ok(vote_state)
-    }
 
     #[test]
     fn test_voter_registration() {

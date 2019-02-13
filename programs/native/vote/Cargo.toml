@@ -22,5 +22,5 @@ solana-runtime = { path = "../../../runtime", version = "0.12.0" }
 
 [lib]
 name = "solana_vote_program"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "lib"]
 

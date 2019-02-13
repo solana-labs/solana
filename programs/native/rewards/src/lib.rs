@@ -63,6 +63,8 @@ fn redeem_vote_credits(keyed_accounts: &mut [KeyedAccount]) -> Result<(), Progra
     keyed_accounts[0].account.tokens -= lamports;
     keyed_accounts[2].account.tokens += lamports;
 
+    // TODO: The runtime should reject this, because this program
+    // is not the owner of the VoteState account.
     vote_state.clear_credits();
     vote_state.serialize(&mut keyed_accounts[1].account.userdata)?;
 
@@ -91,65 +93,89 @@ fn entrypoint(
     }
 }
 
-//#[cfg(test)]
-//mod tests {
-//    use super::*;
-//    use solana_sdk::account::Account;
-//    use solana_sdk::signature::{Keypair, KeypairUtil};
-//    use solana_sdk::vote_program;
-//
-//    fn create_vote_account(tokens: u64) -> Account {
-//        let space = vote_program::get_max_size();
-//        Account::new(tokens, space, vote_program::id())
-//    }
-//
-//    fn register_and_deserialize(
-//        from_id: &Pubkey,
-//        from_account: &mut Account,
-//        vote_id: &Pubkey,
-//        vote_account: &mut Account,
-//    ) -> Result<VoteState, ProgramError> {
-//        let mut keyed_accounts = [
-//            KeyedAccount::new(from_id, true, from_account),
-//            KeyedAccount::new(vote_id, false, vote_account),
-//        ];
-//        register(&mut keyed_accounts)?;
-//        let vote_state = VoteState::deserialize(&vote_account.userdata).unwrap();
-//        Ok(vote_state)
-//    }
-//
-//    fn vote_and_deserialize(
-//        vote_id: &Pubkey,
-//        vote_account: &mut Account,
-//        vote: Vote,
-//    ) -> Result<VoteState, ProgramError> {
-//        let mut keyed_accounts = [KeyedAccount::new(vote_id, true, vote_account)];
-//        process_vote(&mut keyed_accounts, vote)?;
-//        let vote_state = VoteState::deserialize(&vote_account.userdata).unwrap();
-//        Ok(vote_state)
-//    }
-//
-//    #[test]
-//    fn test_redeem_vote_credits() {
-//        let from_id = Keypair::new().pubkey();
-//        let mut from_account = Account::new(100, 0, Pubkey::default());
-//
-//        let vote_id = Keypair::new().pubkey();
-//        let mut vote_account = create_vote_account(100);
-//        register_and_deserialize(&from_id, &mut from_account, &vote_id, &mut vote_account).unwrap();
-//
-//        for _ in 0..vote_program::MAX_VOTE_HISTORY {
-//            let vote = Vote::new(1);
-//            let vote_state =
-//                vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();
-//            assert_eq!(vote_state.credits(), 0);
-//        }
-//
-//        let vote = Vote::new(1);
-//        let vote_state = vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();
-//        assert_eq!(vote_state.credits(), 1);
-//
-//        let vote_state = redeem_vote_credits_and_deserialize()
-//        assert_eq!(vote_state.credits(), 0);
-//    }
-//}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use solana_sdk::account::Account;
+    use solana_sdk::rewards_program;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::vote_program::{self, Vote};
+    use solana_vote_program;
+
+    fn create_rewards_account(tokens: u64) -> Account {
+        let space = rewards_program::get_max_size();
+        Account::new(tokens, space, rewards_program::id())
+    }
+
+    fn redeem_vote_credits_and_deserialize(
+        rewards_id: &Pubkey,
+        rewards_account: &mut Account,
+        vote_id: &Pubkey,
+        vote_account: &mut Account,
+        to_id: &Pubkey,
+        to_account: &mut Account,
+    ) -> Result<VoteState, ProgramError> {
+        let mut keyed_accounts = [
+            KeyedAccount::new(rewards_id, true, rewards_account),
+            KeyedAccount::new(vote_id, true, vote_account),
+            KeyedAccount::new(to_id, false, to_account),
+        ];
+        redeem_vote_credits(&mut keyed_accounts)?;
+        let vote_state = VoteState::deserialize(&vote_account.userdata).unwrap();
+        Ok(vote_state)
+    }
+
+    #[test]
+    fn test_redeem_vote_credits() {
+        let from_id = Keypair::new().pubkey();
+        let mut from_account = Account::new(100, 0, Pubkey::default());
+
+        let vote_id = Keypair::new().pubkey();
+        let mut vote_account = solana_vote_program::create_vote_account(100);
+        solana_vote_program::register_and_deserialize(
+            &from_id,
+            &mut from_account,
+            &vote_id,
+            &mut vote_account,
+        )
+        .unwrap();
+
+        for _ in 0..vote_program::MAX_VOTE_HISTORY {
+            let vote = Vote::new(1);
+            let vote_state = solana_vote_program::vote_and_deserialize(
+                &vote_id,
+                &mut vote_account,
+                vote.clone(),
+            )
+            .unwrap();
+            assert_eq!(vote_state.credits(), 0);
+        }
+
+        let vote = Vote::new(1);
+        let vote_state =
+            solana_vote_program::vote_and_deserialize(&vote_id, &mut vote_account, vote.clone())
+                .unwrap();
+        assert_eq!(vote_state.credits(), 1);
+
+        let rewards_id = Keypair::new().pubkey();
+        let mut rewards_account = create_rewards_account(100);
+
+        // TODO: Add VoteInstruction::RegisterStakerId so that we don't need to point the "to"
+        // account to the "from" account.
+        let to_id = from_id;
+        let mut to_account = from_account;
+        let to_tokens = to_account.tokens;
+
+        let vote_state = redeem_vote_credits_and_deserialize(
+            &rewards_id,
+            &mut rewards_account,
+            &vote_id,
+            &mut vote_account,
+            &to_id,
+            &mut to_account,
+        )
+        .unwrap();
+        assert_eq!(vote_state.credits(), 0);
+        assert!(to_account.tokens > to_tokens);
+    }
+}
