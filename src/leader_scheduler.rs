@@ -2,7 +2,7 @@
 //! managing the schedule for leader rotation
 
 use crate::bank::Bank;
-use crate::entry::{create_ticks, Entry};
+use crate::entry::{create_ticks, next_entry_mut, Entry};
 use crate::voting_keypair::VotingKeypair;
 use bincode::serialize;
 use byteorder::{LittleEndian, ReadBytesExt};
@@ -421,8 +421,8 @@ pub fn make_active_set_entries(
         *last_tick_id,
         0,
     );
-    let transfer_entry = Entry::new(last_entry_id, 0, 1, vec![transfer_tx]);
-    let mut last_entry_id = transfer_entry.id;
+    let mut last_entry_id = *last_entry_id;
+    let transfer_entry = next_entry_mut(&mut last_entry_id, 1, vec![transfer_tx]);
 
     // 2) Create and register a vote account for active_keypair
     let voting_keypair = VotingKeypair::new_local(active_keypair);
@@ -430,14 +430,12 @@ pub fn make_active_set_entries(
 
     let new_vote_account_tx =
         VoteTransaction::new_account(active_keypair, vote_account_id, *last_tick_id, 1, 1);
-    let new_vote_account_entry = Entry::new(&last_entry_id, 0, 1, vec![new_vote_account_tx]);
-    last_entry_id = new_vote_account_entry.id;
+    let new_vote_account_entry = next_entry_mut(&mut last_entry_id, 1, vec![new_vote_account_tx]);
 
     // 3) Create vote entry
     let vote_tx =
         VoteTransaction::new_vote(&voting_keypair, tick_height_to_vote_on, *last_tick_id, 0);
-    let vote_entry = Entry::new(&last_entry_id, 0, 1, vec![vote_tx]);
-    last_entry_id = vote_entry.id;
+    let vote_entry = next_entry_mut(&mut last_entry_id, 1, vec![vote_tx]);
 
     // 4) Create the ending empty ticks
     let mut txs = vec![transfer_entry, new_vote_account_entry, vote_entry];
