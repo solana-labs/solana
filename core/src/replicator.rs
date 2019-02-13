@@ -6,6 +6,7 @@ use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
 use crate::cluster_info::{ClusterInfo, Node, FULLNODE_PORT_RANGE};
 use crate::contact_info::ContactInfo;
 use crate::gossip_service::GossipService;
+use crate::repair_service::RepairSlotRange;
 use crate::result::Result;
 use crate::service::Service;
 use crate::storage_stage::{get_segment_from_entry, ENTRIES_PER_SEGMENT};
@@ -156,6 +157,9 @@ impl Replicator {
 
         let signature = keypair.sign(storage_blockhash.as_ref());
         let entry_height = get_entry_heights_from_blockhash(&signature, storage_entry_height);
+        let mut repair_slot_range = RepairSlotRange::default();
+        repair_slot_range.end = entry_height;
+        repair_slot_range.start = entry_height - ENTRIES_PER_SEGMENT;
 
         info!("replicating entry_height: {}", entry_height);
 
@@ -176,6 +180,7 @@ impl Replicator {
             retransmit_sender,
             repair_socket,
             &exit,
+            repair_slot_range,
         );
 
         info!("window created, waiting for ledger download done");
