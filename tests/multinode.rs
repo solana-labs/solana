@@ -1781,11 +1781,16 @@ fn retry_send_tx_and_retry_get_balance(
     None
 }
 
-fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64, include_validator: bool) {
+fn test_fullnode_rotate(
+    ticks_per_slot: u64,
+    slots_per_epoch: u64,
+    include_validator: bool,
+    transact: bool,
+) {
     solana_logger::setup();
     info!(
-        "fullnode_rotate_fast: ticks_per_slot={} slots_per_epoch={}",
-        ticks_per_slot, slots_per_epoch
+        "fullnode_rotate_fast: ticks_per_slot={} slots_per_epoch={} include_validator={} transact={}",
+        ticks_per_slot, slots_per_epoch, include_validator, transact
     );
 
     let mut fullnode_config = FullnodeConfig::default();
@@ -2007,10 +2012,40 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64, include_valid
         poll_gossip_for_leader(leader_info.gossip, Some(5)).unwrap()
     );
 
+    let bob = Keypair::new().pubkey();
+    let mut expected_bob_balance = 0;
+    let mut client = mk_client(&leader_info);
+    let mut client_last_id = solana_sdk::hash::Hash::default();
+
     let max_tick_height = 16;
     while leader_tick_height_of_next_rotation.load(Ordering::Relaxed) < max_tick_height {
-        trace!("waiting for leader to reach max tick height...");
-        sleep(Duration::from_millis(100));
+        if transact {
+            client_last_id = client.get_next_last_id(&client_last_id);
+            info!("Transferring 500 tokens, last_id={:?}", client_last_id);
+            expected_bob_balance += 500;
+
+            let signature = client
+                .transfer(500, &mint_keypair, bob, &client_last_id)
+                .unwrap();
+            debug!("transfer send, signature is {:?}", signature);
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            client.poll_for_signature(&signature).unwrap();
+            debug!("transfer signature confirmed");
+            let actual_bob_balance =
+                retry_get_balance(&mut client, &bob, Some(expected_bob_balance)).unwrap();
+            assert_eq!(actual_bob_balance, expected_bob_balance);
+            debug!("account balance confirmed: {}", actual_bob_balance);
+
+            client_last_id = client.get_next_last_id(&client_last_id);
+        } else {
+            trace!("waiting for leader to reach max tick height...");
+            sleep(Duration::from_millis(100));
+        }
+    }
+
+    if transact {
+        // Make sure at least one transfer succeeded.
+        assert!(expected_bob_balance > 0);
     }
 
     if include_validator {
@@ -2054,20 +2089,32 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64, include_valid
 
 #[test]
 fn test_one_fullnode_rotate_every_tick() {
-    test_fullnode_rotate(1, 1, false);
+    test_fullnode_rotate(1, 1, false, false);
 }
 
 #[test]
 fn test_one_fullnode_rotate_every_second_tick() {
-    test_fullnode_rotate(2, 1, false);
+    test_fullnode_rotate(2, 1, false, false);
 }
 
 #[test]
 fn test_two_fullnodes_rotate_every_tick() {
-    test_fullnode_rotate(1, 1, true);
+    test_fullnode_rotate(1, 1, true, false);
 }
 
 #[test]
 fn test_two_fullnodes_rotate_every_second_tick() {
-    test_fullnode_rotate(2, 1, true);
+    test_fullnode_rotate(2, 1, true, false);
+}
+
+#[test]
+#[ignore]
+fn test_one_fullnode_rotate_every_tick_with_transactions() {
+    test_fullnode_rotate(1, 1, false, true);
+}
+
+#[test]
+#[ignore]
+fn test_two_fullnodes_rotate_every_tick_with_transacations() {
+    test_fullnode_rotate(1, 1, true, true);
 }
