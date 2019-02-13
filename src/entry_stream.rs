@@ -57,8 +57,14 @@ impl Output for SocketOutput {
 }
 
 pub trait EntryStreamHandler {
-    fn emit_entry_event(&self, entries: &Entry) -> Result<()>;
-    fn emit_block_event(&self, tick_height: u64, last_id: Hash) -> Result<()>;
+    fn emit_entry_event(&self, slot: u64, leader_id: &str, entries: &Entry) -> Result<()>;
+    fn emit_block_event(
+        &self,
+        slot: u64,
+        leader_id: &str,
+        tick_height: u64,
+        last_id: Hash,
+    ) -> Result<()>;
 }
 
 #[derive(Debug)]
@@ -72,14 +78,7 @@ impl<T> EntryStreamHandler for EntryStream<T>
 where
     T: Output,
 {
-    fn emit_entry_event(&self, entry: &Entry) -> Result<()> {
-        let leader_scheduler = self.leader_scheduler.read().unwrap();
-        let slot = leader_scheduler.tick_height_to_slot(entry.tick_height);
-        let leader_id = leader_scheduler
-            .get_leader_for_slot(slot)
-            .map(|leader| leader.to_string())
-            .unwrap_or_else(|| "None".to_string());
-
+    fn emit_entry_event(&self, slot: u64, leader_id: &str, entry: &Entry) -> Result<()> {
         let json_entry = serde_json::to_string(&entry)?;
         let payload = format!(
             r#"{{"dt":"{}","t":"entry","s":{},"l":{:?},"entry":{}}}"#,
@@ -92,13 +91,13 @@ where
         Ok(())
     }
 
-    fn emit_block_event(&self, tick_height: u64, last_id: Hash) -> Result<()> {
-        let leader_scheduler = self.leader_scheduler.read().unwrap();
-        let slot = leader_scheduler.tick_height_to_slot(tick_height);
-        let leader_id = leader_scheduler
-            .get_leader_for_slot(slot)
-            .map(|leader| leader.to_string())
-            .unwrap_or_else(|| "None".to_string());
+    fn emit_block_event(
+        &self,
+        slot: u64,
+        leader_id: &str,
+        tick_height: u64,
+        last_id: Hash,
+    ) -> Result<()> {
         let payload = format!(
             r#"{{"dt":"{}","t":"block","s":{},"h":{},"l":{:?},"id":"{:?}"}}"#,
             Utc::now().to_rfc3339_opts(SecondsFormat::Nanos, true),
@@ -180,6 +179,13 @@ mod test {
             .read()
             .unwrap()
             .tick_height_to_slot(tick_height_initial);
+        let leader_id = bank
+            .leader_scheduler
+            .read()
+            .unwrap()
+            .get_leader_for_slot(previous_slot)
+            .map(|leader| leader.to_string())
+            .unwrap_or_else(|| "None".to_string());
 
         for tick_height in tick_height_initial..=tick_height_final {
             bank.leader_scheduler
@@ -193,13 +199,15 @@ mod test {
                 .tick_height_to_slot(tick_height);
             if curr_slot != previous_slot {
                 entry_stream
-                    .emit_block_event(tick_height - 1, last_id)
+                    .emit_block_event(previous_slot, &leader_id, tick_height - 1, last_id)
                     .unwrap();
             }
-            let entry = Entry::new(&mut last_id, tick_height, 1, vec![]); //just ticks
+            let entry = Entry::new(&mut last_id, tick_height, 1, vec![]); // just ticks
             last_id = entry.id;
             previous_slot = curr_slot;
-            entry_stream.emit_entry_event(&entry).unwrap();
+            entry_stream
+                .emit_entry_event(curr_slot, &leader_id, &entry)
+                .unwrap();
             expected_entries.push(entry.clone());
             entries.push(entry);
         }
