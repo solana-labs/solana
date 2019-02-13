@@ -57,39 +57,38 @@ impl Output for SocketOutput {
 }
 
 pub trait EntryStreamHandler {
-    fn emit_entry_events(&self, entries: &[Entry]) -> Result<()>;
+    fn emit_entry_event(&self, entries: &Entry) -> Result<()>;
     fn emit_block_event(&self, tick_height: u64, last_id: Hash) -> Result<()>;
 }
 
 #[derive(Debug)]
 pub struct EntryStream<T: Output> {
     pub output: T,
-    leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+    pub leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+    pub queued_block: Option<EntryStreamBlock>,
 }
 
 impl<T> EntryStreamHandler for EntryStream<T>
 where
     T: Output,
 {
-    fn emit_entry_events(&self, entries: &[Entry]) -> Result<()> {
+    fn emit_entry_event(&self, entry: &Entry) -> Result<()> {
         let leader_scheduler = self.leader_scheduler.read().unwrap();
-        for entry in entries {
-            let slot = leader_scheduler.tick_height_to_slot(entry.tick_height);
-            let leader_id = leader_scheduler
-                .get_leader_for_slot(slot)
-                .map(|leader| leader.to_string())
-                .unwrap_or_else(|| "None".to_string());
+        let slot = leader_scheduler.tick_height_to_slot(entry.tick_height);
+        let leader_id = leader_scheduler
+            .get_leader_for_slot(slot)
+            .map(|leader| leader.to_string())
+            .unwrap_or_else(|| "None".to_string());
 
-            let json_entry = serde_json::to_string(&entry)?;
-            let payload = format!(
-                r#"{{"dt":"{}","t":"entry","s":{},"l":{:?},"entry":{}}}"#,
-                Utc::now().to_rfc3339_opts(SecondsFormat::Nanos, true),
-                slot,
-                leader_id,
-                json_entry,
-            );
-            self.output.write(payload)?;
-        }
+        let json_entry = serde_json::to_string(&entry)?;
+        let payload = format!(
+            r#"{{"dt":"{}","t":"entry","s":{},"l":{:?},"entry":{}}}"#,
+            Utc::now().to_rfc3339_opts(SecondsFormat::Nanos, true),
+            slot,
+            leader_id,
+            json_entry,
+        );
+        self.output.write(payload)?;
         Ok(())
     }
 
@@ -120,6 +119,7 @@ impl SocketEntryStream {
         EntryStream {
             output: SocketOutput { socket },
             leader_scheduler,
+            queued_block: None,
         }
     }
 }
@@ -131,12 +131,19 @@ impl MockEntryStream {
         EntryStream {
             output: VecOutput::new(),
             leader_scheduler,
+            queued_block: None,
         }
     }
 
     pub fn entries(&self) -> Vec<String> {
         self.output.entries()
     }
+}
+
+#[derive(Debug)]
+pub struct EntryStreamBlock {
+    pub tick_height: u64,
+    pub id: Hash,
 }
 
 #[cfg(test)]
@@ -192,11 +199,10 @@ mod test {
             let entry = Entry::new(&mut last_id, tick_height, 1, vec![]); //just ticks
             last_id = entry.id;
             previous_slot = curr_slot;
+            entry_stream.emit_entry_event(&entry).unwrap();
             expected_entries.push(entry.clone());
             entries.push(entry);
         }
-
-        entry_stream.emit_entry_events(&entries).unwrap();
 
         assert_eq!(
             entry_stream.entries().len() as u64,
