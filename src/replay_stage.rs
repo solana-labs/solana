@@ -363,7 +363,7 @@ mod test {
     };
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::create_ticks;
-    use crate::entry::Entry;
+    use crate::entry::{next_entry_mut, Entry};
     use crate::fullnode::new_bank_from_ledger;
     use crate::genesis_block::GenesisBlock;
     use crate::leader_scheduler::{make_active_set_entries, LeaderSchedulerConfig};
@@ -469,8 +469,7 @@ mod test {
             let total_entries_to_send = 2 * ticks_per_slot as usize - 2;
             let mut entries_to_send = vec![];
             while entries_to_send.len() < total_entries_to_send {
-                let entry = Entry::new(&mut last_id, 0, 1, vec![]);
-                last_id = entry.id;
+                let entry = next_entry_mut(&mut last_id, 1, vec![]);
                 entries_to_send.push(entry);
             }
 
@@ -706,8 +705,7 @@ mod test {
             let leader_rotation_index = (active_window_tick_length - tick_height - 1) as usize;
             let mut expected_last_id = Hash::default();
             for i in 0..total_entries_to_send {
-                let entry = Entry::new(&mut last_id, 0, num_hashes, vec![]);
-                last_id = entry.id;
+                let entry = next_entry_mut(&mut last_id, num_hashes, vec![]);
                 blocktree
                     .write_entries(
                         DEFAULT_SLOT_HEIGHT,
@@ -758,8 +756,7 @@ mod test {
         let mut last_id = Hash::default();
         let mut entries = Vec::new();
         for _ in 0..5 {
-            let entry = Entry::new(&mut last_id, 0, 1, vec![]); //just ticks
-            last_id = entry.id;
+            let entry = next_entry_mut(&mut last_id, 1, vec![]); //just ticks
             entries.push(entry);
         }
 

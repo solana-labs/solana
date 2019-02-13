@@ -213,13 +213,13 @@ pub mod tests {
     use crate::bank::Bank;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::entry::Entry;
+    use crate::entry::next_entry_mut;
+    use crate::entry::EntrySlice;
     use crate::genesis_block::GenesisBlock;
     use crate::gossip_service::GossipService;
-    use crate::packet::SharedBlob;
+    use crate::packet::index_blobs;
     use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
     use crate::streamer;
-    use bincode::serialize;
     use solana_sdk::system_transaction::SystemTransaction;
     use std::fs::remove_dir_all;
     use std::time::Duration;
@@ -372,10 +372,8 @@ pub mod tests {
         let transfer_amount = 501;
         let bob_keypair = Keypair::new();
         for i in 0..num_transfers {
-            let entry0 = Entry::new(&cur_hash, 0, i, vec![]);
-            cur_hash = entry0.id;
-            let entry_tick0 = Entry::new(&cur_hash, 0, i + 1, vec![]);
-            cur_hash = entry_tick0.id;
+            let entry0 = next_entry_mut(&mut cur_hash, i, vec![]);
+            let entry_tick0 = next_entry_mut(&mut cur_hash, i + 1, vec![]);
 
             let tx0 = SystemTransaction::new_account(
                 &mint_keypair,
@@ -384,30 +382,19 @@ pub mod tests {
                 cur_hash,
                 0,
             );
-            let entry_tick1 = Entry::new(&cur_hash, 0, i + 1, vec![]);
-            cur_hash = entry_tick1.id;
-            let entry1 = Entry::new(&cur_hash, 0, i + num_transfers, vec![tx0]);
-            let entry_tick2 = Entry::new(&entry1.id, 0, i + 1, vec![]);
-            cur_hash = entry_tick2.id;
+            let entry_tick1 = next_entry_mut(&mut cur_hash, i + 1, vec![]);
+            let entry1 = next_entry_mut(&mut cur_hash, i + num_transfers, vec![tx0]);
+            let entry_tick2 = next_entry_mut(&mut cur_hash, i + 1, vec![]);
 
             alice_ref_balance -= transfer_amount;
 
-            for entry in vec![entry0, entry_tick0, entry_tick1, entry1, entry_tick2] {
-                let b = SharedBlob::default();
-                {
-                    let mut w = b.write().unwrap();
-                    w.set_index(blob_idx);
-                    blob_idx += 1;
-                    w.forward(true);
-
-                    let serialized_entry = serialize(&entry).unwrap();
-
-                    w.data_mut()[..serialized_entry.len()].copy_from_slice(&serialized_entry);
-                    w.set_size(serialized_entry.len());
-                    w.meta.set_addr(&tvu_addr);
-                }
-                msgs.push(b);
-            }
+            let entries = vec![entry0, entry_tick0, entry_tick1, entry1, entry_tick2];
+            let blobs = entries.to_shared_blobs();
+            index_blobs(&blobs, &mut blob_idx, &vec![0; blobs.len()]);
+            blobs
+                .iter()
+                .for_each(|b| b.write().unwrap().meta.set_addr(&tvu_addr));
+            msgs.extend(blobs.into_iter());
         }
 
         // send the blobs into the socket

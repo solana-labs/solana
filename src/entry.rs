@@ -311,6 +311,12 @@ impl EntrySlice for [Entry] {
     }
 }
 
+pub fn next_entry_mut(start: &mut Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Entry {
+    let entry = Entry::new(&start, 0, num_hashes, transactions);
+    *start = entry.id;
+    entry
+}
+
 /// Creates the next entries for given transactions, outputs
 /// updates start_hash to id of last Entry, sets num_hashes to 0
 pub fn next_entries_mut(
@@ -389,8 +395,7 @@ pub fn next_entries(
 pub fn create_ticks(num_ticks: u64, mut hash: Hash) -> Vec<Entry> {
     let mut ticks = Vec::with_capacity(num_ticks as usize);
     for _ in 0..num_ticks {
-        let new_tick = Entry::new(&hash, 0, 1, vec![]);
-        hash = new_tick.id;
+        let new_tick = next_entry_mut(&mut hash, 1, vec![]);
         ticks.push(new_tick);
     }
 
