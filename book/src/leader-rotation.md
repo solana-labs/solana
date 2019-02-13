@@ -52,7 +52,11 @@ using fork at slot height 102.  It is active from slot 200 until it is updated
 again.
 
 No inconsistency can exist because every validator that is voting with the
-cluster has skipped 100 and 101 when its root reaches 102.
+cluster has skipped 100 and 101 when its root reaches 102.  The duration of the
+*leader schedule offset* has a direct relationship to the likelihood of a
+cluster inconsistency state.  If the *leader schedule offset* is 6 standard
+deviations longer than the median partition time, then the likelihood of a
+partition longer than the offset is 1 in 1 million.
 
 ### Leader Schedule Rotation with Epoch Sized Partitions.
 
@@ -74,9 +78,7 @@ forks until it is updated.
 Each partition's schedule will diverge after the partition lasts more than an
 epoch.  For this reason, the epoch duration should be selected to be much much
 larger then slot time and the expected length for a fork to be committed to
-root.  If the epoch time is 6 standard deviations longer than the median
-partition time, then the likelihood of a partition longer than an epoch is 1:1
-million.
+root.
 
 ## Leader Schedule Generation at Genesis
 
