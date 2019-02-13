@@ -118,10 +118,10 @@ impl RepairService {
         slot: &SlotMeta,
         max_repairs: usize,
     ) -> Result<Vec<(u64, u64)>> {
-        if slot.contains_all_ticks() {
+        if slot.is_full() {
             Ok(vec![])
         } else {
-            let num_unreceived_ticks = {
+            /*let num_unreceived_ticks = {
                 if slot.consumed == slot.received {
                     let num_expected_ticks = slot.num_expected_ticks(blocktree);
                     if num_expected_ticks == 0 {
@@ -141,9 +141,9 @@ impl RepairService {
                 } else {
                     0
                 }
-            };
+            };*/
 
-            let upper = slot.received + num_unreceived_ticks;
+            let upper = slot.received;
 
             let reqs =
                 blocktree.find_missing_data_indexes(slot_height, slot.consumed, upper, max_repairs);
