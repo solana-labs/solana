@@ -20,7 +20,7 @@ use solana_sdk::timing::duration_as_s;
 use std::collections::{HashSet, VecDeque};
 use std::env;
 use std::fs::remove_dir_all;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder};
@@ -1806,7 +1806,9 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64, include_valid
     let validator = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
     info!("leader id: {}", leader_keypair.pubkey());
-    info!("validator id: {}", validator_keypair.pubkey());
+    if include_validator {
+        info!("validator id: {}", validator_keypair.pubkey());
+    }
 
     // Make a common mint and a genesis entry for both leader + validator ledgers
     let (
@@ -1848,8 +1850,8 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64, include_valid
         last_entry_id = entries.last().unwrap().id;
     }
 
-    let mut tick_height_of_next_rotation = ticks_per_slot;
-    let mut should_be_leader = true;
+    let mut leader_tick_height_of_next_rotation = ticks_per_slot;
+    let mut leader_should_be_leader = true;
     if fullnode_config.leader_scheduler_config.ticks_per_slot == 1 {
         // Add another tick to the ledger if the cluster has been configured for 1 tick_per_slot.
         // The "pseudo-tick" entry0 currently added by bank::process_ledger cannot be rotated on
@@ -1859,11 +1861,21 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64, include_valid
         entries.extend(tick);
         last_entry_id = entries.last().unwrap().id;
 
-        tick_height_of_next_rotation += 2;
+        leader_tick_height_of_next_rotation += 2;
         if include_validator {
-            should_be_leader = false;
+            leader_should_be_leader = false;
         }
     }
+
+    let validator_tick_height_of_next_rotation = Arc::new(AtomicUsize::new(
+        leader_tick_height_of_next_rotation as usize,
+    ));
+    let leader_tick_height_of_next_rotation = Arc::new(AtomicUsize::new(
+        leader_tick_height_of_next_rotation as usize,
+    ));
+
+    let validator_should_be_leader = Arc::new(AtomicBool::new(!leader_should_be_leader));
+    let leader_should_be_leader = Arc::new(AtomicBool::new(leader_should_be_leader));
 
     // Write additional ledger entires
     {
@@ -1903,37 +1915,43 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64, include_valid
         );
 
         let (validator_rotation_sender, validator_rotation_receiver) = channel();
-        node_exits.push(validator_fullnode.run(Some(validator_rotation_sender)));
 
-        let mut validator_tick_height_of_next_rotation = tick_height_of_next_rotation;
-        let mut validator_should_be_leader = !should_be_leader;
-        let monitor_thread = Builder::new()
-            .name("validator_rotation_receiver".to_string())
-            .spawn(move || loop {
-                match validator_rotation_receiver.recv() {
-                    Ok((rotation_type, tick_height)) => {
-                        info!(
-                            "validator rotation event {:?} at tick_height={}",
-                            rotation_type, tick_height
-                        );
-                        info!("validator should be leader? {}", validator_should_be_leader);
-                        assert_eq!(validator_tick_height_of_next_rotation, tick_height);
-                        assert_eq!(
-                            rotation_type,
-                            if validator_should_be_leader {
-                                FullnodeReturnType::LeaderToValidatorRotation
-                            } else {
-                                FullnodeReturnType::ValidatorToLeaderRotation
-                            }
-                        );
-                        validator_should_be_leader = !validator_should_be_leader;
-                        validator_tick_height_of_next_rotation += ticks_per_slot;
-                    }
-                    Err(_) => break,
-                };
-            })
-            .unwrap();
-        monitor_threads.push(monitor_thread);
+        monitor_threads.push({
+            let validator_should_be_leader = validator_should_be_leader.clone();
+            let validator_tick_height_of_next_rotation =
+                validator_tick_height_of_next_rotation.clone();
+            Builder::new()
+                .name("validator_rotation_receiver".to_string())
+                .spawn(move || loop {
+                    match validator_rotation_receiver.recv() {
+                        Ok((rotation_type, tick_height)) => {
+                            info!(
+                                "validator rotation event {:?} at tick_height={}",
+                                rotation_type, tick_height
+                            );
+                            let should_be_leader =
+                                validator_should_be_leader.fetch_xor(true, Ordering::Relaxed);
+                            info!("validator should be leader? {}", should_be_leader);
+                            assert_eq!(
+                                tick_height as usize,
+                                validator_tick_height_of_next_rotation
+                                    .fetch_add(ticks_per_slot as usize, Ordering::Relaxed)
+                            );
+                            assert_eq!(
+                                rotation_type,
+                                if should_be_leader {
+                                    FullnodeReturnType::LeaderToValidatorRotation
+                                } else {
+                                    FullnodeReturnType::ValidatorToLeaderRotation
+                                }
+                            );
+                        }
+                        Err(_) => break,
+                    };
+                })
+                .unwrap()
+        });
+        node_exits.push(validator_fullnode.run(Some(validator_rotation_sender)));
     }
 
     let (leader_rotation_sender, leader_rotation_receiver) = channel();
@@ -1946,6 +1964,41 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64, include_valid
         &fullnode_config,
     );
 
+    monitor_threads.push({
+        let leader_should_be_leader = leader_should_be_leader.clone();
+        let leader_tick_height_of_next_rotation = leader_tick_height_of_next_rotation.clone();
+
+        Builder::new()
+            .name("leader_rotation_receiver".to_string())
+            .spawn(move || loop {
+                match leader_rotation_receiver.recv() {
+                    Ok((rotation_type, tick_height)) => {
+                        info!(
+                            "leader rotation event {:?} at tick_height={}",
+                            rotation_type, tick_height
+                        );
+                        let should_be_leader =
+                            leader_should_be_leader.fetch_xor(true, Ordering::Relaxed);
+                        info!("leader should be leader? {}", should_be_leader);
+                        assert_eq!(
+                            tick_height as usize,
+                            leader_tick_height_of_next_rotation
+                                .fetch_add(ticks_per_slot as usize, Ordering::Relaxed)
+                        );
+                        assert_eq!(
+                            rotation_type,
+                            if should_be_leader {
+                                FullnodeReturnType::LeaderToValidatorRotation
+                            } else {
+                                FullnodeReturnType::ValidatorToLeaderRotation
+                            }
+                        );
+                    }
+                    Err(_) => break,
+                };
+            })
+            .unwrap()
+    });
     node_exits.push(leader_fullnode.run(Some(leader_rotation_sender)));
 
     converge(&leader_info, node_exits.len());
@@ -1954,33 +2007,17 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64, include_valid
         poll_gossip_for_leader(leader_info.gossip, Some(5)).unwrap()
     );
 
-    const N: usize = 10;
-    for i in 1..=N {
-        info!("waiting for rotation #{}/{}", i, N);
-        match leader_rotation_receiver.recv_timeout(Duration::from_secs(5)) {
-            Ok((rotation_type, tick_height)) => {
-                info!(
-                    "leader rotation event {:?} at tick_height={}",
-                    rotation_type, tick_height
-                );
-                assert_eq!(tick_height_of_next_rotation, tick_height);
-                if include_validator {
-                    assert_eq!(
-                        rotation_type,
-                        if should_be_leader {
-                            FullnodeReturnType::LeaderToValidatorRotation
-                        } else {
-                            FullnodeReturnType::ValidatorToLeaderRotation
-                        }
-                    );
-                    should_be_leader = !should_be_leader;
-                } else {
-                    assert_eq!(rotation_type, FullnodeReturnType::LeaderToLeaderRotation);
-                }
-                tick_height_of_next_rotation += ticks_per_slot;
-            }
-            err => panic!("Unexpected response: {:?}", err),
-        };
+    let max_tick_height = 16;
+    while leader_tick_height_of_next_rotation.load(Ordering::Relaxed) < max_tick_height {
+        trace!("waiting for leader to reach max tick height...");
+        sleep(Duration::from_millis(100));
+    }
+
+    if include_validator {
+        while validator_tick_height_of_next_rotation.load(Ordering::Relaxed) < max_tick_height {
+            trace!("waiting for validator to reach max tick height...");
+            sleep(Duration::from_millis(100));
+        }
     }
 
     info!("Shutting down");
@@ -1996,6 +2033,23 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64, include_valid
         Blocktree::destroy(&path).unwrap();
         remove_dir_all(path).unwrap();
     }
+
+    trace!(
+        "final validator_tick_height_of_next_rotation: {}",
+        validator_tick_height_of_next_rotation.load(Ordering::Relaxed)
+    );
+    trace!(
+        "final leader_tick_height_of_next_rotation: {}",
+        leader_tick_height_of_next_rotation.load(Ordering::Relaxed)
+    );
+    trace!(
+        "final leader_should_be_leader: {}",
+        leader_should_be_leader.load(Ordering::Relaxed)
+    );
+    trace!(
+        "final validator_should_be_leader: {}",
+        validator_should_be_leader.load(Ordering::Relaxed)
+    );
 }
 
 #[test]
