@@ -51,10 +51,10 @@ slot index and blob index for an entry, and the value is the entry data. Note bl
       * `next_slots` - A list of future slots this slot could chain to. Used when rebuilding
       the ledger to find possible fork points.
       * `consumed_ticks` - Tick height of the highest received blob (used to identify when a slot is full)
-      * `is_trunk` - True iff every block from 0...slot forms a full sequence without any holes. We can derive is_trunk for each slot with the following rules. Let slot(n) be the slot with index `n`, and slot(n).contains_all_ticks() is true if the slot with index `n` has all the ticks expected for that slot. Let is_trunk(n) be the statement that "the slot(n).is_trunk is true". Then:
+      * `is_trunk` - True iff every block from 0...slot forms a full sequence without any holes. We can derive is_trunk for each slot with the following rules. Let slot(n) be the slot with index `n`, and slot(n).is_full() is true if the slot with index `n` has all the ticks expected for that slot. Let is_trunk(n) be the statement that "the slot(n).is_trunk is true". Then:
       
       is_trunk(0)
-      is_trunk(n+1) iff (is_trunk(n) and slot(n).contains_all_ticks()
+      is_trunk(n+1) iff (is_trunk(n) and slot(n).is_full()
 
 3. Chaining - When a blob for a new slot `x` arrives, we check the number of blocks (`num_blocks`) for that new slot (this information is encoded in the blob). We then know that this new slot chains to slot `x - num_blocks`.
 
