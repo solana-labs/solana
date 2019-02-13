@@ -573,6 +573,7 @@ impl Blocktree {
 
             // This slot is full, skip the bogus blob
             if slot_meta.contains_all_ticks(&self) {
+                info!("Slot is full, skipping the bogus blob");
                 continue;
             }
 
