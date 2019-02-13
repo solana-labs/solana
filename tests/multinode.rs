@@ -1884,6 +1884,7 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64, include_valid
 
     // Start up the node(s)
     let mut node_exits = vec![];
+    let mut monitor_threads = vec![];
 
     if include_validator {
         let validator_ledger_path = tmp_copy_ledger(
@@ -1906,7 +1907,7 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64, include_valid
 
         let mut validator_tick_height_of_next_rotation = tick_height_of_next_rotation;
         let mut validator_should_be_leader = !should_be_leader;
-        Builder::new()
+        let monitor_thread = Builder::new()
             .name("validator_rotation_receiver".to_string())
             .spawn(move || loop {
                 match validator_rotation_receiver.recv() {
@@ -1932,6 +1933,7 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64, include_valid
                 };
             })
             .unwrap();
+        monitor_threads.push(monitor_thread);
     }
 
     let (leader_rotation_sender, leader_rotation_receiver) = channel();
@@ -1986,9 +1988,12 @@ fn test_fullnode_rotate(ticks_per_slot: u64, slots_per_epoch: u64, include_valid
         node_exit();
     }
 
+    for monitor_thread in monitor_threads {
+        monitor_thread.join().unwrap();
+    }
+
     for path in ledger_paths {
-        Blocktree::destroy(&path)
-            .unwrap_or_else(|err| warn!("Expected successful database destruction: {:?}", err));
+        Blocktree::destroy(&path).unwrap();
         remove_dir_all(path).unwrap();
     }
 }
