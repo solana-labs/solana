@@ -5,7 +5,7 @@
 use crate::blocktree::Blocktree;
 #[cfg(all(feature = "chacha", feature = "cuda"))]
 use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
-use crate::client::mk_client;
+use crate::client::mk_client_with_timeout;
 use crate::cluster_info::ClusterInfo;
 use crate::entry::EntryReceiver;
 use crate::result::{Error, Result};
@@ -227,7 +227,7 @@ impl StorageStage {
         account_to_create: Option<Pubkey>,
     ) -> io::Result<()> {
         if let Some(leader_info) = cluster_info.read().unwrap().leader_data() {
-            let mut client = mk_client(leader_info);
+            let mut client = mk_client_with_timeout(leader_info, Duration::from_secs(5));
 
             if let Some(account) = account_to_create {
                 if client.get_account_userdata(&account).is_ok() {
@@ -235,7 +235,19 @@ impl StorageStage {
                 }
             }
 
-            if let Some(last_id) = client.try_get_last_id(10) {
+            let mut last_id = None;
+            for _ in 0..10 {
+                if let Some(new_last_id) = client.try_get_last_id(1) {
+                    last_id = Some(new_last_id);
+                    break;
+                }
+
+                if exit.load(Ordering::Relaxed) {
+                    Err(io::Error::new(io::ErrorKind::Other, "exit signaled"))?;
+                }
+            }
+
+            if let Some(last_id) = last_id {
                 tx.sign(&[keypair.as_ref()], last_id);
 
                 if exit.load(Ordering::Relaxed) {
