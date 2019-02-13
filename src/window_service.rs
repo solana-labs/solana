@@ -172,7 +172,6 @@ mod test {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
-    use std::thread::sleep;
     use std::time::Duration;
 
     #[test]
@@ -226,15 +225,13 @@ mod test {
 
         let max_attempts = 10;
         let mut num_attempts = 0;
+        let mut q = Vec::new();
         loop {
             assert!(num_attempts != max_attempts);
-            let mut q = r_retransmit.recv().unwrap();
-            while let Ok(mut nq) = r_retransmit.try_recv() {
+            while let Ok(mut nq) = r_retransmit.recv_timeout(Duration::from_millis(500)) {
                 q.append(&mut nq);
             }
-            if q.len() != 10 {
-                sleep(Duration::from_millis(100));
-            } else {
+            if q.len() == 10 {
                 break;
             }
             num_attempts += 1;
@@ -302,8 +299,8 @@ mod test {
             s_responder.send(msgs1).expect("send");
             t_responder
         };
-        let mut q = r_retransmit.recv().unwrap();
-        while let Ok(mut nq) = r_retransmit.recv_timeout(Duration::from_millis(100)) {
+        let mut q = Vec::new();
+        while let Ok(mut nq) = r_retransmit.recv_timeout(Duration::from_millis(500)) {
             q.append(&mut nq);
         }
         assert!(q.len() > 10);
