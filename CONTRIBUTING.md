@@ -53,7 +53,7 @@ Solana's architecture is described by a book generated from markdown files in
 the `book/src/` directory, maintained by an *editor* (currently @garious). To
 change the architecture, you'll need to at least propose a change the content
 under the [Proposed
-Changes](https://solana-labs.github.io/book/proposals.html) chapter. Here's
+Changes](https://solana-labs.github.io/book-edge/proposals.html) chapter. Here's
 the full process:
 
 1. Propose to a change to the architecture by creating a PR that adds a
