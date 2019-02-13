@@ -60,11 +60,28 @@ impl VoteTransaction {
         for i in 0..tx.instructions.len() {
             let tx_program_id = tx.program_id(i);
             if vote_program::check_id(&tx_program_id) {
-                if let Ok(Some(VoteInstruction::Vote(vote))) = deserialize(&tx.userdata(i)) {
+                if let Ok(VoteInstruction::Vote(vote)) = deserialize(&tx.userdata(i)) {
                     votes.push((tx.account_keys[0], vote, tx.last_id))
                 }
             }
         }
         votes
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_votes() {
+        let keypair = Keypair::new();
+        let tick_height = 1;
+        let last_id = Hash::default();
+        let transaction = VoteTransaction::new_vote(&keypair, tick_height, last_id, 0);
+        assert_eq!(
+            VoteTransaction::get_votes(&transaction),
+            vec![(keypair.pubkey(), Vote::new(tick_height), last_id)]
+        );
     }
 }
