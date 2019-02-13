@@ -16,8 +16,7 @@ rejected.
 ## Validator
 
 A validator operates on many different concurrent forks of the bank state until
-it can prove a PoH record at a height within the slot it is scheduled to be the
-slot leader.
+it generates a PoH hash with a height within its leader slot.
 
 ## Slot Leader
 
@@ -28,7 +27,7 @@ A slot leader builds blocks on top of only one fork, the one it last voted on.
 Slot leaders and validators use a PoH Recorder for both estimating slot height
 and for recording transactions.
 
-### PoH as a Validators
+### PoH Recorder when Validating
 
 The PoH Recorder acts as a simple VDF when validating. It tells the validator
 when it needs to switch to the slot leader role. Every time the validator votes
@@ -41,7 +40,7 @@ starts, the block it produces should have a PoH duration of two blocks. The
 longer duration ensures the following leader isn't attempting to snip all the
 transactions from the previous leader's slot.
 
-### PoH as a Slot Leader
+### PoH Recorder when Leading
 
 A slot leader use the PoH Recorder to record transactions, locking their
 positions in time. The PoH hash must be derived from a previous leader's last
