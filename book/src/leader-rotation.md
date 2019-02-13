@@ -12,7 +12,7 @@ leader by rotating which node takes the lead.
 Each validator selects the expected leader using the same algorithm, described
 below. When the validator receives a new signed ledger entry, it can be certain
 that entry was produced by the expected leader.  The order of slots which each
-leader is assigned a slot is called a *Leader Schedule*.
+leader is assigned a slot is called a *leader schedule*.
 
 ## Leader Schedule Rotation
 
@@ -24,9 +24,9 @@ boundary.  While operating without partitions lasting longer than an epoch the
 schedule only needs to be generated when the root fork crosses the epoch
 boundary.
 
-The Leader Schedule is active at the next epoch.  The epoch should be much
+The leader schedule is active at the next epoch.  The epoch should be much
 longer then the amount of time required for a block to be committed as root.
-Such that the Leader Schedule is based on a block that has been committed as the
+Such that the leader schedule is based on a block that has been committed as the
 root fork.  Since the schedule is for the next epoch, any new stakes committed
 to the root fork will not be active until the next epoch.
 
@@ -55,21 +55,21 @@ Consider the following scenario:
 Two partitions that are generating half of the blocks each.  Neither is coming
 to a definitive supermajority fork.  Both will cross epoch 100 and 200 without
 actually committing to a root and therefore a cluster wide commitment to a new
-Leader Schedule.
+leader schedule.
 
 In this unstable scenario, multiple valid leader schedules exist.
 
-* An Leader Schedule is generated for every fork whose direct parent is in the
+* A leader schedule is generated for every fork whose direct parent is in the
 previous epoch.
 
-* The Leader Schedule is valid after the start of the next epoch for descendant
+* The leader schedule is valid after the start of the next epoch for descendant
 forks until it is updated.
 
 Each partition's schedule will diverge after the partition lasts more than an
 epoch.  For this reason, the epoch duration should be selected to be much much
 larger then slot time and the expected length for a fork to be committed to
 root.  If the epoch time is 6 standard deviations longer than the median
-partition time, then the likelyhood of a partition longer than an epoch is 1:1
+partition time, then the likelihood of a partition longer than an epoch is 1:1
 million.
 
 ## Leader Schedule Generation at Genesis
@@ -140,9 +140,9 @@ Two phase commit:
 2. An *activate* transaction is submitted by the leader to acknowledge the new
 schedule if they observe a supermajority at root.
 
-3. The *activate* transaction sets the activation for the new Leader Schedule to
+3. The *activate* transaction sets the activation for the new leader schedule to
 be at the epoch following block's slot plus half an epoch length.  So any forks in
-the next epoch boundary use the new Leader Schedule.
+the next epoch boundary use the new leader schedule.
 
 Validators reject the block if they do not observe the root to be past the epoch
 boundary.  The complexity with this approach revolves around the incentives for
