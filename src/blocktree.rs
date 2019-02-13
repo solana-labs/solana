@@ -23,7 +23,6 @@ use std::cell::RefCell;
 use std::cmp;
 use std::fs;
 use std::io;
-use std::iter::once;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
@@ -131,12 +130,10 @@ pub struct SlotMeta {
     pub consumed: u64,
     // The entry height of the highest blob received for this slot.
     pub received: u64,
-    // The number of ticks in the range [0..consumed]. Used to detect when
-    // a slot contains all expected ticks, so that components like repair/ReplayStage
-    // know to look at the next slot.
-    pub consumed_ticks: u64,
-    // The number of blocks in this slot
-    pub num_blocks: u64,
+    // The index of the blob that is flagged as the last blob for this slot
+    pub last_index: u64,
+    // The parent slot of this slot
+    pub parent_slot: u64,
     // The list of slots that chains to this slot
     pub next_slots: Vec<u64>,
     // True if every block from 0..slot, where slot is the slot index of this slot
@@ -145,28 +142,19 @@ pub struct SlotMeta {
 }
 
 impl SlotMeta {
-    pub fn contains_all_ticks(&self, blocktree: &Blocktree) -> bool {
-        if self.num_blocks == 0 {
-            // A placeholder slot does not contain all the ticks
-            false
-        } else {
-            self.num_expected_ticks(blocktree) <= self.consumed_ticks
-        }
+    pub fn contains_all_ticks(&self) -> bool {
+        self.consumed > self.last_index
     }
 
-    pub fn num_expected_ticks(&self, blocktree: &Blocktree) -> u64 {
-        blocktree.ticks_per_slot * self.num_blocks
-    }
-
-    fn new(slot_height: u64, num_blocks: u64) -> Self {
+    fn new(slot_height: u64, parent_slot: u64) -> Self {
         SlotMeta {
             slot_height,
             consumed: 0,
             received: 0,
-            consumed_ticks: 0,
-            num_blocks,
+            parent_slot,
             next_slots: vec![],
             is_trunk: slot_height == 0,
+            last_index: std::u64::MAX,
         }
     }
 }
@@ -510,15 +498,19 @@ impl Blocktree {
             }
 
             let mut b = entry.borrow().to_blob();
+
+            if entry.borrow().is_tick() {
+                remaining_ticks_in_slot -= 1;
+                if remaining_ticks_in_slot == 0 {
+                    b.set_is_last_in_slot();
+                }
+            }
+
             b.set_index(current_index);
             b.set_slot(current_slot);
             blobs.push(b);
 
             current_index += 1;
-
-            if entry.borrow().is_tick() {
-                remaining_ticks_in_slot -= 1;
-            }
         }
 
         self.write_blobs(&blobs)
@@ -539,6 +531,7 @@ impl Blocktree {
         for blob in new_blobs.iter() {
             let blob = blob.borrow();
             let blob_slot = blob.slot();
+            let parent_slot = blob.parent();
 
             // Check if we've already inserted the slot metadata for this blob's slot
             let entry = slot_meta_working_set.entry(blob_slot).or_insert_with(|| {
@@ -548,13 +541,11 @@ impl Blocktree {
                     .get_slot_meta(blob_slot)
                     .expect("Expect database get to succeed")
                 {
-                    // If num_blocks == 0, then this is one of the dummy metadatas inserted
+                    // If parent_slot == std::u64::MAX, then this is one of the dummy metadatas inserted
                     // during the chaining process, see the function find_slot_meta_in_cached_state()
                     // for details
-                    if meta.num_blocks == 0 {
-                        // TODO: derive num_blocks for this metadata from the blob itself
-                        // Issue: https://github.com/solana-labs/solana/issues/2459.
-                        meta.num_blocks = 1;
+                    if meta.parent_slot == std::u64::MAX {
+                        meta.parent_slot = parent_slot;
                         // Set backup as None so that all the logic for inserting new slots
                         // still runs, as this placeholder slot is essentially equivalent to
                         // inserting a new slot
@@ -563,17 +554,17 @@ impl Blocktree {
                         (Rc::new(RefCell::new(meta.clone())), Some(meta))
                     }
                 } else {
-                    // TODO: derive num_blocks for this metadata from the blob itself
-                    // Issue: https://github.com/solana-labs/solana/issues/2459
-                    (Rc::new(RefCell::new(SlotMeta::new(blob_slot, 1))), None)
+                    (
+                        Rc::new(RefCell::new(SlotMeta::new(blob_slot, parent_slot))),
+                        None,
+                    )
                 }
             });
 
             let slot_meta = &mut entry.0.borrow_mut();
 
             // This slot is full, skip the bogus blob
-            if slot_meta.contains_all_ticks(&self) {
-                info!("Slot is full, skipping the bogus blob");
+            if slot_meta.contains_all_ticks() {
                 continue;
             }
 
@@ -967,14 +958,13 @@ impl Blocktree {
             .expect("Slot must exist in the working_set hashmap");
         {
             let mut slot_meta = meta_copy.borrow_mut();
-            assert!(slot_meta.num_blocks > 0);
 
             // If:
             // 1) This is a new slot
             // 2) slot_height != 0
             // then try to chain this slot to a previous slot
             if slot_height != 0 {
-                let prev_slot_height = slot_height - slot_meta.num_blocks;
+                let prev_slot_height = slot_meta.parent_slot;
 
                 // Check if slot_meta is a new slot
                 if meta_backup.is_none() {
@@ -1008,7 +998,7 @@ impl Blocktree {
                 current_slot.borrow_mut().is_trunk = true;
 
                 let current_slot = &RefCell::borrow(&*current_slot);
-                if current_slot.contains_all_ticks(self) {
+                if current_slot.contains_all_ticks() {
                     for next_slot_index in current_slot.next_slots.iter() {
                         let next_slot = self.find_slot_meta_else_create(
                             working_set,
@@ -1031,7 +1021,7 @@ impl Blocktree {
         current_slot: &mut SlotMeta,
     ) {
         prev_slot.next_slots.push(current_slot_height);
-        current_slot.is_trunk = prev_slot.is_trunk && prev_slot.contains_all_ticks(self);
+        current_slot.is_trunk = prev_slot.is_trunk && prev_slot.contains_all_ticks();
     }
 
     fn is_newly_completed_slot(
@@ -1039,9 +1029,9 @@ impl Blocktree {
         slot_meta: &SlotMeta,
         backup_slot_meta: &Option<SlotMeta>,
     ) -> bool {
-        slot_meta.contains_all_ticks(self)
+        slot_meta.contains_all_ticks()
             && (backup_slot_meta.is_none()
-                || slot_meta.consumed_ticks != backup_slot_meta.as_ref().unwrap().consumed_ticks)
+                || slot_meta.consumed != backup_slot_meta.as_ref().unwrap().consumed)
     }
 
     // 1) Find the slot metadata in the cache of dirty slot metadata we've previously touched,
@@ -1073,13 +1063,12 @@ impl Blocktree {
             insert_map.insert(slot_height, Rc::new(RefCell::new(slot)));
             Ok(insert_map.get(&slot_height).unwrap().clone())
         } else {
-            // If this slot doesn't exist, make a dummy placeholder slot (denoted by passing
-            // 0 for the num_blocks argument to the SlotMeta constructor). This way we
+            // If this slot doesn't exist, make a placeholder slot. This way we
             // remember which slots chained to this one when we eventually get a real blob
             // for this slot
             insert_map.insert(
                 slot_height,
-                Rc::new(RefCell::new(SlotMeta::new(slot_height, 0))),
+                Rc::new(RefCell::new(SlotMeta::new(slot_height, std::u64::MAX))),
             );
             Ok(insert_map.get(&slot_height).unwrap().clone())
         }
@@ -1119,7 +1108,7 @@ impl Blocktree {
             return Err(Error::BlocktreeError(BlocktreeError::BlobForIndexExists));
         }
 
-        let (new_consumed, new_consumed_ticks) = {
+        let new_consumed = {
             if slot_meta.consumed == blob_index {
                 let blob_datas = self.get_slot_consecutive_blobs(
                     blob_slot,
@@ -1132,26 +1121,11 @@ impl Blocktree {
                 )?;
 
                 let blob_to_insert = Cow::Borrowed(&blob_to_insert.data[..]);
-                let mut new_consumed_ticks = 0;
-                // Check all the consecutive blobs for ticks
-                for blob_data in once(&blob_to_insert).chain(blob_datas.iter()) {
-                    let serialized_entry_data = &blob_data[BLOB_HEADER_SIZE..];
-                    let entry: Entry = deserialize(serialized_entry_data).expect(
-                        "Blob made it past validation, so must be deserializable at this point",
-                    );
-                    if entry.is_tick() {
-                        new_consumed_ticks += 1;
-                    }
-                }
-
-                (
-                    // Add one because we skipped this current blob when calling
-                    // get_slot_consecutive_blobs() earlier
-                    slot_meta.consumed + blob_datas.len() as u64 + 1,
-                    new_consumed_ticks,
-                )
+                // Add one because we skipped this current blob when calling
+                // get_slot_consecutive_blobs() earlier
+                slot_meta.consumed + blob_datas.len() as u64 + 1
             } else {
-                (slot_meta.consumed, 0)
+                slot_meta.consumed
             }
         };
 
@@ -1166,7 +1140,19 @@ impl Blocktree {
         // so received = index + 1 for the same blob.
         slot_meta.received = cmp::max(blob_index + 1, slot_meta.received);
         slot_meta.consumed = new_consumed;
-        slot_meta.consumed_ticks += new_consumed_ticks;
+        slot_meta.last_index = {
+            // If the last slot hasn't been set before, then
+            // set it to this blob index
+            if slot_meta.last_index == std::u64::MAX {
+                if blob_to_insert.is_last_in_slot() {
+                    blob_slot
+                } else {
+                    std::u64::MAX
+                }
+            } else {
+                slot_meta.last_index
+            }
+        };
         Ok(())
     }
 
@@ -1219,7 +1205,6 @@ impl Blocktree {
         bootstrap_meta.consumed = last.index() + 1;
         bootstrap_meta.received = last.index() + 1;
         bootstrap_meta.is_trunk = true;
-        bootstrap_meta.consumed_ticks = num_ending_ticks;
 
         let mut batch = WriteBatch::default();
         batch.put_cf(

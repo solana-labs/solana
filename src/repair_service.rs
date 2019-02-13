@@ -118,7 +118,7 @@ impl RepairService {
         slot: &SlotMeta,
         max_repairs: usize,
     ) -> Result<Vec<(u64, u64)>> {
-        if slot.contains_all_ticks(blocktree) {
+        if slot.contains_all_ticks() {
             Ok(vec![])
         } else {
             let num_unreceived_ticks = {
