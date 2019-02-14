@@ -22,8 +22,7 @@ specific attributes to be modified as is allowed by Solana's Proof of History
 
 ### General Overview
 
-Solana's ledger validation design is based on a rotating, stake-weighted
-randomly selected leader broadcasting transactions in a PoH data
+Solana's ledger validation design is based on a rotating, stake-weighted selected leader broadcasting transactions in a PoH data
 structure to validating nodes. These nodes, upon receiving the leader's
 broadcast, have the opportunity to vote on the current state and PoH height by
 signing a transaction into the PoH stream.
@@ -50,43 +49,12 @@ specific parameters will be necessary:
 Solana's trustless sense of time and ordering provided by its PoH data
 structure, along with its
 [avalanche](https://www.youtube.com/watch?v=qt_gDRXHrHQ&t=1s) data broadcast
-and transmission design, should provide subsecond confirmation times that scale
+and transmission design, should provide sub-second transaction confirmation times that scale
 with the log of the number of nodes in the cluster. This means we shouldn't
 have to restrict the number of validating nodes with a prohibitive 'minimum
 deposits' and expect nodes to be able to become validators with nominal amounts
-of SOL staked. This should also render validation pools, a proposed solution
-for economic censorship imposed by minimum staking amounts currently described
-in Casper, unnecessary and remove the concern for needing to put slashable
-stake at risk while relying on others to play by the rules.
+of SOL staked. At the same time, Solana's focus on high-throughput should create incentive for validation clients to provide high-performant and reliable hardware. Combined with potential a minimum network speed threshold to join as a validation-client, we expect a healthy validation delegation market to emerge. To this end, Solana's testnet will lead into a "Tour de SOL" validation-client competition, focusing on throughput and uptime to rank and reward testnet validators.
 
-### Stake-weighted Rewards
-
-Rewards are expected to be paid out to active validators as a function of
-validator activity and as a proportion of the percentage of SOL they have at
-stake out of the entirety of the staking pool.
-
-We expect to define a baseline annual validator payout/inflation rate based on
-the total SOL deposited. E.g. 10% annual interest on SOL deposited with X total
-SOL deposited as slashable on the cluster. This is the same design as currently
-proposed in Casper FFG which has additionally specifies how inflation rates
-adjust as a function of total ETH deposited. Specifically, Casper validator
-returns are proportional to the inverse square root of the total deposits and
-initial annual rates are estimated as:
-
-| Deposit Size | Annual Validator Interest |
-|-------------:|--------------------------:|
-| 2.5M ETH     | 10.12%                    |
-| 10M ETH      | 5.00%                     |
-| 20M ETH      | 3.52%                     |
-| 40M ETH      | 2.48%                     |
-
-This has the nice property of potentially incentivizing participation around a
-target deposit size. Incentivisation of specific participation rates more
-directly (rather than deposit size) may something also worth exploring.
-
-The specifics of the Solana validator reward scheme are to be worked out in
-parallel with a design for transaction fee assignment as well as our storage
-mining reward scheme.
 
 ### Slashing rules
 
@@ -149,8 +117,8 @@ This is an area currently under exploration
 
 ### Penalties
 
-As previously discussed, annual validator reward rates are to be specified as a
-function of total amount staked. The cluster rewards validators who are online
+As discussed in the [Economic Design](ed_overview.md) section, annual validator interest rates are to be specified as a
+function of total percentage of circulating supply that has been staked. The cluster rewards validators who are online
 and actively participating in the validation process throughout the entirety of
 their *validation period*. For validators that go offline/fail to validate
 transactions during this period, their annual reward is effectively reduced.
