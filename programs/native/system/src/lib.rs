@@ -81,12 +81,9 @@ pub fn entrypoint(
                 keyed_accounts[to].account.tokens += tokens;
             }
             SystemInstruction::Spawn => {
-                if !keyed_accounts[from].account.executable
-                    || keyed_accounts[from].account.owner != Pubkey::default()
-                {
+                if !keyed_accounts[from].account.executable {
                     Err(ProgramError::AccountNotFinalized)?;
                 }
-                keyed_accounts[from].account.owner = *keyed_accounts[from].signer_key().unwrap();
             }
         }
         Ok(())
