@@ -1,13 +1,9 @@
 //! Rewards program
 //! Exchanges validation and storage proofs for lamports
 
-pub mod rewards_instruction;
-pub mod rewards_program;
-pub mod rewards_transaction;
-
-use crate::rewards_instruction::RewardsInstruction;
 use bincode::deserialize;
 use log::*;
+use solana_rewards_api::rewards_instruction::RewardsInstruction;
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
@@ -95,7 +91,7 @@ fn entrypoint(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rewards_program;
+    use solana_rewards_api::rewards_program;
     use solana_sdk::account::Account;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::vote_program::{self, Vote};
