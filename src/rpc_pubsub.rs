@@ -507,7 +507,6 @@ mod tests {
         let contract_funds = Keypair::new();
         let contract_state = Keypair::new();
         let budget_program_id = budget_program::id();
-        let loader = Pubkey::default(); // TODO
         let executable = false; // TODO
         let bank = Bank::new(&genesis_block);
         let arc_bank = Arc::new(bank);
@@ -565,7 +564,6 @@ mod tests {
                    "tokens": 1,
                    "userdata": expected_userdata,
                    "executable": executable,
-                   "loader": loader,
 
                },
                "subscription": 0,
@@ -605,7 +603,6 @@ mod tests {
                    "tokens": 51,
                    "userdata": expected_userdata,
                     "executable": executable,
-                   "loader": loader,
                },
                "subscription": 0,
            }
@@ -644,7 +641,6 @@ mod tests {
                    "tokens": 1,
                    "userdata": expected_userdata,
                     "executable": executable,
-                   "loader": loader,
                },
                "subscription": 0,
            }
@@ -736,7 +732,7 @@ mod tests {
         subscriptions.check_account(&alice.pubkey(), &account);
         let string = transport_receiver.poll();
         if let Async::Ready(Some(response)) = string.unwrap() {
-            let expected = format!(r#"{{"jsonrpc":"2.0","method":"accountNotification","params":{{"result":{{"executable":false,"loader":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"owner":[129,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}},"subscription":0}}}}"#);
+            let expected = format!(r#"{{"jsonrpc":"2.0","method":"accountNotification","params":{{"result":{{"executable":false,"owner":[129,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"tokens":1,"userdata":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}},"subscription":0}}}}"#);
             assert_eq!(expected, response);
         }
 

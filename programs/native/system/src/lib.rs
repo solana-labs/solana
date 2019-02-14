@@ -59,7 +59,6 @@ pub fn entrypoint(
                 keyed_accounts[to].account.owner = program_id;
                 keyed_accounts[to].account.userdata = vec![0; space as usize];
                 keyed_accounts[to].account.executable = false;
-                keyed_accounts[to].account.loader = Pubkey::default();
             }
             SystemInstruction::Assign { program_id } => {
                 if !system_program::check_id(&keyed_accounts[from].account.owner) {
@@ -83,11 +82,10 @@ pub fn entrypoint(
             }
             SystemInstruction::Spawn => {
                 if !keyed_accounts[from].account.executable
-                    || keyed_accounts[from].account.loader != Pubkey::default()
+                    || keyed_accounts[from].account.owner != Pubkey::default()
                 {
                     Err(ProgramError::AccountNotFinalized)?;
                 }
-                keyed_accounts[from].account.loader = keyed_accounts[from].account.owner;
                 keyed_accounts[from].account.owner = *keyed_accounts[from].signer_key().unwrap();
             }
         }

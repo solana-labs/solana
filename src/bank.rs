@@ -191,7 +191,6 @@ impl Bank {
             userdata: vec![0; vote_program::get_max_size() as usize],
             owner: vote_program::id(),
             executable: false,
-            loader: Pubkey::default(),
         };
 
         let mut vote_state = vote_program::VoteState::new(
