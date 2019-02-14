@@ -11,7 +11,6 @@ use log::Level;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
 use std::borrow::Borrow;
-use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
 
 pub const MAX_REPAIR_LENGTH: usize = 128;

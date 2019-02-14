@@ -22,7 +22,7 @@ use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::{duration_as_ms, timestamp};
 use std::net::UdpSocket;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender, SyncSender};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, spawn, Result};

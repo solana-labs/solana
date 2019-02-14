@@ -20,10 +20,10 @@ macro_rules! create_counter {
     ($name:expr, $lograte:expr) => {
         Counter {
             name: $name,
-            counts: AtomicUsize::new(0),
-            times: AtomicUsize::new(0),
-            lastlog: AtomicUsize::new(0),
-            lograte: AtomicUsize::new($lograte),
+            counts: std::sync::atomic::AtomicUsize::new(0),
+            times: std::sync::atomic::AtomicUsize::new(0),
+            lastlog: std::sync::atomic::AtomicUsize::new(0),
+            lograte: std::sync::atomic::AtomicUsize::new($lograte),
             point: None,
         }
     };
@@ -116,7 +116,7 @@ mod tests {
     use crate::counter::{Counter, DEFAULT_LOG_RATE};
     use log::Level;
     use std::env;
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::atomic::Ordering;
     use std::sync::{Once, RwLock, ONCE_INIT};
 
     fn get_env_lock() -> &'static RwLock<()> {

@@ -16,7 +16,7 @@ use core::cmp;
 use log::Level;
 use solana_metrics::{influxdb, submit};
 use std::net::UdpSocket;
-use std::sync::atomic::{AtomicBool, AtomicUsize};
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::{Arc, RwLock};

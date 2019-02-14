@@ -16,7 +16,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
 use solana_sdk::vote_transaction::VoteTransaction;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, SyncSender};
 use std::sync::{Arc, RwLock};
 #[cfg(test)]
