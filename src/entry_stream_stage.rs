@@ -70,10 +70,11 @@ impl EntryStreamStage {
 
             if entry.is_tick() && entry_stream.queued_block.is_some() {
                 let queued_block = entry_stream.queued_block.as_ref();
+                let block_slot = queued_block.unwrap().slot;
                 let block_tick_height = queued_block.unwrap().tick_height;
                 let block_id = queued_block.unwrap().id;
                 entry_stream
-                    .emit_block_event(slot, &leader_id, block_tick_height, block_id)
+                    .emit_block_event(block_slot, &leader_id, block_tick_height, block_id)
                     .unwrap_or_else(|e| {
                         error!("Entry Stream error: {:?}, {:?}", e, entry_stream.output);
                     });
@@ -86,6 +87,7 @@ impl EntryStreamStage {
                 });
             if 0 == leader_scheduler.num_ticks_left_in_slot(entry.tick_height) {
                 entry_stream.queued_block = Some(EntryStreamBlock {
+                    slot,
                     tick_height: entry.tick_height,
                     id: entry.id,
                 });
@@ -183,6 +185,8 @@ mod test {
             }
         }
         for json in block_events {
+            let slot = json["s"].as_u64().unwrap();
+            assert_eq!(0, slot);
             let height = json["h"].as_u64().unwrap();
             assert_eq!(ticks_per_slot - 1, height);
         }
