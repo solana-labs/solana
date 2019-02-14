@@ -39,9 +39,6 @@ fn load_program(bank: &Bank, from: &Keypair, loader_id: Pubkey, program: Vec<u8>
     let tx = LoaderTransaction::new_finalize(&program_account, loader_id, bank.last_id(), 0);
     bank.process_transaction(&tx).unwrap();
 
-    let tx = SystemTransaction::new_spawn(&program_account, bank.last_id(), 0);
-    bank.process_transaction(&tx).unwrap();
-
     program_account.pubkey()
 }
 

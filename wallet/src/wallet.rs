@@ -447,10 +447,6 @@ fn process_deploy(
         WalletError::DynamicProgramError("Program finalize transaction failed".to_string())
     })?;
 
-    let mut tx = SystemTransaction::new_spawn(&program_id, last_id, 0);
-    send_and_confirm_tx(&rpc_client, &mut tx, &program_id)
-        .map_err(|_| WalletError::DynamicProgramError("Program spawn failed".to_string()))?;
-
     Ok(json!({
         "programId": format!("{}", program_id.pubkey()),
     })
