@@ -2,10 +2,10 @@
 //!  transaction processing unit responsibility, which
 //!  forwards received packets to the current leader
 
+use crate::banking_stage::UnprocessedPackets;
 use crate::cluster_info::ClusterInfo;
 use crate::contact_info::ContactInfo;
 use crate::counter::Counter;
-use crate::result::Result;
 use crate::service::Service;
 use crate::streamer::{self, PacketReceiver};
 use log::Level;
@@ -18,9 +18,11 @@ use std::thread::{self, Builder, JoinHandle};
 
 fn get_forwarding_addr(leader_data: Option<&ContactInfo>, my_id: &Pubkey) -> Option<SocketAddr> {
     let leader_data = leader_data?;
-    if leader_data.id == *my_id || !ContactInfo::is_valid_address(&leader_data.tpu) {
-        // weird cases, but we don't want to broadcast, send to ANY, or
-        // induce an infinite loop, but this shouldn't happen, or shouldn't be true for long...
+    if leader_data.id == *my_id {
+        info!("I may be stuck in a loop"); // Should never try to forward to ourselves
+        return None;
+    }
+    if !ContactInfo::is_valid_address(&leader_data.tpu) {
         return None;
     }
     Some(leader_data.tpu)
@@ -29,36 +31,65 @@ fn get_forwarding_addr(leader_data: Option<&ContactInfo>, my_id: &Pubkey) -> Opt
 pub struct TpuForwarder {
     exit: Arc<AtomicBool>,
     thread_hdls: Vec<JoinHandle<()>>,
+    forwarder_thread: Option<JoinHandle<UnprocessedPackets>>,
 }
 
 impl TpuForwarder {
-    fn forward(receiver: &PacketReceiver, cluster_info: &Arc<RwLock<ClusterInfo>>) -> Result<()> {
-        let socket = UdpSocket::bind("0.0.0.0:0")?;
-
+    fn forward(
+        receiver: &PacketReceiver,
+        cluster_info: &Arc<RwLock<ClusterInfo>>,
+        exit: &Arc<AtomicBool>,
+    ) -> UnprocessedPackets {
+        let socket = UdpSocket::bind("0.0.0.0:0").expect("Unable to bind");
         let my_id = cluster_info.read().unwrap().id();
 
+        let mut unprocessed_packets = vec![];
         loop {
-            let msgs = receiver.recv()?;
+            match receiver.recv() {
+                Ok(msgs) => {
+                    inc_new_counter_info!(
+                        "tpu_forwarder-msgs_received",
+                        msgs.read().unwrap().packets.len()
+                    );
 
-            inc_new_counter_info!(
-                "tpu_forwarder-msgs_received",
-                msgs.read().unwrap().packets.len()
-            );
+                    if exit.load(Ordering::Relaxed) {
+                        // Collect all remaining packets on exit signaled
+                        unprocessed_packets.push((msgs, 0));
+                        continue;
+                    }
 
-            let send_addr = get_forwarding_addr(cluster_info.read().unwrap().leader_data(), &my_id);
-
-            if let Some(send_addr) = send_addr {
-                msgs.write().unwrap().set_addr(&send_addr);
-                msgs.read().unwrap().send_to(&socket)?;
+                    match get_forwarding_addr(cluster_info.read().unwrap().leader_data(), &my_id) {
+                        Some(send_addr) => {
+                            msgs.write().unwrap().set_addr(&send_addr);
+                            msgs.read().unwrap().send_to(&socket).unwrap_or_else(|err| {
+                                info!("Failed to forward packet to {:?}: {:?}", send_addr, err)
+                            });
+                        }
+                        None => warn!("Packets dropped due to no forwarding address"),
+                    }
+                }
+                Err(err) => {
+                    trace!("Exiting forwarder due to {:?}", err);
+                    break;
+                }
             }
         }
+        unprocessed_packets
+    }
+
+    pub fn join_and_collect_unprocessed_packets(&mut self) -> UnprocessedPackets {
+        let forwarder_thread = self.forwarder_thread.take().unwrap();
+        forwarder_thread.join().unwrap_or_else(|err| {
+            warn!("forwarder_thread join failed: {:?}", err);
+            vec![]
+        })
     }
 
     pub fn new(sockets: Vec<UdpSocket>, cluster_info: Arc<RwLock<ClusterInfo>>) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
         let (sender, receiver) = channel();
 
-        let mut thread_hdls: Vec<_> = sockets
+        let thread_hdls: Vec<_> = sockets
             .into_iter()
             .map(|socket| {
                 streamer::receiver(
@@ -70,16 +101,19 @@ impl TpuForwarder {
             })
             .collect();
 
-        let thread_hdl = Builder::new()
-            .name("solana-tpu_forwarder".to_string())
-            .spawn(move || {
-                let _ignored = Self::forward(&receiver, &cluster_info);
-            })
-            .unwrap();
+        let thread_exit = exit.clone();
+        let forwarder_thread = Some(
+            Builder::new()
+                .name("solana-tpu_forwarder".to_string())
+                .spawn(move || Self::forward(&receiver, &cluster_info, &thread_exit))
+                .unwrap(),
+        );
 
-        thread_hdls.push(thread_hdl);
-
-        TpuForwarder { exit, thread_hdls }
+        TpuForwarder {
+            exit,
+            thread_hdls,
+            forwarder_thread,
+        }
     }
 
     pub fn close(&self) {
@@ -95,6 +129,7 @@ impl Service for TpuForwarder {
         for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }
+        self.forwarder_thread.unwrap().join()?;
         Ok(())
     }
 }

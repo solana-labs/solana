@@ -1797,6 +1797,13 @@ fn test_fullnode_rotate(
     let mut fullnode_config = FullnodeConfig::default();
     fullnode_config.leader_scheduler_config.ticks_per_slot = ticks_per_slot;
     fullnode_config.leader_scheduler_config.slots_per_epoch = slots_per_epoch;
+
+    // Note: when debugging failures in this test, disabling voting can help keep the log noise
+    // down by removing the extra vote transactions
+    /*
+    fullnode_config.voting_disabled = true;
+    */
+
     let blocktree_config = fullnode_config.ledger_config();
     fullnode_config
         .leader_scheduler_config
@@ -2084,7 +2091,6 @@ fn test_one_fullnode_rotate_every_tick_with_transactions() {
 }
 
 #[test]
-#[ignore]
 fn test_two_fullnodes_rotate_every_tick_with_transactions() {
     test_fullnode_rotate(1, 1, true, true);
 }
