@@ -220,18 +220,16 @@ impl Bank {
     }
 
     fn add_builtin_programs(&self) {
-        let system_program_account =
-            native_loader::create_program_account(system_program::id(), "solana_system_program");
+        let system_program_account = native_loader::create_program_account("solana_system_program");
         self.accounts
             .store_slow(true, &system_program::id(), &system_program_account);
 
-        let vote_program_account =
-            native_loader::create_program_account(vote_program::id(), "solana_vote_program");
+        let vote_program_account = native_loader::create_program_account("solana_vote_program");
         self.accounts
             .store_slow(true, &vote_program::id(), &vote_program_account);
 
         let storage_program_account =
-            native_loader::create_program_account(storage_program::id(), "solana_storage_program");
+            native_loader::create_program_account("solana_storage_program");
         self.accounts
             .store_slow(true, &storage_program::id(), &storage_program_account);
 
@@ -239,18 +237,15 @@ impl Bank {
         self.accounts
             .store_slow(true, &storage_program::system_id(), &storage_system_account);
 
-        let bpf_loader_account =
-            native_loader::create_program_account(bpf_loader::id(), "solana_bpf_loader");
+        let bpf_loader_account = native_loader::create_program_account("solana_bpf_loader");
         self.accounts
             .store_slow(true, &bpf_loader::id(), &bpf_loader_account);
 
-        let budget_program_account =
-            native_loader::create_program_account(budget_program::id(), "solana_budget_program");
+        let budget_program_account = native_loader::create_program_account("solana_budget_program");
         self.accounts
             .store_slow(true, &budget_program::id(), &budget_program_account);
 
-        let erc20_account =
-            native_loader::create_program_account(token_program::id(), "solana_erc20");
+        let erc20_account = native_loader::create_program_account("solana_erc20");
         self.accounts
             .store_slow(true, &token_program::id(), &erc20_account);
     }
