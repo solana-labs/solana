@@ -19,6 +19,7 @@ solana-sdk = { path = "../../../sdk", version = "0.12.0" }
 
 [dev-dependencies]
 solana-vote-program = { path = "../vote", version = "0.12.0" }
+solana-runtime = { path = "../../../runtime", version = "0.12.0" }
 
 [lib]
 name = "solana_rewards_program"
