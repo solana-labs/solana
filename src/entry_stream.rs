@@ -47,10 +47,13 @@ pub struct EntrySocket {
     socket: String,
 }
 
+const MESSAGE_TERMINATOR: &str = "\n";
+
 impl EntryWriter for EntrySocket {
     fn write(&self, payload: String) -> Result<()> {
         let mut socket = UnixStream::connect(Path::new(&self.socket))?;
         socket.write_all(payload.as_bytes())?;
+        socket.write_all(MESSAGE_TERMINATOR.as_bytes())?;
         socket.shutdown(Shutdown::Write)?;
         Ok(())
     }
