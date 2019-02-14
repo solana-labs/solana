@@ -1,9 +1,13 @@
 //! Rewards program
 //! Exchanges validation and storage proofs for lamports
 
+pub mod rewards_instruction;
+pub mod rewards_program;
+pub mod rewards_transaction;
+
+use crate::rewards_instruction::RewardsInstruction;
 use bincode::deserialize;
 use log::*;
-use serde_derive::{Deserialize, Serialize};
 use solana_sdk::account::KeyedAccount;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
@@ -19,7 +23,7 @@ const MINIMUM_CREDITS_PER_REDEMPTION: u64 = 1; // Raise this to either minimize 
 //
 // TODO: Migrate to reward mechanism described by the book:
 // https://github.com/solana-labs/solana/blob/master/book/src/ed_vce_state_validation_protocol_based_rewards.md
-// https://github.com/solana-labs/solana/blob/master/book/src/staking-rewards.md#stake-weighted-rewards
+// https://github.com/solana-labs/solana/blob/master/book/src/staking-rewards.md
 fn calc_vote_reward(credits: u64, stake: u64) -> Result<u64, ProgramError> {
     if credits < MINIMUM_CREDITS_PER_REDEMPTION {
         error!("Credit redemption too early");
@@ -71,11 +75,6 @@ fn redeem_vote_credits(keyed_accounts: &mut [KeyedAccount]) -> Result<(), Progra
     Ok(())
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub enum RewardsInstruction {
-    RedeemVoteCredits,
-}
-
 solana_entrypoint!(entrypoint);
 fn entrypoint(
     _program_id: &Pubkey,
@@ -96,8 +95,8 @@ fn entrypoint(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::rewards_program;
     use solana_sdk::account::Account;
-    use solana_sdk::rewards_program;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::vote_program::{self, Vote};
     use solana_vote_program;

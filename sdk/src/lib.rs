@@ -12,7 +12,6 @@ pub mod native_program;
 pub mod packet;
 pub mod payment_plan;
 pub mod pubkey;
-pub mod rewards_program;
 pub mod shortvec;
 pub mod signature;
 pub mod storage_program;

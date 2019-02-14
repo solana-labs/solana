@@ -1,5 +1,6 @@
-use crate::pubkey::Pubkey;
 use bincode::serialized_size;
+use serde_derive::{Deserialize, Serialize};
+use solana_sdk::pubkey::Pubkey;
 
 pub const REWARDS_PROGRAM_ID: [u8; 32] = [
     133, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
