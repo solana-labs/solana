@@ -2,7 +2,7 @@
 //! multi-stage transaction processing pipeline in software.
 
 use crate::bank::Bank;
-use crate::banking_stage::BankingStage;
+use crate::banking_stage::{BankingStage, UnprocessedPackets};
 use crate::blocktree::Blocktree;
 use crate::broadcast_service::BroadcastService;
 use crate::cluster_info::ClusterInfo;
@@ -115,7 +115,7 @@ impl Tpu {
         tpu
     }
 
-    fn tpu_mode_close(&self) {
+    fn mode_close(&self) {
         match &self.tpu_mode {
             Some(TpuMode::Leader(svcs)) => {
                 svcs.fetch_stage.close();
@@ -127,8 +127,39 @@ impl Tpu {
         }
     }
 
+    fn forward_unprocessed_packets(
+        tpu: &std::net::SocketAddr,
+        unprocessed_packets: UnprocessedPackets,
+    ) -> std::io::Result<()> {
+        let socket = UdpSocket::bind("0.0.0.0:0")?;
+        for (packets, start_index) in unprocessed_packets {
+            let packets = packets.read().unwrap();
+            for packet in packets.packets.iter().skip(start_index) {
+                socket.send_to(&packet.data[..packet.meta.size], tpu)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn close_and_forward_unprocessed_packets(&mut self) {
+        self.mode_close();
+
+        if let Some(TpuMode::Leader(svcs)) = self.tpu_mode.take().as_mut() {
+            let unprocessed_packets = svcs.banking_stage.join_and_collect_unprocessed_packets();
+
+            if !unprocessed_packets.is_empty() {
+                let tpu = self.cluster_info.read().unwrap().leader_data().unwrap().tpu;
+                info!("forwarding unprocessed packets to new leader at {:?}", tpu);
+                Tpu::forward_unprocessed_packets(&tpu, unprocessed_packets).unwrap_or_else(|err| {
+                    warn!("Failed to forward unprocessed transactions: {:?}", err)
+                });
+            }
+        }
+    }
+
     pub fn switch_to_forwarder(&mut self, transactions_sockets: Vec<UdpSocket>) {
-        self.tpu_mode_close();
+        self.close_and_forward_unprocessed_packets();
+
         let tpu_forwarder = TpuForwarder::new(transactions_sockets, self.cluster_info.clone());
         self.tpu_mode = Some(TpuMode::Forwarder(ForwarderServices::new(tpu_forwarder)));
     }
@@ -148,7 +179,7 @@ impl Tpu {
         to_validator_sender: &TpuRotationSender,
         blocktree: &Arc<Blocktree>,
     ) {
-        self.tpu_mode_close();
+        self.close_and_forward_unprocessed_packets();
 
         self.exit = Arc::new(AtomicBool::new(false));
         let (packet_sender, packet_receiver) = channel();
@@ -214,7 +245,7 @@ impl Tpu {
     }
 
     pub fn close(self) -> thread::Result<()> {
-        self.tpu_mode_close();
+        self.mode_close();
         self.join()
     }
 }

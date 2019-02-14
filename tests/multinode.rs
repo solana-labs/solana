@@ -1703,6 +1703,7 @@ fn test_broadcast_last_tick() {
                     .expect("Expected to be able to reconstruct entries from blob")
                     .0[0];
                 assert_eq!(actual_last_tick, expected_last_tick);
+                break;
             } else {
                 assert!(!b_r.is_last_in_slot());
             }
@@ -2078,13 +2079,12 @@ fn test_two_fullnodes_rotate_every_second_tick() {
 }
 
 #[test]
-#[ignore]
 fn test_one_fullnode_rotate_every_tick_with_transactions() {
     test_fullnode_rotate(1, 1, false, true);
 }
 
 #[test]
 #[ignore]
-fn test_two_fullnodes_rotate_every_tick_with_transacations() {
+fn test_two_fullnodes_rotate_every_tick_with_transactions() {
     test_fullnode_rotate(1, 1, true, true);
 }
