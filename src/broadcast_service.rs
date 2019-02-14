@@ -83,6 +83,16 @@ impl Broadcast {
 
         // TODO: blob_index should be slot-relative...
         index_blobs(&blobs, &mut self.blob_index, &slots);
+        let parent = {
+            if slots[0] == 0 {
+                0
+            } else {
+                slots[0] - 1
+            }
+        };
+        for b in blobs.iter() {
+            b.write().unwrap().set_parent(parent);
+        }
 
         let to_blobs_elapsed = duration_as_ms(&to_blobs_start.elapsed());
 
