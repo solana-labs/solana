@@ -8,13 +8,10 @@ pub struct Account {
     pub tokens: u64,
     /// data held in this account
     pub userdata: Vec<u8>,
-    /// the program that owns this account
+    /// the program that owns this account. If executable, the program that loads this account.
     pub owner: Pubkey,
     /// this account's userdata contains a loaded program (and is now read-only)
     pub executable: bool,
-    /// the loader for this account
-    /// (Pubkey::default() if the account is not executable and thus was never 'loaded')
-    pub loader: Pubkey,
 }
 
 impl Account {
@@ -25,7 +22,6 @@ impl Account {
             userdata: vec![0u8; space],
             owner,
             executable: false,
-            loader: Pubkey::default(),
         }
     }
 }

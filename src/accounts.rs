@@ -192,7 +192,7 @@ impl AccountsDB {
                     return Err(BankError::AccountNotFound);
                 }
             };
-            if !program.executable || program.loader == Pubkey::default() {
+            if !program.executable || program.owner == Pubkey::default() {
                 error_counters.account_not_found += 1;
                 return Err(BankError::AccountNotFound);
             }
@@ -200,7 +200,7 @@ impl AccountsDB {
             // add loader to chain
             accounts.insert(0, (program_id, program.clone()));
 
-            program_id = program.loader;
+            program_id = program.owner;
         }
         Ok(accounts)
     }
@@ -616,32 +616,32 @@ mod tests {
 
         let mut account = Account::new(40, 1, Pubkey::default());
         account.executable = true;
-        account.loader = native_loader::id();
+        account.owner = native_loader::id();
         accounts.push((key1, account));
 
         let mut account = Account::new(41, 1, Pubkey::default());
         account.executable = true;
-        account.loader = key1;
+        account.owner = key1;
         accounts.push((key2, account));
 
         let mut account = Account::new(42, 1, Pubkey::default());
         account.executable = true;
-        account.loader = key2;
+        account.owner = key2;
         accounts.push((key3, account));
 
         let mut account = Account::new(43, 1, Pubkey::default());
         account.executable = true;
-        account.loader = key3;
+        account.owner = key3;
         accounts.push((key4, account));
 
         let mut account = Account::new(44, 1, Pubkey::default());
         account.executable = true;
-        account.loader = key4;
+        account.owner = key4;
         accounts.push((key5, account));
 
         let mut account = Account::new(45, 1, Pubkey::default());
         account.executable = true;
-        account.loader = key5;
+        account.owner = key5;
         accounts.push((key6, account));
 
         let instructions = vec![Instruction::new(0, &(), vec![0])];
@@ -675,7 +675,7 @@ mod tests {
 
         let mut account = Account::new(40, 1, Pubkey::default());
         account.executable = true;
-        account.loader = Pubkey::default();
+        account.owner = Pubkey::default();
         accounts.push((key1, account));
 
         let instructions = vec![Instruction::new(0, &(), vec![0])];
@@ -708,7 +708,7 @@ mod tests {
         accounts.push((key0, account));
 
         let mut account = Account::new(40, 1, Pubkey::default());
-        account.loader = native_loader::id();
+        account.owner = native_loader::id();
         accounts.push((key1, account));
 
         let instructions = vec![Instruction::new(0, &(), vec![0])];
@@ -744,17 +744,17 @@ mod tests {
 
         let mut account = Account::new(40, 1, Pubkey::default());
         account.executable = true;
-        account.loader = native_loader::id();
+        account.owner = native_loader::id();
         accounts.push((key1, account));
 
         let mut account = Account::new(41, 1, Pubkey::default());
         account.executable = true;
-        account.loader = key1;
+        account.owner = key1;
         accounts.push((key2, account));
 
         let mut account = Account::new(42, 1, Pubkey::default());
         account.executable = true;
-        account.loader = key2;
+        account.owner = key2;
         accounts.push((key3, account));
 
         let instructions = vec![

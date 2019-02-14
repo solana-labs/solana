@@ -20,6 +20,5 @@ pub fn create_program_account(name: &str) -> Account {
         owner: id(),
         userdata: name.as_bytes().to_vec(),
         executable: true,
-        loader: id(),
     }
 }
