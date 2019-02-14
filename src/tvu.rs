@@ -211,12 +211,13 @@ impl Service for Tvu {
 pub mod tests {
     use super::*;
     use crate::bank::Bank;
-    use crate::blocktree::get_tmp_ledger_path;
+    use crate::blocktree::{get_tmp_ledger_path, BlocktreeConfig};
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::next_entry_mut;
     use crate::entry::EntrySlice;
     use crate::genesis_block::GenesisBlock;
     use crate::gossip_service::GossipService;
+    use crate::leader_scheduler::LeaderSchedulerConfig;
     use crate::packet::index_blobs;
     use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
     use crate::streamer;
@@ -291,14 +292,14 @@ pub mod tests {
         let target2 = Node::new_localhost();
         let exit = Arc::new(AtomicBool::new(false));
 
-        //start cluster_info_l
+        // start cluster_info_l
         let mut cluster_info_l = ClusterInfo::new(leader.info.clone());
         cluster_info_l.set_leader(leader.info.id);
 
         let cref_l = Arc::new(RwLock::new(cluster_info_l));
         let dr_l = new_gossip(cref_l, leader.sockets.gossip, exit.clone());
 
-        //start cluster_info2
+        // start cluster_info2
         let mut cluster_info2 = ClusterInfo::new(target2.info.clone());
         cluster_info2.insert_info(leader.info.clone());
         cluster_info2.set_leader(leader.info.id);
@@ -322,13 +323,22 @@ pub mod tests {
             r_responder,
         );
 
+        // TODO: Fix this test so it always works with the default
+        // LeaderSchedulerConfig/BlocktreeConfig configuration
+        let mut leader_scheduler_config = LeaderSchedulerConfig::default();
+        leader_scheduler_config.ticks_per_slot = 64;
+        let blocktree_config = BlocktreeConfig::new(leader_scheduler_config.ticks_per_slot);
+
         let starting_balance = 10_000;
         let (genesis_block, mint_keypair) = GenesisBlock::new(starting_balance);
         let tvu_addr = target1.info.tvu;
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let bank = Arc::new(Bank::new_with_leader_scheduler_config(
+            &genesis_block,
+            &leader_scheduler_config,
+        ));
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), starting_balance);
 
-        //start cluster_info1
+        // start cluster_info1
         let mut cluster_info1 = ClusterInfo::new(target1.info.clone());
         cluster_info1.insert_info(leader.info.clone());
         cluster_info1.set_leader(leader.info.id);
@@ -337,8 +347,10 @@ pub mod tests {
 
         let mut cur_hash = Hash::default();
         let blocktree_path = get_tmp_ledger_path("test_replay");
-        let (blocktree, l_sender, l_receiver) = Blocktree::open_with_signal(&blocktree_path)
-            .expect("Expected to successfully open ledger");
+
+        let (blocktree, l_sender, l_receiver) =
+            Blocktree::open_with_config_signal(&blocktree_path, &blocktree_config)
+                .expect("Expected to successfully open ledger");
         let vote_account_keypair = Arc::new(Keypair::new());
         let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
         let (sender, _) = channel();

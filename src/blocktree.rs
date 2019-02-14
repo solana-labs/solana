@@ -1692,7 +1692,8 @@ mod tests {
     pub fn test_insert_data_blobs_consecutive() {
         let blocktree_path = get_tmp_ledger_path("test_insert_data_blobs_consecutive");
         {
-            let blocktree = Blocktree::open(&blocktree_path).unwrap();
+            let config = BlocktreeConfig::new(32);
+            let blocktree = Blocktree::open_config(&blocktree_path, &config).unwrap();
             let slot = 0;
             let parent_slot = 0;
             // Write entries
