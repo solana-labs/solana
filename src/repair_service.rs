@@ -59,7 +59,7 @@ impl RepairService {
                         cluster_info
                             .read()
                             .unwrap()
-                            .window_index_request(slot_height, blob_index)
+                            .window_index_request(slot_height, blob_index, false)
                             .map(|result| (result, slot_height, blob_index))
                             .ok()
                     })
