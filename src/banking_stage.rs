@@ -279,6 +279,7 @@ mod tests {
     use crate::banking_stage::BankingStageReturnType;
     use crate::entry::EntrySlice;
     use crate::genesis_block::GenesisBlock;
+    use crate::leader_scheduler::DEFAULT_TICKS_PER_SLOT;
     use crate::packet::to_packets;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
@@ -295,7 +296,7 @@ mod tests {
             verified_receiver,
             PohServiceConfig::default(),
             &bank.last_id(),
-            std::u64::MAX,
+            DEFAULT_TICKS_PER_SLOT,
             genesis_block.bootstrap_leader_id,
             &to_validator_sender,
         );
@@ -317,7 +318,7 @@ mod tests {
             verified_receiver,
             PohServiceConfig::default(),
             &bank.last_id(),
-            std::u64::MAX,
+            DEFAULT_TICKS_PER_SLOT,
             genesis_block.bootstrap_leader_id,
             &to_validator_sender,
         );
@@ -340,7 +341,7 @@ mod tests {
             verified_receiver,
             PohServiceConfig::Sleep(Duration::from_millis(1)),
             &bank.last_id(),
-            std::u64::MAX,
+            DEFAULT_TICKS_PER_SLOT,
             genesis_block.bootstrap_leader_id,
             &to_validator_sender,
         );
@@ -369,7 +370,7 @@ mod tests {
             verified_receiver,
             PohServiceConfig::default(),
             &bank.last_id(),
-            std::u64::MAX,
+            DEFAULT_TICKS_PER_SLOT,
             genesis_block.bootstrap_leader_id,
             &to_validator_sender,
         );
@@ -427,7 +428,7 @@ mod tests {
             verified_receiver,
             PohServiceConfig::default(),
             &bank.last_id(),
-            std::u64::MAX,
+            DEFAULT_TICKS_PER_SLOT,
             genesis_block.bootstrap_leader_id,
             &to_validator_sender,
         );
