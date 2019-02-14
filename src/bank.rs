@@ -220,80 +220,37 @@ impl Bank {
     }
 
     fn add_builtin_programs(&self) {
-        let system_program_account = Account {
-            tokens: 1,
-            owner: system_program::id(),
-            userdata: b"solana_system_program".to_vec(),
-            executable: true,
-            loader: native_loader::id(),
-        };
+        let system_program_account =
+            native_loader::create_program_account(system_program::id(), "solana_system_program");
         self.accounts
             .store_slow(true, &system_program::id(), &system_program_account);
 
-        // Vote program
-        let vote_program_account = Account {
-            tokens: 1,
-            owner: vote_program::id(),
-            userdata: b"solana_vote_program".to_vec(),
-            executable: true,
-            loader: native_loader::id(),
-        };
+        let vote_program_account =
+            native_loader::create_program_account(vote_program::id(), "solana_vote_program");
         self.accounts
             .store_slow(true, &vote_program::id(), &vote_program_account);
 
-        // Storage program
-        let storage_program_account = Account {
-            tokens: 1,
-            owner: storage_program::id(),
-            userdata: b"solana_storage_program".to_vec(),
-            executable: true,
-            loader: native_loader::id(),
-        };
+        let storage_program_account =
+            native_loader::create_program_account(storage_program::id(), "solana_storage_program");
         self.accounts
             .store_slow(true, &storage_program::id(), &storage_program_account);
 
-        let storage_system_account = Account {
-            tokens: 1,
-            owner: storage_program::system_id(),
-            userdata: vec![0; 16 * 1024],
-            executable: false,
-            loader: Pubkey::default(),
-        };
+        let storage_system_account = Account::new(1, 16 * 1024, storage_program::system_id());
         self.accounts
             .store_slow(true, &storage_program::system_id(), &storage_system_account);
 
-        // Bpf Loader
-        let bpf_loader_account = Account {
-            tokens: 1,
-            owner: bpf_loader::id(),
-            userdata: b"solana_bpf_loader".to_vec(),
-            executable: true,
-            loader: native_loader::id(),
-        };
-
+        let bpf_loader_account =
+            native_loader::create_program_account(bpf_loader::id(), "solana_bpf_loader");
         self.accounts
             .store_slow(true, &bpf_loader::id(), &bpf_loader_account);
 
-        // Budget program
-        let budget_program_account = Account {
-            tokens: 1,
-            owner: budget_program::id(),
-            userdata: b"solana_budget_program".to_vec(),
-            executable: true,
-            loader: native_loader::id(),
-        };
+        let budget_program_account =
+            native_loader::create_program_account(budget_program::id(), "solana_budget_program");
         self.accounts
             .store_slow(true, &budget_program::id(), &budget_program_account);
 
-        // Erc20 token program
-        let erc20_account = Account {
-            tokens: 1,
-            owner: token_program::id(),
-            userdata: b"solana_erc20".to_vec(),
-            executable: true,
-            loader: native_loader::id(),
-        };
-
+        let erc20_account =
+            native_loader::create_program_account(token_program::id(), "solana_erc20");
         self.accounts
             .store_slow(true, &token_program::id(), &erc20_account);
     }
