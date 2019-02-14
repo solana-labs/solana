@@ -5,7 +5,7 @@ use crate::result::Result;
 use crate::service::Service;
 use crate::streamer::PacketSender;
 use log::Level;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;

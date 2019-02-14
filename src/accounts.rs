@@ -12,7 +12,6 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::Transaction;
 use std::collections::BTreeMap;
 use std::ops::Deref;
-use std::sync::atomic::AtomicUsize;
 use std::sync::{Mutex, RwLock};
 
 pub type InstructionAccounts = Vec<Account>;

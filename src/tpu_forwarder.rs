@@ -11,7 +11,7 @@ use crate::streamer::{self, PacketReceiver};
 use log::Level;
 use solana_sdk::pubkey::Pubkey;
 use std::net::{SocketAddr, UdpSocket};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};

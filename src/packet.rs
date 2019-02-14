@@ -12,7 +12,6 @@ use std::fmt;
 use std::io;
 use std::mem::size_of;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, UdpSocket};
-use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
 
 pub type SharedPackets = Arc<RwLock<Packets>>;

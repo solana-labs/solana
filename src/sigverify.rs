@@ -15,7 +15,6 @@ use solana_sdk::signature::Signature;
 use solana_sdk::transaction::Transaction;
 use std::io::Cursor;
 use std::mem::size_of;
-use std::sync::atomic::AtomicUsize;
 
 pub const TX_OFFSET: usize = 0;
 

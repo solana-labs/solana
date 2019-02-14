@@ -16,7 +16,6 @@ use log::Level;
 use rand::{thread_rng, Rng};
 use solana_metrics::{influxdb, submit};
 use solana_sdk::timing;
-use std::sync::atomic::AtomicUsize;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, spawn, JoinHandle};
