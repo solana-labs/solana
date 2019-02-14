@@ -144,6 +144,7 @@ impl MockEntryStream {
 
 #[derive(Debug)]
 pub struct EntryStreamBlock {
+    pub slot: u64,
     pub tick_height: u64,
     pub id: Hash,
 }
