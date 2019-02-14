@@ -32,14 +32,15 @@ fn bad_arguments() {
 #[test]
 fn nominal() {
     let keypair = Arc::new(Keypair::new());
-    let (_mint_keypair, ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
+    let blocktree_config = BlocktreeConfig::default();
+    let (_mint_keypair, ledger_path, tick_height, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_ledger(
             "test_ledger_tool_nominal",
             100,
-            9,
+            blocktree_config.ticks_per_slot - 2,
             keypair.pubkey(),
             50,
-            &BlocktreeConfig::default(),
+            &blocktree_config,
         );
 
     // Basic validation
@@ -49,7 +50,7 @@ fn nominal() {
     // Print everything
     let output = run_ledger_tool(&["-l", &ledger_path, "print"]);
     assert!(output.status.success());
-    assert_eq!(count_newlines(&output.stdout), 10);
+    assert_eq!(count_newlines(&output.stdout), tick_height as usize);
 
     // Only print the first 5 items
     let output = run_ledger_tool(&["-l", &ledger_path, "-n", "5", "print"]);
@@ -59,7 +60,7 @@ fn nominal() {
     // Skip entries with no hashes
     let output = run_ledger_tool(&["-l", &ledger_path, "-h", "1", "print"]);
     assert!(output.status.success());
-    assert_eq!(count_newlines(&output.stdout), 10);
+    assert_eq!(count_newlines(&output.stdout), tick_height as usize);
 
     // Skip entries with fewer than 2 hashes (skip everything)
     let output = run_ledger_tool(&["-l", &ledger_path, "-h", "2", "print"]);
