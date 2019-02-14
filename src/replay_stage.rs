@@ -278,11 +278,13 @@ impl ReplayStage {
                             // Check for leader rotation
                             let leader_id = Self::get_leader_for_next_tick(&bank);
 
-                            // TODO: Remove this soon once we boot the leader from ClusterInfo
-                            cluster_info.write().unwrap().set_leader(leader_id);
-
-                            if leader_id != last_leader_id && my_id == leader_id {
-                                to_leader_sender.send(current_tick_height).unwrap();
+                            if leader_id != last_leader_id {
+                                if my_id == leader_id {
+                                    to_leader_sender.send(current_tick_height).unwrap();
+                                } else {
+                                    // TODO: Remove this soon once we boot the leader from ClusterInfo
+                                    cluster_info.write().unwrap().set_leader(leader_id);
+                                }
                             }
 
                             // Check for any slots that chain to this one

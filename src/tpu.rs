@@ -68,51 +68,18 @@ impl ForwarderServices {
 pub struct Tpu {
     tpu_mode: Option<TpuMode>,
     exit: Arc<AtomicBool>,
+    id: Pubkey,
     cluster_info: Arc<RwLock<ClusterInfo>>,
 }
 
 impl Tpu {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        bank: &Arc<Bank>,
-        tick_duration: PohServiceConfig,
-        transactions_sockets: Vec<UdpSocket>,
-        broadcast_socket: UdpSocket,
-        cluster_info: &Arc<RwLock<ClusterInfo>>,
-        sigverify_disabled: bool,
-        max_tick_height: u64,
-        blob_index: u64,
-        last_entry_id: &Hash,
-        leader_id: Pubkey,
-        to_validator_sender: &TpuRotationSender,
-        blocktree: &Arc<Blocktree>,
-        is_leader: bool,
-    ) -> Self {
-        let mut tpu = Self {
+    pub fn new(id: Pubkey, cluster_info: &Arc<RwLock<ClusterInfo>>) -> Self {
+        Self {
             tpu_mode: None,
             exit: Arc::new(AtomicBool::new(false)),
+            id,
             cluster_info: cluster_info.clone(),
-        };
-
-        if is_leader {
-            tpu.switch_to_leader(
-                bank,
-                tick_duration,
-                transactions_sockets,
-                broadcast_socket,
-                sigverify_disabled,
-                max_tick_height,
-                blob_index,
-                last_entry_id,
-                leader_id,
-                to_validator_sender,
-                blocktree,
-            );
-        } else {
-            tpu.switch_to_forwarder(transactions_sockets);
         }
-
-        tpu
     }
 
     fn mode_close(&self) {
@@ -144,21 +111,29 @@ impl Tpu {
     fn close_and_forward_unprocessed_packets(&mut self) {
         self.mode_close();
 
-        if let Some(TpuMode::Leader(svcs)) = self.tpu_mode.take().as_mut() {
-            let unprocessed_packets = svcs.banking_stage.join_and_collect_unprocessed_packets();
-
-            if !unprocessed_packets.is_empty() {
-                let tpu = self.cluster_info.read().unwrap().leader_data().unwrap().tpu;
-                info!("forwarding unprocessed packets to new leader at {:?}", tpu);
-                Tpu::forward_unprocessed_packets(&tpu, unprocessed_packets).unwrap_or_else(|err| {
-                    warn!("Failed to forward unprocessed transactions: {:?}", err)
-                });
+        let unprocessed_packets = match self.tpu_mode.take().as_mut() {
+            Some(TpuMode::Leader(svcs)) => {
+                svcs.banking_stage.join_and_collect_unprocessed_packets()
             }
+            Some(TpuMode::Forwarder(svcs)) => {
+                svcs.tpu_forwarder.join_and_collect_unprocessed_packets()
+            }
+            None => vec![],
+        };
+
+        if !unprocessed_packets.is_empty() {
+            let tpu = self.cluster_info.read().unwrap().leader_data().unwrap().tpu;
+            info!("forwarding unprocessed packets to new leader at {:?}", tpu);
+            Tpu::forward_unprocessed_packets(&tpu, unprocessed_packets).unwrap_or_else(|err| {
+                warn!("Failed to forward unprocessed transactions: {:?}", err)
+            });
         }
     }
 
-    pub fn switch_to_forwarder(&mut self, transactions_sockets: Vec<UdpSocket>) {
+    pub fn switch_to_forwarder(&mut self, leader_id: Pubkey, transactions_sockets: Vec<UdpSocket>) {
         self.close_and_forward_unprocessed_packets();
+
+        self.cluster_info.write().unwrap().set_leader(leader_id);
 
         let tpu_forwarder = TpuForwarder::new(transactions_sockets, self.cluster_info.clone());
         self.tpu_mode = Some(TpuMode::Forwarder(ForwarderServices::new(tpu_forwarder)));
@@ -175,11 +150,12 @@ impl Tpu {
         max_tick_height: u64,
         blob_index: u64,
         last_entry_id: &Hash,
-        leader_id: Pubkey,
         to_validator_sender: &TpuRotationSender,
         blocktree: &Arc<Blocktree>,
     ) {
         self.close_and_forward_unprocessed_packets();
+
+        self.cluster_info.write().unwrap().set_leader(self.id);
 
         self.exit = Arc::new(AtomicBool::new(false));
         let (packet_sender, packet_receiver) = channel();
@@ -203,7 +179,7 @@ impl Tpu {
             tick_duration,
             last_entry_id,
             max_tick_height,
-            leader_id,
+            self.id,
             &to_validator_sender,
         );
 
@@ -229,10 +205,11 @@ impl Tpu {
         self.tpu_mode = Some(TpuMode::Leader(svcs));
     }
 
-    pub fn is_leader(&self) -> bool {
+    pub fn is_leader(&self) -> Option<bool> {
         match self.tpu_mode {
-            Some(TpuMode::Leader(_)) => true,
-            _ => false,
+            Some(TpuMode::Leader(_)) => Some(true),
+            Some(TpuMode::Forwarder(_)) => Some(false),
+            None => None,
         }
     }
 

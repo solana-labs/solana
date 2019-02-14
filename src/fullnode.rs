@@ -98,7 +98,6 @@ pub struct Fullnode {
     rpc_pubsub_service: Option<PubSubService>,
     gossip_service: GossipService,
     bank: Arc<Bank>,
-    cluster_info: Arc<RwLock<ClusterInfo>>,
     sigverify_disabled: bool,
     tpu_sockets: Vec<UdpSocket>,
     broadcast_socket: UdpSocket,
@@ -228,8 +227,6 @@ impl Fullnode {
             (scheduled_leader, max_tick_height, blob_index)
         };
 
-        cluster_info.write().unwrap().set_leader(scheduled_leader);
-
         let sockets = Sockets {
             repair: node
                 .sockets
@@ -274,34 +271,10 @@ impl Fullnode {
             ledger_signal_sender,
             ledger_signal_receiver,
         );
-        let tpu = Tpu::new(
-            &Arc::new(bank.copy_for_tpu()),
-            PohServiceConfig::default(),
-            node.sockets
-                .tpu
-                .iter()
-                .map(|s| s.try_clone().expect("Failed to clone TPU sockets"))
-                .collect(),
-            node.sockets
-                .broadcast
-                .try_clone()
-                .expect("Failed to clone broadcast socket"),
-            &cluster_info,
-            config.sigverify_disabled,
-            max_tick_height,
-            blob_index,
-            &last_entry_id,
-            id,
-            &rotation_sender,
-            &blocktree,
-            scheduled_leader == id,
-        );
+        let tpu = Tpu::new(id, &cluster_info);
 
-        inc_new_counter_info!("fullnode-new", 1);
-
-        Self {
+        let mut fullnode = Self {
             id,
-            cluster_info,
             bank,
             sigverify_disabled: config.sigverify_disabled,
             gossip_service,
@@ -314,7 +287,16 @@ impl Fullnode {
             rotation_sender,
             rotation_receiver,
             blocktree,
-        }
+        };
+
+        fullnode.rotate(
+            scheduled_leader,
+            max_tick_height,
+            blob_index,
+            &last_entry_id,
+        );
+        inc_new_counter_info!("fullnode-new", 1);
+        fullnode
     }
 
     fn get_next_leader(&self, tick_height: u64) -> (Pubkey, u64) {
@@ -355,29 +337,29 @@ impl Fullnode {
             max_tick_height
         );
 
-        self.cluster_info
-            .write()
-            .unwrap()
-            .set_leader(scheduled_leader);
-
         (scheduled_leader, max_tick_height)
     }
 
-    fn rotate(&mut self, tick_height: u64) -> FullnodeReturnType {
-        trace!("{:?}: rotate at tick_height={}", self.id, tick_height,);
-        let was_leader = self.node_services.tpu.is_leader();
-
-        let (scheduled_leader, max_tick_height) = self.get_next_leader(tick_height);
-        if scheduled_leader == self.id {
-            let transition = if was_leader {
-                debug!("{:?} remaining in leader role", self.id);
-                FullnodeReturnType::LeaderToLeaderRotation
-            } else {
-                debug!("{:?} rotating to leader role", self.id);
-                FullnodeReturnType::ValidatorToLeaderRotation
+    fn rotate(
+        &mut self,
+        next_leader: Pubkey,
+        max_tick_height: u64,
+        blob_index: u64,
+        last_entry_id: &Hash,
+    ) -> FullnodeReturnType {
+        if next_leader == self.id {
+            let transition = match self.node_services.tpu.is_leader() {
+                Some(was_leader) => {
+                    if was_leader {
+                        debug!("{:?} remaining in leader role", self.id);
+                        FullnodeReturnType::LeaderToLeaderRotation
+                    } else {
+                        debug!("{:?} rotating to leader role", self.id);
+                        FullnodeReturnType::ValidatorToLeaderRotation
+                    }
+                }
+                None => FullnodeReturnType::LeaderToLeaderRotation, // value doesn't matter here...
             };
-
-            let last_entry_id = self.bank.last_id();
 
             self.node_services.tpu.switch_to_leader(
                 &Arc::new(self.bank.copy_for_tpu()),
@@ -391,17 +373,16 @@ impl Fullnode {
                     .expect("Failed to clone broadcast socket"),
                 self.sigverify_disabled,
                 max_tick_height,
-                0,
-                &last_entry_id,
-                self.id,
+                blob_index,
+                last_entry_id,
                 &self.rotation_sender,
                 &self.blocktree,
             );
-
             transition
         } else {
             debug!("{:?} rotating to validator role", self.id);
             self.node_services.tpu.switch_to_forwarder(
+                next_leader,
                 self.tpu_sockets
                     .iter()
                     .map(|s| s.try_clone().expect("Failed to clone TPU sockets"))
@@ -430,7 +411,10 @@ impl Fullnode {
 
             match self.rotation_receiver.recv_timeout(timeout) {
                 Ok(tick_height) => {
-                    let transition = self.rotate(tick_height);
+                    trace!("{:?}: rotate at tick_height={}", self.id, tick_height);
+                    let (next_leader, max_tick_height) = self.get_next_leader(tick_height);
+                    let transition =
+                        self.rotate(next_leader, max_tick_height, 0, &self.bank.last_id());
                     debug!("role transition complete: {:?}", transition);
                     if let Some(ref rotation_notifier) = rotation_notifier {
                         rotation_notifier
@@ -732,7 +716,7 @@ mod tests {
                 &fullnode_config,
             );
 
-            assert!(!bootstrap_leader.node_services.tpu.is_leader());
+            assert!(!bootstrap_leader.node_services.tpu.is_leader().unwrap());
 
             // Test that a node knows to transition to a leader based on parsing the ledger
             let validator = Fullnode::new(
@@ -744,7 +728,7 @@ mod tests {
                 &fullnode_config,
             );
 
-            assert!(validator.node_services.tpu.is_leader());
+            assert!(validator.node_services.tpu.is_leader().unwrap());
             validator.close().expect("Expected leader node to close");
             bootstrap_leader
                 .close()
