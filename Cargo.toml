@@ -108,6 +108,7 @@ members = [
     "programs/native/native_loader",
     "programs/native/noop",
     "programs/native/rewards",
+    "programs/native/rewards_api",
     "programs/native/storage",
     "programs/native/system",
     "programs/native/vote",
