@@ -80,11 +80,6 @@ pub fn entrypoint(
                 keyed_accounts[from].account.tokens -= tokens;
                 keyed_accounts[to].account.tokens += tokens;
             }
-            SystemInstruction::Spawn => {
-                if !keyed_accounts[from].account.executable {
-                    Err(ProgramError::AccountNotFinalized)?;
-                }
-            }
         }
         Ok(())
     } else {

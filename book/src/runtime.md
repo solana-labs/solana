@@ -62,7 +62,6 @@ encodes.
   Program.
 * `Assign` - allows the user to assign an existing account to a program.
 * `Move`  - moves tokens between accounts.
-* `Spawn` - spawns a new program from an account.
 
 ## Notes
 

@@ -33,10 +33,6 @@ pub enum ProgramError {
 
     /// SystemInstruction::Assign was attempted on an account unowned by the system program
     AssignOfUnownedAccount,
-
-    /// SystemInstruction::Spawn was attempted on an account that was not finalized by
-    /// LoaderInstruction::Finalize
-    AccountNotFinalized,
 }
 
 impl std::fmt::Display for ProgramError {

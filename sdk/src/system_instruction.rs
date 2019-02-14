@@ -20,7 +20,4 @@ pub enum SystemInstruction {
     /// * Transaction::keys[0] - source
     /// * Transaction::keys[1] - destination
     Move { tokens: u64 },
-
-    /// Spawn a new program from an account
-    Spawn,
 }

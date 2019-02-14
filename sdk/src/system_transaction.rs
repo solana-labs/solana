@@ -107,18 +107,6 @@ impl SystemTransaction {
             instructions,
         )
     }
-    /// Create and sign new SystemInstruction::Spawn transaction
-    pub fn new_spawn(from_keypair: &Keypair, last_id: Hash, fee: u64) -> Transaction {
-        let spawn = SystemInstruction::Spawn;
-        Transaction::new(
-            from_keypair,
-            &[],
-            system_program::id(),
-            &spawn,
-            last_id,
-            fee,
-        )
-    }
 }
 
 #[cfg(test)]
