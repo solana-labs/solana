@@ -24,7 +24,7 @@ test = []
 unstable = []
 
 [dependencies]
-bincode = "1.0.0"
+bincode = "1.1.1"
 bs58 = "0.2.0"
 bv = { version = "0.11.0", features = ["serde"] }
 byteorder = "1.3.1"
