@@ -33,7 +33,8 @@ schedule updates.
 While operating without partitions lasting longer than an epoch the schedule
 only needs to be generated when the root fork crosses the epoch boundary.  Since
 the schedule is for the next epoch, any new stakes committed to the root fork
-will not be active until the next epoch.
+will not be active until the next epoch.  The block used for generating the
+leader schedule is the first block to cross the epoch boundary.
 
 Without a partition lasting longer then an epoch, the cluster will work as
 follows:
@@ -52,11 +53,12 @@ using fork at slot height 102.  It is active from slot 200 until it is updated
 again.
 
 No inconsistency can exist because every validator that is voting with the
-cluster has skipped 100 and 101 when its root reaches 102.  The duration of the
-*leader schedule offset* has a direct relationship to the likelihood of a
-cluster inconsistency state.  If the *leader schedule offset* is 6 standard
-deviations longer than the median partition time, then the likelihood of a
-partition longer than the offset is 1 in 1 million.
+cluster has skipped 100 and 101 when its root passes 102.  All validators,
+regardless of voting pattern, would be committing to a root that is either 102,
+or a descendant of 102.  The duration of the leader schedule offset has a direct
+relationship to the likelihood of a cluster inconsistency state.  If the leader
+schedule offset is 6 standard deviations longer than the median partition time,
+then the likelihood of a partition longer than the offset is 1 in 1 million.
 
 ### Leader Schedule Rotation with Epoch Sized Partitions.
 
