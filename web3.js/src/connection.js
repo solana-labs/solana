@@ -82,7 +82,6 @@ function jsonRpcResult(resultDescription: any) {
  */
 const AccountInfoResult = struct({
   executable: 'boolean',
-  loader: 'array',
   owner: 'array',
   tokens: 'number',
   userdata: 'array',
@@ -151,12 +150,10 @@ const SendTransactionRpcResult = jsonRpcResult('string');
  * @property {number} tokens Number of tokens assigned to the account
  * @property {PublicKey} owner Identifier of the program that owns the account
  * @property {?Buffer} userdata Optional userdata assigned to the account
- * @property {PublicKey} loader Identifier of the loader for this account
  * @property {boolean} executable `true` if this account's userdata contains a loaded program
  */
 type AccountInfo = {
   executable: boolean,
-  loader: PublicKey,
   owner: PublicKey,
   tokens: number,
   userdata: Buffer,
@@ -271,7 +268,6 @@ export class Connection {
 
     return {
       executable: result.executable,
-      loader: new PublicKey(result.loader),
       owner: new PublicKey(result.owner),
       tokens: result.tokens,
       userdata: Buffer.from(result.userdata),
@@ -431,7 +427,6 @@ export class Connection {
   async sendRawTransaction(
     rawTransaction: Buffer,
   ): Promise<TransactionSignature> {
-
     // sendTransaction RPC API requires a u64 length field prepended to the raw
     // Transaction bytes
     const rpcTransaction = Buffer.alloc(8 + rawTransaction.length);
@@ -494,7 +489,6 @@ export class Connection {
 
         sub.callback({
           executable: result.executable,
-          loader: new PublicKey(result.loader),
           owner: new PublicKey(result.owner),
           tokens: result.tokens,
           userdata: Buffer.from(result.userdata),

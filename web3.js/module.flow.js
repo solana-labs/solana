@@ -35,7 +35,6 @@ declare module '@solana/web3.js' {
   // === src/connection.js ===
   declare export type AccountInfo = {
     executable: boolean,
-    loader: PublicKey,
     owner: PublicKey,
     tokens: number,
     userdata: Buffer,
@@ -90,7 +89,6 @@ declare module '@solana/web3.js' {
     ): Transaction;
     static move(from: PublicKey, to: PublicKey, amount: number): Transaction;
     static assign(from: PublicKey, programId: PublicKey): Transaction;
-    static spawn(programId: PublicKey): Transaction;
   }
 
   // === src/transaction.js ===
