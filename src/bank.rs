@@ -101,7 +101,7 @@ pub struct Bank {
     pub accounts: Accounts,
 
     /// A cache of signature statuses
-    status_cache: RwLock<BankStatusCache>,
+    status_cache: RwLock<Arc<BankStatusCache>>,
 
     /// FIFO queue of `last_id` items
     last_id_queue: RwLock<LastIdQueue>,
@@ -121,7 +121,7 @@ impl Default for Bank {
         Bank {
             accounts: Accounts::default(),
             last_id_queue: RwLock::new(LastIdQueue::default()),
-            status_cache: RwLock::new(BankStatusCache::default()),
+            status_cache: RwLock::new(Arc::new(BankStatusCache::default())),
             confirmation_time: AtomicUsize::new(std::usize::MAX),
             leader_scheduler: Arc::new(RwLock::new(LeaderScheduler::default())),
             subscriptions: RwLock::new(None),
@@ -335,6 +335,15 @@ impl Bank {
             last_id_queue.register_tick(last_id);
             last_id_queue.tick_height
         };
+        if current_tick_height % NUM_TICKS_PER_SECOND == 0 {
+            //TODO: this is a fix until proper forking is implemented
+            let mut bank_cache = self.status_cache.write().unwrap();
+            let old_cache = bank_cache.clone();
+            let mut new_cache = Arc::new(BankStatusCache::default());
+            // old_queue is stored inside the new queue as a cache that gets checked
+            new_cache.merge_into_root(old_cache.into_inner());
+            *bank_cache = new_status_cache;
+        }
         self.leader_scheduler
             .write()
             .unwrap()

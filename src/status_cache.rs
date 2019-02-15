@@ -85,7 +85,7 @@ impl<T: Clone> StatusCache<T> {
         // which cannot be rolled back
         assert!(other.merges.is_empty());
         self.merges.push_front(other);
-        if self.merges.len() > MAX_ENTRY_IDS {
+        if self.merges.len() > MAX_ENTRY_IDS / NUM_TICKS_PER_SECOND {
             //TODO check if this is the right size ^
             self.merges.pop_back();
         }
