@@ -587,6 +587,7 @@ fn test_with_partitions(
 }
 
 #[test]
+#[ignore]
 fn test_3_partitions() {
     test_with_partitions(3, 0.0, 0, 0.0, true)
 }
