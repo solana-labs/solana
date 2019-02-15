@@ -1,9 +1,11 @@
 //! Vote program
 //! Receive and processes votes from validators
 
+use crate::account::{Account, KeyedAccount};
 use crate::native_program::ProgramError;
 use crate::pubkey::Pubkey;
 use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
+use log::*;
 use std::collections::VecDeque;
 
 pub const VOTE_PROGRAM_ID: [u8; 32] = [
@@ -57,9 +59,9 @@ pub struct VoteState {
 pub fn get_max_size() -> usize {
     // Upper limit on the size of the Vote State. Equal to
     // sizeof(VoteState) when votes.len() is MAX_VOTE_HISTORY
-    let mut vote_program = VoteState::default();
-    vote_program.votes = VecDeque::from(vec![Vote::default(); MAX_VOTE_HISTORY]);
-    serialized_size(&vote_program).unwrap() as usize
+    let mut vote_state = VoteState::default();
+    vote_state.votes = VecDeque::from(vec![Vote::default(); MAX_VOTE_HISTORY]);
+    serialized_size(&vote_state).unwrap() as usize
 }
 
 impl VoteState {
@@ -111,9 +113,76 @@ impl VoteState {
     }
 }
 
+// TODO: Deprecate the RegisterAccount instruction and its awkward delegation
+// semantics.
+pub fn register(keyed_accounts: &mut [KeyedAccount]) -> Result<(), ProgramError> {
+    if !check_id(&keyed_accounts[1].account.owner) {
+        error!("account[1] is not assigned to the VOTE_PROGRAM");
+        Err(ProgramError::InvalidArgument)?;
+    }
+
+    // TODO: This assumes keyed_accounts[0] is the SystemInstruction::CreateAccount
+    // that created keyed_accounts[1]. Putting any other signed instruction in
+    // keyed_accounts[0] would allow the owner to highjack the vote account and
+    // insert itself into the leader rotation.
+    let from_id = keyed_accounts[0].signer_key().unwrap();
+
+    // Awkwardly configure the voting account to claim that the account that
+    // initially funded it is both the identity of the staker and the fullnode
+    // that should sign blocks on behalf of the staker.
+    let vote_state = VoteState::new(*from_id, *from_id);
+    vote_state.serialize(&mut keyed_accounts[1].account.userdata)?;
+
+    Ok(())
+}
+
+pub fn process_vote(keyed_accounts: &mut [KeyedAccount], vote: Vote) -> Result<(), ProgramError> {
+    if !check_id(&keyed_accounts[0].account.owner) {
+        error!("account[0] is not assigned to the VOTE_PROGRAM");
+        Err(ProgramError::InvalidArgument)?;
+    }
+
+    let mut vote_state = VoteState::deserialize(&keyed_accounts[0].account.userdata)?;
+    vote_state.process_vote(vote);
+    vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
+    Ok(())
+}
+
+pub fn create_vote_account(tokens: u64) -> Account {
+    let space = get_max_size();
+    Account::new(tokens, space, id())
+}
+
+pub fn register_and_deserialize(
+    from_id: &Pubkey,
+    from_account: &mut Account,
+    vote_id: &Pubkey,
+    vote_account: &mut Account,
+) -> Result<VoteState, ProgramError> {
+    let mut keyed_accounts = [
+        KeyedAccount::new(from_id, true, from_account),
+        KeyedAccount::new(vote_id, false, vote_account),
+    ];
+    register(&mut keyed_accounts)?;
+    let vote_state = VoteState::deserialize(&vote_account.userdata).unwrap();
+    Ok(vote_state)
+}
+
+pub fn vote_and_deserialize(
+    vote_id: &Pubkey,
+    vote_account: &mut Account,
+    vote: Vote,
+) -> Result<VoteState, ProgramError> {
+    let mut keyed_accounts = [KeyedAccount::new(vote_id, true, vote_account)];
+    process_vote(&mut keyed_accounts, vote)?;
+    let vote_state = VoteState::deserialize(&vote_account.userdata).unwrap();
+    Ok(vote_state)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::signature::{Keypair, KeypairUtil};
 
     #[test]
     fn test_vote_serialize() {
@@ -135,5 +204,46 @@ mod tests {
         assert_eq!(vote_state.credits(), 2);
         vote_state.clear_credits();
         assert_eq!(vote_state.credits(), 0);
+    }
+
+    #[test]
+    fn test_voter_registration() {
+        let from_id = Keypair::new().pubkey();
+        let mut from_account = Account::new(100, 0, Pubkey::default());
+
+        let vote_id = Keypair::new().pubkey();
+        let mut vote_account = create_vote_account(100);
+
+        let vote_state =
+            register_and_deserialize(&from_id, &mut from_account, &vote_id, &mut vote_account)
+                .unwrap();
+        assert_eq!(vote_state.node_id, from_id);
+        assert!(vote_state.votes.is_empty());
+    }
+
+    #[test]
+    fn test_vote() {
+        let from_id = Keypair::new().pubkey();
+        let mut from_account = Account::new(100, 0, Pubkey::default());
+
+        let vote_id = Keypair::new().pubkey();
+        let mut vote_account = create_vote_account(100);
+        register_and_deserialize(&from_id, &mut from_account, &vote_id, &mut vote_account).unwrap();
+
+        let vote = Vote::new(1);
+        let vote_state = vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();
+        assert_eq!(vote_state.votes, vec![vote]);
+        assert_eq!(vote_state.credits(), 0);
+    }
+
+    #[test]
+    fn test_vote_without_registration() {
+        let vote_id = Keypair::new().pubkey();
+        let mut vote_account = create_vote_account(100);
+
+        let vote = Vote::new(1);
+        let vote_state = vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();
+        assert_eq!(vote_state.node_id, Pubkey::default());
+        assert_eq!(vote_state.votes, vec![vote]);
     }
 }
