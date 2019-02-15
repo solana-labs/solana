@@ -82,7 +82,11 @@ fn redeem_credits(
 ) -> Result<VoteState, RuntimeError> {
     let last_id = Hash::default();
     let rewards_program_account = create_program_account("solana_rewards_program");
-    let loaders = &mut [vec![(rewards_program::id(), rewards_program_account)]];
+    let vote_program_account = create_program_account("solana_vote_program");
+    let loaders = &mut [
+        vec![(rewards_program::id(), rewards_program_account)],
+        vec![(vote_program::id(), vote_program_account)],
+    ];
 
     let accounts = &mut [
         vote_account.clone(),
