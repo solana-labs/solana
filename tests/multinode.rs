@@ -1946,7 +1946,7 @@ fn test_fullnode_rotate(
     let mut client = mk_client(&leader_info);
     let mut client_last_id = solana_sdk::hash::Hash::default();
 
-    let max_tick_height = 16;
+    let max_tick_height = 8;
     while leader_tick_height_of_next_rotation < max_tick_height
         && validator_tick_height_of_next_rotation < max_tick_height
     {
