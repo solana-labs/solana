@@ -120,7 +120,7 @@ mod tests {
     }
 
     #[test]
-    fn test_redeem_vote_credits() {
+    fn test_redeem_vote_credits_via_program() {
         let from_id = Keypair::new().pubkey();
         let mut from_account = Account::new(100, 0, Pubkey::default());
 
