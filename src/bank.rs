@@ -339,11 +339,10 @@ impl Bank {
         if current_tick_height % NUM_TICKS_PER_SECOND as u64 == 0 {
             //TODO: this is a fix until proper forking is implemented
             let mut bank_cache = self.status_cache.write().unwrap();
-            let old_cache = bank_cache.clone();
-            let mut new_cache = BankStatusCache::default();
+            let mut old_cache = BankStatusCache::default();
+            std::mem::swap(&mut old_cache, &mut bank_cache);
             // old_queue is stored inside the new queue as a cache that gets checked
-            new_cache.merge_into_root(old_cache);
-            *bank_cache = new_cache;
+            bank_cache.merge_into_root(old_cache);
         }
         self.leader_scheduler
             .write()
