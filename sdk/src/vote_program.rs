@@ -46,6 +46,9 @@ pub enum VoteInstruction {
     /// identified by keys[0] for voting
     RegisterAccount,
     Vote(Vote),
+    /// Clear the credits in the vote account
+    /// * Transaction::keys[0] - the "vote account"
+    ClearCredits,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -144,6 +147,18 @@ pub fn process_vote(keyed_accounts: &mut [KeyedAccount], vote: Vote) -> Result<(
 
     let mut vote_state = VoteState::deserialize(&keyed_accounts[0].account.userdata)?;
     vote_state.process_vote(vote);
+    vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
+    Ok(())
+}
+
+pub fn clear_credits(keyed_accounts: &mut [KeyedAccount]) -> Result<(), ProgramError> {
+    if !check_id(&keyed_accounts[0].account.owner) {
+        error!("account[0] is not assigned to the VOTE_PROGRAM");
+        Err(ProgramError::InvalidArgument)?;
+    }
+
+    let mut vote_state = VoteState::deserialize(&keyed_accounts[0].account.userdata)?;
+    vote_state.clear_credits();
     vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
     Ok(())
 }

@@ -7,7 +7,8 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Keypair;
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::transaction::Transaction;
+use solana_sdk::transaction::{Instruction, Transaction};
+use solana_sdk::vote_program::{self, VoteInstruction};
 
 pub struct RewardsTransaction {}
 
@@ -37,14 +38,16 @@ impl RewardsTransaction {
         last_id: Hash,
         fee: u64,
     ) -> Transaction {
-        let instruction = RewardsInstruction::RedeemVoteCredits;
-        Transaction::new(
-            vote_keypair,
+        Transaction::new_with_instructions(
+            &[vote_keypair],
             &[rewards_id, to_id],
-            rewards_program::id(),
-            &instruction,
             last_id,
             fee,
+            vec![rewards_program::id(), vote_program::id()],
+            vec![
+                Instruction::new(0, &RewardsInstruction::RedeemVoteCredits, vec![0, 1, 2]),
+                Instruction::new(1, &VoteInstruction::ClearCredits, vec![0]),
+            ],
         )
     }
 }

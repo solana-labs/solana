@@ -38,5 +38,6 @@ fn entrypoint(
             );
             vote_program::process_vote(keyed_accounts, vote)
         }
+        VoteInstruction::ClearCredits => vote_program::clear_credits(keyed_accounts),
     }
 }

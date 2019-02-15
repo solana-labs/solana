@@ -40,7 +40,11 @@ fn redeem_vote_credits(keyed_accounts: &mut [KeyedAccount]) -> Result<(), Progra
         Err(ProgramError::InvalidArgument)?;
     }
 
-    let mut vote_state = VoteState::deserialize(&keyed_accounts[0].account.userdata)?;
+    // TODO: Verify the next instruction in the transaction being processed is
+    // VoteInstruction::ClearCredits and that it points to the same vote account
+    // as keyed_accounts[0].
+
+    let vote_state = VoteState::deserialize(&keyed_accounts[0].account.userdata)?;
 
     //// TODO: This assumes the staker_id is static. If not, it should use the staker_id
     //// at the time of voting, not at credit redemption.
@@ -62,11 +66,6 @@ fn redeem_vote_credits(keyed_accounts: &mut [KeyedAccount]) -> Result<(), Progra
     // Transfer rewards from the rewards pool to the staking account.
     keyed_accounts[1].account.tokens -= lamports;
     keyed_accounts[2].account.tokens += lamports;
-
-    // TODO: The runtime should reject this, because this program
-    // is not the owner of the VoteState account.
-    vote_state.clear_credits();
-    vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
 
     Ok(())
 }
@@ -101,22 +100,20 @@ mod tests {
         Account::new(tokens, space, rewards_program::id())
     }
 
-    fn redeem_vote_credits_and_deserialize(
+    fn redeem_vote_credits_(
         rewards_id: &Pubkey,
         rewards_account: &mut Account,
         vote_id: &Pubkey,
         vote_account: &mut Account,
         to_id: &Pubkey,
         to_account: &mut Account,
-    ) -> Result<VoteState, ProgramError> {
+    ) -> Result<(), ProgramError> {
         let mut keyed_accounts = [
             KeyedAccount::new(vote_id, true, vote_account),
             KeyedAccount::new(rewards_id, false, rewards_account),
             KeyedAccount::new(to_id, false, to_account),
         ];
-        redeem_vote_credits(&mut keyed_accounts)?;
-        let vote_state = VoteState::deserialize(&vote_account.userdata).unwrap();
-        Ok(vote_state)
+        redeem_vote_credits(&mut keyed_accounts)
     }
 
     #[test]
@@ -156,7 +153,7 @@ mod tests {
         let mut to_account = from_account;
         let to_tokens = to_account.tokens;
 
-        let vote_state = redeem_vote_credits_and_deserialize(
+        redeem_vote_credits_(
             &rewards_id,
             &mut rewards_account,
             &vote_id,
@@ -165,7 +162,6 @@ mod tests {
             &mut to_account,
         )
         .unwrap();
-        assert_eq!(vote_state.credits(), 0);
         assert!(to_account.tokens > to_tokens);
     }
 }
