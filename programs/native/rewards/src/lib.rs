@@ -95,7 +95,6 @@ mod tests {
     use solana_sdk::account::Account;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::vote_program::{self, Vote};
-    use solana_vote_program;
 
     fn create_rewards_account(tokens: u64) -> Account {
         let space = rewards_program::get_max_size();
@@ -126,8 +125,8 @@ mod tests {
         let mut from_account = Account::new(100, 0, Pubkey::default());
 
         let vote_id = Keypair::new().pubkey();
-        let mut vote_account = solana_vote_program::create_vote_account(100);
-        solana_vote_program::register_and_deserialize(
+        let mut vote_account = vote_program::create_vote_account(100);
+        vote_program::register_and_deserialize(
             &from_id,
             &mut from_account,
             &vote_id,
@@ -137,19 +136,15 @@ mod tests {
 
         for _ in 0..vote_program::MAX_VOTE_HISTORY {
             let vote = Vote::new(1);
-            let vote_state = solana_vote_program::vote_and_deserialize(
-                &vote_id,
-                &mut vote_account,
-                vote.clone(),
-            )
-            .unwrap();
+            let vote_state =
+                vote_program::vote_and_deserialize(&vote_id, &mut vote_account, vote.clone())
+                    .unwrap();
             assert_eq!(vote_state.credits(), 0);
         }
 
         let vote = Vote::new(1);
         let vote_state =
-            solana_vote_program::vote_and_deserialize(&vote_id, &mut vote_account, vote.clone())
-                .unwrap();
+            vote_program::vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();
         assert_eq!(vote_state.credits(), 1);
 
         let rewards_id = Keypair::new().pubkey();
