@@ -82,7 +82,7 @@ impl ReplayStage {
             .unwrap()
             .num_ticks_left_in_block(current_slot, bank.active_fork().tick_height());
 
-        trace!(
+        info!(
             "entries.len(): {}, bank.tick_height(): {} num_ticks_left_in_slot: {}",
             entries.len(),
             bank.active_fork().tick_height(),
@@ -100,7 +100,7 @@ impl ReplayStage {
             }
             retain
         });
-        trace!(
+        info!(
             "entries.len(): {}, num_ticks_left_in_slot: {}",
             entries.len(),
             num_ticks_left_in_slot,
@@ -250,7 +250,7 @@ impl ReplayStage {
                                 .unwrap()
                                 .max_tick_height_for_slot(new_slot);
                         }
-                        trace!(
+                        info!(
                             "updated to current_slot: {:?} leader_id: {} max_tick_height: {}",
                             current_slot,
                             leader_id,
@@ -259,7 +259,7 @@ impl ReplayStage {
                     }
 
                     if current_slot.is_some() && my_id == leader_id {
-                        trace!("skip validating current_slot: {:?}", current_slot);
+                        info!("skip validating current_slot: {:?}", current_slot);
                         // skip validating this slot
                         prev_slot = current_slot;
                         current_slot = None;
@@ -267,6 +267,7 @@ impl ReplayStage {
 
                     let entries = {
                         if let Some(slot) = current_slot {
+                            info!("replay getting slot_entries: {} {}", slot, current_blob_index);
                             if let Ok(entries) = blocktree.get_slot_entries(
                                 slot,
                                 current_blob_index,
@@ -280,6 +281,7 @@ impl ReplayStage {
                             vec![]
                         }
                     };
+                    info!("entries: {:?}", entries);
 
                     let entry_len = entries.len();
                     // Fetch the next entries from the database
@@ -313,7 +315,7 @@ impl ReplayStage {
 
                         // we've reached the end of a slot, reset our state and check
                         // for leader rotation
-                        trace!(
+                        info!(
                             "max_tick_height: {} current_tick_height: {}",
                             max_tick_height,
                             current_tick_height
@@ -328,7 +330,7 @@ impl ReplayStage {
                                 .get_leader_for_slot(slot + 1)
                                 .expect("Scheduled leader should be calculated by this point");
 
-                            trace!(
+                            info!(
                                 "next_leader_id: {} leader_id_for_slot: {} my_id: {}",
                                 next_leader_id,
                                 leader_id,
@@ -568,6 +570,7 @@ mod test {
 
     #[test]
     fn test_vote_error_replay_stage_correctness() {
+        solana_logger::setup();
         // Set up dummy node to host a ReplayStage
         let my_keypair = Keypair::new();
         let my_id = my_keypair.pubkey();
@@ -636,6 +639,7 @@ mod test {
 
             info!("Send ReplayStage an entry, should see it on the ledger writer receiver");
             let next_tick = create_ticks(1, last_entry_id);
+            info!("tick: {:?}", next_tick);
             blocktree
                 .write_entries(
                     DEFAULT_SLOT_HEIGHT,
