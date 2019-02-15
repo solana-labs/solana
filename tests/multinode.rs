@@ -2015,7 +2015,6 @@ fn test_fullnode_rotate(
                 .transfer(500, &mint_keypair, bob, &client_last_id)
                 .unwrap();
             debug!("transfer send, signature is {:?}", signature);
-            std::thread::sleep(std::time::Duration::from_millis(100));
             client.poll_for_signature(&signature).unwrap();
             debug!("transfer signature confirmed");
             let actual_bob_balance =
@@ -2030,7 +2029,6 @@ fn test_fullnode_rotate(
             } else {
                 trace!("waiting for leader to reach max tick height...");
             }
-            sleep(Duration::from_millis(100));
         }
     }
 

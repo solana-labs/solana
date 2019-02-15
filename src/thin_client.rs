@@ -332,11 +332,11 @@ impl ThinClient {
     pub fn poll_for_signature(&mut self, signature: &Signature) -> io::Result<()> {
         let now = Instant::now();
         while !self.check_signature(signature) {
-            if now.elapsed().as_secs() > 4 {
+            if now.elapsed().as_secs() > 15 {
                 // TODO: Return a better error.
                 return Err(io::Error::new(io::ErrorKind::Other, "signature not found"));
             }
-            sleep(Duration::from_millis(500));
+            sleep(Duration::from_millis(250));
         }
         Ok(())
     }
