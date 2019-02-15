@@ -30,20 +30,20 @@ fn calc_vote_reward(credits: u64, stake: u64) -> Result<u64, ProgramError> {
 
 fn redeem_vote_credits(keyed_accounts: &mut [KeyedAccount]) -> Result<(), ProgramError> {
     // The owner of the vote account needs to authorize having its credits cleared.
-    if keyed_accounts[1].signer_key().is_none() {
-        error!("account[1] is unsigned");
+    if keyed_accounts[0].signer_key().is_none() {
+        error!("account[0] is unsigned");
         Err(ProgramError::InvalidArgument)?;
     }
 
-    if !vote_program::check_id(&keyed_accounts[1].account.owner) {
-        error!("account[1] is not assigned to the VOTE_PROGRAM");
+    if !vote_program::check_id(&keyed_accounts[0].account.owner) {
+        error!("account[0] is not assigned to the VOTE_PROGRAM");
         Err(ProgramError::InvalidArgument)?;
     }
 
-    let mut vote_state = VoteState::deserialize(&keyed_accounts[1].account.userdata)?;
+    let mut vote_state = VoteState::deserialize(&keyed_accounts[0].account.userdata)?;
 
-    // TODO: This assumes the staker_id is static. If not, it should use the staker_id
-    // at the time of voting, not at credit redemption.
+    //// TODO: This assumes the staker_id is static. If not, it should use the staker_id
+    //// at the time of voting, not at credit redemption.
     if vote_state.staker_id != *keyed_accounts[2].unsigned_key() {
         error!("account[2] was not the VOTE_PROGRAM's staking account");
         Err(ProgramError::InvalidArgument)?;
@@ -60,13 +60,13 @@ fn redeem_vote_credits(keyed_accounts: &mut [KeyedAccount]) -> Result<(), Progra
     let lamports = calc_vote_reward(vote_state.credits(), stake)?;
 
     // Transfer rewards from the rewards pool to the staking account.
-    keyed_accounts[0].account.tokens -= lamports;
+    keyed_accounts[1].account.tokens -= lamports;
     keyed_accounts[2].account.tokens += lamports;
 
     // TODO: The runtime should reject this, because this program
     // is not the owner of the VoteState account.
     vote_state.clear_credits();
-    vote_state.serialize(&mut keyed_accounts[1].account.userdata)?;
+    vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
 
     Ok(())
 }
@@ -111,8 +111,8 @@ mod tests {
         to_account: &mut Account,
     ) -> Result<VoteState, ProgramError> {
         let mut keyed_accounts = [
-            KeyedAccount::new(rewards_id, true, rewards_account),
             KeyedAccount::new(vote_id, true, vote_account),
+            KeyedAccount::new(rewards_id, false, rewards_account),
             KeyedAccount::new(to_id, false, to_account),
         ];
         redeem_vote_credits(&mut keyed_accounts)?;
