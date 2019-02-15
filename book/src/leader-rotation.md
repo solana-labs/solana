@@ -91,11 +91,12 @@ ledger schedule in the cluster to 1 in 1 million.
  
 ## Leader Schedule Generation at Genesis
 
-The genesis block declares the first leader.  This leader is scheduled for the
-first two epochs.  The length of the first two epochs can be specified in the
-genesis block as well.  The minimum length of the first epochs must be greater
-than or equal to the maximum rollback depth as defined in [fork
-selection](fork-selection.md).
+The genesis block declares the first leader for the first epoch.  This leader
+ends up scheduled for the first two epochs because the leader schedule is also
+generated at slot 0 for the next epoch.  The length of the first two epochs can
+be specified in the genesis block as well.  The minimum length of the first
+epochs must be greater than or equal to the maximum rollback depth as defined in
+[fork selection](fork-selection.md).
 
 ## Leader Schedule Generation Algorithm
 
