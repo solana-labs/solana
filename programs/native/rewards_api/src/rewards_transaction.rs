@@ -31,16 +31,16 @@ impl RewardsTransaction {
     }
 
     pub fn new_redeem_credits(
-        keypair: &Keypair,
-        vote_id: Pubkey,
+        vote_keypair: &Keypair,
+        rewards_id: Pubkey,
         to_id: Pubkey,
         last_id: Hash,
         fee: u64,
     ) -> Transaction {
         let instruction = RewardsInstruction::RedeemVoteCredits;
         Transaction::new(
-            keypair,
-            &[vote_id, to_id],
+            vote_keypair,
+            &[rewards_id, to_id],
             rewards_program::id(),
             &instruction,
             last_id,
