@@ -11,6 +11,7 @@ use crate::genesis_block::GenesisBlock;
 use crate::last_id_queue::{LastIdQueue, MAX_ENTRY_IDS};
 use crate::leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig};
 use crate::poh_recorder::{PohRecorder, PohRecorderError};
+use crate::poh_service::NUM_TICKS_PER_SECOND;
 use crate::result::Error;
 use crate::rpc_pubsub::RpcSubscriptions;
 use crate::status_cache::StatusCache;
@@ -101,7 +102,7 @@ pub struct Bank {
     pub accounts: Accounts,
 
     /// A cache of signature statuses
-    status_cache: RwLock<Arc<BankStatusCache>>,
+    status_cache: RwLock<BankStatusCache>,
 
     /// FIFO queue of `last_id` items
     last_id_queue: RwLock<LastIdQueue>,
@@ -121,7 +122,7 @@ impl Default for Bank {
         Bank {
             accounts: Accounts::default(),
             last_id_queue: RwLock::new(LastIdQueue::default()),
-            status_cache: RwLock::new(Arc::new(BankStatusCache::default())),
+            status_cache: RwLock::new(BankStatusCache::default()),
             confirmation_time: AtomicUsize::new(std::usize::MAX),
             leader_scheduler: Arc::new(RwLock::new(LeaderScheduler::default())),
             subscriptions: RwLock::new(None),
@@ -335,14 +336,14 @@ impl Bank {
             last_id_queue.register_tick(last_id);
             last_id_queue.tick_height
         };
-        if current_tick_height % NUM_TICKS_PER_SECOND == 0 {
+        if current_tick_height % NUM_TICKS_PER_SECOND as u64 == 0 {
             //TODO: this is a fix until proper forking is implemented
             let mut bank_cache = self.status_cache.write().unwrap();
             let old_cache = bank_cache.clone();
-            let mut new_cache = Arc::new(BankStatusCache::default());
+            let mut new_cache = BankStatusCache::default();
             // old_queue is stored inside the new queue as a cache that gets checked
-            new_cache.merge_into_root(old_cache.into_inner());
-            *bank_cache = new_status_cache;
+            new_cache.merge_into_root(old_cache);
+            *bank_cache = new_cache;
         }
         self.leader_scheduler
             .write()

@@ -1,5 +1,6 @@
 use crate::bloom::{Bloom, BloomHashIndex};
 use crate::last_id_queue::MAX_ENTRY_IDS;
+use crate::poh_service::NUM_TICKS_PER_SECOND;
 use hashbrown::HashMap;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Signature;
