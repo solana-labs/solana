@@ -406,7 +406,7 @@ export class Connection {
           };
           break;
         }
-        if (attempts === 8) {
+        if (attempts === 16) {
           throw new Error(
             `Unable to obtain a new last id after ${Date.now() - startTime}ms`,
           );
