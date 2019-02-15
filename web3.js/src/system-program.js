@@ -103,27 +103,4 @@ export class SystemProgram {
       userdata,
     });
   }
-
-  /**
-   * Spawn a new program from an account
-   */
-  static spawn(programId: PublicKey): Transaction {
-    const userdataLayout = BufferLayout.struct([
-      BufferLayout.u32('instruction'),
-    ]);
-
-    const userdata = Buffer.alloc(userdataLayout.span);
-    userdataLayout.encode(
-      {
-        instruction: 3, // Spawn instruction
-      },
-      userdata,
-    );
-
-    return new Transaction().add({
-      keys: [programId],
-      programId: SystemProgram.programId,
-      userdata,
-    });
-  }
 }

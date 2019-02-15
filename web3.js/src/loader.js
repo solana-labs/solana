@@ -4,7 +4,6 @@ import * as BufferLayout from 'buffer-layout';
 
 import {Account} from './account';
 import {PublicKey} from './publickey';
-import {SystemProgram} from './system-program';
 import {Transaction} from './transaction';
 import {sendAndConfirmTransaction} from './util/send-and-confirm-transaction';
 import type {Connection} from './connection';
@@ -115,14 +114,11 @@ export class Loader {
       userdata,
     );
 
-    const transaction = new Transaction();
-
-    transaction.add({
+    const transaction = new Transaction().add({
       keys: [program.publicKey],
       programId: this.programId,
       userdata,
     });
-    transaction.add(SystemProgram.spawn(program.publicKey));
     await sendAndConfirmTransaction(this.connection, transaction, program);
   }
 }
