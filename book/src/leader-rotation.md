@@ -30,13 +30,13 @@ their ledger state before the next schedule is generated. A cluster may choose
 to shorten the offset to reduce the time between stake changes and leader
 schedule updates.
 
-While operating without partitions lasting longer than an epoch the schedule
+While operating without partitions lasting longer than an epoch, the schedule
 only needs to be generated when the root fork crosses the epoch boundary.  Since
 the schedule is for the next epoch, any new stakes committed to the root fork
 will not be active until the next epoch.  The block used for generating the
 leader schedule is the first block to cross the epoch boundary.
 
-Without a partition lasting longer then an epoch, the cluster will work as
+Without a partition lasting longer than an epoch, the cluster will work as
 follows:
 
 1. A validator continuously updates its own root fork as it votes.
@@ -55,12 +55,13 @@ again.
 No inconsistency can exist because every validator that is voting with the
 cluster has skipped 100 and 101 when its root passes 102.  All validators,
 regardless of voting pattern, would be committing to a root that is either 102,
-or a descendant of 102.  The duration of the leader schedule offset has a direct
-relationship to the likelihood of a cluster inconsistency state.  If the leader
-schedule offset is 6 standard deviations longer than the median partition time,
-then the likelihood of a partition longer than the offset is 1 in 1 million.
+or a descendant of 102.
 
 ### Leader Schedule Rotation with Epoch Sized Partitions.
+
+The duration of the leader schedule offset has a direct relationship to the
+likelihood of a cluster having an inconsistent view of the correct leader
+schedule.
 
 Consider the following scenario:
 
@@ -82,12 +83,18 @@ epoch.  For this reason, the epoch duration should be selected to be much much
 larger then slot time and the expected length for a fork to be committed to
 root.
 
+After observing the cluster for a sufficient amount of time, the leader schedule
+offset can be selected based on the median partition duration and its standard
+deviation.  For example, an offset longer then the median partition duration
+plus six standard deviations would reduce the likelihood of an inconsistent
+ledger schedule in the cluster to 1 in 1 million.
+ 
 ## Leader Schedule Generation at Genesis
 
 The genesis block declares the first leader.  This leader is scheduled for the
 first two epochs.  The length of the first two epochs can be specified in the
 genesis block as well.  The minimum length of the first epochs must be greater
-than or equal than the maximum rollback depth as defined in [fork
+than or equal to the maximum rollback depth as defined in [fork
 selection](fork-selection.md).
 
 ## Leader Schedule Generation Algorithm
@@ -113,16 +120,33 @@ attack to influence its outcome.
 
 ### Active Set
 
-The active set, however, can be biased by a leader by censoring validator votes.
-To reduce the likelihood of censorship, the active set is sampled many slots in
-advance, such that votes will have been collected by multiple leaders. If even
-one node is honest, the malicious leaders will not be able to use censorship to
-influence the leader schedule.
+A leader can bias the active set by censoring validator votes.  Two possible
+ways exist for leaders to censor the active set:
+
+* Ignore votes from validators 
+* Refuse to vote for blocks with votes from validators
+
+To reduce the likelihood of censorship, the active set is calculated at the
+leader schedule offset boundary over an *active set sampling duration*. The
+active set sampling duration is long enough such that votes will have been
+collected by multiple leaders.
 
 ### Staking
 
-Leaders can censor new staking transactions, or refuse to validate blocks with
-new stakes.
+Leaders can censor new staking transactions or refuse to validate blocks with
+new stakes.  This attack is similar to censorship of validator votes.
+
+### Validator operational key loss
+
+Leaders and validators are expected to use ephemeral keys for operation, and
+stake owners authorize the validators to do work with their stake via
+delegation.
+
+The cluster should be able to recover from the loss of all the ephemeral keys
+used by leaders and validators, which could occur through a common software
+vulnerability shared by all the nodes.  Stake owners should be able to vote
+directly co-sign a validator vote even though the stake is currently delegated
+to a validator.
 
 ## Appending Entries
 
@@ -140,22 +164,3 @@ previous leader's slot. Note that the next leader should do repair requests in
 parallel, and postpone sending ticks until it is confident other validators
 also failed to observe the previous leader's entries. If a leader incorrectly
 builds on its own ticks, the leader following it must replace all its ticks.
-
-## Alternative Leader Scheduler Rotation
-
-Two phase commit:
-
-1. Root crosses the epoch boundary.
-
-2. An *activate* transaction is submitted by the leader to acknowledge the new
-schedule if they observe a supermajority at root.
-
-3. The *activate* transaction sets the activation for the new leader schedule to
-be at the epoch following block's slot plus half an epoch length.  So any forks in
-the next epoch boundary use the new leader schedule.
-
-Validators reject the block if they do not observe the root to be past the epoch
-boundary.  The complexity with this approach revolves around the incentives for
-any leader to bet that the super majority has confirmed the root.  One possible
-solution is that *all* leader rewards are not generated until this transaction
-is encoded into the ledger.
