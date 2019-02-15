@@ -59,6 +59,7 @@ fn verify_instruction(
     program_id: &Pubkey,
     pre_program_id: &Pubkey,
     pre_tokens: u64,
+    pre_userdata: &[u8],
     account: &Account,
 ) -> Result<(), ProgramError> {
     // Verify the transaction
@@ -70,6 +71,13 @@ fn verify_instruction(
     // For accounts unassigned to the program, the individual balance of each accounts cannot decrease.
     if *program_id != account.owner && pre_tokens > account.tokens {
         return Err(ProgramError::ExternalAccountTokenSpend);
+    }
+    // For accounts unassigned to the program, the userdata may not change.
+    if *program_id != account.owner
+        && !system_program::check_id(&program_id)
+        && pre_userdata != &account.userdata[..]
+    {
+        return Err(ProgramError::ExternalAccountUserdataModified);
     }
     Ok(())
 }
@@ -91,7 +99,7 @@ fn execute_instruction(
     let pre_total: u64 = program_accounts.iter().map(|a| a.tokens).sum();
     let pre_data: Vec<_> = program_accounts
         .iter_mut()
-        .map(|a| (a.owner, a.tokens))
+        .map(|a| (a.owner, a.tokens, a.userdata.clone()))
         .collect();
 
     process_instruction(
@@ -103,9 +111,16 @@ fn execute_instruction(
     )?;
 
     // Verify the instruction
-    for ((pre_program_id, pre_tokens), post_account) in pre_data.iter().zip(program_accounts.iter())
+    for ((pre_program_id, pre_tokens, pre_userdata), post_account) in
+        pre_data.iter().zip(program_accounts.iter())
     {
-        verify_instruction(&program_id, pre_program_id, *pre_tokens, post_account)?;
+        verify_instruction(
+            &program_id,
+            pre_program_id,
+            *pre_tokens,
+            pre_userdata,
+            post_account,
+        )?;
     }
     // The total sum of all the tokens in all the accounts cannot change.
     let post_total: u64 = program_accounts.iter().map(|a| a.tokens).sum();
