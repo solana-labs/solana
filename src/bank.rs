@@ -340,8 +340,11 @@ impl Bank {
             //TODO: this is a fix until proper forking is implemented
             let mut bank_cache = self.status_cache.write().unwrap();
             let mut old_cache = BankStatusCache::default();
+            // swap the two variables
+            // old_cache becomes the old bank cache
+            // and bank_cache is a default
             std::mem::swap(&mut old_cache, &mut bank_cache);
-            // old_queue is stored inside the new queue as a cache that gets checked
+            // old bank cache is now held inside the bank_cache queue
             bank_cache.merge_into_root(old_cache);
         }
         self.leader_scheduler
