@@ -402,8 +402,7 @@ impl Bank {
                 self.init_fork(current_slot.unwrap(), &entries[0].id, base_slot)
                     .expect("init fork");
             }
-            let _ = self
-                .fork(current_slot.unwrap())
+            self.fork(current_slot.unwrap())
                 .unwrap()
                 .process_entries(&entries)?;
 
