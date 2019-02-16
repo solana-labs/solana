@@ -2,6 +2,7 @@
 
 use crate::bank::Bank;
 use crate::blocktree::Blocktree;
+use crate::blocktree_processor;
 use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
 use crate::entry::{Entry, EntryReceiver, EntrySender, EntrySlice};
@@ -110,7 +111,7 @@ impl ReplayStage {
             // If we don't process the entry now, the for loop will exit and the entry
             // will be dropped.
             if 0 == num_ticks_to_next_vote || (i + 1) == entries.len() {
-                res = bank.process_entries(&entries[0..=i], leader_scheduler);
+                res = blocktree_processor::process_entries(bank, &entries[0..=i], leader_scheduler);
 
                 if res.is_err() {
                     // TODO: This will return early from the first entry that has an erroneous

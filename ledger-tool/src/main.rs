@@ -1,6 +1,7 @@
 use clap::{crate_version, App, Arg, SubCommand};
 use solana::bank::Bank;
 use solana::blocktree::Blocktree;
+use solana::blocktree_processor;
 use solana::genesis_block::GenesisBlock;
 use std::io::{stdout, Write};
 use std::process::exit;
@@ -129,7 +130,7 @@ fn main() {
                 last_id = entry.id;
                 num_entries += 1;
 
-                if let Err(e) = bank.process_entry(&entry) {
+                if let Err(e) = blocktree_processor::process_entry(&bank, &entry) {
                     eprintln!("verify failed at entry[{}], err: {:?}", i + 2, e);
                     if !matches.is_present("continue") {
                         exit(1);
