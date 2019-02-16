@@ -14,7 +14,7 @@ use crate::rpc_pubsub_service::PubSubService;
 use crate::rpc_service::JsonRpcService;
 use crate::service::Service;
 use crate::storage_stage::StorageState;
-use crate::tpu::{Tpu, TpuRotationReceiver, TpuRotationSender};
+use crate::tpu::{Tpu, TpuRotationReceiver};
 use crate::tvu::{Sockets, Tvu};
 use crate::voting_keypair::VotingKeypair;
 use log::Level;
@@ -104,7 +104,6 @@ pub struct Fullnode {
     tpu_sockets: Vec<UdpSocket>,
     broadcast_socket: UdpSocket,
     node_services: NodeServices,
-    rotation_sender: TpuRotationSender,
     rotation_receiver: TpuRotationReceiver,
     blocktree: Arc<Blocktree>,
     leader_scheduler: Arc<RwLock<LeaderScheduler>>,
@@ -279,7 +278,6 @@ impl Fullnode {
             exit,
             tpu_sockets: node.sockets.tpu,
             broadcast_socket: node.sockets.broadcast,
-            rotation_sender,
             rotation_receiver,
             blocktree,
             leader_scheduler,
@@ -371,7 +369,6 @@ impl Fullnode {
                 max_tick_height,
                 blob_index,
                 last_entry_id,
-                &self.rotation_sender,
                 &self.blocktree,
                 &self.leader_scheduler,
             );
@@ -920,14 +917,8 @@ mod tests {
         // Wait for convergence
         converge(&leader_node_info, 2);
 
-        info!("Wait for leader -> validator transition");
-        let rotation_signal = leader
-            .rotation_receiver
-            .recv()
-            .expect("signal for leader -> validator transition");
-        debug!("received rotation signal: {:?}", rotation_signal);
-        // Re-send the rotation signal, it'll be received again once the tvu is unpaused
-        leader.rotation_sender.send(rotation_signal).expect("send");
+        // Wait for Tpu bank to progress while the Tvu bank is stuck
+        sleep(Duration::from_millis(1000));
 
         info!("Make sure the tvu bank has not reached the last tick for the slot (the last tick is ticks_per_slot - 1)");
         {

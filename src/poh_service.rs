@@ -1,11 +1,9 @@
 //! The `poh_service` module implements a service that records the passing of
 //! "ticks", a measure of time in the PoH stream
 
-use crate::poh_recorder::{PohRecorder, PohRecorderError};
-use crate::result::Error;
+use crate::poh_recorder::PohRecorder;
 use crate::result::Result;
 use crate::service::Service;
-use crate::tpu::TpuRotationSender;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::sleep;
@@ -46,11 +44,7 @@ impl PohService {
         self.join()
     }
 
-    pub fn new(
-        poh_recorder: PohRecorder,
-        config: PohServiceConfig,
-        to_validator_sender: TpuRotationSender,
-    ) -> Self {
+    pub fn new(poh_recorder: PohRecorder, config: PohServiceConfig) -> Self {
         // PohService is a headless producer, so when it exits it should notify the banking stage.
         // Since channel are not used to talk between these threads an AtomicBool is used as a
         // signal.
@@ -61,12 +55,7 @@ impl PohService {
             .name("solana-poh-service-tick_producer".to_string())
             .spawn(move || {
                 let mut poh_recorder_ = poh_recorder;
-                let return_value = Self::tick_producer(
-                    &mut poh_recorder_,
-                    config,
-                    &poh_exit_,
-                    &to_validator_sender,
-                );
+                let return_value = Self::tick_producer(&mut poh_recorder_, config, &poh_exit_);
                 poh_exit_.store(true, Ordering::Relaxed);
                 return_value
             })
@@ -82,18 +71,13 @@ impl PohService {
         poh: &mut PohRecorder,
         config: PohServiceConfig,
         poh_exit: &AtomicBool,
-        to_validator_sender: &TpuRotationSender,
     ) -> Result<()> {
-        let max_tick_height = poh.max_tick_height();
         loop {
             match config {
                 PohServiceConfig::Tick(num) => {
                     for _ in 1..num {
                         let res = poh.hash();
                         if let Err(e) = res {
-                            if let Error::PohRecorderError(PohRecorderError::MaxHeightReached) = e {
-                                to_validator_sender.send(max_tick_height)?;
-                            }
                             return Err(e);
                         }
                     }
@@ -104,9 +88,6 @@ impl PohService {
             }
             let res = poh.tick();
             if let Err(e) = res {
-                if let Error::PohRecorderError(PohRecorderError::MaxHeightReached) = e {
-                    to_validator_sender.send(max_tick_height)?;
-                }
                 return Err(e);
             }
             if poh_exit.load(Ordering::Relaxed) {
@@ -164,11 +145,9 @@ mod tests {
         };
 
         const HASHES_PER_TICK: u64 = 2;
-        let (sender, _) = channel();
         let poh_service = PohService::new(
             poh_recorder,
             PohServiceConfig::Tick(HASHES_PER_TICK as usize),
-            sender,
         );
 
         // get some events
