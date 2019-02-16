@@ -25,7 +25,7 @@ usage: $0 [update|up|down|logs|deploy] [command-specific options]
 
 Operate a local testnet
 
- update   - Update the network image from dockerhub.com
+ update   - Update the image from dockerhub.com
  up       - Start the network
  down     - Stop the network
  logs     - Display network logging
@@ -35,9 +35,13 @@ Operate a local testnet
  logs-specific options:
    -f     - Follow log output
 
- update/up-specific options:
-   edge   - Update/start the "edge" channel network
-   beta   - Update/start the "beta" channel network
+ update-specific options:
+   edge   - Update the "edge" channel image
+   beta   - Update the "beta" channel imae
+
+ up-specific options:
+   edge   - Start the "edge" channel image
+   beta   - Start the "beta" channel image
    -n     - Optional Docker network to join
 
    Default channel: $channel
@@ -72,31 +76,39 @@ update)
   )
   ;;
 up)
-  if [[ -n $1 ]]; then
-    channel="$1"
-  fi
-  [[ $channel = edge || $channel = beta ]] || usage "Invalid channel: $channel"
-
-  if [[ $2 = -n ]]; then
-    [[ -n $3 ]] || usage "Invalid -n argument"
-    network="$3"
-  fi
+  while [[ -n $1 ]]; do
+    if [[ $1 = -n ]]; then
+      [[ -n $2 ]] || usage "Invalid $1 argument"
+      network="$2"
+      shift 2
+    elif [[ $1 = edge ]]; then
+      channel=edge
+      shift 1
+    elif [[ $1 = beta ]]; then
+      channel=beta
+      shift 1
+    else
+      usage "Unknown argument: $1"
+    fi
+  done
 
   (
     set -x
     RUST_LOG=${RUST_LOG:-solana=warn,solana_bpf=info,solana_jsonrpc=info,solana::rpc=info,solana_fullnode=info,solana::drone=info,solana::bank=info,solana::banking_stage=info,solana::system_program=info}
 
-    docker run \
-      --detach \
-      --name solana-localnet \
-      --network "$network" \
-      --rm \
-      --publish 8899:8899 \
-      --publish 8900:8900 \
-      --publish 9900:9900 \
-      --tty \
-      --env RUST_LOG="$RUST_LOG" \
-      solanalabs/solana:"$channel"
+    ARGS=(
+      --detach
+      --name solana-localnet
+      --network "$network"
+      --rm
+      --publish 8899:8899
+      --publish 8900:8900
+      --publish 9900:9900
+      --tty
+      --env "RUST_LOG=$RUST_LOG"
+    )
+
+    docker run "${ARGS[@]}" solanalabs/solana:"$channel"
 
     for _ in 1 2 3 4 5; do
       if curl \
