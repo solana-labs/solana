@@ -154,7 +154,7 @@ impl Bank {
 
     pub fn copy_for_tpu(&self) -> Self {
         let mut status_cache = BankStatusCache::default();
-        status_cache.merge_from_root(self.status_cache.read().unwrap().clone());
+        status_cache.merge_into_root(self.status_cache.read().unwrap().clone());
         Self {
             accounts: self.accounts.copy_for_tpu(),
             status_cache: RwLock::new(status_cache),

@@ -182,10 +182,14 @@ mod tests {
         first.add(&sig);
         assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
         let last_id = hash(last_id.as_ref());
-        let second = BankStatusCache::new(&last_id);
-        first.merge_from_root(second);
-        assert_eq!(first.get_signature_status(&sig), Some(Ok(())),);
-        assert!(first.has_signature(&sig));
+        let mut second = BankStatusCache::new(&last_id);
+        second.merge_from_root(first);
+        assert_eq!(second.get_signature_status(&sig), Some(Ok(())),);
+        assert!(second.has_signature(&sig));
+        let mut third = BankStatusCache::new(&last_id);
+        third.merge_from_root(second);
+        assert_eq!(third.get_signature_status(&sig), Some(Ok(())),);
+        assert!(third.has_signature(&sig));
     }
 
     #[test]
