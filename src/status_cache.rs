@@ -61,6 +61,7 @@ impl<T: Clone> StatusCache<T> {
     pub fn clear(&mut self) {
         self.failures.clear();
         self.signatures.clear();
+        self.merges = VecDeque::new();
     }
     fn get_signature_status_merged(&self, sig: &Signature) -> Option<Result<(), T>> {
         for c in &self.merges {
@@ -190,6 +191,9 @@ mod tests {
         third.merge_from_root(second);
         assert_eq!(third.get_signature_status(&sig), Some(Ok(())),);
         assert!(third.has_signature(&sig));
+        third.clear();
+        assert_eq!(third.get_signature_status(&sig), None);
+        assert!(!third.has_signature(&sig));
     }
 
     #[test]
