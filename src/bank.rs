@@ -9,7 +9,6 @@ use crate::entry::Entry;
 use crate::entry::EntrySlice;
 use crate::genesis_block::GenesisBlock;
 use crate::last_id_queue::{LastIdQueue, MAX_ENTRY_IDS};
-use crate::leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig};
 use crate::poh_recorder::{PohRecorder, PohRecorderError};
 use crate::result::Error;
 use crate::rpc_pubsub::RpcSubscriptions;
@@ -109,10 +108,6 @@ pub struct Bank {
     // The latest confirmation time for the network
     confirmation_time: AtomicUsize,
 
-    /// Tracks and updates the leader schedule based on the votes and account stakes
-    /// processed by the bank
-    pub leader_scheduler: Arc<RwLock<LeaderScheduler>>,
-
     subscriptions: RwLock<Option<Arc<RpcSubscriptions>>>,
 }
 
@@ -123,27 +118,17 @@ impl Default for Bank {
             last_id_queue: RwLock::new(LastIdQueue::default()),
             status_cache: RwLock::new(BankStatusCache::default()),
             confirmation_time: AtomicUsize::new(std::usize::MAX),
-            leader_scheduler: Arc::new(RwLock::new(LeaderScheduler::default())),
             subscriptions: RwLock::new(None),
         }
     }
 }
 
 impl Bank {
-    pub fn new_with_leader_scheduler_config(
-        genesis_block: &GenesisBlock,
-        leader_scheduler_config: &LeaderSchedulerConfig,
-    ) -> Self {
+    pub fn new(genesis_block: &GenesisBlock) -> Self {
         let mut bank = Self::default();
-        bank.leader_scheduler =
-            Arc::new(RwLock::new(LeaderScheduler::new(leader_scheduler_config)));
         bank.process_genesis_block(genesis_block);
         bank.add_builtin_programs();
         bank
-    }
-
-    pub fn new(genesis_block: &GenesisBlock) -> Self {
-        Self::new_with_leader_scheduler_config(genesis_block, &LeaderSchedulerConfig::default())
     }
 
     pub fn set_subscriptions(&self, subscriptions: Arc<RpcSubscriptions>) {
@@ -159,7 +144,6 @@ impl Bank {
             status_cache: RwLock::new(status_cache),
             last_id_queue: RwLock::new(self.last_id_queue.read().unwrap().clone()),
             confirmation_time: AtomicUsize::new(self.confirmation_time()),
-            leader_scheduler: self.leader_scheduler.clone(),
             subscriptions: RwLock::new(None),
         }
     }
@@ -207,10 +191,6 @@ impl Bank {
             &genesis_block.bootstrap_leader_vote_account_id,
             &bootstrap_leader_vote_account,
         );
-        self.leader_scheduler
-            .write()
-            .unwrap()
-            .update_tick_height(0, self);
 
         self.last_id_queue
             .write()
@@ -335,10 +315,6 @@ impl Bank {
             last_id_queue.register_tick(last_id);
             last_id_queue.tick_height
         };
-        self.leader_scheduler
-            .write()
-            .unwrap()
-            .update_tick_height(current_tick_height, self);
     }
 
     /// Process a Transaction. This is used for unit tests and simply calls the vector Bank::process_transactions method.
@@ -876,14 +852,6 @@ impl Bank {
                 }
             }
         }
-    }
-
-    #[cfg(test)]
-    fn get_current_leader(&self) -> Option<Pubkey> {
-        let tick_height = self.tick_height();
-        let leader_scheduler = self.leader_scheduler.read().unwrap();
-        let slot = leader_scheduler.tick_height_to_slot(tick_height);
-        leader_scheduler.get_leader_for_slot(slot)
     }
 
     pub fn tick_height(&self) -> u64 {
