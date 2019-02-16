@@ -1,26 +1,47 @@
 #!/usr/bin/env bash
-set -ex
+#
+# Run a minimal Solana cluster.  Ctrl-C to exit.
+#
+# Before running this script ensure standard Solana programs are available
+# in the PATH, or that `cargo build --all` ran successfully
+#
+set -e
+
+# Prefer possible `cargo build --all` binaries over PATH binaries
+PATH=$PWD/target/debug:$PATH
+
+ok=true
+for program in solana-{genesis,keygen,fullnode{,-config}}; do
+  $program -V || ok=false
+done
+$ok || {
+  echo
+  echo "Unable to locate required programs.  Try running: cargo build --all"
+  exit 1
+}
 
 export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
 export RUST_BACKTRACE=1
+dataDir=$PWD/target/"$(basename "$0" .sh)"
 
-solana-keygen -o /config/leader-keypair.json
-solana-keygen -o /config/drone-keypair.json
+set -x
+solana-keygen -o "$dataDir"/config/leader-keypair.json
+solana-keygen -o "$dataDir"/config/drone-keypair.json
 
 solana-fullnode-config \
-  --keypair=/config/leader-keypair.json -l > /config/leader-config.json
+  --keypair="$dataDir"/config/leader-keypair.json -l > "$dataDir"/config/leader-config.json
 solana-genesis \
   --num_tokens 1000000000 \
-  --mint /config/drone-keypair.json \
-  --bootstrap-leader-keypair /config/leader-keypair.json \
-  --ledger /ledger
+  --mint "$dataDir"/config/drone-keypair.json \
+  --bootstrap-leader-keypair "$dataDir"/config/leader-keypair.json \
+  --ledger "$dataDir"/ledger
 
-solana-drone --keypair /config/drone-keypair.json &
+solana-drone --keypair "$dataDir"/config/drone-keypair.json &
 drone=$!
 
 solana-fullnode \
-  --identity /config/leader-config.json \
-  --ledger /ledger/ \
+  --identity "$dataDir"/config/leader-config.json \
+  --ledger "$dataDir"/ledger/ \
   --rpc-port 8899 &
 fullnode=$!
 
