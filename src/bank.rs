@@ -3,14 +3,14 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 
-use crate::blocktree::Blocktree;
-use crate::replay_stage::get_next_slot;
 use crate::bank_delta::BankDelta;
 use crate::bank_fork::BankFork;
+use crate::blocktree::Blocktree;
 use crate::forks::{self, Forks, ForksError};
 use crate::genesis_block::GenesisBlock;
 use crate::leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig};
 use crate::poh_recorder::PohRecorder;
+use crate::replay_stage::get_next_slot;
 use crate::rpc_pubsub::RpcSubscriptions;
 use bincode::deserialize;
 use solana_sdk::account::Account;
@@ -307,8 +307,7 @@ impl Bank {
 
     /// Starting from the genesis block, append the provided entries to the ledger verifying them
     /// along the way.
-    pub fn process_ledger(&mut self, blocktree: &Blocktree) -> Result<(u64, Hash)>
-    {
+    pub fn process_ledger(&mut self, blocktree: &Blocktree) -> Result<(u64, Hash)> {
         // assumes this function is starting from genesis
         let mut last_entry_id = self.root().last_id();
 
@@ -333,12 +332,8 @@ impl Bank {
         let mut prev_slot = None;
         let mut current_slot = Some(0);
         loop {
-
             if current_slot.is_none() {
-                let new_slot = get_next_slot(
-                    &blocktree,
-                    prev_slot.expect("prev_slot must exist"),
-                );
+                let new_slot = get_next_slot(&blocktree, prev_slot.expect("prev_slot must exist"));
                 if let Some(new_slot) = new_slot {
                     // Reset the state
                     current_slot = Some(new_slot);
@@ -346,21 +341,17 @@ impl Bank {
                 } else {
                     break;
                 }
-                trace!(
-                    "updated to current_slot: {:?}",
-                    current_slot,
-                );
+                trace!("updated to current_slot: {:?}", current_slot,);
             }
-
 
             let mut entries = {
                 if let Some(slot) = current_slot {
-                    trace!("process_ledger getting slot_entries: {} {}", slot, entry_height);
-                    if let Ok(entries) = blocktree.get_slot_entries(
+                    trace!(
+                        "process_ledger getting slot_entries: {} {}",
                         slot,
-                        entry_height,
-                        Some(10),
-                    ) {
+                        entry_height
+                    );
+                    if let Ok(entries) = blocktree.get_slot_entries(slot, entry_height, Some(10)) {
                         entries
                     } else {
                         break;
@@ -376,7 +367,11 @@ impl Bank {
                 .unwrap()
                 .num_ticks_left_in_block(current_slot.unwrap(), self.active_fork().tick_height());
 
-            trace!("process_ledger num_entries: {} slot: {}", entries.len(), current_slot.unwrap());
+            trace!(
+                "process_ledger num_entries: {} slot: {}",
+                entries.len(),
+                current_slot.unwrap()
+            );
 
             entries.retain(|e| {
                 let retain = num_ticks_left_in_slot > 0;
@@ -400,10 +395,15 @@ impl Bank {
                 self.init_fork(current_slot.unwrap(), &entries[0].id, base_slot)
                     .expect("init fork");
             }
-            let _ = self.fork(current_slot.unwrap()).unwrap().process_entries(&entries)?;
+            let _ = self
+                .fork(current_slot.unwrap())
+                .unwrap()
+                .process_entries(&entries)?;
 
             if num_ticks_left_in_slot == 0 {
-                let fork = self.fork(current_slot.unwrap()).expect("current bank state");
+                let fork = self
+                    .fork(current_slot.unwrap())
+                    .expect("current bank state");
 
                 trace!("freezing {} from replay_stage", current_slot.unwrap());
                 fork.head().freeze();
@@ -416,10 +416,12 @@ impl Bank {
             last_entry_id = entries.last().unwrap().id;
             entry_height += entries.len() as u64;
 
-            self.leader_scheduler
-                .write()
-                .unwrap()
-                .update_tick_height(self.fork(current_slot.unwrap()).unwrap().tick_height(), &self);
+            if current_slot.is_some() {
+                self.leader_scheduler.write().unwrap().update_tick_height(
+                    self.fork(current_slot.unwrap()).unwrap().tick_height(),
+                    &self,
+                );
+            }
         }
         Ok((entry_height, last_entry_id))
     }
@@ -506,7 +508,7 @@ impl Bank {
 mod tests {
     use super::*;
     use crate::bank_fork::BankFork;
-    use crate::entry::{next_entry};
+    use crate::entry::next_entry;
     use crate::poh_recorder::PohRecorder;
     use bincode::serialize;
     use hashbrown::HashSet;

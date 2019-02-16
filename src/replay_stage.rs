@@ -236,10 +236,8 @@ impl ReplayStage {
                     }
 
                     if current_slot.is_none() {
-                        let new_slot = get_next_slot(
-                            &blocktree,
-                            prev_slot.expect("prev_slot must exist"),
-                        );
+                        let new_slot =
+                            get_next_slot(&blocktree, prev_slot.expect("prev_slot must exist"));
                         if let Some(new_slot) = new_slot {
                             // Reset the state
                             current_slot = Some(new_slot);
