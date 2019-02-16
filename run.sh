@@ -8,7 +8,7 @@
 set -e
 
 # Prefer possible `cargo build --all` binaries over PATH binaries
-PATH=$PWD/target/debug:$PATH
+PATH=$PWD/targt/debug:$PATH
 
 ok=true
 for program in solana-{genesis,keygen,fullnode{,-config}}; do
@@ -16,7 +16,10 @@ for program in solana-{genesis,keygen,fullnode{,-config}}; do
 done
 $ok || {
   echo
-  echo "Unable to locate required programs.  Try running: cargo build --all"
+  echo "Unable to locate required programs.  Try building them first with:"
+  echo
+  echo "  $ cargo build --all"
+  echo
   exit 1
 }
 
