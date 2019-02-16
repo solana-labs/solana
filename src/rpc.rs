@@ -155,9 +155,6 @@ pub trait RpcSol {
     #[rpc(meta, name = "getBalance")]
     fn get_balance(&self, _: Self::Metadata, _: String) -> Result<u64>;
 
-    #[rpc(meta, name = "getConfirmationTime")]
-    fn get_confirmation_time(&self, _: Self::Metadata) -> Result<usize>;
-
     #[rpc(meta, name = "getLastId")]
     fn get_last_id(&self, _: Self::Metadata) -> Result<String>;
 
@@ -209,13 +206,6 @@ impl RpcSol for RpcSolImpl {
         info!("get_balance rpc request received: {:?}", id);
         let pubkey = verify_pubkey(id)?;
         meta.request_processor.read().unwrap().get_balance(pubkey)
-    }
-    fn get_confirmation_time(&self, meta: Self::Metadata) -> Result<usize> {
-        info!("get_confirmation_time rpc request received");
-        meta.request_processor
-            .read()
-            .unwrap()
-            .get_confirmation_time()
     }
     fn get_last_id(&self, meta: Self::Metadata) -> Result<String> {
         info!("get_last_id rpc request received");
@@ -377,9 +367,6 @@ impl JsonRpcRequestProcessor {
     fn get_balance(&self, pubkey: Pubkey) -> Result<u64> {
         let val = self.bank.get_balance(&pubkey);
         Ok(val)
-    }
-    fn get_confirmation_time(&self) -> Result<usize> {
-        Ok(self.bank.confirmation_time())
     }
     fn get_last_id(&self) -> Result<String> {
         let id = self.bank.last_id();
@@ -655,21 +642,6 @@ mod tests {
         );
         let res = io.handle_request_sync(&req, meta);
         let expected = format!(r#"{{"jsonrpc":"2.0","result":"SignatureNotFound","id":1}}"#);
-        let expected: Response =
-            serde_json::from_str(&expected).expect("expected response deserialization");
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
-        assert_eq!(expected, result);
-    }
-
-    #[test]
-    fn test_rpc_get_confirmation() {
-        let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, _last_id, _alice) = start_rpc_handler_with_tx(bob_pubkey);
-
-        let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getConfirmationTime"}}"#);
-        let res = io.handle_request_sync(&req, meta);
-        let expected = format!(r#"{{"jsonrpc":"2.0","result":18446744073709551615,"id":1}}"#);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
