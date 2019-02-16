@@ -126,7 +126,7 @@ fn main() {
     solana_logger::setup();
     solana_metrics::set_panic_hook("fullnode");
 
-    let matches = App::new("fullnode")
+    let matches = App::new("solana-fullnode")
         .version(crate_version!())
         .arg(
             Arg::with_name("entry_stream")
