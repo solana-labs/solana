@@ -103,7 +103,7 @@ pub struct Bank {
 
     /// Tracks and updates the leader schedule based on the votes and account stakes
     /// processed by the bank
-    leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+    leader_scheduler: Option<Arc<RwLock<LeaderScheduler>>>,
 
     subscriptions: RwLock<Option<Arc<RpcSubscriptions>>>,
 }
@@ -114,7 +114,7 @@ impl Default for Bank {
             accounts: Accounts::default(),
             last_id_queue: RwLock::new(LastIdQueue::default()),
             status_cache: RwLock::new(BankStatusCache::default()),
-            leader_scheduler: Arc::new(RwLock::new(LeaderScheduler::default())),
+            leader_scheduler: None,
             subscriptions: RwLock::new(None),
         }
     }
@@ -137,7 +137,7 @@ impl Bank {
             .write()
             .unwrap()
             .update_tick_height(0, &bank);
-        bank.leader_scheduler = leader_scheduler;
+        bank.leader_scheduler = Some(leader_scheduler);
         bank
     }
 
@@ -325,10 +325,12 @@ impl Bank {
             last_id_queue.register_tick(last_id);
             last_id_queue.tick_height
         };
-        self.leader_scheduler
-            .write()
-            .unwrap()
-            .update_tick_height(current_tick_height, self);
+        if let Some(leader_scheduler) = &self.leader_scheduler {
+            leader_scheduler
+                .write()
+                .unwrap()
+                .update_tick_height(current_tick_height, self);
+        }
     }
 
     /// Process a Transaction. This is used for unit tests and simply calls the vector Bank::process_transactions method.
