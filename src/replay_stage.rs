@@ -783,13 +783,12 @@ mod test {
         }
 
         let genesis_block = GenesisBlock::new(10_000).0;
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
         let my_keypair = Arc::new(my_keypair);
         let voting_keypair = Arc::new(VotingKeypair::new_local(&my_keypair));
-        let bank = Arc::new(Bank::new_with_leader_scheduler(
-            &genesis_block,
-            leader_scheduler.clone(),
-        ));
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let leader_scheduler_config = LeaderSchedulerConfig::default();
+        let leader_scheduler = LeaderScheduler::new_with_bank(&leader_scheduler_config, &bank);
+        let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
         let res = ReplayStage::process_entries(
             entries.clone(),
             &bank,
@@ -812,10 +811,9 @@ mod test {
             entries.push(entry);
         }
 
-        let bank = Arc::new(Bank::new_with_leader_scheduler(
-            &genesis_block,
-            leader_scheduler.clone(),
-        ));
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let leader_scheduler = LeaderScheduler::new_with_bank(&leader_scheduler_config, &bank);
+        let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
         let res = ReplayStage::process_entries(
             entries.clone(),
             &bank,

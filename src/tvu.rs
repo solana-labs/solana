@@ -245,11 +245,10 @@ pub mod tests {
 
         let starting_balance = 10_000;
         let (genesis_block, _mint_keypair) = GenesisBlock::new(starting_balance);
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
-        let bank = Arc::new(Bank::new_with_leader_scheduler(
-            &genesis_block,
-            leader_scheduler.clone(),
-        ));
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let leader_scheduler_config = LeaderSchedulerConfig::default();
+        let leader_scheduler = LeaderScheduler::new_with_bank(&leader_scheduler_config, &bank);
+        let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
 
         //start cluster_info1
         let mut cluster_info1 = ClusterInfo::new(target1.info.clone());
@@ -340,12 +339,11 @@ pub mod tests {
         let starting_balance = 10_000;
         let (genesis_block, mint_keypair) = GenesisBlock::new(starting_balance);
         let tvu_addr = target1.info.tvu;
-        let leader_scheduler =
-            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
-        let bank = Arc::new(Bank::new_with_leader_scheduler(
-            &genesis_block,
-            leader_scheduler.clone(),
-        ));
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::new_with_bank(
+            &leader_scheduler_config,
+            &bank,
+        )));
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), starting_balance);
 
         // start cluster_info1
