@@ -42,13 +42,16 @@ pub struct Forks {
 
 impl Forks {
     pub fn active_fork(&self) -> BankFork {
+        info!("getting active: {}", self.active_fork);
         self.fork(self.active_fork).expect("live fork")
     }
     pub fn root(&self) -> BankFork {
+        info!("getting root: {}", self.root);
         self.fork(self.root).expect("root fork")
     }
 
     pub fn fork(&self, fork: u64) -> Option<BankFork> {
+        info!("getting fork: {}", fork);
         let cp: Vec<_> = self
             .deltas
             .collect(ROLLBACK_DEPTH + 1, fork)
@@ -152,6 +155,7 @@ impl Forks {
     }
     /// Initialize the `current` fork that is a direct descendant of the `base` fork.
     pub fn init_fork(&mut self, current: u64, last_id: &Hash, base: u64) -> Result<()> {
+        info!("initing fork {} from {}", current, base);
         if let Some(state) = self.deltas.load(base) {
             if !state.0.frozen() {
                 return Err(ForksError::DeltaNotFrozen);

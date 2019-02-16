@@ -87,6 +87,18 @@ impl BankingStage {
                                 trace!("freezing slot {}", current_slot);
                                 bank_fork.head().freeze();
                                 bank.merge_into_root(current_slot);
+
+                                let next_leader_id = bank
+                                    .leader_scheduler
+                                    .read()
+                                    .unwrap()
+                                    .get_leader_for_slot(current_slot + 1)
+                                    .expect("Scheduled leader should be calculated by this point");
+
+                                if leader_id == next_leader_id {
+                                    bank.init_fork(current_slot + 1, &bank.active_fork().last_id(), current_slot)
+                                        .expect("init fork");
+                                }
                             } else {
                                 trace!("current slot not found! {}", current_slot);
                             }
