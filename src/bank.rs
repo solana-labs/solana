@@ -37,7 +37,6 @@ use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program;
 use std;
 use std::result;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
@@ -106,9 +105,6 @@ pub struct Bank {
     /// FIFO queue of `last_id` items
     last_id_queue: RwLock<LastIdQueue>,
 
-    // The latest confirmation time for the network
-    confirmation_time: AtomicUsize,
-
     /// Tracks and updates the leader schedule based on the votes and account stakes
     /// processed by the bank
     pub leader_scheduler: Arc<RwLock<LeaderScheduler>>,
@@ -122,7 +118,6 @@ impl Default for Bank {
             accounts: Accounts::default(),
             last_id_queue: RwLock::new(LastIdQueue::default()),
             status_cache: RwLock::new(BankStatusCache::default()),
-            confirmation_time: AtomicUsize::new(std::usize::MAX),
             leader_scheduler: Arc::new(RwLock::new(LeaderScheduler::default())),
             subscriptions: RwLock::new(None),
         }
@@ -158,7 +153,6 @@ impl Bank {
             accounts: self.accounts.copy_for_tpu(),
             status_cache: RwLock::new(status_cache),
             last_id_queue: RwLock::new(self.last_id_queue.read().unwrap().clone()),
-            confirmation_time: AtomicUsize::new(self.confirmation_time()),
             leader_scheduler: self.leader_scheduler.clone(),
             subscriptions: RwLock::new(None),
         }
@@ -848,15 +842,6 @@ impl Bank {
         self.accounts.hash_internal_state()
     }
 
-    pub fn confirmation_time(&self) -> usize {
-        self.confirmation_time.load(Ordering::Relaxed)
-    }
-
-    pub fn set_confirmation_time(&self, confirmation: usize) {
-        self.confirmation_time
-            .store(confirmation, Ordering::Relaxed);
-    }
-
     fn send_account_notifications(
         &self,
         txs: &[Transaction],
@@ -1338,13 +1323,6 @@ mod tests {
             .transfer(1_000, &mint_keypair, pubkey, bank1.last_id())
             .unwrap();
         assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
-    }
-    #[test]
-    fn test_confirmation_time() {
-        let def_bank = Bank::default();
-        assert_eq!(def_bank.confirmation_time(), std::usize::MAX);
-        def_bank.set_confirmation_time(90);
-        assert_eq!(def_bank.confirmation_time(), 90);
     }
     #[test]
     fn test_interleaving_locks() {

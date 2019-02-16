@@ -193,28 +193,6 @@ impl ThinClient {
             })
     }
 
-    /// Request the confirmation time from the leader node
-    pub fn get_confirmation_time(&mut self) -> usize {
-        trace!("get_confirmation_time");
-        loop {
-            debug!("get_confirmation_time send_to {}", &self.rpc_addr);
-
-            let response =
-                self.rpc_client
-                    .make_rpc_request(1, RpcRequest::GetConfirmationTime, None);
-
-            match response {
-                Ok(value) => {
-                    let confirmation = value.as_u64().unwrap() as usize;
-                    return confirmation;
-                }
-                Err(error) => {
-                    debug!("thin_client get_confirmation_time error: {:?}", error);
-                }
-            };
-        }
-    }
-
     /// Request the transaction count.  If the response packet is dropped by the network,
     /// this method will try again 5 times.
     pub fn transaction_count(&mut self) -> u64 {
@@ -530,9 +508,6 @@ mod tests {
 
         let transaction_count = client.transaction_count();
         assert_eq!(transaction_count, 0);
-
-        let confirmation = client.get_confirmation_time();
-        assert_eq!(confirmation, 18446744073709551615);
 
         let last_id = client.get_last_id();
         info!("test_thin_client last_id: {:?}", last_id);

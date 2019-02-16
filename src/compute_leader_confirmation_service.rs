@@ -105,7 +105,6 @@ impl ComputeLeaderConfirmationService {
             let confirmation_ms = now - super_majority_timestamp;
 
             *last_valid_validator_timestamp = super_majority_timestamp;
-            bank.set_confirmation_time(confirmation_ms as usize);
 
             submit(
                 influxdb::Point::new(&"leader-confirmation")
@@ -215,7 +214,6 @@ pub mod tests {
             genesis_block.bootstrap_leader_id,
             &mut last_confirmation_time,
         );
-        assert_eq!(bank.confirmation_time(), std::usize::MAX);
 
         // Get another validator to vote, so we now have 2/3 consensus
         let voting_keypair = &vote_accounts[7].0;
@@ -227,7 +225,6 @@ pub mod tests {
             genesis_block.bootstrap_leader_id,
             &mut last_confirmation_time,
         );
-        assert!(bank.confirmation_time() != std::usize::MAX);
         assert!(last_confirmation_time > 0);
     }
 }
