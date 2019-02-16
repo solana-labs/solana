@@ -592,6 +592,19 @@ pub mod tests {
     }
 
     #[test]
+    fn test_leader_after_genesis() {
+        solana_logger::setup();
+        let leader_id = Keypair::new().pubkey();
+        let leader_tokens = 2;
+        let (genesis_block, _) = GenesisBlock::new_with_leader(5, leader_id, leader_tokens);
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
+        let bank = Bank::new_with_leader_scheduler(&genesis_block, leader_scheduler.clone());
+        let leader_scheduler = leader_scheduler.read().unwrap();
+        let slot = leader_scheduler.tick_height_to_slot(bank.tick_height());
+        assert_eq!(leader_scheduler.get_leader_for_slot(slot), Some(leader_id));
+    }
+
+    #[test]
     fn test_num_ticks_left_in_block() {
         let leader_scheduler = LeaderScheduler::new(&LeaderSchedulerConfig::new(10, 2, 1));
 
