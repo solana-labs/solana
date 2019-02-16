@@ -166,7 +166,7 @@ impl Bank {
     pub fn active_fork(&self) -> BankFork {
         self.forks.read().unwrap().active_fork()
     }
-    pub fn root(&self) -> BankFork {
+    fn root(&self) -> BankFork {
         self.forks.read().unwrap().root()
     }
     pub fn fork(&self, slot: u64) -> Option<BankFork> {

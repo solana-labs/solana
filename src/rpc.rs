@@ -260,7 +260,7 @@ impl RpcSol for RpcSolImpl {
         trace!("request_airdrop id={} tokens={}", id, tokens);
         let pubkey = verify_pubkey(id)?;
 
-        let last_id = meta.request_processor.read().unwrap().bank.root().last_id();
+        let last_id = meta.request_processor.read().unwrap().bank.active_fork().last_id();
         let transaction = request_airdrop_transaction(&meta.drone_addr, &pubkey, tokens, last_id)
             .map_err(|err| {
             info!("request_airdrop_transaction failed: {:?}", err);
@@ -384,7 +384,7 @@ impl JsonRpcRequestProcessor {
     }
     fn get_last_id(&self) -> Result<String> {
         //TODO: least likely to unroll?
-        let id = self.bank.root().last_id();
+        let id = self.bank.active_fork().last_id();
         Ok(bs58::encode(id).into_string())
     }
     pub fn get_signature_status(&self, signature: Signature) -> Option<bank::Result<()>> {

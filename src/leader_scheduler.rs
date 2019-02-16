@@ -213,7 +213,7 @@ impl LeaderScheduler {
         );
 
         {
-            let bank_state = bank.root();
+            let bank_state = bank.active_fork();
             let accounts = bank_state.head().accounts.accounts_db.read().unwrap();
             // TODO: iterate through checkpoints, too
             accounts
@@ -333,7 +333,7 @@ impl LeaderScheduler {
     {
         let mut active_accounts: Vec<(&'a Pubkey, u64)> = active
             .filter_map(|pubkey| {
-                let stake = bank.root().get_balance_slow(pubkey);
+                let stake = bank.active_fork().get_balance_slow(pubkey);
                 if stake > 0 {
                     Some((pubkey, stake as u64))
                 } else {
@@ -353,10 +353,11 @@ impl LeaderScheduler {
     }
 
     fn calculate_seed(tick_height: u64) -> u64 {
-        let hash = hash(&serialize(&tick_height).unwrap());
-        let bytes = hash.as_ref();
-        let mut rdr = Cursor::new(bytes);
-        rdr.read_u64::<LittleEndian>().unwrap()
+        //let hash = hash(&serialize(&tick_height).unwrap());
+        //let bytes = hash.as_ref();
+        //let mut rdr = Cursor::new(bytes);
+        //rdr.read_u64::<LittleEndian>().unwrap()
+        0
     }
 
     fn choose_account<I>(stakes: I, seed: u64, total_stake: u64) -> usize
@@ -827,7 +828,7 @@ pub mod tests {
             let new_validator = Keypair::new();
             let new_pubkey = new_validator.pubkey();
             tied_validators_pk.push(new_pubkey);
-            assert!(bank.root().get_balance_slow(&mint_keypair.pubkey()) > 1);
+            assert!(bank.active_fork().get_balance_slow(&mint_keypair.pubkey()) > 1);
             bank.transfer(1, &mint_keypair, new_pubkey, last_id)
                 .unwrap();
         }

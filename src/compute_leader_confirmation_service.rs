@@ -38,7 +38,7 @@ impl ComputeLeaderConfirmationService {
         // Hold an accounts_db read lock as briefly as possible, just long enough to collect all
         // the vote states
         let vote_states: Vec<VoteState> = bank
-            .root()
+            .active_fork()
             .head()
             .accounts
             .accounts_db

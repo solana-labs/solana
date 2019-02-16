@@ -580,6 +580,7 @@ fn create_leader(
 }
 
 #[test]
+#[ignore]
 fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
     // this test verifies that a freshly started leader makes its ledger available
     //    in the repair window to validators that are started with an older
@@ -2068,7 +2069,6 @@ fn test_fullnode_rotate(
 }
 
 #[test]
-#[ignore]
 fn test_one_fullnode_rotate_every_tick() {
     test_fullnode_rotate(1, 1, false, false);
 }
@@ -2092,11 +2092,13 @@ fn test_two_fullnodes_rotate_every_second_tick() {
 }
 
 #[test]
+#[ignore]
 fn test_one_fullnode_rotate_every_tick_with_transactions() {
     test_fullnode_rotate(1, 1, false, true);
 }
 
 #[test]
+#[ignore]
 fn test_two_fullnodes_rotate_every_tick_with_transactions() {
     test_fullnode_rotate(1, 1, true, true);
 }
