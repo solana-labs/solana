@@ -1,16 +1,26 @@
 use crate::bank::{Bank, BankError, Result};
 use crate::blocktree::Blocktree;
 use crate::entry::{Entry, EntrySlice};
+use crate::leader_scheduler::LeaderScheduler;
 use itertools::Itertools;
 use solana_sdk::hash::Hash;
+use std::sync::{Arc, RwLock};
 
 pub const VERIFY_BLOCK_SIZE: usize = 16;
 
 /// Process an ordered list of entries, populating a circular buffer "tail"
 /// as we go.
-fn process_block(bank: &Bank, entries: &[Entry]) -> Result<()> {
+fn process_block(
+    bank: &Bank,
+    entries: &[Entry],
+    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
+) -> Result<()> {
     for entry in entries {
         bank.process_entry(entry)?;
+        if entry.is_tick() {
+            let mut leader_scheduler = leader_scheduler.write().unwrap();
+            leader_scheduler.update_tick_height(bank.tick_height(), bank);
+        }
     }
 
     Ok(())
@@ -18,7 +28,11 @@ fn process_block(bank: &Bank, entries: &[Entry]) -> Result<()> {
 
 /// Starting from the genesis block, append the provided entries to the ledger verifying them
 /// along the way.
-fn process_ledger<I>(bank: &Bank, entries: I) -> Result<(u64, Hash)>
+fn process_ledger<I>(
+    bank: &Bank,
+    entries: I,
+    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
+) -> Result<(u64, Hash)>
 where
     I: IntoIterator<Item = Entry>,
 {
@@ -50,7 +64,7 @@ where
             return Err(BankError::LedgerVerificationFailed);
         }
 
-        process_block(bank, &block)?;
+        process_block(bank, &block, leader_scheduler)?;
 
         last_entry_id = block.last().unwrap().id;
         entry_height += block.len() as u64;
@@ -58,9 +72,13 @@ where
     Ok((entry_height, last_entry_id))
 }
 
-pub fn process_blocktree(bank: &Bank, blocktree: &Blocktree) -> Result<(u64, Hash)> {
+pub fn process_blocktree(
+    bank: &Bank,
+    blocktree: &Blocktree,
+    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
+) -> Result<(u64, Hash)> {
     let entries = blocktree.read_ledger().expect("opening ledger");
-    process_ledger(&bank, entries)
+    process_ledger(&bank, entries, leader_scheduler)
 }
 
 #[cfg(test)]
@@ -133,7 +151,8 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         assert_eq!(bank.tick_height(), 0);
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100);
-        let (ledger_height, last_id) = process_ledger(&bank, ledger).unwrap();
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
+        let (ledger_height, last_id) = process_ledger(&bank, ledger, &leader_scheduler).unwrap();
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 3);
         assert_eq!(ledger_height, 8);
         assert_eq!(bank.tick_height(), 1);
