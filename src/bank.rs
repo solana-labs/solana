@@ -101,20 +101,15 @@ pub struct Bank {
     /// FIFO queue of `last_id` items
     last_id_queue: RwLock<LastIdQueue>,
 
-    /// Tracks and updates the leader schedule based on the votes and account stakes
-    /// processed by the bank
-    leader_scheduler: Option<Arc<RwLock<LeaderScheduler>>>,
-
     subscriptions: RwLock<Option<Arc<RpcSubscriptions>>>,
 }
 
 impl Default for Bank {
     fn default() -> Self {
-        Bank {
+        Self {
             accounts: Accounts::default(),
             last_id_queue: RwLock::new(LastIdQueue::default()),
             status_cache: RwLock::new(BankStatusCache::default()),
-            leader_scheduler: None,
             subscriptions: RwLock::new(None),
         }
     }
@@ -132,12 +127,11 @@ impl Bank {
         genesis_block: &GenesisBlock,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> Self {
-        let mut bank = Bank::new(genesis_block);
+        let bank = Bank::new(genesis_block);
         leader_scheduler
             .write()
             .unwrap()
             .update_tick_height(0, &bank);
-        bank.leader_scheduler = Some(leader_scheduler);
         bank
     }
 
@@ -153,7 +147,6 @@ impl Bank {
             accounts: self.accounts.copy_for_tpu(),
             status_cache: RwLock::new(status_cache),
             last_id_queue: RwLock::new(self.last_id_queue.read().unwrap().clone()),
-            leader_scheduler: self.leader_scheduler.clone(),
             subscriptions: RwLock::new(None),
         }
     }
@@ -319,18 +312,9 @@ impl Bank {
     /// the oldest ones once its internal cache is full. Once boot, the
     /// bank will reject transactions using that `last_id`.
     pub fn register_tick(&self, last_id: &Hash) {
-        let current_tick_height = {
-            let mut last_id_queue = self.last_id_queue.write().unwrap();
-            inc_new_counter_info!("bank-register_tick-registered", 1);
-            last_id_queue.register_tick(last_id);
-            last_id_queue.tick_height
-        };
-        if let Some(leader_scheduler) = &self.leader_scheduler {
-            leader_scheduler
-                .write()
-                .unwrap()
-                .update_tick_height(current_tick_height, self);
-        }
+        let mut last_id_queue = self.last_id_queue.write().unwrap();
+        inc_new_counter_info!("bank-register_tick-registered", 1);
+        last_id_queue.register_tick(last_id);
     }
 
     /// Process a Transaction. This is used for unit tests and simply calls the vector Bank::process_transactions method.
@@ -652,8 +636,12 @@ impl Bank {
     }
 
     /// Process an ordered list of entries.
-    pub fn process_entries(&self, entries: &[Entry]) -> Result<()> {
-        self.par_process_entries(entries)
+    pub fn process_entries(
+        &self,
+        entries: &[Entry],
+        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
+    ) -> Result<()> {
+        self.par_process_entries_with_scheduler(entries, leader_scheduler)
     }
 
     pub fn first_err(results: &[Result<()>]) -> Result<()> {
@@ -700,8 +688,13 @@ impl Bank {
     /// process entries in parallel
     /// 1. In order lock accounts for each entry while the lock succeeds, up to a Tick entry
     /// 2. Process the locked group in parallel
-    /// 3. Register the `Tick` if it's available, goto 1
-    pub fn par_process_entries(&self, entries: &[Entry]) -> Result<()> {
+    /// 3. Register the `Tick` if it's available
+    /// 4. Update the leader scheduler, goto 1
+    fn par_process_entries_with_scheduler(
+        &self,
+        entries: &[Entry],
+        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
+    ) -> Result<()> {
         // accumulator for entries that can be processed in parallel
         let mut mt_group = vec![];
         for entry in entries {
@@ -709,6 +702,10 @@ impl Bank {
                 // if its a tick, execute the group and register the tick
                 self.par_execute_entries(&mt_group)?;
                 self.register_tick(&entry.id);
+                leader_scheduler
+                    .write()
+                    .unwrap()
+                    .update_tick_height(self.tick_height(), self);
                 mt_group = vec![];
                 continue;
             }
@@ -730,6 +727,12 @@ impl Bank {
         }
         self.par_execute_entries(&mt_group)?;
         Ok(())
+    }
+
+    #[cfg(test)]
+    fn par_process_entries(&self, entries: &[Entry]) -> Result<()> {
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
+        self.par_process_entries_with_scheduler(entries, &leader_scheduler)
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
@@ -1122,7 +1125,7 @@ mod tests {
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
-        bank.process_entries(&[entry]).unwrap();
+        bank.par_process_entries(&[entry]).unwrap();
         assert_eq!(bank.process_transaction(&tx), Ok(()));
     }
 
@@ -1188,11 +1191,11 @@ mod tests {
         let bank0 = Bank::default();
         bank0.add_builtin_programs();
         bank0.process_genesis_block(&genesis_block);
-        bank0.process_entries(&entries0).unwrap();
+        bank0.par_process_entries(&entries0).unwrap();
         let bank1 = Bank::default();
         bank1.add_builtin_programs();
         bank1.process_genesis_block(&genesis_block);
-        bank1.process_entries(&entries1).unwrap();
+        bank1.par_process_entries(&entries1).unwrap();
 
         let initial_state = bank0.hash_internal_state();
 

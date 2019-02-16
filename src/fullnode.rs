@@ -471,7 +471,8 @@ pub fn new_bank_from_ledger(
     let now = Instant::now();
     info!("processing ledger...");
     let (entry_height, last_entry_id) =
-        blocktree_processor::process_blocktree(&bank, &blocktree).expect("process_blocktree");
+        blocktree_processor::process_blocktree(&bank, &blocktree, leader_scheduler)
+            .expect("process_blocktree");
     info!(
         "processed {} ledger entries in {}ms, tick_height={}...",
         entry_height,
