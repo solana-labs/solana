@@ -6,7 +6,7 @@ entire set.  Each block that is proposed by the network represents a change to
 this set, and since each block is a potential rollback point the changes need to
 be reversible.
 
-Persistent storage like NVMEs are 20 to 40 times cheaper then DDR.  The problem
+Persistent storage like NVMEs are 20 to 40 times cheaper than DDR.  The problem
 with persistent storage is that write and read performance is much slower then
 DDR, and care must be taken in how data is read or written to.  Both reads and
 writes can be split between multiple storage drives and accessed in parallel.
@@ -21,8 +21,8 @@ check-pointing of state.
 
 AppendVec is a data structure that allows for random reads concurrent with a
 single append only writer.  Grow, or resizing the capacity of the AppendVec
-requires exclusive access.  This is implemented with an atomic `len`, which is
-updated at the end of a completed append.
+requires exclusive access.  This is implemented with an atomic `offset`, which
+is updated at the end of a completed append.
 
 The underlying memory for an AppendVec is a memory mapped file.  Memory mapped
 files allow for fast random access, and paging is handled by the OS.
@@ -35,9 +35,9 @@ forked Accounts.
 ```
 type AppendVecId = usize;
 
-type Fork = usize;
+type Fork = u64;
 
-struct AccountMap(HashMap<Fork, (AppendVecId, u64)>);
+struct AccountMap(Vec<Fork, (AppendVecId, u64)>);
 
 type AccountIndex = HashMap<Pubkey, AccountMap>;
 
@@ -82,6 +82,10 @@ To speed up this process, its possible to move Accounts that have not been
 recently updated to the front of a new AppendVec.  This form of garbage
 collection can be done without requiring exclusive locks to any of the data
 structures except for the index update.
+
+Initial implementation for garbage collection is that once all the accounts in
+an AppendVec become stale versions, it gets reused. The accounts are not updated
+or moved around once appended.
 
 # Index Recovery
 
