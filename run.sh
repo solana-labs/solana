@@ -8,7 +8,7 @@
 set -e
 
 # Prefer possible `cargo build --all` binaries over PATH binaries
-PATH=$PWD/targt/debug:$PATH
+PATH=$PWD/target/debug:$PATH
 
 ok=true
 for program in solana-{genesis,keygen,fullnode{,-config}}; do
@@ -22,6 +22,17 @@ $ok || {
   echo
   exit 1
 }
+
+entryStreamSocket=
+while [[ -n $1 ]]; do
+  if [[ $1 = --entry-stream ]]; then
+    entryStreamSocket=$2
+    shift 2
+  else
+    echo "Unknown argument: $1"
+    exit 1
+  fi
+done
 
 export RUST_LOG=${RUST_LOG:-solana=info} # if RUST_LOG is unset, default to info
 export RUST_BACKTRACE=1
@@ -42,10 +53,15 @@ solana-genesis \
 solana-drone --keypair "$dataDir"/config/drone-keypair.json &
 drone=$!
 
-solana-fullnode \
-  --identity "$dataDir"/config/leader-config.json \
-  --ledger "$dataDir"/ledger/ \
-  --rpc-port 8899 &
+args=(
+  --identity "$dataDir"/config/leader-config.json
+  --ledger "$dataDir"/ledger/
+  --rpc-port 8899
+)
+if [[ -n $entryStreamSocket ]]; then
+  args+=(--entry-stream "$entryStreamSocket")
+fi
+solana-fullnode "${args[@]}" &
 fullnode=$!
 
 abort() {
