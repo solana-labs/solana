@@ -2,6 +2,7 @@
 
 use crate::bank::Bank;
 use crate::blocktree::{Blocktree, BlocktreeConfig};
+use crate::blocktree_processor;
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
 use crate::counter::Counter;
 use crate::genesis_block::GenesisBlock;
@@ -462,12 +463,12 @@ pub fn new_bank_from_ledger(
             .expect("Expected to successfully open database ledger");
     let genesis_block =
         GenesisBlock::load(ledger_path).expect("Expected to successfully open genesis block");
-    let mut bank = Bank::new_with_leader_scheduler_config(&genesis_block, leader_scheduler_config);
+    let bank = Bank::new_with_leader_scheduler_config(&genesis_block, leader_scheduler_config);
 
     let now = Instant::now();
-    let entries = blocktree.read_ledger().expect("opening ledger");
     info!("processing ledger...");
-    let (entry_height, last_entry_id) = bank.process_ledger(entries).expect("process_ledger");
+    let (entry_height, last_entry_id) =
+        blocktree_processor::process_blocktree(&bank, &blocktree).expect("process_blocktree");
     info!(
         "processed {} ledger entries in {}ms, tick_height={}...",
         entry_height,
