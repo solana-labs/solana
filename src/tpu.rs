@@ -30,11 +30,11 @@ pub enum TpuMode {
 }
 
 pub struct LeaderServices {
-    fetch_stage: FetchStage,
-    sigverify_stage: SigVerifyStage,
-    banking_stage: BankingStage,
-    cluster_info_vote_listener: ClusterInfoVoteListener,
-    broadcast_service: BroadcastService,
+    fetch_stage: Option<FetchStage>,
+    sigverify_stage: Option<SigVerifyStage>,
+    banking_stage: Option<BankingStage>,
+    cluster_info_vote_listener: Option<ClusterInfoVoteListener>,
+    broadcast_service: Option<BroadcastService>,
 }
 
 impl LeaderServices {
@@ -46,22 +46,60 @@ impl LeaderServices {
         broadcast_service: BroadcastService,
     ) -> Self {
         LeaderServices {
-            fetch_stage,
-            sigverify_stage,
-            banking_stage,
-            cluster_info_vote_listener,
-            broadcast_service,
+            fetch_stage: Some(fetch_stage),
+            sigverify_stage: Some(sigverify_stage),
+            banking_stage: Some(banking_stage),
+            cluster_info_vote_listener: Some(cluster_info_vote_listener),
+            broadcast_service: Some(broadcast_service),
         }
+    }
+
+    fn exit(&self) {
+        self.fetch_stage.as_ref().unwrap().close();
+    }
+
+    fn join(&mut self) -> thread::Result<()> {
+        let mut results = vec![];
+        results.push(self.fetch_stage.take().unwrap().join());
+        results.push(self.sigverify_stage.take().unwrap().join());
+        results.push(self.cluster_info_vote_listener.take().unwrap().join());
+        results.push(self.banking_stage.take().unwrap().join());
+        let broadcast_result = self.broadcast_service.take().unwrap().join();
+        for result in results {
+            result?;
+        }
+        let _ = broadcast_result?;
+        Ok(())
+    }
+
+    fn close(&mut self) -> thread::Result<()> {
+        self.exit();
+        self.join()
     }
 }
 
 pub struct ForwarderServices {
-    tpu_forwarder: TpuForwarder,
+    tpu_forwarder: Option<TpuForwarder>,
 }
 
 impl ForwarderServices {
     fn new(tpu_forwarder: TpuForwarder) -> Self {
-        ForwarderServices { tpu_forwarder }
+        ForwarderServices {
+            tpu_forwarder: Some(tpu_forwarder),
+        }
+    }
+
+    fn exit(&self) {
+        self.tpu_forwarder.as_ref().unwrap().close();
+    }
+
+    fn join(&mut self) -> thread::Result<()> {
+        self.tpu_forwarder.take().unwrap().join()
+    }
+
+    fn close(&mut self) -> thread::Result<()> {
+        self.exit();
+        self.join()
     }
 }
 
@@ -82,13 +120,25 @@ impl Tpu {
         }
     }
 
-    fn mode_close(&self) {
-        match &self.tpu_mode {
+    fn mode_exit(&mut self) {
+        match &mut self.tpu_mode {
             Some(TpuMode::Leader(svcs)) => {
-                svcs.fetch_stage.close();
+                svcs.exit();
             }
             Some(TpuMode::Forwarder(svcs)) => {
-                svcs.tpu_forwarder.close();
+                svcs.exit();
+            }
+            None => (),
+        }
+    }
+
+    fn mode_close(&mut self) {
+        match &mut self.tpu_mode {
+            Some(TpuMode::Leader(svcs)) => {
+                let _ = svcs.close();
+            }
+            Some(TpuMode::Forwarder(svcs)) => {
+                let _ = svcs.close();
             }
             None => (),
         }
@@ -109,15 +159,19 @@ impl Tpu {
     }
 
     fn close_and_forward_unprocessed_packets(&mut self) {
-        self.mode_close();
+        self.mode_exit();
 
         let unprocessed_packets = match self.tpu_mode.take().as_mut() {
-            Some(TpuMode::Leader(svcs)) => {
-                svcs.banking_stage.join_and_collect_unprocessed_packets()
-            }
-            Some(TpuMode::Forwarder(svcs)) => {
-                svcs.tpu_forwarder.join_and_collect_unprocessed_packets()
-            }
+            Some(TpuMode::Leader(svcs)) => svcs
+                .banking_stage
+                .as_mut()
+                .unwrap()
+                .join_and_collect_unprocessed_packets(),
+            Some(TpuMode::Forwarder(svcs)) => svcs
+                .tpu_forwarder
+                .as_mut()
+                .unwrap()
+                .join_and_collect_unprocessed_packets(),
             None => vec![],
         };
 
@@ -128,6 +182,8 @@ impl Tpu {
                 warn!("Failed to forward unprocessed transactions: {:?}", err)
             });
         }
+
+        self.mode_close();
     }
 
     pub fn switch_to_forwarder(&mut self, leader_id: Pubkey, transactions_sockets: Vec<UdpSocket>) {
@@ -221,7 +277,7 @@ impl Tpu {
         self.exit.load(Ordering::Relaxed)
     }
 
-    pub fn close(self) -> thread::Result<()> {
+    pub fn close(mut self) -> thread::Result<()> {
         self.mode_close();
         self.join()
     }
@@ -232,16 +288,8 @@ impl Service for Tpu {
 
     fn join(self) -> thread::Result<()> {
         match self.tpu_mode {
-            Some(TpuMode::Leader(svcs)) => {
-                svcs.broadcast_service.join()?;
-                svcs.fetch_stage.join()?;
-                svcs.sigverify_stage.join()?;
-                svcs.cluster_info_vote_listener.join()?;
-                svcs.banking_stage.join()?;
-            }
-            Some(TpuMode::Forwarder(svcs)) => {
-                svcs.tpu_forwarder.join()?;
-            }
+            Some(TpuMode::Leader(mut svcs)) => svcs.join()?,
+            Some(TpuMode::Forwarder(mut svcs)) => svcs.join()?,
             None => (),
         }
         Ok(())
