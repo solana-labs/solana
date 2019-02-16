@@ -83,8 +83,13 @@ impl BankingStage {
                     match poh_return_value {
                         Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) => {
                             trace!("leader for slot {} done", current_slot);
-                            bank.fork(current_slot).unwrap().head().freeze();
-                            bank.merge_into_root(current_slot);
+                            if let Some(bank_fork) = bank.fork(current_slot) {
+                                trace!("freezing slot {}", current_slot);
+                                bank_fork.head().freeze();
+                                bank.merge_into_root(current_slot);
+                            } else {
+                                trace!("current slot not found! {}", current_slot);
+                            }
                             to_validator_sender.send(max_tick_height)?
                         }
                         _ => (),

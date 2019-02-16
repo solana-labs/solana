@@ -337,12 +337,14 @@ impl ReplayStage {
                                 my_id
                             );
 
+                            if my_id == next_leader_id {
+                                // construct the leader's bank_state for it
+                                bank.init_fork(slot + 1, &last_entry_id.read().unwrap(), slot)
+                                    .expect("init fork");
+                            }
+
                             if leader_id != next_leader_id {
                                 if my_id == leader_id {
-                                    // construct the leader's bank_state for it
-                                    bank.init_fork(slot + 1, &last_entry_id.read().unwrap(), slot)
-                                        .expect("init fork");
-
                                     to_leader_sender.send(current_tick_height).unwrap();
                                 } else {
                                     // TODO: Remove this soon once we boot the leader from ClusterInfo
