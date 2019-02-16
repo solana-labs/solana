@@ -18,7 +18,7 @@ byteorder = "1.3.1"
 clap = "2.31"
 log = "0.4.2"
 serde = "1.0.88"
-serde_derive = "1.0.87"
+serde_derive = "1.0.88"
 solana-logger = { path = "../logger", version = "0.12.0" }
 solana-sdk = { path = "../sdk", version = "0.12.0" }
 solana-metrics = { path = "../metrics", version = "0.12.0" }
