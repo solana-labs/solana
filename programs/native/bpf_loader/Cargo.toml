@@ -19,7 +19,7 @@ elf = "0.0.10"
 libc = "0.2.48"
 log = "0.4.2"
 solana_rbpf = "=0.1.9"
-serde = "1.0.87"
+serde = "1.0.88"
 solana-logger = { path = "../../../logger", version = "0.12.0" }
 solana-sdk = { path = "../../../sdk", version = "0.12.0" }
 
