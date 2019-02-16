@@ -142,7 +142,9 @@ impl Bank {
     }
 
     pub fn init_fork(&self, current: u64, last_id: &Hash, base: u64) -> Result<()> {
+        trace!("new fork current: {} base: {}", current, base);
         if self.forks.read().unwrap().is_active_fork(current) {
+            trace!("already active: {}", current);
             return Ok(());
         }
         self.forks

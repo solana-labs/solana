@@ -359,7 +359,16 @@ impl Fullnode {
                 }
                 None => FullnodeReturnType::LeaderToLeaderRotation, // value doesn't matter here...
             };
-
+            let current_slot = self.bank
+                .leader_scheduler
+                .read()
+                .unwrap()
+                .tick_height_to_slot(max_tick_height);
+            if current_slot > 0 {
+                let base = current_slot - 1;
+                self.bank.fork(base).unwrap().head().freeze();
+                self.bank.init_fork(current_slot, &last_entry_id, base).expect("init fork");
+            }
             self.node_services.tpu.switch_to_leader(
                 &self.bank,
                 PohServiceConfig::default(),
