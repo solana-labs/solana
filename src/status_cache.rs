@@ -87,7 +87,18 @@ impl<T: Clone> StatusCache<T> {
         assert!(other.merges.is_empty());
         self.merges.push_front(other);
         if self.merges.len() > MAX_ENTRY_IDS / NUM_TICKS_PER_SECOND {
-            //TODO check if this is the right size ^
+            self.merges.pop_back();
+        }
+    }
+
+    /// Temp fix until forking is implemented
+    pub fn merge_from_root(&mut self, mut old_root: Self) {
+        let mut old_merges = VecDeque::new();
+        std::mem::swap(&mut old_merges, &mut old_root.merges);
+        assert!(self.merges.is_empty());
+        self.merges = old_merges;
+        self.merges.push_front(old_root);
+        if self.merges.len() > MAX_ENTRY_IDS / NUM_TICKS_PER_SECOND {
             self.merges.pop_back();
         }
     }
@@ -161,6 +172,20 @@ mod tests {
             Some(Ok(())),
         );
         assert!(StatusCache::has_signature_all(&checkpoints, &sig));
+    }
+
+    #[test]
+    fn test_has_signature_merged_from() {
+        let sig = Signature::default();
+        let last_id = hash(Hash::default().as_ref());
+        let mut first = BankStatusCache::new(&last_id);
+        first.add(&sig);
+        assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
+        let last_id = hash(last_id.as_ref());
+        let second = BankStatusCache::new(&last_id);
+        first.merge_from_root(second);
+        assert_eq!(first.get_signature_status(&sig), Some(Ok(())),);
+        assert!(first.has_signature(&sig));
     }
 
     #[test]

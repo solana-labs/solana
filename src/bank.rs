@@ -154,7 +154,7 @@ impl Bank {
 
     pub fn copy_for_tpu(&self) -> Self {
         let mut status_cache = BankStatusCache::default();
-        status_cache.merge_into_root(self.status_cache.read().unwrap().clone());
+        status_cache.merge_from_root(self.status_cache.read().unwrap().clone());
         Self {
             accounts: self.accounts.copy_for_tpu(),
             status_cache: RwLock::new(status_cache),
@@ -345,7 +345,7 @@ impl Bank {
             // and bank_cache is a default
             std::mem::swap(&mut old_cache, &mut bank_cache);
             // old bank cache is now held inside the bank_cache queue
-            bank_cache.merge_into_root(old_cache);
+            bank_cache.merge_from_root(old_cache);
         }
         self.leader_scheduler
             .write()
