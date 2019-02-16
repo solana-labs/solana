@@ -6,7 +6,6 @@
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::counter::Counter;
 use crate::entry::Entry;
-use crate::entry::EntrySlice;
 use crate::genesis_block::GenesisBlock;
 use crate::last_id_queue::{LastIdQueue, MAX_ENTRY_IDS};
 use crate::leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig};
@@ -15,7 +14,6 @@ use crate::result::Error;
 use crate::rpc_pubsub::RpcSubscriptions;
 use crate::status_cache::StatusCache;
 use bincode::deserialize;
-use itertools::Itertools;
 use log::Level;
 use rayon::prelude::*;
 use solana_runtime::{self, RuntimeError};
@@ -86,8 +84,6 @@ pub enum BankError {
 }
 
 pub type Result<T> = result::Result<T, BankError>;
-
-pub const VERIFY_BLOCK_SIZE: usize = 16;
 
 pub trait BankSubscriptions {
     fn check_account(&self, pubkey: &Pubkey, account: &Account);
@@ -740,58 +736,6 @@ impl Bank {
         Ok(())
     }
 
-    /// Process an ordered list of entries, populating a circular buffer "tail"
-    /// as we go.
-    fn process_block(&self, entries: &[Entry]) -> Result<()> {
-        for entry in entries {
-            self.process_entry(entry)?;
-        }
-
-        Ok(())
-    }
-
-    /// Starting from the genesis block, append the provided entries to the ledger verifying them
-    /// along the way.
-    pub fn process_ledger<I>(&mut self, entries: I) -> Result<(u64, Hash)>
-    where
-        I: IntoIterator<Item = Entry>,
-    {
-        let mut last_entry_id = self.last_id();
-        let mut entries_iter = entries.into_iter();
-
-        trace!("genesis last_id={}", last_entry_id);
-
-        // The first entry in the ledger is a pseudo-tick used only to ensure the number of ticks
-        // in slot 0 is the same as the number of ticks in all subsequent slots.  It is not
-        // registered as a tick and thus cannot be used as a last_id
-        let entry0 = entries_iter
-            .next()
-            .ok_or(BankError::LedgerVerificationFailed)?;
-        if !(entry0.is_tick() && entry0.verify(&last_entry_id)) {
-            warn!("Ledger proof of history failed at entry0");
-            return Err(BankError::LedgerVerificationFailed);
-        }
-        last_entry_id = entry0.id;
-        let mut entry_height = 1;
-
-        // Ledger verification needs to be parallelized, but we can't pull the whole
-        // thing into memory. We therefore chunk it.
-        for block in &entries_iter.chunks(VERIFY_BLOCK_SIZE) {
-            let block: Vec<_> = block.collect();
-
-            if !block.verify(&last_entry_id) {
-                warn!("Ledger proof of history failed at entry: {}", entry_height);
-                return Err(BankError::LedgerVerificationFailed);
-            }
-
-            self.process_block(&block)?;
-
-            last_entry_id = block.last().unwrap().id;
-            entry_height += block.len() as u64;
-        }
-        Ok((entry_height, last_entry_id))
-    }
-
     /// Create, sign, and process a Transaction from `keypair` to `to` of
     /// `n` tokens where `last_id` is the last Entry ID observed by the client.
     pub fn transfer(
@@ -1197,7 +1141,7 @@ mod tests {
         genesis_block: &GenesisBlock,
         mint_keypair: &Keypair,
         keypairs: &[Keypair],
-    ) -> impl Iterator<Item = Entry> {
+    ) -> Vec<Entry> {
         let mut entries: Vec<Entry> = vec![];
 
         let mut last_id = genesis_block.last_id();
@@ -1220,83 +1164,7 @@ mod tests {
             last_id = hash;
             entries.push(tick);
         }
-        entries.into_iter()
-    }
-
-    // create a ledger with a tick every `tick_interval` entries and a couple other transactions
-    fn create_sample_block_with_ticks(
-        genesis_block: &GenesisBlock,
-        mint_keypair: &Keypair,
-        num_one_token_transfers: usize,
-        tick_interval: usize,
-    ) -> impl Iterator<Item = Entry> {
-        let mut entries = vec![];
-
-        let mut last_id = genesis_block.last_id();
-
-        // Start off the ledger with the psuedo-tick linked to the genesis block
-        // (see entry0 in `process_ledger`)
-        let tick = Entry::new(&genesis_block.last_id(), 0, 1, vec![]);
-        let mut hash = tick.id;
-        entries.push(tick);
-
-        for i in 0..num_one_token_transfers {
-            // Transfer one token from the mint to a random account
-            let keypair = Keypair::new();
-            let tx = SystemTransaction::new_account(mint_keypair, keypair.pubkey(), 1, last_id, 0);
-            let entry = Entry::new(&hash, 0, 1, vec![tx]);
-            hash = entry.id;
-            entries.push(entry);
-
-            // Add a second Transaction that will produce a
-            // ProgramError<0, ResultWithNegativeTokens> error when processed
-            let keypair2 = Keypair::new();
-            let tx = SystemTransaction::new_account(&keypair, keypair2.pubkey(), 42, last_id, 0);
-            let entry = Entry::new(&hash, 0, 1, vec![tx]);
-            hash = entry.id;
-            entries.push(entry);
-
-            if (i + 1) % tick_interval == 0 {
-                let tick = Entry::new(&hash, 0, 1, vec![]);
-                hash = tick.id;
-                last_id = hash;
-                entries.push(tick);
-            }
-        }
-        entries.into_iter()
-    }
-
-    fn create_sample_ledger(
-        tokens: u64,
-        num_one_token_transfers: usize,
-    ) -> (GenesisBlock, Keypair, impl Iterator<Item = Entry>) {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(tokens);
-        let block = create_sample_block_with_ticks(
-            &genesis_block,
-            &mint_keypair,
-            num_one_token_transfers,
-            num_one_token_transfers,
-        );
-        (genesis_block, mint_keypair, block)
-    }
-
-    #[test]
-    fn test_process_ledger_simple() {
-        let (genesis_block, mint_keypair, ledger) = create_sample_ledger(100, 3);
-        let mut bank = Bank::default();
-        bank.add_builtin_programs();
-        bank.process_genesis_block(&genesis_block);
-        assert_eq!(bank.tick_height(), 0);
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100);
-        assert_eq!(
-            bank.get_current_leader(),
-            Some(genesis_block.bootstrap_leader_id)
-        );
-        let (ledger_height, last_id) = bank.process_ledger(ledger).unwrap();
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 3);
-        assert_eq!(ledger_height, 8);
-        assert_eq!(bank.tick_height(), 1);
-        assert_eq!(bank.last_id(), last_id);
+        entries
     }
 
     #[test]
@@ -1305,25 +1173,25 @@ mod tests {
         let seed = [0u8; 32];
         let mut rnd = GenKeys::new(seed);
         let keypairs = rnd.gen_n_keypairs(5);
-        let ledger0 = create_sample_block_with_next_entries_using_keypairs(
+        let entries0 = create_sample_block_with_next_entries_using_keypairs(
             &genesis_block,
             &mint_keypair,
             &keypairs,
         );
-        let ledger1 = create_sample_block_with_next_entries_using_keypairs(
+        let entries1 = create_sample_block_with_next_entries_using_keypairs(
             &genesis_block,
             &mint_keypair,
             &keypairs,
         );
 
-        let mut bank0 = Bank::default();
+        let bank0 = Bank::default();
         bank0.add_builtin_programs();
         bank0.process_genesis_block(&genesis_block);
-        bank0.process_ledger(ledger0).unwrap();
-        let mut bank1 = Bank::default();
+        bank0.process_entries(&entries0).unwrap();
+        let bank1 = Bank::default();
         bank1.add_builtin_programs();
         bank1.process_genesis_block(&genesis_block);
-        bank1.process_ledger(ledger1).unwrap();
+        bank1.process_entries(&entries1).unwrap();
 
         let initial_state = bank0.hash_internal_state();
 

@@ -30,6 +30,7 @@ pub mod crds_value;
 #[macro_use]
 pub mod contact_info;
 pub mod blocktree;
+pub mod blocktree_processor;
 pub mod cluster_info;
 pub mod compute_leader_confirmation_service;
 pub mod db_window;
