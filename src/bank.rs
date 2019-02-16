@@ -498,7 +498,7 @@ impl Bank {
             .unwrap()
             .merge_into_root(forks::ROLLBACK_DEPTH, leaf_slot)
             .expect("merge into root");
-        let height = self.root().tick_height();
+        let height = self.fork(leaf_slot).unwrap().head().tick_height();
         self.leader_scheduler
             .write()
             .unwrap()
