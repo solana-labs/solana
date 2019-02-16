@@ -122,14 +122,19 @@ mod test {
 
     #[test]
     fn test_entry_stream_stage_process_entries() {
-        // Set up bank and leader_scheduler
+        // Set up the bank and leader_scheduler
         let ticks_per_slot = 5;
         let leader_scheduler_config = LeaderSchedulerConfig::new(ticks_per_slot, 2, 10);
+        let leader_scheduler =
+            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
+
+        // Side-effect: Register a bank with the leader_scheduler
         let (genesis_block, _mint_keypair) = GenesisBlock::new(1_000_000);
-        let bank = Bank::new_with_leader_scheduler_config(&genesis_block, &leader_scheduler_config);
+        Bank::new_with_leader_scheduler(&genesis_block, leader_scheduler.clone());
+
         // Set up entry stream
         let mut entry_stream =
-            EntryStream::new("test_stream".to_string(), bank.leader_scheduler.clone());
+            EntryStream::new("test_stream".to_string(), leader_scheduler.clone());
 
         // Set up dummy channels to host an EntryStreamStage
         let (ledger_entry_sender, ledger_entry_receiver) = channel();

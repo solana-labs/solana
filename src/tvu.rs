@@ -17,6 +17,7 @@ use crate::blob_fetch_stage::BlobFetchStage;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
 use crate::entry_stream_stage::EntryStreamStage;
+use crate::leader_scheduler::LeaderScheduler;
 use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
 use crate::service::Service;
@@ -78,6 +79,7 @@ impl Tvu {
         entry_stream: Option<&String>,
         ledger_signal_sender: SyncSender<bool>,
         ledger_signal_receiver: Receiver<bool>,
+        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
         let keypair: Arc<Keypair> = cluster_info
@@ -111,7 +113,7 @@ impl Tvu {
             Arc::new(retransmit_socket),
             repair_socket,
             blob_fetch_receiver,
-            bank.leader_scheduler.clone(),
+            leader_scheduler.clone(),
             exit.clone(),
         );
 
@@ -129,13 +131,14 @@ impl Tvu {
             to_leader_sender,
             ledger_signal_sender,
             ledger_signal_receiver,
+            &leader_scheduler,
         );
 
         let entry_stream_stage = if entry_stream.is_some() {
             let (entry_stream_stage, entry_stream_receiver) = EntryStreamStage::new(
                 previous_receiver,
                 entry_stream.unwrap().to_string(),
-                bank.leader_scheduler.clone(),
+                leader_scheduler,
                 exit.clone(),
             );
             previous_receiver = entry_stream_receiver;
@@ -242,7 +245,11 @@ pub mod tests {
 
         let starting_balance = 10_000;
         let (genesis_block, _mint_keypair) = GenesisBlock::new(starting_balance);
-        let bank = Arc::new(Bank::new(&genesis_block));
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
+        let bank = Arc::new(Bank::new_with_leader_scheduler(
+            &genesis_block,
+            leader_scheduler.clone(),
+        ));
 
         //start cluster_info1
         let mut cluster_info1 = ClusterInfo::new(target1.info.clone());
@@ -278,6 +285,7 @@ pub mod tests {
             None,
             l_sender,
             l_receiver,
+            leader_scheduler,
         );
         tvu.close().expect("close");
     }
@@ -332,9 +340,11 @@ pub mod tests {
         let starting_balance = 10_000;
         let (genesis_block, mint_keypair) = GenesisBlock::new(starting_balance);
         let tvu_addr = target1.info.tvu;
-        let bank = Arc::new(Bank::new_with_leader_scheduler_config(
+        let leader_scheduler =
+            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
+        let bank = Arc::new(Bank::new_with_leader_scheduler(
             &genesis_block,
-            &leader_scheduler_config,
+            leader_scheduler.clone(),
         ));
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), starting_balance);
 
@@ -375,6 +385,7 @@ pub mod tests {
             None,
             l_sender,
             l_receiver,
+            leader_scheduler,
         );
 
         let mut alice_ref_balance = starting_balance;
