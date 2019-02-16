@@ -262,10 +262,11 @@ mod tests {
     use super::*;
     use crate::entry::EntrySlice;
     use crate::genesis_block::GenesisBlock;
-    use crate::leader_scheduler::{LeaderSchedulerConfig, DEFAULT_TICKS_PER_SLOT};
+    use crate::leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig, DEFAULT_TICKS_PER_SLOT};
     use crate::packet::to_packets;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
+    use std::sync::RwLock;
     use std::thread::sleep;
 
     #[test]
@@ -459,9 +460,11 @@ mod tests {
         solana_logger::setup();
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let leader_scheduler_config = LeaderSchedulerConfig::new(1, 1, 1);
-        let bank = Arc::new(Bank::new_with_leader_scheduler_config(
+        let leader_scheduler =
+            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
+        let bank = Arc::new(Bank::new_with_leader_scheduler(
             &genesis_block,
-            &leader_scheduler_config,
+            leader_scheduler,
         ));
         let (verified_sender, verified_receiver) = channel();
         let (to_validator_sender, to_validator_receiver) = channel();

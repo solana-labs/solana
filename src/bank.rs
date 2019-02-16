@@ -8,7 +8,7 @@ use crate::counter::Counter;
 use crate::entry::Entry;
 use crate::genesis_block::GenesisBlock;
 use crate::last_id_queue::{LastIdQueue, MAX_ENTRY_IDS};
-use crate::leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig};
+use crate::leader_scheduler::LeaderScheduler;
 use crate::poh_recorder::{PohRecorder, PohRecorderError};
 use crate::result::Error;
 use crate::rpc_pubsub::RpcSubscriptions;
@@ -130,14 +130,6 @@ impl Bank {
         bank.process_genesis_block(genesis_block);
         bank.add_builtin_programs();
         bank
-    }
-
-    pub fn new_with_leader_scheduler_config(
-        genesis_block: &GenesisBlock,
-        leader_scheduler_config: &LeaderSchedulerConfig,
-    ) -> Self {
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::new(leader_scheduler_config)));
-        Self::new_with_leader_scheduler(genesis_block, leader_scheduler)
     }
 
     pub fn new(genesis_block: &GenesisBlock) -> Self {
