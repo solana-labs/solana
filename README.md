@@ -69,6 +69,11 @@ Build
 $ cargo build --all
 ```
 
+Then to run a minimal local cluster
+```bash
+$ ./run.sh
+```
+
 Testing
 ---
 
