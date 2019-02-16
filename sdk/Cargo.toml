@@ -9,7 +9,7 @@ license = "Apache-2.0"
 edition = "2018"
 
 [dependencies]
-bincode = "1.1.1"
+bincode = "1.1.2"
 bs58 = "0.2.0"
 byteorder = "1.2.1"
 chrono = { version = "0.4.0", features = ["serde"] }
