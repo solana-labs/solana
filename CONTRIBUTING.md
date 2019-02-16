@@ -23,10 +23,20 @@ is merged, you can use git-rebase to purge it from your original branch.
 $ git pull --rebase upstream master
 ```
 
-How big is too big? If there are no functional changes, PRs can be very large and that's
-no problem. If, however, your changes are making meaningful changes or additions, then
-about 1,000 lines of changes is about the most you should ask a Solana maintainer to
-review.
+### How big is too big?
+
+If there are no functional changes, PRs can be very large and that's no problem. If,
+however, your changes are making meaningful changes or additions, then about 1,000 lines of
+changes is about the most you should ask a Solana maintainer to review.
+
+### Should I send small PRs as I develop large, new components?
+
+Add only code to the codebase that is ready to be deployed. If you are building a large
+library, consider developing it in a separate git repository. When it is ready to be
+integrated, the Solana maintainers will work with you to decide on a path forward. Smaller
+libraries may be copied in whereas very large ones may be pulled in with a package manager.
+
+### When will my PR be reviewed?
 
 PRs are typically reviewed and merged in under 7 days. If your PR has been open for longer,
 it's a strong indicator that the reviewers aren't confident the change meets the quality
