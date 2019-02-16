@@ -5,17 +5,14 @@
 
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::counter::Counter;
-use crate::entry::Entry;
 use crate::genesis_block::GenesisBlock;
 use crate::last_id_queue::{LastIdQueue, MAX_ENTRY_IDS};
-use crate::leader_scheduler::LeaderScheduler;
 use crate::poh_recorder::{PohRecorder, PohRecorderError};
 use crate::result::Error;
 use crate::rpc_pubsub::RpcSubscriptions;
 use crate::status_cache::StatusCache;
 use bincode::deserialize;
 use log::Level;
-use rayon::prelude::*;
 use solana_runtime::{self, RuntimeError};
 use solana_sdk::account::Account;
 use solana_sdk::bpf_loader;
@@ -139,7 +136,7 @@ impl Bank {
         }
     }
 
-    fn process_genesis_block(&self, genesis_block: &GenesisBlock) {
+    pub fn process_genesis_block(&self, genesis_block: &GenesisBlock) {
         assert!(genesis_block.mint_id != Pubkey::default());
         assert!(genesis_block.bootstrap_leader_id != Pubkey::default());
         assert!(genesis_block.bootstrap_leader_vote_account_id != Pubkey::default());
@@ -189,7 +186,7 @@ impl Bank {
             .genesis_last_id(&genesis_block.last_id());
     }
 
-    fn add_builtin_programs(&self) {
+    pub fn add_builtin_programs(&self) {
         let system_program_account = native_loader::create_program_account("solana_system_program");
         self.accounts
             .store_slow(true, &system_program::id(), &system_program_account);
@@ -317,11 +314,11 @@ impl Bank {
         }
     }
 
-    fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<()>> {
+    pub fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         self.accounts.lock_accounts(txs)
     }
 
-    fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
+    pub fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
         self.accounts.unlock_accounts(txs, results)
     }
 
@@ -606,123 +603,6 @@ impl Bank {
         results
     }
 
-    pub fn process_entry(&self, entry: &Entry) -> Result<()> {
-        if !entry.is_tick() {
-            for result in self.process_transactions(&entry.transactions) {
-                match result {
-                    // Entries that result in a ProgramError are still valid and are written in the
-                    // ledger so map them to an ok return value
-                    Err(BankError::ProgramError(_, _)) => Ok(()),
-                    _ => result,
-                }?;
-            }
-        } else {
-            self.register_tick(&entry.id);
-        }
-
-        Ok(())
-    }
-
-    /// Process an ordered list of entries.
-    pub fn process_entries(
-        &self,
-        entries: &[Entry],
-        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-    ) -> Result<()> {
-        self.par_process_entries_with_scheduler(entries, leader_scheduler)
-    }
-
-    pub fn first_err(results: &[Result<()>]) -> Result<()> {
-        for r in results {
-            r.clone()?;
-        }
-        Ok(())
-    }
-
-    fn ignore_program_errors(results: Vec<Result<()>>) -> Vec<Result<()>> {
-        results
-            .into_iter()
-            .map(|result| match result {
-                // Entries that result in a ProgramError are still valid and are written in the
-                // ledger so map them to an ok return value
-                Err(BankError::ProgramError(index, err)) => {
-                    info!("program error {:?}, {:?}", index, err);
-                    inc_new_counter_info!("bank-ignore_program_err", 1);
-                    Ok(())
-                }
-                _ => result,
-            })
-            .collect()
-    }
-
-    fn par_execute_entries(&self, entries: &[(&Entry, Vec<Result<()>>)]) -> Result<()> {
-        inc_new_counter_info!("bank-par_execute_entries-count", entries.len());
-        let results: Vec<Result<()>> = entries
-            .into_par_iter()
-            .map(|(e, lock_results)| {
-                let old_results = self.load_execute_and_commit_transactions(
-                    &e.transactions,
-                    lock_results.to_vec(),
-                    MAX_ENTRY_IDS,
-                );
-                let results = Bank::ignore_program_errors(old_results);
-                self.unlock_accounts(&e.transactions, &results);
-                Self::first_err(&results)
-            })
-            .collect();
-        Self::first_err(&results)
-    }
-
-    /// process entries in parallel
-    /// 1. In order lock accounts for each entry while the lock succeeds, up to a Tick entry
-    /// 2. Process the locked group in parallel
-    /// 3. Register the `Tick` if it's available
-    /// 4. Update the leader scheduler, goto 1
-    fn par_process_entries_with_scheduler(
-        &self,
-        entries: &[Entry],
-        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-    ) -> Result<()> {
-        // accumulator for entries that can be processed in parallel
-        let mut mt_group = vec![];
-        for entry in entries {
-            if entry.is_tick() {
-                // if its a tick, execute the group and register the tick
-                self.par_execute_entries(&mt_group)?;
-                self.register_tick(&entry.id);
-                leader_scheduler
-                    .write()
-                    .unwrap()
-                    .update_tick_height(self.tick_height(), self);
-                mt_group = vec![];
-                continue;
-            }
-            // try to lock the accounts
-            let lock_results = self.lock_accounts(&entry.transactions);
-            // if any of the locks error out
-            // execute the current group
-            if Self::first_err(&lock_results).is_err() {
-                self.par_execute_entries(&mt_group)?;
-                mt_group = vec![];
-                //reset the lock and push the entry
-                self.unlock_accounts(&entry.transactions, &lock_results);
-                let lock_results = self.lock_accounts(&entry.transactions);
-                mt_group.push((entry, lock_results));
-            } else {
-                // push the entry to the mt_group
-                mt_group.push((entry, lock_results));
-            }
-        }
-        self.par_execute_entries(&mt_group)?;
-        Ok(())
-    }
-
-    #[cfg(test)]
-    fn par_process_entries(&self, entries: &[Entry]) -> Result<()> {
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
-        self.par_process_entries_with_scheduler(entries, &leader_scheduler)
-    }
-
     /// Create, sign, and process a Transaction from `keypair` to `to` of
     /// `n` tokens where `last_id` is the last Entry ID observed by the client.
     pub fn transfer(
@@ -836,8 +716,6 @@ impl Bank {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entry::{next_entries, next_entry, Entry};
-    use crate::gen_keys::GenKeys;
     use bincode::serialize;
     use hashbrown::HashSet;
     use solana_sdk::hash::hash;
@@ -1099,25 +977,6 @@ mod tests {
     }
 
     #[test]
-    fn test_process_empty_entry_is_registered() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
-        let bank = Bank::new(&genesis_block);
-        let keypair = Keypair::new();
-        let entry = next_entry(&genesis_block.last_id(), 1, vec![]);
-        let tx = SystemTransaction::new_account(&mint_keypair, keypair.pubkey(), 1, entry.id, 0);
-
-        // First, ensure the TX is rejected because of the unregistered last ID
-        assert_eq!(
-            bank.process_transaction(&tx),
-            Err(BankError::LastIdNotFound)
-        );
-
-        // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
-        bank.par_process_entries(&[entry]).unwrap();
-        assert_eq!(bank.process_transaction(&tx), Ok(()));
-    }
-
-    #[test]
     fn test_process_genesis() {
         solana_logger::setup();
         let dummy_leader_id = Keypair::new().pubkey();
@@ -1129,76 +988,6 @@ mod tests {
         assert_eq!(bank.get_balance(&dummy_leader_id), 1);
     }
 
-    fn create_sample_block_with_next_entries_using_keypairs(
-        genesis_block: &GenesisBlock,
-        mint_keypair: &Keypair,
-        keypairs: &[Keypair],
-    ) -> Vec<Entry> {
-        let mut entries: Vec<Entry> = vec![];
-
-        let mut last_id = genesis_block.last_id();
-
-        // Start off the ledger with the psuedo-tick linked to the genesis block
-        // (see entry0 in `process_ledger`)
-        let tick = Entry::new(&genesis_block.last_id(), 0, 1, vec![]);
-        let mut hash = tick.id;
-        entries.push(tick);
-
-        let num_hashes = 1;
-        for k in keypairs {
-            let tx = SystemTransaction::new_account(mint_keypair, k.pubkey(), 1, last_id, 0);
-            let txs = vec![tx];
-            let mut e = next_entries(&hash, 0, txs);
-            entries.append(&mut e);
-            hash = entries.last().unwrap().id;
-            let tick = Entry::new(&hash, 0, num_hashes, vec![]);
-            hash = tick.id;
-            last_id = hash;
-            entries.push(tick);
-        }
-        entries
-    }
-
-    #[test]
-    fn test_hash_internal_state() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2_000);
-        let seed = [0u8; 32];
-        let mut rnd = GenKeys::new(seed);
-        let keypairs = rnd.gen_n_keypairs(5);
-        let entries0 = create_sample_block_with_next_entries_using_keypairs(
-            &genesis_block,
-            &mint_keypair,
-            &keypairs,
-        );
-        let entries1 = create_sample_block_with_next_entries_using_keypairs(
-            &genesis_block,
-            &mint_keypair,
-            &keypairs,
-        );
-
-        let bank0 = Bank::default();
-        bank0.add_builtin_programs();
-        bank0.process_genesis_block(&genesis_block);
-        bank0.par_process_entries(&entries0).unwrap();
-        let bank1 = Bank::default();
-        bank1.add_builtin_programs();
-        bank1.process_genesis_block(&genesis_block);
-        bank1.par_process_entries(&entries1).unwrap();
-
-        let initial_state = bank0.hash_internal_state();
-
-        assert_eq!(bank1.hash_internal_state(), initial_state);
-
-        let pubkey = keypairs[0].pubkey();
-        bank0
-            .transfer(1_000, &mint_keypair, pubkey, bank0.last_id())
-            .unwrap();
-        assert_ne!(bank0.hash_internal_state(), initial_state);
-        bank1
-            .transfer(1_000, &mint_keypair, pubkey, bank1.last_id())
-            .unwrap();
-        assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
-    }
     #[test]
     fn test_interleaving_locks() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(3);
@@ -1237,193 +1026,6 @@ mod tests {
         assert_matches!(
             bank.transfer(2, &mint_keypair, bob.pubkey(), genesis_block.last_id()),
             Ok(_)
-        );
-    }
-
-    #[test]
-    fn test_first_err() {
-        assert_eq!(Bank::first_err(&[Ok(())]), Ok(()));
-        assert_eq!(
-            Bank::first_err(&[Ok(()), Err(BankError::DuplicateSignature)]),
-            Err(BankError::DuplicateSignature)
-        );
-        assert_eq!(
-            Bank::first_err(&[
-                Ok(()),
-                Err(BankError::DuplicateSignature),
-                Err(BankError::AccountInUse)
-            ]),
-            Err(BankError::DuplicateSignature)
-        );
-        assert_eq!(
-            Bank::first_err(&[
-                Ok(()),
-                Err(BankError::AccountInUse),
-                Err(BankError::DuplicateSignature)
-            ]),
-            Err(BankError::AccountInUse)
-        );
-        assert_eq!(
-            Bank::first_err(&[
-                Err(BankError::AccountInUse),
-                Ok(()),
-                Err(BankError::DuplicateSignature)
-            ]),
-            Err(BankError::AccountInUse)
-        );
-    }
-    #[test]
-    fn test_par_process_entries_tick() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(1000);
-        let bank = Bank::new(&genesis_block);
-
-        // ensure bank can process a tick
-        let tick = next_entry(&genesis_block.last_id(), 1, vec![]);
-        assert_eq!(bank.par_process_entries(&[tick.clone()]), Ok(()));
-        assert_eq!(bank.last_id(), tick.id);
-    }
-    #[test]
-    fn test_par_process_entries_2_entries_collision() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
-        let bank = Bank::new(&genesis_block);
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
-
-        let last_id = bank.last_id();
-
-        // ensure bank can process 2 entries that have a common account and no tick is registered
-        let tx =
-            SystemTransaction::new_account(&mint_keypair, keypair1.pubkey(), 2, bank.last_id(), 0);
-        let entry_1 = next_entry(&last_id, 1, vec![tx]);
-        let tx =
-            SystemTransaction::new_account(&mint_keypair, keypair2.pubkey(), 2, bank.last_id(), 0);
-        let entry_2 = next_entry(&entry_1.id, 1, vec![tx]);
-        assert_eq!(bank.par_process_entries(&[entry_1, entry_2]), Ok(()));
-        assert_eq!(bank.get_balance(&keypair1.pubkey()), 2);
-        assert_eq!(bank.get_balance(&keypair2.pubkey()), 2);
-        assert_eq!(bank.last_id(), last_id);
-    }
-    #[test]
-    fn test_par_process_entries_2_txes_collision() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
-        let bank = Bank::new(&genesis_block);
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
-        let keypair3 = Keypair::new();
-
-        // fund: put 4 in each of 1 and 2
-        assert_matches!(
-            bank.transfer(4, &mint_keypair, keypair1.pubkey(), bank.last_id()),
-            Ok(_)
-        );
-        assert_matches!(
-            bank.transfer(4, &mint_keypair, keypair2.pubkey(), bank.last_id()),
-            Ok(_)
-        );
-
-        // construct an Entry whose 2nd transaction would cause a lock conflict with previous entry
-        let entry_1_to_mint = next_entry(
-            &bank.last_id(),
-            1,
-            vec![SystemTransaction::new_account(
-                &keypair1,
-                mint_keypair.pubkey(),
-                1,
-                bank.last_id(),
-                0,
-            )],
-        );
-
-        let entry_2_to_3_mint_to_1 = next_entry(
-            &entry_1_to_mint.id,
-            1,
-            vec![
-                SystemTransaction::new_account(&keypair2, keypair3.pubkey(), 2, bank.last_id(), 0), // should be fine
-                SystemTransaction::new_account(
-                    &keypair1,
-                    mint_keypair.pubkey(),
-                    2,
-                    bank.last_id(),
-                    0,
-                ), // will collide
-            ],
-        );
-
-        assert_eq!(
-            bank.par_process_entries(&[entry_1_to_mint, entry_2_to_3_mint_to_1]),
-            Ok(())
-        );
-
-        assert_eq!(bank.get_balance(&keypair1.pubkey()), 1);
-        assert_eq!(bank.get_balance(&keypair2.pubkey()), 2);
-        assert_eq!(bank.get_balance(&keypair3.pubkey()), 2);
-    }
-    #[test]
-    fn test_par_process_entries_2_entries_par() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
-        let bank = Bank::new(&genesis_block);
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
-        let keypair3 = Keypair::new();
-        let keypair4 = Keypair::new();
-
-        //load accounts
-        let tx =
-            SystemTransaction::new_account(&mint_keypair, keypair1.pubkey(), 1, bank.last_id(), 0);
-        assert_eq!(bank.process_transaction(&tx), Ok(()));
-        let tx =
-            SystemTransaction::new_account(&mint_keypair, keypair2.pubkey(), 1, bank.last_id(), 0);
-        assert_eq!(bank.process_transaction(&tx), Ok(()));
-
-        // ensure bank can process 2 entries that do not have a common account and no tick is registered
-        let last_id = bank.last_id();
-        let tx = SystemTransaction::new_account(&keypair1, keypair3.pubkey(), 1, bank.last_id(), 0);
-        let entry_1 = next_entry(&last_id, 1, vec![tx]);
-        let tx = SystemTransaction::new_account(&keypair2, keypair4.pubkey(), 1, bank.last_id(), 0);
-        let entry_2 = next_entry(&entry_1.id, 1, vec![tx]);
-        assert_eq!(bank.par_process_entries(&[entry_1, entry_2]), Ok(()));
-        assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
-        assert_eq!(bank.get_balance(&keypair4.pubkey()), 1);
-        assert_eq!(bank.last_id(), last_id);
-    }
-    #[test]
-    fn test_par_process_entries_2_entries_tick() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(1000);
-        let bank = Bank::new(&genesis_block);
-        let keypair1 = Keypair::new();
-        let keypair2 = Keypair::new();
-        let keypair3 = Keypair::new();
-        let keypair4 = Keypair::new();
-
-        //load accounts
-        let tx =
-            SystemTransaction::new_account(&mint_keypair, keypair1.pubkey(), 1, bank.last_id(), 0);
-        assert_eq!(bank.process_transaction(&tx), Ok(()));
-        let tx =
-            SystemTransaction::new_account(&mint_keypair, keypair2.pubkey(), 1, bank.last_id(), 0);
-        assert_eq!(bank.process_transaction(&tx), Ok(()));
-
-        let last_id = bank.last_id();
-
-        // ensure bank can process 2 entries that do not have a common account and tick is registered
-        let tx = SystemTransaction::new_account(&keypair2, keypair3.pubkey(), 1, bank.last_id(), 0);
-        let entry_1 = next_entry(&last_id, 1, vec![tx]);
-        let tick = next_entry(&entry_1.id, 1, vec![]);
-        let tx = SystemTransaction::new_account(&keypair1, keypair4.pubkey(), 1, tick.id, 0);
-        let entry_2 = next_entry(&tick.id, 1, vec![tx]);
-        assert_eq!(
-            bank.par_process_entries(&[entry_1.clone(), tick.clone(), entry_2.clone()]),
-            Ok(())
-        );
-        assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
-        assert_eq!(bank.get_balance(&keypair4.pubkey()), 1);
-        assert_eq!(bank.last_id(), tick.id);
-        // ensure that an error is returned for an empty account (keypair2)
-        let tx = SystemTransaction::new_account(&keypair2, keypair3.pubkey(), 1, tick.id, 0);
-        let entry_3 = next_entry(&entry_2.id, 1, vec![tx]);
-        assert_eq!(
-            bank.par_process_entries(&[entry_3]),
-            Err(BankError::AccountNotFound)
         );
     }
 
@@ -1524,29 +1126,6 @@ mod tests {
             .unwrap();
         let entries = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].transactions.len(), transactions.len() - 1);
-    }
-
-    #[test]
-    fn test_bank_ignore_program_errors() {
-        let expected_results = vec![Ok(()), Ok(())];
-        let results = vec![Ok(()), Ok(())];
-        let updated_results = Bank::ignore_program_errors(results);
-        assert_eq!(updated_results, expected_results);
-
-        let results = vec![
-            Err(BankError::ProgramError(
-                1,
-                ProgramError::ResultWithNegativeTokens,
-            )),
-            Ok(()),
-        ];
-        let updated_results = Bank::ignore_program_errors(results);
-        assert_eq!(updated_results, expected_results);
-
-        // Other BankErrors should not be ignored
-        let results = vec![Err(BankError::AccountNotFound), Ok(())];
-        let updated_results = Bank::ignore_program_errors(results);
-        assert_ne!(updated_results, expected_results);
     }
 
     #[test]
