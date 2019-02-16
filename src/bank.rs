@@ -145,7 +145,10 @@ impl Bank {
         trace!("new fork current: {} base: {}", current, base);
         if self.forks.read().unwrap().is_active_fork(current) {
             let parent = self.forks.read().unwrap().deltas.load(current).unwrap().1;
-            assert_eq!(parent, base, "fork initialised a second time with a different base");
+            assert_eq!(
+                parent, base,
+                "fork initialised a second time with a different base"
+            );
             trace!("already active: {}", current);
             return Ok(());
         }

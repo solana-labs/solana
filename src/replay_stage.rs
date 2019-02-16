@@ -250,9 +250,7 @@ impl ReplayStage {
                         }
                         info!(
                             "updated to current_slot: {:?} leader_id: {} max_tick_height: {}",
-                            current_slot,
-                            leader_id,
-                            max_tick_height
+                            current_slot, leader_id, max_tick_height
                         );
                     }
 
@@ -265,7 +263,10 @@ impl ReplayStage {
 
                     let entries = {
                         if let Some(slot) = current_slot {
-                            info!("replay getting slot_entries: {} {}", slot, current_blob_index);
+                            info!(
+                                "replay getting slot_entries: {} {}",
+                                slot, current_blob_index
+                            );
                             if let Ok(entries) = blocktree.get_slot_entries(
                                 slot,
                                 current_blob_index,
@@ -315,8 +316,7 @@ impl ReplayStage {
                         // for leader rotation
                         info!(
                             "max_tick_height: {} current_tick_height: {}",
-                            max_tick_height,
-                            current_tick_height
+                            max_tick_height, current_tick_height
                         );
 
                         if max_tick_height == current_tick_height {
@@ -330,9 +330,7 @@ impl ReplayStage {
 
                             info!(
                                 "next_leader_id: {} leader_id_for_slot: {} my_id: {}",
-                                next_leader_id,
-                                leader_id,
-                                my_id
+                                next_leader_id, leader_id, my_id
                             );
 
                             if my_id == next_leader_id {

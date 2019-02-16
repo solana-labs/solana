@@ -96,8 +96,12 @@ impl BankingStage {
                                     .expect("Scheduled leader should be calculated by this point");
 
                                 if leader_id == next_leader_id {
-                                    bank.init_fork(current_slot + 1, &bank.active_fork().last_id(), current_slot)
-                                        .expect("init fork");
+                                    bank.init_fork(
+                                        current_slot + 1,
+                                        &bank.active_fork().last_id(),
+                                        current_slot,
+                                    )
+                                    .expect("init fork");
                                 }
                             } else {
                                 trace!("current slot not found! {}", current_slot);
