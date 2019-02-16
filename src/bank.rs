@@ -830,14 +830,6 @@ impl Bank {
             .collect()
     }
 
-    #[cfg(test)]
-    fn get_current_leader(&self) -> Option<Pubkey> {
-        let tick_height = self.tick_height();
-        let leader_scheduler = self.leader_scheduler.read().unwrap();
-        let slot = leader_scheduler.tick_height_to_slot(tick_height);
-        leader_scheduler.get_leader_for_slot(slot)
-    }
-
     pub fn tick_height(&self) -> u64 {
         self.last_id_queue.read().unwrap().tick_height
     }
@@ -1142,7 +1134,6 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         assert_eq!(bank.get_balance(&genesis_block.mint_id), 3);
         assert_eq!(bank.get_balance(&dummy_leader_id), 1);
-        assert_eq!(bank.get_current_leader(), Some(dummy_leader_id));
     }
 
     fn create_sample_block_with_next_entries_using_keypairs(
