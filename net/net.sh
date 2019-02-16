@@ -35,7 +35,7 @@ Operate a configured testnet
    -f [cargoFeatures]          - List of |cargo --feaures=| to activate
                                  (ignored if -s or -S is specified)
    -r                          - Reuse existing node/ledger configuration from a
-                                 previous |start| (ie, don't run ./mulitnode-demo/setup.sh).
+                                 previous |start| (ie, don't run ./multinode-demo/setup.sh).
 
  sanity/start/update-specific options:
    -o noLedgerVerify    - Skip ledger verification

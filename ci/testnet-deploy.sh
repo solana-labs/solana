@@ -51,7 +51,7 @@ Deploys a CD testnet
    -d [disk-type]       - Specify a boot disk type (default None) Use pd-ssd to get ssd on GCE.
    -D                   - Delete the network
    -r                   - Reuse existing node/ledger configuration from a
-                          previous |start| (ie, don't run ./mulitnode-demo/setup.sh).
+                          previous |start| (ie, don't run ./multinode-demo/setup.sh).
 
    Note: the SOLANA_METRICS_CONFIG environment variable is used to configure
          metrics
