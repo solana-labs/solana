@@ -466,7 +466,11 @@ pub fn new_bank_from_ledger(
             .expect("Expected to successfully open database ledger");
     let genesis_block =
         GenesisBlock::load(ledger_path).expect("Expected to successfully open genesis block");
-    let bank = Bank::new_with_leader_scheduler(&genesis_block, leader_scheduler.clone());
+    let bank = Bank::new(&genesis_block);
+    leader_scheduler
+        .write()
+        .unwrap()
+        .update_tick_height(0, &bank);
 
     let now = Instant::now();
     info!("processing ledger...");

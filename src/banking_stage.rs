@@ -262,11 +262,10 @@ mod tests {
     use super::*;
     use crate::entry::EntrySlice;
     use crate::genesis_block::GenesisBlock;
-    use crate::leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig, DEFAULT_TICKS_PER_SLOT};
+    use crate::leader_scheduler::DEFAULT_TICKS_PER_SLOT;
     use crate::packet::to_packets;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
-    use std::sync::RwLock;
     use std::thread::sleep;
 
     #[test]
@@ -459,13 +458,8 @@ mod tests {
     fn test_returns_unprocessed_packet() {
         solana_logger::setup();
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
-        let leader_scheduler_config = LeaderSchedulerConfig::new(1, 1, 1);
-        let leader_scheduler =
-            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
-        let bank = Arc::new(Bank::new_with_leader_scheduler(
-            &genesis_block,
-            leader_scheduler,
-        ));
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let ticks_per_slot = 1;
         let (verified_sender, verified_receiver) = channel();
         let (to_validator_sender, to_validator_receiver) = channel();
         let (mut banking_stage, _entry_receiver) = BankingStage::new(
@@ -473,16 +467,13 @@ mod tests {
             verified_receiver,
             PohServiceConfig::default(),
             &bank.last_id(),
-            leader_scheduler_config.ticks_per_slot,
+            ticks_per_slot,
             genesis_block.bootstrap_leader_id,
             &to_validator_sender,
         );
 
         // Wait for Poh recorder to hit max height
-        assert_eq!(
-            to_validator_receiver.recv().unwrap(),
-            leader_scheduler_config.ticks_per_slot
-        );
+        assert_eq!(to_validator_receiver.recv().unwrap(), ticks_per_slot);
 
         // Now send a transaction to the banking stage
         let transaction = SystemTransaction::new_account(

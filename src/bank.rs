@@ -123,18 +123,6 @@ impl Bank {
         bank
     }
 
-    pub fn new_with_leader_scheduler(
-        genesis_block: &GenesisBlock,
-        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
-    ) -> Self {
-        let bank = Bank::new(genesis_block);
-        leader_scheduler
-            .write()
-            .unwrap()
-            .update_tick_height(0, &bank);
-        bank
-    }
-
     pub fn set_subscriptions(&self, subscriptions: Arc<RpcSubscriptions>) {
         let mut sub = self.subscriptions.write().unwrap();
         *sub = Some(subscriptions)
