@@ -560,7 +560,7 @@ mod tests {
         // Wait for Poh recorder to hit max height
         loop {
             let bank_tick_height = bank.tick_height();
-            if bank_tick_height >= leader_scheduler_config.ticks_per_slot {
+            if bank_tick_height >= ticks_per_slot {
                 break;
             }
             sleep(Duration::from_millis(10));

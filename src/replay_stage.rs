@@ -288,7 +288,7 @@ impl ReplayStage {
                             );
                             if my_id == leader_id || my_id == last_leader_id {
                                 to_leader_sender.send(current_tick_height).unwrap();
-                            } else {
+                            } else if leader_id != last_leader_id {
                                 // TODO: Remove this soon once we boot the leader from ClusterInfo
                                 cluster_info.write().unwrap().set_leader(leader_id);
                             }
