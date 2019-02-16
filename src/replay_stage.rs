@@ -368,7 +368,9 @@ mod test {
     use crate::entry::{next_entry_mut, Entry};
     use crate::fullnode::new_bank_from_ledger;
     use crate::genesis_block::GenesisBlock;
-    use crate::leader_scheduler::{make_active_set_entries, LeaderSchedulerConfig};
+    use crate::leader_scheduler::{
+        make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
+    };
     use crate::replay_stage::ReplayStage;
     use crate::voting_keypair::VotingKeypair;
     use solana_sdk::hash::Hash;
@@ -395,6 +397,8 @@ mod test {
         // Set up the LeaderScheduler so that my_id becomes the leader for epoch 1
         let ticks_per_slot = 16;
         let leader_scheduler_config = LeaderSchedulerConfig::new(ticks_per_slot, 1, ticks_per_slot);
+        let leader_scheduler =
+            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
 
         // Create a ledger
         let (
@@ -446,7 +450,7 @@ mod test {
             // Set up the bank
             let blocktree_config = BlocktreeConfig::new(ticks_per_slot);
             let (bank, _entry_height, last_entry_id, blocktree, l_sender, l_receiver) =
-                new_bank_from_ledger(&my_ledger_path, &blocktree_config, &leader_scheduler_config);
+                new_bank_from_ledger(&my_ledger_path, &blocktree_config, &leader_scheduler);
 
             // Set up the replay stage
             let (rotation_sender, rotation_receiver) = channel();
@@ -553,7 +557,7 @@ mod test {
                 new_bank_from_ledger(
                     &my_ledger_path,
                     &BlocktreeConfig::default(),
-                    &LeaderSchedulerConfig::default(),
+                    &Arc::new(RwLock::new(LeaderScheduler::default())),
                 );
 
             let bank = Arc::new(bank);
@@ -663,6 +667,8 @@ mod test {
 
         let leader_scheduler_config =
             LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_tick_length);
+        let leader_scheduler =
+            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
 
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
@@ -672,7 +678,7 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         {
             let (bank, _entry_height, last_entry_id, blocktree, l_sender, l_receiver) =
-                new_bank_from_ledger(&my_ledger_path, &blocktree_config, &leader_scheduler_config);
+                new_bank_from_ledger(&my_ledger_path, &blocktree_config, &leader_scheduler);
 
             let meta = blocktree
                 .meta(0)

@@ -121,20 +121,28 @@ impl Default for Bank {
 }
 
 impl Bank {
-    pub fn new_with_leader_scheduler_config(
+    pub fn new_with_leader_scheduler(
         genesis_block: &GenesisBlock,
-        leader_scheduler_config: &LeaderSchedulerConfig,
+        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> Self {
         let mut bank = Self::default();
-        bank.leader_scheduler =
-            Arc::new(RwLock::new(LeaderScheduler::new(leader_scheduler_config)));
+        bank.leader_scheduler = leader_scheduler;
         bank.process_genesis_block(genesis_block);
         bank.add_builtin_programs();
         bank
     }
 
+    pub fn new_with_leader_scheduler_config(
+        genesis_block: &GenesisBlock,
+        leader_scheduler_config: &LeaderSchedulerConfig,
+    ) -> Self {
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::new(leader_scheduler_config)));
+        Self::new_with_leader_scheduler(genesis_block, leader_scheduler)
+    }
+
     pub fn new(genesis_block: &GenesisBlock) -> Self {
-        Self::new_with_leader_scheduler_config(genesis_block, &LeaderSchedulerConfig::default())
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
+        Self::new_with_leader_scheduler(genesis_block, leader_scheduler)
     }
 
     pub fn set_subscriptions(&self, subscriptions: Arc<RpcSubscriptions>) {

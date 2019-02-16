@@ -8,7 +8,7 @@ use solana::cluster_info::{Node, NodeInfo};
 use solana::entry::{reconstruct_entries_from_blobs, Entry};
 use solana::fullnode::{new_bank_from_ledger, Fullnode, FullnodeConfig, FullnodeReturnType};
 use solana::gossip_service::{converge, make_listening_node};
-use solana::leader_scheduler::{make_active_set_entries, LeaderSchedulerConfig};
+use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
 use solana::result;
 use solana::service::Service;
 use solana::thin_client::{poll_gossip_for_leader, retry_get_balance};
@@ -1010,7 +1010,7 @@ fn test_leader_to_validator_transition() {
     let bank = new_bank_from_ledger(
         &leader_ledger_path,
         &BlocktreeConfig::default(),
-        &LeaderSchedulerConfig::default(),
+        &Arc::new(RwLock::new(LeaderScheduler::default())),
     )
     .0;
 
