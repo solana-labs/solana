@@ -431,6 +431,8 @@ $(
     add-solana-user-authorized_keys.sh \
     install-earlyoom.sh \
     install-libssl-compatability.sh \
+    install-nodejs.sh \
+    install-redis.sh \
     install-rsync.sh \
     network-config.sh \
     remove-docker-interface.sh \
