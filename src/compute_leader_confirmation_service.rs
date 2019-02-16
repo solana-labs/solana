@@ -8,7 +8,6 @@ use crate::service::Service;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
-use solana_sdk::vote_program::{self, VoteState};
 use std::result;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -37,24 +36,7 @@ impl ComputeLeaderConfirmationService {
 
         // Hold an accounts_db read lock as briefly as possible, just long enough to collect all
         // the vote states
-        let vote_states: Vec<VoteState> = bank
-            .accounts
-            .accounts_db
-            .read()
-            .unwrap()
-            .accounts
-            .values()
-            .filter_map(|account| {
-                if vote_program::check_id(&account.owner) {
-                    if let Ok(vote_state) = VoteState::deserialize(&account.userdata) {
-                        if leader_id != vote_state.node_id {
-                            return Some(vote_state);
-                        }
-                    }
-                }
-                None
-            })
-            .collect();
+        let vote_states = bank.vote_states(|vote_state| leader_id != vote_state.node_id);
 
         let mut ticks_and_stakes: Vec<(u64, u64)> = vote_states
             .iter()
