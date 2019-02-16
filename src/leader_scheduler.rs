@@ -11,7 +11,7 @@ use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::vote_program::{self, VoteState};
+use solana_sdk::vote_program::VoteState;
 use solana_sdk::vote_transaction::VoteTransaction;
 use std::io::Cursor;
 use std::sync::Arc;
@@ -195,6 +195,15 @@ impl LeaderScheduler {
         }
     }
 
+    // Return true of the latest vote is between the lower and upper bounds (inclusive)
+    fn is_active_staker(vote_state: &VoteState, lower_bound: u64, upper_bound: u64) -> bool {
+        vote_state
+            .votes
+            .back()
+            .filter(|vote| vote.tick_height >= lower_bound && vote.tick_height <= upper_bound)
+            .is_some()
+    }
+
     // TODO: We use a HashSet for now because a single validator could potentially register
     // multiple vote account. Once that is no longer possible (see the TODO in vote_program.rs,
     // process_transaction(), case VoteInstruction::RegisterAccount), we can use a vector.
@@ -207,31 +216,10 @@ impl LeaderScheduler {
             upper_bound
         );
 
-        {
-            let accounts = bank.accounts.accounts_db.read().unwrap();
-            // TODO: iterate through checkpoints, too
-            accounts
-                .accounts
-                .values()
-                .filter_map(|account| {
-                    if vote_program::check_id(&account.owner) {
-                        if let Ok(vote_state) = VoteState::deserialize(&account.userdata) {
-                            trace!("get_active_set: account vote_state: {:?}", vote_state);
-                            return vote_state
-                                .votes
-                                .back()
-                                .filter(|vote| {
-                                    vote.tick_height >= lower_bound
-                                        && vote.tick_height <= upper_bound
-                                })
-                                .map(|_| vote_state.staker_id);
-                        }
-                    }
-
-                    None
-                })
-                .collect()
-        }
+        bank.vote_states(|vote_state| Self::is_active_staker(vote_state, lower_bound, upper_bound))
+            .iter()
+            .map(|vote_state| vote_state.staker_id)
+            .collect()
     }
 
     // Updates the leader schedule to include ticks from tick_height to the first tick of the next epoch

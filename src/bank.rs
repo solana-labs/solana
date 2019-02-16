@@ -34,7 +34,7 @@ use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::duration_as_us;
 use solana_sdk::token_program;
 use solana_sdk::transaction::Transaction;
-use solana_sdk::vote_program;
+use solana_sdk::vote_program::{self, VoteState};
 use std;
 use std::result;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -98,7 +98,7 @@ type BankStatusCache = StatusCache<BankError>;
 
 /// Manager for the state of all accounts and programs after processing its entries.
 pub struct Bank {
-    pub accounts: Accounts,
+    accounts: Accounts,
 
     /// A cache of signature statuses
     status_cache: RwLock<BankStatusCache>,
@@ -193,7 +193,7 @@ impl Bank {
             executable: false,
         };
 
-        let mut vote_state = vote_program::VoteState::new(
+        let mut vote_state = VoteState::new(
             genesis_block.bootstrap_leader_id,
             genesis_block.bootstrap_leader_id,
         );
@@ -876,6 +876,29 @@ impl Bank {
                 }
             }
         }
+    }
+
+    pub fn vote_states<F>(&self, cond: F) -> Vec<VoteState>
+    where
+        F: Fn(&VoteState) -> bool,
+    {
+        self.accounts
+            .accounts_db
+            .read()
+            .unwrap()
+            .accounts
+            .values()
+            .filter_map(|account| {
+                if vote_program::check_id(&account.owner) {
+                    if let Ok(vote_state) = VoteState::deserialize(&account.userdata) {
+                        if cond(&vote_state) {
+                            return Some(vote_state);
+                        }
+                    }
+                }
+                None
+            })
+            .collect()
     }
 
     #[cfg(test)]
