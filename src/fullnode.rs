@@ -7,7 +7,7 @@ use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
 use crate::counter::Counter;
 use crate::genesis_block::GenesisBlock;
 use crate::gossip_service::GossipService;
-use crate::leader_scheduler::LeaderSchedulerConfig;
+use crate::leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig};
 use crate::poh_service::PohServiceConfig;
 use crate::rpc::JsonRpcService;
 use crate::rpc_pubsub::PubSubService;
@@ -122,6 +122,9 @@ impl Fullnode {
         let id = keypair.pubkey();
         assert_eq!(id, node.info.id);
 
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::new(
+            &config.leader_scheduler_config,
+        )));
         let (
             bank,
             entry_height,
@@ -129,11 +132,7 @@ impl Fullnode {
             blocktree,
             ledger_signal_sender,
             ledger_signal_receiver,
-        ) = new_bank_from_ledger(
-            ledger_path,
-            &config.ledger_config(),
-            &config.leader_scheduler_config,
-        );
+        ) = new_bank_from_ledger(ledger_path, &config.ledger_config(), &leader_scheduler);
 
         info!("node info: {:?}", node.info);
         info!("node entrypoint_info: {:?}", entrypoint_info_option);
@@ -456,14 +455,14 @@ impl Fullnode {
 pub fn new_bank_from_ledger(
     ledger_path: &str,
     ledger_config: &BlocktreeConfig,
-    leader_scheduler_config: &LeaderSchedulerConfig,
+    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
 ) -> (Bank, u64, Hash, Blocktree, SyncSender<bool>, Receiver<bool>) {
     let (blocktree, ledger_signal_sender, ledger_signal_receiver) =
         Blocktree::open_with_config_signal(ledger_path, ledger_config)
             .expect("Expected to successfully open database ledger");
     let genesis_block =
         GenesisBlock::load(ledger_path).expect("Expected to successfully open genesis block");
-    let bank = Bank::new_with_leader_scheduler_config(&genesis_block, leader_scheduler_config);
+    let bank = Bank::new_with_leader_scheduler(&genesis_block, leader_scheduler.clone());
 
     let now = Instant::now();
     info!("processing ledger...");
@@ -824,7 +823,7 @@ mod tests {
         let (bank, entry_height, _, _, _, _) = new_bank_from_ledger(
             &validator_ledger_path,
             &BlocktreeConfig::default(),
-            &LeaderSchedulerConfig::default(),
+            &Arc::new(RwLock::new(LeaderScheduler::default())),
         );
 
         assert!(bank.tick_height() >= bank.leader_scheduler.read().unwrap().ticks_per_epoch);
