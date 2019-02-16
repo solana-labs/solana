@@ -436,6 +436,7 @@ pub mod tests {
     use hashbrown::HashSet;
     use std::hash::Hash as StdHash;
     use std::iter::FromIterator;
+    use std::sync::RwLock;
 
     fn to_hashset_owned<T>(slice: &[T]) -> HashSet<T>
     where
@@ -480,12 +481,14 @@ pub mod tests {
             ticks_per_epoch / ticks_per_slot,
             active_window_tick_length,
         );
+        let leader_scheduler =
+            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
 
         // Create the bank and validators, which are inserted in order of account balance
         let num_vote_account_tokens = 1;
         let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
         info!("bootstrap_leader_id: {}", genesis_block.bootstrap_leader_id);
-        let bank = Bank::new_with_leader_scheduler_config(&genesis_block, &leader_scheduler_config);
+        let bank = Bank::new_with_leader_scheduler(&genesis_block, leader_scheduler.clone());
         let mut validators = vec![];
         let last_id = genesis_block.last_id();
         for i in 0..num_validators {
@@ -625,8 +628,10 @@ pub mod tests {
         let leader_id = Keypair::new().pubkey();
         let active_window_tick_length = 1000;
         let leader_scheduler_config = LeaderSchedulerConfig::new(100, 1, active_window_tick_length);
+        let leader_scheduler =
+            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
         let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10000, leader_id, 500);
-        let bank = Bank::new_with_leader_scheduler_config(&genesis_block, &leader_scheduler_config);
+        let bank = Bank::new_with_leader_scheduler(&genesis_block, leader_scheduler.clone());
 
         let bootstrap_ids = to_hashset_owned(&vec![genesis_block.bootstrap_leader_id]);
 
@@ -692,7 +697,7 @@ pub mod tests {
         }
 
         // Query for the active set at various heights
-        let mut leader_scheduler = bank.leader_scheduler.write().unwrap();
+        let mut leader_scheduler = leader_scheduler.write().unwrap();
 
         let result = leader_scheduler.get_active_set(0, &bank);
         assert_eq!(result, bootstrap_ids);
@@ -917,13 +922,15 @@ pub mod tests {
 
         let leader_scheduler_config =
             LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_tick_length);
+        let leader_scheduler =
+            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
 
         // Create the bank and validators
         let (genesis_block, mint_keypair) = GenesisBlock::new(
             ((((num_validators + 1) / 2) * (num_validators + 1))
                 + (num_vote_account_tokens * num_validators)) as u64,
         );
-        let bank = Bank::new_with_leader_scheduler_config(&genesis_block, &leader_scheduler_config);
+        let bank = Bank::new_with_leader_scheduler(&genesis_block, leader_scheduler.clone());
         let mut validators = vec![];
         let last_id = genesis_block.last_id();
         for i in 0..num_validators {
@@ -960,7 +967,7 @@ pub mod tests {
         // Generate schedule every active_window_tick_length entries and check that
         // validators are falling out of the rotation as they fall out of the
         // active set
-        let mut leader_scheduler = bank.leader_scheduler.write().unwrap();
+        let mut leader_scheduler = leader_scheduler.write().unwrap();
         trace!("bootstrap_leader_id: {}", genesis_block.bootstrap_leader_id);
         for i in 0..num_validators {
             trace!("validators[{}]: {}", i, validators[i as usize]);
@@ -993,11 +1000,13 @@ pub mod tests {
         let active_window_tick_length = 1000;
         let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10000, leader_id, 500);
         let leader_scheduler_config = LeaderSchedulerConfig::new(100, 1, active_window_tick_length);
-        let bank = Bank::new_with_leader_scheduler_config(&genesis_block, &leader_scheduler_config);
+        let leader_scheduler =
+            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
+        let bank = Bank::new_with_leader_scheduler(&genesis_block, leader_scheduler.clone());
 
         // Bootstrap leader should be in the active set even without explicit votes
         {
-            let mut leader_scheduler = bank.leader_scheduler.write().unwrap();
+            let mut leader_scheduler = leader_scheduler.write().unwrap();
             let result = leader_scheduler.get_active_set(0, &bank);
             assert_eq!(result, to_hashset_owned(&vec![leader_id]));
 
@@ -1025,7 +1034,7 @@ pub mod tests {
         push_vote(&voting_keypair, &bank, 1, genesis_block.last_id());
 
         {
-            let mut leader_scheduler = bank.leader_scheduler.write().unwrap();
+            let mut leader_scheduler = leader_scheduler.write().unwrap();
             let result = leader_scheduler.get_active_set(active_window_tick_length + 1, &bank);
             assert_eq!(result, to_hashset_owned(&vec![leader_id]));
 
@@ -1037,7 +1046,7 @@ pub mod tests {
         push_vote(&voting_keypair, &bank, 2, genesis_block.last_id());
 
         {
-            let mut leader_scheduler = bank.leader_scheduler.write().unwrap();
+            let mut leader_scheduler = leader_scheduler.write().unwrap();
             let result = leader_scheduler.get_active_set(active_window_tick_length + 2, &bank);
             assert_eq!(result, to_hashset_owned(&vec![leader_id]));
 
@@ -1057,12 +1066,14 @@ pub mod tests {
 
         let leader_scheduler_config =
             LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_tick_length);
+        let leader_scheduler =
+            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
 
         // Check that the generate_schedule() function is being called by the
         // update_tick_height() function at the correct entry heights.
         let (genesis_block, _) = GenesisBlock::new(10_000);
-        let bank = Bank::new_with_leader_scheduler_config(&genesis_block, &leader_scheduler_config);
-        let mut leader_scheduler = bank.leader_scheduler.write().unwrap();
+        let bank = Bank::new_with_leader_scheduler(&genesis_block, leader_scheduler.clone());
+        let mut leader_scheduler = leader_scheduler.write().unwrap();
         info!(
             "bootstrap_leader_id: {:?}",
             genesis_block.bootstrap_leader_id
@@ -1198,11 +1209,13 @@ pub mod tests {
 
         let leader_scheduler_config =
             LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_tick_length);
+        let leader_scheduler =
+            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
 
         // Create mint and bank
         let (genesis_block, mint_keypair) =
             GenesisBlock::new_with_leader(10_000, bootstrap_leader_id, BOOTSTRAP_LEADER_TOKENS);
-        let bank = Bank::new_with_leader_scheduler_config(&genesis_block, &leader_scheduler_config);
+        let bank = Bank::new_with_leader_scheduler(&genesis_block, leader_scheduler.clone());
         let last_id = genesis_block.last_id();
         let initial_vote_height = 1;
 

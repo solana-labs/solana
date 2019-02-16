@@ -166,11 +166,13 @@ mod test {
         // Set up bank and leader_scheduler
         let leader_scheduler_config = LeaderSchedulerConfig::new(5, 2, 10);
         let (genesis_block, _mint_keypair) = GenesisBlock::new(1_000_000);
-        let bank = Bank::new_with_leader_scheduler_config(&genesis_block, &leader_scheduler_config);
+        let leader_scheduler =
+            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
+        let bank = Bank::new_with_leader_scheduler(&genesis_block, leader_scheduler.clone());
         // Set up entry stream
         let entry_stream =
-            MockEntryStream::new("test_stream".to_string(), bank.leader_scheduler.clone());
-        let ticks_per_slot = bank.leader_scheduler.read().unwrap().ticks_per_slot;
+            MockEntryStream::new("test_stream".to_string(), leader_scheduler.clone());
+        let ticks_per_slot = leader_scheduler.read().unwrap().ticks_per_slot;
 
         let mut last_id = Hash::default();
         let mut entries = Vec::new();
@@ -178,13 +180,11 @@ mod test {
 
         let tick_height_initial = 0;
         let tick_height_final = tick_height_initial + ticks_per_slot + 2;
-        let mut previous_slot = bank
-            .leader_scheduler
+        let mut previous_slot = leader_scheduler
             .read()
             .unwrap()
             .tick_height_to_slot(tick_height_initial);
-        let leader_id = bank
-            .leader_scheduler
+        let leader_id = leader_scheduler
             .read()
             .unwrap()
             .get_leader_for_slot(previous_slot)
@@ -192,12 +192,11 @@ mod test {
             .unwrap_or_else(|| "None".to_string());
 
         for tick_height in tick_height_initial..=tick_height_final {
-            bank.leader_scheduler
+            leader_scheduler
                 .write()
                 .unwrap()
                 .update_tick_height(tick_height, &bank);
-            let curr_slot = bank
-                .leader_scheduler
+            let curr_slot = leader_scheduler
                 .read()
                 .unwrap()
                 .tick_height_to_slot(tick_height);

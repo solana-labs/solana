@@ -106,6 +106,7 @@ pub struct Fullnode {
     rotation_sender: TpuRotationSender,
     rotation_receiver: TpuRotationReceiver,
     blocktree: Arc<Blocktree>,
+    leader_scheduler: Arc<RwLock<LeaderScheduler>>,
 }
 
 impl Fullnode {
@@ -202,7 +203,7 @@ impl Fullnode {
         let (scheduled_leader, max_tick_height, blob_index) = {
             let next_tick = bank.tick_height() + 1;
 
-            let leader_scheduler = bank.leader_scheduler.read().unwrap();
+            let leader_scheduler = leader_scheduler.read().unwrap();
             let slot_at_next_tick = leader_scheduler.tick_height_to_slot(next_tick);
 
             let scheduled_leader = leader_scheduler
@@ -270,6 +271,7 @@ impl Fullnode {
             config.entry_stream.as_ref(),
             ledger_signal_sender,
             ledger_signal_receiver,
+            leader_scheduler.clone(),
         );
         let tpu = Tpu::new(id, &cluster_info);
 
@@ -287,6 +289,7 @@ impl Fullnode {
             rotation_sender,
             rotation_receiver,
             blocktree,
+            leader_scheduler,
         };
 
         fullnode.rotate(
@@ -315,7 +318,7 @@ impl Fullnode {
         }
 
         let (scheduled_leader, max_tick_height) = {
-            let mut leader_scheduler = self.bank.leader_scheduler.write().unwrap();
+            let mut leader_scheduler = self.leader_scheduler.write().unwrap();
 
             // A transition is only permitted on the final tick of a slot
             assert_eq!(leader_scheduler.num_ticks_left_in_slot(tick_height), 0);
@@ -377,6 +380,7 @@ impl Fullnode {
                 last_entry_id,
                 &self.rotation_sender,
                 &self.blocktree,
+                &self.leader_scheduler,
             );
             transition
         } else {
@@ -820,13 +824,14 @@ mod tests {
 
         // Close the validator so that rocksdb has locks available
         validator_exit();
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
         let (bank, entry_height, _, _, _, _) = new_bank_from_ledger(
             &validator_ledger_path,
             &BlocktreeConfig::default(),
-            &Arc::new(RwLock::new(LeaderScheduler::default())),
+            &leader_scheduler,
         );
 
-        assert!(bank.tick_height() >= bank.leader_scheduler.read().unwrap().ticks_per_epoch);
+        assert!(bank.tick_height() >= leader_scheduler.read().unwrap().ticks_per_epoch);
 
         assert!(entry_height >= ledger_initial_len);
 

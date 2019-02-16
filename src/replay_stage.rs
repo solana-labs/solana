@@ -5,6 +5,7 @@ use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
 use crate::entry::{Entry, EntryReceiver, EntrySender, EntrySlice};
+use crate::leader_scheduler::LeaderScheduler;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -65,6 +66,7 @@ impl ReplayStage {
         ledger_entry_sender: &EntrySender,
         current_blob_index: &mut u64,
         last_entry_id: &Arc<RwLock<Hash>>,
+        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     ) -> Result<()> {
         // Coalesce all the available entries into a single vote
         submit(
@@ -87,8 +89,7 @@ impl ReplayStage {
         );
 
         let num_ticks = bank.tick_height();
-        let mut num_ticks_to_next_vote = bank
-            .leader_scheduler
+        let mut num_ticks_to_next_vote = leader_scheduler
             .read()
             .unwrap()
             .num_ticks_left_in_slot(num_ticks);
@@ -97,7 +98,7 @@ impl ReplayStage {
             inc_new_counter_info!("replicate-stage_bank-tick", bank.tick_height() as usize);
             if entry.is_tick() {
                 if num_ticks_to_next_vote == 0 {
-                    num_ticks_to_next_vote = bank.leader_scheduler.read().unwrap().ticks_per_slot;
+                    num_ticks_to_next_vote = leader_scheduler.read().unwrap().ticks_per_slot;
                 }
                 num_ticks_to_next_vote -= 1;
             }
@@ -181,6 +182,7 @@ impl ReplayStage {
         to_leader_sender: &TvuRotationSender,
         ledger_signal_sender: SyncSender<bool>,
         ledger_signal_receiver: Receiver<bool>,
+        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     ) -> (Self, EntryReceiver) {
         let (ledger_entry_sender, ledger_entry_receiver) = channel();
         #[cfg(test)]
@@ -190,16 +192,18 @@ impl ReplayStage {
             (pause, pause_)
         };
         let exit_ = exit.clone();
+        let leader_scheduler_ = leader_scheduler.clone();
         let to_leader_sender = to_leader_sender.clone();
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit_.clone());
-                let mut last_leader_id = Self::get_leader_for_next_tick(&bank);
+                let mut last_leader_id =
+                    Self::get_leader_for_next_tick(bank.tick_height(), &leader_scheduler_);
                 let mut prev_slot = None;
                 let (mut current_slot, mut max_tick_height_for_slot) = {
                     let tick_height = bank.tick_height();
-                    let leader_scheduler = bank.leader_scheduler.read().unwrap();
+                    let leader_scheduler = leader_scheduler_.read().unwrap();
                     let current_slot = leader_scheduler.tick_height_to_slot(tick_height + 1);
                     let first_tick_in_current_slot = current_slot * leader_scheduler.ticks_per_slot;
                     (
@@ -230,7 +234,7 @@ impl ReplayStage {
                             // Reset the state
                             current_slot = new_slot;
                             current_blob_index = 0;
-                            let leader_scheduler = bank.leader_scheduler.read().unwrap();
+                            let leader_scheduler = leader_scheduler_.read().unwrap();
                             let first_tick_in_current_slot =
                                 current_slot.unwrap() * leader_scheduler.ticks_per_slot;
                             max_tick_height_for_slot = first_tick_in_current_slot
@@ -266,6 +270,7 @@ impl ReplayStage {
                             &ledger_entry_sender,
                             &mut current_blob_index,
                             &last_entry_id,
+                            &leader_scheduler_,
                         ) {
                             error!("process_entries failed: {:?}", e);
                         }
@@ -276,7 +281,10 @@ impl ReplayStage {
                         // for leader rotation
                         if max_tick_height_for_slot == current_tick_height {
                             // Check for leader rotation
-                            let leader_id = Self::get_leader_for_next_tick(&bank);
+                            let leader_id = Self::get_leader_for_next_tick(
+                                bank.tick_height(),
+                                &leader_scheduler_,
+                            );
 
                             if leader_id != last_leader_id {
                                 if my_id == leader_id {
@@ -332,9 +340,11 @@ impl ReplayStage {
         let _ = self.ledger_signal_sender.send(true);
     }
 
-    fn get_leader_for_next_tick(bank: &Bank) -> Pubkey {
-        let tick_height = bank.tick_height();
-        let leader_scheduler = bank.leader_scheduler.read().unwrap();
+    fn get_leader_for_next_tick(
+        tick_height: u64,
+        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
+    ) -> Pubkey {
+        let leader_scheduler = leader_scheduler.read().unwrap();
         let slot = leader_scheduler.tick_height_to_slot(tick_height + 1);
         leader_scheduler
             .get_leader_for_slot(slot)
@@ -470,6 +480,7 @@ mod test {
                 &rotation_sender,
                 l_sender,
                 l_receiver,
+                &leader_scheduler,
             );
 
             let total_entries_to_send = 2 * ticks_per_slot as usize - 2;
@@ -553,11 +564,12 @@ mod test {
         let voting_keypair = Arc::new(VotingKeypair::new_local(&my_keypair));
         let (to_leader_sender, _) = channel();
         {
+            let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
             let (bank, entry_height, last_entry_id, blocktree, l_sender, l_receiver) =
                 new_bank_from_ledger(
                     &my_ledger_path,
                     &BlocktreeConfig::default(),
-                    &Arc::new(RwLock::new(LeaderScheduler::default())),
+                    &leader_scheduler,
                 );
 
             let bank = Arc::new(bank);
@@ -574,6 +586,7 @@ mod test {
                 &to_leader_sender,
                 l_sender,
                 l_receiver,
+                &leader_scheduler,
             );
 
             let keypair = voting_keypair.as_ref();
@@ -700,6 +713,7 @@ mod test {
                 &rotation_tx,
                 l_sender,
                 l_receiver,
+                &leader_scheduler,
             );
 
             let keypair = voting_keypair.as_ref();
@@ -768,16 +782,23 @@ mod test {
             entries.push(entry);
         }
 
+        let genesis_block = GenesisBlock::new(10_000).0;
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
         let my_keypair = Arc::new(my_keypair);
         let voting_keypair = Arc::new(VotingKeypair::new_local(&my_keypair));
+        let bank = Arc::new(Bank::new_with_leader_scheduler(
+            &genesis_block,
+            leader_scheduler.clone(),
+        ));
         let res = ReplayStage::process_entries(
             entries.clone(),
-            &Arc::new(Bank::new(&GenesisBlock::new(10_000).0)),
+            &bank,
             &cluster_info_me,
             Some(&voting_keypair),
             &ledger_entry_sender,
             &mut current_blob_index,
             &Arc::new(RwLock::new(last_entry_id)),
+            &leader_scheduler,
         );
 
         match res {
@@ -791,14 +812,19 @@ mod test {
             entries.push(entry);
         }
 
+        let bank = Arc::new(Bank::new_with_leader_scheduler(
+            &genesis_block,
+            leader_scheduler.clone(),
+        ));
         let res = ReplayStage::process_entries(
             entries.clone(),
-            &Arc::new(Bank::default()),
+            &bank,
             &cluster_info_me,
             Some(&voting_keypair),
             &ledger_entry_sender,
             &mut current_blob_index,
             &Arc::new(RwLock::new(last_entry_id)),
+            &leader_scheduler,
         );
 
         match res {

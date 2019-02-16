@@ -103,7 +103,7 @@ pub struct Bank {
 
     /// Tracks and updates the leader schedule based on the votes and account stakes
     /// processed by the bank
-    pub leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+    leader_scheduler: Arc<RwLock<LeaderScheduler>>,
 
     subscriptions: RwLock<Option<Arc<RpcSubscriptions>>>,
 }
