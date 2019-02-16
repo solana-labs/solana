@@ -14,7 +14,6 @@ use crate::poh_service::{PohService, PohServiceConfig};
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::sigverify_stage::VerifiedPackets;
-use crate::tpu::TpuRotationSender;
 use bincode::deserialize;
 use log::Level;
 use solana_sdk::hash::Hash;
@@ -51,7 +50,6 @@ impl BankingStage {
         last_entry_id: &Hash,
         max_tick_height: u64,
         leader_id: Pubkey,
-        to_validator_sender: &TpuRotationSender,
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (entry_sender, entry_receiver) = channel();
         let shared_verified_receiver = Arc::new(Mutex::new(verified_receiver));
@@ -61,8 +59,7 @@ impl BankingStage {
         // Single thread to generate entries from many banks.
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
         // Once an entry has been recorded, its last_id is registered with the bank.
-        let poh_service =
-            PohService::new(poh_recorder.clone(), config, to_validator_sender.clone());
+        let poh_service = PohService::new(poh_recorder.clone(), config);
 
         // Single thread to compute confirmation
         let compute_confirmation_service = ComputeLeaderConfirmationService::new(
@@ -365,7 +362,6 @@ mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let (verified_sender, verified_receiver) = channel();
-        let (to_validator_sender, _) = channel();
         let (banking_stage, _entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
@@ -373,7 +369,6 @@ mod tests {
             &bank.last_id(),
             DEFAULT_TICKS_PER_SLOT,
             genesis_block.bootstrap_leader_id,
-            &to_validator_sender,
         );
         drop(verified_sender);
         banking_stage.join().unwrap();
@@ -385,7 +380,6 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
-        let (to_validator_sender, _) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
@@ -393,7 +387,6 @@ mod tests {
             &bank.last_id(),
             DEFAULT_TICKS_PER_SLOT,
             genesis_block.bootstrap_leader_id,
-            &to_validator_sender,
         );
         sleep(Duration::from_millis(500));
         drop(verified_sender);
@@ -411,7 +404,6 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
-        let (to_validator_sender, _) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
@@ -419,7 +411,6 @@ mod tests {
             &bank.last_id(),
             DEFAULT_TICKS_PER_SLOT,
             genesis_block.bootstrap_leader_id,
-            &to_validator_sender,
         );
 
         // good tx
@@ -466,7 +457,6 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let (verified_sender, verified_receiver) = channel();
-        let (to_validator_sender, _) = channel();
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
@@ -474,7 +464,6 @@ mod tests {
             &bank.last_id(),
             DEFAULT_TICKS_PER_SLOT,
             genesis_block.bootstrap_leader_id,
-            &to_validator_sender,
         );
 
         // Process a batch that includes a transaction that receives two tokens.
@@ -530,7 +519,6 @@ mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let (verified_sender, verified_receiver) = channel();
-        let (to_validator_sender, to_validator_receiver) = channel();
         let max_tick_height = 10;
         let (banking_stage, _entry_receiver) = BankingStage::new(
             &bank,
@@ -539,9 +527,16 @@ mod tests {
             &bank.last_id(),
             max_tick_height,
             genesis_block.bootstrap_leader_id,
-            &to_validator_sender,
         );
-        assert_eq!(to_validator_receiver.recv().unwrap(), max_tick_height);
+
+        loop {
+            let bank_tick_height = bank.tick_height();
+            if bank_tick_height >= max_tick_height {
+                break;
+            }
+            sleep(Duration::from_millis(10));
+        }
+
         drop(verified_sender);
         banking_stage.join().unwrap();
     }
@@ -553,7 +548,6 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let ticks_per_slot = 1;
         let (verified_sender, verified_receiver) = channel();
-        let (to_validator_sender, to_validator_receiver) = channel();
         let (mut banking_stage, _entry_receiver) = BankingStage::new(
             &bank,
             verified_receiver,
@@ -561,11 +555,16 @@ mod tests {
             &bank.last_id(),
             ticks_per_slot,
             genesis_block.bootstrap_leader_id,
-            &to_validator_sender,
         );
 
         // Wait for Poh recorder to hit max height
-        assert_eq!(to_validator_receiver.recv().unwrap(), ticks_per_slot);
+        loop {
+            let bank_tick_height = bank.tick_height();
+            if bank_tick_height >= leader_scheduler_config.ticks_per_slot {
+                break;
+            }
+            sleep(Duration::from_millis(10));
+        }
 
         // Now send a transaction to the banking stage
         let transaction = SystemTransaction::new_account(

@@ -151,7 +151,6 @@ impl Tpu {
         max_tick_height: u64,
         blob_index: u64,
         last_entry_id: &Hash,
-        to_validator_sender: &TpuRotationSender,
         blocktree: &Arc<Blocktree>,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     ) {
@@ -182,7 +181,6 @@ impl Tpu {
             last_entry_id,
             max_tick_height,
             self.id,
-            &to_validator_sender,
         );
 
         let broadcast_service = BroadcastService::new(

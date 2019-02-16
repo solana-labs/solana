@@ -286,14 +286,11 @@ impl ReplayStage {
                                 bank.tick_height(),
                                 &leader_scheduler_,
                             );
-
-                            if leader_id != last_leader_id {
-                                if my_id == leader_id {
-                                    to_leader_sender.send(current_tick_height).unwrap();
-                                } else {
-                                    // TODO: Remove this soon once we boot the leader from ClusterInfo
-                                    cluster_info.write().unwrap().set_leader(leader_id);
-                                }
+                            if my_id == leader_id || my_id == last_leader_id {
+                                to_leader_sender.send(current_tick_height).unwrap();
+                            } else {
+                                // TODO: Remove this soon once we boot the leader from ClusterInfo
+                                cluster_info.write().unwrap().set_leader(leader_id);
                             }
 
                             // Check for any slots that chain to this one

@@ -100,7 +100,6 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             (x, iter::repeat(1).take(len).collect())
         })
         .collect();
-    let (to_leader_sender, _to_leader_recvr) = channel();
     let (_stage, signal_receiver) = BankingStage::new(
         &bank,
         verified_receiver,
@@ -108,7 +107,6 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         &genesis_block.last_id(),
         std::u64::MAX,
         genesis_block.bootstrap_leader_id,
-        &to_leader_sender,
     );
 
     let mut id = genesis_block.last_id();
@@ -209,7 +207,6 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
             (x, iter::repeat(1).take(len).collect())
         })
         .collect();
-    let (to_leader_sender, _to_leader_recvr) = channel();
     let (_stage, signal_receiver) = BankingStage::new(
         &bank,
         verified_receiver,
@@ -217,7 +214,6 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         &genesis_block.last_id(),
         std::u64::MAX,
         genesis_block.bootstrap_leader_id,
-        &to_leader_sender,
     );
 
     let mut id = genesis_block.last_id();
