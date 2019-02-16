@@ -8,6 +8,39 @@ don't agree with a convention, submit a PR patching this document and let's disc
 the PR is accepted, *all* code should be updated as soon as possible to reflect the new
 conventions.
 
+Pull Requests
+---
+
+Small, frequent PRs are much preferred to large, infrequent ones. A large PR is difficult
+to review, can block others from making progress, and can quickly get its author into
+"rebase hell". A large PR oftentimes arises when one change requires another, which requires
+another, and then another. When you notice those dependencies, put the fix into a commit of
+its own, then checkout a new branch, and cherrypick it. Open a PR to start the review
+process and then jump back to your original branch to keep making progress. Once the commit
+is merged, you can use git-rebase to purge it from your original branch.
+
+```bash
+$ git pull --rebase upstream master
+```
+
+How big is too big? If there are no functional changes, PRs can be very large and that's
+no problem. If, however, your changes are making meaningful changes or additions, then
+about 1,000 lines of changes is about the most you should ask a Solana maintainer to
+review.
+
+PRs are typically reviewed and merged in under 7 days. If your PR has been open for longer,
+it's a strong indicator that the reviewers aren't confident the change meets the quality
+standards of the codebase. You might consider closing it and coming back with smaller PRs
+and longer descriptions detailing what problem it solves and how it solves it.
+
+Draft Pull Requests
+---
+
+If you want early feedback on your PR, use GitHub's "Draft Pull Request" mechanism. Draft
+PRs are a convenient way to collaborate with the Solana maintainers without triggering
+notifications as you make changes. When you feel your PR is ready for a broader audience,
+you can transition your draft PR to a standard PR with the click of a button.
+
 Rust coding conventions
 ---
 
