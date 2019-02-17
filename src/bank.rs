@@ -8,7 +8,7 @@ use crate::counter::Counter;
 use crate::genesis_block::GenesisBlock;
 use crate::last_id_queue::{LastIdQueue, MAX_ENTRY_IDS};
 use crate::poh_service::NUM_TICKS_PER_SECOND;
-use crate::rpc_pubsub::RpcSubscriptions;
+use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::status_cache::StatusCache;
 use bincode::deserialize;
 use log::Level;
