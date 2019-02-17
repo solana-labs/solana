@@ -129,7 +129,9 @@ impl Service for TpuForwarder {
         for thread_hdl in self.thread_hdls {
             thread_hdl.join()?;
         }
-        self.forwarder_thread.unwrap().join()?;
+        if let Some(forwarder_thread) = self.forwarder_thread {
+            forwarder_thread.join()?;
+        }
         Ok(())
     }
 }
