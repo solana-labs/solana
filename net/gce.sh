@@ -17,6 +17,7 @@ gce)
   bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
   fullNodeMachineType=n1-standard-16
   clientMachineType=n1-standard-16
+  apiNodeMachineType=n1-standard-8
   ;;
 ec2)
   # shellcheck source=net/scripts/ec2-provider.sh
@@ -27,6 +28,7 @@ ec2)
   bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
   fullNodeMachineType=m4.2xlarge
   clientMachineType=m4.2xlarge
+  apiNodeMachineType=m4.2xlarge
   ;;
 *)
   echo "Error: Unknown cloud provider: $cloudProvider"
@@ -37,12 +39,13 @@ esac
 prefix=testnet-dev-${USER//[^A-Za-z0-9]/}
 additionalFullNodeCount=5
 clientNodeCount=1
+apiNode=false
 fullNodeBootDiskSizeInGb=1000
 clientBootDiskSizeInGb=75
 
 publicNetwork=false
 enableGpu=false
-bootstrapLeaderAddress=
+customAddress=
 leaderRotation=true
 
 usage() {
@@ -69,14 +72,17 @@ Manage testnet instances
  create-specific options:
    -n [number]      - Number of additional fullnodes (default: $additionalFullNodeCount)
    -c [number]      - Number of client nodes (default: $clientNodeCount)
+   -u               - Include an API node (default: $apiNode)
    -P               - Use public network IP addresses (default: $publicNetwork)
    -g               - Enable GPU (default: $enableGpu)
-   -G               - Enable GPU, and set count/type of GPUs to use (e.g $cpuBootstrapLeaderMachineType --accelerator count=4,type=nvidia-tesla-k80)
-   -a [address]     - Set the bootstreap fullnode's external IP address to this value.
-                      For GCE, [address] is the "name" of the desired External
-                      IP Address.
-                      For EC2, [address] is the "allocation ID" of the desired
-                      Elastic IP.
+   -G               - Enable GPU, and set count/type of GPUs to use
+                      (e.g $cpuBootstrapLeaderMachineType --accelerator count=4,type=nvidia-tesla-k80)
+   -a [address]     - Address to be be assigned to the API node if present,
+                      otherwise the bootstrap fullnode.
+                      * For GCE, [address] is the "name" of the desired External
+                        IP Address.
+                      * For EC2, [address] is the "allocation ID" of the desired
+                        Elastic IP.
    -d [disk-type]   - Specify a boot disk type (default None) Use pd-ssd to get ssd on GCE.
    -b               - Disable leader rotation
 
@@ -100,7 +106,7 @@ shift
 [[ $command = create || $command = config || $command = info || $command = delete ]] ||
   usage "Invalid command: $command"
 
-while getopts "h?p:Pn:c:z:gG:a:d:b" opt; do
+while getopts "h?p:Pn:c:z:gG:a:d:bu" opt; do
   case $opt in
   h | \?)
     usage
@@ -133,10 +139,13 @@ while getopts "h?p:Pn:c:z:gG:a:d:b" opt; do
     bootstrapLeaderMachineType="$OPTARG"
     ;;
   a)
-    bootstrapLeaderAddress=$OPTARG
+    customAddress=$OPTARG
     ;;
   d)
     bootDiskType=$OPTARG
+    ;;
+  u)
+    apiNode=true
     ;;
   *)
     usage "unhandled option: $opt"
@@ -327,6 +336,15 @@ EOF
     cloud_ForEachInstance waitForStartupComplete
   }
 
+  echo "apiIpList=()" >> "$configFile"
+  echo "apiIpListPrivate=()" >> "$configFile"
+  echo "Looking for api instances..."
+  cloud_FindInstances "$prefix-api"
+  [[ ${#instances[@]} -eq 0 ]] || {
+    cloud_ForEachInstance recordInstanceIp apiIpList
+    cloud_ForEachInstance waitForStartupComplete
+  }
+
   echo "Wrote $configFile"
   $metricsWriteDatapoint "testnet-deploy net-config-complete=1"
 }
@@ -382,6 +400,7 @@ Network composition:
   Bootstrap leader = $bootstrapLeaderMachineType (GPU=$enableGpu)
   Additional fullnodes = $additionalFullNodeCount x $fullNodeMachineType
   Client(s) = $clientNodeCount x $clientMachineType
+  API Node = $apiNode
 
 Leader rotation: $leaderRotation
 
@@ -451,6 +470,12 @@ touch /.instance-startup-complete
 
 EOF
 
+  if $apiNode; then
+    apiNodeAddress=$customAddress
+  else
+    bootstrapLeaderAddress=$customAddress
+  fi
+
   cloud_CreateInstances "$prefix" "$prefix-bootstrap-leader" 1 \
     "$imageName" "$bootstrapLeaderMachineType" "$fullNodeBootDiskSizeInGb" \
     "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType"
@@ -463,6 +488,12 @@ EOF
     cloud_CreateInstances "$prefix" "$prefix-client" "$clientNodeCount" \
       "$imageName" "$clientMachineType" "$clientBootDiskSizeInGb" \
       "$startupScript" "" "$bootDiskType"
+  fi
+
+  if $apiNode; then
+    cloud_CreateInstances "$prefix" "$prefix-api" "1" \
+      "$imageName" "$apiNodeMachineType" "$fullNodeBootDiskSizeInGb" \
+      "$startupScript" "$apiNodeAddress" "$bootDiskType"
   fi
 
   $metricsWriteDatapoint "testnet-deploy net-create-complete=1"
@@ -496,6 +527,12 @@ info)
     ipAddress=${clientIpList[$i]}
     ipAddressPrivate=${clientIpListPrivate[$i]}
     printNode bench-tps "$ipAddress" "$ipAddressPrivate"
+  done
+
+  for i in $(seq 0 $(( ${#apiIpList[@]} - 1)) ); do
+    ipAddress=${apiIpList[$i]}
+    ipAddressPrivate=${apiIpListPrivate[$i]}
+    printNode api "$ipAddress" "$ipAddressPrivate"
   done
   ;;
 *)

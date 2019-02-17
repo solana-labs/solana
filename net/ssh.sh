@@ -63,6 +63,15 @@ else
   done
 fi
 echo
+echo API nodes:
+if [[ ${#apiIpList[@]} -eq 0 ]]; then
+  echo "  None"
+else
+  for ipAddress in "${apiIpList[@]}"; do
+    printNode fullnode "$ipAddress"
+  done
+fi
+echo
 echo "Use |scp.sh| to transfer files to and from nodes"
 echo
 

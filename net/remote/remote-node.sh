@@ -98,14 +98,21 @@ snap)
     echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
   fi
 
-  if [[ $nodeType = bootstrap-leader ]]; then
+  case $nodeType in
+  bootstrap-leader)
     nodeConfig="mode=bootstrap-leader+drone $commonNodeConfig"
     ln -sf -T /var/snap/solana/current/bootstrap-leader/current fullnode.log
     ln -sf -T /var/snap/solana/current/drone/current drone.log
-  else
+    ;;
+  fullnode)
     nodeConfig="mode=fullnode $commonNodeConfig"
     ln -sf -T /var/snap/solana/current/fullnode/current fullnode.log
-  fi
+    ;;
+  *)
+    echo "Error: unknown node type: $nodeType"
+    exit 1
+    ;;
+  esac
 
   logmarker="solana deploy $(date)/$RANDOM"
   logger "$logmarker"
@@ -163,7 +170,7 @@ local|tar)
     ./multinode-demo/bootstrap-leader.sh $maybeNoLeaderRotation > bootstrap-leader.log 2>&1 &
     ln -sTf bootstrap-leader.log fullnode.log
     ;;
-  fullnode)
+  fullnode|apinode)
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
 
     if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-fullnode-cuda ]]; then
@@ -171,11 +178,25 @@ local|tar)
       export SOLANA_CUDA=1
     fi
 
+    args=("$maybeNoLeaderRotation")
+    if [[ $nodeType = apinode ]]; then
+      args+=(--entry-stream /tmp/solana-entry-stream.sock)
+    fi
+
     set -x
     if [[ $skipSetup != true ]]; then
       ./multinode-demo/setup.sh -t fullnode $setupArgs
+
+      if [[ $nodeType = apinode ]]; then
+        npm install @solana/blockexplorer
+      fi
     fi
-    ./multinode-demo/fullnode.sh $maybeNoLeaderRotation "$entrypointIp":~/solana "$entrypointIp:8001" > fullnode.log 2>&1 &
+
+    # Run blockexplorer as root so it can bind to port 80
+    # shellcheck disable=SC2024 # "sudo doesn't affect redirects" warning does not apply
+    sudo npx solana-blockexplorer > blockexplorer.log 2>&1 &
+
+    ./multinode-demo/fullnode.sh "${args[@]}" "$entrypointIp":~/solana "$entrypointIp:8001" > fullnode.log 2>&1 &
     ;;
   *)
     echo "Error: unknown node type: $nodeType"
