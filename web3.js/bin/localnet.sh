@@ -6,7 +6,7 @@ channel=$(
   node -p '
     let p;
     try {
-      p = require("@solana/web3.js/package.json");
+      p = require("../lib/node_modules/@solana/web3.js/package.json");
     } catch (err) {
       p = require("../package.json");
     }
