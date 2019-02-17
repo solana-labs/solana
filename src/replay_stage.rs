@@ -6,6 +6,7 @@ use crate::blocktree_processor;
 use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
 use crate::entry::{Entry, EntryReceiver, EntrySender, EntrySlice};
+use std::sync::mpsc::RecvTimeoutError;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
@@ -19,12 +20,11 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
 use solana_sdk::vote_transaction::VoteTransaction;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, SyncSender};
+use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, RwLock};
 #[cfg(test)]
 use std::thread::sleep;
 use std::thread::{self, Builder, JoinHandle};
-#[cfg(test)]
 use std::time::Duration;
 use std::time::Instant;
 
@@ -51,7 +51,6 @@ impl Drop for Finalizer {
 pub struct ReplayStage {
     t_replay: JoinHandle<()>,
     exit: Arc<AtomicBool>,
-    ledger_signal_sender: SyncSender<bool>,
     #[cfg(test)]
     pause: Arc<AtomicBool>,
 }
@@ -181,7 +180,6 @@ impl ReplayStage {
         mut current_blob_index: u64,
         last_entry_id: Arc<RwLock<Hash>>,
         to_leader_sender: &TvuRotationSender,
-        ledger_signal_sender: SyncSender<bool>,
         ledger_signal_receiver: Receiver<bool>,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     ) -> (Self, EntryReceiver) {
@@ -225,6 +223,13 @@ impl ReplayStage {
                     while pause_.load(Ordering::Relaxed) {
                         sleep(Duration::from_millis(200));
                     }
+                    let timer = Duration::from_millis(100);
+                    let e = ledger_signal_receiver.recv_timeout(timer);
+                    match e {
+                        Err(RecvTimeoutError::Disconnected) => continue,
+                        Err(_) => break,
+                        Ok(_) => (),
+                    };
 
                     if current_slot.is_none() {
                         let new_slot = Self::get_next_slot(
@@ -260,7 +265,6 @@ impl ReplayStage {
                         }
                     };
 
-                    let entry_len = entries.len();
                     // Fetch the next entries from the database
                     if !entries.is_empty() {
                         if let Err(e) = Self::process_entries(
@@ -303,13 +307,6 @@ impl ReplayStage {
                             continue;
                         }
                     }
-
-                    // Block until there are updates again
-                    if entry_len < MAX_ENTRY_RECV_PER_ITER && ledger_signal_receiver.recv().is_err()
-                    {
-                        // Update disconnected, exit
-                        break;
-                    }
                 }
             })
             .unwrap();
@@ -318,7 +315,6 @@ impl ReplayStage {
             Self {
                 t_replay,
                 exit,
-                ledger_signal_sender,
                 #[cfg(test)]
                 pause,
             },
@@ -338,7 +334,6 @@ impl ReplayStage {
 
     pub fn exit(&self) {
         self.exit.store(true, Ordering::Relaxed);
-        let _ = self.ledger_signal_sender.send(true);
     }
 
     fn get_leader_for_next_tick(
@@ -460,7 +455,7 @@ mod test {
         {
             // Set up the bank
             let blocktree_config = BlocktreeConfig::new(ticks_per_slot);
-            let (bank, _entry_height, last_entry_id, blocktree, l_sender, l_receiver) =
+            let (bank, _entry_height, last_entry_id, blocktree, l_receiver) =
                 new_bank_from_ledger(&my_ledger_path, &blocktree_config, &leader_scheduler);
 
             // Set up the replay stage
@@ -478,7 +473,6 @@ mod test {
                 meta.consumed,
                 Arc::new(RwLock::new(last_entry_id)),
                 &rotation_sender,
-                l_sender,
                 l_receiver,
                 &leader_scheduler,
             );
@@ -565,7 +559,7 @@ mod test {
         let (to_leader_sender, _) = channel();
         {
             let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
-            let (bank, entry_height, last_entry_id, blocktree, l_sender, l_receiver) =
+            let (bank, entry_height, last_entry_id, blocktree, l_receiver) =
                 new_bank_from_ledger(
                     &my_ledger_path,
                     &BlocktreeConfig::default(),
@@ -583,7 +577,6 @@ mod test {
                 entry_height,
                 Arc::new(RwLock::new(last_entry_id)),
                 &to_leader_sender,
-                l_sender,
                 l_receiver,
                 &leader_scheduler,
             );
@@ -689,7 +682,7 @@ mod test {
         let (rotation_tx, rotation_rx) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         {
-            let (bank, _entry_height, last_entry_id, blocktree, l_sender, l_receiver) =
+            let (bank, _entry_height, last_entry_id, blocktree, l_receiver) =
                 new_bank_from_ledger(&my_ledger_path, &blocktree_config, &leader_scheduler);
 
             let meta = blocktree
@@ -709,7 +702,6 @@ mod test {
                 meta.consumed,
                 Arc::new(RwLock::new(last_entry_id)),
                 &rotation_tx,
-                l_sender,
                 l_receiver,
                 &leader_scheduler,
             );
