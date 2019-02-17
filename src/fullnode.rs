@@ -363,7 +363,7 @@ impl Fullnode {
                 }
                 None => FullnodeReturnType::LeaderToLeaderRotation, // value doesn't matter here...
             };
-            let tpu_bank = Arc::new(Bank::new_from_parent(self.bank.clone()));
+            let tpu_bank = Arc::new(Bank::new_from_parent(&self.bank));
             self.node_services.tpu.switch_to_leader(
                 &tpu_bank,
                 PohServiceConfig::default(),
