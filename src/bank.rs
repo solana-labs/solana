@@ -124,6 +124,7 @@ impl Bank {
 
     pub fn new_from_parent(parent: Arc<Bank>) -> Self {
         let mut bank = Self::default();
+        bank.last_id_queue = RwLock::new(parent.last_id_queue.read().unwrap().clone());
         bank.parent = Some(parent);
         bank
     }
@@ -347,7 +348,10 @@ impl Bank {
         results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
-        Accounts::load_accounts(&[&self.accounts], txs, results, error_counters)
+        let parents = self.parents();
+        let mut accounts = vec![&self.accounts];
+        accounts.extend(parents.iter().map(|b| &b.accounts));
+        Accounts::load_accounts(&accounts, txs, results, error_counters)
     }
     fn check_age(
         &self,
@@ -375,11 +379,13 @@ impl Bank {
         lock_results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
-        let status_cache = self.status_cache.read().unwrap();
+        let parents = self.parents();
+        let mut caches = vec![self.status_cache.read().unwrap()];
+        caches.extend(parents.iter().map(|b| b.status_cache.read().unwrap()));
         txs.iter()
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
-                if lock_res.is_ok() && status_cache.has_signature(&tx.signatures[0]) {
+                if lock_res.is_ok() && StatusCache::has_signature_all(&caches, &tx.signatures[0]) {
                     error_counters.duplicate_signature += 1;
                     Err(BankError::DuplicateSignature)
                 } else {
@@ -566,8 +572,22 @@ impl Bank {
             .unwrap_or(0)
     }
 
+    /// Compute all the parents of the bank in order
+    fn parents(&self) -> Vec<Arc<Bank>> {
+        let mut parents = vec![];
+        let mut bank = self.parent();
+        while let Some(parent) = bank {
+            parents.push(parent.clone());
+            bank = parent.parent();
+        }
+        parents
+    }
+
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
-        Accounts::load_slow(&[&self.accounts], pubkey)
+        let parents = self.parents();
+        let mut accounts = vec![&self.accounts];
+        accounts.extend(parents.iter().map(|b| &b.accounts));
+        Accounts::load_slow(&accounts, pubkey)
     }
 
     pub fn transaction_count(&self) -> u64 {
@@ -575,14 +595,17 @@ impl Bank {
     }
 
     pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
-        self.status_cache
-            .read()
-            .unwrap()
-            .get_signature_status(signature)
+        let parents = self.parents();
+        let mut caches = vec![self.status_cache.read().unwrap()];
+        caches.extend(parents.iter().map(|b| b.status_cache.read().unwrap()));
+        StatusCache::get_signature_status_all(&caches, signature)
     }
 
     pub fn has_signature(&self, signature: &Signature) -> bool {
-        self.status_cache.read().unwrap().has_signature(signature)
+        let parents = self.parents();
+        let mut caches = vec![self.status_cache.read().unwrap()];
+        caches.extend(parents.iter().map(|b| b.status_cache.read().unwrap()));
+        StatusCache::has_signature_all(&caches, signature)
     }
 
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
@@ -1082,4 +1105,58 @@ mod tests {
         assert_eq!(bank.get_balance(&key1.pubkey()), 1);
         res[0].clone().unwrap_err();
     }
+
+    /// Verify that the parents vector is computed correclty
+    #[test]
+    fn test_bank_parents() {
+        let (genesis_block, _) = GenesisBlock::new(1);
+        let parent = Arc::new(Bank::new(&genesis_block));
+
+        let bank = Bank::new_from_parent(parent.clone());
+        assert!(Arc::ptr_eq(&bank.parents()[0], &parent));
+    }
+
+    /// Verifies that last ids and status cache are correclty referenced from parent
+    #[test]
+    fn test_bank_parent_duplicate_signature() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let key1 = Keypair::new();
+        let parent = Arc::new(Bank::new(&genesis_block));
+
+        let tx = SystemTransaction::new_move(
+            &mint_keypair,
+            key1.pubkey(),
+            1,
+            genesis_block.last_id(),
+            0,
+        );
+        assert_eq!(parent.process_transaction(&tx), Ok(()));
+        let bank = Bank::new_from_parent(parent);
+        assert_eq!(
+            bank.process_transaction(&tx),
+            Err(BankError::DuplicateSignature)
+        );
+    }
+
+    /// Verifies that last ids and accounts are correclty referenced from parent
+    #[test]
+    fn test_bank_parent_account_spend() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let key1 = Keypair::new();
+        let key2 = Keypair::new();
+        let parent = Arc::new(Bank::new(&genesis_block));
+
+        let tx = SystemTransaction::new_move(
+            &mint_keypair,
+            key1.pubkey(),
+            1,
+            genesis_block.last_id(),
+            0,
+        );
+        assert_eq!(parent.process_transaction(&tx), Ok(()));
+        let bank = Bank::new_from_parent(parent);
+        let tx = SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.last_id(), 0);
+        assert_eq!(bank.process_transaction(&tx), Ok(()));
+    }
+
 }
