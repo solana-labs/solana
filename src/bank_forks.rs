@@ -64,7 +64,7 @@ mod tests {
         let bank = Bank::default();
         let finalized_bank_id = bank.tick_height();
         let mut bank_forks = BankForks::new(bank);
-        let child_bank = Bank::new_from_parent(bank_forks.working_bank());
+        let child_bank = Bank::new_from_parent(&bank_forks.working_bank());
         child_bank.register_tick(&Hash::default());
         let child_bank_id = bank_forks.insert(child_bank);
         bank_forks.set_working_bank_id(child_bank_id);

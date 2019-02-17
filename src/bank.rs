@@ -122,10 +122,10 @@ impl Bank {
         bank
     }
 
-    pub fn new_from_parent(parent: Arc<Bank>) -> Self {
+    pub fn new_from_parent(parent: &Arc<Bank>) -> Self {
         let mut bank = Self::default();
         bank.last_id_queue = RwLock::new(parent.last_id_queue.read().unwrap().clone());
-        bank.parent = Some(parent);
+        bank.parent = Some(parent.clone());
         bank
     }
 
@@ -1102,7 +1102,7 @@ mod tests {
         let (genesis_block, _) = GenesisBlock::new(1);
         let parent = Arc::new(Bank::new(&genesis_block));
 
-        let bank = Bank::new_from_parent(parent.clone());
+        let bank = Bank::new_from_parent(&parent);
         assert!(Arc::ptr_eq(&bank.parents()[0], &parent));
     }
 
@@ -1121,7 +1121,7 @@ mod tests {
             0,
         );
         assert_eq!(parent.process_transaction(&tx), Ok(()));
-        let bank = Bank::new_from_parent(parent);
+        let bank = Bank::new_from_parent(&parent);
         assert_eq!(
             bank.process_transaction(&tx),
             Err(BankError::DuplicateSignature)
@@ -1144,9 +1144,10 @@ mod tests {
             0,
         );
         assert_eq!(parent.process_transaction(&tx), Ok(()));
-        let bank = Bank::new_from_parent(parent);
+        let bank = Bank::new_from_parent(&parent);
         let tx = SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.last_id(), 0);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
+        assert_eq!(parent.get_signature_status(&tx.signatures[0]), None);
     }
 
 }
