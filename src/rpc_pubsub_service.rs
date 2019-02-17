@@ -1,22 +1,20 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
 use crate::bank::Bank;
-use crate::rpc_pubsub::{RpcPubSubBank, RpcSolPubSub, RpcSolPubSubImpl};
+use crate::rpc_pubsub::{RpcSolPubSub, RpcSolPubSubImpl};
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use jsonrpc_pubsub::{PubSubHandler, Session};
 use jsonrpc_ws_server::{RequestContext, ServerBuilder};
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
 
 pub struct PubSubService {
     thread_hdl: JoinHandle<()>,
     exit: Arc<AtomicBool>,
-    rpc_bank: Arc<RwLock<RpcPubSubBank>>,
-    subscription: Arc<RpcSubscriptions>,
 }
 
 impl Service for PubSubService {
@@ -30,10 +28,9 @@ impl Service for PubSubService {
 impl PubSubService {
     pub fn new(bank: &Arc<Bank>, pubsub_addr: SocketAddr) -> Self {
         info!("rpc_pubsub bound to {:?}", pubsub_addr);
-        let rpc_bank = Arc::new(RwLock::new(RpcPubSubBank::new(bank.clone())));
-        let rpc = RpcSolPubSubImpl::new(rpc_bank.clone());
-        let subscription = rpc.subscription.clone();
-        bank.set_subscriptions(subscription.clone());
+        let subscriptions = Arc::new(RpcSubscriptions::default());
+        let rpc = RpcSolPubSubImpl::new_with_subscriptions(bank.clone(), subscriptions.clone());
+        bank.set_subscriptions(subscriptions);
         let exit = Arc::new(AtomicBool::new(false));
         let exit_ = exit.clone();
         let thread_hdl = Builder::new()
@@ -62,17 +59,7 @@ impl PubSubService {
                 server.unwrap().close();
             })
             .unwrap();
-        PubSubService {
-            thread_hdl,
-            exit,
-            rpc_bank,
-            subscription,
-        }
-    }
-
-    pub fn set_bank(&self, bank: &Arc<Bank>) {
-        self.rpc_bank.write().unwrap().bank = bank.clone();
-        bank.set_subscriptions(self.subscription.clone());
+        Self { thread_hdl, exit }
     }
 
     pub fn exit(&self) {
