@@ -6,7 +6,7 @@ use crate::packet::PACKET_DATA_SIZE;
 use crate::storage_stage::StorageState;
 use bincode::{deserialize, serialize};
 use bs58;
-use jsonrpc_core::{Error, ErrorCode, MetaIoHandler, Metadata, Result};
+use jsonrpc_core::{Error, ErrorCode, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_drone::drone::request_airdrop_transaction;
 use solana_sdk::account::Account;
@@ -17,7 +17,7 @@ use std::mem;
 use std::net::{SocketAddr, UdpSocket};
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
-use std::thread::{self, sleep};
+use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 #[derive(Clone)]

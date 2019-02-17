@@ -8,13 +8,12 @@ use jsonrpc_core::futures::Future;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::typed::Subscriber;
-use jsonrpc_pubsub::{PubSubHandler, Session, SubscriptionId};
+use jsonrpc_pubsub::{Session, SubscriptionId};
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
 use std::mem;
 use std::sync::{atomic, Arc, RwLock};
-use std::time::Duration;
 
 #[rpc]
 pub trait RpcSolPubSub {
