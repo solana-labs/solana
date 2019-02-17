@@ -128,7 +128,7 @@ impl BankingStage {
         txs: &[Transaction],
         results: &[bank::Result<()>],
         poh: &PohRecorder,
-    ) -> bank::Result<()> {
+    ) -> Result<()> {
         let processed_transactions: Vec<_> = results
             .iter()
             .zip(txs.iter())
@@ -149,15 +149,7 @@ impl BankingStage {
         if !processed_transactions.is_empty() {
             let hash = Transaction::hash(&processed_transactions);
             // record and unlock will unlock all the successfull transactions
-            poh.record(hash, processed_transactions).map_err(|e| {
-                warn!("record failure: {:?}", e);
-                match e {
-                    Error::PohRecorderError(PohRecorderError::MaxHeightReached) => {
-                        BankError::MaxHeightReached
-                    }
-                    _ => BankError::RecordFailure,
-                }
-            })?;
+            poh.record(hash, processed_transactions)?;
         }
         Ok(())
     }
@@ -166,7 +158,7 @@ impl BankingStage {
         bank: &Bank,
         txs: &[Transaction],
         poh: &PohRecorder,
-    ) -> bank::Result<()> {
+    ) -> Result<()> {
         let now = Instant::now();
         // Once accounts are locked, other threads cannot encode transactions that will modify the
         // same account state
@@ -228,7 +220,7 @@ impl BankingStage {
                 &transactions[chunk_start..chunk_end],
                 poh,
             );
-            if Err(BankError::MaxHeightReached) == result {
+            if let Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) = result {
                 break;
             }
             result?;
@@ -672,9 +664,9 @@ mod tests {
             0,
         )];
 
-        assert_eq!(
+        assert_matches!(
             BankingStage::process_and_record_transactions(&bank, &transactions, &poh_recorder),
-            Err(BankError::MaxHeightReached)
+            Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
         );
 
         assert_eq!(bank.get_balance(&pubkey), 1);
