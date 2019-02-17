@@ -1,6 +1,7 @@
 //! The `fullnode` module hosts all the fullnode microservices.
 
 use crate::bank::Bank;
+use crate::bank_forks::BankForks;
 use crate::blocktree::{Blocktree, BlocktreeConfig};
 use crate::blocktree_processor;
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
@@ -143,7 +144,6 @@ impl Fullnode {
         );
 
         let exit = Arc::new(AtomicBool::new(false));
-        let bank = Arc::new(bank);
         let blocktree = Arc::new(blocktree);
 
         node.info.wallclock = timestamp();
@@ -456,36 +456,75 @@ impl Fullnode {
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)]
-pub fn new_bank_from_ledger(
-    ledger_path: &str,
-    ledger_config: &BlocktreeConfig,
+fn new_banks_from_blocktree(
+    blocktree_path: &str,
+    blocktree_config: &BlocktreeConfig,
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-) -> (Bank, u64, Hash, Blocktree, SyncSender<bool>, Receiver<bool>) {
+) -> (
+    BankForks,
+    u64,
+    Hash,
+    Blocktree,
+    SyncSender<bool>,
+    Receiver<bool>,
+) {
     let (blocktree, ledger_signal_sender, ledger_signal_receiver) =
-        Blocktree::open_with_config_signal(ledger_path, ledger_config)
+        Blocktree::open_with_config_signal(blocktree_path, blocktree_config)
             .expect("Expected to successfully open database ledger");
     let genesis_block =
-        GenesisBlock::load(ledger_path).expect("Expected to successfully open genesis block");
+        GenesisBlock::load(blocktree_path).expect("Expected to successfully open genesis block");
     let bank = Bank::new(&genesis_block);
+    let bank_forks = BankForks::new(bank);
     leader_scheduler
         .write()
         .unwrap()
-        .update_tick_height(0, &bank);
+        .update_tick_height(0, &bank_forks.finalized_bank());
 
     let now = Instant::now();
     info!("processing ledger...");
     let (entry_height, last_entry_id) =
-        blocktree_processor::process_blocktree(&bank, &blocktree, leader_scheduler)
+        blocktree_processor::process_blocktree(&bank_forks, &blocktree, leader_scheduler)
             .expect("process_blocktree");
     info!(
         "processed {} ledger entries in {}ms, tick_height={}...",
         entry_height,
         duration_as_ms(&now.elapsed()),
-        bank.tick_height()
+        bank_forks.working_bank().tick_height()
     );
 
     (
-        bank,
+        bank_forks,
+        entry_height,
+        last_entry_id,
+        blocktree,
+        ledger_signal_sender,
+        ledger_signal_receiver,
+    )
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+pub fn new_bank_from_ledger(
+    ledger_path: &str,
+    ledger_config: &BlocktreeConfig,
+    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
+) -> (
+    Arc<Bank>,
+    u64,
+    Hash,
+    Blocktree,
+    SyncSender<bool>,
+    Receiver<bool>,
+) {
+    let (
+        bank_forks,
+        entry_height,
+        last_entry_id,
+        blocktree,
+        ledger_signal_sender,
+        ledger_signal_receiver,
+    ) = new_banks_from_blocktree(ledger_path, ledger_config, leader_scheduler);
+    (
+        bank_forks.working_bank(),
         entry_height,
         last_entry_id,
         blocktree,

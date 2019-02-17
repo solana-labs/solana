@@ -467,7 +467,6 @@ mod test {
             let (rotation_sender, rotation_receiver) = channel();
             let meta = blocktree.meta(0).unwrap().unwrap();
             let exit = Arc::new(AtomicBool::new(false));
-            let bank = Arc::new(bank);
             let blocktree = Arc::new(blocktree);
             let (replay_stage, ledger_writer_recv) = ReplayStage::new(
                 my_id,
@@ -573,7 +572,6 @@ mod test {
                     &leader_scheduler,
                 );
 
-            let bank = Arc::new(bank);
             let blocktree = Arc::new(blocktree);
             let (replay_stage, ledger_writer_recv) = ReplayStage::new(
                 my_keypair.pubkey(),
@@ -700,7 +698,6 @@ mod test {
                 .expect("First slot metadata must exist");
 
             let voting_keypair = Arc::new(voting_keypair);
-            let bank = Arc::new(bank);
             let blocktree = Arc::new(blocktree);
             let (replay_stage, ledger_writer_recv) = ReplayStage::new(
                 my_keypair.pubkey(),

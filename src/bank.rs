@@ -98,6 +98,8 @@ pub struct Bank {
     last_id_queue: RwLock<LastIdQueue>,
 
     subscriptions: RwLock<Option<Arc<RpcSubscriptions>>>,
+
+    parent: Option<Arc<Bank>>,
 }
 
 impl Default for Bank {
@@ -107,6 +109,7 @@ impl Default for Bank {
             last_id_queue: RwLock::new(LastIdQueue::default()),
             status_cache: RwLock::new(BankStatusCache::default()),
             subscriptions: RwLock::new(None),
+            parent: None,
         }
     }
 }
@@ -117,6 +120,17 @@ impl Bank {
         bank.process_genesis_block(genesis_block);
         bank.add_builtin_programs();
         bank
+    }
+
+    pub fn new_from_parent(parent: Arc<Bank>) -> Self {
+        let mut bank = Self::default();
+        bank.parent = Some(parent);
+        bank
+    }
+
+    /// Return the more recent checkpoint of this bank instance.
+    pub fn parent(&self) -> Option<Arc<Bank>> {
+        self.parent.clone()
     }
 
     pub fn set_subscriptions(&self, subscriptions: Arc<RpcSubscriptions>) {
@@ -130,6 +144,7 @@ impl Bank {
             status_cache: RwLock::new(self.status_cache.read().unwrap().clone()),
             last_id_queue: RwLock::new(self.last_id_queue.read().unwrap().clone()),
             subscriptions: RwLock::new(None),
+            parent: self.parent.clone(),
         }
     }
 
