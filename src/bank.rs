@@ -347,24 +347,10 @@ impl Bank {
         results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
-        let loaded = Accounts::load_accounts(&[&self.accounts], txs, results, error_counters);
         let tree = self.tree();
-        //query the parents
-        let accounts: Vec<&Accounts> = tree.iter().map(|b| &b.accounts).collect();
-        let results: Vec<Result<()>> = loaded
-            .iter()
-            .map(|l| match l {
-                Ok(_) => Err(BankError::AccountNotFound),
-                Err(BankError::AccountNotFound) => Ok(()),
-                Err(e) => Err(e.clone()),
-            })
-            .collect();
-        let rest = Accounts::load_accounts(&accounts, txs, results, error_counters);
-        loaded
-            .into_iter()
-            .zip(rest.into_iter())
-            .map(|(a, b)| if a.is_ok() { a } else { b })
-            .collect()
+        let mut accounts = vec![&self.accounts];
+        accounts.extend(tree.iter().map(|b| &b.accounts));
+        Accounts::load_accounts(&accounts, txs, results, error_counters)
     }
     fn check_age(
         &self,
@@ -392,11 +378,13 @@ impl Bank {
         lock_results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
-        let status_cache = self.status_cache.read().unwrap();
+        let tree = self.tree();
+        let mut caches = vec![self.status_cache.read().unwrap()];
+        caches.extend(tree.iter().map(|b| b.status_cache.read().unwrap()));
         txs.iter()
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
-                if lock_res.is_ok() && status_cache.has_signature(&tx.signatures[0]) {
+                if lock_res.is_ok() && StatusCache::has_signature_all(&caches, &tx.signatures[0]) {
                     error_counters.duplicate_signature += 1;
                     Err(BankError::DuplicateSignature)
                 } else {
@@ -595,11 +583,10 @@ impl Bank {
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
-        Accounts::load_slow(&[&self.accounts], pubkey).or({
-            let tree = self.tree();
-            let accounts: Vec<&Accounts> = tree.iter().map(|b| &b.accounts).collect();
-            Accounts::load_slow(&accounts, pubkey)
-        })
+        let tree = self.tree();
+        let mut accounts = vec![&self.accounts];
+        accounts.extend(tree.iter().map(|b| &b.accounts));
+        Accounts::load_slow(&accounts, pubkey)
     }
 
     pub fn transaction_count(&self) -> u64 {
@@ -607,14 +594,17 @@ impl Bank {
     }
 
     pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
-        self.status_cache
-            .read()
-            .unwrap()
-            .get_signature_status(signature)
+        let tree = self.tree();
+        let mut caches = vec![self.status_cache.read().unwrap()];
+        caches.extend(tree.iter().map(|b| b.status_cache.read().unwrap()));
+        StatusCache::get_signature_status_all(&caches, signature)
     }
 
     pub fn has_signature(&self, signature: &Signature) -> bool {
-        self.status_cache.read().unwrap().has_signature(signature)
+        let tree = self.tree();
+        let mut caches = vec![self.status_cache.read().unwrap()];
+        caches.extend(tree.iter().map(|b| b.status_cache.read().unwrap()));
+        StatusCache::has_signature_all(&caches, signature)
     }
 
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
