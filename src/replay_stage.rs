@@ -6,7 +6,6 @@ use crate::blocktree_processor;
 use crate::cluster_info::ClusterInfo;
 use crate::counter::Counter;
 use crate::entry::{Entry, EntryReceiver, EntrySender, EntrySlice};
-use std::sync::mpsc::RecvTimeoutError;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
@@ -20,6 +19,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
 use solana_sdk::vote_transaction::VoteTransaction;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, RwLock};
 #[cfg(test)]
@@ -559,12 +559,11 @@ mod test {
         let (to_leader_sender, _) = channel();
         {
             let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
-            let (bank, entry_height, last_entry_id, blocktree, l_receiver) =
-                new_bank_from_ledger(
-                    &my_ledger_path,
-                    &BlocktreeConfig::default(),
-                    &leader_scheduler,
-                );
+            let (bank, entry_height, last_entry_id, blocktree, l_receiver) = new_bank_from_ledger(
+                &my_ledger_path,
+                &BlocktreeConfig::default(),
+                &leader_scheduler,
+            );
 
             let blocktree = Arc::new(blocktree);
             let (replay_stage, ledger_writer_recv) = ReplayStage::new(
