@@ -150,12 +150,6 @@ local|tar)
   scripts/net-stats.sh  > net-stats.log 2>&1 &
   echo $! > net-stats.pid
 
-  maybeNoLeaderRotation=
-  if ! $leaderRotation; then
-    maybeNoLeaderRotation="--no-leader-rotation"
-  fi
-
-
   case $nodeType in
   bootstrap-leader)
     if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-fullnode-cuda ]]; then
@@ -167,6 +161,11 @@ local|tar)
       ./multinode-demo/setup.sh -t bootstrap-leader $setupArgs
     fi
     ./multinode-demo/drone.sh > drone.log 2>&1 &
+
+    maybeNoLeaderRotation=
+    if ! $leaderRotation; then
+      maybeNoLeaderRotation="--no-leader-rotation"
+    fi
     ./multinode-demo/bootstrap-leader.sh $maybeNoLeaderRotation > bootstrap-leader.log 2>&1 &
     ln -sTf bootstrap-leader.log fullnode.log
     ;;
@@ -178,7 +177,10 @@ local|tar)
       export SOLANA_CUDA=1
     fi
 
-    args=("$maybeNoLeaderRotation")
+    args=()
+    if ! $leaderRotation; then
+      args+=("--no-leader-rotation")
+    fi
     if [[ $nodeType = apinode ]]; then
       args+=(--entry-stream /tmp/solana-entry-stream.sock)
     fi
