@@ -201,7 +201,7 @@ mod tests {
         let mut first = BankStatusCache::new(&last_id);
         first.add(&sig);
         assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
-        for _ in 0..MAX_CACHE_ENTRIES {
+        for _ in 0..(MAX_CACHE_ENTRIES + 1) {
             let last_id = hash(last_id.as_ref());
             first.new_cache(&last_id);
         }
