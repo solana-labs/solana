@@ -347,9 +347,24 @@ impl Bank {
         results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
+        let loaded = Accounts::load_accounts(&[&self.accounts], txs, results, error_counters);
         let tree = self.tree();
+        //query the parents
         let accounts: Vec<&Accounts> = tree.iter().map(|b| &b.accounts).collect();
-        Accounts::load_accounts(&accounts, txs, results, error_counters)
+        let results: Vec<Result<()>> = loaded
+            .iter()
+            .map(|l| match l {
+                Ok(_) => Err(BankError::AccountNotFound),
+                Err(BankError::AccountNotFound) => Ok(()),
+                Err(e) => Err(e.clone()),
+            })
+            .collect();
+        let rest = Accounts::load_accounts(&accounts, txs, results, error_counters);
+        loaded
+            .into_iter()
+            .zip(rest.into_iter())
+            .map(|(a, b)| if a.is_ok() { a } else { b })
+            .collect()
     }
     fn check_age(
         &self,
@@ -580,9 +595,11 @@ impl Bank {
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
-        let tree = self.tree();
-        let accounts: Vec<&Accounts> = tree.iter().map(|b| &b.accounts).collect();
-        Accounts::load_slow(&accounts, pubkey)
+        Accounts::load_slow(&[&self.accounts], pubkey).or({
+            let tree = self.tree();
+            let accounts: Vec<&Accounts> = tree.iter().map(|b| &b.accounts).collect();
+            Accounts::load_slow(&accounts, pubkey)
+        })
     }
 
     pub fn transaction_count(&self) -> u64 {
