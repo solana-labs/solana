@@ -1,7 +1,7 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
 use crate::bank;
-use crate::bank::{Bank, BankError, BankSubscriptions};
+use crate::bank::{Bank, BankError};
 use crate::rpc::RpcSignatureStatus;
 use crate::service::Service;
 use bs58;
@@ -161,8 +161,8 @@ impl Default for RpcSubscriptions {
     }
 }
 
-impl BankSubscriptions for RpcSubscriptions {
-    fn check_account(&self, pubkey: &Pubkey, account: &Account) {
+impl RpcSubscriptions {
+    pub fn check_account(&self, pubkey: &Pubkey, account: &Account) {
         let subscriptions = self.account_subscriptions.read().unwrap();
         if let Some(hashmap) = subscriptions.get(pubkey) {
             for (_bank_sub_id, sink) in hashmap.iter() {
@@ -171,7 +171,7 @@ impl BankSubscriptions for RpcSubscriptions {
         }
     }
 
-    fn check_signature(&self, signature: &Signature, bank_error: &bank::Result<()>) {
+    pub fn check_signature(&self, signature: &Signature, bank_error: &bank::Result<()>) {
         let status = match bank_error {
             Ok(_) => RpcSignatureStatus::Confirmed,
             Err(BankError::AccountInUse) => RpcSignatureStatus::AccountInUse,
@@ -187,9 +187,7 @@ impl BankSubscriptions for RpcSubscriptions {
         }
         subscriptions.remove(&signature);
     }
-}
 
-impl RpcSubscriptions {
     pub fn add_account_subscription(
         &self,
         pubkey: &Pubkey,
