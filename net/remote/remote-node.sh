@@ -182,7 +182,10 @@ local|tar)
       args+=("--no-leader-rotation")
     fi
     if [[ $nodeType = apinode ]]; then
-      args+=(--entry-stream /tmp/solana-entry-stream.sock)
+      args+=(
+        --entry-stream /tmp/solana-entry-stream.sock
+        --no-signer
+      )
     fi
 
     set -x
@@ -194,10 +197,9 @@ local|tar)
       fi
     fi
 
-    # Run blockexplorer as root so it can bind to port 80
-    # shellcheck disable=SC2024 # "sudo doesn't affect redirects" warning does not apply
-    sudo npx solana-blockexplorer > blockexplorer.log 2>&1 &
-
+    if [[ $nodeType = apinode ]]; then
+      npx solana-blockexplorer > blockexplorer.log 2>&1 &
+    fi
     ./multinode-demo/fullnode.sh "${args[@]}" "$entrypointIp":~/solana "$entrypointIp:8001" > fullnode.log 2>&1 &
     ;;
   *)
