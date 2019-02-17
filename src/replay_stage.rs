@@ -226,7 +226,7 @@ impl ReplayStage {
                     let timer = Duration::from_millis(100);
                     let e = ledger_signal_receiver.recv_timeout(timer);
                     match e {
-                        Err(RecvTimeoutError::Disconnected) => continue,
+                        Err(RecvTimeoutError::Timeout) => continue,
                         Err(_) => break,
                         Ok(_) => (),
                     };
