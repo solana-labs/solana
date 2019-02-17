@@ -80,11 +80,6 @@ pub enum BankError {
 
 pub type Result<T> = result::Result<T, BankError>;
 
-pub trait BankSubscriptions {
-    fn check_account(&self, pubkey: &Pubkey, account: &Account);
-    fn check_signature(&self, signature: &Signature, status: &Result<()>);
-}
-
 type BankStatusCache = StatusCache<BankError>;
 
 /// Manager for the state of all accounts and programs after processing its entries.
