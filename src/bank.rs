@@ -7,6 +7,7 @@ use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionL
 use crate::counter::Counter;
 use crate::genesis_block::GenesisBlock;
 use crate::last_id_queue::{LastIdQueue, MAX_ENTRY_IDS};
+use crate::poh_service::NUM_TICKS_PER_SECOND;
 use crate::rpc_pubsub::RpcSubscriptions;
 use crate::status_cache::StatusCache;
 use bincode::deserialize;
@@ -124,11 +125,9 @@ impl Bank {
     }
 
     pub fn copy_for_tpu(&self) -> Self {
-        let mut status_cache = BankStatusCache::default();
-        status_cache.merge_into_root(self.status_cache.read().unwrap().clone());
         Self {
             accounts: self.accounts.copy_for_tpu(),
-            status_cache: RwLock::new(status_cache),
+            status_cache: RwLock::new(self.status_cache.read().unwrap().clone()),
             last_id_queue: RwLock::new(self.last_id_queue.read().unwrap().clone()),
             subscriptions: RwLock::new(None),
         }
@@ -295,9 +294,16 @@ impl Bank {
     /// the oldest ones once its internal cache is full. Once boot, the
     /// bank will reject transactions using that `last_id`.
     pub fn register_tick(&self, last_id: &Hash) {
-        let mut last_id_queue = self.last_id_queue.write().unwrap();
-        inc_new_counter_info!("bank-register_tick-registered", 1);
-        last_id_queue.register_tick(last_id);
+        let current_tick_height = {
+            //atomic register and read the tick
+            let mut last_id_queue = self.last_id_queue.write().unwrap();
+            inc_new_counter_info!("bank-register_tick-registered", 1);
+            last_id_queue.register_tick(last_id);
+            last_id_queue.tick_height
+        };
+        if current_tick_height % NUM_TICKS_PER_SECOND as u64 == 0 {
+            self.status_cache.write().unwrap().new_cache(last_id);
+        }
     }
 
     /// Process a Transaction. This is used for unit tests and simply calls the vector Bank::process_transactions method.
@@ -637,7 +643,6 @@ mod tests {
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Instruction;
-    use std;
 
     #[test]
     fn test_bank_new() {

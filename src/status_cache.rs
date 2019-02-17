@@ -1,10 +1,14 @@
 use crate::bloom::{Bloom, BloomHashIndex};
 use crate::last_id_queue::MAX_ENTRY_IDS;
+use crate::poh_service::NUM_TICKS_PER_SECOND;
 use hashbrown::HashMap;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Signature;
 use std::collections::VecDeque;
 use std::ops::{Deref, DerefMut};
+
+/// This cache is designed to last 1 second
+const MAX_CACHE_ENTRIES: usize = MAX_ENTRY_IDS / NUM_TICKS_PER_SECOND;
 
 type FailureMap<T> = HashMap<Signature, T>;
 
@@ -60,6 +64,7 @@ impl<T: Clone> StatusCache<T> {
     pub fn clear(&mut self) {
         self.failures.clear();
         self.signatures.clear();
+        self.merges = VecDeque::new();
     }
     fn get_signature_status_merged(&self, sig: &Signature) -> Option<Result<(), T>> {
         for c in &self.merges {
@@ -85,8 +90,19 @@ impl<T: Clone> StatusCache<T> {
         // which cannot be rolled back
         assert!(other.merges.is_empty());
         self.merges.push_front(other);
-        if self.merges.len() > MAX_ENTRY_IDS {
-            //TODO check if this is the right size ^
+        if self.merges.len() > MAX_CACHE_ENTRIES {
+            self.merges.pop_back();
+        }
+    }
+
+    /// Crate a new cache, pushing the old cache into the merged queue
+    pub fn new_cache(&mut self, last_id: &Hash) {
+        let mut old = Self::new(last_id);
+        std::mem::swap(&mut old.signatures, &mut self.signatures);
+        std::mem::swap(&mut old.failures, &mut self.failures);
+        assert!(old.merges.is_empty());
+        self.merges.push_front(old);
+        if self.merges.len() > MAX_CACHE_ENTRIES {
             self.merges.pop_back();
         }
     }
@@ -160,6 +176,37 @@ mod tests {
             Some(Ok(())),
         );
         assert!(StatusCache::has_signature_all(&checkpoints, &sig));
+    }
+
+    #[test]
+    fn test_new_cache() {
+        let sig = Signature::default();
+        let last_id = hash(Hash::default().as_ref());
+        let mut first = BankStatusCache::new(&last_id);
+        first.add(&sig);
+        assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
+        let last_id = hash(last_id.as_ref());
+        first.new_cache(&last_id);
+        assert_eq!(first.get_signature_status(&sig), Some(Ok(())),);
+        assert!(first.has_signature(&sig));
+        first.clear();
+        assert_eq!(first.get_signature_status(&sig), None);
+        assert!(!first.has_signature(&sig));
+    }
+
+    #[test]
+    fn test_new_cache_full() {
+        let sig = Signature::default();
+        let last_id = hash(Hash::default().as_ref());
+        let mut first = BankStatusCache::new(&last_id);
+        first.add(&sig);
+        assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
+        for _ in 0..(MAX_CACHE_ENTRIES + 1) {
+            let last_id = hash(last_id.as_ref());
+            first.new_cache(&last_id);
+        }
+        assert_eq!(first.get_signature_status(&sig), None);
+        assert!(!first.has_signature(&sig));
     }
 
     #[test]
