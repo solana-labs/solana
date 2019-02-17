@@ -61,6 +61,7 @@ pub mod retransmit_stage;
 pub mod rpc;
 pub mod rpc_mock;
 pub mod rpc_pubsub;
+pub mod rpc_pubsub_service;
 pub mod rpc_request;
 pub mod rpc_subscriptions;
 pub mod service;
