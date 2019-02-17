@@ -363,9 +363,10 @@ impl Fullnode {
                 }
                 None => FullnodeReturnType::LeaderToLeaderRotation, // value doesn't matter here...
             };
-
+            let mut new: Arc<Bank> = Arc::new(Bank::new_from_parent(self.bank.clone()));
+            std::mem::swap(&mut self.bank, &mut new);
             self.node_services.tpu.switch_to_leader(
-                &Arc::new(self.bank.copy_for_tpu()),
+                &self.bank,
                 PohServiceConfig::default(),
                 self.tpu_sockets
                     .iter()
