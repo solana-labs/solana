@@ -187,7 +187,7 @@ start() {
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
         ci/testnet-deploy.sh edge-testnet-solana-com ec2 us-west-1a \
-          -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a eipalloc-0ccd4f2239886fa94 \
+          -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P -a eipalloc-0ccd4f2239886fa94 \
           ${maybeReuseLedger:+-r} \
           ${maybeDelete:+-D}
     )
@@ -210,7 +210,7 @@ start() {
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
         ci/testnet-deploy.sh beta-testnet-solana-com ec2 us-west-1a \
-          -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a eipalloc-0f286cf8a0771ce35 \
+          -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P -a eipalloc-0f286cf8a0771ce35 \
           -b \
           ${maybeReuseLedger:+-r} \
           ${maybeDelete:+-D}
@@ -234,7 +234,7 @@ start() {
       NO_VALIDATOR_SANITY=1 \
       RUST_LOG=solana=info \
         ci/testnet-deploy.sh testnet-solana-com ec2 us-west-1a \
-          -t "$CHANNEL_OR_TAG" -n 3 -c 0 -P -a eipalloc-0fa502bf95f6f18b2 \
+          -t "$CHANNEL_OR_TAG" -n 3 -c 0 -u -P -a eipalloc-0fa502bf95f6f18b2 \
           -b \
           ${maybeReuseLedger:+-r} \
           ${maybeDelete:+-D}
