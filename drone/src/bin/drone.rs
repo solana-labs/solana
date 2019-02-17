@@ -1,5 +1,5 @@
 use clap::{crate_version, App, Arg};
-use log::*;
+use log::info;
 use solana_drone::drone::{Drone, DRONE_PORT};
 use solana_drone::socketaddr;
 use solana_sdk::signature::read_keypair;
@@ -9,7 +9,7 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use tokio::net::TcpListener;
-use tokio::prelude::*;
+use tokio::prelude::{Future, Sink, Stream};
 use tokio_codec::{BytesCodec, Decoder};
 
 fn main() -> Result<(), Box<error::Error>> {

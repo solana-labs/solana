@@ -7,7 +7,7 @@
 use bincode::{deserialize, serialize};
 use byteorder::{ByteOrder, LittleEndian};
 use bytes::{Bytes, BytesMut};
-use log::*;
+use log::{debug, info, trace, warn};
 use serde_derive::{Deserialize, Serialize};
 use solana_metrics;
 use solana_metrics::influxdb;
@@ -27,7 +27,7 @@ use std::thread;
 use std::time::Duration;
 use tokio;
 use tokio::net::TcpListener;
-use tokio::prelude::*;
+use tokio::prelude::{Future, Read, Sink, Stream, Write};
 use tokio_codec::{BytesCodec, Decoder};
 
 #[macro_export]
