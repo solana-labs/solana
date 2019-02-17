@@ -76,14 +76,14 @@ impl EntryStreamStage {
                 entry_stream
                     .emit_block_event(block_slot, &leader_id, block_tick_height, block_id)
                     .unwrap_or_else(|e| {
-                        error!("Entry Stream error: {:?}, {:?}", e, entry_stream.output);
+                        debug!("Entry Stream error: {:?}, {:?}", e, entry_stream.output);
                     });
                 entry_stream.queued_block = None;
             }
             entry_stream
                 .emit_entry_event(slot, &leader_id, &entry)
                 .unwrap_or_else(|e| {
-                    error!("Entry Stream error: {:?}, {:?}", e, entry_stream.output);
+                    debug!("Entry Stream error: {:?}, {:?}", e, entry_stream.output);
                 });
             if 0 == leader_scheduler.num_ticks_left_in_slot(entry.tick_height) {
                 entry_stream.queued_block = Some(EntryStreamBlock {
