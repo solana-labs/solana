@@ -488,12 +488,19 @@ impl Blocktree {
         let mut blobs = vec![];
         let mut current_index = start_index;
         let mut current_slot = start_slot;
-
+        let mut parent_slot = {
+            if current_slot == 0 {
+                current_slot
+            } else {
+                current_slot - 1
+            }
+        };
         // Find all the entries for start_slot
         for entry in entries {
             if remaining_ticks_in_slot == 0 {
                 current_slot += 1;
                 current_index = 0;
+                parent_slot = current_slot - 1;
                 remaining_ticks_in_slot = ticks_per_slot;
             }
 
@@ -508,6 +515,7 @@ impl Blocktree {
 
             b.set_index(current_index);
             b.set_slot(current_slot);
+            b.set_parent(parent_slot);
             blobs.push(b);
 
             current_index += 1;
