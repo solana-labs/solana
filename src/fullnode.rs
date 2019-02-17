@@ -127,13 +127,8 @@ impl Fullnode {
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::new(
             &config.leader_scheduler_config,
         )));
-        let (
-            bank,
-            entry_height,
-            last_entry_id,
-            blocktree,
-            ledger_signal_receiver,
-        ) = new_bank_from_ledger(ledger_path, &config.ledger_config(), &leader_scheduler);
+        let (bank, entry_height, last_entry_id, blocktree, ledger_signal_receiver) =
+            new_bank_from_ledger(ledger_path, &config.ledger_config(), &leader_scheduler);
 
         info!("node info: {:?}", node.info);
         info!("node entrypoint_info: {:?}", entrypoint_info_option);
@@ -458,13 +453,7 @@ fn new_banks_from_blocktree(
     blocktree_path: &str,
     blocktree_config: &BlocktreeConfig,
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-) -> (
-    BankForks,
-    u64,
-    Hash,
-    Blocktree,
-    Receiver<bool>,
-) {
+) -> (BankForks, u64, Hash, Blocktree, Receiver<bool>) {
     let (blocktree, ledger_signal_receiver) =
         Blocktree::open_with_config_signal(blocktree_path, blocktree_config)
             .expect("Expected to successfully open database ledger");
@@ -503,20 +492,9 @@ pub fn new_bank_from_ledger(
     ledger_path: &str,
     ledger_config: &BlocktreeConfig,
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-) -> (
-    Arc<Bank>,
-    u64,
-    Hash,
-    Blocktree,
-    Receiver<bool>,
-) {
-    let (
-        bank_forks,
-        entry_height,
-        last_entry_id,
-        blocktree,
-        ledger_signal_receiver,
-    ) = new_banks_from_blocktree(ledger_path, ledger_config, leader_scheduler);
+) -> (Arc<Bank>, u64, Hash, Blocktree, Receiver<bool>) {
+    let (bank_forks, entry_height, last_entry_id, blocktree, ledger_signal_receiver) =
+        new_banks_from_blocktree(ledger_path, ledger_config, leader_scheduler);
     (
         bank_forks.working_bank(),
         entry_height,
