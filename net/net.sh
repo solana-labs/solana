@@ -225,9 +225,10 @@ startBootstrapLeader() {
 
 startNode() {
   declare ipAddress=$1
+  declare nodeType=$2
   declare logFile="$netLogDir/fullnode-$ipAddress.log"
 
-  echo "--- Starting fullnode: $ipAddress"
+  echo "--- Starting $nodeType: $ipAddress"
   echo "start log: $logFile"
   (
     set -x
@@ -235,7 +236,7 @@ startNode() {
     ssh "${sshOptions[@]}" -n "$ipAddress" \
       "./solana/net/remote/remote-node.sh \
          $deployMethod \
-         fullnode \
+         $nodeType \
          $publicNetwork \
          $entrypointIp \
          ${#fullnodeIpList[@]} \
@@ -347,8 +348,13 @@ start() {
     $metricsWriteDatapoint "testnet-deploy net-start-begin=1"
   fi
 
-  bootstrapLeader=true
-  for ipAddress in "${fullnodeIpList[@]}"; do
+  declare bootstrapLeader=true
+  declare nodeType=fullnode
+  for ipAddress in "${fullnodeIpList[@]}" - "${apiIpList[@]}"; do
+    if [[ $ipAddress = - ]]; then
+      nodeType=apinode
+      continue
+    fi
     if $updateNodes; then
       stopNode "$ipAddress"
     fi
@@ -364,7 +370,7 @@ start() {
       pids=()
       loopCount=0
     else
-      startNode "$ipAddress"
+      startNode "$ipAddress" $nodeType
 
       # Stagger additional node start time. If too many nodes start simultaneously
       # the bootstrap node gets more rsync requests from the additional nodes than
@@ -431,7 +437,7 @@ start() {
   echo
   echo "+++ Deployment Successful"
   echo "Bootstrap leader deployment took $bootstrapNodeDeployTime seconds"
-  echo "Additional fullnode deployment (${#fullnodeIpList[@]} instances) took $additionalNodeDeployTime seconds"
+  echo "Additional fullnode deployment (${#fullnodeIpList[@]} full nodes, ${#apiIpList[@]} api nodes) took $additionalNodeDeployTime seconds"
   echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
   echo "Network start logs in $netLogDir:"
   ls -l "$netLogDir"
@@ -466,7 +472,7 @@ stop() {
   SECONDS=0
   $metricsWriteDatapoint "testnet-deploy net-stop-begin=1"
 
-  for ipAddress in "${fullnodeIpList[@]}" "${clientIpList[@]}"; do
+  for ipAddress in "${fullnodeIpList[@]}" "${apiIpList[@]}" "${clientIpList[@]}"; do
     stopNode "$ipAddress"
   done
 
@@ -514,6 +520,9 @@ logs)
   done
   for ipAddress in "${clientIpList[@]}"; do
     fetchRemoteLog "$ipAddress" client
+  done
+  for ipAddress in "${apiIpList[@]}"; do
+    fetchRemoteLog "$ipAddress" fullnode
   done
   ;;
 

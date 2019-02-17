@@ -29,6 +29,8 @@ fullnodeIpList=()
 fullnodeIpListPrivate=()
 clientIpList=()
 clientIpListPrivate=()
+apiIpList=()
+apiIpListPrivate=()
 leaderRotation=
 
 buildSshOptions() {
