@@ -3,6 +3,7 @@
 use crate::bank::{self, Bank, BankError};
 use crate::cluster_info::ClusterInfo;
 use crate::packet::PACKET_DATA_SIZE;
+use crate::rpc_status::RpcSignatureStatus;
 use crate::storage_stage::StorageState;
 use bincode::{deserialize, serialize};
 use bs58;
@@ -15,7 +16,6 @@ use solana_sdk::signature::Signature;
 use solana_sdk::transaction::Transaction;
 use std::mem;
 use std::net::{SocketAddr, UdpSocket};
-use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -122,31 +122,6 @@ pub struct Meta {
     pub drone_addr: SocketAddr,
 }
 impl Metadata for Meta {}
-
-#[derive(Copy, Clone, PartialEq, Serialize, Debug)]
-pub enum RpcSignatureStatus {
-    AccountInUse,
-    AccountLoadedTwice,
-    Confirmed,
-    GenericFailure,
-    ProgramRuntimeError,
-    SignatureNotFound,
-}
-impl FromStr for RpcSignatureStatus {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<RpcSignatureStatus> {
-        match s {
-            "AccountInUse" => Ok(RpcSignatureStatus::AccountInUse),
-            "AccountLoadedTwice" => Ok(RpcSignatureStatus::AccountLoadedTwice),
-            "Confirmed" => Ok(RpcSignatureStatus::Confirmed),
-            "GenericFailure" => Ok(RpcSignatureStatus::GenericFailure),
-            "ProgramRuntimeError" => Ok(RpcSignatureStatus::ProgramRuntimeError),
-            "SignatureNotFound" => Ok(RpcSignatureStatus::SignatureNotFound),
-            _ => Err(Error::parse_error()),
-        }
-    }
-}
 
 #[rpc]
 pub trait RpcSol {
@@ -356,11 +331,12 @@ mod tests {
     use crate::bank::Bank;
     use crate::cluster_info::NodeInfo;
     use crate::genesis_block::GenesisBlock;
-    use jsonrpc_core::Response;
+    use jsonrpc_core::{MetaIoHandler, Response};
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::thread;
 
     fn start_rpc_handler_with_tx(pubkey: Pubkey) -> (MetaIoHandler<Meta>, Meta, Hash, Keypair) {
         let (genesis_block, alice) = GenesisBlock::new(10_000);

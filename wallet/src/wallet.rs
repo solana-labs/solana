@@ -4,12 +4,13 @@ use chrono::prelude::*;
 use clap::ArgMatches;
 use serde_json;
 use serde_json::json;
-use solana::rpc::{RpcSignatureStatus, RPC_PORT};
 #[cfg(test)]
 use solana::rpc_mock::{request_airdrop_transaction, MockRpcClient as RpcClient};
 #[cfg(not(test))]
 use solana::rpc_request::RpcClient;
 use solana::rpc_request::{get_rpc_request_str, RpcRequest};
+use solana::rpc_service::RPC_PORT;
+use solana::rpc_status::RpcSignatureStatus;
 #[cfg(not(test))]
 use solana_drone::drone::request_airdrop_transaction;
 use solana_drone::drone::DRONE_PORT;

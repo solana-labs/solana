@@ -64,6 +64,7 @@ pub mod rpc_pubsub;
 pub mod rpc_pubsub_service;
 pub mod rpc_request;
 pub mod rpc_service;
+pub mod rpc_status;
 pub mod rpc_subscriptions;
 pub mod service;
 pub mod sigverify;
