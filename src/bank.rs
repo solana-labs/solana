@@ -8,7 +8,6 @@ use crate::counter::Counter;
 use crate::genesis_block::GenesisBlock;
 use crate::last_id_queue::{LastIdQueue, MAX_ENTRY_IDS};
 use crate::poh_service::NUM_TICKS_PER_SECOND;
-use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::status_cache::StatusCache;
 use bincode::{deserialize, serialize};
 use log::Level;
@@ -89,8 +88,6 @@ pub struct Bank {
     /// FIFO queue of `last_id` items
     last_id_queue: RwLock<LastIdQueue>,
 
-    subscriptions: RwLock<Option<Arc<RpcSubscriptions>>>,
-
     parent: Option<Arc<Bank>>,
 
     parent_hash: Hash,
@@ -102,7 +99,6 @@ impl Default for Bank {
             accounts: Accounts::default(),
             last_id_queue: RwLock::new(LastIdQueue::default()),
             status_cache: RwLock::new(BankStatusCache::default()),
-            subscriptions: RwLock::new(None),
             parent: None,
             parent_hash: Hash::default(),
         }
@@ -129,11 +125,6 @@ impl Bank {
     /// Return the more recent checkpoint of this bank instance.
     pub fn parent(&self) -> Option<Arc<Bank>> {
         self.parent.clone()
-    }
-
-    pub fn set_subscriptions(&self, subscriptions: Arc<RpcSubscriptions>) {
-        let mut sub = self.subscriptions.write().unwrap();
-        *sub = Some(subscriptions)
     }
 
     fn process_genesis_block(&self, genesis_block: &GenesisBlock) {
@@ -258,13 +249,6 @@ impl Bank {
         self.status_cache.write().unwrap().clear();
     }
 
-    fn update_subscriptions(&self, txs: &[Transaction], res: &[Result<()>]) {
-        for (i, tx) in txs.iter().enumerate() {
-            if let Some(ref subs) = *self.subscriptions.read().unwrap() {
-                subs.check_signature(&tx.signatures[0], &res[i]);
-            }
-        }
-    }
     fn update_transaction_statuses(&self, txs: &[Transaction], res: &[Result<()>]) {
         let mut status_cache = self.status_cache.write().unwrap();
         for (i, tx) in txs.iter().enumerate() {
@@ -491,9 +475,6 @@ impl Bank {
         self.accounts
             .store_accounts(true, txs, executed, loaded_accounts);
 
-        // Check account subscriptions and send notifications
-        self.send_account_notifications(txs, executed, loaded_accounts);
-
         // once committed there is no way to unroll
         let write_elapsed = now.elapsed();
         debug!(
@@ -502,7 +483,6 @@ impl Bank {
             txs.len(),
         );
         self.update_transaction_statuses(txs, &executed);
-        self.update_subscriptions(txs, &executed);
     }
 
     /// Process a batch of transactions.
@@ -607,27 +587,6 @@ impl Bank {
 
         let accounts_delta_hash = self.accounts.hash_internal_state();
         extend_and_hash(&self.parent_hash, &serialize(&accounts_delta_hash).unwrap())
-    }
-
-    fn send_account_notifications(
-        &self,
-        txs: &[Transaction],
-        res: &[Result<()>],
-        loaded: &[Result<(InstructionAccounts, InstructionLoaders)>],
-    ) {
-        for (i, raccs) in loaded.iter().enumerate() {
-            if res[i].is_err() || raccs.is_err() {
-                continue;
-            }
-
-            let tx = &txs[i];
-            let accs = raccs.as_ref().unwrap();
-            for (key, account) in tx.account_keys.iter().zip(accs.0.iter()) {
-                if let Some(ref subs) = *self.subscriptions.read().unwrap() {
-                    subs.check_account(&key, account)
-                }
-            }
-        }
     }
 
     pub fn vote_states<F>(&self, cond: F) -> Vec<VoteState>

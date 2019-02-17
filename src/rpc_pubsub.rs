@@ -186,6 +186,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::bank;
     use crate::genesis_block::GenesisBlock;
     use jsonrpc_core::futures::sync::mpsc;
     use jsonrpc_core::Response;
@@ -194,9 +195,30 @@ mod tests {
     use solana_sdk::budget_transaction::BudgetTransaction;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
+    use solana_sdk::transaction::Transaction;
     use std::thread::sleep;
     use std::time::Duration;
     use tokio::prelude::{Async, Stream};
+
+    pub fn process_transaction_and_notify(
+        bank: &Bank,
+        tx: &Transaction,
+        subscriptions: &RpcSubscriptions,
+    ) -> bank::Result<()> {
+        bank.process_transaction(tx)?;
+
+        for pubkey in &tx.account_keys {
+            if let Some(account) = &bank.get_account(pubkey) {
+                subscriptions.check_account(pubkey, account);
+            }
+        }
+
+        let signature = &tx.signatures[0];
+        let status = bank.get_signature_status(signature).unwrap();
+        subscriptions.check_signature(signature, &status);
+
+        Ok(())
+    }
 
     fn create_session() -> Arc<Session> {
         Arc::new(Session::new(mpsc::channel(1).0))
@@ -212,8 +234,6 @@ mod tests {
         let last_id = arc_bank.last_id();
 
         let rpc = RpcSolPubSubImpl::new(arc_bank.clone());
-        let subscriptions = rpc.subscriptions.clone();
-        arc_bank.set_subscriptions(subscriptions);
 
         // Test signature subscriptions
         let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
@@ -223,9 +243,7 @@ mod tests {
             Subscriber::new_test("signatureNotification");
         rpc.signature_subscribe(session, subscriber, tx.signatures[0].to_string());
 
-        arc_bank
-            .process_transaction(&tx)
-            .expect("process transaction");
+        process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
 
         // Test signature confirmation notification
@@ -262,11 +280,9 @@ mod tests {
         let res = io.handle_request_sync(&req, session.clone());
 
         let expected = format!(r#"{{"jsonrpc":"2.0","result":true,"id":1}}"#);
-        let expected: Response =
-            serde_json::from_str(&expected).expect("expected response deserialization");
+        let expected: Response = serde_json::from_str(&expected).unwrap();
 
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
+        let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
         assert_eq!(expected, result);
 
         // Test bad parameter
@@ -274,11 +290,9 @@ mod tests {
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"signatureUnsubscribe","params":[1]}}"#);
         let res = io.handle_request_sync(&req, session.clone());
         let expected = format!(r#"{{"jsonrpc":"2.0","error":{{"code":-32602,"message":"Invalid Request: Subscription id does not exist"}},"id":1}}"#);
-        let expected: Response =
-            serde_json::from_str(&expected).expect("expected response deserialization");
+        let expected: Response = serde_json::from_str(&expected).unwrap();
 
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
+        let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
         assert_eq!(expected, result);
     }
 
@@ -296,9 +310,6 @@ mod tests {
         let last_id = arc_bank.last_id();
 
         let rpc = RpcSolPubSubImpl::new(arc_bank.clone());
-        let subscriptions = rpc.subscriptions.clone();
-        arc_bank.set_subscriptions(subscriptions);
-
         let session = create_session();
         let (subscriber, _id_receiver, mut receiver) = Subscriber::new_test("accountNotification");
         rpc.account_subscribe(session, subscriber, contract_state.pubkey().to_string());
@@ -312,9 +323,7 @@ mod tests {
             budget_program_id,
             0,
         );
-        arc_bank
-            .process_transaction(&tx)
-            .expect("process transaction");
+        process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
 
         let tx = SystemTransaction::new_program_account(
             &alice,
@@ -326,9 +335,7 @@ mod tests {
             0,
         );
 
-        arc_bank
-            .process_transaction(&tx)
-            .expect("process transaction");
+        process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
 
         // Test signature confirmation notification #1
         let string = receiver.poll();
@@ -366,9 +373,7 @@ mod tests {
             50,
             last_id,
         );
-        arc_bank
-            .process_transaction(&tx)
-            .expect("process transaction");
+        process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
 
         // Test signature confirmation notification #2
@@ -396,9 +401,7 @@ mod tests {
         }
 
         let tx = SystemTransaction::new_account(&alice, witness.pubkey(), 1, last_id, 0);
-        arc_bank
-            .process_transaction(&tx)
-            .expect("process transaction");
+        process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
         let tx = BudgetTransaction::new_signature(
             &witness,
@@ -406,9 +409,7 @@ mod tests {
             bob_pubkey,
             last_id,
         );
-        arc_bank
-            .process_transaction(&tx)
-            .expect("process transaction");
+        process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
 
         let expected_userdata = arc_bank
@@ -459,11 +460,9 @@ mod tests {
         let res = io.handle_request_sync(&req, session.clone());
 
         let expected = format!(r#"{{"jsonrpc":"2.0","result":true,"id":1}}"#);
-        let expected: Response =
-            serde_json::from_str(&expected).expect("expected response deserialization");
+        let expected: Response = serde_json::from_str(&expected).unwrap();
 
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
+        let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
         assert_eq!(expected, result);
 
         // Test bad parameter
@@ -471,11 +470,9 @@ mod tests {
             format!(r#"{{"jsonrpc":"2.0","id":1,"method":"accountUnsubscribe","params":[1]}}"#);
         let res = io.handle_request_sync(&req, session.clone());
         let expected = format!(r#"{{"jsonrpc":"2.0","error":{{"code":-32602,"message":"Invalid Request: Subscription id does not exist"}},"id":1}}"#);
-        let expected: Response =
-            serde_json::from_str(&expected).expect("expected response deserialization");
+        let expected: Response = serde_json::from_str(&expected).unwrap();
 
-        let result: Response = serde_json::from_str(&res.expect("actual response"))
-            .expect("actual response deserialization");
+        let result: Response = serde_json::from_str(&res.unwrap()).unwrap();
         assert_eq!(expected, result);
     }
 }

@@ -30,7 +30,6 @@ impl PubSubService {
         info!("rpc_pubsub bound to {:?}", pubsub_addr);
         let subscriptions = Arc::new(RpcSubscriptions::default());
         let rpc = RpcSolPubSubImpl::new_with_subscriptions(bank.clone(), subscriptions.clone());
-        bank.set_subscriptions(subscriptions);
         let exit = Arc::new(AtomicBool::new(false));
         let exit_ = exit.clone();
         let thread_hdl = Builder::new()
