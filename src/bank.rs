@@ -124,6 +124,7 @@ impl Bank {
 
     pub fn new_from_parent(parent: Arc<Bank>) -> Self {
         let mut bank = Self::default();
+        bank.last_id_queue = RwLock::new(parent.last_id_queue.read().unwrap().clone());
         bank.parent = Some(parent);
         bank
     }
@@ -1104,4 +1105,58 @@ mod tests {
         assert_eq!(bank.get_balance(&key1.pubkey()), 1);
         res[0].clone().unwrap_err();
     }
+
+    /// Verify that the parents vector is computed correclty
+    #[test]
+    fn test_bank_parents() {
+        let (genesis_block, _) = GenesisBlock::new(1);
+        let parent = Arc::new(Bank::new(&genesis_block));
+
+        let bank = Bank::new_from_parent(parent.clone());
+        assert!(Arc::ptr_eq(&bank.parents()[0], &parent));
+    }
+
+    /// Verifies that last ids and status cache are correclty referenced from parent
+    #[test]
+    fn test_bank_parent_duplicate_signature() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let key1 = Keypair::new();
+        let parent = Arc::new(Bank::new(&genesis_block));
+
+        let tx = SystemTransaction::new_move(
+            &mint_keypair,
+            key1.pubkey(),
+            1,
+            genesis_block.last_id(),
+            0,
+        );
+        assert_eq!(parent.process_transaction(&tx), Ok(()));
+        let bank = Bank::new_from_parent(parent);
+        assert_eq!(
+            bank.process_transaction(&tx),
+            Err(BankError::DuplicateSignature)
+        );
+    }
+
+    /// Verifies that last ids and accounts are correclty referenced from parent
+    #[test]
+    fn test_bank_parent_account_spend() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let key1 = Keypair::new();
+        let key2 = Keypair::new();
+        let parent = Arc::new(Bank::new(&genesis_block));
+
+        let tx = SystemTransaction::new_move(
+            &mint_keypair,
+            key1.pubkey(),
+            1,
+            genesis_block.last_id(),
+            0,
+        );
+        assert_eq!(parent.process_transaction(&tx), Ok(()));
+        let bank = Bank::new_from_parent(parent);
+        let tx = SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.last_id(), 0);
+        assert_eq!(bank.process_transaction(&tx), Ok(()));
+    }
+
 }
