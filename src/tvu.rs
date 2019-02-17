@@ -28,7 +28,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, SyncSender};
+use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, RwLock};
 use std::thread;
 
@@ -77,7 +77,6 @@ impl Tvu {
         to_leader_sender: &TvuRotationSender,
         storage_state: &StorageState,
         entry_stream: Option<&String>,
-        ledger_signal_sender: SyncSender<bool>,
         ledger_signal_receiver: Receiver<bool>,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     ) -> Self {
@@ -129,7 +128,6 @@ impl Tvu {
             blob_index,
             l_last_entry_id.clone(),
             to_leader_sender,
-            ledger_signal_sender,
             ledger_signal_receiver,
             &leader_scheduler,
         );
@@ -258,7 +256,7 @@ pub mod tests {
 
         let cur_hash = Hash::default();
         let blocktree_path = get_tmp_ledger_path("test_tvu_exit");
-        let (blocktree, l_sender, l_receiver) = Blocktree::open_with_signal(&blocktree_path)
+        let (blocktree, l_receiver) = Blocktree::open_with_signal(&blocktree_path)
             .expect("Expected to successfully open ledger");
         let vote_account_keypair = Arc::new(Keypair::new());
         let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
@@ -282,7 +280,6 @@ pub mod tests {
             &sender,
             &StorageState::default(),
             None,
-            l_sender,
             l_receiver,
             leader_scheduler,
         );
@@ -356,7 +353,7 @@ pub mod tests {
         let mut cur_hash = Hash::default();
         let blocktree_path = get_tmp_ledger_path("test_replay");
 
-        let (blocktree, l_sender, l_receiver) =
+        let (blocktree, l_receiver) =
             Blocktree::open_with_config_signal(&blocktree_path, &blocktree_config)
                 .expect("Expected to successfully open ledger");
         let vote_account_keypair = Arc::new(Keypair::new());
@@ -381,7 +378,6 @@ pub mod tests {
             &sender,
             &StorageState::default(),
             None,
-            l_sender,
             l_receiver,
             leader_scheduler,
         );

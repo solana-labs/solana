@@ -393,12 +393,12 @@ impl Blocktree {
         })
     }
 
-    pub fn open_with_signal(ledger_path: &str) -> Result<(Self, SyncSender<bool>, Receiver<bool>)> {
+    pub fn open_with_signal(ledger_path: &str) -> Result<(Self, Receiver<bool>)> {
         let mut blocktree = Self::open(ledger_path)?;
         let (signal_sender, signal_receiver) = sync_channel(1);
-        blocktree.new_blobs_signals = vec![signal_sender.clone()];
+        blocktree.new_blobs_signals = vec![signal_sender];
 
-        Ok((blocktree, signal_sender, signal_receiver))
+        Ok((blocktree, signal_receiver))
     }
 
     #[allow(clippy::trivially_copy_pass_by_ref)]
@@ -412,13 +412,13 @@ impl Blocktree {
     pub fn open_with_config_signal(
         ledger_path: &str,
         config: &BlocktreeConfig,
-    ) -> Result<(Self, SyncSender<bool>, Receiver<bool>)> {
+    ) -> Result<(Self, Receiver<bool>)> {
         let mut blocktree = Self::open(ledger_path)?;
         let (signal_sender, signal_receiver) = sync_channel(1);
-        blocktree.new_blobs_signals = vec![signal_sender.clone()];
+        blocktree.new_blobs_signals = vec![signal_sender];
         blocktree.ticks_per_slot = config.ticks_per_slot;
 
-        Ok((blocktree, signal_sender, signal_receiver))
+        Ok((blocktree, signal_receiver))
     }
 
     pub fn meta(&self, slot_height: u64) -> Result<Option<SlotMeta>> {
@@ -1855,7 +1855,7 @@ mod tests {
     pub fn test_new_blobs_signal() {
         // Initialize ledger
         let ledger_path = get_tmp_ledger_path("test_new_blobs_signal");
-        let (ledger, _, recvr) = Blocktree::open_with_signal(&ledger_path).unwrap();
+        let (ledger, recvr) = Blocktree::open_with_signal(&ledger_path).unwrap();
         let ledger = Arc::new(ledger);
 
         let entries_per_slot = 10;

@@ -25,7 +25,7 @@ use solana_sdk::timing::{duration_as_ms, timestamp};
 use std::net::UdpSocket;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender, SyncSender};
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, spawn, Result};
 use std::time::{Duration, Instant};
@@ -132,7 +132,6 @@ impl Fullnode {
             entry_height,
             last_entry_id,
             blocktree,
-            ledger_signal_sender,
             ledger_signal_receiver,
         ) = new_bank_from_ledger(ledger_path, &config.ledger_config(), &leader_scheduler);
 
@@ -269,7 +268,6 @@ impl Fullnode {
             &rotation_sender,
             &storage_state,
             config.entry_stream.as_ref(),
-            ledger_signal_sender,
             ledger_signal_receiver,
             leader_scheduler.clone(),
         );
@@ -465,10 +463,9 @@ fn new_banks_from_blocktree(
     u64,
     Hash,
     Blocktree,
-    SyncSender<bool>,
     Receiver<bool>,
 ) {
-    let (blocktree, ledger_signal_sender, ledger_signal_receiver) =
+    let (blocktree, ledger_signal_receiver) =
         Blocktree::open_with_config_signal(blocktree_path, blocktree_config)
             .expect("Expected to successfully open database ledger");
     let genesis_block =
@@ -497,7 +494,6 @@ fn new_banks_from_blocktree(
         entry_height,
         last_entry_id,
         blocktree,
-        ledger_signal_sender,
         ledger_signal_receiver,
     )
 }
@@ -512,7 +508,6 @@ pub fn new_bank_from_ledger(
     u64,
     Hash,
     Blocktree,
-    SyncSender<bool>,
     Receiver<bool>,
 ) {
     let (
@@ -520,7 +515,6 @@ pub fn new_bank_from_ledger(
         entry_height,
         last_entry_id,
         blocktree,
-        ledger_signal_sender,
         ledger_signal_receiver,
     ) = new_banks_from_blocktree(ledger_path, ledger_config, leader_scheduler);
     (
@@ -528,7 +522,6 @@ pub fn new_bank_from_ledger(
         entry_height,
         last_entry_id,
         blocktree,
-        ledger_signal_sender,
         ledger_signal_receiver,
     )
 }
@@ -869,7 +862,7 @@ mod tests {
         // Close the validator so that rocksdb has locks available
         validator_exit();
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
-        let (bank, entry_height, _, _, _, _) = new_bank_from_ledger(
+        let (bank, entry_height, _, _, _) = new_bank_from_ledger(
             &validator_ledger_path,
             &BlocktreeConfig::default(),
             &leader_scheduler,
