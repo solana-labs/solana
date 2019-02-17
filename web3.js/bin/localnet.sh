@@ -4,12 +4,12 @@ set -e
 channel=$(
   cd "$(dirname "$0")";
   node -p '
-    let p;
-    try {
-      p = require("../lib/node_modules/@solana/web3.js/package.json");
-    } catch (err) {
-      p = require("../package.json");
-    }
+    let p = [
+      "../lib/node_modules/@solana/web3.js/package.json",
+      "../@solana/web3.js/package.json",
+      "../package.json"
+    ].find(require("fs").existsSync);
+    if (!p) throw new Error("Unable to locate solana-web3.js directory");
     p["testnetDefaultChannel"]
   '
 )
