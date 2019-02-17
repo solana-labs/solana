@@ -1,4 +1,4 @@
-use crate::rpc::RPC_PORT;
+use crate::rpc_service::RPC_PORT;
 use bincode::serialize;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};

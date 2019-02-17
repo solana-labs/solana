@@ -23,7 +23,7 @@ use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
 use crate::crds_value::{CrdsValue, CrdsValueLabel, LeaderId, Vote};
 use crate::packet::{to_shared_blob, Blob, SharedBlob, BLOB_SIZE};
 use crate::result::Result;
-use crate::rpc::RPC_PORT;
+use crate::rpc_service::RPC_PORT;
 use crate::streamer::{BlobReceiver, BlobSender};
 use bincode::{deserialize, serialize};
 use hashbrown::HashMap;
