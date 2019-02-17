@@ -139,16 +139,6 @@ impl Bank {
         *sub = Some(subscriptions)
     }
 
-    pub fn copy_for_tpu(&self) -> Self {
-        Self {
-            accounts: self.accounts.copy_for_tpu(),
-            status_cache: RwLock::new(self.status_cache.read().unwrap().clone()),
-            last_id_queue: RwLock::new(self.last_id_queue.read().unwrap().clone()),
-            subscriptions: RwLock::new(None),
-            parent: self.parent.clone(),
-        }
-    }
-
     pub fn process_genesis_block(&self, genesis_block: &GenesisBlock) {
         assert!(genesis_block.mint_id != Pubkey::default());
         assert!(genesis_block.bootstrap_leader_id != Pubkey::default());
