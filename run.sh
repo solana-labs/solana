@@ -23,7 +23,7 @@ $ok || {
   exit 1
 }
 
-entryStreamSocket=
+entryStreamSocket=/tmp/solana-entry-stream.sock # Default to location used by the block explorer
 while [[ -n $1 ]]; do
   if [[ $1 = --entry-stream ]]; then
     entryStreamSocket=$2
