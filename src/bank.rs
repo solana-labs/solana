@@ -73,9 +73,6 @@ pub enum BankError {
 
     /// Transaction has a fee but has no signature present
     MissingSignatureForFee,
-
-    // Poh recorder hit the maximum tick height before leader rotation
-    MaxHeightReached,
 }
 
 pub type Result<T> = result::Result<T, BankError>;
