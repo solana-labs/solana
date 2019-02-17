@@ -1,4 +1,5 @@
 use crate::bank::{Bank, BankError, Result};
+use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
 use crate::counter::Counter;
 use crate::entry::{Entry, EntrySlice};
@@ -188,12 +189,12 @@ where
 }
 
 pub fn process_blocktree(
-    bank: &Bank,
+    bank_forks: &BankForks,
     blocktree: &Blocktree,
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
 ) -> Result<(u64, Hash)> {
     let entries = blocktree.read_ledger().expect("opening ledger");
-    process_ledger(&bank, entries, leader_scheduler)
+    process_ledger(&bank_forks.working_bank(), entries, leader_scheduler)
 }
 
 #[cfg(test)]

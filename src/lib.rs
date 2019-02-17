@@ -11,6 +11,7 @@
 pub mod counter;
 pub mod accounts;
 pub mod bank;
+pub mod bank_forks;
 pub mod banking_stage;
 pub mod blob_fetch_stage;
 pub mod bloom;
