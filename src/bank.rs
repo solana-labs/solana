@@ -347,7 +347,7 @@ impl Bank {
         results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
-        Accounts::load_accounts(&[&self.accounts], txs, results, error_counters)
+        Accounts::load_accounts(&self.working_accounts(), txs, results, error_counters)
     }
     fn check_age(
         &self,
@@ -566,8 +566,18 @@ impl Bank {
             .unwrap_or(0)
     }
 
+    /// Get the working fork of accounts from working bank to finalized bank
+    fn working_accounts(&self) -> Vec<&Accounts> {
+        let mut accounts = vec![];
+        accounts.push(&self.accounts);
+        while let Some(parent) = bank.parent() {
+            accounts.push(&parent.accounts);
+        }
+        accounts
+    }
+
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
-        Accounts::load_slow(&[&self.accounts], pubkey)
+        Accounts::load_slow(&self.working_accounts(), pubkey)
     }
 
     pub fn transaction_count(&self) -> u64 {
