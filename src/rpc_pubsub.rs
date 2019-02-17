@@ -1,7 +1,7 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
 use crate::bank::Bank;
-use crate::rpc::RpcSignatureStatus;
+use crate::rpc_status::RpcSignatureStatus;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use bs58;
 use jsonrpc_core::futures::Future;
@@ -215,11 +215,13 @@ mod tests {
     use crate::genesis_block::GenesisBlock;
     use jsonrpc_core::futures::sync::mpsc;
     use jsonrpc_core::Response;
+    use jsonrpc_pubsub::{PubSubHandler, Session};
     use solana_sdk::budget_program;
     use solana_sdk::budget_transaction::BudgetTransaction;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
     use std::thread::sleep;
+    use std::time::Duration;
     use tokio::prelude::{Async, Stream};
 
     #[test]
