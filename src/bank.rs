@@ -347,9 +347,9 @@ impl Bank {
         results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
-        let tree = self.tree();
+        let parents = self.parents();
         let mut accounts = vec![&self.accounts];
-        accounts.extend(tree.iter().map(|b| &b.accounts));
+        accounts.extend(parents.iter().map(|b| &b.accounts));
         Accounts::load_accounts(&accounts, txs, results, error_counters)
     }
     fn check_age(
@@ -378,9 +378,9 @@ impl Bank {
         lock_results: Vec<Result<()>>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
-        let tree = self.tree();
+        let parents = self.parents();
         let mut caches = vec![self.status_cache.read().unwrap()];
-        caches.extend(tree.iter().map(|b| b.status_cache.read().unwrap()));
+        caches.extend(parents.iter().map(|b| b.status_cache.read().unwrap()));
         txs.iter()
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
@@ -571,21 +571,21 @@ impl Bank {
             .unwrap_or(0)
     }
 
-    /// Get the working fork of accounts from working bank to finalized bank
-    fn tree(&self) -> Vec<Arc<Bank>> {
-        let mut tree = vec![];
+    /// Compute all the parents of the bank in order
+    fn parents(&self) -> Vec<Arc<Bank>> {
+        let mut parents = vec![];
         let mut bank = self.parent();
         while let Some(parent) = bank {
-            tree.push(parent.clone());
+            parents.push(parent.clone());
             bank = parent.parent();
         }
-        tree
+        parents
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
-        let tree = self.tree();
+        let parents = self.parents();
         let mut accounts = vec![&self.accounts];
-        accounts.extend(tree.iter().map(|b| &b.accounts));
+        accounts.extend(parents.iter().map(|b| &b.accounts));
         Accounts::load_slow(&accounts, pubkey)
     }
 
@@ -594,16 +594,16 @@ impl Bank {
     }
 
     pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
-        let tree = self.tree();
+        let parents = self.parents();
         let mut caches = vec![self.status_cache.read().unwrap()];
-        caches.extend(tree.iter().map(|b| b.status_cache.read().unwrap()));
+        caches.extend(parents.iter().map(|b| b.status_cache.read().unwrap()));
         StatusCache::get_signature_status_all(&caches, signature)
     }
 
     pub fn has_signature(&self, signature: &Signature) -> bool {
-        let tree = self.tree();
+        let parents = self.parents();
         let mut caches = vec![self.status_cache.read().unwrap()];
-        caches.extend(tree.iter().map(|b| b.status_cache.read().unwrap()));
+        caches.extend(parents.iter().map(|b| b.status_cache.read().unwrap()));
         StatusCache::has_signature_all(&caches, signature)
     }
 
