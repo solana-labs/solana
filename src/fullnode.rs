@@ -11,7 +11,7 @@ use crate::gossip_service::GossipService;
 use crate::leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig};
 use crate::poh_service::PohServiceConfig;
 use crate::rpc::JsonRpcService;
-use crate::rpc_pubsub::PubSubService;
+use crate::rpc_pubsub_service::PubSubService;
 use crate::service::Service;
 use crate::storage_stage::StorageState;
 use crate::tpu::{Tpu, TpuRotationReceiver, TpuRotationSender};
