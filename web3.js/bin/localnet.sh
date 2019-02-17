@@ -10,7 +10,7 @@ channel=$(
       "../package.json"
     ].find(require("fs").existsSync);
     if (!p) throw new Error("Unable to locate solana-web3.js directory");
-    p["testnetDefaultChannel"]
+    require(p)["testnetDefaultChannel"]
   '
 )
 
