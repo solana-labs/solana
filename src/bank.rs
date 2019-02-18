@@ -10,13 +10,13 @@ use crate::last_id_queue::{LastIdQueue, MAX_ENTRY_IDS};
 use crate::poh_service::NUM_TICKS_PER_SECOND;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::status_cache::StatusCache;
-use bincode::deserialize;
+use bincode::{deserialize, serialize};
 use log::Level;
 use solana_runtime::{self, RuntimeError};
 use solana_sdk::account::Account;
 use solana_sdk::bpf_loader;
 use solana_sdk::budget_program;
-use solana_sdk::hash::Hash;
+use solana_sdk::hash::{extend_and_hash, Hash};
 use solana_sdk::native_loader;
 use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
@@ -92,6 +92,8 @@ pub struct Bank {
     subscriptions: RwLock<Option<Arc<RpcSubscriptions>>>,
 
     parent: Option<Arc<Bank>>,
+
+    parent_hash: Hash,
 }
 
 impl Default for Bank {
@@ -102,14 +104,16 @@ impl Default for Bank {
             status_cache: RwLock::new(BankStatusCache::default()),
             subscriptions: RwLock::new(None),
             parent: None,
+            parent_hash: Hash::default(),
         }
     }
 }
 
 impl Bank {
     pub fn new(genesis_block: &GenesisBlock) -> Self {
-        let bank = Self::default();
+        let mut bank = Self::default();
         bank.process_genesis_block(genesis_block);
+        bank.parent_hash = bank.hash_internal_state();
         bank.add_builtin_programs();
         bank
     }
@@ -117,6 +121,7 @@ impl Bank {
     pub fn new_from_parent(parent: &Arc<Bank>) -> Self {
         let mut bank = Self::default();
         bank.last_id_queue = RwLock::new(parent.last_id_queue.read().unwrap().clone());
+        bank.parent_hash = parent.hash_internal_state();
         bank.parent = Some(parent.clone());
         bank
     }
@@ -131,7 +136,7 @@ impl Bank {
         *sub = Some(subscriptions)
     }
 
-    pub fn process_genesis_block(&self, genesis_block: &GenesisBlock) {
+    fn process_genesis_block(&self, genesis_block: &GenesisBlock) {
         assert!(genesis_block.mint_id != Pubkey::default());
         assert!(genesis_block.bootstrap_leader_id != Pubkey::default());
         assert!(genesis_block.bootstrap_leader_vote_account_id != Pubkey::default());
@@ -181,7 +186,7 @@ impl Bank {
             .genesis_last_id(&genesis_block.last_id());
     }
 
-    pub fn add_builtin_programs(&self) {
+    fn add_builtin_programs(&self) {
         let system_program_account = native_loader::create_program_account("solana_system_program");
         self.accounts
             .store_slow(true, &system_program::id(), &system_program_account);
@@ -593,7 +598,15 @@ impl Bank {
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
     ///  of the delta of the ledger since the last vote and up to now
     pub fn hash_internal_state(&self) -> Hash {
-        self.accounts.hash_internal_state()
+        // If there are no accounts, return the same hash as we did before
+        // checkpointing.
+        let accounts = &self.accounts.accounts_db.read().unwrap().accounts;
+        if accounts.is_empty() {
+            return self.parent_hash;
+        }
+
+        let accounts_delta_hash = self.accounts.hash_internal_state();
+        extend_and_hash(&self.parent_hash, &serialize(&accounts_delta_hash).unwrap())
     }
 
     fn send_account_notifications(
@@ -653,7 +666,6 @@ impl Bank {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bincode::serialize;
     use hashbrown::HashSet;
     use solana_sdk::hash::hash;
     use solana_sdk::native_program::ProgramError;

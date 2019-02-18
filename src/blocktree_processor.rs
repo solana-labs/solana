@@ -315,13 +315,9 @@ mod tests {
             &keypairs,
         );
 
-        let bank0 = Bank::default();
-        bank0.add_builtin_programs();
-        bank0.process_genesis_block(&genesis_block);
+        let bank0 = Bank::new(&genesis_block);
         par_process_entries(&bank0, &entries0).unwrap();
-        let bank1 = Bank::default();
-        bank1.add_builtin_programs();
-        bank1.process_genesis_block(&genesis_block);
+        let bank1 = Bank::new(&genesis_block);
         par_process_entries(&bank1, &entries1).unwrap();
 
         let initial_state = bank0.hash_internal_state();
@@ -337,6 +333,17 @@ mod tests {
             .transfer(1_000, &mint_keypair, pubkey, bank1.last_id())
             .unwrap();
         assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
+
+        // Checkpointing should not change its state
+        let bank2 = Bank::new_from_parent(&Arc::new(bank1));
+        assert_eq!(bank0.hash_internal_state(), bank2.hash_internal_state());
+    }
+
+    #[test]
+    fn test_hash_internal_state_parents() {
+        let bank0 = Bank::new(&GenesisBlock::new(10).0);
+        let bank1 = Bank::new(&GenesisBlock::new(20).0);
+        assert_ne!(bank0.hash_internal_state(), bank1.hash_internal_state());
     }
 
     #[test]
