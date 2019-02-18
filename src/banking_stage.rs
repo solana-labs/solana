@@ -3,10 +3,10 @@
 //! can do its processing in parallel with signature verification on the GPU.
 
 use crate::bank::{self, Bank, BankError};
-use crate::compute_leader_confirmation_service::ComputeLeaderConfirmationService;
 use crate::counter::Counter;
 use crate::entry::Entry;
 use crate::last_id_queue::MAX_ENTRY_IDS;
+use crate::leader_confirmation_service::LeaderConfirmationService;
 use crate::packet::Packets;
 use crate::packet::SharedPackets;
 use crate::poh_recorder::{PohRecorder, PohRecorderError};
@@ -37,7 +37,7 @@ pub const NUM_THREADS: u32 = 10;
 pub struct BankingStage {
     bank_thread_hdls: Vec<JoinHandle<UnprocessedPackets>>,
     poh_service: PohService,
-    compute_confirmation_service: ComputeLeaderConfirmationService,
+    leader_confirmation_service: LeaderConfirmationService,
 }
 
 impl BankingStage {
@@ -62,11 +62,8 @@ impl BankingStage {
         let poh_service = PohService::new(poh_recorder.clone(), config);
 
         // Single thread to compute confirmation
-        let compute_confirmation_service = ComputeLeaderConfirmationService::new(
-            bank.clone(),
-            leader_id,
-            poh_service.poh_exit.clone(),
-        );
+        let leader_confirmation_service =
+            LeaderConfirmationService::new(bank.clone(), leader_id, poh_service.poh_exit.clone());
 
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<UnprocessedPackets>> = (0..Self::num_threads())
@@ -103,7 +100,7 @@ impl BankingStage {
             Self {
                 bank_thread_hdls,
                 poh_service,
-                compute_confirmation_service,
+                leader_confirmation_service,
             },
             entry_receiver,
         )
@@ -331,7 +328,7 @@ impl Service for BankingStage {
         for bank_thread_hdl in self.bank_thread_hdls {
             bank_thread_hdl.join()?;
         }
-        self.compute_confirmation_service.join()?;
+        self.leader_confirmation_service.join()?;
         let _ = self.poh_service.join()?;
         Ok(())
     }

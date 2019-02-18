@@ -1,4 +1,4 @@
-//! The `compute_leader_confirmation_service` module implements the tools necessary
+//! The `leader_confirmation_service` module implements the tools necessary
 //! to generate a thread which regularly calculates the last confirmation times
 //! observed by the leader
 
@@ -22,11 +22,11 @@ pub enum ConfirmationError {
 
 pub const COMPUTE_CONFIRMATION_MS: u64 = 100;
 
-pub struct ComputeLeaderConfirmationService {
-    compute_confirmation_thread: JoinHandle<()>,
+pub struct LeaderConfirmationService {
+    thread_hdl: JoinHandle<()>,
 }
 
-impl ComputeLeaderConfirmationService {
+impl LeaderConfirmationService {
     fn get_last_supermajority_timestamp(
         bank: &Arc<Bank>,
         leader_id: Pubkey,
@@ -99,9 +99,9 @@ impl ComputeLeaderConfirmationService {
         }
     }
 
-    /// Create a new ComputeLeaderConfirmationService for computing confirmation.
+    /// Create a new LeaderConfirmationService for computing confirmation.
     pub fn new(bank: Arc<Bank>, leader_id: Pubkey, exit: Arc<AtomicBool>) -> Self {
-        let compute_confirmation_thread = Builder::new()
+        let thread_hdl = Builder::new()
             .name("solana-leader-confirmation-stage".to_string())
             .spawn(move || {
                 let mut last_valid_validator_timestamp = 0;
@@ -119,24 +119,22 @@ impl ComputeLeaderConfirmationService {
             })
             .unwrap();
 
-        (ComputeLeaderConfirmationService {
-            compute_confirmation_thread,
-        })
+        Self { thread_hdl }
     }
 }
 
-impl Service for ComputeLeaderConfirmationService {
+impl Service for LeaderConfirmationService {
     type JoinReturnType = ();
 
     fn join(self) -> thread::Result<()> {
-        self.compute_confirmation_thread.join()
+        self.thread_hdl.join()
     }
 }
 
 #[cfg(test)]
 pub mod tests {
+    use super::*;
     use crate::bank::Bank;
-    use crate::compute_leader_confirmation_service::ComputeLeaderConfirmationService;
     use crate::voting_keypair::VotingKeypair;
 
     use crate::genesis_block::GenesisBlock;
@@ -191,7 +189,7 @@ pub mod tests {
 
         // There isn't 2/3 consensus, so the bank's confirmation value should be the default
         let mut last_confirmation_time = 0;
-        ComputeLeaderConfirmationService::compute_confirmation(
+        LeaderConfirmationService::compute_confirmation(
             &bank,
             genesis_block.bootstrap_leader_id,
             &mut last_confirmation_time,
@@ -202,7 +200,7 @@ pub mod tests {
         let vote_tx = VoteTransaction::new_vote(voting_keypair, 7, ids[6], 0);
         bank.process_transaction(&vote_tx).unwrap();
 
-        ComputeLeaderConfirmationService::compute_confirmation(
+        LeaderConfirmationService::compute_confirmation(
             &bank,
             genesis_block.bootstrap_leader_id,
             &mut last_confirmation_time,
