@@ -1,6 +1,6 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::bank::{self, BankError};
+use crate::bank::{self, Bank, BankError};
 use crate::rpc_status::RpcSignatureStatus;
 use jsonrpc_core::futures::Future;
 use jsonrpc_pubsub::typed::Sink;
@@ -116,12 +116,34 @@ impl RpcSubscriptions {
         });
         found
     }
+
+    /// Notify subscribers of changes to any accounts or new signatures since
+    /// the bank's last checkpoint.
+    pub fn notify_subscribers(&self, bank: &Bank) {
+        let pubkeys: Vec<_> = {
+            let subs = self.account_subscriptions.read().unwrap();
+            subs.keys().cloned().collect()
+        };
+        for pubkey in &pubkeys {
+            if let Some(account) = &bank.get_account_modified_since_parent(pubkey) {
+                self.check_account(pubkey, account);
+            }
+        }
+
+        let signatures: Vec<_> = {
+            let subs = self.signature_subscriptions.read().unwrap();
+            subs.keys().cloned().collect()
+        };
+        for signature in &signatures {
+            let status = bank.get_signature_status(signature).unwrap();
+            self.check_signature(signature, &status);
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bank::Bank;
     use crate::genesis_block::GenesisBlock;
     use jsonrpc_pubsub::typed::Subscriber;
     use solana_sdk::budget_program;
@@ -155,7 +177,7 @@ mod tests {
 
         assert!(subscriptions
             .account_subscriptions
-            .write()
+            .read()
             .unwrap()
             .contains_key(&alice.pubkey()));
 
@@ -170,7 +192,7 @@ mod tests {
         subscriptions.remove_account_subscription(&sub_id);
         assert!(!subscriptions
             .account_subscriptions
-            .write()
+            .read()
             .unwrap()
             .contains_key(&alice.pubkey()));
     }
@@ -193,7 +215,7 @@ mod tests {
 
         assert!(subscriptions
             .signature_subscriptions
-            .write()
+            .read()
             .unwrap()
             .contains_key(&signature));
 
@@ -207,7 +229,7 @@ mod tests {
         subscriptions.remove_signature_subscription(&sub_id);
         assert!(!subscriptions
             .signature_subscriptions
-            .write()
+            .read()
             .unwrap()
             .contains_key(&signature));
     }

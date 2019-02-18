@@ -200,24 +200,16 @@ mod tests {
     use std::time::Duration;
     use tokio::prelude::{Async, Stream};
 
-    pub fn process_transaction_and_notify(
-        bank: &Bank,
+    fn process_transaction_and_notify(
+        bank: &Arc<Bank>,
         tx: &Transaction,
         subscriptions: &RpcSubscriptions,
-    ) -> bank::Result<()> {
+    ) -> bank::Result<Arc<Bank>> {
         bank.process_transaction(tx)?;
+        subscriptions.notify_subscribers(&bank);
 
-        for pubkey in &tx.account_keys {
-            if let Some(account) = &bank.get_account(pubkey) {
-                subscriptions.check_account(pubkey, account);
-            }
-        }
-
-        let signature = &tx.signatures[0];
-        let status = bank.get_signature_status(signature).unwrap();
-        subscriptions.check_signature(signature, &status);
-
-        Ok(())
+        // Simulate a block boundary
+        Ok(Arc::new(Bank::new_from_parent(&bank)))
     }
 
     fn create_session() -> Arc<Session> {
@@ -323,7 +315,7 @@ mod tests {
             budget_program_id,
             0,
         );
-        process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
+        let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
 
         let tx = SystemTransaction::new_program_account(
             &alice,
@@ -335,7 +327,7 @@ mod tests {
             0,
         );
 
-        process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
+        let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
 
         // Test signature confirmation notification #1
         let string = receiver.poll();
@@ -363,7 +355,6 @@ mod tests {
         if let Async::Ready(Some(response)) = string.unwrap() {
             assert_eq!(serde_json::to_string(&expected).unwrap(), response);
         }
-
         let tx = BudgetTransaction::new_when_signed(
             &contract_funds,
             bob_pubkey,
@@ -373,7 +364,7 @@ mod tests {
             50,
             last_id,
         );
-        process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
+        let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
 
         // Test signature confirmation notification #2
@@ -401,7 +392,7 @@ mod tests {
         }
 
         let tx = SystemTransaction::new_account(&alice, witness.pubkey(), 1, last_id, 0);
-        process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
+        let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
         let tx = BudgetTransaction::new_signature(
             &witness,
@@ -409,7 +400,7 @@ mod tests {
             bob_pubkey,
             last_id,
         );
-        process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
+        let arc_bank = process_transaction_and_notify(&arc_bank, &tx, &rpc.subscriptions).unwrap();
         sleep(Duration::from_millis(200));
 
         let expected_userdata = arc_bank
