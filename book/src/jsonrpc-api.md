@@ -24,7 +24,6 @@ Methods
 * [confirmTransaction](#confirmtransaction)
 * [getAccountInfo](#getaccountinfo)
 * [getBalance](#getbalance)
-* [getConfirmationTime](#getconfirmationTime)
 * [getLastId](#getlastid)
 * [getSignatureStatus](#getsignaturestatus)
 * [getTransactionCount](#gettransactioncount)
@@ -200,25 +199,6 @@ curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "m
 
 // Result
 {"jsonrpc":"2.0","result":268,"id":1}
-```
-
----
-### getConfirmationTime
-Returns the current cluster confirmation time in milliseconds
-
-##### Parameters:
-None
-
-##### Results:
-* `integer` - confirmation time in milliseconds, as unsigned 64-bit integer
-
-##### Example:
-```bash
-// Request
-curl -X POST -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","id":1, "method":"getConfirmationTime"}' http://localhost:8899
-
-// Result
-{"jsonrpc":"2.0","result":500,"id":1}
 ```
 
 ---
