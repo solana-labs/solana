@@ -2,11 +2,11 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::prelude::*;
 use solana::bank::Bank;
 use solana::cluster_info::{
-    ClusterInfo, DATA_PLANE_FANOUT, GROW_LAYER_CAPACITY, NEIGHBORHOOD_SIZE,
+    compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT, GROW_LAYER_CAPACITY,
+    NEIGHBORHOOD_SIZE,
 };
 use solana::contact_info::ContactInfo;
 use solana::genesis_block::GenesisBlock;
-use solana::retransmit_stage::compute_retransmit_peers;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::collections::{HashMap, HashSet};
