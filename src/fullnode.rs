@@ -457,7 +457,8 @@ fn new_banks_from_blocktree(
     let genesis_block =
         GenesisBlock::load(blocktree_path).expect("Expected to successfully open genesis block");
     let bank = Bank::new(&genesis_block);
-    let bank_forks = BankForks::new(bank);
+    let slot_height = 0; // Use the Bank's slot_height as its ID.
+    let bank_forks = BankForks::new(slot_height, bank);
     leader_scheduler
         .write()
         .unwrap()
