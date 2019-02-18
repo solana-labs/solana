@@ -21,6 +21,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
 use solana_sdk::timing::duration_as_us;
 use solana_sdk::transaction::Transaction;
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
@@ -59,11 +60,12 @@ impl BankingStage {
         // Single thread to generate entries from many banks.
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
         // Once an entry has been recorded, its last_id is registered with the bank.
-        let poh_service = PohService::new(poh_recorder.clone(), config);
+        let poh_exit = Arc::new(AtomicBool::new(false));
+        let poh_service = PohService::new(poh_recorder.clone(), config, poh_exit.clone());
 
         // Single thread to compute confirmation
         let leader_confirmation_service =
-            LeaderConfirmationService::new(bank.clone(), leader_id, poh_service.poh_exit.clone());
+            LeaderConfirmationService::new(bank.clone(), leader_id, poh_exit.clone());
 
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<UnprocessedPackets>> = (0..Self::num_threads())
