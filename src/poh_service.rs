@@ -1,6 +1,7 @@
 //! The `poh_service` module implements a service that records the passing of
 //! "ticks", a measure of time in the PoH stream
 
+use crate::bank::Bank;
 use crate::poh_recorder::PohRecorder;
 use crate::result::Result;
 use crate::service::Service;
@@ -45,6 +46,7 @@ impl PohService {
     }
 
     pub fn new(
+        bank: Arc<Bank>,
         poh_recorder: PohRecorder,
         config: PohServiceConfig,
         poh_exit: Arc<AtomicBool>,
@@ -58,7 +60,9 @@ impl PohService {
             .name("solana-poh-service-tick_producer".to_string())
             .spawn(move || {
                 let mut poh_recorder_ = poh_recorder;
-                let return_value = Self::tick_producer(&mut poh_recorder_, config, &poh_exit_);
+                let bank = bank.clone();
+                let return_value =
+                    Self::tick_producer(&bank, &mut poh_recorder_, config, &poh_exit_);
                 poh_exit_.store(true, Ordering::Relaxed);
                 return_value
             })
@@ -71,6 +75,7 @@ impl PohService {
     }
 
     fn tick_producer(
+        bank: &Arc<Bank>,
         poh: &mut PohRecorder,
         config: PohServiceConfig,
         poh_exit: &AtomicBool,
@@ -86,7 +91,7 @@ impl PohService {
                     sleep(duration);
                 }
             }
-            poh.tick()?;
+            poh.tick(&bank)?;
             if poh_exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
@@ -117,7 +122,8 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let prev_id = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
-        let poh_recorder = PohRecorder::new(bank, entry_sender, prev_id, std::u64::MAX);
+        let poh_recorder =
+            PohRecorder::new(bank.tick_height(), entry_sender, prev_id, std::u64::MAX);
         let exit = Arc::new(AtomicBool::new(false));
 
         let entry_producer: JoinHandle<Result<()>> = {
@@ -143,6 +149,7 @@ mod tests {
 
         const HASHES_PER_TICK: u64 = 2;
         let poh_service = PohService::new(
+            bank,
             poh_recorder,
             PohServiceConfig::Tick(HASHES_PER_TICK as usize),
             Arc::new(AtomicBool::new(false)),
