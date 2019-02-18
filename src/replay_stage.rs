@@ -22,8 +22,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::RecvTimeoutError;
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, RwLock};
-#[cfg(test)]
-use std::thread::sleep;
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 use std::time::Instant;
@@ -51,8 +49,6 @@ impl Drop for Finalizer {
 pub struct ReplayStage {
     t_replay: JoinHandle<()>,
     exit: Arc<AtomicBool>,
-    #[cfg(test)]
-    pause: Arc<AtomicBool>,
 }
 
 impl ReplayStage {
@@ -184,12 +180,6 @@ impl ReplayStage {
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     ) -> (Self, EntryReceiver) {
         let (ledger_entry_sender, ledger_entry_receiver) = channel();
-        #[cfg(test)]
-        let (pause, pause_) = {
-            let pause = Arc::new(AtomicBool::new(false));
-            let pause_ = pause.clone();
-            (pause, pause_)
-        };
         let exit_ = exit.clone();
         let leader_scheduler_ = leader_scheduler.clone();
         let to_leader_sender = to_leader_sender.clone();
@@ -218,10 +208,6 @@ impl ReplayStage {
                     // Stop getting entries if we get exit signal
                     if exit_.load(Ordering::Relaxed) {
                         break;
-                    }
-                    #[cfg(test)]
-                    while pause_.load(Ordering::Relaxed) {
-                        sleep(Duration::from_millis(200));
                     }
                     let timer = Duration::from_millis(100);
                     let e = ledger_signal_receiver.recv_timeout(timer);
@@ -308,20 +294,7 @@ impl ReplayStage {
             })
             .unwrap();
 
-        (
-            Self {
-                t_replay,
-                exit,
-                #[cfg(test)]
-                pause,
-            },
-            ledger_entry_receiver,
-        )
-    }
-
-    #[cfg(test)]
-    pub fn get_pause(&self) -> Arc<AtomicBool> {
-        self.pause.clone()
+        (Self { t_replay, exit }, ledger_entry_receiver)
     }
 
     pub fn close(self) -> thread::Result<()> {
