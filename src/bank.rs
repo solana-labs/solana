@@ -557,6 +557,10 @@ impl Bank {
         Accounts::load_slow(&accounts, pubkey)
     }
 
+    pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<Account> {
+        Accounts::load_slow(&[&self.accounts], pubkey)
+    }
+
     pub fn transaction_count(&self) -> u64 {
         self.accounts.transaction_count()
     }

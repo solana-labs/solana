@@ -5,7 +5,6 @@ use crate::cluster_info::ClusterInfo;
 use crate::rpc::*;
 use crate::service::Service;
 use crate::storage_stage::StorageState;
-use bs58;
 use jsonrpc_core::MetaIoHandler;
 use jsonrpc_http_server::{hyper, AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
 use std::net::SocketAddr;
