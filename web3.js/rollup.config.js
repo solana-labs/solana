@@ -5,7 +5,7 @@ import globals from 'rollup-plugin-node-globals';
 import json from 'rollup-plugin-json';
 import nodeResolve from 'rollup-plugin-node-resolve';
 import replace from 'rollup-plugin-replace';
-import uglify from 'rollup-plugin-uglify';
+import {terser} from 'rollup-plugin-terser';
 
 const env = process.env.NODE_ENV;
 
@@ -25,15 +25,6 @@ function generateConfig(configType) {
     ],
   };
 
-  if (env === 'production') {
-    config.plugins.push(
-      uglify({
-        mangle: false,
-        compress: false,
-      }),
-    );
-  }
-
   switch (configType) {
     case 'browser':
       config.output = [
@@ -51,6 +42,17 @@ function generateConfig(configType) {
           browser: true,
         }),
       );
+
+      if (env === 'production') {
+        config.plugins.push(
+          terser({
+            mangle: false,
+            compress: false,
+            sourcemap: true,
+          }),
+        );
+      }
+
       break;
     case 'node':
       config.output = [
@@ -71,21 +73,23 @@ function generateConfig(configType) {
       // maintained.
       config.external = [
         'assert',
-        'babel-runtime/core-js/get-iterator',
-        'babel-runtime/core-js/json/stringify',
-        'babel-runtime/core-js/object/assign',
-        'babel-runtime/core-js/object/get-prototype-of',
-        'babel-runtime/core-js/object/keys',
-        'babel-runtime/core-js/promise',
-        'babel-runtime/helpers/asyncToGenerator',
-        'babel-runtime/helpers/classCallCheck',
-        'babel-runtime/helpers/createClass',
-        'babel-runtime/helpers/get',
-        'babel-runtime/helpers/inherits',
-        'babel-runtime/helpers/possibleConstructorReturn',
-        'babel-runtime/helpers/toConsumableArray',
-        'babel-runtime/helpers/typeof',
-        'babel-runtime/regenerator',
+        '@babel/runtime/core-js/get-iterator',
+        '@babel/runtime/core-js/json/stringify',
+        '@babel/runtime/core-js/object/assign',
+        '@babel/runtime/core-js/object/get-prototype-of',
+        '@babel/runtime/core-js/object/keys',
+        '@babel/runtime/core-js/promise',
+        '@babel/runtime/helpers/asyncToGenerator',
+        '@babel/runtime/helpers/classCallCheck',
+        '@babel/runtime/helpers/createClass',
+        '@babel/runtime/helpers/defineProperty',
+        '@babel/runtime/helpers/get',
+        '@babel/runtime/helpers/getPrototypeOf',
+        '@babel/runtime/helpers/inherits',
+        '@babel/runtime/helpers/possibleConstructorReturn',
+        '@babel/runtime/helpers/toConsumableArray',
+        '@babel/runtime/helpers/typeof',
+        '@babel/runtime/regenerator',
         'bn.js',
         'bs58',
         'buffer-layout',
