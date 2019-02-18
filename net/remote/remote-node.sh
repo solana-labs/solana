@@ -191,13 +191,10 @@ local|tar)
     set -x
     if [[ $skipSetup != true ]]; then
       ./multinode-demo/setup.sh -t fullnode $setupArgs
-
-      if [[ $nodeType = apinode ]]; then
-        npm install @solana/blockexplorer
-      fi
     fi
 
     if [[ $nodeType = apinode ]]; then
+      npm install @solana/blockexplorer
       npx solana-blockexplorer > blockexplorer.log 2>&1 &
     fi
     ./multinode-demo/fullnode.sh "${args[@]}" "$entrypointIp":~/solana "$entrypointIp:8001" > fullnode.log 2>&1 &
