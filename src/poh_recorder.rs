@@ -19,7 +19,6 @@ pub enum PohRecorderError {
 #[derive(Clone)]
 pub struct PohRecorder {
     poh: Arc<Mutex<Poh>>,
-    bank: Arc<Bank>,
     sender: Sender<Vec<Entry>>,
     max_tick_height: u64,
 }
@@ -41,7 +40,7 @@ impl PohRecorder {
         Ok(())
     }
 
-    pub fn tick(&mut self) -> Result<()> {
+    pub fn tick(&mut self, bank: &Arc<Bank>) -> Result<()> {
         // Register and send the entry out while holding the lock if the max PoH height
         // hasn't been reached.
         // This guarantees PoH order and Entry production and banks LastId queue is the same
@@ -49,7 +48,7 @@ impl PohRecorder {
 
         self.check_tick_height(&poh)?;
 
-        self.register_and_send_tick(&mut *poh)
+        self.register_and_send_tick(&mut *poh, bank)
     }
 
     pub fn record(&self, mixin: Hash, txs: Vec<Transaction>) -> Result<()> {
@@ -66,15 +65,14 @@ impl PohRecorder {
     /// * bank - the LastId's queue is updated on `tick` and `record` events
     /// * sender - the Entry channel that outputs to the ledger
     pub fn new(
-        bank: Arc<Bank>,
+        tick_height: u64,
         sender: Sender<Vec<Entry>>,
         last_entry_id: Hash,
         max_tick_height: u64,
     ) -> Self {
-        let poh = Arc::new(Mutex::new(Poh::new(last_entry_id, bank.tick_height())));
+        let poh = Arc::new(Mutex::new(Poh::new(last_entry_id, tick_height)));
         PohRecorder {
             poh,
-            bank,
             sender,
             max_tick_height,
         }
@@ -101,7 +99,7 @@ impl PohRecorder {
         Ok(())
     }
 
-    fn register_and_send_tick(&self, poh: &mut Poh) -> Result<()> {
+    fn register_and_send_tick(&self, poh: &mut Poh, bank: &Arc<Bank>) -> Result<()> {
         let tick = poh.tick();
         let tick = Entry {
             tick_height: tick.tick_height,
@@ -109,7 +107,7 @@ impl PohRecorder {
             id: tick.id,
             transactions: vec![],
         };
-        self.bank.register_tick(&tick.id);
+        bank.register_tick(&tick.id);
         self.sender.send(vec![tick])?;
         Ok(())
     }
@@ -130,7 +128,7 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let prev_id = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
-        let mut poh_recorder = PohRecorder::new(bank, entry_sender, prev_id, 2);
+        let mut poh_recorder = PohRecorder::new(0, entry_sender, prev_id, 2);
 
         //send some data
         let h1 = hash(b"hello world!");
@@ -140,20 +138,20 @@ mod tests {
         let e = entry_receiver.recv().unwrap();
         assert_eq!(e[0].tick_height, 0); // super weird case, but ok!
 
-        poh_recorder.tick().unwrap();
+        poh_recorder.tick(&bank).unwrap();
         let e = entry_receiver.recv().unwrap();
         assert_eq!(e[0].tick_height, 1);
 
-        poh_recorder.tick().unwrap();
+        poh_recorder.tick(&bank).unwrap();
         let e = entry_receiver.recv().unwrap();
         assert_eq!(e[0].tick_height, 2);
 
         // max tick height reached
-        assert!(poh_recorder.tick().is_err());
+        assert!(poh_recorder.tick(&bank).is_err());
         assert!(poh_recorder.record(h1, vec![tx]).is_err());
 
         //make sure it handles channel close correctly
         drop(entry_receiver);
-        assert!(poh_recorder.tick().is_err());
+        assert!(poh_recorder.tick(&bank).is_err());
     }
 }

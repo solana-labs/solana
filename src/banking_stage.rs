@@ -54,14 +54,19 @@ impl BankingStage {
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (entry_sender, entry_receiver) = channel();
         let shared_verified_receiver = Arc::new(Mutex::new(verified_receiver));
-        let poh_recorder =
-            PohRecorder::new(bank.clone(), entry_sender, *last_entry_id, max_tick_height);
+        let poh_recorder = PohRecorder::new(
+            bank.tick_height(),
+            entry_sender,
+            *last_entry_id,
+            max_tick_height,
+        );
 
         // Single thread to generate entries from many banks.
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
         // Once an entry has been recorded, its last_id is registered with the bank.
         let poh_exit = Arc::new(AtomicBool::new(false));
-        let poh_service = PohService::new(poh_recorder.clone(), config, poh_exit.clone());
+        let poh_service =
+            PohService::new(bank.clone(), poh_recorder.clone(), config, poh_exit.clone());
 
         // Single thread to compute confirmation
         let leader_confirmation_service =
@@ -585,8 +590,12 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
         let bank = Arc::new(Bank::new(&genesis_block));
         let (entry_sender, entry_receiver) = channel();
-        let poh_recorder =
-            PohRecorder::new(bank.clone(), entry_sender, bank.last_id(), std::u64::MAX);
+        let poh_recorder = PohRecorder::new(
+            bank.tick_height(),
+            entry_sender,
+            bank.last_id(),
+            std::u64::MAX,
+        );
         let pubkey = Keypair::new().pubkey();
 
         let transactions = vec![
@@ -631,14 +640,14 @@ mod tests {
 
         let (entry_sender, entry_receiver) = channel();
         let mut poh_recorder = PohRecorder::new(
-            bank.clone(),
+            bank.tick_height(),
             entry_sender,
             bank.last_id(),
             bank.tick_height() + 1,
         );
 
         BankingStage::process_and_record_transactions(&bank, &transactions, &poh_recorder).unwrap();
-        poh_recorder.tick().unwrap();
+        poh_recorder.tick(&bank).unwrap();
 
         let mut need_tick = true;
         // read entries until I find mine, might be ticks...
