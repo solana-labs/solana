@@ -17,7 +17,7 @@ programDir="$2"
 )
 
 for dir in "$programDir"/*; do
-  for program in echo $programDir/target/release/deps/lib"$(basename "$dir")".{so,dylib,dll}; do
+  for program in $programDir/target/release/deps/lib"$(basename "$dir")".{so,dylib,dll}; do
     if [[ -f $program ]]; then
       (
         set -x

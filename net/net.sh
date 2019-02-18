@@ -154,7 +154,7 @@ build() {
     $MAYBE_DOCKER bash -c "
       set -ex
       scripts/cargo-install-all.sh farf \"$cargoFeatures\"
-      if [[ -n \"$customPrograms\" ]]; then
+      if [[ -n $customPrograms ]]; then
         scripts/cargo-install-custom-programs.sh farf $customPrograms
       fi
     "
