@@ -31,7 +31,7 @@ impl Default for PohServiceConfig {
 
 pub struct PohService {
     tick_producer: JoinHandle<Result<()>>,
-    pub poh_exit: Arc<AtomicBool>,
+    poh_exit: Arc<AtomicBool>,
 }
 
 impl PohService {
@@ -44,11 +44,14 @@ impl PohService {
         self.join()
     }
 
-    pub fn new(poh_recorder: PohRecorder, config: PohServiceConfig) -> Self {
+    pub fn new(
+        poh_recorder: PohRecorder,
+        config: PohServiceConfig,
+        poh_exit: Arc<AtomicBool>,
+    ) -> Self {
         // PohService is a headless producer, so when it exits it should notify the banking stage.
         // Since channel are not used to talk between these threads an AtomicBool is used as a
         // signal.
-        let poh_exit = Arc::new(AtomicBool::new(false));
         let poh_exit_ = poh_exit.clone();
         // Single thread to generate ticks
         let tick_producer = Builder::new()
@@ -76,20 +79,14 @@ impl PohService {
             match config {
                 PohServiceConfig::Tick(num) => {
                     for _ in 1..num {
-                        let res = poh.hash();
-                        if let Err(e) = res {
-                            return Err(e);
-                        }
+                        poh.hash()?;
                     }
                 }
                 PohServiceConfig::Sleep(duration) => {
                     sleep(duration);
                 }
             }
-            let res = poh.tick();
-            if let Err(e) = res {
-                return Err(e);
-            }
+            poh.tick()?;
             if poh_exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
@@ -148,6 +145,7 @@ mod tests {
         let poh_service = PohService::new(
             poh_recorder,
             PohServiceConfig::Tick(HASHES_PER_TICK as usize),
+            Arc::new(AtomicBool::new(false)),
         );
 
         // get some events
