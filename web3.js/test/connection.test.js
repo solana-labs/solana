@@ -123,25 +123,6 @@ test('get last Id', async () => {
   expect(lastId.length).toBeGreaterThanOrEqual(43);
 });
 
-test('get confirmation time', async () => {
-  const connection = new Connection(url);
-
-  mockRpc.push([
-    url,
-    {
-      method: 'getConfirmationTime',
-      params: [],
-    },
-    {
-      error: null,
-      result: 123,
-    },
-  ]);
-
-  const finality = await connection.getConfirmationTime();
-  expect(finality).toBeGreaterThanOrEqual(0);
-});
-
 test('request airdrop', async () => {
   const account = new Account();
   const connection = new Connection(url);

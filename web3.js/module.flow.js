@@ -59,7 +59,6 @@ declare module '@solana/web3.js' {
     ): Promise<SignatureStatus>;
     getTransactionCount(): Promise<number>;
     getLastId(): Promise<TransactionId>;
-    getConfirmationTime(): Promise<number>;
     requestAirdrop(
       to: PublicKey,
       amount: number,
