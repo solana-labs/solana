@@ -35,6 +35,7 @@ Operate a configured testnet
                                  (ignored if -s or -S is specified)
    -r                          - Reuse existing node/ledger configuration from a
                                  previous |start| (ie, don't run ./mulitnode-demo/setup.sh).
+   -D /path/to/programs        - Deploy custom programs from this location
 
    Note: if RUST_LOG is set in the environment it will be propogated into the
          network nodes.
@@ -59,12 +60,13 @@ sanityExtraArgs=
 cargoFeatures=
 skipSetup=false
 updateNodes=false
+customPrograms=
 
 command=$1
 [[ -n $command ]] || usage
 shift
 
-while getopts "h?S:s:T:t:o:f:r" opt; do
+while getopts "h?S:s:T:t:o:f:r:D:" opt; do
   case $opt in
   h | \?)
     usage
@@ -107,6 +109,9 @@ while getopts "h?S:s:T:t:o:f:r" opt; do
   r)
     skipSetup=true
     ;;
+  D)
+    customPrograms=$OPTARG
+    ;;
   o)
     case $OPTARG in
     noLedgerVerify|noValidatorSanity|rejectExtraNodes)
@@ -146,6 +151,9 @@ build() {
     $MAYBE_DOCKER bash -c "
       set -ex
       scripts/cargo-install-all.sh farf \"$cargoFeatures\"
+      if [[ -n $customPrograms ]]; then
+        scripts/cargo-install-custom-programs.sh farf $customPrograms
+      fi
     "
   )
   echo "Build took $SECONDS seconds"
