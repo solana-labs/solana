@@ -2074,11 +2074,13 @@ fn test_one_fullnode_rotate_every_second_tick() {
 }
 
 #[test]
+#[ignore]
 fn test_two_fullnodes_rotate_every_tick() {
     test_fullnode_rotate(1, 1, true, false);
 }
 
 #[test]
+#[ignore]
 fn test_two_fullnodes_rotate_every_second_tick() {
     test_fullnode_rotate(2, 1, true, false);
 }
@@ -2089,6 +2091,7 @@ fn test_one_fullnode_rotate_every_tick_with_transactions() {
 }
 
 #[test]
+#[ignore]
 fn test_two_fullnodes_rotate_every_tick_with_transactions() {
     test_fullnode_rotate(1, 1, true, true);
 }
