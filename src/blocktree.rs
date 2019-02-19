@@ -1378,7 +1378,9 @@ pub fn tmp_copy_ledger(from: &str, name: &str, config: &BlocktreeConfig) -> Stri
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::entry::{make_tiny_test_entries, make_tiny_test_entries_from_id, Entry, EntrySlice};
+    use crate::entry::{
+        create_ticks, make_tiny_test_entries, make_tiny_test_entries_from_id, Entry, EntrySlice,
+    };
     use crate::packet::index_blobs;
     use rand::seq::SliceRandom;
     use rand::thread_rng;
@@ -1387,6 +1389,38 @@ pub mod tests {
     use std::collections::HashSet;
     use std::iter::once;
     use std::time::Duration;
+
+    #[test]
+    fn test_write_entries() {
+        let ledger_path = get_tmp_ledger_path("test_write_entries");
+        {
+            let ticks_per_slot = 10;
+            let num_slots = 10;
+            let num_ticks = ticks_per_slot * num_slots;
+            let ticks = create_ticks(num_ticks, Hash::default());
+            let config = BlocktreeConfig::new(ticks_per_slot);
+            let ledger = Blocktree::open_config(&ledger_path, &config).unwrap();
+            ledger.write_entries(0, 0, 0, ticks.clone()).unwrap();
+
+            for i in 0..num_slots {
+                let meta = ledger.meta(i).unwrap().unwrap();
+                assert_eq!(meta.consumed, ticks_per_slot);
+                assert_eq!(meta.received, ticks_per_slot);
+                assert_eq!(meta.last_index, ticks_per_slot - 1);
+                if i == 0 {
+                    assert_eq!(meta.parent_slot, 0);
+                } else {
+                    assert_eq!(meta.parent_slot, i - 1);
+                }
+
+                assert_eq!(
+                    &ticks[(i * ticks_per_slot) as usize..((i + 1) * ticks_per_slot) as usize],
+                    &ledger.get_slot_entries(i, 0, None).unwrap()[..]
+                );
+            }
+        }
+        Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
 
     #[test]
     fn test_put_get_simple() {
