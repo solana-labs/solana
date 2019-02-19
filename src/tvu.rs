@@ -20,6 +20,7 @@ use crate::entry_stream_stage::EntryStreamStage;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
+use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::storage_stage::{StorageStage, StorageState};
 use crate::tpu::{TpuReturnType, TpuRotationReceiver, TpuRotationSender};
@@ -79,6 +80,7 @@ impl Tvu {
         entry_stream: Option<&String>,
         ledger_signal_receiver: Receiver<bool>,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+        subscriptions: &Arc<RpcSubscriptions>,
     ) -> Self {
         let exit = Arc::new(AtomicBool::new(false));
         let keypair: Arc<Keypair> = cluster_info
@@ -130,6 +132,7 @@ impl Tvu {
             to_leader_sender,
             ledger_signal_receiver,
             &leader_scheduler,
+            subscriptions,
         );
 
         let entry_stream_stage = if entry_stream.is_some() {
@@ -261,6 +264,7 @@ pub mod tests {
             None,
             l_receiver,
             leader_scheduler,
+            &Arc::new(RpcSubscriptions::default()),
         );
         tvu.close().expect("close");
     }
