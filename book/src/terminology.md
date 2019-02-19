@@ -163,7 +163,7 @@ The [token](#token) used to track work done by [nodes](#node) in a cluster.
 
 #### node
 
-A computer particpating in a [cluster](#cluster).
+A computer participating in a [cluster](#cluster).
 
 #### node count
 
