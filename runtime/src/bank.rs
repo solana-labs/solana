@@ -175,35 +175,22 @@ impl Bank {
             .genesis_last_id(&genesis_block.last_id());
     }
 
+    pub fn add_native_program(&self, name: &str, program_id: &Pubkey) {
+        let account = native_loader::create_program_account(name);
+        self.accounts.store_slow(true, program_id, &account);
+    }
+
     fn add_builtin_programs(&self) {
-        let system_program_account = native_loader::create_program_account("solana_system_program");
-        self.accounts
-            .store_slow(true, &system_program::id(), &system_program_account);
-
-        let vote_program_account = native_loader::create_program_account("solana_vote_program");
-        self.accounts
-            .store_slow(true, &vote_program::id(), &vote_program_account);
-
-        let storage_program_account =
-            native_loader::create_program_account("solana_storage_program");
-        self.accounts
-            .store_slow(true, &storage_program::id(), &storage_program_account);
+        self.add_native_program("solana_system_program", &system_program::id());
+        self.add_native_program("solana_vote_program", &vote_program::id());
+        self.add_native_program("solana_storage_program", &storage_program::id());
+        self.add_native_program("solana_bpf_loader", &bpf_loader::id());
+        self.add_native_program("solana_budget_program", &budget_program::id());
+        self.add_native_program("solana_erc20", &token_program::id());
 
         let storage_system_account = Account::new(1, 16 * 1024, storage_program::system_id());
         self.accounts
             .store_slow(true, &storage_program::system_id(), &storage_system_account);
-
-        let bpf_loader_account = native_loader::create_program_account("solana_bpf_loader");
-        self.accounts
-            .store_slow(true, &bpf_loader::id(), &bpf_loader_account);
-
-        let budget_program_account = native_loader::create_program_account("solana_budget_program");
-        self.accounts
-            .store_slow(true, &budget_program::id(), &budget_program_account);
-
-        let erc20_account = native_loader::create_program_account("solana_erc20");
-        self.accounts
-            .store_slow(true, &token_program::id(), &erc20_account);
     }
 
     /// Return the last entry ID registered.
