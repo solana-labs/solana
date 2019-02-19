@@ -18,8 +18,7 @@ use bincode::deserialize;
 use log::Level;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::timing;
-use solana_sdk::timing::duration_as_us;
+use solana_sdk::timing::{self, duration_as_us};
 use solana_sdk::transaction::Transaction;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
@@ -346,11 +345,11 @@ mod tests {
     use super::*;
     use crate::entry::EntrySlice;
     use crate::genesis_block::GenesisBlock;
-    use crate::leader_scheduler::DEFAULT_TICKS_PER_SLOT;
     use crate::packet::to_packets;
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
+    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use std::thread::sleep;
 
     #[test]

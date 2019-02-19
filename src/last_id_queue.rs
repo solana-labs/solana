@@ -1,7 +1,6 @@
-use crate::poh_service::NUM_TICKS_PER_SECOND;
 use hashbrown::HashMap;
 use solana_sdk::hash::Hash;
-use solana_sdk::timing::timestamp;
+use solana_sdk::timing::{timestamp, NUM_TICKS_PER_SECOND};
 
 /// The number of most recent `last_id` values that the bank will track the signatures
 /// of. Once the bank discards a `last_id`, it will reject any transactions that use
