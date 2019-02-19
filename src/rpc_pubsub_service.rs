@@ -1,6 +1,5 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::bank::Bank;
 use crate::rpc_pubsub::{RpcSolPubSub, RpcSolPubSubImpl};
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
@@ -26,10 +25,9 @@ impl Service for PubSubService {
 }
 
 impl PubSubService {
-    pub fn new(bank: &Arc<Bank>, pubsub_addr: SocketAddr) -> Self {
+    pub fn new(subscriptions: &Arc<RpcSubscriptions>, pubsub_addr: SocketAddr) -> Self {
         info!("rpc_pubsub bound to {:?}", pubsub_addr);
-        let subscriptions = Arc::new(RpcSubscriptions::default());
-        let rpc = RpcSolPubSubImpl::new_with_subscriptions(bank.clone(), subscriptions.clone());
+        let rpc = RpcSolPubSubImpl::new(subscriptions.clone());
         let exit = Arc::new(AtomicBool::new(false));
         let exit_ = exit.clone();
         let thread_hdl = Builder::new()
@@ -74,15 +72,13 @@ impl PubSubService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis_block::GenesisBlock;
     use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
     fn test_pubsub_new() {
-        let (genesis_block, _) = GenesisBlock::new(10_000);
-        let bank = Bank::new(&genesis_block);
+        let subscriptions = Arc::new(RpcSubscriptions::default());
         let pubsub_addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0);
-        let pubsub_service = PubSubService::new(&Arc::new(bank), pubsub_addr);
+        let pubsub_service = PubSubService::new(&subscriptions, pubsub_addr);
         let thread = pubsub_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-pubsub");
     }

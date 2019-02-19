@@ -12,6 +12,7 @@ use crate::leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig};
 use crate::poh_service::PohServiceConfig;
 use crate::rpc_pubsub_service::PubSubService;
 use crate::rpc_service::JsonRpcService;
+use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::storage_stage::StorageState;
 use crate::tpu::{Tpu, TpuRotationReceiver};
@@ -168,8 +169,9 @@ impl Fullnode {
             storage_state.clone(),
         );
 
+        let subscriptions = Arc::new(RpcSubscriptions::default());
         let rpc_pubsub_service = PubSubService::new(
-            &bank,
+            &subscriptions,
             SocketAddr::new(
                 IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
                 node.info.rpc_pubsub.port(),

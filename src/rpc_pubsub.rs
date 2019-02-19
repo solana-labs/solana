@@ -1,10 +1,8 @@
 //! The `pubsub` module implements a threaded subscription service on client RPC request
 
-use crate::bank::Bank;
 use crate::rpc_status::RpcSignatureStatus;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use bs58;
-use jsonrpc_core::futures::Future;
 use jsonrpc_core::{Error, ErrorCode, Result};
 use jsonrpc_derive::rpc;
 use jsonrpc_pubsub::typed::Subscriber;
@@ -54,24 +52,16 @@ pub trait RpcSolPubSub {
     fn signature_unsubscribe(&self, _: Option<Self::Metadata>, _: SubscriptionId) -> Result<bool>;
 }
 
+#[derive(Default)]
 pub struct RpcSolPubSubImpl {
     uid: Arc<atomic::AtomicUsize>,
-    bank: Arc<Bank>,
     subscriptions: Arc<RpcSubscriptions>,
 }
 
 impl RpcSolPubSubImpl {
-    pub fn new_with_subscriptions(bank: Arc<Bank>, subscriptions: Arc<RpcSubscriptions>) -> Self {
+    pub fn new(subscriptions: Arc<RpcSubscriptions>) -> Self {
         let uid = Arc::new(atomic::AtomicUsize::default());
-        Self {
-            uid,
-            bank,
-            subscriptions,
-        }
-    }
-
-    pub fn new(bank: Arc<Bank>) -> Self {
-        Self::new_with_subscriptions(bank, Arc::new(RpcSubscriptions::default()))
+        Self { uid, subscriptions }
     }
 }
 
@@ -146,23 +136,8 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
         let sub_id = SubscriptionId::Number(id as u64);
         let sink = subscriber.assign_id(sub_id.clone()).unwrap();
 
-        let status = self.bank.get_signature_status(&signature);
-        if status.is_none() {
-            self.subscriptions
-                .add_signature_subscription(&signature, &sub_id, &sink);
-            return;
-        }
-
-        match status.unwrap() {
-            Ok(_) => {
-                sink.notify(Ok(RpcSignatureStatus::Confirmed))
-                    .wait()
-                    .unwrap();
-            }
-            _ => self
-                .subscriptions
-                .add_signature_subscription(&signature, &sub_id, &sink),
-        }
+        self.subscriptions
+            .add_signature_subscription(&signature, &sub_id, &sink);
     }
 
     fn signature_unsubscribe(
@@ -186,7 +161,7 @@ impl RpcSolPubSub for RpcSolPubSubImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bank;
+    use crate::bank::{self, Bank};
     use crate::genesis_block::GenesisBlock;
     use jsonrpc_core::futures::sync::mpsc;
     use jsonrpc_core::Response;
@@ -225,7 +200,7 @@ mod tests {
         let arc_bank = Arc::new(bank);
         let last_id = arc_bank.last_id();
 
-        let rpc = RpcSolPubSubImpl::new(arc_bank.clone());
+        let rpc = RpcSolPubSubImpl::default();
 
         // Test signature subscriptions
         let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
@@ -257,7 +232,7 @@ mod tests {
         let session = create_session();
 
         let mut io = PubSubHandler::default();
-        let rpc = RpcSolPubSubImpl::new(arc_bank.clone());
+        let rpc = RpcSolPubSubImpl::default();
         io.extend_with(rpc.to_delegate());
 
         let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
@@ -301,7 +276,7 @@ mod tests {
         let arc_bank = Arc::new(bank);
         let last_id = arc_bank.last_id();
 
-        let rpc = RpcSolPubSubImpl::new(arc_bank.clone());
+        let rpc = RpcSolPubSubImpl::default();
         let session = create_session();
         let (subscriber, _id_receiver, mut receiver) = Subscriber::new_test("accountNotification");
         rpc.account_subscribe(session, subscriber, contract_state.pubkey().to_string());
@@ -428,15 +403,11 @@ mod tests {
 
     #[test]
     fn test_account_unsubscribe() {
-        let (genesis_block, _) = GenesisBlock::new(10_000);
         let bob_pubkey = Keypair::new().pubkey();
-        let bank = Bank::new(&genesis_block);
-        let arc_bank = Arc::new(bank);
-
         let session = create_session();
 
         let mut io = PubSubHandler::default();
-        let rpc = RpcSolPubSubImpl::new(arc_bank.clone());
+        let rpc = RpcSolPubSubImpl::default();
 
         io.extend_with(rpc.to_delegate());
 
