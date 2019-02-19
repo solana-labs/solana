@@ -25,7 +25,7 @@ A contiguous set of [entries](#entry) on the ledger covered by a
 #### block height
 
 The number of [blocks](#block) beneath the current block. The first block after
-the [genesis block](#genesis block) has height zero.
+the [genesis block](#genesis-block) has height zero.
 
 #### block id
 
