@@ -101,6 +101,33 @@ cloud_FindInstance() {
   __cloud_FindInstances "$name"
 }
 
+#
+# cloud_Initialize [networkName]
+#
+# Perform one-time initialization that may be required for the given testnet.
+#
+# networkName   - unique name of this testnet
+#
+# This function will be called before |cloud_CreateInstances|
+cloud_Initialize() {
+  declare networkName="$1"
+
+  __cloud_SshPrivateKeyCheck
+  (
+    set -x
+    aws ec2 delete-key-pair --region "$region" --key-name "$networkName"
+    aws ec2 import-key-pair --region "$region" --key-name "$networkName" \
+      --public-key-material file://"${sshPrivateKey}".pub
+  )
+
+  (
+    set -x
+    aws ec2 delete-security-group --region "$region" --group-name "$networkName" || true
+    aws ec2 create-security-group --region "$region" --group-name "$networkName" --description "Created automatically by $0"
+    rules=$(cat "$(dirname "${BASH_SOURCE[0]}")"/ec2-security-group-config.json)
+    aws ec2 authorize-security-group-ingress --region "$region" --group-name "$networkName" --cli-input-json "$rules"
+  )
+}
 
 #
 # cloud_CreateInstances [networkName] [namePrefix] [numNodes] [imageName]
@@ -131,21 +158,13 @@ cloud_CreateInstances() {
   declare optionalStartupScript="$7"
   declare optionalAddress="$8"
 
-  __cloud_SshPrivateKeyCheck
-  (
-    set -x
-    aws ec2 delete-key-pair --region "$region" --key-name "$networkName"
-    aws ec2 import-key-pair --region "$region" --key-name "$networkName" \
-      --public-key-material file://"${sshPrivateKey}".pub
-  )
-
   declare -a args
   args=(
     --key-name "$networkName"
     --count "$numNodes"
     --region "$region"
     --placement "AvailabilityZone=$zone"
-    --security-groups testnet
+    --security-groups "$networkName"
     --image-id "$imageName"
     --instance-type "$machineType"
     --tag-specifications "ResourceType=instance,Tags=[{Key=name,Value=$namePrefix}]"

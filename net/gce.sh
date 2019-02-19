@@ -476,6 +476,8 @@ EOF
     bootstrapLeaderAddress=$customAddress
   fi
 
+  cloud_Initialize "$prefix"
+
   cloud_CreateInstances "$prefix" "$prefix-bootstrap-leader" 1 \
     "$imageName" "$bootstrapLeaderMachineType" "$fullNodeBootDiskSizeInGb" \
     "$startupScript" "$bootstrapLeaderAddress" "$bootDiskType"
