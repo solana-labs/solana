@@ -112,18 +112,21 @@ impl AccountsDB {
         txs: &[Transaction],
         res: &[Result<()>],
         loaded: &[Result<(InstructionAccounts, InstructionLoaders)>],
-    ) {
+    ) -> u64 {
+        let mut fee = 0;
         for (i, raccs) in loaded.iter().enumerate() {
             if res[i].is_err() || raccs.is_err() {
                 continue;
             }
 
             let tx = &txs[i];
+            fee += tx.fee;
             let acc = raccs.as_ref().unwrap();
             for (key, account) in tx.account_keys.iter().zip(acc.0.iter()) {
                 self.store(purge, key, account);
             }
         }
+        fee
     }
     fn load_tx_accounts<U>(
         checkpoints: &[U],
@@ -372,7 +375,7 @@ impl Accounts {
         txs: &[Transaction],
         res: &[Result<()>],
         loaded: &[Result<(InstructionAccounts, InstructionLoaders)>],
-    ) {
+    ) -> u64 {
         self.accounts_db
             .write()
             .unwrap()

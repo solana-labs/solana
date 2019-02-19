@@ -56,22 +56,27 @@ fn ignore_program_errors(results: Vec<Result<()>>) -> Vec<Result<()>> {
         .collect()
 }
 
-fn par_execute_entries(bank: &Bank, entries: &[(&Entry, Vec<Result<()>>)]) -> Result<()> {
+fn par_execute_entries(bank: &Bank, entries: &[(&Entry, Vec<Result<()>>)]) -> (Result<()>, u64) {
     inc_new_counter_info!("bank-par_execute_entries-count", entries.len());
-    let results: Vec<Result<()>> = entries
+    let results_fees: Vec<(Result<()>, u64)> = entries
         .into_par_iter()
         .map(|(e, lock_results)| {
-            let old_results = bank.load_execute_and_commit_transactions(
+            let (old_results, fee) = bank.load_execute_and_commit_transactions(
                 &e.transactions,
                 lock_results.to_vec(),
                 MAX_ENTRY_IDS,
             );
             let results = ignore_program_errors(old_results);
             bank.unlock_accounts(&e.transactions, &results);
-            first_err(&results)
+            (first_err(&results), fee)
         })
         .collect();
-    first_err(&results)
+
+    let fee = results_fees.iter().map(|(_, fee)| fee).sum();
+    let mut results = Vec::new();
+    results.reserve_exact(results_fees.len());
+    results = results_fees.into_iter().map(|(res, _)| res).collect();
+    (first_err(&results[..]), fee)
 }
 
 /// process entries in parallel
@@ -83,13 +88,18 @@ fn par_process_entries_with_scheduler(
     bank: &Bank,
     entries: &[Entry],
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-) -> Result<()> {
+) -> (Result<()>, u64) {
     // accumulator for entries that can be processed in parallel
     let mut mt_group = vec![];
+    let mut fees = 0;
     for entry in entries {
         if entry.is_tick() {
             // if its a tick, execute the group and register the tick
-            par_execute_entries(bank, &mt_group)?;
+            let (res, fee) = par_execute_entries(bank, &mt_group);
+            fees += fee;
+            if res.is_err() {
+                return (res, fees);
+            }
             bank.register_tick(&entry.id);
             leader_scheduler
                 .write()
@@ -103,7 +113,11 @@ fn par_process_entries_with_scheduler(
         // if any of the locks error out
         // execute the current group
         if first_err(&lock_results).is_err() {
-            par_execute_entries(bank, &mt_group)?;
+            let (res, fee) = par_execute_entries(bank, &mt_group);
+            fees += fee;
+            if res.is_err() {
+                return (res, fees);
+            }
             mt_group = vec![];
             //reset the lock and push the entry
             bank.unlock_accounts(&entry.transactions, &lock_results);
@@ -114,8 +128,9 @@ fn par_process_entries_with_scheduler(
             mt_group.push((entry, lock_results));
         }
     }
-    par_execute_entries(bank, &mt_group)?;
-    Ok(())
+    let (res, fee) = par_execute_entries(bank, &mt_group);
+    fees += fee;
+    (res, fees)
 }
 
 /// Process an ordered list of entries.
@@ -123,7 +138,7 @@ pub fn process_entries(
     bank: &Bank,
     entries: &[Entry],
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-) -> Result<()> {
+) -> (Result<()>, u64) {
     par_process_entries_with_scheduler(bank, entries, leader_scheduler)
 }
 
@@ -389,7 +404,7 @@ mod tests {
 
     fn par_process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
-        par_process_entries_with_scheduler(bank, entries, &leader_scheduler)
+        par_process_entries_with_scheduler(bank, entries, &leader_scheduler).0
     }
 
     fn create_sample_block_with_next_entries_using_keypairs(
