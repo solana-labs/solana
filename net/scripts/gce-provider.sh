@@ -77,6 +77,21 @@ cloud_FindInstance() {
 }
 
 #
+# cloud_Initialize [networkName]
+#
+# Perform one-time initialization that may be required for the given testnet.
+#
+# networkName   - unique name of this testnet
+#
+# This function will be called before |cloud_CreateInstances|
+cloud_Initialize() {
+  declare networkName="$1"
+  # ec2-provider.sh creates firewall rules programmatically, should to the same
+  # here.
+  echo "TODO: create $networkName firewall rules programmatically instead of assuming the 'testnet' tag exists"
+}
+
+#
 # cloud_CreateInstances [networkName] [namePrefix] [numNodes] [imageName]
 #                       [machineType] [bootDiskSize] [enableGpu]
 #                       [startupScript] [address]
