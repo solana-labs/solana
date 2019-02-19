@@ -5,13 +5,11 @@ use crate::bank::Bank;
 use crate::poh_recorder::PohRecorder;
 use crate::result::Result;
 use crate::service::Service;
+use solana_sdk::timing::NUM_TICKS_PER_SECOND;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::thread::sleep;
-use std::thread::{self, Builder, JoinHandle};
+use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
-
-pub const NUM_TICKS_PER_SECOND: usize = 10;
 
 #[derive(Copy, Clone)]
 pub enum PohServiceConfig {

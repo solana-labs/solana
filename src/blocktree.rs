@@ -4,7 +4,6 @@
 
 use crate::entry::Entry;
 use crate::genesis_block::GenesisBlock;
-use crate::leader_scheduler::DEFAULT_TICKS_PER_SLOT;
 use crate::packet::{Blob, SharedBlob, BLOB_HEADER_SIZE};
 use crate::result::{Error, Result};
 use bincode::{deserialize, serialize};
@@ -18,6 +17,7 @@ use serde::Serialize;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 use std::borrow::{Borrow, Cow};
 use std::cell::RefCell;
 use std::cmp;
