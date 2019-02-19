@@ -275,7 +275,7 @@ mod test {
             // Check that repair tries to patch the empty slot
             assert_eq!(
                 RepairService::generate_repairs(&blocktree, 2, &mut repair_info).unwrap(),
-                vec![RepairType::Blob(1, 0), RepairType::Blob(2, 0)]
+                vec![RepairType::HighestBlob(0, 0), RepairType::Blob(2, 0)]
             );
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
@@ -348,7 +348,7 @@ mod test {
 
             blocktree.write_blobs(&blobs).unwrap();
 
-            // We didn't get the last blob for the slot, so ask for the highest blob for that slot
+            // We didn't get the last blob for this slot, so ask for the highest blob for that slot
             let expected: Vec<RepairType> = vec![RepairType::HighestBlob(0, num_entries_per_slot)];
 
             assert_eq!(
