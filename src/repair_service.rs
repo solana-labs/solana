@@ -178,6 +178,7 @@ impl RepairService {
 
         // Only increment repair_tries if the ledger contains every blob for every slot
         if repairs.is_empty() {
+            println!("incrementing repairs");
             repair_info.repair_tries += 1;
         }
 
@@ -202,23 +203,22 @@ impl Service for RepairService {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::blocktree::{get_tmp_ledger_path, Blocktree, BlocktreeConfig};
+    use crate::blocktree::tests::{make_many_slot_entries, make_slot_entries};
+    use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::entry::create_ticks;
     use crate::entry::{make_tiny_test_entries, EntrySlice};
     use solana_sdk::hash::Hash;
 
     #[test]
-    #[ignore]
     pub fn test_repair_missed_future_slot() {
         let blocktree_path = get_tmp_ledger_path("test_repair_missed_future_slot");
         {
-            let num_ticks_per_slot = 1;
-            let blocktree_config = BlocktreeConfig::new(num_ticks_per_slot);
-            let blocktree = Blocktree::open_config(&blocktree_path, &blocktree_config).unwrap();
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
             let mut blobs = create_ticks(1, Hash::default()).to_blobs();
             blobs[0].set_index(0);
             blobs[0].set_slot(0);
+            blobs[0].set_is_last_in_slot();
 
             blocktree.write_blobs(&blobs).unwrap();
 
@@ -230,7 +230,7 @@ mod test {
                 assert_eq!(repair_info.repair_tries, i);
                 assert_eq!(repair_info.max_slot, 0);
                 let expected = if i == MAX_REPAIR_TRIES - 1 {
-                    vec![RepairType::Blob(1, 0)]
+                    vec![RepairType::HighestBlob(1, 0)]
                 } else {
                     vec![]
                 };
@@ -240,10 +240,11 @@ mod test {
                 );
             }
 
-            // Insert a bigger blob
+            // Insert a bigger blob, see that we the MAX_REPAIR_TRIES gets reset
             let mut blobs = create_ticks(1, Hash::default()).to_blobs();
             blobs[0].set_index(0);
             blobs[0].set_slot(1);
+            blobs[0].set_is_last_in_slot();
 
             blocktree.write_blobs(&blobs).unwrap();
             assert_eq!(
@@ -258,13 +259,10 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     pub fn test_repair_empty_slot() {
         let blocktree_path = get_tmp_ledger_path("test_repair_empty_slot");
         {
-            let num_ticks_per_slot = 10;
-            let blocktree_config = BlocktreeConfig::new(num_ticks_per_slot);
-            let blocktree = Blocktree::open_config(&blocktree_path, &blocktree_config).unwrap();
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
             let mut blobs = make_tiny_test_entries(1).to_blobs();
             blobs[0].set_index(1);
@@ -285,30 +283,27 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     pub fn test_generate_repairs() {
         let blocktree_path = get_tmp_ledger_path("test_generate_repairs");
         {
-            let num_ticks_per_slot = 10;
-            let blocktree_config = BlocktreeConfig::new(num_ticks_per_slot);
-            let blocktree = Blocktree::open_config(&blocktree_path, &blocktree_config).unwrap();
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
-            let num_entries_per_slot = 10;
+            let nth = 3;
+            let num_entries_per_slot = 5 * nth;
             let num_slots = 2;
-            let mut blobs = make_tiny_test_entries(num_slots * num_entries_per_slot).to_blobs();
 
             let mut repair_info = RepairInfo::new();
 
-            // Insert every nth entry for each slot
-            let nth = 3;
-            for (i, b) in blobs.iter_mut().enumerate() {
-                b.set_index(((i % num_entries_per_slot) * nth) as u64);
-                b.set_slot((i / num_entries_per_slot) as u64);
-            }
+            // Create some blobs
+            let (blobs, _) =
+                make_many_slot_entries(0, num_slots as u64, num_entries_per_slot as u64);
 
-            blocktree.write_blobs(&blobs).unwrap();
+            // write every nth blob
+            let blobs_to_write: Vec<_> = blobs.iter().step_by(nth as usize).collect();
 
-            let missing_indexes_per_slot: Vec<u64> = (0..num_entries_per_slot - 1)
+            blocktree.write_blobs(blobs_to_write).unwrap();
+
+            let missing_indexes_per_slot: Vec<u64> = (0..num_entries_per_slot / nth - 1)
                 .flat_map(|x| ((nth * x + 1) as u64..(nth * x + nth) as u64))
                 .collect();
 
@@ -320,7 +315,7 @@ mod test {
                 })
                 .collect();
 
-            // Across all slots, find all missing indexes in the range [0, num_entries_per_slot * nth]
+            // Across all slots, find all missing indexes in the range [0, num_entries_per_slot]
             assert_eq!(
                 RepairService::generate_repairs(&blocktree, std::usize::MAX, &mut repair_info)
                     .unwrap(),
@@ -332,42 +327,36 @@ mod test {
                     .unwrap()[..],
                 expected[0..expected.len() - 2]
             );
+        }
+        Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
+    }
 
-            // Now fill in all the holes for each slot such that for each slot, consumed == received.
-            // Because none of the slots contain ticks, we should see that the repair requests
-            // ask for ticks, starting from the last received index for that slot
-            for repair in expected {
-                match repair {
-                    RepairType::Blob(slot_height, blob_index) => {
-                        let mut b = make_tiny_test_entries(1).to_blobs().pop().unwrap();
-                        b.set_index(blob_index);
-                        b.set_slot(slot_height);
-                        blocktree.write_blobs(&vec![b]).unwrap();
-                    }
+    #[test]
+    pub fn test_generate_highest_repair() {
+        let blocktree_path = get_tmp_ledger_path("test_generate_repairs");
+        {
+            let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
-                    _ => panic!("Unexpected repair type"),
-                }
-            }
+            let num_entries_per_slot = 10;
 
-            let last_index_per_slot = ((num_entries_per_slot - 1) * nth) as u64;
-            let missing_indexes_per_slot: Vec<u64> =
-                (last_index_per_slot + 1..last_index_per_slot + 1 + num_ticks_per_slot).collect();
-            let expected: Vec<RepairType> = (0..num_slots)
-                .flat_map(|slot_height| {
-                    missing_indexes_per_slot
-                        .iter()
-                        .map(move |blob_index| RepairType::Blob(slot_height as u64, *blob_index))
-                })
-                .collect();
+            let mut repair_info = RepairInfo::new();
+
+            // Create some blobs
+            let (mut blobs, _) = make_slot_entries(0, 0, num_entries_per_slot as u64);
+
+            // Remove is_last flag on last blob
+            blobs.last_mut().unwrap().set_flags(0);
+
+            blocktree.write_blobs(&blobs).unwrap();
+
+            // We didn't get the last blob for the slot, so ask for the highest blob for that slot
+            let expected: Vec<RepairType> =
+                vec![RepairType::HighestBlob(0, num_entries_per_slot)];
+
             assert_eq!(
                 RepairService::generate_repairs(&blocktree, std::usize::MAX, &mut repair_info)
                     .unwrap(),
                 expected
-            );
-            assert_eq!(
-                RepairService::generate_repairs(&blocktree, expected.len() - 2, &mut repair_info)
-                    .unwrap()[..],
-                expected[0..expected.len() - 2]
             );
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
