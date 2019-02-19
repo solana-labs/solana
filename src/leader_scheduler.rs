@@ -50,6 +50,41 @@ impl Default for LeaderSchedulerConfig {
     }
 }
 
+pub struct LeaderSchedule {
+    epoch_schedule: Vec<Pubkey>,
+    current_epoch: u64,
+    ticks_per_slot: u64,
+}
+
+impl LeaderSchedule {
+    pub fn new(
+        epoch_schedule: Vec<Pubkey>,
+        current_epoch: u64,
+        ticks_per_slot: u64,
+    ) -> LeaderSchedule {
+        LeaderSchedule {
+            epoch_schedule,
+            current_epoch,
+            ticks_per_slot,
+        }
+    }
+
+    pub fn get_leader_for_slot(&self, slot_height: u64) -> Option<Pubkey> {
+        let tick_height = slot_height * self.ticks_per_slot;
+        let epoch = LeaderScheduler::tick_height_to_epoch(tick_height, self.ticks_per_slot);
+
+        if epoch != self.current_epoch {
+            warn!(
+                "get_leader_for_slot: leader unknown for epoch {}, which is not equal to {}",
+                epoch, self.current_epoch
+            );
+            None
+        } else {
+            Some(self.epoch_schedule[slot_height as usize % self.epoch_schedule.len()])
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct LeaderScheduler {
     // A leader slot duration in ticks
@@ -120,8 +155,8 @@ impl LeaderScheduler {
         tick_height / self.ticks_per_slot
     }
 
-    fn tick_height_to_epoch(&self, tick_height: u64) -> u64 {
-        tick_height / self.ticks_per_epoch
+    fn tick_height_to_epoch(tick_height: u64, ticks_per_epoch: u64) -> u64 {
+        tick_height / ticks_per_epoch
     }
 
     // Returns the number of ticks remaining from the specified tick_height to
@@ -139,7 +174,7 @@ impl LeaderScheduler {
     // Inform the leader scheduler about the current tick height of the cluster.  It may generate a
     // new schedule as a side-effect.
     pub fn update_tick_height(&mut self, tick_height: u64, bank: &Bank) {
-        let epoch = self.tick_height_to_epoch(tick_height);
+        let epoch = Self::tick_height_to_epoch(tick_height, self.ticks_per_slot);
         trace!(
             "update_tick_height: tick_height={} (epoch={})",
             tick_height,
@@ -153,7 +188,7 @@ impl LeaderScheduler {
         }
 
         // If we're about to cross an epoch boundary generate the schedule for the next epoch
-        if self.tick_height_to_epoch(tick_height + 1) == epoch + 1 {
+        if Self::tick_height_to_epoch(tick_height + 1, self.ticks_per_slot) == epoch + 1 {
             self.generate_schedule(tick_height + 1, bank);
         }
     }
@@ -162,7 +197,7 @@ impl LeaderScheduler {
     pub fn get_leader_for_slot(&self, slot: u64) -> Option<Pubkey> {
         trace!("get_leader_for_slot: slot {}", slot);
         let tick_height = slot * self.ticks_per_slot;
-        let epoch = self.tick_height_to_epoch(tick_height);
+        let epoch = Self::tick_height_to_epoch(tick_height, self.ticks_per_slot);
         trace!(
             "get_leader_for_slot: tick_height={} slot={} epoch={} (ce={})",
             tick_height,
@@ -225,9 +260,82 @@ impl LeaderScheduler {
             .collect()
     }
 
+    fn generate_leader_schedule(
+        &mut self,
+        tick_height: u64,
+        bank: &Bank,
+        default_schedule: Vec<Pubkey>,
+    ) -> LeaderSchedule {
+        assert!(default_schedule.is_empty());
+        self.seed = Self::calculate_seed(tick_height);
+        let active_set = self.get_active_set(tick_height, &bank);
+        let ranked_active_set = Self::rank_active_set(bank, active_set.iter());
+
+        let schedule = {
+            if ranked_active_set.is_empty() {
+                info!(
+                    "generate_schedule: empty ranked_active_set at tick_height {}, using leader_schedule from previous epoch",
+                    tick_height,
+                );
+                default_schedule
+            } else {
+                let (mut validator_rankings, total_stake) = ranked_active_set.iter().fold(
+                    (Vec::with_capacity(ranked_active_set.len()), 0),
+                    |(mut ids, total_stake), (pubkey, stake)| {
+                        ids.push(**pubkey);
+                        (ids, total_stake + stake)
+                    },
+                );
+
+                // Choose a validator to be the first slot leader in the new schedule
+                let ordered_account_stake = ranked_active_set.into_iter().map(|(_, stake)| stake);
+                let start_index =
+                    Self::choose_account(ordered_account_stake, self.seed, total_stake);
+                validator_rankings.rotate_left(start_index);
+
+                // If possible try to avoid having the same slot leader twice in a row, but
+                // if there's only one leader to choose from then we have no other choice
+                if validator_rankings.len() > 1 && tick_height > 0 {
+                    let last_slot_leader = self
+                        .get_leader_for_slot(self.tick_height_to_slot(tick_height - 1))
+                        .expect("Previous leader schedule should still exist");
+                    let next_slot_leader = validator_rankings[0];
+
+                    if last_slot_leader == next_slot_leader {
+                        let slots_per_epoch = self.ticks_per_epoch / self.ticks_per_slot;
+                        if slots_per_epoch == 1 {
+                            // If there is only one slot per epoch, and the same leader as the last slot
+                            // of the previous epoch was chosen, then pick the next leader in the
+                            // rankings instead
+                            validator_rankings[0] = validator_rankings[1];
+                        } else {
+                            // If there is more than one leader in the schedule, truncate and set the most
+                            // recent leader to the back of the line. This way that node will still remain
+                            // in the rotation, just at a later slot.
+                            validator_rankings.truncate(slots_per_epoch as usize);
+                            validator_rankings.rotate_left(1);
+                        }
+                    }
+                }
+                validator_rankings
+            }
+        };
+
+        assert!(!schedule.is_empty());
+        trace!(
+            "generate_schedule: schedule for ticks ({}, {}): {:?} ",
+            tick_height,
+            tick_height + self.ticks_per_epoch,
+            schedule
+        );
+
+        let current_epoch = Self::tick_height_to_epoch(tick_height, self.ticks_per_slot);
+        LeaderSchedule::new(schedule, current_epoch, self.ticks_per_slot)
+    }
+
     // Updates the leader schedule to include ticks from tick_height to the first tick of the next epoch
     fn generate_schedule(&mut self, tick_height: u64, bank: &Bank) {
-        let epoch = self.tick_height_to_epoch(tick_height);
+        let epoch = Self::tick_height_to_epoch(tick_height, self.ticks_per_slot);
         trace!(
             "generate_schedule: tick_height={} (epoch={})",
             tick_height,
