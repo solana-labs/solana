@@ -26,7 +26,6 @@ use solana_sdk::timing::{duration_as_us, MAX_ENTRY_IDS, NUM_TICKS_PER_SECOND};
 use solana_sdk::token_program;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, VoteState};
-use std;
 use std::result;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
