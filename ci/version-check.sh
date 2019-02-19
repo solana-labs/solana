@@ -25,8 +25,8 @@ nightly)
   require cargo 1.34.[0-9]+-nightly +nightly
   ;;
 stable)
-  require rustc 1.31.[0-9]+
-  require cargo 1.31.[0-9]+
+  require rustc 1.32.[0-9]+
+  require cargo 1.32.[0-9]+
   ;;
 *)
   echo Error: unknown argument: "$1"
