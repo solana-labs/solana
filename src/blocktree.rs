@@ -1376,7 +1376,7 @@ pub fn tmp_copy_ledger(from: &str, name: &str, config: &BlocktreeConfig) -> Stri
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use crate::entry::{make_tiny_test_entries, make_tiny_test_entries_from_id, Entry, EntrySlice};
     use crate::packet::index_blobs;
@@ -2329,7 +2329,7 @@ mod tests {
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
-    fn make_slot_entries(
+    pub fn make_slot_entries(
         slot_height: u64,
         parent_slot: u64,
         num_entries: u64,
@@ -2346,7 +2346,7 @@ mod tests {
         (blobs, entries)
     }
 
-    fn make_many_slot_entries(
+    pub fn make_many_slot_entries(
         start_slot_height: u64,
         num_slots: u64,
         entries_per_slot: u64,
