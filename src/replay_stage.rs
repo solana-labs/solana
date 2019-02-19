@@ -9,6 +9,7 @@ use crate::entry::{Entry, EntryReceiver, EntrySender, EntrySlice};
 use crate::leader_scheduler::LeaderScheduler;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
+use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::tvu::TvuRotationSender;
 use crate::voting_keypair::VotingKeypair;
@@ -63,6 +64,7 @@ impl ReplayStage {
         current_blob_index: &mut u64,
         last_entry_id: &Arc<RwLock<Hash>>,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
+        subscriptions: &Arc<RpcSubscriptions>,
     ) -> Result<()> {
         // Coalesce all the available entries into a single vote
         submit(
@@ -120,6 +122,7 @@ impl ReplayStage {
                 }
 
                 if 0 == num_ticks_to_next_vote {
+                    subscriptions.notify_subscribers(&bank);
                     if let Some(voting_keypair) = voting_keypair {
                         let keypair = voting_keypair.as_ref();
                         let vote = VoteTransaction::new_vote(
@@ -178,11 +181,13 @@ impl ReplayStage {
         to_leader_sender: &TvuRotationSender,
         ledger_signal_receiver: Receiver<bool>,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
+        subscriptions: &Arc<RpcSubscriptions>,
     ) -> (Self, EntryReceiver) {
         let (ledger_entry_sender, ledger_entry_receiver) = channel();
         let exit_ = exit.clone();
         let leader_scheduler_ = leader_scheduler.clone();
         let to_leader_sender = to_leader_sender.clone();
+        let subscriptions_ = subscriptions.clone();
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
@@ -262,6 +267,7 @@ impl ReplayStage {
                             &mut current_blob_index,
                             &last_entry_id,
                             &leader_scheduler_,
+                            &subscriptions_,
                         ) {
                             error!("process_entries failed: {:?}", e);
                         }
@@ -445,6 +451,7 @@ mod test {
                 &rotation_sender,
                 l_receiver,
                 &leader_scheduler,
+                &Arc::new(RpcSubscriptions::default()),
             );
 
             let total_entries_to_send = 2 * ticks_per_slot as usize - 2;
@@ -548,6 +555,7 @@ mod test {
                 &to_leader_sender,
                 l_receiver,
                 &leader_scheduler,
+                &Arc::new(RpcSubscriptions::default()),
             );
 
             let keypair = voting_keypair.as_ref();
@@ -673,6 +681,7 @@ mod test {
                 &rotation_tx,
                 l_receiver,
                 &leader_scheduler,
+                &Arc::new(RpcSubscriptions::default()),
             );
 
             let keypair = voting_keypair.as_ref();
@@ -757,6 +766,7 @@ mod test {
             &mut current_blob_index,
             &Arc::new(RwLock::new(last_entry_id)),
             &leader_scheduler,
+            &Arc::new(RpcSubscriptions::default()),
         );
 
         match res {
@@ -782,6 +792,7 @@ mod test {
             &mut current_blob_index,
             &Arc::new(RwLock::new(last_entry_id)),
             &leader_scheduler,
+            &Arc::new(RpcSubscriptions::default()),
         );
 
         match res {

@@ -266,6 +266,7 @@ impl Fullnode {
             config.entry_stream.as_ref(),
             ledger_signal_receiver,
             leader_scheduler.clone(),
+            &subscriptions,
         );
         let tpu = Tpu::new(id, &cluster_info);
 

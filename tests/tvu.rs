@@ -10,6 +10,7 @@ use solana::gossip_service::GossipService;
 use solana::leader_scheduler::LeaderScheduler;
 use solana::leader_scheduler::LeaderSchedulerConfig;
 use solana::packet::index_blobs;
+use solana::rpc_subscriptions::RpcSubscriptions;
 use solana::service::Service;
 use solana::storage_stage::StorageState;
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
@@ -127,6 +128,7 @@ fn test_replay() {
         None,
         l_receiver,
         leader_scheduler,
+        &Arc::new(RpcSubscriptions::default()),
     );
 
     let mut alice_ref_balance = starting_balance;
