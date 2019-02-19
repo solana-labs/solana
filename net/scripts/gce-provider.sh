@@ -86,7 +86,7 @@ cloud_FindInstance() {
 # This function will be called before |cloud_CreateInstances|
 cloud_Initialize() {
   declare networkName="$1"
-  # ec2-provider.sh creates firewall rules programmatically, should to the same
+  # ec2-provider.sh creates firewall rules programmatically, should do the same
   # here.
   echo "TODO: create $networkName firewall rules programmatically instead of assuming the 'testnet' tag exists"
 }

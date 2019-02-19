@@ -168,6 +168,11 @@ case $cloudProvider in
 gce)
   if $enableGpu; then
     # Custom Ubuntu 18.04 LTS image with CUDA 9.2 and CUDA 10.0 installed
+    #
+    # TODO: Unfortunately this image is not public.  When this becomes an issue,
+    # use the stock Ubuntu 18.04 image and programmatically install CUDA after the
+    # instance boots
+    #
     imageName="ubuntu-1804-bionic-v20181029-with-cuda-10-and-cuda-9-2"
   else
     # Upstream Ubuntu 18.04 LTS image
@@ -175,23 +180,45 @@ gce)
   fi
   ;;
 ec2)
-  #
-  # Custom Ubuntu 18.04 LTS image with CUDA 9.2 and CUDA 10.0 installed
-  #
-  case $region in # (region global variable is set by cloud_SetZone)
-  us-east-1)
-    imageName="ami-0a8bd6fb204473f78"
-    ;;
-  us-west-1)
-    imageName="ami-07011f0795513c59d"
-    ;;
-  us-west-2)
-    imageName="ami-0a11ef42b62b82b68"
-    ;;
-  *)
-    usage "Unsupported region: $region"
-    ;;
-  esac
+  if $enableGpu; then
+    #
+    # Custom Ubuntu 18.04 LTS image with CUDA 9.2 and CUDA 10.0 installed
+    #
+    # TODO: Unfortunately these AMIs are not public.  When this becomes an issue,
+    # use the stock Ubuntu 18.04 image and programmatically install CUDA after the
+    # instance boots
+    #
+    case $region in
+    us-east-1)
+      imageName="ami-0a8bd6fb204473f78"
+      ;;
+    us-west-1)
+      imageName="ami-07011f0795513c59d"
+      ;;
+    us-west-2)
+      imageName="ami-0a11ef42b62b82b68"
+      ;;
+    *)
+      usage "Unsupported region: $region"
+      ;;
+    esac
+  else
+    # Select an upstream Ubuntu 18.04 AMI from https://cloud-images.ubuntu.com/locator/ec2/
+    case $region in
+    us-east-1)
+      imageName="ami-0a313d6098716f372"
+      ;;
+    us-west-1)
+      imageName="ami-06397100adf427136"
+      ;;
+    us-west-2)
+      imageName="ami-0dc34f4b016c9ce49"
+      ;;
+    *)
+      usage "Unsupported region: $region"
+      ;;
+    esac
+  fi
   ;;
 *)
   echo "Error: Unknown cloud provider: $cloudProvider"
