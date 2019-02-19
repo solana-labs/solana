@@ -1397,9 +1397,10 @@ pub mod tests {
             let ticks_per_slot = 10;
             let num_slots = 10;
             let num_ticks = ticks_per_slot * num_slots;
-            let ticks = create_ticks(num_ticks, Hash::default());
             let config = BlocktreeConfig::new(ticks_per_slot);
             let ledger = Blocktree::open_config(&ledger_path, &config).unwrap();
+
+            let ticks = create_ticks(num_ticks, Hash::default());
             ledger.write_entries(0, 0, 0, ticks.clone()).unwrap();
 
             for i in 0..num_slots {
@@ -1407,6 +1408,11 @@ pub mod tests {
                 assert_eq!(meta.consumed, ticks_per_slot);
                 assert_eq!(meta.received, ticks_per_slot);
                 assert_eq!(meta.last_index, ticks_per_slot - 1);
+                if i == num_slots - 1 {
+                    assert!(meta.next_slots.is_empty());
+                } else {
+                    assert_eq!(meta.next_slots, vec![i + 1]);
+                }
                 if i == 0 {
                     assert_eq!(meta.parent_slot, 0);
                 } else {
@@ -1418,6 +1424,45 @@ pub mod tests {
                     &ledger.get_slot_entries(i, 0, None).unwrap()[..]
                 );
             }
+
+            // Simulate writing to the end of a slot with existing ticks
+            ledger
+                .write_entries(
+                    num_slots,
+                    ticks_per_slot - 1,
+                    ticks_per_slot - 2,
+                    &ticks[0..2],
+                )
+                .unwrap();
+
+            let meta = ledger.meta(num_slots).unwrap().unwrap();
+            assert_eq!(meta.consumed, 0);
+            // received blob was ticks_per_slot - 2, so received should be ticks_per_slot - 2 + 1
+            assert_eq!(meta.received, ticks_per_slot - 1);
+            // last blob index ticks_per_slot - 2 because that's the blob that made tick_height == ticks_per_slot
+            // for the slot
+            assert_eq!(meta.last_index, ticks_per_slot - 2);
+            assert_eq!(meta.parent_slot, num_slots - 1);
+            assert_eq!(meta.next_slots, vec![num_slots + 1]);
+            assert_eq!(
+                &ticks[0..1],
+                &ledger
+                    .get_slot_entries(num_slots, ticks_per_slot - 2, None)
+                    .unwrap()[..]
+            );
+
+            // We wrote two entries, the second should spill into slot num_slots + 1
+            let meta = ledger.meta(num_slots + 1).unwrap().unwrap();
+            assert_eq!(meta.consumed, 1);
+            assert_eq!(meta.received, 1);
+            assert_eq!(meta.last_index, std::u64::MAX);
+            assert_eq!(meta.parent_slot, num_slots);
+            assert!(meta.next_slots.is_empty());
+
+            assert_eq!(
+                &ticks[1..2],
+                &ledger.get_slot_entries(num_slots + 1, 0, None).unwrap()[..]
+            );
         }
         Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
     }

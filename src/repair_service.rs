@@ -178,7 +178,6 @@ impl RepairService {
 
         // Only increment repair_tries if the ledger contains every blob for every slot
         if repairs.is_empty() {
-            println!("incrementing repairs");
             repair_info.repair_tries += 1;
         }
 
