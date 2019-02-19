@@ -607,11 +607,8 @@ mod tests {
     use super::*;
     use hashbrown::HashSet;
     use solana_sdk::genesis_block::BOOTSTRAP_LEADER_TOKENS;
-    use solana_sdk::hash::hash;
     use solana_sdk::native_program::ProgramError;
-    use solana_sdk::signature::Keypair;
-    use solana_sdk::signature::KeypairUtil;
-    use solana_sdk::storage_program::{StorageTransaction, ENTRIES_PER_SEGMENT};
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Instruction;
@@ -973,52 +970,6 @@ mod tests {
             storage_program::system_id(),
         ];
         assert!(ids.into_iter().all(move |id| unique.insert(id)));
-    }
-
-    #[test]
-    fn test_bank_storage() {
-        let (genesis_block, alice) = GenesisBlock::new(1000);
-        let bank = Bank::new(&genesis_block);
-
-        let bob = Keypair::new();
-        let jack = Keypair::new();
-        let jill = Keypair::new();
-
-        let x = 42;
-        let last_id = hash(&[x]);
-        let x2 = x * 2;
-        let storage_last_id = hash(&[x2]);
-
-        bank.register_tick(&last_id);
-
-        bank.transfer(10, &alice, jill.pubkey(), last_id).unwrap();
-
-        bank.transfer(10, &alice, bob.pubkey(), last_id).unwrap();
-        bank.transfer(10, &alice, jack.pubkey(), last_id).unwrap();
-
-        let tx = StorageTransaction::new_advertise_last_id(
-            &bob,
-            storage_last_id,
-            last_id,
-            ENTRIES_PER_SEGMENT,
-        );
-
-        bank.process_transaction(&tx).unwrap();
-
-        let entry_height = 0;
-
-        let tx = StorageTransaction::new_mining_proof(
-            &jack,
-            Hash::default(),
-            last_id,
-            entry_height,
-            Signature::default(),
-        );
-
-        bank.process_transaction(&tx).unwrap();
-
-        assert_eq!(bank.get_storage_entry_height(), ENTRIES_PER_SEGMENT);
-        assert_eq!(bank.get_storage_last_id(), storage_last_id);
     }
 
     #[test]
