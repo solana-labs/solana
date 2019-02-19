@@ -350,8 +350,7 @@ mod test {
             blocktree.write_blobs(&blobs).unwrap();
 
             // We didn't get the last blob for the slot, so ask for the highest blob for that slot
-            let expected: Vec<RepairType> =
-                vec![RepairType::HighestBlob(0, num_entries_per_slot)];
+            let expected: Vec<RepairType> = vec![RepairType::HighestBlob(0, num_entries_per_slot)];
 
             assert_eq!(
                 RepairService::generate_repairs(&blocktree, std::usize::MAX, &mut repair_info)
