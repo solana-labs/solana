@@ -76,6 +76,7 @@ pub type Result<T> = result::Result<T, BankError>;
 type BankStatusCache = StatusCache<BankError>;
 
 /// Manager for the state of all accounts and programs after processing its entries.
+#[derive(Default)]
 pub struct Bank {
     accounts: Accounts,
 
@@ -85,21 +86,11 @@ pub struct Bank {
     /// FIFO queue of `last_id` items
     last_id_queue: RwLock<LastIdQueue>,
 
+    /// Previous checkpoint of this bank
     parent: Option<Arc<Bank>>,
 
+    /// Hash of the previous checkpoint's state
     parent_hash: Hash,
-}
-
-impl Default for Bank {
-    fn default() -> Self {
-        Self {
-            accounts: Accounts::default(),
-            last_id_queue: RwLock::new(LastIdQueue::default()),
-            status_cache: RwLock::new(BankStatusCache::default()),
-            parent: None,
-            parent_hash: Hash::default(),
-        }
-    }
 }
 
 impl Bank {
@@ -111,6 +102,7 @@ impl Bank {
         bank
     }
 
+    /// Create a new bank that points to an immutable checkpoint of another bank.
     pub fn new_from_parent(parent: &Arc<Bank>) -> Self {
         let mut bank = Self::default();
         bank.last_id_queue = RwLock::new(parent.last_id_queue.read().unwrap().clone());
@@ -1045,7 +1037,7 @@ mod tests {
         res[0].clone().unwrap_err();
     }
 
-    /// Verify that the parents vector is computed correclty
+    /// Verify that the parent's vector is computed correctly
     #[test]
     fn test_bank_parents() {
         let (genesis_block, _) = GenesisBlock::new(1);
@@ -1055,7 +1047,7 @@ mod tests {
         assert!(Arc::ptr_eq(&bank.parents()[0], &parent));
     }
 
-    /// Verifies that last ids and status cache are correclty referenced from parent
+    /// Verifies that last ids and status cache are correctly referenced from parent
     #[test]
     fn test_bank_parent_duplicate_signature() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
@@ -1077,7 +1069,7 @@ mod tests {
         );
     }
 
-    /// Verifies that last ids and accounts are correclty referenced from parent
+    /// Verifies that last ids and accounts are correctly referenced from parent
     #[test]
     fn test_bank_parent_account_spend() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
