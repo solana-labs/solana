@@ -8,7 +8,6 @@
 //!    the local nodes wallclock window they are drooped silently.
 //! 2. The prune set is stored in a Bloom filter.
 
-use crate::bloom::Bloom;
 use crate::contact_info::ContactInfo;
 use crate::crds::{Crds, VersionedCrdsValue};
 use crate::crds_gossip::CRDS_GOSSIP_BLOOM_SIZE;
@@ -20,6 +19,7 @@ use hashbrown::HashMap;
 use indexmap::map::IndexMap;
 use rand;
 use rand::seq::SliceRandom;
+use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;

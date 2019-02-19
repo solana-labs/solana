@@ -3,12 +3,12 @@
 //! designed to run with a simulator or over a UDP network connection with messages up to a
 //! packet::BLOB_DATA_SIZE size.
 
-use crate::bloom::Bloom;
 use crate::crds::Crds;
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::CrdsGossipPull;
 use crate::crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE};
 use crate::crds_value::CrdsValue;
+use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 

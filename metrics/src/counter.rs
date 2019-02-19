@@ -1,4 +1,5 @@
-use solana_metrics::{influxdb, submit};
+use crate::{influxdb, submit};
+use log::{info, log_enabled};
 use solana_sdk::timing;
 use std::env;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -16,6 +17,7 @@ pub struct Counter {
     pub point: Option<influxdb::Point>,
 }
 
+#[macro_export]
 macro_rules! create_counter {
     ($name:expr, $lograte:expr) => {
         Counter {
@@ -29,21 +31,14 @@ macro_rules! create_counter {
     };
 }
 
+#[macro_export]
 macro_rules! inc_counter {
     ($name:expr, $level:expr, $count:expr) => {
         unsafe { $name.inc($level, $count) };
     };
 }
 
-macro_rules! inc_new_counter_info {
-    ($name:expr, $count:expr) => {{
-        inc_new_counter!($name, $count, Level::Info, 0);
-    }};
-    ($name:expr, $count:expr, $lograte:expr) => {{
-        inc_new_counter!($name, $count, Level::Info, $lograte);
-    }};
-}
-
+#[macro_export]
 macro_rules! inc_new_counter {
     ($name:expr, $count:expr, $level:expr, $lograte:expr) => {{
         static mut INC_NEW_COUNTER: Counter = create_counter!($name, $lograte);
@@ -54,6 +49,16 @@ macro_rules! inc_new_counter {
             });
         }
         inc_counter!(INC_NEW_COUNTER, $level, $count);
+    }};
+}
+
+#[macro_export]
+macro_rules! inc_new_counter_info {
+    ($name:expr, $count:expr) => {{
+        inc_new_counter!($name, $count, Level::Info, 0);
+    }};
+    ($name:expr, $count:expr, $lograte:expr) => {{
+        inc_new_counter!($name, $count, Level::Info, $lograte);
     }};
 }
 

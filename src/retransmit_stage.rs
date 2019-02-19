@@ -1,12 +1,10 @@
 //! The `retransmit_stage` retransmits blobs between validators
 
-use crate::bank::Bank;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{
     compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT, GROW_LAYER_CAPACITY,
     NEIGHBORHOOD_SIZE,
 };
-use crate::counter::Counter;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::packet::SharedBlob;
 use crate::result::{Error, Result};
@@ -14,7 +12,9 @@ use crate::service::Service;
 use crate::streamer::BlobReceiver;
 use crate::window_service::WindowService;
 use log::Level;
+use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};
+use solana_runtime::bank::Bank;
 use std::net::UdpSocket;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::channel;

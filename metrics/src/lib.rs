@@ -1,3 +1,6 @@
+#[macro_use]
+pub mod counter;
+
 mod metrics;
 
 pub use crate::metrics::flush;

@@ -1,6 +1,6 @@
 //! The `bank_forks` module implments BankForks a DAG of checkpointed Banks
 
-use crate::bank::Bank;
+use solana_runtime::bank::Bank;
 use std::collections::HashMap;
 use std::sync::Arc;
 

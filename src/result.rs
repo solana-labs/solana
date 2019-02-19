@@ -1,6 +1,5 @@
 //! The `result` module exposes a Result type that propagates one of many different Error types.
 
-use crate::bank;
 use crate::blocktree;
 use crate::cluster_info;
 #[cfg(feature = "erasure")]
@@ -9,6 +8,7 @@ use crate::packet;
 use crate::poh_recorder;
 use bincode;
 use serde_json;
+use solana_runtime::bank;
 use std;
 use std::any::Any;
 

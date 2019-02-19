@@ -2,7 +2,7 @@
 
 use clap::{crate_version, value_t_or_exit, App, Arg};
 use solana::blocktree::create_new_ledger;
-use solana::genesis_block::GenesisBlock;
+use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::signature::{read_keypair, Keypair, KeypairUtil};
 use std::error;
 

@@ -1,8 +1,8 @@
 //! The `genesis_block` module is a library for generating the chain's genesis block.
 
-use solana_sdk::hash::{hash, Hash};
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::{Keypair, KeypairUtil};
+use crate::hash::{hash, Hash};
+use crate::pubkey::Pubkey;
+use crate::signature::{Keypair, KeypairUtil};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;

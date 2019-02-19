@@ -5,8 +5,6 @@
 //! transaction. All processing is done on the CPU by default and on a GPU
 //! if the `cuda` feature is enabled with `--features=cuda`.
 
-use crate::counter::Counter;
-
 use crate::packet::SharedPackets;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -14,6 +12,7 @@ use crate::sigverify;
 use crate::streamer::{self, PacketReceiver};
 use log::Level;
 use rand::{thread_rng, Rng};
+use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::timing;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};

@@ -110,12 +110,12 @@ impl Service for EntryStreamStage {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::bank::Bank;
     use crate::entry::Entry;
-    use crate::genesis_block::GenesisBlock;
     use crate::leader_scheduler::LeaderSchedulerConfig;
     use chrono::{DateTime, FixedOffset};
     use serde_json::Value;
+    use solana_runtime::bank::Bank;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;

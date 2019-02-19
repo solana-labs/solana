@@ -9,7 +9,6 @@
 //! with random hash functions.  So each subsequent request will have a different distribution
 //! of false positives.
 
-use crate::bloom::Bloom;
 use crate::crds::Crds;
 use crate::crds_gossip::CRDS_GOSSIP_BLOOM_SIZE;
 use crate::crds_gossip_error::CrdsGossipError;
@@ -19,6 +18,7 @@ use bincode::serialized_size;
 use hashbrown::HashMap;
 use rand;
 use rand::distributions::{Distribution, WeightedIndex};
+use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;

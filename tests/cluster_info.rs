@@ -1,12 +1,12 @@
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::prelude::*;
-use solana::bank::Bank;
 use solana::cluster_info::{
     compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT, GROW_LAYER_CAPACITY,
     NEIGHBORHOOD_SIZE,
 };
 use solana::contact_info::ContactInfo;
-use solana::genesis_block::GenesisBlock;
+use solana_runtime::bank::Bank;
+use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::collections::{HashMap, HashSet};

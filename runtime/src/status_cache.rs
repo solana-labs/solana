@@ -1,11 +1,12 @@
 use crate::bloom::{Bloom, BloomHashIndex};
-use crate::last_id_queue::MAX_ENTRY_IDS;
 use hashbrown::HashMap;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Signature;
-use solana_sdk::timing::NUM_TICKS_PER_SECOND;
+use solana_sdk::timing::{MAX_ENTRY_IDS, NUM_TICKS_PER_SECOND};
 use std::collections::VecDeque;
-use std::ops::{Deref, DerefMut};
+use std::ops::Deref;
+#[cfg(test)]
+use std::ops::DerefMut;
 
 /// This cache is designed to last 1 second
 const MAX_CACHE_ENTRIES: usize = MAX_ENTRY_IDS / NUM_TICKS_PER_SECOND;
@@ -85,6 +86,7 @@ impl<T: Clone> StatusCache<T> {
     /// like accounts, status cache starts with an new data structure for every checkpoint
     /// so only merge is implemented
     /// but the merges maintains a history
+    #[cfg(test)]
     pub fn merge_into_root(&mut self, other: Self) {
         // merges should be empty for every other checkpoint accept the root
         // which cannot be rolled back
@@ -131,6 +133,7 @@ impl<T: Clone> StatusCache<T> {
         }
         false
     }
+    #[cfg(test)]
     pub fn clear_all<U>(checkpoints: &mut [U]) -> bool
     where
         U: DerefMut<Target = Self>,
