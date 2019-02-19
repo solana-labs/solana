@@ -2,7 +2,6 @@
 //!
 use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
-use crate::counter::Counter;
 use crate::db_window::*;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::repair_service::RepairService;
@@ -10,6 +9,7 @@ use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::streamer::{BlobReceiver, BlobSender};
 use log::Level;
+use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;

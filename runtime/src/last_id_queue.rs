@@ -1,14 +1,6 @@
 use hashbrown::HashMap;
 use solana_sdk::hash::Hash;
-use solana_sdk::timing::{timestamp, NUM_TICKS_PER_SECOND};
-
-/// The number of most recent `last_id` values that the bank will track the signatures
-/// of. Once the bank discards a `last_id`, it will reject any transactions that use
-/// that `last_id` in a transaction. Lowering this value reduces memory consumption,
-/// but requires clients to update its `last_id` more frequently. Raising the value
-/// lengthens the time a client must wait to be certain a missing transaction will
-/// not be processed by the network.
-pub const MAX_ENTRY_IDS: usize = NUM_TICKS_PER_SECOND * 120;
+use solana_sdk::timing::{timestamp, MAX_ENTRY_IDS};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct LastIdEntry {
@@ -48,6 +40,7 @@ impl LastIdQueue {
         }
     }
     /// check if entry is valid
+    #[cfg(test)]
     pub fn check_entry(&self, entry_id: Hash) -> bool {
         self.entries.get(&entry_id).is_some()
     }
@@ -124,12 +117,14 @@ impl LastIdQueue {
         None
     }
 
+    #[cfg(test)]
     pub fn clear(&mut self) {
         self.entries = HashMap::new();
         self.tick_height = 0;
         self.last_id = None;
     }
     /// fork for LastIdQueue is a simple clone
+    #[cfg(test)]
     pub fn fork(&self) -> Self {
         Self {
             entries: self.entries.clone(),
@@ -138,6 +133,7 @@ impl LastIdQueue {
         }
     }
     /// merge for entryq is a swap
+    #[cfg(test)]
     pub fn merge_into_root(&mut self, other: Self) {
         let (entries, tick_height, last_id) = { (other.entries, other.tick_height, other.last_id) };
         self.entries = entries;

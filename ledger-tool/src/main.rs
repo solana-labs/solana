@@ -1,8 +1,8 @@
 use clap::{crate_version, App, Arg, SubCommand};
-use solana::bank::Bank;
 use solana::blocktree::Blocktree;
 use solana::blocktree_processor;
-use solana::genesis_block::GenesisBlock;
+use solana_runtime::bank::Bank;
+use solana_sdk::genesis_block::GenesisBlock;
 use std::io::{stdout, Write};
 use std::process::exit;
 

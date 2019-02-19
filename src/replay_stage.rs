@@ -1,10 +1,8 @@
 //! The `replay_stage` replays transactions broadcast by the leader.
 
-use crate::bank::Bank;
 use crate::blocktree::Blocktree;
 use crate::blocktree_processor;
 use crate::cluster_info::ClusterInfo;
-use crate::counter::Counter;
 use crate::entry::{Entry, EntryReceiver, EntrySender, EntrySlice};
 use crate::leader_scheduler::LeaderScheduler;
 use crate::packet::BlobError;
@@ -14,7 +12,9 @@ use crate::service::Service;
 use crate::tvu::TvuRotationSender;
 use crate::voting_keypair::VotingKeypair;
 use log::Level;
+use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};
+use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
@@ -341,7 +341,6 @@ impl Service for ReplayStage {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::bank::Bank;
     use crate::blocktree::{
         create_tmp_sample_ledger, Blocktree, BlocktreeConfig, DEFAULT_SLOT_HEIGHT,
     };
@@ -349,12 +348,12 @@ mod test {
     use crate::entry::create_ticks;
     use crate::entry::{next_entry_mut, Entry};
     use crate::fullnode::new_bank_from_ledger;
-    use crate::genesis_block::GenesisBlock;
     use crate::leader_scheduler::{
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
     use crate::replay_stage::ReplayStage;
     use crate::voting_keypair::VotingKeypair;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;

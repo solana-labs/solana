@@ -12,7 +12,6 @@
 //! 4. StorageStage
 //! - Generating the keys used to encrypt the ledger and sample it for storage mining.
 
-use crate::bank::Bank;
 use crate::blob_fetch_stage::BlobFetchStage;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
@@ -25,6 +24,7 @@ use crate::service::Service;
 use crate::storage_stage::{StorageStage, StorageState};
 use crate::tpu::{TpuReturnType, TpuRotationReceiver, TpuRotationSender};
 use crate::voting_keypair::VotingKeypair;
+use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
@@ -209,12 +209,11 @@ impl Service for Tvu {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::bank::Bank;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::genesis_block::GenesisBlock;
     use crate::leader_scheduler::LeaderSchedulerConfig;
     use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
+    use solana_sdk::genesis_block::GenesisBlock;
 
     #[test]
     fn test_tvu_exit() {

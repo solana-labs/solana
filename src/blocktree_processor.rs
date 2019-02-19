@@ -1,14 +1,14 @@
-use crate::bank::{Bank, BankError, Result};
 use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
-use crate::counter::Counter;
 use crate::entry::{Entry, EntrySlice};
-use crate::last_id_queue::MAX_ENTRY_IDS;
 use crate::leader_scheduler::LeaderScheduler;
 use itertools::Itertools;
 use log::Level;
 use rayon::prelude::*;
+use solana_metrics::counter::Counter;
+use solana_runtime::bank::{Bank, BankError, Result};
 use solana_sdk::hash::Hash;
+use solana_sdk::timing::MAX_ENTRY_IDS;
 use std::sync::{Arc, RwLock};
 
 pub const VERIFY_BLOCK_SIZE: usize = 16;
@@ -202,7 +202,7 @@ mod tests {
     use super::*;
     use crate::entry::{next_entries, next_entry, Entry};
     use crate::gen_keys::GenKeys;
-    use crate::genesis_block::GenesisBlock;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;

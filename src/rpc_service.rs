@@ -1,12 +1,12 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
-use crate::bank::Bank;
 use crate::cluster_info::ClusterInfo;
 use crate::rpc::*;
 use crate::service::Service;
 use crate::storage_stage::StorageState;
 use jsonrpc_core::MetaIoHandler;
 use jsonrpc_http_server::{hyper, AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
+use solana_runtime::bank::Bank;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -101,9 +101,8 @@ impl Service for JsonRpcService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bank::Bank;
     use crate::cluster_info::NodeInfo;
-    use crate::genesis_block::GenesisBlock;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::KeypairUtil;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 

@@ -1,10 +1,10 @@
 //! The `poh_recorder` module provides an object for synchronizing with Proof of History.
 //! It synchronizes PoH, bank's register_tick and the ledger
 //!
-use crate::bank::Bank;
 use crate::entry::Entry;
 use crate::poh::Poh;
 use crate::result::{Error, Result};
+use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::transaction::Transaction;
 use std::sync::mpsc::Sender;
@@ -116,8 +116,8 @@ impl PohRecorder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis_block::GenesisBlock;
     use crate::test_tx::test_tx;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::hash;
     use std::sync::mpsc::channel;
     use std::sync::Arc;

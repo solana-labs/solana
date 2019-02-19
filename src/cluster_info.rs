@@ -12,11 +12,8 @@
 //! * layer 2 - Everyone else, if layer 1 is `2^10`, layer 2 should be able to fit `2^20` number of nodes.
 //!
 //! Bank needs to provide an interface for us to query the stake weight
-use crate::bank::Bank;
 use crate::blocktree::Blocktree;
-use crate::bloom::Bloom;
 use crate::contact_info::ContactInfo;
-use crate::counter::Counter;
 use crate::crds_gossip::CrdsGossip;
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS;
@@ -31,8 +28,11 @@ use hashbrown::HashMap;
 use log::Level;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
+use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};
 use solana_netutil::{bind_in_range, bind_to, find_available_port_in_range, multi_bind_in_range};
+use solana_runtime::bank::Bank;
+use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signable, Signature};

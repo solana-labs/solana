@@ -1,10 +1,10 @@
 //! The `poh_service` module implements a service that records the passing of
 //! "ticks", a measure of time in the PoH stream
 
-use crate::bank::Bank;
 use crate::poh_recorder::PohRecorder;
 use crate::result::Result;
 use crate::service::Service;
+use solana_runtime::bank::Bank;
 use solana_sdk::timing::NUM_TICKS_PER_SECOND;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -108,9 +108,8 @@ impl Service for PohService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bank::Bank;
-    use crate::genesis_block::GenesisBlock;
     use crate::test_tx::test_tx;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::hash;
     use std::sync::mpsc::channel;
 

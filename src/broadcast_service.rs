@@ -1,9 +1,7 @@
 //! The `broadcast_service` broadcasts data from a leader node to validators
 //!
-use crate::bank::Bank;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, ClusterInfoError, NodeInfo, DATA_PLANE_FANOUT};
-use crate::counter::Counter;
 use crate::entry::Entry;
 use crate::entry::EntrySlice;
 #[cfg(feature = "erasure")]
@@ -14,7 +12,9 @@ use crate::result::{Error, Result};
 use crate::service::Service;
 use log::Level;
 use rayon::prelude::*;
+use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};
+use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::duration_as_ms;
 use std::net::UdpSocket;

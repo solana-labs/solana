@@ -1,6 +1,5 @@
 //! Set of functions for emulating windowing functions from a database ledger implementation
 use crate::blocktree::*;
-use crate::counter::Counter;
 #[cfg(feature = "erasure")]
 use crate::erasure;
 use crate::leader_scheduler::LeaderScheduler;
@@ -8,6 +7,7 @@ use crate::packet::{SharedBlob, BLOB_HEADER_SIZE};
 use crate::result::Result;
 use crate::streamer::BlobSender;
 use log::Level;
+use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;
 use std::borrow::Borrow;

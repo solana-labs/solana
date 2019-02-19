@@ -1,6 +1,6 @@
 use solana_rewards_api::rewards_program;
 use solana_rewards_api::rewards_transaction::RewardsTransaction;
-use solana_runtime::{execute_transaction, RuntimeError};
+use solana_runtime::runtime::{execute_transaction, RuntimeError};
 use solana_sdk::account::Account;
 use solana_sdk::hash::Hash;
 use solana_sdk::native_loader::create_program_account;

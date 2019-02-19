@@ -2,10 +2,7 @@
 //! to contruct a software pipeline. The stage uses all available CPU cores and
 //! can do its processing in parallel with signature verification on the GPU.
 
-use crate::bank::{self, Bank, BankError};
-use crate::counter::Counter;
 use crate::entry::Entry;
-use crate::last_id_queue::MAX_ENTRY_IDS;
 use crate::leader_confirmation_service::LeaderConfirmationService;
 use crate::packet::Packets;
 use crate::packet::SharedPackets;
@@ -16,9 +13,11 @@ use crate::service::Service;
 use crate::sigverify_stage::VerifiedPackets;
 use bincode::deserialize;
 use log::Level;
+use solana_metrics::counter::Counter;
+use solana_runtime::bank::{self, Bank, BankError};
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::timing::{self, duration_as_us};
+use solana_sdk::timing::{self, duration_as_us, MAX_ENTRY_IDS};
 use solana_sdk::transaction::Transaction;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
@@ -344,8 +343,8 @@ impl Service for BankingStage {
 mod tests {
     use super::*;
     use crate::entry::EntrySlice;
-    use crate::genesis_block::GenesisBlock;
     use crate::packet::to_packets;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;

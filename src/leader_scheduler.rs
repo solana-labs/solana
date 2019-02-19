@@ -1,12 +1,12 @@
 //! The `leader_scheduler` module implements a structure and functions for tracking and
 //! managing the schedule for leader rotation
 
-use crate::bank::Bank;
 use crate::entry::{create_ticks, next_entry_mut, Entry};
 use crate::voting_keypair::VotingKeypair;
 use bincode::serialize;
 use byteorder::{LittleEndian, ReadBytesExt};
 use hashbrown::HashSet;
+use solana_runtime::bank::Bank;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -435,8 +435,8 @@ pub fn make_active_set_entries(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_TOKENS};
     use hashbrown::HashSet;
+    use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_TOKENS};
     use std::hash::Hash as StdHash;
     use std::iter::FromIterator;
     use std::sync::RwLock;

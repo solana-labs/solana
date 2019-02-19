@@ -7,14 +7,9 @@
 //!
 
 #![cfg_attr(feature = "unstable", feature(test))]
-#[macro_use]
-pub mod counter;
-pub mod accounts;
-pub mod bank;
 pub mod bank_forks;
 pub mod banking_stage;
 pub mod blob_fetch_stage;
-pub mod bloom;
 pub mod broadcast_service;
 #[cfg(feature = "chacha")]
 pub mod chacha;
@@ -42,9 +37,7 @@ pub mod erasure;
 pub mod fetch_stage;
 pub mod fullnode;
 pub mod gen_keys;
-pub mod genesis_block;
 pub mod gossip_service;
-pub mod last_id_queue;
 pub mod leader_confirmation_service;
 pub mod leader_scheduler;
 pub mod local_vote_signer_service;
@@ -69,7 +62,6 @@ pub mod rpc_subscriptions;
 pub mod service;
 pub mod sigverify;
 pub mod sigverify_stage;
-pub mod status_cache;
 pub mod storage_stage;
 pub mod streamer;
 pub mod test_tx;
@@ -94,6 +86,9 @@ extern crate log;
 extern crate serde_derive;
 #[macro_use]
 extern crate serde_json;
+
+#[macro_use]
+extern crate solana_metrics;
 
 #[cfg(test)]
 #[macro_use]

@@ -1,6 +1,5 @@
 //! The `rpc` module implements the Solana RPC interface.
 
-use crate::bank::{self, Bank, BankError};
 use crate::cluster_info::ClusterInfo;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::rpc_status::RpcSignatureStatus;
@@ -10,6 +9,7 @@ use bs58;
 use jsonrpc_core::{Error, ErrorCode, Metadata, Result};
 use jsonrpc_derive::rpc;
 use solana_drone::drone::request_airdrop_transaction;
+use solana_runtime::bank::{self, Bank, BankError};
 use solana_sdk::account::Account;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::Signature;
@@ -328,10 +328,9 @@ impl RpcSol for RpcSolImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bank::Bank;
     use crate::cluster_info::NodeInfo;
-    use crate::genesis_block::GenesisBlock;
     use jsonrpc_core::{MetaIoHandler, Response};
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::{hash, Hash};
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;

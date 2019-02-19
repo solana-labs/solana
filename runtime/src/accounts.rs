@@ -1,10 +1,9 @@
-use crate::bank::BankError;
-use crate::bank::Result;
-use crate::counter::Counter;
+use crate::bank::{BankError, Result};
+use crate::runtime::has_duplicates;
 use bincode::serialize;
 use hashbrown::{HashMap, HashSet};
-use log::Level;
-use solana_runtime::has_duplicates;
+use log::{debug, Level};
+use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::native_loader;
@@ -256,13 +255,13 @@ impl AccountsDB {
     pub fn transaction_count(&self) -> u64 {
         self.transaction_count
     }
-    pub fn account_values_slow(&self) -> Vec<(Pubkey, solana_sdk::account::Account)> {
-        self.accounts.iter().map(|(x, y)| (*x, y.clone())).collect()
-    }
-    fn merge(&mut self, other: Self) {
-        self.transaction_count += other.transaction_count;
-        self.accounts.extend(other.accounts)
-    }
+    //pub fn account_values_slow(&self) -> Vec<(Pubkey, solana_sdk::account::Account)> {
+    //    self.accounts.iter().map(|(x, y)| (*x, y.clone())).collect()
+    //}
+    //fn merge(&mut self, other: Self) {
+    //    self.transaction_count += other.transaction_count;
+    //    self.accounts.extend(other.accounts)
+    //}
 }
 
 impl Accounts {
@@ -390,27 +389,27 @@ impl Accounts {
     pub fn transaction_count(&self) -> u64 {
         self.accounts_db.read().unwrap().transaction_count()
     }
-    /// accounts starts with an empty data structure for every fork
-    /// self is root, merge the fork into self
-    pub fn merge_into_root(&self, other: Self) {
-        assert!(other.account_locks.lock().unwrap().is_empty());
-        let db = other.accounts_db.into_inner().unwrap();
-        let mut mydb = self.accounts_db.write().unwrap();
-        mydb.merge(db)
-    }
-    pub fn copy_for_tpu(&self) -> Self {
-        //TODO: deprecate this in favor of forks and merge_into_root
-        let copy = Accounts::default();
+    ///// accounts starts with an empty data structure for every fork
+    ///// self is root, merge the fork into self
+    //pub fn merge_into_root(&self, other: Self) {
+    //    assert!(other.account_locks.lock().unwrap().is_empty());
+    //    let db = other.accounts_db.into_inner().unwrap();
+    //    let mut mydb = self.accounts_db.write().unwrap();
+    //    mydb.merge(db)
+    //}
+    //pub fn copy_for_tpu(&self) -> Self {
+    //    //TODO: deprecate this in favor of forks and merge_into_root
+    //    let copy = Accounts::default();
 
-        {
-            let mut accounts_db = copy.accounts_db.write().unwrap();
-            for (key, val) in self.accounts_db.read().unwrap().accounts.iter() {
-                accounts_db.accounts.insert(key.clone(), val.clone());
-            }
-            accounts_db.transaction_count = self.transaction_count();
-        }
-        copy
-    }
+    //    {
+    //        let mut accounts_db = copy.accounts_db.write().unwrap();
+    //        for (key, val) in self.accounts_db.read().unwrap().accounts.iter() {
+    //            accounts_db.accounts.insert(key.clone(), val.clone());
+    //        }
+    //        accounts_db.transaction_count = self.transaction_count();
+    //    }
+    //    copy
+    //}
 }
 
 #[cfg(test)]

@@ -4,16 +4,16 @@
 //! already been signed and verified.
 
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
-use crate::counter::Counter;
-use crate::genesis_block::GenesisBlock;
-use crate::last_id_queue::{LastIdQueue, MAX_ENTRY_IDS};
+use crate::last_id_queue::LastIdQueue;
+use crate::runtime::{self, RuntimeError};
 use crate::status_cache::StatusCache;
 use bincode::{deserialize, serialize};
-use log::Level;
-use solana_runtime::{self, RuntimeError};
+use log::{debug, info, Level};
+use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
 use solana_sdk::bpf_loader;
 use solana_sdk::budget_program;
+use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::{extend_and_hash, Hash};
 use solana_sdk::native_loader;
 use solana_sdk::native_program::ProgramError;
@@ -22,7 +22,7 @@ use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::storage_program;
 use solana_sdk::system_program;
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::timing::{duration_as_us, NUM_TICKS_PER_SECOND};
+use solana_sdk::timing::{duration_as_us, MAX_ENTRY_IDS, NUM_TICKS_PER_SECOND};
 use solana_sdk::token_program;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, VoteState};
@@ -389,7 +389,7 @@ impl Bank {
             .map(|(accs, tx)| match accs {
                 Err(e) => Err(e.clone()),
                 Ok((ref mut accounts, ref mut loaders)) => {
-                    solana_runtime::execute_transaction(tx, loaders, accounts, tick_height).map_err(
+                    runtime::execute_transaction(tx, loaders, accounts, tick_height).map_err(
                         |RuntimeError::ProgramError(index, err)| {
                             BankError::ProgramError(index, err)
                         },
@@ -628,6 +628,7 @@ impl Bank {
 mod tests {
     use super::*;
     use hashbrown::HashSet;
+    use solana_sdk::genesis_block::BOOTSTRAP_LEADER_TOKENS;
     use solana_sdk::hash::hash;
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::Keypair;
@@ -647,7 +648,7 @@ mod tests {
     #[test]
     fn test_bank_new_with_leader() {
         let dummy_leader_id = Keypair::new().pubkey();
-        let dummy_leader_tokens = crate::genesis_block::BOOTSTRAP_LEADER_TOKENS;
+        let dummy_leader_tokens = BOOTSTRAP_LEADER_TOKENS;
         let (genesis_block, _) =
             GenesisBlock::new_with_leader(10_000, dummy_leader_id, dummy_leader_tokens);
         assert_eq!(genesis_block.bootstrap_leader_tokens, dummy_leader_tokens);
@@ -797,7 +798,7 @@ mod tests {
         // Result failed, but signature is registered
         assert!(res.is_err());
         assert!(bank.has_signature(&signature));
-        assert_matches!(
+        assert_eq!(
             bank.get_signature_status(&signature),
             Some(Err(BankError::ProgramError(
                 0,
@@ -833,7 +834,7 @@ mod tests {
             .unwrap();
         assert_eq!(bank.transaction_count(), 1);
         assert_eq!(bank.get_balance(&pubkey), 1_000);
-        assert_matches!(
+        assert_eq!(
             bank.transfer(10_001, &mint_keypair, pubkey, genesis_block.last_id()),
             Err(BankError::ProgramError(
                 0,
@@ -886,7 +887,6 @@ mod tests {
 
     #[test]
     fn test_process_genesis() {
-        solana_logger::setup();
         let dummy_leader_id = Keypair::new().pubkey();
         let dummy_leader_tokens = 2;
         let (genesis_block, _) =
@@ -931,10 +931,9 @@ mod tests {
 
         bank.unlock_accounts(&pay_alice, &results_alice);
 
-        assert_matches!(
-            bank.transfer(2, &mint_keypair, bob.pubkey(), genesis_block.last_id()),
-            Ok(_)
-        );
+        assert!(bank
+            .transfer(2, &mint_keypair, bob.pubkey(), genesis_block.last_id())
+            .is_ok());
     }
 
     #[test]
@@ -1000,7 +999,6 @@ mod tests {
 
     #[test]
     fn test_bank_storage() {
-        solana_logger::setup();
         let (genesis_block, alice) = GenesisBlock::new(1000);
         let bank = Bank::new(&genesis_block);
 

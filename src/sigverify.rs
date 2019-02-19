@@ -4,10 +4,10 @@
 //! offloaded to the GPU.
 //!
 
-use crate::counter::Counter;
 use crate::packet::{Packet, SharedPackets};
 use crate::result::Result;
 use log::Level;
+use solana_metrics::counter::Counter;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::shortvec::decode_len;
 use solana_sdk::signature::Signature;

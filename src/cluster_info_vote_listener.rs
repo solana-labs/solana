@@ -1,10 +1,10 @@
 use crate::cluster_info::{ClusterInfo, GOSSIP_SLEEP_MILLIS};
-use crate::counter::Counter;
 use crate::packet;
 use crate::result::Result;
 use crate::service::Service;
 use crate::streamer::PacketSender;
 use log::Level;
+use solana_metrics::counter::Counter;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, sleep, Builder, JoinHandle};

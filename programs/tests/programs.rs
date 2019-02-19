@@ -1,5 +1,5 @@
-use solana::bank::Bank;
-use solana::genesis_block::GenesisBlock;
+use solana_runtime::bank::Bank;
+use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::loader_transaction::LoaderTransaction;
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;

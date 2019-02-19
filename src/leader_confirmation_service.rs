@@ -2,10 +2,9 @@
 //! to generate a thread which regularly calculates the last confirmation times
 //! observed by the leader
 
-use crate::bank::Bank;
-
 use crate::service::Service;
 use solana_metrics::{influxdb, submit};
+use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing;
 use std::result;
@@ -134,12 +133,10 @@ impl Service for LeaderConfirmationService {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::bank::Bank;
-    use crate::voting_keypair::VotingKeypair;
-
-    use crate::genesis_block::GenesisBlock;
     use crate::leader_scheduler::tests::new_vote_account;
+    use crate::voting_keypair::VotingKeypair;
     use bincode::serialize;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::vote_transaction::VoteTransaction;
