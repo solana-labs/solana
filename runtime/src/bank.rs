@@ -898,7 +898,7 @@ mod tests {
         let pay_alice = vec![tx1];
 
         let lock_result = bank.lock_accounts(&pay_alice);
-        let (results_alice, fee) =
+        let (results_alice, _fee) =
             bank.load_execute_and_commit_transactions(&pay_alice, lock_result, MAX_ENTRY_IDS);
         assert_eq!(results_alice[0], Ok(()));
 
