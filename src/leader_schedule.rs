@@ -15,8 +15,8 @@ impl LeaderSchedule {
         current_epoch: u64,
         ticks_per_slot: u64,
         ticks_per_epoch: u64,
-    ) -> LeaderSchedule {
-        LeaderSchedule {
+    ) -> Self {
+        Self {
             current_epoch,
             slot_leaders,
             ticks_per_slot,
