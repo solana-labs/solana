@@ -27,19 +27,7 @@ impl GenesisBlock {
         let tokens = tokens
             .checked_add(BOOTSTRAP_LEADER_TOKENS)
             .unwrap_or(tokens);
-        let mint_keypair = Keypair::new();
-        let bootstrap_leader_keypair = Keypair::new();
-        let bootstrap_leader_vote_account_keypair = Keypair::new();
-        (
-            Self {
-                bootstrap_leader_id: bootstrap_leader_keypair.pubkey(),
-                bootstrap_leader_tokens: BOOTSTRAP_LEADER_TOKENS,
-                bootstrap_leader_vote_account_id: bootstrap_leader_vote_account_keypair.pubkey(),
-                mint_id: mint_keypair.pubkey(),
-                tokens,
-            },
-            mint_keypair,
-        )
+        Self::new_with_leader(tokens, Keypair::new().pubkey(), BOOTSTRAP_LEADER_TOKENS)
     }
 
     pub fn new_with_leader(
