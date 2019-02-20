@@ -1046,4 +1046,33 @@ mod tests {
         assert_eq!(parent.get_signature_status(&tx.signatures[0]), None);
     }
 
+    #[test]
+    fn test_hash_internal_state() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2_000);
+        let bank0 = Bank::new(&genesis_block);
+        let bank1 = Bank::new(&genesis_block);
+        let initial_state = bank0.hash_internal_state();
+        assert_eq!(bank1.hash_internal_state(), initial_state);
+
+        let pubkey = Keypair::new().pubkey();
+        bank0
+            .transfer(1_000, &mint_keypair, pubkey, bank0.last_id())
+            .unwrap();
+        assert_ne!(bank0.hash_internal_state(), initial_state);
+        bank1
+            .transfer(1_000, &mint_keypair, pubkey, bank1.last_id())
+            .unwrap();
+        assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
+
+        // Checkpointing should not change its state
+        let bank2 = Bank::new_from_parent(&Arc::new(bank1));
+        assert_eq!(bank0.hash_internal_state(), bank2.hash_internal_state());
+    }
+
+    #[test]
+    fn test_hash_internal_state_parents() {
+        let bank0 = Bank::new(&GenesisBlock::new(10).0);
+        let bank1 = Bank::new(&GenesisBlock::new(20).0);
+        assert_ne!(bank0.hash_internal_state(), bank1.hash_internal_state());
+    }
 }

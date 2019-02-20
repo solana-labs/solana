@@ -256,8 +256,7 @@ mod tests {
     use super::*;
     use crate::blocktree::tests::entries_to_blobs;
     use crate::blocktree::{create_tmp_sample_ledger, BlocktreeConfig};
-    use crate::entry::{create_ticks, next_entries, next_entry, Entry};
-    use crate::gen_keys::GenKeys;
+    use crate::entry::{create_ticks, next_entry, Entry};
     use crate::leader_scheduler::LeaderSchedulerConfig;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::native_program::ProgramError;
@@ -420,84 +419,6 @@ mod tests {
     fn par_process_entries(bank: &Bank, entries: &[Entry]) -> (Result<()>, u64) {
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
         par_process_entries_with_scheduler(bank, entries, &leader_scheduler)
-    }
-
-    fn create_sample_block_with_next_entries_using_keypairs(
-        genesis_block: &GenesisBlock,
-        mint_keypair: &Keypair,
-        keypairs: &[Keypair],
-    ) -> Vec<Entry> {
-        let mut entries: Vec<Entry> = vec![];
-
-        let mut last_id = genesis_block.last_id();
-
-        // Start off the ledger with the psuedo-tick linked to the genesis block
-        // (see entry0 in `process_ledger`)
-        let tick = Entry::new(&genesis_block.last_id(), 1, vec![]);
-        let mut hash = tick.id;
-        entries.push(tick);
-
-        let num_hashes = 1;
-        for k in keypairs {
-            let tx = SystemTransaction::new_account(mint_keypair, k.pubkey(), 1, last_id, 0);
-            let txs = vec![tx];
-            let mut e = next_entries(&hash, 0, txs);
-            entries.append(&mut e);
-            hash = entries.last().unwrap().id;
-            let tick = Entry::new(&hash, num_hashes, vec![]);
-            hash = tick.id;
-            last_id = hash;
-            entries.push(tick);
-        }
-        entries
-    }
-
-    #[test]
-    fn test_hash_internal_state() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(2_000);
-        let seed = [0u8; 32];
-        let mut rnd = GenKeys::new(seed);
-        let keypairs = rnd.gen_n_keypairs(5);
-        let entries0 = create_sample_block_with_next_entries_using_keypairs(
-            &genesis_block,
-            &mint_keypair,
-            &keypairs,
-        );
-        let entries1 = create_sample_block_with_next_entries_using_keypairs(
-            &genesis_block,
-            &mint_keypair,
-            &keypairs,
-        );
-
-        let bank0 = Bank::new(&genesis_block);
-        par_process_entries(&bank0, &entries0).0.unwrap();
-        let bank1 = Bank::new(&genesis_block);
-        par_process_entries(&bank1, &entries1).0.unwrap();
-
-        let initial_state = bank0.hash_internal_state();
-
-        assert_eq!(bank1.hash_internal_state(), initial_state);
-
-        let pubkey = keypairs[0].pubkey();
-        bank0
-            .transfer(1_000, &mint_keypair, pubkey, bank0.last_id())
-            .unwrap();
-        assert_ne!(bank0.hash_internal_state(), initial_state);
-        bank1
-            .transfer(1_000, &mint_keypair, pubkey, bank1.last_id())
-            .unwrap();
-        assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
-
-        // Checkpointing should not change its state
-        let bank2 = Bank::new_from_parent(&Arc::new(bank1));
-        assert_eq!(bank0.hash_internal_state(), bank2.hash_internal_state());
-    }
-
-    #[test]
-    fn test_hash_internal_state_parents() {
-        let bank0 = Bank::new(&GenesisBlock::new(10).0);
-        let bank1 = Bank::new(&GenesisBlock::new(20).0);
-        assert_ne!(bank0.hash_internal_state(), bank1.hash_internal_state());
     }
 
     #[test]
