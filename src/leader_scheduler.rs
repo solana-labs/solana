@@ -214,7 +214,8 @@ impl LeaderScheduler {
             upper_bound
         );
 
-        ActiveStakers::new_with_upper_bound(&bank, lower_bound, upper_bound).stakers()
+        let active_stakers = ActiveStakers::new_with_upper_bound(&bank, lower_bound, upper_bound);
+        active_stakers.pubkeys().into_iter().collect()
     }
 
     // Updates the leader schedule to include ticks from tick_height to the first tick of the next epoch
