@@ -174,16 +174,16 @@ impl ClusterInfo {
         let id = node_info.id;
         me.gossip.set_self(id);
         me.insert_info(node_info);
-        me.push_self();
+        me.push_self(None);
         me
     }
-    pub fn push_self(&mut self) {
+    pub fn push_self(&mut self, bank: Option<&Arc<Bank>>) {
         let mut my_data = self.my_data();
         let now = timestamp();
         my_data.wallclock = now;
         let mut entry = CrdsValue::ContactInfo(my_data);
         entry.sign(&self.keypair);
-        self.gossip.refresh_push_active_set();
+        self.gossip.refresh_push_active_set(bank);
         self.gossip.process_push_message(&[entry], now);
     }
     pub fn insert_info(&mut self, node_info: NodeInfo) {
@@ -756,9 +756,9 @@ impl ClusterInfo {
         Ok((addr, out))
     }
 
-    fn new_pull_requests(&mut self) -> Vec<(SocketAddr, Protocol)> {
+    fn new_pull_requests(&mut self, bank: Option<&Arc<Bank>>) -> Vec<(SocketAddr, Protocol)> {
         let now = timestamp();
-        let pulls: Vec<_> = self.gossip.new_pull_request(now).ok().into_iter().collect();
+        let pulls: Vec<_> = self.gossip.new_pull_request(now, bank).ok().into_iter().collect();
 
         let pr: Vec<_> = pulls
             .into_iter()
@@ -795,15 +795,19 @@ impl ClusterInfo {
             .collect()
     }
 
-    fn gossip_request(&mut self) -> Vec<(SocketAddr, Protocol)> {
-        let pulls: Vec<_> = self.new_pull_requests();
+    fn gossip_request(&mut self, bank: Option<&Arc<Bank>>) -> Vec<(SocketAddr, Protocol)> {
+        let pulls: Vec<_> = self.new_pull_requests(bank);
         let pushes: Vec<_> = self.new_push_requests();
         vec![pulls, pushes].into_iter().flat_map(|x| x).collect()
     }
 
     /// At random pick a node and try to get updated changes from them
-    fn run_gossip(obj: &Arc<RwLock<Self>>, blob_sender: &BlobSender) -> Result<()> {
-        let reqs = obj.write().unwrap().gossip_request();
+    fn run_gossip(
+        obj: &Arc<RwLock<Self>>,
+        bank: Option<&Arc<Bank>>,
+        blob_sender: &BlobSender,
+    ) -> Result<()> {
+        let reqs = obj.write().unwrap().gossip_request(bank);
         let blobs = reqs
             .into_iter()
             .filter_map(|(remote_gossip_addr, req)| to_shared_blob(req, remote_gossip_addr).ok())
@@ -845,6 +849,7 @@ impl ClusterInfo {
     /// randomly pick a node and ask them for updates asynchronously
     pub fn gossip(
         obj: Arc<RwLock<Self>>,
+        bank: Option<Arc<Bank>>,
         blob_sender: BlobSender,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
@@ -854,7 +859,7 @@ impl ClusterInfo {
                 let mut last_push = timestamp();
                 loop {
                     let start = timestamp();
-                    let _ = Self::run_gossip(&obj, &blob_sender);
+                    let _ = Self::run_gossip(&obj, bank.as_ref(), &blob_sender);
                     if exit.load(Ordering::Relaxed) {
                         return;
                     }
@@ -862,7 +867,7 @@ impl ClusterInfo {
                     //TODO: possibly tune this parameter
                     //we saw a deadlock passing an obj.read().unwrap().timeout into sleep
                     if start - last_push > CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 2 {
-                        obj.write().unwrap().push_self();
+                        obj.write().unwrap().push_self(bank.as_ref());
                         last_push = timestamp();
                     }
                     let elapsed = timestamp() - start;
@@ -1451,8 +1456,8 @@ mod tests {
             .write()
             .unwrap()
             .gossip
-            .refresh_push_active_set();
-        let reqs = cluster_info.write().unwrap().gossip_request();
+            .refresh_push_active_set(None);
+        let reqs = cluster_info.write().unwrap().gossip_request(None);
         //assert none of the addrs are invalid.
         reqs.iter().all(|(addr, _)| {
             let res = ContactInfo::is_valid_address(addr);
@@ -1730,7 +1735,7 @@ mod tests {
 
         let (_, _, val) = cluster_info
             .gossip
-            .new_pull_request(timestamp())
+            .new_pull_request(timestamp(), None)
             .ok()
             .unwrap();
         assert!(val.verify());

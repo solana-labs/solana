@@ -8,9 +8,12 @@ use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::CrdsGossipPull;
 use crate::crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE};
 use crate::crds_value::CrdsValue;
+use solana_runtime::bank::Bank;
 use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
+use std::cmp;
+use std::sync::Arc;
 
 ///The min size for bloom filters
 pub const CRDS_GOSSIP_BLOOM_SIZE: usize = 1000;
@@ -92,9 +95,10 @@ impl CrdsGossip {
 
     /// refresh the push active set
     /// * ratio - number of actives to rotate
-    pub fn refresh_push_active_set(&mut self) {
+    pub fn refresh_push_active_set(&mut self, bank: Option<&Arc<Bank>>) {
         self.push.refresh_push_active_set(
             &self.crds,
+            bank,
             self.id,
             self.pull.pull_request_time.len(),
             CRDS_GOSSIP_NUM_ACTIVE,
@@ -105,8 +109,9 @@ impl CrdsGossip {
     pub fn new_pull_request(
         &self,
         now: u64,
+        bank: Option<&Arc<Bank>>,
     ) -> Result<(Pubkey, Bloom<Hash>, CrdsValue), CrdsGossipError> {
-        self.pull.new_pull_request(&self.crds, self.id, now)
+        self.pull.new_pull_request(&self.crds, self.id, now, bank)
     }
 
     /// time when a request to `from` was initiated
@@ -156,6 +161,32 @@ impl CrdsGossip {
     }
 }
 
+/// A function that computes a normalized(log of bank balance) stake
+pub fn get_stake(id: &Pubkey, bank: Option<&Arc<Bank>>) -> u32 {
+    match bank {
+        Some(bank) => {
+            // cap the max balance to u32 max (it should be plenty)
+            let bal = cmp::min(u64::from(u32::max_value()), bank.get_balance(id));
+            cmp::max(1, (bal as f32).ln().round() as u32)
+        }
+        _ => 1,
+    }
+}
+
+/// A function that computes bounded weight given some max, a time since last selected, and a stake value
+/// The minimum stake is 1 and not 0 to allow 'time since last' picked to factor in.
+pub fn get_weight(max_weight: u32, time_since_last_selected: u32, stake: u32) -> u32 {
+    cmp::max(
+        1,
+        cmp::min(
+            max_weight,
+            time_since_last_selected
+                .checked_mul(stake)
+                .unwrap_or(max_weight),
+        ),
+    )
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -174,7 +205,7 @@ mod test {
             .crds
             .insert(CrdsValue::ContactInfo(ci.clone()), 0)
             .unwrap();
-        crds_gossip.refresh_push_active_set();
+        crds_gossip.refresh_push_active_set(None);
         let now = timestamp();
         //incorrect dest
         let mut res = crds_gossip.process_prune_msg(

@@ -372,7 +372,7 @@ fn test_prune_errors() {
         .crds
         .insert(CrdsValue::ContactInfo(ci.clone()), 0)
         .unwrap();
-    crds_gossip.refresh_push_active_set();
+    crds_gossip.refresh_push_active_set(None);
     let now = timestamp();
     //incorrect dest
     let mut res = crds_gossip.process_prune_msg(

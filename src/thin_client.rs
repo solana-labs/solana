@@ -373,8 +373,13 @@ pub fn poll_gossip_for_leader(leader_gossip: SocketAddr, timeout: Option<u64>) -
     let (node, gossip_socket) = ClusterInfo::spy_node();
     let my_addr = gossip_socket.local_addr().unwrap();
     let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(node)));
-    let gossip_service =
-        GossipService::new(&cluster_info.clone(), None, gossip_socket, exit.clone());
+    let gossip_service = GossipService::new(
+        &cluster_info.clone(),
+        None,
+        None,
+        gossip_socket,
+        exit.clone(),
+    );
 
     let leader_entry_point = NodeInfo::new_entry_point(&leader_gossip);
     cluster_info

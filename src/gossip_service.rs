@@ -4,6 +4,7 @@ use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
 use crate::service::Service;
 use crate::streamer;
+use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
@@ -23,6 +24,7 @@ impl GossipService {
     pub fn new(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         blocktree: Option<Arc<Blocktree>>,
+        bank: Option<Arc<Bank>>,
         gossip_socket: UdpSocket,
         exit: Arc<AtomicBool>,
     ) -> Self {
@@ -44,7 +46,8 @@ impl GossipService {
             response_sender.clone(),
             exit.clone(),
         );
-        let t_gossip = ClusterInfo::gossip(cluster_info.clone(), response_sender, exit.clone());
+        let t_gossip =
+            ClusterInfo::gossip(cluster_info.clone(), bank, response_sender, exit.clone());
         let thread_hdls = vec![t_receiver, t_responder, t_listen, t_gossip];
         Self { exit, thread_hdls }
     }
@@ -69,6 +72,7 @@ pub fn make_listening_node(
     let new_node_cluster_info_ref = Arc::new(RwLock::new(new_node_cluster_info));
     let gossip_service = GossipService::new(
         &new_node_cluster_info_ref,
+        None,
         None,
         new_node
             .sockets
@@ -124,6 +128,7 @@ pub fn make_spy_node(leader: &NodeInfo) -> (GossipService, Arc<RwLock<ClusterInf
     let gossip_service = GossipService::new(
         &spy_cluster_info_ref,
         None,
+        None,
         spy.sockets.gossip,
         exit.clone(),
     );
@@ -157,7 +162,7 @@ mod tests {
         let tn = Node::new_localhost();
         let cluster_info = ClusterInfo::new(tn.info.clone());
         let c = Arc::new(RwLock::new(cluster_info));
-        let d = GossipService::new(&c, None, tn.sockets.gossip, exit.clone());
+        let d = GossipService::new(&c, None, None, tn.sockets.gossip, exit.clone());
         d.close().expect("thread join");
     }
 }
