@@ -82,7 +82,7 @@ impl Default for FullnodeConfig {
             storage_rotate_count: NUM_HASHES_FOR_STORAGE_ROTATE,
             leader_scheduler_config: LeaderSchedulerConfig::default(),
             tick_config: PohServiceConfig::default(),
-            account_paths: "0,1,2,3".to_string(),
+            account_paths: "".to_string(),
         }
     }
 }
@@ -469,7 +469,7 @@ fn new_banks_from_blocktree(
         GenesisBlock::load(blocktree_path).expect("Expected to successfully open genesis block");
 
     let (mut bank_forks, bank_forks_info) =
-        blocktree_processor::process_blocktree(&genesis_block, &blocktree, leader_scheduler)
+        blocktree_processor::process_blocktree(&genesis_block, &blocktree, leader_scheduler, account_paths)
             .expect("process_blocktree failed");
 
     if bank_forks_info.len() != 1 {

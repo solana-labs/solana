@@ -1,4 +1,5 @@
 use crate::appendvec::AppendVec;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use crate::bank::{BankError, Result};
 use crate::runtime::has_duplicates;
 use bincode::serialize;
@@ -66,7 +67,7 @@ pub struct ErrorCounters {
 
 const ACCOUNT_DATA_FILE_SIZE: u64 = 64 * 1024 * 1024;
 const ACCOUNT_DATA_FILE: &str = "data";
-const NUM_ACCOUNT_DIRS: usize = 4;
+const NUM_ACCOUNT_DIRS: usize = 1;
 
 /// An offset into the AccountsDB::storage vector
 type AppendVecId = usize;
@@ -185,7 +186,8 @@ impl AccountsDB {
         let paths: Vec<String> = paths.split(',').map(|s| s.to_string()).collect();
         let mut stores: Vec<AccountStorage> = vec![];
         paths.iter().for_each(|p| {
-            let path = format!("{}/{}", p, std::process::id());
+            let keypair = Keypair::new();
+            let path = format!("{}/{}", p, keypair.pubkey());
             let storage = AccountStorage {
                 appendvec: self.new_account_storage(&path),
                 status: AtomicUsize::new(AccountStorageStatus::StorageAvailable as usize),
@@ -240,6 +242,19 @@ impl AccountsDB {
                 }
             });
         accounts
+    }
+
+    pub fn has_accounts(&self, fork: Fork) -> bool {
+        let index = self.index_info.index.read().unwrap();
+
+        for account_map in index.values() {
+            for (v_fork, _) in account_map.0.iter() {
+                if fork == *v_fork {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     pub fn hash_internal_state(&self, fork: Fork) -> Option<Hash> {
@@ -414,6 +429,7 @@ impl AccountsDB {
         }
     }
 
+
     pub fn store_accounts(
         &self,
         fork: Fork,
@@ -569,19 +585,26 @@ impl AccountsDB {
 }
 
 impl Accounts {
-    pub fn new(in_paths: &str) -> Self {
+    fn make_new_dir() -> String {
         static ACCOUNT_DIR: AtomicUsize = AtomicUsize::new(0);
+        let dir = ACCOUNT_DIR.fetch_add(1, Ordering::Relaxed);
+        format!("accountsdb/{}", dir.to_string())
+    }
+
+    fn make_default_paths() -> String {
+        let mut paths = Self::make_new_dir();
+        for _ in 1..NUM_ACCOUNT_DIRS {
+            paths.push_str(",");
+            paths.push_str(&Self::make_new_dir());
+        }
+        paths
+    }
+
+    pub fn new(in_paths: &str) -> Self {
         let paths = if !in_paths.is_empty() {
             in_paths.to_string()
         } else {
-            let mut dir: usize;
-            dir = ACCOUNT_DIR.fetch_add(1, Ordering::Relaxed);
-            let mut paths = dir.to_string();
-            for _ in 1..NUM_ACCOUNT_DIRS {
-                dir = ACCOUNT_DIR.fetch_add(1, Ordering::Relaxed);
-                paths = format!("{},{}", paths, dir.to_string());
-            }
-            paths
+            Self::make_default_paths()
         };
         let accounts_db = AccountsDB::default();
         accounts_db.add_storage(&paths);
@@ -663,6 +686,10 @@ impl Accounts {
         txs.iter()
             .zip(results.iter())
             .for_each(|(tx, result)| Self::unlock_account(tx, result, &mut account_locks));
+    }
+
+    pub fn has_accounts(&self, fork: Fork) -> bool {
+        self.accounts_db.has_accounts(fork)
     }
 
     pub fn load_accounts(
