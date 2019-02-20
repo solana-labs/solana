@@ -133,7 +133,7 @@ impl Service for LeaderConfirmationService {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::active_stakers::tests::new_vote_account;
+    use crate::active_stakers::tests::{new_vote_account, push_vote};
     use crate::voting_keypair::VotingKeypair;
     use bincode::serialize;
     use solana_sdk::genesis_block::GenesisBlock;
@@ -169,16 +169,15 @@ pub mod tests {
                 let validator_keypair = Arc::new(Keypair::new());
                 let last_id = ids[i];
                 let voting_keypair = VotingKeypair::new_local(&validator_keypair);
+                let voting_pubkey = voting_keypair.pubkey();
 
                 // Give the validator some tokens
                 bank.transfer(2, &mint_keypair, validator_keypair.pubkey(), last_id)
                     .unwrap();
-                new_vote_account(&validator_keypair, &voting_keypair, &bank, 1, last_id);
+                new_vote_account(&validator_keypair, &voting_pubkey, &bank, 1);
 
                 if i < 6 {
-                    let vote_tx =
-                        VoteTransaction::new_vote(&voting_keypair, (i + 1) as u64, last_id, 0);
-                    bank.process_transaction(&vote_tx).unwrap();
+                    push_vote(&voting_keypair, &bank, (i + 1) as u64);
                 }
                 (voting_keypair, validator_keypair)
             })
