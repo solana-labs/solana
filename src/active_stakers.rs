@@ -360,6 +360,12 @@ pub mod tests {
         let bank = Bank::new(&genesis_block);
         let slots_per_epoch = num_keys * 10;
         let leader_schedule = active_stakers.leader_schedule(&bank, slots_per_epoch);
+        let leader_schedule2 = active_stakers.leader_schedule(&bank, slots_per_epoch);
         assert_eq!(leader_schedule.slot_leaders().len() as u64, slots_per_epoch);
+        // Check that the same schedule is reproducibly generated
+        assert_eq!(
+            leader_schedule.slot_leaders(),
+            leader_schedule2.slot_leaders()
+        );
     }
 }
