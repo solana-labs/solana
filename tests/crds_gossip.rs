@@ -112,7 +112,7 @@ fn network_simulator(network: &mut Network) {
     // make sure there is someone in the active set
     let network_values: Vec<Node> = network.values().cloned().collect();
     network_values.par_iter().for_each(|node| {
-        node.lock().unwrap().refresh_push_active_set();
+        node.lock().unwrap().refresh_push_active_set(None);
     });
     let mut total_bytes = bytes_tx;
     for second in 1..num {
@@ -211,7 +211,7 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
         }
         if now % CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS == 0 && now > 0 {
             network_values.par_iter().for_each(|node| {
-                node.lock().unwrap().refresh_push_active_set();
+                node.lock().unwrap().refresh_push_active_set(None);
             });
         }
         total = network_values
@@ -249,7 +249,7 @@ fn network_run_pull(
         let requests: Vec<_> = {
             network_values
                 .par_iter()
-                .filter_map(|from| from.lock().unwrap().new_pull_request(now).ok())
+                .filter_map(|from| from.lock().unwrap().new_pull_request(now, None).ok())
                 .collect()
         };
         let transfered: Vec<_> = requests
