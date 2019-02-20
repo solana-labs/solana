@@ -428,7 +428,7 @@ pub fn make_active_set_entries(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::active_stakers::tests::{new_vote_account, push_vote};
+    use crate::active_stakers::tests::{new_vote_account_with_vote, push_vote};
     use hashbrown::HashSet;
     use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_TOKENS};
     use std::hash::Hash as StdHash;
@@ -477,22 +477,14 @@ pub mod tests {
             bank.transfer(stake, &mint_keypair, new_pubkey, last_id)
                 .unwrap();
 
-            // Create a vote account
-            new_vote_account(
+            // Vote to make the validator part of the active set for the entire test
+            // (we made the active_window_tick_length large enough at the beginning of the test)
+            new_vote_account_with_vote(
                 &new_validator,
                 &voting_keypair,
                 &bank,
                 num_vote_account_tokens as u64,
-                genesis_block.last_id(),
-            );
-
-            // Vote to make the validator part of the active set for the entire test
-            // (we made the active_window_tick_length large enough at the beginning of the test)
-            push_vote(
-                &voting_keypair,
-                &bank,
                 ticks_per_epoch,
-                genesis_block.last_id(),
             );
         }
 
@@ -636,23 +628,8 @@ pub mod tests {
             bank.transfer(5, &mint_keypair, pk, genesis_block.last_id())
                 .unwrap();
 
-            // Create a vote account
-            let voting_keypair = Keypair::new();
-            new_vote_account(
-                &new_keypair,
-                &voting_keypair,
-                &bank,
-                1,
-                genesis_block.last_id(),
-            );
-
-            // Push a vote for the account
-            push_vote(
-                &voting_keypair,
-                &bank,
-                start_height,
-                genesis_block.last_id(),
-            );
+            // Create a vote account and push a vote
+            new_vote_account_with_vote(&new_keypair, &Keypair::new(), &bank, 1, start_height);
         }
 
         // Insert a bunch of votes at height "start_height + active_window_tick_length"
@@ -666,22 +643,9 @@ pub mod tests {
             bank.transfer(5, &mint_keypair, pk, genesis_block.last_id())
                 .unwrap();
 
-            // Create a vote account
-            let voting_keypair = Keypair::new();
-            new_vote_account(
-                &new_keypair,
-                &voting_keypair,
-                &bank,
-                1,
-                genesis_block.last_id(),
-            );
-
-            push_vote(
-                &voting_keypair,
-                &bank,
-                start_height + active_window_tick_length + 1,
-                genesis_block.last_id(),
-            );
+            // Create a vote account and push a vote
+            let tick_height = start_height + active_window_tick_length + 1;
+            new_vote_account_with_vote(&new_keypair, &Keypair::new(), &bank, 1, tick_height);
         }
 
         // Query for the active set at various heights
@@ -932,21 +896,9 @@ pub mod tests {
             )
             .unwrap();
 
-            // Create a vote account
-            new_vote_account(
-                &new_validator,
-                &voting_keypair,
-                &bank,
-                num_vote_account_tokens as u64,
-                genesis_block.last_id(),
-            );
-
-            push_vote(
-                &voting_keypair,
-                &bank,
-                (i + 2) * active_window_tick_length - 1,
-                genesis_block.last_id(),
-            );
+            // Create a vote account and push a vote
+            let tick_height = (i + 2) * active_window_tick_length - 1;
+            new_vote_account_with_vote(&new_validator, &voting_keypair, &bank, 1, tick_height);
         }
 
         // Generate schedule every active_window_tick_length entries and check that
@@ -1006,18 +958,9 @@ pub mod tests {
         // Check that a node that votes twice in a row will get included in the active
         // window
 
-        let voting_keypair = Keypair::new();
         // Create a vote account
-        new_vote_account(
-            &leader_keypair,
-            &voting_keypair,
-            &bank,
-            1,
-            genesis_block.last_id(),
-        );
-
-        // Vote at tick_height 1
-        push_vote(&voting_keypair, &bank, 1, genesis_block.last_id());
+        let voting_keypair = Keypair::new();
+        new_vote_account_with_vote(&leader_keypair, &voting_keypair, &bank, 1, 1);
 
         {
             let mut leader_scheduler = leader_scheduler.write().unwrap();
@@ -1029,7 +972,7 @@ pub mod tests {
         }
 
         // Vote at tick_height 2
-        push_vote(&voting_keypair, &bank, 2, genesis_block.last_id());
+        push_vote(&voting_keypair, &bank, 2);
 
         {
             let mut leader_scheduler = leader_scheduler.write().unwrap();
@@ -1203,21 +1146,14 @@ pub mod tests {
         if add_validator {
             bank.transfer(5, &mint_keypair, validator_id, last_id)
                 .unwrap();
-            // Create a vote account
-            let voting_keypair = VotingKeypair::new_local(&validator_keypair);
-            new_vote_account(
+
+            // Create a vote account and push a vote
+            new_vote_account_with_vote(
                 &validator_keypair,
-                &voting_keypair,
+                &Keypair::new(),
                 &bank,
                 1,
-                genesis_block.last_id(),
-            );
-
-            push_vote(
-                &voting_keypair,
-                &bank,
                 initial_vote_height,
-                genesis_block.last_id(),
             );
         }
 
@@ -1238,22 +1174,14 @@ pub mod tests {
         )
         .unwrap();
 
-        // Create a vote account
-        let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
-        new_vote_account(
+        // Create a vote account and push a vote to add the leader to the active set
+        let voting_keypair = Keypair::new();
+        new_vote_account_with_vote(
             &bootstrap_leader_keypair,
             &voting_keypair,
             &bank,
             vote_account_tokens as u64,
-            genesis_block.last_id(),
-        );
-
-        // Add leader to the active set
-        push_vote(
-            &voting_keypair,
-            &bank,
             initial_vote_height,
-            genesis_block.last_id(),
         );
 
         let leader_scheduler_config =
