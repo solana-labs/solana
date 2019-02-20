@@ -101,6 +101,7 @@ impl PohService {
                 }
             }
             let e = if let Some(ref current_leader) = leader {
+                println!("tick");
                 poh.tick(current_leader)
             } else {
                 Ok(())
@@ -214,5 +215,47 @@ mod tests {
         let _ = poh_service.join().unwrap();
         let _ = entry_producer.join().unwrap();
     }
+    #[test]
+    fn test_poh_service_height() {
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let prev_id = bank.last_id();
+        let (entry_sender, entry_receiver) = channel();
+        let poh_recorder = PohRecorder::new(bank.tick_height(), prev_id);
+        let exit = Arc::new(AtomicBool::new(false));
+        let working_leader = WorkingLeader {
+            bank: bank.clone(),
+            sender: entry_sender,
+            min_tick_height: bank.tick_height() + 3,
+            max_tick_height: bank.tick_height() + 5,
+        };
 
+        const HASHES_PER_TICK: u64 = 2;
+        let (poh_service, leader_sender) = PohService::new(
+            poh_recorder.clone(),
+            PohServiceConfig::Tick(HASHES_PER_TICK as usize),
+            Arc::new(AtomicBool::new(false)),
+        );
+
+        leader_sender.send(working_leader.clone()).expect("send");
+
+        // all 5 ticks are expected
+        let _ = entry_receiver.recv().unwrap();
+        println!("x");
+        let _ = entry_receiver.recv().unwrap();
+        println!("x");
+        let _ = entry_receiver.recv().unwrap();
+        println!("x");
+        let _ = entry_receiver.recv().unwrap();
+        println!("x");
+        let _ = entry_receiver.recv().unwrap();
+        println!("x");
+
+        //empty
+        assert!(entry_receiver.try_recv().is_err());
+
+        exit.store(true, Ordering::Relaxed);
+        poh_service.exit();
+        let _ = poh_service.join().unwrap();
+    }
 }

@@ -44,6 +44,7 @@ impl PohRecorder {
         let mut cache = vec![];
         std::mem::swap(&mut cache, &mut self.tick_cache.lock().unwrap());
         if !cache.is_empty() {
+            println!("flushing {}", cache.len());
             for t in &cache {
                 leader.bank.register_tick(&t.id);
             }
@@ -212,5 +213,38 @@ mod tests {
         assert_eq!(e[0].tick_height, 1);
         let e = entry_receiver.recv().unwrap();
         assert_eq!(e[0].tick_height, 2);
+    }
+
+    #[test]
+    fn test_poh_recorder_tick_cache_old_working_leader() {
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let prev_id = bank.last_id();
+        let (entry_sender, entry_receiver) = channel();
+        let poh_recorder = PohRecorder::new(0, prev_id);
+
+        let leader = WorkingLeader {
+            bank,
+            sender: entry_sender,
+            min_tick_height: 1,
+            max_tick_height: 1,
+        };
+
+        // tick should be cached
+        assert_matches!(
+            poh_recorder.tick(&leader),
+            Err(Error::PohRecorderError(
+                PohRecorderError::MinHeightNotReached
+            ))
+        );
+
+        // leader should be past the right height
+        assert_matches!(
+            poh_recorder.tick(&leader),
+            Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
+        );
+        assert_eq!(poh_recorder.tick_cache.lock().unwrap().len(), 2);
+
+        assert!(entry_receiver.try_recv().is_err());
     }
 }
