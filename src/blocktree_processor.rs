@@ -155,15 +155,10 @@ fn process_block(
 ) -> Result<()> {
     for entry in entries {
         let (res, fee) = process_entry(bank, entry);
-        let num_ticks = bank.tick_height();
-        let slot_height = leader_scheduler
-            .read()
-            .unwrap()
-            .tick_height_to_slot(num_ticks);
         if let Some(leader) = leader_scheduler
             .read()
             .unwrap()
-            .get_leader_for_slot(slot_height)
+            .get_leader_for_tick(bank.tick_height())
         {
             // Credit the accumulated fees to the current leader and reset the fee to 0
             bank.deposit(&leader, fee);
@@ -263,6 +258,7 @@ mod tests {
     use crate::blocktree::{create_tmp_sample_ledger, BlocktreeConfig};
     use crate::entry::{create_ticks, next_entries, next_entry, Entry};
     use crate::gen_keys::GenKeys;
+    use crate::leader_scheduler::LeaderSchedulerConfig;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -421,9 +417,9 @@ mod tests {
         assert_ne!(updated_results, expected_results);
     }
 
-    fn par_process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
+    fn par_process_entries(bank: &Bank, entries: &[Entry]) -> (Result<()>, u64) {
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
-        par_process_entries_with_scheduler(bank, entries, &leader_scheduler).0
+        par_process_entries_with_scheduler(bank, entries, &leader_scheduler)
     }
 
     fn create_sample_block_with_next_entries_using_keypairs(
@@ -474,9 +470,9 @@ mod tests {
         );
 
         let bank0 = Bank::new(&genesis_block);
-        par_process_entries(&bank0, &entries0).unwrap();
+        par_process_entries(&bank0, &entries0).0.unwrap();
         let bank1 = Bank::new(&genesis_block);
-        par_process_entries(&bank1, &entries1).unwrap();
+        par_process_entries(&bank1, &entries1).0.unwrap();
 
         let initial_state = bank0.hash_internal_state();
 
@@ -519,7 +515,7 @@ mod tests {
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
-        par_process_entries(&bank, &[entry]).unwrap();
+        par_process_entries(&bank, &[entry]).0.unwrap();
         assert_eq!(bank.process_transaction(&tx), Ok(()));
     }
 
@@ -566,29 +562,22 @@ mod tests {
         entries.into_iter()
     }
 
-    fn create_sample_ledger(
-        tokens: u64,
-        num_one_token_transfers: usize,
-    ) -> (GenesisBlock, Keypair, impl Iterator<Item = Entry>) {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(tokens);
-        let block = create_sample_block_with_ticks(
-            &genesis_block,
-            &mint_keypair,
-            num_one_token_transfers,
-            num_one_token_transfers,
-        );
-        (genesis_block, mint_keypair, block)
-    }
-
     #[test]
     fn test_process_ledger_simple() {
-        let (genesis_block, mint_keypair, ledger) = create_sample_ledger(100, 3);
+        let leader_id = Keypair::new().pubkey();
+        let leader_scheduler_config = LeaderSchedulerConfig::new(100, 1, 1000);
+        let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, leader_id, 50);
+
+        let ledger = create_sample_block_with_ticks(&genesis_block, &mint_keypair, 3, 3);
         let bank = Bank::new(&genesis_block);
         assert_eq!(bank.tick_height(), 0);
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100);
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 50);
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::new_with_bank(
+            &leader_scheduler_config,
+            &bank,
+        )));
         let (ledger_height, last_id) = process_ledger(&bank, ledger, &leader_scheduler).unwrap();
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 3);
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 50 - 3);
         assert_eq!(ledger_height, 8);
         assert_eq!(bank.tick_height(), 1);
         assert_eq!(bank.last_id(), last_id);
@@ -601,7 +590,7 @@ mod tests {
 
         // ensure bank can process a tick
         let tick = next_entry(&genesis_block.last_id(), 1, vec![]);
-        assert_eq!(par_process_entries(&bank, &[tick.clone()]), Ok(()));
+        assert_eq!(par_process_entries(&bank, &[tick.clone()]).0, Ok(()));
         assert_eq!(bank.last_id(), tick.id);
     }
 
@@ -621,7 +610,7 @@ mod tests {
         let tx =
             SystemTransaction::new_account(&mint_keypair, keypair2.pubkey(), 2, bank.last_id(), 0);
         let entry_2 = next_entry(&entry_1.id, 1, vec![tx]);
-        assert_eq!(par_process_entries(&bank, &[entry_1, entry_2]), Ok(()));
+        assert_eq!(par_process_entries(&bank, &[entry_1, entry_2]).0, Ok(()));
         assert_eq!(bank.get_balance(&keypair1.pubkey()), 2);
         assert_eq!(bank.get_balance(&keypair2.pubkey()), 2);
         assert_eq!(bank.last_id(), last_id);
@@ -674,7 +663,7 @@ mod tests {
         );
 
         assert_eq!(
-            par_process_entries(&bank, &[entry_1_to_mint, entry_2_to_3_mint_to_1]),
+            par_process_entries(&bank, &[entry_1_to_mint, entry_2_to_3_mint_to_1]).0,
             Ok(())
         );
 
@@ -694,19 +683,21 @@ mod tests {
 
         //load accounts
         let tx =
-            SystemTransaction::new_account(&mint_keypair, keypair1.pubkey(), 1, bank.last_id(), 0);
+            SystemTransaction::new_account(&mint_keypair, keypair1.pubkey(), 4, bank.last_id(), 0);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         let tx =
-            SystemTransaction::new_account(&mint_keypair, keypair2.pubkey(), 1, bank.last_id(), 0);
+            SystemTransaction::new_account(&mint_keypair, keypair2.pubkey(), 4, bank.last_id(), 0);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
 
         // ensure bank can process 2 entries that do not have a common account and no tick is registered
         let last_id = bank.last_id();
-        let tx = SystemTransaction::new_account(&keypair1, keypair3.pubkey(), 1, bank.last_id(), 0);
+        let tx = SystemTransaction::new_account(&keypair1, keypair3.pubkey(), 1, bank.last_id(), 1);
         let entry_1 = next_entry(&last_id, 1, vec![tx]);
-        let tx = SystemTransaction::new_account(&keypair2, keypair4.pubkey(), 1, bank.last_id(), 0);
+        let tx = SystemTransaction::new_account(&keypair2, keypair4.pubkey(), 1, bank.last_id(), 3);
         let entry_2 = next_entry(&entry_1.id, 1, vec![tx]);
-        assert_eq!(par_process_entries(&bank, &[entry_1, entry_2]), Ok(()));
+        let (res, fee) = par_process_entries(&bank, &[entry_1, entry_2]);
+        assert_eq!(res, Ok(()));
+        assert_eq!(fee, 4);
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
         assert_eq!(bank.get_balance(&keypair4.pubkey()), 1);
         assert_eq!(bank.last_id(), last_id);
@@ -723,33 +714,32 @@ mod tests {
 
         //load accounts
         let tx =
-            SystemTransaction::new_account(&mint_keypair, keypair1.pubkey(), 1, bank.last_id(), 0);
+            SystemTransaction::new_account(&mint_keypair, keypair1.pubkey(), 6, bank.last_id(), 0);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         let tx =
-            SystemTransaction::new_account(&mint_keypair, keypair2.pubkey(), 1, bank.last_id(), 0);
+            SystemTransaction::new_account(&mint_keypair, keypair2.pubkey(), 3, bank.last_id(), 0);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
 
         let last_id = bank.last_id();
 
         // ensure bank can process 2 entries that do not have a common account and tick is registered
-        let tx = SystemTransaction::new_account(&keypair2, keypair3.pubkey(), 1, bank.last_id(), 0);
+        let tx = SystemTransaction::new_account(&keypair2, keypair3.pubkey(), 1, bank.last_id(), 2);
         let entry_1 = next_entry(&last_id, 1, vec![tx]);
         let tick = next_entry(&entry_1.id, 1, vec![]);
-        let tx = SystemTransaction::new_account(&keypair1, keypair4.pubkey(), 1, tick.id, 0);
+        let tx = SystemTransaction::new_account(&keypair1, keypair4.pubkey(), 1, tick.id, 5);
         let entry_2 = next_entry(&tick.id, 1, vec![tx]);
-        assert_eq!(
-            par_process_entries(&bank, &[entry_1.clone(), tick.clone(), entry_2.clone()]),
-            Ok(())
-        );
+        let (res, fee) =
+            par_process_entries(&bank, &[entry_1.clone(), tick.clone(), entry_2.clone()]);
+        assert_eq!(res, Ok(()));
+        assert_eq!(fee, 7);
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
         assert_eq!(bank.get_balance(&keypair4.pubkey()), 1);
         assert_eq!(bank.last_id(), tick.id);
         // ensure that an error is returned for an empty account (keypair2)
         let tx = SystemTransaction::new_account(&keypair2, keypair3.pubkey(), 1, tick.id, 0);
         let entry_3 = next_entry(&entry_2.id, 1, vec![tx]);
-        assert_eq!(
-            par_process_entries(&bank, &[entry_3]),
-            Err(BankError::AccountNotFound)
-        );
+        let (res, fee) = par_process_entries(&bank, &[entry_3]);
+        assert_eq!(fee, 0);
+        assert_eq!(res, Err(BankError::AccountNotFound));
     }
 }
