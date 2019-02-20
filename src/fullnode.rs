@@ -1,6 +1,5 @@
 //! The `fullnode` module hosts all the fullnode microservices.
 
-use crate::bank_forks::BankForks;
 use crate::blocktree::{Blocktree, BlocktreeConfig};
 use crate::blocktree_processor;
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
@@ -454,21 +453,25 @@ fn new_banks_from_blocktree(
     blocktree_path: &str,
     blocktree_config: &BlocktreeConfig,
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-) -> (BankForks, u64, Hash, Blocktree, Receiver<bool>) {
+) -> (Arc<Bank>, u64, Hash, Blocktree, Receiver<bool>) {
     let (blocktree, ledger_signal_receiver) =
         Blocktree::open_with_config_signal(blocktree_path, blocktree_config)
             .expect("Expected to successfully open database ledger");
     let genesis_block =
         GenesisBlock::load(blocktree_path).expect("Expected to successfully open genesis block");
 
-    let (bank_forks, entry_height, last_entry_id) =
+    let (mut bank_forks, bank_forks_info) =
         blocktree_processor::process_blocktree(&genesis_block, &blocktree, leader_scheduler)
             .expect("process_blocktree failed");
 
+    if bank_forks_info.len() != 1 {
+        warn!("TODO: figure out what to do with multiple bank forks");
+    }
+    bank_forks.set_working_bank_id(bank_forks_info[0].bank_id);
     (
-        bank_forks,
-        entry_height,
-        last_entry_id,
+        bank_forks.working_bank(),
+        bank_forks_info[0].entry_height,
+        bank_forks_info[0].last_entry_id,
         blocktree,
         ledger_signal_receiver,
     )
@@ -480,10 +483,10 @@ pub fn new_bank_from_ledger(
     ledger_config: &BlocktreeConfig,
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
 ) -> (Arc<Bank>, u64, Hash, Blocktree, Receiver<bool>) {
-    let (bank_forks, entry_height, last_entry_id, blocktree, ledger_signal_receiver) =
+    let (working_bank, entry_height, last_entry_id, blocktree, ledger_signal_receiver) =
         new_banks_from_blocktree(ledger_path, ledger_config, leader_scheduler);
     (
-        bank_forks.working_bank(),
+        working_bank,
         entry_height,
         last_entry_id,
         blocktree,
