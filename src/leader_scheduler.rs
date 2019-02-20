@@ -3,6 +3,7 @@
 
 use crate::bank::Bank;
 use crate::entry::{create_ticks, next_entry_mut, Entry};
+use crate::leader_schedule::LeaderSchedule;
 use crate::voting_keypair::VotingKeypair;
 use bincode::serialize;
 use byteorder::{LittleEndian, ReadBytesExt};
@@ -46,41 +47,6 @@ impl Default for LeaderSchedulerConfig {
             ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
             slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
             active_window_tick_length: DEFAULT_ACTIVE_WINDOW_TICK_LENGTH,
-        }
-    }
-}
-
-pub struct LeaderSchedule {
-    epoch_schedule: Vec<Pubkey>,
-    current_epoch: u64,
-    ticks_per_slot: u64,
-}
-
-impl LeaderSchedule {
-    pub fn new(
-        epoch_schedule: Vec<Pubkey>,
-        current_epoch: u64,
-        ticks_per_slot: u64,
-    ) -> LeaderSchedule {
-        LeaderSchedule {
-            epoch_schedule,
-            current_epoch,
-            ticks_per_slot,
-        }
-    }
-
-    pub fn get_leader_for_slot(&self, slot_height: u64) -> Option<Pubkey> {
-        let tick_height = slot_height * self.ticks_per_slot;
-        let epoch = LeaderScheduler::tick_height_to_epoch(tick_height, self.ticks_per_slot);
-
-        if epoch != self.current_epoch {
-            warn!(
-                "get_leader_for_slot: leader unknown for epoch {}, which is not equal to {}",
-                epoch, self.current_epoch
-            );
-            None
-        } else {
-            Some(self.epoch_schedule[slot_height as usize % self.epoch_schedule.len()])
         }
     }
 }
@@ -155,7 +121,7 @@ impl LeaderScheduler {
         tick_height / self.ticks_per_slot
     }
 
-    fn tick_height_to_epoch(tick_height: u64, ticks_per_epoch: u64) -> u64 {
+    pub fn tick_height_to_epoch(tick_height: u64, ticks_per_epoch: u64) -> u64 {
         tick_height / ticks_per_epoch
     }
 
@@ -330,7 +296,12 @@ impl LeaderScheduler {
         );
 
         let current_epoch = Self::tick_height_to_epoch(tick_height, self.ticks_per_slot);
-        LeaderSchedule::new(schedule, current_epoch, self.ticks_per_slot)
+        LeaderSchedule::new(
+            schedule,
+            current_epoch,
+            self.ticks_per_slot,
+            self.ticks_per_epoch,
+        )
     }
 
     // Updates the leader schedule to include ticks from tick_height to the first tick of the next epoch

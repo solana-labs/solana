@@ -46,6 +46,7 @@ pub mod genesis_block;
 pub mod gossip_service;
 pub mod last_id_queue;
 pub mod leader_confirmation_service;
+pub mod leader_schedule;
 pub mod leader_scheduler;
 pub mod local_vote_signer_service;
 pub mod packet;
