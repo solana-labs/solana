@@ -579,6 +579,12 @@ impl Bank {
         parents
     }
 
+    pub fn withdraw(&self, pubkey: &Pubkey, tokens: u64) {
+        let mut account = self.get_account(pubkey).unwrap_or_default();
+        account.tokens -= tokens;
+        self.accounts.store_slow(true, pubkey, &account);
+    }
+
     pub fn deposit(&self, pubkey: &Pubkey, tokens: u64) {
         let mut account = self.get_account(pubkey).unwrap_or_default();
         account.tokens += tokens;
