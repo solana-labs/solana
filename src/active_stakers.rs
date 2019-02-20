@@ -65,3 +65,37 @@ impl ActiveStakers {
         LeaderSchedule::new(self.pubkeys())
     }
 }
+
+pub mod tests {
+    use solana_runtime::bank::Bank;
+    use solana_sdk::hash::Hash;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::vote_transaction::VoteTransaction;
+
+    pub fn new_vote_account<T: KeypairUtil>(
+        from_keypair: &Keypair,
+        voting_keypair: &T,
+        bank: &Bank,
+        num_tokens: u64,
+        last_id: Hash,
+    ) {
+        let tx = VoteTransaction::new_account(
+            from_keypair,
+            voting_keypair.pubkey(),
+            last_id,
+            num_tokens,
+            0,
+        );
+        bank.process_transaction(&tx).unwrap();
+    }
+
+    pub fn push_vote<T: KeypairUtil>(
+        voting_keypair: &T,
+        bank: &Bank,
+        tick_height: u64,
+        last_id: Hash,
+    ) {
+        let new_vote_tx = VoteTransaction::new_vote(voting_keypair, tick_height, last_id, 0);
+        bank.process_transaction(&new_vote_tx).unwrap();
+    }
+}

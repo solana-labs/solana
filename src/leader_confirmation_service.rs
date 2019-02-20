@@ -133,7 +133,7 @@ impl Service for LeaderConfirmationService {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::leader_scheduler::tests::new_vote_account;
+    use crate::active_stakers::tests::new_vote_account;
     use crate::voting_keypair::VotingKeypair;
     use bincode::serialize;
     use solana_sdk::genesis_block::GenesisBlock;
