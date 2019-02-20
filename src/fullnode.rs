@@ -85,7 +85,7 @@ impl Default for FullnodeConfig {
             blockstream: None,
             storage_rotate_count: NUM_HASHES_FOR_STORAGE_ROTATE,
             tick_config: PohServiceConfig::default(),
-            account_paths: "0,1,2,3".to_string(),
+            account_paths: "".to_string(),
         }
     }
 }
@@ -417,7 +417,7 @@ pub fn new_banks_from_blocktree(
             .expect("Expected to successfully open database ledger");
 
     let (bank_forks, bank_forks_info) =
-        blocktree_processor::process_blocktree(&genesis_block, &blocktree)
+        blocktree_processor::process_blocktree(&genesis_block, &blocktree, account_paths)
             .expect("process_blocktree failed");
 
     (

@@ -644,7 +644,7 @@ impl Bank {
         if let Some(accounts) = &self.accounts {
             accounts.clone()
         } else {
-            Arc::new(Accounts::new(""))
+            panic!("no accounts!");
         }
     }
 

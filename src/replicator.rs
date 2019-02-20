@@ -139,7 +139,7 @@ impl Replicator {
             GenesisBlock::load(ledger_path).expect("Expected to successfully open genesis block");
 
         let (bank_forks, _bank_forks_info) =
-            blocktree_processor::process_blocktree(&genesis_block, &blocktree)
+            blocktree_processor::process_blocktree(&genesis_block, &blocktree, "")
                 .expect("process_blocktree failed");
 
         let blocktree = Arc::new(blocktree);
