@@ -433,7 +433,7 @@ mod tests {
 
         // Start off the ledger with the psuedo-tick linked to the genesis block
         // (see entry0 in `process_ledger`)
-        let tick = Entry::new(&genesis_block.last_id(), 0, 1, vec![]);
+        let tick = Entry::new(&genesis_block.last_id(), 1, vec![]);
         let mut hash = tick.id;
         entries.push(tick);
 
@@ -444,7 +444,7 @@ mod tests {
             let mut e = next_entries(&hash, 0, txs);
             entries.append(&mut e);
             hash = entries.last().unwrap().id;
-            let tick = Entry::new(&hash, 0, num_hashes, vec![]);
+            let tick = Entry::new(&hash, num_hashes, vec![]);
             hash = tick.id;
             last_id = hash;
             entries.push(tick);
@@ -532,7 +532,7 @@ mod tests {
 
         // Start off the ledger with the psuedo-tick linked to the genesis block
         // (see entry0 in `process_ledger`)
-        let tick = Entry::new(&genesis_block.last_id(), 0, 1, vec![]);
+        let tick = Entry::new(&genesis_block.last_id(), 1, vec![]);
         let mut hash = tick.id;
         entries.push(tick);
 
@@ -540,7 +540,7 @@ mod tests {
             // Transfer one token from the mint to a random account
             let keypair = Keypair::new();
             let tx = SystemTransaction::new_account(mint_keypair, keypair.pubkey(), 1, last_id, 0);
-            let entry = Entry::new(&hash, 0, 1, vec![tx]);
+            let entry = Entry::new(&hash, 1, vec![tx]);
             hash = entry.id;
             entries.push(entry);
 
@@ -548,12 +548,12 @@ mod tests {
             // ProgramError<0, ResultWithNegativeTokens> error when processed
             let keypair2 = Keypair::new();
             let tx = SystemTransaction::new_account(&keypair, keypair2.pubkey(), 42, last_id, 0);
-            let entry = Entry::new(&hash, 0, 1, vec![tx]);
+            let entry = Entry::new(&hash, 1, vec![tx]);
             hash = entry.id;
             entries.push(entry);
 
             if (i + 1) % tick_interval == 0 {
-                let tick = Entry::new(&hash, 0, 1, vec![]);
+                let tick = Entry::new(&hash, 1, vec![]);
                 hash = tick.id;
                 last_id = hash;
                 entries.push(tick);

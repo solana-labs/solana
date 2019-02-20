@@ -94,7 +94,6 @@ impl PohRecorder {
         let entry = poh.record(mixin);
         assert!(!txs.is_empty(), "Entries without transactions are used to track real-time passing in the ledger and can only be generated with PohRecorder::tick function");
         let entry = Entry {
-            tick_height: entry.tick_height,
             num_hashes: entry.num_hashes,
             id: entry.id,
             transactions: txs,
@@ -111,7 +110,6 @@ impl PohRecorder {
     ) -> Result<()> {
         let tick = poh.tick();
         let tick = Entry {
-            tick_height: tick.tick_height,
             num_hashes: tick.num_hashes,
             id: tick.id,
             transactions: vec![],
@@ -146,16 +144,13 @@ mod tests {
             .record(h1, vec![tx.clone()], &entry_sender)
             .unwrap();
         //get some events
-        let e = entry_receiver.recv().unwrap();
-        assert_eq!(e[0].tick_height, 0); // super weird case, but ok!
+        let _e = entry_receiver.recv().unwrap();
 
         poh_recorder.tick(&bank, &entry_sender).unwrap();
-        let e = entry_receiver.recv().unwrap();
-        assert_eq!(e[0].tick_height, 1);
+        let _e = entry_receiver.recv().unwrap();
 
         poh_recorder.tick(&bank, &entry_sender).unwrap();
-        let e = entry_receiver.recv().unwrap();
-        assert_eq!(e[0].tick_height, 2);
+        let _e = entry_receiver.recv().unwrap();
 
         // max tick height reached
         assert!(poh_recorder.tick(&bank, &entry_sender).is_err());

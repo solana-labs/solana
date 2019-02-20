@@ -793,7 +793,7 @@ mod test {
 
         entries.clear();
         for _ in 0..5 {
-            let entry = Entry::new(&mut Hash::default(), 0, 1, vec![]); //just broken entries
+            let entry = Entry::new(&mut Hash::default(), 1, vec![]); //just broken entries
             entries.push(entry);
         }
 
