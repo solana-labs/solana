@@ -1,7 +1,7 @@
 //! The `poh_service` module implements a service that records the passing of
 //! "ticks", a measure of time in the PoH stream
 
-use crate::poh_recorder::{PohRecorder, PohRecorderError, WorkingLeader};
+use crate::poh_recorder::{PohRecorder, PohRecorderError, WorkingBank};
 use crate::result::{Error, Result};
 use crate::service::Service;
 use solana_sdk::timing::NUM_TICKS_PER_SECOND;
@@ -47,20 +47,24 @@ impl PohService {
         poh_recorder: PohRecorder,
         config: PohServiceConfig,
         poh_exit: Arc<AtomicBool>,
-    ) -> (Self, Sender<WorkingLeader>) {
+    ) -> (Self, Sender<WorkingBank>) {
         // PohService is a headless producer, so when it exits it should notify the banking stage.
         // Since channel are not used to talk between these threads an AtomicBool is used as a
         // signal.
         let poh_exit_ = poh_exit.clone();
-        let (leader_sender, leader_receiver) = channel();
+        let (working_bank_sender, working_bank_receiver) = channel();
         // Single thread to generate ticks
         let tick_producer = Builder::new()
             .name("solana-poh-service-tick_producer".to_string())
             .spawn(move || {
                 let mut poh_recorder = poh_recorder;
-                let leader_receiver = leader_receiver;
-                let return_value =
-                    Self::tick_producer(&leader_receiver, &mut poh_recorder, config, &poh_exit_);
+                let working_bank_receiver = working_bank_receiver;
+                let return_value = Self::tick_producer(
+                    &working_bank_receiver,
+                    &mut poh_recorder,
+                    config,
+                    &poh_exit_,
+                );
                 poh_exit_.store(true, Ordering::Relaxed);
                 return_value
             })
@@ -71,21 +75,21 @@ impl PohService {
                 tick_producer,
                 poh_exit,
             },
-            leader_sender,
+            working_bank_sender,
         )
     }
 
     fn tick_producer(
-        leader_receiver: &Receiver<WorkingLeader>,
+        working_bank_receiver: &Receiver<WorkingBank>,
         poh: &mut PohRecorder,
         config: PohServiceConfig,
         poh_exit: &AtomicBool,
     ) -> Result<()> {
-        let mut leader = None;
+        let mut working_bank = None;
         loop {
-            if leader.is_none() {
-                let e = leader_receiver.try_recv();
-                leader = match e {
+            if working_bank.is_none() {
+                let result = working_bank_receiver.try_recv();
+                working_bank = match result {
                     Err(TryRecvError::Empty) => None,
                     _ => Some(e?),
                 };
@@ -100,15 +104,15 @@ impl PohService {
                     sleep(duration);
                 }
             }
-            let e = if let Some(ref current_leader) = leader {
+            let result = if let Some(ref current_leader) = working_bank {
                 poh.tick(current_leader)
             } else {
                 Ok(())
             };
-            match e {
+            match result {
                 Err(Error::PohRecorderError(PohRecorderError::MinHeightNotReached)) => (),
                 Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) => {
-                    leader = None;
+                    working_bank = None;
                 }
                 e => e?,
             };
@@ -145,7 +149,7 @@ mod tests {
         let (entry_sender, entry_receiver) = channel();
         let poh_recorder = PohRecorder::new(bank.tick_height(), prev_id);
         let exit = Arc::new(AtomicBool::new(false));
-        let working_leader = WorkingLeader {
+        let working_bank = WorkingBank {
             bank: bank.clone(),
             sender: entry_sender,
             min_tick_height: bank.tick_height(),
@@ -154,7 +158,7 @@ mod tests {
 
         let entry_producer: JoinHandle<Result<()>> = {
             let poh_recorder = poh_recorder.clone();
-            let working_leader = working_leader.clone();
+            let working_bank = working_bank.clone();
             let exit = exit.clone();
 
             Builder::new()
@@ -164,7 +168,7 @@ mod tests {
                         // send some data
                         let h1 = hash(b"hello world!");
                         let tx = test_tx();
-                        poh_recorder.record(h1, vec![tx], &working_leader).unwrap();
+                        poh_recorder.record(h1, vec![tx], &working_bank).unwrap();
 
                         if exit.load(Ordering::Relaxed) {
                             break Ok(());
@@ -175,13 +179,15 @@ mod tests {
         };
 
         const HASHES_PER_TICK: u64 = 2;
-        let (poh_service, leader_sender) = PohService::new(
+        let (poh_service, working_bank_sender) = PohService::new(
             poh_recorder.clone(),
             PohServiceConfig::Tick(HASHES_PER_TICK as usize),
             Arc::new(AtomicBool::new(false)),
         );
 
-        leader_sender.send(working_leader.clone()).expect("send");
+        working_bank_sender
+            .send(working_bank.clone())
+            .expect("send");
 
         // get some events
         let mut hashes = 0;
@@ -219,27 +225,27 @@ mod tests {
     }
 
     #[test]
-    fn test_poh_service_drops_working_leader() {
+    fn test_poh_service_drops_working_bank() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let prev_id = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
         let poh_recorder = PohRecorder::new(bank.tick_height(), prev_id);
         let exit = Arc::new(AtomicBool::new(false));
-        let working_leader = WorkingLeader {
+        let working_bank = WorkingBank {
             bank: bank.clone(),
             sender: entry_sender,
             min_tick_height: bank.tick_height() + 3,
             max_tick_height: bank.tick_height() + 5,
         };
 
-        let (poh_service, leader_sender) = PohService::new(
+        let (poh_service, working_bank_sender) = PohService::new(
             poh_recorder.clone(),
             PohServiceConfig::default(),
             Arc::new(AtomicBool::new(false)),
         );
 
-        leader_sender.send(working_leader).expect("send");
+        working_bank_sender.send(working_bank).expect("send");
 
         // all 5 ticks are expected
         // First 3 ticks must be sent all at once, since bank shouldn't see them until
@@ -251,7 +257,7 @@ mod tests {
         let entries = entry_receiver.recv().unwrap();
         assert_eq!(entries.len(), 1);
 
-        //WorkingLeader should be dropped by the PoHService thread as well
+        //WorkingBank should be dropped by the PohService thread as well
         assert_eq!(entry_receiver.recv(), Err(RecvError));
 
         exit.store(true, Ordering::Relaxed);

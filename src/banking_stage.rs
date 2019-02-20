@@ -6,7 +6,7 @@ use crate::entry::Entry;
 use crate::leader_confirmation_service::LeaderConfirmationService;
 use crate::packet::Packets;
 use crate::packet::SharedPackets;
-use crate::poh_recorder::{PohRecorder, PohRecorderError, WorkingLeader};
+use crate::poh_recorder::{PohRecorder, PohRecorderError, WorkingBank};
 use crate::poh_service::{PohService, PohServiceConfig};
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -52,7 +52,7 @@ impl BankingStage {
     ) -> (Self, Receiver<Vec<Entry>>) {
         let (entry_sender, entry_receiver) = channel();
         let shared_verified_receiver = Arc::new(Mutex::new(verified_receiver));
-        let working_leader = WorkingLeader {
+        let working_bank = WorkingBank {
             bank: bank.clone(),
             sender: entry_sender,
             min_tick_height: bank.tick_height(),
@@ -70,7 +70,7 @@ impl BankingStage {
             PohService::new(poh_recorder.clone(), config, poh_exit.clone());
 
         leader_sender
-            .send(working_leader.clone())
+            .send(working_bank.clone())
             .expect("failed to send leader to poh_service");
 
         // Single thread to compute confirmation
@@ -83,7 +83,7 @@ impl BankingStage {
                 let thread_bank = bank.clone();
                 let thread_verified_receiver = shared_verified_receiver.clone();
                 let thread_poh_recorder = poh_recorder.clone();
-                let thread_leader = working_leader.clone();
+                let thread_leader = working_bank.clone();
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
@@ -136,7 +136,7 @@ impl BankingStage {
         txs: &[Transaction],
         results: &[bank::Result<()>],
         poh: &PohRecorder,
-        working_leader: &WorkingLeader,
+        working_bank: &WorkingBank,
     ) -> Result<()> {
         let processed_transactions: Vec<_> = results
             .iter()
@@ -158,7 +158,7 @@ impl BankingStage {
         if !processed_transactions.is_empty() {
             let hash = Transaction::hash(&processed_transactions);
             // record and unlock will unlock all the successfull transactions
-            poh.record(hash, processed_transactions, working_leader)?;
+            poh.record(hash, processed_transactions, working_bank)?;
         }
         Ok(())
     }
@@ -167,7 +167,7 @@ impl BankingStage {
         bank: &Bank,
         txs: &[Transaction],
         poh: &PohRecorder,
-        working_leader: &WorkingLeader,
+        working_bank: &WorkingBank,
     ) -> Result<()> {
         let now = Instant::now();
         // Once accounts are locked, other threads cannot encode transactions that will modify the
@@ -186,7 +186,7 @@ impl BankingStage {
 
         let record_time = {
             let now = Instant::now();
-            Self::record_transactions(txs, &results, poh, working_leader)?;
+            Self::record_transactions(txs, &results, poh, working_bank)?;
             now.elapsed()
         };
 
@@ -220,7 +220,7 @@ impl BankingStage {
         bank: &Arc<Bank>,
         transactions: &[Transaction],
         poh: &PohRecorder,
-        working_leader: &WorkingLeader,
+        working_bank: &WorkingBank,
     ) -> Result<(usize)> {
         let mut chunk_start = 0;
         while chunk_start != transactions.len() {
@@ -230,7 +230,7 @@ impl BankingStage {
                 bank,
                 &transactions[chunk_start..chunk_end],
                 poh,
-                working_leader,
+                working_bank,
             );
             if let Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) = result {
                 break;
@@ -246,7 +246,7 @@ impl BankingStage {
         bank: &Arc<Bank>,
         verified_receiver: &Arc<Mutex<Receiver<VerifiedPackets>>>,
         poh: &PohRecorder,
-        working_leader: &WorkingLeader,
+        working_bank: &WorkingBank,
     ) -> Result<UnprocessedPackets> {
         let recv_start = Instant::now();
         let mms = verified_receiver
@@ -298,7 +298,7 @@ impl BankingStage {
             debug!("verified transactions {}", verified_transactions.len());
 
             let processed =
-                Self::process_transactions(bank, &verified_transactions, poh, working_leader)?;
+                Self::process_transactions(bank, &verified_transactions, poh, working_bank)?;
             if processed < verified_transactions.len() {
                 bank_shutdown = true;
                 // Collect any unprocessed transactions in this batch for forwarding
@@ -603,7 +603,7 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
         let bank = Arc::new(Bank::new(&genesis_block));
         let (entry_sender, entry_receiver) = channel();
-        let working_leader = WorkingLeader {
+        let working_bank = WorkingBank {
             bank: bank.clone(),
             sender: entry_sender,
             min_tick_height: bank.tick_height(),
@@ -619,7 +619,7 @@ mod tests {
         ];
 
         let mut results = vec![Ok(()), Ok(())];
-        BankingStage::record_transactions(&transactions, &results, &poh_recorder, &working_leader)
+        BankingStage::record_transactions(&transactions, &results, &poh_recorder, &working_bank)
             .unwrap();
         let entries = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].transactions.len(), transactions.len());
@@ -629,14 +629,14 @@ mod tests {
             1,
             ProgramError::ResultWithNegativeTokens,
         ));
-        BankingStage::record_transactions(&transactions, &results, &poh_recorder, &working_leader)
+        BankingStage::record_transactions(&transactions, &results, &poh_recorder, &working_bank)
             .unwrap();
         let entries = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].transactions.len(), transactions.len());
 
         // Other BankErrors should not be recorded
         results[0] = Err(BankError::AccountNotFound);
-        BankingStage::record_transactions(&transactions, &results, &poh_recorder, &working_leader)
+        BankingStage::record_transactions(&transactions, &results, &poh_recorder, &working_bank)
             .unwrap();
         let entries = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].transactions.len(), transactions.len() - 1);
@@ -657,7 +657,7 @@ mod tests {
         )];
 
         let (entry_sender, entry_receiver) = channel();
-        let working_leader = WorkingLeader {
+        let working_bank = WorkingBank {
             bank: bank.clone(),
             sender: entry_sender,
             min_tick_height: bank.tick_height(),
@@ -669,10 +669,10 @@ mod tests {
             &bank,
             &transactions,
             &poh_recorder,
-            &working_leader,
+            &working_bank,
         )
         .unwrap();
-        poh_recorder.tick(&working_leader).unwrap();
+        poh_recorder.tick(&working_bank).unwrap();
 
         let mut need_tick = true;
         // read entries until I find mine, might be ticks...
@@ -701,7 +701,7 @@ mod tests {
                 &bank,
                 &transactions,
                 &poh_recorder,
-                &working_leader
+                &working_bank
             ),
             Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
         );
