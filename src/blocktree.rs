@@ -1339,12 +1339,10 @@ pub fn create_tmp_sample_ledger(
         let entries = crate::entry::create_ticks(num_extra_ticks, last_entry_id);
 
         let blocktree = Blocktree::open_config(&ledger_path, config).unwrap();
-
-        // create_new_ledger creates one beginning tick
-        tick_height += num_extra_ticks;
         blocktree
             .write_entries(DEFAULT_SLOT_HEIGHT, tick_height, entry_height, &entries)
             .unwrap();
+        tick_height += num_extra_ticks;
         entry_height += entries.len() as u64;
         last_id = entries.last().unwrap().id;
         last_entry_id = last_id;
@@ -2408,12 +2406,7 @@ pub mod tests {
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
     }
 
-    pub fn make_slot_entries(
-        slot_height: u64,
-        parent_slot: u64,
-        num_entries: u64,
-    ) -> (Vec<Blob>, Vec<Entry>) {
-        let entries = make_tiny_test_entries(num_entries as usize);
+    pub fn entries_to_blobs(entries: &Vec<Entry>, slot_height: u64, parent_slot: u64) -> Vec<Blob> {
         let mut blobs = entries.clone().to_blobs();
         for (i, b) in blobs.iter_mut().enumerate() {
             b.set_index(i as u64);
@@ -2422,6 +2415,16 @@ pub mod tests {
         }
 
         blobs.last_mut().unwrap().set_is_last_in_slot();
+        blobs
+    }
+
+    pub fn make_slot_entries(
+        slot_height: u64,
+        parent_slot: u64,
+        num_entries: u64,
+    ) -> (Vec<Blob>, Vec<Entry>) {
+        let entries = make_tiny_test_entries(num_entries as usize);
+        let blobs = entries_to_blobs(&entries, slot_height, parent_slot);
         (blobs, entries)
     }
 
