@@ -1,7 +1,7 @@
 //! The `leader_scheduler` module implements a structure and functions for tracking and
 //! managing the schedule for leader rotation
 
-use crate::active_stakers::{self, ActiveStakers, DEFAULT_ACTIVE_WINDOW_TICK_LENGTH};
+use crate::active_stakers::{ActiveStakers, DEFAULT_ACTIVE_WINDOW_TICK_LENGTH};
 use crate::entry::{create_ticks, next_entry_mut, Entry};
 use crate::voting_keypair::VotingKeypair;
 use bincode::serialize;
@@ -228,10 +228,9 @@ impl LeaderScheduler {
         }
 
         self.seed = Self::calculate_seed(tick_height);
-        let active_set =
+        let ranked_active_set =
             ActiveStakers::new_with_bounds(&bank, self.active_window_tick_length, tick_height)
-                .pubkeys();
-        let ranked_active_set = Self::rank_active_set(bank, active_set);
+                .ranked_stakes();
 
         if ranked_active_set.is_empty() {
             info!(
@@ -286,22 +285,6 @@ impl LeaderScheduler {
             tick_height + self.ticks_per_epoch,
             self.epoch_schedule[0]
         );
-    }
-
-    fn rank_active_set(bank: &Bank, active: Vec<Pubkey>) -> Vec<(Pubkey, u64)> {
-        let mut active_accounts: Vec<_> = active
-            .into_iter()
-            .filter_map(|pubkey| {
-                let stake = bank.get_balance(&pubkey);
-                if stake > 0 {
-                    Some((pubkey, stake as u64))
-                } else {
-                    None
-                }
-            })
-            .collect();
-        active_stakers::rank_stakes(&mut active_accounts);
-        active_accounts
     }
 
     fn calculate_seed(tick_height: u64) -> u64 {
@@ -575,93 +558,6 @@ pub mod tests {
             let seed = LeaderScheduler::calculate_seed(i);
             assert!(!old_seeds.contains(&seed));
             old_seeds.insert(seed);
-        }
-    }
-
-    #[test]
-    fn test_rank_active_set() {
-        let num_validators: usize = 101;
-        // Give genesis_block sum(1..num_validators) tokens
-        let (genesis_block, mint_keypair) =
-            GenesisBlock::new((((num_validators + 1) / 2) * (num_validators + 1)) as u64);
-        let bank = Bank::new(&genesis_block);
-        let mut validators = vec![];
-        let last_id = genesis_block.last_id();
-        for i in 0..num_validators {
-            let new_validator = Keypair::new();
-            let new_pubkey = new_validator.pubkey();
-            validators.push(new_validator);
-            bank.transfer(
-                (num_validators - i) as u64,
-                &mint_keypair,
-                new_pubkey,
-                last_id,
-            )
-            .unwrap();
-        }
-
-        let validator_pubkeys: Vec<_> = validators.iter().map(Keypair::pubkey).collect();
-        let result = LeaderScheduler::rank_active_set(&bank, validator_pubkeys);
-
-        assert_eq!(result.len(), validators.len());
-
-        // Expect the result to be the reverse of the list we passed into the rank_active_set()
-        for (i, (pubkey, stake)) in result.into_iter().enumerate() {
-            assert_eq!(stake, i as u64 + 1);
-            assert_eq!(pubkey, validators[num_validators - i - 1].pubkey());
-        }
-
-        // Transfer all the tokens to a new set of validators, old validators should now
-        // have balance of zero and get filtered out of the rankings
-        let mut new_validators = vec![];
-        for i in 0..num_validators {
-            let new_validator = Keypair::new();
-            let new_pubkey = new_validator.pubkey();
-            new_validators.push(new_validator);
-            bank.transfer(
-                (num_validators - i) as u64,
-                &validators[i],
-                new_pubkey,
-                last_id,
-            )
-            .unwrap();
-        }
-
-        let all_validators: Vec<Pubkey> = validators
-            .iter()
-            .chain(new_validators.iter())
-            .map(Keypair::pubkey)
-            .collect();
-        let result = LeaderScheduler::rank_active_set(&bank, all_validators);
-        assert_eq!(result.len(), new_validators.len());
-
-        for (i, (pubkey, balance)) in result.into_iter().enumerate() {
-            assert_eq!(balance, i as u64 + 1);
-            assert_eq!(pubkey, new_validators[num_validators - i - 1].pubkey());
-        }
-
-        // Break ties between validators with the same balances using public key
-        let (genesis_block, mint_keypair) = GenesisBlock::new((num_validators + 1) as u64);
-        let bank = Bank::new(&genesis_block);
-        let mut tied_validators_pk = vec![];
-        let last_id = genesis_block.last_id();
-
-        for _i in 0..num_validators {
-            let new_validator = Keypair::new();
-            let new_pubkey = new_validator.pubkey();
-            tied_validators_pk.push(new_pubkey);
-            assert!(bank.get_balance(&mint_keypair.pubkey()) > 1);
-            bank.transfer(1, &mint_keypair, new_pubkey, last_id)
-                .unwrap();
-        }
-
-        let mut sorted = tied_validators_pk.clone();
-        sorted.sort_by(|pk1, pk2| pk1.cmp(pk2));
-        let result = LeaderScheduler::rank_active_set(&bank, tied_validators_pk);
-        assert_eq!(result.len(), sorted.len());
-        for (i, (pk, s)) in result.into_iter().enumerate() {
-            assert_eq!(s, 1);
-            assert_eq!(pk, sorted[i]);
         }
     }
 
