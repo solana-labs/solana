@@ -101,14 +101,15 @@ impl PohService {
                 }
             }
             let e = if let Some(ref current_leader) = leader {
-                println!("tick");
                 poh.tick(current_leader)
             } else {
                 Ok(())
             };
             match e {
                 Err(Error::PohRecorderError(PohRecorderError::MinHeightNotReached)) => (),
-                Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) => leader = None,
+                Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) => {
+                    leader = None;
+                }
                 e => e?,
             };
             if poh_exit.load(Ordering::Relaxed) {
@@ -134,6 +135,7 @@ mod tests {
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::hash;
     use std::sync::mpsc::channel;
+    use std::sync::mpsc::RecvError;
 
     #[test]
     fn test_poh_service() {
@@ -215,8 +217,9 @@ mod tests {
         let _ = poh_service.join().unwrap();
         let _ = entry_producer.join().unwrap();
     }
+
     #[test]
-    fn test_poh_service_height() {
+    fn test_poh_service_drops_working_leader() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
         let prev_id = bank.last_id();
@@ -230,29 +233,26 @@ mod tests {
             max_tick_height: bank.tick_height() + 5,
         };
 
-        const HASHES_PER_TICK: u64 = 2;
         let (poh_service, leader_sender) = PohService::new(
             poh_recorder.clone(),
-            PohServiceConfig::Tick(HASHES_PER_TICK as usize),
+            PohServiceConfig::default(),
             Arc::new(AtomicBool::new(false)),
         );
 
-        leader_sender.send(working_leader.clone()).expect("send");
+        leader_sender.send(working_leader).expect("send");
 
         // all 5 ticks are expected
-        let _ = entry_receiver.recv().unwrap();
-        println!("x");
-        let _ = entry_receiver.recv().unwrap();
-        println!("x");
-        let _ = entry_receiver.recv().unwrap();
-        println!("x");
-        let _ = entry_receiver.recv().unwrap();
-        println!("x");
-        let _ = entry_receiver.recv().unwrap();
-        println!("x");
+        // First 3 ticks must be sent all at once, since bank shouldn't see them until
+        // the bank's min_tick_height(3) is reached.
+        let entries = entry_receiver.recv().unwrap();
+        assert_eq!(entries.len(), 3);
+        let entries = entry_receiver.recv().unwrap();
+        assert_eq!(entries.len(), 1);
+        let entries = entry_receiver.recv().unwrap();
+        assert_eq!(entries.len(), 1);
 
-        //empty
-        assert!(entry_receiver.try_recv().is_err());
+        //WorkingLeader should be dropped by the PoHService thread as well
+        assert_eq!(entry_receiver.recv(), Err(RecvError));
 
         exit.store(true, Ordering::Relaxed);
         poh_service.exit();

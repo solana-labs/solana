@@ -44,7 +44,6 @@ impl PohRecorder {
         let mut cache = vec![];
         std::mem::swap(&mut cache, &mut self.tick_cache.lock().unwrap());
         if !cache.is_empty() {
-            println!("flushing {}", cache.len());
             for t in &cache {
                 leader.bank.register_tick(&t.id);
             }
