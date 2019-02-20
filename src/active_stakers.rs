@@ -1,4 +1,7 @@
 use crate::leader_schedule::LeaderSchedule;
+use rand::distributions::{Distribution, WeightedIndex};
+use rand::SeedableRng;
+use rand_chacha::ChaChaRng;
 use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT};
@@ -64,6 +67,10 @@ impl ActiveStakers {
         self.stakes.clone()
     }
 
+    pub fn stakes(&self) -> Vec<u64> {
+        self.stakes.iter().map(|(_pubkey, stake)| *stake).collect()
+    }
+
     /// Return the pubkeys of each staker.
     pub fn pubkeys(&self) -> Vec<Pubkey> {
         self.stakes.iter().map(|(pubkey, _stake)| *pubkey).collect()
@@ -76,8 +83,22 @@ impl ActiveStakers {
         pubkeys
     }
 
-    pub fn leader_schedule(&self) -> LeaderSchedule {
-        LeaderSchedule::new(self.pubkeys())
+    pub fn leader_schedule(&self, bank: &Bank, len: u64) -> LeaderSchedule {
+        let stakes = self.stakes();
+        let pubkeys = self.pubkeys();
+        let mut seed = [0u8; 32];
+        seed.copy_from_slice(&bank.last_id().as_ref()[..32]);
+        let mut rng = ChaChaRng::from_seed(seed);
+        // Should have no zero weighted stakes
+        let weighted_index = WeightedIndex::new(stakes).unwrap();
+        let schedule = (0..len)
+            .map(|_| {
+                let i = weighted_index.sample(&mut rng);
+                pubkeys[i]
+            })
+            .collect();
+
+        LeaderSchedule::new(schedule)
     }
 }
 
@@ -325,5 +346,20 @@ pub mod tests {
         let mut stakes = vec![(pubkey0, 1), (pubkey1, 1)];
         rank_stakes(&mut stakes);
         assert_eq!(stakes, vec![(pubkey0, 1), (pubkey1, 1)]);
+    }
+
+    #[test]
+    fn test_leader_schedule() {
+        let num_keys = 10;
+        let stakes = (0..num_keys)
+            .map(|i| (Keypair::new().pubkey(), i))
+            .collect();
+        let active_stakers = ActiveStakers { stakes };
+
+        let (genesis_block, _) = GenesisBlock::new_with_leader(10000, Keypair::new().pubkey(), 500);
+        let bank = Bank::new(&genesis_block);
+        let slots_per_epoch = num_keys * 10;
+        let leader_schedule = active_stakers.leader_schedule(&bank, slots_per_epoch);
+        assert_eq!(leader_schedule.slot_leaders().len() as u64, slots_per_epoch);
     }
 }

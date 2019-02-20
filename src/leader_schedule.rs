@@ -10,6 +10,11 @@ impl LeaderSchedule {
     pub fn new(slot_leaders: Vec<Pubkey>) -> Self {
         Self { slot_leaders }
     }
+
+    #[cfg(test)]
+    pub fn slot_leaders(&self) -> &Vec<Pubkey> {
+        &self.slot_leaders
+    }
 }
 
 impl Index<usize> for LeaderSchedule {
