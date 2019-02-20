@@ -446,10 +446,9 @@ impl Bank {
         txs: &[Transaction],
         loaded_accounts: &[Result<(InstructionAccounts, InstructionLoaders)>],
         executed: &[Result<()>],
-    ) -> u64 {
+    ) {
         let now = Instant::now();
-        let fee = self
-            .accounts
+        self.accounts
             .store_accounts(true, txs, executed, loaded_accounts);
 
         // once committed there is no way to unroll
@@ -460,7 +459,6 @@ impl Bank {
             txs.len(),
         );
         self.update_transaction_statuses(txs, &executed);
-        fee
     }
 
     /// Process a batch of transactions.
@@ -470,19 +468,18 @@ impl Bank {
         txs: &[Transaction],
         lock_results: Vec<Result<()>>,
         max_age: usize,
-    ) -> (Vec<Result<()>>, u64) {
+    ) -> Vec<Result<()>> {
         let (loaded_accounts, executed) =
             self.load_and_execute_transactions(txs, lock_results, max_age);
 
-        let fee = self.commit_transactions(txs, &loaded_accounts, &executed);
-        (executed, fee)
+        self.commit_transactions(txs, &loaded_accounts, &executed);
+        executed
     }
 
     #[must_use]
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let lock_results = self.lock_accounts(txs);
-        let (results, _fee) =
-            self.load_execute_and_commit_transactions(txs, lock_results, MAX_ENTRY_IDS);
+        let results = self.load_execute_and_commit_transactions(txs, lock_results, MAX_ENTRY_IDS);
         self.unlock_accounts(txs, &results);
         results
     }
@@ -529,7 +526,7 @@ impl Bank {
         parents
     }
 
-    pub fn collect_tx_fee(&self, pubkey: &Pubkey, fee: u64) {
+    pub fn deposit(&self, pubkey: &Pubkey, fee: u64) {
         if let Some(mut account) = self.get_account(pubkey) {
             account.tokens += fee;
             self.accounts.store_slow(false, pubkey, &account);
@@ -898,7 +895,7 @@ mod tests {
         let pay_alice = vec![tx1];
 
         let lock_result = bank.lock_accounts(&pay_alice);
-        let (results_alice, _fee) =
+        let results_alice =
             bank.load_execute_and_commit_transactions(&pay_alice, lock_result, MAX_ENTRY_IDS);
         assert_eq!(results_alice[0], Ok(()));
 
