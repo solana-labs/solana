@@ -467,9 +467,9 @@ pub mod tests {
         let mut validators = vec![];
         let last_id = genesis_block.last_id();
         for i in 0..num_validators {
-            let new_validator = Arc::new(Keypair::new());
+            let new_validator = Keypair::new();
             let new_pubkey = new_validator.pubkey();
-            let voting_keypair = VotingKeypair::new_local(&new_validator);
+            let voting_keypair = Keypair::new();
             validators.push(new_pubkey);
             let stake = (i + 42) as u64;
             info!("validator {}: stake={} pubkey={}", i, stake, new_pubkey);
@@ -628,7 +628,7 @@ pub mod tests {
         let num_old_ids = 20;
         let mut old_ids = HashSet::new();
         for _ in 0..num_old_ids {
-            let new_keypair = Arc::new(Keypair::new());
+            let new_keypair = Keypair::new();
             let pk = new_keypair.pubkey();
             old_ids.insert(pk.clone());
 
@@ -637,7 +637,7 @@ pub mod tests {
                 .unwrap();
 
             // Create a vote account
-            let voting_keypair = VotingKeypair::new_local(&new_keypair);
+            let voting_keypair = Keypair::new();
             new_vote_account(
                 &new_keypair,
                 &voting_keypair,
@@ -659,7 +659,7 @@ pub mod tests {
         let num_new_ids = 10;
         let mut new_ids = HashSet::new();
         for _ in 0..num_new_ids {
-            let new_keypair = Arc::new(Keypair::new());
+            let new_keypair = Keypair::new();
             let pk = new_keypair.pubkey();
             new_ids.insert(pk);
             // Give the account some stake
@@ -667,7 +667,7 @@ pub mod tests {
                 .unwrap();
 
             // Create a vote account
-            let voting_keypair = VotingKeypair::new_local(&new_keypair);
+            let voting_keypair = Keypair::new();
             new_vote_account(
                 &new_keypair,
                 &voting_keypair,
@@ -919,9 +919,9 @@ pub mod tests {
         let mut validators = vec![];
         let last_id = genesis_block.last_id();
         for i in 0..num_validators {
-            let new_validator = Arc::new(Keypair::new());
+            let new_validator = Keypair::new();
             let new_pubkey = new_validator.pubkey();
-            let voting_keypair = VotingKeypair::new_local(&new_validator);
+            let voting_keypair = Keypair::new();
             validators.push(new_pubkey);
             // Give the validator some tokens
             bank.transfer(
@@ -979,7 +979,7 @@ pub mod tests {
 
     #[test]
     fn test_multiple_vote() {
-        let leader_keypair = Arc::new(Keypair::new());
+        let leader_keypair = Keypair::new();
         let leader_id = leader_keypair.pubkey();
         let active_window_tick_length = 1000;
         let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10000, leader_id, 500);
@@ -1006,7 +1006,7 @@ pub mod tests {
         // Check that a node that votes twice in a row will get included in the active
         // window
 
-        let voting_keypair = VotingKeypair::new_local(&leader_keypair);
+        let voting_keypair = Keypair::new();
         // Create a vote account
         new_vote_account(
             &leader_keypair,
