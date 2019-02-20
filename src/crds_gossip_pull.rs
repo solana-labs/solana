@@ -226,7 +226,6 @@ mod test {
         // The min balance of the heaviest nodes is at least ln(3000) - 0.5
         // This is because the heaviest nodes will have very similar weights
         let min_balance = E.powf(3000_f32.ln() - 0.5);
-        println!("{:?}", min_balance);
         let now = 1024;
         // try upto 10 times because of rng
         for _ in 0..10 {
