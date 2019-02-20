@@ -35,7 +35,7 @@ pub struct WorkingBank {
 }
 
 pub struct PohRecorder {
-    poh: Poh,
+    pub poh: Poh,
     tick_cache: Vec<(Entry, u64)>,
     working_bank: Option<WorkingBank>,
 }
