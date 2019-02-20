@@ -1,12 +1,14 @@
 //! The `poh_service` module implements a service that records the passing of
 //! "ticks", a measure of time in the PoH stream
 
+use crate::entry::Entry;
 use crate::poh_recorder::PohRecorder;
 use crate::result::Result;
 use crate::service::Service;
 use solana_runtime::bank::Bank;
 use solana_sdk::timing::NUM_TICKS_PER_SECOND;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Sender;
 use std::sync::Arc;
 use std::thread::{self, sleep, Builder, JoinHandle};
 use std::time::Duration;
@@ -45,6 +47,7 @@ impl PohService {
 
     pub fn new(
         bank: Arc<Bank>,
+        sender: Sender<Vec<Entry>>,
         poh_recorder: PohRecorder,
         config: PohServiceConfig,
         poh_exit: Arc<AtomicBool>,
@@ -58,9 +61,10 @@ impl PohService {
             .name("solana-poh-service-tick_producer".to_string())
             .spawn(move || {
                 let mut poh_recorder_ = poh_recorder;
+                let sender = sender.clone();
                 let bank = bank.clone();
                 let return_value =
-                    Self::tick_producer(&bank, &mut poh_recorder_, config, &poh_exit_);
+                    Self::tick_producer(&bank, &sender, &mut poh_recorder_, config, &poh_exit_);
                 poh_exit_.store(true, Ordering::Relaxed);
                 return_value
             })
@@ -74,6 +78,7 @@ impl PohService {
 
     fn tick_producer(
         bank: &Arc<Bank>,
+        sender: &Sender<Vec<Entry>>,
         poh: &mut PohRecorder,
         config: PohServiceConfig,
         poh_exit: &AtomicBool,
@@ -89,7 +94,7 @@ impl PohService {
                     sleep(duration);
                 }
             }
-            poh.tick(&bank)?;
+            poh.tick(&bank, sender)?;
             if poh_exit.load(Ordering::Relaxed) {
                 return Ok(());
             }
@@ -119,12 +124,12 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let prev_id = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
-        let poh_recorder =
-            PohRecorder::new(bank.tick_height(), entry_sender, prev_id, std::u64::MAX);
+        let poh_recorder = PohRecorder::new(bank.tick_height(), prev_id, std::u64::MAX);
         let exit = Arc::new(AtomicBool::new(false));
 
         let entry_producer: JoinHandle<Result<()>> = {
             let poh_recorder = poh_recorder.clone();
+            let entry_sender = entry_sender.clone();
             let exit = exit.clone();
 
             Builder::new()
@@ -134,7 +139,7 @@ mod tests {
                         // send some data
                         let h1 = hash(b"hello world!");
                         let tx = test_tx();
-                        poh_recorder.record(h1, vec![tx]).unwrap();
+                        poh_recorder.record(h1, vec![tx], &entry_sender).unwrap();
 
                         if exit.load(Ordering::Relaxed) {
                             break Ok(());
@@ -147,6 +152,7 @@ mod tests {
         const HASHES_PER_TICK: u64 = 2;
         let poh_service = PohService::new(
             bank,
+            entry_sender,
             poh_recorder,
             PohServiceConfig::Tick(HASHES_PER_TICK as usize),
             Arc::new(AtomicBool::new(false)),
