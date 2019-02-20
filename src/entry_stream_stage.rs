@@ -148,15 +148,15 @@ mod test {
         let mut last_id = Hash::default();
         let mut entries = Vec::new();
         let mut expected_entries = Vec::new();
-        for x in 0..6 {
-            let entry = Entry::new(&mut last_id, x, 1, vec![]); //just ticks
+        for _ in 0..6 {
+            let entry = Entry::new(&mut last_id, 1, vec![]); //just ticks
             last_id = entry.id;
             expected_entries.push(entry.clone());
             entries.push(entry);
         }
         let keypair = Keypair::new();
         let tx = SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, Hash::default(), 0);
-        let entry = Entry::new(&mut last_id, ticks_per_slot - 1, 1, vec![tx]);
+        let entry = Entry::new(&mut last_id, 1, vec![tx]);
         expected_entries.insert(ticks_per_slot as usize, entry.clone());
         entries.insert(ticks_per_slot as usize, entry);
 

@@ -41,9 +41,6 @@ pub type EntryReceiver = Receiver<Vec<Entry>>;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Entry {
-    /// tick height of the ledger, not including any tick implied by this Entry
-    pub tick_height: u64,
-
     /// The number of hashes since the previous Entry ID.
     pub num_hashes: u64,
 
@@ -58,16 +55,10 @@ pub struct Entry {
 
 impl Entry {
     /// Creates the next Entry `num_hashes` after `start_hash`.
-    pub fn new(
-        prev_id: &Hash,
-        tick_height: u64,
-        num_hashes: u64,
-        transactions: Vec<Transaction>,
-    ) -> Self {
+    pub fn new(prev_id: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Self {
         let entry = {
             if num_hashes == 0 && transactions.is_empty() {
                 Entry {
-                    tick_height,
                     num_hashes: 0,
                     id: *prev_id,
                     transactions,
@@ -77,7 +68,6 @@ impl Entry {
                 // next_hash will generate the next hash and set num_hashes == 1
                 let id = next_hash(prev_id, 1, &transactions);
                 Entry {
-                    tick_height,
                     num_hashes: 1,
                     id,
                     transactions,
@@ -88,7 +78,6 @@ impl Entry {
                 // and transactions = empty
                 let id = next_hash(prev_id, num_hashes, &transactions);
                 Entry {
-                    tick_height,
                     num_hashes,
                     id,
                     transactions,
@@ -129,9 +118,8 @@ impl Entry {
             .iter()
             .map(|tx| tx.serialized_size().unwrap())
             .sum();
-        // tick_height+num_hashes   +    id  +              txs
-
-        (3 * size_of::<u64>() + size_of::<Hash>()) as u64 + txs_size
+        // num_hashes   +    id  +              txs
+        (2 * size_of::<u64>() + size_of::<Hash>()) as u64 + txs_size
     }
 
     pub fn num_will_fit(transactions: &[Transaction]) -> usize {
@@ -176,7 +164,7 @@ impl Entry {
         num_hashes: &mut u64,
         transactions: Vec<Transaction>,
     ) -> Self {
-        let entry = Self::new(start_hash, 0, *num_hashes, transactions);
+        let entry = Self::new(start_hash, *num_hashes, transactions);
         *start_hash = entry.id;
         *num_hashes = 0;
         assert!(serialized_size(&entry).unwrap() <= BLOB_DATA_SIZE as u64);
@@ -187,9 +175,8 @@ impl Entry {
     /// since the previous transaction and that resulting `id`.
 
     #[cfg(test)]
-    pub fn new_tick(tick_height: u64, num_hashes: u64, id: &Hash) -> Self {
+    pub fn new_tick(num_hashes: u64, id: &Hash) -> Self {
         Entry {
-            tick_height,
             num_hashes,
             id: *id,
             transactions: vec![],
@@ -271,7 +258,6 @@ pub trait EntrySlice {
 impl EntrySlice for [Entry] {
     fn verify(&self, start_hash: &Hash) -> bool {
         let genesis = [Entry {
-            tick_height: 0,
             num_hashes: 0,
             id: *start_hash,
             transactions: vec![],
@@ -312,7 +298,7 @@ impl EntrySlice for [Entry] {
 }
 
 pub fn next_entry_mut(start: &mut Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Entry {
-    let entry = Entry::new(&start, 0, num_hashes, transactions);
+    let entry = Entry::new(&start, num_hashes, transactions);
     *start = entry.id;
     entry
 }
@@ -476,7 +462,6 @@ pub fn make_consecutive_blobs(
 pub fn next_entry(prev_id: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Entry {
     assert!(num_hashes > 0 || transactions.is_empty());
     Entry {
-        tick_height: 0,
         num_hashes,
         id: next_hash(prev_id, num_hashes, &transactions),
         transactions,
@@ -497,8 +482,8 @@ mod tests {
     fn test_entry_verify() {
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
-        assert!(Entry::new_tick(0, 0, &zero).verify(&zero)); // base case, never used
-        assert!(!Entry::new_tick(1, 0, &zero).verify(&one)); // base case, bad
+        assert!(Entry::new_tick(0, &zero).verify(&zero)); // base case, never used
+        assert!(!Entry::new_tick(0, &zero).verify(&one)); // base case, bad
         assert!(next_entry(&zero, 1, vec![]).verify(&zero)); // inductive step
         assert!(!next_entry(&zero, 1, vec![]).verify(&one)); // inductive step, bad
     }
@@ -511,7 +496,7 @@ mod tests {
         let keypair = Keypair::new();
         let tx0 = SystemTransaction::new_account(&keypair, keypair.pubkey(), 0, zero, 0);
         let tx1 = SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, zero, 0);
-        let mut e0 = Entry::new(&zero, 0, 0, vec![tx0.clone(), tx1.clone()]);
+        let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
         assert!(e0.verify(&zero));
 
         // Next, swap two transactions and ensure verification fails.
@@ -535,7 +520,7 @@ mod tests {
         );
         let tx1 =
             BudgetTransaction::new_signature(&keypair, keypair.pubkey(), keypair.pubkey(), zero);
-        let mut e0 = Entry::new(&zero, 0, 0, vec![tx0.clone(), tx1.clone()]);
+        let mut e0 = Entry::new(&zero, 0, vec![tx0.clone(), tx1.clone()]);
         assert!(e0.verify(&zero));
 
         // Next, swap two witness transactions and ensure verification fails.
@@ -595,8 +580,8 @@ mod tests {
         let zero = Hash::default();
         let one = hash(&zero.as_ref());
         assert!(vec![][..].verify(&zero)); // base case
-        assert!(vec![Entry::new_tick(0, 0, &zero)][..].verify(&zero)); // singleton case 1
-        assert!(!vec![Entry::new_tick(0, 0, &zero)][..].verify(&one)); // singleton case 2, bad
+        assert!(vec![Entry::new_tick(0, &zero)][..].verify(&zero)); // singleton case 1
+        assert!(!vec![Entry::new_tick(0, &zero)][..].verify(&one)); // singleton case 2, bad
         assert!(vec![next_entry(&zero, 0, vec![]); 2][..].verify(&zero)); // inductive step
 
         let mut bad_ticks = vec![next_entry(&zero, 0, vec![]); 2];
@@ -663,7 +648,6 @@ mod tests {
         let tx_small_size = tx_small.serialized_size().unwrap() as usize;
         let tx_large_size = tx_large.serialized_size().unwrap() as usize;
         let entry_size = serialized_size(&Entry {
-            tick_height: 0,
             num_hashes: 0,
             id: Hash::default(),
             transactions: vec![],

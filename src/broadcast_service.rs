@@ -405,9 +405,7 @@ mod test {
             );
 
             let ticks = create_ticks(max_tick_height - start_tick_height, Hash::default());
-            for (i, mut tick) in ticks.into_iter().enumerate() {
-                // Simulate the tick heights generated in poh.rs
-                tick.tick_height = start_tick_height + i as u64 + 1;
+            for (_, tick) in ticks.into_iter().enumerate() {
                 entry_sender
                     .send(vec![tick])
                     .expect("Expect successful send to broadcast service");

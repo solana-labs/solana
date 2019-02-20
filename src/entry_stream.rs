@@ -206,7 +206,7 @@ mod test {
                     .emit_block_event(previous_slot, &leader_id, tick_height - 1, last_id)
                     .unwrap();
             }
-            let entry = Entry::new(&mut last_id, tick_height, 1, vec![]); // just ticks
+            let entry = Entry::new(&mut last_id, 1, vec![]); // just ticks
             last_id = entry.id;
             previous_slot = curr_slot;
             entry_stream
