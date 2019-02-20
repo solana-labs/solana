@@ -13,21 +13,21 @@ use std::sync::{Arc, RwLock};
 
 pub const VERIFY_BLOCK_SIZE: usize = 16;
 
-pub fn process_entry(bank: &Bank, entry: &Entry) -> Result<()> {
+pub fn process_entry(bank: &Bank, entry: &Entry) -> (Result<()>, u64) {
     if !entry.is_tick() {
-        for result in bank.process_transactions(&entry.transactions) {
-            match result {
-                // Entries that result in a ProgramError are still valid and are written in the
-                // ledger so map them to an ok return value
-                Err(BankError::ProgramError(_, _)) => Ok(()),
-                _ => result,
-            }?;
-        }
+        let old_results = bank.process_transactions(&entry.transactions);
+        let results = ignore_program_errors(old_results);
+        let fee = entry
+            .transactions
+            .iter()
+            .zip(&results)
+            .map(|(tx, res)| if res.is_ok() { tx.fee } else { 0 })
+            .sum();
+        (first_err(&results), fee)
     } else {
         bank.register_tick(&entry.id);
+        (Ok(()), 0)
     }
-
-    Ok(())
 }
 
 fn first_err(results: &[Result<()>]) -> Result<()> {
@@ -58,21 +58,25 @@ fn par_execute_entries(bank: &Bank, entries: &[(&Entry, Vec<Result<()>>)]) -> (R
     let results_fees: Vec<(Result<()>, u64)> = entries
         .into_par_iter()
         .map(|(e, lock_results)| {
-            let (old_results, fee) = bank.load_execute_and_commit_transactions(
+            let old_results = bank.load_execute_and_commit_transactions(
                 &e.transactions,
                 lock_results.to_vec(),
                 MAX_ENTRY_IDS,
             );
             let results = ignore_program_errors(old_results);
             bank.unlock_accounts(&e.transactions, &results);
+            let fee = e
+                .transactions
+                .iter()
+                .zip(&results)
+                .map(|(tx, res)| if res.is_ok() { tx.fee } else { 0 })
+                .sum();
             (first_err(&results), fee)
         })
         .collect();
 
     let fee = results_fees.iter().map(|(_, fee)| fee).sum();
-    let mut results = Vec::new();
-    results.reserve_exact(results_fees.len());
-    results = results_fees.into_iter().map(|(res, _)| res).collect();
+    let results: Vec<Result<()>> = results_fees.into_iter().map(|(res, _)| res).collect();
     (first_err(&results[..]), fee)
 }
 
@@ -147,11 +151,26 @@ fn process_block(
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
 ) -> Result<()> {
     for entry in entries {
-        process_entry(bank, entry)?;
+        let (res, fee) = process_entry(bank, entry);
+        let num_ticks = bank.tick_height();
+        let slot_num = leader_scheduler
+            .read()
+            .unwrap()
+            .tick_height_to_slot(num_ticks);
+        if let Some(leader) = leader_scheduler
+            .read()
+            .unwrap()
+            .get_leader_for_slot(slot_num)
+        {
+            // Credit the accumulated fees to the current leader and reset the fee to 0
+            bank.deposit(&leader, fee);
+        }
+
         if entry.is_tick() {
             let mut leader_scheduler = leader_scheduler.write().unwrap();
             leader_scheduler.update_tick_height(bank.tick_height(), bank);
         }
+        res?;
     }
 
     Ok(())

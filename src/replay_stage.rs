@@ -137,7 +137,7 @@ impl ReplayStage {
                         .get_leader_for_slot(slot_num)
                     {
                         // Credit the accumulated fees to the current leader and reset the fee to 0
-                        bank.collect_tx_fee(&leader, *fees);
+                        bank.deposit(&leader, *fees);
                         *fees = 0;
                     }
                     if let Some(voting_keypair) = voting_keypair {
