@@ -26,6 +26,7 @@ impl EntryStreamStage {
     pub fn new(
         ledger_entry_receiver: EntryReceiver,
         entry_stream_socket: String,
+        mut tick_height: u64,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         exit: Arc<AtomicBool>,
     ) -> (Self, EntryReceiver) {
@@ -40,6 +41,7 @@ impl EntryStreamStage {
                 if let Err(e) = Self::process_entries(
                     &ledger_entry_receiver,
                     &entry_stream_sender,
+                    &mut tick_height,
                     &mut entry_stream,
                 ) {
                     match e {
@@ -55,6 +57,7 @@ impl EntryStreamStage {
     fn process_entries(
         ledger_entry_receiver: &EntryReceiver,
         entry_stream_sender: &EntrySender,
+        tick_height: &mut u64,
         entry_stream: &mut EntryStream,
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
@@ -62,7 +65,10 @@ impl EntryStreamStage {
         let leader_scheduler = entry_stream.leader_scheduler.read().unwrap();
 
         for entry in &entries {
-            let slot = leader_scheduler.tick_height_to_slot(entry.tick_height);
+            if entry.is_tick() {
+                *tick_height += 1
+            }
+            let slot = leader_scheduler.tick_height_to_slot(*tick_height);
             let leader_id = leader_scheduler
                 .get_leader_for_slot(slot)
                 .map(|leader| leader.to_string())
@@ -85,10 +91,10 @@ impl EntryStreamStage {
                 .unwrap_or_else(|e| {
                     debug!("Entry Stream error: {:?}, {:?}", e, entry_stream.output);
                 });
-            if 0 == leader_scheduler.num_ticks_left_in_slot(entry.tick_height) {
+            if 0 == leader_scheduler.num_ticks_left_in_slot(*tick_height) {
                 entry_stream.queued_block = Some(EntryStreamBlock {
                     slot,
-                    tick_height: entry.tick_height,
+                    tick_height: *tick_height,
                     id: entry.id,
                 });
             }
@@ -158,6 +164,7 @@ mod test {
         EntryStreamStage::process_entries(
             &ledger_entry_receiver,
             &entry_stream_sender,
+            &mut 1,
             &mut entry_stream,
         )
         .unwrap();
