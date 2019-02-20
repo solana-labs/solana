@@ -171,19 +171,17 @@ impl CrdsGossipPush {
     ) {
         let need = Self::compute_need(self.num_active, self.active_set.len(), ratio);
         let mut new_items = HashMap::new();
-        let mut ixs: Vec<_> = (0..crds.table.len()).collect();
-        ixs.shuffle(&mut rand::thread_rng());
 
-        let mut options: Vec<_> = crds
+        let options: Vec<_> = crds
             .table
             .values()
             .filter(|v| v.value.contact_info().is_some())
             .map(|v| (v.value.contact_info().unwrap(), v))
             .filter(|(info, _)| info.id != self_id && ContactInfo::is_valid_address(&info.gossip))
             .map(|(info, value)| {
-                let max_weight = u32::from(u16::max_value()) - 1;
-                let req_time: u64 = value.local_timestamp;
-                let since = (timestamp() - req_time / 1024) as u32;
+                let max_weight = f32::from(u16::max_value()) - 1.0;
+                let last_updated: u64 = value.local_timestamp;
+                let since = ((timestamp() - last_updated) / 1024) as u32;
                 let stake = get_stake(&info.id, bank);
                 let weight = get_weight(max_weight, since, stake);
                 (weight, info)
@@ -192,15 +190,10 @@ impl CrdsGossipPush {
         if options.is_empty() {
             return;
         }
+        let index = WeightedIndex::new(options.iter().map(|weighted| weighted.0)).unwrap();
         while new_items.len() < need {
-            let index = WeightedIndex::new(options.iter().map(|weighted| weighted.0));
-            if index.is_err() {
-                break;
-            }
-            let index = index.unwrap();
             let index = index.sample(&mut rand::thread_rng());
             let item = options[index].1;
-            options.remove(index);
             if self.active_set.get(&item.id).is_some() {
                 continue;
             }
@@ -262,7 +255,10 @@ impl CrdsGossipPush {
 mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use std::f32::consts::E;
+
     #[test]
     fn test_process_push() {
         let mut crds = Crds::default();
@@ -385,6 +381,44 @@ mod test {
         }
         push.refresh_push_active_set(&crds, None, Pubkey::default(), 1, 1);
         assert_eq!(push.active_set.len(), push.num_active);
+    }
+    #[test]
+    fn test_active_set_refresh_with_bank() {
+        let (block, mint_keypair) = GenesisBlock::new(100_000_000);
+        let bank = Arc::new(Bank::new(&block));
+        let time = timestamp() - 1024; //make sure there's at least a 1 second delay
+        let mut crds = Crds::default();
+        let mut push = CrdsGossipPush::default();
+        for i in 1..=100 {
+            let peer =
+                CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), time));
+            let id = peer.label().pubkey();
+            crds.insert(peer.clone(), time).unwrap();
+            bank.transfer(i * 100, &mint_keypair, id, bank.last_id())
+                .unwrap();
+        }
+        let min_balance = E.powf(7000_f32.ln() - 0.5);
+        // try upto 10 times because of rng
+        for _ in 0..10 {
+            push.refresh_push_active_set(&crds, Some(&bank), Pubkey::default(), 100, 30);
+            let mut num_correct = 0;
+            let mut num_wrong = 0;
+            push.active_set.iter().for_each(|peer| {
+                if bank.get_balance(peer.0) >= min_balance as u64 {
+                    num_correct += 1;
+                } else {
+                    num_wrong += 1;
+                }
+            });
+            // at least half of the heaviest nodes should be picked
+            if num_wrong <= num_correct {
+                return;
+            }
+        }
+        assert!(
+            false,
+            "expected at 50% of the active set to contain the heaviest nodes"
+        );
     }
     #[test]
     fn test_new_push_messages() {

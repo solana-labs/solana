@@ -65,9 +65,9 @@ impl CrdsGossipPull {
             .filter_map(|v| v.value.contact_info())
             .filter(|v| v.id != self_id && ContactInfo::is_valid_address(&v.gossip))
             .map(|item| {
-                let max_weight = u32::from(u16::max_value()) - 1;
+                let max_weight = f32::from(u16::max_value()) - 1.0;
                 let req_time: u64 = *self.pull_request_time.get(&item.id).unwrap_or(&0);
-                let since = (now - req_time / 1024) as u32;
+                let since = ((now - req_time) / 1024) as u32;
                 let stake = get_stake(&item.id, bank);
                 let weight = get_weight(max_weight, since, stake);
                 (weight, item)
@@ -203,7 +203,42 @@ mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
     use crate::crds_value::LeaderId;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use std::f32::consts::E;
+
+    #[test]
+    fn test_new_pull_with_bank() {
+        let (block, mint_keypair) = GenesisBlock::new(500_000);
+        let bank = Arc::new(Bank::new(&block));
+        let mut crds = Crds::default();
+        let node = CrdsGossipPull::default();
+        let me = CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0));
+        crds.insert(me.clone(), 0).unwrap();
+        for i in 1..=30 {
+            let entry =
+                CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0));
+            let id = entry.label().pubkey();
+            crds.insert(entry.clone(), 0).unwrap();
+            bank.transfer(i * 100, &mint_keypair, id, bank.last_id())
+                .unwrap();
+        }
+        // The min balance of the heaviest nodes is at least ln(3000) - 0.5
+        // This is because the heaviest nodes will have very similar weights
+        let min_balance = E.powf(3000_f32.ln() - 0.5);
+        println!("{:?}", min_balance);
+        let now = 1024;
+        // try upto 10 times because of rng
+        for _ in 0..10 {
+            let msg = node
+                .new_pull_request(&crds, me.label().pubkey(), now, Some(&bank))
+                .unwrap();
+            if bank.get_balance(&msg.0) >= min_balance.round() as u64 {
+                return;
+            }
+        }
+        assert!(false, "weighted nodes didn't get picked");
+    }
 
     #[test]
     fn test_new_pull_request() {

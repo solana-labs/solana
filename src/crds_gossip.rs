@@ -12,7 +12,6 @@ use solana_runtime::bank::Bank;
 use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use std::cmp;
 use std::sync::Arc;
 
 ///The min size for bloom filters
@@ -161,30 +160,26 @@ impl CrdsGossip {
     }
 }
 
-/// A function that computes a normalized(log of bank balance) stake
-pub fn get_stake(id: &Pubkey, bank: Option<&Arc<Bank>>) -> u32 {
+/// Computes a normalized(log of bank balance) stake
+pub fn get_stake(id: &Pubkey, bank: Option<&Arc<Bank>>) -> f32 {
     match bank {
         Some(bank) => {
             // cap the max balance to u32 max (it should be plenty)
-            let bal = cmp::min(u64::from(u32::max_value()), bank.get_balance(id));
-            cmp::max(1, (bal as f32).ln().round() as u32)
+            let bal = f64::from(u32::max_value()).min(bank.get_balance(id) as f64);
+            1_f32.max((bal as f32).ln())
         }
-        _ => 1,
+        _ => 1.0,
     }
 }
 
-/// A function that computes bounded weight given some max, a time since last selected, and a stake value
+/// Computes bounded weight given some max, a time since last selected, and a stake value
 /// The minimum stake is 1 and not 0 to allow 'time since last' picked to factor in.
-pub fn get_weight(max_weight: u32, time_since_last_selected: u32, stake: u32) -> u32 {
-    cmp::max(
-        1,
-        cmp::min(
-            max_weight,
-            time_since_last_selected
-                .checked_mul(stake)
-                .unwrap_or(max_weight),
-        ),
-    )
+pub fn get_weight(max_weight: f32, time_since_last_selected: u32, stake: f32) -> f32 {
+    let mut weight = time_since_last_selected as f32 * stake;
+    if weight.is_infinite() {
+        weight = max_weight;
+    }
+    1.0_f32.max(weight.min(max_weight))
 }
 
 #[cfg(test)]
