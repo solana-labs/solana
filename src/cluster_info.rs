@@ -758,7 +758,12 @@ impl ClusterInfo {
 
     fn new_pull_requests(&mut self, bank: Option<&Arc<Bank>>) -> Vec<(SocketAddr, Protocol)> {
         let now = timestamp();
-        let pulls: Vec<_> = self.gossip.new_pull_request(now, bank).ok().into_iter().collect();
+        let pulls: Vec<_> = self
+            .gossip
+            .new_pull_request(now, bank)
+            .ok()
+            .into_iter()
+            .collect();
 
         let pr: Vec<_> = pulls
             .into_iter()
