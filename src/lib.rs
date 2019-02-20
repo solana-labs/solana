@@ -7,6 +7,7 @@
 //!
 
 #![cfg_attr(feature = "unstable", feature(test))]
+pub mod active_stakers;
 pub mod bank_forks;
 pub mod banking_stage;
 pub mod blob_fetch_stage;
@@ -39,6 +40,7 @@ pub mod fullnode;
 pub mod gen_keys;
 pub mod gossip_service;
 pub mod leader_confirmation_service;
+pub mod leader_schedule;
 pub mod leader_scheduler;
 pub mod local_vote_signer_service;
 pub mod packet;

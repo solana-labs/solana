@@ -1,6 +1,7 @@
 //! The `leader_scheduler` module implements a structure and functions for tracking and
 //! managing the schedule for leader rotation
 
+use crate::active_stakers::ActiveStakers;
 use crate::entry::{create_ticks, next_entry_mut, Entry};
 use crate::voting_keypair::VotingKeypair;
 use bincode::serialize;
@@ -12,7 +13,6 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT};
-use solana_sdk::vote_program::VoteState;
 use solana_sdk::vote_transaction::VoteTransaction;
 use std::io::Cursor;
 use std::sync::Arc;
@@ -202,15 +202,6 @@ impl LeaderScheduler {
         }
     }
 
-    // Return true of the latest vote is between the lower and upper bounds (inclusive)
-    fn is_active_staker(vote_state: &VoteState, lower_bound: u64, upper_bound: u64) -> bool {
-        vote_state
-            .votes
-            .back()
-            .filter(|vote| vote.tick_height >= lower_bound && vote.tick_height <= upper_bound)
-            .is_some()
-    }
-
     // TODO: We use a HashSet for now because a single validator could potentially register
     // multiple vote account. Once that is no longer possible (see the TODO in vote_program.rs,
     // process_transaction(), case VoteInstruction::RegisterAccount), we can use a vector.
@@ -223,10 +214,7 @@ impl LeaderScheduler {
             upper_bound
         );
 
-        bank.vote_states(|vote_state| Self::is_active_staker(vote_state, lower_bound, upper_bound))
-            .iter()
-            .map(|vote_state| vote_state.staker_id)
-            .collect()
+        ActiveStakers::new_with_upper_bound(&bank, lower_bound, upper_bound).stakers()
     }
 
     // Updates the leader schedule to include ticks from tick_height to the first tick of the next epoch
