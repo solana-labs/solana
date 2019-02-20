@@ -15,7 +15,7 @@ fn is_active_staker(vote_state: &VoteState, lower_bound: u64, upper_bound: u64) 
         .is_some()
 }
 
-fn rank_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
+pub fn rank_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
     // Rank first by stake. If stakes are the same we rank by pubkey to ensure a
     // deterministic result.
     // Note: Use unstable sort, because we dedup right after to remove the equal elements.

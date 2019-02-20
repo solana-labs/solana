@@ -1,7 +1,7 @@
 //! The `leader_scheduler` module implements a structure and functions for tracking and
 //! managing the schedule for leader rotation
 
-use crate::active_stakers::{ActiveStakers, DEFAULT_ACTIVE_WINDOW_TICK_LENGTH};
+use crate::active_stakers::{self, ActiveStakers, DEFAULT_ACTIVE_WINDOW_TICK_LENGTH};
 use crate::entry::{create_ticks, next_entry_mut, Entry};
 use crate::voting_keypair::VotingKeypair;
 use bincode::serialize;
@@ -296,14 +296,7 @@ impl LeaderScheduler {
                 }
             })
             .collect();
-
-        active_accounts.sort_by(|(pubkey1, stake1), (pubkey2, stake2)| {
-            if stake1 == stake2 {
-                pubkey1.cmp(&pubkey2)
-            } else {
-                stake1.cmp(&stake2)
-            }
-        });
+        active_stakers::rank_stakes(&mut active_accounts);
         active_accounts
     }
 
