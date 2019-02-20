@@ -105,8 +105,10 @@ impl Bank {
     pub fn new_from_parent(parent: &Arc<Bank>) -> Self {
         let mut bank = Self::default();
         bank.last_id_queue = RwLock::new(parent.last_id_queue.read().unwrap().clone());
-        *parent.hash.write().unwrap() = parent.hash_internal_state();
         bank.parent = Some(parent.clone());
+        if *parent.hash.read().unwrap() == Hash::default() {
+            *parent.hash.write().unwrap() = parent.hash_internal_state();
+        }
         bank
     }
 
