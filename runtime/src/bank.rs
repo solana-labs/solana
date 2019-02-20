@@ -89,15 +89,14 @@ pub struct Bank {
     /// Previous checkpoint of this bank
     parent: Option<Arc<Bank>>,
 
-    /// Hash of the previous checkpoint's state
-    parent_hash: Hash,
+    /// Hash of this Bank's state. Only meaningful after freezing it via `new_from_parent()`.
+    hash: RwLock<Hash>,
 }
 
 impl Bank {
     pub fn new(genesis_block: &GenesisBlock) -> Self {
-        let mut bank = Self::default();
+        let bank = Self::default();
         bank.process_genesis_block(genesis_block);
-        bank.parent_hash = bank.hash_internal_state();
         bank.add_builtin_programs();
         bank
     }
@@ -106,7 +105,7 @@ impl Bank {
     pub fn new_from_parent(parent: &Arc<Bank>) -> Self {
         let mut bank = Self::default();
         bank.last_id_queue = RwLock::new(parent.last_id_queue.read().unwrap().clone());
-        bank.parent_hash = parent.hash_internal_state();
+        *parent.hash.write().unwrap() = parent.hash_internal_state();
         bank.parent = Some(parent.clone());
         bank
     }
@@ -560,12 +559,16 @@ impl Bank {
         // If there are no accounts, return the same hash as we did before
         // checkpointing.
         let accounts = &self.accounts.accounts_db.read().unwrap().accounts;
+        let parent_hash = match &self.parent {
+            None => Hash::default(),
+            Some(parent) => *parent.hash.read().unwrap(),
+        };
         if accounts.is_empty() {
-            return self.parent_hash;
+            return parent_hash;
         }
 
         let accounts_delta_hash = self.accounts.hash_internal_state();
-        extend_and_hash(&self.parent_hash, &serialize(&accounts_delta_hash).unwrap())
+        extend_and_hash(&parent_hash, &serialize(&accounts_delta_hash).unwrap())
     }
 
     pub fn vote_states<F>(&self, cond: F) -> Vec<VoteState>
