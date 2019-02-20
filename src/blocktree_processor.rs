@@ -16,13 +16,21 @@ use std::time::Instant;
 pub fn process_entry(bank: &Bank, entry: &Entry) -> (Result<()>, u64) {
     if !entry.is_tick() {
         let old_results = bank.process_transactions(&entry.transactions);
-        let results = ignore_program_errors(old_results);
         let fee = entry
             .transactions
             .iter()
-            .zip(&results)
-            .map(|(tx, res)| if res.is_ok() { tx.fee } else { 0 })
+            .zip(&old_results)
+            .map(|(tx, res)| match res {
+                Err(BankError::ProgramError(_, _)) => {
+                    // Charge the transaction fee in case of ProgramError
+                    bank.withdraw(&tx.account_keys[0], tx.fee);
+                    tx.fee
+                }
+                Ok(()) => tx.fee,
+                _ => 0,
+            })
             .sum();
+        let results = ignore_program_errors(old_results);
         (first_err(&results), fee)
     } else {
         bank.register_tick(&entry.id);
@@ -63,14 +71,22 @@ fn par_execute_entries(bank: &Bank, entries: &[(&Entry, Vec<Result<()>>)]) -> (R
                 lock_results.to_vec(),
                 MAX_ENTRY_IDS,
             );
-            let results = ignore_program_errors(old_results);
-            bank.unlock_accounts(&e.transactions, &results);
             let fee = e
                 .transactions
                 .iter()
-                .zip(&results)
-                .map(|(tx, res)| if res.is_ok() { tx.fee } else { 0 })
+                .zip(&old_results)
+                .map(|(tx, res)| match res {
+                    Err(BankError::ProgramError(_, _)) => {
+                        // Charge the transaction fee in case of ProgramError
+                        bank.withdraw(&tx.account_keys[0], tx.fee);
+                        tx.fee
+                    }
+                    Ok(()) => tx.fee,
+                    _ => 0,
+                })
                 .sum();
+            let results = ignore_program_errors(old_results);
+            bank.unlock_accounts(&e.transactions, &results);
             (first_err(&results), fee)
         })
         .collect();
