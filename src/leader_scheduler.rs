@@ -424,6 +424,7 @@ pub fn make_active_set_entries(
 #[cfg(test)]
 pub mod tests {
     use super::*;
+    use crate::active_stakers::tests::{new_vote_account, push_vote};
     use hashbrown::HashSet;
     use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_TOKENS};
     use std::hash::Hash as StdHash;
@@ -435,28 +436,6 @@ pub mod tests {
         T: Eq + StdHash + Clone,
     {
         HashSet::from_iter(slice.iter().cloned())
-    }
-
-    pub fn new_vote_account(
-        from_keypair: &Keypair,
-        voting_keypair: &VotingKeypair,
-        bank: &Bank,
-        num_tokens: u64,
-        last_id: Hash,
-    ) {
-        let tx = VoteTransaction::new_account(
-            from_keypair,
-            voting_keypair.pubkey(),
-            last_id,
-            num_tokens,
-            0,
-        );
-        bank.process_transaction(&tx).unwrap();
-    }
-
-    fn push_vote(voting_keypair: &VotingKeypair, bank: &Bank, tick_height: u64, last_id: Hash) {
-        let new_vote_tx = VoteTransaction::new_vote(voting_keypair, tick_height, last_id, 0);
-        bank.process_transaction(&new_vote_tx).unwrap();
     }
 
     fn run_scheduler_test(num_validators: usize, ticks_per_slot: u64, ticks_per_epoch: u64) {
