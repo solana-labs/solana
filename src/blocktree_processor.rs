@@ -156,14 +156,14 @@ fn process_block(
     for entry in entries {
         let (res, fee) = process_entry(bank, entry);
         let num_ticks = bank.tick_height();
-        let slot_num = leader_scheduler
+        let slot_height = leader_scheduler
             .read()
             .unwrap()
             .tick_height_to_slot(num_ticks);
         if let Some(leader) = leader_scheduler
             .read()
             .unwrap()
-            .get_leader_for_slot(slot_num)
+            .get_leader_for_slot(slot_height)
         {
             // Credit the accumulated fees to the current leader and reset the fee to 0
             bank.deposit(&leader, fee);

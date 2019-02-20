@@ -127,14 +127,14 @@ impl ReplayStage {
 
                 if 0 == num_ticks_to_next_vote {
                     subscriptions.notify_subscribers(&bank);
-                    let slot_num = leader_scheduler
+                    let slot_height = leader_scheduler
                         .read()
                         .unwrap()
                         .tick_height_to_slot(num_ticks);
                     if let Some(leader) = leader_scheduler
                         .read()
                         .unwrap()
-                        .get_leader_for_slot(slot_num)
+                        .get_leader_for_slot(slot_height)
                     {
                         // Credit the accumulated fees to the current leader and reset the fee to 0
                         bank.deposit(&leader, *fees);
