@@ -225,12 +225,111 @@ pub fn process_blocktree(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::entry::{next_entries, next_entry, Entry};
+    use crate::blocktree::tests::entries_to_blobs;
+    use crate::blocktree::{create_tmp_sample_ledger, BlocktreeConfig};
+    use crate::entry::{create_ticks, next_entries, next_entry, Entry};
     use crate::gen_keys::GenKeys;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
+
+    fn fill_blocktree_slot_with_ticks(
+        blocktree: &Blocktree,
+        blocktree_config: &BlocktreeConfig,
+        slot: u64,
+        parent_slot: u64,
+        last_entry_id: Hash,
+    ) -> Hash {
+        let entries = create_ticks(blocktree_config.ticks_per_slot, last_entry_id);
+        let last_entry_id = entries.last().unwrap().id;
+
+        let blobs = entries_to_blobs(&entries, slot, parent_slot);
+        blocktree.insert_data_blobs(blobs.iter()).unwrap();
+
+        last_entry_id
+    }
+
+    #[test]
+    fn test_process_blocktree_with_two_forks() {
+        solana_logger::setup();
+
+        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
+        let blocktree_config = &BlocktreeConfig::default();
+
+        // Create a new ledger with slot 0 full of ticks
+        let (
+            _mint_keypair,
+            ledger_path,
+            tick_height,
+            _last_entry_height,
+            _last_id,
+            mut last_entry_id,
+        ) = create_tmp_sample_ledger(
+            "blocktree_with_two_forks",
+            10_000,
+            blocktree_config.ticks_per_slot - 1,
+            Keypair::new().pubkey(),
+            123,
+            &blocktree_config,
+        );
+        debug!("ledger_path: {:?}", ledger_path);
+        assert_eq!(tick_height, blocktree_config.ticks_per_slot);
+
+        /*
+            Build a blocktree in the ledger with the following fork structure:
+
+                 slot 0
+                   |
+                 slot 1
+                 /   \
+            slot 2   |
+               /     |
+            slot 3   |
+                     |
+                   slot 4
+
+        */
+        let genesis_block =
+            GenesisBlock::load(&ledger_path).expect("Expected to successfully open genesis block");
+        let (blocktree, _ledger_signal_receiver) =
+            Blocktree::open_with_config_signal(&ledger_path, &blocktree_config)
+                .expect("Expected to successfully open database ledger");
+
+        // Fork 1, ending at slot 3
+        let last_slot1_entry_id =
+            fill_blocktree_slot_with_ticks(&blocktree, &blocktree_config, 1, 0, last_entry_id);
+        last_entry_id = fill_blocktree_slot_with_ticks(
+            &blocktree,
+            &blocktree_config,
+            2,
+            1,
+            last_slot1_entry_id,
+        );
+        let last_fork1_entry_id =
+            fill_blocktree_slot_with_ticks(&blocktree, &blocktree_config, 3, 2, last_entry_id);
+
+        // Fork 2, ending at slot 4
+        let last_fork2_entry_id = fill_blocktree_slot_with_ticks(
+            &blocktree,
+            &blocktree_config,
+            4,
+            1,
+            last_slot1_entry_id,
+        );
+
+        info!("last_fork1_entry_id: {:?}", last_fork1_entry_id);
+        info!("last_fork2_entry_id: {:?}", last_fork2_entry_id);
+
+        let (bank_forks, ledger_height, last_entry_id) =
+            process_blocktree(&genesis_block, &blocktree, &leader_scheduler).unwrap();
+
+        // The following asserts loosely demonstrate how `process_blocktree()` currently only
+        // processes fork1 and ignores fork2.
+        assert_eq!(last_entry_id, last_fork1_entry_id);
+        assert_eq!(ledger_height, 4 * blocktree_config.ticks_per_slot);
+        assert_eq!(bank_forks.working_bank().last_id(), last_entry_id);
+    }
 
     #[test]
     fn test_first_err() {
