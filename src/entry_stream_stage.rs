@@ -130,6 +130,7 @@ mod test {
     fn test_entry_stream_stage_process_entries() {
         // Set up the bank and leader_scheduler
         let ticks_per_slot = 5;
+        let starting_tick_height = 1;
 
         let (genesis_block, _mint_keypair) = GenesisBlock::new(1_000_000);
         let bank = Bank::new(&genesis_block);
@@ -148,23 +149,29 @@ mod test {
         let mut last_id = Hash::default();
         let mut entries = Vec::new();
         let mut expected_entries = Vec::new();
-        for _ in 0..6 {
+        let mut expected_tick_heights = Vec::new();
+        for x in 0..6 {
             let entry = Entry::new(&mut last_id, 1, vec![]); //just ticks
             last_id = entry.id;
             expected_entries.push(entry.clone());
+            expected_tick_heights.push(starting_tick_height + x);
             entries.push(entry);
         }
         let keypair = Keypair::new();
         let tx = SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, Hash::default(), 0);
         let entry = Entry::new(&mut last_id, 1, vec![tx]);
         expected_entries.insert(ticks_per_slot as usize, entry.clone());
+        expected_tick_heights.insert(
+            ticks_per_slot as usize,
+            starting_tick_height + ticks_per_slot - 1, // Populated entries should share the tick height of the previous tick.
+        );
         entries.insert(ticks_per_slot as usize, entry);
 
         ledger_entry_sender.send(entries).unwrap();
         EntryStreamStage::process_entries(
             &ledger_entry_receiver,
             &entry_stream_sender,
-            &mut 1,
+            &mut (starting_tick_height - 1),
             &mut entry_stream,
         )
         .unwrap();
@@ -185,6 +192,8 @@ mod test {
                 item_type == "entry"
             });
         for (i, json) in entry_events.iter().enumerate() {
+            let height = json["h"].as_u64().unwrap();
+            assert_eq!(height, expected_tick_heights[i]);
             let entry_obj = json["entry"].clone();
             let tx = entry_obj["transactions"].as_array().unwrap();
             if tx.len() == 0 {
