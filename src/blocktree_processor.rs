@@ -7,9 +7,12 @@ use log::Level;
 use rayon::prelude::*;
 use solana_metrics::counter::Counter;
 use solana_runtime::bank::{Bank, BankError, Result};
+use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
+use solana_sdk::timing::duration_as_ms;
 use solana_sdk::timing::MAX_ENTRY_IDS;
 use std::sync::{Arc, RwLock};
+use std::time::Instant;
 
 pub const VERIFY_BLOCK_SIZE: usize = 16;
 
@@ -189,12 +192,34 @@ where
 }
 
 pub fn process_blocktree(
-    bank_forks: &BankForks,
+    genesis_block: &GenesisBlock,
     blocktree: &Blocktree,
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-) -> Result<(u64, Hash)> {
+) -> Result<(BankForks, u64, Hash)> {
+    let bank = Bank::new(&genesis_block);
+    let slot_height = 0; // Use the Bank's slot_height as its ID.
+    let bank_forks = BankForks::new(slot_height, bank);
+    leader_scheduler
+        .write()
+        .unwrap()
+        .update_tick_height(0, &bank_forks.finalized_bank());
+
+    let now = Instant::now();
+    info!("processing ledger...");
     let entries = blocktree.read_ledger().expect("opening ledger");
-    process_ledger(&bank_forks.working_bank(), entries, leader_scheduler)
+    let (entry_height, last_entry_id) =
+        process_ledger(&bank_forks.working_bank(), entries, leader_scheduler)?;
+
+    info!(
+        "processed {} ledger entries in {}ms, tick_height={}...",
+        entry_height,
+        duration_as_ms(&now.elapsed()),
+        bank_forks.working_bank().tick_height()
+    );
+
+    // TODO: probably need to return `entry_height` and `last_entry_id` for *all* banks in
+    // `bank_forks` instead of just for the `working_bank`
+    Ok((bank_forks, entry_height, last_entry_id))
 }
 
 #[cfg(test)]

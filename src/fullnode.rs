@@ -22,14 +22,14 @@ use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::timing::{duration_as_ms, timestamp};
+use solana_sdk::timing::timestamp;
 use std::net::UdpSocket;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, spawn, Result};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 struct NodeServices {
     tpu: Tpu,
@@ -459,25 +459,10 @@ fn new_banks_from_blocktree(
             .expect("Expected to successfully open database ledger");
     let genesis_block =
         GenesisBlock::load(blocktree_path).expect("Expected to successfully open genesis block");
-    let bank = Bank::new(&genesis_block);
-    let slot_height = 0; // Use the Bank's slot_height as its ID.
-    let bank_forks = BankForks::new(slot_height, bank);
-    leader_scheduler
-        .write()
-        .unwrap()
-        .update_tick_height(0, &bank_forks.finalized_bank());
 
-    let now = Instant::now();
-    info!("processing ledger...");
-    let (entry_height, last_entry_id) =
-        blocktree_processor::process_blocktree(&bank_forks, &blocktree, leader_scheduler)
-            .expect("process_blocktree");
-    info!(
-        "processed {} ledger entries in {}ms, tick_height={}...",
-        entry_height,
-        duration_as_ms(&now.elapsed()),
-        bank_forks.working_bank().tick_height()
-    );
+    let (bank_forks, entry_height, last_entry_id) =
+        blocktree_processor::process_blocktree(&genesis_block, &blocktree, leader_scheduler)
+            .expect("process_blocktree failed");
 
     (
         bank_forks,
