@@ -135,9 +135,32 @@ impl Bank {
         bank
     }
 
+    /// merge (i.e. pull) the parent's state up into this Bank,
+    ///   this Bank becomes a root
+    pub fn merge_parents(&mut self) {
+        let parents = self.parents();
+        self.parent = None;
+
+        let parent_accounts: Vec<_> = parents.iter().map(|b| &b.accounts).collect();
+        self.accounts.merge_parents(&parent_accounts);
+
+        let parent_caches: Vec<_> = parents
+            .iter()
+            .map(|b| b.status_cache.read().unwrap())
+            .collect();
+        self.status_cache
+            .write()
+            .unwrap()
+            .merge_parents(&parent_caches);
+    }
+
     /// Return the more recent checkpoint of this bank instance.
     pub fn parent(&self) -> Option<Arc<Bank>> {
         self.parent.clone()
+    }
+    /// Returns whether this bank is the root
+    pub fn is_root(&self) -> bool {
+        self.parent.is_none()
     }
 
     fn process_genesis_block(&self, genesis_block: &GenesisBlock) {
@@ -172,7 +195,7 @@ impl Bank {
             .unwrap();
 
         self.accounts.store_slow(
-            true,
+            self.is_root(),
             &genesis_block.bootstrap_leader_vote_account_id,
             &bootstrap_leader_vote_account,
         );
@@ -185,7 +208,8 @@ impl Bank {
 
     pub fn add_native_program(&self, name: &str, program_id: &Pubkey) {
         let account = native_loader::create_program_account(name);
-        self.accounts.store_slow(true, program_id, &account);
+        self.accounts
+            .store_slow(self.is_root(), program_id, &account);
     }
 
     fn add_builtin_programs(&self) {
@@ -197,8 +221,11 @@ impl Bank {
         self.add_native_program("solana_erc20", &token_program::id());
 
         let storage_system_account = Account::new(1, 16 * 1024, storage_program::system_id());
-        self.accounts
-            .store_slow(true, &storage_program::system_id(), &storage_system_account);
+        self.accounts.store_slow(
+            self.is_root(),
+            &storage_program::system_id(),
+            &storage_system_account,
+        );
     }
 
     /// Return the last entry ID registered.
@@ -466,7 +493,7 @@ impl Bank {
     ) {
         let now = Instant::now();
         self.accounts
-            .store_accounts(true, txs, executed, loaded_accounts);
+            .store_accounts(self.is_root(), txs, executed, loaded_accounts);
 
         // once committed there is no way to unroll
         let write_elapsed = now.elapsed();
@@ -546,7 +573,7 @@ impl Bank {
     pub fn deposit(&self, pubkey: &Pubkey, tokens: u64) {
         let mut account = self.get_account(pubkey).unwrap_or_default();
         account.tokens += tokens;
-        self.accounts.store_slow(true, pubkey, &account);
+        self.accounts.store_slow(self.is_root(), pubkey, &account);
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
@@ -1170,4 +1197,48 @@ mod tests {
         let bank1 = Bank::new(&GenesisBlock::new(20).0);
         assert_ne!(bank0.hash_internal_state(), bank1.hash_internal_state());
     }
+
+    /// Verifies that last ids and accounts are correctly referenced from parent
+    #[test]
+    fn test_bank_merge_parents() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let key1 = Keypair::new();
+        let key2 = Keypair::new();
+        let parent = Arc::new(Bank::new(&genesis_block));
+
+        let tx_move_mint_to_1 = SystemTransaction::new_move(
+            &mint_keypair,
+            key1.pubkey(),
+            1,
+            genesis_block.last_id(),
+            0,
+        );
+        assert_eq!(parent.process_transaction(&tx_move_mint_to_1), Ok(()));
+        let mut bank = Bank::new_from_parent(&parent);
+        let tx_move_1_to_2 =
+            SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.last_id(), 0);
+        assert_eq!(bank.process_transaction(&tx_move_1_to_2), Ok(()));
+        assert_eq!(
+            parent.get_signature_status(&tx_move_1_to_2.signatures[0]),
+            None
+        );
+
+        for _ in 0..3 {
+            // first time these should match what happened above, assert that parents are ok
+            assert_eq!(bank.get_balance(&key1.pubkey()), 0);
+            assert_eq!(bank.get_balance(&key2.pubkey()), 1);
+            assert_eq!(
+                bank.get_signature_status(&tx_move_mint_to_1.signatures[0]),
+                Some(Ok(()))
+            );
+            assert_eq!(
+                bank.get_signature_status(&tx_move_1_to_2.signatures[0]),
+                Some(Ok(()))
+            );
+
+            // works iteration 0, no-ops on iteration 1 and 2
+            bank.merge_parents();
+        }
+    }
+
 }
