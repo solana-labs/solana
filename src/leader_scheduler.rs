@@ -1,7 +1,7 @@
 //! The `leader_scheduler` module implements a structure and functions for tracking and
 //! managing the schedule for leader rotation
 
-use crate::active_stakers::ActiveStakers;
+use crate::active_stakers::{ActiveStakers, DEFAULT_ACTIVE_WINDOW_TICK_LENGTH};
 use crate::entry::{create_ticks, next_entry_mut, Entry};
 use crate::voting_keypair::VotingKeypair;
 use bincode::serialize;
@@ -15,8 +15,6 @@ use solana_sdk::timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT};
 use solana_sdk::vote_transaction::VoteTransaction;
 use std::io::Cursor;
 use std::sync::Arc;
-
-pub const DEFAULT_ACTIVE_WINDOW_TICK_LENGTH: u64 = DEFAULT_SLOTS_PER_EPOCH * DEFAULT_TICKS_PER_SLOT;
 
 #[derive(Clone)]
 pub struct LeaderSchedulerConfig {
@@ -201,18 +199,6 @@ impl LeaderScheduler {
         }
     }
 
-    fn get_active_set(&mut self, tick_height: u64, bank: &Bank) -> Vec<Pubkey> {
-        let upper_bound = tick_height;
-        let lower_bound = tick_height.saturating_sub(self.active_window_tick_length);
-        trace!(
-            "get_active_set: vote bounds ({}, {})",
-            lower_bound,
-            upper_bound
-        );
-
-        ActiveStakers::new_with_upper_bound(&bank, lower_bound, upper_bound).pubkeys()
-    }
-
     // Updates the leader schedule to include ticks from tick_height to the first tick of the next epoch
     fn generate_schedule(&mut self, tick_height: u64, bank: &Bank) {
         let epoch = self.tick_height_to_epoch(tick_height);
@@ -242,7 +228,9 @@ impl LeaderScheduler {
         }
 
         self.seed = Self::calculate_seed(tick_height);
-        let active_set = self.get_active_set(tick_height, &bank);
+        let active_set =
+            ActiveStakers::new_with_bounds(&bank, self.active_window_tick_length, tick_height)
+                .pubkeys();
         let ranked_active_set = Self::rank_active_set(bank, active_set.iter());
 
         if ranked_active_set.is_empty() {
@@ -423,10 +411,9 @@ pub fn make_active_set_entries(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::active_stakers::tests::{new_vote_account_with_vote, push_vote};
+    use crate::active_stakers::tests::new_vote_account_with_vote;
     use hashbrown::HashSet;
     use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_TOKENS};
-    use std::sync::RwLock;
 
     fn run_scheduler_test(num_validators: usize, ticks_per_slot: u64, ticks_per_epoch: u64) {
         info!(
@@ -586,91 +573,6 @@ pub mod tests {
         assert_eq!(leader_scheduler.num_ticks_left_in_slot(19), 0);
         assert_eq!(leader_scheduler.num_ticks_left_in_slot(20), 9);
         assert_eq!(leader_scheduler.num_ticks_left_in_slot(21), 8);
-    }
-
-    #[test]
-    fn test_active_set() {
-        solana_logger::setup();
-
-        let leader_id = Keypair::new().pubkey();
-        let active_window_tick_length = 1000;
-        let leader_scheduler_config = LeaderSchedulerConfig::new(100, 1, active_window_tick_length);
-        let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10000, leader_id, 500);
-        let bank = Bank::new(&genesis_block);
-        let mut leader_scheduler = LeaderScheduler::new_with_bank(&leader_scheduler_config, &bank);
-
-        let bootstrap_ids = vec![genesis_block.bootstrap_leader_id];
-
-        // Insert a bunch of votes at height "start_height"
-        let start_height = 3;
-        let num_old_ids = 20;
-        let mut old_ids = vec![];
-        for _ in 0..num_old_ids {
-            let new_keypair = Keypair::new();
-            let pk = new_keypair.pubkey();
-            old_ids.push(pk);
-
-            // Give the account some stake
-            bank.transfer(5, &mint_keypair, pk, genesis_block.last_id())
-                .unwrap();
-
-            // Create a vote account and push a vote
-            new_vote_account_with_vote(&new_keypair, &Keypair::new(), &bank, 1, start_height);
-        }
-        old_ids.sort();
-
-        // Insert a bunch of votes at height "start_height + active_window_tick_length"
-        let num_new_ids = 10;
-        let mut new_ids = vec![];
-        for _ in 0..num_new_ids {
-            let new_keypair = Keypair::new();
-            let pk = new_keypair.pubkey();
-            new_ids.push(pk);
-            // Give the account some stake
-            bank.transfer(5, &mint_keypair, pk, genesis_block.last_id())
-                .unwrap();
-
-            // Create a vote account and push a vote
-            let tick_height = start_height + active_window_tick_length + 1;
-            new_vote_account_with_vote(&new_keypair, &Keypair::new(), &bank, 1, tick_height);
-        }
-        new_ids.sort();
-
-        // Query for the active set at various heights
-        let result = leader_scheduler.get_active_set(0, &bank);
-        assert_eq!(result, bootstrap_ids);
-
-        let result = leader_scheduler.get_active_set(start_height - 1, &bank);
-        assert_eq!(result, bootstrap_ids);
-
-        let mut result =
-            leader_scheduler.get_active_set(active_window_tick_length + start_height - 1, &bank);
-        result.sort();
-        assert_eq!(result, old_ids);
-
-        let mut result =
-            leader_scheduler.get_active_set(active_window_tick_length + start_height, &bank);
-        result.sort();
-        assert_eq!(result, old_ids);
-
-        let mut result =
-            leader_scheduler.get_active_set(active_window_tick_length + start_height + 1, &bank);
-        result.sort();
-        assert_eq!(result, new_ids);
-
-        let mut result =
-            leader_scheduler.get_active_set(2 * active_window_tick_length + start_height, &bank);
-        result.sort();
-        assert_eq!(result, new_ids);
-
-        let mut result = leader_scheduler
-            .get_active_set(2 * active_window_tick_length + start_height + 1, &bank);
-        result.sort();
-        assert_eq!(result, new_ids);
-
-        let result = leader_scheduler
-            .get_active_set(2 * active_window_tick_length + start_height + 2, &bank);
-        assert!(result.is_empty());
     }
 
     #[test]
@@ -919,61 +821,6 @@ pub mod tests {
                     leader_scheduler.epoch_schedule[0],
                 );
             };
-        }
-    }
-
-    #[test]
-    fn test_multiple_vote() {
-        let leader_keypair = Keypair::new();
-        let leader_id = leader_keypair.pubkey();
-        let active_window_tick_length = 1000;
-        let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10000, leader_id, 500);
-        let bank = Bank::new(&genesis_block);
-        let leader_scheduler_config = LeaderSchedulerConfig::new(100, 1, active_window_tick_length);
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::new_with_bank(
-            &leader_scheduler_config,
-            &bank,
-        )));
-
-        // Bootstrap leader should be in the active set even without explicit votes
-        {
-            let mut leader_scheduler = leader_scheduler.write().unwrap();
-            let result = leader_scheduler.get_active_set(0, &bank);
-            assert_eq!(result, vec![leader_id]);
-
-            let result = leader_scheduler.get_active_set(active_window_tick_length, &bank);
-            assert_eq!(result, vec![leader_id]);
-
-            let result = leader_scheduler.get_active_set(active_window_tick_length + 1, &bank);
-            assert!(result.is_empty());
-        }
-
-        // Check that a node that votes twice in a row will get included in the active
-        // window
-
-        // Create a vote account
-        let voting_keypair = Keypair::new();
-        new_vote_account_with_vote(&leader_keypair, &voting_keypair, &bank, 1, 1);
-
-        {
-            let mut leader_scheduler = leader_scheduler.write().unwrap();
-            let result = leader_scheduler.get_active_set(active_window_tick_length + 1, &bank);
-            assert_eq!(result, vec![leader_id]);
-
-            let result = leader_scheduler.get_active_set(active_window_tick_length + 2, &bank);
-            assert!(result.is_empty());
-        }
-
-        // Vote at tick_height 2
-        push_vote(&voting_keypair, &bank, 2);
-
-        {
-            let mut leader_scheduler = leader_scheduler.write().unwrap();
-            let result = leader_scheduler.get_active_set(active_window_tick_length + 2, &bank);
-            assert_eq!(result, vec![leader_id]);
-
-            let result = leader_scheduler.get_active_set(active_window_tick_length + 3, &bank);
-            assert!(result.is_empty());
         }
     }
 
