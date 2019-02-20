@@ -139,6 +139,7 @@ impl Tvu {
             let (entry_stream_stage, entry_stream_receiver) = EntryStreamStage::new(
                 previous_receiver,
                 entry_stream.unwrap().to_string(),
+                bank.tick_height(),
                 leader_scheduler,
                 exit.clone(),
             );
