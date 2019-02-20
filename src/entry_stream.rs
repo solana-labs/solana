@@ -60,12 +60,18 @@ impl EntryWriter for EntrySocket {
 }
 
 pub trait EntryStreamHandler {
-    fn emit_entry_event(&self, slot: u64, leader_id: &str, entries: &Entry) -> Result<()>;
+    fn emit_entry_event(
+        &self,
+        slot: u64,
+        tick_height: u64,
+        leader_id: &str,
+        entries: &Entry,
+    ) -> Result<()>;
     fn emit_block_event(
         &self,
         slot: u64,
-        leader_id: &str,
         tick_height: u64,
+        leader_id: &str,
         last_id: Hash,
     ) -> Result<()>;
 }
@@ -81,12 +87,19 @@ impl<T> EntryStreamHandler for EntryStream<T>
 where
     T: EntryWriter,
 {
-    fn emit_entry_event(&self, slot: u64, leader_id: &str, entry: &Entry) -> Result<()> {
+    fn emit_entry_event(
+        &self,
+        slot: u64,
+        tick_height: u64,
+        leader_id: &str,
+        entry: &Entry,
+    ) -> Result<()> {
         let json_entry = serde_json::to_string(&entry)?;
         let payload = format!(
-            r#"{{"dt":"{}","t":"entry","s":{},"l":{:?},"entry":{}}}"#,
+            r#"{{"dt":"{}","t":"entry","s":{},"h":{},"l":{:?},"entry":{}}}"#,
             Utc::now().to_rfc3339_opts(SecondsFormat::Nanos, true),
             slot,
+            tick_height,
             leader_id,
             json_entry,
         );
@@ -97,8 +110,8 @@ where
     fn emit_block_event(
         &self,
         slot: u64,
-        leader_id: &str,
         tick_height: u64,
+        leader_id: &str,
         last_id: Hash,
     ) -> Result<()> {
         let payload = format!(
@@ -203,14 +216,14 @@ mod test {
                 .tick_height_to_slot(tick_height);
             if curr_slot != previous_slot {
                 entry_stream
-                    .emit_block_event(previous_slot, &leader_id, tick_height - 1, last_id)
+                    .emit_block_event(previous_slot, tick_height - 1, &leader_id, last_id)
                     .unwrap();
             }
             let entry = Entry::new(&mut last_id, 1, vec![]); // just ticks
             last_id = entry.id;
             previous_slot = curr_slot;
             entry_stream
-                .emit_entry_event(curr_slot, &leader_id, &entry)
+                .emit_entry_event(curr_slot, tick_height, &leader_id, &entry)
                 .unwrap();
             expected_entries.push(entry.clone());
             entries.push(entry);

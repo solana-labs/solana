@@ -80,14 +80,14 @@ impl EntryStreamStage {
                 let block_tick_height = queued_block.unwrap().tick_height;
                 let block_id = queued_block.unwrap().id;
                 entry_stream
-                    .emit_block_event(block_slot, &leader_id, block_tick_height, block_id)
+                    .emit_block_event(block_slot, block_tick_height, &leader_id, block_id)
                     .unwrap_or_else(|e| {
                         debug!("Entry Stream error: {:?}, {:?}", e, entry_stream.output);
                     });
                 entry_stream.queued_block = None;
             }
             entry_stream
-                .emit_entry_event(slot, &leader_id, &entry)
+                .emit_entry_event(slot, *tick_height, &leader_id, &entry)
                 .unwrap_or_else(|e| {
                     debug!("Entry Stream error: {:?}, {:?}", e, entry_stream.output);
                 });
