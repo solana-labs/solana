@@ -231,7 +231,7 @@ impl LeaderScheduler {
         let active_set =
             ActiveStakers::new_with_bounds(&bank, self.active_window_tick_length, tick_height)
                 .pubkeys();
-        let ranked_active_set = Self::rank_active_set(bank, active_set.iter());
+        let ranked_active_set = Self::rank_active_set(bank, active_set);
 
         if ranked_active_set.is_empty() {
             info!(
@@ -242,7 +242,7 @@ impl LeaderScheduler {
             let (mut validator_rankings, total_stake) = ranked_active_set.iter().fold(
                 (Vec::with_capacity(ranked_active_set.len()), 0),
                 |(mut ids, total_stake), (pubkey, stake)| {
-                    ids.push(**pubkey);
+                    ids.push(*pubkey);
                     (ids, total_stake + stake)
                 },
             );
@@ -288,13 +288,11 @@ impl LeaderScheduler {
         );
     }
 
-    fn rank_active_set<'a, I>(bank: &Bank, active: I) -> Vec<(&'a Pubkey, u64)>
-    where
-        I: Iterator<Item = &'a Pubkey>,
-    {
-        let mut active_accounts: Vec<(&'a Pubkey, u64)> = active
+    fn rank_active_set(bank: &Bank, active: Vec<Pubkey>) -> Vec<(Pubkey, u64)> {
+        let mut active_accounts: Vec<_> = active
+            .into_iter()
             .filter_map(|pubkey| {
-                let stake = bank.get_balance(pubkey);
+                let stake = bank.get_balance(&pubkey);
                 if stake > 0 {
                     Some((pubkey, stake as u64))
                 } else {
@@ -609,15 +607,15 @@ pub mod tests {
             .unwrap();
         }
 
-        let validators_pubkey: Vec<Pubkey> = validators.iter().map(Keypair::pubkey).collect();
-        let result = LeaderScheduler::rank_active_set(&bank, validators_pubkey.iter());
+        let validator_pubkeys: Vec<_> = validators.iter().map(Keypair::pubkey).collect();
+        let result = LeaderScheduler::rank_active_set(&bank, validator_pubkeys);
 
         assert_eq!(result.len(), validators.len());
 
         // Expect the result to be the reverse of the list we passed into the rank_active_set()
         for (i, (pubkey, stake)) in result.into_iter().enumerate() {
             assert_eq!(stake, i as u64 + 1);
-            assert_eq!(*pubkey, validators[num_validators - i - 1].pubkey());
+            assert_eq!(pubkey, validators[num_validators - i - 1].pubkey());
         }
 
         // Transfer all the tokens to a new set of validators, old validators should now
@@ -641,12 +639,12 @@ pub mod tests {
             .chain(new_validators.iter())
             .map(Keypair::pubkey)
             .collect();
-        let result = LeaderScheduler::rank_active_set(&bank, all_validators.iter());
+        let result = LeaderScheduler::rank_active_set(&bank, all_validators);
         assert_eq!(result.len(), new_validators.len());
 
         for (i, (pubkey, balance)) in result.into_iter().enumerate() {
             assert_eq!(balance, i as u64 + 1);
-            assert_eq!(*pubkey, new_validators[num_validators - i - 1].pubkey());
+            assert_eq!(pubkey, new_validators[num_validators - i - 1].pubkey());
         }
 
         // Break ties between validators with the same balances using public key
@@ -664,13 +662,13 @@ pub mod tests {
                 .unwrap();
         }
 
-        let result = LeaderScheduler::rank_active_set(&bank, tied_validators_pk.iter());
-        let mut sorted: Vec<&Pubkey> = tied_validators_pk.iter().map(|x| x).collect();
+        let mut sorted = tied_validators_pk.clone();
         sorted.sort_by(|pk1, pk2| pk1.cmp(pk2));
-        assert_eq!(result.len(), tied_validators_pk.len());
+        let result = LeaderScheduler::rank_active_set(&bank, tied_validators_pk);
+        assert_eq!(result.len(), sorted.len());
         for (i, (pk, s)) in result.into_iter().enumerate() {
             assert_eq!(s, 1);
-            assert_eq!(*pk, *sorted[i]);
+            assert_eq!(pk, sorted[i]);
         }
     }
 
