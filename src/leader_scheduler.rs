@@ -158,6 +158,10 @@ impl LeaderScheduler {
         }
     }
 
+    pub fn get_leader_for_tick(&self, tick: u64) -> Option<Pubkey> {
+        self.get_leader_for_slot(self.tick_height_to_slot(tick))
+    }
+
     // Returns the leader for the requested slot, or None if the slot is out of the schedule bounds
     pub fn get_leader_for_slot(&self, slot: u64) -> Option<Pubkey> {
         trace!("get_leader_for_slot: slot {}", slot);
