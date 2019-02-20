@@ -131,18 +131,11 @@ impl Bank {
         assert!(genesis_block.tokens >= genesis_block.bootstrap_leader_tokens);
         assert!(genesis_block.bootstrap_leader_tokens >= 2);
 
-        let mut mint_account = Account::default();
-        mint_account.tokens = genesis_block.tokens - genesis_block.bootstrap_leader_tokens;
-        self.accounts
-            .store_slow(true, &genesis_block.mint_id, &mint_account);
+        let mint_tokens = genesis_block.tokens - genesis_block.bootstrap_leader_tokens;
+        self.deposit(&genesis_block.mint_id, mint_tokens);
 
-        let mut bootstrap_leader_account = Account::default();
-        bootstrap_leader_account.tokens = genesis_block.bootstrap_leader_tokens - 1;
-        self.accounts.store_slow(
-            true,
-            &genesis_block.bootstrap_leader_id,
-            &bootstrap_leader_account,
-        );
+        let bootstrap_leader_tokens = genesis_block.bootstrap_leader_tokens - 1;
+        self.deposit(&genesis_block.bootstrap_leader_id, bootstrap_leader_tokens);
 
         // Construct a vote account for the bootstrap_leader such that the leader_scheduler
         // will be forced to select it as the leader for height 0
@@ -534,11 +527,10 @@ impl Bank {
         parents
     }
 
-    pub fn deposit(&self, pubkey: &Pubkey, fee: u64) {
-        if let Some(mut account) = self.get_account(pubkey) {
-            account.tokens += fee;
-            self.accounts.store_slow(false, pubkey, &account);
-        }
+    pub fn deposit(&self, pubkey: &Pubkey, tokens: u64) {
+        let mut account = self.get_account(pubkey).unwrap_or_default();
+        account.tokens += tokens;
+        self.accounts.store_slow(true, pubkey, &account);
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
