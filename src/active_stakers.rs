@@ -60,6 +60,10 @@ impl ActiveStakers {
         Self::new_with_bounds(bank, DEFAULT_ACTIVE_WINDOW_TICK_LENGTH, bank.tick_height())
     }
 
+    pub fn ranked_stakes(&self) -> Vec<(Pubkey, u64)> {
+        self.stakes.clone()
+    }
+
     /// Return the pubkeys of each staker.
     pub fn pubkeys(&self) -> Vec<Pubkey> {
         self.stakes.iter().map(|(pubkey, _stake)| *pubkey).collect()
@@ -77,6 +81,7 @@ impl ActiveStakers {
     }
 }
 
+#[cfg(test)]
 pub mod tests {
     use super::*;
     use solana_runtime::bank::Bank;
@@ -293,5 +298,32 @@ pub mod tests {
             .sorted_pubkeys();
             assert_eq!(result.len(), 0);
         }
+    }
+
+    #[test]
+    fn test_rank_stakes_basic() {
+        let pubkey0 = Keypair::new().pubkey();
+        let pubkey1 = Keypair::new().pubkey();
+        let mut stakes = vec![(pubkey0, 2), (pubkey1, 1)];
+        rank_stakes(&mut stakes);
+        assert_eq!(stakes, vec![(pubkey1, 1), (pubkey0, 2)]);
+    }
+
+    #[test]
+    fn test_rank_stakes_with_dup() {
+        let pubkey0 = Keypair::new().pubkey();
+        let pubkey1 = Keypair::new().pubkey();
+        let mut stakes = vec![(pubkey0, 1), (pubkey1, 2), (pubkey0, 1)];
+        rank_stakes(&mut stakes);
+        assert_eq!(stakes, vec![(pubkey0, 1), (pubkey1, 2)]);
+    }
+
+    #[test]
+    fn test_rank_stakes_with_equal_stakes() {
+        let pubkey0 = Pubkey::default();
+        let pubkey1 = Keypair::new().pubkey();
+        let mut stakes = vec![(pubkey0, 1), (pubkey1, 1)];
+        rank_stakes(&mut stakes);
+        assert_eq!(stakes, vec![(pubkey0, 1), (pubkey1, 1)]);
     }
 }
