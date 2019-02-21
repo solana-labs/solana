@@ -181,6 +181,7 @@ impl Fullnode {
         let gossip_service = GossipService::new(
             &cluster_info,
             Some(blocktree.clone()),
+            Some(bank.clone()),
             node.sockets.gossip,
             exit.clone(),
         );

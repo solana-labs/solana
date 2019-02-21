@@ -10,7 +10,7 @@
 
 use crate::contact_info::ContactInfo;
 use crate::crds::{Crds, VersionedCrdsValue};
-use crate::crds_gossip::CRDS_GOSSIP_BLOOM_SIZE;
+use crate::crds_gossip::{get_stake, get_weight, CRDS_GOSSIP_BLOOM_SIZE};
 use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_value::{CrdsValue, CrdsValueLabel};
 use crate::packet::BLOB_DATA_SIZE;
@@ -18,11 +18,15 @@ use bincode::serialized_size;
 use hashbrown::HashMap;
 use indexmap::map::IndexMap;
 use rand;
+use rand::distributions::{Distribution, WeightedIndex};
 use rand::seq::SliceRandom;
+use solana_runtime::bank::Bank;
 use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::timing::timestamp;
 use std::cmp;
+use std::sync::Arc;
 
 pub const CRDS_GOSSIP_NUM_ACTIVE: usize = 30;
 pub const CRDS_GOSSIP_PUSH_FANOUT: usize = 6;
@@ -160,41 +164,50 @@ impl CrdsGossipPush {
     pub fn refresh_push_active_set(
         &mut self,
         crds: &Crds,
+        bank: Option<&Arc<Bank>>,
         self_id: Pubkey,
         network_size: usize,
         ratio: usize,
     ) {
         let need = Self::compute_need(self.num_active, self.active_set.len(), ratio);
         let mut new_items = HashMap::new();
-        let mut ixs: Vec<_> = (0..crds.table.len()).collect();
-        ixs.shuffle(&mut rand::thread_rng());
 
-        for ix in ixs {
-            let item = crds.table.get_index(ix);
-            if item.is_none() {
+        let mut options: Vec<_> = crds
+            .table
+            .values()
+            .filter(|v| v.value.contact_info().is_some())
+            .map(|v| (v.value.contact_info().unwrap(), v))
+            .filter(|(info, _)| info.id != self_id && ContactInfo::is_valid_address(&info.gossip))
+            .map(|(info, value)| {
+                let max_weight = f32::from(u16::max_value()) - 1.0;
+                let last_updated: u64 = value.local_timestamp;
+                let since = ((timestamp() - last_updated) / 1024) as u32;
+                let stake = get_stake(&info.id, bank);
+                let weight = get_weight(max_weight, since, stake);
+                (weight, info)
+            })
+            .collect();
+        if options.is_empty() {
+            return;
+        }
+        while new_items.len() < need {
+            let index = WeightedIndex::new(options.iter().map(|weighted| weighted.0));
+            if index.is_err() {
+                break;
+            }
+            let index = index.unwrap();
+            let index = index.sample(&mut rand::thread_rng());
+            let item = options[index].1;
+            options.remove(index);
+            if self.active_set.get(&item.id).is_some() {
                 continue;
             }
-            let val = item.unwrap();
-            if val.0.pubkey() == self_id {
+            if new_items.get(&item.id).is_some() {
                 continue;
-            }
-            if self.active_set.get(&val.0.pubkey()).is_some() {
-                continue;
-            }
-            if new_items.get(&val.0.pubkey()).is_some() {
-                continue;
-            }
-            if let Some(contact) = val.1.value.contact_info() {
-                if !ContactInfo::is_valid_address(&contact.gossip) {
-                    continue;
-                }
             }
             let size = cmp::max(CRDS_GOSSIP_BLOOM_SIZE, network_size);
             let bloom = Bloom::random(size, 0.1, 1024 * 8 * 4);
-            new_items.insert(val.0.pubkey(), bloom);
-            if new_items.len() == need {
-                break;
-            }
+            new_items.insert(item.id, bloom);
         }
         let mut keys: Vec<Pubkey> = self.active_set.keys().cloned().collect();
         keys.shuffle(&mut rand::thread_rng());
@@ -247,7 +260,10 @@ impl CrdsGossipPush {
 mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use std::f32::consts::E;
+
     #[test]
     fn test_process_push() {
         let mut crds = Crds::default();
@@ -349,14 +365,14 @@ mod test {
         let value1 = CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0));
 
         assert_eq!(crds.insert(value1.clone(), 0), Ok(None));
-        push.refresh_push_active_set(&crds, Pubkey::default(), 1, 1);
+        push.refresh_push_active_set(&crds, None, Pubkey::default(), 1, 1);
 
         assert!(push.active_set.get(&value1.label().pubkey()).is_some());
         let value2 = CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0));
         assert!(push.active_set.get(&value2.label().pubkey()).is_none());
         assert_eq!(crds.insert(value2.clone(), 0), Ok(None));
         for _ in 0..30 {
-            push.refresh_push_active_set(&crds, Pubkey::default(), 1, 1);
+            push.refresh_push_active_set(&crds, None, Pubkey::default(), 1, 1);
             if push.active_set.get(&value2.label().pubkey()).is_some() {
                 break;
             }
@@ -368,8 +384,46 @@ mod test {
                 CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0));
             assert_eq!(crds.insert(value2.clone(), 0), Ok(None));
         }
-        push.refresh_push_active_set(&crds, Pubkey::default(), 1, 1);
+        push.refresh_push_active_set(&crds, None, Pubkey::default(), 1, 1);
         assert_eq!(push.active_set.len(), push.num_active);
+    }
+    #[test]
+    fn test_active_set_refresh_with_bank() {
+        let (block, mint_keypair) = GenesisBlock::new(100_000_000);
+        let bank = Arc::new(Bank::new(&block));
+        let time = timestamp() - 1024; //make sure there's at least a 1 second delay
+        let mut crds = Crds::default();
+        let mut push = CrdsGossipPush::default();
+        for i in 1..=100 {
+            let peer =
+                CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), time));
+            let id = peer.label().pubkey();
+            crds.insert(peer.clone(), time).unwrap();
+            bank.transfer(i * 100, &mint_keypair, id, bank.last_id())
+                .unwrap();
+        }
+        let min_balance = E.powf(7000_f32.ln() - 0.5);
+        // try upto 10 times because of rng
+        for _ in 0..10 {
+            push.refresh_push_active_set(&crds, Some(&bank), Pubkey::default(), 100, 30);
+            let mut num_correct = 0;
+            let mut num_wrong = 0;
+            push.active_set.iter().for_each(|peer| {
+                if bank.get_balance(peer.0) >= min_balance as u64 {
+                    num_correct += 1;
+                } else {
+                    num_wrong += 1;
+                }
+            });
+            // at least half of the heaviest nodes should be picked
+            if num_wrong <= num_correct {
+                return;
+            }
+        }
+        assert!(
+            false,
+            "expected at 50% of the active set to contain the heaviest nodes"
+        );
     }
     #[test]
     fn test_new_push_messages() {
@@ -377,7 +431,7 @@ mod test {
         let mut push = CrdsGossipPush::default();
         let peer = CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0));
         assert_eq!(crds.insert(peer.clone(), 0), Ok(None));
-        push.refresh_push_active_set(&crds, Pubkey::default(), 1, 1);
+        push.refresh_push_active_set(&crds, None, Pubkey::default(), 1, 1);
 
         let new_msg =
             CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0));
@@ -397,7 +451,7 @@ mod test {
         let mut push = CrdsGossipPush::default();
         let peer = CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0));
         assert_eq!(crds.insert(peer.clone(), 0), Ok(None));
-        push.refresh_push_active_set(&crds, Pubkey::default(), 1, 1);
+        push.refresh_push_active_set(&crds, None, Pubkey::default(), 1, 1);
 
         let new_msg =
             CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0));
@@ -417,7 +471,7 @@ mod test {
         let mut push = CrdsGossipPush::default();
         let peer = CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0));
         assert_eq!(crds.insert(peer.clone(), 0), Ok(None));
-        push.refresh_push_active_set(&crds, Pubkey::default(), 1, 1);
+        push.refresh_push_active_set(&crds, None, Pubkey::default(), 1, 1);
 
         let mut ci = ContactInfo::new_localhost(Keypair::new().pubkey(), 0);
         ci.wallclock = 1;

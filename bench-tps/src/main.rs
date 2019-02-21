@@ -41,7 +41,8 @@ fn converge(
     spy_cluster_info.insert_info(leader.clone());
     spy_cluster_info.set_leader(leader.id);
     let spy_ref = Arc::new(RwLock::new(spy_cluster_info));
-    let gossip_service = GossipService::new(&spy_ref, None, gossip_socket, exit_signal.clone());
+    let gossip_service =
+        GossipService::new(&spy_ref, None, None, gossip_socket, exit_signal.clone());
     let mut v: Vec<NodeInfo> = vec![];
     // wait for the network to converge, 30 seconds should be plenty
     for _ in 0..30 {

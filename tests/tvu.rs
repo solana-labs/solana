@@ -32,7 +32,7 @@ fn new_gossip(
     gossip: UdpSocket,
     exit: Arc<AtomicBool>,
 ) -> GossipService {
-    GossipService::new(&cluster_info, None, gossip, exit)
+    GossipService::new(&cluster_info, None, None, gossip, exit)
 }
 
 /// Test that message sent from leader to target1 and replayed to target2

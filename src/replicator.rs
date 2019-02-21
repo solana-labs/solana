@@ -136,9 +136,11 @@ impl Replicator {
 
         let blocktree = Arc::new(blocktree);
 
+        //TODO(sagar) Does replicator need a bank also ?
         let gossip_service = GossipService::new(
             &cluster_info,
             Some(blocktree.clone()),
+            None,
             node.sockets.gossip,
             exit.clone(),
         );
