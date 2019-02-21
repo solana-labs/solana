@@ -1,8 +1,9 @@
 use crate::pubkey::Pubkey;
+use std::{cmp, fmt};
 
 /// An Account with userdata that is stored on chain
 #[repr(C)]
-#[derive(Serialize, Deserialize, Debug, Clone, Default, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Default, Eq, PartialEq)]
 pub struct Account {
     /// tokens in the account
     pub tokens: u64,
@@ -12,6 +13,29 @@ pub struct Account {
     pub owner: Pubkey,
     /// this account's userdata contains a loaded program (and is now read-only)
     pub executable: bool,
+}
+
+impl fmt::Debug for Account {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let userdata_len = cmp::min(64, self.userdata.len());
+        let userdata_str = if userdata_len > 0 {
+            format!(
+                " userdata: {}",
+                hex::encode(self.userdata[..userdata_len].to_vec())
+            )
+        } else {
+            "".to_string()
+        };
+        write!(
+            f,
+            "Account {{ tokens: {} userdata.len: {} owner: {} executable: {}{} }}",
+            self.tokens,
+            self.userdata.len(),
+            self.owner,
+            self.executable,
+            userdata_str,
+        )
+    }
 }
 
 impl Account {
