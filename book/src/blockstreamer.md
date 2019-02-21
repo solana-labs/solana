@@ -1,15 +1,15 @@
-# API Node
+# Blockstreamer
 
-Solana supports a fullnode type called an *api node*. This node type is intended
-for applications that need to observe the data plane, without participating in
-transaction validation or ledger replication.
+Solana supports a node type called an *blockstreamer*. This fullnode variation
+is intended for applications that need to observe the data plane without
+participating in transaction validation or ledger replication.
 
-An api node runs without a vote signer, and can optionally stream ledger entries
-out to a Unix domain socket as they are processed. The JSON-RPC service still
-functions as on any other node.
+A blockstreamer runs without a vote signer, and can optionally stream ledger
+entries out to a Unix domain socket as they are processed. The JSON-RPC service
+still functions as on any other node.
 
-To run an api node, include the argument `no-signer` and (optional)
-`entry-stream` socket location:
+To run a blockstreamer, include the argument `no-signer` and (optional)
+`blockstream` socket location:
 
 ```bash
 $ ./multinode-demo/fullnode-x.sh --no-signer --blockstream <SOCKET>
