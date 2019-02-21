@@ -100,7 +100,7 @@ pub struct Fullnode {
     rpc_service: Option<JsonRpcService>,
     rpc_pubsub_service: Option<PubSubService>,
     gossip_service: GossipService,
-    bank_forks: BankForks,
+    bank_forks: Arc<RwLock<BankForks>>,
     sigverify_disabled: bool,
     tpu_sockets: Vec<UdpSocket>,
     broadcast_socket: UdpSocket,
@@ -149,6 +149,7 @@ impl Fullnode {
 
         let exit = Arc::new(AtomicBool::new(false));
         let blocktree = Arc::new(blocktree);
+        let bank_forks = Arc::new(RwLock::new(bank_forks));
 
         node.info.wallclock = timestamp();
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_keypair(
@@ -172,7 +173,7 @@ impl Fullnode {
         let storage_state = StorageState::new();
 
         let rpc_service = JsonRpcService::new(
-            &bank,
+            &bank_forks,
             &cluster_info,
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
             drone_addr,
@@ -422,7 +423,7 @@ impl Fullnode {
             match self.rotation_receiver.recv_timeout(timeout) {
                 Ok(tick_height) => {
                     trace!("{:?}: rotate at tick_height={}", self.id, tick_height);
-                    let bank = self.bank_forks.working_bank();
+                    let bank = self.bank_forks.read().unwrap().working_bank();
                     let (next_leader, max_tick_height) = self.get_next_leader(&bank, tick_height);
                     let transition =
                         self.rotate(&bank, next_leader, max_tick_height, 0, &bank.last_id());
