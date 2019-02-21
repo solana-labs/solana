@@ -2,29 +2,23 @@
 set -e
 cd "$(dirname "$0")/.."
 
-source ci/_
-export RUST_BACKTRACE=1
-source scripts/ulimit-n.sh
+source ci/test-pre.sh
 
-annotate() {
-  ${BUILDKITE:-false} && {
-    buildkite-agent annotate "$@"
-  }
-}
+# Run program package with these features
+PROGRAM_FEATURES=bpf_c,bpf_rust
 
-ci/affects-files.sh \
-  .rs$ \
-  Cargo.lock$ \
-  Cargo.toml$ \
-  ci/test-stable-perf.sh \
-  ci/test-stable.sh \
-|| {
-  annotate --style info --context test-stable-perf \
-    "Stable Perf skipped as no .rs files were modified"
-  exit 0
-}
+# Run all BPF C tests
+_ make -C programs/bpf/c tests
 
-ROOT_FEATURES=erasure,chacha
+# Must be built out of band
+_ make -C programs/bpf/rust/noop/ all
+
+_ cargo test --manifest-path programs/Cargo.toml --no-default-features --features="$PROGRAM_FEATURES"
+_ cargo test --manifest-path programs/native/bpf_loader/Cargo.toml --no-default-features --features="$PROGRAM_FEATURES"
+
+# Run root package tests witht these features
+ROOT_FEATURES=chacha
+# ROOT_FEATURES=erasure,chacha
 if [[ $(uname) = Darwin ]]; then
   ./build-perf-libs.sh
 else
@@ -39,7 +33,7 @@ else
   ROOT_FEATURES=$ROOT_FEATURES,cuda
 fi
 
-# Build and run root package library tests
+# Run root package library tests
 _ cargo build ${V:+--verbose} --features="$ROOT_FEATURES"
 _ cargo test --lib ${V:+--verbose} --features="$ROOT_FEATURES" -- --nocapture --test-threads=1
 
@@ -54,14 +48,6 @@ for test in tests/*.rs; do
   )
 done
 
-# Run all program package tests
-{
-  # Run all BPF C tests
-  make -C programs/bpf/c tests
-  # Must be built out of band
-  make -C programs/bpf/rust/noop/ all
-  # Run programs package tests
-  cargo test --manifest-path programs/Cargo.toml --no-default-features --features=bpf_c,bpf_rust
-  # Run BPF loader package tests
-  cargo test --manifest-path programs/native/bpf_loader/Cargo.toml --no-default-features --features=bpf_c,bpf_rust
-}
+# Post script assumes target/debug is populated.   Ensure last build command
+# leaves target/debug in the state intended for further testing
+exec ci/test-post.sh
