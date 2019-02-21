@@ -297,14 +297,23 @@ impl ReplayStage {
                         // for leader rotation
                         if max_tick_height_for_slot == current_tick_height {
                             // Check for leader rotation
-                            let leader_id = leader_scheduler_
-                                .read()
-                                .unwrap()
-                                .get_leader_for_tick(current_tick_height + 1)
-                                .unwrap();
+                            let (leader_id, next_slot) = {
+                                let leader_scheduler = leader_scheduler_.read().unwrap();
+                                (
+                                    leader_scheduler
+                                        .get_leader_for_tick(current_tick_height + 1)
+                                        .unwrap(),
+                                    leader_scheduler.tick_height_to_slot(current_tick_height + 1),
+                                )
+                            };
 
                             if my_id == leader_id || my_id == last_leader_id {
-                                to_leader_sender.send(current_tick_height).unwrap();
+                                to_leader_sender
+                                    .send((
+                                        0, // TODO: fix hard coded bank_id
+                                        next_slot, leader_id,
+                                    ))
+                                    .unwrap();
                             } else if leader_id != last_leader_id {
                                 // TODO: Remove this soon once we boot the leader from ClusterInfo
                                 cluster_info.write().unwrap().set_leader(leader_id);
@@ -482,7 +491,7 @@ mod test {
 
             info!("Wait for replay_stage to exit and check return value is correct");
             assert_eq!(
-                2 * ticks_per_slot - 1,
+                (0, 2, my_keypair.pubkey()),
                 rotation_receiver
                     .recv()
                     .expect("should have signaled leader rotation"),
@@ -726,7 +735,7 @@ mod test {
 
             // Wait for replay_stage to exit and check return value is correct
             assert_eq!(
-                active_window_tick_length,
+                (0, 1, my_keypair.pubkey()),
                 rotation_rx
                     .recv()
                     .expect("should have signaled leader rotation")

@@ -25,6 +25,7 @@ use crate::storage_stage::{StorageStage, StorageState};
 use crate::voting_keypair::VotingKeypair;
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -32,7 +33,11 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread;
 
-pub type TvuReturnType = u64; // tick_height to initiate a rotation
+pub type TvuReturnType = (
+    u64,    // bank_id,
+    u64,    // slot height to initiate a rotation
+    Pubkey, // leader upon rotation
+);
 pub type TvuRotationSender = Sender<TvuReturnType>;
 pub type TvuRotationReceiver = Receiver<TvuReturnType>;
 

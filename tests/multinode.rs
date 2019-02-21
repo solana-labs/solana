@@ -989,10 +989,7 @@ fn test_leader_to_validator_transition() {
     let (rotation_sender, rotation_receiver) = channel();
     let leader_exit = leader.run(Some(rotation_sender));
 
-    let expected_rotations = vec![(
-        FullnodeReturnType::LeaderToValidatorRotation,
-        ticks_per_slot,
-    )];
+    let expected_rotations = vec![(FullnodeReturnType::LeaderToValidatorRotation, 1)];
 
     for expected_rotation in expected_rotations {
         loop {
@@ -1127,35 +1124,23 @@ fn test_leader_validator_basic() {
     info!("Waiting for slot 0 -> slot 1: bootstrap leader and the validator rotate");
     assert_eq!(
         leader_rotation_receiver.recv().unwrap(),
-        (
-            FullnodeReturnType::LeaderToValidatorRotation,
-            ticks_per_slot,
-        )
+        (FullnodeReturnType::LeaderToValidatorRotation, 1)
     );
     assert_eq!(
         validator_rotation_receiver.recv().unwrap(),
-        (
-            FullnodeReturnType::ValidatorToLeaderRotation,
-            ticks_per_slot,
-        )
+        (FullnodeReturnType::ValidatorToLeaderRotation, 1)
     );
 
     info!("Waiting for slot 1 -> slot 2: validator remains the slot leader due to no votes");
     assert_eq!(
         validator_rotation_receiver.recv().unwrap(),
-        (
-            FullnodeReturnType::LeaderToLeaderRotation,
-            ticks_per_slot * 2,
-        )
+        (FullnodeReturnType::LeaderToLeaderRotation, 2)
     );
 
     info!("Waiting for slot 2 -> slot 3: validator remains the slot leader due to no votes");
     assert_eq!(
         validator_rotation_receiver.recv().unwrap(),
-        (
-            FullnodeReturnType::LeaderToLeaderRotation,
-            ticks_per_slot * 3,
-        )
+        (FullnodeReturnType::LeaderToLeaderRotation, 3)
     );
 
     info!("Shut down");
@@ -1953,13 +1938,10 @@ fn test_fullnode_rotate(
         // Check for leader rotation
         {
             match leader_rotation_receiver.try_recv() {
-                Ok((rotation_type, tick_height)) => {
-                    info!(
-                        "leader rotation event {:?} at tick_height={}",
-                        rotation_type, tick_height
-                    );
+                Ok((rotation_type, slot)) => {
+                    info!("leader rotation event {:?} at slot={}", rotation_type, slot);
                     info!("leader should be leader? {}", leader_should_be_leader);
-                    assert_eq!(tick_height, leader_tick_height_of_next_rotation);
+                    assert_eq!(slot, leader_tick_height_of_next_rotation / ticks_per_slot);
                     if include_validator {
                         assert_eq!(
                             rotation_type,
@@ -1983,13 +1965,16 @@ fn test_fullnode_rotate(
         // Check for validator rotation
         if include_validator {
             match validator_rotation_receiver.try_recv() {
-                Ok((rotation_type, tick_height)) => {
+                Ok((rotation_type, slot)) => {
                     info!(
-                        "validator rotation event {:?} at tick_height={}",
-                        rotation_type, tick_height
+                        "validator rotation event {:?} at slot={}",
+                        rotation_type, slot
                     );
                     info!("validator should be leader? {}", validator_should_be_leader);
-                    assert_eq!(tick_height, validator_tick_height_of_next_rotation);
+                    assert_eq!(
+                        slot,
+                        validator_tick_height_of_next_rotation / ticks_per_slot
+                    );
                     assert_eq!(
                         rotation_type,
                         if validator_should_be_leader {
