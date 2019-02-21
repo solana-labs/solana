@@ -30,6 +30,7 @@ impl LeaderConfirmationService {
         bank: &Arc<Bank>,
         leader_id: Pubkey,
         last_valid_validator_timestamp: u64,
+        ticks_per_slot: u64,
     ) -> result::Result<u64, ConfirmationError> {
         let mut total_stake = 0;
 
@@ -47,7 +48,8 @@ impl LeaderConfirmationService {
                 vote_state
                     .votes
                     .back()
-                    .map(|vote| (vote.tick_height, validator_stake))
+                    // A vote for a slot is like a vote for the last tick in that slot
+                    .map(|vote| ((vote.slot_height + 1) * ticks_per_slot - 1, validator_stake))
             })
             .collect();
 
@@ -78,10 +80,14 @@ impl LeaderConfirmationService {
         bank: &Arc<Bank>,
         leader_id: Pubkey,
         last_valid_validator_timestamp: &mut u64,
+        ticks_per_slot: u64,
     ) {
-        if let Ok(super_majority_timestamp) =
-            Self::get_last_supermajority_timestamp(bank, leader_id, *last_valid_validator_timestamp)
-        {
+        if let Ok(super_majority_timestamp) = Self::get_last_supermajority_timestamp(
+            bank,
+            leader_id,
+            *last_valid_validator_timestamp,
+            ticks_per_slot,
+        ) {
             let now = timing::timestamp();
             let confirmation_ms = now - super_majority_timestamp;
 
@@ -99,9 +105,14 @@ impl LeaderConfirmationService {
     }
 
     /// Create a new LeaderConfirmationService for computing confirmation.
-    pub fn new(bank: Arc<Bank>, leader_id: Pubkey, exit: Arc<AtomicBool>) -> Self {
+    pub fn new(
+        bank: Arc<Bank>,
+        leader_id: Pubkey,
+        exit: Arc<AtomicBool>,
+        ticks_per_slot: u64,
+    ) -> Self {
         let thread_hdl = Builder::new()
-            .name("solana-leader-confirmation-stage".to_string())
+            .name("solana-leader-confirmation-service".to_string())
             .spawn(move || {
                 let mut last_valid_validator_timestamp = 0;
                 loop {
@@ -112,6 +123,7 @@ impl LeaderConfirmationService {
                         &bank,
                         leader_id,
                         &mut last_valid_validator_timestamp,
+                        ticks_per_slot,
                     );
                     sleep(Duration::from_millis(COMPUTE_CONFIRMATION_MS));
                 }
@@ -189,6 +201,7 @@ pub mod tests {
             &bank,
             genesis_block.bootstrap_leader_id,
             &mut last_confirmation_time,
+            1,
         );
 
         // Get another validator to vote, so we now have 2/3 consensus
@@ -200,6 +213,7 @@ pub mod tests {
             &bank,
             genesis_block.bootstrap_leader_id,
             &mut last_confirmation_time,
+            1,
         );
         assert!(last_confirmation_time > 0);
     }

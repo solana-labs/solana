@@ -14,11 +14,11 @@ pub struct VoteTransaction {}
 impl VoteTransaction {
     pub fn new_vote<T: KeypairUtil>(
         voting_keypair: &T,
-        tick_height: u64,
+        slot_height: u64,
         last_id: Hash,
         fee: u64,
     ) -> Transaction {
-        let vote = Vote { tick_height };
+        let vote = Vote { slot_height };
         let instruction = VoteInstruction::Vote(vote);
         Transaction::new(
             voting_keypair,
@@ -81,12 +81,12 @@ mod tests {
     #[test]
     fn test_get_votes() {
         let keypair = Keypair::new();
-        let tick_height = 1;
+        let slot_height = 1;
         let last_id = Hash::default();
-        let transaction = VoteTransaction::new_vote(&keypair, tick_height, last_id, 0);
+        let transaction = VoteTransaction::new_vote(&keypair, slot_height, last_id, 0);
         assert_eq!(
             VoteTransaction::get_votes(&transaction),
-            vec![(keypair.pubkey(), Vote::new(tick_height), last_id)]
+            vec![(keypair.pubkey(), Vote::new(slot_height), last_id)]
         );
     }
 }

@@ -10,7 +10,7 @@ fn is_active_staker(vote_state: &VoteState, lower_bound: u64, upper_bound: u64) 
     vote_state
         .votes
         .back()
-        .filter(|vote| vote.tick_height >= lower_bound && vote.tick_height <= upper_bound)
+        .filter(|vote| vote.slot_height >= lower_bound && vote.slot_height <= upper_bound)
         .is_some()
 }
 
@@ -36,8 +36,8 @@ pub struct ActiveStakers {
 }
 
 impl ActiveStakers {
-    pub fn new_with_bounds(bank: &Bank, active_window_tick_length: u64, upper_bound: u64) -> Self {
-        let lower_bound = upper_bound.saturating_sub(active_window_tick_length);
+    pub fn new_with_bounds(bank: &Bank, active_window_num_slots: u64, upper_bound: u64) -> Self {
+        let lower_bound = upper_bound.saturating_sub(active_window_num_slots);
         let mut stakes: Vec<_> = bank
             .vote_states(|vote_state| is_active_staker(vote_state, lower_bound, upper_bound))
             .iter()
@@ -96,9 +96,9 @@ pub mod tests {
         bank.process_transaction(&tx).unwrap();
     }
 
-    pub fn push_vote<T: KeypairUtil>(voting_keypair: &T, bank: &Bank, tick_height: u64) {
+    pub fn push_vote<T: KeypairUtil>(voting_keypair: &T, bank: &Bank, slot_height: u64) {
         let last_id = bank.last_id();
-        let tx = VoteTransaction::new_vote(voting_keypair, tick_height, last_id, 0);
+        let tx = VoteTransaction::new_vote(voting_keypair, slot_height, last_id, 0);
         bank.process_transaction(&tx).unwrap();
     }
 
@@ -107,10 +107,10 @@ pub mod tests {
         voting_keypair: &T,
         bank: &Bank,
         num_tokens: u64,
-        tick_height: u64,
+        slot_height: u64,
     ) {
         new_vote_account(from_keypair, &voting_keypair.pubkey(), bank, num_tokens);
-        push_vote(voting_keypair, bank, tick_height);
+        push_vote(voting_keypair, bank, slot_height);
     }
 
     #[test]
@@ -154,8 +154,8 @@ pub mod tests {
                 .unwrap();
 
             // Create a vote account and push a vote
-            let tick_height = start_height + active_window_tick_length + 1;
-            new_vote_account_with_vote(&new_keypair, &Keypair::new(), &bank, 1, tick_height);
+            let slot_height = start_height + active_window_tick_length + 1;
+            new_vote_account_with_vote(&new_keypair, &Keypair::new(), &bank, 1, slot_height);
         }
         new_ids.sort();
 
@@ -273,7 +273,7 @@ pub mod tests {
             assert_eq!(result.len(), 0);
         }
 
-        // Vote at tick_height 2
+        // Vote at slot_height 2
         push_vote(&voting_keypair, &bank, 2);
 
         {
