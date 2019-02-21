@@ -12,7 +12,7 @@ To run an api node, include the argument `no-signer` and (optional)
 `entry-stream` socket location:
 
 ```bash
-$ ./multinode-demo/fullnode-x.sh --no-signer --entry-stream <SOCKET>
+$ ./multinode-demo/fullnode-x.sh --no-signer --blockstream <SOCKET>
 ```
 
 The stream will output a series of JSON objects:
