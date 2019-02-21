@@ -22,7 +22,10 @@ impl LeaderSchedule {
         seed: &[u8; 32],
         slots_per_epoch: u64,
     ) -> Vec<Pubkey> {
-        let (pubkeys, stakes): (Vec<Pubkey>, Vec<u64>) = ids_and_stakes.iter().cloned().unzip();
+        let (pubkeys, stakes): (Vec<Pubkey>, Vec<u64>) = ids_and_stakes
+            .iter()
+            .map(|&(ref id, ref stake)| (id, stake))
+            .unzip();
         let mut rng = ChaChaRng::from_seed(*seed);
         // Should have no zero weighted stakes
         let weighted_index = WeightedIndex::new(stakes).unwrap();
