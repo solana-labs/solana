@@ -23,8 +23,18 @@ impl BankForks {
         self.banks[&self.working_bank_id].clone()
     }
 
+    // TODO: use the bank's own ID instead of receiving a parameter
     pub fn insert(&mut self, bank_id: u64, bank: Bank) {
-        self.banks.insert(bank_id, Arc::new(bank));
+        let mut bank = Arc::new(bank);
+        self.banks.insert(bank_id, bank.clone());
+
+        // TODO: this really only needs to look at the first
+        //  parent if we're always calling insert()
+        //  when we construct a child bank
+        while let Some(parent) = bank.parent() {
+            self.banks.remove(&parent.id());
+            bank = parent;
+        }
     }
 
     pub fn set_working_bank_id(&mut self, bank_id: u64) {
@@ -43,9 +53,8 @@ mod tests {
     #[test]
     fn test_bank_forks_root() {
         let bank = Bank::default();
-        let tick_height = bank.tick_height();
         let bank_forks = BankForks::new(0, bank);
-        assert_eq!(bank_forks.working_bank().tick_height(), tick_height);
+        assert_eq!(bank_forks.working_bank().tick_height(), 0);
     }
 
     #[test]
@@ -54,9 +63,8 @@ mod tests {
         let mut bank_forks = BankForks::new(0, bank);
         let child_bank = Bank::new_from_parent(&bank_forks.working_bank(), &Pubkey::default());
         child_bank.register_tick(&Hash::default());
-        let child_bank_id = 1;
-        bank_forks.insert(child_bank_id, child_bank);
-        bank_forks.set_working_bank_id(child_bank_id);
-        assert_eq!(bank_forks.working_bank().tick_height(), child_bank_id);
+        bank_forks.insert(1, child_bank);
+        bank_forks.set_working_bank_id(1);
+        assert_eq!(bank_forks.working_bank().tick_height(), 1);
     }
 }
