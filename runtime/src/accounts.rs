@@ -1,5 +1,4 @@
 use crate::appendvec::AppendVec;
-use solana_sdk::signature::{Keypair, KeypairUtil};
 use crate::bank::{BankError, Result};
 use crate::runtime::has_duplicates;
 use bincode::serialize;
@@ -10,10 +9,11 @@ use solana_sdk::account::Account;
 use solana_sdk::hash::{hash, Hash};
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program;
 use std::collections::BTreeMap;
-use std::fs::{create_dir_all, remove_dir_all};
+use std::fs::{create_dir_all, read_dir, remove_dir_all};
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
@@ -67,14 +67,15 @@ pub struct ErrorCounters {
 
 const ACCOUNT_DATA_FILE_SIZE: u64 = 64 * 1024 * 1024;
 const ACCOUNT_DATA_FILE: &str = "data";
-const NUM_ACCOUNT_DIRS: usize = 1;
+const ACCOUNTSDB_DIR: &str = "accountsdb";
+const NUM_ACCOUNT_DIRS: usize = 4;
 
 /// An offset into the AccountsDB::storage vector
 type AppendVecId = usize;
 
 type Fork = u64;
 
-struct AccountMap(Vec<(Fork, (AppendVecId, u64))>);
+struct AccountMap(HashMap<Fork, (AppendVecId, u64)>);
 
 #[derive(Debug, PartialEq)]
 enum AccountStorageStatus {
@@ -130,6 +131,16 @@ impl AccountStorage {
     }
 }
 
+#[derive(Default)]
+struct AccountsForkInfo {
+    /// The number of transactions the bank has processed without error since the
+    /// start of the ledger.
+    transaction_count: u64,
+
+    /// List of all parents corresponding to this fork
+    parents: Vec<Fork>,
+}
+
 // This structure handles the load/store of the accounts
 pub struct AccountsDB {
     /// Keeps tracks of index into AppendVec on a per fork basis
@@ -141,24 +152,8 @@ pub struct AccountsDB {
     /// distribute the accounts across storage lists
     next_id: AtomicUsize,
 
-    /// The number of transactions the bank has processed without error since the
-    /// start of the ledger.
-    transaction_count: RwLock<HashMap<u64, u64>>,
-}
-
-impl Default for AccountsDB {
-    fn default() -> Self {
-        let index_info = AccountIndexInfo {
-            index: RwLock::new(HashMap::new()),
-            vote_index: RwLock::new(HashSet::new()),
-        };
-        AccountsDB {
-            index_info,
-            storage: RwLock::new(vec![]),
-            next_id: AtomicUsize::new(0),
-            transaction_count: RwLock::new(HashMap::new()),
-        }
-    }
+    /// Information related to the fork
+    fork_info: RwLock<HashMap<Fork, AccountsForkInfo>>,
 }
 
 /// This structure handles synchronization for db
@@ -166,7 +161,7 @@ pub struct Accounts {
     pub accounts_db: AccountsDB,
 
     /// set of accounts which are currently in the pipeline
-    account_locks: Mutex<HashSet<Pubkey>>,
+    account_locks: Mutex<HashMap<Fork, HashSet<Pubkey>>>,
 
     /// List of persistent stores
     paths: String,
@@ -177,12 +172,44 @@ impl Drop for Accounts {
         let paths: Vec<String> = self.paths.split(',').map(|s| s.to_string()).collect();
         paths.iter().for_each(|p| {
             let _ignored = remove_dir_all(p);
-        })
+        });
+        let entry = read_dir(ACCOUNTSDB_DIR);
+        if entry.is_ok() && entry.unwrap().count() == 0 {
+            let _ignored = remove_dir_all(ACCOUNTSDB_DIR);
+        }
     }
 }
 
 impl AccountsDB {
-    pub fn add_storage(&self, paths: &str) {
+    pub fn new(fork: Fork, paths: &str) -> Self {
+        let index_info = AccountIndexInfo {
+            index: RwLock::new(HashMap::new()),
+            vote_index: RwLock::new(HashSet::new()),
+        };
+        let accounts_db = AccountsDB {
+            index_info,
+            storage: RwLock::new(vec![]),
+            next_id: AtomicUsize::new(0),
+            fork_info: RwLock::new(HashMap::new()),
+        };
+        accounts_db.add_storage(paths);
+        accounts_db.add_fork(fork, None);
+        accounts_db
+    }
+
+    pub fn add_fork(&self, fork: Fork, parent: Option<Fork>) {
+        let mut info = self.fork_info.write().unwrap();
+        let mut fork_info = AccountsForkInfo::default();
+        if parent.is_some() {
+            fork_info.parents.push(parent.unwrap());
+            if let Some(list) = info.get(&parent.unwrap()) {
+                fork_info.parents.extend_from_slice(&list.parents);
+            }
+        }
+        info.insert(fork, fork_info);
+    }
+
+    fn add_storage(&self, paths: &str) {
         let paths: Vec<String> = paths.split(',').map(|s| s.to_string()).collect();
         let mut stores: Vec<AccountStorage> = vec![];
         paths.iter().for_each(|p| {
@@ -196,7 +223,6 @@ impl AccountsDB {
             };
             stores.push(storage);
         });
-        let _ignored = stores[0].appendvec.write().unwrap().grow_file();
         let mut storage = self.storage.write().unwrap();
         storage.append(&mut stores);
     }
@@ -234,10 +260,8 @@ impl AccountsDB {
         let index = self.index_info.index.read().unwrap();
 
         for account_map in index.values() {
-            for (v_fork, _) in account_map.0.iter() {
-                if fork == *v_fork {
-                    return true;
-                }
+            if account_map.0.contains_key(&fork) {
+                return true;
             }
         }
         false
@@ -247,19 +271,14 @@ impl AccountsDB {
         let mut ordered_accounts = BTreeMap::new();
         let rindex = self.index_info.index.read().unwrap();
         rindex.iter().for_each(|(p, forks)| {
-            for (v_fork, (id, index)) in forks.0.iter() {
-                if fork == *v_fork {
-                    let account = self.storage.read().unwrap()[*id]
-                        .appendvec
-                        .read()
-                        .unwrap()
-                        .get_account(*index)
-                        .unwrap();
-                    ordered_accounts.insert(*p, account);
-                }
-                if fork > *v_fork {
-                    break;
-                }
+            if let Some((id, index)) = forks.0.get(&fork) {
+                let account = self.storage.read().unwrap()[*id]
+                    .appendvec
+                    .read()
+                    .unwrap()
+                    .get_account(*index)
+                    .unwrap();
+                ordered_accounts.insert(*p, account);
             }
         });
 
@@ -269,17 +288,27 @@ impl AccountsDB {
         Some(hash(&serialize(&ordered_accounts).unwrap()))
     }
 
-    fn load(&self, fork: Fork, pubkey: &Pubkey) -> Option<Account> {
+    fn get_account(&self, id: AppendVecId, offset: u64) -> Option<Account> {
+        let appendvec = &self.storage.read().unwrap()[id].appendvec;
+        let av = appendvec.read().unwrap();
+        Some(av.get_account(offset).unwrap())
+    }
+
+    fn load(&self, fork: Fork, pubkey: &Pubkey, walk_back: bool) -> Option<Account> {
         let index = self.index_info.index.read().unwrap();
         if let Some(forks) = index.get(pubkey) {
             // find most recent fork that is an ancestor of current_fork
-            for (v_fork, (id, offset)) in forks.0.iter() {
-                if *v_fork > fork {
-                    continue;
-                } else {
-                    let appendvec = &self.storage.read().unwrap()[*id].appendvec;
-                    let av = appendvec.read().unwrap();
-                    return Some(av.get_account(*offset).unwrap());
+            if let Some((id, offset)) = forks.0.get(&fork) {
+                return self.get_account(*id, *offset);
+            } else {
+                if !walk_back {
+                    return None;
+                }
+                let fork_info = self.fork_info.read().unwrap();
+                for parent_fork in fork_info.get(&fork).unwrap().parents.iter() {
+                    if let Some((id, offset)) = forks.0.get(&parent_fork) {
+                        return self.get_account(*id, *offset);
+                    }
                 }
             }
         }
@@ -352,16 +381,26 @@ impl AccountsDB {
         (id, offset)
     }
 
+    fn remove_account_entry(&self, fork: Fork, forks: &mut AccountMap) {
+        if let Some((id, _)) = forks.0.remove(&fork) {
+            let stores = self.storage.read().unwrap();
+            if stores[id].count.fetch_sub(1, Ordering::Relaxed) == 1 {
+                stores[id].appendvec.write().unwrap().reset();
+                stores[id].set_status(AccountStorageStatus::StorageAvailable);
+            }
+        }
+    }
+
     /// Store the account update.  If the update is to delete the account because the token balance
     /// is 0, purge needs to be set to true for the delete to occur in place.
     pub fn store(&self, fork: Fork, purge: bool, pubkey: &Pubkey, account: &Account) {
         if account.tokens == 0 && purge {
             // purge if balance is 0 and no checkpoints
             let mut index = self.index_info.index.write().unwrap();
-            if let Some(forks) = index.remove(pubkey) {
-                let stores = self.storage.read().unwrap();
-                for (_, (id, _)) in forks.0.iter() {
-                    stores[*id].count.fetch_sub(1, Ordering::Relaxed);
+            if let Some(mut forks) = index.get_mut(&pubkey) {
+                self.remove_account_entry(fork, &mut forks);
+                if forks.0.is_empty() {
+                    index.remove(pubkey);
                 }
             }
             if vote_program::check_id(&account.owner) {
@@ -379,34 +418,15 @@ impl AccountsDB {
                 }
             }
 
-            let mut result: Option<usize> = None;
+            let result: Option<(AppendVecId, u64)>;
             {
-                let mut insert: Option<usize> = None;
                 let mut windex = self.index_info.index.write().unwrap();
-                let forks = windex.entry(*pubkey).or_insert(AccountMap(vec![]));
-                for (i, (v_fork, (v_id, _))) in forks.0.iter().enumerate() {
-                    if *v_fork > fork {
-                        continue;
-                    }
-                    if *v_fork == fork {
-                        result = Some(*v_id);
-                        forks.0[i] = (fork, (id, offset));
-                        break;
-                    }
-                    insert = Some(i);
-                    break;
-                }
-                if result.is_none() {
-                    if let Some(index) = insert {
-                        forks.0.insert(index, (fork, (id, offset)));
-                    } else {
-                        forks.0.push((fork, (id, offset)));
-                    }
-                }
+                let forks = windex.entry(*pubkey).or_insert(AccountMap(HashMap::new()));
+                result = forks.0.insert(fork, (id, offset));
             }
             let stores = self.storage.read().unwrap();
             stores[id].count.fetch_add(1, Ordering::Relaxed);
-            if let Some(old_id) = result {
+            if let Some((old_id, _)) = result {
                 if stores[old_id].count.fetch_sub(1, Ordering::Relaxed) == 1 {
                     stores[old_id].appendvec.write().unwrap().reset();
                     stores[old_id].set_status(AccountStorageStatus::StorageAvailable);
@@ -414,7 +434,6 @@ impl AccountsDB {
             }
         }
     }
-
 
     pub fn store_accounts(
         &self,
@@ -457,7 +476,7 @@ impl AccountsDB {
             // If a fee can pay for execution then the program will be scheduled
             let mut called_accounts: Vec<Account> = vec![];
             for key in &tx.account_keys {
-                called_accounts.push(self.load(fork, key).unwrap_or_default());
+                called_accounts.push(self.load(fork, key, true).unwrap_or_default());
             }
             if called_accounts.is_empty() || called_accounts[0].tokens == 0 {
                 error_counters.account_not_found += 1;
@@ -492,7 +511,7 @@ impl AccountsDB {
             }
             depth += 1;
 
-            let program = match self.load(fork, &program_id) {
+            let program = match self.load(fork, &program_id, true) {
                 Some(program) => program,
                 None => {
                     error_counters.account_not_found += 1;
@@ -553,43 +572,70 @@ impl AccountsDB {
     }
 
     pub fn increment_transaction_count(&self, fork: Fork, tx_count: usize) {
-        let mut tx = self.transaction_count.write().unwrap();
-        let entry = tx.entry(fork).or_insert(0);
-        *entry += tx_count as u64;
+        let mut info = self.fork_info.write().unwrap();
+        let entry = info.entry(fork).or_insert(AccountsForkInfo::default());
+        entry.transaction_count += tx_count as u64;
     }
 
     pub fn transaction_count(&self, fork: Fork) -> u64 {
-        let tx = self.transaction_count.read().unwrap();
-        if let Some(entry) = tx.get(&fork) {
-            *entry
+        let info = self.fork_info.read().unwrap();
+        if let Some(entry) = info.get(&fork) {
+            entry.transaction_count
         } else {
             0
         }
     }
 
     /// become the root accountsDB
-    fn merge_parents<U>(&mut self, parents: &[U])
-    where
-        U: std::ops::Deref<Target = Self>,
-    {
-        /*
-        self.transaction_count += parents
+    fn merge_parents(&self, fork: Fork) {
+        let parents: Vec<Fork>;
+        {
+            let info = self.fork_info.read().unwrap();
+            let fork_info = info.get(&fork).unwrap();
+            parents = fork_info.parents.clone();
+        }
+        let tx_count = parents
             .iter()
-            .fold(0, |sum, parent| sum + parent.transaction_count);
+            .fold(0, |sum, parent| sum + self.transaction_count(*parent));
+        self.increment_transaction_count(fork, tx_count as usize);
 
         // for every account in all the parents, load latest and update self if
-        //   absent
-        for pubkey in parents.iter().flat_map(|parent| parent.accounts.keys()) {
-            // update self with data from parents unless in self
-            if self.accounts.get(pubkey).is_none() {
-                self.accounts
-                    .insert(pubkey.clone(), Self::load(parents, pubkey).unwrap().clone());
+        // absent
+        let mut index = self.index_info.index.write().unwrap();
+        index.iter_mut().for_each(|(_, mut forks)| {
+            if forks.0.get(&fork).is_none() {
+                for parent_fork in parents.iter() {
+                    if let Some((id, offset)) = forks.0.get(parent_fork) {
+                        forks.0.insert(fork, (*id, *offset));
+                        forks.0.remove(parent_fork);
+                        break;
+                    }
+                }
+            }
+            for parent_fork in parents.iter() {
+                self.remove_account_entry(*parent_fork, &mut forks);
+            }
+        });
+
+        {
+            let mut info = self.fork_info.write().unwrap();
+            let fork_info = info.get_mut(&fork).unwrap();
+            fork_info.parents = vec![];
+            for parent_fork in parents.iter() {
+                info.remove(parent_fork);
             }
         }
-
-        // toss any zero-balance accounts, since self is root now
-        self.accounts.retain(|_, account| account.tokens != 0);
-        */
+        index.iter_mut().for_each(|(pubkey, mut forks)| {
+            if let Some((id, offset)) = forks.0.get(&fork) {
+                let account = self.get_account(*id, *offset).unwrap();
+                if account.tokens == 0 {
+                    self.remove_account_entry(fork, &mut forks);
+                    if vote_program::check_id(&account.owner) {
+                        self.index_info.vote_index.write().unwrap().remove(pubkey);
+                    }
+                }
+            }
+        });
     }
 }
 
@@ -597,36 +643,47 @@ impl Accounts {
     fn make_new_dir() -> String {
         static ACCOUNT_DIR: AtomicUsize = AtomicUsize::new(0);
         let dir = ACCOUNT_DIR.fetch_add(1, Ordering::Relaxed);
-        format!("accountsdb/{}", dir.to_string())
+        format!("{}/{}", ACCOUNTSDB_DIR, dir.to_string())
     }
 
     fn make_default_paths() -> String {
-        let mut paths = Self::make_new_dir();
-        for _ in 1..NUM_ACCOUNT_DIRS {
-            paths.push_str(",");
+        let mut paths = "".to_string();
+        for index in 0..NUM_ACCOUNT_DIRS {
+            if index > 0 {
+                paths.push_str(",");
+            }
             paths.push_str(&Self::make_new_dir());
         }
         paths
     }
 
-    pub fn new(in_paths: &str) -> Self {
+    pub fn new(fork: Fork, in_paths: &str) -> Self {
         let paths = if !in_paths.is_empty() {
             in_paths.to_string()
         } else {
             Self::make_default_paths()
         };
-        let accounts_db = AccountsDB::default();
-        accounts_db.add_storage(&paths);
+        let accounts_db = AccountsDB::new(fork, &paths);
+        accounts_db.add_fork(fork, None);
         Accounts {
             accounts_db,
-            account_locks: Mutex::new(HashSet::new()),
+            account_locks: Mutex::new(HashMap::new()),
             paths,
         }
     }
 
+    pub fn new_from_parent(&self, fork: Fork, parent: Fork) {
+        self.accounts_db.add_fork(fork, Some(parent));
+    }
+
     /// Slow because lock is held for 1 operation insted of many
     pub fn load_slow(&self, fork: Fork, pubkey: &Pubkey) -> Option<Account> {
-        self.accounts_db.load(fork, pubkey)
+        self.accounts_db.load(fork, pubkey, true)
+    }
+
+    /// Slow because lock is held for 1 operation insted of many
+    pub fn load_slow_no_parent(&self, fork: Fork, pubkey: &Pubkey) -> Option<Account> {
+        self.accounts_db.load(fork, pubkey, false)
     }
 
     /// Slow because lock is held for 1 operation insted of many
@@ -637,29 +694,41 @@ impl Accounts {
     }
 
     fn lock_account(
-        account_locks: &mut HashSet<Pubkey>,
+        fork: Fork,
+        account_locks: &mut HashMap<Fork, HashSet<Pubkey>>,
         keys: &[Pubkey],
         error_counters: &mut ErrorCounters,
     ) -> Result<()> {
         // Copy all the accounts
+        let locks = account_locks.entry(fork).or_insert(HashSet::new());
         for k in keys {
-            if account_locks.contains(k) {
+            if locks.contains(k) {
                 error_counters.account_in_use += 1;
                 return Err(BankError::AccountInUse);
             }
         }
         for k in keys {
-            account_locks.insert(*k);
+            locks.insert(*k);
         }
         Ok(())
     }
 
-    fn unlock_account(tx: &Transaction, result: &Result<()>, account_locks: &mut HashSet<Pubkey>) {
+    fn unlock_account(
+        fork: Fork,
+        tx: &Transaction,
+        result: &Result<()>,
+        account_locks: &mut HashMap<Fork, HashSet<Pubkey>>,
+    ) {
         match result {
             Err(BankError::AccountInUse) => (),
             _ => {
-                for k in &tx.account_keys {
-                    account_locks.remove(k);
+                if let Some(locks) = account_locks.get_mut(&fork) {
+                    for k in &tx.account_keys {
+                        locks.remove(k);
+                    }
+                    if locks.is_empty() {
+                        account_locks.remove(&fork);
+                    }
                 }
             }
         }
@@ -672,12 +741,19 @@ impl Accounts {
     /// This function will prevent multiple threads from modifying the same account state at the
     /// same time
     #[must_use]
-    pub fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<()>> {
+    pub fn lock_accounts(&self, fork: Fork, txs: &[Transaction]) -> Vec<Result<()>> {
         let mut account_locks = self.account_locks.lock().unwrap();
         let mut error_counters = ErrorCounters::default();
         let rv = txs
             .iter()
-            .map(|tx| Self::lock_account(&mut account_locks, &tx.account_keys, &mut error_counters))
+            .map(|tx| {
+                Self::lock_account(
+                    fork,
+                    &mut account_locks,
+                    &tx.account_keys,
+                    &mut error_counters,
+                )
+            })
             .collect();
         if error_counters.account_in_use != 0 {
             inc_new_counter_info!(
@@ -689,12 +765,12 @@ impl Accounts {
     }
 
     /// Once accounts are unlocked, new transactions that modify that state can enter the pipeline
-    pub fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
+    pub fn unlock_accounts(&self, fork: Fork, txs: &[Transaction], results: &[Result<()>]) {
         let mut account_locks = self.account_locks.lock().unwrap();
         debug!("bank unlock accounts");
         txs.iter()
             .zip(results.iter())
-            .for_each(|(tx, result)| Self::unlock_account(tx, result, &mut account_locks));
+            .for_each(|(tx, result)| Self::unlock_account(fork, tx, result, &mut account_locks));
     }
 
     pub fn has_accounts(&self, fork: Fork) -> bool {
@@ -736,21 +812,10 @@ impl Accounts {
     }
 
     /// accounts starts with an empty data structure for every child/fork
-    ///   this merges all the parents/checkpoints
-    pub fn merge_parents<U>(&self, parents: &[U])
-    where
-        U: std::ops::Deref<Target = Self>,
-    {
-        assert!(self.account_locks.lock().unwrap().is_empty());
-
-        /*
-        let dbs: Vec<_> = parents
-            .iter()
-            .map(|obj| obj.accounts_db.read().unwrap())
-            .collect();
-
-        self.accounts_db.write().unwrap().merge_parents(&dbs);
-        */
+    /// this merges all the parents/checkpoints
+    pub fn merge_parents(&self, fork: Fork) {
+        assert!(!self.account_locks.lock().unwrap().contains_key(&fork));
+        self.accounts_db.merge_parents(fork);
     }
 }
 
@@ -770,16 +835,15 @@ mod tests {
     #[test]
     fn test_purge() {
         let paths = "purge".to_string();
-        let db = AccountsDB::default();
-        db.add_storage(&paths);
+        let db = AccountsDB::new(0, &paths);
         let key = Pubkey::default();
         let account = Account::new(0, 0, Pubkey::default());
         // accounts are deleted when their token value is 0 and purge is true
         db.store(0, false, &key, &account);
-        assert_eq!(db.load(0, &key), Some(account.clone()));
+        assert_eq!(db.load(0, &key, true), Some(account.clone()));
         // purge should be set to true for the root checkpoint
         db.store(0, true, &key, &account);
-        assert_eq!(db.load(0, &key), None);
+        assert_eq!(db.load(0, &key, true), None);
         cleanup_dirs(&paths);
     }
 
@@ -788,7 +852,7 @@ mod tests {
         ka: &Vec<(Pubkey, Account)>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
-        let accounts = Accounts::new("");
+        let accounts = Accounts::new(0, "");
         for ka in ka.iter() {
             accounts.store_slow(0, true, &ka.0, &ka.1);
         }
@@ -1169,21 +1233,23 @@ mod tests {
 
     #[test]
     fn test_accounts_merge_parents() {
-        let db0 = AccountsDB::default();
+        let paths = "merge".to_string();
+        let db0 = AccountsDB::new(0, &paths);
         let key = Pubkey::default();
         let account = Account::new(1, 0, key);
 
         // store value 1 in the "root", i.e. db zero
         db0.store(0, true, &key, &account);
 
+        db0.add_fork(1, Some(0));
         // store value 0 in the child, but don't purge (see purge test above)
-        let mut db1 = AccountsDB::default();
-        db1.store(0, false, &key, &Account::new(0, 0, key));
+        db0.store(1, false, &key, &Account::new(0, 0, key));
 
         // merge, which should whack key's account
-        db1.merge_parents(&[&db0]);
+        db0.merge_parents(1);
 
-        assert_eq!(db1.load(0, &key), None);
+        assert_eq!(db0.load(1, &key, true), None);
+        cleanup_dirs(&paths);
     }
 
     fn create_account(
@@ -1202,7 +1268,7 @@ mod tests {
                 default_account.owner = vote_program::id();
                 nvote -= 1;
             }
-            assert!(accounts.load(0, &pubkey).is_none());
+            assert!(accounts.load(0, &pubkey, true).is_none());
             accounts.store(0, true, &pubkey, &default_account);
         }
     }
@@ -1210,11 +1276,11 @@ mod tests {
     fn update_accounts(accounts: &AccountsDB, pubkeys: Vec<Pubkey>, range: usize) {
         for _ in 1..1000 {
             let idx = thread_rng().gen_range(0, range);
-            if let Some(mut account) = accounts.load(0, &pubkeys[idx]) {
+            if let Some(mut account) = accounts.load(0, &pubkeys[idx], true) {
                 account.tokens = account.tokens + 1;
                 accounts.store(0, true, &pubkeys[idx], &account);
                 if account.tokens == 0 {
-                    assert!(accounts.load(0, &pubkeys[idx]).is_none());
+                    assert!(accounts.load(0, &pubkeys[idx], true).is_none());
                 } else {
                     let mut default_account = Account::default();
                     default_account.tokens = account.tokens;
@@ -1245,11 +1311,10 @@ mod tests {
     #[test]
     fn test_account_one() {
         let paths = "one".to_string();
-        let accounts = AccountsDB::default();
-        accounts.add_storage(&paths);
+        let accounts = AccountsDB::new(0, &paths);
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 1, 0);
-        let account = accounts.load(0, &pubkeys[0]).unwrap();
+        let account = accounts.load(0, &pubkeys[0], true).unwrap();
         let mut default_account = Account::default();
         default_account.tokens = 1;
         assert_eq!(compare_account(&default_account, &account), true);
@@ -1259,13 +1324,12 @@ mod tests {
     #[test]
     fn test_account_many() {
         let paths = "many0,many1".to_string();
-        let accounts = AccountsDB::default();
-        accounts.add_storage(&paths);
+        let accounts = AccountsDB::new(0, &paths);
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 100, 0);
         for _ in 1..100 {
             let idx = thread_rng().gen_range(0, 99);
-            let account = accounts.load(0, &pubkeys[idx]).unwrap();
+            let account = accounts.load(0, &pubkeys[idx], true).unwrap();
             let mut default_account = Account::default();
             default_account.tokens = (idx + 1) as u64;
             assert_eq!(compare_account(&default_account, &account), true);
@@ -1276,8 +1340,7 @@ mod tests {
     #[test]
     fn test_account_update() {
         let paths = "update0".to_string();
-        let accounts = AccountsDB::default();
-        accounts.add_storage(&paths);
+        let accounts = AccountsDB::new(0, &paths);
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 100, 0);
         update_accounts(&accounts, pubkeys, 99);
@@ -1296,8 +1359,7 @@ mod tests {
     #[test]
     fn test_account_grow() {
         let paths = "grow0".to_string();
-        let accounts = AccountsDB::default();
-        accounts.add_storage(&paths);
+        let accounts = AccountsDB::new(0, &paths);
         let count = [0, 1];
         let status = [
             AccountStorageStatus::StorageAvailable,
@@ -1324,8 +1386,8 @@ mod tests {
             assert_eq!(stores[1].count.load(Ordering::Relaxed), 1);
             assert_eq!(stores[1].get_status(), status[0]);
         }
-        assert_eq!(accounts.load(0, &pubkey1).unwrap(), account1);
-        assert_eq!(accounts.load(0, &pubkey2).unwrap(), account2);
+        assert_eq!(accounts.load(0, &pubkey1, true).unwrap(), account1);
+        assert_eq!(accounts.load(0, &pubkey2, true).unwrap(), account2);
 
         for i in 0..25 {
             let index = i % 2;
@@ -1340,8 +1402,8 @@ mod tests {
                 assert_eq!(stores[2].count.load(Ordering::Relaxed), count[index ^ 1]);
                 assert_eq!(stores[2].get_status(), status[0]);
             }
-            assert_eq!(accounts.load(0, &pubkey1).unwrap(), account1);
-            assert_eq!(accounts.load(0, &pubkey2).unwrap(), account2);
+            assert_eq!(accounts.load(0, &pubkey1, true).unwrap(), account1);
+            assert_eq!(accounts.load(0, &pubkey2, true).unwrap(), account2);
         }
         cleanup_dirs(&paths);
     }
@@ -1349,8 +1411,7 @@ mod tests {
     #[test]
     fn test_account_vote() {
         let paths = "vote0".to_string();
-        let accounts = AccountsDB::default();
-        accounts.add_storage(&paths);
+        let accounts = AccountsDB::new(0, &paths);
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&accounts, &mut pubkeys, 100, 6);
         let accounts = accounts.get_vote_accounts(0);

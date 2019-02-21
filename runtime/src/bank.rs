@@ -29,6 +29,7 @@ use solana_sdk::token_program;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, VoteState};
 use std::result;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
@@ -103,7 +104,7 @@ pub struct Bank {
     // A number of slots before slot_index 0. Used to calculate finalized staked nodes.
     stakers_slot_offset: u64,
 
-    id: u64,
+    pub id: u64,
 }
 
 impl Bank {
@@ -113,7 +114,7 @@ impl Bank {
 
     pub fn new_with_paths(genesis_block: &GenesisBlock, paths: &str) -> Self {
         let mut bank = Self::default();
-        bank.accounts = Some(Arc::new(Accounts::new(&paths)));
+        bank.accounts = Some(Arc::new(Accounts::new(bank.id, &paths)));
         bank.process_genesis_block(genesis_block);
         bank.add_builtin_programs();
         bank
@@ -121,6 +122,7 @@ impl Bank {
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
     pub fn new_from_parent(parent: &Arc<Bank>) -> Self {
+        static BANK_ID: AtomicUsize = AtomicUsize::new(1);
         let mut bank = Self::default();
         bank.last_id_queue = RwLock::new(parent.last_id_queue.read().unwrap().clone());
         bank.ticks_per_slot = parent.ticks_per_slot;
@@ -132,8 +134,9 @@ impl Bank {
             *parent.hash.write().unwrap() = parent.hash_internal_state();
         }
 
+        bank.id = BANK_ID.fetch_add(1, Ordering::Relaxed) as u64;
         bank.accounts = Some(parent.accounts());
-        bank.id = format!("{:p}", &bank.id).parse().unwrap();
+        bank.accounts().new_from_parent(bank.id, parent.id);
         bank
     }
 
@@ -143,8 +146,7 @@ impl Bank {
         let parents = self.parents();
         self.parent = None;
 
-        let parent_accounts: Vec<_> = parents.iter().map(|b| b.accounts()).collect();
-        self.accounts().merge_parents(&parent_accounts);
+        self.accounts().merge_parents(self.id);
 
         let parent_caches: Vec<_> = parents
             .iter()
@@ -299,11 +301,11 @@ impl Bank {
     }
 
     pub fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<()>> {
-        self.accounts().lock_accounts(txs)
+        self.accounts().lock_accounts(self.id, txs)
     }
 
     pub fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
-        self.accounts().unlock_accounts(txs, results)
+        self.accounts().unlock_accounts(self.id, txs, results)
     }
 
     fn load_accounts(
@@ -420,7 +422,8 @@ impl Bank {
             inc_new_counter_info!("bank-process_transactions-error_count", err_count);
         }
 
-        self.accounts().increment_transaction_count(self.id, tx_count);
+        self.accounts()
+            .increment_transaction_count(self.id, tx_count);
 
         inc_new_counter_info!("bank-process_transactions-txs", tx_count);
         if 0 != error_counters.last_id_not_found {
@@ -586,7 +589,8 @@ impl Bank {
     pub fn deposit(&self, pubkey: &Pubkey, tokens: u64) {
         let mut account = self.get_account(pubkey).unwrap_or_default();
         account.tokens += tokens;
-        self.accounts().store_slow(self.id, self.is_root(), pubkey, &account);
+        self.accounts()
+            .store_slow(self.id, self.is_root(), pubkey, &account);
     }
 
     fn accounts(&self) -> Arc<Accounts> {
@@ -602,7 +606,7 @@ impl Bank {
     }
 
     pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<Account> {
-        self.accounts().load_slow(self.id, pubkey)
+        self.accounts().load_slow_no_parent(self.id, pubkey)
     }
 
     pub fn transaction_count(&self) -> u64 {
