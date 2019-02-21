@@ -100,7 +100,7 @@ pub struct Fullnode {
     rpc_service: Option<JsonRpcService>,
     rpc_pubsub_service: Option<PubSubService>,
     gossip_service: GossipService,
-    bank: Arc<Bank>,
+    bank_forks: BankForks,
     sigverify_disabled: bool,
     tpu_sockets: Vec<UdpSocket>,
     broadcast_socket: UdpSocket,
@@ -283,7 +283,7 @@ impl Fullnode {
 
         let mut fullnode = Self {
             id,
-            bank,
+            bank_forks,
             sigverify_disabled: config.sigverify_disabled,
             gossip_service,
             rpc_service: Some(rpc_service),
@@ -298,6 +298,7 @@ impl Fullnode {
         };
 
         fullnode.rotate(
+            &bank,
             scheduled_leader,
             max_tick_height,
             blob_index,
@@ -307,9 +308,9 @@ impl Fullnode {
         fullnode
     }
 
-    fn get_next_leader(&self, tick_height: u64) -> (Pubkey, u64) {
+    fn get_next_leader(&self, bank: &Arc<Bank>, tick_height: u64) -> (Pubkey, u64) {
         loop {
-            let bank_tick_height = self.bank.tick_height();
+            let bank_tick_height = bank.tick_height();
             if bank_tick_height >= tick_height {
                 break;
             }
@@ -329,7 +330,7 @@ impl Fullnode {
             assert_eq!(leader_scheduler.num_ticks_left_in_slot(tick_height), 0);
             let first_tick_of_next_slot = tick_height + 1;
 
-            leader_scheduler.update_tick_height(first_tick_of_next_slot, &self.bank);
+            leader_scheduler.update_tick_height(first_tick_of_next_slot, bank);
             let slot = leader_scheduler.tick_height_to_slot(first_tick_of_next_slot);
             (
                 leader_scheduler.get_leader_for_slot(slot).unwrap(),
@@ -350,6 +351,7 @@ impl Fullnode {
 
     fn rotate(
         &mut self,
+        bank: &Arc<Bank>,
         next_leader: Pubkey,
         max_tick_height: u64,
         blob_index: u64,
@@ -368,7 +370,7 @@ impl Fullnode {
                 }
                 None => FullnodeReturnType::LeaderToLeaderRotation, // value doesn't matter here...
             };
-            let tpu_bank = Arc::new(Bank::new_from_parent(&self.bank));
+            let tpu_bank = Arc::new(Bank::new_from_parent(bank));
             self.node_services.tpu.switch_to_leader(
                 &tpu_bank,
                 PohServiceConfig::default(),
@@ -420,9 +422,10 @@ impl Fullnode {
             match self.rotation_receiver.recv_timeout(timeout) {
                 Ok(tick_height) => {
                     trace!("{:?}: rotate at tick_height={}", self.id, tick_height);
-                    let (next_leader, max_tick_height) = self.get_next_leader(tick_height);
+                    let bank = self.bank_forks.working_bank();
+                    let (next_leader, max_tick_height) = self.get_next_leader(&bank, tick_height);
                     let transition =
-                        self.rotate(next_leader, max_tick_height, 0, &self.bank.last_id());
+                        self.rotate(&bank, next_leader, max_tick_height, 0, &bank.last_id());
                     debug!("role transition complete: {:?}", transition);
                     if let Some(ref rotation_notifier) = rotation_notifier {
                         rotation_notifier
