@@ -48,7 +48,6 @@ pub struct Tvu {
     entry_stream_stage: Option<EntryStreamStage>,
     storage_stage: StorageStage,
     exit: Arc<AtomicBool>,
-    last_entry_id: Arc<RwLock<Hash>>,
 }
 
 pub struct Sockets {
@@ -122,8 +121,6 @@ impl Tvu {
             exit.clone(),
         );
 
-        let l_last_entry_id = Arc::new(RwLock::new(last_entry_id));
-
         let (replay_stage, mut previous_receiver) = ReplayStage::new(
             keypair.pubkey(),
             voting_keypair,
@@ -132,7 +129,7 @@ impl Tvu {
             cluster_info.clone(),
             exit.clone(),
             blob_index,
-            l_last_entry_id.clone(),
+            last_entry_id,
             to_leader_sender,
             ledger_signal_receiver,
             &leader_scheduler,
@@ -171,12 +168,7 @@ impl Tvu {
             entry_stream_stage,
             storage_stage,
             exit,
-            last_entry_id: l_last_entry_id,
         }
-    }
-
-    pub fn get_state(&self) -> Hash {
-        *self.last_entry_id.read().unwrap()
     }
 
     pub fn is_exited(&self) -> bool {
