@@ -2187,6 +2187,7 @@ dependencies = [
  "solana-bpfloader 0.12.0",
  "solana-logger 0.12.0",
  "solana-native-loader 0.12.0",
+ "solana-noop 0.12.0",
  "solana-runtime 0.12.0",
  "solana-sdk 0.12.0",
 ]
