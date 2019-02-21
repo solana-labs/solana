@@ -172,7 +172,7 @@ impl CrdsGossipPush {
         let need = Self::compute_need(self.num_active, self.active_set.len(), ratio);
         let mut new_items = HashMap::new();
 
-        let options: Vec<_> = crds
+        let mut options: Vec<_> = crds
             .table
             .values()
             .filter(|v| v.value.contact_info().is_some())
@@ -190,10 +190,15 @@ impl CrdsGossipPush {
         if options.is_empty() {
             return;
         }
-        let index = WeightedIndex::new(options.iter().map(|weighted| weighted.0)).unwrap();
         while new_items.len() < need {
+            let index = WeightedIndex::new(options.iter().map(|weighted| weighted.0));
+            if index.is_err() {
+                break;
+            }
+            let index = index.unwrap();
             let index = index.sample(&mut rand::thread_rng());
             let item = options[index].1;
+            options.remove(index);
             if self.active_set.get(&item.id).is_some() {
                 continue;
             }
