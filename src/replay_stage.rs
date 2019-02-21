@@ -190,7 +190,7 @@ impl ReplayStage {
         cluster_info: Arc<RwLock<ClusterInfo>>,
         exit: Arc<AtomicBool>,
         mut current_blob_index: u64,
-        last_entry_id: Arc<RwLock<Hash>>,
+        last_entry_id: Hash,
         to_leader_sender: &TvuRotationSender,
         ledger_signal_receiver: Receiver<bool>,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
@@ -200,6 +200,7 @@ impl ReplayStage {
         let exit_ = exit.clone();
         let leader_scheduler_ = leader_scheduler.clone();
         let to_leader_sender = to_leader_sender.clone();
+        let last_entry_id = Arc::new(RwLock::new(last_entry_id));
         let subscriptions_ = subscriptions.clone();
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
@@ -465,7 +466,7 @@ mod test {
                 Arc::new(RwLock::new(cluster_info_me)),
                 exit.clone(),
                 meta.consumed,
-                Arc::new(RwLock::new(last_entry_id)),
+                last_entry_id,
                 &rotation_sender,
                 l_receiver,
                 &leader_scheduler,
@@ -569,7 +570,7 @@ mod test {
                 cluster_info_me.clone(),
                 exit.clone(),
                 entry_height,
-                Arc::new(RwLock::new(last_entry_id)),
+                last_entry_id,
                 &to_leader_sender,
                 l_receiver,
                 &leader_scheduler,
@@ -695,7 +696,7 @@ mod test {
                 cluster_info_me.clone(),
                 exit.clone(),
                 meta.consumed,
-                Arc::new(RwLock::new(last_entry_id)),
+                last_entry_id,
                 &rotation_tx,
                 l_receiver,
                 &leader_scheduler,
