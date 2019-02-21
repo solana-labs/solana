@@ -1,12 +1,12 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
+use crate::bank_forks::BankForks;
 use crate::cluster_info::ClusterInfo;
 use crate::rpc::*;
 use crate::service::Service;
 use crate::storage_stage::StorageState;
 use jsonrpc_core::MetaIoHandler;
 use jsonrpc_http_server::{hyper, AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
-use solana_runtime::bank::Bank;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -18,12 +18,12 @@ pub const RPC_PORT: u16 = 8899;
 pub struct JsonRpcService {
     thread_hdl: JoinHandle<()>,
     exit: Arc<AtomicBool>,
-    request_processor: Arc<RwLock<JsonRpcRequestProcessor>>,
+    pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>, // Used only by tests...
 }
 
 impl JsonRpcService {
     pub fn new(
-        bank: &Arc<Bank>,
+        bank_forks: &Arc<RwLock<BankForks>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         rpc_addr: SocketAddr,
         drone_addr: SocketAddr,
@@ -32,10 +32,9 @@ impl JsonRpcService {
         info!("rpc bound to {:?}", rpc_addr);
         let exit = Arc::new(AtomicBool::new(false));
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
-            bank.clone(),
+            bank_forks.clone(),
             storage_state,
         )));
-        request_processor.write().unwrap().bank = bank.clone();
         let request_processor_ = request_processor.clone();
 
         let info = cluster_info.clone();
@@ -76,10 +75,6 @@ impl JsonRpcService {
         }
     }
 
-    pub fn set_bank(&mut self, bank: &Arc<Bank>) {
-        self.request_processor.write().unwrap().bank = bank.clone();
-    }
-
     pub fn exit(&self) {
         self.exit.store(true, Ordering::Relaxed);
     }
@@ -102,6 +97,7 @@ impl Service for JsonRpcService {
 mod tests {
     use super::*;
     use crate::cluster_info::NodeInfo;
+    use solana_runtime::bank::Bank;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::KeypairUtil;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -109,7 +105,7 @@ mod tests {
     #[test]
     fn test_rpc_new() {
         let (genesis_block, alice) = GenesisBlock::new(10_000);
-        let bank = Bank::new(&genesis_block);
+        let bank_forks = BankForks::new(0, Bank::new(&genesis_block));
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default())));
         let rpc_addr = SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
@@ -120,7 +116,7 @@ mod tests {
             solana_netutil::find_available_port_in_range((10000, 65535)).unwrap(),
         );
         let rpc_service = JsonRpcService::new(
-            &Arc::new(bank),
+            &Arc::new(RwLock::new(bank_forks)),
             &cluster_info,
             rpc_addr,
             drone_addr,
