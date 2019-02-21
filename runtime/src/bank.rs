@@ -464,7 +464,7 @@ impl Bank {
             inc_new_counter_info!("bank-process_transactions-error_count", err_count);
         }
 
-        self.accounts().increment_transaction_count(tx_count);
+        self.accounts().increment_transaction_count(self.id, tx_count);
 
         inc_new_counter_info!("bank-process_transactions-txs", tx_count);
         if 0 != error_counters.last_id_not_found {
@@ -655,7 +655,7 @@ impl Bank {
     }
 
     pub fn transaction_count(&self) -> u64 {
-        self.accounts().transaction_count()
+        self.accounts().transaction_count(self.id)
     }
 
     pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
