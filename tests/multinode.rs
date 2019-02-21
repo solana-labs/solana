@@ -1788,7 +1788,9 @@ fn test_fullnode_rotate(
     */
 
     let blocktree_config = fullnode_config.ledger_config();
-    fullnode_config.leader_scheduler_config.active_window_length = std::u64::MAX;
+    fullnode_config
+        .leader_scheduler_config
+        .active_window_num_slots = std::u64::MAX;
 
     // Create the leader node information
     let leader_keypair = Arc::new(Keypair::new());
