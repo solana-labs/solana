@@ -1,4 +1,5 @@
 use bincode::serialized_size;
+use hashbrown::HashMap;
 use log::trace;
 use rayon::prelude::*;
 use solana::cluster_info::NodeInfo;
@@ -12,7 +13,6 @@ use solana_sdk::hash::hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::timestamp;
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 type Node = Arc<Mutex<CrdsGossip>>;
@@ -112,7 +112,9 @@ fn network_simulator(network: &mut Network) {
     // make sure there is someone in the active set
     let network_values: Vec<Node> = network.values().cloned().collect();
     network_values.par_iter().for_each(|node| {
-        node.lock().unwrap().refresh_push_active_set(None);
+        node.lock()
+            .unwrap()
+            .refresh_push_active_set(&HashMap::new());
     });
     let mut total_bytes = bytes_tx;
     for second in 1..num {
@@ -211,7 +213,9 @@ fn network_run_push(network: &mut Network, start: usize, end: usize) -> (usize, 
         }
         if now % CRDS_GOSSIP_PUSH_MSG_TIMEOUT_MS == 0 && now > 0 {
             network_values.par_iter().for_each(|node| {
-                node.lock().unwrap().refresh_push_active_set(None);
+                node.lock()
+                    .unwrap()
+                    .refresh_push_active_set(&HashMap::new());
             });
         }
         total = network_values
@@ -249,7 +253,12 @@ fn network_run_pull(
         let requests: Vec<_> = {
             network_values
                 .par_iter()
-                .filter_map(|from| from.lock().unwrap().new_pull_request(now, None).ok())
+                .filter_map(|from| {
+                    from.lock()
+                        .unwrap()
+                        .new_pull_request(now, &HashMap::new())
+                        .ok()
+                })
                 .collect()
         };
         let transfered: Vec<_> = requests
@@ -372,7 +381,7 @@ fn test_prune_errors() {
         .crds
         .insert(CrdsValue::ContactInfo(ci.clone()), 0)
         .unwrap();
-    crds_gossip.refresh_push_active_set(None);
+    crds_gossip.refresh_push_active_set(&HashMap::new());
     let now = timestamp();
     //incorrect dest
     let mut res = crds_gossip.process_prune_msg(
