@@ -88,10 +88,13 @@ impl ReplayStage {
         );
 
         let num_ticks = bank.tick_height();
-        let mut num_ticks_to_next_vote = leader_scheduler
-            .read()
-            .unwrap()
-            .num_ticks_left_in_slot(num_ticks);
+        let (mut num_ticks_to_next_vote, slot_height) = {
+            let rl = leader_scheduler.read().unwrap();
+            (
+                rl.num_ticks_left_in_slot(num_ticks),
+                rl.tick_height_to_slot(num_ticks),
+            )
+        };
 
         for (i, entry) in entries.iter().enumerate() {
             inc_new_counter_info!("replicate-stage_bank-tick", bank.tick_height() as usize);
@@ -138,12 +141,8 @@ impl ReplayStage {
                     }
                     if let Some(voting_keypair) = voting_keypair {
                         let keypair = voting_keypair.as_ref();
-                        let vote = VoteTransaction::new_vote(
-                            keypair,
-                            bank.tick_height(),
-                            bank.last_id(),
-                            0,
-                        );
+                        let vote =
+                            VoteTransaction::new_vote(keypair, slot_height, bank.last_id(), 0);
                         cluster_info.write().unwrap().push_vote(vote);
                     }
                 }
@@ -427,7 +426,7 @@ mod test {
             &my_keypair,
             &mint_keypair,
             100,
-            ticks_per_slot, // add a vote for tick_height = ticks_per_slot
+            1, // add a vote for tick_height = ticks_per_slot
             &last_entry_id,
             &last_id,
             num_ending_ticks,
@@ -578,7 +577,7 @@ mod test {
             );
 
             let keypair = voting_keypair.as_ref();
-            let vote = VoteTransaction::new_vote(keypair, bank.tick_height(), bank.last_id(), 0);
+            let vote = VoteTransaction::new_vote(keypair, 0, bank.last_id(), 0);
             cluster_info_me.write().unwrap().push_vote(vote);
 
             info!("Send ReplayStage an entry, should see it on the ledger writer receiver");
@@ -704,7 +703,7 @@ mod test {
             );
 
             let keypair = voting_keypair.as_ref();
-            let vote = VoteTransaction::new_vote(keypair, bank.tick_height(), bank.last_id(), 0);
+            let vote = VoteTransaction::new_vote(keypair, 0, bank.last_id(), 0);
             cluster_info_me.write().unwrap().push_vote(vote);
 
             // Send enough ticks to trigger leader rotation

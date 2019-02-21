@@ -39,6 +39,10 @@ impl LeaderSchedule {
             bank.slots_per_epoch(),
         )
     }
+
+    pub fn tick_height_to_slot(tick_height: u64, ticks_per_slot: u64) -> u64 {
+        tick_height / ticks_per_slot
+    }
 }
 
 impl Index<usize> for LeaderSchedule {

@@ -929,7 +929,7 @@ fn test_leader_to_validator_transition() {
         // Setup window length to exclude the genesis bootstrap leader vote at tick height 0, so
         // that when the leader schedule is recomputed for epoch 1 only the validator vote at tick
         // height 1 will be considered.
-        ticks_per_slot,
+        1,
     );
     let blocktree_config = fullnode_config.ledger_config();
 
@@ -957,7 +957,7 @@ fn test_leader_to_validator_transition() {
         &validator_keypair,
         &mint_keypair,
         100,
-        ticks_per_slot,
+        1,
         &last_entry_id,
         &last_id,
         0,
@@ -1040,7 +1040,7 @@ fn test_leader_validator_basic() {
     fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
         ticks_per_slot,
         1, // 1 slot per epoch
-        ticks_per_slot,
+        1,
     );
     let blocktree_config = fullnode_config.ledger_config();
 
@@ -1066,7 +1066,7 @@ fn test_leader_validator_basic() {
         &validator_keypair,
         &mint_keypair,
         100,
-        1,
+        0,
         &last_entry_id,
         &last_id,
         0,
@@ -1182,10 +1182,9 @@ fn test_dropped_handoff_recovery() {
     // Create the common leader scheduling configuration
     let slots_per_epoch = (N + 1) as u64;
     let ticks_per_slot = 5;
-    let ticks_per_epoch = slots_per_epoch * ticks_per_slot;
     let mut fullnode_config = FullnodeConfig::default();
     fullnode_config.leader_scheduler_config =
-        LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, ticks_per_epoch);
+        LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, slots_per_epoch);
     let blocktree_config = fullnode_config.ledger_config();
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
@@ -1221,7 +1220,7 @@ fn test_dropped_handoff_recovery() {
         &next_leader_keypair,
         &mint_keypair,
         100,
-        ticks_per_slot,
+        1,
         &last_entry_id,
         &last_id,
         0,
@@ -1353,10 +1352,9 @@ fn test_full_leader_validator_network() {
     // Create the common leader scheduling configuration
     let slots_per_epoch = (N + 1) as u64;
     let ticks_per_slot = 5;
-    let ticks_per_epoch = slots_per_epoch * ticks_per_slot;
     let mut fullnode_config = FullnodeConfig::default();
     fullnode_config.leader_scheduler_config =
-        LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, ticks_per_epoch * 3);
+        LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, slots_per_epoch * 3);
 
     // Create the bootstrap leader node information
     let bootstrap_leader_keypair = Arc::new(Keypair::new());
@@ -1403,7 +1401,7 @@ fn test_full_leader_validator_network() {
             node_keypair,
             &mint_keypair,
             100,
-            1,
+            0,
             &last_entry_id,
             &last_id,
             0,
@@ -1790,9 +1788,7 @@ fn test_fullnode_rotate(
     */
 
     let blocktree_config = fullnode_config.ledger_config();
-    fullnode_config
-        .leader_scheduler_config
-        .active_window_tick_length = std::u64::MAX;
+    fullnode_config.leader_scheduler_config.active_window_length = std::u64::MAX;
 
     // Create the leader node information
     let leader_keypair = Arc::new(Keypair::new());
@@ -1839,7 +1835,7 @@ fn test_fullnode_rotate(
             &validator_keypair,
             &mint_keypair,
             100,
-            1,
+            0,
             &last_entry_id,
             &last_id,
             0,
