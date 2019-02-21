@@ -59,7 +59,6 @@ impl BankingStage {
             max_tick_height,
         };
 
-        let ticks_per_slot = max_tick_height - bank.tick_height();
         let poh_recorder = PohRecorder::new(bank.tick_height(), *last_entry_id);
 
         // Single thread to generate entries from many banks.
@@ -75,12 +74,8 @@ impl BankingStage {
             .expect("failed to send leader to poh_service");
 
         // Single thread to compute confirmation
-        let leader_confirmation_service = LeaderConfirmationService::new(
-            bank.clone(),
-            leader_id,
-            poh_exit.clone(),
-            ticks_per_slot,
-        );
+        let leader_confirmation_service =
+            LeaderConfirmationService::new(bank.clone(), leader_id, poh_exit.clone());
 
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<UnprocessedPackets>> = (0..Self::num_threads())

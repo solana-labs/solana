@@ -30,7 +30,6 @@ impl LeaderConfirmationService {
         bank: &Arc<Bank>,
         leader_id: Pubkey,
         last_valid_validator_timestamp: u64,
-        ticks_per_slot: u64,
     ) -> result::Result<u64, ConfirmationError> {
         let mut total_stake = 0;
 
@@ -49,7 +48,12 @@ impl LeaderConfirmationService {
                     .votes
                     .back()
                     // A vote for a slot is like a vote for the last tick in that slot
-                    .map(|vote| ((vote.slot_height + 1) * ticks_per_slot - 1, validator_stake))
+                    .map(|vote| {
+                        (
+                            (vote.slot_height + 1) * bank.ticks_per_slot() - 1,
+                            validator_stake,
+                        )
+                    })
             })
             .collect();
 
@@ -80,14 +84,10 @@ impl LeaderConfirmationService {
         bank: &Arc<Bank>,
         leader_id: Pubkey,
         last_valid_validator_timestamp: &mut u64,
-        ticks_per_slot: u64,
     ) {
-        if let Ok(super_majority_timestamp) = Self::get_last_supermajority_timestamp(
-            bank,
-            leader_id,
-            *last_valid_validator_timestamp,
-            ticks_per_slot,
-        ) {
+        if let Ok(super_majority_timestamp) =
+            Self::get_last_supermajority_timestamp(bank, leader_id, *last_valid_validator_timestamp)
+        {
             let now = timing::timestamp();
             let confirmation_ms = now - super_majority_timestamp;
 
@@ -105,12 +105,7 @@ impl LeaderConfirmationService {
     }
 
     /// Create a new LeaderConfirmationService for computing confirmation.
-    pub fn new(
-        bank: Arc<Bank>,
-        leader_id: Pubkey,
-        exit: Arc<AtomicBool>,
-        ticks_per_slot: u64,
-    ) -> Self {
+    pub fn new(bank: Arc<Bank>, leader_id: Pubkey, exit: Arc<AtomicBool>) -> Self {
         let thread_hdl = Builder::new()
             .name("solana-leader-confirmation-service".to_string())
             .spawn(move || {
@@ -123,7 +118,6 @@ impl LeaderConfirmationService {
                         &bank,
                         leader_id,
                         &mut last_valid_validator_timestamp,
-                        ticks_per_slot,
                     );
                     sleep(Duration::from_millis(COMPUTE_CONFIRMATION_MS));
                 }
@@ -153,8 +147,6 @@ pub mod tests {
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::vote_transaction::VoteTransaction;
     use std::sync::Arc;
-    use std::thread::sleep;
-    use std::time::Duration;
 
     #[test]
     fn test_compute_confirmation() {
@@ -163,12 +155,10 @@ pub mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(1234);
         let bank = Arc::new(Bank::new(&genesis_block));
         // generate 10 validators, but only vote for the first 6 validators
-        let ids: Vec<_> = (0..10)
+        let ids: Vec<_> = (0..10 * bank.ticks_per_slot())
             .map(|i| {
                 let last_id = hash(&serialize(&i).unwrap()); // Unique hash
                 bank.register_tick(&last_id);
-                // sleep to get a different timestamp in the bank
-                sleep(Duration::from_millis(1));
                 last_id
             })
             .collect();
@@ -201,7 +191,6 @@ pub mod tests {
             &bank,
             genesis_block.bootstrap_leader_id,
             &mut last_confirmation_time,
-            1,
         );
 
         // Get another validator to vote, so we now have 2/3 consensus
@@ -213,7 +202,6 @@ pub mod tests {
             &bank,
             genesis_block.bootstrap_leader_id,
             &mut last_confirmation_time,
-            1,
         );
         assert!(last_confirmation_time > 0);
     }

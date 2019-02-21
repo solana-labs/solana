@@ -605,8 +605,7 @@ mod tests {
         // epoch, check that the same leader knows to shut down and restart as a leader again.
         let ticks_per_slot = 5;
         let slots_per_epoch = 2;
-        let ticks_per_epoch = slots_per_epoch * ticks_per_slot;
-        let active_window_length = 10 * ticks_per_epoch;
+        let active_window_length = 10;
         let leader_scheduler_config =
             LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_length);
 
@@ -660,11 +659,8 @@ mod tests {
         let mut fullnode_config = FullnodeConfig::default();
         let ticks_per_slot = 16;
         let slots_per_epoch = 2;
-        fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
-            ticks_per_slot,
-            slots_per_epoch,
-            ticks_per_slot * slots_per_epoch,
-        );
+        fullnode_config.leader_scheduler_config =
+            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, slots_per_epoch);
         let blocktree_config = &fullnode_config.ledger_config();
 
         // Create the leader and validator nodes
@@ -675,9 +671,9 @@ mod tests {
                 &bootstrap_leader_keypair,
                 &validator_keypair,
                 0,
-                // Generate enough ticks for two epochs to flush the bootstrap_leader's vote at
+                // Generate enough ticks for an epochs to flush the bootstrap_leader's vote at
                 // tick_height = 0 from the leader scheduler's active window
-                ticks_per_slot * slots_per_epoch * 2,
+                ticks_per_slot * slots_per_epoch,
                 "test_wrong_role_transition",
                 &blocktree_config,
             );
@@ -741,11 +737,8 @@ mod tests {
         let leader_keypair = Arc::new(Keypair::new());
         let validator_keypair = Arc::new(Keypair::new());
         let mut fullnode_config = FullnodeConfig::default();
-        fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
-            ticks_per_slot,
-            slots_per_epoch,
-            ticks_per_slot * slots_per_epoch,
-        );
+        fullnode_config.leader_scheduler_config =
+            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, slots_per_epoch);
         let (leader_node, validator_node, validator_ledger_path, ledger_initial_len, last_id) =
             setup_leader_validator(
                 &leader_keypair,
@@ -835,6 +828,8 @@ mod tests {
         test_name: &str,
         blocktree_config: &BlocktreeConfig,
     ) -> (Node, Node, String, u64, Hash) {
+        info!("validator: {}", validator_keypair.pubkey());
+        info!("leader: {}", leader_keypair.pubkey());
         // Make a leader identity
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
@@ -857,7 +852,7 @@ mod tests {
             validator_keypair,
             &mint_keypair,
             10,
-            1,
+            0,
             &last_entry_id,
             &last_id,
             num_ending_ticks,

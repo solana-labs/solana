@@ -1,9 +1,10 @@
+use crate::leader_schedule::LeaderSchedule;
 use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT};
+use solana_sdk::timing::DEFAULT_SLOTS_PER_EPOCH;
 use solana_sdk::vote_program::VoteState;
 
-pub const DEFAULT_ACTIVE_WINDOW_TICK_LENGTH: u64 = DEFAULT_SLOTS_PER_EPOCH * DEFAULT_TICKS_PER_SLOT;
+pub const DEFAULT_ACTIVE_WINDOW_NUM_SLOTS: u64 = DEFAULT_SLOTS_PER_EPOCH;
 
 // Return true of the latest vote is between the lower and upper bounds (inclusive)
 fn is_active_staker(vote_state: &VoteState, lower_bound: u64, upper_bound: u64) -> bool {
@@ -56,7 +57,11 @@ impl ActiveStakers {
     }
 
     pub fn new(bank: &Bank) -> Self {
-        Self::new_with_bounds(bank, DEFAULT_ACTIVE_WINDOW_TICK_LENGTH, bank.tick_height())
+        Self::new_with_bounds(
+            bank,
+            DEFAULT_ACTIVE_WINDOW_NUM_SLOTS,
+            LeaderSchedule::tick_height_to_slot(bank.tick_height(), bank.ticks_per_slot()),
+        )
     }
 
     pub fn sorted_stakes(&self) -> Vec<(Pubkey, u64)> {
