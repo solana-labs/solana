@@ -129,11 +129,11 @@ fn main() {
     let matches = App::new("solana-fullnode")
         .version(crate_version!())
         .arg(
-            Arg::with_name("entry_stream")
-                .long("entry-stream")
+            Arg::with_name("blockstream")
+                .long("blockstream")
                 .takes_value(true)
                 .value_name("UNIX DOMAIN SOCKET")
-                .help("Open entry stream at this unix domain socket location")
+                .help("Open blockstream at this unix domain socket location")
         )
         .arg(
             Arg::with_name("identity")
@@ -238,7 +238,7 @@ fn main() {
         )
     };
     let init_complete_file = matches.value_of("init_complete_file");
-    fullnode_config.entry_stream = matches.value_of("entry_stream").map(|s| s.to_string());
+    fullnode_config.blockstream = matches.value_of("blockstream").map(|s| s.to_string());
 
     let keypair = Arc::new(keypair);
     let mut node = Node::new_with_external_ip(keypair.pubkey(), &gossip);

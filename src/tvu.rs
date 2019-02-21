@@ -14,9 +14,9 @@
 
 use crate::bank_forks::BankForks;
 use crate::blob_fetch_stage::BlobFetchStage;
+use crate::blockstream_service::BlockstreamService;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
-use crate::entry_stream_stage::EntryStreamStage;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
@@ -45,7 +45,7 @@ pub struct Tvu {
     fetch_stage: BlobFetchStage,
     retransmit_stage: RetransmitStage,
     replay_stage: ReplayStage,
-    entry_stream_stage: Option<EntryStreamStage>,
+    blockstream_service: Option<BlockstreamService>,
     storage_stage: StorageStage,
     exit: Arc<AtomicBool>,
 }
@@ -78,7 +78,7 @@ impl Tvu {
         storage_rotate_count: u64,
         to_leader_sender: &TvuRotationSender,
         storage_state: &StorageState,
-        entry_stream: Option<&String>,
+        blockstream: Option<&String>,
         ledger_signal_receiver: Receiver<bool>,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         subscriptions: &Arc<RpcSubscriptions>,
@@ -134,16 +134,16 @@ impl Tvu {
             subscriptions,
         );
 
-        let entry_stream_stage = if entry_stream.is_some() {
-            let (entry_stream_stage, entry_stream_receiver) = EntryStreamStage::new(
+        let blockstream_service = if blockstream.is_some() {
+            let (blockstream_service, blockstream_receiver) = BlockstreamService::new(
                 previous_receiver,
-                entry_stream.unwrap().to_string(),
+                blockstream.unwrap().to_string(),
                 bank.tick_height(),
                 leader_scheduler,
                 exit.clone(),
             );
-            previous_receiver = entry_stream_receiver;
-            Some(entry_stream_stage)
+            previous_receiver = blockstream_receiver;
+            Some(blockstream_service)
         } else {
             None
         };
@@ -163,7 +163,7 @@ impl Tvu {
             fetch_stage,
             retransmit_stage,
             replay_stage,
-            entry_stream_stage,
+            blockstream_service,
             storage_stage,
             exit,
         }
@@ -193,8 +193,8 @@ impl Service for Tvu {
         self.retransmit_stage.join()?;
         self.fetch_stage.join()?;
         self.storage_stage.join()?;
-        if self.entry_stream_stage.is_some() {
-            self.entry_stream_stage.unwrap().join()?;
+        if self.blockstream_service.is_some() {
+            self.blockstream_service.unwrap().join()?;
         }
         self.replay_stage.join()?;
         Ok(())

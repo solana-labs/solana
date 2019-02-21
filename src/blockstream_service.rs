@@ -1,13 +1,13 @@
-//! The `entry_stream_stage` implements optional streaming of entries using the
-//! `entry_stream` module, providing client services such as a block explorer with
+//! The `blockstream_service` implements optional streaming of entries and block metadata
+//! using the `blockstream` module, providing client services such as a block explorer with
 //! real-time access to entries.
 
-use crate::entry::{EntryReceiver, EntrySender};
 #[cfg(test)]
-use crate::entry_stream::MockEntryStream as EntryStream;
+use crate::blockstream::MockBlockstream as Blockstream;
 #[cfg(not(test))]
-use crate::entry_stream::SocketEntryStream as EntryStream;
-use crate::entry_stream::{EntryStreamBlock, EntryStreamHandler};
+use crate::blockstream::SocketBlockstream as Blockstream;
+use crate::blockstream::{BlockData, BlockstreamEvents};
+use crate::entry::{EntryReceiver, EntrySender};
 use crate::leader_scheduler::LeaderScheduler;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -17,32 +17,32 @@ use std::sync::{Arc, RwLock};
 use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 
-pub struct EntryStreamStage {
-    t_entry_stream: JoinHandle<()>,
+pub struct BlockstreamService {
+    t_blockstream: JoinHandle<()>,
 }
 
-impl EntryStreamStage {
+impl BlockstreamService {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         ledger_entry_receiver: EntryReceiver,
-        entry_stream_socket: String,
+        blockstream_socket: String,
         mut tick_height: u64,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         exit: Arc<AtomicBool>,
     ) -> (Self, EntryReceiver) {
-        let (entry_stream_sender, entry_stream_receiver) = channel();
-        let mut entry_stream = EntryStream::new(entry_stream_socket, leader_scheduler);
-        let t_entry_stream = Builder::new()
-            .name("solana-entry-stream".to_string())
+        let (blockstream_sender, blockstream_receiver) = channel();
+        let mut blockstream = Blockstream::new(blockstream_socket, leader_scheduler);
+        let t_blockstream = Builder::new()
+            .name("solana-blockstream".to_string())
             .spawn(move || loop {
                 if exit.load(Ordering::Relaxed) {
                     break;
                 }
                 if let Err(e) = Self::process_entries(
                     &ledger_entry_receiver,
-                    &entry_stream_sender,
+                    &blockstream_sender,
                     &mut tick_height,
-                    &mut entry_stream,
+                    &mut blockstream,
                 ) {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
@@ -52,17 +52,17 @@ impl EntryStreamStage {
                 }
             })
             .unwrap();
-        (Self { t_entry_stream }, entry_stream_receiver)
+        (Self { t_blockstream }, blockstream_receiver)
     }
     fn process_entries(
         ledger_entry_receiver: &EntryReceiver,
-        entry_stream_sender: &EntrySender,
+        blockstream_sender: &EntrySender,
         tick_height: &mut u64,
-        entry_stream: &mut EntryStream,
+        blockstream: &mut Blockstream,
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
         let entries = ledger_entry_receiver.recv_timeout(timeout)?;
-        let leader_scheduler = entry_stream.leader_scheduler.read().unwrap();
+        let leader_scheduler = blockstream.leader_scheduler.read().unwrap();
 
         for entry in &entries {
             if entry.is_tick() {
@@ -74,25 +74,25 @@ impl EntryStreamStage {
                 .map(|leader| leader.to_string())
                 .unwrap_or_else(|| "None".to_string());
 
-            if entry.is_tick() && entry_stream.queued_block.is_some() {
-                let queued_block = entry_stream.queued_block.as_ref();
+            if entry.is_tick() && blockstream.queued_block.is_some() {
+                let queued_block = blockstream.queued_block.as_ref();
                 let block_slot = queued_block.unwrap().slot;
                 let block_tick_height = queued_block.unwrap().tick_height;
                 let block_id = queued_block.unwrap().id;
-                entry_stream
+                blockstream
                     .emit_block_event(block_slot, block_tick_height, &leader_id, block_id)
                     .unwrap_or_else(|e| {
-                        debug!("Entry Stream error: {:?}, {:?}", e, entry_stream.output);
+                        debug!("Blockstream error: {:?}, {:?}", e, blockstream.output);
                     });
-                entry_stream.queued_block = None;
+                blockstream.queued_block = None;
             }
-            entry_stream
+            blockstream
                 .emit_entry_event(slot, *tick_height, &leader_id, &entry)
                 .unwrap_or_else(|e| {
-                    debug!("Entry Stream error: {:?}, {:?}", e, entry_stream.output);
+                    debug!("Blockstream error: {:?}, {:?}", e, blockstream.output);
                 });
             if 0 == leader_scheduler.num_ticks_left_in_slot(*tick_height) {
-                entry_stream.queued_block = Some(EntryStreamBlock {
+                blockstream.queued_block = Some(BlockData {
                     slot,
                     tick_height: *tick_height,
                     id: entry.id,
@@ -100,16 +100,16 @@ impl EntryStreamStage {
             }
         }
 
-        entry_stream_sender.send(entries)?;
+        blockstream_sender.send(entries)?;
         Ok(())
     }
 }
 
-impl Service for EntryStreamStage {
+impl Service for BlockstreamService {
     type JoinReturnType = ();
 
     fn join(self) -> thread::Result<()> {
-        self.t_entry_stream.join()
+        self.t_blockstream.join()
     }
 }
 
@@ -127,7 +127,7 @@ mod test {
     use solana_sdk::system_transaction::SystemTransaction;
 
     #[test]
-    fn test_entry_stream_stage_process_entries() {
+    fn test_blockstream_stage_process_entries() {
         // Set up the bank and leader_scheduler
         let ticks_per_slot = 5;
         let starting_tick_height = 1;
@@ -138,13 +138,12 @@ mod test {
         let leader_scheduler = LeaderScheduler::new_with_bank(&leader_scheduler_config, &bank);
         let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
 
-        // Set up entry stream
-        let mut entry_stream =
-            EntryStream::new("test_stream".to_string(), leader_scheduler.clone());
+        // Set up blockstream
+        let mut blockstream = Blockstream::new("test_stream".to_string(), leader_scheduler.clone());
 
-        // Set up dummy channels to host an EntryStreamStage
+        // Set up dummy channels to host an BlockstreamService
         let (ledger_entry_sender, ledger_entry_receiver) = channel();
-        let (entry_stream_sender, entry_stream_receiver) = channel();
+        let (blockstream_sender, blockstream_receiver) = channel();
 
         let mut last_id = Hash::default();
         let mut entries = Vec::new();
@@ -168,16 +167,16 @@ mod test {
         entries.insert(ticks_per_slot as usize, entry);
 
         ledger_entry_sender.send(entries).unwrap();
-        EntryStreamStage::process_entries(
+        BlockstreamService::process_entries(
             &ledger_entry_receiver,
-            &entry_stream_sender,
+            &blockstream_sender,
             &mut (starting_tick_height - 1),
-            &mut entry_stream,
+            &mut blockstream,
         )
         .unwrap();
-        assert_eq!(entry_stream.entries().len(), 8);
+        assert_eq!(blockstream.entries().len(), 8);
 
-        let (entry_events, block_events): (Vec<Value>, Vec<Value>) = entry_stream
+        let (entry_events, block_events): (Vec<Value>, Vec<Value>) = blockstream
             .entries()
             .iter()
             .map(|item| {
@@ -212,7 +211,7 @@ mod test {
         }
 
         // Ensure entries pass through stage unadulterated
-        let recv_entries = entry_stream_receiver.recv().unwrap();
+        let recv_entries = blockstream_receiver.recv().unwrap();
         assert_eq!(expected_entries, recv_entries);
     }
 }

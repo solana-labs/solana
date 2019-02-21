@@ -64,7 +64,7 @@ pub enum FullnodeReturnType {
 pub struct FullnodeConfig {
     pub sigverify_disabled: bool,
     pub voting_disabled: bool,
-    pub entry_stream: Option<String>,
+    pub blockstream: Option<String>,
     pub storage_rotate_count: u64,
     pub leader_scheduler_config: LeaderSchedulerConfig,
     pub tick_config: PohServiceConfig,
@@ -78,7 +78,7 @@ impl Default for FullnodeConfig {
         Self {
             sigverify_disabled: false,
             voting_disabled: false,
-            entry_stream: None,
+            blockstream: None,
             storage_rotate_count: NUM_HASHES_FOR_STORAGE_ROTATE,
             leader_scheduler_config: LeaderSchedulerConfig::default(),
             tick_config: PohServiceConfig::default(),
@@ -270,7 +270,7 @@ impl Fullnode {
             config.storage_rotate_count,
             &rotation_sender,
             &storage_state,
-            config.entry_stream.as_ref(),
+            config.blockstream.as_ref(),
             ledger_signal_receiver,
             leader_scheduler.clone(),
             &subscriptions,

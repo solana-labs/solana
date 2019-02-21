@@ -23,10 +23,10 @@ $ok || {
   exit 1
 }
 
-entryStreamSocket=/tmp/solana-entry-stream.sock # Default to location used by the block explorer
+blockstreamSocket=/tmp/solana-blockstream.sock # Default to location used by the block explorer
 while [[ -n $1 ]]; do
-  if [[ $1 = --entry-stream ]]; then
-    entryStreamSocket=$2
+  if [[ $1 = --blockstream ]]; then
+    blockstreamSocket=$2
     shift 2
   else
     echo "Unknown argument: $1"
@@ -58,8 +58,8 @@ args=(
   --ledger "$dataDir"/ledger/
   --rpc-port 8899
 )
-if [[ -n $entryStreamSocket ]]; then
-  args+=(--entry-stream "$entryStreamSocket")
+if [[ -n $blockstreamSocket ]]; then
+  args+=(--blockstream "$blockstreamSocket")
 fi
 solana-fullnode "${args[@]}" &
 fullnode=$!

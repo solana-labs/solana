@@ -183,7 +183,7 @@ local|tar)
     fi
     if [[ $nodeType = apinode ]]; then
       args+=(
-        --entry-stream /tmp/solana-entry-stream.sock
+        --blockstream /tmp/solana-blockstream.sock
         --no-signer
       )
     fi

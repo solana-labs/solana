@@ -26,13 +26,13 @@ pub mod crds_gossip_push;
 pub mod crds_value;
 #[macro_use]
 pub mod contact_info;
+pub mod blockstream;
+pub mod blockstream_service;
 pub mod blocktree;
 pub mod blocktree_processor;
 pub mod cluster_info;
 pub mod db_window;
 pub mod entry;
-pub mod entry_stream;
-pub mod entry_stream_stage;
 #[cfg(feature = "erasure")]
 pub mod erasure;
 pub mod fetch_stage;

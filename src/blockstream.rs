@@ -1,4 +1,4 @@
-//! The `entry_stream` module provides a method for streaming entries out via a
+//! The `blockstream` module provides a method for streaming entries out via a
 //! local unix socket, to provide client services such as a block explorer with
 //! real-time access to entries.
 
@@ -59,7 +59,7 @@ impl EntryWriter for EntrySocket {
     }
 }
 
-pub trait EntryStreamHandler {
+pub trait BlockstreamEvents {
     fn emit_entry_event(
         &self,
         slot: u64,
@@ -77,13 +77,13 @@ pub trait EntryStreamHandler {
 }
 
 #[derive(Debug)]
-pub struct EntryStream<T: EntryWriter> {
+pub struct Blockstream<T: EntryWriter> {
     pub output: T,
     pub leader_scheduler: Arc<RwLock<LeaderScheduler>>,
-    pub queued_block: Option<EntryStreamBlock>,
+    pub queued_block: Option<BlockData>,
 }
 
-impl<T> EntryStreamHandler for EntryStream<T>
+impl<T> BlockstreamEvents for Blockstream<T>
 where
     T: EntryWriter,
 {
@@ -127,11 +127,11 @@ where
     }
 }
 
-pub type SocketEntryStream = EntryStream<EntrySocket>;
+pub type SocketBlockstream = Blockstream<EntrySocket>;
 
-impl SocketEntryStream {
+impl SocketBlockstream {
     pub fn new(socket: String, leader_scheduler: Arc<RwLock<LeaderScheduler>>) -> Self {
-        EntryStream {
+        Blockstream {
             output: EntrySocket { socket },
             leader_scheduler,
             queued_block: None,
@@ -139,11 +139,11 @@ impl SocketEntryStream {
     }
 }
 
-pub type MockEntryStream = EntryStream<EntryVec>;
+pub type MockBlockstream = Blockstream<EntryVec>;
 
-impl MockEntryStream {
+impl MockBlockstream {
     pub fn new(_: String, leader_scheduler: Arc<RwLock<LeaderScheduler>>) -> Self {
-        EntryStream {
+        Blockstream {
             output: EntryVec::new(),
             leader_scheduler,
             queued_block: None,
@@ -156,7 +156,7 @@ impl MockEntryStream {
 }
 
 #[derive(Debug)]
-pub struct EntryStreamBlock {
+pub struct BlockData {
     pub slot: u64,
     pub tick_height: u64,
     pub id: Hash,
@@ -175,7 +175,7 @@ mod test {
     use std::collections::HashSet;
 
     #[test]
-    fn test_entry_stream() -> () {
+    fn test_blockstream() -> () {
         // Set up bank and leader_scheduler
         let leader_scheduler_config = LeaderSchedulerConfig::new(5, 2, 10);
         let (genesis_block, _mint_keypair) = GenesisBlock::new(1_000_000);
@@ -183,9 +183,8 @@ mod test {
         let leader_scheduler = LeaderScheduler::new_with_bank(&leader_scheduler_config, &bank);
         let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
 
-        // Set up entry stream
-        let entry_stream =
-            MockEntryStream::new("test_stream".to_string(), leader_scheduler.clone());
+        // Set up blockstream
+        let blockstream = MockBlockstream::new("test_stream".to_string(), leader_scheduler.clone());
         let ticks_per_slot = leader_scheduler.read().unwrap().ticks_per_slot;
 
         let mut last_id = Hash::default();
@@ -215,14 +214,14 @@ mod test {
                 .unwrap()
                 .tick_height_to_slot(tick_height);
             if curr_slot != previous_slot {
-                entry_stream
+                blockstream
                     .emit_block_event(previous_slot, tick_height - 1, &leader_id, last_id)
                     .unwrap();
             }
             let entry = Entry::new(&mut last_id, 1, vec![]); // just ticks
             last_id = entry.id;
             previous_slot = curr_slot;
-            entry_stream
+            blockstream
                 .emit_entry_event(curr_slot, tick_height, &leader_id, &entry)
                 .unwrap();
             expected_entries.push(entry.clone());
@@ -230,7 +229,7 @@ mod test {
         }
 
         assert_eq!(
-            entry_stream.entries().len() as u64,
+            blockstream.entries().len() as u64,
             // one entry per tick (0..=N+2) is +3, plus one block
             ticks_per_slot + 3 + 1
         );
@@ -240,7 +239,7 @@ mod test {
         let mut matched_slots = HashSet::new();
         let mut matched_blocks = HashSet::new();
 
-        for item in entry_stream.entries() {
+        for item in blockstream.entries() {
             let json: Value = serde_json::from_str(&item).unwrap();
             let dt_str = json["dt"].as_str().unwrap();
 
