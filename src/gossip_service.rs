@@ -1,10 +1,10 @@
 //! The `gossip_service` module implements the network control plane.
 
+use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
 use crate::service::Service;
 use crate::streamer;
-use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
@@ -24,7 +24,7 @@ impl GossipService {
     pub fn new(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         blocktree: Option<Arc<Blocktree>>,
-        bank: Option<Arc<Bank>>,
+        bank_forks: Option<Arc<RwLock<BankForks>>>,
         gossip_socket: UdpSocket,
         exit: Arc<AtomicBool>,
     ) -> Self {
@@ -46,8 +46,12 @@ impl GossipService {
             response_sender.clone(),
             exit.clone(),
         );
-        let t_gossip =
-            ClusterInfo::gossip(cluster_info.clone(), bank, response_sender, exit.clone());
+        let t_gossip = ClusterInfo::gossip(
+            cluster_info.clone(),
+            bank_forks,
+            response_sender,
+            exit.clone(),
+        );
         let thread_hdls = vec![t_receiver, t_responder, t_listen, t_gossip];
         Self { exit, thread_hdls }
     }

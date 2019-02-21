@@ -12,6 +12,7 @@
 //! * layer 2 - Everyone else, if layer 1 is `2^10`, layer 2 should be able to fit `2^20` number of nodes.
 //!
 //! Bank needs to provide an interface for us to query the stake weight
+use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
 use crate::contact_info::ContactInfo;
 use crate::crds_gossip::CrdsGossip;
@@ -31,7 +32,6 @@ use rayon::prelude::*;
 use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};
 use solana_netutil::{bind_in_range, bind_to, find_available_port_in_range, multi_bind_in_range};
-use solana_runtime::bank::Bank;
 use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -860,7 +860,7 @@ impl ClusterInfo {
     /// randomly pick a node and ask them for updates asynchronously
     pub fn gossip(
         obj: Arc<RwLock<Self>>,
-        bank: Option<Arc<Bank>>,
+        bank_forks: Option<Arc<RwLock<BankForks>>>,
         blob_sender: BlobSender,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
@@ -870,8 +870,10 @@ impl ClusterInfo {
                 let mut last_push = timestamp();
                 loop {
                     let start = timestamp();
-                    let stakes: HashMap<_, _> = match bank {
-                        Some(ref bank) => bank.staked_nodes(),
+                    let stakes: HashMap<_, _> = match bank_forks {
+                        Some(ref bank_forks) => {
+                            bank_forks.read().unwrap().working_bank().staked_nodes()
+                        }
                         None => HashMap::new(),
                     };
                     let _ = Self::run_gossip(&obj, &stakes, &blob_sender);
