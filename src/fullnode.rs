@@ -130,7 +130,12 @@ impl Fullnode {
             &config.leader_scheduler_config,
         )));
         let (mut bank_forks, bank_forks_info, blocktree, ledger_signal_receiver) =
-            new_banks_from_blocktree(ledger_path, &config.account_paths, config.ticks_per_slot(), &leader_scheduler);
+            new_banks_from_blocktree(
+                ledger_path,
+                &config.account_paths,
+                config.ticks_per_slot(),
+                &leader_scheduler,
+            );
 
         let exit = Arc::new(AtomicBool::new(false));
         let bank_info = &bank_forks_info[0];
@@ -424,9 +429,13 @@ pub fn new_banks_from_blocktree(
     let genesis_block =
         GenesisBlock::load(blocktree_path).expect("Expected to successfully open genesis block");
 
-    let (mut bank_forks, bank_forks_info) =
-        blocktree_processor::process_blocktree(&genesis_block, &blocktree, leader_scheduler, account_paths)
-            .expect("process_blocktree failed");
+    let (bank_forks, bank_forks_info) = blocktree_processor::process_blocktree(
+        &genesis_block,
+        &blocktree,
+        leader_scheduler,
+        account_paths,
+    )
+    .expect("process_blocktree failed");
 
     (
         bank_forks,

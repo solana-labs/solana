@@ -27,8 +27,8 @@ use solana_sdk::timing::{duration_as_us, MAX_ENTRY_IDS, NUM_TICKS_PER_SECOND};
 use solana_sdk::token_program;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, VoteState};
-use std::collections::HashSet;
 use std::result;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
@@ -120,7 +120,7 @@ impl Bank {
 
     pub fn new_with_paths(genesis_block: &GenesisBlock, paths: &str) -> Self {
         let mut bank = Self::default();
-        bank.accounts = Some(Arc::new(Accounts::new(&paths)));
+        bank.accounts = Some(Arc::new(Accounts::new(bank.id, &paths)));
         bank.process_genesis_block(genesis_block);
         bank.add_builtin_programs();
         bank
@@ -140,16 +140,18 @@ impl Bank {
         bank.parent = RwLock::new(Some(parent.clone()));
         bank.parent_hash = parent.hash();
         bank.collector_id = collector_id;
-
         bank.accounts = Some(parent.accounts());
+        bank.accounts().new_from_parent(bank.id, parent.id);
+
         bank
     }
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
     /// TODO: remove me in favor of _and_id(), id should not be an assumed value
     pub fn new_from_parent(parent: &Arc<Bank>) -> Self {
+        static BANK_ID: AtomicUsize = AtomicUsize::new(1);
         let collector_id = parent.collector_id;
-        Self::new_from_parent_and_id(parent, collector_id, parent.id() + 1)
+        Self::new_from_parent_and_id(parent, collector_id, BANK_ID.fetch_add(1, Ordering::Relaxed) as u64)
     }
 
     pub fn id(&self) -> u64 {
@@ -181,8 +183,7 @@ impl Bank {
         let parents = self.parents();
         *self.parent.write().unwrap() = None;
 
-        let parent_accounts: Vec<_> = parents.iter().map(|b| b.accounts()).collect();
-        self.accounts().squash(&parent_accounts);
+        self.accounts().squash(self.id);
 
         let parent_caches: Vec<_> = parents
             .iter()
@@ -343,11 +344,11 @@ impl Bank {
         }
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
-        self.accounts().lock_accounts(txs)
+        self.accounts().lock_accounts(self.id, txs)
     }
 
     pub fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
-        self.accounts().unlock_accounts(txs, results)
+        self.accounts().unlock_accounts(self.id, txs, results)
     }
 
     fn load_accounts(
@@ -464,7 +465,8 @@ impl Bank {
             inc_new_counter_info!("bank-process_transactions-error_count", err_count);
         }
 
-        self.accounts().increment_transaction_count(self.id, tx_count);
+        self.accounts()
+            .increment_transaction_count(self.id, tx_count);
 
         inc_new_counter_info!("bank-process_transactions-txs", tx_count);
         if 0 != error_counters.last_id_not_found {
@@ -635,7 +637,8 @@ impl Bank {
     pub fn deposit(&self, pubkey: &Pubkey, tokens: u64) {
         let mut account = self.get_account(pubkey).unwrap_or_default();
         account.tokens += tokens;
-        self.accounts().store_slow(self.id, self.is_root(), pubkey, &account);
+        self.accounts()
+            .store_slow(self.id, self.is_root(), pubkey, &account);
     }
 
     fn accounts(&self) -> Arc<Accounts> {
@@ -651,7 +654,7 @@ impl Bank {
     }
 
     pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<Account> {
-        self.accounts().load_slow(self.id, pubkey)
+        self.accounts().load_slow_no_parent(self.id, pubkey)
     }
 
     pub fn transaction_count(&self) -> u64 {
