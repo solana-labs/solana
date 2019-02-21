@@ -8,6 +8,7 @@ use crate::last_id_queue::LastIdQueue;
 use crate::runtime::{self, RuntimeError};
 use crate::status_cache::StatusCache;
 use bincode::{deserialize, serialize};
+use hashbrown::HashMap;
 use log::{debug, info, Level};
 use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
@@ -594,6 +595,16 @@ impl Bank {
                 None
             })
             .collect()
+    }
+
+    /// Collect all the stakes into a Map keyed on the Node id.
+    pub fn get_stakes(&self) -> HashMap<Pubkey, u64> {
+        let map: HashMap<_, _> = self
+            .vote_states(|_| true)
+            .iter()
+            .map(|state| (state.node_id, self.get_balance(&state.staker_id)))
+            .collect();
+        map
     }
 
     pub fn tick_height(&self) -> u64 {

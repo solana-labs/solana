@@ -19,13 +19,11 @@ use bincode::serialized_size;
 use hashbrown::HashMap;
 use rand;
 use rand::distributions::{Distribution, WeightedIndex};
-use solana_runtime::bank::Bank;
 use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::cmp;
 use std::collections::VecDeque;
-use std::sync::Arc;
 
 pub const CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS: u64 = 15000;
 
@@ -57,7 +55,7 @@ impl CrdsGossipPull {
         crds: &Crds,
         self_id: Pubkey,
         now: u64,
-        bank: Option<&Arc<Bank>>,
+        stakes: &HashMap<Pubkey, u64>,
     ) -> Result<(Pubkey, Bloom<Hash>, CrdsValue), CrdsGossipError> {
         let options: Vec<_> = crds
             .table
@@ -68,7 +66,7 @@ impl CrdsGossipPull {
                 let max_weight = f32::from(u16::max_value()) - 1.0;
                 let req_time: u64 = *self.pull_request_time.get(&item.id).unwrap_or(&0);
                 let since = ((now - req_time) / 1024) as u32;
-                let stake = get_stake(&item.id, bank);
+                let stake = get_stake(&item.id, stakes);
                 let weight = get_weight(max_weight, since, stake);
                 (weight, item)
             })
@@ -203,15 +201,13 @@ mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
     use crate::crds_value::LeaderId;
-    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::f32::consts::E;
 
     #[test]
-    fn test_new_pull_with_bank() {
-        let (block, mint_keypair) = GenesisBlock::new(500_000);
-        let bank = Arc::new(Bank::new(&block));
+    fn test_new_pull_with_stakes() {
         let mut crds = Crds::default();
+        let mut stakes = HashMap::new();
         let node = CrdsGossipPull::default();
         let me = CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0));
         crds.insert(me.clone(), 0).unwrap();
@@ -220,8 +216,7 @@ mod test {
                 CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0));
             let id = entry.label().pubkey();
             crds.insert(entry.clone(), 0).unwrap();
-            bank.transfer(i * 100, &mint_keypair, id, bank.last_id())
-                .unwrap();
+            stakes.insert(id, i * 100);
         }
         // The min balance of the heaviest nodes is at least ln(3000) - 0.5
         // This is because the heaviest nodes will have very similar weights
@@ -230,9 +225,9 @@ mod test {
         // try upto 10 times because of rng
         for _ in 0..10 {
             let msg = node
-                .new_pull_request(&crds, me.label().pubkey(), now, Some(&bank))
+                .new_pull_request(&crds, me.label().pubkey(), now, &stakes)
                 .unwrap();
-            if bank.get_balance(&msg.0) >= min_balance.round() as u64 {
+            if *stakes.get(&msg.0).unwrap_or(&0) >= min_balance.round() as u64 {
                 return;
             }
         }
@@ -246,19 +241,19 @@ mod test {
         let id = entry.label().pubkey();
         let node = CrdsGossipPull::default();
         assert_eq!(
-            node.new_pull_request(&crds, id, 0, None),
+            node.new_pull_request(&crds, id, 0, &HashMap::new()),
             Err(CrdsGossipError::NoPeers)
         );
 
         crds.insert(entry.clone(), 0).unwrap();
         assert_eq!(
-            node.new_pull_request(&crds, id, 0, None),
+            node.new_pull_request(&crds, id, 0, &HashMap::new()),
             Err(CrdsGossipError::NoPeers)
         );
 
         let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0));
         crds.insert(new.clone(), 0).unwrap();
-        let req = node.new_pull_request(&crds, id, 0, None);
+        let req = node.new_pull_request(&crds, id, 0, &HashMap::new());
         let (to, _, self_info) = req.unwrap();
         assert_eq!(to, new.label().pubkey());
         assert_eq!(self_info, entry);
@@ -281,7 +276,7 @@ mod test {
 
         // odds of getting the other request should be 1 in u64::max_value()
         for _ in 0..10 {
-            let req = node.new_pull_request(&crds, node_id, u64::max_value(), None);
+            let req = node.new_pull_request(&crds, node_id, u64::max_value(), &HashMap::new());
             let (to, _, self_info) = req.unwrap();
             assert_eq!(to, old.label().pubkey());
             assert_eq!(self_info, entry);
@@ -297,7 +292,7 @@ mod test {
         node_crds.insert(entry.clone(), 0).unwrap();
         let new = CrdsValue::ContactInfo(ContactInfo::new_localhost(Keypair::new().pubkey(), 0));
         node_crds.insert(new.clone(), 0).unwrap();
-        let req = node.new_pull_request(&node_crds, node_id, 0, None);
+        let req = node.new_pull_request(&node_crds, node_id, 0, &HashMap::new());
 
         let mut dest_crds = Crds::default();
         let mut dest = CrdsGossipPull::default();
@@ -349,7 +344,7 @@ mod test {
         let mut done = false;
         for _ in 0..30 {
             // there is a chance of a false positive with bloom filters
-            let req = node.new_pull_request(&node_crds, node_id, 0, None);
+            let req = node.new_pull_request(&node_crds, node_id, 0, &HashMap::new());
             let (_, filter, caller) = req.unwrap();
             let rsp = dest.process_pull_request(&mut dest_crds, caller, filter, 0);
             // if there is a false positive this is empty

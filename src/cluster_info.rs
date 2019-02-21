@@ -174,16 +174,16 @@ impl ClusterInfo {
         let id = node_info.id;
         me.gossip.set_self(id);
         me.insert_info(node_info);
-        me.push_self(None);
+        me.push_self(&HashMap::new());
         me
     }
-    pub fn push_self(&mut self, bank: Option<&Arc<Bank>>) {
+    pub fn push_self(&mut self, stakes: &HashMap<Pubkey, u64>) {
         let mut my_data = self.my_data();
         let now = timestamp();
         my_data.wallclock = now;
         let mut entry = CrdsValue::ContactInfo(my_data);
         entry.sign(&self.keypair);
-        self.gossip.refresh_push_active_set(bank);
+        self.gossip.refresh_push_active_set(stakes);
         self.gossip.process_push_message(&[entry], now);
     }
     pub fn insert_info(&mut self, node_info: NodeInfo) {
@@ -756,11 +756,11 @@ impl ClusterInfo {
         Ok((addr, out))
     }
 
-    fn new_pull_requests(&mut self, bank: Option<&Arc<Bank>>) -> Vec<(SocketAddr, Protocol)> {
+    fn new_pull_requests(&mut self, stakes: &HashMap<Pubkey, u64>) -> Vec<(SocketAddr, Protocol)> {
         let now = timestamp();
         let pulls: Vec<_> = self
             .gossip
-            .new_pull_request(now, bank)
+            .new_pull_request(now, stakes)
             .ok()
             .into_iter()
             .collect();
@@ -800,8 +800,8 @@ impl ClusterInfo {
             .collect()
     }
 
-    fn gossip_request(&mut self, bank: Option<&Arc<Bank>>) -> Vec<(SocketAddr, Protocol)> {
-        let pulls: Vec<_> = self.new_pull_requests(bank);
+    fn gossip_request(&mut self, stakes: &HashMap<Pubkey, u64>) -> Vec<(SocketAddr, Protocol)> {
+        let pulls: Vec<_> = self.new_pull_requests(stakes);
         let pushes: Vec<_> = self.new_push_requests();
         vec![pulls, pushes].into_iter().flat_map(|x| x).collect()
     }
@@ -809,10 +809,10 @@ impl ClusterInfo {
     /// At random pick a node and try to get updated changes from them
     fn run_gossip(
         obj: &Arc<RwLock<Self>>,
-        bank: Option<&Arc<Bank>>,
+        stakes: &HashMap<Pubkey, u64>,
         blob_sender: &BlobSender,
     ) -> Result<()> {
-        let reqs = obj.write().unwrap().gossip_request(bank);
+        let reqs = obj.write().unwrap().gossip_request(&stakes);
         let blobs = reqs
             .into_iter()
             .filter_map(|(remote_gossip_addr, req)| to_shared_blob(req, remote_gossip_addr).ok())
@@ -864,7 +864,11 @@ impl ClusterInfo {
                 let mut last_push = timestamp();
                 loop {
                     let start = timestamp();
-                    let _ = Self::run_gossip(&obj, bank.as_ref(), &blob_sender);
+                    let stakes: HashMap<_, _> = match bank {
+                        Some(ref bank) => bank.get_stakes(),
+                        None => HashMap::new(),
+                    };
+                    let _ = Self::run_gossip(&obj, &stakes, &blob_sender);
                     if exit.load(Ordering::Relaxed) {
                         return;
                     }
@@ -872,7 +876,7 @@ impl ClusterInfo {
                     //TODO: possibly tune this parameter
                     //we saw a deadlock passing an obj.read().unwrap().timeout into sleep
                     if start - last_push > CRDS_GOSSIP_PULL_CRDS_TIMEOUT_MS / 2 {
-                        obj.write().unwrap().push_self(bank.as_ref());
+                        obj.write().unwrap().push_self(&stakes);
                         last_push = timestamp();
                     }
                     let elapsed = timestamp() - start;
@@ -1461,8 +1465,11 @@ mod tests {
             .write()
             .unwrap()
             .gossip
-            .refresh_push_active_set(None);
-        let reqs = cluster_info.write().unwrap().gossip_request(None);
+            .refresh_push_active_set(&HashMap::new());
+        let reqs = cluster_info
+            .write()
+            .unwrap()
+            .gossip_request(&HashMap::new());
         //assert none of the addrs are invalid.
         reqs.iter().all(|(addr, _)| {
             let res = ContactInfo::is_valid_address(addr);
@@ -1740,7 +1747,7 @@ mod tests {
 
         let (_, _, val) = cluster_info
             .gossip
-            .new_pull_request(timestamp(), None)
+            .new_pull_request(timestamp(), &HashMap::new())
             .ok()
             .unwrap();
         assert!(val.verify());
