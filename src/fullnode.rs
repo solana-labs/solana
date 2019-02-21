@@ -595,9 +595,9 @@ mod tests {
         // epoch, check that the same leader knows to shut down and restart as a leader again.
         let ticks_per_slot = 5;
         let slots_per_epoch = 2;
-        let active_window_length = 10;
+        let active_window_num_slots = 10;
         let leader_scheduler_config =
-            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_length);
+            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_num_slots);
 
         let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
         let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
