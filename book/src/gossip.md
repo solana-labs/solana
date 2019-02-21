@@ -93,19 +93,26 @@ that only adversarial nodes are selected for pull.
 every push message.  An eclipse attack on *push* would influence the active set
 selection, or the random fanout selection.
 
+### Time and Stake based weights
+
+Weights are calculated based on `time since last picked` and the `natural log` of the `stake weight`.
+
+Taking the `ln` of the stake weight allows giving all nodes a fairer chance of network
+coverage in a reasonable amount of time. It helps normalize the large possible `stake weight` differences between nodes.
+This way a node with low `stake weight`, compared to a node with large `stake weight` will only have to wait a
+few multiples of ln(`stake`) seconds before it gets picked.
+
+There is no way for an adversary to influence these parameters.
+
 ### Pull Message
 
-A node is selected as a pull target based on local time since last selection and
-the stake weight.  There is no way for an adversary to influence those
-parameters.
+A node is selected as a pull target based on the weights described above.
 
 ### Push Message
 
 A prune message can only remove an adversary from a potential connection.
 
-Just like *pull message*, nodes are selected into the active set based on local
-time since last selection and the stake weight.  There is no way for an
-adversary to influence those parameters.
+Just like *pull message*, nodes are selected into the active set based on weights.
 
 ## Notable differences from PlumTree
 
