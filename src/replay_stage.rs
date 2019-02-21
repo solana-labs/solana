@@ -1,7 +1,8 @@
 //! The `replay_stage` replays transactions broadcast by the leader.
 
+use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
-use crate::blocktree_processor;
+use crate::blocktree_processor::{self, BankForksInfo};
 use crate::cluster_info::ClusterInfo;
 use crate::entry::{Entry, EntryReceiver, EntrySender, EntrySlice};
 use crate::leader_scheduler::LeaderScheduler;
@@ -9,7 +10,7 @@ use crate::packet::BlobError;
 use crate::result::{Error, Result};
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
-use crate::tvu::TvuRotationSender;
+use crate::tvu::{TvuRotationInfo, TvuRotationSender};
 use crate::voting_keypair::VotingKeypair;
 use log::Level;
 use solana_metrics::counter::Counter;
@@ -172,10 +173,10 @@ impl ReplayStage {
         my_id: Pubkey,
         voting_keypair: Option<Arc<VotingKeypair>>,
         blocktree: Arc<Blocktree>,
-        bank: Arc<Bank>,
+        bank_forks: &Arc<RwLock<BankForks>>,
+        bank_forks_info: &[BankForksInfo],
         cluster_info: Arc<RwLock<ClusterInfo>>,
         exit: Arc<AtomicBool>,
-        last_entry_id: Hash,
         to_leader_sender: &TvuRotationSender,
         ledger_signal_receiver: Receiver<bool>,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
@@ -185,8 +186,41 @@ impl ReplayStage {
         let exit_ = exit.clone();
         let leader_scheduler_ = leader_scheduler.clone();
         let to_leader_sender = to_leader_sender.clone();
-        let last_entry_id = Arc::new(RwLock::new(last_entry_id));
         let subscriptions_ = subscriptions.clone();
+
+        let (bank, last_entry_id) = {
+            let mut bank_forks = bank_forks.write().unwrap();
+            bank_forks.set_working_bank_id(bank_forks_info[0].bank_id);
+            (bank_forks.working_bank(), bank_forks_info[0].last_entry_id)
+        };
+        let last_entry_id = Arc::new(RwLock::new(last_entry_id));
+
+        let mut current_blob_index = {
+            let leader_scheduler = leader_scheduler.read().unwrap();
+            let slot = leader_scheduler.tick_height_to_slot(bank.tick_height() + 1);
+
+            let leader_id = leader_scheduler
+                .get_leader_for_slot(slot)
+                .expect("Leader not known after processing bank");
+            trace!("node {:?} scheduled as leader for slot {}", leader_id, slot,);
+
+            // Send a rotation notification back to Fullnode to initialize the TPU to the right
+            // state
+            to_leader_sender
+                .send(TvuRotationInfo {
+                    bank: Bank::new_from_parent(&bank, &leader_id),
+                    last_entry_id: *last_entry_id.read().unwrap(),
+                    slot,
+                    leader_id,
+                })
+                .unwrap();
+
+            blocktree
+                .meta(slot)
+                .expect("Database error")
+                .map(|meta| meta.consumed)
+                .unwrap_or(0)
+        };
 
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
@@ -209,11 +243,6 @@ impl ReplayStage {
                             + leader_scheduler.num_ticks_left_in_slot(first_tick_in_current_slot),
                     )
                 };
-                let mut current_blob_index = blocktree
-                    .meta(current_slot.unwrap())
-                    .expect("Database error")
-                    .map(|meta| meta.consumed)
-                    .unwrap_or(0);
 
                 // Loop through blocktree MAX_ENTRY_RECV_PER_ITER entries at a time for each
                 // relevant slot to see if there are any available updates
@@ -298,10 +327,12 @@ impl ReplayStage {
 
                             if my_id == leader_id || my_id == last_leader_id {
                                 to_leader_sender
-                                    .send((
-                                        0, // TODO: fix hard coded bank_id
-                                        next_slot, leader_id,
-                                    ))
+                                    .send(TvuRotationInfo {
+                                        bank: Bank::new_from_parent(&bank, &leader_id),
+                                        last_entry_id: *last_entry_id.read().unwrap(),
+                                        slot: next_slot,
+                                        leader_id,
+                                    })
                                     .unwrap();
                             } else if leader_id != last_leader_id {
                                 // TODO: Remove this soon once we boot the leader from ClusterInfo
@@ -355,7 +386,7 @@ mod test {
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::create_ticks;
     use crate::entry::{next_entry_mut, Entry};
-    use crate::fullnode::new_bank_from_ledger;
+    use crate::fullnode::new_banks_from_blocktree;
     use crate::leader_scheduler::{
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
@@ -438,24 +469,23 @@ mod test {
         {
             // Set up the bank
             let blocktree_config = BlocktreeConfig::new(ticks_per_slot);
-            let (bank, _entry_height, last_entry_id, blocktree, l_receiver) =
-                new_bank_from_ledger(&my_ledger_path, &blocktree_config, &leader_scheduler);
+            let (bank_forks, bank_forks_info, blocktree, ledger_signal_receiver) =
+                new_banks_from_blocktree(&my_ledger_path, &blocktree_config, &leader_scheduler);
 
             // Set up the replay stage
             let (rotation_sender, rotation_receiver) = channel();
-            let meta = blocktree.meta(0).unwrap().unwrap();
             let exit = Arc::new(AtomicBool::new(false));
             let blocktree = Arc::new(blocktree);
             let (replay_stage, ledger_writer_recv) = ReplayStage::new(
                 my_id,
                 Some(Arc::new(voting_keypair)),
                 blocktree.clone(),
-                bank.clone(),
+                &Arc::new(RwLock::new(bank_forks)),
+                &bank_forks_info,
                 Arc::new(RwLock::new(cluster_info_me)),
                 exit.clone(),
-                last_entry_id,
                 &rotation_sender,
-                l_receiver,
+                ledger_signal_receiver,
                 &leader_scheduler,
                 &Arc::new(RpcSubscriptions::default()),
             );
@@ -468,6 +498,7 @@ mod test {
             }
 
             // Write the entries to the ledger, replay_stage should get notified of changes
+            let meta = blocktree.meta(0).unwrap().unwrap();
             blocktree
                 .write_entries(
                     DEFAULT_SLOT_HEIGHT,
@@ -478,12 +509,15 @@ mod test {
                 .unwrap();
 
             info!("Wait for replay_stage to exit and check return value is correct");
+            let rotation_info = rotation_receiver
+                .recv()
+                .expect("should have signaled leader rotation");
             assert_eq!(
-                (0, 2, my_keypair.pubkey()),
-                rotation_receiver
-                    .recv()
-                    .expect("should have signaled leader rotation"),
+                rotation_info.last_entry_id,
+                bank_forks_info[0].last_entry_id
             );
+            assert_eq!(rotation_info.slot, 2);
+            assert_eq!(rotation_info.leader_id, my_keypair.pubkey());
 
             info!("Check that the entries on the ledger writer channel are correct");
             let mut received_ticks = ledger_writer_recv
@@ -539,24 +573,27 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         let my_keypair = Arc::new(my_keypair);
         let voting_keypair = Arc::new(VotingKeypair::new_local(&my_keypair));
-        let (to_leader_sender, _) = channel();
+        let (to_leader_sender, _to_leader_receiver) = channel();
         {
             let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
-            let (bank, entry_height, last_entry_id, blocktree, l_receiver) = new_bank_from_ledger(
+            let (bank_forks, bank_forks_info, blocktree, l_receiver) = new_banks_from_blocktree(
                 &my_ledger_path,
                 &BlocktreeConfig::default(),
                 &leader_scheduler,
             );
+            let bank = bank_forks.working_bank();
+            let entry_height = bank_forks_info[0].entry_height;
+            let last_entry_id = bank_forks_info[0].last_entry_id;
 
             let blocktree = Arc::new(blocktree);
             let (replay_stage, ledger_writer_recv) = ReplayStage::new(
                 my_keypair.pubkey(),
                 Some(voting_keypair.clone()),
                 blocktree.clone(),
-                bank.clone(),
+                &Arc::new(RwLock::new(bank_forks)),
+                &bank_forks_info,
                 cluster_info_me.clone(),
                 exit.clone(),
-                last_entry_id,
                 &to_leader_sender,
                 l_receiver,
                 &leader_scheduler,
@@ -661,12 +698,12 @@ mod test {
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
 
         // Set up the replay stage
-        let (rotation_tx, rotation_rx) = channel();
+        let (rotation_sender, rotation_receiver) = channel();
         let exit = Arc::new(AtomicBool::new(false));
         {
-            let (bank, _entry_height, last_entry_id, blocktree, l_receiver) =
-                new_bank_from_ledger(&my_ledger_path, &blocktree_config, &leader_scheduler);
-
+            let (bank_forks, bank_forks_info, blocktree, l_receiver) =
+                new_banks_from_blocktree(&my_ledger_path, &blocktree_config, &leader_scheduler);
+            let bank = bank_forks.working_bank();
             let meta = blocktree
                 .meta(0)
                 .unwrap()
@@ -678,11 +715,11 @@ mod test {
                 my_keypair.pubkey(),
                 Some(voting_keypair.clone()),
                 blocktree.clone(),
-                bank.clone(),
+                &Arc::new(RwLock::new(bank_forks)),
+                &bank_forks_info,
                 cluster_info_me.clone(),
                 exit.clone(),
-                last_entry_id,
-                &rotation_tx,
+                &rotation_sender,
                 l_receiver,
                 &leader_scheduler,
                 &Arc::new(RpcSubscriptions::default()),
@@ -720,12 +757,15 @@ mod test {
             }
 
             // Wait for replay_stage to exit and check return value is correct
+            let rotation_info = rotation_receiver
+                .recv()
+                .expect("should have signaled leader rotation");
             assert_eq!(
-                (0, 1, my_keypair.pubkey()),
-                rotation_rx
-                    .recv()
-                    .expect("should have signaled leader rotation")
+                rotation_info.last_entry_id,
+                bank_forks_info[0].last_entry_id
             );
+            assert_eq!(rotation_info.slot, 1);
+            assert_eq!(rotation_info.leader_id, my_keypair.pubkey());
 
             assert_ne!(expected_last_id, Hash::default());
             //replay stage should continue running even after rotation has happened (tvu never goes down)
