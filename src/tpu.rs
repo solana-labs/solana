@@ -17,13 +17,9 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::channel;
 use std::sync::{Arc, RwLock};
 use std::thread;
-
-pub type TpuReturnType = u64; // tick_height to initiate a rotation
-pub type TpuRotationSender = Sender<TpuReturnType>;
-pub type TpuRotationReceiver = Receiver<TpuReturnType>;
 
 pub enum TpuMode {
     Leader(LeaderServices),

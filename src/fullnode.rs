@@ -11,8 +11,8 @@ use crate::rpc_service::JsonRpcService;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::storage_stage::StorageState;
-use crate::tpu::{Tpu, TpuRotationReceiver};
-use crate::tvu::{Sockets, Tvu};
+use crate::tpu::Tpu;
+use crate::tvu::{Sockets, Tvu, TvuRotationReceiver};
 use crate::voting_keypair::VotingKeypair;
 use log::Level;
 use solana_metrics::counter::Counter;
@@ -104,7 +104,7 @@ pub struct Fullnode {
     tpu_sockets: Vec<UdpSocket>,
     broadcast_socket: UdpSocket,
     node_services: NodeServices,
-    rotation_receiver: TpuRotationReceiver,
+    rotation_receiver: TvuRotationReceiver,
     blocktree: Arc<Blocktree>,
     leader_scheduler: Arc<RwLock<LeaderScheduler>>,
 }
