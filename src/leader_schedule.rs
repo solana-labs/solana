@@ -48,7 +48,7 @@ impl Index<usize> for LeaderSchedule {
     }
 }
 
-trait LeaderScheduleUtil {
+pub trait LeaderScheduleUtil {
     /// Return the leader schedule for the current epoch.
     fn leader_schedule(&self) -> LeaderSchedule;
 }
