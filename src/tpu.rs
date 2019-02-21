@@ -197,7 +197,6 @@ impl Tpu {
         broadcast_socket: UdpSocket,
         sigverify_disabled: bool,
         slot: u64,
-        blob_index: u64,
         last_entry_id: &Hash,
         blocktree: &Arc<Blocktree>,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
@@ -225,6 +224,11 @@ impl Tpu {
         // TODO: Fix BankingStage/BroadcastService to operate on `slot` directly instead of
         // `max_tick_height`
         let max_tick_height = (slot + 1) * leader_scheduler.read().unwrap().ticks_per_slot - 1;
+        let blob_index = blocktree
+            .meta(slot)
+            .expect("Database error")
+            .map(|meta| meta.consumed)
+            .unwrap_or(0);
 
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,

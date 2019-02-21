@@ -114,7 +114,6 @@ fn test_replay() {
         Some(Arc::new(voting_keypair)),
         &Arc::new(RwLock::new(bank_forks)),
         0,
-        0,
         cur_hash,
         &cref1,
         {
