@@ -16,6 +16,7 @@ use crate::bank_forks::BankForks;
 use crate::blob_fetch_stage::BlobFetchStage;
 use crate::blockstream_service::BlockstreamService;
 use crate::blocktree::Blocktree;
+use crate::blocktree_processor::BankForksInfo;
 use crate::cluster_info::ClusterInfo;
 use crate::leader_scheduler::LeaderScheduler;
 use crate::replay_stage::ReplayStage;
@@ -24,6 +25,7 @@ use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::storage_stage::{StorageStage, StorageState};
 use crate::voting_keypair::VotingKeypair;
+use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -33,13 +35,14 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread;
 
-pub type TvuReturnType = (
-    u64,    // bank_id,
-    u64,    // slot height to initiate a rotation
-    Pubkey, // leader upon rotation
-);
-pub type TvuRotationSender = Sender<TvuReturnType>;
-pub type TvuRotationReceiver = Receiver<TvuReturnType>;
+pub struct TvuRotationInfo {
+    pub bank: Bank,          // Bank to use
+    pub last_entry_id: Hash, // last_entry_id of that bank
+    pub slot: u64,           // slot height to initiate a rotation
+    pub leader_id: Pubkey,   // leader upon rotation
+}
+pub type TvuRotationSender = Sender<TvuRotationInfo>;
+pub type TvuRotationReceiver = Receiver<TvuRotationInfo>;
 
 pub struct Tvu {
     fetch_stage: BlobFetchStage,
@@ -60,18 +63,14 @@ impl Tvu {
     /// This service receives messages from a leader in the network and processes the transactions
     /// on the bank state.
     /// # Arguments
-    /// * `bank` - The bank state.
-    /// * `entry_height` - Initial ledger height
-    /// * `last_entry_id` - Hash of the last entry
     /// * `cluster_info` - The cluster_info state.
-    /// * `sockets` - My fetch, repair, and restransmit sockets
+    /// * `sockets` - fetch, repair, and retransmit sockets
     /// * `blocktree` - the ledger itself
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new(
         voting_keypair: Option<Arc<VotingKeypair>>,
         bank_forks: &Arc<RwLock<BankForks>>,
-        entry_height: u64,
-        last_entry_id: Hash,
+        bank_forks_info: &[BankForksInfo],
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         sockets: Sockets,
         blocktree: Arc<Blocktree>,
@@ -119,15 +118,14 @@ impl Tvu {
             exit.clone(),
         );
 
-        let bank = bank_forks.read().unwrap().working_bank();
         let (replay_stage, mut previous_receiver) = ReplayStage::new(
             keypair.pubkey(),
             voting_keypair,
             blocktree.clone(),
-            bank.clone(),
+            &bank_forks,
+            &bank_forks_info,
             cluster_info.clone(),
             exit.clone(),
-            last_entry_id,
             to_leader_sender,
             ledger_signal_receiver,
             &leader_scheduler,
@@ -138,7 +136,7 @@ impl Tvu {
             let (blockstream_service, blockstream_receiver) = BlockstreamService::new(
                 previous_receiver,
                 blockstream.unwrap().to_string(),
-                bank.tick_height(),
+                bank_forks.read().unwrap().working_bank().tick_height(), // TODO: BlockstreamService needs to deal with BankForks somehow still
                 leader_scheduler,
                 exit.clone(),
             );
@@ -154,7 +152,7 @@ impl Tvu {
             Some(blocktree),
             &keypair,
             &exit.clone(),
-            entry_height,
+            bank_forks_info[0].entry_height, // TODO: StorageStage needs to deal with BankForks somehow still
             storage_rotate_count,
             &cluster_info,
         );
@@ -210,6 +208,7 @@ pub mod tests {
     use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
     use solana_runtime::bank::Bank;
     use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::hash::Hash;
 
     #[test]
     fn test_tvu_exit() {
@@ -222,6 +221,11 @@ pub mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(starting_balance);
 
         let bank_forks = BankForks::new(0, Bank::new(&genesis_block));
+        let bank_forks_info = vec![BankForksInfo {
+            bank_id: 0,
+            entry_height: 0,
+            last_entry_id: Hash::default(),
+        }];
         let leader_scheduler_config = LeaderSchedulerConfig::default();
         let leader_scheduler =
             LeaderScheduler::new_with_bank(&leader_scheduler_config, &bank_forks.working_bank());
@@ -233,7 +237,6 @@ pub mod tests {
         cluster_info1.set_leader(leader.info.id);
         let cref1 = Arc::new(RwLock::new(cluster_info1));
 
-        let cur_hash = Hash::default();
         let blocktree_path = get_tmp_ledger_path("test_tvu_exit");
         let (blocktree, l_receiver) = Blocktree::open_with_signal(&blocktree_path)
             .expect("Expected to successfully open ledger");
@@ -243,8 +246,7 @@ pub mod tests {
         let tvu = Tvu::new(
             Some(Arc::new(voting_keypair)),
             &Arc::new(RwLock::new(bank_forks)),
-            0,
-            cur_hash,
+            &bank_forks_info,
             &cref1,
             {
                 Sockets {

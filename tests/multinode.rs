@@ -6,7 +6,7 @@ use solana::blocktree::{
 use solana::client::mk_client;
 use solana::cluster_info::{Node, NodeInfo};
 use solana::entry::{reconstruct_entries_from_blobs, Entry};
-use solana::fullnode::{new_bank_from_ledger, Fullnode, FullnodeConfig, FullnodeReturnType};
+use solana::fullnode::{new_banks_from_blocktree, Fullnode, FullnodeConfig, FullnodeReturnType};
 use solana::gossip_service::{converge, make_listening_node};
 use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
 use solana::result;
@@ -507,8 +507,11 @@ fn test_boot_validator_from_file() -> result::Result<()> {
         );
     ledger_paths.push(genesis_ledger_path.clone());
 
-    let leader_ledger_path =
-        tmp_copy_ledger(&genesis_ledger_path, "multi_node_basic", &blocktree_config);
+    let leader_ledger_path = tmp_copy_ledger(
+        &genesis_ledger_path,
+        "boot_validator_from_file",
+        &blocktree_config,
+    );
     ledger_paths.push(leader_ledger_path.clone());
 
     let leader_data = leader.info.clone();
@@ -521,12 +524,16 @@ fn test_boot_validator_from_file() -> result::Result<()> {
         None,
         &fullnode_config,
     );
+    let leader_fullnode_exit = leader_fullnode.run(None);
+
+    info!("Sending transaction to leader");
     let leader_balance =
         send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, 500, Some(500)).unwrap();
     assert_eq!(leader_balance, 500);
     let leader_balance =
         send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, 500, Some(1000)).unwrap();
     assert_eq!(leader_balance, 1000);
+    info!("Leader balance verified");
 
     let keypair = Arc::new(Keypair::new());
     let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
@@ -546,12 +553,16 @@ fn test_boot_validator_from_file() -> result::Result<()> {
         Some(&leader_data),
         &fullnode_config,
     );
+    let val_fullnode_exit = val_fullnode.run(None);
+
+    info!("Checking validator balance");
     let mut client = mk_client(&validator_data);
     let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
     assert!(getbal == Some(leader_balance));
+    info!("Validator balance verified");
 
-    val_fullnode.close()?;
-    leader_fullnode.close()?;
+    val_fullnode_exit();
+    leader_fullnode_exit();
 
     for path in ledger_paths {
         remove_dir_all(path)?;
@@ -604,6 +615,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
         let voting_keypair = VotingKeypair::new_local(&leader_keypair);
         let (leader_data, leader_fullnode) =
             create_leader(&ledger_path, leader_keypair.clone(), voting_keypair);
+        let leader_fullnode_exit = leader_fullnode.run(None);
 
         // lengthen the ledger
         let leader_balance =
@@ -612,7 +624,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
         assert_eq!(leader_balance, 500);
 
         // restart the leader
-        leader_fullnode.close()?;
+        leader_fullnode_exit();
     }
 
     // create a "stale" ledger by copying current ledger
@@ -626,6 +638,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
         let voting_keypair = VotingKeypair::new_local(&leader_keypair);
         let (leader_data, leader_fullnode) =
             create_leader(&ledger_path, leader_keypair.clone(), voting_keypair);
+        let leader_fullnode_exit = leader_fullnode.run(None);
 
         // lengthen the ledger
         let leader_balance =
@@ -634,12 +647,13 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
         assert_eq!(leader_balance, 1000);
 
         // restart the leader
-        leader_fullnode.close()?;
+        leader_fullnode_exit();
     }
 
     let voting_keypair = VotingKeypair::new_local(&leader_keypair);
     let (leader_data, leader_fullnode) =
         create_leader(&ledger_path, leader_keypair, voting_keypair);
+    let leader_fullnode_exit = leader_fullnode.run(None);
 
     // start validator from old ledger
     let keypair = Arc::new(Keypair::new());
@@ -655,6 +669,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
         Some(&leader_data),
         &fullnode_config,
     );
+    let val_fullnode_exit = val_fullnode.run(None);
 
     // trigger broadcast, validator should catch up from leader, whose window contains
     //   the entries missing from the stale ledger
@@ -677,8 +692,8 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
     let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(expected));
     assert_eq!(getbal, Some(expected));
 
-    val_fullnode.close()?;
-    leader_fullnode.close()?;
+    val_fullnode_exit();
+    leader_fullnode_exit();
     remove_dir_all(ledger_path)?;
     remove_dir_all(stale_ledger_path)?;
 
@@ -989,7 +1004,10 @@ fn test_leader_to_validator_transition() {
     let (rotation_sender, rotation_receiver) = channel();
     let leader_exit = leader.run(Some(rotation_sender));
 
-    let expected_rotations = vec![(FullnodeReturnType::LeaderToValidatorRotation, 1)];
+    let expected_rotations = vec![
+        (FullnodeReturnType::LeaderToLeaderRotation, 0),
+        (FullnodeReturnType::LeaderToValidatorRotation, 1),
+    ];
 
     for expected_rotation in expected_rotations {
         loop {
@@ -1004,12 +1022,13 @@ fn test_leader_to_validator_transition() {
     leader_exit();
 
     info!("Check the ledger to make sure it's the right height...");
-    let bank = new_bank_from_ledger(
+    let bank_forks = new_banks_from_blocktree(
         &leader_ledger_path,
         &BlocktreeConfig::default(),
         &Arc::new(RwLock::new(LeaderScheduler::default())),
     )
     .0;
+    let bank = bank_forks.working_bank();
 
     assert_eq!(
         bank.tick_height(),
@@ -1124,7 +1143,15 @@ fn test_leader_validator_basic() {
     info!("Waiting for slot 0 -> slot 1: bootstrap leader and the validator rotate");
     assert_eq!(
         leader_rotation_receiver.recv().unwrap(),
+        (FullnodeReturnType::LeaderToLeaderRotation, 0),
+    );
+    assert_eq!(
+        leader_rotation_receiver.recv().unwrap(),
         (FullnodeReturnType::LeaderToValidatorRotation, 1)
+    );
+    assert_eq!(
+        validator_rotation_receiver.recv().unwrap(),
+        (FullnodeReturnType::LeaderToValidatorRotation, 0)
     );
     assert_eq!(
         validator_rotation_receiver.recv().unwrap(),
@@ -1501,6 +1528,7 @@ fn test_full_leader_validator_network() {
     for node in nodes {
         node.1();
     }
+    info!("Bootstrap leader exit");
     bootstrap_leader_exit();
 
     let mut node_entries = vec![];
@@ -1654,7 +1682,7 @@ fn test_broadcast_last_tick() {
     loop {
         let transition = bootstrap_leader_rotation_receiver.recv().unwrap();
         info!("bootstrap leader transition event: {:?}", transition);
-        if transition.0 == FullnodeReturnType::LeaderToLeaderRotation {
+        if (FullnodeReturnType::LeaderToLeaderRotation, 1) == transition {
             break;
         }
     }
@@ -1846,7 +1874,7 @@ fn test_fullnode_rotate(
         last_entry_id = entries.last().unwrap().id;
     }
 
-    let mut leader_tick_height_of_next_rotation = ticks_per_slot;
+    let mut leader_tick_height_of_next_rotation = 0;
     let mut leader_should_be_leader = true;
     if fullnode_config.leader_scheduler_config.ticks_per_slot == 1 {
         // Add another tick to the ledger if the cluster has been configured for 1 tick_per_slot.
@@ -1857,7 +1885,7 @@ fn test_fullnode_rotate(
         entries.extend(tick);
         last_entry_id = entries.last().unwrap().id;
 
-        leader_tick_height_of_next_rotation += 2;
+        leader_tick_height_of_next_rotation = 2;
         if include_validator {
             leader_should_be_leader = false;
         }

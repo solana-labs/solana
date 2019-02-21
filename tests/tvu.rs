@@ -1,7 +1,7 @@
 use log::trace;
 use solana::bank_forks::BankForks;
-use solana::blocktree::Blocktree;
-use solana::blocktree::{get_tmp_ledger_path, BlocktreeConfig};
+use solana::blocktree::{get_tmp_ledger_path, Blocktree, BlocktreeConfig};
+use solana::blocktree_processor::BankForksInfo;
 use solana::cluster_info::{ClusterInfo, Node};
 use solana::entry::next_entry_mut;
 use solana::entry::EntrySlice;
@@ -86,7 +86,14 @@ fn test_replay() {
     let (genesis_block, mint_keypair) = GenesisBlock::new(starting_balance);
     let tvu_addr = target1.info.tvu;
 
+    let mut cur_hash = Hash::default();
     let bank_forks = BankForks::new(0, Bank::new(&genesis_block));
+    let bank_forks_info = vec![BankForksInfo {
+        bank_id: 0,
+        entry_height: 0,
+        last_entry_id: cur_hash,
+    }];
+
     let bank = bank_forks.working_bank();
     let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::new_with_bank(
         &leader_scheduler_config,
@@ -101,20 +108,18 @@ fn test_replay() {
     let cref1 = Arc::new(RwLock::new(cluster_info1));
     let dr_1 = new_gossip(cref1.clone(), target1.sockets.gossip, exit.clone());
 
-    let mut cur_hash = Hash::default();
     let blocktree_path = get_tmp_ledger_path("test_replay");
 
-    let (blocktree, l_receiver) =
+    let (blocktree, ledger_signal_receiver) =
         Blocktree::open_with_config_signal(&blocktree_path, &blocktree_config)
             .expect("Expected to successfully open ledger");
     let vote_account_keypair = Arc::new(Keypair::new());
     let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
-    let (sender, _) = channel();
+    let (to_leader_sender, _to_leader_receiver) = channel();
     let tvu = Tvu::new(
         Some(Arc::new(voting_keypair)),
         &Arc::new(RwLock::new(bank_forks)),
-        0,
-        cur_hash,
+        &bank_forks_info,
         &cref1,
         {
             Sockets {
@@ -125,10 +130,10 @@ fn test_replay() {
         },
         Arc::new(blocktree),
         STORAGE_ROTATE_TEST_COUNT,
-        &sender,
+        &to_leader_sender,
         &StorageState::default(),
         None,
-        l_receiver,
+        ledger_signal_receiver,
         leader_scheduler,
         &Arc::new(RpcSubscriptions::default()),
     );

@@ -191,13 +191,13 @@ impl Tpu {
     #[allow(clippy::too_many_arguments)]
     pub fn switch_to_leader(
         &mut self,
-        bank: &Arc<Bank>,
+        bank: Arc<Bank>,
         tick_duration: PohServiceConfig,
         transactions_sockets: Vec<UdpSocket>,
         broadcast_socket: UdpSocket,
         sigverify_disabled: bool,
         slot: u64,
-        last_entry_id: &Hash,
+        last_entry_id: Hash,
         blocktree: &Arc<Blocktree>,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     ) {
@@ -234,13 +234,13 @@ impl Tpu {
             &bank,
             verified_receiver,
             tick_duration,
-            last_entry_id,
+            &last_entry_id,
             max_tick_height,
             self.id,
         );
 
         let broadcast_service = BroadcastService::new(
-            bank.clone(),
+            bank,
             broadcast_socket,
             self.cluster_info.clone(),
             blob_index,
