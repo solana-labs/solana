@@ -63,11 +63,11 @@ else
   done
 fi
 echo
-echo API nodes:
-if [[ ${#apiIpList[@]} -eq 0 ]]; then
+echo Blockstreamers:
+if [[ ${#blockstreamerIpList[@]} -eq 0 ]]; then
   echo "  None"
 else
-  for ipAddress in "${apiIpList[@]}"; do
+  for ipAddress in "${blockstreamerIpList[@]}"; do
     printNode fullnode "$ipAddress"
   done
 fi
