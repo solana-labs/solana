@@ -47,9 +47,8 @@ impl BankForks {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_sdk::hash::Hash;
-    use solana_sdk::pubkey::Pubkey;
     use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::hash::Hash;
 
     #[test]
     fn test_bank_forks_root() {
