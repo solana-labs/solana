@@ -1,6 +1,8 @@
+use crate::active_stakers::ActiveStakers;
 use rand::distributions::{Distribution, WeightedIndex};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
+use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 use std::ops::Index;
 
@@ -11,7 +13,7 @@ pub struct LeaderSchedule {
 }
 
 impl LeaderSchedule {
-    pub fn new(ids_and_stakes: &[(Pubkey, u64)], seed: &[u8; 32], slots_per_epoch: u64) -> Self {
+    pub fn new(ids_and_stakes: &[(Pubkey, u64)], seed: &[u8; 32], len: u64) -> Self {
         let (pubkeys, stakes): (Vec<Pubkey>, Vec<u64>) = ids_and_stakes
             .iter()
             .map(|&(ref id, ref stake)| (id, stake))
@@ -20,11 +22,18 @@ impl LeaderSchedule {
         // Should have no zero weighted stakes
         let mut rng = ChaChaRng::from_seed(*seed);
         let weighted_index = WeightedIndex::new(stakes).unwrap();
-        let slot_leaders = (0..slots_per_epoch)
+        let slot_leaders = (0..len)
             .map(|_| pubkeys[weighted_index.sample(&mut rng)])
             .collect();
 
         Self { slot_leaders }
+    }
+
+    pub fn new_with_bank(bank: &Bank, len: u64) -> Self {
+        let active_stakers = ActiveStakers::new(&bank);
+        let mut seed = [0u8; 32];
+        seed.copy_from_slice(bank.last_id().as_ref());
+        Self::new(&active_stakers.sorted_stakes(), &seed, len)
     }
 }
 
@@ -38,6 +47,7 @@ impl Index<usize> for LeaderSchedule {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::{Keypair, KeypairUtil};
 
     #[test]
@@ -53,7 +63,7 @@ mod tests {
     }
 
     #[test]
-    fn test_new_leader_schedule() {
+    fn test_leader_schedule_basic() {
         let num_keys = 10;
         let stakes: Vec<_> = (0..num_keys)
             .map(|i| (Keypair::new().pubkey(), i))
@@ -62,11 +72,20 @@ mod tests {
         let seed = Keypair::new().pubkey();
         let mut seed_bytes = [0u8; 32];
         seed_bytes.copy_from_slice(seed.as_ref());
-        let slots_per_epoch = num_keys * 10;
-        let leader_schedule = LeaderSchedule::new(&stakes, &seed_bytes, slots_per_epoch);
-        let leader_schedule2 = LeaderSchedule::new(&stakes, &seed_bytes, slots_per_epoch);
-        assert_eq!(leader_schedule.slot_leaders.len() as u64, slots_per_epoch);
+        let len = num_keys * 10;
+        let leader_schedule = LeaderSchedule::new(&stakes, &seed_bytes, len);
+        let leader_schedule2 = LeaderSchedule::new(&stakes, &seed_bytes, len);
+        assert_eq!(leader_schedule.slot_leaders.len() as u64, len);
         // Check that the same schedule is reproducibly generated
         assert_eq!(leader_schedule, leader_schedule2);
+    }
+
+    #[test]
+    fn test_leader_schedule_via_bank() {
+        let pubkey = Keypair::new().pubkey();
+        let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(2, pubkey, 2);
+        let bank = Bank::new(&genesis_block);
+        let leader_schedule = LeaderSchedule::new_with_bank(&bank, 2);
+        assert_eq!(leader_schedule.slot_leaders, vec![pubkey, pubkey]);
     }
 }
