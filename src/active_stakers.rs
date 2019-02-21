@@ -1,4 +1,3 @@
-use crate::leader_schedule::LeaderSchedule;
 use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT};
@@ -60,7 +59,7 @@ impl ActiveStakers {
         Self::new_with_bounds(bank, DEFAULT_ACTIVE_WINDOW_TICK_LENGTH, bank.tick_height())
     }
 
-    pub fn ranked_stakes(&self) -> Vec<(Pubkey, u64)> {
+    pub fn sorted_stakes(&self) -> Vec<(Pubkey, u64)> {
         self.stakes.clone()
     }
 
@@ -74,10 +73,6 @@ impl ActiveStakers {
         let mut pubkeys = self.pubkeys();
         pubkeys.sort_unstable();
         pubkeys
-    }
-
-    pub fn leader_schedule(&self) -> LeaderSchedule {
-        LeaderSchedule::new(self.pubkeys())
     }
 }
 

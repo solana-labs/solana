@@ -230,7 +230,7 @@ impl LeaderScheduler {
         self.seed = Self::calculate_seed(tick_height);
         let ranked_active_set =
             ActiveStakers::new_with_bounds(&bank, self.active_window_tick_length, tick_height)
-                .ranked_stakes();
+                .sorted_stakes();
 
         if ranked_active_set.is_empty() {
             info!(
