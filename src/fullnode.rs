@@ -268,7 +268,7 @@ impl Fullnode {
 
         let tvu = Tvu::new(
             voting_keypair_option,
-            &bank,
+            &bank_forks,
             blob_index,
             entry_height,
             last_entry_id,

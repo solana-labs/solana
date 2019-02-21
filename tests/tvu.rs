@@ -1,4 +1,5 @@
 use log::trace;
+use solana::bank_forks::BankForks;
 use solana::blocktree::Blocktree;
 use solana::blocktree::{get_tmp_ledger_path, BlocktreeConfig};
 use solana::cluster_info::{ClusterInfo, Node};
@@ -84,7 +85,9 @@ fn test_replay() {
     let starting_balance = 10_000;
     let (genesis_block, mint_keypair) = GenesisBlock::new(starting_balance);
     let tvu_addr = target1.info.tvu;
-    let bank = Arc::new(Bank::new(&genesis_block));
+
+    let bank_forks = BankForks::new(0, Bank::new(&genesis_block));
+    let bank = bank_forks.working_bank();
     let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::new_with_bank(
         &leader_scheduler_config,
         &bank,
@@ -109,7 +112,7 @@ fn test_replay() {
     let (sender, _) = channel();
     let tvu = Tvu::new(
         Some(Arc::new(voting_keypair)),
-        &bank,
+        &Arc::new(RwLock::new(bank_forks)),
         0,
         0,
         cur_hash,
