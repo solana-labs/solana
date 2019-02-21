@@ -38,6 +38,7 @@ impl BankForks {
 mod tests {
     use super::*;
     use solana_sdk::hash::Hash;
+    use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_bank_forks_root() {
@@ -51,7 +52,7 @@ mod tests {
     fn test_bank_forks_parent() {
         let bank = Bank::default();
         let mut bank_forks = BankForks::new(0, bank);
-        let child_bank = Bank::new_from_parent(&bank_forks.working_bank());
+        let child_bank = Bank::new_from_parent(&bank_forks.working_bank(), &Pubkey::default());
         child_bank.register_tick(&Hash::default());
         let child_bank_id = 1;
         bank_forks.insert(child_bank_id, child_bank);

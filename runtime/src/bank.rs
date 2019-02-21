@@ -104,6 +104,9 @@ pub struct Bank {
     // A number of slots before slot_index 0. Used to generate the current
     // epoch's leader schedule.
     leader_schedule_slot_offset: u64,
+
+    /// Slot leader
+    leader: Pubkey,
 }
 
 impl Default for Bank {
@@ -117,6 +120,7 @@ impl Default for Bank {
             ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
             slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
             leader_schedule_slot_offset: DEFAULT_SLOTS_PER_EPOCH,
+            leader: Pubkey::default(),
         }
     }
 }
@@ -130,7 +134,7 @@ impl Bank {
     }
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
-    pub fn new_from_parent(parent: &Arc<Bank>) -> Self {
+    pub fn new_from_parent(parent: &Arc<Bank>, leader: &Pubkey) -> Self {
         let mut bank = Self::default();
         bank.last_id_queue = RwLock::new(parent.last_id_queue.read().unwrap().clone());
         bank.ticks_per_slot = parent.ticks_per_slot;
@@ -141,6 +145,7 @@ impl Bank {
         if *parent.hash.read().unwrap() == Hash::default() {
             *parent.hash.write().unwrap() = parent.hash_internal_state();
         }
+        bank.leader = leader.clone();
         bank
     }
 
@@ -499,7 +504,7 @@ impl Bank {
         txs: &[Transaction],
         loaded_accounts: &[Result<(InstructionAccounts, InstructionLoaders)>],
         executed: &[Result<()>],
-    ) {
+    ) -> Vec<Result<()>> {
         let now = Instant::now();
         self.accounts
             .store_accounts(self.is_root(), txs, executed, loaded_accounts);
@@ -512,6 +517,27 @@ impl Bank {
             txs.len(),
         );
         self.update_transaction_statuses(txs, &executed);
+
+        let mut fees = 0;
+        let results = txs
+            .iter()
+            .zip(executed.into_iter())
+            .map(|(tx, res)| match *res {
+                Err(BankError::ProgramError(_, _)) => {
+                    // Charge the transaction fee even in case of ProgramError
+                    self.withdraw(&tx.account_keys[0], tx.fee)?;
+                    fees += tx.fee;
+                    Ok(())
+                }
+                Ok(()) => {
+                    fees += tx.fee;
+                    Ok(())
+                }
+                _ => res.clone(),
+            })
+            .collect();
+        self.deposit(&self.leader, fees);
+        results
     }
 
     /// Process a batch of transactions.
@@ -525,8 +551,7 @@ impl Bank {
         let (loaded_accounts, executed) =
             self.load_and_execute_transactions(txs, lock_results, max_age);
 
-        self.commit_transactions(txs, &loaded_accounts, &executed);
-        executed
+        self.commit_transactions(txs, &loaded_accounts, &executed)
     }
 
     #[must_use]
@@ -579,10 +604,19 @@ impl Bank {
         parents
     }
 
-    pub fn withdraw(&self, pubkey: &Pubkey, tokens: u64) {
-        let mut account = self.get_account(pubkey).unwrap_or_default();
-        account.tokens -= tokens;
-        self.accounts.store_slow(true, pubkey, &account);
+    pub fn withdraw(&self, pubkey: &Pubkey, tokens: u64) -> Result<()> {
+        match self.get_account(pubkey) {
+            Some(mut account) => {
+                if tokens > account.tokens {
+                    return Err(BankError::InsufficientFundsForFee);
+                }
+
+                account.tokens -= tokens;
+                self.accounts.store_slow(true, pubkey, &account);
+                Ok(())
+            }
+            None => Err(BankError::AccountNotFound),
+        }
     }
 
     pub fn deposit(&self, pubkey: &Pubkey, tokens: u64) {
@@ -953,6 +987,77 @@ mod tests {
     }
 
     #[test]
+    fn test_bank_deposit() {
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(100);
+        let bank = Bank::new(&genesis_block);
+
+        // Test new account
+        let key = Keypair::new();
+        bank.deposit(&key.pubkey(), 10);
+        assert_eq!(bank.get_balance(&key.pubkey()), 10);
+
+        // Existing account
+        bank.deposit(&key.pubkey(), 3);
+        assert_eq!(bank.get_balance(&key.pubkey()), 13);
+    }
+
+    #[test]
+    fn test_bank_withdraw() {
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(100);
+        let bank = Bank::new(&genesis_block);
+
+        // Test no account
+        let key = Keypair::new();
+        assert_eq!(
+            bank.withdraw(&key.pubkey(), 10),
+            Err(BankError::AccountNotFound)
+        );
+
+        bank.deposit(&key.pubkey(), 3);
+        assert_eq!(bank.get_balance(&key.pubkey()), 3);
+
+        // Low balance
+        assert_eq!(
+            bank.withdraw(&key.pubkey(), 10),
+            Err(BankError::InsufficientFundsForFee)
+        );
+
+        // Enough balance
+        assert_eq!(bank.withdraw(&key.pubkey(), 2), Ok(()));
+        assert_eq!(bank.get_balance(&key.pubkey()), 1);
+    }
+
+    #[test]
+    fn test_bank_tx_fee() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(100);
+        let mut bank = Bank::new(&genesis_block);
+        bank.leader = Pubkey::default();
+
+        let key1 = Keypair::new();
+        let key2 = Keypair::new();
+
+        let tx = SystemTransaction::new_move(
+            &mint_keypair,
+            key1.pubkey(),
+            2,
+            genesis_block.last_id(),
+            3,
+        );
+        let initial_balance = bank.get_balance(&bank.leader);
+        assert_eq!(bank.process_transaction(&tx), Ok(()));
+        assert_eq!(bank.get_balance(&bank.leader), initial_balance + 3);
+        assert_eq!(bank.get_balance(&key1.pubkey()), 2);
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 2 - 3);
+
+        let tx = SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.last_id(), 1);
+        assert_eq!(bank.process_transaction(&tx), Ok(()));
+        assert_eq!(bank.get_balance(&bank.leader), initial_balance + 4);
+        assert_eq!(bank.get_balance(&key1.pubkey()), 0);
+        assert_eq!(bank.get_balance(&key2.pubkey()), 1);
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 2 - 3);
+    }
+
+    #[test]
     fn test_debits_before_credits() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let bank = Bank::new(&genesis_block);
@@ -1028,13 +1133,13 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         assert!(bank.leader_schedule_bank().is_none());
 
-        let bank = Bank::new_from_parent(&Arc::new(bank));
+        let bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default());
         let ticks_per_offset = bank.leader_schedule_slot_offset * bank.ticks_per_slot();
         register_ticks(&bank, ticks_per_offset);
         assert_eq!(bank.slot_height(), bank.leader_schedule_slot_offset);
 
         let slot_height = bank.slots_per_epoch() - bank.leader_schedule_slot_offset;
-        let bank = Bank::new_from_parent(&Arc::new(bank));
+        let bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default());
         assert_eq!(
             bank.leader_schedule_bank().unwrap().slot_height(),
             slot_height
@@ -1164,7 +1269,7 @@ mod tests {
         let (genesis_block, _) = GenesisBlock::new(1);
         let parent = Arc::new(Bank::new(&genesis_block));
 
-        let bank = Bank::new_from_parent(&parent);
+        let bank = Bank::new_from_parent(&parent, &Pubkey::default());
         assert!(Arc::ptr_eq(&bank.parents()[0], &parent));
     }
 
@@ -1183,7 +1288,7 @@ mod tests {
             0,
         );
         assert_eq!(parent.process_transaction(&tx), Ok(()));
-        let bank = Bank::new_from_parent(&parent);
+        let bank = Bank::new_from_parent(&parent, &Pubkey::default());
         assert_eq!(
             bank.process_transaction(&tx),
             Err(BankError::DuplicateSignature)
@@ -1206,7 +1311,7 @@ mod tests {
             0,
         );
         assert_eq!(parent.process_transaction(&tx), Ok(()));
-        let bank = Bank::new_from_parent(&parent);
+        let bank = Bank::new_from_parent(&parent, &Pubkey::default());
         let tx = SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.last_id(), 0);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         assert_eq!(parent.get_signature_status(&tx.signatures[0]), None);
@@ -1231,7 +1336,7 @@ mod tests {
         assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
 
         // Checkpointing should not change its state
-        let bank2 = Bank::new_from_parent(&Arc::new(bank1));
+        let bank2 = Bank::new_from_parent(&Arc::new(bank1), &Pubkey::default());
         assert_eq!(bank0.hash_internal_state(), bank2.hash_internal_state());
     }
 
@@ -1258,7 +1363,7 @@ mod tests {
             0,
         );
         assert_eq!(parent.process_transaction(&tx_move_mint_to_1), Ok(()));
-        let mut bank = Bank::new_from_parent(&parent);
+        let mut bank = Bank::new_from_parent(&parent, &Pubkey::default());
         let tx_move_1_to_2 =
             SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.last_id(), 0);
         assert_eq!(bank.process_transaction(&tx_move_1_to_2), Ok(()));
