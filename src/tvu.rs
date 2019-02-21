@@ -62,7 +62,6 @@ impl Tvu {
     /// # Arguments
     /// * `bank` - The bank state.
     /// * `entry_height` - Initial ledger height
-    /// * `blob_index` - Index of last processed blob
     /// * `last_entry_id` - Hash of the last entry
     /// * `cluster_info` - The cluster_info state.
     /// * `sockets` - My fetch, repair, and restransmit sockets
@@ -71,7 +70,6 @@ impl Tvu {
     pub fn new(
         voting_keypair: Option<Arc<VotingKeypair>>,
         bank_forks: &Arc<RwLock<BankForks>>,
-        blob_index: u64,
         entry_height: u64,
         last_entry_id: Hash,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -129,7 +127,6 @@ impl Tvu {
             bank.clone(),
             cluster_info.clone(),
             exit.clone(),
-            blob_index,
             last_entry_id,
             to_leader_sender,
             ledger_signal_receiver,
@@ -246,7 +243,6 @@ pub mod tests {
         let tvu = Tvu::new(
             Some(Arc::new(voting_keypair)),
             &Arc::new(RwLock::new(bank_forks)),
-            0,
             0,
             cur_hash,
             &cref1,

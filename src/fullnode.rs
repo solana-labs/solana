@@ -239,7 +239,7 @@ impl Fullnode {
         };
 
         // Figure which node should generate the next tick
-        let (next_leader, next_slot, blob_index) = {
+        let (next_leader, next_slot) = {
             let next_tick = bank.tick_height() + 1;
 
             let leader_scheduler = leader_scheduler.read().unwrap();
@@ -248,28 +248,20 @@ impl Fullnode {
             let next_leader = leader_scheduler
                 .get_leader_for_slot(next_slot)
                 .expect("Leader not known after processing bank");
-            let blob_index = if let Some(meta) = blocktree.meta(next_slot).expect("Database error")
-            {
-                meta.consumed
-            } else {
-                0
-            };
 
             trace!(
-                "node {:?} scheduled as leader for slot {}, starting blob_index={}",
+                "node {:?} scheduled as leader for slot {}",
                 next_leader,
                 next_slot,
-                blob_index,
             );
 
-            (next_leader, next_slot, blob_index)
+            (next_leader, next_slot)
         };
         // END TODO
 
         let tvu = Tvu::new(
             voting_keypair_option,
             &bank_forks,
-            blob_index,
             entry_height,
             last_entry_id,
             &cluster_info,
@@ -302,7 +294,7 @@ impl Fullnode {
         };
 
         // TODO: This first rotate should come from the Tvu/ReplayStage
-        fullnode.rotate(&bank, next_leader, next_slot, blob_index, &last_entry_id);
+        fullnode.rotate(&bank, next_leader, next_slot, &last_entry_id);
         inc_new_counter_info!("fullnode-new", 1);
         fullnode
     }
@@ -312,7 +304,6 @@ impl Fullnode {
         bank: &Arc<Bank>,
         leader: Pubkey,
         slot: u64,
-        blob_index: u64,
         last_entry_id: &Hash,
     ) -> FullnodeReturnType {
         if leader == self.id {
@@ -342,7 +333,6 @@ impl Fullnode {
                     .expect("Failed to clone broadcast socket"),
                 self.sigverify_disabled,
                 slot,
-                blob_index,
                 last_entry_id,
                 &self.blocktree,
                 &self.leader_scheduler,
@@ -392,7 +382,7 @@ impl Fullnode {
                     //self.bank_forks.write().set_working_bank_id(bank_id);
                     let bank = self.bank_forks.read().unwrap().working_bank();
 
-                    let transition = self.rotate(&bank, leader, slot, 0, &bank.last_id());
+                    let transition = self.rotate(&bank, leader, slot, &bank.last_id());
                     debug!("role transition complete: {:?}", transition);
                     if let Some(ref rotation_notifier) = rotation_notifier {
                         rotation_notifier.send((transition, slot)).unwrap();

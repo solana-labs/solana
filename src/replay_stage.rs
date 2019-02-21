@@ -189,7 +189,6 @@ impl ReplayStage {
         bank: Arc<Bank>,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         exit: Arc<AtomicBool>,
-        mut current_blob_index: u64,
         last_entry_id: Hash,
         to_leader_sender: &TvuRotationSender,
         ledger_signal_receiver: Receiver<bool>,
@@ -202,6 +201,7 @@ impl ReplayStage {
         let to_leader_sender = to_leader_sender.clone();
         let last_entry_id = Arc::new(RwLock::new(last_entry_id));
         let subscriptions_ = subscriptions.clone();
+
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
@@ -223,7 +223,11 @@ impl ReplayStage {
                             + leader_scheduler.num_ticks_left_in_slot(first_tick_in_current_slot),
                     )
                 };
-
+                let mut current_blob_index = blocktree
+                    .meta(current_slot.unwrap())
+                    .expect("Database error")
+                    .map(|meta| meta.consumed)
+                    .unwrap_or(0);
                 let mut fees = 0;
 
                 // Loop through blocktree MAX_ENTRY_RECV_PER_ITER entries at a time for each
@@ -465,7 +469,6 @@ mod test {
                 bank.clone(),
                 Arc::new(RwLock::new(cluster_info_me)),
                 exit.clone(),
-                meta.consumed,
                 last_entry_id,
                 &rotation_sender,
                 l_receiver,
@@ -569,7 +572,6 @@ mod test {
                 bank.clone(),
                 cluster_info_me.clone(),
                 exit.clone(),
-                entry_height,
                 last_entry_id,
                 &to_leader_sender,
                 l_receiver,
@@ -695,7 +697,6 @@ mod test {
                 bank.clone(),
                 cluster_info_me.clone(),
                 exit.clone(),
-                meta.consumed,
                 last_entry_id,
                 &rotation_tx,
                 l_receiver,
