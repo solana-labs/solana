@@ -358,9 +358,9 @@ start() {
 
   declare bootstrapLeader=true
   declare nodeType=fullnode
-  for ipAddress in "${fullnodeIpList[@]}" - "${apiIpList[@]}"; do
+  for ipAddress in "${fullnodeIpList[@]}" - "${blockstreamerIpList[@]}"; do
     if [[ $ipAddress = - ]]; then
-      nodeType=apinode
+      nodeType=blockstreamer
       continue
     fi
     if $updateNodes; then
@@ -445,7 +445,7 @@ start() {
   echo
   echo "+++ Deployment Successful"
   echo "Bootstrap leader deployment took $bootstrapNodeDeployTime seconds"
-  echo "Additional fullnode deployment (${#fullnodeIpList[@]} full nodes, ${#apiIpList[@]} api nodes) took $additionalNodeDeployTime seconds"
+  echo "Additional fullnode deployment (${#fullnodeIpList[@]} full nodes, ${#blockstreamerIpList[@]} blockstreamer nodes) took $additionalNodeDeployTime seconds"
   echo "Client deployment (${#clientIpList[@]} instances) took $clientDeployTime seconds"
   echo "Network start logs in $netLogDir:"
   ls -l "$netLogDir"
@@ -480,7 +480,7 @@ stop() {
   SECONDS=0
   $metricsWriteDatapoint "testnet-deploy net-stop-begin=1"
 
-  for ipAddress in "${fullnodeIpList[@]}" "${apiIpList[@]}" "${clientIpList[@]}"; do
+  for ipAddress in "${fullnodeIpList[@]}" "${blockstreamerIpList[@]}" "${clientIpList[@]}"; do
     stopNode "$ipAddress"
   done
 
@@ -529,7 +529,7 @@ logs)
   for ipAddress in "${clientIpList[@]}"; do
     fetchRemoteLog "$ipAddress" client
   done
-  for ipAddress in "${apiIpList[@]}"; do
+  for ipAddress in "${blockstreamerIpList[@]}"; do
     fetchRemoteLog "$ipAddress" fullnode
   done
   ;;

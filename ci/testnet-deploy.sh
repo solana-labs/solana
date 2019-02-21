@@ -18,7 +18,7 @@ enableGpu=false
 bootDiskType=""
 leaderRotation=true
 useTarReleaseChannel=false
-apiNode=false
+blockstreamer=false
 
 usage() {
   exitcode=0
@@ -44,7 +44,7 @@ Deploys a CD testnet
                                  (default: $tarChannelOrTag)
    -n [number]          - Number of additional full nodes (default: $additionalFullNodeCount)
    -c [number]          - Number of client bencher nodes (default: $clientNodeCount)
-   -u                   - Include an API node (default: $apiNode)
+   -u                   - Include a Blockstreamer (default: $blockstreamer)
    -P                   - Use public network IP addresses (default: $publicNetwork)
    -G                   - Enable GPU, and set count/type of GPUs to use (e.g n1-standard-16 --accelerator count=4,type=nvidia-tesla-k80)
    -g                   - Enable GPU (default: $enableGpu)
@@ -127,7 +127,7 @@ while getopts "h?p:Pn:c:s:t:gG:a:Dbd:ru" opt; do
     skipSetup=true
     ;;
   u)
-    apiNode=true
+    blockstreamer=true
     ;;
   *)
     usage "Error: unhandled option: $opt"
@@ -171,7 +171,7 @@ if ! $skipSetup; then
     -n "$additionalFullNodeCount"
   )
 
-  if $apiNode; then
+  if $blockstreamer; then
     create_args+=(-u)
   fi
 

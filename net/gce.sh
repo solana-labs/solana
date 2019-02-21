@@ -17,7 +17,7 @@ gce)
   bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
   fullNodeMachineType=n1-standard-16
   clientMachineType=n1-standard-16
-  apiNodeMachineType=n1-standard-8
+  blockstreamerMachineType=n1-standard-8
   ;;
 ec2)
   # shellcheck source=net/scripts/ec2-provider.sh
@@ -28,7 +28,7 @@ ec2)
   bootstrapLeaderMachineType=$cpuBootstrapLeaderMachineType
   fullNodeMachineType=m4.2xlarge
   clientMachineType=m4.2xlarge
-  apiNodeMachineType=m4.2xlarge
+  blockstreamerMachineType=m4.2xlarge
   ;;
 *)
   echo "Error: Unknown cloud provider: $cloudProvider"
@@ -39,7 +39,7 @@ esac
 prefix=testnet-dev-${USER//[^A-Za-z0-9]/}
 additionalFullNodeCount=5
 clientNodeCount=1
-apiNode=false
+blockstreamer=false
 fullNodeBootDiskSizeInGb=1000
 clientBootDiskSizeInGb=75
 
@@ -72,12 +72,12 @@ Manage testnet instances
  create-specific options:
    -n [number]      - Number of additional fullnodes (default: $additionalFullNodeCount)
    -c [number]      - Number of client nodes (default: $clientNodeCount)
-   -u               - Include an API node (default: $apiNode)
+   -u               - Include a Blockstreamer (default: $blockstreamer)
    -P               - Use public network IP addresses (default: $publicNetwork)
    -g               - Enable GPU (default: $enableGpu)
    -G               - Enable GPU, and set count/type of GPUs to use
                       (e.g $cpuBootstrapLeaderMachineType --accelerator count=4,type=nvidia-tesla-k80)
-   -a [address]     - Address to be be assigned to the API node if present,
+   -a [address]     - Address to be be assigned to the Blockstreamer if present,
                       otherwise the bootstrap fullnode.
                       * For GCE, [address] is the "name" of the desired External
                         IP Address.
@@ -145,7 +145,7 @@ while getopts "h?p:Pn:c:z:gG:a:d:bu" opt; do
     bootDiskType=$OPTARG
     ;;
   u)
-    apiNode=true
+    blockstreamer=true
     ;;
   *)
     usage "unhandled option: $opt"
@@ -363,12 +363,12 @@ EOF
     cloud_ForEachInstance waitForStartupComplete
   }
 
-  echo "apiIpList=()" >> "$configFile"
-  echo "apiIpListPrivate=()" >> "$configFile"
-  echo "Looking for api instances..."
-  cloud_FindInstances "$prefix-api"
+  echo "blockstreamerIpList=()" >> "$configFile"
+  echo "blockstreamerIpListPrivate=()" >> "$configFile"
+  echo "Looking for blockstreamer instances..."
+  cloud_FindInstances "$prefix-blockstreamer"
   [[ ${#instances[@]} -eq 0 ]] || {
-    cloud_ForEachInstance recordInstanceIp apiIpList
+    cloud_ForEachInstance recordInstanceIp blockstreamerIpList
     cloud_ForEachInstance waitForStartupComplete
   }
 
@@ -427,7 +427,7 @@ Network composition:
   Bootstrap leader = $bootstrapLeaderMachineType (GPU=$enableGpu)
   Additional fullnodes = $additionalFullNodeCount x $fullNodeMachineType
   Client(s) = $clientNodeCount x $clientMachineType
-  API Node = $apiNode
+  Blockstreamer = $blockstreamer
 
 Leader rotation: $leaderRotation
 
@@ -497,8 +497,8 @@ touch /.instance-startup-complete
 
 EOF
 
-  if $apiNode; then
-    apiNodeAddress=$customAddress
+  if $blockstreamer; then
+    blockstreamerAddress=$customAddress
   else
     bootstrapLeaderAddress=$customAddress
   fi
@@ -519,10 +519,10 @@ EOF
       "$startupScript" "" "$bootDiskType"
   fi
 
-  if $apiNode; then
-    cloud_CreateInstances "$prefix" "$prefix-api" "1" \
-      "$imageName" "$apiNodeMachineType" "$fullNodeBootDiskSizeInGb" \
-      "$startupScript" "$apiNodeAddress" "$bootDiskType"
+  if $blockstreamer; then
+    cloud_CreateInstances "$prefix" "$prefix-blockstreamer" "1" \
+      "$imageName" "$blockstreamerMachineType" "$fullNodeBootDiskSizeInGb" \
+      "$startupScript" "$blockstreamerAddress" "$bootDiskType"
   fi
 
   $metricsWriteDatapoint "testnet-deploy net-create-complete=1"
@@ -558,10 +558,10 @@ info)
     printNode bench-tps "$ipAddress" "$ipAddressPrivate"
   done
 
-  for i in $(seq 0 $(( ${#apiIpList[@]} - 1)) ); do
-    ipAddress=${apiIpList[$i]}
-    ipAddressPrivate=${apiIpListPrivate[$i]}
-    printNode api "$ipAddress" "$ipAddressPrivate"
+  for i in $(seq 0 $(( ${#blockstreamerIpList[@]} - 1)) ); do
+    ipAddress=${blockstreamerIpList[$i]}
+    ipAddressPrivate=${blockstreamerIpListPrivate[$i]}
+    printNode blockstreamer "$ipAddress" "$ipAddressPrivate"
   done
   ;;
 *)

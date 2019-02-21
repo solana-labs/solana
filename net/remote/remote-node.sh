@@ -169,7 +169,7 @@ local|tar)
     ./multinode-demo/bootstrap-leader.sh $maybeNoLeaderRotation > bootstrap-leader.log 2>&1 &
     ln -sTf bootstrap-leader.log fullnode.log
     ;;
-  fullnode|apinode)
+  fullnode|blockstreamer)
     net/scripts/rsync-retry.sh -vPrc "$entrypointIp":~/.cargo/bin/ ~/.cargo/bin/
 
     if [[ -e /dev/nvidia0 && -x ~/.cargo/bin/solana-fullnode-cuda ]]; then
@@ -181,7 +181,7 @@ local|tar)
     if ! $leaderRotation; then
       args+=("--no-leader-rotation")
     fi
-    if [[ $nodeType = apinode ]]; then
+    if [[ $nodeType = blockstreamer ]]; then
       args+=(
         --blockstream /tmp/solana-blockstream.sock
         --no-signer
@@ -193,7 +193,7 @@ local|tar)
       ./multinode-demo/setup.sh -t fullnode $setupArgs
     fi
 
-    if [[ $nodeType = apinode ]]; then
+    if [[ $nodeType = blockstreamer ]]; then
       npm install @solana/blockexplorer@1
       npx solana-blockexplorer > blockexplorer.log 2>&1 &
     fi
