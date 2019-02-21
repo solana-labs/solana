@@ -230,7 +230,7 @@ impl BroadcastService {
             let mut broadcast_table = cluster_info
                 .read()
                 .unwrap()
-                .sorted_tvu_peers(&bank.get_stakes());
+                .sorted_tvu_peers(&bank.staked_nodes());
             // Layer 1, leader nodes are limited to the fanout size.
             broadcast_table.truncate(DATA_PLANE_FANOUT);
             inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);

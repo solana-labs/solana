@@ -597,14 +597,13 @@ impl Bank {
             .collect()
     }
 
-    /// Collect all the stakes into a Map keyed on the Node id.
-    pub fn get_stakes(&self) -> HashMap<Pubkey, u64> {
-        let map: HashMap<_, _> = self
-            .vote_states(|_| true)
+    /// Collect the node Pubkey and staker account balance for nodes
+    /// that have non-zero balance in their corresponding staker accounts
+    pub fn staked_nodes(&self) -> HashMap<Pubkey, u64> {
+        self.vote_states(|state| self.get_balance(&state.staker_id) > 0)
             .iter()
             .map(|state| (state.node_id, self.get_balance(&state.staker_id)))
-            .collect();
-        map
+            .collect()
     }
 
     pub fn tick_height(&self) -> u64 {
