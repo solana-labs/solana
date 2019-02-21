@@ -145,7 +145,7 @@ impl Bank {
         if *parent.hash.read().unwrap() == Hash::default() {
             *parent.hash.write().unwrap() = parent.hash_internal_state();
         }
-        bank.leader = leader.clone();
+        bank.leader = *leader;
         bank
     }
 
@@ -521,7 +521,7 @@ impl Bank {
         let mut fees = 0;
         let results = txs
             .iter()
-            .zip(executed.into_iter())
+            .zip(executed.iter())
             .map(|(tx, res)| match *res {
                 Err(BankError::ProgramError(_, _)) => {
                     // Charge the transaction fee even in case of ProgramError
