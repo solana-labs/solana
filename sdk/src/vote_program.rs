@@ -27,13 +27,13 @@ pub const MAX_VOTE_HISTORY: usize = 32;
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Vote {
     // TODO: add signature of the state here as well
-    /// A vote for height tick_height
-    pub tick_height: u64,
+    /// A vote for height slot_height
+    pub slot_height: u64,
 }
 
 impl Vote {
-    pub fn new(tick_height: u64) -> Self {
-        Self { tick_height }
+    pub fn new(slot_height: u64) -> Self {
+        Self { slot_height }
     }
 }
 
