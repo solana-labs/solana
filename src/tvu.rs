@@ -22,20 +22,19 @@ use crate::retransmit_stage::RetransmitStage;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::storage_stage::{StorageStage, StorageState};
-use crate::tpu::{TpuReturnType, TpuRotationReceiver, TpuRotationSender};
 use crate::voting_keypair::VotingKeypair;
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread;
 
-pub type TvuReturnType = TpuReturnType;
-pub type TvuRotationSender = TpuRotationSender;
-pub type TvuRotationReceiver = TpuRotationReceiver;
+pub type TvuReturnType = u64; // tick_height to initiate a rotation
+pub type TvuRotationSender = Sender<TvuReturnType>;
+pub type TvuRotationReceiver = Receiver<TvuReturnType>;
 
 pub struct Tvu {
     fetch_stage: BlobFetchStage,
