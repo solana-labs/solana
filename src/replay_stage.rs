@@ -205,8 +205,11 @@ impl ReplayStage {
             .name("solana-replay-stage".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit_.clone());
-                let mut last_leader_id =
-                    Self::get_leader_for_next_tick(bank.tick_height(), &leader_scheduler_);
+                let mut last_leader_id = leader_scheduler_
+                    .read()
+                    .unwrap()
+                    .get_leader_for_tick(bank.tick_height() + 1)
+                    .unwrap();
                 let mut prev_slot = None;
                 let (mut current_slot, mut max_tick_height_for_slot) = {
                     let tick_height = bank.tick_height();
@@ -294,10 +297,12 @@ impl ReplayStage {
                         // for leader rotation
                         if max_tick_height_for_slot == current_tick_height {
                             // Check for leader rotation
-                            let leader_id = Self::get_leader_for_next_tick(
-                                bank.tick_height(),
-                                &leader_scheduler_,
-                            );
+                            let leader_id = leader_scheduler_
+                                .read()
+                                .unwrap()
+                                .get_leader_for_tick(current_tick_height + 1)
+                                .unwrap();
+
                             if my_id == leader_id || my_id == last_leader_id {
                                 to_leader_sender.send(current_tick_height).unwrap();
                             } else if leader_id != last_leader_id {
@@ -326,17 +331,6 @@ impl ReplayStage {
 
     pub fn exit(&self) {
         self.exit.store(true, Ordering::Relaxed);
-    }
-
-    fn get_leader_for_next_tick(
-        tick_height: u64,
-        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-    ) -> Pubkey {
-        let leader_scheduler = leader_scheduler.read().unwrap();
-        let slot = leader_scheduler.tick_height_to_slot(tick_height + 1);
-        leader_scheduler
-            .get_leader_for_slot(slot)
-            .expect("Scheduled leader should be calculated by this point")
     }
 
     fn get_next_slot(blocktree: &Blocktree, slot_index: u64) -> Option<u64> {
