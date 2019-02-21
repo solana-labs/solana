@@ -8,11 +8,10 @@ use crate::crds_gossip_error::CrdsGossipError;
 use crate::crds_gossip_pull::CrdsGossipPull;
 use crate::crds_gossip_push::{CrdsGossipPush, CRDS_GOSSIP_NUM_ACTIVE};
 use crate::crds_value::CrdsValue;
-use solana_runtime::bank::Bank;
+use hashbrown::HashMap;
 use solana_runtime::bloom::Bloom;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use std::sync::Arc;
 
 ///The min size for bloom filters
 pub const CRDS_GOSSIP_BLOOM_SIZE: usize = 1000;
@@ -94,10 +93,10 @@ impl CrdsGossip {
 
     /// refresh the push active set
     /// * ratio - number of actives to rotate
-    pub fn refresh_push_active_set(&mut self, bank: Option<&Arc<Bank>>) {
+    pub fn refresh_push_active_set(&mut self, stakes: &HashMap<Pubkey, u64>) {
         self.push.refresh_push_active_set(
             &self.crds,
-            bank,
+            stakes,
             self.id,
             self.pull.pull_request_time.len(),
             CRDS_GOSSIP_NUM_ACTIVE,
@@ -108,9 +107,9 @@ impl CrdsGossip {
     pub fn new_pull_request(
         &self,
         now: u64,
-        bank: Option<&Arc<Bank>>,
+        stakes: &HashMap<Pubkey, u64>,
     ) -> Result<(Pubkey, Bloom<Hash>, CrdsValue), CrdsGossipError> {
-        self.pull.new_pull_request(&self.crds, self.id, now, bank)
+        self.pull.new_pull_request(&self.crds, self.id, now, stakes)
     }
 
     /// time when a request to `from` was initiated
@@ -160,16 +159,11 @@ impl CrdsGossip {
     }
 }
 
-/// Computes a normalized(log of bank balance) stake
-pub fn get_stake(id: &Pubkey, bank: Option<&Arc<Bank>>) -> f32 {
-    match bank {
-        Some(bank) => {
-            // cap the max balance to u32 max (it should be plenty)
-            let bal = f64::from(u32::max_value()).min(bank.get_balance(id) as f64);
-            1_f32.max((bal as f32).ln())
-        }
-        _ => 1.0,
-    }
+/// Computes a normalized(log of actual stake) stake
+pub fn get_stake<S: std::hash::BuildHasher>(id: &Pubkey, stakes: &HashMap<Pubkey, u64, S>) -> f32 {
+    // cap the max balance to u32 max (it should be plenty)
+    let bal = f64::from(u32::max_value()).min(*stakes.get(id).unwrap_or(&0) as f64);
+    1_f32.max((bal as f32).ln())
 }
 
 /// Computes bounded weight given some max, a time since last selected, and a stake value
@@ -200,7 +194,7 @@ mod test {
             .crds
             .insert(CrdsValue::ContactInfo(ci.clone()), 0)
             .unwrap();
-        crds_gossip.refresh_push_active_set(None);
+        crds_gossip.refresh_push_active_set(&HashMap::new());
         let now = timestamp();
         //incorrect dest
         let mut res = crds_gossip.process_prune_msg(
