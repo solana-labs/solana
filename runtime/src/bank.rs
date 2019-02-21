@@ -23,7 +23,10 @@ use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::storage_program;
 use solana_sdk::system_program;
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::timing::{duration_as_us, MAX_ENTRY_IDS, NUM_TICKS_PER_SECOND};
+use solana_sdk::timing::{
+    duration_as_us, DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT, MAX_ENTRY_IDS,
+    NUM_TICKS_PER_SECOND,
+};
 use solana_sdk::token_program;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, VoteState};
@@ -606,8 +609,29 @@ impl Bank {
             .collect()
     }
 
+    /// Return the number of ticks since genesis.
     pub fn tick_height(&self) -> u64 {
         self.last_id_queue.read().unwrap().tick_height
+    }
+
+    /// Return the number of ticks since the last slot boundary.
+    pub fn tick_index(&self) -> u64 {
+        self.tick_height() % DEFAULT_TICKS_PER_SLOT
+    }
+
+    /// Return the slot_height of the last registered tick.
+    pub fn slot_height(&self) -> u64 {
+        self.tick_height() / DEFAULT_TICKS_PER_SLOT
+    }
+
+    /// Return the number of slots since the last epoch boundary.
+    pub fn slot_index(&self) -> u64 {
+        self.slot_height() % DEFAULT_SLOTS_PER_EPOCH
+    }
+
+    /// Return the epoch height of the last registered tick.
+    pub fn epoch_height(&self) -> u64 {
+        self.slot_height() / DEFAULT_SLOTS_PER_EPOCH
     }
 
     #[cfg(test)]
@@ -883,6 +907,38 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         assert_eq!(bank.get_balance(&genesis_block.mint_id), 3);
         assert_eq!(bank.get_balance(&dummy_leader_id), 1);
+    }
+
+    // Register n ticks and return the tick, slot and epoch indexes.
+    fn register_ticks(bank: &Bank, n: u64) -> (u64, u64, u64) {
+        for _ in 0..n {
+            bank.register_tick(&Hash::default());
+        }
+        (bank.tick_index(), bank.slot_index(), bank.epoch_height())
+    }
+
+    #[test]
+    fn test_tick_slot_epoch_indexes() {
+        let (genesis_block, _) = GenesisBlock::new(5);
+        let bank = Bank::new(&genesis_block);
+        let ticks_per_slot = DEFAULT_TICKS_PER_SLOT;
+        let slots_per_epoch = DEFAULT_SLOTS_PER_EPOCH;
+        let ticks_per_epoch = ticks_per_slot * slots_per_epoch;
+
+        // All indexes are zero-based.
+        assert_eq!(register_ticks(&bank, 0), (0, 0, 0));
+
+        // Slot index remains zero through the last tick.
+        assert_eq!(
+            register_ticks(&bank, ticks_per_slot - 1),
+            (ticks_per_slot - 1, 0, 0)
+        );
+
+        // Cross a slot boundary.
+        assert_eq!(register_ticks(&bank, 1), (0, 1, 0));
+
+        // Cross an epoch boundary.
+        assert_eq!(register_ticks(&bank, ticks_per_epoch), (0, 1, 1));
     }
 
     #[test]
