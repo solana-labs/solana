@@ -59,10 +59,6 @@ impl ActiveStakers {
         Self::new_with_bounds(bank, DEFAULT_ACTIVE_WINDOW_TICK_LENGTH, bank.tick_height())
     }
 
-    pub fn from_stakes(stakes: Vec<(Pubkey, u64)>) -> Self {
-        ActiveStakers { stakes }
-    }
-
     pub fn sorted_stakes(&self) -> Vec<(Pubkey, u64)> {
         self.stakes.clone()
     }
