@@ -41,7 +41,7 @@ fn retransmit(
             .to_owned(),
     );
     let (neighbors, children) = compute_retransmit_peers(
-        &bank,
+        &bank.get_stakes(),
         cluster_info,
         DATA_PLANE_FANOUT,
         NEIGHBORHOOD_SIZE,

@@ -1,3 +1,4 @@
+use hashbrown::{HashMap, HashSet};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::prelude::*;
 use solana::cluster_info::{
@@ -5,11 +6,8 @@ use solana::cluster_info::{
     NEIGHBORHOOD_SIZE,
 };
 use solana::contact_info::ContactInfo;
-use solana_runtime::bank::Bank;
-use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::channel;
 use std::sync::mpsc::TryRecvError;
 use std::sync::mpsc::{Receiver, Sender};
@@ -37,19 +35,13 @@ fn run_simulation(num_nodes: u64, fanout: usize, hood_size: usize) {
     // set timeout to 5 minutes
     let timeout = 60 * 5;
 
-    // math yo
-    let required_balance = num_nodes * (num_nodes + 1) / 2;
-
-    // create a genesis block
-    let (genesis_block, mint_keypair) = GenesisBlock::new(required_balance);
-
     // describe the leader
     let leader_info = ContactInfo::new_localhost(Keypair::new().pubkey(), 0);
     let mut cluster_info = ClusterInfo::new(leader_info.clone());
     cluster_info.set_leader(leader_info.id);
 
-    // create a bank
-    let bank = Arc::new(Bank::new(&genesis_block));
+    // setup stakes
+    let mut stakes = HashMap::new();
 
     // setup accounts for all nodes (leader has 0 bal)
     let (s, r) = channel();
@@ -69,8 +61,7 @@ fn run_simulation(num_nodes: u64, fanout: usize, hood_size: usize) {
             //distribute neighbors across threads to maximize parallel compute
             let batch_ix = *i as usize % batches.len();
             let node = ContactInfo::new_localhost(Keypair::new().pubkey(), 0);
-            bank.transfer(*i, &mint_keypair, node.id, bank.last_id())
-                .unwrap();
+            stakes.insert(node.id, *i);
             cluster_info.insert_info(node.clone());
             let (s, r) = channel();
             batches
@@ -82,14 +73,11 @@ fn run_simulation(num_nodes: u64, fanout: usize, hood_size: usize) {
     });
     let c_info = cluster_info.clone();
 
-    // check that all tokens have been exhausted
-    assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 0);
-
     // create some "blobs".
     let blobs: Vec<(_, _)> = (0..100).into_par_iter().map(|i| (i as i32, true)).collect();
 
     // pretend to broadcast from leader - cluster_info::create_broadcast_orders
-    let mut broadcast_table = cluster_info.sorted_tvu_peers(&bank);
+    let mut broadcast_table = cluster_info.sorted_tvu_peers(&stakes);
     broadcast_table.truncate(fanout);
     let orders = ClusterInfo::create_broadcast_orders(false, &blobs, &broadcast_table);
 
@@ -119,7 +107,7 @@ fn run_simulation(num_nodes: u64, fanout: usize, hood_size: usize) {
                 cluster.gossip.set_self(*id);
                 if !mapped_peers.contains_key(id) {
                     let (neighbors, children) = compute_retransmit_peers(
-                        &bank,
+                        &stakes,
                         &Arc::new(RwLock::new(cluster.clone())),
                         fanout,
                         hood_size,
