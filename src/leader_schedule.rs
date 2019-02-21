@@ -16,8 +16,8 @@ impl LeaderSchedule {
     }
 
     pub fn new(active_stakers: &ActiveStakers, seed: &[u8; 32], slots_per_epoch: u64) -> Self {
-        let stakes = active_stakers.stakes();
-        let pubkeys = active_stakers.pubkeys();
+        let (pubkeys, stakes): (Vec<Pubkey>, Vec<u64>) =
+            active_stakers.sorted_stakes().into_iter().unzip();
         let mut rng = ChaChaRng::from_seed(*seed);
         // Should have no zero weighted stakes
         let weighted_index = WeightedIndex::new(stakes).unwrap();

@@ -63,12 +63,8 @@ impl ActiveStakers {
         ActiveStakers { stakes }
     }
 
-    pub fn ranked_stakes(&self) -> Vec<(Pubkey, u64)> {
+    pub fn sorted_stakes(&self) -> Vec<(Pubkey, u64)> {
         self.stakes.clone()
-    }
-
-    pub fn stakes(&self) -> Vec<u64> {
-        self.stakes.iter().map(|(_pubkey, stake)| *stake).collect()
     }
 
     /// Return the pubkeys of each staker.
