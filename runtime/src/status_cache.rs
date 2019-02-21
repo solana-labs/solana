@@ -83,17 +83,37 @@ impl<T: Clone> StatusCache<T> {
         }
         self.get_signature_status_merged(sig)
     }
-    /// like accounts, status cache starts with an new data structure for every checkpoint
-    /// so only merge is implemented
-    /// but the merges maintains a history
-    #[cfg(test)]
-    pub fn merge_into_root(&mut self, other: Self) {
-        // merges should be empty for every other checkpoint accept the root
-        // which cannot be rolled back
-        assert!(other.merges.is_empty());
-        self.merges.push_front(other);
-        if self.merges.len() > MAX_CACHE_ENTRIES {
-            self.merges.pop_back();
+
+    fn merge_parent_is_full(&mut self, parent: &Self) -> bool {
+        // flatten the parent and their merges into self.merges, limit
+
+        self.merges.push_back(StatusCache {
+            signatures: parent.signatures.clone(),
+            failures: parent.failures.clone(),
+            merges: VecDeque::new(),
+        });
+        for merge in &parent.merges {
+            self.merges.push_back(StatusCache {
+                signatures: merge.signatures.clone(),
+                failures: merge.failures.clone(),
+                merges: VecDeque::new(),
+            });
+        }
+        self.merges.truncate(MAX_CACHE_ENTRIES);
+
+        self.merges.len() == MAX_CACHE_ENTRIES
+    }
+
+    /// copy the parents and parents' merges up to this instance, up to
+    ///   MAX_CACHE_ENTRIES deep
+    pub fn merge_parents<U>(&mut self, parents: &[U])
+    where
+        U: Deref<Target = Self>,
+    {
+        for parent in parents {
+            if self.merge_parent_is_full(parent) {
+                break;
+            }
         }
     }
 
@@ -158,10 +178,10 @@ mod tests {
         let last_id = hash(Hash::default().as_ref());
         let mut status_cache = BankStatusCache::new(&last_id);
         assert_eq!(status_cache.has_signature(&sig), false);
-        assert_eq!(status_cache.get_signature_status(&sig), None,);
+        assert_eq!(status_cache.get_signature_status(&sig), None);
         status_cache.add(&sig);
         assert_eq!(status_cache.has_signature(&sig), true);
-        assert_eq!(status_cache.get_signature_status(&sig), Some(Ok(())),);
+        assert_eq!(status_cache.get_signature_status(&sig), Some(Ok(())));
     }
 
     #[test]
@@ -190,7 +210,7 @@ mod tests {
         assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
         let last_id = hash(last_id.as_ref());
         first.new_cache(&last_id);
-        assert_eq!(first.get_signature_status(&sig), Some(Ok(())),);
+        assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
         assert!(first.has_signature(&sig));
         first.clear();
         assert_eq!(first.get_signature_status(&sig), None);
@@ -213,31 +233,58 @@ mod tests {
     }
 
     #[test]
-    fn test_has_signature_merged1() {
+    fn test_status_cache_merge_parents_has_signature() {
         let sig = Signature::default();
         let last_id = hash(Hash::default().as_ref());
         let mut first = BankStatusCache::new(&last_id);
         first.add(&sig);
         assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
+
+        // give first a merge
         let last_id = hash(last_id.as_ref());
-        let second = BankStatusCache::new(&last_id);
-        first.merge_into_root(second);
-        assert_eq!(first.get_signature_status(&sig), Some(Ok(())),);
-        assert!(first.has_signature(&sig));
+        first.new_cache(&last_id);
+
+        let last_id = hash(last_id.as_ref());
+        let mut second = BankStatusCache::new(&last_id);
+
+        second.merge_parents(&[&first]);
+
+        assert_eq!(second.get_signature_status(&sig), Some(Ok(())));
+        assert!(second.has_signature(&sig));
     }
 
     #[test]
-    fn test_has_signature_merged2() {
+    #[ignore] // takes a lot of time or RAM or both..
+    fn test_status_cache_merge_parents_overflow() {
+        let mut last_id = hash(Hash::default().as_ref());
+        let mut cache = BankStatusCache::new(&last_id);
+
+        let parents: Vec<_> = (0..MAX_CACHE_ENTRIES)
+            .map(|_| {
+                last_id = hash(last_id.as_ref());
+
+                BankStatusCache::new(&last_id)
+            })
+            .collect();
+
+        let mut parents_refs: Vec<_> = parents.iter().collect();
+
+        last_id = hash(Hash::default().as_ref());
+        let mut root = BankStatusCache::new(&last_id);
+
         let sig = Signature::default();
-        let last_id = hash(Hash::default().as_ref());
-        let mut first = BankStatusCache::new(&last_id);
-        first.add(&sig);
-        assert_eq!(first.get_signature_status(&sig), Some(Ok(())));
-        let last_id = hash(last_id.as_ref());
-        let mut second = BankStatusCache::new(&last_id);
-        second.merge_into_root(first);
-        assert_eq!(second.get_signature_status(&sig), Some(Ok(())),);
-        assert!(second.has_signature(&sig));
+        root.add(&sig);
+
+        parents_refs.push(&root);
+
+        assert_eq!(root.get_signature_status(&sig), Some(Ok(())));
+        assert!(root.has_signature(&sig));
+
+        // will overflow
+        cache.merge_parents(&parents_refs);
+
+        assert_eq!(cache.get_signature_status(&sig), None);
+        assert!(!cache.has_signature(&sig));
     }
 
     #[test]
@@ -268,7 +315,7 @@ mod tests {
         );
         first.clear();
         assert_eq!(first.has_signature(&sig), false);
-        assert_eq!(first.get_signature_status(&sig), None,);
+        assert_eq!(first.get_signature_status(&sig), None);
     }
     #[test]
     fn test_clear_signatures_all() {

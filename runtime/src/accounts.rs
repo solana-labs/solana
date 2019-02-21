@@ -255,13 +255,29 @@ impl AccountsDB {
     pub fn transaction_count(&self) -> u64 {
         self.transaction_count
     }
-    //pub fn account_values_slow(&self) -> Vec<(Pubkey, solana_sdk::account::Account)> {
-    //    self.accounts.iter().map(|(x, y)| (*x, y.clone())).collect()
-    //}
-    //fn merge(&mut self, other: Self) {
-    //    self.transaction_count += other.transaction_count;
-    //    self.accounts.extend(other.accounts)
-    //}
+
+    /// become the root accountsDB
+    fn merge_parents<U>(&mut self, parents: &[U])
+    where
+        U: Deref<Target = Self>,
+    {
+        self.transaction_count += parents
+            .iter()
+            .fold(0, |sum, parent| sum + parent.transaction_count);
+
+        // for every account in all the parents, load latest and update self if
+        //   absent
+        for pubkey in parents.iter().flat_map(|parent| parent.accounts.keys()) {
+            // update self with data from parents unless in self
+            if self.accounts.get(pubkey).is_none() {
+                self.accounts
+                    .insert(pubkey.clone(), Self::load(parents, pubkey).unwrap().clone());
+            }
+        }
+
+        // toss any zero-balance accounts, since self is root now
+        self.accounts.retain(|_, account| account.tokens != 0);
+    }
 }
 
 impl Accounts {
@@ -389,27 +405,22 @@ impl Accounts {
     pub fn transaction_count(&self) -> u64 {
         self.accounts_db.read().unwrap().transaction_count()
     }
-    ///// accounts starts with an empty data structure for every fork
-    ///// self is root, merge the fork into self
-    //pub fn merge_into_root(&self, other: Self) {
-    //    assert!(other.account_locks.lock().unwrap().is_empty());
-    //    let db = other.accounts_db.into_inner().unwrap();
-    //    let mut mydb = self.accounts_db.write().unwrap();
-    //    mydb.merge(db)
-    //}
-    //pub fn copy_for_tpu(&self) -> Self {
-    //    //TODO: deprecate this in favor of forks and merge_into_root
-    //    let copy = Accounts::default();
 
-    //    {
-    //        let mut accounts_db = copy.accounts_db.write().unwrap();
-    //        for (key, val) in self.accounts_db.read().unwrap().accounts.iter() {
-    //            accounts_db.accounts.insert(key.clone(), val.clone());
-    //        }
-    //        accounts_db.transaction_count = self.transaction_count();
-    //    }
-    //    copy
-    //}
+    /// accounts starts with an empty data structure for every child/fork
+    ///   this merges all the parents/checkpoints
+    pub fn merge_parents<U>(&self, parents: &[U])
+    where
+        U: Deref<Target = Self>,
+    {
+        assert!(self.account_locks.lock().unwrap().is_empty());
+
+        let dbs: Vec<_> = parents
+            .iter()
+            .map(|obj| obj.accounts_db.read().unwrap())
+            .collect();
+
+        self.accounts_db.write().unwrap().merge_parents(&dbs);
+    }
 }
 
 #[cfg(test)]
@@ -819,4 +830,24 @@ mod tests {
         loaded_accounts[0].clone().unwrap_err();
         assert_eq!(loaded_accounts[0], Err(BankError::AccountLoadedTwice));
     }
+
+    #[test]
+    fn test_accounts_merge_parents() {
+        let mut db0 = AccountsDB::default();
+        let key = Pubkey::default();
+        let account = Account::new(1, 0, key);
+
+        // store value 1 in the "root", i.e. db zero
+        db0.store(true, &key, &account);
+
+        // store value 0 in the child, but don't purge (see purge test above)
+        let mut db1 = AccountsDB::default();
+        db1.store(false, &key, &Account::new(0, 0, key));
+
+        // merge, which should whack key's account
+        db1.merge_parents(&[&db0]);
+
+        assert_eq!(AccountsDB::load(&[&db1], &key), None);
+    }
+
 }

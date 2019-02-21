@@ -123,23 +123,6 @@ impl LastIdQueue {
         self.tick_height = 0;
         self.last_id = None;
     }
-    /// fork for LastIdQueue is a simple clone
-    #[cfg(test)]
-    pub fn fork(&self) -> Self {
-        Self {
-            entries: self.entries.clone(),
-            tick_height: self.tick_height,
-            last_id: self.last_id,
-        }
-    }
-    /// merge for entryq is a swap
-    #[cfg(test)]
-    pub fn merge_into_root(&mut self, other: Self) {
-        let (entries, tick_height, last_id) = { (other.entries, other.tick_height, other.last_id) };
-        self.entries = entries;
-        self.tick_height = tick_height;
-        self.last_id = last_id;
-    }
 }
 #[cfg(test)]
 mod tests {
@@ -165,24 +148,5 @@ mod tests {
         }
         // Assert we're no longer able to use the oldest entry ID.
         assert!(!entry_queue.check_entry(last_id));
-    }
-    #[test]
-    fn test_fork() {
-        let last_id = Hash::default();
-        let mut first = LastIdQueue::default();
-        assert!(!first.check_entry(last_id));
-        first.register_tick(&last_id);
-        let second = first.fork();
-        assert!(second.check_entry(last_id));
-    }
-    #[test]
-    fn test_merge() {
-        let last_id = Hash::default();
-        let mut first = LastIdQueue::default();
-        assert!(!first.check_entry(last_id));
-        let mut second = first.fork();
-        second.register_tick(&last_id);
-        first.merge_into_root(second);
-        assert!(first.check_entry(last_id));
     }
 }
