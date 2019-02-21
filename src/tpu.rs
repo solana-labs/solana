@@ -196,7 +196,7 @@ impl Tpu {
         transactions_sockets: Vec<UdpSocket>,
         broadcast_socket: UdpSocket,
         sigverify_disabled: bool,
-        max_tick_height: u64,
+        slot: u64,
         blob_index: u64,
         last_entry_id: &Hash,
         blocktree: &Arc<Blocktree>,
@@ -221,6 +221,10 @@ impl Tpu {
 
         let (sigverify_stage, verified_receiver) =
             SigVerifyStage::new(packet_receiver, sigverify_disabled);
+
+        // TODO: Fix BankingStage/BroadcastService to operate on `slot` directly instead of
+        // `max_tick_height`
+        let max_tick_height = (slot + 1) * leader_scheduler.read().unwrap().ticks_per_slot - 1;
 
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
