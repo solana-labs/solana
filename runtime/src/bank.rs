@@ -80,7 +80,6 @@ pub type Result<T> = result::Result<T, BankError>;
 type BankStatusCache = StatusCache<BankError>;
 
 /// Manager for the state of all accounts and programs after processing its entries.
-#[derive(Default)]
 pub struct Bank {
     accounts: Accounts,
 
@@ -95,6 +94,26 @@ pub struct Bank {
 
     /// Hash of this Bank's state. Only meaningful after freezing it via `new_from_parent()`.
     hash: RwLock<Hash>,
+
+    /// The number of ticks in each slot.
+    ticks_per_slot: u64,
+
+    /// The number of slots in each epoch.
+    slots_per_epoch: u64,
+}
+
+impl Default for Bank {
+    fn default() -> Self {
+        Self {
+            accounts: Accounts::default(),
+            status_cache: RwLock::<BankStatusCache>::default(),
+            last_id_queue: RwLock::<LastIdQueue>::default(),
+            parent: Option::<Arc<Bank>>::default(),
+            hash: RwLock::<Hash>::default(),
+            ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
+            slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
+        }
+    }
 }
 
 impl Bank {
@@ -609,6 +628,16 @@ impl Bank {
             .collect()
     }
 
+    /// Return the number of ticks per slot that should be used calls to slot_height().
+    pub fn ticks_per_slot(&self) -> u64 {
+        self.ticks_per_slot
+    }
+
+    /// Return the number of slots per tick that should be used calls to epoch_height().
+    pub fn slots_per_epoch(&self) -> u64 {
+        self.slots_per_epoch
+    }
+
     /// Return the number of ticks since genesis.
     pub fn tick_height(&self) -> u64 {
         self.last_id_queue.read().unwrap().tick_height
@@ -616,22 +645,22 @@ impl Bank {
 
     /// Return the number of ticks since the last slot boundary.
     pub fn tick_index(&self) -> u64 {
-        self.tick_height() % DEFAULT_TICKS_PER_SLOT
+        self.tick_height() % self.ticks_per_slot()
     }
 
     /// Return the slot_height of the last registered tick.
     pub fn slot_height(&self) -> u64 {
-        self.tick_height() / DEFAULT_TICKS_PER_SLOT
+        self.tick_height() / self.ticks_per_slot()
     }
 
     /// Return the number of slots since the last epoch boundary.
     pub fn slot_index(&self) -> u64 {
-        self.slot_height() % DEFAULT_SLOTS_PER_EPOCH
+        self.slot_height() % self.slots_per_epoch()
     }
 
     /// Return the epoch height of the last registered tick.
     pub fn epoch_height(&self) -> u64 {
-        self.slot_height() / DEFAULT_SLOTS_PER_EPOCH
+        self.slot_height() / self.slots_per_epoch()
     }
 
     #[cfg(test)]
@@ -921,8 +950,8 @@ mod tests {
     fn test_tick_slot_epoch_indexes() {
         let (genesis_block, _) = GenesisBlock::new(5);
         let bank = Bank::new(&genesis_block);
-        let ticks_per_slot = DEFAULT_TICKS_PER_SLOT;
-        let slots_per_epoch = DEFAULT_SLOTS_PER_EPOCH;
+        let ticks_per_slot = bank.ticks_per_slot();
+        let slots_per_epoch = bank.slots_per_epoch();
         let ticks_per_epoch = ticks_per_slot * slots_per_epoch;
 
         // All indexes are zero-based.
