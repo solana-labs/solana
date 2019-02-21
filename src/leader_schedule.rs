@@ -1,4 +1,3 @@
-use crate::active_stakers::ActiveStakers;
 use rand::distributions::{Distribution, WeightedIndex};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -6,37 +5,26 @@ use solana_sdk::pubkey::Pubkey;
 use std::ops::Index;
 
 /// Round-robin leader schedule.
+#[derive(Debug, PartialEq)]
 pub struct LeaderSchedule {
     slot_leaders: Vec<Pubkey>,
 }
 
 impl LeaderSchedule {
-    pub fn new(active_stakers: &ActiveStakers, seed: &[u8; 32], slots_per_epoch: u64) -> Self {
-        let ids_and_stakes = active_stakers.sorted_stakes();
-        let slot_leaders = Self::generate_schedule(&ids_and_stakes, seed, slots_per_epoch);
-        Self { slot_leaders }
-    }
-
-    fn generate_schedule(
-        ids_and_stakes: &Vec<(Pubkey, u64)>,
-        seed: &[u8; 32],
-        slots_per_epoch: u64,
-    ) -> Vec<Pubkey> {
+    pub fn new(ids_and_stakes: &[(Pubkey, u64)], seed: &[u8; 32], slots_per_epoch: u64) -> Self {
         let (pubkeys, stakes): (Vec<Pubkey>, Vec<u64>) = ids_and_stakes
             .iter()
             .map(|&(ref id, ref stake)| (id, stake))
             .unzip();
-        let mut rng = ChaChaRng::from_seed(*seed);
+
         // Should have no zero weighted stakes
+        let mut rng = ChaChaRng::from_seed(*seed);
         let weighted_index = WeightedIndex::new(stakes).unwrap();
         let slot_leaders = (0..slots_per_epoch)
-            .map(|_| {
-                let i = weighted_index.sample(&mut rng);
-                pubkeys[i]
-            })
+            .map(|_| pubkeys[weighted_index.sample(&mut rng)])
             .collect();
 
-        slot_leaders
+        Self { slot_leaders }
     }
 }
 
@@ -51,6 +39,7 @@ impl Index<usize> for LeaderSchedule {
 mod tests {
     use super::*;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+
     #[test]
     fn test_leader_schedule_index() {
         let pubkey0 = Keypair::new().pubkey();
@@ -74,11 +63,9 @@ mod tests {
         let mut seed_bytes = [0u8; 32];
         seed_bytes.copy_from_slice(seed.as_ref());
         let slots_per_epoch = num_keys * 10;
-        let leader_schedule =
-            LeaderSchedule::generate_schedule(&stakes, &seed_bytes, slots_per_epoch);
-        let leader_schedule2 =
-            LeaderSchedule::generate_schedule(&stakes, &seed_bytes, slots_per_epoch);
-        assert_eq!(leader_schedule.len() as u64, slots_per_epoch);
+        let leader_schedule = LeaderSchedule::new(&stakes, &seed_bytes, slots_per_epoch);
+        let leader_schedule2 = LeaderSchedule::new(&stakes, &seed_bytes, slots_per_epoch);
+        assert_eq!(leader_schedule.slot_leaders.len() as u64, slots_per_epoch);
         // Check that the same schedule is reproducibly generated
         assert_eq!(leader_schedule, leader_schedule2);
     }
