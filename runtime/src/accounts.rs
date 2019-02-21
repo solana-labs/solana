@@ -143,7 +143,7 @@ pub struct AccountsDB {
 
     /// The number of transactions the bank has processed without error since the
     /// start of the ledger.
-    transaction_count: RwLock<u64>,
+    transaction_count: RwLock<HashMap<u64, u64>>,
 }
 
 impl Default for AccountsDB {
@@ -156,7 +156,7 @@ impl Default for AccountsDB {
             index_info,
             storage: RwLock::new(vec![]),
             next_id: AtomicUsize::new(0),
-            transaction_count: RwLock::new(0),
+            transaction_count: RwLock::new(HashMap::new()),
         }
     }
 }
@@ -566,15 +566,21 @@ impl AccountsDB {
             .collect()
     }
 
-    pub fn increment_transaction_count(&self, tx_count: usize) {
+    pub fn increment_transaction_count(&self, fork: Fork, tx_count: usize) {
         let mut tx = self.transaction_count.write().unwrap();
-        *tx += tx_count as u64;
+        let entry = tx.entry(fork).or_insert(0);
+        *entry += tx_count as u64;
     }
 
-    pub fn transaction_count(&self) -> u64 {
+    pub fn transaction_count(&self, fork: Fork) -> u64 {
         let tx = self.transaction_count.read().unwrap();
-        *tx
+        if let Some(entry) = tx.get(&fork) {
+            *entry
+        } else {
+            0
+        }
     }
+
     //pub fn account_values_slow(&self) -> Vec<(Pubkey, solana_sdk::account::Account)> {
     //    self.accounts.iter().map(|(x, y)| (*x, y.clone())).collect()
     //}
@@ -718,13 +724,14 @@ impl Accounts {
             .store_accounts(fork, purge, txs, res, loaded)
     }
 
-    pub fn increment_transaction_count(&self, tx_count: usize) {
-        self.accounts_db.increment_transaction_count(tx_count)
+    pub fn increment_transaction_count(&self, fork: Fork, tx_count: usize) {
+        self.accounts_db.increment_transaction_count(fork, tx_count)
     }
 
-    pub fn transaction_count(&self) -> u64 {
-        self.accounts_db.transaction_count()
+    pub fn transaction_count(&self, fork: Fork) -> u64 {
+        self.accounts_db.transaction_count(fork)
     }
+
     ///// accounts starts with an empty data structure for every fork
     ///// self is root, merge the fork into self
     //pub fn merge_into_root(&self, other: Self) {
