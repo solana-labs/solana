@@ -1,6 +1,6 @@
 //! The `rpc` module implements the Solana RPC interface.
 
-use crate::bank_forks::BankForks;
+use crate::banktree::Banktree;
 use crate::cluster_info::ClusterInfo;
 use crate::packet::PACKET_DATA_SIZE;
 use crate::rpc_status::RpcSignatureStatus;
@@ -23,19 +23,19 @@ use std::time::{Duration, Instant};
 
 #[derive(Clone)]
 pub struct JsonRpcRequestProcessor {
-    pub bank_forks: Arc<RwLock<BankForks>>,
+    pub banktree: Arc<RwLock<Banktree>>,
     storage_state: StorageState,
 }
 
 impl JsonRpcRequestProcessor {
     fn bank(&self) -> Arc<Bank> {
-        self.bank_forks.read().unwrap().working_bank()
+        self.banktree.read().unwrap().working_bank()
     }
 
     /// Create a new request processor that wraps the given Bank.
-    pub fn new(bank_forks: Arc<RwLock<BankForks>>, storage_state: StorageState) -> Self {
+    pub fn new(banktree: Arc<RwLock<Banktree>>, storage_state: StorageState) -> Self {
         JsonRpcRequestProcessor {
-            bank_forks,
+            banktree,
             storage_state,
         }
     }
@@ -344,15 +344,15 @@ mod tests {
 
     fn start_rpc_handler_with_tx(pubkey: Pubkey) -> (MetaIoHandler<Meta>, Meta, Hash, Keypair) {
         let (genesis_block, alice) = GenesisBlock::new(10_000);
-        let bank_forks = BankForks::new(0, Bank::new(&genesis_block));
-        let bank = bank_forks.working_bank();
+        let banktree = Banktree::new(0, Bank::new(&genesis_block));
+        let bank = banktree.working_bank();
 
         let last_id = bank.last_id();
         let tx = SystemTransaction::new_move(&alice, pubkey, 20, last_id, 0);
         bank.process_transaction(&tx).expect("process transaction");
 
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
-            Arc::new(RwLock::new(bank_forks)),
+            Arc::new(RwLock::new(banktree)),
             StorageState::default(),
         )));
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default())));
@@ -379,11 +379,11 @@ mod tests {
     fn test_rpc_request_processor_new() {
         let (genesis_block, alice) = GenesisBlock::new(10_000);
         let bob_pubkey = Keypair::new().pubkey();
-        let bank_forks = Arc::new(RwLock::new(BankForks::new(0, Bank::new(&genesis_block))));
+        let banktree = Arc::new(RwLock::new(Banktree::new(0, Bank::new(&genesis_block))));
         let request_processor =
-            JsonRpcRequestProcessor::new(bank_forks.clone(), StorageState::default());
+            JsonRpcRequestProcessor::new(banktree.clone(), StorageState::default());
         thread::spawn(move || {
-            let bank = bank_forks.read().unwrap().working_bank();
+            let bank = banktree.read().unwrap().working_bank();
             let last_id = bank.last_id();
             let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
             bank.process_transaction(&tx).expect("process transaction");
@@ -543,14 +543,14 @@ mod tests {
     #[test]
     fn test_rpc_send_bad_tx() {
         let (genesis_block, _) = GenesisBlock::new(10_000);
-        let bank_forks = BankForks::new(0, Bank::new(&genesis_block));
+        let banktree = Banktree::new(0, Bank::new(&genesis_block));
 
         let mut io = MetaIoHandler::default();
         let rpc = RpcSolImpl;
         io.extend_with(rpc.to_delegate());
         let meta = Meta {
             request_processor: Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
-                Arc::new(RwLock::new(bank_forks)),
+                Arc::new(RwLock::new(banktree)),
                 StorageState::default(),
             ))),
             cluster_info: Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default()))),

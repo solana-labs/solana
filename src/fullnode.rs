@@ -1,8 +1,8 @@
 //! The `fullnode` module hosts all the fullnode microservices.
 
-use crate::bank_forks::BankForks;
+use crate::banktree::Banktree;
 use crate::blocktree::{Blocktree, BlocktreeConfig};
-use crate::blocktree_processor::{self, BankForksInfo};
+use crate::blocktree_processor::{self, BanktreeInfo};
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
 use crate::gossip_service::GossipService;
 use crate::leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig};
@@ -100,7 +100,7 @@ pub struct Fullnode {
     rpc_service: Option<JsonRpcService>,
     rpc_pubsub_service: Option<PubSubService>,
     gossip_service: GossipService,
-    bank_forks: Arc<RwLock<BankForks>>,
+    banktree: Arc<RwLock<Banktree>>,
     sigverify_disabled: bool,
     tpu_sockets: Vec<UdpSocket>,
     broadcast_socket: UdpSocket,
@@ -127,7 +127,7 @@ impl Fullnode {
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::new(
             &config.leader_scheduler_config,
         )));
-        let (bank_forks, bank_forks_info, blocktree, ledger_signal_receiver) =
+        let (banktree, banktree_info, blocktree, ledger_signal_receiver) =
             new_banks_from_blocktree(ledger_path, &config.ledger_config(), &leader_scheduler);
 
         info!("node info: {:?}", node.info);
@@ -139,7 +139,7 @@ impl Fullnode {
 
         let exit = Arc::new(AtomicBool::new(false));
         let blocktree = Arc::new(blocktree);
-        let bank_forks = Arc::new(RwLock::new(bank_forks));
+        let banktree = Arc::new(RwLock::new(banktree));
 
         node.info.wallclock = timestamp();
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new_with_keypair(
@@ -163,7 +163,7 @@ impl Fullnode {
         let storage_state = StorageState::new();
 
         let rpc_service = JsonRpcService::new(
-            &bank_forks,
+            &banktree,
             &cluster_info,
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
             drone_addr,
@@ -182,7 +182,7 @@ impl Fullnode {
         let gossip_service = GossipService::new(
             &cluster_info,
             Some(blocktree.clone()),
-            Some(bank_forks.clone()),
+            Some(banktree.clone()),
             node.sockets.gossip,
             exit.clone(),
         );
@@ -225,16 +225,16 @@ impl Fullnode {
         let (rotation_sender, rotation_receiver) = channel();
 
         // TODO: All this into Tpu/ReplayStage....
-        if bank_forks_info.len() != 1 {
+        if banktree_info.len() != 1 {
             warn!("TODO: figure out what to do with multiple bank forks");
         }
         let (bank, entry_height, last_entry_id) = {
-            let mut bank_forks = bank_forks.write().unwrap();
-            bank_forks.set_working_bank_id(bank_forks_info[0].bank_id);
+            let mut banktree = banktree.write().unwrap();
+            banktree.set_working_bank_id(banktree_info[0].bank_id);
             (
-                bank_forks.working_bank(),
-                bank_forks_info[0].entry_height,
-                bank_forks_info[0].last_entry_id,
+                banktree.working_bank(),
+                banktree_info[0].entry_height,
+                banktree_info[0].last_entry_id,
             )
         };
 
@@ -268,7 +268,7 @@ impl Fullnode {
 
         let tvu = Tvu::new(
             voting_keypair_option,
-            &bank_forks,
+            &banktree,
             blob_index,
             entry_height,
             last_entry_id,
@@ -287,7 +287,7 @@ impl Fullnode {
 
         let mut fullnode = Self {
             id,
-            bank_forks,
+            banktree,
             sigverify_disabled: config.sigverify_disabled,
             gossip_service,
             rpc_service: Some(rpc_service),
@@ -389,8 +389,8 @@ impl Fullnode {
                     );
 
                     // TODO: Uncomment next line once `bank_id` has a valid id in it
-                    //self.bank_forks.write().set_working_bank_id(bank_id);
-                    let bank = self.bank_forks.read().unwrap().working_bank();
+                    //self.banktree.write().set_working_bank_id(bank_id);
+                    let bank = self.banktree.read().unwrap().working_bank();
 
                     let transition = self.rotate(&bank, leader, slot, 0, &bank.last_id());
                     debug!("role transition complete: {:?}", transition);
@@ -432,23 +432,18 @@ fn new_banks_from_blocktree(
     blocktree_path: &str,
     blocktree_config: &BlocktreeConfig,
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-) -> (BankForks, Vec<BankForksInfo>, Blocktree, Receiver<bool>) {
+) -> (Banktree, Vec<BanktreeInfo>, Blocktree, Receiver<bool>) {
     let (blocktree, ledger_signal_receiver) =
         Blocktree::open_with_config_signal(blocktree_path, blocktree_config)
             .expect("Expected to successfully open database ledger");
     let genesis_block =
         GenesisBlock::load(blocktree_path).expect("Expected to successfully open genesis block");
 
-    let (bank_forks, bank_forks_info) =
+    let (banktree, banktree_info) =
         blocktree_processor::process_blocktree(&genesis_block, &blocktree, leader_scheduler)
             .expect("process_blocktree failed");
 
-    (
-        bank_forks,
-        bank_forks_info,
-        blocktree,
-        ledger_signal_receiver,
-    )
+    (banktree, banktree_info, blocktree, ledger_signal_receiver)
 }
 
 // TODO: Remove this function from tests
@@ -458,16 +453,16 @@ pub fn new_bank_from_ledger(
     ledger_config: &BlocktreeConfig,
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
 ) -> (Arc<Bank>, u64, Hash, Blocktree, Receiver<bool>) {
-    let (mut bank_forks, bank_forks_info, blocktree, ledger_signal_receiver) =
+    let (mut banktree, banktree_info, blocktree, ledger_signal_receiver) =
         new_banks_from_blocktree(ledger_path, ledger_config, leader_scheduler);
 
     // This helper won't handle multiple banks
-    assert_eq!(bank_forks_info.len(), 1);
-    bank_forks.set_working_bank_id(bank_forks_info[0].bank_id);
+    assert_eq!(banktree_info.len(), 1);
+    banktree.set_working_bank_id(banktree_info[0].bank_id);
     let (working_bank, entry_height, last_entry_id) = (
-        bank_forks.working_bank(),
-        bank_forks_info[0].entry_height,
-        bank_forks_info[0].last_entry_id,
+        banktree.working_bank(),
+        banktree_info[0].entry_height,
+        banktree_info[0].last_entry_id,
     );
 
     (

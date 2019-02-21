@@ -1,4 +1,4 @@
-# Bank Fork
+# Banktree
 
 This design describes a way to checkpoint the bank state such that it can track
 multiple forks without duplicating data.  It addresses the following
@@ -14,9 +14,9 @@ challenges:
 The basic design idea is to maintain a DAG of forks. The DAG is initialized with
 a *root*.  Each subsequent fork must descend from the root.
 
-## Active Forks
+## Working Forks
 
-An *active fork* is a direct list of connected forks that descend from the
+An *fork* is a direct list of connected checkpoints that descend from the
 current root to a specific fork without any descendants.
 
 For example:

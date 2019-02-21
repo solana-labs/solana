@@ -12,7 +12,7 @@
 //! 4. StorageStage
 //! - Generating the keys used to encrypt the ledger and sample it for storage mining.
 
-use crate::bank_forks::BankForks;
+use crate::banktree::Banktree;
 use crate::blob_fetch_stage::BlobFetchStage;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
@@ -70,7 +70,7 @@ impl Tvu {
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new(
         voting_keypair: Option<Arc<VotingKeypair>>,
-        bank_forks: &Arc<RwLock<BankForks>>,
+        banktree: &Arc<RwLock<Banktree>>,
         blob_index: u64,
         entry_height: u64,
         last_entry_id: Hash,
@@ -111,7 +111,7 @@ impl Tvu {
         //the packets coming out of blob_receiver need to be sent to the GPU and verified
         //then sent to the window, which does the erasure coding reconstruction
         let retransmit_stage = RetransmitStage::new(
-            &bank_forks,
+            &banktree,
             blocktree.clone(),
             &cluster_info,
             Arc::new(retransmit_socket),
@@ -121,7 +121,7 @@ impl Tvu {
             exit.clone(),
         );
 
-        let bank = bank_forks.read().unwrap().working_bank();
+        let bank = banktree.read().unwrap().working_bank();
         let (replay_stage, mut previous_receiver) = ReplayStage::new(
             keypair.pubkey(),
             voting_keypair,
@@ -224,10 +224,10 @@ pub mod tests {
         let starting_balance = 10_000;
         let (genesis_block, _mint_keypair) = GenesisBlock::new(starting_balance);
 
-        let bank_forks = BankForks::new(0, Bank::new(&genesis_block));
+        let banktree = Banktree::new(0, Bank::new(&genesis_block));
         let leader_scheduler_config = LeaderSchedulerConfig::default();
         let leader_scheduler =
-            LeaderScheduler::new_with_bank(&leader_scheduler_config, &bank_forks.working_bank());
+            LeaderScheduler::new_with_bank(&leader_scheduler_config, &banktree.working_bank());
         let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
 
         //start cluster_info1
@@ -245,7 +245,7 @@ pub mod tests {
         let (sender, _receiver) = channel();
         let tvu = Tvu::new(
             Some(Arc::new(voting_keypair)),
-            &Arc::new(RwLock::new(bank_forks)),
+            &Arc::new(RwLock::new(banktree)),
             0,
             0,
             cur_hash,

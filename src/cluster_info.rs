@@ -12,7 +12,7 @@
 //! * layer 2 - Everyone else, if layer 1 is `2^10`, layer 2 should be able to fit `2^20` number of nodes.
 //!
 //! Bank needs to provide an interface for us to query the stake weight
-use crate::bank_forks::BankForks;
+use crate::banktree::Banktree;
 use crate::blocktree::Blocktree;
 use crate::contact_info::ContactInfo;
 use crate::crds_gossip::CrdsGossip;
@@ -860,7 +860,7 @@ impl ClusterInfo {
     /// randomly pick a node and ask them for updates asynchronously
     pub fn gossip(
         obj: Arc<RwLock<Self>>,
-        bank_forks: Option<Arc<RwLock<BankForks>>>,
+        banktree: Option<Arc<RwLock<Banktree>>>,
         blob_sender: BlobSender,
         exit: Arc<AtomicBool>,
     ) -> JoinHandle<()> {
@@ -870,9 +870,9 @@ impl ClusterInfo {
                 let mut last_push = timestamp();
                 loop {
                     let start = timestamp();
-                    let stakes: HashMap<_, _> = match bank_forks {
-                        Some(ref bank_forks) => {
-                            bank_forks.read().unwrap().working_bank().staked_nodes()
+                    let stakes: HashMap<_, _> = match banktree {
+                        Some(ref banktree) => {
+                            banktree.read().unwrap().working_bank().staked_nodes()
                         }
                         None => HashMap::new(),
                     };

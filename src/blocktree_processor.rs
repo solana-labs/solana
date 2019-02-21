@@ -1,4 +1,4 @@
-use crate::bank_forks::BankForks;
+use crate::banktree::Banktree;
 use crate::blocktree::Blocktree;
 use crate::entry::{Entry, EntrySlice};
 use crate::leader_scheduler::LeaderScheduler;
@@ -172,7 +172,7 @@ fn process_block(
 }
 
 #[derive(Debug, PartialEq)]
-pub struct BankForksInfo {
+pub struct BanktreeInfo {
     pub bank_id: u64,
     pub entry_height: u64,
     pub last_entry_id: Hash,
@@ -182,12 +182,12 @@ pub fn process_blocktree(
     genesis_block: &GenesisBlock,
     blocktree: &Blocktree,
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-) -> Result<(BankForks, Vec<BankForksInfo>)> {
+) -> Result<(Banktree, Vec<BanktreeInfo>)> {
     let now = Instant::now();
     info!("processing ledger...");
 
     // Setup bank for slot 0
-    let (mut bank_forks, mut pending_slots) = {
+    let (mut banktree, mut pending_slots) = {
         let bank0 = Bank::new(&genesis_block);
         let bank_id = 0;
         let slot = 0;
@@ -199,17 +199,17 @@ pub fn process_blocktree(
         let last_entry_id = bank0.last_id();
 
         (
-            BankForks::new(bank_id, bank0),
+            Banktree::new(bank_id, bank0),
             vec![(slot, bank_id, entry_height, last_entry_id)],
         )
     };
 
-    let mut bank_forks_info = vec![];
+    let mut banktree_info = vec![];
     while !pending_slots.is_empty() {
         let (slot, bank_id, mut entry_height, mut last_entry_id) = pending_slots.pop().unwrap();
 
-        bank_forks.set_working_bank_id(bank_id);
-        let bank = bank_forks.working_bank();
+        banktree.set_working_bank_id(bank_id);
+        let bank = banktree.working_bank();
 
         // Load the metadata for this slot
         let meta = blocktree
@@ -264,7 +264,7 @@ pub fn process_blocktree(
         match meta.next_slots.len() {
             0 => {
                 // Reached the end of this fork.  Record the final entry height and last entry id
-                bank_forks_info.push(BankForksInfo {
+                banktree_info.push(BanktreeInfo {
                     bank_id,
                     entry_height,
                     last_entry_id,
@@ -277,7 +277,7 @@ pub fn process_blocktree(
                     let child_bank = Bank::new_from_parent(&bank);
                     trace!("Add child bank for slot={}", next_slot);
                     let child_bank_id = *next_slot;
-                    bank_forks.insert(child_bank_id, child_bank);
+                    banktree.insert(child_bank_id, child_bank);
                     (*next_slot, child_bank_id, entry_height, last_entry_id)
                 }));
             }
@@ -289,10 +289,10 @@ pub fn process_blocktree(
     info!(
         "processed ledger in {}ms, forks={}...",
         duration_as_ms(&now.elapsed()),
-        bank_forks_info.len(),
+        banktree_info.len(),
     );
 
-    Ok((bank_forks, bank_forks_info))
+    Ok((banktree, banktree_info))
 }
 
 #[cfg(test)]
@@ -386,31 +386,31 @@ mod tests {
         info!("last_fork1_entry_id: {:?}", last_fork1_entry_id);
         info!("last_fork2_entry_id: {:?}", last_fork2_entry_id);
 
-        let (mut bank_forks, bank_forks_info) =
+        let (mut banktree, banktree_info) =
             process_blocktree(&genesis_block, &blocktree, &leader_scheduler).unwrap();
 
-        assert_eq!(bank_forks_info.len(), 2); // There are two forks
+        assert_eq!(banktree_info.len(), 2); // There are two forks
         assert_eq!(
-            bank_forks_info[0],
-            BankForksInfo {
+            banktree_info[0],
+            BanktreeInfo {
                 bank_id: 2, // Fork 1 diverged with slot 2
                 entry_height: blocktree_config.ticks_per_slot * 4,
                 last_entry_id: last_fork1_entry_id,
             }
         );
         assert_eq!(
-            bank_forks_info[1],
-            BankForksInfo {
+            banktree_info[1],
+            BanktreeInfo {
                 bank_id: 4, // Fork 2 diverged with slot 4
                 entry_height: blocktree_config.ticks_per_slot * 3,
                 last_entry_id: last_fork2_entry_id,
             }
         );
 
-        // Ensure bank_forks holds the right banks
-        for info in bank_forks_info {
-            bank_forks.set_working_bank_id(info.bank_id);
-            assert_eq!(bank_forks.working_bank().last_id(), info.last_entry_id)
+        // Ensure banktree holds the right banks
+        for info in banktree_info {
+            banktree.set_working_bank_id(info.bank_id);
+            assert_eq!(banktree.working_bank().last_id(), info.last_entry_id)
         }
     }
 
@@ -550,20 +550,20 @@ mod tests {
             .unwrap();
         entry_height += entries.len() as u64;
 
-        let (bank_forks, bank_forks_info) =
+        let (banktree, banktree_info) =
             process_blocktree(&genesis_block, &blocktree, &leader_scheduler).unwrap();
 
-        assert_eq!(bank_forks_info.len(), 1);
+        assert_eq!(banktree_info.len(), 1);
         assert_eq!(
-            bank_forks_info[0],
-            BankForksInfo {
+            banktree_info[0],
+            BanktreeInfo {
                 bank_id: 0,
                 entry_height,
                 last_entry_id,
             }
         );
 
-        let bank = bank_forks.working_bank();
+        let bank = banktree.working_bank();
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 50 - 3);
         assert_eq!(bank.tick_height(), 1);
         assert_eq!(bank.last_id(), last_id);

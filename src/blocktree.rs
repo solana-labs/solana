@@ -1,4 +1,4 @@
-//! The `block_tree` module provides functions for parallel verification of the
+//! The `blocktree` module provides functions for parallel verification of the
 //! Proof of History ledger as well as iterative read, append write, and random
 //! access read to a persistent file-based ledger.
 

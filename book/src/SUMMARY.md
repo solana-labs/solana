@@ -35,7 +35,7 @@
   - [Fork Selection](fork-selection.md)
   - [Data Plane Fanout](data-plane-fanout.md)
   - [Reliable Vote Transmission](reliable-vote-transmission.md)
-  - [Bank Forks](bank-forks.md)
+  - [Banktree](banktree.md)
   - [Blocktree Validation](fullnode-with-ledger-notifications.md)
   - [Cluster Economics](ed_overview.md)
     - [Validation-client Economics](ed_validation_client_economics.md)

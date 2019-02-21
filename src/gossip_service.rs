@@ -1,6 +1,6 @@
 //! The `gossip_service` module implements the network control plane.
 
-use crate::bank_forks::BankForks;
+use crate::banktree::Banktree;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
 use crate::service::Service;
@@ -24,7 +24,7 @@ impl GossipService {
     pub fn new(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         blocktree: Option<Arc<Blocktree>>,
-        bank_forks: Option<Arc<RwLock<BankForks>>>,
+        banktree: Option<Arc<RwLock<Banktree>>>,
         gossip_socket: UdpSocket,
         exit: Arc<AtomicBool>,
     ) -> Self {
@@ -48,7 +48,7 @@ impl GossipService {
         );
         let t_gossip = ClusterInfo::gossip(
             cluster_info.clone(),
-            bank_forks,
+            banktree,
             response_sender,
             exit.clone(),
         );

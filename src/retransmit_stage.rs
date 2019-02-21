@@ -1,6 +1,6 @@
 //! The `retransmit_stage` retransmits blobs between validators
 
-use crate::bank_forks::BankForks;
+use crate::banktree::Banktree;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::{
     compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT, GROW_LAYER_CAPACITY,
@@ -24,7 +24,7 @@ use std::thread::{self, Builder, JoinHandle};
 use std::time::Duration;
 
 fn retransmit(
-    bank_forks: &Arc<RwLock<BankForks>>,
+    banktree: &Arc<RwLock<Banktree>>,
     cluster_info: &Arc<RwLock<ClusterInfo>>,
     r: &BlobReceiver,
     sock: &UdpSocket,
@@ -41,7 +41,7 @@ fn retransmit(
             .to_owned(),
     );
     let (neighbors, children) = compute_retransmit_peers(
-        &bank_forks.read().unwrap().working_bank().staked_nodes(),
+        &banktree.read().unwrap().working_bank().staked_nodes(),
         cluster_info,
         DATA_PLANE_FANOUT,
         NEIGHBORHOOD_SIZE,
@@ -76,7 +76,7 @@ fn copy_for_neighbors(b: &SharedBlob) -> SharedBlob {
 /// * `r` - Receive channel for blobs to be retransmitted to all the layer 1 nodes.
 fn retransmitter(
     sock: Arc<UdpSocket>,
-    bank_forks: Arc<RwLock<BankForks>>,
+    banktree: Arc<RwLock<Banktree>>,
     cluster_info: Arc<RwLock<ClusterInfo>>,
     r: BlobReceiver,
 ) -> JoinHandle<()> {
@@ -85,7 +85,7 @@ fn retransmitter(
         .spawn(move || {
             trace!("retransmitter started");
             loop {
-                if let Err(e) = retransmit(&bank_forks, &cluster_info, &r, &sock) {
+                if let Err(e) = retransmit(&banktree, &cluster_info, &r, &sock) {
                     match e {
                         Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                         Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
@@ -108,7 +108,7 @@ pub struct RetransmitStage {
 impl RetransmitStage {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
-        bank_forks: &Arc<RwLock<BankForks>>,
+        banktree: &Arc<RwLock<Banktree>>,
         blocktree: Arc<Blocktree>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         retransmit_socket: Arc<UdpSocket>,
@@ -121,7 +121,7 @@ impl RetransmitStage {
 
         let t_retransmit = retransmitter(
             retransmit_socket,
-            bank_forks.clone(),
+            banktree.clone(),
             cluster_info.clone(),
             retransmit_receiver,
         );
