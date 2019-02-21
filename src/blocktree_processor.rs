@@ -13,29 +13,20 @@ use solana_sdk::timing::MAX_ENTRY_IDS;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
-pub fn process_entry(bank: &Bank, entry: &Entry) -> (Result<()>, u64) {
+pub fn process_entry(bank: &Bank, entry: &Entry) -> Result<()> {
     if !entry.is_tick() {
-        let old_results = bank.process_transactions(&entry.transactions);
-        let fee = entry
-            .transactions
-            .iter()
-            .zip(&old_results)
-            .map(|(tx, res)| match res {
-                Err(BankError::ProgramError(_, _)) => {
-                    // Charge the transaction fee in case of ProgramError
-                    bank.withdraw(&tx.account_keys[0], tx.fee);
-                    tx.fee
-                }
-                Ok(()) => tx.fee,
-                _ => 0,
-            })
-            .sum();
-        let results = ignore_program_errors(old_results);
-        (first_err(&results), fee)
+        for result in bank.process_transactions(&entry.transactions) {
+            match result {
+                // Entries that result in a ProgramError are still valid and are written in the
+                // ledger so map them to an ok return value
+                Err(BankError::ProgramError(_, _)) => Ok(()),
+                _ => result,
+            }?;
+        }
     } else {
         bank.register_tick(&entry.id);
-        (Ok(()), 0)
     }
+    Ok(())
 }
 
 fn first_err(results: &[Result<()>]) -> Result<()> {
@@ -61,9 +52,9 @@ fn ignore_program_errors(results: Vec<Result<()>>) -> Vec<Result<()>> {
         .collect()
 }
 
-fn par_execute_entries(bank: &Bank, entries: &[(&Entry, Vec<Result<()>>)]) -> (Result<()>, u64) {
+fn par_execute_entries(bank: &Bank, entries: &[(&Entry, Vec<Result<()>>)]) -> Result<()> {
     inc_new_counter_info!("bank-par_execute_entries-count", entries.len());
-    let results_fees: Vec<(Result<()>, u64)> = entries
+    let results: Vec<Result<()>> = entries
         .into_par_iter()
         .map(|(e, lock_results)| {
             let old_results = bank.load_execute_and_commit_transactions(
@@ -71,29 +62,13 @@ fn par_execute_entries(bank: &Bank, entries: &[(&Entry, Vec<Result<()>>)]) -> (R
                 lock_results.to_vec(),
                 MAX_ENTRY_IDS,
             );
-            let fee = e
-                .transactions
-                .iter()
-                .zip(&old_results)
-                .map(|(tx, res)| match res {
-                    Err(BankError::ProgramError(_, _)) => {
-                        // Charge the transaction fee in case of ProgramError
-                        bank.withdraw(&tx.account_keys[0], tx.fee);
-                        tx.fee
-                    }
-                    Ok(()) => tx.fee,
-                    _ => 0,
-                })
-                .sum();
             let results = ignore_program_errors(old_results);
             bank.unlock_accounts(&e.transactions, &results);
-            (first_err(&results), fee)
+            first_err(&results)
         })
         .collect();
 
-    let fee = results_fees.iter().map(|(_, fee)| fee).sum();
-    let results: Vec<Result<()>> = results_fees.into_iter().map(|(res, _)| res).collect();
-    (first_err(&results[..]), fee)
+    first_err(&results)
 }
 
 /// process entries in parallel
@@ -105,18 +80,13 @@ fn par_process_entries_with_scheduler(
     bank: &Bank,
     entries: &[Entry],
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-) -> (Result<()>, u64) {
+) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut mt_group = vec![];
-    let mut fees = 0;
     for entry in entries {
         if entry.is_tick() {
             // if its a tick, execute the group and register the tick
-            let (res, fee) = par_execute_entries(bank, &mt_group);
-            fees += fee;
-            if res.is_err() {
-                return (res, fees);
-            }
+            par_execute_entries(bank, &mt_group)?;
             bank.register_tick(&entry.id);
             leader_scheduler
                 .write()
@@ -130,11 +100,7 @@ fn par_process_entries_with_scheduler(
         // if any of the locks error out
         // execute the current group
         if first_err(&lock_results).is_err() {
-            let (res, fee) = par_execute_entries(bank, &mt_group);
-            fees += fee;
-            if res.is_err() {
-                return (res, fees);
-            }
+            par_execute_entries(bank, &mt_group)?;
             mt_group = vec![];
             //reset the lock and push the entry
             bank.unlock_accounts(&entry.transactions, &lock_results);
@@ -145,9 +111,8 @@ fn par_process_entries_with_scheduler(
             mt_group.push((entry, lock_results));
         }
     }
-    let (res, fee) = par_execute_entries(bank, &mt_group);
-    fees += fee;
-    (res, fees)
+    par_execute_entries(bank, &mt_group)?;
+    Ok(())
 }
 
 /// Process an ordered list of entries.
@@ -155,7 +120,7 @@ pub fn process_entries(
     bank: &Bank,
     entries: &[Entry],
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-) -> (Result<()>, u64) {
+) -> Result<()> {
     par_process_entries_with_scheduler(bank, entries, leader_scheduler)
 }
 
@@ -167,21 +132,11 @@ fn process_block(
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
 ) -> Result<()> {
     for entry in entries {
-        let (res, fee) = process_entry(bank, entry);
-        if let Some(leader) = leader_scheduler
-            .read()
-            .unwrap()
-            .get_leader_for_tick(bank.tick_height())
-        {
-            // Credit the accumulated fees to the current leader and reset the fee to 0
-            bank.deposit(&leader, fee);
-        }
-
+        process_entry(bank, entry)?;
         if entry.is_tick() {
             let mut leader_scheduler = leader_scheduler.write().unwrap();
             leader_scheduler.update_tick_height(bank.tick_height(), bank);
         }
-        res?;
     }
 
     Ok(())
@@ -290,7 +245,12 @@ pub fn process_blocktree(
             _ => {
                 // This is a fork point, create a new child bank for each fork
                 pending_slots.extend(meta.next_slots.iter().map(|next_slot| {
-                    let child_bank = Bank::new_from_parent(&bank);
+                    let leader = leader_scheduler
+                        .read()
+                        .unwrap()
+                        .get_leader_for_slot(*next_slot)
+                        .unwrap();
+                    let child_bank = Bank::new_from_parent(&bank, &leader);
                     trace!("Add child bank for slot={}", next_slot);
                     let child_bank_id = *next_slot;
                     bank_forks.insert(child_bank_id, child_bank);
@@ -486,7 +446,7 @@ mod tests {
         assert_ne!(updated_results, expected_results);
     }
 
-    fn par_process_entries(bank: &Bank, entries: &[Entry]) -> (Result<()>, u64) {
+    fn par_process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
         par_process_entries_with_scheduler(bank, entries, &leader_scheduler)
     }
@@ -506,7 +466,7 @@ mod tests {
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
-        par_process_entries(&bank, &[entry]).0.unwrap();
+        par_process_entries(&bank, &[entry]).unwrap();
         assert_eq!(bank.process_transaction(&tx), Ok(()));
     }
 
@@ -592,7 +552,7 @@ mod tests {
 
         // ensure bank can process a tick
         let tick = next_entry(&genesis_block.last_id(), 1, vec![]);
-        assert_eq!(par_process_entries(&bank, &[tick.clone()]).0, Ok(()));
+        assert_eq!(par_process_entries(&bank, &[tick.clone()]), Ok(()));
         assert_eq!(bank.last_id(), tick.id);
     }
 
@@ -612,7 +572,7 @@ mod tests {
         let tx =
             SystemTransaction::new_account(&mint_keypair, keypair2.pubkey(), 2, bank.last_id(), 0);
         let entry_2 = next_entry(&entry_1.id, 1, vec![tx]);
-        assert_eq!(par_process_entries(&bank, &[entry_1, entry_2]).0, Ok(()));
+        assert_eq!(par_process_entries(&bank, &[entry_1, entry_2]), Ok(()));
         assert_eq!(bank.get_balance(&keypair1.pubkey()), 2);
         assert_eq!(bank.get_balance(&keypair2.pubkey()), 2);
         assert_eq!(bank.last_id(), last_id);
@@ -665,7 +625,7 @@ mod tests {
         );
 
         assert_eq!(
-            par_process_entries(&bank, &[entry_1_to_mint, entry_2_to_3_mint_to_1]).0,
+            par_process_entries(&bank, &[entry_1_to_mint, entry_2_to_3_mint_to_1]),
             Ok(())
         );
 
@@ -685,21 +645,19 @@ mod tests {
 
         //load accounts
         let tx =
-            SystemTransaction::new_account(&mint_keypair, keypair1.pubkey(), 4, bank.last_id(), 0);
+            SystemTransaction::new_account(&mint_keypair, keypair1.pubkey(), 1, bank.last_id(), 0);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         let tx =
-            SystemTransaction::new_account(&mint_keypair, keypair2.pubkey(), 4, bank.last_id(), 0);
+            SystemTransaction::new_account(&mint_keypair, keypair2.pubkey(), 1, bank.last_id(), 0);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
 
         // ensure bank can process 2 entries that do not have a common account and no tick is registered
         let last_id = bank.last_id();
-        let tx = SystemTransaction::new_account(&keypair1, keypair3.pubkey(), 1, bank.last_id(), 1);
+        let tx = SystemTransaction::new_account(&keypair1, keypair3.pubkey(), 1, bank.last_id(), 0);
         let entry_1 = next_entry(&last_id, 1, vec![tx]);
-        let tx = SystemTransaction::new_account(&keypair2, keypair4.pubkey(), 1, bank.last_id(), 3);
+        let tx = SystemTransaction::new_account(&keypair2, keypair4.pubkey(), 1, bank.last_id(), 0);
         let entry_2 = next_entry(&entry_1.id, 1, vec![tx]);
-        let (res, fee) = par_process_entries(&bank, &[entry_1, entry_2]);
-        assert_eq!(res, Ok(()));
-        assert_eq!(fee, 4);
+        assert_eq!(par_process_entries(&bank, &[entry_1, entry_2]), Ok(()));
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
         assert_eq!(bank.get_balance(&keypair4.pubkey()), 1);
         assert_eq!(bank.last_id(), last_id);
@@ -716,32 +674,33 @@ mod tests {
 
         //load accounts
         let tx =
-            SystemTransaction::new_account(&mint_keypair, keypair1.pubkey(), 6, bank.last_id(), 0);
+            SystemTransaction::new_account(&mint_keypair, keypair1.pubkey(), 1, bank.last_id(), 0);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         let tx =
-            SystemTransaction::new_account(&mint_keypair, keypair2.pubkey(), 3, bank.last_id(), 0);
+            SystemTransaction::new_account(&mint_keypair, keypair2.pubkey(), 1, bank.last_id(), 0);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
 
         let last_id = bank.last_id();
 
         // ensure bank can process 2 entries that do not have a common account and tick is registered
-        let tx = SystemTransaction::new_account(&keypair2, keypair3.pubkey(), 1, bank.last_id(), 2);
+        let tx = SystemTransaction::new_account(&keypair2, keypair3.pubkey(), 1, bank.last_id(), 0);
         let entry_1 = next_entry(&last_id, 1, vec![tx]);
         let tick = next_entry(&entry_1.id, 1, vec![]);
-        let tx = SystemTransaction::new_account(&keypair1, keypair4.pubkey(), 1, tick.id, 5);
+        let tx = SystemTransaction::new_account(&keypair1, keypair4.pubkey(), 1, tick.id, 0);
         let entry_2 = next_entry(&tick.id, 1, vec![tx]);
-        let (res, fee) =
-            par_process_entries(&bank, &[entry_1.clone(), tick.clone(), entry_2.clone()]);
-        assert_eq!(res, Ok(()));
-        assert_eq!(fee, 7);
+        assert_eq!(
+            par_process_entries(&bank, &[entry_1.clone(), tick.clone(), entry_2.clone()]),
+            Ok(())
+        );
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
         assert_eq!(bank.get_balance(&keypair4.pubkey()), 1);
         assert_eq!(bank.last_id(), tick.id);
         // ensure that an error is returned for an empty account (keypair2)
         let tx = SystemTransaction::new_account(&keypair2, keypair3.pubkey(), 1, tick.id, 0);
         let entry_3 = next_entry(&entry_2.id, 1, vec![tx]);
-        let (res, fee) = par_process_entries(&bank, &[entry_3]);
-        assert_eq!(fee, 0);
-        assert_eq!(res, Err(BankError::AccountNotFound));
+        assert_eq!(
+            par_process_entries(&bank, &[entry_3]),
+            Err(BankError::AccountNotFound)
+        );
     }
 }

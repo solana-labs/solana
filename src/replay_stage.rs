@@ -65,7 +65,6 @@ impl ReplayStage {
         last_entry_id: &Arc<RwLock<Hash>>,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
         subscriptions: &Arc<RpcSubscriptions>,
-        fees: &mut u64,
     ) -> Result<()> {
         // Coalesce all the available entries into a single vote
         submit(
@@ -112,10 +111,7 @@ impl ReplayStage {
             // If we don't process the entry now, the for loop will exit and the entry
             // will be dropped.
             if 0 == num_ticks_to_next_vote || (i + 1) == entries.len() {
-                let (res_int, fee) =
-                    blocktree_processor::process_entries(bank, &entries[0..=i], leader_scheduler);
-                res = res_int;
-                *fees += fee;
+                res = blocktree_processor::process_entries(bank, &entries[0..=i], leader_scheduler);
 
                 if res.is_err() {
                     // TODO: This will return early from the first entry that has an erroneous
@@ -130,15 +126,6 @@ impl ReplayStage {
 
                 if 0 == num_ticks_to_next_vote {
                     subscriptions.notify_subscribers(&bank);
-                    if let Some(leader) = leader_scheduler
-                        .read()
-                        .unwrap()
-                        .get_leader_for_tick(num_ticks)
-                    {
-                        // Credit the accumulated fees to the current leader and reset the fee to 0
-                        bank.deposit(&leader, *fees);
-                        *fees = 0;
-                    }
                     if let Some(voting_keypair) = voting_keypair {
                         let keypair = voting_keypair.as_ref();
                         let vote =
@@ -227,7 +214,6 @@ impl ReplayStage {
                     .expect("Database error")
                     .map(|meta| meta.consumed)
                     .unwrap_or(0);
-                let mut fees = 0;
 
                 // Loop through blocktree MAX_ENTRY_RECV_PER_ITER entries at a time for each
                 // relevant slot to see if there are any available updates
@@ -290,7 +276,6 @@ impl ReplayStage {
                             &last_entry_id,
                             &leader_scheduler_,
                             &subscriptions_,
-                            &mut fees,
                         ) {
                             error!("process_entries failed: {:?}", e);
                         }
@@ -776,7 +761,6 @@ mod test {
         let leader_scheduler_config = LeaderSchedulerConfig::default();
         let leader_scheduler = LeaderScheduler::new_with_bank(&leader_scheduler_config, &bank);
         let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
-        let mut fee = 0;
         let res = ReplayStage::process_entries(
             entries.clone(),
             &bank,
@@ -787,7 +771,6 @@ mod test {
             &Arc::new(RwLock::new(last_entry_id)),
             &leader_scheduler,
             &Arc::new(RpcSubscriptions::default()),
-            &mut fee,
         );
 
         match res {
@@ -814,7 +797,6 @@ mod test {
             &Arc::new(RwLock::new(last_entry_id)),
             &leader_scheduler,
             &Arc::new(RpcSubscriptions::default()),
-            &mut fee,
         );
 
         match res {
