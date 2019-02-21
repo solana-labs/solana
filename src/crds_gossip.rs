@@ -159,8 +159,8 @@ impl CrdsGossip {
     }
 }
 
-/// Computes a normalized(log of bank balance) stake
-pub fn get_stake(id: &Pubkey, stakes: &HashMap<Pubkey, u64>) -> f32 {
+/// Computes a normalized(log of actual stake) stake
+pub fn get_stake<S: std::hash::BuildHasher>(id: &Pubkey, stakes: &HashMap<Pubkey, u64, S>) -> f32 {
     // cap the max balance to u32 max (it should be plenty)
     let bal = f64::from(u32::max_value()).min(*stakes.get(id).unwrap_or(&0) as f64);
     1_f32.max((bal as f32).ln())
