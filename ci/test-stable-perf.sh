@@ -36,7 +36,7 @@ else
   ./fetch-perf-libs.sh
   # shellcheck source=/dev/null
   source ./target/perf-libs/env.sh
-  FEATURES=$ROOT_FEATURES,cuda
+  ROOT_FEATURES=$ROOT_FEATURES,cuda
 fi
 
 # Build and run root package library tests
