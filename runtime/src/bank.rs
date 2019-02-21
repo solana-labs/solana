@@ -100,6 +100,9 @@ pub struct Bank {
 
     /// The number of slots in each epoch.
     slots_per_epoch: u64,
+
+    // The number of slots until the next leader schedule activates.
+    leader_schedule_offset: u64,
 }
 
 impl Default for Bank {
@@ -112,6 +115,7 @@ impl Default for Bank {
             hash: RwLock::<Hash>::default(),
             ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
             slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
+            leader_schedule_offset: DEFAULT_SLOTS_PER_EPOCH,
         }
     }
 }
@@ -128,6 +132,10 @@ impl Bank {
     pub fn new_from_parent(parent: &Arc<Bank>) -> Self {
         let mut bank = Self::default();
         bank.last_id_queue = RwLock::new(parent.last_id_queue.read().unwrap().clone());
+        bank.ticks_per_slot = parent.ticks_per_slot;
+        bank.slots_per_epoch = parent.slots_per_epoch;
+        bank.leader_schedule_offset = parent.leader_schedule_offset;
+
         bank.parent = Some(parent.clone());
         if *parent.hash.read().unwrap() == Hash::default() {
             *parent.hash.write().unwrap() = parent.hash_internal_state();
@@ -665,6 +673,21 @@ impl Bank {
         self.slots_per_epoch
     }
 
+    /// Return the number of slots until the next leader schedule activates.
+    pub fn leader_schedule_offset(&self) -> u64 {
+        self.leader_schedule_offset
+    }
+
+    /// Return the checkpointed bank that should be used to generate a leader schedule.
+    /// Return None if a sufficiently old bank checkpoint doesn't exist.
+    pub fn leader_schedule_bank(&self) -> Option<Arc<Bank>> {
+        let epoch_slot_height = self.slot_height() - self.slot_index();
+        let expected = epoch_slot_height.saturating_sub(self.leader_schedule_offset);
+        self.parents()
+            .into_iter()
+            .find(|bank| bank.slot_height() <= expected)
+    }
+
     /// Return the number of ticks since genesis.
     pub fn tick_height(&self) -> u64 {
         self.last_id_queue.read().unwrap().tick_height
@@ -995,6 +1018,25 @@ mod tests {
 
         // Cross an epoch boundary.
         assert_eq!(register_ticks(&bank, ticks_per_epoch), (0, 1, 1));
+    }
+
+    #[test]
+    fn test_leader_schedule_bank() {
+        let (genesis_block, _) = GenesisBlock::new(5);
+        let bank = Bank::new(&genesis_block);
+        assert!(bank.leader_schedule_bank().is_none());
+
+        let bank = Bank::new_from_parent(&Arc::new(bank));
+        let ticks_per_offset = bank.leader_schedule_offset() * bank.ticks_per_slot();
+        register_ticks(&bank, ticks_per_offset);
+        assert_eq!(bank.slot_height(), bank.leader_schedule_offset());
+
+        let slot_height = bank.slots_per_epoch() - bank.leader_schedule_offset();
+        let bank = Bank::new_from_parent(&Arc::new(bank));
+        assert_eq!(
+            bank.leader_schedule_bank().unwrap().slot_height(),
+            slot_height
+        );
     }
 
     #[test]

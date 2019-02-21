@@ -29,11 +29,15 @@ impl LeaderSchedule {
         Self { slot_leaders }
     }
 
-    pub fn new_with_bank(bank: &Bank, len: u64) -> Self {
+    pub fn new_with_bank(bank: &Bank) -> Self {
         let active_stakers = ActiveStakers::new(&bank);
         let mut seed = [0u8; 32];
         seed.copy_from_slice(bank.last_id().as_ref());
-        Self::new(&active_stakers.sorted_stakes(), &seed, len)
+        Self::new(
+            &active_stakers.sorted_stakes(),
+            &seed,
+            bank.slots_per_epoch(),
+        )
     }
 }
 
@@ -44,11 +48,26 @@ impl Index<usize> for LeaderSchedule {
     }
 }
 
+trait LeaderScheduleUtil {
+    /// Return the leader schedule for the current epoch.
+    fn leader_schedule(&self) -> LeaderSchedule;
+}
+
+impl LeaderScheduleUtil for Bank {
+    fn leader_schedule(&self) -> LeaderSchedule {
+        match self.leader_schedule_bank() {
+            None => LeaderSchedule::new_with_bank(self),
+            Some(bank) => LeaderSchedule::new_with_bank(&bank),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use std::iter;
 
     #[test]
     fn test_leader_schedule_index() {
@@ -85,7 +104,10 @@ mod tests {
         let pubkey = Keypair::new().pubkey();
         let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(2, pubkey, 2);
         let bank = Bank::new(&genesis_block);
-        let leader_schedule = LeaderSchedule::new_with_bank(&bank, 2);
-        assert_eq!(leader_schedule.slot_leaders, vec![pubkey, pubkey]);
+        let leader_schedule = LeaderSchedule::new_with_bank(&bank);
+        let len = bank.slots_per_epoch() as usize;
+        let expected: Vec<_> = iter::repeat(pubkey).take(len).collect();
+        assert_eq!(leader_schedule.slot_leaders, expected);
+        assert_eq!(bank.leader_schedule().slot_leaders, expected); // Same thing, but with the trait
     }
 }
