@@ -22,13 +22,13 @@ rm -rf "$HOME/.config/solana"
 testName=$(basename "$0" .sh)
 case $testName in
 test-stable)
-  echo Executing $testName
+  echo "Executing $testName"
 
   _ cargo build --all ${V:+--verbose}
   _ cargo test --all ${V:+--verbose} -- --nocapture --test-threads=1
   ;;
 test-stable-perf)
-  echo Executing $testName
+  echo "Executing $testName"
 
   ci/affects-files.sh \
   .rs$ \
