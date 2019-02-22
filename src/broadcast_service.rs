@@ -323,6 +323,7 @@ mod test {
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::create_ticks;
     use crate::service::Service;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
@@ -361,7 +362,7 @@ mod test {
         let cluster_info = Arc::new(RwLock::new(cluster_info));
 
         let exit_sender = Arc::new(AtomicBool::new(false));
-        let bank = Arc::new(Bank::default());
+        let bank = Arc::new(Bank::new(&GenesisBlock::new(123).0));
 
         // Start up the broadcast stage
         let broadcast_service = BroadcastService::new(

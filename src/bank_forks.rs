@@ -47,19 +47,20 @@ impl BankForks {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_bank_forks_root() {
-        let bank = Bank::default();
+        let bank = Bank::new(&GenesisBlock::new(123).0);
         let bank_forks = BankForks::new(0, bank);
         assert_eq!(bank_forks.working_bank().tick_height(), 0);
     }
 
     #[test]
     fn test_bank_forks_parent() {
-        let bank = Bank::default();
+        let bank = Bank::new(&GenesisBlock::new(123).0);
         let mut bank_forks = BankForks::new(0, bank);
         let child_bank = Bank::new_from_parent(&bank_forks.working_bank(), &Pubkey::default());
         child_bank.register_tick(&Hash::default());

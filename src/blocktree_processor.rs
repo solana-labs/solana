@@ -240,7 +240,7 @@ pub fn process_blocktree(
                     .unwrap()
                     .get_leader_for_slot(*next_slot)
                     .unwrap();
-                let child_bank = Bank::new_from_parent_and_id(&bank, &leader, *next_slot);
+                let child_bank = Bank::new_from_parent(&bank, &leader);
                 trace!("Add child bank for slot={}", next_slot);
                 bank_forks.insert(*next_slot, child_bank);
                 (*next_slot, entry_height, last_entry_id)

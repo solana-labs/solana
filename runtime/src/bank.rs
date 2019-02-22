@@ -93,9 +93,6 @@ pub struct Bank {
     /// Hash of this Bank's state. Only meaningful after freezing it
     hash: RwLock<Hash>,
 
-    /// Bank fork id
-    id: u64,
-
     /// The number of ticks in each slot.
     ticks_per_slot: u64,
 
@@ -119,7 +116,7 @@ impl Bank {
     }
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
-    pub fn new_from_parent_and_id(parent: &Arc<Bank>, leader: &Pubkey, id: u64) -> Self {
+    pub fn new_from_parent(parent: &Arc<Bank>, leader: &Pubkey) -> Self {
         parent.freeze();
 
         let mut bank = Self::default();
@@ -128,7 +125,6 @@ impl Bank {
         bank.slots_per_epoch = parent.slots_per_epoch;
         bank.leader_schedule_slot_offset = parent.leader_schedule_slot_offset;
 
-        bank.id = id;
         bank.parent = RwLock::new(Some(parent.clone()));
         if *parent.hash.read().unwrap() == Hash::default() {
             *parent.hash.write().unwrap() = parent.hash_internal_state();
@@ -138,13 +134,8 @@ impl Bank {
         bank
     }
 
-    /// Create a new bank that points to an immutable checkpoint of another bank.
-    pub fn new_from_parent(parent: &Arc<Bank>, leader: &Pubkey) -> Self {
-        Self::new_from_parent_and_id(parent, leader, parent.id() + 1)
-    }
-
     pub fn id(&self) -> u64 {
-        self.id
+        self.slot_height()
     }
 
     pub fn hash(&self) -> Hash {
@@ -158,6 +149,11 @@ impl Bank {
     pub fn freeze(&self) {
         //  freeze is a one-way trip, idempotent
         if !self.is_frozen() {
+            trace!(
+                "Freezing bank {} at a tick_height of {}",
+                self.slot_height(),
+                self.tick_height()
+            );
             *self.hash.write().unwrap() = self.hash_internal_state();
         }
     }
@@ -298,7 +294,7 @@ impl Bank {
     /// the oldest ones once its internal cache is full. Once boot, the
     /// bank will reject transactions using that `last_id`.
     pub fn register_tick(&self, last_id: &Hash) {
-        assert!(!self.is_frozen());
+        assert!(!self.is_frozen(), "bank {} is frozen", self.id());
 
         let current_tick_height = {
             //atomic register and read the tick
@@ -325,7 +321,7 @@ impl Bank {
     }
 
     pub fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<()>> {
-        assert!(!self.is_frozen());
+        assert!(!self.is_frozen(), "bank {} is frozen", self.id());
         self.accounts.lock_accounts(txs)
     }
 
@@ -518,7 +514,7 @@ impl Bank {
         loaded_accounts: &[Result<(InstructionAccounts, InstructionLoaders)>],
         executed: &[Result<()>],
     ) -> Vec<Result<()>> {
-        assert!(!self.is_frozen());
+        assert!(!self.is_frozen(), "bank {} is frozen", self.id());
         let now = Instant::now();
         self.accounts
             .store_accounts(self.is_root(), txs, executed, loaded_accounts);
@@ -614,7 +610,7 @@ impl Bank {
     }
 
     pub fn deposit(&self, pubkey: &Pubkey, tokens: u64) {
-        assert!(!self.is_frozen());
+        assert!(!self.is_frozen(), "bank {} is frozen", self.id());
         let mut account = self.get_account(pubkey).unwrap_or_default();
         account.tokens += tokens;
         self.accounts.store_slow(self.is_root(), pubkey, &account);
