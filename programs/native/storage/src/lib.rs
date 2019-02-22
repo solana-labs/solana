@@ -45,10 +45,13 @@ fn entrypoint(
         Err(ProgramError::GenericError)?;
     }
 
-    if !check_id(&keyed_accounts[1].account.owner) {
-        error!("account[1] is not assigned to the STORAGE_PROGRAM");
-        Err(ProgramError::InvalidArgument)?;
-    }
+    // Following https://github.com/solana-labs/solana/pull/2773,
+    // Modifications to userdata can only be made by accounts owned
+    // by this program. TODO: Add this check:
+    //if !check_id(&keyed_accounts[1].account.owner) {
+    //    error!("account[1] is not assigned to the STORAGE_PROGRAM");
+    //    Err(ProgramError::InvalidArgument)?;
+    //}
 
     if *keyed_accounts[1].unsigned_key() != system_id() {
         info!(
