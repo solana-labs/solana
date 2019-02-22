@@ -1,6 +1,6 @@
 # Secure Vote Signing
 
-The goal of this design is to address the following challenges with voting:
+There are a few security challenges when fullnodes need to vote:
 
 * A validator execute untrusted code in a potentially insecure VM.
 * A validator signs the result of its work and votes on a fork.

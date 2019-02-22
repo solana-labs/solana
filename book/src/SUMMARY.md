@@ -15,6 +15,7 @@
   - [Synchronization](synchronization.md)
   - [Leader Rotation](leader-rotation.md)
   - [Fork Generation](fork-generation.md)
+  - [Secure Vote Signing](vote-signer.md)
 
 - [Anatomy of a Fullnode](fullnode.md)
   - [TPU](tpu.md)
@@ -31,7 +32,6 @@
 
 - [Proposed Architectural Changes](proposals.md)
   - [Ledger Replication](ledger-replication.md)
-  - [Secure Vote Signing](vote-signer.md)
   - [Staking Rewards](staking-rewards.md)
   - [Fork Selection](fork-selection.md)
   - [Data Plane Fanout](data-plane-fanout.md)
