@@ -23,10 +23,7 @@ use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::storage_program;
 use solana_sdk::system_program;
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::timing::{
-    duration_as_us, DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT, MAX_ENTRY_IDS,
-    NUM_TICKS_PER_SECOND,
-};
+use solana_sdk::timing::{duration_as_us, MAX_ENTRY_IDS, NUM_TICKS_PER_SECOND};
 use solana_sdk::token_program;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, VoteState};
@@ -80,6 +77,7 @@ pub type Result<T> = result::Result<T, BankError>;
 type BankStatusCache = StatusCache<BankError>;
 
 /// Manager for the state of all accounts and programs after processing its entries.
+#[derive(Default)]
 pub struct Bank {
     accounts: Accounts,
 
@@ -109,25 +107,9 @@ pub struct Bank {
     leader: Pubkey,
 }
 
-impl Default for Bank {
-    fn default() -> Self {
-        Self {
-            accounts: Accounts::default(),
-            status_cache: RwLock::<BankStatusCache>::default(),
-            last_id_queue: RwLock::<LastIdQueue>::default(),
-            parent: Option::<Arc<Bank>>::default(),
-            hash: RwLock::<Hash>::default(),
-            ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
-            slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
-            leader_schedule_slot_offset: DEFAULT_SLOTS_PER_EPOCH,
-            leader: Pubkey::default(),
-        }
-    }
-}
-
 impl Bank {
     pub fn new(genesis_block: &GenesisBlock) -> Self {
-        let bank = Self::default();
+        let mut bank = Self::default();
         bank.process_genesis_block(genesis_block);
         bank.add_builtin_programs();
         bank
@@ -177,7 +159,7 @@ impl Bank {
         self.parent.is_none()
     }
 
-    fn process_genesis_block(&self, genesis_block: &GenesisBlock) {
+    fn process_genesis_block(&mut self, genesis_block: &GenesisBlock) {
         assert!(genesis_block.mint_id != Pubkey::default());
         assert!(genesis_block.bootstrap_leader_id != Pubkey::default());
         assert!(genesis_block.bootstrap_leader_vote_account_id != Pubkey::default());
@@ -218,6 +200,10 @@ impl Bank {
             .write()
             .unwrap()
             .genesis_last_id(&genesis_block.last_id());
+
+        self.ticks_per_slot = genesis_block.ticks_per_slot;
+        self.slots_per_epoch = genesis_block.slots_per_epoch;
+        self.leader_schedule_slot_offset = genesis_block.leader_schedule_slot_offset;
     }
 
     pub fn add_native_program(&self, name: &str, program_id: &Pubkey) {

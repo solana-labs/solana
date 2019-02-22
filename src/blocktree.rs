@@ -1266,17 +1266,16 @@ impl Iterator for EntryIterator {
 // Returns a tuple (entry_height, tick_height, last_id), corresponding to the
 // total number of entries, the number of ticks, and the last id generated in the
 // new ledger
-#[allow(clippy::trivially_copy_pass_by_ref)]
 pub fn create_new_ledger(
     ledger_path: &str,
     genesis_block: &GenesisBlock,
-    config: &BlocktreeConfig,
 ) -> Result<(u64, u64, Hash)> {
+    let config = BlocktreeConfig::new(genesis_block.ticks_per_slot);
     Blocktree::destroy(ledger_path)?;
     genesis_block.write(&ledger_path)?;
 
     // Add a single tick linked back to the genesis_block to bootstrap the ledger
-    let blocktree = Blocktree::open_config(ledger_path, config)?;
+    let blocktree = Blocktree::open_config(ledger_path, &config)?;
     let entries = crate::entry::create_ticks(1, genesis_block.last_id());
     blocktree.write_entries(DEFAULT_SLOT_HEIGHT, 0, 0, &entries)?;
 
@@ -1328,11 +1327,14 @@ pub fn create_tmp_sample_ledger(
     bootstrap_leader_tokens: u64,
     config: &BlocktreeConfig,
 ) -> (Keypair, String, u64, u64, Hash, Hash) {
-    let (genesis_block, mint_keypair) =
+    // TODO: Pass in a genesis block instead of all its parameters.
+    let (mut genesis_block, mint_keypair) =
         GenesisBlock::new_with_leader(num_tokens, bootstrap_leader_id, bootstrap_leader_tokens);
+    genesis_block.ticks_per_slot = config.ticks_per_slot;
+
     let ledger_path = get_tmp_ledger_path(name);
     let (mut entry_height, mut tick_height, mut last_entry_id) =
-        create_new_ledger(&ledger_path, &genesis_block, config).unwrap();
+        create_new_ledger(&ledger_path, &genesis_block).unwrap();
 
     let mut last_id = genesis_block.last_id();
     if num_extra_ticks > 0 {
