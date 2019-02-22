@@ -24,7 +24,6 @@ use crate::retransmit_stage::RetransmitStage;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::storage_stage::{StorageStage, StorageState};
-use crate::voting_keypair::VotingKeypair;
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
@@ -67,8 +66,8 @@ impl Tvu {
     /// * `sockets` - fetch, repair, and retransmit sockets
     /// * `blocktree` - the ledger itself
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
-    pub fn new(
-        voting_keypair: Option<Arc<VotingKeypair>>,
+    pub fn new<T>(
+        voting_keypair: Option<Arc<T>>,
         bank_forks: &Arc<RwLock<BankForks>>,
         bank_forks_info: &[BankForksInfo],
         cluster_info: &Arc<RwLock<ClusterInfo>>,
@@ -81,7 +80,10 @@ impl Tvu {
         ledger_signal_receiver: Receiver<bool>,
         leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         subscriptions: &Arc<RpcSubscriptions>,
-    ) -> Self {
+    ) -> Self
+    where
+        T: 'static + KeypairUtil + Sync + Send,
+    {
         let exit = Arc::new(AtomicBool::new(false));
         let keypair: Arc<Keypair> = cluster_info
             .read()
@@ -240,11 +242,9 @@ pub mod tests {
         let blocktree_path = get_tmp_ledger_path("test_tvu_exit");
         let (blocktree, l_receiver) = Blocktree::open_with_signal(&blocktree_path)
             .expect("Expected to successfully open ledger");
-        let vote_account_keypair = Arc::new(Keypair::new());
-        let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
         let (sender, _receiver) = channel();
         let tvu = Tvu::new(
-            Some(Arc::new(voting_keypair)),
+            Some(Arc::new(Keypair::new())),
             &Arc::new(RwLock::new(bank_forks)),
             &bank_forks_info,
             &cref1,

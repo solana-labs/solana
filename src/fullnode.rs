@@ -14,7 +14,6 @@ use crate::service::Service;
 use crate::storage_stage::StorageState;
 use crate::tpu::Tpu;
 use crate::tvu::{Sockets, Tvu, TvuRotationInfo, TvuRotationReceiver};
-use crate::voting_keypair::VotingKeypair;
 use log::Level;
 use solana_metrics::counter::Counter;
 use solana_sdk::genesis_block::GenesisBlock;
@@ -106,14 +105,17 @@ pub struct Fullnode {
 }
 
 impl Fullnode {
-    pub fn new(
+    pub fn new<T>(
         mut node: Node,
         keypair: &Arc<Keypair>,
         ledger_path: &str,
-        voting_keypair: VotingKeypair,
+        voting_keypair: T,
         entrypoint_info_option: Option<&NodeInfo>,
         config: &FullnodeConfig,
-    ) -> Self {
+    ) -> Self
+    where
+        T: 'static + KeypairUtil + Sync + Send,
+    {
         info!("creating bank...");
 
         let id = keypair.pubkey();
@@ -438,7 +440,7 @@ mod tests {
             validator_node,
             &Arc::new(validator_keypair),
             &validator_ledger_path,
-            VotingKeypair::new(),
+            Keypair::new(),
             Some(&leader_node.info),
             &FullnodeConfig::default(),
         );
@@ -476,7 +478,7 @@ mod tests {
                     validator_node,
                     &Arc::new(validator_keypair),
                     &validator_ledger_path,
-                    VotingKeypair::new(),
+                    Keypair::new(),
                     Some(&leader_node.info),
                     &FullnodeConfig::default(),
                 )
@@ -513,8 +515,7 @@ mod tests {
         let leader_scheduler_config =
             LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_num_slots);
 
-        let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
-        let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
+        let voting_keypair = Keypair::new();
         let mut fullnode_config = FullnodeConfig::default();
         fullnode_config.leader_scheduler_config = leader_scheduler_config;
 
@@ -537,7 +538,7 @@ mod tests {
         // Start the bootstrap leader
         let bootstrap_leader = Fullnode::new(
             bootstrap_leader_node,
-            &bootstrap_leader_keypair,
+            &Arc::new(bootstrap_leader_keypair),
             &bootstrap_leader_ledger_path,
             voting_keypair,
             None,
@@ -604,7 +605,7 @@ mod tests {
                 bootstrap_leader_node,
                 &bootstrap_leader_keypair,
                 &bootstrap_leader_ledger_path,
-                VotingKeypair::new(),
+                Keypair::new(),
                 Some(&bootstrap_leader_info),
                 &fullnode_config,
             );
@@ -620,7 +621,7 @@ mod tests {
                 validator_node,
                 &validator_keypair,
                 &validator_ledger_path,
-                VotingKeypair::new(),
+                Keypair::new(),
                 Some(&bootstrap_leader_info),
                 &fullnode_config,
             );
@@ -671,7 +672,7 @@ mod tests {
         info!("leader: {:?}", leader_id);
         info!("validator: {:?}", validator_info.id);
 
-        let voting_keypair = VotingKeypair::new_local(&validator_keypair);
+        let voting_keypair = Keypair::new();
 
         // Start the validator
         let validator = Fullnode::new(

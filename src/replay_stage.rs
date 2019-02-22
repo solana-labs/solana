@@ -11,13 +11,13 @@ use crate::result::{Error, Result};
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::tvu::{TvuRotationInfo, TvuRotationSender};
-use crate::voting_keypair::VotingKeypair;
 use log::Level;
 use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};
 use solana_runtime::bank::Bank;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
+use solana_sdk::signature::KeypairUtil;
 use solana_sdk::timing::duration_as_ms;
 use solana_sdk::vote_transaction::VoteTransaction;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -56,11 +56,11 @@ pub struct ReplayStage {
 impl ReplayStage {
     /// Process entry blobs, already in order
     #[allow(clippy::too_many_arguments)]
-    fn process_entries(
+    fn process_entries<T: KeypairUtil>(
         mut entries: Vec<Entry>,
         bank: &Arc<Bank>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
-        voting_keypair: Option<&Arc<VotingKeypair>>,
+        voting_keypair: &Option<Arc<T>>,
         ledger_entry_sender: &EntrySender,
         current_blob_index: &mut u64,
         last_entry_id: &Arc<RwLock<Hash>>,
@@ -169,9 +169,9 @@ impl ReplayStage {
     }
 
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
-    pub fn new(
+    pub fn new<T>(
         my_id: Pubkey,
-        voting_keypair: Option<Arc<VotingKeypair>>,
+        voting_keypair: Option<Arc<T>>,
         blocktree: Arc<Blocktree>,
         bank_forks: &Arc<RwLock<BankForks>>,
         bank_forks_info: &[BankForksInfo],
@@ -181,7 +181,10 @@ impl ReplayStage {
         ledger_signal_receiver: Receiver<bool>,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
         subscriptions: &Arc<RpcSubscriptions>,
-    ) -> (Self, EntryReceiver) {
+    ) -> (Self, EntryReceiver)
+    where
+        T: 'static + KeypairUtil + Send + Sync,
+    {
         let (ledger_entry_sender, ledger_entry_receiver) = channel();
         let exit_ = exit.clone();
         let leader_scheduler_ = leader_scheduler.clone();
@@ -299,7 +302,7 @@ impl ReplayStage {
                             entries,
                             &bank,
                             &cluster_info,
-                            voting_keypair.as_ref(),
+                            &voting_keypair,
                             &ledger_entry_sender,
                             &mut current_blob_index,
                             &last_entry_id,
@@ -389,7 +392,6 @@ mod test {
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
     use crate::replay_stage::ReplayStage;
-    use crate::voting_keypair::VotingKeypair;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -569,8 +571,7 @@ mod test {
 
         // Set up the replay stage
         let exit = Arc::new(AtomicBool::new(false));
-        let my_keypair = Arc::new(my_keypair);
-        let voting_keypair = Arc::new(VotingKeypair::new_local(&my_keypair));
+        let voting_keypair = Arc::new(Keypair::new());
         let (to_leader_sender, _to_leader_receiver) = channel();
         {
             let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
@@ -792,17 +793,16 @@ mod test {
         }
 
         let genesis_block = GenesisBlock::new(10_000).0;
-        let my_keypair = Arc::new(my_keypair);
-        let voting_keypair = Arc::new(VotingKeypair::new_local(&my_keypair));
         let bank = Arc::new(Bank::new(&genesis_block));
         let leader_scheduler_config = LeaderSchedulerConfig::default();
         let leader_scheduler = LeaderScheduler::new_with_bank(&leader_scheduler_config, &bank);
         let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
+        let voting_keypair = Some(Arc::new(Keypair::new()));
         let res = ReplayStage::process_entries(
             entries.clone(),
             &bank,
             &cluster_info_me,
-            Some(&voting_keypair),
+            &voting_keypair,
             &ledger_entry_sender,
             &mut current_blob_index,
             &Arc::new(RwLock::new(last_entry_id)),
@@ -828,7 +828,7 @@ mod test {
             entries.clone(),
             &bank,
             &cluster_info_me,
-            Some(&voting_keypair),
+            &voting_keypair,
             &ledger_entry_sender,
             &mut current_blob_index,
             &Arc::new(RwLock::new(last_entry_id)),
