@@ -191,7 +191,7 @@ impl ReplayStage {
         let to_leader_sender = to_leader_sender.clone();
         let subscriptions_ = subscriptions.clone();
 
-        let (bank, last_entry_id) = {
+        let (mut bank, last_entry_id) = {
             let mut bank_forks = bank_forks.write().unwrap();
             bank_forks.set_working_bank_id(bank_forks_info[0].bank_id);
             (bank_forks.working_bank(), bank_forks_info[0].last_entry_id)
@@ -205,18 +205,20 @@ impl ReplayStage {
             let leader_id = leader_scheduler
                 .get_leader_for_slot(slot)
                 .expect("Leader not known after processing bank");
-            trace!("node {:?} scheduled as leader for slot {}", leader_id, slot,);
+            trace!("node {:?} scheduled as leader for slot {}", leader_id, slot);
 
+            bank.merge_parents();
             // Send a rotation notification back to Fullnode to initialize the TPU to the right
             // state
             to_leader_sender
                 .send(TvuRotationInfo {
-                    bank: Bank::new_from_parent(&bank, &leader_id),
+                    bank: Arc::new(Bank::new_from_parent(&bank, &leader_id)),
                     last_entry_id: *last_entry_id.read().unwrap(),
                     slot,
                     leader_id,
                 })
                 .unwrap();
+            bank = Arc::new(Bank::new_from_parent(&bank, &leader_id));
 
             blocktree
                 .meta(slot)
@@ -317,6 +319,9 @@ impl ReplayStage {
                         // We've reached the end of a slot, reset our state and check
                         // for leader rotation
                         if max_tick_height_for_slot == current_tick_height {
+                            bank.merge_parents();
+                            leader_scheduler_.write().unwrap().update(&bank);
+
                             // Check for leader rotation
                             let (leader_id, next_slot) = {
                                 let leader_scheduler = leader_scheduler_.read().unwrap();
@@ -331,7 +336,7 @@ impl ReplayStage {
                             if my_id == leader_id || my_id == last_leader_id {
                                 to_leader_sender
                                     .send(TvuRotationInfo {
-                                        bank: Bank::new_from_parent(&bank, &leader_id),
+                                        bank: Arc::new(Bank::new_from_parent(&bank, &leader_id)),
                                         last_entry_id: *last_entry_id.read().unwrap(),
                                         slot: next_slot,
                                         leader_id,
@@ -341,6 +346,7 @@ impl ReplayStage {
                                 // TODO: Remove this soon once we boot the leader from ClusterInfo
                                 cluster_info.write().unwrap().set_leader(leader_id);
                             }
+                            bank = Arc::new(Bank::new_from_parent(&bank, &leader_id));
 
                             // Check for any slots that chain to this one
                             prev_slot = current_slot;
@@ -542,6 +548,8 @@ mod test {
 
     #[test]
     fn test_vote_error_replay_stage_correctness() {
+        solana_logger::setup();
+
         // Set up dummy node to host a ReplayStage
         let my_keypair = Keypair::new();
         let my_id = my_keypair.pubkey();

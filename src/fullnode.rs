@@ -278,7 +278,7 @@ impl Fullnode {
                 None => FullnodeReturnType::LeaderToLeaderRotation, // value doesn't matter here...
             };
             self.node_services.tpu.switch_to_leader(
-                Arc::new(rotation_info.bank),
+                rotation_info.bank,
                 PohServiceConfig::default(),
                 self.tpu_sockets
                     .iter()
@@ -533,10 +533,12 @@ mod tests {
 
         // Wait for the bootstrap leader to transition.  Since there are no other nodes in the
         // cluster it will continue to be the leader
+        info!("Waiting for rotation at slot 0");
         assert_eq!(
             rotation_receiver.recv().unwrap(),
             (FullnodeReturnType::LeaderToLeaderRotation, 0)
         );
+        info!("Waiting for rotation at slot 1");
         assert_eq!(
             rotation_receiver.recv().unwrap(),
             (FullnodeReturnType::LeaderToLeaderRotation, 1)
@@ -545,14 +547,14 @@ mod tests {
     }
 
     #[test]
-    fn test_wrong_role_transition() {
+    fn test_ledger_role_transition() {
         solana_logger::setup();
 
         let mut fullnode_config = FullnodeConfig::default();
         let ticks_per_slot = 16;
         let slots_per_epoch = 2;
         fullnode_config.leader_scheduler_config =
-            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, slots_per_epoch);
+            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, std::u64::MAX);
         let ticks_per_slot = fullnode_config.ticks_per_slot();
 
         // Create the leader and validator nodes
@@ -563,7 +565,7 @@ mod tests {
                 &bootstrap_leader_keypair,
                 &validator_keypair,
                 0,
-                // Generate enough ticks for an epochs to flush the bootstrap_leader's vote at
+                // Generate enough ticks for an epoch to flush the bootstrap_leader's vote at
                 // tick_height = 0 from the leader scheduler's active window
                 ticks_per_slot * slots_per_epoch,
                 "test_wrong_role_transition",

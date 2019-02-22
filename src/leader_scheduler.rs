@@ -135,8 +135,7 @@ impl LeaderScheduler {
         self.ticks_per_slot - tick_height % self.ticks_per_slot - 1
     }
 
-    // Inform the leader scheduler about the current tick height of the cluster.  It may generate a
-    // new schedule as a side-effect.
+    // TODO: Remove this function, use `update` instead
     pub fn update_tick_height(&mut self, tick_height: u64, bank: &Bank) {
         let epoch = self.tick_height_to_epoch(tick_height);
         trace!(
@@ -155,6 +154,12 @@ impl LeaderScheduler {
         if self.tick_height_to_epoch(tick_height + 1) == epoch + 1 {
             self.generate_schedule(tick_height + 1, bank);
         }
+    }
+
+    // Update the leader scheduler with the given bank.  It may generate a
+    // new schedule as a side-effect.
+    pub fn update(&mut self, bank: &Bank) {
+        self.update_tick_height(bank.tick_height(), bank);
     }
 
     pub fn get_leader_for_tick(&self, tick: u64) -> Option<Pubkey> {
@@ -205,9 +210,10 @@ impl LeaderScheduler {
     fn generate_schedule(&mut self, tick_height: u64, bank: &Bank) {
         let epoch = self.tick_height_to_epoch(tick_height);
         trace!(
-            "generate_schedule: tick_height={} (epoch={})",
+            "generate_schedule: tick_height={} (epoch={}) using bank {}",
             tick_height,
-            epoch
+            epoch,
+            bank.id(),
         );
         if epoch < self.current_epoch {
             // Don't support going backwards for implementation convenience

@@ -51,12 +51,7 @@ fn par_execute_entries(bank: &Bank, entries: &[(&Entry, Vec<Result<()>>)]) -> Re
 /// 1. In order lock accounts for each entry while the lock succeeds, up to a Tick entry
 /// 2. Process the locked group in parallel
 /// 3. Register the `Tick` if it's available
-/// 4. Update the leader scheduler, goto 1
-fn par_process_entries_with_scheduler(
-    bank: &Bank,
-    entries: &[Entry],
-    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-) -> Result<()> {
+fn par_process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut mt_group = vec![];
     for entry in entries {
@@ -64,10 +59,6 @@ fn par_process_entries_with_scheduler(
             // if its a tick, execute the group and register the tick
             par_execute_entries(bank, &mt_group)?;
             bank.register_tick(&entry.id);
-            leader_scheduler
-                .write()
-                .unwrap()
-                .update_tick_height(bank.tick_height(), bank);
             mt_group = vec![];
             continue;
         }
@@ -95,24 +86,16 @@ fn par_process_entries_with_scheduler(
 pub fn process_entries(
     bank: &Bank,
     entries: &[Entry],
-    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
+    _leader_scheduler: &Arc<RwLock<LeaderScheduler>>, // TODO: update callers to remove this parameter
 ) -> Result<()> {
-    par_process_entries_with_scheduler(bank, entries, leader_scheduler)
+    par_process_entries(bank, entries)
 }
 
 /// Process an ordered list of entries, populating a circular buffer "tail"
 /// as we go.
-fn process_block(
-    bank: &Bank,
-    entries: &[Entry],
-    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-) -> Result<()> {
+fn process_block(bank: &Bank, entries: &[Entry]) -> Result<()> {
     for entry in entries {
         process_entry(bank, entry)?;
-        if entry.is_tick() {
-            let mut leader_scheduler = leader_scheduler.write().unwrap();
-            leader_scheduler.update_tick_height(bank.tick_height(), bank);
-        }
     }
 
     Ok(())
@@ -138,10 +121,7 @@ pub fn process_blocktree(
         let bank0 = Bank::new(&genesis_block);
         let slot = 0;
         let entry_height = 0;
-        leader_scheduler
-            .write()
-            .unwrap()
-            .update_tick_height(slot, &bank0);
+        leader_scheduler.write().unwrap().update(&bank0);
         let last_entry_id = bank0.last_id();
 
         (
@@ -198,7 +178,7 @@ pub fn process_blocktree(
                 return Err(BankError::LedgerVerificationFailed);
             }
 
-            process_block(&bank, &entries, &leader_scheduler).map_err(|err| {
+            process_block(&bank, &entries).map_err(|err| {
                 warn!("Failed to process entries for slot {}: {:?}", slot, err);
                 BankError::LedgerVerificationFailed
             })?;
@@ -217,6 +197,8 @@ pub fn process_blocktree(
             bank.freeze();
             // TODO merge with locktower, voting
             bank.merge_parents();
+
+            leader_scheduler.write().unwrap().update(&bank);
         }
 
         if !slot_complete || meta.next_slots.is_empty() {
@@ -445,11 +427,6 @@ mod tests {
             ]),
             Err(BankError::AccountInUse)
         );
-    }
-
-    fn par_process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
-        par_process_entries_with_scheduler(bank, entries, &leader_scheduler)
     }
 
     #[test]
