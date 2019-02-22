@@ -863,13 +863,6 @@ mod tests {
         );
         let res = bank.process_transactions(&vec![t1.clone()]);
         assert_eq!(res.len(), 1);
-        assert_eq!(
-            res[0],
-            Err(BankError::ProgramError(
-                1,
-                ProgramError::ResultWithNegativeTokens
-            ))
-        );
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 1);
         assert_eq!(bank.get_balance(&key1), 0);
         assert_eq!(bank.get_balance(&key2), 0);
@@ -921,10 +914,8 @@ mod tests {
         );
         let signature = tx.signatures[0];
         assert!(!bank.has_signature(&signature));
-        let res = bank.process_transaction(&tx);
+        let _res = bank.process_transaction(&tx);
 
-        // Result failed, but signature is registered
-        assert!(res.is_err());
         assert!(bank.has_signature(&signature));
         assert_eq!(
             bank.get_signature_status(&signature),
@@ -937,8 +928,8 @@ mod tests {
         // The tokens didn't move, but the from address paid the transaction fee.
         assert_eq!(bank.get_balance(&dest.pubkey()), 0);
 
-        // BUG: This should be the original balance minus the transaction fee.
-        //assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 0);
+        // This should be the original balance minus the transaction fee.
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 1);
     }
 
     #[test]
@@ -962,14 +953,18 @@ mod tests {
             .unwrap();
         assert_eq!(bank.transaction_count(), 1);
         assert_eq!(bank.get_balance(&pubkey), 1_000);
+        let signature = bank
+            .transfer(10_001, &mint_keypair, pubkey, genesis_block.last_id())
+            .unwrap();
+        assert_eq!(bank.transaction_count(), 1);
+        assert!(bank.has_signature(&signature));
         assert_eq!(
-            bank.transfer(10_001, &mint_keypair, pubkey, genesis_block.last_id()),
-            Err(BankError::ProgramError(
+            bank.get_signature_status(&signature),
+            Some(Err(BankError::ProgramError(
                 0,
                 ProgramError::ResultWithNegativeTokens
-            ))
+            )))
         );
-        assert_eq!(bank.transaction_count(), 1);
 
         let mint_pubkey = mint_keypair.pubkey();
         assert_eq!(bank.get_balance(&mint_pubkey), 10_000);
