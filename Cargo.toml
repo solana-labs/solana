@@ -14,6 +14,8 @@ edition = "2018"
 codecov = { repository = "solana-labs/solana", branch = "master", service = "github" }
 
 [features]
+bpf_c = []
+bpf_rust = []
 chacha = []
 cuda = []
 erasure = []
