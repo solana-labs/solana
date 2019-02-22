@@ -330,8 +330,6 @@ mod tests {
                    slot 4
 
         */
-        let genesis_block =
-            GenesisBlock::load(&ledger_path).expect("Expected to successfully open genesis block");
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot)
             .expect("Expected to successfully open database ledger");
 
@@ -466,8 +464,6 @@ mod tests {
         let (ledger_path, tick_height, mut entry_height, mut last_id, mut last_entry_id) =
             create_tmp_sample_blocktree("process_ledger_simple", &genesis_block, 0);
         debug!("ledger_path: {:?}", ledger_path);
-        let genesis_block =
-            GenesisBlock::load(&ledger_path).expect("Expected to successfully open genesis block");
 
         let mut entries = vec![];
         for _ in 0..3 {
