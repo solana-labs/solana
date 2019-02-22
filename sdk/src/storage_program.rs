@@ -66,21 +66,12 @@ pub const STORAGE_PROGRAM_ID: [u8; 32] = [
     0,
 ];
 
-pub const STORAGE_SYSTEM_ACCOUNT_ID: [u8; 32] = [
-    133, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0,
-];
-
 pub fn check_id(program_id: &Pubkey) -> bool {
     program_id.as_ref() == STORAGE_PROGRAM_ID
 }
 
 pub fn id() -> Pubkey {
     Pubkey::new(&STORAGE_PROGRAM_ID)
-}
-
-pub fn system_id() -> Pubkey {
-    Pubkey::new(&STORAGE_SYSTEM_ACCOUNT_ID)
 }
 
 pub struct StorageTransaction {}
@@ -98,14 +89,7 @@ impl StorageTransaction {
             entry_height,
             signature,
         };
-        Transaction::new(
-            from_keypair,
-            &[Pubkey::new(&STORAGE_SYSTEM_ACCOUNT_ID)],
-            id(),
-            &program,
-            last_id,
-            0,
-        )
+        Transaction::new(from_keypair, &[], id(), &program, last_id, 0)
     }
 
     pub fn new_advertise_last_id(
@@ -118,14 +102,7 @@ impl StorageTransaction {
             id: storage_id,
             entry_height,
         };
-        Transaction::new(
-            from_keypair,
-            &[Pubkey::new(&STORAGE_SYSTEM_ACCOUNT_ID)],
-            id(),
-            &program,
-            last_id,
-            0,
-        )
+        Transaction::new(from_keypair, &[], id(), &program, last_id, 0)
     }
 
     pub fn new_proof_validation(
@@ -138,14 +115,7 @@ impl StorageTransaction {
             entry_height,
             proof_mask,
         };
-        Transaction::new(
-            from_keypair,
-            &[Pubkey::new(&STORAGE_SYSTEM_ACCOUNT_ID)],
-            id(),
-            &program,
-            last_id,
-            0,
-        )
+        Transaction::new(from_keypair, &[], id(), &program, last_id, 0)
     }
 
     pub fn new_reward_claim(
@@ -154,13 +124,6 @@ impl StorageTransaction {
         entry_height: u64,
     ) -> Transaction {
         let program = StorageProgram::ClaimStorageReward { entry_height };
-        Transaction::new(
-            from_keypair,
-            &[Pubkey::new(&STORAGE_SYSTEM_ACCOUNT_ID)],
-            id(),
-            &program,
-            last_id,
-            0,
-        )
+        Transaction::new(from_keypair, &[], id(), &program, last_id, 0)
     }
 }
