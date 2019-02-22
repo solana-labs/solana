@@ -71,8 +71,8 @@ else
 fi
 
 # Run root package library tests
-_ cargo build --all ${V:+--verbose} --features="$ROOT_FEATURES"
-_ cargo test --all --lib ${V:+--verbose} --features="$ROOT_FEATURES" -- --nocapture --test-threads=1
+_ cargo build ${V:+--verbose} --features="$ROOT_FEATURES"
+_ cargo test --lib ${V:+--verbose} --features="$ROOT_FEATURES" -- --nocapture --test-threads=1
 
 # Run root package integration tests
 for test in tests/*.rs; do
@@ -80,7 +80,7 @@ for test in tests/*.rs; do
   test=${test%.rs} # basename x .rs
   (
     export RUST_LOG="$test"=trace,$RUST_LOG
-    _ cargo test --all ${V:+--verbose} --features="$ROOT_FEATURES" --test="$test" \
+    _ cargo test ${V:+--verbose} --features="$ROOT_FEATURES" --test="$test" \
       -- --test-threads=1 --nocapture
   )
 done
