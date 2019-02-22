@@ -23,6 +23,7 @@ pub fn id() -> Pubkey {
 
 // Maximum number of votes to keep around
 pub const MAX_VOTE_HISTORY: usize = 32;
+pub const INITIAL_LOCKOUT: usize = 2;
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Vote {
@@ -34,6 +35,25 @@ pub struct Vote {
 impl Vote {
     pub fn new(slot_height: u64) -> Self {
         Self { slot_height }
+    }
+}
+
+#[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
+pub struct StoredVote {
+    pub slot_height: u64,
+    pub lockout: usize,
+}
+
+impl StoredVote {
+    pub fn new(vote: &Vote) -> Self {
+        Self {
+            slot_height: vote.slot_height,
+            lockout: INITIAL_LOCKOUT,
+        }
+    }
+
+    pub fn lock_height(&self) -> u64 {
+        self.slot_height + self.lockout as u64
     }
 }
 
@@ -53,7 +73,7 @@ pub enum VoteInstruction {
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VoteState {
-    pub votes: VecDeque<Vote>,
+    pub votes: VecDeque<StoredVote>,
     pub node_id: Pubkey,
     pub staker_id: Pubkey,
     credits: u64,
@@ -63,7 +83,7 @@ pub fn get_max_size() -> usize {
     // Upper limit on the size of the Vote State. Equal to
     // sizeof(VoteState) when votes.len() is MAX_VOTE_HISTORY
     let mut vote_state = VoteState::default();
-    vote_state.votes = VecDeque::from(vec![Vote::default(); MAX_VOTE_HISTORY]);
+    vote_state.votes = VecDeque::from(vec![StoredVote::default(); MAX_VOTE_HISTORY]);
     serialized_size(&vote_state).unwrap() as usize
 }
 
@@ -91,16 +111,32 @@ impl VoteState {
     }
 
     pub fn process_vote(&mut self, vote: Vote) {
-        // TODO: Integrity checks
-        // a) Verify the vote's bank hash matches what is expected
-        // b) Verify vote is older than previous votes
-
-        // Only keep around the most recent MAX_VOTE_HISTORY votes
-        if self.votes.len() == MAX_VOTE_HISTORY {
-            self.votes.pop_front();
-            self.credits += 1;
+        // Ignore votes for slots earlier than we already have votes for
+        if self
+            .votes
+            .back()
+            .map_or(false, |old_vote| old_vote.slot_height >= vote.slot_height)
+        {
+            return;
         }
 
+        let vote = StoredVote::new(&vote);
+
+        // TODO: Integrity checks
+        // Verify the vote's bank hash matches what is expected
+
+        self.pop_expired_votes(vote.slot_height);
+        self.double_lockouts();
+
+        // Once the stack is full, pop everything and distribute rewards
+        if self.votes.len() == MAX_VOTE_HISTORY {
+            self.votes.clear();
+            self.credits += MAX_VOTE_HISTORY as u64;
+        }
+
+        // Once a validator has voted, always keep at least one vote around to ensure
+        // the validator gets included in computations involving staking accounts (leader
+        // schedule, confirmation times, etc.)
         self.votes.push_back(vote);
     }
 
@@ -113,6 +149,26 @@ impl VoteState {
     /// Clear any credits.
     pub fn clear_credits(&mut self) {
         self.credits = 0;
+    }
+
+    fn pop_expired_votes(&mut self, slot_height: u64) {
+        loop {
+            if self
+                .votes
+                .back()
+                .map_or(false, |v| v.lock_height() < slot_height)
+            {
+                self.votes.pop_back();
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn double_lockouts(&mut self) {
+        for v in self.votes.iter_mut() {
+            v.lockout *= 2;
+        }
     }
 }
 
@@ -203,7 +259,9 @@ mod tests {
     fn test_vote_serialize() {
         let mut buffer: Vec<u8> = vec![0; get_max_size()];
         let mut vote_state = VoteState::default();
-        vote_state.votes.resize(MAX_VOTE_HISTORY, Vote::default());
+        vote_state
+            .votes
+            .resize(MAX_VOTE_HISTORY, StoredVote::default());
         vote_state.serialize(&mut buffer).unwrap();
         assert_eq!(VoteState::deserialize(&buffer).unwrap(), vote_state);
     }
@@ -211,7 +269,9 @@ mod tests {
     #[test]
     fn test_vote_credits() {
         let mut vote_state = VoteState::default();
-        vote_state.votes.resize(MAX_VOTE_HISTORY, Vote::default());
+        vote_state
+            .votes
+            .resize(MAX_VOTE_HISTORY, StoredVote::default());
         assert_eq!(vote_state.credits(), 0);
         vote_state.process_vote(Vote::new(42));
         assert_eq!(vote_state.credits(), 1);
@@ -247,7 +307,7 @@ mod tests {
 
         let vote = Vote::new(1);
         let vote_state = vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();
-        assert_eq!(vote_state.votes, vec![vote]);
+        assert_eq!(vote_state.votes, vec![StoredVote::new(&vote)]);
         assert_eq!(vote_state.credits(), 0);
     }
 
@@ -259,6 +319,45 @@ mod tests {
         let vote = Vote::new(1);
         let vote_state = vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();
         assert_eq!(vote_state.node_id, Pubkey::default());
-        assert_eq!(vote_state.votes, vec![vote]);
+        assert_eq!(vote_state.votes, vec![StoredVote::new(&vote)]);
+    }
+
+    #[test]
+    fn test_vote_lockout() {
+        let voter_id = Keypair::new().pubkey();
+        let staker_id = Keypair::new().pubkey();
+        let mut vote_state = VoteState::new(voter_id, staker_id);
+
+        for i in 0..MAX_VOTE_HISTORY {
+            let vote = Vote::new((INITIAL_LOCKOUT * i) as u64);
+            vote_state.process_vote(vote);
+        }
+
+        assert_eq!(vote_state.votes.len(), MAX_VOTE_HISTORY);
+        for (i, vote) in vote_state.votes.iter().enumerate() {
+            let num_lockouts = MAX_VOTE_HISTORY - i;
+            assert_eq!(vote.lockout, INITIAL_LOCKOUT.pow(num_lockouts as u32));
+        }
+
+        // Expire everything except the first vote
+        let vote = Vote::new(vote_state.votes.front().unwrap().lock_height());
+        vote_state.process_vote(vote);
+        // First vote and new vote are both stored for a total of 2 votes
+        assert_eq!(vote_state.votes.len(), 2);
+    }
+
+    #[test]
+    fn test_vote_reward() {
+        let voter_id = Keypair::new().pubkey();
+        let staker_id = Keypair::new().pubkey();
+        let mut vote_state = VoteState::new(voter_id, staker_id);
+
+        for i in 0..MAX_VOTE_HISTORY + 1 {
+            let vote = Vote::new((INITIAL_LOCKOUT * i) as u64);
+            vote_state.process_vote(vote);
+        }
+
+        assert_eq!(vote_state.votes.len(), 1);
+        assert_eq!(vote_state.credits, MAX_VOTE_HISTORY as u64);
     }
 }

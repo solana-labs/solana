@@ -131,7 +131,7 @@ mod tests {
         )
         .unwrap();
 
-        for _ in 0..vote_program::MAX_VOTE_HISTORY {
+        for _ in 0..vote_program::MAX_VOTE_HISTORY + 1 {
             let vote = Vote::new(1);
             let vote_state =
                 vote_program::vote_and_deserialize(&vote_id, &mut vote_account, vote.clone())
