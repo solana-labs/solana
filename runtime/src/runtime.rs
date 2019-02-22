@@ -192,6 +192,7 @@ pub fn execute_transaction(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
 
     #[test]
     fn test_has_duplicates() {
@@ -221,4 +222,50 @@ mod tests {
         // This panics, because it assumes bounds validation is done elsewhere.
         get_subset_unchecked_mut(&mut [7, 8], &[2]);
     }
+
+    #[test]
+    fn test_verify_instruction_change_program_id() {
+        fn change_program_id(ix: Pubkey, pre: Pubkey, post: Pubkey) -> Result<(), ProgramError> {
+            verify_instruction(&ix, &pre, 0, &[], &Account::new(0, 0, post))
+        }
+
+        let system_program_id = system_program::id();
+        let alice_program_id = Keypair::new().pubkey();
+        let mallory_program_id = Keypair::new().pubkey();
+
+        assert_eq!(
+            change_program_id(system_program_id, system_program_id, alice_program_id),
+            Ok(()),
+            "system program should be able to change the account owner"
+        );
+        assert_eq!(
+            change_program_id(mallory_program_id, system_program_id, alice_program_id),
+            Err(ProgramError::ModifiedProgramId),
+            "malicious Mallory should not be able to change the account owner"
+        );
+    }
+
+    #[test]
+    fn test_verify_instruction_change_userdata() {
+        fn change_userdata(program_id: Pubkey) -> Result<(), ProgramError> {
+            let alice_program_id = Keypair::new().pubkey();
+            let account = Account::new(0, 0, alice_program_id);
+            verify_instruction(&program_id, &alice_program_id, 0, &[42], &account)
+        }
+
+        let system_program_id = system_program::id();
+        let mallory_program_id = Keypair::new().pubkey();
+
+        assert_eq!(
+            change_userdata(system_program_id),
+            Ok(()),
+            "system program should be able to change the userdata"
+        );
+        assert_eq!(
+            change_userdata(mallory_program_id),
+            Err(ProgramError::ExternalAccountUserdataModified),
+            "malicious Mallory should not be able to change the account userdata"
+        );
+    }
+
 }
