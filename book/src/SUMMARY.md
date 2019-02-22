@@ -17,6 +17,7 @@
   - [Fork Generation](fork-generation.md)
   - [Data Plane Fanout](data-plane-fanout.md)
   - [Ledger Replication](ledger-replication.md)
+  - [Secure Vote Signing](vote-signing.md)
 
 - [Anatomy of a Fullnode](fullnode.md)
   - [TPU](tpu.md)
@@ -33,7 +34,7 @@
 
 - [Proposed Architectural Changes](proposals.md)
   - [Ledger Replication](ledger-replication-to-implement.md)
-  - [Secure Vote Signing](vote-signer.md)
+  - [Secure Vote Signing](vote-signing-to-implement.md)
   - [Staking Rewards](staking-rewards.md)
   - [Fork Selection](fork-selection.md)
   - [Reliable Vote Transmission](reliable-vote-transmission.md)
