@@ -45,6 +45,11 @@ fn entrypoint(
         Err(ProgramError::GenericError)?;
     }
 
+    if !check_id(&keyed_accounts[1].account.owner) {
+        error!("account[1] is not assigned to the STORAGE_PROGRAM");
+        Err(ProgramError::InvalidArgument)?;
+    }
+
     if *keyed_accounts[1].unsigned_key() != system_id() {
         info!(
             "invalid account id owner: {:?} system_id: {:?}",
