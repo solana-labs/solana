@@ -170,7 +170,7 @@ impl ReplayStage {
 
     #[allow(clippy::new_ret_no_self, clippy::too_many_arguments)]
     pub fn new<T>(
-        my_id: Pubkey,
+        _my_id: Pubkey, // TODO: Remove from callers, it's not needed
         voting_keypair: Option<Arc<T>>,
         blocktree: Arc<Blocktree>,
         bank_forks: &Arc<RwLock<BankForks>>,
@@ -190,52 +190,65 @@ impl ReplayStage {
         let leader_scheduler_ = leader_scheduler.clone();
         let to_leader_sender = to_leader_sender.clone();
         let subscriptions_ = subscriptions.clone();
+        let bank_forks = bank_forks.clone();
 
-        let (mut bank, last_entry_id) = {
-            let mut bank_forks = bank_forks.write().unwrap();
-            bank_forks.set_working_bank_id(bank_forks_info[0].bank_id);
-            (bank_forks.working_bank(), bank_forks_info[0].last_entry_id)
-        };
-        let last_entry_id = Arc::new(RwLock::new(last_entry_id));
+        let (mut bank, last_entry_id, mut current_blob_index) = {
+            // TODO: Be smarter than just selecting the first available bank
+            let bank_id = bank_forks_info[0].bank_id;
+            let last_entry_id = bank_forks_info[0].last_entry_id;
 
-        let mut current_blob_index = {
+            let bank = {
+                let mut bank_forks = bank_forks.write().unwrap();
+                bank_forks.set_working_bank_id(bank_id);
+                bank_forks.working_bank()
+            };
+
             let leader_scheduler = leader_scheduler.read().unwrap();
-            let slot = leader_scheduler.tick_height_to_slot(bank.tick_height() + 1);
+            let next_slot = leader_scheduler.tick_height_to_slot(bank.tick_height() + 1);
 
             let leader_id = leader_scheduler
-                .get_leader_for_slot(slot)
+                .get_leader_for_slot(next_slot)
                 .expect("Leader not known after processing bank");
-            trace!("node {:?} scheduled as leader for slot {}", leader_id, slot);
+            trace!(
+                "node {:?} scheduled as leader for slot {}",
+                leader_id,
+                next_slot
+            );
 
-            bank.merge_parents();
+            // Update the working_bank() to be an unfrozen copy
+            {
+                let mut bank_forks = bank_forks.write().unwrap();
+                bank_forks.insert(bank_id, Bank::new_from_parent(&bank, &leader_id));
+            }
+
             // Send a rotation notification back to Fullnode to initialize the TPU to the right
             // state
             to_leader_sender
                 .send(TvuRotationInfo {
-                    bank: Arc::new(Bank::new_from_parent(&bank, &leader_id)),
-                    last_entry_id: *last_entry_id.read().unwrap(),
-                    slot,
-                    leader_id,
+                    bank: bank.clone(),
+                    last_entry_id,
+                    next_slot,
+                    next_leader_id: leader_id,
                 })
                 .unwrap();
-            bank = Arc::new(Bank::new_from_parent(&bank, &leader_id));
 
-            blocktree
-                .meta(slot)
-                .expect("Database error")
-                .map(|meta| meta.consumed)
-                .unwrap_or(0)
+            let bank = Arc::new(Bank::new_from_parent(&bank, &leader_id));
+
+            (
+                bank,
+                Arc::new(RwLock::new(last_entry_id)),
+                blocktree
+                    .meta(next_slot)
+                    .expect("Database error")
+                    .map(|meta| meta.consumed)
+                    .unwrap_or(0),
+            )
         };
 
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
             .spawn(move || {
                 let _exit = Finalizer::new(exit_.clone());
-                let mut last_leader_id = leader_scheduler_
-                    .read()
-                    .unwrap()
-                    .get_leader_for_tick(bank.tick_height() + 1)
-                    .unwrap();
                 let mut prev_slot = None;
                 let (mut current_slot, mut max_tick_height_for_slot) = {
                     let tick_height = bank.tick_height();
@@ -319,6 +332,9 @@ impl ReplayStage {
                         // We've reached the end of a slot, reset our state and check
                         // for leader rotation
                         if max_tick_height_for_slot == current_tick_height {
+                            let bank_id = current_slot.unwrap();
+
+                            // Finalize the bank for this slot.
                             bank.merge_parents();
                             leader_scheduler_.write().unwrap().update(&bank);
 
@@ -333,25 +349,28 @@ impl ReplayStage {
                                 )
                             };
 
-                            if my_id == leader_id || my_id == last_leader_id {
-                                to_leader_sender
-                                    .send(TvuRotationInfo {
-                                        bank: Arc::new(Bank::new_from_parent(&bank, &leader_id)),
-                                        last_entry_id: *last_entry_id.read().unwrap(),
-                                        slot: next_slot,
-                                        leader_id,
-                                    })
-                                    .unwrap();
-                            } else if leader_id != last_leader_id {
-                                // TODO: Remove this soon once we boot the leader from ClusterInfo
-                                cluster_info.write().unwrap().set_leader(leader_id);
+                            {
+                                let mut bank_forks = bank_forks.write().unwrap();
+                                bank_forks
+                                    .insert(bank_id, Bank::new_from_parent(&bank, &leader_id));
+                                bank_forks.set_working_bank_id(bank_id);
                             }
+
+                            to_leader_sender
+                                .send(TvuRotationInfo {
+                                    bank: bank.clone(),
+                                    last_entry_id: *last_entry_id.read().unwrap(),
+                                    next_slot,
+                                    next_leader_id: leader_id,
+                                })
+                                .unwrap();
+
+                            // Setup a new bank for the next slot
                             bank = Arc::new(Bank::new_from_parent(&bank, &leader_id));
 
                             // Check for any slots that chain to this one
                             prev_slot = current_slot;
                             current_slot = None;
-                            last_leader_id = leader_id;
                             continue;
                         }
                     }
@@ -522,8 +541,8 @@ mod test {
                 rotation_info.last_entry_id,
                 bank_forks_info[0].last_entry_id
             );
-            assert_eq!(rotation_info.slot, 2);
-            assert_eq!(rotation_info.leader_id, my_keypair.pubkey());
+            assert_eq!(rotation_info.next_slot, 2);
+            assert_eq!(rotation_info.next_leader_id, my_keypair.pubkey());
 
             info!("Check that the entries on the ledger writer channel are correct");
             let mut received_ticks = ledger_writer_recv
@@ -770,8 +789,8 @@ mod test {
                 rotation_info.last_entry_id,
                 bank_forks_info[0].last_entry_id
             );
-            assert_eq!(rotation_info.slot, 1);
-            assert_eq!(rotation_info.leader_id, my_keypair.pubkey());
+            assert_eq!(rotation_info.next_slot, 1);
+            assert_eq!(rotation_info.next_leader_id, my_keypair.pubkey());
 
             assert_ne!(expected_last_id, Hash::default());
             //replay stage should continue running even after rotation has happened (tvu never goes down)

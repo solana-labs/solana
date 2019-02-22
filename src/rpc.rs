@@ -23,19 +23,23 @@ use std::time::{Duration, Instant};
 
 #[derive(Clone)]
 pub struct JsonRpcRequestProcessor {
-    pub bank_forks: Arc<RwLock<BankForks>>,
+    bank: Arc<Bank>,
     storage_state: StorageState,
 }
 
 impl JsonRpcRequestProcessor {
-    fn bank(&self) -> Arc<Bank> {
-        self.bank_forks.read().unwrap().working_bank()
+    fn bank(&self) -> &Arc<Bank> {
+        &self.bank
+    }
+
+    pub fn set_bank(&mut self, bank: Arc<Bank>) {
+        self.bank = bank;
     }
 
     /// Create a new request processor that wraps the given Bank.
     pub fn new(bank_forks: Arc<RwLock<BankForks>>, storage_state: StorageState) -> Self {
         JsonRpcRequestProcessor {
-            bank_forks,
+            bank: bank_forks.read().unwrap().working_bank(),
             storage_state,
         }
     }

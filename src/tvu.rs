@@ -35,10 +35,10 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 
 pub struct TvuRotationInfo {
-    pub bank: Arc<Bank>,     // Bank to use for slot
-    pub last_entry_id: Hash, // last_entry_id of the bank
-    pub slot: u64,           // next slot
-    pub leader_id: Pubkey,   // leader for the next slot
+    pub bank: Arc<Bank>,        // Frozen bank representing the last voted on state
+    pub last_entry_id: Hash,    // last_entry_id of the current working_bank()
+    pub next_slot: u64,         // next slot
+    pub next_leader_id: Pubkey, // leader for the next slot
 }
 pub type TvuRotationSender = Sender<TvuRotationInfo>;
 pub type TvuRotationReceiver = Receiver<TvuRotationInfo>;

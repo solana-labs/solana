@@ -56,6 +56,7 @@ pub enum FullnodeReturnType {
     LeaderToValidatorRotation,
     ValidatorToLeaderRotation,
     LeaderToLeaderRotation,
+    ValidatorToValidatorRotation,
 }
 
 pub struct FullnodeConfig {
@@ -102,6 +103,7 @@ pub struct Fullnode {
     rotation_receiver: TvuRotationReceiver,
     blocktree: Arc<Blocktree>,
     leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+    bank_forks: Arc<RwLock<BankForks>>,
 }
 
 impl Fullnode {
@@ -252,19 +254,23 @@ impl Fullnode {
             rotation_receiver,
             blocktree,
             leader_scheduler,
+            bank_forks,
         }
     }
 
     fn rotate(&mut self, rotation_info: TvuRotationInfo) -> FullnodeReturnType {
         trace!(
-            "{:?}: rotate for slot={} to leader={:?} using last_entry_id={:?}",
+            "{:?}: rotate for slot={} to leader={:?}",
             self.id,
-            rotation_info.slot,
-            rotation_info.leader_id,
-            rotation_info.last_entry_id,
+            rotation_info.next_slot,
+            rotation_info.next_leader_id,
         );
 
-        if rotation_info.leader_id == self.id {
+        if let Some(ref mut rpc_service) = self.rpc_service {
+            rpc_service.set_bank(rotation_info.bank);
+        }
+
+        if rotation_info.next_leader_id == self.id {
             let transition = match self.node_services.tpu.is_leader() {
                 Some(was_leader) => {
                     if was_leader {
@@ -278,7 +284,7 @@ impl Fullnode {
                 None => FullnodeReturnType::LeaderToLeaderRotation, // value doesn't matter here...
             };
             self.node_services.tpu.switch_to_leader(
-                rotation_info.bank,
+                self.bank_forks.read().unwrap().working_bank(),
                 PohServiceConfig::default(),
                 self.tpu_sockets
                     .iter()
@@ -288,22 +294,34 @@ impl Fullnode {
                     .try_clone()
                     .expect("Failed to clone broadcast socket"),
                 self.sigverify_disabled,
-                rotation_info.slot,
+                rotation_info.next_slot,
                 rotation_info.last_entry_id,
                 &self.blocktree,
                 &self.leader_scheduler,
             );
             transition
         } else {
-            debug!("{:?} rotating to validator role", self.id);
+            let transition = match self.node_services.tpu.is_leader() {
+                Some(was_leader) => {
+                    if was_leader {
+                        debug!("{:?} rotating to validator role", self.id);
+                        FullnodeReturnType::LeaderToValidatorRotation
+                    } else {
+                        debug!("{:?} remaining to validator role", self.id);
+                        FullnodeReturnType::ValidatorToValidatorRotation
+                    }
+                }
+                None => FullnodeReturnType::ValidatorToValidatorRotation, // value doesn't matter here...
+            };
+
             self.node_services.tpu.switch_to_forwarder(
-                rotation_info.leader_id,
+                rotation_info.next_leader_id,
                 self.tpu_sockets
                     .iter()
                     .map(|s| s.try_clone().expect("Failed to clone TPU sockets"))
                     .collect(),
             );
-            FullnodeReturnType::LeaderToValidatorRotation
+            transition
         }
     }
 
@@ -326,11 +344,11 @@ impl Fullnode {
 
             match self.rotation_receiver.recv_timeout(timeout) {
                 Ok(rotation_info) => {
-                    let slot = rotation_info.slot;
+                    let next_slot = rotation_info.next_slot;
                     let transition = self.rotate(rotation_info);
                     debug!("role transition complete: {:?}", transition);
                     if let Some(ref rotation_notifier) = rotation_notifier {
-                        rotation_notifier.send((transition, slot)).unwrap();
+                        rotation_notifier.send((transition, next_slot)).unwrap();
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => continue,
@@ -598,7 +616,7 @@ mod tests {
             let bootstrap_leader_exit = bootstrap_leader.run(Some(rotation_sender));
             assert_eq!(
                 rotation_receiver.recv().unwrap(),
-                (FullnodeReturnType::LeaderToValidatorRotation, 2)
+                (FullnodeReturnType::ValidatorToValidatorRotation, 2)
             );
 
             // Test that a node knows to transition to a leader based on parsing the ledger

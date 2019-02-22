@@ -32,6 +32,9 @@ impl BankForks {
         //  parent if we're always calling insert()
         //  when we construct a child bank
         while let Some(parent) = bank.parent() {
+            if parent.id() == bank_id {
+                break;
+            }
             self.banks.remove(&parent.id());
             bank = parent;
         }

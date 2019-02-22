@@ -7,6 +7,7 @@ use crate::service::Service;
 use crate::storage_stage::StorageState;
 use jsonrpc_core::MetaIoHandler;
 use jsonrpc_http_server::{hyper, AccessControlAllowOrigin, DomainsValidation, ServerBuilder};
+use solana_runtime::bank::Bank;
 use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
@@ -18,7 +19,7 @@ pub const RPC_PORT: u16 = 8899;
 pub struct JsonRpcService {
     thread_hdl: JoinHandle<()>,
     exit: Arc<AtomicBool>,
-    pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>, // Used only by tests...
+    pub request_processor: Arc<RwLock<JsonRpcRequestProcessor>>,
 }
 
 impl JsonRpcService {
@@ -73,6 +74,10 @@ impl JsonRpcService {
             exit,
             request_processor,
         }
+    }
+
+    pub fn set_bank(&mut self, bank: Arc<Bank>) {
+        self.request_processor.write().unwrap().set_bank(bank);
     }
 
     pub fn exit(&self) {
