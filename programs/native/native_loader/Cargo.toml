@@ -10,7 +10,7 @@ edition = "2018"
 
 [dependencies]
 bincode = "1.1.2"
-libc = "0.2.48"
+libc = "0.2.49"
 libloading = "0.5.0"
 log = "0.4.2"
 solana-sdk = { path = "../../../sdk", version = "0.12.0" }
