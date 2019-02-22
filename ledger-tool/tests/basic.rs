@@ -1,7 +1,7 @@
-use solana::blocktree::{create_tmp_sample_ledger, BlocktreeConfig};
-use solana_sdk::signature::{Keypair, KeypairUtil};
-
 use assert_cmd::prelude::*;
+use solana::blocktree::create_tmp_sample_ledger;
+use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 use std::process::Command;
 use std::process::Output;
 use std::sync::Arc;
@@ -32,15 +32,15 @@ fn bad_arguments() {
 #[test]
 fn nominal() {
     let keypair = Arc::new(Keypair::new());
-    let blocktree_config = BlocktreeConfig::default();
+    let ticks_per_slot = DEFAULT_TICKS_PER_SLOT;
     let (_mint_keypair, ledger_path, tick_height, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_ledger(
             "test_ledger_tool_nominal",
             100,
-            blocktree_config.ticks_per_slot - 2,
+            ticks_per_slot - 2,
             keypair.pubkey(),
             50,
-            &blocktree_config,
+            ticks_per_slot,
         );
 
     // Basic validation

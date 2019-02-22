@@ -470,7 +470,7 @@ pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, 
             0,
             node_info.id,
             42,
-            &fullnode_config.ledger_config(),
+            fullnode_config.ticks_per_slot(),
         );
 
     let vote_account_keypair = Arc::new(Keypair::new());

@@ -1,6 +1,6 @@
 use log::trace;
 use solana::bank_forks::BankForks;
-use solana::blocktree::{get_tmp_ledger_path, Blocktree, BlocktreeConfig};
+use solana::blocktree::{get_tmp_ledger_path, Blocktree};
 use solana::blocktree_processor::BankForksInfo;
 use solana::cluster_info::{ClusterInfo, Node};
 use solana::entry::next_entry_mut;
@@ -77,10 +77,10 @@ fn test_replay() {
     );
 
     // TODO: Fix this test so it always works with the default
-    // LeaderSchedulerConfig/BlocktreeConfig configuration
+    // LeaderSchedulerConfig configuration
     let mut leader_scheduler_config = LeaderSchedulerConfig::default();
     leader_scheduler_config.ticks_per_slot = 64;
-    let blocktree_config = BlocktreeConfig::new(leader_scheduler_config.ticks_per_slot);
+    let ticks_per_slot = leader_scheduler_config.ticks_per_slot;
 
     let starting_balance = 10_000;
     let (genesis_block, mint_keypair) = GenesisBlock::new(starting_balance);
@@ -111,7 +111,7 @@ fn test_replay() {
     let blocktree_path = get_tmp_ledger_path("test_replay");
 
     let (blocktree, ledger_signal_receiver) =
-        Blocktree::open_with_config_signal(&blocktree_path, &blocktree_config)
+        Blocktree::open_with_config_signal(&blocktree_path, ticks_per_slot)
             .expect("Expected to successfully open ledger");
     let vote_account_keypair = Arc::new(Keypair::new());
     let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);

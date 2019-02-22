@@ -40,7 +40,7 @@ fn test_replicator_startup_basic() {
 
     let leader_ledger_path = "replicator_test_leader_ledger";
     let mut fullnode_config = FullnodeConfig::default();
-    let blocktree_config = fullnode_config.ledger_config();
+    let ticks_per_slot = fullnode_config.ticks_per_slot();
 
     let (
         mint_keypair,
@@ -55,13 +55,13 @@ fn test_replicator_startup_basic() {
         0,
         leader_info.id,
         42,
-        &blocktree_config,
+        ticks_per_slot,
     );
 
     let validator_ledger_path = tmp_copy_ledger(
         &leader_ledger_path,
         "replicator_test_validator_ledger",
-        &blocktree_config,
+        ticks_per_slot,
     );
 
     {
@@ -295,7 +295,7 @@ fn test_replicator_startup_ledger_hang() {
 
     let leader_ledger_path = "replicator_test_leader_ledger";
     let fullnode_config = FullnodeConfig::default();
-    let blocktree_config = fullnode_config.ledger_config();
+    let ticks_per_slot = fullnode_config.ticks_per_slot();
     let (
         _mint_keypair,
         leader_ledger_path,
@@ -309,13 +309,13 @@ fn test_replicator_startup_ledger_hang() {
         0,
         leader_info.id,
         42,
-        &blocktree_config,
+        ticks_per_slot,
     );
 
     let validator_ledger_path = tmp_copy_ledger(
         &leader_ledger_path,
         "replicator_test_validator_ledger",
-        &blocktree_config,
+        ticks_per_slot,
     );
 
     {

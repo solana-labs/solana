@@ -95,7 +95,7 @@ pub fn chacha_cbc_encrypt_ledger(
 #[cfg(test)]
 mod tests {
     use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::{Blocktree, BlocktreeConfig, DEFAULT_SLOT_HEIGHT};
+    use crate::blocktree::{Blocktree, DEFAULT_SLOT_HEIGHT};
     use crate::chacha::chacha_cbc_encrypt_ledger;
     use crate::entry::Entry;
     use ring::signature::Ed25519KeyPair;
@@ -145,9 +145,7 @@ mod tests {
         let ledger_dir = "chacha_test_encrypt_file";
         let ledger_path = get_tmp_ledger_path(ledger_dir);
         let ticks_per_slot = 16;
-        let blocktree = Arc::new(
-            Blocktree::open_config(&ledger_path, &BlocktreeConfig::new(ticks_per_slot)).unwrap(),
-        );
+        let blocktree = Arc::new(Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap());
         let out_path = Path::new("test_chacha_encrypt_file_output.txt.enc");
 
         let entries = make_tiny_deterministic_test_entries(32);
