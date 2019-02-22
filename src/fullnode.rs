@@ -405,7 +405,7 @@ impl Service for Fullnode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocktree::{create_tmp_sample_ledger, tmp_copy_ledger, DEFAULT_SLOT_HEIGHT};
+    use crate::blocktree::{create_tmp_sample_blocktree, tmp_copy_ledger, DEFAULT_SLOT_HEIGHT};
     use crate::entry::make_consecutive_blobs;
     use crate::leader_scheduler::make_active_set_entries;
     use crate::streamer::responder;
@@ -420,21 +420,10 @@ mod tests {
 
         let validator_keypair = Keypair::new();
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
-        let (
-            _mint_keypair,
-            validator_ledger_path,
-            _tick_height,
-            _last_entry_height,
-            _last_id,
-            _last_entry_id,
-        ) = create_tmp_sample_ledger(
-            "validator_exit",
-            10_000,
-            0,
-            leader_keypair.pubkey(),
-            1000,
-            DEFAULT_TICKS_PER_SLOT,
-        );
+        let (genesis_block, _mint_keypair) =
+            GenesisBlock::new_with_leader(10_000, leader_keypair.pubkey(), 1000);
+        let (validator_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
+            create_tmp_sample_blocktree("validator_exit", &genesis_block, 0);
 
         let validator = Fullnode::new(
             validator_node,
@@ -458,20 +447,18 @@ mod tests {
             .map(|i| {
                 let validator_keypair = Keypair::new();
                 let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
+                let (genesis_block, _mint_keypair) =
+                    GenesisBlock::new_with_leader(10_000, leader_keypair.pubkey(), 1000);
                 let (
-                    _mint_keypair,
                     validator_ledger_path,
                     _tick_height,
                     _last_entry_height,
                     _last_id,
                     _last_entry_id,
-                ) = create_tmp_sample_ledger(
+                ) = create_tmp_sample_blocktree(
                     &format!("validator_parallel_exit_{}", i),
-                    10_000,
+                    &genesis_block,
                     0,
-                    leader_keypair.pubkey(),
-                    1000,
-                    DEFAULT_TICKS_PER_SLOT,
                 );
                 ledger_paths.push(validator_ledger_path.clone());
                 Fullnode::new(
@@ -519,21 +506,17 @@ mod tests {
         let mut fullnode_config = FullnodeConfig::default();
         fullnode_config.leader_scheduler_config = leader_scheduler_config;
 
+        let (mut genesis_block, _mint_keypair) =
+            GenesisBlock::new_with_leader(10_000, bootstrap_leader_keypair.pubkey(), 500);
+        genesis_block.ticks_per_slot = fullnode_config.ticks_per_slot();
+
         let (
-            _mint_keypair,
             bootstrap_leader_ledger_path,
             _tick_height,
             _genesis_entry_height,
             _last_id,
             _last_entry_id,
-        ) = create_tmp_sample_ledger(
-            "test_leader_to_leader_transition",
-            10_000,
-            1,
-            bootstrap_leader_keypair.pubkey(),
-            500,
-            fullnode_config.ticks_per_slot(),
-        );
+        ) = create_tmp_sample_blocktree("test_leader_to_leader_transition", &genesis_block, 1);
 
         // Start the bootstrap leader
         let bootstrap_leader = Fullnode::new(
@@ -754,15 +737,13 @@ mod tests {
 
         // Create validator identity
         assert!(num_genesis_ticks <= ticks_per_slot);
-        let (mint_keypair, ledger_path, tick_height, mut entry_height, last_id, last_entry_id) =
-            create_tmp_sample_ledger(
-                test_name,
-                10_000,
-                num_genesis_ticks,
-                leader_node.info.id,
-                500,
-                ticks_per_slot,
-            );
+
+        let (mut genesis_block, mint_keypair) =
+            GenesisBlock::new_with_leader(10_000, leader_node.info.id, 500);
+        genesis_block.ticks_per_slot = ticks_per_slot;
+
+        let (ledger_path, tick_height, mut entry_height, last_id, last_entry_id) =
+            create_tmp_sample_blocktree(test_name, &genesis_block, num_genesis_ticks);
 
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
