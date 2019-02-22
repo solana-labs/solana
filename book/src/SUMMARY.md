@@ -15,6 +15,7 @@
   - [Synchronization](synchronization.md)
   - [Leader Rotation](leader-rotation.md)
   - [Fork Generation](fork-generation.md)
+  - [Data Plane Fanout](data-plane-fanout.md)
 
 - [Anatomy of a Fullnode](fullnode.md)
   - [TPU](tpu.md)
@@ -34,7 +35,6 @@
   - [Secure Vote Signing](vote-signer.md)
   - [Staking Rewards](staking-rewards.md)
   - [Fork Selection](fork-selection.md)
-  - [Data Plane Fanout](data-plane-fanout.md)
   - [Reliable Vote Transmission](reliable-vote-transmission.md)
   - [Bank Forks](bank-forks.md)
   - [Blocktree Validation](fullnode-with-ledger-notifications.md)
