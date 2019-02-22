@@ -212,7 +212,6 @@ fn entrypoint(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use solana_rbpf::helpers;
 
     #[test]
     #[should_panic(expected = "Error: Execution exceeded maximum number of instructions")]
