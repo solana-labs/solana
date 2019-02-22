@@ -15,55 +15,6 @@ proof and it also requires the validator to have the entirety of the encrypted
 data present for verification of every proof of every identity. So the space
 required to validate is `number_of_proofs * data_size`
 
-## Terminology
-
-#### replicator
-
-Storage mining client, stores some part of the ledger enumerated in blocks and
-submits storage proofs to the chain. Not a full-node.
-
-#### ledger segment
-
-Portion of the ledger which is downloaded by the replicator where storage proof
-data is derived.
-
-#### CBC block
-
-Smallest encrypted chunk of ledger, an encrypted ledger segment would be made of
-many CBC blocks. `ledger_segment_size / cbc_block_size` to be exact.
-
-#### storage proof
-
-A set of sha hash state which is constructed by sampling the encrypted version
-of the stored ledger segment at certain offsets.
-
-#### fake storage proof
-
-A proof which has the same format as a storage proof, but the sha state is
-actually from hashing a known ledger value which the storage client can reveal
-and is also easily verifiable by the network on-chain.
-
-#### storage proof confirmation
-
-A transaction by a validator which indicates the set of real and fake proofs
-submitted by a storage miner. The transaction would contain a list of proof
-hash values and a bit which says if this hash is valid or fake.
-
-#### storage proof challenge
-
-A transaction from a replicator that verifiably proves that a validator
-confirmed a fake proof.
-
-#### storage proof claim
-
-A transaction from a validator which is after the timeout period given from the
-storage proof confirmation and which no successful challenges have been
-observed which rewards the parties of the storage proofs and confirmations.
-
-#### storage validation capacity
-
-The number of keys and samples that a validator can verify each storage epoch.
-
 ## Optimization with PoH
 
 Our improvement on this approach is to randomly sample the encrypted segments
