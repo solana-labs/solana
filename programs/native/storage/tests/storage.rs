@@ -35,6 +35,7 @@ fn get_storage_last_id(bank: &Bank) -> Hash {
 }
 
 #[test]
+#[ignore]
 fn test_bank_storage() {
     let (genesis_block, alice) = GenesisBlock::new(1000);
     let bank = Bank::new(&genesis_block);
