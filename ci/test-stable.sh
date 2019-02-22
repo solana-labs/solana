@@ -55,11 +55,15 @@ _ cargo test --manifest-path programs/Cargo.toml --no-default-features --feature
 _ cargo test --manifest-path programs/native/bpf_loader/Cargo.toml --no-default-features --features="$PROGRAM_FEATURES"
 
 # Run root package tests witht these features
-ROOT_FEATURES=chacha
-# ROOT_FEATURES=erasure,chacha // TODO
+ROOT_FEATURES=erasure,chacha
 if [[ $(uname) = Darwin ]]; then
   ./build-perf-libs.sh
 else
+  # Enable persistence mode to keep the CUDA kernel driver loaded, avoiding a
+  # lengthy and unexpected delay the first time CUDA is involved when the driver
+  # is not yet loaded.
+  sudo --non-interactive ./net/scripts/enable-nvidia-persistence-mode.sh
+
   ./fetch-perf-libs.sh
   # shellcheck source=/dev/null
   source ./target/perf-libs/env.sh
