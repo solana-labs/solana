@@ -274,14 +274,13 @@ pub fn process_blocktree(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocktree::create_tmp_sample_ledger;
+    use crate::blocktree::create_tmp_sample_blocktree;
     use crate::blocktree::tests::entries_to_blobs;
     use crate::entry::{create_ticks, next_entry, Entry};
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::native_program::ProgramError;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
-    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 
     fn fill_blocktree_slot_with_ticks(
         blocktree: &Blocktree,
@@ -304,17 +303,15 @@ mod tests {
         solana_logger::setup();
 
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
-        let ticks_per_slot = DEFAULT_TICKS_PER_SLOT;
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(10_000);
+        let ticks_per_slot = genesis_block.ticks_per_slot;
 
         // Create a new ledger with slot 0 full of ticks
-        let (_mint_keypair, ledger_path, tick_height, _entry_height, _last_id, mut last_entry_id) =
-            create_tmp_sample_ledger(
+        let (ledger_path, tick_height, _entry_height, _last_id, mut last_entry_id) =
+            create_tmp_sample_blocktree(
                 "blocktree_with_two_forks",
-                10_000,
+                &genesis_block,
                 ticks_per_slot - 1,
-                Keypair::new().pubkey(),
-                123,
-                ticks_per_slot,
             );
         debug!("ledger_path: {:?}", ledger_path);
         assert_eq!(tick_height, ticks_per_slot);
@@ -463,24 +460,11 @@ mod tests {
 
     #[test]
     fn test_process_ledger_simple() {
-        let ticks_per_slot = DEFAULT_TICKS_PER_SLOT;
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
-
-        let (
-            mint_keypair,
-            ledger_path,
-            tick_height,
-            mut entry_height,
-            mut last_id,
-            mut last_entry_id,
-        ) = create_tmp_sample_ledger(
-            "process_ledger_simple",
-            100,
-            0,
-            Keypair::new().pubkey(),
-            50,
-            ticks_per_slot,
-        );
+        let leader_pubkey = Keypair::new().pubkey();
+        let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, leader_pubkey, 50);
+        let (ledger_path, tick_height, mut entry_height, mut last_id, mut last_entry_id) =
+            create_tmp_sample_blocktree("process_ledger_simple", &genesis_block, 0);
         debug!("ledger_path: {:?}", ledger_path);
         let genesis_block =
             GenesisBlock::load(&ledger_path).expect("Expected to successfully open genesis block");
@@ -509,8 +493,8 @@ mod tests {
         last_id = last_entry_id;
         entries.push(tick);
 
-        let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot)
-            .expect("Expected to successfully open database ledger");
+        let blocktree =
+            Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
 
         blocktree
             .write_entries(0, tick_height, entry_height, &entries)
