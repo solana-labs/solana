@@ -444,9 +444,7 @@ impl Service for StorageStage {
 
 #[cfg(test)]
 mod tests {
-    use crate::blocktree::{
-        create_tmp_sample_ledger, Blocktree, BlocktreeConfig, DEFAULT_SLOT_HEIGHT,
-    };
+    use crate::blocktree::{create_tmp_sample_ledger, Blocktree, DEFAULT_SLOT_HEIGHT};
     use crate::cluster_info::{ClusterInfo, NodeInfo};
     use crate::entry::{make_tiny_test_entries, Entry};
     use crate::service::Service;
@@ -460,6 +458,7 @@ mod tests {
     use solana_sdk::hash::Hasher;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use solana_sdk::vote_transaction::VoteTransaction;
     use std::cmp::{max, min};
     use std::fs::remove_dir_all;
@@ -504,7 +503,7 @@ mod tests {
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
-        let blocktree_config = BlocktreeConfig::default();
+        let ticks_per_slot = DEFAULT_TICKS_PER_SLOT;
         let (_mint, ledger_path, tick_height, genesis_entry_height, _last_id, _last_entry_id) =
             create_tmp_sample_ledger(
                 "storage_stage_process_entries",
@@ -512,11 +511,11 @@ mod tests {
                 1,
                 Keypair::new().pubkey(),
                 1,
-                &blocktree_config,
+                ticks_per_slot,
             );
 
         let entries = make_tiny_test_entries(64);
-        let blocktree = Blocktree::open_config(&ledger_path, &blocktree_config).unwrap();
+        let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
         blocktree
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,
@@ -580,7 +579,7 @@ mod tests {
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
-        let blocktree_config = BlocktreeConfig::default();
+        let ticks_per_slot = DEFAULT_TICKS_PER_SLOT;
         let (_mint, ledger_path, tick_height, genesis_entry_height, _last_id, _last_entry_id) =
             create_tmp_sample_ledger(
                 "storage_stage_process_entries",
@@ -588,11 +587,11 @@ mod tests {
                 1,
                 Keypair::new().pubkey(),
                 1,
-                &blocktree_config,
+                ticks_per_slot,
             );
 
         let entries = make_tiny_test_entries(128);
-        let blocktree = Blocktree::open_config(&ledger_path, &blocktree_config).unwrap();
+        let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
         blocktree
             .write_entries(
                 DEFAULT_SLOT_HEIGHT,

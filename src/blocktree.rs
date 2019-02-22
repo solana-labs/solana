@@ -310,23 +310,6 @@ impl LedgerColumnFamilyRaw for ErasureCf {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
-pub struct BlocktreeConfig {
-    pub ticks_per_slot: u64,
-}
-
-impl BlocktreeConfig {
-    pub fn new(ticks_per_slot: u64) -> Self {
-        BlocktreeConfig { ticks_per_slot }
-    }
-}
-
-impl Default for BlocktreeConfig {
-    fn default() -> Self {
-        Self::new(DEFAULT_TICKS_PER_SLOT)
-    }
-}
-
 // ledger window
 pub struct Blocktree {
     // Underlying database is automatically closed in the Drop implementation of DB
@@ -380,8 +363,6 @@ impl Blocktree {
         // Create the erasure column family
         let erasure_cf = ErasureCf::new(db.clone());
 
-        // TODO: make these constructor arguments
-        // Issue: https://github.com/solana-labs/solana/issues/2458
         let ticks_per_slot = DEFAULT_TICKS_PER_SLOT;
         Ok(Blocktree {
             db,
@@ -401,22 +382,20 @@ impl Blocktree {
         Ok((blocktree, signal_receiver))
     }
 
-    #[allow(clippy::trivially_copy_pass_by_ref)]
-    pub fn open_config(ledger_path: &str, config: &BlocktreeConfig) -> Result<Self> {
+    pub fn open_config(ledger_path: &str, ticks_per_slot: u64) -> Result<Self> {
         let mut blocktree = Self::open(ledger_path)?;
-        blocktree.ticks_per_slot = config.ticks_per_slot;
+        blocktree.ticks_per_slot = ticks_per_slot;
         Ok(blocktree)
     }
 
-    #[allow(clippy::trivially_copy_pass_by_ref)]
     pub fn open_with_config_signal(
         ledger_path: &str,
-        config: &BlocktreeConfig,
+        ticks_per_slot: u64,
     ) -> Result<(Self, Receiver<bool>)> {
         let mut blocktree = Self::open(ledger_path)?;
         let (signal_sender, signal_receiver) = sync_channel(1);
         blocktree.new_blobs_signals = vec![signal_sender];
-        blocktree.ticks_per_slot = config.ticks_per_slot;
+        blocktree.ticks_per_slot = ticks_per_slot;
 
         Ok((blocktree, signal_receiver))
     }
@@ -1270,12 +1249,12 @@ pub fn create_new_ledger(
     ledger_path: &str,
     genesis_block: &GenesisBlock,
 ) -> Result<(u64, u64, Hash)> {
-    let config = BlocktreeConfig::new(genesis_block.ticks_per_slot);
+    let ticks_per_slot = genesis_block.ticks_per_slot;
     Blocktree::destroy(ledger_path)?;
     genesis_block.write(&ledger_path)?;
 
     // Add a single tick linked back to the genesis_block to bootstrap the ledger
-    let blocktree = Blocktree::open_config(ledger_path, &config)?;
+    let blocktree = Blocktree::open_config(ledger_path, ticks_per_slot)?;
     let entries = crate::entry::create_ticks(1, genesis_block.last_id());
     blocktree.write_entries(DEFAULT_SLOT_HEIGHT, 0, 0, &entries)?;
 
@@ -1318,19 +1297,18 @@ pub fn get_tmp_ledger_path(name: &str) -> String {
     path
 }
 
-#[allow(clippy::trivially_copy_pass_by_ref)]
 pub fn create_tmp_sample_ledger(
     name: &str,
     num_tokens: u64,
     num_extra_ticks: u64,
     bootstrap_leader_id: Pubkey,
     bootstrap_leader_tokens: u64,
-    config: &BlocktreeConfig,
+    ticks_per_slot: u64,
 ) -> (Keypair, String, u64, u64, Hash, Hash) {
     // TODO: Pass in a genesis block instead of all its parameters.
     let (mut genesis_block, mint_keypair) =
         GenesisBlock::new_with_leader(num_tokens, bootstrap_leader_id, bootstrap_leader_tokens);
-    genesis_block.ticks_per_slot = config.ticks_per_slot;
+    genesis_block.ticks_per_slot = ticks_per_slot;
 
     let ledger_path = get_tmp_ledger_path(name);
     let (mut entry_height, mut tick_height, mut last_entry_id) =
@@ -1340,7 +1318,7 @@ pub fn create_tmp_sample_ledger(
     if num_extra_ticks > 0 {
         let entries = crate::entry::create_ticks(num_extra_ticks, last_entry_id);
 
-        let blocktree = Blocktree::open_config(&ledger_path, config).unwrap();
+        let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
         blocktree
             .write_entries(DEFAULT_SLOT_HEIGHT, tick_height, entry_height, &entries)
             .unwrap();
@@ -1359,16 +1337,15 @@ pub fn create_tmp_sample_ledger(
     )
 }
 
-#[allow(clippy::trivially_copy_pass_by_ref)]
-pub fn tmp_copy_ledger(from: &str, name: &str, config: &BlocktreeConfig) -> String {
+pub fn tmp_copy_ledger(from: &str, name: &str, ticks_per_slot: u64) -> String {
     let path = get_tmp_ledger_path(name);
 
-    let blocktree = Blocktree::open_config(from, config).unwrap();
+    let blocktree = Blocktree::open_config(from, ticks_per_slot).unwrap();
     let blobs = blocktree.read_ledger_blobs();
     let genesis_block = GenesisBlock::load(from).unwrap();
 
     Blocktree::destroy(&path).expect("Expected successful database destruction");
-    let blocktree = Blocktree::open_config(&path, config).unwrap();
+    let blocktree = Blocktree::open_config(&path, ticks_per_slot).unwrap();
     blocktree.write_blobs(blobs).unwrap();
     genesis_block.write(&path).unwrap();
 
@@ -1397,8 +1374,7 @@ pub mod tests {
             let ticks_per_slot = 10;
             let num_slots = 10;
             let num_ticks = ticks_per_slot * num_slots;
-            let config = BlocktreeConfig::new(ticks_per_slot);
-            let ledger = Blocktree::open_config(&ledger_path, &config).unwrap();
+            let ledger = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
 
             let ticks = create_ticks(num_ticks, Hash::default());
             ledger.write_entries(0, 0, 0, ticks.clone()).unwrap();
@@ -1779,8 +1755,7 @@ pub mod tests {
     pub fn test_insert_data_blobs_consecutive() {
         let blocktree_path = get_tmp_ledger_path("test_insert_data_blobs_consecutive");
         {
-            let config = BlocktreeConfig::new(32);
-            let blocktree = Blocktree::open_config(&blocktree_path, &config).unwrap();
+            let blocktree = Blocktree::open_config(&blocktree_path, 32).unwrap();
             let slot = 0;
             let parent_slot = 0;
             // Write entries

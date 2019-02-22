@@ -380,9 +380,7 @@ impl Service for ReplayStage {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::blocktree::{
-        create_tmp_sample_ledger, Blocktree, BlocktreeConfig, DEFAULT_SLOT_HEIGHT,
-    };
+    use crate::blocktree::{create_tmp_sample_ledger, Blocktree, DEFAULT_SLOT_HEIGHT};
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::create_ticks;
     use crate::entry::{next_entry_mut, Entry};
@@ -395,6 +393,7 @@ mod test {
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
@@ -434,7 +433,7 @@ mod test {
             0,
             old_leader_id,
             500,
-            &BlocktreeConfig::new(ticks_per_slot),
+            ticks_per_slot,
         );
 
         info!("my_id: {:?}", my_id);
@@ -468,9 +467,8 @@ mod test {
 
         {
             // Set up the bank
-            let blocktree_config = BlocktreeConfig::new(ticks_per_slot);
             let (bank_forks, bank_forks_info, blocktree, ledger_signal_receiver) =
-                new_banks_from_blocktree(&my_ledger_path, &blocktree_config, &leader_scheduler);
+                new_banks_from_blocktree(&my_ledger_path, ticks_per_slot, &leader_scheduler);
 
             // Set up the replay stage
             let (rotation_sender, rotation_receiver) = channel();
@@ -563,7 +561,7 @@ mod test {
             1,
             leader_id,
             500,
-            &BlocktreeConfig::default(),
+            DEFAULT_TICKS_PER_SLOT,
         );
 
         // Set up the cluster info
@@ -578,7 +576,7 @@ mod test {
             let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
             let (bank_forks, bank_forks_info, blocktree, l_receiver) = new_banks_from_blocktree(
                 &my_ledger_path,
-                &BlocktreeConfig::default(),
+                DEFAULT_TICKS_PER_SLOT,
                 &leader_scheduler,
             );
             let bank = bank_forks.working_bank();
@@ -646,7 +644,6 @@ mod test {
         let leader_id = Keypair::new().pubkey();
 
         // Create the ledger
-        let blocktree_config = BlocktreeConfig::new(ticks_per_slot);
         let (
             mint_keypair,
             my_ledger_path,
@@ -660,7 +657,7 @@ mod test {
             1,
             leader_id,
             500,
-            &blocktree_config,
+            ticks_per_slot,
         );
 
         let my_keypair = Arc::new(my_keypair);
@@ -678,7 +675,7 @@ mod test {
         );
         let mut last_id = active_set_entries.last().unwrap().id;
         {
-            let blocktree = Blocktree::open_config(&my_ledger_path, &blocktree_config).unwrap();
+            let blocktree = Blocktree::open_config(&my_ledger_path, ticks_per_slot).unwrap();
             blocktree
                 .write_entries(
                     DEFAULT_SLOT_HEIGHT,
@@ -702,7 +699,7 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         {
             let (bank_forks, bank_forks_info, blocktree, l_receiver) =
-                new_banks_from_blocktree(&my_ledger_path, &blocktree_config, &leader_scheduler);
+                new_banks_from_blocktree(&my_ledger_path, ticks_per_slot, &leader_scheduler);
             let bank = bank_forks.working_bank();
             let meta = blocktree
                 .meta(0)

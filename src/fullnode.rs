@@ -1,7 +1,7 @@
 //! The `fullnode` module hosts all the fullnode microservices.
 
 use crate::bank_forks::BankForks;
-use crate::blocktree::{Blocktree, BlocktreeConfig};
+use crate::blocktree::Blocktree;
 use crate::blocktree_processor::{self, BankForksInfo};
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
 use crate::gossip_service::GossipService;
@@ -85,10 +85,8 @@ impl Default for FullnodeConfig {
 }
 
 impl FullnodeConfig {
-    pub fn ledger_config(&self) -> BlocktreeConfig {
-        // TODO: Refactor LeaderSchedulerConfig and BlocktreeConfig to avoid the duplicated
-        //       `ticks_per_slot` field that must be identical between the two
-        BlocktreeConfig::new(self.leader_scheduler_config.ticks_per_slot)
+    pub fn ticks_per_slot(&self) -> u64 {
+        self.leader_scheduler_config.ticks_per_slot
     }
 }
 
@@ -125,7 +123,7 @@ impl Fullnode {
             &config.leader_scheduler_config,
         )));
         let (bank_forks, bank_forks_info, blocktree, ledger_signal_receiver) =
-            new_banks_from_blocktree(ledger_path, &config.ledger_config(), &leader_scheduler);
+            new_banks_from_blocktree(ledger_path, config.ticks_per_slot(), &leader_scheduler);
 
         info!("node info: {:?}", node.info);
         info!("node entrypoint_info: {:?}", entrypoint_info_option);
@@ -362,14 +360,13 @@ impl Fullnode {
     }
 }
 
-#[allow(clippy::trivially_copy_pass_by_ref)]
 pub fn new_banks_from_blocktree(
     blocktree_path: &str,
-    blocktree_config: &BlocktreeConfig,
+    ticks_per_slot: u64,
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
 ) -> (BankForks, Vec<BankForksInfo>, Blocktree, Receiver<bool>) {
     let (blocktree, ledger_signal_receiver) =
-        Blocktree::open_with_config_signal(blocktree_path, blocktree_config)
+        Blocktree::open_with_config_signal(blocktree_path, ticks_per_slot)
             .expect("Expected to successfully open database ledger");
     let genesis_block =
         GenesisBlock::load(blocktree_path).expect("Expected to successfully open genesis block");
@@ -406,13 +403,12 @@ impl Service for Fullnode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocktree::{
-        create_tmp_sample_ledger, tmp_copy_ledger, BlocktreeConfig, DEFAULT_SLOT_HEIGHT,
-    };
+    use crate::blocktree::{create_tmp_sample_ledger, tmp_copy_ledger, DEFAULT_SLOT_HEIGHT};
     use crate::entry::make_consecutive_blobs;
     use crate::leader_scheduler::make_active_set_entries;
     use crate::streamer::responder;
     use solana_sdk::hash::Hash;
+    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use std::fs::remove_dir_all;
 
     #[test]
@@ -435,7 +431,7 @@ mod tests {
             0,
             leader_keypair.pubkey(),
             1000,
-            &BlocktreeConfig::default(),
+            DEFAULT_TICKS_PER_SLOT,
         );
 
         let validator = Fullnode::new(
@@ -473,7 +469,7 @@ mod tests {
                     0,
                     leader_keypair.pubkey(),
                     1000,
-                    &BlocktreeConfig::default(),
+                    DEFAULT_TICKS_PER_SLOT,
                 );
                 ledger_paths.push(validator_ledger_path.clone());
                 Fullnode::new(
@@ -535,7 +531,7 @@ mod tests {
             1,
             bootstrap_leader_keypair.pubkey(),
             500,
-            &fullnode_config.ledger_config(),
+            fullnode_config.ticks_per_slot(),
         );
 
         // Start the bootstrap leader
@@ -573,7 +569,7 @@ mod tests {
         let slots_per_epoch = 2;
         fullnode_config.leader_scheduler_config =
             LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, slots_per_epoch);
-        let blocktree_config = &fullnode_config.ledger_config();
+        let ticks_per_slot = fullnode_config.ticks_per_slot();
 
         // Create the leader and validator nodes
         let bootstrap_leader_keypair = Arc::new(Keypair::new());
@@ -587,14 +583,14 @@ mod tests {
                 // tick_height = 0 from the leader scheduler's active window
                 ticks_per_slot * slots_per_epoch,
                 "test_wrong_role_transition",
-                &blocktree_config,
+                ticks_per_slot,
             );
         let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
         let validator_ledger_path = tmp_copy_ledger(
             &bootstrap_leader_ledger_path,
             "test_wrong_role_transition",
-            &blocktree_config,
+            ticks_per_slot,
         );
 
         let ledger_paths = vec![
@@ -666,7 +662,7 @@ mod tests {
                 0,
                 0,
                 "test_validator_to_leader_transition",
-                &fullnode_config.ledger_config(),
+                fullnode_config.ticks_per_slot(),
             );
 
         let leader_id = leader_keypair.pubkey();
@@ -725,7 +721,7 @@ mod tests {
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
         let (bank_forks, bank_forks_info, _, _) = new_banks_from_blocktree(
             &validator_ledger_path,
-            &BlocktreeConfig::default(),
+            DEFAULT_TICKS_PER_SLOT,
             &leader_scheduler,
         );
         let bank = bank_forks.working_bank();
@@ -748,7 +744,7 @@ mod tests {
         num_genesis_ticks: u64,
         num_ending_ticks: u64,
         test_name: &str,
-        blocktree_config: &BlocktreeConfig,
+        ticks_per_slot: u64,
     ) -> (Node, Node, String, u64, Hash) {
         info!("validator: {}", validator_keypair.pubkey());
         info!("leader: {}", leader_keypair.pubkey());
@@ -756,7 +752,7 @@ mod tests {
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
         // Create validator identity
-        assert!(num_genesis_ticks <= blocktree_config.ticks_per_slot);
+        assert!(num_genesis_ticks <= ticks_per_slot);
         let (mint_keypair, ledger_path, tick_height, mut entry_height, last_id, last_entry_id) =
             create_tmp_sample_ledger(
                 test_name,
@@ -764,7 +760,7 @@ mod tests {
                 num_genesis_ticks,
                 leader_node.info.id,
                 500,
-                blocktree_config,
+                ticks_per_slot,
             );
 
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
@@ -780,7 +776,7 @@ mod tests {
             num_ending_ticks,
         );
 
-        let blocktree = Blocktree::open_config(&ledger_path, blocktree_config).unwrap();
+        let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
         let active_set_entries_len = active_set_entries.len() as u64;
         let last_id = active_set_entries.last().unwrap().id;
 
