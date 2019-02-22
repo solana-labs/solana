@@ -485,25 +485,11 @@ impl Bank {
         (loaded_accounts, executed)
     }
 
-    pub fn commit_transactions(
+    fn filter_program_errors_and_collect_fee(
         &self,
         txs: &[Transaction],
-        loaded_accounts: &[Result<(InstructionAccounts, InstructionLoaders)>],
         executed: &[Result<()>],
     ) -> Vec<Result<()>> {
-        let now = Instant::now();
-        self.accounts
-            .store_accounts(self.is_root(), txs, executed, loaded_accounts);
-
-        // once committed there is no way to unroll
-        let write_elapsed = now.elapsed();
-        debug!(
-            "store: {}us txs_len={}",
-            duration_as_us(&write_elapsed),
-            txs.len(),
-        );
-        self.update_transaction_statuses(txs, &executed);
-
         let mut fees = 0;
         let results = txs
             .iter()
@@ -524,6 +510,27 @@ impl Bank {
             .collect();
         self.deposit(&self.leader, fees);
         results
+    }
+
+    pub fn commit_transactions(
+        &self,
+        txs: &[Transaction],
+        loaded_accounts: &[Result<(InstructionAccounts, InstructionLoaders)>],
+        executed: &[Result<()>],
+    ) -> Vec<Result<()>> {
+        let now = Instant::now();
+        self.accounts
+            .store_accounts(self.is_root(), txs, executed, loaded_accounts);
+
+        // once committed there is no way to unroll
+        let write_elapsed = now.elapsed();
+        debug!(
+            "store: {}us txs_len={}",
+            duration_as_us(&write_elapsed),
+            txs.len(),
+        );
+        self.update_transaction_statuses(txs, &executed);
+        self.filter_program_errors_and_collect_fee(txs, executed)
     }
 
     /// Process a batch of transactions.
@@ -882,8 +889,7 @@ mod tests {
         assert_eq!(bank.get_signature_status(&t1.signatures[0]), Some(Ok(())));
     }
 
-    // TODO: This test demonstrates that fees are not paid when a program fails.
-    // See github issue 1157 (https://github.com/solana-labs/solana/issues/1157)
+    // This test demonstrates that fees are paid even when a program fails.
     #[test]
     fn test_detect_failed_duplicate_transactions_issue_1157() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
@@ -900,7 +906,9 @@ mod tests {
         );
         let signature = tx.signatures[0];
         assert!(!bank.has_signature(&signature));
-        let _res = bank.process_transaction(&tx);
+
+        // Assert that process_transaction has filtered out Program Errors
+        assert_eq!(bank.process_transaction(&tx), Ok(()));
 
         assert!(bank.has_signature(&signature));
         assert_eq!(
@@ -1036,6 +1044,33 @@ mod tests {
         assert_eq!(bank.get_balance(&key1.pubkey()), 0);
         assert_eq!(bank.get_balance(&key2.pubkey()), 1);
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 2 - 3);
+    }
+
+    #[test]
+    fn test_filter_program_errors_and_collect_fee() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(100);
+        let mut bank = Bank::new(&genesis_block);
+        bank.leader = Pubkey::default();
+
+        let key = Keypair::new();
+        let tx1 =
+            SystemTransaction::new_move(&mint_keypair, key.pubkey(), 2, genesis_block.last_id(), 3);
+        let tx2 =
+            SystemTransaction::new_move(&mint_keypair, key.pubkey(), 5, genesis_block.last_id(), 1);
+
+        let results = vec![
+            Ok(()),
+            Err(BankError::ProgramError(
+                1,
+                ProgramError::ResultWithNegativeTokens,
+            )),
+        ];
+
+        let initial_balance = bank.get_balance(&bank.leader);
+        let results = bank.filter_program_errors_and_collect_fee(&vec![tx1, tx2], &results);
+        assert_eq!(bank.get_balance(&bank.leader), initial_balance + 3 + 1);
+        assert_eq!(results[0], Ok(()));
+        assert_eq!(results[1], Ok(()));
     }
 
     #[test]
