@@ -3,12 +3,14 @@ use log::info;
 use solana_runtime::bank::Bank;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::{hash, Hash};
+use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::storage_program;
 use solana_sdk::storage_program::{StorageTransaction, ENTRIES_PER_SEGMENT};
+use solana_sdk::system_transaction::SystemTransaction;
 
-fn get_storage_entry_height(bank: &Bank) -> u64 {
-    match bank.get_account(&storage_program::system_id()) {
+fn get_storage_entry_height(bank: &Bank, account: Pubkey) -> u64 {
+    match bank.get_account(&account) {
         Some(storage_system_account) => {
             let state = deserialize(&storage_system_account.userdata);
             if let Ok(state) = state {
@@ -23,8 +25,8 @@ fn get_storage_entry_height(bank: &Bank) -> u64 {
     0
 }
 
-fn get_storage_last_id(bank: &Bank) -> Hash {
-    if let Some(storage_system_account) = bank.get_account(&storage_program::system_id()) {
+fn get_storage_last_id(bank: &Bank, account: Pubkey) -> Hash {
+    if let Some(storage_system_account) = bank.get_account(&account) {
         let state = deserialize(&storage_system_account.userdata);
         if let Ok(state) = state {
             let state: storage_program::StorageProgramState = state;
@@ -35,7 +37,6 @@ fn get_storage_last_id(bank: &Bank) -> Hash {
 }
 
 #[test]
-#[ignore]
 fn test_bank_storage() {
     let (genesis_block, alice) = GenesisBlock::new(1000);
     let bank = Bank::new(&genesis_block);
@@ -55,6 +56,18 @@ fn test_bank_storage() {
 
     bank.transfer(10, &alice, bob.pubkey(), last_id).unwrap();
     bank.transfer(10, &alice, jack.pubkey(), last_id).unwrap();
+
+    let tx = SystemTransaction::new_program_account(
+        &alice,
+        bob.pubkey(),
+        last_id,
+        1,
+        4 * 1024,
+        storage_program::id(),
+        0,
+    );
+
+    bank.process_transaction(&tx).unwrap();
 
     let tx = StorageTransaction::new_advertise_last_id(
         &bob,
@@ -77,6 +90,9 @@ fn test_bank_storage() {
 
     bank.process_transaction(&tx).unwrap();
 
-    assert_eq!(get_storage_entry_height(&bank), ENTRIES_PER_SEGMENT);
-    assert_eq!(get_storage_last_id(&bank), storage_last_id);
+    assert_eq!(
+        get_storage_entry_height(&bank, bob.pubkey()),
+        ENTRIES_PER_SEGMENT
+    );
+    assert_eq!(get_storage_last_id(&bank, bob.pubkey()), storage_last_id);
 }

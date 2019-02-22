@@ -7,7 +7,7 @@ use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionL
 use crate::last_id_queue::LastIdQueue;
 use crate::runtime::{self, RuntimeError};
 use crate::status_cache::StatusCache;
-use bincode::{deserialize, serialize};
+use bincode::serialize;
 use hashbrown::HashMap;
 use log::{debug, info, Level};
 use solana_metrics::counter::Counter;
@@ -219,13 +219,6 @@ impl Bank {
         self.add_native_program("solana_bpf_loader", &bpf_loader::id());
         self.add_native_program("solana_budget_program", &budget_program::id());
         self.add_native_program("solana_erc20", &token_program::id());
-
-        let storage_system_account = Account::new(1, 16 * 1024, storage_program::system_id());
-        self.accounts.store_slow(
-            self.is_root(),
-            &storage_program::system_id(),
-            &storage_system_account,
-        );
     }
 
     /// Return the last entry ID registered.
@@ -235,33 +228,6 @@ impl Bank {
             .unwrap()
             .last_id
             .expect("no last_id has been set")
-    }
-
-    pub fn get_storage_entry_height(&self) -> u64 {
-        match self.get_account(&storage_program::system_id()) {
-            Some(storage_system_account) => {
-                let state = deserialize(&storage_system_account.userdata);
-                if let Ok(state) = state {
-                    let state: storage_program::StorageProgramState = state;
-                    return state.entry_height;
-                }
-            }
-            None => {
-                info!("error in reading entry_height");
-            }
-        }
-        0
-    }
-
-    pub fn get_storage_last_id(&self) -> Hash {
-        if let Some(storage_system_account) = self.get_account(&storage_program::system_id()) {
-            let state = deserialize(&storage_system_account.userdata);
-            if let Ok(state) = state {
-                let state: storage_program::StorageProgramState = state;
-                return state.id;
-            }
-        }
-        Hash::default()
     }
 
     /// Forget all signatures. Useful for benchmarking.
@@ -1232,10 +1198,6 @@ mod tests {
             132, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0,
         ]);
-        let storage_system = Pubkey::new(&[
-            133, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0,
-        ]);
 
         assert_eq!(system_program::id(), system);
         assert_eq!(native_loader::id(), native);
@@ -1244,7 +1206,6 @@ mod tests {
         assert_eq!(storage_program::id(), storage);
         assert_eq!(token_program::id(), token);
         assert_eq!(vote_program::id(), vote);
-        assert_eq!(storage_program::system_id(), storage_system);
     }
 
     #[test]
@@ -1258,7 +1219,6 @@ mod tests {
             storage_program::id(),
             token_program::id(),
             vote_program::id(),
-            storage_program::system_id(),
         ];
         assert!(ids.into_iter().all(move |id| unique.insert(id)));
     }
