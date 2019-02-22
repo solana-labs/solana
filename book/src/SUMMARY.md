@@ -16,6 +16,7 @@
   - [Leader Rotation](leader-rotation.md)
   - [Fork Generation](fork-generation.md)
   - [Data Plane Fanout](data-plane-fanout.md)
+  - [Ledger Replication](ledger-replication.md)
 
 - [Anatomy of a Fullnode](fullnode.md)
   - [TPU](tpu.md)
@@ -31,7 +32,7 @@
   - [solana-wallet CLI](wallet.md)
 
 - [Proposed Architectural Changes](proposals.md)
-  - [Ledger Replication](ledger-replication.md)
+  - [Ledger Replication](ledger-replication-to-implement.md)
   - [Secure Vote Signing](vote-signer.md)
   - [Staking Rewards](staking-rewards.md)
   - [Fork Selection](fork-selection.md)
