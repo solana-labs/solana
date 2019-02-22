@@ -3,6 +3,7 @@
 use crate::hash::{hash, Hash};
 use crate::pubkey::Pubkey;
 use crate::signature::{Keypair, KeypairUtil};
+use crate::timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -19,6 +20,9 @@ pub struct GenesisBlock {
     pub bootstrap_leader_vote_account_id: Pubkey,
     pub mint_id: Pubkey,
     pub tokens: u64,
+    pub ticks_per_slot: u64,
+    pub slots_per_epoch: u64,
+    pub leader_schedule_slot_offset: u64,
 }
 
 impl GenesisBlock {
@@ -44,6 +48,9 @@ impl GenesisBlock {
                 bootstrap_leader_vote_account_id: bootstrap_leader_vote_account_keypair.pubkey(),
                 mint_id: mint_keypair.pubkey(),
                 tokens,
+                ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
+                slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
+                leader_schedule_slot_offset: DEFAULT_SLOTS_PER_EPOCH,
             },
             mint_keypair,
         )
