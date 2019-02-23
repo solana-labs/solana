@@ -177,15 +177,18 @@ mod test {
     #[test]
     fn test_blockstream() -> () {
         // Set up bank and leader_scheduler
-        let leader_scheduler_config = LeaderSchedulerConfig::new(5, 2, 10);
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(1_000_000);
+        let (mut genesis_block, _mint_keypair) = GenesisBlock::new(1_000_000);
+        genesis_block.ticks_per_slot = 5;
+        let leader_scheduler_config =
+            LeaderSchedulerConfig::new(genesis_block.ticks_per_slot, 2, 10);
+
         let bank = Bank::new(&genesis_block);
         let leader_scheduler = LeaderScheduler::new_with_bank(&leader_scheduler_config, &bank);
         let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
 
         // Set up blockstream
         let blockstream = MockBlockstream::new("test_stream".to_string(), leader_scheduler.clone());
-        let ticks_per_slot = leader_scheduler.read().unwrap().ticks_per_slot;
+        let ticks_per_slot = bank.ticks_per_slot();
 
         let mut last_id = Hash::default();
         let mut entries = Vec::new();

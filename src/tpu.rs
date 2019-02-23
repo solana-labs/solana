@@ -223,7 +223,7 @@ impl Tpu {
 
         // TODO: Fix BankingStage/BroadcastService to operate on `slot` directly instead of
         // `max_tick_height`
-        let max_tick_height = (slot + 1) * leader_scheduler.read().unwrap().ticks_per_slot - 1;
+        let max_tick_height = (slot + 1) * bank.ticks_per_slot() - 1;
         let blob_index = blocktree
             .meta(slot)
             .expect("Database error")

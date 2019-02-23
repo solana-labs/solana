@@ -325,6 +325,7 @@ mod test {
     use crate::service::Service;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
@@ -394,7 +395,7 @@ mod test {
             // Mock the tick height to look like the tick height right after a leader transition
             leader_scheduler.set_leader_schedule(vec![leader_keypair.pubkey()]);
             let start_tick_height = 0;
-            let max_tick_height = start_tick_height + leader_scheduler.ticks_per_slot;
+            let max_tick_height = start_tick_height + DEFAULT_TICKS_PER_SLOT;
 
             let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
             let (entry_sender, entry_receiver) = channel();

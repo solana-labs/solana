@@ -50,11 +50,11 @@ impl Default for LeaderSchedulerConfig {
 #[derive(Clone, Debug)]
 pub struct LeaderScheduler {
     // A leader slot duration in ticks
-    pub ticks_per_slot: u64,
+    ticks_per_slot: u64,
 
     // Duration of an epoch (one or more slots) in ticks.
     // This value must be divisible by ticks_per_slot
-    pub ticks_per_epoch: u64,
+    ticks_per_epoch: u64,
 
     // The number of slots for which a vote qualifies a candidate for leader
     // selection
