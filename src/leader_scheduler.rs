@@ -105,7 +105,9 @@ impl LeaderScheduler {
         }
     }
 
-    pub fn new_with_window_len(active_window_slot_len: u64, bank: &Bank) -> Self {
+    // Same as new_with_bank() but allows caller to override `active_window_slot_len`.
+    // Used by unit-tests.
+    fn new_with_window_len(active_window_slot_len: u64, bank: &Bank) -> Self {
         let config = LeaderSchedulerConfig::new(
             bank.ticks_per_slot(),
             bank.slots_per_epoch(),
