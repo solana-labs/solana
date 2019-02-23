@@ -3,6 +3,7 @@
 //! on behalf of the caller, and a low-level API for when they have
 //! already been signed and verified.
 
+use crate::accounts::AccountsStore;
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::last_id_queue::LastIdQueue;
 use crate::runtime::{self, RuntimeError};
@@ -640,13 +641,12 @@ impl Bank {
             .read()
             .unwrap()
             .accounts
-            .values()
+            .get_vote_accounts()
+            .iter()
             .filter_map(|account| {
-                if vote_program::check_id(&account.owner) {
-                    if let Ok(vote_state) = VoteState::deserialize(&account.userdata) {
-                        if cond(&vote_state) {
-                            return Some(vote_state);
-                        }
+                if let Ok(vote_state) = VoteState::deserialize(&account.userdata) {
+                    if cond(&vote_state) {
+                        return Some(vote_state);
                     }
                 }
                 None

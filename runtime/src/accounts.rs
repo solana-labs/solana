@@ -1,6 +1,8 @@
 use crate::bank::{BankError, Result};
 use crate::runtime::has_duplicates;
 use bincode::serialize;
+use hashbrown::hash_map::Iter;
+use hashbrown::hash_map::Keys;
 use hashbrown::{HashMap, HashSet};
 use log::{debug, Level};
 use solana_metrics::counter::Counter;
@@ -9,6 +11,7 @@ use solana_sdk::hash::{hash, Hash};
 use solana_sdk::native_loader;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::transaction::Transaction;
+use solana_sdk::vote_program;
 use std::collections::BTreeMap;
 use std::ops::Deref;
 use std::sync::{Mutex, RwLock};
@@ -30,10 +33,84 @@ pub struct ErrorCounters {
     pub missing_signature_for_fee: usize,
 }
 
+pub trait AccountsStore {
+    fn new() -> Self;
+    fn get_vote_accounts(&self) -> Vec<Account>;
+    fn is_empty(&self) -> bool;
+    fn get(&self, key: &Pubkey) -> Option<&Account>;
+    fn insert(&mut self, key: Pubkey, account: Account);
+    fn remove(&mut self, key: &Pubkey);
+    fn keys(&self) -> Keys<Pubkey, Account>;
+    fn retain<F>(&mut self, f: F)
+    where
+        F: FnMut(&Pubkey, &mut Account) -> bool;
+}
+
+pub struct HashMapAccountsStore {
+    accounts: HashMap<Pubkey, Account>,
+}
+
+impl<'a> IntoIterator for &'a HashMapAccountsStore {
+    type Item = (&'a Pubkey, &'a Account);
+    type IntoIter = Iter<'a, Pubkey, Account>;
+
+    fn into_iter(self) -> Iter<'a, Pubkey, Account> {
+        self.accounts.iter()
+    }
+}
+
+impl AccountsStore for HashMapAccountsStore {
+    fn new() -> Self {
+        HashMapAccountsStore {
+            accounts: HashMap::new(),
+        }
+    }
+
+    fn get_vote_accounts(&self) -> Vec<Account> {
+        self.accounts
+            .values()
+            .filter_map(|account| {
+                if vote_program::check_id(&account.owner) {
+                    Some(account.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.accounts.is_empty()
+    }
+
+    fn get(&self, key: &Pubkey) -> Option<&Account> {
+        self.accounts.get(key)
+    }
+
+    fn insert(&mut self, key: Pubkey, account: Account) {
+        self.accounts.insert(key, account);
+    }
+
+    fn remove(&mut self, key: &Pubkey) {
+        self.accounts.remove(key);
+    }
+
+    fn keys(&self) -> Keys<Pubkey, Account> {
+        self.accounts.keys()
+    }
+
+    fn retain<F>(&mut self, f: F)
+    where
+        F: FnMut(&Pubkey, &mut Account) -> bool,
+    {
+        self.accounts.retain(f)
+    }
+}
+
 /// This structure handles the load/store of the accounts
 pub struct AccountsDB {
     /// Mapping of known public keys/IDs to accounts
-    pub accounts: HashMap<Pubkey, Account>,
+    pub accounts: HashMapAccountsStore,
 
     /// The number of transactions the bank has processed without error since the
     /// start of the ledger.
@@ -51,7 +128,7 @@ pub struct Accounts {
 impl Default for AccountsDB {
     fn default() -> Self {
         Self {
-            accounts: HashMap::new(),
+            accounts: HashMapAccountsStore::new(),
             transaction_count: 0,
         }
     }
@@ -269,7 +346,7 @@ impl AccountsDB {
         //   absent
         for pubkey in parents.iter().flat_map(|parent| parent.accounts.keys()) {
             // update self with data from parents unless in self
-            if self.accounts.get(pubkey).is_none() {
+            if self.accounts.get(&pubkey).is_none() {
                 self.accounts
                     .insert(pubkey.clone(), Self::load(parents, pubkey).unwrap().clone());
             }
