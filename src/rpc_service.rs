@@ -1,6 +1,5 @@
 //! The `rpc_service` module implements the Solana JSON RPC service.
 
-use crate::bank_forks::BankForks;
 use crate::cluster_info::ClusterInfo;
 use crate::rpc::*;
 use crate::service::Service;
@@ -24,7 +23,6 @@ pub struct JsonRpcService {
 
 impl JsonRpcService {
     pub fn new(
-        bank_forks: &Arc<RwLock<BankForks>>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         rpc_addr: SocketAddr,
         drone_addr: SocketAddr,
@@ -32,10 +30,7 @@ impl JsonRpcService {
     ) -> Self {
         info!("rpc bound to {:?}", rpc_addr);
         let exit = Arc::new(AtomicBool::new(false));
-        let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
-            bank_forks.clone(),
-            storage_state,
-        )));
+        let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(storage_state)));
         let request_processor_ = request_processor.clone();
 
         let info = cluster_info.clone();
@@ -110,7 +105,7 @@ mod tests {
     #[test]
     fn test_rpc_new() {
         let (genesis_block, alice) = GenesisBlock::new(10_000);
-        let bank_forks = BankForks::new(0, Bank::new(&genesis_block));
+        let bank = Bank::new(&genesis_block);
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default())));
         let rpc_addr = SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
@@ -120,13 +115,9 @@ mod tests {
             IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
             solana_netutil::find_available_port_in_range((10000, 65535)).unwrap(),
         );
-        let rpc_service = JsonRpcService::new(
-            &Arc::new(RwLock::new(bank_forks)),
-            &cluster_info,
-            rpc_addr,
-            drone_addr,
-            StorageState::default(),
-        );
+        let mut rpc_service =
+            JsonRpcService::new(&cluster_info, rpc_addr, drone_addr, StorageState::default());
+        rpc_service.set_bank(Arc::new(bank));
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-jsonrpc");
 
