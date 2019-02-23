@@ -746,7 +746,7 @@ mod tests {
 
         // Close the validator so that rocksdb has locks available
         validator_exit();
-        let (bank_forks, bank_forks_info, _, _) = new_banks_from_blocktree(&validator_ledger_path, "accounts");
+        let (bank_forks, bank_forks_info, _, _) = new_banks_from_blocktree(&validator_ledger_path, "");
         let bank = bank_forks.working_bank();
         let entry_height = bank_forks_info[0].entry_height;
 

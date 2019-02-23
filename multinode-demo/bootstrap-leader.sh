@@ -68,6 +68,7 @@ $program \
   $maybe_no_leader_rotation \
   --identity "$SOLANA_CONFIG_DIR"/bootstrap-leader.json \
   --ledger "$SOLANA_CONFIG_DIR"/bootstrap-leader-ledger \
+  --accounts "$SOLANA_CONFIG_DIR"/bootstrap-leader-accounts \
   --rpc-port 8899 \
   > >($bootstrap_leader_logger) 2>&1 &
 pid=$!
