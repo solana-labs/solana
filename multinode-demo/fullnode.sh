@@ -157,6 +157,7 @@ if ((!self_setup)); then
   fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id.json
   fullnode_json_path=$SOLANA_CONFIG_DIR/fullnode.json
   ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger
+  accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts
 else
   mkdir -p "$SOLANA_CONFIG_DIR"
   fullnode_id_path=$SOLANA_CONFIG_DIR/fullnode-id-x$self_setup_label.json
@@ -181,6 +182,7 @@ else
   }
 
   ledger_config_dir=$SOLANA_CONFIG_DIR/fullnode-ledger-x$self_setup_label
+  accounts_config_dir=$SOLANA_CONFIG_DIR/fullnode-accounts-x$self_setup_label
 fi
 
 [[ -r $fullnode_id_path ]] || {
@@ -256,6 +258,7 @@ $program \
   --identity "$fullnode_json_path" \
   --network "$leader_address" \
   --ledger "$ledger_config_dir" \
+  --accounts "$accounts_config_dir" \
   > >($fullnode_logger) 2>&1 &
 pid=$!
 oom_score_adj "$pid" 1000
