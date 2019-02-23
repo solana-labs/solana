@@ -55,6 +55,9 @@ impl Index<usize> for LeaderSchedule {
 pub trait LeaderScheduleUtil {
     /// Return the leader schedule for the current epoch.
     fn leader_schedule(&self) -> LeaderSchedule;
+
+    /// Return the leader id for the current slot.
+    fn slot_leader(&self) -> Pubkey;
 }
 
 impl LeaderScheduleUtil for Bank {
@@ -63,6 +66,10 @@ impl LeaderScheduleUtil for Bank {
             None => LeaderSchedule::new_with_bank(self),
             Some(bank) => LeaderSchedule::new_with_bank(&bank),
         }
+    }
+
+    fn slot_leader(&self) -> Pubkey {
+        self.leader_schedule()[self.slot_index() as usize]
     }
 }
 
@@ -113,5 +120,12 @@ mod tests {
         let expected: Vec<_> = iter::repeat(pubkey).take(len).collect();
         assert_eq!(leader_schedule.slot_leaders, expected);
         assert_eq!(bank.leader_schedule().slot_leaders, expected); // Same thing, but with the trait
+    }
+
+    #[test]
+    fn test_leader_schedule_slot_leader_basic() {
+        let pubkey = Keypair::new().pubkey();
+        let bank = Bank::new(&GenesisBlock::new_with_leader(2, pubkey, 2).0);
+        assert_eq!(bank.slot_leader(), pubkey);
     }
 }
