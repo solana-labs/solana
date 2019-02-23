@@ -1,7 +1,7 @@
 use assert_cmd::prelude::*;
-use solana::blocktree::create_tmp_sample_ledger;
+use solana::blocktree::create_tmp_sample_blocktree;
+use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::signature::{Keypair, KeypairUtil};
-use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 use std::process::Command;
 use std::process::Output;
 use std::sync::Arc;
@@ -32,15 +32,13 @@ fn bad_arguments() {
 #[test]
 fn nominal() {
     let keypair = Arc::new(Keypair::new());
-    let ticks_per_slot = DEFAULT_TICKS_PER_SLOT;
-    let (_mint_keypair, ledger_path, tick_height, _last_entry_height, _last_id, _last_entry_id) =
-        create_tmp_sample_ledger(
+    let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(100, keypair.pubkey(), 50);
+    let ticks_per_slot = genesis_block.ticks_per_slot;
+    let (ledger_path, tick_height, _last_entry_height, _last_id, _last_entry_id) =
+        create_tmp_sample_blocktree(
             "test_ledger_tool_nominal",
-            100,
+            &genesis_block,
             ticks_per_slot - 2,
-            keypair.pubkey(),
-            50,
-            ticks_per_slot,
         );
 
     // Basic validation

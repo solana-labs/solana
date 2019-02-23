@@ -452,26 +452,21 @@ pub fn retry_get_balance(
 }
 
 pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, String) {
-    use crate::blocktree::create_tmp_sample_ledger;
+    use crate::blocktree::create_tmp_sample_blocktree;
     use crate::cluster_info::Node;
     use crate::fullnode::Fullnode;
     use crate::voting_keypair::VotingKeypair;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::KeypairUtil;
 
     let node_keypair = Arc::new(Keypair::new());
     let node = Node::new_localhost_with_pubkey(node_keypair.pubkey());
     let node_info = node.info.clone();
 
-    let fullnode_config = &FullnodeConfig::default();
-    let (mint_keypair, ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
-        create_tmp_sample_ledger(
-            ledger_name,
-            10_000,
-            0,
-            node_info.id,
-            42,
-            fullnode_config.ticks_per_slot(),
-        );
+    let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10_000, node_info.id, 42);
+
+    let (ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
+        create_tmp_sample_blocktree(ledger_name, &genesis_block, 0);
 
     let vote_account_keypair = Arc::new(Keypair::new());
     let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);

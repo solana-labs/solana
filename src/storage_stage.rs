@@ -444,7 +444,7 @@ impl Service for StorageStage {
 
 #[cfg(test)]
 mod tests {
-    use crate::blocktree::{create_tmp_sample_ledger, Blocktree, DEFAULT_SLOT_HEIGHT};
+    use crate::blocktree::{create_tmp_sample_blocktree, Blocktree, DEFAULT_SLOT_HEIGHT};
     use crate::cluster_info::{ClusterInfo, NodeInfo};
     use crate::entry::{make_tiny_test_entries, Entry};
     use crate::service::Service;
@@ -454,11 +454,11 @@ mod tests {
         get_identity_index_from_signature, StorageStage, STORAGE_ROTATE_TEST_COUNT,
     };
     use rayon::prelude::*;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use solana_sdk::hash::Hasher;
     use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use solana_sdk::vote_transaction::VoteTransaction;
     use std::cmp::{max, min};
     use std::fs::remove_dir_all;
@@ -503,16 +503,10 @@ mod tests {
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
-        let ticks_per_slot = DEFAULT_TICKS_PER_SLOT;
-        let (_mint, ledger_path, tick_height, genesis_entry_height, _last_id, _last_entry_id) =
-            create_tmp_sample_ledger(
-                "storage_stage_process_entries",
-                1000,
-                1,
-                Keypair::new().pubkey(),
-                1,
-                ticks_per_slot,
-            );
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(1000);
+        let ticks_per_slot = genesis_block.ticks_per_slot;
+        let (ledger_path, tick_height, genesis_entry_height, _last_id, _last_entry_id) =
+            create_tmp_sample_blocktree("storage_stage_process_entries", &genesis_block, 1);
 
         let entries = make_tiny_test_entries(64);
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
@@ -579,16 +573,10 @@ mod tests {
         let keypair = Arc::new(Keypair::new());
         let exit = Arc::new(AtomicBool::new(false));
 
-        let ticks_per_slot = DEFAULT_TICKS_PER_SLOT;
-        let (_mint, ledger_path, tick_height, genesis_entry_height, _last_id, _last_entry_id) =
-            create_tmp_sample_ledger(
-                "storage_stage_process_entries",
-                1000,
-                1,
-                Keypair::new().pubkey(),
-                1,
-                ticks_per_slot,
-            );
+        let (genesis_block, _mint_keypair) = GenesisBlock::new(1000);
+        let ticks_per_slot = genesis_block.ticks_per_slot;;
+        let (ledger_path, tick_height, genesis_entry_height, _last_id, _last_entry_id) =
+            create_tmp_sample_blocktree("storage_stage_process_entries", &genesis_block, 1);
 
         let entries = make_tiny_test_entries(128);
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();

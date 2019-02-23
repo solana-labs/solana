@@ -15,7 +15,6 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
 use std::borrow::{Borrow, Cow};
@@ -1322,31 +1321,6 @@ pub fn create_tmp_sample_blocktree(
         last_entry_id = last_id;
     }
     (
-        ledger_path,
-        tick_height,
-        entry_height,
-        last_id,
-        last_entry_id,
-    )
-}
-
-// Deprecated! Please use create_tmp_sample_blocktree() instead.
-pub fn create_tmp_sample_ledger(
-    name: &str,
-    num_tokens: u64,
-    num_extra_tokens: u64,
-    bootstrap_leader_id: Pubkey,
-    bootstrap_leader_tokens: u64,
-    ticks_per_slot: u64,
-) -> (Keypair, String, u64, u64, Hash, Hash) {
-    let (mut genesis_block, mint_keypair) =
-        GenesisBlock::new_with_leader(num_tokens, bootstrap_leader_id, bootstrap_leader_tokens);
-    genesis_block.ticks_per_slot = ticks_per_slot;
-
-    let (ledger_path, tick_height, entry_height, last_id, last_entry_id) =
-        create_tmp_sample_blocktree(name, &genesis_block, num_extra_tokens);
-    (
-        mint_keypair,
         ledger_path,
         tick_height,
         entry_height,

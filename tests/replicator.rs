@@ -7,7 +7,8 @@ extern crate serde_json;
 
 use bincode::deserialize;
 use solana::blocktree::{
-    create_tmp_sample_ledger, get_tmp_ledger_path, tmp_copy_ledger, Blocktree, DEFAULT_SLOT_HEIGHT,
+    create_tmp_sample_blocktree, get_tmp_ledger_path, tmp_copy_ledger, Blocktree,
+    DEFAULT_SLOT_HEIGHT,
 };
 use solana::client::mk_client;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
@@ -17,6 +18,7 @@ use solana::replicator::Replicator;
 use solana::storage_stage::STORAGE_ROTATE_TEST_COUNT;
 use solana::streamer::blob_receiver;
 use solana::voting_keypair::VotingKeypair;
+use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
@@ -39,24 +41,13 @@ fn test_replicator_startup_basic() {
     let leader_info = leader_node.info.clone();
 
     let leader_ledger_path = "replicator_test_leader_ledger";
-    let mut fullnode_config = FullnodeConfig::default();
-    let ticks_per_slot = fullnode_config.ticks_per_slot();
 
-    let (
-        mint_keypair,
-        leader_ledger_path,
-        _tick_height,
-        _last_entry_height,
-        _last_id,
-        _last_entry_id,
-    ) = create_tmp_sample_ledger(
-        leader_ledger_path,
-        1_000_000_000,
-        0,
-        leader_info.id,
-        42,
-        ticks_per_slot,
-    );
+    let (genesis_block, mint_keypair) =
+        GenesisBlock::new_with_leader(1_000_000_000, leader_info.id, 42);
+    let ticks_per_slot = genesis_block.ticks_per_slot;
+
+    let (leader_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
+        create_tmp_sample_blocktree(leader_ledger_path, &genesis_block, 0);
 
     let validator_ledger_path = tmp_copy_ledger(
         &leader_ledger_path,
@@ -67,6 +58,7 @@ fn test_replicator_startup_basic() {
     {
         let voting_keypair = VotingKeypair::new_local(&leader_keypair);
 
+        let mut fullnode_config = FullnodeConfig::default();
         fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
         let leader = Fullnode::new(
             leader_node,
@@ -294,23 +286,10 @@ fn test_replicator_startup_ledger_hang() {
     let leader_info = leader_node.info.clone();
 
     let leader_ledger_path = "replicator_test_leader_ledger";
-    let fullnode_config = FullnodeConfig::default();
-    let ticks_per_slot = fullnode_config.ticks_per_slot();
-    let (
-        _mint_keypair,
-        leader_ledger_path,
-        _tick_height,
-        _last_entry_height,
-        _last_id,
-        _last_entry_id,
-    ) = create_tmp_sample_ledger(
-        leader_ledger_path,
-        100,
-        0,
-        leader_info.id,
-        42,
-        ticks_per_slot,
-    );
+    let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(100, leader_info.id, 42);
+    let ticks_per_slot = genesis_block.ticks_per_slot;
+    let (leader_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
+        create_tmp_sample_blocktree(leader_ledger_path, &genesis_block, 0);
 
     let validator_ledger_path = tmp_copy_ledger(
         &leader_ledger_path,
@@ -321,6 +300,7 @@ fn test_replicator_startup_ledger_hang() {
     {
         let voting_keypair = VotingKeypair::new_local(&leader_keypair);
 
+        let fullnode_config = FullnodeConfig::default();
         let _ = Fullnode::new(
             leader_node,
             &leader_keypair,

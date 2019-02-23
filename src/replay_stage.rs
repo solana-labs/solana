@@ -383,7 +383,7 @@ impl Service for ReplayStage {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::blocktree::{create_tmp_sample_ledger, Blocktree, DEFAULT_SLOT_HEIGHT};
+    use crate::blocktree::{create_tmp_sample_blocktree, Blocktree, DEFAULT_SLOT_HEIGHT};
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::create_ticks;
     use crate::entry::{next_entry_mut, Entry};
@@ -421,22 +421,17 @@ mod test {
         let leader_scheduler =
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
 
+        let (mut genesis_block, mint_keypair) =
+            GenesisBlock::new_with_leader(10_000, old_leader_id, 500);
+        genesis_block.ticks_per_slot = ticks_per_slot;
+
         // Create a ledger
-        let (
-            mint_keypair,
-            my_ledger_path,
-            mut tick_height,
-            entry_height,
-            mut last_id,
-            last_entry_id,
-        ) = create_tmp_sample_ledger(
-            "test_replay_stage_leader_rotation_exit",
-            10_000,
-            0,
-            old_leader_id,
-            500,
-            ticks_per_slot,
-        );
+        let (my_ledger_path, mut tick_height, entry_height, mut last_id, last_entry_id) =
+            create_tmp_sample_blocktree(
+                "test_replay_stage_leader_rotation_exit",
+                &genesis_block,
+                0,
+            );
 
         info!("my_id: {:?}", my_id);
         info!("old_leader_id: {:?}", old_leader_id);
@@ -550,21 +545,14 @@ mod test {
         // Create keypair for the leader
         let leader_id = Keypair::new().pubkey();
 
-        let (
-            _mint_keypair,
-            my_ledger_path,
-            tick_height,
-            _last_entry_height,
-            _last_id,
-            _last_entry_id,
-        ) = create_tmp_sample_ledger(
-            "test_vote_error_replay_stage_correctness",
-            10_000,
-            1,
-            leader_id,
-            500,
-            DEFAULT_TICKS_PER_SLOT,
-        );
+        let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10_000, leader_id, 500);
+
+        let (my_ledger_path, tick_height, _last_entry_height, _last_id, _last_entry_id) =
+            create_tmp_sample_blocktree(
+                "test_vote_error_replay_stage_correctness",
+                &genesis_block,
+                1,
+            );
 
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
@@ -644,22 +632,17 @@ mod test {
         // Create keypair for the leader
         let leader_id = Keypair::new().pubkey();
 
+        let (mut genesis_block, mint_keypair) =
+            GenesisBlock::new_with_leader(10_000, leader_id, 500);
+        genesis_block.ticks_per_slot = ticks_per_slot;
+
         // Create the ledger
-        let (
-            mint_keypair,
-            my_ledger_path,
-            tick_height,
-            genesis_entry_height,
-            last_id,
-            last_entry_id,
-        ) = create_tmp_sample_ledger(
-            "test_vote_error_replay_stage_leader_rotation",
-            10_000,
-            1,
-            leader_id,
-            500,
-            ticks_per_slot,
-        );
+        let (my_ledger_path, tick_height, genesis_entry_height, last_id, last_entry_id) =
+            create_tmp_sample_blocktree(
+                "test_vote_error_replay_stage_leader_rotation",
+                &genesis_block,
+                1,
+            );
 
         let my_keypair = Arc::new(my_keypair);
         // Write two entries to the ledger so that the validator is in the active set:
