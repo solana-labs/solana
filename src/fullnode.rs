@@ -405,7 +405,7 @@ impl Service for Fullnode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocktree::{create_tmp_sample_blocktree, tmp_copy_ledger, DEFAULT_SLOT_HEIGHT};
+    use crate::blocktree::{create_tmp_sample_blocktree, tmp_copy_blocktree, DEFAULT_SLOT_HEIGHT};
     use crate::entry::make_consecutive_blobs;
     use crate::leader_scheduler::make_active_set_entries;
     use crate::streamer::responder;
@@ -553,7 +553,6 @@ mod tests {
         let slots_per_epoch = 2;
         fullnode_config.leader_scheduler_config =
             LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, slots_per_epoch);
-        let ticks_per_slot = fullnode_config.ticks_per_slot();
 
         // Create the leader and validator nodes
         let bootstrap_leader_keypair = Arc::new(Keypair::new());
@@ -571,11 +570,8 @@ mod tests {
             );
         let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
-        let validator_ledger_path = tmp_copy_ledger(
-            &bootstrap_leader_ledger_path,
-            "test_wrong_role_transition",
-            ticks_per_slot,
-        );
+        let validator_ledger_path =
+            tmp_copy_blocktree(&bootstrap_leader_ledger_path, "test_wrong_role_transition");
 
         let ledger_paths = vec![
             bootstrap_leader_ledger_path.clone(),
