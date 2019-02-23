@@ -191,14 +191,18 @@ impl ReplayStage {
         let to_leader_sender = to_leader_sender.clone();
         let subscriptions_ = subscriptions.clone();
 
-        let (bank, last_entry_id) = {
+        let (bank, last_entry_id, mut current_blob_index) = {
             let mut bank_forks = bank_forks.write().unwrap();
             bank_forks.set_working_bank_id(bank_forks_info[0].bank_id);
-            (bank_forks.working_bank(), bank_forks_info[0].last_entry_id)
+            (
+                bank_forks.working_bank(),
+                bank_forks_info[0].last_entry_id,
+                bank_forks_info[0].entry_height,
+            )
         };
         let last_entry_id = Arc::new(RwLock::new(last_entry_id));
 
-        let mut current_blob_index = {
+        {
             let leader_scheduler = leader_scheduler.read().unwrap();
             let slot = leader_scheduler.tick_height_to_slot(bank.tick_height() + 1);
 
@@ -217,13 +221,7 @@ impl ReplayStage {
                     leader_id,
                 })
                 .unwrap();
-
-            blocktree
-                .meta(slot)
-                .expect("Database error")
-                .map(|meta| meta.consumed)
-                .unwrap_or(0)
-        };
+        }
 
         let t_replay = Builder::new()
             .name("solana-replay-stage".to_string())
