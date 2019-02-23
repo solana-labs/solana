@@ -777,8 +777,7 @@ mod test {
 
         let genesis_block = GenesisBlock::new(10_000).0;
         let bank = Arc::new(Bank::new(&genesis_block));
-        let leader_scheduler_config = LeaderSchedulerConfig::default();
-        let leader_scheduler = LeaderScheduler::new_with_bank(&leader_scheduler_config, &bank);
+        let leader_scheduler = LeaderScheduler::new_with_bank(&bank);
         let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
         let voting_keypair = Some(Arc::new(Keypair::new()));
         let res = ReplayStage::process_entries(
@@ -805,7 +804,7 @@ mod test {
         }
 
         let bank = Arc::new(Bank::new(&genesis_block));
-        let leader_scheduler = LeaderScheduler::new_with_bank(&leader_scheduler_config, &bank);
+        let leader_scheduler = LeaderScheduler::new_with_bank(&bank);
         let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
         let res = ReplayStage::process_entries(
             entries.clone(),

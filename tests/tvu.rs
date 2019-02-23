@@ -7,7 +7,6 @@ use solana::entry::next_entry_mut;
 use solana::entry::EntrySlice;
 use solana::gossip_service::GossipService;
 use solana::leader_scheduler::LeaderScheduler;
-use solana::leader_scheduler::LeaderSchedulerConfig;
 use solana::packet::index_blobs;
 use solana::rpc_subscriptions::RpcSubscriptions;
 use solana::service::Service;
@@ -76,14 +75,13 @@ fn test_replay() {
         r_responder,
     );
 
-    // TODO: Fix this test so it always works with the default
-    // LeaderSchedulerConfig configuration
-    let mut leader_scheduler_config = LeaderSchedulerConfig::default();
-    leader_scheduler_config.ticks_per_slot = 64;
-    let ticks_per_slot = leader_scheduler_config.ticks_per_slot;
-
     let starting_balance = 10_000;
-    let (genesis_block, mint_keypair) = GenesisBlock::new(starting_balance);
+    let (mut genesis_block, mint_keypair) = GenesisBlock::new(starting_balance);
+
+    // TODO: Fix this test so it always works with the default GenesisBlock configuration
+    genesis_block.ticks_per_slot = 64;
+
+    let ticks_per_slot = genesis_block.ticks_per_slot;
     let tvu_addr = target1.info.tvu;
 
     let mut cur_hash = Hash::default();
@@ -95,10 +93,7 @@ fn test_replay() {
     }];
 
     let bank = bank_forks.working_bank();
-    let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::new_with_bank(
-        &leader_scheduler_config,
-        &bank,
-    )));
+    let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::new_with_bank(&bank)));
     assert_eq!(bank.get_balance(&mint_keypair.pubkey()), starting_balance);
 
     // start cluster_info1

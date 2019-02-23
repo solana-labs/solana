@@ -117,7 +117,6 @@ impl Service for BlockstreamService {
 mod test {
     use super::*;
     use crate::entry::Entry;
-    use crate::leader_scheduler::LeaderSchedulerConfig;
     use chrono::{DateTime, FixedOffset};
     use serde_json::Value;
     use solana_runtime::bank::Bank;
@@ -132,10 +131,12 @@ mod test {
         let ticks_per_slot = 5;
         let starting_tick_height = 1;
 
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(1_000_000);
+        let (mut genesis_block, _mint_keypair) = GenesisBlock::new(1_000_000);
+        genesis_block.ticks_per_slot = ticks_per_slot;
+        genesis_block.slots_per_epoch = 2;
+
         let bank = Bank::new(&genesis_block);
-        let leader_scheduler_config = LeaderSchedulerConfig::new(ticks_per_slot, 2, 10);
-        let leader_scheduler = LeaderScheduler::new_with_bank(&leader_scheduler_config, &bank);
+        let leader_scheduler = LeaderScheduler::new_with_window_len(10, &bank);
         let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
 
         // Set up blockstream
