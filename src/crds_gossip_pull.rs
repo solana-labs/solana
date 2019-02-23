@@ -222,8 +222,8 @@ mod test {
         // This is because the heaviest nodes will have very similar weights
         let min_balance = E.powf(3000_f32.ln() - 0.5);
         let now = 1024;
-        // try upto 10 times because of rng
-        for _ in 0..10 {
+        // try up to 20 times because of rng
+        for _ in 0..20 {
             let msg = node
                 .new_pull_request(&crds, me.label().pubkey(), now, &stakes)
                 .unwrap();
