@@ -181,7 +181,7 @@ mod test {
         genesis_block.slots_per_epoch = 2;
 
         let bank = Bank::new(&genesis_block);
-        let leader_scheduler = LeaderScheduler::new_with_window_len(10, &bank);
+        let leader_scheduler = LeaderScheduler::new_with_bank(&bank);
         let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
 
         // Set up blockstream
