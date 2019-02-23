@@ -1231,8 +1231,8 @@ fn test_dropped_handoff_recovery() {
     node_exits.push(next_leader.run(Some(rotation_sender)));
 
     info!("Wait for 'next leader' to assume leader role");
-    error!("TODO: FIX https://github.com/solana-labs/solana/issues/2482");
-    // TODO: Once fixed restore the commented out code below
+    // TODO: Once https://github.com/solana-labs/solana/issues/2482" is fixed,
+    //      restore the commented out code below
     /*
     loop {
         let transition = _rotation_receiver.recv().unwrap();
@@ -1802,6 +1802,7 @@ fn test_fullnode_rotate(
     let mut validator_should_be_leader = !leader_should_be_leader;
     let mut validator_tick_height_of_next_rotation = leader_tick_height_of_next_rotation;
 
+    let mut log_spam = 0;
     let max_tick_height = 8;
     while leader_tick_height_of_next_rotation < max_tick_height
         && validator_tick_height_of_next_rotation < max_tick_height
@@ -1902,10 +1903,13 @@ fn test_fullnode_rotate(
                 sleep(Duration::from_millis(100));
             });
         } else {
-            if include_validator {
-                trace!("waiting for leader and validator to reach max tick height...");
-            } else {
-                trace!("waiting for leader to reach max tick height...");
+            log_spam += 1;
+            if log_spam % 10 == 0 {
+                if include_validator {
+                    trace!("waiting for leader and validator to reach max tick height...");
+                } else {
+                    trace!("waiting for leader to reach max tick height...");
+                }
             }
         }
         tick_step_receiver.recv().expect("tick step");
@@ -1945,22 +1949,22 @@ fn test_fullnode_rotate(
 }
 
 #[test]
-fn test_one_fullnode_rotate_every_tick() {
+fn test_one_fullnode_rotate_every_tick_without_transactions() {
     test_fullnode_rotate(1, 1, false, false);
 }
 
 #[test]
-fn test_one_fullnode_rotate_every_second_tick() {
+fn test_one_fullnode_rotate_every_second_tick_without_transactions() {
     test_fullnode_rotate(2, 1, false, false);
 }
 
 #[test]
-fn test_two_fullnodes_rotate_every_tick() {
+fn test_two_fullnodes_rotate_every_tick_without_transactions() {
     test_fullnode_rotate(1, 1, true, false);
 }
 
 #[test]
-fn test_two_fullnodes_rotate_every_second_tick() {
+fn test_two_fullnodes_rotate_every_second_tick_without_transactions() {
     test_fullnode_rotate(2, 1, true, false);
 }
 
