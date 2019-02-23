@@ -198,7 +198,12 @@ pub fn process_blocktree(
             // TODO merge with locktower, voting
             bank.merge_parents();
 
-            leader_scheduler.write().unwrap().update(&bank);
+            // Special case: skip slot 0 since it was already generated at the top of
+            // `process_blocktree`.  This check can hopefully go away if/when the leader_scheduler
+            // implementation is reworked
+            if slot > 0 {
+                leader_scheduler.write().unwrap().update(&bank);
+            }
         }
 
         if !slot_complete || meta.next_slots.is_empty() {

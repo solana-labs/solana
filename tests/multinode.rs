@@ -688,7 +688,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
 
     // Validator should catch up from leader whose window contains the entries missing from the
     // stale ledger send requests so the validator eventually sees a gap and requests a repair
-    let mut expected_bob_balance = 1000;
+    let expected_bob_balance = 1000;
     let mut validator_client = mk_client(&validator_data);
 
     for _ in 0..42 {
@@ -1163,7 +1163,7 @@ fn test_leader_validator_basic() {
     );
     assert_eq!(
         validator_rotation_receiver.recv().unwrap(),
-        (FullnodeReturnType::LeaderToValidatorRotation, 0)
+        (FullnodeReturnType::ValidatorToValidatorRotation, 0)
     );
     assert_eq!(
         validator_rotation_receiver.recv().unwrap(),
@@ -2022,6 +2022,7 @@ fn test_fullnode_rotate(
             }
         }
 
+        let mut log_spam = 0;
         if transact {
             client_last_id = client.get_next_last_id(&client_last_id);
             info!("Transferring 500 tokens, last_id={:?}", client_last_id);
@@ -2040,10 +2041,13 @@ fn test_fullnode_rotate(
 
             client_last_id = client.get_next_last_id(&client_last_id);
         } else {
-            if include_validator {
-                trace!("waiting for leader and validator to reach max tick height...");
-            } else {
-                trace!("waiting for leader to reach max tick height...");
+            log_spam += 1;
+            if log_spam % 10 == 0 {
+                if include_validator {
+                    trace!("waiting for leader and validator to reach max tick height...");
+                } else {
+                    trace!("waiting for leader to reach max tick height...");
+                }
             }
         }
     }
@@ -2080,24 +2084,24 @@ fn test_fullnode_rotate(
 }
 
 #[test]
-fn test_one_fullnode_rotate_every_tick() {
+fn test_one_fullnode_rotate_every_tick_without_transactions() {
     test_fullnode_rotate(1, 1, false, false);
 }
 
 #[test]
-fn test_one_fullnode_rotate_every_second_tick() {
+fn test_one_fullnode_rotate_every_second_tick_without_transactions() {
     test_fullnode_rotate(2, 1, false, false);
 }
 
 #[test]
 #[ignore]
-fn test_two_fullnodes_rotate_every_tick() {
+fn test_two_fullnodes_rotate_every_tick_without_transactions() {
     test_fullnode_rotate(1, 1, true, false);
 }
 
 #[test]
 #[ignore]
-fn test_two_fullnodes_rotate_every_second_tick() {
+fn test_two_fullnodes_rotate_every_second_tick_without_transactions() {
     test_fullnode_rotate(2, 1, true, false);
 }
 
