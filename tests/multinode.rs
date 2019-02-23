@@ -1360,8 +1360,8 @@ fn test_dropped_handoff_recovery() {
     node_exits.push(next_leader.run(Some(rotation_sender)));
 
     info!("Wait for 'next leader' to assume leader role");
-    error!("TODO: FIX https://github.com/solana-labs/solana/issues/2482");
-    // TODO: Once fixed restore the commented out code below
+    // TODO: Once https://github.com/solana-labs/solana/issues/2482" is fixed,
+    //      restore the commented out code below
     /*
     loop {
         let transition = _rotation_receiver.recv().unwrap();
