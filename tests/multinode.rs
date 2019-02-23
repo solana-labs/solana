@@ -549,12 +549,31 @@ fn test_boot_validator_from_file() -> result::Result<()> {
         Some(&leader_data),
         &fullnode_config,
     );
-    let val_fullnode_exit = val_fullnode.run(None);
+    let (rotation_sender, rotation_receiver) = channel();
+    let val_fullnode_exit = val_fullnode.run(Some(rotation_sender));
+
+    // Wait for validator to start and process a couple slots before trying to poke at it via RPC
+    // TODO: it would be nice to determine the slot that the leader processed the transactions
+    // in, and only wait for that slot here
+    let expected_rotations = vec![
+        (FullnodeReturnType::ValidatorToValidatorRotation, 0),
+        (FullnodeReturnType::ValidatorToValidatorRotation, 1),
+        (FullnodeReturnType::ValidatorToValidatorRotation, 2),
+    ];
+
+    for expected_rotation in expected_rotations {
+        loop {
+            let transition = rotation_receiver.recv().unwrap();
+            info!("validator transition: {:?}", transition);
+            assert_eq!(transition, expected_rotation);
+            break;
+        }
+    }
 
     info!("Checking validator balance");
     let mut client = mk_client(&validator_data);
     let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
-    assert!(getbal == Some(leader_balance));
+    assert_eq!(getbal, Some(leader_balance));
     info!("Validator balance verified");
 
     val_fullnode_exit();
