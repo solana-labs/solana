@@ -38,6 +38,7 @@ fn new_gossip(
 
 /// Test that message sent from leader to target1 and replayed to target2
 #[test]
+#[ignore]
 fn test_replay() {
     solana_logger::setup();
     let leader = Node::new_localhost();
@@ -87,14 +88,14 @@ fn test_replay() {
     let tvu_addr = target1.info.tvu;
 
     let mut cur_hash = Hash::default();
-    let bank_forks = BankForks::new(0, Bank::new(&genesis_block));
+    let bank_forks = Arc::new(RwLock::new(BankForks::new(0, Bank::new(&genesis_block))));
     let bank_forks_info = vec![BankForksInfo {
         bank_id: 0,
         entry_height: 0,
         last_entry_id: cur_hash,
     }];
 
-    let bank = bank_forks.working_bank();
+    let bank = bank_forks.read().unwrap().working_bank();
     let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::new_with_bank(
         &leader_scheduler_config,
         &bank,
@@ -118,7 +119,7 @@ fn test_replay() {
     let (to_leader_sender, _to_leader_receiver) = channel();
     let tvu = Tvu::new(
         Some(Arc::new(voting_keypair)),
-        &Arc::new(RwLock::new(bank_forks)),
+        &bank_forks,
         &bank_forks_info,
         &cref1,
         {
