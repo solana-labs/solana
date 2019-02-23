@@ -7,7 +7,7 @@ extern crate serde_json;
 
 use bincode::deserialize;
 use solana::blocktree::{
-    create_tmp_sample_blocktree, get_tmp_ledger_path, tmp_copy_ledger, Blocktree,
+    create_tmp_sample_blocktree, get_tmp_ledger_path, tmp_copy_blocktree, Blocktree,
     DEFAULT_SLOT_HEIGHT,
 };
 use solana::client::mk_client;
@@ -44,16 +44,12 @@ fn test_replicator_startup_basic() {
 
     let (genesis_block, mint_keypair) =
         GenesisBlock::new_with_leader(1_000_000_000, leader_info.id, 42);
-    let ticks_per_slot = genesis_block.ticks_per_slot;
 
     let (leader_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_blocktree(leader_ledger_path, &genesis_block, 0);
 
-    let validator_ledger_path = tmp_copy_ledger(
-        &leader_ledger_path,
-        "replicator_test_validator_ledger",
-        ticks_per_slot,
-    );
+    let validator_ledger_path =
+        tmp_copy_blocktree(&leader_ledger_path, "replicator_test_validator_ledger");
 
     {
         let voting_keypair = VotingKeypair::new_local(&leader_keypair);
@@ -287,15 +283,11 @@ fn test_replicator_startup_ledger_hang() {
 
     let leader_ledger_path = "replicator_test_leader_ledger";
     let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(100, leader_info.id, 42);
-    let ticks_per_slot = genesis_block.ticks_per_slot;
     let (leader_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_blocktree(leader_ledger_path, &genesis_block, 0);
 
-    let validator_ledger_path = tmp_copy_ledger(
-        &leader_ledger_path,
-        "replicator_test_validator_ledger",
-        ticks_per_slot,
-    );
+    let validator_ledger_path =
+        tmp_copy_blocktree(&leader_ledger_path, "replicator_test_validator_ledger");
 
     {
         let voting_keypair = VotingKeypair::new_local(&leader_keypair);

@@ -1344,12 +1344,6 @@ pub fn tmp_copy_blocktree(from: &str, name: &str) -> String {
     path
 }
 
-// Deprecated! Please use tmp_copy_blocktree() instead.
-pub fn tmp_copy_ledger(from: &str, name: &str, _ticks_per_slot: u64) -> String {
-    // Ignore 'ticks_per_slot' because it's now encoded in the genesis block.
-    tmp_copy_blocktree(from, name)
-}
-
 #[cfg(test)]
 pub mod tests {
     use super::*;
