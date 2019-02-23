@@ -178,7 +178,6 @@ impl Fullnode {
         let storage_state = StorageState::new();
 
         let rpc_service = JsonRpcService::new(
-            &bank_forks,
             &cluster_info,
             SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), node.info.rpc.port()),
             drone_addr,
@@ -284,6 +283,13 @@ impl Fullnode {
             rotation_info.leader_id,
             rotation_info.last_entry_id,
         );
+
+        if let Some(ref mut rpc_service) = self.rpc_service {
+            // TODO: This is not the correct bank.  Instead TVU should pass along the
+            // frozen Bank for each completed block for RPC to use from it's notion of the "best"
+            // available fork (until we want to surface multiple forks to RPC)
+            rpc_service.set_bank(self.bank_forks.read().unwrap().working_bank());
+        }
 
         if rotation_info.leader_id == self.id {
             let transition = match self.node_services.tpu.is_leader() {
