@@ -500,7 +500,7 @@ mod tests {
     #[test]
     fn test_thin_client_basic() {
         solana_logger::setup();
-        let (server, leader_data, alice, ledger_path) = new_fullnode("thin_client");
+        let (server, leader_data, alice, ledger_path) = new_fullnode("test_thin_client_basic");
         let server_exit = server.run(None);
         let bob_pubkey = Keypair::new().pubkey();
 
@@ -570,7 +570,7 @@ mod tests {
     #[test]
     fn test_register_vote_account() {
         solana_logger::setup();
-        let (server, leader_data, alice, ledger_path) = new_fullnode("thin_client");
+        let (server, leader_data, alice, ledger_path) = new_fullnode("test_register_vote_account");
         let server_exit = server.run(None);
         info!(
             "found leader: {:?}",
@@ -639,7 +639,8 @@ mod tests {
     #[test]
     fn test_zero_balance_after_nonzero() {
         solana_logger::setup();
-        let (server, leader_data, alice, ledger_path) = new_fullnode("thin_client");
+        let (server, leader_data, alice, ledger_path) =
+            new_fullnode("test_zero_balance_after_nonzero");
         let server_exit = server.run(None);
         let bob_keypair = Keypair::new();
 
