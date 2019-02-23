@@ -54,7 +54,7 @@ pub struct LeaderScheduler {
 
     // Duration of an epoch (one or more slots) in ticks.
     // This value must be divisible by ticks_per_slot
-    ticks_per_epoch: u64,
+    slots_per_epoch: u64,
 
     // The number of slots for which a vote qualifies a candidate for leader
     // selection
@@ -88,18 +88,16 @@ pub struct LeaderScheduler {
 impl LeaderScheduler {
     pub fn new(config: &LeaderSchedulerConfig) -> Self {
         let ticks_per_slot = config.ticks_per_slot;
-        let ticks_per_epoch = config.ticks_per_slot * config.slots_per_epoch;
+        let slots_per_epoch = config.slots_per_epoch;
         let active_window_num_slots = config.active_window_num_slots;
 
         // Enforced invariants
         assert!(ticks_per_slot > 0);
-        assert!(ticks_per_epoch >= ticks_per_slot);
-        assert!(ticks_per_epoch % ticks_per_slot == 0);
         assert!(active_window_num_slots > 0);
 
-        LeaderScheduler {
+        Self {
             ticks_per_slot,
-            ticks_per_epoch,
+            slots_per_epoch,
             active_window_num_slots,
             seed: 0,
             epoch_schedule: [Vec::new(), Vec::new()],
@@ -117,8 +115,12 @@ impl LeaderScheduler {
         tick_height / self.ticks_per_slot
     }
 
+    fn ticks_per_epoch(&self) -> u64 {
+        self.slots_per_epoch * self.ticks_per_slot
+    }
+
     fn tick_height_to_epoch(&self, tick_height: u64) -> u64 {
-        tick_height / self.ticks_per_epoch
+        tick_height / self.ticks_per_epoch()
     }
 
     // Returns the number of ticks remaining from the specified tick_height to
@@ -191,7 +193,7 @@ impl LeaderScheduler {
                 panic!("leader_schedule is empty"); // Should never happen
             }
 
-            let first_tick_in_epoch = epoch * self.ticks_per_epoch;
+            let first_tick_in_epoch = epoch * self.ticks_per_epoch();
             let slot_index = (tick_height - first_tick_in_epoch) / self.ticks_per_slot;
 
             // Round robin through each node in the schedule
@@ -261,8 +263,7 @@ impl LeaderScheduler {
                 let next_slot_leader = validator_rankings[0];
 
                 if last_slot_leader == next_slot_leader {
-                    let slots_per_epoch = self.ticks_per_epoch / self.ticks_per_slot;
-                    if slots_per_epoch == 1 {
+                    if self.slots_per_epoch == 1 {
                         // If there is only one slot per epoch, and the same leader as the last slot
                         // of the previous epoch was chosen, then pick the next leader in the
                         // rankings instead
@@ -271,7 +272,7 @@ impl LeaderScheduler {
                         // If there is more than one leader in the schedule, truncate and set the most
                         // recent leader to the back of the line. This way that node will still remain
                         // in the rotation, just at a later slot.
-                        validator_rankings.truncate(slots_per_epoch as usize);
+                        validator_rankings.truncate(self.slots_per_epoch as usize);
                         validator_rankings.rotate_left(1);
                     }
                 }
@@ -283,7 +284,7 @@ impl LeaderScheduler {
         trace!(
             "generate_schedule: schedule for ticks ({}, {}): {:?} ",
             tick_height,
-            tick_height + self.ticks_per_epoch,
+            tick_height + self.ticks_per_epoch(),
             self.epoch_schedule[0]
         );
     }
@@ -824,10 +825,7 @@ pub mod tests {
         let leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
 
         assert_eq!(leader_scheduler.ticks_per_slot, DEFAULT_TICKS_PER_SLOT);
-        assert_eq!(
-            leader_scheduler.ticks_per_epoch,
-            DEFAULT_TICKS_PER_SLOT * DEFAULT_SLOTS_PER_EPOCH
-        );
+        assert_eq!(leader_scheduler.slots_per_epoch, DEFAULT_SLOTS_PER_EPOCH);
 
         // Check actual arguments for LeaderScheduler
         let ticks_per_slot = 100;
@@ -840,10 +838,7 @@ pub mod tests {
         let leader_scheduler = LeaderScheduler::new(&leader_scheduler_config);
 
         assert_eq!(leader_scheduler.ticks_per_slot, ticks_per_slot);
-        assert_eq!(
-            leader_scheduler.ticks_per_epoch,
-            ticks_per_slot * slots_per_epoch
-        );
+        assert_eq!(leader_scheduler.slots_per_epoch, slots_per_epoch);
     }
 
     fn run_consecutive_leader_test(slots_per_epoch: u64, add_validator: bool) {
