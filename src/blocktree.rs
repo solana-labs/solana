@@ -1329,19 +1329,25 @@ pub fn create_tmp_sample_blocktree(
     )
 }
 
-pub fn tmp_copy_ledger(from: &str, name: &str, ticks_per_slot: u64) -> String {
+pub fn tmp_copy_blocktree(from: &str, name: &str) -> String {
     let path = get_tmp_ledger_path(name);
 
-    let blocktree = Blocktree::open_config(from, ticks_per_slot).unwrap();
+    let blocktree = Blocktree::open(from).unwrap();
     let blobs = blocktree.read_ledger_blobs();
     let genesis_block = GenesisBlock::load(from).unwrap();
 
     Blocktree::destroy(&path).expect("Expected successful database destruction");
-    let blocktree = Blocktree::open_config(&path, ticks_per_slot).unwrap();
+    let blocktree = Blocktree::open(&path).unwrap();
     blocktree.write_blobs(blobs).unwrap();
     genesis_block.write(&path).unwrap();
 
     path
+}
+
+// Deprecated! Please use tmp_copy_blocktree() instead.
+pub fn tmp_copy_ledger(from: &str, name: &str, _ticks_per_slot: u64) -> String {
+    // Ignore 'ticks_per_slot' because it's now encoded in the genesis block.
+    tmp_copy_blocktree(from, name)
 }
 
 #[cfg(test)]
