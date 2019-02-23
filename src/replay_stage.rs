@@ -100,7 +100,7 @@ impl ReplayStage {
             inc_new_counter_info!("replicate-stage_bank-tick", bank.tick_height() as usize);
             if entry.is_tick() {
                 if num_ticks_to_next_vote == 0 {
-                    num_ticks_to_next_vote = leader_scheduler.read().unwrap().ticks_per_slot;
+                    num_ticks_to_next_vote = bank.ticks_per_slot();
                 }
                 num_ticks_to_next_vote -= 1;
             }
@@ -239,7 +239,7 @@ impl ReplayStage {
                     let tick_height = bank.tick_height();
                     let leader_scheduler = leader_scheduler_.read().unwrap();
                     let current_slot = leader_scheduler.tick_height_to_slot(tick_height + 1);
-                    let first_tick_in_current_slot = current_slot * leader_scheduler.ticks_per_slot;
+                    let first_tick_in_current_slot = current_slot * bank.ticks_per_slot();
                     (
                         Some(current_slot),
                         first_tick_in_current_slot
@@ -273,7 +273,7 @@ impl ReplayStage {
                             current_blob_index = 0;
                             let leader_scheduler = leader_scheduler_.read().unwrap();
                             let first_tick_in_current_slot =
-                                current_slot.unwrap() * leader_scheduler.ticks_per_slot;
+                                current_slot.unwrap() * bank.ticks_per_slot();
                             max_tick_height_for_slot = first_tick_in_current_slot
                                 + leader_scheduler
                                     .num_ticks_left_in_slot(first_tick_in_current_slot);

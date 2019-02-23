@@ -711,7 +711,7 @@ mod tests {
         let bank = bank_forks.working_bank();
         let entry_height = bank_forks_info[0].entry_height;
 
-        assert!(bank.tick_height() >= leader_scheduler.read().unwrap().ticks_per_epoch);
+        assert!(bank.tick_height() >= bank.ticks_per_slot() * bank.slots_per_epoch());
 
         assert!(entry_height >= ledger_initial_len);
 
