@@ -13,7 +13,8 @@ use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program;
 use std::collections::BTreeMap;
-use std::fs::{create_dir_all, read_dir, remove_dir_all};
+use std::env;
+use std::fs::{create_dir_all, remove_dir_all};
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
@@ -167,16 +168,20 @@ pub struct Accounts {
     paths: String,
 }
 
+fn get_paths_vec(paths: &str) -> Vec<String> {
+    paths.split(',').map(|s| s.to_string()).collect()
+}
+
+fn cleanup_dirs(paths: &str) {
+    let paths = get_paths_vec(&paths);
+    paths.iter().for_each(|p| {
+        let _ignored = remove_dir_all(p);
+    })
+}
+
 impl Drop for Accounts {
     fn drop(&mut self) {
-        let paths: Vec<String> = self.paths.split(',').map(|s| s.to_string()).collect();
-        paths.iter().for_each(|p| {
-            let _ignored = remove_dir_all(p);
-        });
-        let entry = read_dir(ACCOUNTSDB_DIR);
-        if entry.is_ok() && entry.unwrap().count() == 0 {
-            let _ignored = remove_dir_all(ACCOUNTSDB_DIR);
-        }
+        cleanup_dirs(&self.paths);
     }
 }
 
@@ -210,16 +215,14 @@ impl AccountsDB {
     }
 
     fn add_storage(&self, paths: &str) {
-        let paths: Vec<String> = paths.split(',').map(|s| s.to_string()).collect();
+        let paths = get_paths_vec(&paths);
         let mut stores: Vec<AccountStorage> = vec![];
         paths.iter().for_each(|p| {
-            let keypair = Keypair::new();
-            let path = format!("{}/{}", p, keypair.pubkey());
             let storage = AccountStorage {
-                appendvec: self.new_account_storage(&path),
+                appendvec: self.new_account_storage(&p),
                 status: AtomicUsize::new(AccountStorageStatus::StorageAvailable as usize),
                 count: AtomicUsize::new(0),
-                path: path.to_string(),
+                path: p.to_string(),
             };
             stores.push(storage);
         });
@@ -643,7 +646,15 @@ impl Accounts {
     fn make_new_dir() -> String {
         static ACCOUNT_DIR: AtomicUsize = AtomicUsize::new(0);
         let dir = ACCOUNT_DIR.fetch_add(1, Ordering::Relaxed);
-        format!("{}/{}", ACCOUNTSDB_DIR, dir.to_string())
+        let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
+        let keypair = Keypair::new();
+        format!(
+            "{}/{}/{}/{}",
+            out_dir,
+            ACCOUNTSDB_DIR,
+            keypair.pubkey(),
+            dir.to_string()
+        )
     }
 
     fn make_default_paths() -> String {
@@ -1299,13 +1310,6 @@ mod tests {
             return false;
         }
         true
-    }
-
-    fn cleanup_dirs(paths: &str) {
-        let paths: Vec<String> = paths.split(',').map(|s| s.to_string()).collect();
-        paths.iter().for_each(|p| {
-            let _ignored = remove_dir_all(p);
-        })
     }
 
     #[test]

@@ -715,7 +715,7 @@ mod tests {
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
         let (bank_forks, bank_forks_info, _, _) = new_banks_from_blocktree(
             &validator_ledger_path,
-            "accounts",
+            "",
             DEFAULT_TICKS_PER_SLOT,
             &leader_scheduler,
         );
