@@ -206,7 +206,6 @@ pub mod tests {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::cluster_info::{ClusterInfo, Node};
-    use crate::leader_scheduler::LeaderSchedulerConfig;
     use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
     use solana_runtime::bank::Bank;
     use solana_sdk::genesis_block::GenesisBlock;
@@ -228,9 +227,7 @@ pub mod tests {
             entry_height: 0,
             last_entry_id: Hash::default(),
         }];
-        let leader_scheduler_config = LeaderSchedulerConfig::default();
-        let leader_scheduler =
-            LeaderScheduler::new_with_bank(&leader_scheduler_config, &bank_forks.working_bank());
+        let leader_scheduler = LeaderScheduler::new_with_bank(&bank_forks.working_bank());
         let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
 
         //start cluster_info1

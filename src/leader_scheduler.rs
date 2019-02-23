@@ -105,10 +105,19 @@ impl LeaderScheduler {
         }
     }
 
-    pub fn new_with_bank(config: &LeaderSchedulerConfig, bank: &Bank) -> Self {
-        let mut leader_schedule = Self::new(config);
+    pub fn new_with_window_len(active_window_slot_len: u64, bank: &Bank) -> Self {
+        let config = LeaderSchedulerConfig::new(
+            bank.ticks_per_slot(),
+            bank.slots_per_epoch(),
+            active_window_slot_len,
+        );
+        let mut leader_schedule = Self::new(&config);
         leader_schedule.update_tick_height(bank.tick_height(), bank);
         leader_schedule
+    }
+
+    pub fn new_with_bank(bank: &Bank) -> Self {
+        Self::new_with_window_len(DEFAULT_ACTIVE_WINDOW_NUM_SLOTS, bank)
     }
 
     pub fn tick_height_to_slot(&self, tick_height: u64) -> u64 {
@@ -399,13 +408,12 @@ pub mod tests {
         // Allow the validators to be in the active window for the entire test
         let active_window_num_slots = slots_per_epoch;
 
-        // Set up the LeaderScheduler struct
-        let leader_scheduler_config =
-            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_num_slots);
-
         // Create the bank and validators, which are inserted in order of account balance
         let num_vote_account_tokens = 1;
-        let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
+        let (mut genesis_block, mint_keypair) = GenesisBlock::new(10_000);
+        genesis_block.ticks_per_slot = ticks_per_slot;
+        genesis_block.slots_per_epoch = slots_per_epoch;
+
         info!("bootstrap_leader_id: {}", genesis_block.bootstrap_leader_id);
 
         let bank = Bank::new(&genesis_block);
@@ -434,7 +442,8 @@ pub mod tests {
             );
         }
 
-        let mut leader_scheduler = LeaderScheduler::new_with_bank(&leader_scheduler_config, &bank);
+        let mut leader_scheduler =
+            LeaderScheduler::new_with_window_len(active_window_num_slots, &bank);
 
         // Generate the schedule for first epoch, bootstrap_leader will be the only leader
         leader_scheduler.generate_schedule(0, &bank);
@@ -509,8 +518,7 @@ pub mod tests {
         let leader_tokens = 2;
         let (genesis_block, _) = GenesisBlock::new_with_leader(5, leader_id, leader_tokens);
         let bank = Bank::new(&genesis_block);
-        let leader_scheduler =
-            LeaderScheduler::new_with_bank(&LeaderSchedulerConfig::default(), &bank);
+        let leader_scheduler = LeaderScheduler::new_with_bank(&bank);
         let slot = leader_scheduler.tick_height_to_slot(bank.tick_height());
         assert_eq!(leader_scheduler.get_leader_for_slot(slot), Some(leader_id));
     }
@@ -645,14 +653,15 @@ pub mod tests {
         let active_window_num_slots = slots_per_epoch;
 
         // Create the bazzznk and validators
-        let (genesis_block, mint_keypair) = GenesisBlock::new(
+        let (mut genesis_block, mint_keypair) = GenesisBlock::new(
             ((((num_validators + 1) / 2) * (num_validators + 1))
                 + (num_vote_account_tokens * num_validators)) as u64,
         );
+        genesis_block.ticks_per_slot = ticks_per_slot;
+        genesis_block.slots_per_epoch = slots_per_epoch;
         let bank = Bank::new(&genesis_block);
-        let leader_scheduler_config =
-            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_num_slots);
-        let mut leader_scheduler = LeaderScheduler::new_with_bank(&leader_scheduler_config, &bank);
+        let mut leader_scheduler =
+            LeaderScheduler::new_with_window_len(active_window_num_slots, &bank);
 
         let mut validators = vec![];
         let last_id = genesis_block.last_id();
@@ -715,11 +724,13 @@ pub mod tests {
 
         // Check that the generate_schedule() function is being called by the
         // update_tick_height() function at the correct entry heights.
-        let (genesis_block, _) = GenesisBlock::new(10_000);
+        let (mut genesis_block, _) = GenesisBlock::new(10_000);
+        genesis_block.ticks_per_slot = ticks_per_slot;
+        genesis_block.slots_per_epoch = slots_per_epoch;
+
         let bank = Bank::new(&genesis_block);
-        let leader_scheduler_config =
-            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_num_slots);
-        let mut leader_scheduler = LeaderScheduler::new_with_bank(&leader_scheduler_config, &bank);
+        let mut leader_scheduler =
+            LeaderScheduler::new_with_window_len(active_window_num_slots, &bank);
         info!(
             "bootstrap_leader_id: {:?}",
             genesis_block.bootstrap_leader_id
