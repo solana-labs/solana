@@ -59,16 +59,21 @@ impl BankingStage {
             max_tick_height,
         };
 
-        let poh_recorder = PohRecorder::new(bank.tick_height(), *last_entry_id);
+        let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
+            bank.tick_height(),
+            *last_entry_id,
+        )));
 
         // Single thread to generate entries from many banks.
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
         // Once an entry has been recorded, its last_id is registered with the bank.
         let poh_exit = Arc::new(AtomicBool::new(false));
 
+        poh_recorder
+            .lock()
+            .unwrap()
+            .set_working_bank(working_bank.clone());
         let poh_service = PohService::new(poh_recorder.clone(), config, poh_exit.clone());
-
-        poh_recorder.set_working_bank(working_bank.clone());
 
         // Single thread to compute confirmation
         let leader_confirmation_service =
@@ -132,7 +137,7 @@ impl BankingStage {
     fn record_transactions(
         txs: &[Transaction],
         results: &[bank::Result<()>],
-        poh: &PohRecorder,
+        poh: &Arc<Mutex<PohRecorder>>,
         working_bank: &WorkingBank,
     ) -> Result<()> {
         let processed_transactions: Vec<_> = results
@@ -155,7 +160,9 @@ impl BankingStage {
         if !processed_transactions.is_empty() {
             let hash = Transaction::hash(&processed_transactions);
             // record and unlock will unlock all the successfull transactions
-            poh.record(hash, processed_transactions, working_bank)?;
+            poh.lock()
+                .unwrap()
+                .record(hash, processed_transactions, working_bank)?;
         }
         Ok(())
     }
@@ -163,7 +170,7 @@ impl BankingStage {
     pub fn process_and_record_transactions(
         bank: &Bank,
         txs: &[Transaction],
-        poh: &PohRecorder,
+        poh: &Arc<Mutex<PohRecorder>>,
         working_bank: &WorkingBank,
     ) -> Result<()> {
         let now = Instant::now();
@@ -216,7 +223,7 @@ impl BankingStage {
     fn process_transactions(
         bank: &Arc<Bank>,
         transactions: &[Transaction],
-        poh: &PohRecorder,
+        poh: &Arc<Mutex<PohRecorder>>,
         working_bank: &WorkingBank,
     ) -> Result<(usize)> {
         let mut chunk_start = 0;
@@ -242,7 +249,7 @@ impl BankingStage {
     pub fn process_packets(
         bank: &Arc<Bank>,
         verified_receiver: &Arc<Mutex<Receiver<VerifiedPackets>>>,
-        poh: &PohRecorder,
+        poh: &Arc<Mutex<PohRecorder>>,
         working_bank: &WorkingBank,
     ) -> Result<UnprocessedPackets> {
         let recv_start = Instant::now();
@@ -607,7 +614,10 @@ mod tests {
             max_tick_height: std::u64::MAX,
         };
 
-        let poh_recorder = PohRecorder::new(bank.tick_height(), bank.last_id());
+        let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
+            bank.tick_height(),
+            bank.last_id(),
+        )));
         let pubkey = Keypair::new().pubkey();
 
         let transactions = vec![
@@ -660,7 +670,10 @@ mod tests {
             min_tick_height: bank.tick_height(),
             max_tick_height: bank.tick_height() + 1,
         };
-        let poh_recorder = PohRecorder::new(bank.tick_height(), bank.last_id());
+        let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
+            bank.tick_height(),
+            bank.last_id(),
+        )));
 
         BankingStage::process_and_record_transactions(
             &bank,
