@@ -66,12 +66,9 @@ impl BankingStage {
         // Once an entry has been recorded, its last_id is registered with the bank.
         let poh_exit = Arc::new(AtomicBool::new(false));
 
-        let (poh_service, leader_sender) =
-            PohService::new(poh_recorder.clone(), config, poh_exit.clone());
+        let poh_service = PohService::new(poh_recorder.clone(), config, poh_exit.clone());
 
-        leader_sender
-            .send(working_bank.clone())
-            .expect("failed to send leader to poh_service");
+        poh_recorder.set_working_bank(working_bank.clone());
 
         // Single thread to compute confirmation
         let leader_confirmation_service =
