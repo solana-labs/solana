@@ -19,7 +19,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{self, duration_as_us, MAX_ENTRY_IDS};
 use solana_sdk::transaction::Transaction;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
@@ -37,6 +37,7 @@ pub struct BankingStage {
     bank_thread_hdls: Vec<JoinHandle<UnprocessedPackets>>,
     poh_service: PohService,
     leader_confirmation_service: LeaderConfirmationService,
+    poh_exit: Arc<AtomicBool>,
 }
 
 impl BankingStage {
@@ -112,6 +113,7 @@ impl BankingStage {
                 bank_thread_hdls,
                 poh_service,
                 leader_confirmation_service,
+                poh_exit,
             },
             entry_receiver,
         )
@@ -339,6 +341,7 @@ impl Service for BankingStage {
         for bank_thread_hdl in self.bank_thread_hdls {
             bank_thread_hdl.join()?;
         }
+        self.poh_exit.store(true, Ordering::Relaxed);
         self.leader_confirmation_service.join()?;
         self.poh_service.join()?;
         Ok(())
