@@ -5,6 +5,7 @@
 
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::last_id_queue::LastIdQueue;
+use crate::leader_schedule::LeaderSchedule;
 use crate::runtime::{self, RuntimeError};
 use crate::status_cache::StatusCache;
 use bincode::serialize;
@@ -675,12 +676,25 @@ impl Bank {
 
     /// Return the checkpointed bank that should be used to generate a leader schedule.
     /// Return None if a sufficiently old bank checkpoint doesn't exist.
-    pub fn leader_schedule_bank(&self) -> Option<Arc<Bank>> {
+    fn leader_schedule_bank(&self) -> Option<Arc<Bank>> {
         let epoch_slot_height = self.slot_height() - self.slot_index();
         let expected = epoch_slot_height.saturating_sub(self.leader_schedule_slot_offset);
         self.parents()
             .into_iter()
             .find(|bank| bank.slot_height() <= expected)
+    }
+
+    /// Return the leader schedule for the current epoch.
+    fn leader_schedule(&self) -> LeaderSchedule {
+        match self.leader_schedule_bank() {
+            None => LeaderSchedule::new_with_bank(self),
+            Some(bank) => LeaderSchedule::new_with_bank(&bank),
+        }
+    }
+
+    /// Return the leader for the current slot.
+    pub fn slot_leader(&self) -> Pubkey {
+        self.leader_schedule()[self.slot_index() as usize]
     }
 
     /// Return the number of ticks since genesis.
@@ -1364,5 +1378,12 @@ mod tests {
             // works iteration 0, no-ops on iteration 1 and 2
             bank.merge_parents();
         }
+    }
+
+    #[test]
+    fn test_bank_slot_leader_basic() {
+        let pubkey = Keypair::new().pubkey();
+        let bank = Bank::new(&GenesisBlock::new_with_leader(2, pubkey, 2).0);
+        assert_eq!(bank.slot_leader(), pubkey);
     }
 }
