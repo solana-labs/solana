@@ -35,7 +35,7 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 
 pub struct TvuRotationInfo {
-    pub bank: Bank,          // Bank to use
+    pub bank: Arc<Bank>,     // Bank to use
     pub last_entry_id: Hash, // last_entry_id of that bank
     pub slot: u64,           // slot height to initiate a rotation
     pub leader_id: Pubkey,   // leader upon rotation

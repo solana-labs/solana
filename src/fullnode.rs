@@ -102,6 +102,7 @@ pub struct Fullnode {
     rotation_receiver: TvuRotationReceiver,
     blocktree: Arc<Blocktree>,
     leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+    bank_forks: Arc<RwLock<BankForks>>,
 }
 
 impl Fullnode {
@@ -252,6 +253,7 @@ impl Fullnode {
             rotation_receiver,
             blocktree,
             leader_scheduler,
+            bank_forks,
         }
     }
 
@@ -278,7 +280,7 @@ impl Fullnode {
                 None => FullnodeReturnType::LeaderToLeaderRotation, // value doesn't matter here...
             };
             self.node_services.tpu.switch_to_leader(
-                Arc::new(rotation_info.bank),
+                self.bank_forks.read().unwrap().working_bank(),
                 PohServiceConfig::default(),
                 self.tpu_sockets
                     .iter()
