@@ -31,7 +31,8 @@ impl LeaderSchedule {
     pub fn new_with_bank(bank: &Bank) -> Self {
         let mut seed = [0u8; 32];
         seed.copy_from_slice(bank.last_id().as_ref());
-        Self::new(&bank.stakes(), &seed, bank.slots_per_epoch())
+        let stakes: Vec<_> = bank.staked_nodes().into_iter().collect();
+        Self::new(&stakes, &seed, bank.slots_per_epoch())
     }
 }
 

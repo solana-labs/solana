@@ -663,48 +663,6 @@ impl Bank {
             .collect()
     }
 
-    fn sort_stakes(stakes: &mut Vec<(Pubkey, u64)>) {
-        // Sort first by stake. If stakes are the same, sort by pubkey to ensure a
-        // deterministic result.
-        // Note: Use unstable sort, because we dedup right after to remove the equal elements.
-        stakes.sort_unstable_by(|(pubkey0, stake0), (pubkey1, stake1)| {
-            if stake0 == stake1 {
-                pubkey0.cmp(&pubkey1)
-            } else {
-                stake0.cmp(&stake1)
-            }
-        });
-
-        // Now that it's sorted, we can do an O(n) dedup.
-        stakes.dedup();
-    }
-
-    /// Return a sorted, filtered list of staker/stake pairs.
-    pub fn filtered_stakes<F>(&self, filter: F) -> Vec<(Pubkey, u64)>
-    where
-        F: Fn(&VoteState) -> bool,
-    {
-        let mut stakes: Vec<_> = self
-            .vote_states(filter)
-            .iter()
-            .filter_map(|vote_state| {
-                let pubkey = vote_state.staker_id;
-                let stake = self.get_balance(&pubkey);
-                if stake > 0 {
-                    Some((pubkey, stake))
-                } else {
-                    None
-                }
-            })
-            .collect();
-        Self::sort_stakes(&mut stakes);
-        stakes
-    }
-
-    pub fn stakes(&self) -> Vec<(Pubkey, u64)> {
-        self.filtered_stakes(|_| true)
-    }
-
     /// Return the number of ticks per slot that should be used calls to slot_height().
     pub fn ticks_per_slot(&self) -> u64 {
         self.ticks_per_slot
@@ -1406,32 +1364,5 @@ mod tests {
             // works iteration 0, no-ops on iteration 1 and 2
             bank.merge_parents();
         }
-    }
-
-    #[test]
-    fn test_sort_stakes_basic() {
-        let pubkey0 = Keypair::new().pubkey();
-        let pubkey1 = Keypair::new().pubkey();
-        let mut stakes = vec![(pubkey0, 2), (pubkey1, 1)];
-        Bank::sort_stakes(&mut stakes);
-        assert_eq!(stakes, vec![(pubkey1, 1), (pubkey0, 2)]);
-    }
-
-    #[test]
-    fn test_sort_stakes_with_dup() {
-        let pubkey0 = Keypair::new().pubkey();
-        let pubkey1 = Keypair::new().pubkey();
-        let mut stakes = vec![(pubkey0, 1), (pubkey1, 2), (pubkey0, 1)];
-        Bank::sort_stakes(&mut stakes);
-        assert_eq!(stakes, vec![(pubkey0, 1), (pubkey1, 2)]);
-    }
-
-    #[test]
-    fn test_sort_stakes_with_equal_stakes() {
-        let pubkey0 = Pubkey::default();
-        let pubkey1 = Keypair::new().pubkey();
-        let mut stakes = vec![(pubkey0, 1), (pubkey1, 1)];
-        Bank::sort_stakes(&mut stakes);
-        assert_eq!(stakes, vec![(pubkey0, 1), (pubkey1, 1)]);
     }
 }
