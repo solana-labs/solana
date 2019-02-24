@@ -1,11 +1,11 @@
+use crate::bank::Bank;
 use rand::distributions::{Distribution, WeightedIndex};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
-use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 use std::ops::Index;
 
-/// Round-robin leader schedule.
+/// Stake-weighted leader schedule for one epoch.
 #[derive(Debug, PartialEq)]
 pub struct LeaderSchedule {
     slot_leaders: Vec<Pubkey>,
@@ -40,27 +40,6 @@ impl Index<usize> for LeaderSchedule {
     type Output = Pubkey;
     fn index(&self, index: usize) -> &Pubkey {
         &self.slot_leaders[index % self.slot_leaders.len()]
-    }
-}
-
-pub trait LeaderScheduleUtil {
-    /// Return the leader schedule for the current epoch.
-    fn leader_schedule(&self) -> LeaderSchedule;
-
-    /// Return the leader id for the current slot.
-    fn slot_leader(&self) -> Pubkey;
-}
-
-impl LeaderScheduleUtil for Bank {
-    fn leader_schedule(&self) -> LeaderSchedule {
-        match self.leader_schedule_bank() {
-            None => LeaderSchedule::new_with_bank(self),
-            Some(bank) => LeaderSchedule::new_with_bank(&bank),
-        }
-    }
-
-    fn slot_leader(&self) -> Pubkey {
-        self.leader_schedule()[self.slot_index() as usize]
     }
 }
 
@@ -110,13 +89,5 @@ mod tests {
         let len = bank.slots_per_epoch() as usize;
         let expected: Vec<_> = iter::repeat(pubkey).take(len).collect();
         assert_eq!(leader_schedule.slot_leaders, expected);
-        assert_eq!(bank.leader_schedule().slot_leaders, expected); // Same thing, but with the trait
-    }
-
-    #[test]
-    fn test_leader_schedule_slot_leader_basic() {
-        let pubkey = Keypair::new().pubkey();
-        let bank = Bank::new(&GenesisBlock::new_with_leader(2, pubkey, 2).0);
-        assert_eq!(bank.slot_leader(), pubkey);
     }
 }
