@@ -226,6 +226,7 @@ pub mod tests {
             bank_id: 0,
             entry_height: 0,
             last_entry_id: Hash::default(),
+            next_blob_index: 0,
         }];
         let leader_scheduler = LeaderScheduler::new_with_bank(&bank_forks.working_bank());
         let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
