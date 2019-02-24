@@ -90,6 +90,7 @@ fn test_replay() {
         bank_id: 0,
         entry_height: 0,
         last_entry_id: cur_hash,
+        next_blob_index: 0,
     }];
 
     let bank = bank_forks.working_bank();

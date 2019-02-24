@@ -201,7 +201,7 @@ impl ReplayStage {
                 bank,
                 tick_height,
                 bank_forks_info[0].last_entry_id,
-                bank_forks_info[0].entry_height,
+                bank_forks_info[0].next_blob_index,
             )
         };
 

@@ -123,6 +123,7 @@ pub struct BankForksInfo {
     pub bank_id: u64,
     pub entry_height: u64,
     pub last_entry_id: Hash,
+    pub next_blob_index: u64,
 }
 
 pub fn process_blocktree(
@@ -166,7 +167,6 @@ pub fn process_blocktree(
                 BankError::LedgerVerificationFailed
             })?
             .unwrap();
-        trace!("processing slot {:?}, meta={:?}", slot, meta);
 
         // Fetch all entries for this slot
         let mut entries = blocktree.get_slot_entries(slot, 0, None).map_err(|err| {
@@ -210,11 +210,19 @@ pub fn process_blocktree(
 
         match meta.next_slots.len() {
             0 => {
+                let next_blob_index = {
+                    if meta.is_full() {
+                        0
+                    } else {
+                        meta.consumed
+                    }
+                };
                 // Reached the end of this fork.  Record the final entry height and last entry id
                 bank_forks_info.push(BankForksInfo {
                     bank_id,
                     entry_height,
                     last_entry_id,
+                    next_blob_index,
                 })
             }
             1 => pending_slots.push((meta.next_slots[0], bank_id, entry_height, last_entry_id)),
@@ -328,6 +336,7 @@ mod tests {
                 bank_id: 2, // Fork 1 diverged with slot 2
                 entry_height: ticks_per_slot * 4,
                 last_entry_id: last_fork1_entry_id,
+                next_blob_index: 0,
             }
         );
         assert_eq!(
@@ -336,6 +345,7 @@ mod tests {
                 bank_id: 4, // Fork 2 diverged with slot 4
                 entry_height: ticks_per_slot * 3,
                 last_entry_id: last_fork2_entry_id,
+                next_blob_index: 0,
             }
         );
 
@@ -454,6 +464,7 @@ mod tests {
                 bank_id: 0,
                 entry_height,
                 last_entry_id,
+                next_blob_index: entry_height,
             }
         );
 
