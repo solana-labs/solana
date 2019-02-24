@@ -95,3 +95,39 @@ impl VotingKeypair {
         Self::new_with_signer(keypair, Box::new(LocalVoteSigner::default()))
     }
 }
+
+#[cfg(test)]
+pub mod tests {
+    use solana_runtime::bank::Bank;
+    use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::vote_transaction::VoteTransaction;
+
+    pub fn new_vote_account(
+        from_keypair: &Keypair,
+        voting_pubkey: &Pubkey,
+        bank: &Bank,
+        num_tokens: u64,
+    ) {
+        let last_id = bank.last_id();
+        let tx = VoteTransaction::new_account(from_keypair, *voting_pubkey, last_id, num_tokens, 0);
+        bank.process_transaction(&tx).unwrap();
+    }
+
+    pub fn push_vote<T: KeypairUtil>(voting_keypair: &T, bank: &Bank, slot_height: u64) {
+        let last_id = bank.last_id();
+        let tx = VoteTransaction::new_vote(voting_keypair, slot_height, last_id, 0);
+        bank.process_transaction(&tx).unwrap();
+    }
+
+    pub fn new_vote_account_with_vote<T: KeypairUtil>(
+        from_keypair: &Keypair,
+        voting_keypair: &T,
+        bank: &Bank,
+        num_tokens: u64,
+        slot_height: u64,
+    ) {
+        new_vote_account(from_keypair, &voting_keypair.pubkey(), bank, num_tokens);
+        push_vote(voting_keypair, bank, slot_height);
+    }
+}

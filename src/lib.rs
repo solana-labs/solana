@@ -7,7 +7,6 @@
 //!
 
 #![cfg_attr(feature = "unstable", feature(test))]
-pub mod active_stakers;
 pub mod bank_forks;
 pub mod banking_stage;
 pub mod blob_fetch_stage;
