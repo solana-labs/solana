@@ -3,7 +3,7 @@
 use solana_sdk::hash::{hash, hashv, Hash};
 
 pub struct Poh {
-    id: Hash,
+    pub id: Hash,
     num_hashes: u64,
     pub tick_height: u64,
 }

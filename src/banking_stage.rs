@@ -19,7 +19,7 @@ use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::timing::{self, duration_as_us, MAX_ENTRY_IDS};
 use solana_sdk::transaction::Transaction;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, Builder, JoinHandle};
@@ -37,6 +37,7 @@ pub struct BankingStage {
     bank_thread_hdls: Vec<JoinHandle<UnprocessedPackets>>,
     poh_service: PohService,
     leader_confirmation_service: LeaderConfirmationService,
+    poh_exit: Arc<AtomicBool>,
 }
 
 impl BankingStage {
@@ -59,19 +60,18 @@ impl BankingStage {
             max_tick_height,
         };
 
-        let poh_recorder = PohRecorder::new(bank.tick_height(), *last_entry_id);
+        let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
+            bank.tick_height(),
+            *last_entry_id,
+        )));
 
         // Single thread to generate entries from many banks.
         // This thread talks to poh_service and broadcasts the entries once they have been recorded.
         // Once an entry has been recorded, its last_id is registered with the bank.
         let poh_exit = Arc::new(AtomicBool::new(false));
 
-        let (poh_service, leader_sender) =
-            PohService::new(poh_recorder.clone(), config, poh_exit.clone());
-
-        leader_sender
-            .send(working_bank.clone())
-            .expect("failed to send leader to poh_service");
+        poh_recorder.lock().unwrap().set_working_bank(working_bank);
+        let poh_service = PohService::new(poh_recorder.clone(), config, poh_exit.clone());
 
         // Single thread to compute confirmation
         let leader_confirmation_service =
@@ -83,7 +83,6 @@ impl BankingStage {
                 let thread_bank = bank.clone();
                 let thread_verified_receiver = shared_verified_receiver.clone();
                 let thread_poh_recorder = poh_recorder.clone();
-                let thread_leader = working_bank.clone();
                 Builder::new()
                     .name("solana-banking-stage-tx".to_string())
                     .spawn(move || {
@@ -93,7 +92,6 @@ impl BankingStage {
                                 &thread_bank,
                                 &thread_verified_receiver,
                                 &thread_poh_recorder,
-                                &thread_leader,
                             ) {
                                 Err(Error::RecvTimeoutError(RecvTimeoutError::Timeout)) => (),
                                 Ok(more_unprocessed_packets) => {
@@ -115,6 +113,7 @@ impl BankingStage {
                 bank_thread_hdls,
                 poh_service,
                 leader_confirmation_service,
+                poh_exit,
             },
             entry_receiver,
         )
@@ -135,8 +134,7 @@ impl BankingStage {
     fn record_transactions(
         txs: &[Transaction],
         results: &[bank::Result<()>],
-        poh: &PohRecorder,
-        working_bank: &WorkingBank,
+        poh: &Arc<Mutex<PohRecorder>>,
     ) -> Result<()> {
         let processed_transactions: Vec<_> = results
             .iter()
@@ -158,7 +156,7 @@ impl BankingStage {
         if !processed_transactions.is_empty() {
             let hash = Transaction::hash(&processed_transactions);
             // record and unlock will unlock all the successfull transactions
-            poh.record(hash, processed_transactions, working_bank)?;
+            poh.lock().unwrap().record(hash, processed_transactions)?;
         }
         Ok(())
     }
@@ -166,8 +164,7 @@ impl BankingStage {
     pub fn process_and_record_transactions(
         bank: &Bank,
         txs: &[Transaction],
-        poh: &PohRecorder,
-        working_bank: &WorkingBank,
+        poh: &Arc<Mutex<PohRecorder>>,
     ) -> Result<()> {
         let now = Instant::now();
         // Once accounts are locked, other threads cannot encode transactions that will modify the
@@ -186,7 +183,7 @@ impl BankingStage {
 
         let record_time = {
             let now = Instant::now();
-            Self::record_transactions(txs, &results, poh, working_bank)?;
+            Self::record_transactions(txs, &results, poh)?;
             now.elapsed()
         };
 
@@ -219,8 +216,7 @@ impl BankingStage {
     fn process_transactions(
         bank: &Arc<Bank>,
         transactions: &[Transaction],
-        poh: &PohRecorder,
-        working_bank: &WorkingBank,
+        poh: &Arc<Mutex<PohRecorder>>,
     ) -> Result<(usize)> {
         let mut chunk_start = 0;
         while chunk_start != transactions.len() {
@@ -230,7 +226,6 @@ impl BankingStage {
                 bank,
                 &transactions[chunk_start..chunk_end],
                 poh,
-                working_bank,
             );
             if let Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached)) = result {
                 break;
@@ -245,8 +240,7 @@ impl BankingStage {
     pub fn process_packets(
         bank: &Arc<Bank>,
         verified_receiver: &Arc<Mutex<Receiver<VerifiedPackets>>>,
-        poh: &PohRecorder,
-        working_bank: &WorkingBank,
+        poh: &Arc<Mutex<PohRecorder>>,
     ) -> Result<UnprocessedPackets> {
         let recv_start = Instant::now();
         let mms = verified_receiver
@@ -297,8 +291,7 @@ impl BankingStage {
 
             debug!("verified transactions {}", verified_transactions.len());
 
-            let processed =
-                Self::process_transactions(bank, &verified_transactions, poh, working_bank)?;
+            let processed = Self::process_transactions(bank, &verified_transactions, poh)?;
             if processed < verified_transactions.len() {
                 bank_shutdown = true;
                 // Collect any unprocessed transactions in this batch for forwarding
@@ -348,8 +341,9 @@ impl Service for BankingStage {
         for bank_thread_hdl in self.bank_thread_hdls {
             bank_thread_hdl.join()?;
         }
+        self.poh_exit.store(true, Ordering::Relaxed);
         self.leader_confirmation_service.join()?;
-        let _ = self.poh_service.join()?;
+        self.poh_service.join()?;
         Ok(())
     }
 }
@@ -610,7 +604,10 @@ mod tests {
             max_tick_height: std::u64::MAX,
         };
 
-        let poh_recorder = PohRecorder::new(bank.tick_height(), bank.last_id());
+        let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
+            bank.tick_height(),
+            bank.last_id(),
+        )));
         let pubkey = Keypair::new().pubkey();
 
         let transactions = vec![
@@ -619,8 +616,8 @@ mod tests {
         ];
 
         let mut results = vec![Ok(()), Ok(())];
-        BankingStage::record_transactions(&transactions, &results, &poh_recorder, &working_bank)
-            .unwrap();
+        poh_recorder.lock().unwrap().set_working_bank(working_bank);
+        BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
         let entries = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].transactions.len(), transactions.len());
 
@@ -629,15 +626,13 @@ mod tests {
             1,
             ProgramError::ResultWithNegativeTokens,
         ));
-        BankingStage::record_transactions(&transactions, &results, &poh_recorder, &working_bank)
-            .unwrap();
+        BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
         let entries = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].transactions.len(), transactions.len());
 
         // Other BankErrors should not be recorded
         results[0] = Err(BankError::AccountNotFound);
-        BankingStage::record_transactions(&transactions, &results, &poh_recorder, &working_bank)
-            .unwrap();
+        BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
         let entries = entry_receiver.recv().unwrap();
         assert_eq!(entries[0].transactions.len(), transactions.len() - 1);
     }
@@ -663,16 +658,14 @@ mod tests {
             min_tick_height: bank.tick_height(),
             max_tick_height: bank.tick_height() + 1,
         };
-        let poh_recorder = PohRecorder::new(bank.tick_height(), bank.last_id());
+        let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
+            bank.tick_height(),
+            bank.last_id(),
+        )));
+        poh_recorder.lock().unwrap().set_working_bank(working_bank);
 
-        BankingStage::process_and_record_transactions(
-            &bank,
-            &transactions,
-            &poh_recorder,
-            &working_bank,
-        )
-        .unwrap();
-        poh_recorder.tick(&working_bank).unwrap();
+        BankingStage::process_and_record_transactions(&bank, &transactions, &poh_recorder).unwrap();
+        poh_recorder.lock().unwrap().tick();
 
         let mut need_tick = true;
         // read entries until I find mine, might be ticks...
@@ -697,12 +690,7 @@ mod tests {
         )];
 
         assert_matches!(
-            BankingStage::process_and_record_transactions(
-                &bank,
-                &transactions,
-                &poh_recorder,
-                &working_bank
-            ),
+            BankingStage::process_and_record_transactions(&bank, &transactions, &poh_recorder,),
             Err(Error::PohRecorderError(PohRecorderError::MaxHeightReached))
         );
 
