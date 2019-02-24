@@ -340,7 +340,7 @@ impl Service for BankingStage {
             bank_thread_hdl.join()?;
         }
         self.leader_confirmation_service.join()?;
-         self.poh_service.join()?;
+        self.poh_service.join()?;
         Ok(())
     }
 }
