@@ -1,7 +1,6 @@
 //! The `leader_scheduler` module implements a structure and functions for tracking and
 //! managing the schedule for leader rotation
 
-use crate::active_stakers::{ActiveStakers, DEFAULT_ACTIVE_WINDOW_NUM_SLOTS};
 use crate::entry::{create_ticks, next_entry_mut, Entry};
 use crate::voting_keypair::VotingKeypair;
 use bincode::serialize;
@@ -12,9 +11,12 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::{DEFAULT_SLOTS_PER_EPOCH, DEFAULT_TICKS_PER_SLOT};
+use solana_sdk::vote_program::VoteState;
 use solana_sdk::vote_transaction::VoteTransaction;
 use std::io::Cursor;
 use std::sync::Arc;
+
+pub const DEFAULT_ACTIVE_WINDOW_NUM_SLOTS: u64 = DEFAULT_SLOTS_PER_EPOCH;
 
 #[derive(Clone)]
 pub struct LeaderSchedulerConfig {
@@ -45,6 +47,24 @@ impl Default for LeaderSchedulerConfig {
             active_window_num_slots: DEFAULT_ACTIVE_WINDOW_NUM_SLOTS,
         }
     }
+}
+
+// Return true of the latest vote is between the lower and upper bounds (inclusive)
+fn is_active_staker(vote_state: &VoteState, lower_bound: u64, upper_bound: u64) -> bool {
+    vote_state
+        .votes
+        .back()
+        .filter(|vote| vote.slot_height >= lower_bound && vote.slot_height <= upper_bound)
+        .is_some()
+}
+
+fn get_active_stakes(
+    bank: &Bank,
+    active_window_num_slots: u64,
+    upper_bound: u64,
+) -> Vec<(Pubkey, u64)> {
+    let lower_bound = upper_bound.saturating_sub(active_window_num_slots);
+    bank.filtered_stakes(|vote_state| is_active_staker(vote_state, lower_bound, upper_bound))
 }
 
 #[derive(Clone, Debug)]
@@ -242,9 +262,7 @@ impl LeaderScheduler {
 
         self.seed = Self::calculate_seed(tick_height);
         let slot = self.tick_height_to_slot(tick_height);
-        let ranked_active_set =
-            ActiveStakers::new_with_bounds(&bank, self.active_window_num_slots, slot)
-                .sorted_stakes();
+        let ranked_active_set = get_active_stakes(&bank, self.active_window_num_slots, slot);
 
         if ranked_active_set.is_empty() {
             info!(
@@ -398,9 +416,186 @@ pub fn make_active_set_entries(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::active_stakers::tests::new_vote_account_with_vote;
+    use crate::voting_keypair::tests::{new_vote_account_with_vote, push_vote};
     use hashbrown::HashSet;
+    use solana_runtime::bank::Bank;
     use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_TOKENS};
+    use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
+    use solana_sdk::timing::DEFAULT_SLOTS_PER_EPOCH;
+
+    fn get_active_pubkeys(
+        bank: &Bank,
+        active_window_num_slots: u64,
+        upper_bound: u64,
+    ) -> Vec<Pubkey> {
+        let stakes = get_active_stakes(bank, active_window_num_slots, upper_bound);
+        stakes.into_iter().map(|x| x.0).collect()
+    }
+
+    #[test]
+    fn test_active_set() {
+        solana_logger::setup();
+
+        let leader_id = Keypair::new().pubkey();
+        let active_window_tick_length = 1000;
+        let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10000, leader_id, 500);
+        let bank = Bank::new(&genesis_block);
+
+        let bootstrap_ids = vec![genesis_block.bootstrap_leader_id];
+
+        // Insert a bunch of votes at height "start_height"
+        let start_height = 3;
+        let num_old_ids = 20;
+        let mut old_ids = vec![];
+        for _ in 0..num_old_ids {
+            let new_keypair = Keypair::new();
+            let pk = new_keypair.pubkey();
+            old_ids.push(pk);
+
+            // Give the account some stake
+            bank.transfer(5, &mint_keypair, pk, genesis_block.last_id())
+                .unwrap();
+
+            // Create a vote account and push a vote
+            new_vote_account_with_vote(&new_keypair, &Keypair::new(), &bank, 1, start_height);
+        }
+        old_ids.sort();
+
+        // Insert a bunch of votes at height "start_height + active_window_tick_length"
+        let num_new_ids = 10;
+        let mut new_ids = vec![];
+        for _ in 0..num_new_ids {
+            let new_keypair = Keypair::new();
+            let pk = new_keypair.pubkey();
+            new_ids.push(pk);
+            // Give the account some stake
+            bank.transfer(5, &mint_keypair, pk, genesis_block.last_id())
+                .unwrap();
+
+            // Create a vote account and push a vote
+            let slot_height = start_height + active_window_tick_length + 1;
+            new_vote_account_with_vote(&new_keypair, &Keypair::new(), &bank, 1, slot_height);
+        }
+        new_ids.sort();
+
+        // Query for the active set at various heights
+        let result = get_active_pubkeys(&bank, active_window_tick_length, 0);
+        assert_eq!(result, bootstrap_ids);
+
+        let result = get_active_pubkeys(&bank, active_window_tick_length, start_height - 1);
+        assert_eq!(result, bootstrap_ids);
+
+        let result = get_active_pubkeys(
+            &bank,
+            active_window_tick_length,
+            active_window_tick_length + start_height - 1,
+        );
+        assert_eq!(result, old_ids);
+
+        let result = get_active_pubkeys(
+            &bank,
+            active_window_tick_length,
+            active_window_tick_length + start_height,
+        );
+        assert_eq!(result, old_ids);
+
+        let result = get_active_pubkeys(
+            &bank,
+            active_window_tick_length,
+            active_window_tick_length + start_height + 1,
+        );
+        assert_eq!(result, new_ids);
+
+        let result = get_active_pubkeys(
+            &bank,
+            active_window_tick_length,
+            2 * active_window_tick_length + start_height,
+        );
+        assert_eq!(result, new_ids);
+
+        let result = get_active_pubkeys(
+            &bank,
+            active_window_tick_length,
+            2 * active_window_tick_length + start_height + 1,
+        );
+        assert_eq!(result, new_ids);
+
+        let result = get_active_pubkeys(
+            &bank,
+            active_window_tick_length,
+            2 * active_window_tick_length + start_height + 2,
+        );
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_multiple_vote() {
+        let leader_keypair = Keypair::new();
+        let leader_id = leader_keypair.pubkey();
+        let active_window_tick_length = 1000;
+        let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10000, leader_id, 500);
+        let bank = Bank::new(&genesis_block);
+
+        // Bootstrap leader should be in the active set even without explicit votes
+        {
+            let result = get_active_pubkeys(&bank, active_window_tick_length, 0);
+            assert_eq!(result, vec![leader_id]);
+
+            let result =
+                get_active_pubkeys(&bank, active_window_tick_length, active_window_tick_length);
+            assert_eq!(result, vec![leader_id]);
+
+            let result = get_active_pubkeys(
+                &bank,
+                active_window_tick_length,
+                active_window_tick_length + 1,
+            );
+            assert_eq!(result.len(), 0);
+        }
+
+        // Check that a node that votes twice in a row will get included in the active
+        // window
+
+        // Create a vote account
+        let voting_keypair = Keypair::new();
+        new_vote_account_with_vote(&leader_keypair, &voting_keypair, &bank, 1, 1);
+
+        {
+            let result = get_active_pubkeys(
+                &bank,
+                active_window_tick_length,
+                active_window_tick_length + 1,
+            );
+            assert_eq!(result, vec![leader_id]);
+
+            let result = get_active_pubkeys(
+                &bank,
+                active_window_tick_length,
+                active_window_tick_length + 2,
+            );
+            assert_eq!(result.len(), 0);
+        }
+
+        // Vote at slot_height 2
+        push_vote(&voting_keypair, &bank, 2);
+
+        {
+            let result = get_active_pubkeys(
+                &bank,
+                active_window_tick_length,
+                active_window_tick_length + 2,
+            );
+            assert_eq!(result, vec![leader_id]);
+
+            let result = get_active_pubkeys(
+                &bank,
+                active_window_tick_length,
+                active_window_tick_length + 3,
+            );
+            assert_eq!(result.len(), 0);
+        }
+    }
 
     fn run_scheduler_test(num_validators: u64, ticks_per_slot: u64, slots_per_epoch: u64) {
         info!(

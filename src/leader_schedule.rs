@@ -1,4 +1,3 @@
-use crate::active_stakers::ActiveStakers;
 use rand::distributions::{Distribution, WeightedIndex};
 use rand::SeedableRng;
 use rand_chacha::ChaChaRng;
@@ -30,14 +29,9 @@ impl LeaderSchedule {
     }
 
     pub fn new_with_bank(bank: &Bank) -> Self {
-        let active_stakers = ActiveStakers::new(&bank);
         let mut seed = [0u8; 32];
         seed.copy_from_slice(bank.last_id().as_ref());
-        Self::new(
-            &active_stakers.sorted_stakes(),
-            &seed,
-            bank.slots_per_epoch(),
-        )
+        Self::new(&bank.stakes(), &seed, bank.slots_per_epoch())
     }
 }
 
