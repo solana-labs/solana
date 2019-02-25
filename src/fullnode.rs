@@ -407,7 +407,7 @@ impl Service for Fullnode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocktree::{create_tmp_sample_blocktree, tmp_copy_blocktree, DEFAULT_SLOT_HEIGHT};
+    use crate::blocktree::{create_tmp_sample_blocktree, tmp_copy_blocktree};
     use crate::entry::make_consecutive_blobs;
     use crate::leader_scheduler::make_active_set_entries;
     use crate::streamer::responder;
@@ -761,12 +761,7 @@ mod tests {
         let last_id = active_set_entries.last().unwrap().id;
 
         blocktree
-            .write_entries(
-                DEFAULT_SLOT_HEIGHT,
-                tick_height,
-                entry_height,
-                active_set_entries,
-            )
+            .write_entries(0, tick_height, entry_height, active_set_entries)
             .unwrap();
 
         entry_height += active_set_entries_len;

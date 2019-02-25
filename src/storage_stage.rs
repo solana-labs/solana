@@ -444,7 +444,7 @@ impl Service for StorageStage {
 
 #[cfg(test)]
 mod tests {
-    use crate::blocktree::{create_tmp_sample_blocktree, Blocktree, DEFAULT_SLOT_HEIGHT};
+    use crate::blocktree::{create_tmp_sample_blocktree, Blocktree};
     use crate::cluster_info::{ClusterInfo, NodeInfo};
     use crate::entry::{make_tiny_test_entries, Entry};
     use crate::service::Service;
@@ -511,12 +511,7 @@ mod tests {
         let entries = make_tiny_test_entries(64);
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
         blocktree
-            .write_entries(
-                DEFAULT_SLOT_HEIGHT,
-                tick_height,
-                genesis_entry_height,
-                &entries,
-            )
+            .write_entries(0, tick_height, genesis_entry_height, &entries)
             .unwrap();
 
         let cluster_info = test_cluster_info(keypair.pubkey());
@@ -581,12 +576,7 @@ mod tests {
         let entries = make_tiny_test_entries(128);
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
         blocktree
-            .write_entries(
-                DEFAULT_SLOT_HEIGHT,
-                tick_height,
-                genesis_entry_height,
-                &entries,
-            )
+            .write_entries(0, tick_height, genesis_entry_height, &entries)
             .unwrap();
 
         let cluster_info = test_cluster_info(keypair.pubkey());

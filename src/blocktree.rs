@@ -320,10 +320,6 @@ pub struct Blocktree {
     ticks_per_slot: u64,
 }
 
-// TODO: Once we support a window that knows about different leader
-// slots, change functions where this is used to take slot height
-// as a variable argument
-pub const DEFAULT_SLOT_HEIGHT: u64 = 0;
 // Column family for metadata about a leader slot
 pub const META_CF: &str = "meta";
 // Column family for the data in a leader slot
@@ -1178,7 +1174,7 @@ impl Blocktree {
     // don't count as ticks, even if they're empty entries
     fn write_genesis_blobs(&self, blobs: &[Blob]) -> Result<()> {
         // TODO: change bootstrap height to number of slots
-        let meta_key = MetaCf::key(DEFAULT_SLOT_HEIGHT);
+        let meta_key = MetaCf::key(0);
         let mut bootstrap_meta = SlotMeta::new(0, 1);
         let last = blobs.last().unwrap();
 
@@ -1255,7 +1251,7 @@ pub fn create_new_ledger(
     // Add a single tick linked back to the genesis_block to bootstrap the ledger
     let blocktree = Blocktree::open_config(ledger_path, ticks_per_slot)?;
     let entries = crate::entry::create_ticks(1, genesis_block.last_id());
-    blocktree.write_entries(DEFAULT_SLOT_HEIGHT, 0, 0, &entries)?;
+    blocktree.write_entries(0, 0, 0, &entries)?;
 
     Ok((1, 1, entries[0].id))
 }
@@ -1274,7 +1270,7 @@ where
             let mut b = entry.borrow().to_blob();
             b.set_index(idx as u64);
             b.forward(true);
-            b.set_slot(DEFAULT_SLOT_HEIGHT);
+            b.set_slot(0);
             b
         })
         .collect();
@@ -1313,7 +1309,7 @@ pub fn create_tmp_sample_blocktree(
 
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
         blocktree
-            .write_entries(DEFAULT_SLOT_HEIGHT, tick_height, entry_height, &entries)
+            .write_entries(0, tick_height, entry_height, &entries)
             .unwrap();
         tick_height += num_extra_ticks;
         entry_height += entries.len() as u64;
@@ -1441,8 +1437,8 @@ pub mod tests {
         let ledger = Blocktree::open(&ledger_path).unwrap();
 
         // Test meta column family
-        let meta = SlotMeta::new(DEFAULT_SLOT_HEIGHT, 1);
-        let meta_key = MetaCf::key(DEFAULT_SLOT_HEIGHT);
+        let meta = SlotMeta::new(0, 1);
+        let meta_key = MetaCf::key(0);
         ledger.meta_cf.put(&meta_key, &meta).unwrap();
         let result = ledger
             .meta_cf
@@ -1454,7 +1450,7 @@ pub mod tests {
 
         // Test erasure column family
         let erasure = vec![1u8; 16];
-        let erasure_key = ErasureCf::key(DEFAULT_SLOT_HEIGHT, 0);
+        let erasure_key = ErasureCf::key(0, 0);
         ledger.erasure_cf.put(&erasure_key, &erasure).unwrap();
 
         let result = ledger
@@ -1467,7 +1463,7 @@ pub mod tests {
 
         // Test data column family
         let data = vec![2u8; 16];
-        let data_key = DataCf::key(DEFAULT_SLOT_HEIGHT, 0);
+        let data_key = DataCf::key(0, 0);
         ledger.data_cf.put(&data_key, &data).unwrap();
 
         let result = ledger
@@ -1486,7 +1482,7 @@ pub mod tests {
     #[test]
     fn test_read_blobs_bytes() {
         let shared_blobs = make_tiny_test_entries(10).to_shared_blobs();
-        let slot = DEFAULT_SLOT_HEIGHT;
+        let slot = 0;
         index_blobs(&shared_blobs, &mut 0, &[slot; 10]);
 
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
@@ -1652,7 +1648,7 @@ pub mod tests {
             for (i, b) in shared_blobs.iter().enumerate() {
                 let mut w_b = b.write().unwrap();
                 w_b.set_index(1 << (i * 8));
-                w_b.set_slot(DEFAULT_SLOT_HEIGHT);
+                w_b.set_slot(0);
             }
 
             blocktree
@@ -1835,7 +1831,7 @@ pub mod tests {
 
             assert_eq!(blocktree.get_slot_entries(0, 0, None).unwrap(), expected,);
 
-            let meta_key = MetaCf::key(DEFAULT_SLOT_HEIGHT);
+            let meta_key = MetaCf::key(0);
             let meta = blocktree.meta_cf.get(&meta_key).unwrap().unwrap();
             assert_eq!(meta.consumed, num_unique_entries);
             assert_eq!(meta.received, num_unique_entries);
