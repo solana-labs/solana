@@ -49,11 +49,35 @@ Account data in an AppendVec.  To get the latest version of an account:
 ```
 /// Load the account for the pubkey.
 /// This function will load the account from the greatest or equal to fork. 
-pub fn load_slow(&self, fork: u64, pubkey: &Pubkey) -> Option<&Account>
+/// * forks - A vector of forks indicating a priority list of forks. The earlier
+///   forks are loaded first if available.
+/// * pubkey - The Account's public key.
+pub fn load_slow(&self, forks: &[u64], pubkey: &Pubkey) -> Option<&Account>
 ```
 
 The read is satisfied by pointing to a memory mapped location in the
-`AppendVecId` at the stored offset.
+`AppendVecId` at the stored offset, and a reference can be returned without a copy.
+
+## Root Forks
+
+The [fork selection algorithm](fork-selection.md), eventually selects a fork
+that is committed as a root fork.  No further rollback to the root fork is
+possible.  When a fork is picked as a root fork, it is combined with a direct
+descendant.  All other direct descendants and forks derived from them can be
+cleaned up.
+
+Three possible options exist
+
+* Maintain a HashSet<u64> of root forks.  One is expected to be created every
+second.  The entire tree can be garbage collected later. Or if every fork keeps
+a reference count of accounts garbage collection could occur any time an index
+location is updated.
+
+* Remove any pruned forks from the index.  Any remaining forks lower in number
+than the root are can be considered root.
+
+* Scan the index, migrate any old roots into the new one.   Any remaining forks
+lower then the new root can be deleted later.
 
 # Append Only Writes
 
