@@ -101,9 +101,8 @@ pub struct Bank {
     /// The number of slots in each epoch.
     slots_per_epoch: u64,
 
-    // A number of slots before slot_index 0. Used to generate the current
-    // epoch's leader schedule.
-    leader_schedule_slot_offset: u64,
+    // A number of slots before slot_index 0. Used to calculate finalized staked nodes.
+    stakers_slot_offset: u64,
 }
 
 impl Bank {
@@ -120,7 +119,7 @@ impl Bank {
         bank.last_id_queue = RwLock::new(parent.last_id_queue.read().unwrap().clone());
         bank.ticks_per_slot = parent.ticks_per_slot;
         bank.slots_per_epoch = parent.slots_per_epoch;
-        bank.leader_schedule_slot_offset = parent.leader_schedule_slot_offset;
+        bank.stakers_slot_offset = parent.stakers_slot_offset;
 
         bank.parent = Some(parent.clone());
         if *parent.hash.read().unwrap() == Hash::default() {
@@ -201,7 +200,7 @@ impl Bank {
 
         self.ticks_per_slot = genesis_block.ticks_per_slot;
         self.slots_per_epoch = genesis_block.slots_per_epoch;
-        self.leader_schedule_slot_offset = genesis_block.leader_schedule_slot_offset;
+        self.stakers_slot_offset = genesis_block.stakers_slot_offset;
     }
 
     pub fn add_native_program(&self, name: &str, program_id: &Pubkey) {
@@ -685,22 +684,25 @@ impl Bank {
     }
 
     /// Return the checkpointed stakes that should be used to generate a leader schedule.
-    fn leader_schedule_stakes(&self, epoch_height: u64) -> HashMap<Pubkey, u64> {
+    fn staked_nodes_at_epoch(&self, epoch_height: u64) -> HashMap<Pubkey, u64> {
         let epoch_slot_height = epoch_height * self.slots_per_epoch();
-        let expected = epoch_slot_height.saturating_sub(self.leader_schedule_slot_offset);
-        if self.slot_height() <= expected {
-            return self.staked_nodes();
-        }
-        self.parents()
-            .into_iter()
+        let expected = epoch_slot_height.saturating_sub(self.stakers_slot_offset);
+
+        let parents = self.parents();
+        let mut banks = vec![self];
+        banks.extend(parents.iter().map(|x| x.as_ref()));
+
+        let bank = banks
+            .iter()
             .find(|bank| bank.slot_height() <= expected)
-            .map(|bank| bank.staked_nodes())
-            .unwrap()
+            .unwrap_or_else(|| banks.last().unwrap());
+
+        bank.staked_nodes()
     }
 
     /// Return the leader schedule for the given epoch.
     fn leader_schedule(&self, epoch_height: u64) -> LeaderSchedule {
-        let stakes = self.leader_schedule_stakes(epoch_height);
+        let stakes = self.staked_nodes_at_epoch(epoch_height);
         let mut seed = [0u8; 32];
         seed[0..8].copy_from_slice(&epoch_height.to_le_bytes());
         let stakes: Vec<_> = stakes.into_iter().collect();
@@ -1194,24 +1196,24 @@ mod tests {
     }
 
     #[test]
-    fn test_leader_schedule_stakes() {
+    fn test_bank_staked_nodes_at_epoch() {
         let pubkey = Keypair::new().pubkey();
         let bootstrap_tokens = 2;
         let (genesis_block, _) = GenesisBlock::new_with_leader(2, pubkey, bootstrap_tokens);
         let bank = Bank::new(&genesis_block);
         let bank = Bank::new_from_parent(&Arc::new(bank));
-        let ticks_per_offset = bank.leader_schedule_slot_offset * bank.ticks_per_slot();
+        let ticks_per_offset = bank.stakers_slot_offset * bank.ticks_per_slot();
         register_ticks(&bank, ticks_per_offset);
-        assert_eq!(bank.slot_height(), bank.leader_schedule_slot_offset);
+        assert_eq!(bank.slot_height(), bank.stakers_slot_offset);
 
         let mut expected = HashMap::new();
         expected.insert(pubkey, bootstrap_tokens - 1);
         let bank = Bank::new_from_parent(&Arc::new(bank));
-        assert_eq!(bank.leader_schedule_stakes(bank.epoch_height()), expected,);
+        assert_eq!(bank.staked_nodes_at_epoch(bank.epoch_height()), expected,);
     }
 
     #[test]
-    fn test_leader_schedule_basic() {
+    fn test_bank_leader_schedule_basic() {
         let pubkey = Keypair::new().pubkey();
         let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(2, pubkey, 2);
         let bank = Bank::new(&genesis_block);

@@ -22,7 +22,7 @@ pub struct GenesisBlock {
     pub tokens: u64,
     pub ticks_per_slot: u64,
     pub slots_per_epoch: u64,
-    pub leader_schedule_slot_offset: u64,
+    pub stakers_slot_offset: u64,
 }
 
 impl GenesisBlock {
@@ -50,7 +50,7 @@ impl GenesisBlock {
                 tokens,
                 ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
                 slots_per_epoch: DEFAULT_SLOTS_PER_EPOCH,
-                leader_schedule_slot_offset: DEFAULT_SLOTS_PER_EPOCH,
+                stakers_slot_offset: DEFAULT_SLOTS_PER_EPOCH,
             },
             mint_keypair,
         )
