@@ -221,12 +221,7 @@ pub fn process_blocktree(
             _ => {
                 // This is a fork point, create a new child bank for each fork
                 pending_slots.extend(meta.next_slots.iter().map(|next_slot| {
-                    let leader = leader_scheduler
-                        .read()
-                        .unwrap()
-                        .get_leader_for_slot(*next_slot)
-                        .unwrap();
-                    let child_bank = Bank::new_from_parent(&bank, &leader);
+                    let child_bank = Bank::new_from_parent(&bank);
                     trace!("Add child bank for slot={}", next_slot);
                     let child_bank_id = *next_slot;
                     bank_forks.insert(child_bank_id, child_bank);
