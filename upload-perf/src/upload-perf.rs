@@ -101,9 +101,9 @@ fn main() {
                 "{}, {:#10?}, {:#10?}, {:#10?}, {:#10?}",
                 entry,
                 values.0,
-                values.2.parse::<i32>().unwrap(),
+                values.2.parse::<i32>().unwrap_or_default(),
                 values.1,
-                values.3.parse::<i32>().unwrap(),
+                values.3.parse::<i32>().unwrap_or_default(),
             );
         }
     } else {
