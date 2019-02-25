@@ -10,7 +10,7 @@ use crate::runtime::{self, RuntimeError};
 use crate::status_cache::StatusCache;
 use bincode::serialize;
 use hashbrown::HashMap;
-use log::{debug, info, Level};
+use log::{debug, info, warn, Level};
 use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
 use solana_sdk::bpf_loader;
@@ -90,10 +90,16 @@ pub struct Bank {
     last_id_queue: RwLock<LastIdQueue>,
 
     /// Previous checkpoint of this bank
-    parent: Option<Arc<Bank>>,
+    parent: RwLock<Option<Arc<Bank>>>,
 
-    /// Hash of this Bank's state. Only meaningful after freezing it via `new_from_parent()`.
+    /// Hash of this Bank's state. Only meaningful after freezing.
     hash: RwLock<Hash>,
+
+    /// Hash of this Bank's parent's state
+    parent_hash: Hash,
+
+    /// Bank fork id
+    id: u64,
 
     /// The number of ticks in each slot.
     ticks_per_slot: u64,
@@ -114,25 +120,56 @@ impl Bank {
     }
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
-    pub fn new_from_parent(parent: &Arc<Bank>) -> Self {
+    pub fn new_from_parent_and_id(parent: &Arc<Bank>, id: u64) -> Self {
+        parent.freeze();
+
         let mut bank = Self::default();
         bank.last_id_queue = RwLock::new(parent.last_id_queue.read().unwrap().clone());
         bank.ticks_per_slot = parent.ticks_per_slot;
         bank.slots_per_epoch = parent.slots_per_epoch;
         bank.stakers_slot_offset = parent.stakers_slot_offset;
 
-        bank.parent = Some(parent.clone());
-        if *parent.hash.read().unwrap() == Hash::default() {
-            *parent.hash.write().unwrap() = parent.hash_internal_state();
-        }
+        bank.id = id;
+        bank.parent = RwLock::new(Some(parent.clone()));
+        bank.parent_hash = parent.hash();
+
         bank
+    }
+
+    /// Create a new bank that points to an immutable checkpoint of another bank.
+    /// TODO: remove me in favor of _and_id(), id should not be an assumed value
+    pub fn new_from_parent(parent: &Arc<Bank>) -> Self {
+        Self::new_from_parent_and_id(parent, parent.id() + 1)
+    }
+
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
+    pub fn hash(&self) -> Hash {
+        *self.hash.read().unwrap()
+    }
+
+    pub fn is_frozen(&self) -> bool {
+        *self.hash.read().unwrap() != Hash::default()
+    }
+
+    pub fn freeze(&self) {
+        let mut hash = self.hash.write().unwrap();
+
+        if *hash == Hash::default() {
+            //  freeze is a one-way trip, idempotent
+            *hash = self.hash_internal_state();
+        }
     }
 
     /// merge (i.e. pull) the parent's state up into this Bank,
     ///   this Bank becomes a root
-    pub fn merge_parents(&mut self) {
+    pub fn merge_parents(&self) {
+        self.freeze();
+
         let parents = self.parents();
-        self.parent = None;
+        *self.parent.write().unwrap() = None;
 
         let parent_accounts: Vec<_> = parents.iter().map(|b| &b.accounts).collect();
         self.accounts.merge_parents(&parent_accounts);
@@ -149,11 +186,11 @@ impl Bank {
 
     /// Return the more recent checkpoint of this bank instance.
     pub fn parent(&self) -> Option<Arc<Bank>> {
-        self.parent.clone()
+        self.parent.read().unwrap().clone()
     }
     /// Returns whether this bank is the root
     pub fn is_root(&self) -> bool {
-        self.parent.is_none()
+        self.parent.read().unwrap().is_none()
     }
 
     fn process_genesis_block(&mut self, genesis_block: &GenesisBlock) {
@@ -264,6 +301,11 @@ impl Bank {
     /// the oldest ones once its internal cache is full. Once boot, the
     /// bank will reject transactions using that `last_id`.
     pub fn register_tick(&self, last_id: &Hash) {
+        if self.is_frozen() {
+            warn!("=========== FIXME: working on a frozen bank! ================");
+        }
+        // TODO: put this assert back in
+        // assert!(!self.is_frozen());
         let current_tick_height = {
             //atomic register and read the tick
             let mut last_id_queue = self.last_id_queue.write().unwrap();
@@ -289,6 +331,11 @@ impl Bank {
     }
 
     pub fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<()>> {
+        if self.is_frozen() {
+            warn!("=========== FIXME: working on a frozen bank! ================");
+        }
+        // TODO: put this assert back in
+        // assert!(!self.is_frozen());
         self.accounts.lock_accounts(txs)
     }
 
@@ -481,6 +528,11 @@ impl Bank {
         loaded_accounts: &[Result<(InstructionAccounts, InstructionLoaders)>],
         executed: &[Result<()>],
     ) -> Vec<Result<()>> {
+        if self.is_frozen() {
+            warn!("=========== FIXME: working on a frozen bank! ================");
+        }
+        // TODO: put this assert back in
+        // assert!(!self.is_frozen());
         let now = Instant::now();
         self.accounts
             .store_accounts(self.is_root(), txs, executed, loaded_accounts);
@@ -612,20 +664,16 @@ impl Bank {
 
     /// Hash the `accounts` HashMap. This represents a validator's interpretation
     ///  of the delta of the ledger since the last vote and up to now
-    pub fn hash_internal_state(&self) -> Hash {
+    fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the same hash as we did before
         // checkpointing.
         let accounts = &self.accounts.accounts_db.read().unwrap().accounts;
-        let parent_hash = match &self.parent {
-            None => Hash::default(),
-            Some(parent) => *parent.hash.read().unwrap(),
-        };
         if accounts.is_empty() {
-            return parent_hash;
+            return self.parent_hash;
         }
 
         let accounts_delta_hash = self.accounts.hash_internal_state();
-        extend_and_hash(&parent_hash, &serialize(&accounts_delta_hash).unwrap())
+        extend_and_hash(&self.parent_hash, &serialize(&accounts_delta_hash).unwrap())
     }
 
     pub fn vote_states<F>(&self, cond: F) -> Vec<VoteState>
@@ -1394,7 +1442,7 @@ mod tests {
     }
 
     #[test]
-    fn test_hash_internal_state() {
+    fn test_bank_hash_internal_state() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(2_000);
         let bank0 = Bank::new(&genesis_block);
         let bank1 = Bank::new(&genesis_block);
@@ -1417,10 +1465,26 @@ mod tests {
     }
 
     #[test]
-    fn test_hash_internal_state_parents() {
+    fn test_hash_internal_state_genesis() {
         let bank0 = Bank::new(&GenesisBlock::new(10).0);
         let bank1 = Bank::new(&GenesisBlock::new(20).0);
         assert_ne!(bank0.hash_internal_state(), bank1.hash_internal_state());
+    }
+
+    #[test]
+    fn test_bank_hash_internal_state_merge_parents() {
+        let bank0 = Arc::new(Bank::new(&GenesisBlock::new(10).0));
+        let bank1 = Bank::new_from_parent_and_id(&bank0, 1);
+
+        // no delta in bank1, hashes match
+        assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
+
+        // remove parent
+        bank1.merge_parents();
+        assert!(bank1.parents().is_empty());
+
+        // hash should still match
+        assert_eq!(bank0.hash(), bank1.hash());
     }
 
     /// Verifies that last ids and accounts are correctly referenced from parent
@@ -1439,7 +1503,7 @@ mod tests {
             0,
         );
         assert_eq!(parent.process_transaction(&tx_move_mint_to_1), Ok(()));
-        let mut bank = Bank::new_from_parent(&parent);
+        let bank = Bank::new_from_parent(&parent);
         let tx_move_1_to_2 =
             SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.last_id(), 0);
         assert_eq!(bank.process_transaction(&tx_move_1_to_2), Ok(()));
