@@ -11,7 +11,7 @@ if [[ -z $CHANNEL ]]; then
 fi
 
 rm -rf usr/
-../../ci/docker-run.sh solanalabs/rust:1.31.0 \
+../../ci/docker-run.sh solanalabs/rust:1.32.0 \
   scripts/cargo-install-all.sh sdk/docker-solana/usr
 
 cp -f ../../run.sh usr/bin/solana-run.sh
