@@ -702,10 +702,64 @@ impl Bank {
         }
     }
 
+    /// Return the leader for the slot at the slot_index and epoch_height returned
+    /// by the given function.
+    pub fn slot_leader_by<F>(&self, get_slot_index: F) -> Pubkey
+    where
+        F: Fn(u64, u64, u64) -> (u64, u64),
+    {
+        let (slot_index, epoch_height) = get_slot_index(
+            self.slot_index(),
+            self.epoch_height(),
+            self.slots_per_epoch(),
+        );
+        let leader_schedule = self.leader_schedule(epoch_height);
+        leader_schedule[slot_index as usize]
+    }
+
     /// Return the leader for the current slot.
     pub fn slot_leader(&self) -> Pubkey {
-        let leader_schedule = self.leader_schedule(self.epoch_height());
-        leader_schedule[self.slot_index() as usize]
+        self.slot_leader_by(|slot_index, epoch_height, _| (slot_index, epoch_height))
+    }
+
+    /// Return the epoch height and slot index of the slot before the current slot.
+    fn prev_slot_leader_index(
+        slot_index: u64,
+        epoch_height: u64,
+        slots_per_epoch: u64,
+    ) -> (u64, u64) {
+        if epoch_height == 0 && slot_index == 0 {
+            return (0, 0);
+        }
+
+        if slot_index == 0 {
+            (slots_per_epoch - 1, epoch_height - 1)
+        } else {
+            (slot_index - 1, epoch_height)
+        }
+    }
+
+    /// Return the slot_index and epoch height of the slot following the current slot.
+    fn next_slot_leader_index(
+        slot_index: u64,
+        epoch_height: u64,
+        slots_per_epoch: u64,
+    ) -> (u64, u64) {
+        if slot_index + 1 == slots_per_epoch {
+            (0, epoch_height + 1)
+        } else {
+            (slot_index + 1, epoch_height)
+        }
+    }
+
+    /// Return the leader for the slot before the current slot.
+    pub fn prev_slot_leader(&self) -> Pubkey {
+        self.slot_leader_by(Self::prev_slot_leader_index)
+    }
+
+    /// Return the leader for the slot following the current slot.
+    pub fn next_slot_leader(&self) -> Pubkey {
+        self.slot_leader_by(Self::next_slot_leader_index)
     }
 
     /// Return the number of ticks since genesis.
@@ -1398,5 +1452,18 @@ mod tests {
         let pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&GenesisBlock::new_with_leader(2, pubkey, 2).0);
         assert_eq!(bank.slot_leader(), pubkey);
+    }
+
+    #[test]
+    fn test_bank_prev_slot_leader_index() {
+        assert_eq!(Bank::prev_slot_leader_index(0, 0, 2), (0, 0));
+        assert_eq!(Bank::prev_slot_leader_index(1, 0, 2), (0, 0));
+        assert_eq!(Bank::prev_slot_leader_index(0, 1, 2), (1, 0));
+    }
+
+    #[test]
+    fn test_bank_next_slot_leader_index() {
+        assert_eq!(Bank::next_slot_leader_index(0, 0, 2), (1, 0));
+        assert_eq!(Bank::next_slot_leader_index(1, 0, 2), (0, 1));
     }
 }
