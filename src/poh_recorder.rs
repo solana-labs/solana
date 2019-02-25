@@ -29,7 +29,7 @@ pub enum PohRecorderError {
 #[derive(Clone)]
 pub struct WorkingBank {
     pub bank: Arc<Bank>,
-    pub sender: Sender<Vec<Entry>>,
+    pub sender: Sender<Vec<(Entry, u64)>>,
     pub min_tick_height: u64,
     pub max_tick_height: u64,
 }
@@ -100,11 +100,11 @@ impl PohRecorder {
                 working_bank.max_tick_height,
                 cnt,
             );
-            let cache: Vec<Entry> = self.tick_cache[..cnt].iter().map(|x| x.0.clone()).collect();
-            for t in &cache {
-                working_bank.bank.register_tick(&t.id);
+            let cache = &self.tick_cache[..cnt];
+            for t in cache {
+                working_bank.bank.register_tick(&t.0.id);
             }
-            working_bank.sender.send(cache)
+            working_bank.sender.send(cache.to_vec())
         } else {
             Ok(())
         };
@@ -160,13 +160,15 @@ impl PohRecorder {
             .ok_or(Error::PohRecorderError(PohRecorderError::MaxHeightReached))?;
         let entry = self.poh.record(mixin);
         assert!(!txs.is_empty(), "Entries without transactions are used to track real-time passing in the ledger and can only be generated with PohRecorder::tick function");
-        let entry = Entry {
+        let recorded_entry = Entry {
             num_hashes: entry.num_hashes,
             id: entry.id,
             transactions: txs,
         };
-        trace!("sending entry {}", entry.is_tick());
-        working_bank.sender.send(vec![entry])?;
+        trace!("sending entry {}", recorded_entry.is_tick());
+        working_bank
+            .sender
+            .send(vec![(recorded_entry, entry.tick_height)])?;
         Ok(())
     }
 
@@ -352,9 +354,9 @@ mod tests {
         //tick in the cache + entry
         let e = entry_receiver.recv().expect("recv 1");
         assert_eq!(e.len(), 1);
-        assert!(e[0].is_tick());
+        assert!(e[0].0.is_tick());
         let e = entry_receiver.recv().expect("recv 2");
-        assert!(!e[0].is_tick());
+        assert!(!e[0].0.is_tick());
     }
 
     #[test]
@@ -381,8 +383,8 @@ mod tests {
 
         let e = entry_receiver.recv().expect("recv 1");
         assert_eq!(e.len(), 2);
-        assert!(e[0].is_tick());
-        assert!(e[1].is_tick());
+        assert!(e[0].0.is_tick());
+        assert!(e[1].0.is_tick());
     }
 
     #[test]

@@ -50,7 +50,7 @@ impl BankingStage {
         last_entry_id: &Hash,
         max_tick_height: u64,
         leader_id: Pubkey,
-    ) -> (Self, Receiver<Vec<Entry>>) {
+    ) -> (Self, Receiver<Vec<(Entry, u64)>>) {
         let (entry_sender, entry_receiver) = channel();
         let shared_verified_receiver = Arc::new(Mutex::new(verified_receiver));
         let working_bank = WorkingBank {
@@ -394,7 +394,10 @@ mod tests {
         sleep(Duration::from_millis(500));
         drop(verified_sender);
 
-        let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
+        let entries: Vec<_> = entry_receiver
+            .iter()
+            .flat_map(|x| x.into_iter().map(|e| e.0))
+            .collect();
         assert!(entries.len() != 0);
         assert!(entries.verify(&start_hash));
         assert_eq!(entries[entries.len() - 1].id, bank.last_id());
@@ -440,7 +443,11 @@ mod tests {
         drop(verified_sender);
 
         //receive entries + ticks
-        let entries: Vec<_> = entry_receiver.iter().map(|x| x).collect();
+        let entries: Vec<Vec<Entry>> = entry_receiver
+            .iter()
+            .map(|x| x.into_iter().map(|e| e.0).collect())
+            .collect();
+
         assert!(entries.len() >= 1);
 
         let mut last_id = start_hash;
@@ -500,7 +507,10 @@ mod tests {
         banking_stage.join().unwrap();
 
         // Collect the ledger and feed it to a new bank.
-        let entries: Vec<_> = entry_receiver.iter().flat_map(|x| x).collect();
+        let entries: Vec<_> = entry_receiver
+            .iter()
+            .flat_map(|x| x.into_iter().map(|e| e.0))
+            .collect();
         // same assertion as running through the bank, really...
         assert!(entries.len() >= 2);
 
@@ -619,7 +629,7 @@ mod tests {
         poh_recorder.lock().unwrap().set_working_bank(working_bank);
         BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
         let entries = entry_receiver.recv().unwrap();
-        assert_eq!(entries[0].transactions.len(), transactions.len());
+        assert_eq!(entries[0].0.transactions.len(), transactions.len());
 
         // ProgramErrors should still be recorded
         results[0] = Err(BankError::ProgramError(
@@ -628,13 +638,13 @@ mod tests {
         ));
         BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
         let entries = entry_receiver.recv().unwrap();
-        assert_eq!(entries[0].transactions.len(), transactions.len());
+        assert_eq!(entries[0].0.transactions.len(), transactions.len());
 
         // Other BankErrors should not be recorded
         results[0] = Err(BankError::AccountNotFound);
         BankingStage::record_transactions(&transactions, &results, &poh_recorder).unwrap();
         let entries = entry_receiver.recv().unwrap();
-        assert_eq!(entries[0].transactions.len(), transactions.len() - 1);
+        assert_eq!(entries[0].0.transactions.len(), transactions.len() - 1);
     }
 
     #[test]
@@ -671,7 +681,7 @@ mod tests {
         // read entries until I find mine, might be ticks...
         while need_tick {
             let entries = entry_receiver.recv().unwrap();
-            for entry in entries {
+            for (entry, _) in entries {
                 if !entry.is_tick() {
                     assert_eq!(entry.transactions.len(), transactions.len());
                     assert_eq!(bank.get_balance(&pubkey), 1);
