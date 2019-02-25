@@ -685,22 +685,22 @@ impl Bank {
     }
 
     /// Return the checkpointed stakes that should be used to generate a leader schedule.
-    /// Return None if a sufficiently old bank checkpoint doesn't exist.
-    fn leader_schedule_stakes(&self, epoch_height: u64) -> Option<HashMap<Pubkey, u64>> {
+    fn leader_schedule_stakes(&self, epoch_height: u64) -> HashMap<Pubkey, u64> {
         let epoch_slot_height = epoch_height * self.slots_per_epoch();
         let expected = epoch_slot_height.saturating_sub(self.leader_schedule_slot_offset);
+        if self.slot_height() <= expected {
+            return self.staked_nodes();
+        }
         self.parents()
             .into_iter()
             .find(|bank| bank.slot_height() <= expected)
             .map(|bank| bank.staked_nodes())
+            .unwrap()
     }
 
     /// Return the leader schedule for the given epoch.
     fn leader_schedule(&self, epoch_height: u64) -> LeaderSchedule {
-        let (stakes, epoch_height) = match self.leader_schedule_stakes(epoch_height) {
-            None => (self.staked_nodes(), self.epoch_height()),
-            Some(stakes) => (stakes, epoch_height),
-        };
+        let stakes = self.leader_schedule_stakes(epoch_height);
         let mut seed = [0u8; 32];
         seed[0..8].copy_from_slice(&epoch_height.to_le_bytes());
         let stakes: Vec<_> = stakes.into_iter().collect();
@@ -1199,8 +1199,6 @@ mod tests {
         let bootstrap_tokens = 2;
         let (genesis_block, _) = GenesisBlock::new_with_leader(2, pubkey, bootstrap_tokens);
         let bank = Bank::new(&genesis_block);
-        assert!(bank.leader_schedule_stakes(bank.epoch_height()).is_none());
-
         let bank = Bank::new_from_parent(&Arc::new(bank));
         let ticks_per_offset = bank.leader_schedule_slot_offset * bank.ticks_per_slot();
         register_ticks(&bank, ticks_per_offset);
@@ -1209,10 +1207,7 @@ mod tests {
         let mut expected = HashMap::new();
         expected.insert(pubkey, bootstrap_tokens - 1);
         let bank = Bank::new_from_parent(&Arc::new(bank));
-        assert_eq!(
-            bank.leader_schedule_stakes(bank.epoch_height()).unwrap(),
-            expected,
-        );
+        assert_eq!(bank.leader_schedule_stakes(bank.epoch_height()), expected,);
     }
 
     #[test]
