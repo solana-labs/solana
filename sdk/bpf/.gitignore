@@ -1,2 +1,4 @@
 /criterion*
 /llvm-native*
+/rust-sysroot*
+/rust-toolchain*

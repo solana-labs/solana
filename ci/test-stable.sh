@@ -36,9 +36,11 @@ test-stable-perf)
   Cargo.toml$ \
   ci/test-stable-perf.sh \
   ci/test-stable.sh \
+  ^programs/ \
+  ^sdk/ \
 || {
   annotate --style info \
-    "Skipped tests as no relavant files were modified"
+    "Skipped test-stable-perf as no relavant files were modified"
   exit 0
 }
 
