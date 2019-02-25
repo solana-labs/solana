@@ -12,27 +12,20 @@ pub struct LeaderSchedule {
 }
 
 impl LeaderSchedule {
-    pub fn new(ids_and_stakes: &[(Pubkey, u64)], seed: &[u8; 32], len: u64) -> Self {
-        let (pubkeys, stakes): (Vec<Pubkey>, Vec<u64>) = ids_and_stakes
-            .iter()
-            .map(|&(ref id, ref stake)| (id, stake))
-            .unzip();
-
-        // Should have no zero weighted stakes
-        let mut rng = ChaChaRng::from_seed(*seed);
+    // Note: passing in zero stakers will cause a panic.
+    pub fn new(ids_and_stakes: &[(Pubkey, u64)], seed: [u8; 32], len: u64) -> Self {
+        let (ids, stakes): (Vec<_>, Vec<_>) = ids_and_stakes.iter().cloned().unzip();
+        let rng = &mut ChaChaRng::from_seed(seed);
         let weighted_index = WeightedIndex::new(stakes).unwrap();
-        let slot_leaders = (0..len)
-            .map(|_| pubkeys[weighted_index.sample(&mut rng)])
-            .collect();
-
+        let slot_leaders = (0..len).map(|_| ids[weighted_index.sample(rng)]).collect();
         Self { slot_leaders }
     }
 
     pub fn new_with_bank(bank: &Bank) -> Self {
+        let id_and_stakes: Vec<_> = bank.staked_nodes().into_iter().collect();
         let mut seed = [0u8; 32];
-        seed.copy_from_slice(bank.last_id().as_ref());
-        let stakes: Vec<_> = bank.staked_nodes().into_iter().collect();
-        Self::new(&stakes, &seed, bank.slots_per_epoch())
+        seed[0..8].copy_from_slice(&bank.epoch_height().to_le_bytes());
+        Self::new(&id_and_stakes, seed, bank.slots_per_epoch())
     }
 }
 
@@ -73,8 +66,8 @@ mod tests {
         let mut seed_bytes = [0u8; 32];
         seed_bytes.copy_from_slice(seed.as_ref());
         let len = num_keys * 10;
-        let leader_schedule = LeaderSchedule::new(&stakes, &seed_bytes, len);
-        let leader_schedule2 = LeaderSchedule::new(&stakes, &seed_bytes, len);
+        let leader_schedule = LeaderSchedule::new(&stakes, seed_bytes, len);
+        let leader_schedule2 = LeaderSchedule::new(&stakes, seed_bytes, len);
         assert_eq!(leader_schedule.slot_leaders.len() as u64, len);
         // Check that the same schedule is reproducibly generated
         assert_eq!(leader_schedule, leader_schedule2);
