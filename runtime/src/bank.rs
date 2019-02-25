@@ -28,6 +28,7 @@ use solana_sdk::timing::{duration_as_us, MAX_ENTRY_IDS, NUM_TICKS_PER_SECOND};
 use solana_sdk::token_program;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, VoteState};
+use std::collections::HashSet;
 use std::result;
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
@@ -103,9 +104,6 @@ pub struct Bank {
     // A number of slots before slot_index 0. Used to generate the current
     // epoch's leader schedule.
     leader_schedule_slot_offset: u64,
-
-    /// Slot leader
-    leader: Pubkey,
 }
 
 impl Bank {
@@ -117,7 +115,7 @@ impl Bank {
     }
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
-    pub fn new_from_parent(parent: &Arc<Bank>, leader: &Pubkey) -> Self {
+    pub fn new_from_parent(parent: &Arc<Bank>) -> Self {
         let mut bank = Self::default();
         bank.last_id_queue = RwLock::new(parent.last_id_queue.read().unwrap().clone());
         bank.ticks_per_slot = parent.ticks_per_slot;
@@ -128,7 +126,6 @@ impl Bank {
         if *parent.hash.read().unwrap() == Hash::default() {
             *parent.hash.write().unwrap() = parent.hash_internal_state();
         }
-        bank.leader = *leader;
         bank
     }
 
@@ -475,7 +472,7 @@ impl Bank {
                 _ => res.clone(),
             })
             .collect();
-        self.deposit(&self.leader, fees);
+        self.deposit(&self.slot_leader(), fees);
         results
     }
 
@@ -636,21 +633,34 @@ impl Bank {
     where
         F: Fn(&VoteState) -> bool,
     {
-        self.accounts
-            .accounts_db
-            .read()
-            .unwrap()
-            .accounts
-            .values()
-            .filter_map(|account| {
-                if vote_program::check_id(&account.owner) {
-                    if let Ok(vote_state) = VoteState::deserialize(&account.userdata) {
-                        if cond(&vote_state) {
-                            return Some(vote_state);
+        let parents = self.parents();
+        let mut accounts = vec![&self.accounts];
+        accounts.extend(parents.iter().map(|b| &b.accounts));
+        let mut exists = HashSet::new();
+        accounts
+            .iter()
+            .flat_map(|account| {
+                let accounts_db = account.accounts_db.read().unwrap();
+                let vote_states: Vec<_> = accounts_db
+                    .accounts
+                    .iter()
+                    .filter_map(|(key, account)| {
+                        if exists.contains(key) {
+                            None
+                        } else {
+                            exists.insert(key.clone());
+                            if vote_program::check_id(&account.owner) {
+                                if let Ok(vote_state) = VoteState::deserialize(&account.userdata) {
+                                    if cond(&vote_state) {
+                                        return Some(vote_state);
+                                    }
+                                }
+                            }
+                            None
                         }
-                    }
-                }
-                None
+                    })
+                    .collect();
+                vote_states
             })
             .collect()
     }
@@ -676,8 +686,8 @@ impl Bank {
 
     /// Return the checkpointed bank that should be used to generate a leader schedule.
     /// Return None if a sufficiently old bank checkpoint doesn't exist.
-    fn leader_schedule_bank(&self) -> Option<Arc<Bank>> {
-        let epoch_slot_height = self.slot_height() - self.slot_index();
+    fn leader_schedule_bank(&self, epoch_height: u64) -> Option<Arc<Bank>> {
+        let epoch_slot_height = epoch_height * self.slots_per_epoch();
         let expected = epoch_slot_height.saturating_sub(self.leader_schedule_slot_offset);
         self.parents()
             .into_iter()
@@ -685,8 +695,8 @@ impl Bank {
     }
 
     /// Return the leader schedule for the current epoch.
-    fn leader_schedule(&self) -> LeaderSchedule {
-        match self.leader_schedule_bank() {
+    fn leader_schedule(&self, epoch_height: u64) -> LeaderSchedule {
+        match self.leader_schedule_bank(epoch_height) {
             None => LeaderSchedule::new_with_bank(self),
             Some(bank) => LeaderSchedule::new_with_bank(&bank),
         }
@@ -694,7 +704,8 @@ impl Bank {
 
     /// Return the leader for the current slot.
     pub fn slot_leader(&self) -> Pubkey {
-        self.leader_schedule()[self.slot_index() as usize]
+        let leader_schedule = self.leader_schedule(self.epoch_height());
+        leader_schedule[self.slot_index() as usize]
     }
 
     /// Return the number of ticks since genesis.
@@ -998,9 +1009,9 @@ mod tests {
 
     #[test]
     fn test_bank_tx_fee() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(100);
-        let mut bank = Bank::new(&genesis_block);
-        bank.leader = Pubkey::default();
+        let leader = Keypair::new().pubkey();
+        let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, leader, 2);
+        let bank = Bank::new(&genesis_block);
 
         let key1 = Keypair::new();
         let key2 = Keypair::new();
@@ -1012,25 +1023,25 @@ mod tests {
             genesis_block.last_id(),
             3,
         );
-        let initial_balance = bank.get_balance(&bank.leader);
+        let initial_balance = bank.get_balance(&leader);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        assert_eq!(bank.get_balance(&bank.leader), initial_balance + 3);
+        assert_eq!(bank.get_balance(&leader), initial_balance + 3);
         assert_eq!(bank.get_balance(&key1.pubkey()), 2);
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 2 - 3);
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 4 - 3);
 
         let tx = SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.last_id(), 1);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
-        assert_eq!(bank.get_balance(&bank.leader), initial_balance + 4);
+        assert_eq!(bank.get_balance(&leader), initial_balance + 4);
         assert_eq!(bank.get_balance(&key1.pubkey()), 0);
         assert_eq!(bank.get_balance(&key2.pubkey()), 1);
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 2 - 3);
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 4 - 3);
     }
 
     #[test]
     fn test_filter_program_errors_and_collect_fee() {
-        let (genesis_block, mint_keypair) = GenesisBlock::new(100);
-        let mut bank = Bank::new(&genesis_block);
-        bank.leader = Pubkey::default();
+        let leader = Keypair::new().pubkey();
+        let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, leader, 2);
+        let bank = Bank::new(&genesis_block);
 
         let key = Keypair::new();
         let tx1 =
@@ -1046,9 +1057,9 @@ mod tests {
             )),
         ];
 
-        let initial_balance = bank.get_balance(&bank.leader);
+        let initial_balance = bank.get_balance(&leader);
         let results = bank.filter_program_errors_and_collect_fee(&vec![tx1, tx2], &results);
-        assert_eq!(bank.get_balance(&bank.leader), initial_balance + 3 + 1);
+        assert_eq!(bank.get_balance(&leader), initial_balance + 3 + 1);
         assert_eq!(results[0], Ok(()));
         assert_eq!(results[1], Ok(()));
     }
@@ -1127,17 +1138,19 @@ mod tests {
     fn test_leader_schedule_bank() {
         let (genesis_block, _) = GenesisBlock::new(5);
         let bank = Bank::new(&genesis_block);
-        assert!(bank.leader_schedule_bank().is_none());
+        assert!(bank.leader_schedule_bank(bank.epoch_height()).is_none());
 
-        let bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default());
+        let bank = Bank::new_from_parent(&Arc::new(bank));
         let ticks_per_offset = bank.leader_schedule_slot_offset * bank.ticks_per_slot();
         register_ticks(&bank, ticks_per_offset);
         assert_eq!(bank.slot_height(), bank.leader_schedule_slot_offset);
 
         let slot_height = bank.slots_per_epoch() - bank.leader_schedule_slot_offset;
-        let bank = Bank::new_from_parent(&Arc::new(bank), &Pubkey::default());
+        let bank = Bank::new_from_parent(&Arc::new(bank));
         assert_eq!(
-            bank.leader_schedule_bank().unwrap().slot_height(),
+            bank.leader_schedule_bank(bank.epoch_height())
+                .unwrap()
+                .slot_height(),
             slot_height
         );
     }
@@ -1259,7 +1272,7 @@ mod tests {
         let (genesis_block, _) = GenesisBlock::new(1);
         let parent = Arc::new(Bank::new(&genesis_block));
 
-        let bank = Bank::new_from_parent(&parent, &Pubkey::default());
+        let bank = Bank::new_from_parent(&parent);
         assert!(Arc::ptr_eq(&bank.parents()[0], &parent));
     }
 
@@ -1278,7 +1291,7 @@ mod tests {
             0,
         );
         assert_eq!(parent.process_transaction(&tx), Ok(()));
-        let bank = Bank::new_from_parent(&parent, &Pubkey::default());
+        let bank = Bank::new_from_parent(&parent);
         assert_eq!(
             bank.process_transaction(&tx),
             Err(BankError::DuplicateSignature)
@@ -1301,7 +1314,7 @@ mod tests {
             0,
         );
         assert_eq!(parent.process_transaction(&tx), Ok(()));
-        let bank = Bank::new_from_parent(&parent, &Pubkey::default());
+        let bank = Bank::new_from_parent(&parent);
         let tx = SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.last_id(), 0);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         assert_eq!(parent.get_signature_status(&tx.signatures[0]), None);
@@ -1326,7 +1339,7 @@ mod tests {
         assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
 
         // Checkpointing should not change its state
-        let bank2 = Bank::new_from_parent(&Arc::new(bank1), &Pubkey::default());
+        let bank2 = Bank::new_from_parent(&Arc::new(bank1));
         assert_eq!(bank0.hash_internal_state(), bank2.hash_internal_state());
     }
 
@@ -1353,7 +1366,7 @@ mod tests {
             0,
         );
         assert_eq!(parent.process_transaction(&tx_move_mint_to_1), Ok(()));
-        let mut bank = Bank::new_from_parent(&parent, &Pubkey::default());
+        let mut bank = Bank::new_from_parent(&parent);
         let tx_move_1_to_2 =
             SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.last_id(), 0);
         assert_eq!(bank.process_transaction(&tx_move_1_to_2), Ok(()));

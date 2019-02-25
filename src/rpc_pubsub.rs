@@ -168,7 +168,6 @@ mod tests {
     use solana_sdk::budget_program;
     use solana_sdk::budget_transaction::BudgetTransaction;
     use solana_sdk::genesis_block::GenesisBlock;
-    use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Transaction;
@@ -185,7 +184,7 @@ mod tests {
         subscriptions.notify_subscribers(&bank);
 
         // Simulate a block boundary
-        Ok(Arc::new(Bank::new_from_parent(&bank, &Pubkey::default())))
+        Ok(Arc::new(Bank::new_from_parent(&bank)))
     }
 
     fn create_session() -> Arc<Session> {

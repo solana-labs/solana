@@ -211,7 +211,7 @@ impl ReplayStage {
             // state
             to_leader_sender
                 .send(TvuRotationInfo {
-                    bank: Bank::new_from_parent(&bank, &leader_id),
+                    bank: Bank::new_from_parent(&bank),
                     last_entry_id: *last_entry_id.read().unwrap(),
                     slot,
                     leader_id,
@@ -331,7 +331,7 @@ impl ReplayStage {
                             if my_id == leader_id || my_id == last_leader_id {
                                 to_leader_sender
                                     .send(TvuRotationInfo {
-                                        bank: Bank::new_from_parent(&bank, &leader_id),
+                                        bank: Bank::new_from_parent(&bank),
                                         last_entry_id: *last_entry_id.read().unwrap(),
                                         slot: next_slot,
                                         leader_id,
