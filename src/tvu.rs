@@ -138,8 +138,6 @@ impl Tvu {
             let (blockstream_service, blockstream_receiver) = BlockstreamService::new(
                 previous_receiver,
                 blockstream.unwrap().to_string(),
-                bank_forks.read().unwrap().working_bank().tick_height(), // TODO: BlockstreamService needs to deal with BankForks somehow still
-                leader_scheduler,
                 exit.clone(),
             );
             previous_receiver = blockstream_receiver;

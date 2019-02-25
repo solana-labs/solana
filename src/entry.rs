@@ -21,8 +21,31 @@ use std::mem::size_of;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, RwLock};
 
-pub type EntrySender = Sender<Vec<Entry>>;
-pub type EntryReceiver = Receiver<Vec<Entry>>;
+pub type EntrySender = Sender<Vec<EntryMeta>>;
+pub type EntryReceiver = Receiver<Vec<EntryMeta>>;
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct EntryMeta {
+    pub tick_height: u64,
+    pub slot: u64,
+    pub slot_leader: Pubkey,
+    pub num_ticks_left_in_slot: u64,
+    pub parent_slot: Option<u64>,
+    pub entry: Entry,
+}
+
+impl EntryMeta {
+    pub fn default_with_entry(entry: &Entry) -> Self {
+        EntryMeta {
+            tick_height: 0,
+            slot: 0,
+            slot_leader: Pubkey::default(),
+            num_ticks_left_in_slot: 0,
+            parent_slot: None,
+            entry: entry.clone(),
+        }
+    }
+}
 
 /// Each Entry contains three pieces of data. The `num_hashes` field is the number
 /// of hashes performed since the previous entry.  The `id` field is the result

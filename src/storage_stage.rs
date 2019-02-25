@@ -7,7 +7,7 @@ use crate::blocktree::Blocktree;
 use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
 use crate::client::mk_client_with_timeout;
 use crate::cluster_info::ClusterInfo;
-use crate::entry::EntryReceiver;
+use crate::entry::{Entry, EntryReceiver};
 use crate::result::{Error, Result};
 use crate::service::Service;
 use bincode::deserialize;
@@ -362,7 +362,11 @@ impl StorageStage {
         tx_sender: &TransactionSender,
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
-        let entries = entry_receiver.recv_timeout(timeout)?;
+        let entries: Vec<Entry> = entry_receiver
+            .recv_timeout(timeout)?
+            .iter()
+            .map(|entry_meta| entry_meta.entry.clone())
+            .collect();
         for entry in entries {
             // Go through the transactions, find votes, and use them to update
             // the storage_keys with their signatures.
@@ -446,7 +450,7 @@ impl Service for StorageStage {
 mod tests {
     use crate::blocktree::{create_tmp_sample_blocktree, Blocktree};
     use crate::cluster_info::{ClusterInfo, NodeInfo};
-    use crate::entry::{make_tiny_test_entries, Entry};
+    use crate::entry::{make_tiny_test_entries, Entry, EntryMeta};
     use crate::service::Service;
     use crate::storage_stage::StorageState;
     use crate::storage_stage::NUM_IDENTITIES;
@@ -528,7 +532,11 @@ mod tests {
             STORAGE_ROTATE_TEST_COUNT,
             &cluster_info,
         );
-        storage_entry_sender.send(entries.clone()).unwrap();
+        let entries_meta: Vec<EntryMeta> = entries
+            .iter()
+            .map(|entry| EntryMeta::default_with_entry(entry))
+            .collect();
+        storage_entry_sender.send(entries_meta.clone()).unwrap();
 
         let keypair = Keypair::new();
         let hash = Hash::default();
@@ -537,7 +545,7 @@ mod tests {
         assert_eq!(result, Hash::default());
 
         for _ in 0..9 {
-            storage_entry_sender.send(entries.clone()).unwrap();
+            storage_entry_sender.send(entries_meta.clone()).unwrap();
         }
         for _ in 0..5 {
             result = storage_state.get_mining_result(&signature);
@@ -593,7 +601,11 @@ mod tests {
             STORAGE_ROTATE_TEST_COUNT,
             &cluster_info,
         );
-        storage_entry_sender.send(entries.clone()).unwrap();
+        let entries_meta: Vec<EntryMeta> = entries
+            .iter()
+            .map(|entry| EntryMeta::default_with_entry(entry))
+            .collect();
+        storage_entry_sender.send(entries_meta.clone()).unwrap();
 
         let mut reference_keys;
         {
@@ -605,7 +617,11 @@ mod tests {
         let keypair = Keypair::new();
         let vote_tx = VoteTransaction::new_vote(&keypair, 123456, Hash::default(), 1);
         vote_txs.push(vote_tx);
-        let vote_entries = vec![Entry::new(&Hash::default(), 1, vote_txs)];
+        let vote_entries = vec![EntryMeta::default_with_entry(&Entry::new(
+            &Hash::default(),
+            1,
+            vote_txs,
+        ))];
         storage_entry_sender.send(vote_entries).unwrap();
 
         for _ in 0..5 {

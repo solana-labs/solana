@@ -4,7 +4,7 @@ use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
 use crate::blocktree_processor::{self, BankForksInfo};
 use crate::cluster_info::ClusterInfo;
-use crate::entry::{Entry, EntryReceiver, EntrySender, EntrySlice};
+use crate::entry::{Entry, EntryMeta, EntryReceiver, EntrySender, EntrySlice};
 use crate::leader_scheduler::LeaderScheduler;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
@@ -66,6 +66,8 @@ impl ReplayStage {
         last_entry_id: &Arc<RwLock<Hash>>,
         leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
         subscriptions: &Arc<RpcSubscriptions>,
+        slot: u64,
+        parent_slot: Option<u64>,
     ) -> Result<()> {
         // Coalesce all the available entries into a single vote
         submit(
@@ -96,9 +98,12 @@ impl ReplayStage {
             )
         };
 
+        let mut entry_tick_height = num_ticks;
+        let mut entries_with_meta = Vec::new();
         for (i, entry) in entries.iter().enumerate() {
             inc_new_counter_info!("replicate-stage_bank-tick", bank.tick_height() as usize);
             if entry.is_tick() {
+                entry_tick_height += 1;
                 if num_ticks_to_next_vote == 0 {
                     num_ticks_to_next_vote = bank.ticks_per_slot();
                 }
@@ -108,6 +113,14 @@ impl ReplayStage {
                 "replicate-stage_tick-to-vote",
                 num_ticks_to_next_vote as usize
             );
+            entries_with_meta.push(EntryMeta {
+                tick_height: entry_tick_height,
+                slot,
+                slot_leader: bank.slot_leader(),
+                num_ticks_left_in_slot: num_ticks_to_next_vote,
+                parent_slot,
+                entry: entry.clone(),
+            });
             // If it's the last entry in the vector, i will be vec len - 1.
             // If we don't process the entry now, the for loop will exit and the entry
             // will be dropped.
@@ -141,6 +154,7 @@ impl ReplayStage {
 
         // If leader rotation happened, only write the entries up to leader rotation.
         entries.truncate(num_entries_to_write);
+        entries_with_meta.truncate(num_entries_to_write);
         *last_entry_id.write().unwrap() = entries
             .last()
             .expect("Entries cannot be empty at this point")
@@ -156,7 +170,7 @@ impl ReplayStage {
         // an error occurred processing one of the entries (causing the rest of the entries to
         // not be processed).
         if entries_len != 0 {
-            ledger_entry_sender.send(entries)?;
+            ledger_entry_sender.send(entries_with_meta)?;
         }
 
         *current_blob_index += entries_len;
@@ -314,6 +328,7 @@ impl ReplayStage {
                             vec![]
                         }
                     };
+                    let parent_slot = blocktree.meta(slot).unwrap().map(|meta| meta.parent_slot);
 
                     if !entries.is_empty() {
                         if let Err(e) = Self::process_entries(
@@ -326,6 +341,8 @@ impl ReplayStage {
                             &last_entry_id,
                             &leader_scheduler_,
                             &subscriptions_,
+                            slot,
+                            parent_slot,
                         ) {
                             error!("{} process_entries failed: {:?}", my_id, e);
                         }
@@ -594,7 +611,11 @@ mod test {
             while let Ok(entries) = ledger_writer_recv.try_recv() {
                 received_ticks.extend(entries);
             }
-            assert_eq!(&received_ticks[..], &entries_to_send[..]);
+            let received_ticks_entries: Vec<Entry> = received_ticks
+                .iter()
+                .map(|entry_meta| entry_meta.entry.clone())
+                .collect();
+            assert_eq!(&received_ticks_entries[..], &entries_to_send[..]);
 
             // Replay stage should continue running even after rotation has happened (tvu never goes down)
             assert_eq!(exit.load(Ordering::Relaxed), false);
@@ -673,7 +694,7 @@ mod test {
                 .recv()
                 .expect("Expected to receive an entry on the ledger writer receiver");
 
-            assert_eq!(next_tick, received_tick);
+            assert_eq!(next_tick[0], received_tick[0].entry);
 
             replay_stage
                 .close()
@@ -792,7 +813,7 @@ mod test {
                 let received_entry = ledger_writer_recv
                     .recv()
                     .expect("Expected to recieve an entry on the ledger writer receiver");
-                assert_eq!(received_entry[0], entry);
+                assert_eq!(received_entry[0].entry, entry);
 
                 if i == leader_rotation_index {
                     expected_last_id = entry.id;
@@ -852,6 +873,8 @@ mod test {
             &Arc::new(RwLock::new(last_entry_id)),
             &leader_scheduler,
             &Arc::new(RpcSubscriptions::default()),
+            0,
+            None,
         );
 
         match res {
@@ -878,6 +901,8 @@ mod test {
             &Arc::new(RwLock::new(last_entry_id)),
             &leader_scheduler,
             &Arc::new(RpcSubscriptions::default()),
+            0,
+            None,
         );
 
         match res {

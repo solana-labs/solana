@@ -3,16 +3,15 @@
 //! real-time access to entries.
 
 use crate::entry::Entry;
-use crate::leader_scheduler::LeaderScheduler;
 use crate::result::Result;
 use chrono::{SecondsFormat, Utc};
 use solana_sdk::hash::Hash;
+use solana_sdk::pubkey::Pubkey;
 use std::cell::RefCell;
 use std::io::prelude::*;
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
-use std::sync::{Arc, RwLock};
 
 pub trait EntryWriter: std::fmt::Debug {
     fn write(&self, payload: String) -> Result<()>;
@@ -64,14 +63,14 @@ pub trait BlockstreamEvents {
         &self,
         slot: u64,
         tick_height: u64,
-        leader_id: &str,
+        leader_id: Pubkey,
         entries: &Entry,
     ) -> Result<()>;
     fn emit_block_event(
         &self,
         slot: u64,
         tick_height: u64,
-        leader_id: &str,
+        leader_id: Pubkey,
         last_id: Hash,
     ) -> Result<()>;
 }
@@ -79,7 +78,6 @@ pub trait BlockstreamEvents {
 #[derive(Debug)]
 pub struct Blockstream<T: EntryWriter> {
     pub output: T,
-    pub leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     pub queued_block: Option<BlockData>,
 }
 
@@ -91,12 +89,12 @@ where
         &self,
         slot: u64,
         tick_height: u64,
-        leader_id: &str,
+        leader_id: Pubkey,
         entry: &Entry,
     ) -> Result<()> {
         let json_entry = serde_json::to_string(&entry)?;
         let payload = format!(
-            r#"{{"dt":"{}","t":"entry","s":{},"h":{},"l":{:?},"entry":{}}}"#,
+            r#"{{"dt":"{}","t":"entry","s":{},"h":{},"l":"{:?}","entry":{}}}"#,
             Utc::now().to_rfc3339_opts(SecondsFormat::Nanos, true),
             slot,
             tick_height,
@@ -111,11 +109,11 @@ where
         &self,
         slot: u64,
         tick_height: u64,
-        leader_id: &str,
+        leader_id: Pubkey,
         last_id: Hash,
     ) -> Result<()> {
         let payload = format!(
-            r#"{{"dt":"{}","t":"block","s":{},"h":{},"l":{:?},"id":"{:?}"}}"#,
+            r#"{{"dt":"{}","t":"block","s":{},"h":{},"l":"{:?}","id":"{:?}"}}"#,
             Utc::now().to_rfc3339_opts(SecondsFormat::Nanos, true),
             slot,
             tick_height,
@@ -130,10 +128,9 @@ where
 pub type SocketBlockstream = Blockstream<EntrySocket>;
 
 impl SocketBlockstream {
-    pub fn new(socket: String, leader_scheduler: Arc<RwLock<LeaderScheduler>>) -> Self {
+    pub fn new(socket: String) -> Self {
         Blockstream {
             output: EntrySocket { socket },
-            leader_scheduler,
             queued_block: None,
         }
     }
@@ -142,10 +139,9 @@ impl SocketBlockstream {
 pub type MockBlockstream = Blockstream<EntryVec>;
 
 impl MockBlockstream {
-    pub fn new(_: String, leader_scheduler: Arc<RwLock<LeaderScheduler>>) -> Self {
+    pub fn new(_: String) -> Self {
         Blockstream {
             output: EntryVec::new(),
-            leader_scheduler,
             queued_block: None,
         }
     }
@@ -160,6 +156,7 @@ pub struct BlockData {
     pub slot: u64,
     pub tick_height: u64,
     pub id: Hash,
+    pub leader_id: Pubkey,
 }
 
 #[cfg(test)]
@@ -168,25 +165,14 @@ mod test {
     use crate::entry::Entry;
     use chrono::{DateTime, FixedOffset};
     use serde_json::Value;
-    use solana_runtime::bank::Bank;
-    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::collections::HashSet;
 
     #[test]
     fn test_blockstream() -> () {
-        // Set up bank and leader_scheduler
-        let (mut genesis_block, _mint_keypair) = GenesisBlock::new(1_000_000);
-        genesis_block.ticks_per_slot = 5;
-        genesis_block.slots_per_epoch = 2;
-
-        let bank = Bank::new(&genesis_block);
-        let leader_scheduler = LeaderScheduler::new_with_bank(&bank);
-        let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
-
-        // Set up blockstream
-        let blockstream = MockBlockstream::new("test_stream".to_string(), leader_scheduler.clone());
-        let ticks_per_slot = bank.ticks_per_slot();
+        let blockstream = MockBlockstream::new("test_stream".to_string());
+        let ticks_per_slot = 5;
 
         let mut last_id = Hash::default();
         let mut entries = Vec::new();
@@ -194,36 +180,20 @@ mod test {
 
         let tick_height_initial = 0;
         let tick_height_final = tick_height_initial + ticks_per_slot + 2;
-        let mut previous_slot = leader_scheduler
-            .read()
-            .unwrap()
-            .tick_height_to_slot(tick_height_initial);
-        let leader_id = leader_scheduler
-            .read()
-            .unwrap()
-            .get_leader_for_slot(previous_slot)
-            .map(|leader| leader.to_string())
-            .unwrap_or_else(|| "None".to_string());
+        let mut curr_slot = 0;
+        let leader_id = Keypair::new().pubkey();
 
         for tick_height in tick_height_initial..=tick_height_final {
-            leader_scheduler
-                .write()
-                .unwrap()
-                .update_tick_height(tick_height, &bank);
-            let curr_slot = leader_scheduler
-                .read()
-                .unwrap()
-                .tick_height_to_slot(tick_height);
-            if curr_slot != previous_slot {
+            if tick_height == 5 {
                 blockstream
-                    .emit_block_event(previous_slot, tick_height - 1, &leader_id, last_id)
+                    .emit_block_event(curr_slot, tick_height - 1, leader_id, last_id)
                     .unwrap();
+                curr_slot += 1;
             }
             let entry = Entry::new(&mut last_id, 1, vec![]); // just ticks
             last_id = entry.id;
-            previous_slot = curr_slot;
             blockstream
-                .emit_entry_event(curr_slot, tick_height, &leader_id, &entry)
+                .emit_entry_event(curr_slot, tick_height, leader_id, &entry)
                 .unwrap();
             expected_entries.push(entry.clone());
             entries.push(entry);
