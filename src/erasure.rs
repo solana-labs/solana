@@ -502,7 +502,7 @@ fn categorize_blob(
 pub mod test {
     use super::*;
     use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::{Blocktree, DEFAULT_SLOT_HEIGHT};
+    use crate::blocktree::Blocktree;
     use crate::entry::{make_tiny_test_entries, EntrySlice};
 
     use crate::packet::{index_blobs, SharedBlob, BLOB_DATA_SIZE, BLOB_SIZE};
@@ -902,11 +902,7 @@ pub mod test {
     fn generate_test_blobs(offset: usize, num_blobs: usize) -> Vec<SharedBlob> {
         let blobs = make_tiny_test_entries(num_blobs).to_shared_blobs();
 
-        index_blobs(
-            &blobs,
-            &mut (offset as u64),
-            &vec![DEFAULT_SLOT_HEIGHT; blobs.len()],
-        );
+        index_blobs(&blobs, &mut (offset as u64), &vec![0; blobs.len()]);
         blobs
     }
 
@@ -954,7 +950,7 @@ pub mod test {
         // Setup the window
         let offset = 0;
         let num_blobs = NUM_DATA + 2;
-        let mut window = setup_window_ledger(offset, num_blobs, true, DEFAULT_SLOT_HEIGHT);
+        let mut window = setup_window_ledger(offset, num_blobs, true, 0);
 
         // Test erasing a data block
         let erase_offset = offset % window.len();
@@ -987,7 +983,7 @@ pub mod test {
                 ref_l2.data[..ref_l2.data_size() as usize]
             );
             assert_eq!(result.index(), offset as u64);
-            assert_eq!(result.slot(), DEFAULT_SLOT_HEIGHT as u64);
+            assert_eq!(result.slot(), 0 as u64);
         }
         drop(blocktree);
         Blocktree::destroy(&ledger_path)
@@ -1002,7 +998,7 @@ pub mod test {
         // Setup the window
         let offset = 0;
         let num_blobs = NUM_DATA + 2;
-        let mut window = setup_window_ledger(offset, num_blobs, true, DEFAULT_SLOT_HEIGHT);
+        let mut window = setup_window_ledger(offset, num_blobs, true, 0);
 
         // Tests erasing a coding block and a data block
         let coding_start = offset - (offset % NUM_DATA) + (NUM_DATA - NUM_CODING);
@@ -1040,7 +1036,7 @@ pub mod test {
                 ref_l2.data[..ref_l2.data_size() as usize]
             );
             assert_eq!(result.index(), coding_start as u64);
-            assert_eq!(result.slot(), DEFAULT_SLOT_HEIGHT as u64);
+            assert_eq!(result.slot(), 0 as u64);
 
             // Check the recovered erasure result
             let ref_l = refwindowcoding.clone().unwrap();
@@ -1053,7 +1049,7 @@ pub mod test {
                 ref_l2.data()[..ref_l2.size() as usize]
             );
             assert_eq!(result.index(), coding_start as u64);
-            assert_eq!(result.slot(), DEFAULT_SLOT_HEIGHT as u64);
+            assert_eq!(result.slot(), 0 as u64);
         }
         drop(blocktree);
         Blocktree::destroy(&ledger_path)

@@ -1,7 +1,7 @@
 // Module used by validators to approve storage mining proofs
 // // in parallel using the GPU
 
-use crate::blocktree::{Blocktree, DEFAULT_SLOT_HEIGHT};
+use crate::blocktree::Blocktree;
 use crate::chacha::{CHACHA_BLOCK_SIZE, CHACHA_KEY_SIZE};
 use crate::sigverify::{
     chacha_cbc_encrypt_many_sample, chacha_end_sha_state, chacha_init_sha_state,
@@ -47,12 +47,8 @@ pub fn chacha_cbc_encrypt_file_many_keys(
         chacha_init_sha_state(int_sha_states.as_mut_ptr(), num_keys as u32);
     }
     loop {
-        match blocktree.read_blobs_bytes(
-            entry,
-            ENTRIES_PER_SEGMENT - total_entries,
-            &mut buffer,
-            DEFAULT_SLOT_HEIGHT,
-        ) {
+        match blocktree.read_blobs_bytes(entry, ENTRIES_PER_SEGMENT - total_entries, &mut buffer, 0)
+        {
             Ok((num_entries, entry_len)) => {
                 debug!(
                     "chacha_cuda: encrypting segment: {} num_entries: {} entry_len: {}",
@@ -110,7 +106,7 @@ pub fn chacha_cbc_encrypt_file_many_keys(
 #[cfg(test)]
 mod tests {
     use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::{Blocktree, DEFAULT_SLOT_HEIGHT};
+    use crate::blocktree::Blocktree;
     use crate::chacha::chacha_cbc_encrypt_ledger;
     use crate::chacha_cuda::chacha_cbc_encrypt_file_many_keys;
     use crate::entry::make_tiny_test_entries;
@@ -130,9 +126,7 @@ mod tests {
         let ticks_per_slot = 16;
         let blocktree = Arc::new(Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap());
 
-        blocktree
-            .write_entries(DEFAULT_SLOT_HEIGHT, 0, 0, &entries)
-            .unwrap();
+        blocktree.write_entries(0, 0, 0, &entries).unwrap();
 
         let out_path = Path::new("test_chacha_encrypt_file_many_keys_single_output.txt.enc");
 
@@ -165,9 +159,7 @@ mod tests {
         let ledger_path = get_tmp_ledger_path(ledger_dir);
         let ticks_per_slot = 16;
         let blocktree = Arc::new(Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap());
-        blocktree
-            .write_entries(DEFAULT_SLOT_HEIGHT, 0, 0, &entries)
-            .unwrap();
+        blocktree.write_entries(0, 0, 0, &entries).unwrap();
 
         let out_path = Path::new("test_chacha_encrypt_file_many_keys_multiple_output.txt.enc");
 

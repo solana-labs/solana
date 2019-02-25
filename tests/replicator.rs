@@ -8,7 +8,6 @@ extern crate serde_json;
 use bincode::deserialize;
 use solana::blocktree::{
     create_tmp_sample_blocktree, get_tmp_ledger_path, tmp_copy_blocktree, Blocktree,
-    DEFAULT_SLOT_HEIGHT,
 };
 use solana::client::mk_client;
 use solana::cluster_info::{ClusterInfo, Node, NodeInfo};
@@ -155,7 +154,7 @@ fn test_replicator_startup_basic() {
         let cluster_info = ClusterInfo::new(tn.info.clone());
         let repair_index = replicator.entry_height();
         let req = cluster_info
-            .window_index_request_bytes(DEFAULT_SLOT_HEIGHT, repair_index)
+            .window_index_request_bytes(0, repair_index)
             .unwrap();
 
         let exit = Arc::new(AtomicBool::new(false));

@@ -465,7 +465,7 @@ impl Service for ReplayStage {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::blocktree::{create_tmp_sample_blocktree, Blocktree, DEFAULT_SLOT_HEIGHT};
+    use crate::blocktree::{create_tmp_sample_blocktree, Blocktree};
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::create_ticks;
     use crate::entry::{next_entry_mut, Entry};
@@ -534,12 +534,7 @@ mod test {
         {
             let blocktree = Blocktree::open(&my_ledger_path).unwrap();
             blocktree
-                .write_entries(
-                    DEFAULT_SLOT_HEIGHT,
-                    tick_height,
-                    entry_height,
-                    active_set_entries,
-                )
+                .write_entries(0, tick_height, entry_height, active_set_entries)
                 .unwrap();
             tick_height += num_ending_ticks;
         }
@@ -577,12 +572,7 @@ mod test {
             // Write the entries to the ledger, replay_stage should get notified of changes
             let meta = blocktree.meta(0).unwrap().unwrap();
             blocktree
-                .write_entries(
-                    DEFAULT_SLOT_HEIGHT,
-                    tick_height,
-                    meta.consumed,
-                    &entries_to_send,
-                )
+                .write_entries(0, tick_height, meta.consumed, &entries_to_send)
                 .unwrap();
 
             info!("Wait for replay_stage to exit and check return value is correct");
@@ -676,12 +666,7 @@ mod test {
             info!("Send ReplayStage an entry, should see it on the ledger writer receiver");
             let next_tick = create_ticks(1, last_entry_id);
             blocktree
-                .write_entries(
-                    DEFAULT_SLOT_HEIGHT,
-                    tick_height,
-                    entry_height,
-                    next_tick.clone(),
-                )
+                .write_entries(0, tick_height, entry_height, next_tick.clone())
                 .unwrap();
 
             let received_tick = ledger_writer_recv
@@ -743,12 +728,7 @@ mod test {
         {
             let blocktree = Blocktree::open_config(&my_ledger_path, ticks_per_slot).unwrap();
             blocktree
-                .write_entries(
-                    DEFAULT_SLOT_HEIGHT,
-                    tick_height,
-                    genesis_entry_height,
-                    &active_set_entries,
-                )
+                .write_entries(0, tick_height, genesis_entry_height, &active_set_entries)
                 .unwrap();
         }
 
@@ -802,7 +782,7 @@ mod test {
                 let entry = next_entry_mut(&mut last_id, num_hashes, vec![]);
                 blocktree
                     .write_entries(
-                        DEFAULT_SLOT_HEIGHT,
+                        0,
                         tick_height + i as u64,
                         meta.consumed + i as u64,
                         vec![entry.clone()],

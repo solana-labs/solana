@@ -1,4 +1,4 @@
-use crate::blocktree::{Blocktree, DEFAULT_SLOT_HEIGHT};
+use crate::blocktree::Blocktree;
 use std::fs::File;
 use std::io;
 use std::io::{BufWriter, Write};
@@ -50,12 +50,8 @@ pub fn chacha_cbc_encrypt_ledger(
     let mut entry = slice;
 
     loop {
-        match blocktree.read_blobs_bytes(
-            entry,
-            ENTRIES_PER_SEGMENT - total_entries,
-            &mut buffer,
-            DEFAULT_SLOT_HEIGHT,
-        ) {
+        match blocktree.read_blobs_bytes(entry, ENTRIES_PER_SEGMENT - total_entries, &mut buffer, 0)
+        {
             Ok((num_entries, entry_len)) => {
                 debug!(
                     "chacha: encrypting slice: {} num_entries: {} entry_len: {}",
@@ -95,7 +91,7 @@ pub fn chacha_cbc_encrypt_ledger(
 #[cfg(test)]
 mod tests {
     use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::{Blocktree, DEFAULT_SLOT_HEIGHT};
+    use crate::blocktree::Blocktree;
     use crate::chacha::chacha_cbc_encrypt_ledger;
     use crate::entry::Entry;
     use ring::signature::Ed25519KeyPair;
@@ -149,9 +145,7 @@ mod tests {
         let out_path = Path::new("test_chacha_encrypt_file_output.txt.enc");
 
         let entries = make_tiny_deterministic_test_entries(32);
-        blocktree
-            .write_entries(DEFAULT_SLOT_HEIGHT, 0, 0, &entries)
-            .unwrap();
+        blocktree.write_entries(0, 0, 0, &entries).unwrap();
 
         let mut key = hex!(
             "abcd1234abcd1234abcd1234abcd1234 abcd1234abcd1234abcd1234abcd1234

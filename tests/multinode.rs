@@ -1,8 +1,6 @@
 use log::*;
 use solana::blob_fetch_stage::BlobFetchStage;
-use solana::blocktree::{
-    create_tmp_sample_blocktree, tmp_copy_blocktree, Blocktree, DEFAULT_SLOT_HEIGHT,
-};
+use solana::blocktree::{create_tmp_sample_blocktree, tmp_copy_blocktree, Blocktree};
 use solana::client::mk_client;
 use solana::cluster_info::{Node, NodeInfo};
 use solana::entry::{reconstruct_entries_from_blobs, Entry};
@@ -69,12 +67,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
             last_entry_id,
         );
         blocktree
-            .write_entries(
-                DEFAULT_SLOT_HEIGHT,
-                tick_height,
-                last_entry_height,
-                &entries,
-            )
+            .write_entries(0, tick_height, last_entry_height, &entries)
             .unwrap();
 
         last_entry_height += entries.len() as u64;
@@ -912,12 +905,7 @@ fn test_leader_to_validator_transition() {
     {
         let blocktree = Blocktree::open_config(&leader_ledger_path, ticks_per_slot).unwrap();
         blocktree
-            .write_entries(
-                DEFAULT_SLOT_HEIGHT,
-                tick_height,
-                genesis_entry_height,
-                &active_set_entries,
-            )
+            .write_entries(0, tick_height, genesis_entry_height, &active_set_entries)
             .unwrap();
     }
     info!("leader id: {}", leader_keypair.pubkey());
@@ -1015,12 +1003,7 @@ fn test_leader_validator_basic() {
     {
         let blocktree = Blocktree::open_config(&leader_ledger_path, ticks_per_slot).unwrap();
         blocktree
-            .write_entries(
-                DEFAULT_SLOT_HEIGHT,
-                tick_height,
-                genesis_entry_height,
-                &active_set_entries,
-            )
+            .write_entries(0, tick_height, genesis_entry_height, &active_set_entries)
             .unwrap();
     }
 
@@ -1170,12 +1153,7 @@ fn test_dropped_handoff_recovery() {
     {
         let blocktree = Blocktree::open_config(&genesis_ledger_path, ticks_per_slot).unwrap();
         blocktree
-            .write_entries(
-                DEFAULT_SLOT_HEIGHT,
-                tick_height,
-                genesis_entry_height,
-                &active_set_entries,
-            )
+            .write_entries(0, tick_height, genesis_entry_height, &active_set_entries)
             .unwrap();
     }
 
@@ -1341,12 +1319,7 @@ fn test_full_leader_validator_network() {
             let blocktree =
                 Blocktree::open_config(&bootstrap_leader_ledger_path, ticks_per_slot).unwrap();
             blocktree
-                .write_entries(
-                    DEFAULT_SLOT_HEIGHT,
-                    tick_height,
-                    entry_height,
-                    &active_set_entries,
-                )
+                .write_entries(0, tick_height, entry_height, &active_set_entries)
                 .unwrap();
             entry_height += active_set_entries.len() as u64;
         }
