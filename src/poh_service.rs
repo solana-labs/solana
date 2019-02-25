@@ -162,6 +162,7 @@ mod tests {
 
         while need_tick || need_entry || need_partial {
             for entry in entry_receiver.recv().unwrap() {
+                let entry = &entry.0;
                 if entry.is_tick() {
                     assert!(entry.num_hashes <= HASHES_PER_TICK);
 
