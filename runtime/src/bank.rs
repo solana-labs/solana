@@ -104,7 +104,7 @@ pub struct Bank {
     // A number of slots before slot_index 0. Used to calculate finalized staked nodes.
     stakers_slot_offset: u64,
 
-    pub id: u64,
+    id: u64,
 }
 
 impl Bank {

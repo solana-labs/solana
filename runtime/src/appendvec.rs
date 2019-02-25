@@ -160,35 +160,34 @@ where
         }
 
         let mut at = data_at as usize;
-        unsafe {
-            let data = &self.map[at..at + mem::size_of::<u64>()];
-            #[allow(clippy::cast_ptr_alignment)]
-            let ptr = data.as_ptr() as *mut u64;
-            std::ptr::write_unaligned(ptr, len as u64);
-            at += mem::size_of::<u64>();
 
-            let data = &self.map[at..at + mem::size_of::<u64>()];
-            #[allow(clippy::cast_ptr_alignment)]
-            let ptr = data.as_ptr() as *mut u64;
-            std::ptr::write_unaligned(ptr, account.tokens);
-            at += mem::size_of::<u64>();
+        let data = &self.map[at..at + mem::size_of::<u64>()];
+        #[allow(clippy::cast_ptr_alignment)]
+        let ptr = data.as_ptr() as *mut u64;
+        unsafe { std::ptr::write_unaligned(ptr, len as u64) };
+        at += mem::size_of::<u64>();
 
-            let data = &self.map[at..at + account.userdata.len()];
-            let dst = data.as_ptr() as *mut u8;
-            let data = &account.userdata[0..account.userdata.len()];
-            let src = data.as_ptr();
-            std::ptr::copy_nonoverlapping(src, dst, account.userdata.len());
-            at += account.userdata.len();
+        let data = &self.map[at..at + mem::size_of::<u64>()];
+        #[allow(clippy::cast_ptr_alignment)]
+        let ptr = data.as_ptr() as *mut u64;
+        unsafe { std::ptr::write_unaligned(ptr, account.tokens) };
+        at += mem::size_of::<u64>();
 
-            let data = &self.map[at..at + mem::size_of::<Pubkey>()];
-            let ptr = data.as_ptr() as *mut Pubkey;
-            std::ptr::write(ptr, account.owner);
-            at += mem::size_of::<Pubkey>();
+        let data = &self.map[at..at + account.userdata.len()];
+        let dst = data.as_ptr() as *mut u8;
+        let data = &account.userdata[0..account.userdata.len()];
+        let src = data.as_ptr();
+        unsafe { std::ptr::copy_nonoverlapping(src, dst, account.userdata.len()) };
+        at += account.userdata.len();
 
-            let data = &self.map[at..at + mem::size_of::<bool>()];
-            let ptr = data.as_ptr() as *mut bool;
-            std::ptr::write(ptr, account.executable);
-        };
+        let data = &self.map[at..at + mem::size_of::<Pubkey>()];
+        let ptr = data.as_ptr() as *mut Pubkey;
+        unsafe { std::ptr::write(ptr, account.owner) };
+        at += mem::size_of::<Pubkey>();
+
+        let data = &self.map[at..at + mem::size_of::<bool>()];
+        let ptr = data.as_ptr() as *mut bool;
+        unsafe { std::ptr::write(ptr, account.executable) };
 
         self.current_offset
             .fetch_add(len + SIZEOF_U64, Ordering::Relaxed);
