@@ -684,22 +684,27 @@ impl Bank {
         self.slots_per_epoch
     }
 
-    /// Return the checkpointed bank that should be used to generate a leader schedule.
+    /// Return the checkpointed stakes that should be used to generate a leader schedule.
     /// Return None if a sufficiently old bank checkpoint doesn't exist.
-    fn leader_schedule_bank(&self, epoch_height: u64) -> Option<Arc<Bank>> {
+    fn leader_schedule_stakes(&self, epoch_height: u64) -> Option<HashMap<Pubkey, u64>> {
         let epoch_slot_height = epoch_height * self.slots_per_epoch();
         let expected = epoch_slot_height.saturating_sub(self.leader_schedule_slot_offset);
         self.parents()
             .into_iter()
             .find(|bank| bank.slot_height() <= expected)
+            .map(|bank| bank.staked_nodes())
     }
 
-    /// Return the leader schedule for the current epoch.
+    /// Return the leader schedule for the given epoch.
     fn leader_schedule(&self, epoch_height: u64) -> LeaderSchedule {
-        match self.leader_schedule_bank(epoch_height) {
-            None => LeaderSchedule::new_with_bank(self),
-            Some(bank) => LeaderSchedule::new_with_bank(&bank),
-        }
+        let (stakes, epoch_height) = match self.leader_schedule_stakes(epoch_height) {
+            None => (self.staked_nodes(), self.epoch_height()),
+            Some(stakes) => (stakes, epoch_height),
+        };
+        let mut seed = [0u8; 32];
+        seed[0..8].copy_from_slice(&epoch_height.to_le_bytes());
+        let stakes: Vec<_> = stakes.into_iter().collect();
+        LeaderSchedule::new(&stakes, seed, self.slots_per_epoch())
     }
 
     /// Return the leader for the slot at the slot_index and epoch_height returned
@@ -1189,24 +1194,41 @@ mod tests {
     }
 
     #[test]
-    fn test_leader_schedule_bank() {
-        let (genesis_block, _) = GenesisBlock::new(5);
+    fn test_leader_schedule_stakes() {
+        let pubkey = Keypair::new().pubkey();
+        let bootstrap_tokens = 2;
+        let (genesis_block, _) = GenesisBlock::new_with_leader(2, pubkey, bootstrap_tokens);
         let bank = Bank::new(&genesis_block);
-        assert!(bank.leader_schedule_bank(bank.epoch_height()).is_none());
+        assert!(bank.leader_schedule_stakes(bank.epoch_height()).is_none());
 
         let bank = Bank::new_from_parent(&Arc::new(bank));
         let ticks_per_offset = bank.leader_schedule_slot_offset * bank.ticks_per_slot();
         register_ticks(&bank, ticks_per_offset);
         assert_eq!(bank.slot_height(), bank.leader_schedule_slot_offset);
 
-        let slot_height = bank.slots_per_epoch() - bank.leader_schedule_slot_offset;
+        let mut expected = HashMap::new();
+        expected.insert(pubkey, bootstrap_tokens - 1);
         let bank = Bank::new_from_parent(&Arc::new(bank));
         assert_eq!(
-            bank.leader_schedule_bank(bank.epoch_height())
-                .unwrap()
-                .slot_height(),
-            slot_height
+            bank.leader_schedule_stakes(bank.epoch_height()).unwrap(),
+            expected,
         );
+    }
+
+    #[test]
+    fn test_leader_schedule_basic() {
+        let pubkey = Keypair::new().pubkey();
+        let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(2, pubkey, 2);
+        let bank = Bank::new(&genesis_block);
+
+        let ids_and_stakes: Vec<_> = bank.staked_nodes().into_iter().collect();
+        let mut seed = [0u8; 32];
+        seed[0..8].copy_from_slice(&bank.epoch_height().to_le_bytes());
+        let leader_schedule = LeaderSchedule::new(&ids_and_stakes, seed, bank.slots_per_epoch());
+
+        assert_eq!(leader_schedule[0], pubkey);
+        assert_eq!(leader_schedule[1], pubkey);
+        assert_eq!(leader_schedule[2], pubkey);
     }
 
     #[test]
