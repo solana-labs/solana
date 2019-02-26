@@ -448,6 +448,7 @@ impl ReplayStage {
         parent: &Arc<Bank>,
     ) -> Arc<Bank> {
         let new_bank = Bank::new_from_parent(&parent);
+        new_bank.squash();
         let mut bank_forks = bank_forks.write().unwrap();
         bank_forks.insert(slot, new_bank);
         bank_forks.set_working_bank_id(slot);
