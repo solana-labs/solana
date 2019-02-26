@@ -39,7 +39,6 @@ impl JsonRpcRequestProcessor {
         self.bank = Some(bank);
     }
 
-    /// Create a new request processor that wraps the given Bank.
     pub fn new(storage_state: StorageState) -> Self {
         JsonRpcRequestProcessor {
             bank: None,
@@ -47,36 +46,42 @@ impl JsonRpcRequestProcessor {
         }
     }
 
-    /// Process JSON-RPC request items sent via JSON-RPC.
     pub fn get_account_info(&self, pubkey: Pubkey) -> Result<Account> {
         self.bank()?
             .get_account(&pubkey)
             .ok_or_else(Error::invalid_request)
     }
+
     pub fn get_balance(&self, pubkey: Pubkey) -> Result<u64> {
         let val = self.bank()?.get_balance(&pubkey);
         Ok(val)
     }
+
     fn get_last_id(&self) -> Result<String> {
         let id = self.bank()?.last_id();
         Ok(bs58::encode(id).into_string())
     }
+
     pub fn get_signature_status(&self, signature: Signature) -> Option<bank::Result<()>> {
         self.bank()
             .ok()
             .and_then(|bank| bank.get_signature_status(&signature))
     }
+
     fn get_transaction_count(&self) -> Result<u64> {
         Ok(self.bank()?.transaction_count() as u64)
     }
+
     fn get_storage_mining_last_id(&self) -> Result<String> {
         let id = self.storage_state.get_last_id();
         Ok(bs58::encode(id).into_string())
     }
+
     fn get_storage_mining_entry_height(&self) -> Result<u64> {
         let entry_height = self.storage_state.get_entry_height();
         Ok(entry_height)
     }
+
     fn get_storage_pubkeys_for_entry_height(&self, entry_height: u64) -> Result<Vec<Pubkey>> {
         Ok(self
             .storage_state
@@ -197,15 +202,18 @@ impl RpcSol for RpcSolImpl {
             .unwrap()
             .get_account_info(pubkey)
     }
+
     fn get_balance(&self, meta: Self::Metadata, id: String) -> Result<u64> {
         info!("get_balance rpc request received: {:?}", id);
         let pubkey = verify_pubkey(id)?;
         meta.request_processor.read().unwrap().get_balance(pubkey)
     }
+
     fn get_last_id(&self, meta: Self::Metadata) -> Result<String> {
         info!("get_last_id rpc request received");
         meta.request_processor.read().unwrap().get_last_id()
     }
+
     fn get_signature_status(&self, meta: Self::Metadata, id: String) -> Result<RpcSignatureStatus> {
         info!("get_signature_status rpc request received: {:?}", id);
         let signature = verify_signature(&id)?;
@@ -234,6 +242,7 @@ impl RpcSol for RpcSolImpl {
         info!("get_signature_status rpc request status: {:?}", status);
         Ok(status)
     }
+
     fn get_transaction_count(&self, meta: Self::Metadata) -> Result<u64> {
         info!("get_transaction_count rpc request received");
         meta.request_processor
@@ -241,6 +250,7 @@ impl RpcSol for RpcSolImpl {
             .unwrap()
             .get_transaction_count()
     }
+
     fn request_airdrop(&self, meta: Self::Metadata, id: String, tokens: u64) -> Result<String> {
         trace!("request_airdrop id={} tokens={}", id, tokens);
         let pubkey = verify_pubkey(id)?;
@@ -286,6 +296,7 @@ impl RpcSol for RpcSolImpl {
             sleep(Duration::from_millis(100));
         }
     }
+
     fn send_transaction(&self, meta: Self::Metadata, data: Vec<u8>) -> Result<String> {
         let tx: Transaction = deserialize(&data).map_err(|err| {
             info!("send_transaction: deserialize error: {:?}", err);
@@ -316,18 +327,21 @@ impl RpcSol for RpcSolImpl {
         );
         Ok(signature)
     }
+
     fn get_storage_mining_last_id(&self, meta: Self::Metadata) -> Result<String> {
         meta.request_processor
             .read()
             .unwrap()
             .get_storage_mining_last_id()
     }
+
     fn get_storage_mining_entry_height(&self, meta: Self::Metadata) -> Result<u64> {
         meta.request_processor
             .read()
             .unwrap()
             .get_storage_mining_entry_height()
     }
+
     fn get_storage_pubkeys_for_entry_height(
         &self,
         meta: Self::Metadata,
@@ -339,6 +353,7 @@ impl RpcSol for RpcSolImpl {
             .get_storage_pubkeys_for_entry_height(entry_height)
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
