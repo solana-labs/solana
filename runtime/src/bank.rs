@@ -5,7 +5,6 @@
 
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
 use crate::last_id_queue::LastIdQueue;
-use crate::leader_schedule::LeaderSchedule;
 use crate::runtime::{self, RuntimeError};
 use crate::status_cache::StatusCache;
 use bincode::serialize;
@@ -723,7 +722,9 @@ impl Bank {
     }
 
     /// Return the checkpointed stakes that should be used to generate a leader schedule.
-    fn staked_nodes_at_slot(&self, slot_height: u64) -> HashMap<Pubkey, u64> {
+    fn staked_nodes_at_slot(&self, current_slot_height: u64) -> HashMap<Pubkey, u64> {
+        let slot_height = current_slot_height.saturating_sub(self.stakers_slot_offset);
+
         let parents = self.parents();
         let mut banks = vec![self];
         banks.extend(parents.iter().map(|x| x.as_ref()));
@@ -741,87 +742,6 @@ impl Bank {
         self.ticks_per_slot
     }
 
-    /// Return the number of slots per tick that should be used calls to epoch_height().
-    pub fn slots_per_epoch(&self) -> u64 {
-        self.slots_per_epoch
-    }
-
-    /// Return the checkpointed stakes that should be used to generate a leader schedule.
-    fn staked_nodes_at_epoch(&self, epoch_height: u64) -> HashMap<Pubkey, u64> {
-        let epoch_slot_height = epoch_height * self.slots_per_epoch();
-        let slot_height = epoch_slot_height.saturating_sub(self.stakers_slot_offset);
-        self.staked_nodes_at_slot(slot_height)
-    }
-
-    /// Return the leader schedule for the given epoch.
-    fn leader_schedule(&self, epoch_height: u64) -> LeaderSchedule {
-        let stakes = self.staked_nodes_at_epoch(epoch_height);
-        let mut seed = [0u8; 32];
-        seed[0..8].copy_from_slice(&epoch_height.to_le_bytes());
-        let stakes: Vec<_> = stakes.into_iter().collect();
-        LeaderSchedule::new(&stakes, seed, self.slots_per_epoch())
-    }
-
-    /// Return the leader for the slot at the slot_index and epoch_height returned
-    /// by the given function.
-    pub fn slot_leader_by<F>(&self, get_slot_index: F) -> Pubkey
-    where
-        F: Fn(u64, u64, u64) -> (u64, u64),
-    {
-        let (slot_index, epoch_height) = get_slot_index(
-            self.slot_index(),
-            self.epoch_height(),
-            self.slots_per_epoch(),
-        );
-        let leader_schedule = self.leader_schedule(epoch_height);
-        leader_schedule[slot_index as usize]
-    }
-
-    /// Return the leader for the current slot.
-    pub fn slot_leader(&self) -> Pubkey {
-        self.slot_leader_by(|slot_index, epoch_height, _| (slot_index, epoch_height))
-    }
-
-    /// Return the epoch height and slot index of the slot before the current slot.
-    fn prev_slot_leader_index(
-        slot_index: u64,
-        epoch_height: u64,
-        slots_per_epoch: u64,
-    ) -> (u64, u64) {
-        if epoch_height == 0 && slot_index == 0 {
-            return (0, 0);
-        }
-
-        if slot_index == 0 {
-            (slots_per_epoch - 1, epoch_height - 1)
-        } else {
-            (slot_index - 1, epoch_height)
-        }
-    }
-
-    /// Return the slot_index and epoch height of the slot following the current slot.
-    fn next_slot_leader_index(
-        slot_index: u64,
-        epoch_height: u64,
-        slots_per_epoch: u64,
-    ) -> (u64, u64) {
-        if slot_index + 1 == slots_per_epoch {
-            (0, epoch_height + 1)
-        } else {
-            (slot_index + 1, epoch_height)
-        }
-    }
-
-    /// Return the leader for the slot before the current slot.
-    pub fn prev_slot_leader(&self) -> Pubkey {
-        self.slot_leader_by(Self::prev_slot_leader_index)
-    }
-
-    /// Return the leader for the slot following the current slot.
-    pub fn next_slot_leader(&self) -> Pubkey {
-        self.slot_leader_by(Self::next_slot_leader_index)
-    }
-
     /// Return the number of ticks since genesis.
     pub fn tick_height(&self) -> u64 {
         self.last_id_queue.read().unwrap().tick_height()
@@ -835,6 +755,17 @@ impl Bank {
     /// Return the slot_height of the last registered tick.
     pub fn slot_height(&self) -> u64 {
         self.tick_height() / self.ticks_per_slot()
+    }
+
+    /// Return the number of slots per tick.
+    pub fn slots_per_epoch(&self) -> u64 {
+        self.slots_per_epoch
+    }
+
+    /// Return the checkpointed stakes that should be used to generate a leader schedule.
+    pub fn staked_nodes_at_epoch(&self, epoch_height: u64) -> HashMap<Pubkey, u64> {
+        let epoch_slot_height = epoch_height * self.slots_per_epoch();
+        self.staked_nodes_at_slot(epoch_slot_height)
     }
 
     /// Return the number of slots since the last epoch boundary.
@@ -1262,23 +1193,7 @@ mod tests {
         let mut expected = HashMap::new();
         expected.insert(pubkey, bootstrap_tokens - 1);
         let bank = Bank::new_from_parent(&Arc::new(bank));
-        assert_eq!(bank.staked_nodes_at_epoch(bank.epoch_height()), expected,);
-    }
-
-    #[test]
-    fn test_bank_leader_schedule_basic() {
-        let pubkey = Keypair::new().pubkey();
-        let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(2, pubkey, 2);
-        let bank = Bank::new(&genesis_block);
-
-        let ids_and_stakes: Vec<_> = bank.staked_nodes().into_iter().collect();
-        let mut seed = [0u8; 32];
-        seed[0..8].copy_from_slice(&bank.epoch_height().to_le_bytes());
-        let leader_schedule = LeaderSchedule::new(&ids_and_stakes, seed, bank.slots_per_epoch());
-
-        assert_eq!(leader_schedule[0], pubkey);
-        assert_eq!(leader_schedule[1], pubkey);
-        assert_eq!(leader_schedule[2], pubkey);
+        assert_eq!(bank.staked_nodes_at_slot(bank.slot_height()), expected);
     }
 
     #[test]
@@ -1534,25 +1449,5 @@ mod tests {
             // works iteration 0, no-ops on iteration 1 and 2
             bank.squash();
         }
-    }
-
-    #[test]
-    fn test_bank_slot_leader_basic() {
-        let pubkey = Keypair::new().pubkey();
-        let bank = Bank::new(&GenesisBlock::new_with_leader(2, pubkey, 2).0);
-        assert_eq!(bank.slot_leader(), pubkey);
-    }
-
-    #[test]
-    fn test_bank_prev_slot_leader_index() {
-        assert_eq!(Bank::prev_slot_leader_index(0, 0, 2), (0, 0));
-        assert_eq!(Bank::prev_slot_leader_index(1, 0, 2), (0, 0));
-        assert_eq!(Bank::prev_slot_leader_index(0, 1, 2), (1, 0));
-    }
-
-    #[test]
-    fn test_bank_next_slot_leader_index() {
-        assert_eq!(Bank::next_slot_leader_index(0, 0, 2), (1, 0));
-        assert_eq!(Bank::next_slot_leader_index(1, 0, 2), (0, 1));
     }
 }
