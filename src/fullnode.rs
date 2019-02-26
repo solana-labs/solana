@@ -624,7 +624,7 @@ mod tests {
             let validator_exit = validator.run(Some(rotation_sender));
             assert_eq!(
                 rotation_receiver.recv().unwrap(),
-                (FullnodeReturnType::LeaderToLeaderRotation, 2)
+                (FullnodeReturnType::ValidatorToLeaderRotation, 2)
             );
 
             validator_exit();
