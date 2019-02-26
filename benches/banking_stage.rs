@@ -21,12 +21,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use test::Bencher;
 
-fn check_txs(receiver: &Receiver<Vec<Entry>>, ref_tx_count: usize) {
+fn check_txs(receiver: &Receiver<Vec<(Entry, u64)>>, ref_tx_count: usize) {
     let mut total = 0;
     loop {
         let entries = receiver.recv_timeout(Duration::new(1, 0));
         if let Ok(entries) = entries {
-            for entry in &entries {
+            for (entry, _) in &entries {
                 total += entry.transactions.len();
             }
         } else {
