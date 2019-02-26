@@ -64,24 +64,27 @@ if [[ ! -f rust-bpf-$machine-$version.md ]]; then
     rm -rf rust-bpf
     rm -rf rust-bpf-$machine-*
     mkdir -p rust-bpf
-    cd rust-bpf
+    pushd rust-bpf
     wget --progress=dot:giga https://github.com/solana-labs/rust-bpf-builder/releases/download/$version/$filename
     tar -jxf $filename
     rm -rf $filename
+    popd
 
-    echo "https://github.com/solana-labs/rust-bpf-builder/releases/tag/$version" > ../rust-bpf-$machine-$version.md
+    set -ex
+    ./rust-bpf/bin/rustc --print sysroot
+
+    set +e
+    rustup toolchain uninstall bpf
+    set -e
+    rustup toolchain link bpf rust-bpf
+
+    echo "https://github.com/solana-labs/rust-bpf-builder/releases/tag/$version" > rust-bpf-$machine-$version.md
   )
   exitcode=$?
   if [[ $exitcode -ne 0 ]]; then
     rm -rf rust-bpf
     exit 1
   fi
-  set +e
-  rustup toolchain uninstall bpf
-  set -e
-  rustup toolchain link bpf rust-bpf
-
-  ./rust-bpf/bin/rustc --print sysroot
 fi
 
 # Install Rust-BPF Sysroot
