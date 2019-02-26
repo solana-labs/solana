@@ -392,7 +392,6 @@ mod test {
         assert_eq!(push.active_set.len(), push.num_active);
     }
     #[test]
-    #[ignore]
     fn test_active_set_refresh_with_bank() {
         let time = timestamp() - 1024; //make sure there's at least a 1 second delay
         let mut crds = Crds::default();
