@@ -254,11 +254,7 @@ impl Bank {
 
     /// Return the last entry ID registered.
     pub fn last_id(&self) -> Hash {
-        self.last_id_queue
-            .read()
-            .unwrap()
-            .last_id
-            .expect("no last_id has been set")
+        self.last_id_queue.read().unwrap().last_id()
     }
 
     /// Forget all signatures. Useful for benchmarking.
@@ -308,7 +304,7 @@ impl Bank {
             let mut last_id_queue = self.last_id_queue.write().unwrap();
             inc_new_counter_info!("bank-register_tick-registered", 1);
             last_id_queue.register_tick(last_id);
-            last_id_queue.tick_height
+            last_id_queue.tick_height()
         };
         if current_tick_height % NUM_TICKS_PER_SECOND as u64 == 0 {
             self.status_cache.write().unwrap().new_cache(last_id);
@@ -718,6 +714,20 @@ impl Bank {
             .collect()
     }
 
+    /// Return the checkpointed stakes that should be used to generate a leader schedule.
+    fn staked_nodes_at_slot(&self, slot_height: u64) -> HashMap<Pubkey, u64> {
+        let parents = self.parents();
+        let mut banks = vec![self];
+        banks.extend(parents.iter().map(|x| x.as_ref()));
+
+        let bank = banks
+            .iter()
+            .find(|bank| bank.slot_height() <= slot_height)
+            .unwrap_or_else(|| banks.last().unwrap());
+
+        bank.staked_nodes()
+    }
+
     /// Return the number of ticks per slot that should be used calls to slot_height().
     pub fn ticks_per_slot(&self) -> u64 {
         self.ticks_per_slot
@@ -731,18 +741,8 @@ impl Bank {
     /// Return the checkpointed stakes that should be used to generate a leader schedule.
     fn staked_nodes_at_epoch(&self, epoch_height: u64) -> HashMap<Pubkey, u64> {
         let epoch_slot_height = epoch_height * self.slots_per_epoch();
-        let expected = epoch_slot_height.saturating_sub(self.stakers_slot_offset);
-
-        let parents = self.parents();
-        let mut banks = vec![self];
-        banks.extend(parents.iter().map(|x| x.as_ref()));
-
-        let bank = banks
-            .iter()
-            .find(|bank| bank.slot_height() <= expected)
-            .unwrap_or_else(|| banks.last().unwrap());
-
-        bank.staked_nodes()
+        let slot_height = epoch_slot_height.saturating_sub(self.stakers_slot_offset);
+        self.staked_nodes_at_slot(slot_height)
     }
 
     /// Return the leader schedule for the given epoch.
@@ -816,7 +816,7 @@ impl Bank {
 
     /// Return the number of ticks since genesis.
     pub fn tick_height(&self) -> u64 {
-        self.last_id_queue.read().unwrap().tick_height
+        self.last_id_queue.read().unwrap().tick_height()
     }
 
     /// Return the number of ticks since the last slot boundary.
