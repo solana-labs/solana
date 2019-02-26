@@ -327,6 +327,7 @@ impl LeaderScheduler {
                         // of the previous epoch was chosen, then pick the next leader in the
                         // rankings instead
                         validator_rankings[0] = validator_rankings[1];
+                        validator_rankings.truncate(self.slots_per_epoch as usize);
                     } else {
                         // If there is more than one leader in the schedule, truncate and set the most
                         // recent leader to the back of the line. This way that node will still remain

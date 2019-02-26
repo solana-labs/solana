@@ -1670,6 +1670,7 @@ fn test_fullnode_rotate(
         ticks_per_slot, slots_per_epoch, include_validator, transact
     );
 
+    // Create fullnode config, and set leader scheduler policies
     let mut fullnode_config = FullnodeConfig::default();
     fullnode_config.leader_scheduler_config.ticks_per_slot = ticks_per_slot;
     fullnode_config.leader_scheduler_config.slots_per_epoch = slots_per_epoch;
@@ -1688,16 +1689,9 @@ fn test_fullnode_rotate(
     let leader_keypair = Arc::new(Keypair::new());
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_info = leader.info.clone();
+    let mut leader_should_be_leader = true;
 
-    // Create the validator node information
-    let validator_keypair = Arc::new(Keypair::new());
-    let validator = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
-
-    info!("leader id: {}", leader_keypair.pubkey());
-    if include_validator {
-        info!("validator id: {}", validator_keypair.pubkey());
-    }
-
+    // Create the Genesis block using leader's keypair
     let (mut genesis_block, mint_keypair) =
         GenesisBlock::new_with_leader(1_000_000_000_000_000_000, leader_keypair.pubkey(), 123);
     genesis_block.ticks_per_slot = ticks_per_slot;
@@ -1712,6 +1706,10 @@ fn test_fullnode_rotate(
     info!("ledger is {}", leader_ledger_path);
 
     let mut entries = vec![];
+
+    // Create the validator node information
+    let validator_keypair = Arc::new(Keypair::new());
+    let validator = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
     // Setup the cluster with a single node
     if include_validator {
@@ -1729,8 +1727,8 @@ fn test_fullnode_rotate(
         last_entry_id = entries.last().unwrap().id;
     }
 
-    let mut leader_tick_height_of_next_rotation = 0;
-    let mut leader_should_be_leader = true;
+    let mut start_slot = 0;
+    let mut leader_tick_height_of_next_rotation = 2;
     if fullnode_config.leader_scheduler_config.ticks_per_slot == 1 {
         // Add another tick to the ledger if the cluster has been configured for 1 tick_per_slot.
         // The "pseudo-tick" entry0 currently added by bank::process_ledger cannot be rotated on
@@ -1740,26 +1738,16 @@ fn test_fullnode_rotate(
         entries.extend(tick);
         last_entry_id = entries.last().unwrap().id;
 
-        leader_tick_height_of_next_rotation = 2;
-        if include_validator {
-            leader_should_be_leader = false;
-        }
+        start_slot = 1;
+        tick_height = 0;
+        last_entry_height = 0;
     }
 
-    let mut validator_should_be_leader = !leader_should_be_leader;
-    let mut validator_tick_height_of_next_rotation = leader_tick_height_of_next_rotation;
-
-    // Write additional ledger entires
+    // Write additional ledger entries
     {
         trace!("last_entry_id: {:?}", last_entry_id);
         trace!("entries: {:?}", entries);
 
-        let mut start_slot = 0;
-        if fullnode_config.leader_scheduler_config.ticks_per_slot == 1 {
-            start_slot = 1;
-            tick_height = 0;
-            last_entry_height = 0;
-        }
         let blocktree = Blocktree::open_config(&leader_ledger_path, ticks_per_slot).unwrap();
         blocktree
             .write_entries(start_slot, tick_height, last_entry_height, &entries)
@@ -1805,8 +1793,11 @@ fn test_fullnode_rotate(
 
     let bob = Keypair::new().pubkey();
     let mut expected_bob_balance = 0;
-    let mut client = mk_client(&leader_info);
+
     let mut client_last_id = solana_sdk::hash::Hash::default();
+
+    let mut validator_should_be_leader = !leader_should_be_leader;
+    let mut validator_tick_height_of_next_rotation = leader_tick_height_of_next_rotation;
 
     let max_tick_height = 8;
     while leader_tick_height_of_next_rotation < max_tick_height
@@ -1816,6 +1807,10 @@ fn test_fullnode_rotate(
         {
             match leader_rotation_receiver.try_recv() {
                 Ok((rotation_type, slot)) => {
+                    if slot == 0 {
+                        // Skip slot 0, as the nodes are not fully initialized in terms of leader scheduler
+                        continue;
+                    }
                     info!("leader rotation event {:?} at slot={}", rotation_type, slot);
                     info!("leader should be leader? {}", leader_should_be_leader);
                     assert_eq!(slot, leader_tick_height_of_next_rotation / ticks_per_slot);
@@ -1843,9 +1838,13 @@ fn test_fullnode_rotate(
         if include_validator {
             match validator_rotation_receiver.try_recv() {
                 Ok((rotation_type, slot)) => {
+                    if slot == 0 {
+                        // Skip slot 0, as the nodes are not fully initialized in terms of leader scheduler
+                        continue;
+                    }
                     info!(
-                        "validator rotation event {:?} at slot={}",
-                        rotation_type, slot
+                        "validator rotation event {:?} at slot={} {}",
+                        rotation_type, slot, validator_tick_height_of_next_rotation
                     );
                     info!("validator should be leader? {}", validator_should_be_leader);
                     assert_eq!(
@@ -1869,6 +1868,8 @@ fn test_fullnode_rotate(
         }
 
         if transact {
+            let mut client = mk_client(&leader_info);
+
             client_last_id = client.get_next_last_id(&client_last_id);
             info!("Transferring 500 tokens, last_id={:?}", client_last_id);
             expected_bob_balance += 500;
@@ -1936,13 +1937,11 @@ fn test_one_fullnode_rotate_every_second_tick() {
 }
 
 #[test]
-#[ignore]
 fn test_two_fullnodes_rotate_every_tick() {
     test_fullnode_rotate(1, 1, true, false);
 }
 
 #[test]
-#[ignore]
 fn test_two_fullnodes_rotate_every_second_tick() {
     test_fullnode_rotate(2, 1, true, false);
 }
