@@ -7,7 +7,8 @@ use rayon::prelude::*;
 use solana::banking_stage::BankingStage;
 use solana::entry::Entry;
 use solana::packet::to_packets_chunked;
-use solana::poh_service::PohServiceConfig;
+use solana::poh_recorder::PohRecorder;
+use solana::poh_service::{PohService, PohServiceConfig};
 use solana_runtime::bank::Bank;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::hash;
@@ -16,8 +17,9 @@ use solana_sdk::signature::{KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::MAX_ENTRY_IDS;
 use std::iter;
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{channel, Receiver};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use test::Bencher;
 
@@ -37,6 +39,20 @@ fn check_txs(receiver: &Receiver<Vec<(Entry, u64)>>, ref_tx_count: usize) {
         }
     }
     assert_eq!(total, ref_tx_count);
+}
+
+fn create_test_recorder(bank: &Arc<Bank>) -> (Arc<Mutex<PohRecorder>>, PohService) {
+    let exit = Arc::new(AtomicBool::new(false));
+    let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
+        bank.tick_height(),
+        bank.last_id(),
+    )));
+    let poh_service = PohService::new(
+        poh_recorder.clone(),
+        &PohServiceConfig::default(),
+        exit.clone(),
+    );
+    (poh_recorder, poh_service)
 }
 
 #[bench]
@@ -101,11 +117,11 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             (x, iter::repeat(1).take(len).collect())
         })
         .collect();
+    let (poh_recorder, poh_service) = create_test_recorder(&bank);
     let (_stage, signal_receiver) = BankingStage::new(
         &bank,
+        &poh_recorder,
         verified_receiver,
-        PohServiceConfig::default(),
-        &genesis_block.last_id(),
         std::u64::MAX,
         genesis_block.bootstrap_leader_id,
     );
@@ -129,6 +145,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         start += half_len;
         start %= verified.len();
     });
+    poh_service.close().unwrap();
 }
 
 #[bench]
@@ -209,11 +226,11 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
             (x, iter::repeat(1).take(len).collect())
         })
         .collect();
+    let (poh_recorder, poh_service) = create_test_recorder(&bank);
     let (_stage, signal_receiver) = BankingStage::new(
         &bank,
+        &poh_recorder,
         verified_receiver,
-        PohServiceConfig::default(),
-        &genesis_block.last_id(),
         std::u64::MAX,
         genesis_block.bootstrap_leader_id,
     );
@@ -237,4 +254,5 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         start += half_len;
         start %= verified.len();
     });
+    poh_service.close().unwrap();
 }

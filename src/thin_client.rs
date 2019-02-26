@@ -256,13 +256,18 @@ impl ThinClient {
     /// Request a new last Entry ID from the server. This method blocks
     /// until the server sends a response.
     pub fn get_next_last_id(&mut self, previous_last_id: &Hash) -> Hash {
+        self.get_next_last_id_ext(previous_last_id, &|| {
+            sleep(Duration::from_millis(100));
+        })
+    }
+    pub fn get_next_last_id_ext(&mut self, previous_last_id: &Hash, func: &Fn()) -> Hash {
         loop {
             let last_id = self.get_last_id();
             if last_id != *previous_last_id {
                 break last_id;
             }
             debug!("Got same last_id ({:?}), will retry...", last_id);
-            sleep(Duration::from_millis(100));
+            func()
         }
     }
 

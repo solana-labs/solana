@@ -7,6 +7,7 @@ use solana::entry::{reconstruct_entries_from_blobs, Entry};
 use solana::fullnode::{new_banks_from_blocktree, Fullnode, FullnodeConfig, FullnodeReturnType};
 use solana::gossip_service::{converge, make_listening_node};
 use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
+use solana::poh_service::PohServiceConfig;
 use solana::result;
 use solana::service::Service;
 use solana::thin_client::{poll_gossip_for_leader, retry_get_balance};
@@ -20,7 +21,7 @@ use std::collections::{HashSet, VecDeque};
 use std::env;
 use std::fs::remove_dir_all;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, TryRecvError};
+use std::sync::mpsc::{channel, sync_channel, TryRecvError};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder};
 use std::time::{Duration, Instant};
@@ -1672,8 +1673,10 @@ fn test_fullnode_rotate(
 
     // Create fullnode config, and set leader scheduler policies
     let mut fullnode_config = FullnodeConfig::default();
+    let (tick_step_sender, tick_step_receiver) = sync_channel(1);
     fullnode_config.leader_scheduler_config.ticks_per_slot = ticks_per_slot;
     fullnode_config.leader_scheduler_config.slots_per_epoch = slots_per_epoch;
+    fullnode_config.tick_config = PohServiceConfig::Step(tick_step_sender);
 
     // Note: when debugging failures in this test, disabling voting can help keep the log noise
     // down by removing the extra vote transactions
@@ -1869,8 +1872,10 @@ fn test_fullnode_rotate(
 
         if transact {
             let mut client = mk_client(&leader_info);
-
-            client_last_id = client.get_next_last_id(&client_last_id);
+            client_last_id = client.get_next_last_id_ext(&client_last_id, &|| {
+                tick_step_receiver.recv().expect("tick step");
+                sleep(Duration::from_millis(100));
+            });
             info!("Transferring 500 tokens, last_id={:?}", client_last_id);
             expected_bob_balance += 500;
 
@@ -1878,14 +1883,24 @@ fn test_fullnode_rotate(
                 .transfer(500, &mint_keypair, bob, &client_last_id)
                 .unwrap();
             debug!("transfer send, signature is {:?}", signature);
-            client.poll_for_signature(&signature).unwrap();
+            for _ in 0..30 {
+                if client.poll_for_signature(&signature).is_err() {
+                    tick_step_receiver.recv().expect("tick step");
+                    info!("poll for signature tick step received");
+                } else {
+                    break;
+                }
+            }
             debug!("transfer signature confirmed");
             let actual_bob_balance =
                 retry_get_balance(&mut client, &bob, Some(expected_bob_balance)).unwrap();
             assert_eq!(actual_bob_balance, expected_bob_balance);
             debug!("account balance confirmed: {}", actual_bob_balance);
 
-            client_last_id = client.get_next_last_id(&client_last_id);
+            client_last_id = client.get_next_last_id_ext(&client_last_id, &|| {
+                tick_step_receiver.recv().expect("tick step");
+                sleep(Duration::from_millis(100));
+            });
         } else {
             if include_validator {
                 trace!("waiting for leader and validator to reach max tick height...");
@@ -1893,6 +1908,8 @@ fn test_fullnode_rotate(
                 trace!("waiting for leader to reach max tick height...");
             }
         }
+        tick_step_receiver.recv().expect("tick step");
+        info!("tick step received");
     }
 
     if transact {
@@ -1901,6 +1918,7 @@ fn test_fullnode_rotate(
     }
 
     info!("Shutting down");
+    drop(tick_step_receiver);
     for node_exit in node_exits {
         node_exit();
     }

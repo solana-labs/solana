@@ -6,7 +6,8 @@ use crate::blocktree_processor::{self, BankForksInfo};
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
 use crate::gossip_service::GossipService;
 use crate::leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig};
-use crate::poh_service::PohServiceConfig;
+use crate::poh_recorder::PohRecorder;
+use crate::poh_service::{PohService, PohServiceConfig};
 use crate::rpc_pubsub_service::PubSubService;
 use crate::rpc_service::JsonRpcService;
 use crate::rpc_subscriptions::RpcSubscriptions;
@@ -23,7 +24,7 @@ use std::net::UdpSocket;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread::{spawn, Result};
 use std::time::Duration;
 
@@ -102,6 +103,8 @@ pub struct Fullnode {
     blocktree: Arc<Blocktree>,
     bank_forks: Arc<RwLock<BankForks>>,
     leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+    poh_service: PohService,
+    poh_recorder: Arc<Mutex<PohRecorder>>,
 }
 
 impl Fullnode {
@@ -124,8 +127,24 @@ impl Fullnode {
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::new(
             &config.leader_scheduler_config,
         )));
-        let (bank_forks, bank_forks_info, blocktree, ledger_signal_receiver) =
+        let (mut bank_forks, bank_forks_info, blocktree, ledger_signal_receiver) =
             new_banks_from_blocktree(ledger_path, config.ticks_per_slot(), &leader_scheduler);
+
+        let exit = Arc::new(AtomicBool::new(false));
+        let bank_info = &bank_forks_info[0];
+        bank_forks.set_working_bank_id(bank_info.bank_id);
+        let bank = bank_forks.working_bank();
+
+        info!(
+            "starting PoH... {} {}",
+            bank.tick_height(),
+            bank_info.last_entry_id
+        );
+        let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
+            bank.tick_height(),
+            bank_info.last_entry_id,
+        )));
+        let poh_service = PohService::new(poh_recorder.clone(), &config.tick_config, exit.clone());
 
         info!("node info: {:?}", node.info);
         info!("node entrypoint_info: {:?}", entrypoint_info_option);
@@ -134,7 +153,6 @@ impl Fullnode {
             node.sockets.gossip.local_addr().unwrap()
         );
 
-        let exit = Arc::new(AtomicBool::new(false));
         let blocktree = Arc::new(blocktree);
         let bank_forks = Arc::new(RwLock::new(bank_forks));
 
@@ -253,6 +271,8 @@ impl Fullnode {
             blocktree,
             bank_forks,
             leader_scheduler,
+            poh_service,
+            poh_recorder,
         }
     }
 
@@ -293,7 +313,7 @@ impl Fullnode {
             };
             self.node_services.tpu.switch_to_leader(
                 self.bank_forks.read().unwrap().working_bank(),
-                PohServiceConfig::default(),
+                &self.poh_recorder,
                 self.tpu_sockets
                     .iter()
                     .map(|s| s.try_clone().expect("Failed to clone TPU sockets"))
@@ -303,7 +323,6 @@ impl Fullnode {
                     .expect("Failed to clone broadcast socket"),
                 self.sigverify_disabled,
                 rotation_info.slot,
-                rotation_info.last_entry_id,
                 &self.blocktree,
             );
             transition
@@ -339,6 +358,13 @@ impl Fullnode {
 
             match self.rotation_receiver.recv_timeout(timeout) {
                 Ok(rotation_info) => {
+                    trace!("{:?}: rotate at slot={}", self.id, rotation_info.slot);
+                    //TODO: this will be called by the TVU every time it votes
+                    //instead of here
+                    self.poh_recorder.lock().unwrap().reset(
+                        rotation_info.bank.tick_height(),
+                        rotation_info.last_entry_id,
+                    );
                     let slot = rotation_info.slot;
                     let transition = self.rotate(rotation_info);
                     debug!("role transition complete: {:?}", transition);
@@ -360,16 +386,25 @@ impl Fullnode {
     // Used for notifying many nodes in parallel to exit
     fn exit(&self) {
         self.exit.store(true, Ordering::Relaxed);
+        // Need to force the poh_recorder to drop the WorkingBank,
+        // which contains the channel to BroadcastStage. This should be
+        // sufficient as long as no other rotations are happening that
+        // can cause the Tpu to restart a BankingStage and reset a
+        // WorkingBank in poh_recorder. It follows no other rotations can be
+        // in motion because exit()/close() are only called by the run() loop
+        // which is the sole initiator of rotations.
+        self.poh_recorder.lock().unwrap().clear_bank();
         if let Some(ref rpc_service) = self.rpc_service {
             rpc_service.exit();
         }
         if let Some(ref rpc_pubsub_service) = self.rpc_pubsub_service {
             rpc_pubsub_service.exit();
         }
-        self.node_services.exit()
+        self.node_services.exit();
+        self.poh_service.exit()
     }
 
-    pub fn close(self) -> Result<()> {
+    fn close(self) -> Result<()> {
         self.exit();
         self.join()
     }
@@ -411,6 +446,9 @@ impl Service for Fullnode {
 
         self.gossip_service.join()?;
         self.node_services.join()?;
+        trace!("exit node_services!");
+        self.poh_service.join()?;
+        trace!("exit poh!");
         Ok(())
     }
 }

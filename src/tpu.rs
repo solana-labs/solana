@@ -7,17 +7,16 @@ use crate::broadcast_service::BroadcastService;
 use crate::cluster_info::ClusterInfo;
 use crate::cluster_info_vote_listener::ClusterInfoVoteListener;
 use crate::fetch_stage::FetchStage;
-use crate::poh_service::PohServiceConfig;
+use crate::poh_recorder::PohRecorder;
 use crate::service::Service;
 use crate::sigverify_stage::SigVerifyStage;
 use crate::tpu_forwarder::TpuForwarder;
 use solana_runtime::bank::Bank;
-use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 
 pub enum TpuMode {
@@ -191,12 +190,11 @@ impl Tpu {
     pub fn switch_to_leader(
         &mut self,
         bank: Arc<Bank>,
-        tick_duration: PohServiceConfig,
+        poh_recorder: &Arc<Mutex<PohRecorder>>,
         transactions_sockets: Vec<UdpSocket>,
         broadcast_socket: UdpSocket,
         sigverify_disabled: bool,
         slot: u64,
-        last_entry_id: Hash,
         blocktree: &Arc<Blocktree>,
     ) {
         self.close_and_forward_unprocessed_packets();
@@ -230,9 +228,8 @@ impl Tpu {
 
         let (banking_stage, entry_receiver) = BankingStage::new(
             &bank,
+            poh_recorder,
             verified_receiver,
-            tick_duration,
-            &last_entry_id,
             max_tick_height,
             self.id,
         );
