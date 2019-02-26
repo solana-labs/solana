@@ -35,7 +35,7 @@ pub fn helper_abort_verify(
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    ro_regions: &[MemoryRegion],
+    _ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<(()), Error> {
     Err(Error::new(
@@ -55,7 +55,7 @@ pub fn helper_sol_panic_verify(
     _arg3: u64,
     _arg4: u64,
     _arg5: u64,
-    ro_regions: &[MemoryRegion],
+    _ro_regions: &[MemoryRegion],
     _rw_regions: &[MemoryRegion],
 ) -> Result<(()), Error> {
     Err(Error::new(ErrorKind::Other, "Error: BPF program Panic!"))
