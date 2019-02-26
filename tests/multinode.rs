@@ -564,17 +564,18 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
             create_leader(&ledger_path, leader_keypair.clone(), voting_keypair);
         let leader_fullnode_exit = leader_fullnode.run(None);
 
-        // lengthen the ledger
-        let leader_balance =
+        // Give bob 500 tokens via the leader
+        assert_eq!(
             send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, 500, Some(500))
-                .unwrap();
-        assert_eq!(leader_balance, 500);
+                .unwrap(),
+            500
+        );
 
         // restart the leader
         leader_fullnode_exit();
     }
 
-    // create a "stale" ledger by copying current ledger
+    // Create a "stale" ledger by copying current ledger where bob only has 500 tokens
     let stale_ledger_path = tmp_copy_blocktree(
         &ledger_path,
         "leader_restart_validator_start_from_old_ledger",
@@ -586,13 +587,13 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
             create_leader(&ledger_path, leader_keypair.clone(), voting_keypair);
         let leader_fullnode_exit = leader_fullnode.run(None);
 
-        // lengthen the ledger
-        let leader_balance =
+        // Give bob 500 more tokens via the leader
+        assert_eq!(
             send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, 500, Some(1000))
-                .unwrap();
-        assert_eq!(leader_balance, 1000);
+                .unwrap(),
+            1000
+        );
 
-        // restart the leader
         leader_fullnode_exit();
     }
 
@@ -601,7 +602,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
         create_leader(&ledger_path, leader_keypair, voting_keypair);
     let leader_fullnode_exit = leader_fullnode.run(None);
 
-    // start validator from old ledger
+    // Start validator from "stale" ledger
     let keypair = Arc::new(Keypair::new());
     let validator = Node::new_localhost_with_pubkey(keypair.pubkey());
     let validator_data = validator.info.clone();
@@ -618,26 +619,25 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
     );
     let val_fullnode_exit = val_fullnode.run(None);
 
-    // trigger broadcast, validator should catch up from leader, whose window contains
-    //   the entries missing from the stale ledger
-    //   send requests so the validator eventually sees a gap and requests a repair
-    let mut expected = 1500;
-    let mut client = mk_client(&validator_data);
-    for _ in 0..solana::window_service::MAX_REPAIR_BACKOFF {
-        let leader_balance =
-            send_tx_and_retry_get_balance(&leader_data, &alice, &bob_pubkey, 500, Some(expected))
-                .unwrap();
-        assert_eq!(leader_balance, expected);
+    // Validator should catch up from leader whose window contains the entries missing from the
+    // stale ledger send requests so the validator eventually sees a gap and requests a repair
+    let expected_bob_balance = 1000;
+    let mut validator_client = mk_client(&validator_data);
 
-        let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
-        if getbal == Some(leader_balance) {
+    for _ in 0..42 {
+        let balance = retry_get_balance(
+            &mut validator_client,
+            &bob_pubkey,
+            Some(expected_bob_balance),
+        );
+        info!(
+            "Bob balance at the validator is {:?} (expecting {:?})",
+            balance, expected_bob_balance
+        );
+        if balance == Some(expected_bob_balance) {
             break;
         }
-
-        expected += 500;
     }
-    let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(expected));
-    assert_eq!(getbal, Some(expected));
 
     val_fullnode_exit();
     leader_fullnode_exit();
