@@ -247,18 +247,12 @@ impl AccountsDB {
     }
 
     pub fn get_vote_accounts(&self, fork: Fork) -> Vec<Account> {
-        let mut accounts: Vec<Account> = vec![];
         self.index_info
             .vote_index
             .read()
             .unwrap()
             .iter()
-            .for_each(|p| {
-                if let Some(account) = self.load(fork, p, true) {
-                    accounts.push(account);
-                }
-            });
-        accounts
+            .filter_map(|p| { self.load(fork, p, true) }).collect()
     }
 
     pub fn has_accounts(&self, fork: Fork) -> bool {
