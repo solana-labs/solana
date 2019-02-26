@@ -9,7 +9,6 @@ use crate::erasure::CodingGenerator;
 use crate::packet::index_blobs;
 use crate::result::{Error, Result};
 use crate::service::Service;
-use log::Level;
 use rayon::prelude::*;
 use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};

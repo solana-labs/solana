@@ -8,7 +8,6 @@ use crate::repair_service::RepairService;
 use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::streamer::{BlobReceiver, BlobSender};
-use log::Level;
 use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};
 use solana_sdk::pubkey::Pubkey;

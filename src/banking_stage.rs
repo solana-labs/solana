@@ -12,7 +12,6 @@ use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::sigverify_stage::VerifiedPackets;
 use bincode::deserialize;
-use log::Level;
 use solana_metrics::counter::Counter;
 use solana_runtime::bank::{self, Bank, BankError};
 use solana_sdk::hash::Hash;

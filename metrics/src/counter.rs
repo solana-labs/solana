@@ -55,10 +55,10 @@ macro_rules! inc_new_counter {
 #[macro_export]
 macro_rules! inc_new_counter_info {
     ($name:expr, $count:expr) => {{
-        inc_new_counter!($name, $count, Level::Info, 0);
+        inc_new_counter!($name, $count, log::Level::Info, 0);
     }};
     ($name:expr, $count:expr, $lograte:expr) => {{
-        inc_new_counter!($name, $count, Level::Info, $lograte);
+        inc_new_counter!($name, $count, log::Level::Info, $lograte);
     }};
 }
 

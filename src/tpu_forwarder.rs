@@ -7,7 +7,6 @@ use crate::cluster_info::ClusterInfo;
 use crate::contact_info::ContactInfo;
 use crate::service::Service;
 use crate::streamer::{self, PacketReceiver};
-use log::Level;
 use solana_metrics::counter::Counter;
 use solana_sdk::pubkey::Pubkey;
 use std::net::{SocketAddr, UdpSocket};

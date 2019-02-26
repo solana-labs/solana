@@ -3,7 +3,6 @@ use crate::recvmmsg::{recv_mmsg, NUM_RCVMMSGS};
 use crate::result::{Error, Result};
 use bincode::{serialize, serialize_into};
 use byteorder::{ByteOrder, LittleEndian};
-use log::Level;
 use serde::Serialize;
 use solana_metrics::counter::Counter;
 pub use solana_sdk::packet::PACKET_DATA_SIZE;
