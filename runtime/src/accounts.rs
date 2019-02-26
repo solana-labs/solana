@@ -254,17 +254,19 @@ impl AccountsDB {
             .unwrap()
             .iter()
             .for_each(|p| {
-                if let Some(entry) = self.index_info.index.read().unwrap().get(p) {
-                    let forks = entry.0.read().unwrap();
-                    if let Some((id, index)) = forks.get(&fork) {
-                        accounts.push(
-                            self.storage.read().unwrap()[*id]
-                                .appendvec
-                                .read()
-                                .unwrap()
-                                .get_account(*index)
-                                .unwrap(),
-                        );
+                if let Some(map) = self.index_info.index.read().unwrap().get(p) {
+                    let forks = map.0.read().unwrap();
+                    if let Some((id, offset)) = forks.get(&fork) {
+                        accounts.push(self.get_account(*id, *offset));
+                    } else {
+                        let fork_info = self.fork_info.read().unwrap();
+                        if let Some(info) = fork_info.get(&fork) {
+                            for parent_fork in info.parents.iter() {
+                                if let Some((id, offset)) = forks.get(&parent_fork) {
+                                    accounts.push(self.get_account(*id, *offset));
+                                }
+                            }
+                        }
                     }
                 }
             });
@@ -305,10 +307,10 @@ impl AccountsDB {
         Some(hash(&serialize(&ordered_accounts).unwrap()))
     }
 
-    fn get_account(&self, id: AppendVecId, offset: u64) -> Option<Account> {
+    fn get_account(&self, id: AppendVecId, offset: u64) -> Account {
         let appendvec = &self.storage.read().unwrap()[id].appendvec;
         let av = appendvec.read().unwrap();
-        Some(av.get_account(offset).unwrap())
+        av.get_account(offset).unwrap()
     }
 
     fn load(&self, fork: Fork, pubkey: &Pubkey, walk_back: bool) -> Option<Account> {
@@ -317,7 +319,7 @@ impl AccountsDB {
             let forks = map.0.read().unwrap();
             // find most recent fork that is an ancestor of current_fork
             if let Some((id, offset)) = forks.get(&fork) {
-                return self.get_account(*id, *offset);
+                return Some(self.get_account(*id, *offset));
             } else {
                 if !walk_back {
                     return None;
@@ -326,7 +328,7 @@ impl AccountsDB {
                 if let Some(info) = fork_info.get(&fork) {
                     for parent_fork in info.parents.iter() {
                         if let Some((id, offset)) = forks.get(&parent_fork) {
-                            return self.get_account(*id, *offset);
+                            return Some(self.get_account(*id, *offset));
                         }
                     }
                 }
@@ -689,7 +691,7 @@ impl AccountsDB {
                             keys.push(pubkey.clone());
                         }
                     }
-                    let account = self.get_account(id, offset).unwrap();
+                    let account = self.get_account(id, offset);
                     if account.tokens == 0 {
                         if self.remove_account_entries(&[fork], &map) {
                             keys.push(pubkey.clone());
@@ -737,11 +739,11 @@ impl Accounts {
         paths
     }
 
-    pub fn new(fork: Fork, in_paths: &str) -> Self {
-        let paths = if !in_paths.is_empty() {
-            in_paths.to_string()
-        } else {
+    pub fn new(fork: Fork, in_paths: Option<String>) -> Self {
+        let paths = if in_paths.is_none() {
             Self::make_default_paths()
+        } else {
+            in_paths.unwrap()
         };
         let accounts_db = AccountsDB::new(fork, &paths);
         accounts_db.add_fork(fork, None);
@@ -932,7 +934,7 @@ mod tests {
         ka: &Vec<(Pubkey, Account)>,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
-        let accounts = Accounts::new(0, "");
+        let accounts = Accounts::new(0, None);
         for ka in ka.iter() {
             accounts.store_slow(0, true, &ka.0, &ka.1);
         }
@@ -1373,7 +1375,7 @@ mod tests {
         // original account
         assert_eq!(db0.load(1, &key, true), Some(account1));
 
-        let mut accounts1 = Accounts::new(3, "");
+        let mut accounts1 = Accounts::new(3, None);
         accounts1.accounts_db = db0;
         assert_eq!(accounts1.load_slow(1, &key), None);
         assert_eq!(accounts1.load_slow(0, &key), Some(account0));
