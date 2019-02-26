@@ -39,12 +39,12 @@ impl Vote {
 }
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct StoredVote {
+pub struct Lockout {
     pub slot_height: u64,
     pub confirmation_count: u32,
 }
 
-impl StoredVote {
+impl Lockout {
     pub fn new(vote: &Vote) -> Self {
         Self {
             slot_height: vote.slot_height,
@@ -60,7 +60,7 @@ impl StoredVote {
     // The slot height at which this vote expires (cannot vote for any slot
     // less than this)
     pub fn lock_height(&self) -> u64 {
-        self.slot_height + self.lockout() as u64
+        self.slot_height + self.lockout()
     }
 }
 
@@ -80,10 +80,10 @@ pub enum VoteInstruction {
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VoteState {
-    pub votes: VecDeque<StoredVote>,
+    pub votes: VecDeque<Lockout>,
     pub node_id: Pubkey,
     pub staker_id: Pubkey,
-    pub max_lockout_slot_height: u64,
+    pub root_block: Option<u64>,
     credits: u64,
 }
 
@@ -91,7 +91,7 @@ pub fn get_max_size() -> usize {
     // Upper limit on the size of the Vote State. Equal to
     // sizeof(VoteState) when votes.len() is MAX_VOTE_HISTORY
     let mut vote_state = VoteState::default();
-    vote_state.votes = VecDeque::from(vec![StoredVote::default(); MAX_VOTE_HISTORY]);
+    vote_state.votes = VecDeque::from(vec![Lockout::default(); MAX_VOTE_HISTORY]);
     serialized_size(&vote_state).unwrap() as usize
 }
 
@@ -99,13 +99,13 @@ impl VoteState {
     pub fn new(node_id: Pubkey, staker_id: Pubkey) -> Self {
         let votes = VecDeque::new();
         let credits = 0;
-        let max_lockout_slot_height = 0;
+        let root_block = None;
         Self {
             votes,
             node_id,
             staker_id,
             credits,
-            max_lockout_slot_height,
+            root_block,
         }
     }
 
@@ -130,7 +130,7 @@ impl VoteState {
             return;
         }
 
-        let vote = StoredVote::new(&vote);
+        let vote = Lockout::new(&vote);
 
         // TODO: Integrity checks
         // Verify the vote's bank hash matches what is expected
@@ -142,7 +142,7 @@ impl VoteState {
         // Once the stack is full, pop the oldest vote and distribute rewards
         if self.votes.len() == MAX_VOTE_HISTORY {
             let vote = self.votes.pop_front().unwrap();
-            self.max_lockout_slot_height = vote.slot_height;
+            self.root_block = Some(vote.slot_height);
             self.credits += 1;
         }
     }
@@ -275,7 +275,7 @@ mod tests {
         let mut vote_state = VoteState::default();
         vote_state
             .votes
-            .resize(MAX_VOTE_HISTORY, StoredVote::default());
+            .resize(MAX_VOTE_HISTORY, Lockout::default());
         vote_state.serialize(&mut buffer).unwrap();
         assert_eq!(VoteState::deserialize(&buffer).unwrap(), vote_state);
     }
@@ -306,7 +306,7 @@ mod tests {
 
         let vote = Vote::new(1);
         let vote_state = vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();
-        assert_eq!(vote_state.votes, vec![StoredVote::new(&vote)]);
+        assert_eq!(vote_state.votes, vec![Lockout::new(&vote)]);
         assert_eq!(vote_state.credits(), 0);
     }
 
@@ -318,7 +318,7 @@ mod tests {
         let vote = Vote::new(1);
         let vote_state = vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();
         assert_eq!(vote_state.node_id, Pubkey::default());
-        assert_eq!(vote_state.votes, vec![StoredVote::new(&vote)]);
+        assert_eq!(vote_state.votes, vec![Lockout::new(&vote)]);
     }
 
     #[test]
@@ -333,7 +333,7 @@ mod tests {
 
         // The last vote should have been popped b/c it reached a depth of MAX_VOTE_HISTORY
         assert_eq!(vote_state.votes.len(), MAX_VOTE_HISTORY - 1);
-        assert_eq!(vote_state.max_lockout_slot_height, 0);
+        assert_eq!(vote_state.root_block, Some(0));
         for (i, vote) in vote_state.votes.iter().enumerate() {
             let num_lockouts = MAX_VOTE_HISTORY - 1 - i;
             assert_eq!(
@@ -343,11 +343,11 @@ mod tests {
         }
 
         // One more vote that confirms the entire stack,
-        // the max_lockout_slot_height should change to the
+        // the root_block should change to the
         // second vote
         let top_vote = vote_state.votes.front().unwrap().slot_height;
         vote_state.process_vote(Vote::new(vote_state.votes.back().unwrap().lock_height()));
-        assert_eq!(top_vote, vote_state.max_lockout_slot_height);
+        assert_eq!(Some(top_vote), vote_state.root_block);
 
         // Expire everything except the first vote
         let vote = Vote::new(vote_state.votes.front().unwrap().lock_height());
