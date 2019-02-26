@@ -1644,8 +1644,8 @@ fn test_fullnode_rotate(
 
     // Create fullnode config, and set leader scheduler policies
     let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.tick_config = PohServiceConfig::Step(tick_step_sender);
     let (tick_step_sender, tick_step_receiver) = sync_channel(1);
+    fullnode_config.tick_config = PohServiceConfig::Step(tick_step_sender);
 
     // Note: when debugging failures in this test, disabling voting can help keep the log noise
     // down by removing the extra vote transactions
