@@ -450,7 +450,7 @@ mod test {
         let num_entries = 10;
         let shared_blobs = make_tiny_test_entries(num_entries).to_shared_blobs();
 
-        index_blobs(&shared_blobs, &mut 0, &vec![slot; num_entries]);
+        index_blobs(&shared_blobs, &mut 0, slot);
 
         let blob_locks: Vec<_> = shared_blobs.iter().map(|b| b.read().unwrap()).collect();
         let blobs: Vec<&Blob> = blob_locks.iter().map(|b| &**b).collect();
@@ -545,7 +545,7 @@ mod test {
         let original_entries = make_tiny_test_entries(num_entries);
         let shared_blobs = original_entries.clone().to_shared_blobs();
 
-        index_blobs(&shared_blobs, &mut 0, &vec![0; num_entries]);
+        index_blobs(&shared_blobs, &mut 0, 0);
 
         for blob in shared_blobs.iter().rev() {
             process_blob(&leader_scheduler, &blocktree, blob)

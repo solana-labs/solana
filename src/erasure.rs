@@ -889,7 +889,7 @@ pub mod test {
         }
 
         // Make some dummy slots
-        index_blobs(&blobs, &mut (offset as u64), &vec![slot; blobs.len()]);
+        index_blobs(&blobs, &mut (offset as u64), slot);
 
         for b in blobs {
             let idx = b.read().unwrap().index() as usize % WINDOW_SIZE;
@@ -902,7 +902,7 @@ pub mod test {
     fn generate_test_blobs(offset: usize, num_blobs: usize) -> Vec<SharedBlob> {
         let blobs = make_tiny_test_entries(num_blobs).to_shared_blobs();
 
-        index_blobs(&blobs, &mut (offset as u64), &vec![0; blobs.len()]);
+        index_blobs(&blobs, &mut (offset as u64), 0);
         blobs
     }
 

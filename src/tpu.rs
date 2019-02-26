@@ -7,7 +7,6 @@ use crate::broadcast_service::BroadcastService;
 use crate::cluster_info::ClusterInfo;
 use crate::cluster_info_vote_listener::ClusterInfoVoteListener;
 use crate::fetch_stage::FetchStage;
-use crate::leader_scheduler::LeaderScheduler;
 use crate::poh_service::PohServiceConfig;
 use crate::service::Service;
 use crate::sigverify_stage::SigVerifyStage;
@@ -199,7 +198,6 @@ impl Tpu {
         slot: u64,
         last_entry_id: Hash,
         blocktree: &Arc<Blocktree>,
-        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
     ) {
         self.close_and_forward_unprocessed_packets();
 
@@ -240,13 +238,12 @@ impl Tpu {
         );
 
         let broadcast_service = BroadcastService::new(
+            slot,
             bank,
             broadcast_socket,
             self.cluster_info.clone(),
             blob_index,
-            leader_scheduler.clone(),
             entry_receiver,
-            max_tick_height,
             self.exit.clone(),
             blocktree,
         );
