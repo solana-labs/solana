@@ -532,10 +532,7 @@ mod tests {
             STORAGE_ROTATE_TEST_COUNT,
             &cluster_info,
         );
-        let entries_meta: Vec<EntryMeta> = entries
-            .iter()
-            .map(|entry| EntryMeta::default_with_entry(entry))
-            .collect();
+        let entries_meta: Vec<EntryMeta> = entries.into_iter().map(EntryMeta::new).collect();
         storage_entry_sender.send(entries_meta.clone()).unwrap();
 
         let keypair = Keypair::new();
@@ -601,10 +598,7 @@ mod tests {
             STORAGE_ROTATE_TEST_COUNT,
             &cluster_info,
         );
-        let entries_meta: Vec<EntryMeta> = entries
-            .iter()
-            .map(|entry| EntryMeta::default_with_entry(entry))
-            .collect();
+        let entries_meta: Vec<EntryMeta> = entries.into_iter().map(EntryMeta::new).collect();
         storage_entry_sender.send(entries_meta.clone()).unwrap();
 
         let mut reference_keys;
@@ -617,11 +611,7 @@ mod tests {
         let keypair = Keypair::new();
         let vote_tx = VoteTransaction::new_vote(&keypair, 123456, Hash::default(), 1);
         vote_txs.push(vote_tx);
-        let vote_entries = vec![EntryMeta::default_with_entry(&Entry::new(
-            &Hash::default(),
-            1,
-            vote_txs,
-        ))];
+        let vote_entries = vec![EntryMeta::new(Entry::new(&Hash::default(), 1, vote_txs))];
         storage_entry_sender.send(vote_entries).unwrap();
 
         for _ in 0..5 {

@@ -35,14 +35,14 @@ pub struct EntryMeta {
 }
 
 impl EntryMeta {
-    pub fn default_with_entry(entry: &Entry) -> Self {
-        EntryMeta {
+    pub fn new(entry: Entry) -> Self {
+        Self {
             tick_height: 0,
             slot: 0,
             slot_leader: Pubkey::default(),
             num_ticks_left_in_slot: 0,
             parent_slot: None,
-            entry: entry.clone(),
+            entry,
         }
     }
 }
