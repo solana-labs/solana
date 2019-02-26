@@ -466,7 +466,7 @@ pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, 
     let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10_000, node_info.id, 42);
 
     let (ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
-        create_tmp_sample_blocktree(ledger_name, &genesis_block, 0);
+        create_tmp_sample_blocktree(ledger_name, &genesis_block, genesis_block.ticks_per_slot);
 
     let vote_account_keypair = Arc::new(Keypair::new());
     let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
