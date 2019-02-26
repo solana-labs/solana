@@ -83,6 +83,7 @@ pub struct VoteState {
     pub votes: VecDeque<StoredVote>,
     pub node_id: Pubkey,
     pub staker_id: Pubkey,
+    pub max_lockout_slot_height: u64,
     credits: u64,
 }
 
@@ -98,11 +99,13 @@ impl VoteState {
     pub fn new(node_id: Pubkey, staker_id: Pubkey) -> Self {
         let votes = VecDeque::new();
         let credits = 0;
+        let max_lockout_slot_height = 0;
         Self {
             votes,
             node_id,
             staker_id,
             credits,
+            max_lockout_slot_height,
         }
     }
 
@@ -138,7 +141,8 @@ impl VoteState {
 
         // Once the stack is full, pop the oldest vote and distribute rewards
         if self.votes.len() == MAX_VOTE_HISTORY {
-            self.votes.pop_front();
+            let vote = self.votes.pop_front().unwrap();
+            self.max_lockout_slot_height = vote.slot_height;
             self.credits += 1;
         }
     }
@@ -329,6 +333,7 @@ mod tests {
 
         // The last vote should have been popped b/c it reached a depth of MAX_VOTE_HISTORY
         assert_eq!(vote_state.votes.len(), MAX_VOTE_HISTORY - 1);
+        assert_eq!(vote_state.max_lockout_slot_height, 0);
         for (i, vote) in vote_state.votes.iter().enumerate() {
             let num_lockouts = MAX_VOTE_HISTORY - 1 - i;
             assert_eq!(
@@ -336,6 +341,13 @@ mod tests {
                 INITIAL_LOCKOUT.pow(num_lockouts as u32) as u64
             );
         }
+
+        // One more vote that confirms the entire stack,
+        // the max_lockout_slot_height should change to the
+        // second vote
+        let top_vote = vote_state.votes.front().unwrap().slot_height;
+        vote_state.process_vote(Vote::new(vote_state.votes.back().unwrap().lock_height()));
+        assert_eq!(top_vote, vote_state.max_lockout_slot_height);
 
         // Expire everything except the first vote
         let vote = Vote::new(vote_state.votes.front().unwrap().lock_height());
