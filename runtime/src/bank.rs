@@ -107,8 +107,11 @@ pub struct Bank {
     /// The number of slots in each epoch.
     slots_per_epoch: u64,
 
-    // A number of slots before slot_index 0. Used to calculate finalized staked nodes.
+    /// A number of slots before slot_index 0. Used to calculate finalized staked nodes.
     stakers_slot_offset: u64,
+
+    /// The pubkey to send transactions fees to.
+    collector_id: Pubkey,
 }
 
 impl Bank {
@@ -120,7 +123,7 @@ impl Bank {
     }
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
-    pub fn new_from_parent_and_id(parent: &Arc<Bank>, id: u64) -> Self {
+    pub fn new_from_parent_and_id(parent: &Arc<Bank>, collector_id: Pubkey, id: u64) -> Self {
         parent.freeze();
 
         let mut bank = Self::default();
@@ -132,6 +135,7 @@ impl Bank {
         bank.id = id;
         bank.parent = RwLock::new(Some(parent.clone()));
         bank.parent_hash = parent.hash();
+        bank.collector_id = collector_id;
 
         bank
     }
@@ -139,7 +143,8 @@ impl Bank {
     /// Create a new bank that points to an immutable checkpoint of another bank.
     /// TODO: remove me in favor of _and_id(), id should not be an assumed value
     pub fn new_from_parent(parent: &Arc<Bank>) -> Self {
-        Self::new_from_parent_and_id(parent, parent.id() + 1)
+        let collector_id = parent.collector_id;
+        Self::new_from_parent_and_id(parent, collector_id, parent.id() + 1)
     }
 
     pub fn id(&self) -> u64 {
@@ -196,6 +201,9 @@ impl Bank {
         assert!(genesis_block.bootstrap_leader_vote_account_id != Pubkey::default());
         assert!(genesis_block.tokens >= genesis_block.bootstrap_leader_tokens);
         assert!(genesis_block.bootstrap_leader_tokens >= 2);
+
+        // Bootstrap leader collects fees until `new_from_parent_and_id` is called.
+        self.collector_id = genesis_block.bootstrap_leader_id;
 
         let mint_tokens = genesis_block.tokens - genesis_block.bootstrap_leader_tokens;
         self.deposit(&genesis_block.mint_id, mint_tokens);
@@ -511,7 +519,7 @@ impl Bank {
                 _ => res.clone(),
             })
             .collect();
-        self.deposit(&self.slot_leader(), fees);
+        self.deposit(&self.collector_id, fees);
         results
     }
 
@@ -1470,8 +1478,9 @@ mod tests {
 
     #[test]
     fn test_bank_hash_internal_state_squash() {
+        let collector_id = Pubkey::default();
         let bank0 = Arc::new(Bank::new(&GenesisBlock::new(10).0));
-        let bank1 = Bank::new_from_parent_and_id(&bank0, 1);
+        let bank1 = Bank::new_from_parent_and_id(&bank0, collector_id, 1);
 
         // no delta in bank1, hashes match
         assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
