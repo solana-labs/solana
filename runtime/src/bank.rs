@@ -1436,6 +1436,7 @@ mod tests {
         for _ in 0..3 {
             // first time these should match what happened above, assert that parents are ok
             assert_eq!(bank.get_balance(&key1.pubkey()), 0);
+            assert_eq!(bank.get_account(&key1.pubkey()), None);
             assert_eq!(bank.get_balance(&key2.pubkey()), 1);
             assert_eq!(
                 bank.get_signature_status(&tx_move_mint_to_1.signatures[0]),

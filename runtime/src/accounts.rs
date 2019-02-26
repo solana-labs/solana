@@ -290,7 +290,7 @@ impl Accounts {
             .iter()
             .map(|obj| obj.accounts_db.read().unwrap())
             .collect();
-        AccountsDB::load(&dbs, pubkey)
+        AccountsDB::load(&dbs, pubkey).filter(|acc| acc.tokens != 0)
     }
     /// Slow because lock is held for 1 operation insted of many
     /// * purge - if the account token value is 0 and purge is true then delete the account.
@@ -832,22 +832,51 @@ mod tests {
     }
 
     #[test]
-    fn test_accounts_squash() {
+    fn test_accountsdb_squash() {
         let mut db0 = AccountsDB::default();
         let key = Pubkey::default();
-        let account = Account::new(1, 0, key);
+        let account0 = Account::new(1, 0, key);
 
         // store value 1 in the "root", i.e. db zero
-        db0.store(true, &key, &account);
+        db0.store(true, &key, &account0);
 
         // store value 0 in the child, but don't purge (see purge test above)
         let mut db1 = AccountsDB::default();
-        db1.store(false, &key, &Account::new(0, 0, key));
+        let account1 = Account::new(0, 0, key);
+        db1.store(false, &key, &account1);
+
+        // masking accounts is done at the Accounts level, at accountsDB we see
+        // original account
+        assert_eq!(AccountsDB::load(&[&db1, &db0], &key), Some(account1));
 
         // squash, which should whack key's account
         db1.squash(&[&db0]);
-
         assert_eq!(AccountsDB::load(&[&db1], &key), None);
+    }
+
+    #[test]
+    fn test_accounts_unsquashed() {
+        let key = Pubkey::default();
+
+        // 1 token in the "root", i.e. db zero
+        let mut db0 = AccountsDB::default();
+        let account0 = Account::new(1, 0, key);
+        db0.store(true, &key, &account0);
+
+        // 0 tokens in the child
+        let mut db1 = AccountsDB::default();
+        let account1 = Account::new(0, 0, key);
+        db1.store(false, &key, &account1);
+
+        // masking accounts is done at the Accounts level, at accountsDB we see
+        // original account
+        assert_eq!(AccountsDB::load(&[&db1, &db0], &key), Some(account1));
+
+        let mut accounts0 = Accounts::default();
+        accounts0.accounts_db = RwLock::new(db0);
+        let mut accounts1 = Accounts::default();
+        accounts1.accounts_db = RwLock::new(db1);
+        assert_eq!(Accounts::load_slow(&[&accounts1, &accounts0], &key), None);
     }
 
 }
