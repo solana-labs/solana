@@ -218,7 +218,9 @@ fn main() {
     let (keypair, gossip) = parse_identity(&matches);
     let ledger_path = matches.value_of("ledger").unwrap();
     if let Some(paths) = matches.value_of("accounts") {
-        fullnode_config.account_paths = paths.to_string();
+        fullnode_config.account_paths = Some(paths.to_string());
+    } else {
+        fullnode_config.account_paths = None;
     }
     let cluster_entrypoint = matches
         .value_of("network")

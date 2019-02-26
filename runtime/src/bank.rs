@@ -115,12 +115,12 @@ pub struct Bank {
 
 impl Bank {
     pub fn new(genesis_block: &GenesisBlock) -> Self {
-        Self::new_with_paths(&genesis_block, "")
+        Self::new_with_paths(&genesis_block, None)
     }
 
-    pub fn new_with_paths(genesis_block: &GenesisBlock, paths: &str) -> Self {
+    pub fn new_with_paths(genesis_block: &GenesisBlock, paths: Option<String>) -> Self {
         let mut bank = Self::default();
-        bank.accounts = Some(Arc::new(Accounts::new(bank.id, &paths)));
+        bank.accounts = Some(Arc::new(Accounts::new(bank.id, paths)));
         bank.process_genesis_block(genesis_block);
         bank.add_builtin_programs();
         bank
@@ -151,7 +151,11 @@ impl Bank {
     pub fn new_from_parent(parent: &Arc<Bank>) -> Self {
         static BANK_ID: AtomicUsize = AtomicUsize::new(1);
         let collector_id = parent.collector_id;
-        Self::new_from_parent_and_id(parent, collector_id, BANK_ID.fetch_add(1, Ordering::Relaxed) as u64)
+        Self::new_from_parent_and_id(
+            parent,
+            collector_id,
+            BANK_ID.fetch_add(1, Ordering::Relaxed) as u64,
+        )
     }
 
     pub fn id(&self) -> u64 {

@@ -71,7 +71,7 @@ pub struct FullnodeConfig {
     pub blockstream: Option<String>,
     pub storage_rotate_count: u64,
     pub tick_config: PohServiceConfig,
-    pub account_paths: String,
+    pub account_paths: Option<String>,
 }
 impl Default for FullnodeConfig {
     fn default() -> Self {
@@ -85,7 +85,7 @@ impl Default for FullnodeConfig {
             blockstream: None,
             storage_rotate_count: NUM_HASHES_FOR_STORAGE_ROTATE,
             tick_config: PohServiceConfig::default(),
-            account_paths: "".to_string(),
+            account_paths: None,
         }
     }
 }
@@ -125,7 +125,7 @@ impl Fullnode {
         assert_eq!(id, node.info.id);
 
         let (mut bank_forks, bank_forks_info, blocktree, ledger_signal_receiver) =
-            new_banks_from_blocktree(ledger_path, &config.account_paths);
+            new_banks_from_blocktree(ledger_path, config.account_paths.clone());
 
         let exit = Arc::new(AtomicBool::new(false));
         let bank_info = &bank_forks_info[0];
@@ -407,7 +407,7 @@ impl Fullnode {
 
 pub fn new_banks_from_blocktree(
     blocktree_path: &str,
-    account_paths: &str,
+    account_paths: Option<String>,
 ) -> (BankForks, Vec<BankForksInfo>, Blocktree, Receiver<bool>) {
     let genesis_block =
         GenesisBlock::load(blocktree_path).expect("Expected to successfully open genesis block");
@@ -746,7 +746,7 @@ mod tests {
 
         // Close the validator so that rocksdb has locks available
         validator_exit();
-        let (bank_forks, bank_forks_info, _, _) = new_banks_from_blocktree(&validator_ledger_path, "");
+        let (bank_forks, bank_forks_info, _, _) = new_banks_from_blocktree(&validator_ledger_path, None);
         let bank = bank_forks.working_bank();
         let entry_height = bank_forks_info[0].entry_height;
 

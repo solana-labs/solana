@@ -499,7 +499,7 @@ mod test {
         let (to_leader_sender, _to_leader_receiver) = channel();
         {
             let (bank_forks, bank_forks_info, blocktree, l_receiver) =
-                new_banks_from_blocktree(&my_ledger_path, "");
+                new_banks_from_blocktree(&my_ledger_path, None);
             let bank = bank_forks.working_bank();
             let last_entry_id = bank_forks_info[0].last_entry_id;
 

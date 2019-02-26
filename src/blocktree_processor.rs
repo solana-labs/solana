@@ -107,7 +107,7 @@ pub struct BankForksInfo {
 pub fn process_blocktree(
     genesis_block: &GenesisBlock,
     blocktree: &Blocktree,
-    account_paths: &str,
+    account_paths: Option<String>,
 ) -> Result<(BankForks, Vec<BankForksInfo>)> {
     let now = Instant::now();
     info!("processing ledger...");
@@ -298,7 +298,7 @@ mod tests {
         fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 2, 1, last_id);
 
         let (mut _bank_forks, bank_forks_info) =
-            process_blocktree(&genesis_block, &blocktree, "").unwrap();
+            process_blocktree(&genesis_block, &blocktree, None).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(
@@ -357,7 +357,7 @@ mod tests {
         info!("last_fork2_entry_id: {:?}", last_fork2_entry_id);
 
         let (mut bank_forks, bank_forks_info) =
-            process_blocktree(&genesis_block, &blocktree, "").unwrap();
+            process_blocktree(&genesis_block, &blocktree, None).unwrap();
 
         assert_eq!(bank_forks_info.len(), 2); // There are two forks
         assert_eq!(
@@ -475,7 +475,7 @@ mod tests {
             Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
         blocktree.write_entries(1, 0, 0, &entries).unwrap();
         let entry_height = genesis_block.ticks_per_slot + entries.len() as u64;
-        let (bank_forks, bank_forks_info) = process_blocktree(&genesis_block, &blocktree, "").unwrap();
+        let (bank_forks, bank_forks_info) = process_blocktree(&genesis_block, &blocktree, None).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(
