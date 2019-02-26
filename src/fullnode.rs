@@ -102,6 +102,7 @@ pub struct Fullnode {
     rotation_receiver: TvuRotationReceiver,
     blocktree: Arc<Blocktree>,
     bank_forks: Arc<RwLock<BankForks>>,
+    leader_scheduler: Arc<RwLock<LeaderScheduler>>,
 }
 
 impl Fullnode {
@@ -252,6 +253,7 @@ impl Fullnode {
             rotation_receiver,
             blocktree,
             bank_forks,
+            leader_scheduler,
         }
     }
 
