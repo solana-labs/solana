@@ -81,6 +81,12 @@ impl LeaderScheduler1 {
     pub fn next_slot_leader(&self, bank: &Bank) -> Pubkey {
         self.slot_leader_by(bank, Self::next_slot_leader_index)
     }
+
+    // Returns the number of ticks remaining from the specified tick_height to the end of the
+    // slot implied by the tick_height
+    pub fn num_ticks_left_in_slot(bank: &Bank, tick_height: u64) -> u64 {
+        bank.ticks_per_slot() - tick_height % bank.ticks_per_slot() - 1
+    }
 }
 
 #[cfg(test)]

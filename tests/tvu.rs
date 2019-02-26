@@ -9,7 +9,6 @@ use solana::cluster_info::{ClusterInfo, Node};
 use solana::entry::next_entry_mut;
 use solana::entry::EntrySlice;
 use solana::gossip_service::GossipService;
-use solana::leader_scheduler::LeaderScheduler;
 use solana::packet::index_blobs;
 use solana::rpc_subscriptions::RpcSubscriptions;
 use solana::service::Service;
@@ -97,7 +96,6 @@ fn test_replay() {
     }];
 
     let bank = bank_forks.working_bank();
-    let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::new_with_bank(&bank)));
     assert_eq!(bank.get_balance(&mint_keypair.pubkey()), starting_balance);
 
     // start cluster_info1
@@ -133,7 +131,6 @@ fn test_replay() {
         &StorageState::default(),
         None,
         ledger_signal_receiver,
-        leader_scheduler,
         &Arc::new(RpcSubscriptions::default()),
     );
 

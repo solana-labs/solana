@@ -1,7 +1,6 @@
 use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
 use crate::entry::{Entry, EntrySlice};
-use crate::leader_scheduler::LeaderScheduler;
 use rayon::prelude::*;
 use solana_metrics::counter::Counter;
 use solana_runtime::bank::{Bank, BankError, Result};
@@ -9,7 +8,6 @@ use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
 use solana_sdk::timing::duration_as_ms;
 use solana_sdk::timing::MAX_ENTRY_IDS;
-use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
 pub fn process_entry(bank: &Bank, entry: &Entry) -> Result<()> {
@@ -51,11 +49,7 @@ fn par_execute_entries(bank: &Bank, entries: &[(&Entry, Vec<Result<()>>)]) -> Re
 /// 2. Process the locked group in parallel
 /// 3. Register the `Tick` if it's available
 /// 4. Update the leader scheduler, goto 1
-fn par_process_entries_with_scheduler(
-    bank: &Bank,
-    entries: &[Entry],
-    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-) -> Result<()> {
+fn par_process_entries_with_scheduler(bank: &Bank, entries: &[Entry]) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut mt_group = vec![];
     for entry in entries {
@@ -63,10 +57,6 @@ fn par_process_entries_with_scheduler(
             // if its a tick, execute the group and register the tick
             par_execute_entries(bank, &mt_group)?;
             bank.register_tick(&entry.id);
-            leader_scheduler
-                .write()
-                .unwrap()
-                .update_tick_height(bank.tick_height(), bank);
             mt_group = vec![];
             continue;
         }
@@ -91,27 +81,15 @@ fn par_process_entries_with_scheduler(
 }
 
 /// Process an ordered list of entries.
-pub fn process_entries(
-    bank: &Bank,
-    entries: &[Entry],
-    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-) -> Result<()> {
-    par_process_entries_with_scheduler(bank, entries, leader_scheduler)
+pub fn process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
+    par_process_entries_with_scheduler(bank, entries)
 }
 
 /// Process an ordered list of entries, populating a circular buffer "tail"
 /// as we go.
-fn process_block(
-    bank: &Bank,
-    entries: &[Entry],
-    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-) -> Result<()> {
+fn process_block(bank: &Bank, entries: &[Entry]) -> Result<()> {
     for entry in entries {
         process_entry(bank, entry)?;
-        if entry.is_tick() {
-            let mut leader_scheduler = leader_scheduler.write().unwrap();
-            leader_scheduler.update_tick_height(bank.tick_height(), bank);
-        }
     }
 
     Ok(())
@@ -128,7 +106,6 @@ pub struct BankForksInfo {
 pub fn process_blocktree(
     genesis_block: &GenesisBlock,
     blocktree: &Blocktree,
-    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
 ) -> Result<(BankForks, Vec<BankForksInfo>)> {
     let now = Instant::now();
     info!("processing ledger...");
@@ -138,10 +115,6 @@ pub fn process_blocktree(
         let bank0 = Bank::new(&genesis_block);
         let slot = 0;
         let entry_height = 0;
-        leader_scheduler
-            .write()
-            .unwrap()
-            .update_tick_height(slot, &bank0);
         let last_entry_id = bank0.last_id();
 
         (
@@ -197,7 +170,7 @@ pub fn process_blocktree(
                 return Err(BankError::LedgerVerificationFailed);
             }
 
-            process_block(&bank, &entries, &leader_scheduler).map_err(|err| {
+            process_block(&bank, &entries).map_err(|err| {
                 warn!("Failed to process entries for slot {}: {:?}", slot, err);
                 BankError::LedgerVerificationFailed
             })?;
@@ -339,7 +312,6 @@ mod tests {
     fn test_process_blocktree_with_two_forks() {
         solana_logger::setup();
 
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
         let (genesis_block, _mint_keypair) = GenesisBlock::new(10_000);
         let ticks_per_slot = genesis_block.ticks_per_slot;
 
@@ -386,7 +358,7 @@ mod tests {
         info!("last_fork2_entry_id: {:?}", last_fork2_entry_id);
 
         let (mut bank_forks, bank_forks_info) =
-            process_blocktree(&genesis_block, &blocktree, &leader_scheduler).unwrap();
+            process_blocktree(&genesis_block, &blocktree).unwrap();
 
         assert_eq!(bank_forks_info.len(), 2); // There are two forks
         assert_eq!(
@@ -449,8 +421,7 @@ mod tests {
     }
 
     fn par_process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
-        par_process_entries_with_scheduler(bank, entries, &leader_scheduler)
+        par_process_entries_with_scheduler(bank, entries)
     }
 
     #[test]
@@ -474,7 +445,6 @@ mod tests {
 
     #[test]
     fn test_process_ledger_simple() {
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
         let leader_pubkey = Keypair::new().pubkey();
         let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, leader_pubkey, 50);
         let (ledger_path, tick_height, mut entry_height, mut last_id, mut last_entry_id) =
@@ -513,8 +483,7 @@ mod tests {
             .unwrap();
         entry_height += entries.len() as u64;
 
-        let (bank_forks, bank_forks_info) =
-            process_blocktree(&genesis_block, &blocktree, &leader_scheduler).unwrap();
+        let (bank_forks, bank_forks_info) = process_blocktree(&genesis_block, &blocktree).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(

@@ -18,7 +18,6 @@ use crate::blockstream_service::BlockstreamService;
 use crate::blocktree::Blocktree;
 use crate::blocktree_processor::BankForksInfo;
 use crate::cluster_info::ClusterInfo;
-use crate::leader_scheduler::LeaderScheduler;
 use crate::replay_stage::ReplayStage;
 use crate::retransmit_stage::RetransmitStage;
 use crate::rpc_subscriptions::RpcSubscriptions;
@@ -78,7 +77,6 @@ impl Tvu {
         storage_state: &StorageState,
         blockstream: Option<&String>,
         ledger_signal_receiver: Receiver<bool>,
-        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         subscriptions: &Arc<RpcSubscriptions>,
     ) -> Self
     where
@@ -116,7 +114,6 @@ impl Tvu {
             Arc::new(retransmit_socket),
             repair_socket,
             blob_fetch_receiver,
-            leader_scheduler.clone(),
             exit.clone(),
         );
 
@@ -130,7 +127,6 @@ impl Tvu {
             exit.clone(),
             to_leader_sender,
             ledger_signal_receiver,
-            &leader_scheduler,
             subscriptions,
         );
 
@@ -226,8 +222,6 @@ pub mod tests {
             last_entry_id: Hash::default(),
             next_blob_index: 0,
         }];
-        let leader_scheduler = LeaderScheduler::new_with_bank(&bank_forks.working_bank());
-        let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
 
         //start cluster_info1
         let mut cluster_info1 = ClusterInfo::new(target1.info.clone());
@@ -257,7 +251,6 @@ pub mod tests {
             &StorageState::default(),
             None,
             l_receiver,
-            leader_scheduler,
             &Arc::new(RpcSubscriptions::default()),
         );
         tvu.close().expect("close");

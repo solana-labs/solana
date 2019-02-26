@@ -1,9 +1,9 @@
 //! The `window_service` provides a thread for maintaining a window (tail of the ledger).
 //!
+use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
 use crate::db_window::*;
-use crate::leader_scheduler::LeaderScheduler;
 use crate::repair_service::RepairService;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -30,7 +30,7 @@ pub enum WindowServiceReturnType {
 fn recv_window(
     blocktree: &Arc<Blocktree>,
     id: &Pubkey,
-    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
+    bank_forks: &Arc<RwLock<BankForks>>,
     r: &BlobReceiver,
     retransmit: &BlobSender,
 ) -> Result<()> {
@@ -49,7 +49,7 @@ fn recv_window(
             .to_owned(),
     );
 
-    retransmit_blobs(&dq, leader_scheduler, retransmit, id)?;
+    retransmit_blobs(&dq, bank_forks, retransmit, id)?;
 
     //send a contiguous set of blocks
     trace!("{} num blobs received: {}", id, dq.len());
@@ -62,7 +62,7 @@ fn recv_window(
 
         trace!("{} window pix: {} size: {}", id, pix, meta_size);
 
-        let _ = process_blob(leader_scheduler, blocktree, &b);
+        let _ = process_blob(bank_forks, blocktree, &b);
     }
 
     trace!(
@@ -104,7 +104,7 @@ impl WindowService {
         r: BlobReceiver,
         retransmit: BlobSender,
         repair_socket: Arc<UdpSocket>,
-        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
+        bank_forks: Arc<RwLock<BankForks>>,
         exit: Arc<AtomicBool>,
     ) -> WindowService {
         let exit_ = exit.clone();
@@ -124,8 +124,7 @@ impl WindowService {
                     if exit.load(Ordering::Relaxed) {
                         break;
                     }
-                    if let Err(e) = recv_window(&blocktree, &id, &leader_scheduler, &r, &retransmit)
-                    {
+                    if let Err(e) = recv_window(&blocktree, &id, &bank_forks, &r, &retransmit) {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                             Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
@@ -159,12 +158,13 @@ impl Service for WindowService {
 mod test {
     use crate::blocktree::get_tmp_ledger_path;
     use crate::blocktree::Blocktree;
+    use crate::blocktree_processor;
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::make_consecutive_blobs;
-    use crate::leader_scheduler::LeaderScheduler;
     use crate::service::Service;
     use crate::streamer::{blob_receiver, responder};
     use crate::window_service::WindowService;
+    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use std::fs::remove_dir_all;
     use std::net::UdpSocket;
@@ -194,15 +194,18 @@ mod test {
         let blocktree = Arc::new(
             Blocktree::open(&blocktree_path).expect("Expected to be able to open database ledger"),
         );
-        let mut leader_schedule = LeaderScheduler::default();
-        leader_schedule.set_leader_schedule(vec![me_id]);
+        let genesis_block = GenesisBlock::load(&blocktree_path)
+            .expect("Expected to successfully open genesis block");
+        let (bank_forks, _bank_forks_info) =
+            blocktree_processor::process_blocktree(&genesis_block, &blocktree)
+                .expect("process_blocktree failed");
         let t_window = WindowService::new(
             blocktree,
             subs,
             r_reader,
             s_retransmit,
             Arc::new(leader_node.sockets.repair),
-            Arc::new(RwLock::new(leader_schedule)),
+            Arc::new(RwLock::new(bank_forks)),
             exit.clone(),
         );
         let t_responder = {
@@ -264,15 +267,18 @@ mod test {
         let blocktree = Arc::new(
             Blocktree::open(&blocktree_path).expect("Expected to be able to open database ledger"),
         );
-        let mut leader_schedule = LeaderScheduler::default();
-        leader_schedule.set_leader_schedule(vec![me_id]);
+        let genesis_block = GenesisBlock::load(&blocktree_path)
+            .expect("Expected to successfully open genesis block");
+        let (bank_forks, _bank_forks_info) =
+            blocktree_processor::process_blocktree(&genesis_block, &blocktree)
+                .expect("process_blocktree failed");
         let t_window = WindowService::new(
             blocktree,
             subs.clone(),
             r_reader,
             s_retransmit,
             Arc::new(leader_node.sockets.repair),
-            Arc::new(RwLock::new(leader_schedule)),
+            Arc::new(RwLock::new(bank_forks)),
             exit.clone(),
         );
         let t_responder = {

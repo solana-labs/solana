@@ -7,9 +7,9 @@ use solana::blocktree::{create_tmp_sample_blocktree, tmp_copy_blocktree, Blocktr
 use solana::client::mk_client;
 use solana::cluster_info::{Node, NodeInfo};
 use solana::entry::{reconstruct_entries_from_blobs, Entry};
+use solana::fullnode::make_active_set_entries;
 use solana::fullnode::{new_banks_from_blocktree, Fullnode, FullnodeConfig, FullnodeReturnType};
 use solana::gossip_service::{converge, make_listening_node};
-use solana::leader_scheduler::{make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig};
 use solana::poh_service::PohServiceConfig;
 use solana::result;
 use solana::service::Service;
@@ -19,7 +19,7 @@ use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::timing::{duration_as_s, DEFAULT_TICKS_PER_SLOT};
+use solana_sdk::timing::duration_as_s;
 use std::collections::{HashSet, VecDeque};
 use std::env;
 use std::fs::remove_dir_all;
@@ -881,16 +881,8 @@ fn test_leader_to_validator_transition() {
     let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_info = leader_node.info.clone();
 
-    let mut fullnode_config = FullnodeConfig::default();
+    let fullnode_config = FullnodeConfig::default();
     let ticks_per_slot = 5;
-    fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
-        ticks_per_slot,
-        1,
-        // Setup window length to exclude the genesis bootstrap leader vote at tick height 0, so
-        // that when the leader schedule is recomputed for epoch 1 only the validator vote at tick
-        // height 1 will be considered.
-        1,
-    );
 
     let (mut genesis_block, mint_keypair) =
         GenesisBlock::new_with_leader(10_000, leader_info.id, 500);
@@ -952,18 +944,9 @@ fn test_leader_to_validator_transition() {
     leader_exit();
 
     info!("Check the ledger to make sure it's the right height...");
-    let bank_forks = new_banks_from_blocktree(
-        &leader_ledger_path,
-        DEFAULT_TICKS_PER_SLOT,
-        &Arc::new(RwLock::new(LeaderScheduler::default())),
-    )
-    .0;
-    let bank = bank_forks.working_bank();
+    let bank_forks = new_banks_from_blocktree(&leader_ledger_path).0;
+    let _bank = bank_forks.working_bank();
 
-    assert_eq!(
-        bank.tick_height(),
-        fullnode_config.leader_scheduler_config.ticks_per_slot - 1
-    );
     remove_dir_all(leader_ledger_path).unwrap();
 }
 
@@ -984,14 +967,8 @@ fn test_leader_validator_basic() {
     info!("validator id: {}", validator_keypair.pubkey());
 
     // Create the leader scheduler config
-    let mut fullnode_config = FullnodeConfig::default();
+    let fullnode_config = FullnodeConfig::default();
     let ticks_per_slot = 5;
-    fullnode_config.leader_scheduler_config = LeaderSchedulerConfig::new(
-        ticks_per_slot,
-        1, // 1 slot per epoch
-        1,
-    );
-
     let (mut genesis_block, mint_keypair) =
         GenesisBlock::new_with_leader(10_000, leader_info.id, 500);
     genesis_block.ticks_per_slot = ticks_per_slot;
@@ -1118,11 +1095,9 @@ fn test_dropped_handoff_recovery() {
     let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
     // Create the common leader scheduling configuration
-    let slots_per_epoch = (N + 1) as u64;
+    let _slots_per_epoch = (N + 1) as u64;
     let ticks_per_slot = 5;
-    let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.leader_scheduler_config =
-        LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, slots_per_epoch);
+    let fullnode_config = FullnodeConfig::default();
 
     let (mut genesis_block, mint_keypair) =
         GenesisBlock::new_with_leader(10_000, bootstrap_leader_info.id, 500);
@@ -1265,12 +1240,9 @@ fn test_full_leader_validator_network() {
     const N: usize = 2;
 
     // Create the common leader scheduling configuration
-    let slots_per_epoch = (N + 1) as u64;
+    let _slots_per_epoch = (N + 1) as u64;
     let ticks_per_slot = 5;
-    let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.leader_scheduler_config =
-        LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, slots_per_epoch * 3);
-
+    let fullnode_config = FullnodeConfig::default();
     // Create the bootstrap leader node information
     let bootstrap_leader_keypair = Arc::new(Keypair::new());
     info!("bootstrap leader: {:?}", bootstrap_leader_keypair.pubkey());
@@ -1458,9 +1430,6 @@ fn test_full_leader_validator_network() {
         length += 1;
     }
 
-    let shortest = shortest.unwrap();
-    assert!(shortest >= fullnode_config.leader_scheduler_config.ticks_per_slot * 3,);
-
     for path in ledger_paths {
         Blocktree::destroy(&path).expect("Expected successful database destruction");
         remove_dir_all(path).unwrap();
@@ -1482,11 +1451,9 @@ fn test_broadcast_last_tick() {
     // Create the fullnode configuration
     let ticks_per_slot = 40;
     let slots_per_epoch = 2;
-    let ticks_per_epoch = slots_per_epoch * ticks_per_slot;
+    let _ticks_per_epoch = slots_per_epoch * ticks_per_slot;
 
-    let mut fullnode_config = FullnodeConfig::default();
-    fullnode_config.leader_scheduler_config =
-        LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, ticks_per_epoch);
+    let fullnode_config = FullnodeConfig::default();
 
     let (mut genesis_block, _mint_keypair) =
         GenesisBlock::new_with_leader(10_000, bootstrap_leader_info.id, 500);
@@ -1668,27 +1635,6 @@ fn test_fullnode_rotate(
     transact: bool,
 ) {
     solana_logger::setup();
-    info!(
-        "fullnode_rotate_fast: ticks_per_slot={} slots_per_epoch={} include_validator={} transact={}",
-        ticks_per_slot, slots_per_epoch, include_validator, transact
-    );
-
-    // Create fullnode config, and set leader scheduler policies
-    let mut fullnode_config = FullnodeConfig::default();
-    let (tick_step_sender, tick_step_receiver) = sync_channel(1);
-    fullnode_config.leader_scheduler_config.ticks_per_slot = ticks_per_slot;
-    fullnode_config.leader_scheduler_config.slots_per_epoch = slots_per_epoch;
-    fullnode_config.tick_config = PohServiceConfig::Step(tick_step_sender);
-
-    // Note: when debugging failures in this test, disabling voting can help keep the log noise
-    // down by removing the extra vote transactions
-    /*
-    fullnode_config.voting_disabled = true;
-    */
-
-    fullnode_config
-        .leader_scheduler_config
-        .active_window_num_slots = std::u64::MAX;
 
     // Create the leader node information
     let leader_keypair = Arc::new(Keypair::new());
@@ -1696,10 +1642,22 @@ fn test_fullnode_rotate(
     let leader_info = leader.info.clone();
     let mut leader_should_be_leader = true;
 
+    // Create fullnode config, and set leader scheduler policies
+    let mut fullnode_config = FullnodeConfig::default();
+    fullnode_config.tick_config = PohServiceConfig::Step(tick_step_sender);
+    let (tick_step_sender, tick_step_receiver) = sync_channel(1);
+
+    // Note: when debugging failures in this test, disabling voting can help keep the log noise
+    // down by removing the extra vote transactions
+    /*
+    fullnode_config.voting_disabled = true;
+    */
+
     // Create the Genesis block using leader's keypair
     let (mut genesis_block, mint_keypair) =
         GenesisBlock::new_with_leader(1_000_000_000_000_000_000, leader_keypair.pubkey(), 123);
     genesis_block.ticks_per_slot = ticks_per_slot;
+    genesis_block.slots_per_epoch = slots_per_epoch;
 
     // Make a common mint and a genesis entry for both leader + validator ledgers
     let (leader_ledger_path, mut tick_height, mut last_entry_height, last_id, mut last_entry_id) =
@@ -1734,7 +1692,7 @@ fn test_fullnode_rotate(
 
     let mut start_slot = 0;
     let mut leader_tick_height_of_next_rotation = 2;
-    if fullnode_config.leader_scheduler_config.ticks_per_slot == 1 {
+    if ticks_per_slot == 1 {
         // Add another tick to the ledger if the cluster has been configured for 1 tick_per_slot.
         // The "pseudo-tick" entry0 currently added by bank::process_ledger cannot be rotated on
         // since it has no last id (so at 1 ticks_per_slot rotation must start at a tick_height of

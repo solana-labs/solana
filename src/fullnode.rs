@@ -4,8 +4,11 @@ use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
 use crate::blocktree_processor::{self, BankForksInfo};
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
+use crate::entry::create_ticks;
+use crate::entry::next_entry_mut;
+use crate::entry::Entry;
 use crate::gossip_service::GossipService;
-use crate::leader_scheduler::{LeaderScheduler, LeaderSchedulerConfig};
+use crate::leader_scheduler1::LeaderScheduler1;
 use crate::poh_recorder::PohRecorder;
 use crate::poh_service::{PohService, PohServiceConfig};
 use crate::rpc_pubsub_service::PubSubService;
@@ -15,11 +18,15 @@ use crate::service::Service;
 use crate::storage_stage::StorageState;
 use crate::tpu::Tpu;
 use crate::tvu::{Sockets, Tvu, TvuRotationInfo, TvuRotationReceiver};
+use crate::voting_keypair::VotingKeypair;
 use solana_metrics::counter::Counter;
 use solana_sdk::genesis_block::GenesisBlock;
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
+use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::timestamp;
+use solana_sdk::vote_transaction::VoteTransaction;
 use std::net::UdpSocket;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -63,7 +70,6 @@ pub struct FullnodeConfig {
     pub voting_disabled: bool,
     pub blockstream: Option<String>,
     pub storage_rotate_count: u64,
-    pub leader_scheduler_config: LeaderSchedulerConfig,
     pub tick_config: PohServiceConfig,
 }
 impl Default for FullnodeConfig {
@@ -77,15 +83,8 @@ impl Default for FullnodeConfig {
             voting_disabled: false,
             blockstream: None,
             storage_rotate_count: NUM_HASHES_FOR_STORAGE_ROTATE,
-            leader_scheduler_config: LeaderSchedulerConfig::default(),
             tick_config: PohServiceConfig::default(),
         }
-    }
-}
-
-impl FullnodeConfig {
-    pub fn ticks_per_slot(&self) -> u64 {
-        self.leader_scheduler_config.ticks_per_slot
     }
 }
 
@@ -102,7 +101,6 @@ pub struct Fullnode {
     rotation_receiver: TvuRotationReceiver,
     blocktree: Arc<Blocktree>,
     bank_forks: Arc<RwLock<BankForks>>,
-    leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     poh_service: PohService,
     poh_recorder: Arc<Mutex<PohRecorder>>,
 }
@@ -124,11 +122,8 @@ impl Fullnode {
         let id = keypair.pubkey();
         assert_eq!(id, node.info.id);
 
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::new(
-            &config.leader_scheduler_config,
-        )));
         let (mut bank_forks, bank_forks_info, blocktree, ledger_signal_receiver) =
-            new_banks_from_blocktree(ledger_path, config.ticks_per_slot(), &leader_scheduler);
+            new_banks_from_blocktree(ledger_path);
 
         let exit = Arc::new(AtomicBool::new(false));
         let bank_info = &bank_forks_info[0];
@@ -250,7 +245,6 @@ impl Fullnode {
             &storage_state,
             config.blockstream.as_ref(),
             ledger_signal_receiver,
-            leader_scheduler.clone(),
             &subscriptions,
         );
         let tpu = Tpu::new(id, &cluster_info);
@@ -269,7 +263,6 @@ impl Fullnode {
             rotation_receiver,
             blocktree,
             bank_forks,
-            leader_scheduler,
             poh_service,
             poh_recorder,
         }
@@ -303,14 +296,8 @@ impl Fullnode {
                     }
                 }
                 None => {
-                    if self
-                        .leader_scheduler
-                        .read()
-                        .unwrap()
-                        .get_leader_for_slot(rotation_info.slot.saturating_sub(1))
-                        .unwrap()
-                        == self.id
-                    {
+                    let bank = self.bank_forks.read().unwrap().working_bank();
+                    if LeaderScheduler1::default().prev_slot_leader(&bank) == self.id {
                         FullnodeReturnType::LeaderToLeaderRotation
                     } else {
                         FullnodeReturnType::ValidatorToLeaderRotation
@@ -418,17 +405,16 @@ impl Fullnode {
 
 pub fn new_banks_from_blocktree(
     blocktree_path: &str,
-    ticks_per_slot: u64,
-    leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
 ) -> (BankForks, Vec<BankForksInfo>, Blocktree, Receiver<bool>) {
-    let (blocktree, ledger_signal_receiver) =
-        Blocktree::open_with_config_signal(blocktree_path, ticks_per_slot)
-            .expect("Expected to successfully open database ledger");
     let genesis_block =
         GenesisBlock::load(blocktree_path).expect("Expected to successfully open genesis block");
 
+    let (blocktree, ledger_signal_receiver) =
+        Blocktree::open_with_config_signal(blocktree_path, genesis_block.ticks_per_slot)
+            .expect("Expected to successfully open database ledger");
+
     let (bank_forks, bank_forks_info) =
-        blocktree_processor::process_blocktree(&genesis_block, &blocktree, leader_scheduler)
+        blocktree_processor::process_blocktree(&genesis_block, &blocktree)
             .expect("process_blocktree failed");
 
     (
@@ -459,15 +445,57 @@ impl Service for Fullnode {
     }
 }
 
+// Create entries such the node identified by active_keypair
+// will be added to the active set for leader selection:
+// 1) Give the node a nonzero number of tokens,
+// 2) A vote from the validator
+pub fn make_active_set_entries(
+    active_keypair: &Arc<Keypair>,
+    token_source: &Keypair,
+    stake: u64,
+    slot_height_to_vote_on: u64,
+    last_entry_id: &Hash,
+    last_tick_id: &Hash,
+    num_ending_ticks: u64,
+) -> (Vec<Entry>, VotingKeypair) {
+    // 1) Assume the active_keypair node has no tokens staked
+    let transfer_tx = SystemTransaction::new_account(
+        &token_source,
+        active_keypair.pubkey(),
+        stake,
+        *last_tick_id,
+        0,
+    );
+    let mut last_entry_id = *last_entry_id;
+    let transfer_entry = next_entry_mut(&mut last_entry_id, 1, vec![transfer_tx]);
+
+    // 2) Create and register a vote account for active_keypair
+    let voting_keypair = VotingKeypair::new_local(active_keypair);
+    let vote_account_id = voting_keypair.pubkey();
+
+    let new_vote_account_tx =
+        VoteTransaction::new_account(active_keypair, vote_account_id, *last_tick_id, 1, 1);
+    let new_vote_account_entry = next_entry_mut(&mut last_entry_id, 1, vec![new_vote_account_tx]);
+
+    // 3) Create vote entry
+    let vote_tx =
+        VoteTransaction::new_vote(&voting_keypair, slot_height_to_vote_on, *last_tick_id, 0);
+    let vote_entry = next_entry_mut(&mut last_entry_id, 1, vec![vote_tx]);
+
+    // 4) Create the ending empty ticks
+    let mut txs = vec![transfer_entry, new_vote_account_entry, vote_entry];
+    let empty_ticks = create_ticks(num_ending_ticks, last_entry_id);
+    txs.extend(empty_ticks);
+    (txs, voting_keypair)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::blocktree::{create_tmp_sample_blocktree, tmp_copy_blocktree};
     use crate::entry::make_consecutive_blobs;
-    use crate::leader_scheduler::make_active_set_entries;
     use crate::streamer::responder;
     use solana_sdk::hash::Hash;
-    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use std::fs::remove_dir_all;
 
     #[test]
@@ -555,17 +583,14 @@ mod tests {
         // epoch, check that the same leader knows to shut down and restart as a leader again.
         let ticks_per_slot = 5;
         let slots_per_epoch = 2;
-        let active_window_num_slots = 10;
-        let leader_scheduler_config =
-            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_num_slots);
 
         let voting_keypair = Keypair::new();
-        let mut fullnode_config = FullnodeConfig::default();
-        fullnode_config.leader_scheduler_config = leader_scheduler_config;
+        let fullnode_config = FullnodeConfig::default();
 
         let (mut genesis_block, _mint_keypair) =
             GenesisBlock::new_with_leader(10_000, bootstrap_leader_keypair.pubkey(), 500);
-        genesis_block.ticks_per_slot = fullnode_config.ticks_per_slot();
+        genesis_block.ticks_per_slot = ticks_per_slot;
+        genesis_block.slots_per_epoch = slots_per_epoch;
 
         let (
             bootstrap_leader_ledger_path,
@@ -605,11 +630,9 @@ mod tests {
     fn test_wrong_role_transition() {
         solana_logger::setup();
 
-        let mut fullnode_config = FullnodeConfig::default();
+        let fullnode_config = FullnodeConfig::default();
         let ticks_per_slot = 16;
         let slots_per_epoch = 2;
-        fullnode_config.leader_scheduler_config =
-            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, slots_per_epoch);
 
         // Create the leader and validator nodes
         let bootstrap_leader_keypair = Arc::new(Keypair::new());
@@ -688,9 +711,7 @@ mod tests {
         let slots_per_epoch = 4;
         let leader_keypair = Arc::new(Keypair::new());
         let validator_keypair = Arc::new(Keypair::new());
-        let mut fullnode_config = FullnodeConfig::default();
-        fullnode_config.leader_scheduler_config =
-            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, slots_per_epoch);
+        let fullnode_config = FullnodeConfig::default();
         let (leader_node, validator_node, validator_ledger_path, ledger_initial_len, last_id) =
             setup_leader_validator(
                 &leader_keypair,
@@ -698,7 +719,7 @@ mod tests {
                 0,
                 0,
                 "test_validator_to_leader_transition",
-                fullnode_config.ticks_per_slot(),
+                ticks_per_slot,
             );
 
         let leader_id = leader_keypair.pubkey();
@@ -754,12 +775,7 @@ mod tests {
 
         // Close the validator so that rocksdb has locks available
         validator_exit();
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
-        let (bank_forks, bank_forks_info, _, _) = new_banks_from_blocktree(
-            &validator_ledger_path,
-            DEFAULT_TICKS_PER_SLOT,
-            &leader_scheduler,
-        );
+        let (bank_forks, bank_forks_info, _, _) = new_banks_from_blocktree(&validator_ledger_path);
         let bank = bank_forks.working_bank();
         let entry_height = bank_forks_info[0].entry_height;
 

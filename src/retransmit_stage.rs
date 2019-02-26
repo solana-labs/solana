@@ -6,7 +6,6 @@ use crate::cluster_info::{
     compute_retransmit_peers, ClusterInfo, DATA_PLANE_FANOUT, GROW_LAYER_CAPACITY,
     NEIGHBORHOOD_SIZE,
 };
-use crate::leader_scheduler::LeaderScheduler;
 use crate::packet::SharedBlob;
 use crate::result::{Error, Result};
 use crate::service::Service;
@@ -113,7 +112,6 @@ impl RetransmitStage {
         retransmit_socket: Arc<UdpSocket>,
         repair_socket: Arc<UdpSocket>,
         fetch_stage_receiver: BlobReceiver,
-        leader_scheduler: Arc<RwLock<LeaderScheduler>>,
         exit: Arc<AtomicBool>,
     ) -> Self {
         let (retransmit_sender, retransmit_receiver) = channel();
@@ -130,7 +128,7 @@ impl RetransmitStage {
             fetch_stage_receiver,
             retransmit_sender,
             repair_socket,
-            leader_scheduler,
+            bank_forks.clone(),
             exit,
         );
 
