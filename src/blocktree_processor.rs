@@ -129,7 +129,7 @@ pub fn process_blocktree(
     genesis_block: &GenesisBlock,
     blocktree: &Blocktree,
     leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
-    account_paths: &str,
+    account_paths: Option<String>,
 ) -> Result<(BankForks, Vec<BankForksInfo>)> {
     let now = Instant::now();
     info!("processing ledger...");
@@ -327,7 +327,7 @@ mod tests {
         info!("last_fork2_entry_id: {:?}", last_fork2_entry_id);
 
         let (mut bank_forks, bank_forks_info) =
-            process_blocktree(&genesis_block, &blocktree, &leader_scheduler, "").unwrap();
+            process_blocktree(&genesis_block, &blocktree, &leader_scheduler, None).unwrap();
 
         assert_eq!(bank_forks_info.len(), 2); // There are two forks
         assert_eq!(
@@ -455,7 +455,7 @@ mod tests {
         entry_height += entries.len() as u64;
 
         let (bank_forks, bank_forks_info) =
-            process_blocktree(&genesis_block, &blocktree, &leader_scheduler, "").unwrap();
+            process_blocktree(&genesis_block, &blocktree, &leader_scheduler, None).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(
