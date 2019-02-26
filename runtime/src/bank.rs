@@ -1451,4 +1451,20 @@ mod tests {
             bank.squash();
         }
     }
+
+    #[test]
+    fn test_bank_get_account_in_parent_after_squash() {
+        let (genesis_block, mint_keypair) = GenesisBlock::new(500);
+        let parent = Arc::new(Bank::new(&genesis_block));
+
+        let key1 = Keypair::new();
+
+        parent
+            .transfer(1, &mint_keypair, key1.pubkey(), genesis_block.last_id())
+            .unwrap();
+        assert_eq!(parent.get_balance(&key1.pubkey()), 1);
+        let bank = Bank::new_from_parent(&parent);
+        bank.squash();
+        assert_eq!(parent.get_balance(&key1.pubkey()), 1);
+    }
 }
