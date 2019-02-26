@@ -275,7 +275,20 @@ impl Fullnode {
                         FullnodeReturnType::ValidatorToLeaderRotation
                     }
                 }
-                None => FullnodeReturnType::LeaderToLeaderRotation, // value doesn't matter here...
+                None => {
+                    if self
+                        .leader_scheduler
+                        .read()
+                        .unwrap()
+                        .get_leader_for_slot(rotation_info.slot.saturating_sub(1))
+                        .unwrap()
+                        == self.id
+                    {
+                        FullnodeReturnType::LeaderToLeaderRotation
+                    } else {
+                        FullnodeReturnType::ValidatorToLeaderRotation
+                    }
+                }
             };
             self.node_services.tpu.switch_to_leader(
                 Arc::new(rotation_info.bank),
