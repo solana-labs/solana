@@ -12,10 +12,10 @@ struct LastIdEntry {
 #[derive(Clone)]
 pub struct LastIdQueue {
     /// updated whenever an id is registered, at each tick ;)
-    pub tick_height: u64,
+    tick_height: u64,
 
     /// last tick to be registered
-    pub last_id: Option<Hash>,
+    last_id: Option<Hash>,
 
     entries: HashMap<Hash, LastIdEntry>,
 }
@@ -30,6 +30,14 @@ impl Default for LastIdQueue {
 }
 
 impl LastIdQueue {
+    pub fn tick_height(&self) -> u64 {
+        self.tick_height
+    }
+
+    pub fn last_id(&self) -> Hash {
+        self.last_id.expect("no last_id has been set")
+    }
+
     /// Check if the age of the entry_id is within the max_age
     /// return false for any entries with an age equal to or above max_age
     pub fn check_entry_id_age(&self, entry_id: Hash, max_age: usize) -> bool {
