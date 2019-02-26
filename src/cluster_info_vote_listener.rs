@@ -3,7 +3,6 @@ use crate::packet;
 use crate::result::Result;
 use crate::service::Service;
 use crate::streamer::PacketSender;
-use log::Level;
 use solana_metrics::counter::Counter;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};

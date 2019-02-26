@@ -10,7 +10,6 @@ use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::sigverify;
 use crate::streamer::{self, PacketReceiver};
-use log::Level;
 use rand::{thread_rng, Rng};
 use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};

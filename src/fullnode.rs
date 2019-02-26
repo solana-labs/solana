@@ -14,7 +14,6 @@ use crate::service::Service;
 use crate::storage_stage::StorageState;
 use crate::tpu::Tpu;
 use crate::tvu::{Sockets, Tvu, TvuRotationInfo, TvuRotationReceiver};
-use log::Level;
 use solana_metrics::counter::Counter;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::pubkey::Pubkey;

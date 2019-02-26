@@ -11,7 +11,6 @@ use crate::result::{Error, Result};
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::tvu::{TvuRotationInfo, TvuRotationSender};
-use log::Level;
 use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};
 use solana_runtime::bank::Bank;

@@ -12,7 +12,6 @@ use crate::result::{Error, Result};
 use crate::service::Service;
 use crate::streamer::BlobReceiver;
 use crate::window_service::WindowService;
-use log::Level;
 use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};
 use std::net::UdpSocket;

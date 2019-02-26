@@ -2,7 +2,6 @@ use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
 use crate::entry::{Entry, EntrySlice};
 use crate::leader_scheduler::LeaderScheduler;
-use log::Level;
 use rayon::prelude::*;
 use solana_metrics::counter::Counter;
 use solana_runtime::bank::{Bank, BankError, Result};

@@ -10,7 +10,7 @@ use crate::runtime::{self, RuntimeError};
 use crate::status_cache::StatusCache;
 use bincode::serialize;
 use hashbrown::HashMap;
-use log::{debug, info, warn, Level};
+use log::{debug, info, warn};
 use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
 use solana_sdk::bpf_loader;
