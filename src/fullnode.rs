@@ -602,14 +602,14 @@ mod tests {
     }
 
     #[test]
-    fn test_wrong_role_transition() {
+    fn test_ledger_role_transition() {
         solana_logger::setup();
 
         let mut fullnode_config = FullnodeConfig::default();
         let ticks_per_slot = 16;
         let slots_per_epoch = 2;
         fullnode_config.leader_scheduler_config =
-            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, slots_per_epoch);
+            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, std::u64::MAX);
 
         // Create the leader and validator nodes
         let bootstrap_leader_keypair = Arc::new(Keypair::new());

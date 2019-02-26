@@ -125,7 +125,7 @@ impl ReplayStage {
             // If we don't process the entry now, the for loop will exit and the entry
             // will be dropped.
             if 0 == num_ticks_to_next_vote || (i + 1) == entries.len() {
-                res = blocktree_processor::process_entries(bank, &entries[0..=i], leader_scheduler);
+                res = blocktree_processor::process_entries(bank, &entries[0..=i]);
 
                 if res.is_err() {
                     // TODO: This will return early from the first entry that has an erroneous
@@ -137,6 +137,8 @@ impl ReplayStage {
                     inc_new_counter_info!("replicate-stage_failed_process_entries", i);
                     break;
                 }
+
+                leader_scheduler.write().unwrap().update(&bank);
 
                 if 0 == num_ticks_to_next_vote {
                     subscriptions.notify_subscribers(&bank);
