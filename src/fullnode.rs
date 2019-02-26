@@ -101,7 +101,6 @@ pub struct Fullnode {
     node_services: NodeServices,
     rotation_receiver: TvuRotationReceiver,
     blocktree: Arc<Blocktree>,
-    leader_scheduler: Arc<RwLock<LeaderScheduler>>,
     bank_forks: Arc<RwLock<BankForks>>,
 }
 
@@ -252,7 +251,6 @@ impl Fullnode {
             broadcast_socket: node.sockets.broadcast,
             rotation_receiver,
             blocktree,
-            leader_scheduler,
             bank_forks,
         }
     }
@@ -293,7 +291,6 @@ impl Fullnode {
                 rotation_info.slot,
                 rotation_info.last_entry_id,
                 &self.blocktree,
-                &self.leader_scheduler,
             );
             transition
         } else {
