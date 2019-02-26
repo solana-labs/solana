@@ -373,8 +373,14 @@ impl ClusterInfo {
             .iter()
             .map(|c| (*stakes.get(&c.id).unwrap_or(&0), c.clone()))
             .collect();
-        peers_with_stakes.sort_unstable();
-        peers_with_stakes.reverse();
+        peers_with_stakes.sort_unstable_by(|(l_stake, l_info), (r_stake, r_info)| {
+            if r_stake == l_stake {
+                r_info.id.cmp(&l_info.id)
+            } else {
+                r_stake.cmp(&l_stake)
+            }
+        });
+        peers_with_stakes.dedup();
         peers_with_stakes
     }
 
