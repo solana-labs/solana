@@ -170,21 +170,7 @@ impl CrdsGossipPush {
         let need = Self::compute_need(self.num_active, self.active_set.len(), ratio);
         let mut new_items = HashMap::new();
 
-        let mut options: Vec<_> = crds
-            .table
-            .values()
-            .filter(|v| v.value.contact_info().is_some())
-            .map(|v| (v.value.contact_info().unwrap(), v))
-            .filter(|(info, _)| info.id != self_id && ContactInfo::is_valid_address(&info.gossip))
-            .map(|(info, value)| {
-                let max_weight = f32::from(u16::max_value()) - 1.0;
-                let last_updated: u64 = value.local_timestamp;
-                let since = ((timestamp() - last_updated) / 1024) as u32;
-                let stake = get_stake(&info.id, stakes);
-                let weight = get_weight(max_weight, since, stake);
-                (weight, info)
-            })
-            .collect();
+        let mut options: Vec<_> = self.push_options(crds, &self_id, stakes);
         if options.is_empty() {
             return;
         }
@@ -216,6 +202,28 @@ impl CrdsGossipPush {
         for (k, v) in new_items {
             self.active_set.insert(k, v);
         }
+    }
+
+    fn push_options<'a>(
+        &self,
+        crds: &'a Crds,
+        self_id: &Pubkey,
+        stakes: &HashMap<Pubkey, u64>,
+    ) -> Vec<(f32, &'a ContactInfo)> {
+        crds.table
+            .values()
+            .filter(|v| v.value.contact_info().is_some())
+            .map(|v| (v.value.contact_info().unwrap(), v))
+            .filter(|(info, _)| info.id != *self_id && ContactInfo::is_valid_address(&info.gossip))
+            .map(|(info, value)| {
+                let max_weight = f32::from(u16::max_value()) - 1.0;
+                let last_updated: u64 = value.local_timestamp;
+                let since = ((timestamp() - last_updated) / 1024) as u32;
+                let stake = get_stake(&info.id, stakes);
+                let weight = get_weight(max_weight, since, stake);
+                (weight, info)
+            })
+            .collect()
     }
 
     /// purge old pending push messages
@@ -259,7 +267,6 @@ mod test {
     use super::*;
     use crate::contact_info::ContactInfo;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use std::f32::consts::E;
 
     #[test]
     fn test_process_push() {
@@ -389,7 +396,7 @@ mod test {
     fn test_active_set_refresh_with_bank() {
         let time = timestamp() - 1024; //make sure there's at least a 1 second delay
         let mut crds = Crds::default();
-        let mut push = CrdsGossipPush::default();
+        let push = CrdsGossipPush::default();
         let mut stakes = HashMap::new();
         for i in 1..=100 {
             let peer =
@@ -398,27 +405,13 @@ mod test {
             crds.insert(peer.clone(), time).unwrap();
             stakes.insert(id, i * 100);
         }
-        let min_balance = E.powf(7000_f32.ln() - 0.5);
-        // try upto 10 times because of rng
-        for _ in 0..10 {
-            push.refresh_push_active_set(&crds, &stakes, Pubkey::default(), 100, 30);
-            let mut num_correct = 0;
-            let mut num_wrong = 0;
-            push.active_set.iter().for_each(|peer| {
-                if *stakes.get(peer.0).unwrap_or(&0) >= min_balance as u64 {
-                    num_correct += 1;
-                } else {
-                    num_wrong += 1;
-                }
-            });
-            // at least half of the heaviest nodes should be picked
-            if num_wrong <= num_correct {
-                return;
-            }
-        }
-        assert!(
-            false,
-            "expected at 50% of the active set to contain the heaviest nodes"
+        let mut options = push.push_options(&crds, &Pubkey::default(), &stakes);
+        assert!(!options.is_empty());
+        options.sort_by(|(weight_l, _), (weight_r, _)| weight_r.partial_cmp(weight_l).unwrap());
+        // check that the highest stake holder is also the heaviest weighted.
+        assert_eq!(
+            *stakes.get(&options.get(0).unwrap().1.id).unwrap(),
+            10_000_u64
         );
     }
     #[test]

@@ -57,20 +57,7 @@ impl CrdsGossipPull {
         now: u64,
         stakes: &HashMap<Pubkey, u64>,
     ) -> Result<(Pubkey, Bloom<Hash>, CrdsValue), CrdsGossipError> {
-        let options: Vec<_> = crds
-            .table
-            .values()
-            .filter_map(|v| v.value.contact_info())
-            .filter(|v| v.id != self_id && ContactInfo::is_valid_address(&v.gossip))
-            .map(|item| {
-                let max_weight = f32::from(u16::max_value()) - 1.0;
-                let req_time: u64 = *self.pull_request_time.get(&item.id).unwrap_or(&0);
-                let since = ((now - req_time) / 1024) as u32;
-                let stake = get_stake(&item.id, stakes);
-                let weight = get_weight(max_weight, since, stake);
-                (weight, item)
-            })
-            .collect();
+        let options = self.pull_options(crds, &self_id, now, stakes);
         if options.is_empty() {
             return Err(CrdsGossipError::NoPeers);
         }
@@ -81,6 +68,28 @@ impl CrdsGossipPull {
             .lookup(&CrdsValueLabel::ContactInfo(self_id))
             .unwrap_or_else(|| panic!("self_id invalid {}", self_id));
         Ok((options[random].1.id, filter, self_info.clone()))
+    }
+
+    fn pull_options<'a>(
+        &self,
+        crds: &'a Crds,
+        self_id: &Pubkey,
+        now: u64,
+        stakes: &HashMap<Pubkey, u64>,
+    ) -> Vec<(f32, &'a ContactInfo)> {
+        crds.table
+            .values()
+            .filter_map(|v| v.value.contact_info())
+            .filter(|v| v.id != *self_id && ContactInfo::is_valid_address(&v.gossip))
+            .map(|item| {
+                let max_weight = f32::from(u16::max_value()) - 1.0;
+                let req_time: u64 = *self.pull_request_time.get(&item.id).unwrap_or(&0);
+                let since = ((now - req_time) / 1024) as u32;
+                let stake = get_stake(&item.id, stakes);
+                let weight = get_weight(max_weight, since, stake);
+                (weight, item)
+            })
+            .collect()
     }
 
     /// time when a request to `from` was initiated
@@ -202,7 +211,6 @@ mod test {
     use crate::contact_info::ContactInfo;
     use crate::crds_value::LeaderId;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use std::f32::consts::E;
 
     #[test]
     fn test_new_pull_with_stakes() {
@@ -218,20 +226,15 @@ mod test {
             crds.insert(entry.clone(), 0).unwrap();
             stakes.insert(id, i * 100);
         }
-        // The min balance of the heaviest nodes is at least ln(3000) - 0.5
-        // This is because the heaviest nodes will have very similar weights
-        let min_balance = E.powf(3000_f32.ln() - 0.5);
         let now = 1024;
-        // try upto 10 times because of rng
-        for _ in 0..10 {
-            let msg = node
-                .new_pull_request(&crds, me.label().pubkey(), now, &stakes)
-                .unwrap();
-            if *stakes.get(&msg.0).unwrap_or(&0) >= min_balance.round() as u64 {
-                return;
-            }
-        }
-        assert!(false, "weighted nodes didn't get picked");
+        let mut options = node.pull_options(&crds, &me.label().pubkey(), now, &stakes);
+        assert!(!options.is_empty());
+        options.sort_by(|(weight_l, _), (weight_r, _)| weight_r.partial_cmp(weight_l).unwrap());
+        // check that the highest stake holder is also the heaviest weighted.
+        assert_eq!(
+            *stakes.get(&options.get(0).unwrap().1.id).unwrap(),
+            3000_u64
+        );
     }
 
     #[test]
