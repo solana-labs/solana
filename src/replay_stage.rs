@@ -89,11 +89,12 @@ impl ReplayStage {
         );
 
         let num_ticks = bank.tick_height();
-        let (mut num_ticks_to_next_vote, slot_height) = {
+        let (mut num_ticks_to_next_vote, slot_height, leader_id) = {
             let rl = leader_scheduler.read().unwrap();
             (
                 rl.num_ticks_left_in_slot(num_ticks),
                 rl.tick_height_to_slot(num_ticks),
+                rl.get_leader_for_slot(slot).expect("Leader not known"),
             )
         };
 
@@ -115,7 +116,7 @@ impl ReplayStage {
             entries_with_meta.push(EntryMeta {
                 tick_height: entry_tick_height,
                 slot,
-                slot_leader: bank.slot_leader(),
+                slot_leader: leader_id,
                 num_ticks_left_in_slot: num_ticks_to_next_vote,
                 parent_slot,
                 entry: entry.clone(),
