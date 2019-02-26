@@ -235,8 +235,11 @@ impl ReplayStage {
             let old_bank = bank.clone();
             // If the next slot is going to be a new slot and we're the leader for that slot,
             // make a new working bank, set it as the working bank.
-            if tick_height + 1 == first_tick_in_slot && leader_id == my_id {
-                bank = Self::create_and_set_working_bank(slot, &bank_forks, &old_bank);
+            if tick_height + 1 == first_tick_in_slot {
+                if leader_id == my_id {
+                    bank = Self::create_and_set_working_bank(slot, &bank_forks, &old_bank);
+                }
+                current_blob_index = 0;
             }
 
             // Send a rotation notification back to Fullnode to initialize the TPU to the right
