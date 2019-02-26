@@ -84,8 +84,9 @@ impl<T: Clone> StatusCache<T> {
         self.get_signature_status_merged(sig)
     }
 
-    fn merge_parent_is_full(&mut self, parent: &Self) -> bool {
-        // flatten the parent and their merges into self.merges, limit
+    fn squash_parent_is_full(&mut self, parent: &Self) -> bool {
+        // flatten and squash the parent and its merges into self.merges,
+        //  returns true if self is full
 
         self.merges.push_back(StatusCache {
             signatures: parent.signatures.clone(),
@@ -106,12 +107,12 @@ impl<T: Clone> StatusCache<T> {
 
     /// copy the parents and parents' merges up to this instance, up to
     ///   MAX_CACHE_ENTRIES deep
-    pub fn merge_parents<U>(&mut self, parents: &[U])
+    pub fn squash<U>(&mut self, parents: &[U])
     where
         U: Deref<Target = Self>,
     {
         for parent in parents {
-            if self.merge_parent_is_full(parent) {
+            if self.squash_parent_is_full(parent) {
                 break;
             }
         }
@@ -233,7 +234,7 @@ mod tests {
     }
 
     #[test]
-    fn test_status_cache_merge_parents_has_signature() {
+    fn test_status_cache_squash_has_signature() {
         let sig = Signature::default();
         let last_id = hash(Hash::default().as_ref());
         let mut first = BankStatusCache::new(&last_id);
@@ -247,7 +248,7 @@ mod tests {
         let last_id = hash(last_id.as_ref());
         let mut second = BankStatusCache::new(&last_id);
 
-        second.merge_parents(&[&first]);
+        second.squash(&[&first]);
 
         assert_eq!(second.get_signature_status(&sig), Some(Ok(())));
         assert!(second.has_signature(&sig));
@@ -255,7 +256,7 @@ mod tests {
 
     #[test]
     #[ignore] // takes a lot of time or RAM or both..
-    fn test_status_cache_merge_parents_overflow() {
+    fn test_status_cache_squash_overflow() {
         let mut last_id = hash(Hash::default().as_ref());
         let mut cache = BankStatusCache::new(&last_id);
 
@@ -281,7 +282,7 @@ mod tests {
         assert!(root.has_signature(&sig));
 
         // will overflow
-        cache.merge_parents(&parents_refs);
+        cache.squash(&parents_refs);
 
         assert_eq!(cache.get_signature_status(&sig), None);
         assert!(!cache.has_signature(&sig));

@@ -257,7 +257,7 @@ impl AccountsDB {
     }
 
     /// become the root accountsDB
-    fn merge_parents<U>(&mut self, parents: &[U])
+    fn squash<U>(&mut self, parents: &[U])
     where
         U: Deref<Target = Self>,
     {
@@ -407,8 +407,8 @@ impl Accounts {
     }
 
     /// accounts starts with an empty data structure for every child/fork
-    ///   this merges all the parents/checkpoints
-    pub fn merge_parents<U>(&self, parents: &[U])
+    ///   this function squashes all the parents into this instance
+    pub fn squash<U>(&self, parents: &[U])
     where
         U: Deref<Target = Self>,
     {
@@ -419,7 +419,7 @@ impl Accounts {
             .map(|obj| obj.accounts_db.read().unwrap())
             .collect();
 
-        self.accounts_db.write().unwrap().merge_parents(&dbs);
+        self.accounts_db.write().unwrap().squash(&dbs);
     }
 }
 
@@ -832,7 +832,7 @@ mod tests {
     }
 
     #[test]
-    fn test_accounts_merge_parents() {
+    fn test_accounts_squash() {
         let mut db0 = AccountsDB::default();
         let key = Pubkey::default();
         let account = Account::new(1, 0, key);
@@ -844,8 +844,8 @@ mod tests {
         let mut db1 = AccountsDB::default();
         db1.store(false, &key, &Account::new(0, 0, key));
 
-        // merge, which should whack key's account
-        db1.merge_parents(&[&db0]);
+        // squash, which should whack key's account
+        db1.squash(&[&db0]);
 
         assert_eq!(AccountsDB::load(&[&db1], &key), None);
     }
