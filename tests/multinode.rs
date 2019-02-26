@@ -445,7 +445,7 @@ fn test_multi_node_basic() {
 }
 
 #[test]
-fn test_boot_validator_from_file() -> result::Result<()> {
+fn test_boot_validator_from_file() {
     solana_logger::setup();
     let leader_keypair = Arc::new(Keypair::new());
     let leader_pubkey = leader_keypair.pubkey();
@@ -498,22 +498,41 @@ fn test_boot_validator_from_file() -> result::Result<()> {
         Some(&leader_data),
         &fullnode_config,
     );
-    let val_fullnode_exit = val_fullnode.run(None);
+
+    let (rotation_sender, rotation_receiver) = channel();
+    let val_fullnode_exit = val_fullnode.run(Some(rotation_sender));
+
+    // Wait for validator to start and process a couple slots before trying to poke at it via RPC
+    // TODO: it would be nice to determine the slot that the leader processed the transactions
+    // in, and only wait for that slot here
+    let expected_rotations = vec![
+        (FullnodeReturnType::LeaderToValidatorRotation, 0),
+        (FullnodeReturnType::LeaderToValidatorRotation, 1),
+    ];
+
+    for expected_rotation in expected_rotations {
+        loop {
+            let transition = rotation_receiver.recv().unwrap();
+            info!("validator transition: {:?}", transition);
+            assert_eq!(transition, expected_rotation);
+            break;
+        }
+    }
 
     info!("Checking validator balance");
     let mut client = mk_client(&validator_data);
-    let getbal = retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance));
-    assert!(getbal == Some(leader_balance));
+    assert_eq!(
+        retry_get_balance(&mut client, &bob_pubkey, Some(leader_balance)),
+        Some(leader_balance)
+    );
     info!("Validator balance verified");
 
     val_fullnode_exit();
     leader_fullnode_exit();
 
     for path in ledger_paths {
-        remove_dir_all(path)?;
+        remove_dir_all(path).unwrap();
     }
-
-    Ok(())
 }
 
 fn create_leader(
