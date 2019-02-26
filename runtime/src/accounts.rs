@@ -434,7 +434,6 @@ impl AccountsDB {
     /// to occur in place.
     fn store_account(&self, fork: Fork, purge: bool, pubkey: &Pubkey, account: &Account) {
         if account.tokens == 0 && purge {
-            println!("store purge {} {:?}", fork, pubkey);
             // purge if balance is 0 and no checkpoints
             let index = self.index_info.index.read().unwrap();
             let map = index.get(&pubkey).unwrap();
