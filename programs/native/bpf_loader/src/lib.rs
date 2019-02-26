@@ -29,15 +29,51 @@ fn dump_program(key: &Pubkey, prog: &[u8]) {
     }
 }
 
-#[allow(unused_variables)]
+pub fn helper_abort_verify(
+    _arg1: u64,
+    _arg2: u64,
+    _arg3: u64,
+    _arg4: u64,
+    _arg5: u64,
+    _ro_regions: &[MemoryRegion],
+    _rw_regions: &[MemoryRegion],
+) -> Result<(()), Error> {
+    Err(Error::new(
+        ErrorKind::Other,
+        "Error: BPF program called abort()!",
+    ))
+}
+
+pub fn helper_abort(_arg1: u64, _arg2: u64, _arg3: u64, _arg4: u64, _arg5: u64) -> u64 {
+    // Never called because its verify function always returns an error
+    0
+}
+
+pub fn helper_sol_panic_verify(
+    _arg1: u64,
+    _arg2: u64,
+    _arg3: u64,
+    _arg4: u64,
+    _arg5: u64,
+    _ro_regions: &[MemoryRegion],
+    _rw_regions: &[MemoryRegion],
+) -> Result<(()), Error> {
+    Err(Error::new(ErrorKind::Other, "Error: BPF program Panic!"))
+}
+
+pub fn helper_sol_panic(_arg1: u64, _arg2: u64, _arg3: u64, _arg4: u64, _arg5: u64) -> u64 {
+    // Never called because its verify function always returns an error
+    0
+}
+
 pub fn helper_sol_log_verify(
     addr: u64,
-    unused2: u64,
-    unused3: u64,
-    unused4: u64,
-    unused5: u64,
+    _arg2: u64,
+    _arg3: u64,
+    _arg4: u64,
+    _arg5: u64,
     ro_regions: &[MemoryRegion],
-    unused7: &[MemoryRegion],
+    _rw_regions: &[MemoryRegion],
 ) -> Result<(()), Error> {
     for region in ro_regions.iter() {
         if region.addr <= addr && (addr as u64) < region.addr + region.len {
@@ -82,6 +118,13 @@ pub fn create_vm(prog: &[u8]) -> Result<EbpfVmRaw, Error> {
     vm.set_verifier(bpf_verifier::check)?;
     vm.set_max_instruction_count(36000)?; // TODO 36000 is a wag, need to tune
     vm.set_elf(&prog)?;
+    vm.register_helper_ex("abort", Some(helper_abort_verify), helper_abort)?;
+    vm.register_helper_ex("sol_panic", Some(helper_sol_panic_verify), helper_sol_panic)?;
+    vm.register_helper_ex(
+        "sol_panic_",
+        Some(helper_sol_panic_verify),
+        helper_sol_panic,
+    )?;
     vm.register_helper_ex("sol_log", Some(helper_sol_log_verify), helper_sol_log)?;
     vm.register_helper_ex("sol_log_", Some(helper_sol_log_verify), helper_sol_log)?;
     vm.register_helper_ex("sol_log_64", None, helper_sol_log_u64)?;
