@@ -163,25 +163,22 @@ impl Bank {
         }
     }
 
-    /// merge (i.e. pull) the parent's state up into this Bank,
+    /// squash the parent's state up into this Bank,
     ///   this Bank becomes a root
-    pub fn merge_parents(&self) {
+    pub fn squash(&self) {
         self.freeze();
 
         let parents = self.parents();
         *self.parent.write().unwrap() = None;
 
         let parent_accounts: Vec<_> = parents.iter().map(|b| &b.accounts).collect();
-        self.accounts.merge_parents(&parent_accounts);
+        self.accounts.squash(&parent_accounts);
 
         let parent_caches: Vec<_> = parents
             .iter()
             .map(|b| b.status_cache.read().unwrap())
             .collect();
-        self.status_cache
-            .write()
-            .unwrap()
-            .merge_parents(&parent_caches);
+        self.status_cache.write().unwrap().squash(&parent_caches);
     }
 
     /// Return the more recent checkpoint of this bank instance.
@@ -1472,7 +1469,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bank_hash_internal_state_merge_parents() {
+    fn test_bank_hash_internal_state_squash() {
         let bank0 = Arc::new(Bank::new(&GenesisBlock::new(10).0));
         let bank1 = Bank::new_from_parent_and_id(&bank0, 1);
 
@@ -1480,7 +1477,7 @@ mod tests {
         assert_eq!(bank0.hash_internal_state(), bank1.hash_internal_state());
 
         // remove parent
-        bank1.merge_parents();
+        bank1.squash();
         assert!(bank1.parents().is_empty());
 
         // hash should still match
@@ -1489,7 +1486,7 @@ mod tests {
 
     /// Verifies that last ids and accounts are correctly referenced from parent
     #[test]
-    fn test_bank_merge_parents() {
+    fn test_bank_squash() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let key1 = Keypair::new();
         let key2 = Keypair::new();
@@ -1526,7 +1523,7 @@ mod tests {
             );
 
             // works iteration 0, no-ops on iteration 1 and 2
-            bank.merge_parents();
+            bank.squash();
         }
     }
 
