@@ -29,15 +29,14 @@ fn dump_program(key: &Pubkey, prog: &[u8]) {
     }
 }
 
-#[allow(unused_variables)]
 pub fn helper_abort_verify(
-    unused1: u64,
-    unused2: u64,
-    unused3: u64,
-    unused4: u64,
-    unused5: u64,
+    _arg1: u64,
+    _arg2: u64,
+    _arg3: u64,
+    _arg4: u64,
+    _arg5: u64,
     ro_regions: &[MemoryRegion],
-    unused7: &[MemoryRegion],
+    _rw_regions: &[MemoryRegion],
 ) -> Result<(()), Error> {
     Err(Error::new(
         ErrorKind::Other,
@@ -45,46 +44,36 @@ pub fn helper_abort_verify(
     ))
 }
 
-#[allow(unused_variables)]
-pub fn helper_abort(unused1: u64, unused2: u64, unused3: u64, unused4: u64, unused5: u64) -> u64 {
+pub fn helper_abort(_arg1: u64, _arg2: u64, _arg3: u64, _arg4: u64, _arg5: u64) -> u64 {
     // Never called because its verify function always returns an error
     0
 }
 
-#[allow(unused_variables)]
 pub fn helper_sol_panic_verify(
-    unused1: u64,
-    unused2: u64,
-    unused3: u64,
-    unused4: u64,
-    unused5: u64,
+    _arg1: u64,
+    _arg2: u64,
+    _arg3: u64,
+    _arg4: u64,
+    _arg5: u64,
     ro_regions: &[MemoryRegion],
-    unused7: &[MemoryRegion],
+    _rw_regions: &[MemoryRegion],
 ) -> Result<(()), Error> {
     Err(Error::new(ErrorKind::Other, "Error: BPF program Panic!"))
 }
 
-#[allow(unused_variables)]
-pub fn helper_sol_panic(
-    unused1: u64,
-    unused2: u64,
-    unused3: u64,
-    unused4: u64,
-    unused5: u64,
-) -> u64 {
+pub fn helper_sol_panic(_arg1: u64, _arg2: u64, _arg3: u64, _arg4: u64, _arg5: u64) -> u64 {
     // Never called because its verify function always returns an error
     0
 }
 
-#[allow(unused_variables)]
 pub fn helper_sol_log_verify(
     addr: u64,
-    unused2: u64,
-    unused3: u64,
-    unused4: u64,
-    unused5: u64,
+    _arg2: u64,
+    _arg3: u64,
+    _arg4: u64,
+    _arg5: u64,
     ro_regions: &[MemoryRegion],
-    unused7: &[MemoryRegion],
+    _rw_regions: &[MemoryRegion],
 ) -> Result<(()), Error> {
     for region in ro_regions.iter() {
         if region.addr <= addr && (addr as u64) < region.addr + region.len {
