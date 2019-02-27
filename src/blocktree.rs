@@ -1303,6 +1303,13 @@ pub fn get_tmp_ledger_path(name: &str) -> String {
     path
 }
 
+#[macro_export]
+macro_rules! create_new_tmp_ledger {
+    ($genesis_block:expr) => {
+        create_new_tmp_ledger(tmp_ledger_name!(), $genesis_block)
+    };
+}
+
 // Same as `create_new_ledger()` but use a temporary ledger name based on the provided `name`
 //
 // Note: like `create_new_ledger` the returned ledger will have slot 0 full of ticks (and only

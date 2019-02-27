@@ -501,8 +501,7 @@ mod tests {
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
         let (genesis_block, _mint_keypair) =
             GenesisBlock::new_with_leader(10_000, leader_keypair.pubkey(), 1000);
-        let (validator_ledger_path, _last_id) =
-            create_new_tmp_ledger("validator_exit", &genesis_block).unwrap();
+        let (validator_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
 
         let validator = Fullnode::new(
             validator_node,
@@ -581,7 +580,7 @@ mod tests {
         genesis_block.slots_per_epoch = slots_per_epoch;
 
         let (bootstrap_leader_ledger_path, _last_id) =
-            create_new_tmp_ledger("test_leader_to_leader_transition", &genesis_block).unwrap();
+            create_new_tmp_ledger!(&genesis_block).unwrap();
 
         // Start the bootstrap leader
         let bootstrap_leader = Fullnode::new(
