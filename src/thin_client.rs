@@ -457,7 +457,7 @@ pub fn retry_get_balance(
 }
 
 pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, String) {
-    use crate::blocktree::create_tmp_sample_blocktree;
+    use crate::blocktree::create_new_tmp_ledger;
     use crate::cluster_info::Node;
     use crate::fullnode::Fullnode;
     use crate::voting_keypair::VotingKeypair;
@@ -469,9 +469,7 @@ pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, 
     let node_info = node.info.clone();
 
     let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10_000, node_info.id, 42);
-
-    let (ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
-        create_tmp_sample_blocktree(ledger_name, &genesis_block, genesis_block.ticks_per_slot);
+    let (ledger_path, _last_id) = create_new_tmp_ledger(ledger_name, &genesis_block).unwrap();
 
     let vote_account_keypair = Arc::new(Keypair::new());
     let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
@@ -651,8 +649,10 @@ mod tests {
 
         let mut client = mk_client(&leader_data);
         let last_id = client.get_last_id();
+        info!("test_thin_client last_id: {:?}", last_id);
 
-        let starting_balance = client.poll_get_balance(&alice.pubkey()).unwrap();
+        let starting_alice_balance = client.poll_get_balance(&alice.pubkey()).unwrap();
+        info!("Alice has {} tokens", starting_alice_balance);
 
         info!("Give Bob 500 tokens");
         let signature = client
@@ -660,20 +660,21 @@ mod tests {
             .unwrap();
         client.poll_for_signature(&signature).unwrap();
 
-        let balance = client.poll_get_balance(&bob_keypair.pubkey());
-        assert_eq!(balance.unwrap(), 500);
+        let bob_balance = client.poll_get_balance(&bob_keypair.pubkey());
+        assert_eq!(bob_balance.unwrap(), 500);
 
         info!("Take Bob's 500 tokens away");
         let signature = client
             .transfer(500, &bob_keypair, alice.pubkey(), &last_id)
             .unwrap();
         client.poll_for_signature(&signature).unwrap();
-        let balance = client.poll_get_balance(&alice.pubkey()).unwrap();
-        assert_eq!(balance, starting_balance);
+        let alice_balance = client.poll_get_balance(&alice.pubkey()).unwrap();
+        assert_eq!(alice_balance, starting_alice_balance);
 
         info!("Should get an error when Bob's balance hits zero and is purged");
-        let balance = client.poll_get_balance(&bob_keypair.pubkey());
-        assert!(balance.is_err());
+        let bob_balance = client.poll_get_balance(&bob_keypair.pubkey());
+        info!("Bob's balance is {:?}", bob_balance);
+        assert!(bob_balance.is_err(),);
 
         server_exit();
         remove_dir_all(ledger_path).unwrap();

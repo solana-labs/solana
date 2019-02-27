@@ -149,7 +149,7 @@ pub fn process_blocktree(
         if slot == 0 {
             // The first entry in the ledger is a pseudo-tick used only to ensure the number of ticks
             // in slot 0 is the same as the number of ticks in all subsequent slots.  It is not
-            // registered as a tick and thus cannot be used as a last_id
+            // processed by the bank, skip over it.
             if entries.is_empty() {
                 warn!("entry0 not present");
                 return Err(BankError::LedgerVerificationFailed);
@@ -164,7 +164,6 @@ pub fn process_blocktree(
             entries = entries.drain(1..).collect();
         }
 
-        // Feed the entries into the bank for this slot
         if !entries.is_empty() {
             if !entries.verify(&last_entry_id) {
                 warn!("Ledger proof of history failed at entry: {}", entry_height);
@@ -228,7 +227,7 @@ pub fn process_blocktree(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocktree::create_tmp_sample_blocktree;
+    use crate::blocktree::create_new_tmp_ledger;
     use crate::blocktree::tests::entries_to_blobs;
     use crate::entry::{create_ticks, next_entry, Entry};
     use solana_sdk::genesis_block::GenesisBlock;
@@ -258,32 +257,45 @@ mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(10_000);
         let ticks_per_slot = genesis_block.ticks_per_slot;
 
-        // Create a new ledger with slot 0 full of ticks
-        let (ledger_path, tick_height, _entry_height, _last_id, last_entry_id) =
-            create_tmp_sample_blocktree(
-                "blocktree_with_incomplete_slot",
-                &genesis_block,
-                ticks_per_slot - 2, // last tick missing in slot 0
-            );
-        debug!("ledger_path: {:?}", ledger_path);
-        assert_eq!(tick_height, ticks_per_slot - 1);
-
         /*
           Build a blocktree in the ledger with the following fork structure:
 
                slot 0
                  |
                slot 1
+                 |
+               slot 2
 
-           where slot 0 is incomplete
+           where slot 1 is incomplete (missing 1 tick at the end)
         */
+
+        // Create a new ledger with slot 0 full of ticks
+        let (ledger_path, mut last_id) =
+            create_new_tmp_ledger("blocktree_with_two_forks", &genesis_block).unwrap();
+        debug!("ledger_path: {:?}", ledger_path);
 
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot)
             .expect("Expected to successfully open database ledger");
 
-        // slot 1, points at slot 0
-        let _last_slot1_entry_id =
-            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 1, 0, last_entry_id);
+        let expected_last_entry_id;
+
+        // Write slot 1
+        // slot 1, points at slot 0.  Missing one tick
+        {
+            let parent_slot = 0;
+            let slot = 1;
+            let mut entries = create_ticks(ticks_per_slot, last_id);
+            last_id = entries.last().unwrap().id;
+
+            entries.pop();
+            expected_last_entry_id = entries.last().unwrap().id;
+
+            let blobs = entries_to_blobs(&entries, slot, parent_slot);
+            blocktree.insert_data_blobs(blobs.iter()).unwrap();
+        }
+
+        // slot 2, points at slot 1
+        fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 2, 1, last_id);
 
         let (mut _bank_forks, bank_forks_info) =
             process_blocktree(&genesis_block, &blocktree).unwrap();
@@ -292,9 +304,9 @@ mod tests {
         assert_eq!(
             bank_forks_info[0],
             BankForksInfo {
-                bank_id: 0, // never finished first slot
-                entry_height: ticks_per_slot - 1,
-                last_entry_id: last_entry_id,
+                bank_id: 1, // never finished first slot
+                entry_height: 2 * ticks_per_slot - 1,
+                last_entry_id: expected_last_entry_id,
                 next_blob_index: ticks_per_slot - 1,
             }
         );
@@ -308,14 +320,10 @@ mod tests {
         let ticks_per_slot = genesis_block.ticks_per_slot;
 
         // Create a new ledger with slot 0 full of ticks
-        let (ledger_path, tick_height, _entry_height, _last_id, mut last_entry_id) =
-            create_tmp_sample_blocktree(
-                "blocktree_with_two_forks",
-                &genesis_block,
-                ticks_per_slot - 1,
-            );
+        let (ledger_path, last_id) =
+            create_new_tmp_ledger("blocktree_with_two_forks", &genesis_block).unwrap();
         debug!("ledger_path: {:?}", ledger_path);
-        assert_eq!(tick_height, ticks_per_slot);
+        let mut last_entry_id = last_id;
 
         /*
             Build a blocktree in the ledger with the following fork structure:
@@ -439,11 +447,12 @@ mod tests {
     fn test_process_ledger_simple() {
         let leader_pubkey = Keypair::new().pubkey();
         let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, leader_pubkey, 50);
-        let (ledger_path, tick_height, mut entry_height, mut last_id, mut last_entry_id) =
-            create_tmp_sample_blocktree("process_ledger_simple", &genesis_block, 0);
+        let (ledger_path, last_id) =
+            create_new_tmp_ledger("process_ledger_simple", &genesis_block).unwrap();
         debug!("ledger_path: {:?}", ledger_path);
 
         let mut entries = vec![];
+        let mut last_entry_id = last_id;
         for _ in 0..3 {
             // Transfer one token from the mint to a random account
             let keypair = Keypair::new();
@@ -461,37 +470,30 @@ mod tests {
             entries.push(entry);
         }
 
-        // Add a tick for good measure
-        let tick = Entry::new(&last_entry_id, 1, vec![]);
-        last_entry_id = tick.id;
-        last_id = last_entry_id;
-        entries.push(tick);
+        // Fill up the rest of slot 1 with ticks
+        entries.extend(create_ticks(genesis_block.ticks_per_slot, last_entry_id));
 
         let blocktree =
             Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
-
-        blocktree
-            .write_entries(0, tick_height, entry_height, &entries)
-            .unwrap();
-        entry_height += entries.len() as u64;
-
+        blocktree.write_entries(1, 0, 0, &entries).unwrap();
+        let entry_height = genesis_block.ticks_per_slot + entries.len() as u64;
         let (bank_forks, bank_forks_info) = process_blocktree(&genesis_block, &blocktree).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(
             bank_forks_info[0],
             BankForksInfo {
-                bank_id: 0,
+                bank_id: 1,
                 entry_height,
-                last_entry_id,
-                next_blob_index: entry_height,
+                last_entry_id: entries.last().unwrap().id,
+                next_blob_index: entries.len() as u64,
             }
         );
 
         let bank = bank_forks.working_bank();
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 50 - 3);
-        assert_eq!(bank.tick_height(), 1);
-        assert_eq!(bank.last_id(), last_id);
+        assert_eq!(bank.tick_height(), 2 * genesis_block.ticks_per_slot - 1);
+        assert_eq!(bank.last_id(), entries.last().unwrap().id);
     }
 
     #[test]

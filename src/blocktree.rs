@@ -1237,23 +1237,20 @@ impl Iterator for EntryIterator {
     }
 }
 
-// Returns a tuple (entry_height, tick_height, last_id), corresponding to the
-// total number of entries, the number of ticks, and the last id generated in the
-// new ledger
-pub fn create_new_ledger(
-    ledger_path: &str,
-    genesis_block: &GenesisBlock,
-) -> Result<(u64, u64, Hash)> {
+// Creates a new ledger with slot 0 full of ticks (and only ticks).
+//
+// Returns the last_id that can be used to start slot 1 entries with.
+pub fn create_new_ledger(ledger_path: &str, genesis_block: &GenesisBlock) -> Result<Hash> {
     let ticks_per_slot = genesis_block.ticks_per_slot;
     Blocktree::destroy(ledger_path)?;
     genesis_block.write(&ledger_path)?;
 
-    // Add a single tick linked back to the genesis_block to bootstrap the ledger
+    // Fill slot 0 with ticks that link back to the genesis_block to bootstrap the ledger.
     let blocktree = Blocktree::open_config(ledger_path, ticks_per_slot)?;
-    let entries = crate::entry::create_ticks(1, genesis_block.last_id());
+    let entries = crate::entry::create_ticks(genesis_block.ticks_per_slot, genesis_block.last_id());
     blocktree.write_entries(0, 0, 0, &entries)?;
 
-    Ok((1, 1, entries[0].id))
+    Ok(entries.last().unwrap().id)
 }
 
 pub fn genesis<'a, I>(ledger_path: &str, entries: I) -> Result<()>
@@ -1306,37 +1303,13 @@ pub fn get_tmp_ledger_path(name: &str) -> String {
     path
 }
 
-pub fn create_tmp_sample_blocktree(
-    name: &str,
-    genesis_block: &GenesisBlock,
-    num_extra_ticks: u64,
-) -> (String, u64, u64, Hash, Hash) {
-    let ticks_per_slot = genesis_block.ticks_per_slot;
-
+// Same as `create_new_ledger()` but use a temporary ledger name based on the provided `name`
+//
+// Note: like `create_new_ledger` the returned ledger will have slot 0 full of ticks (and only
+// ticks)
+pub fn create_new_tmp_ledger(name: &str, genesis_block: &GenesisBlock) -> Result<(String, Hash)> {
     let ledger_path = get_tmp_ledger_path(name);
-    let (mut entry_height, mut tick_height, mut last_entry_id) =
-        create_new_ledger(&ledger_path, &genesis_block).unwrap();
-
-    let mut last_id = genesis_block.last_id();
-    if num_extra_ticks > 0 {
-        let entries = crate::entry::create_ticks(num_extra_ticks, last_entry_id);
-
-        let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
-        blocktree
-            .write_entries(0, tick_height, entry_height, &entries)
-            .unwrap();
-        tick_height += num_extra_ticks;
-        entry_height += entries.len() as u64;
-        last_id = entries.last().unwrap().id;
-        last_entry_id = last_id;
-    }
-    (
-        ledger_path,
-        tick_height,
-        entry_height,
-        last_id,
-        last_entry_id,
-    )
+    create_new_ledger(&ledger_path, genesis_block).and_then(|last_id| Ok((ledger_path, last_id)))
 }
 
 #[macro_export]

@@ -462,7 +462,7 @@ impl Service for ReplayStage {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::blocktree::{create_tmp_sample_blocktree, Blocktree};
+    use crate::blocktree::create_new_tmp_ledger;
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::create_ticks;
     use crate::entry::{next_entry_mut, Entry};
@@ -473,133 +473,9 @@ mod test {
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::fs::remove_dir_all;
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::AtomicBool;
     use std::sync::mpsc::channel;
     use std::sync::{Arc, RwLock};
-
-    #[test]
-    #[ignore] // TODO: Fix this test to not send all entries in slot 0
-    pub fn test_replay_stage_leader_rotation_exit() {
-        solana_logger::setup();
-
-        // Set up dummy node to host a ReplayStage
-        let my_keypair = Keypair::new();
-        let my_id = my_keypair.pubkey();
-        let my_node = Node::new_localhost_with_pubkey(my_id);
-        let cluster_info_me = ClusterInfo::new(my_node.info.clone());
-
-        // Create keypair for the old leader
-        let old_leader_id = Keypair::new().pubkey();
-
-        // Set up the LeaderScheduler so that my_id becomes the leader for epoch 1
-        let ticks_per_slot = 16;
-        let (mut genesis_block, mint_keypair) =
-            GenesisBlock::new_with_leader(10_000, old_leader_id, 500);
-        genesis_block.ticks_per_slot = ticks_per_slot;
-        genesis_block.slots_per_epoch = 1;
-
-        // Create a ledger
-        let (my_ledger_path, mut tick_height, entry_height, mut last_id, last_entry_id) =
-            create_tmp_sample_blocktree(
-                "test_replay_stage_leader_rotation_exit",
-                &genesis_block,
-                0,
-            );
-
-        info!("my_id: {:?}", my_id);
-        info!("old_leader_id: {:?}", old_leader_id);
-
-        let my_keypair = Arc::new(my_keypair);
-        let num_ending_ticks = 0;
-        let (active_set_entries, voting_keypair) = make_active_set_entries(
-            &my_keypair,
-            &mint_keypair,
-            100,
-            1, // add a vote for tick_height = ticks_per_slot
-            &last_entry_id,
-            &last_id,
-            num_ending_ticks,
-        );
-        last_id = active_set_entries.last().unwrap().id;
-
-        {
-            let blocktree = Blocktree::open(&my_ledger_path).unwrap();
-            blocktree
-                .write_entries(0, tick_height, entry_height, active_set_entries)
-                .unwrap();
-            tick_height += num_ending_ticks;
-        }
-
-        {
-            // Set up the bank
-            let (bank_forks, bank_forks_info, blocktree, ledger_signal_receiver) =
-                new_banks_from_blocktree(&my_ledger_path);
-
-            // Set up the replay stage
-            let (rotation_sender, rotation_receiver) = channel();
-            let exit = Arc::new(AtomicBool::new(false));
-            let blocktree = Arc::new(blocktree);
-            let (replay_stage, ledger_writer_recv) = ReplayStage::new(
-                my_id,
-                Some(Arc::new(voting_keypair)),
-                blocktree.clone(),
-                &Arc::new(RwLock::new(bank_forks)),
-                &bank_forks_info,
-                Arc::new(RwLock::new(cluster_info_me)),
-                exit.clone(),
-                &rotation_sender,
-                ledger_signal_receiver,
-                &Arc::new(RpcSubscriptions::default()),
-            );
-
-            let total_entries_to_send = 2 * ticks_per_slot as usize - 2;
-            let mut entries_to_send = vec![];
-            while entries_to_send.len() < total_entries_to_send {
-                let entry = next_entry_mut(&mut last_id, 1, vec![]);
-                entries_to_send.push(entry);
-            }
-
-            // Write the entries to the ledger, replay_stage should get notified of changes
-            let meta = blocktree.meta(0).unwrap().unwrap();
-            blocktree
-                .write_entries(0, tick_height, meta.consumed, &entries_to_send)
-                .unwrap();
-
-            info!("Wait for replay_stage to exit and check return value is correct");
-            let rotation_info = rotation_receiver
-                .recv()
-                .expect("should have signaled leader rotation");
-            assert_eq!(
-                rotation_info.last_entry_id,
-                bank_forks_info[0].last_entry_id
-            );
-            assert_eq!(rotation_info.slot, 2);
-            assert_eq!(rotation_info.leader_id, my_keypair.pubkey());
-
-            info!("Check that the entries on the ledger writer channel are correct");
-            let mut received_ticks = ledger_writer_recv
-                .recv()
-                .expect("Expected to receive an entry on the ledger writer receiver");
-
-            while let Ok(entries) = ledger_writer_recv.try_recv() {
-                received_ticks.extend(entries);
-            }
-            let received_ticks_entries: Vec<Entry> = received_ticks
-                .iter()
-                .map(|entry_meta| entry_meta.entry.clone())
-                .collect();
-            assert_eq!(&received_ticks_entries[..], &entries_to_send[..]);
-
-            // Replay stage should continue running even after rotation has happened (tvu never goes down)
-            assert_eq!(exit.load(Ordering::Relaxed), false);
-
-            info!("Close replay_stage");
-            replay_stage
-                .close()
-                .expect("Expect successful ReplayStage exit");
-        }
-        let _ignored = remove_dir_all(&my_ledger_path);
-    }
 
     #[test]
     fn test_vote_error_replay_stage_correctness() {
@@ -613,12 +489,9 @@ mod test {
 
         let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10_000, leader_id, 500);
 
-        let (my_ledger_path, tick_height, _last_entry_height, _last_id, _last_entry_id) =
-            create_tmp_sample_blocktree(
-                "test_vote_error_replay_stage_correctness",
-                &genesis_block,
-                1,
-            );
+        let (my_ledger_path, _last_id) =
+            create_new_tmp_ledger("test_vote_error_replay_stage_correctness", &genesis_block)
+                .unwrap();
 
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
@@ -631,7 +504,6 @@ mod test {
             let (bank_forks, bank_forks_info, blocktree, l_receiver) =
                 new_banks_from_blocktree(&my_ledger_path);
             let bank = bank_forks.working_bank();
-            let entry_height = bank_forks_info[0].entry_height;
             let last_entry_id = bank_forks_info[0].last_entry_id;
 
             let blocktree = Arc::new(blocktree);
@@ -654,9 +526,7 @@ mod test {
 
             info!("Send ReplayStage an entry, should see it on the ledger writer receiver");
             let next_tick = create_ticks(1, last_entry_id);
-            blocktree
-                .write_entries(0, tick_height, entry_height, next_tick.clone())
-                .unwrap();
+            blocktree.write_entries(1, 0, 0, next_tick.clone()).unwrap();
 
             let received_tick = ledger_writer_recv
                 .recv()
@@ -664,137 +534,6 @@ mod test {
 
             assert_eq!(next_tick[0], received_tick[0].entry);
 
-            replay_stage
-                .close()
-                .expect("Expect successful ReplayStage exit");
-        }
-        let _ignored = remove_dir_all(&my_ledger_path);
-    }
-
-    #[test]
-    #[ignore]
-    fn test_vote_error_replay_stage_leader_rotation() {
-        solana_logger::setup();
-
-        let ticks_per_slot = 10;
-        let slots_per_epoch = 2;
-        let active_window_tick_length = ticks_per_slot * slots_per_epoch;
-
-        // Set up dummy node to host a ReplayStage
-        let my_keypair = Keypair::new();
-        let my_id = my_keypair.pubkey();
-        let my_node = Node::new_localhost_with_pubkey(my_id);
-
-        // Create keypair for the leader
-        let leader_id = Keypair::new().pubkey();
-
-        let (mut genesis_block, mint_keypair) =
-            GenesisBlock::new_with_leader(10_000, leader_id, 500);
-        genesis_block.ticks_per_slot = ticks_per_slot;
-
-        // Create the ledger
-        let (my_ledger_path, tick_height, genesis_entry_height, last_id, last_entry_id) =
-            create_tmp_sample_blocktree(
-                "test_vote_error_replay_stage_leader_rotation",
-                &genesis_block,
-                1,
-            );
-
-        let my_keypair = Arc::new(my_keypair);
-        // Write two entries to the ledger so that the validator is in the active set:
-        // 1) Give the validator a nonzero number of tokens 2) A vote from the validator.
-        // This will cause leader rotation after the bootstrap height
-        let (active_set_entries, voting_keypair) = make_active_set_entries(
-            &my_keypair,
-            &mint_keypair,
-            100,
-            1,
-            &last_entry_id,
-            &last_id,
-            0,
-        );
-        let mut last_id = active_set_entries.last().unwrap().id;
-        {
-            let blocktree = Blocktree::open_config(&my_ledger_path, ticks_per_slot).unwrap();
-            blocktree
-                .write_entries(0, tick_height, genesis_entry_height, &active_set_entries)
-                .unwrap();
-        }
-
-        // Set up the cluster info
-        let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
-
-        // Set up the replay stage
-        let (rotation_sender, rotation_receiver) = channel();
-        let exit = Arc::new(AtomicBool::new(false));
-        {
-            let (bank_forks, bank_forks_info, blocktree, l_receiver) =
-                new_banks_from_blocktree(&my_ledger_path);
-            let bank = bank_forks.working_bank();
-            let meta = blocktree
-                .meta(0)
-                .unwrap()
-                .expect("First slot metadata must exist");
-
-            let voting_keypair = Arc::new(voting_keypair);
-            let blocktree = Arc::new(blocktree);
-            let (replay_stage, ledger_writer_recv) = ReplayStage::new(
-                my_keypair.pubkey(),
-                Some(voting_keypair.clone()),
-                blocktree.clone(),
-                &Arc::new(RwLock::new(bank_forks)),
-                &bank_forks_info,
-                cluster_info_me.clone(),
-                exit.clone(),
-                &rotation_sender,
-                l_receiver,
-                &Arc::new(RpcSubscriptions::default()),
-            );
-
-            let keypair = voting_keypair.as_ref();
-            let vote = VoteTransaction::new_vote(keypair, 0, bank.last_id(), 0);
-            cluster_info_me.write().unwrap().push_vote(vote);
-
-            // Send enough ticks to trigger leader rotation
-            let total_entries_to_send = (active_window_tick_length - tick_height) as usize;
-            let num_hashes = 1;
-
-            let leader_rotation_index = (active_window_tick_length - tick_height - 1) as usize;
-            let mut expected_last_id = Hash::default();
-            for i in 0..total_entries_to_send {
-                let entry = next_entry_mut(&mut last_id, num_hashes, vec![]);
-                blocktree
-                    .write_entries(
-                        0,
-                        tick_height + i as u64,
-                        meta.consumed + i as u64,
-                        vec![entry.clone()],
-                    )
-                    .expect("Expected successful database write");
-                // Check that the entries on the ledger writer channel are correct
-                let received_entry = ledger_writer_recv
-                    .recv()
-                    .expect("Expected to recieve an entry on the ledger writer receiver");
-                assert_eq!(received_entry[0].entry, entry);
-
-                if i == leader_rotation_index {
-                    expected_last_id = entry.id;
-                }
-            }
-
-            // Wait for replay_stage to exit and check return value is correct
-            let rotation_info = rotation_receiver
-                .recv()
-                .expect("should have signaled leader rotation");
-            assert_eq!(
-                rotation_info.last_entry_id,
-                bank_forks_info[0].last_entry_id
-            );
-            assert_eq!(rotation_info.slot, 1);
-            assert_eq!(rotation_info.leader_id, my_keypair.pubkey());
-
-            assert_ne!(expected_last_id, Hash::default());
-            //replay stage should continue running even after rotation has happened (tvu never goes down)
             replay_stage
                 .close()
                 .expect("Expect successful ReplayStage exit");
