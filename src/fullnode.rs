@@ -606,7 +606,6 @@ mod tests {
 
         let fullnode_config = FullnodeConfig::default();
         let ticks_per_slot = DEFAULT_TICKS_PER_SLOT;
-        let slots_per_epoch = DEFAULT_SLOTS_PER_EPOCH;
 
         // Create the leader and validator nodes
         let bootstrap_leader_keypair = Arc::new(Keypair::new());
@@ -689,12 +688,7 @@ mod tests {
         let validator_keypair = Arc::new(Keypair::new());
         let fullnode_config = FullnodeConfig::default();
         let (leader_node, validator_node, validator_ledger_path, ledger_initial_len, last_id) =
-            setup_leader_validator(
-                &leader_keypair,
-                &validator_keypair,
-                ticks_per_slot,
-                0,
-            );
+            setup_leader_validator(&leader_keypair, &validator_keypair, ticks_per_slot, 0);
 
         let leader_id = leader_keypair.pubkey();
         let validator_info = validator_node.info.clone();

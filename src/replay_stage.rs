@@ -466,7 +466,6 @@ mod test {
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::create_ticks;
     use crate::entry::{next_entry_mut, Entry};
-    use crate::fullnode::make_active_set_entries;
     use crate::fullnode::new_banks_from_blocktree;
     use crate::replay_stage::ReplayStage;
     use solana_sdk::genesis_block::GenesisBlock;
