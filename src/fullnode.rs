@@ -613,7 +613,6 @@ mod tests {
         let validator_keypair = Arc::new(Keypair::new());
         let (bootstrap_leader_node, validator_node, bootstrap_leader_ledger_path, _, _) =
             setup_leader_validator(
-                "test_wrong_role_transition",
                 &bootstrap_leader_keypair,
                 &validator_keypair,
                 ticks_per_slot,
@@ -691,7 +690,6 @@ mod tests {
         let fullnode_config = FullnodeConfig::default();
         let (leader_node, validator_node, validator_ledger_path, ledger_initial_len, last_id) =
             setup_leader_validator(
-                "test_validator_to_leader_transition",
                 &leader_keypair,
                 &validator_keypair,
                 ticks_per_slot,
@@ -767,7 +765,6 @@ mod tests {
     }
 
     fn setup_leader_validator(
-        test_name: &str,
         leader_keypair: &Arc<Keypair>,
         validator_keypair: &Arc<Keypair>,
         ticks_per_slot: u64,
