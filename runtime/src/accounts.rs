@@ -686,19 +686,16 @@ impl AccountsDB {
                 {
                     if parent_fork != fork {
                         self.insert_account_entry(fork, id, offset, &map);
-                        if self.remove_account_entries(&parents, &map) {
-                            keys.push(pubkey.clone());
-                        }
-                    }
-                    let account = self.get_account(id, offset);
-                    if account.tokens == 0 {
-                        if self.remove_account_entries(&[fork], &map) {
-                            keys.push(pubkey.clone());
-                        }
-                        if vote_program::check_id(&account.owner) {
-                            self.index_info.vote_index.write().unwrap().remove(pubkey);
-                        }
                     } else {
+                        let account = self.get_account(id, offset);
+                        if account.tokens == 0 {
+                            if self.remove_account_entries(&[fork], &map) {
+                                keys.push(pubkey.clone());
+                            }
+                            if vote_program::check_id(&account.owner) {
+                                self.index_info.vote_index.write().unwrap().remove(pubkey);
+                            }
+                        }
                     }
                 }
             });
@@ -759,12 +756,16 @@ impl Accounts {
 
     /// Slow because lock is held for 1 operation insted of many
     pub fn load_slow(&self, fork: Fork, pubkey: &Pubkey) -> Option<Account> {
-        self.accounts_db.load(fork, pubkey, true).filter(|acc| acc.tokens != 0)
+        self.accounts_db
+            .load(fork, pubkey, true)
+            .filter(|acc| acc.tokens != 0)
     }
 
     /// Slow because lock is held for 1 operation insted of many
     pub fn load_slow_no_parent(&self, fork: Fork, pubkey: &Pubkey) -> Option<Account> {
-        self.accounts_db.load(fork, pubkey, false).filter(|acc| acc.tokens != 0)
+        self.accounts_db
+            .load(fork, pubkey, false)
+            .filter(|acc| acc.tokens != 0)
     }
 
     /// Slow because lock is held for 1 operation insted of many
@@ -1346,11 +1347,12 @@ mod tests {
         assert_eq!(db.load(1, &key, true), None);
         for _ in 1..100 {
             let idx = thread_rng().gen_range(0, 99);
-            assert_eq!(db.load(0, &pubkeys[idx], true), None);
-            let account = db.load(1, &pubkeys[idx], true).unwrap();
+            let account0 = db.load(0, &pubkeys[idx], true).unwrap();
+            let account1 = db.load(1, &pubkeys[idx], true).unwrap();
             let mut default_account = Account::default();
             default_account.tokens = (idx + 1) as u64;
-            assert_eq!(compare_account(&default_account, &account), true);
+            assert_eq!(compare_account(&default_account, &account0), true);
+            assert_eq!(compare_account(&default_account, &account1), true);
         }
         cleanup_dirs(&paths);
     }

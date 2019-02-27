@@ -475,7 +475,8 @@ mod tests {
             Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
         blocktree.write_entries(1, 0, 0, &entries).unwrap();
         let entry_height = genesis_block.ticks_per_slot + entries.len() as u64;
-        let (bank_forks, bank_forks_info) = process_blocktree(&genesis_block, &blocktree, None).unwrap();
+        let (bank_forks, bank_forks_info) =
+            process_blocktree(&genesis_block, &blocktree, None).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(
