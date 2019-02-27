@@ -31,7 +31,7 @@ fn process(ka: &mut [SolKeyedAccount], data: &[u8], info: &SolClusterInfo) -> bo
     sol_log_params(ka, data);
 
     {
-        //// Test - use core methods, unwrap
+        // Test - use core methods, unwrap
 
         // valid bytes, in a stack-allocated array
         let sparkle_heart = [240, 159, 146, 150];
@@ -44,8 +44,7 @@ fn process(ka: &mut [SolKeyedAccount], data: &[u8], info: &SolClusterInfo) -> bo
     }
 
     {
-        //// Test - struct return
-
+        // Test - struct return
         let s = return_sstruct();
         sol_log_64(0, 0, s.x, s.y, s.z);
         assert_eq!(s.x + s.y + s.z, 6);
