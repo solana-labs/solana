@@ -64,6 +64,7 @@ pub mod rpc_subscriptions;
 pub mod service;
 pub mod sigverify;
 pub mod sigverify_stage;
+pub mod staking_utils;
 pub mod storage_stage;
 pub mod streamer;
 pub mod test_tx;

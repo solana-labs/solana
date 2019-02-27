@@ -304,33 +304,6 @@ impl Bank {
         last_ids.get_confirmation_timestamp(ticks_and_stakes, supermajority_stake)
     }
 
-    pub fn stakes_and_lockouts(&self) -> Vec<(u64, Option<u64>)> {
-        let vote_states: Vec<_> = self.vote_states(|_| true);
-        vote_states
-            .into_iter()
-            .filter_map(|state| {
-                let stake = self.get_balance(&state.staker_id);
-                if stake > 0 {
-                    Some((stake, state.root_slot))
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
-
-    /// Looks through vote accounts, and finds the latest slot that has achieved
-    /// supermajority lockout
-    pub fn get_supermajority_slot(&self) -> Option<u64> {
-        // Find the amount of stake needed for supermajority
-        let stakes_and_lockouts = self.stakes_and_lockouts();
-        let total_stake: u64 = stakes_and_lockouts.iter().map(|s| s.0).sum();
-        let supermajority_stake = total_stake * 2 / 3;
-
-        // Filter out the states that don't have a max lockout
-        Self::find_supermajority_slot(supermajority_stake, &stakes_and_lockouts)
-    }
-
     /// Tell the bank which Entry IDs exist on the ledger. This function
     /// assumes subsequent calls correspond to later entries, and will boot
     /// the oldest ones once its internal cache is full. Once boot, the
@@ -376,31 +349,6 @@ impl Bank {
 
     pub fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
         self.accounts().unlock_accounts(self.id, txs, results)
-    }
-
-    fn find_supermajority_slot(
-        supermajority_stake: u64,
-        stakes_and_lockouts: &[(u64, Option<u64>)],
-    ) -> Option<u64> {
-        // Filter out the states that don't have a max lockout
-        let mut stakes_and_lockouts: Vec<_> = stakes_and_lockouts
-            .iter()
-            .filter_map(|(stake, slot)| slot.map(|s| (stake, s)))
-            .collect();
-
-        // Sort by the root slot, in descending order
-        stakes_and_lockouts.sort_unstable_by(|s1, s2| s1.1.cmp(&s2.1).reverse());
-
-        // Find if any slot has achieved sufficient votes for supermajority lockout
-        let mut total = 0;
-        for (stake, slot) in stakes_and_lockouts {
-            total += stake;
-            if total > supermajority_stake {
-                return Some(slot);
-            }
-        }
-
-        None
     }
 
     fn load_accounts(
@@ -840,8 +788,6 @@ mod tests {
     use solana_sdk::system_instruction::SystemInstruction;
     use solana_sdk::system_transaction::SystemTransaction;
     use solana_sdk::transaction::Instruction;
-    use solana_sdk::vote_transaction::VoteTransaction;
-    use std::iter::FromIterator;
 
     #[test]
     fn test_bank_new() {
@@ -1521,111 +1467,5 @@ mod tests {
         let bank = Bank::new_from_parent(&parent);
         bank.squash();
         assert_eq!(parent.get_balance(&key1.pubkey()), 1);
-    }
-
-    #[test]
-    fn test_stakes_and_lockouts() {
-        let validator = Keypair::new();
-        let voter = Keypair::new();
-
-        let (genesis_block, mint_keypair) = GenesisBlock::new(500);
-        let bank = Bank::new(&genesis_block);
-        let bank_voter = Keypair::new();
-
-        // Give the validator some stake
-        bank.transfer(
-            1,
-            &mint_keypair,
-            validator.pubkey(),
-            genesis_block.last_id(),
-        )
-        .unwrap();
-
-        new_vote_account_with_vote(&validator, &voter, &bank, 1, 0);
-        assert_eq!(bank.get_balance(&validator.pubkey()), 0);
-        // Validator has zero balance, so they get filtered out.Only the bootstrap leader
-        // created by the genesis block will get included
-        assert_eq!(bank.stakes_and_lockouts(), vec![(1, None)]);
-
-        new_vote_account_with_vote(&mint_keypair, &bank_voter, &bank, 1, 0);
-
-        let result: HashSet<_> = HashSet::from_iter(bank.stakes_and_lockouts().iter().cloned());
-        let expected: HashSet<_> = HashSet::from_iter(vec![(1, None), (498, None)]);
-        assert_eq!(result, expected);
-    }
-
-    #[test]
-    fn test_find_supermajority_slot() {
-        let supermajority = 10;
-
-        let stakes_and_slots = vec![];
-        assert_eq!(
-            Bank::find_supermajority_slot(supermajority, &stakes_and_slots),
-            None
-        );
-
-        let stakes_and_slots = vec![(5, None), (5, None)];
-        assert_eq!(
-            Bank::find_supermajority_slot(supermajority, &stakes_and_slots),
-            None
-        );
-
-        let stakes_and_slots = vec![(5, None), (5, None), (9, Some(2))];
-        assert_eq!(
-            Bank::find_supermajority_slot(supermajority, &stakes_and_slots),
-            None
-        );
-
-        let stakes_and_slots = vec![(5, None), (5, None), (9, Some(2)), (1, Some(3))];
-        assert_eq!(
-            Bank::find_supermajority_slot(supermajority, &stakes_and_slots),
-            None
-        );
-
-        let stakes_and_slots = vec![(5, None), (5, None), (9, Some(2)), (2, Some(3))];
-        assert_eq!(
-            Bank::find_supermajority_slot(supermajority, &stakes_and_slots),
-            Some(2)
-        );
-
-        let stakes_and_slots = vec![(9, Some(2)), (2, Some(3)), (9, None)];
-        assert_eq!(
-            Bank::find_supermajority_slot(supermajority, &stakes_and_slots),
-            Some(2)
-        );
-
-        let stakes_and_slots = vec![(9, Some(2)), (2, Some(3)), (9, Some(3))];
-        assert_eq!(
-            Bank::find_supermajority_slot(supermajority, &stakes_and_slots),
-            Some(3)
-        );
-    }
-
-    pub fn new_vote_account(
-        from_keypair: &Keypair,
-        voting_pubkey: &Pubkey,
-        bank: &Bank,
-        num_tokens: u64,
-    ) {
-        let last_id = bank.last_id();
-        let tx = VoteTransaction::new_account(from_keypair, *voting_pubkey, last_id, num_tokens, 0);
-        bank.process_transaction(&tx).unwrap();
-    }
-
-    pub fn push_vote<T: KeypairUtil>(voting_keypair: &T, bank: &Bank, slot_height: u64) {
-        let last_id = bank.last_id();
-        let tx = VoteTransaction::new_vote(voting_keypair, slot_height, last_id, 0);
-        bank.process_transaction(&tx).unwrap();
-    }
-
-    pub fn new_vote_account_with_vote<T: KeypairUtil>(
-        from_keypair: &Keypair,
-        voting_keypair: &T,
-        bank: &Bank,
-        num_tokens: u64,
-        slot_height: u64,
-    ) {
-        new_vote_account(from_keypair, &voting_keypair.pubkey(), bank, num_tokens);
-        push_vote(voting_keypair, bank, slot_height);
     }
 }
