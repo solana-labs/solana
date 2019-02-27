@@ -1,6 +1,7 @@
 use reqwest;
 use reqwest::header::CONTENT_TYPE;
 use serde_json::{self, Value};
+use solana_sdk::timing::{DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND};
 use std::net::SocketAddr;
 use std::thread::sleep;
 use std::time::Duration;
@@ -84,8 +85,11 @@ impl RpcClient {
                         Err(e)?;
                     }
                     retries -= 1;
-                    // TODO: Make the caller supply their desired retry frequency?
-                    sleep(Duration::from_millis(500));
+
+                    // Sleep for approximately half a slot
+                    sleep(Duration::from_millis(
+                        500 * DEFAULT_TICKS_PER_SLOT / NUM_TICKS_PER_SECOND as u64,
+                    ));
                 }
             }
         }
