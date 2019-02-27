@@ -83,7 +83,7 @@ pub struct VoteState {
     pub votes: VecDeque<Lockout>,
     pub node_id: Pubkey,
     pub staker_id: Pubkey,
-    pub root_block: Option<u64>,
+    pub root_slot: Option<u64>,
     credits: u64,
 }
 
@@ -92,6 +92,7 @@ pub fn get_max_size() -> usize {
     // sizeof(VoteState) when votes.len() is MAX_LOCKOUT_HISTORY
     let mut vote_state = VoteState::default();
     vote_state.votes = VecDeque::from(vec![Lockout::default(); MAX_LOCKOUT_HISTORY]);
+    vote_state.root_slot = Some(std::u64::MAX);
     serialized_size(&vote_state).unwrap() as usize
 }
 
@@ -99,13 +100,13 @@ impl VoteState {
     pub fn new(node_id: Pubkey, staker_id: Pubkey) -> Self {
         let votes = VecDeque::new();
         let credits = 0;
-        let root_block = None;
+        let root_slot = None;
         Self {
             votes,
             node_id,
             staker_id,
             credits,
-            root_block,
+            root_slot,
         }
     }
 
@@ -139,7 +140,7 @@ impl VoteState {
         // Once the stack is full, pop the oldest vote and distribute rewards
         if self.votes.len() == MAX_LOCKOUT_HISTORY {
             let vote = self.votes.pop_front().unwrap();
-            self.root_block = Some(vote.slot_height);
+            self.root_slot = Some(vote.slot_height);
             self.credits += 1;
         }
         self.votes.push_back(vote);
@@ -332,17 +333,17 @@ mod tests {
 
         // The last vote should have been popped b/c it reached a depth of MAX_LOCKOUT_HISTORY
         assert_eq!(vote_state.votes.len(), MAX_LOCKOUT_HISTORY);
-        assert_eq!(vote_state.root_block, Some(0));
+        assert_eq!(vote_state.root_slot, Some(0));
         check_lockouts(&vote_state);
 
         // One more vote that confirms the entire stack,
-        // the root_block should change to the
+        // the root_slot should change to the
         // second vote
         let top_vote = vote_state.votes.front().unwrap().slot_height;
         vote_state.process_vote(Vote::new(
             vote_state.votes.back().unwrap().expiration_slot_height(),
         ));
-        assert_eq!(Some(top_vote), vote_state.root_block);
+        assert_eq!(Some(top_vote), vote_state.root_slot);
 
         // Expire everything except the first vote
         let vote = Vote::new(vote_state.votes.front().unwrap().expiration_slot_height());
