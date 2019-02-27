@@ -1,5 +1,3 @@
 /target/
 
-!/.cargo*
-
 Cargo.lock
