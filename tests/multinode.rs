@@ -951,6 +951,7 @@ fn test_leader_to_validator_transition() {
 }
 
 #[test]
+#[ignore]
 fn test_leader_validator_basic() {
     solana_logger::setup();
 
@@ -1919,11 +1920,13 @@ fn test_one_fullnode_rotate_every_second_tick_without_transactions() {
 }
 
 #[test]
+#[ignore]
 fn test_two_fullnodes_rotate_every_tick_without_transactions() {
     test_fullnode_rotate(1, 1, true, false);
 }
 
 #[test]
+#[ignore]
 fn test_two_fullnodes_rotate_every_second_tick_without_transactions() {
     test_fullnode_rotate(2, 1, true, false);
 }
