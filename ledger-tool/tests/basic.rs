@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate solana;
+
 use assert_cmd::prelude::*;
 use solana::blocktree::create_new_tmp_ledger;
 use solana_sdk::genesis_block::GenesisBlock;
@@ -35,8 +38,7 @@ fn nominal() {
     let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(100, keypair.pubkey(), 50);
     let ticks_per_slot = genesis_block.ticks_per_slot;
 
-    let (ledger_path, _last_id) =
-        create_new_tmp_ledger("test_ledger_tool_nominal", &genesis_block).unwrap();
+    let (ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
     let ticks = ticks_per_slot as usize;
 
     // Basic validation
