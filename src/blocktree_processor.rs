@@ -255,7 +255,6 @@ mod tests {
     fn test_process_blocktree_with_incomplete_slot() {
         solana_logger::setup();
 
-        let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
         let (genesis_block, _mint_keypair) = GenesisBlock::new(10_000);
         let ticks_per_slot = genesis_block.ticks_per_slot;
 
@@ -287,7 +286,7 @@ mod tests {
             fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 1, 0, last_entry_id);
 
         let (mut _bank_forks, bank_forks_info) =
-            process_blocktree(&genesis_block, &blocktree, &leader_scheduler).unwrap();
+            process_blocktree(&genesis_block, &blocktree).unwrap();
 
         assert_eq!(bank_forks_info.len(), 1);
         assert_eq!(
