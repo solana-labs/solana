@@ -255,14 +255,6 @@ impl Tpu {
         self.tpu_mode = Some(TpuMode::Leader(svcs));
     }
 
-    pub fn is_leader(&self) -> Option<bool> {
-        match self.tpu_mode {
-            Some(TpuMode::Leader(_)) => Some(true),
-            Some(TpuMode::Forwarder(_)) => Some(false),
-            None => None,
-        }
-    }
-
     pub fn exit(&self) {
         self.exit.store(true, Ordering::Relaxed);
     }
