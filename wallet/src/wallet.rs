@@ -22,6 +22,7 @@ use solana_sdk::loader_transaction::LoaderTransaction;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::system_transaction::SystemTransaction;
+use solana_sdk::timing::{DEFAULT_TICKS_PER_SLOT, NUM_TICKS_PER_SECOND};
 use solana_sdk::transaction::Transaction;
 use std::fs::File;
 use std::io::Read;
@@ -775,7 +776,10 @@ fn send_and_confirm_tx(
                 break status;
             }
             if cfg!(not(test)) {
-                sleep(Duration::from_millis(500));
+                // Retry ~twice during a slot
+                sleep(Duration::from_millis(
+                    500 * DEFAULT_TICKS_PER_SLOT / NUM_TICKS_PER_SECOND as u64,
+                ));
             }
         };
         match status {
@@ -823,7 +827,10 @@ fn resign_tx(
             ))?;
         }
         next_last_id_retries -= 1;
-        sleep(Duration::from_secs(1));
+        // Retry ~twice during a slot
+        sleep(Duration::from_millis(
+            500 * DEFAULT_TICKS_PER_SLOT / NUM_TICKS_PER_SECOND as u64,
+        ));
     };
 
     tx.sign(&[signer_key], last_id);
