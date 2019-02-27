@@ -187,9 +187,7 @@ impl ReplayStage {
 
         // Gather up all the metadata about the current state of the ledger
         let (mut bank, tick_height, mut last_entry_id, mut current_blob_index) = {
-            let mut bank_forks = bank_forks.write().unwrap();
-            bank_forks.set_working_bank_id(bank_forks_info[0].bank_id);
-            let bank = bank_forks.working_bank();
+            let bank = bank_forks.read().unwrap()[bank_forks_info[0].bank_id].clone();
             let tick_height = bank.tick_height();
             (
                 bank,
@@ -222,7 +220,7 @@ impl ReplayStage {
             // be updated by the TPU
             to_leader_sender
                 .send(TvuRotationInfo {
-                    bank: old_bank,
+                    bank: bank.clone(),
                     last_entry_id,
                     slot,
                     leader_id,
@@ -383,7 +381,7 @@ impl ReplayStage {
                         // RPC can be made aware of last slot's bank
                         to_leader_sender
                             .send(TvuRotationInfo {
-                                bank: old_bank,
+                                bank: bank.clone(),
                                 last_entry_id,
                                 slot: next_slot,
                                 leader_id,
@@ -423,8 +421,7 @@ impl ReplayStage {
         new_bank.squash();
         let mut bank_forks = bank_forks.write().unwrap();
         bank_forks.insert(slot, new_bank);
-        bank_forks.set_working_bank_id(slot);
-        bank_forks.working_bank()
+        bank_forks[slot].clone()
     }
 
     fn reset_state(

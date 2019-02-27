@@ -2,31 +2,40 @@
 
 use solana_runtime::bank::Bank;
 use std::collections::HashMap;
+use std::ops::Index;
 use std::sync::Arc;
 
 pub struct BankForks {
-    working_bank_id: u64,
     banks: HashMap<u64, Arc<Bank>>,
+    working_bank: Arc<Bank>,
+}
+
+impl Index<u64> for BankForks {
+    type Output = Arc<Bank>;
+    fn index(&self, bank_id: u64) -> &Arc<Bank> {
+        &self.banks[&bank_id]
+    }
 }
 
 impl BankForks {
-    pub fn new(working_bank_id: u64, bank: Bank) -> Self {
+    pub fn new(bank_id: u64, bank: Bank) -> Self {
         let mut banks = HashMap::new();
-        banks.insert(working_bank_id, Arc::new(bank));
+        let working_bank = Arc::new(bank);
+        banks.insert(bank_id, working_bank.clone());
         Self {
-            working_bank_id,
             banks,
+            working_bank,
         }
     }
 
-    pub fn working_bank(&self) -> Arc<Bank> {
-        self.banks[&self.working_bank_id].clone()
-    }
-
-    // TODO: use the bank's own ID instead of receiving a parameter
+    // TODO: use the bank's own ID instead of receiving a parameter?
     pub fn insert(&mut self, bank_id: u64, bank: Bank) {
         let mut bank = Arc::new(bank);
         self.banks.insert(bank_id, bank.clone());
+
+        if bank_id > self.working_bank.id() {
+            self.working_bank = bank.clone()
+        }
 
         // TODO: this really only needs to look at the first
         //  parent if we're always calling insert()
@@ -37,10 +46,9 @@ impl BankForks {
         }
     }
 
-    pub fn set_working_bank_id(&mut self, bank_id: u64) {
-        if self.banks.contains_key(&bank_id) {
-            self.working_bank_id = bank_id;
-        }
+    // TODO: really want to kill this...
+    pub fn working_bank(&self) -> Arc<Bank> {
+        self.working_bank.clone()
     }
 }
 
@@ -51,21 +59,14 @@ mod tests {
     use solana_sdk::hash::Hash;
 
     #[test]
-    fn test_bank_forks_root() {
-        let bank = Bank::default();
-        let bank_forks = BankForks::new(0, bank);
-        assert_eq!(bank_forks.working_bank().tick_height(), 0);
-    }
-
-    #[test]
-    fn test_bank_forks_parent() {
+    fn test_bank_forks() {
         let (genesis_block, _) = GenesisBlock::new(10_000);
         let bank = Bank::new(&genesis_block);
         let mut bank_forks = BankForks::new(0, bank);
-        let child_bank = Bank::new_from_parent(&bank_forks.working_bank());
+        let child_bank = Bank::new_from_parent(&bank_forks[0u64]);
         child_bank.register_tick(&Hash::default());
         bank_forks.insert(1, child_bank);
-        bank_forks.set_working_bank_id(1);
+        assert_eq!(bank_forks[1u64].tick_height(), 1);
         assert_eq!(bank_forks.working_bank().tick_height(), 1);
     }
 }

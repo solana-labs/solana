@@ -114,13 +114,13 @@ pub fn process_blocktree(
 
     // Setup bank for slot 0
     let (mut bank_forks, mut pending_slots) = {
-        let bank0 = Bank::new_with_paths(&genesis_block, account_paths);
+        let bank = Bank::new_with_paths(&genesis_block, account_paths);
         let slot = 0;
         let entry_height = 0;
-        let last_entry_id = bank0.last_id();
+        let last_entry_id = bank.last_id();
 
         (
-            BankForks::new(slot, bank0),
+            BankForks::new(slot, bank),
             vec![(slot, entry_height, last_entry_id)],
         )
     };
@@ -129,8 +129,7 @@ pub fn process_blocktree(
     while !pending_slots.is_empty() {
         let (slot, mut entry_height, mut last_entry_id) = pending_slots.pop().unwrap();
 
-        bank_forks.set_working_bank_id(slot);
-        let bank = bank_forks.working_bank();
+        let bank = bank_forks[slot].clone();
 
         // Load the metadata for this slot
         let meta = blocktree
@@ -355,7 +354,7 @@ mod tests {
         info!("last_fork1_entry_id: {:?}", last_fork1_entry_id);
         info!("last_fork2_entry_id: {:?}", last_fork2_entry_id);
 
-        let (mut bank_forks, bank_forks_info) =
+        let (bank_forks, bank_forks_info) =
             process_blocktree(&genesis_block, &blocktree, None).unwrap();
 
         assert_eq!(bank_forks_info.len(), 2); // There are two forks
@@ -380,8 +379,7 @@ mod tests {
 
         // Ensure bank_forks holds the right banks
         for info in bank_forks_info {
-            bank_forks.set_working_bank_id(info.bank_id);
-            assert_eq!(bank_forks.working_bank().last_id(), info.last_entry_id)
+            assert_eq!(bank_forks[info.bank_id].last_id(), info.last_entry_id)
         }
     }
 
@@ -484,7 +482,7 @@ mod tests {
             }
         );
 
-        let bank = bank_forks.working_bank();
+        let bank = bank_forks[1].clone();
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 50 - 3);
         assert_eq!(bank.tick_height(), 2 * genesis_block.ticks_per_slot - 1);
         assert_eq!(bank.last_id(), entries.last().unwrap().id);
