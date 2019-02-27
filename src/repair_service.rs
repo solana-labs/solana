@@ -210,7 +210,7 @@ mod test {
 
     #[test]
     pub fn test_repair_missed_future_slot() {
-        let blocktree_path = get_tmp_ledger_path("test_repair_missed_future_slot");
+        let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
@@ -259,7 +259,7 @@ mod test {
 
     #[test]
     pub fn test_repair_empty_slot() {
-        let blocktree_path = get_tmp_ledger_path("test_repair_empty_slot");
+        let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
@@ -283,7 +283,7 @@ mod test {
 
     #[test]
     pub fn test_generate_repairs() {
-        let blocktree_path = get_tmp_ledger_path("test_generate_repairs");
+        let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
@@ -332,7 +332,7 @@ mod test {
 
     #[test]
     pub fn test_generate_highest_repair() {
-        let blocktree_path = get_tmp_ledger_path("test_generate_repairs");
+        let blocktree_path = get_tmp_ledger_path!();
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
 

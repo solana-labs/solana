@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate solana;
+
 use log::trace;
 use solana::bank_forks::BankForks;
 use solana::blocktree::{get_tmp_ledger_path, Blocktree};
@@ -104,7 +107,7 @@ fn test_replay() {
     let cref1 = Arc::new(RwLock::new(cluster_info1));
     let dr_1 = new_gossip(cref1.clone(), target1.sockets.gossip, exit.clone());
 
-    let blocktree_path = get_tmp_ledger_path("test_replay");
+    let blocktree_path = get_tmp_ledger_path!();
 
     let (blocktree, ledger_signal_receiver) =
         Blocktree::open_with_config_signal(&blocktree_path, ticks_per_slot)

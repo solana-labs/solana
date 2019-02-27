@@ -27,6 +27,7 @@ pub mod crds_value;
 pub mod contact_info;
 pub mod blockstream;
 pub mod blockstream_service;
+#[macro_use]
 pub mod blocktree;
 pub mod blocktree_processor;
 pub mod cluster_info;

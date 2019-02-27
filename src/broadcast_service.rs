@@ -276,8 +276,7 @@ impl Service for BroadcastService {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::blocktree::get_tmp_ledger_path;
-    use crate::blocktree::Blocktree;
+    use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::create_ticks;
     use crate::leader_scheduler::LeaderScheduler;

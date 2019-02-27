@@ -960,7 +960,7 @@ pub mod test {
         window[erase_offset].data = None;
 
         // Generate the blocktree from the window
-        let ledger_path = get_tmp_ledger_path("test_window_recover_basic");
+        let ledger_path = get_tmp_ledger_path!();
         let blocktree = Arc::new(generate_blocktree_from_window(&ledger_path, &window, true));
 
         // Recover it from coding
@@ -1009,7 +1009,7 @@ pub mod test {
         let refwindowcoding = window[erase_offset].coding.clone();
         window[erase_offset].data = None;
         window[erase_offset].coding = None;
-        let ledger_path = get_tmp_ledger_path("test_window_recover_basic2");
+        let ledger_path = get_tmp_ledger_path!();
         let blocktree = Arc::new(generate_blocktree_from_window(&ledger_path, &window, true));
 
         // Recover it from coding

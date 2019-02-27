@@ -627,8 +627,7 @@ mod tests {
             );
         let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
-        let validator_ledger_path =
-            tmp_copy_blocktree(&bootstrap_leader_ledger_path, "test_wrong_role_transition");
+        let validator_ledger_path = tmp_copy_blocktree!(&bootstrap_leader_ledger_path);
 
         let ledger_paths = vec![
             bootstrap_leader_ledger_path.clone(),
