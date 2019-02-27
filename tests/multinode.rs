@@ -870,6 +870,7 @@ fn test_multi_node_dynamic_network() {
 }
 
 #[test]
+#[ignore]
 fn test_leader_to_validator_transition() {
     solana_logger::setup();
 

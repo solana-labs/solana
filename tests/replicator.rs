@@ -240,8 +240,10 @@ fn test_replicator_startup_leader_hang() {
     solana_logger::setup();
     info!("starting replicator test");
 
-    let replicator_ledger_path = &get_tmp_ledger_path!();
     let leader_ledger_path = "replicator_test_leader_ledger";
+    let (genesis_block, _mint_keypair) = GenesisBlock::new(10_000);
+    let (replicator_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
+        create_tmp_sample_blocktree("replicator_test_replicator_ledger", &genesis_block, 0);
 
     {
         let replicator_keypair = Keypair::new();
@@ -253,7 +255,7 @@ fn test_replicator_startup_leader_hang() {
         let leader_info = NodeInfo::new_entry_point(&fake_gossip);
 
         let replicator_res = Replicator::new(
-            replicator_ledger_path,
+            &replicator_ledger_path,
             replicator_node,
             &leader_info,
             &replicator_keypair,
@@ -275,15 +277,18 @@ fn test_replicator_startup_ledger_hang() {
 
     solana_logger::setup();
     info!("starting replicator test");
-    let replicator_ledger_path = &get_tmp_ledger_path!();
+    let leader_keypair = Arc::new(Keypair::new());
+
+    let (genesis_block, _mint_keypair) =
+        GenesisBlock::new_with_leader(100, leader_keypair.pubkey(), 42);
+    let (replicator_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
+        create_tmp_sample_blocktree("replicator_test_replicator_ledger", &genesis_block, 0);
 
     info!("starting leader node");
-    let leader_keypair = Arc::new(Keypair::new());
     let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_info = leader_node.info.clone();
 
     let leader_ledger_path = "replicator_test_leader_ledger";
-    let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(100, leader_info.id, 42);
     let (leader_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_blocktree(leader_ledger_path, &genesis_block, 0);
 
@@ -325,7 +330,7 @@ fn test_replicator_startup_ledger_hang() {
         let leader_info = NodeInfo::new_entry_point(&leader_info.gossip);
 
         let replicator_res = Replicator::new(
-            replicator_ledger_path,
+            &replicator_ledger_path,
             replicator_node,
             &leader_info,
             &bad_keys,
