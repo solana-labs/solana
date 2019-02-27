@@ -225,7 +225,7 @@ impl Bank {
         );
         vote_state
             .votes
-            .push_back(vote_program::Commitment::new(&vote_program::Vote::new(0)));
+            .push_back(vote_program::Lockout::new(&vote_program::Vote::new(0)));
         vote_state
             .serialize(&mut bootstrap_leader_vote_account.userdata)
             .unwrap();

@@ -39,12 +39,12 @@ impl Vote {
 }
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Commitment {
+pub struct Lockout {
     pub slot_height: u64,
     pub confirmation_count: u32,
 }
 
-impl Commitment {
+impl Lockout {
     pub fn new(vote: &Vote) -> Self {
         Self {
             slot_height: vote.slot_height,
@@ -80,7 +80,7 @@ pub enum VoteInstruction {
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VoteState {
-    pub votes: VecDeque<Commitment>,
+    pub votes: VecDeque<Lockout>,
     pub node_id: Pubkey,
     pub staker_id: Pubkey,
     pub root_block: Option<u64>,
@@ -91,7 +91,7 @@ pub fn get_max_size() -> usize {
     // Upper limit on the size of the Vote State. Equal to
     // sizeof(VoteState) when votes.len() is MAX_VOTE_HISTORY
     let mut vote_state = VoteState::default();
-    vote_state.votes = VecDeque::from(vec![Commitment::default(); MAX_VOTE_HISTORY]);
+    vote_state.votes = VecDeque::from(vec![Lockout::default(); MAX_VOTE_HISTORY]);
     serialized_size(&vote_state).unwrap() as usize
 }
 
@@ -130,7 +130,7 @@ impl VoteState {
             return;
         }
 
-        let vote = Commitment::new(&vote);
+        let vote = Lockout::new(&vote);
 
         // TODO: Integrity checks
         // Verify the vote's bank hash matches what is expected
@@ -275,7 +275,7 @@ mod tests {
         let mut vote_state = VoteState::default();
         vote_state
             .votes
-            .resize(MAX_VOTE_HISTORY, Commitment::default());
+            .resize(MAX_VOTE_HISTORY, Lockout::default());
         vote_state.serialize(&mut buffer).unwrap();
         assert_eq!(VoteState::deserialize(&buffer).unwrap(), vote_state);
     }
@@ -306,7 +306,7 @@ mod tests {
 
         let vote = Vote::new(1);
         let vote_state = vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();
-        assert_eq!(vote_state.votes, vec![Commitment::new(&vote)]);
+        assert_eq!(vote_state.votes, vec![Lockout::new(&vote)]);
         assert_eq!(vote_state.credits(), 0);
     }
 
@@ -318,7 +318,7 @@ mod tests {
         let vote = Vote::new(1);
         let vote_state = vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();
         assert_eq!(vote_state.node_id, Pubkey::default());
-        assert_eq!(vote_state.votes, vec![Commitment::new(&vote)]);
+        assert_eq!(vote_state.votes, vec![Lockout::new(&vote)]);
     }
 
     #[test]
