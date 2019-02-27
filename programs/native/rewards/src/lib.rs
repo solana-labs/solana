@@ -131,7 +131,7 @@ mod tests {
         )
         .unwrap();
 
-        for i in 0..vote_program::MAX_VOTE_HISTORY - 1 {
+        for i in 0..vote_program::MAX_LOCKOUT_HISTORY {
             let vote = Vote::new(i as u64);
             let vote_state =
                 vote_program::vote_and_deserialize(&vote_id, &mut vote_account, vote.clone())
@@ -139,7 +139,7 @@ mod tests {
             assert_eq!(vote_state.credits(), 0);
         }
 
-        let vote = Vote::new(vote_program::MAX_VOTE_HISTORY as u64);
+        let vote = Vote::new(vote_program::MAX_LOCKOUT_HISTORY as u64 + 1);
         let vote_state =
             vote_program::vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();
         assert_eq!(vote_state.credits(), 1);

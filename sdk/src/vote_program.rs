@@ -22,7 +22,7 @@ pub fn id() -> Pubkey {
 }
 
 // Maximum number of votes to keep around
-pub const MAX_VOTE_HISTORY: usize = 32;
+pub const MAX_LOCKOUT_HISTORY: usize = 31;
 pub const INITIAL_LOCKOUT: usize = 2;
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -89,9 +89,9 @@ pub struct VoteState {
 
 pub fn get_max_size() -> usize {
     // Upper limit on the size of the Vote State. Equal to
-    // sizeof(VoteState) when votes.len() is MAX_VOTE_HISTORY
+    // sizeof(VoteState) when votes.len() is MAX_LOCKOUT_HISTORY
     let mut vote_state = VoteState::default();
-    vote_state.votes = VecDeque::from(vec![Lockout::default(); MAX_VOTE_HISTORY]);
+    vote_state.votes = VecDeque::from(vec![Lockout::default(); MAX_LOCKOUT_HISTORY]);
     serialized_size(&vote_state).unwrap() as usize
 }
 
@@ -136,15 +136,14 @@ impl VoteState {
         // Verify the vote's bank hash matches what is expected
 
         self.pop_expired_votes(vote.slot_height);
-        self.votes.push_back(vote);
-        self.double_lockouts();
-
         // Once the stack is full, pop the oldest vote and distribute rewards
-        if self.votes.len() == MAX_VOTE_HISTORY {
+        if self.votes.len() == MAX_LOCKOUT_HISTORY {
             let vote = self.votes.pop_front().unwrap();
             self.root_block = Some(vote.slot_height);
             self.credits += 1;
         }
+        self.votes.push_back(vote);
+        self.double_lockouts();
     }
 
     /// Number of "credits" owed to this account from the mining pool. Submit this
@@ -275,7 +274,7 @@ mod tests {
         let mut vote_state = VoteState::default();
         vote_state
             .votes
-            .resize(MAX_VOTE_HISTORY, Lockout::default());
+            .resize(MAX_LOCKOUT_HISTORY, Lockout::default());
         vote_state.serialize(&mut buffer).unwrap();
         assert_eq!(VoteState::deserialize(&buffer).unwrap(), vote_state);
     }
@@ -327,12 +326,12 @@ mod tests {
         let staker_id = Keypair::new().pubkey();
         let mut vote_state = VoteState::new(voter_id, staker_id);
 
-        for i in 0..MAX_VOTE_HISTORY {
+        for i in 0..(MAX_LOCKOUT_HISTORY + 1) {
             vote_state.process_vote(Vote::new((INITIAL_LOCKOUT as usize * i) as u64));
         }
 
-        // The last vote should have been popped b/c it reached a depth of MAX_VOTE_HISTORY
-        assert_eq!(vote_state.votes.len(), MAX_VOTE_HISTORY - 1);
+        // The last vote should have been popped b/c it reached a depth of MAX_LOCKOUT_HISTORY
+        assert_eq!(vote_state.votes.len(), MAX_LOCKOUT_HISTORY);
         assert_eq!(vote_state.root_block, Some(0));
         check_lockouts(&vote_state);
 
@@ -385,17 +384,17 @@ mod tests {
         let staker_id = Keypair::new().pubkey();
         let mut vote_state = VoteState::new(voter_id, staker_id);
 
-        for i in 0..MAX_VOTE_HISTORY - 1 {
+        for i in 0..MAX_LOCKOUT_HISTORY {
             vote_state.process_vote(Vote::new(i as u64));
         }
 
         assert_eq!(vote_state.credits, 0);
 
-        vote_state.process_vote(Vote::new(MAX_VOTE_HISTORY as u64));
+        vote_state.process_vote(Vote::new(MAX_LOCKOUT_HISTORY as u64 + 1));
         assert_eq!(vote_state.credits, 1);
-        vote_state.process_vote(Vote::new(MAX_VOTE_HISTORY as u64 + 1));
+        vote_state.process_vote(Vote::new(MAX_LOCKOUT_HISTORY as u64 + 2));
         assert_eq!(vote_state.credits(), 2);
-        vote_state.process_vote(Vote::new(MAX_VOTE_HISTORY as u64 + 2));
+        vote_state.process_vote(Vote::new(MAX_LOCKOUT_HISTORY as u64 + 3));
         assert_eq!(vote_state.credits(), 3);
         vote_state.clear_credits();
         assert_eq!(vote_state.credits(), 0);

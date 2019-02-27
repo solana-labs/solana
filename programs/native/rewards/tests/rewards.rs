@@ -86,12 +86,12 @@ fn test_redeem_vote_credits_via_bank() {
         .unwrap();
 
     // The validator submits votes to accumulate credits.
-    for i in 0..vote_program::MAX_VOTE_HISTORY - 1 {
+    for i in 0..vote_program::MAX_LOCKOUT_HISTORY {
         let vote_state = rewards_bank.submit_vote(&vote_keypair, i as u64).unwrap();
         assert_eq!(vote_state.credits(), 0);
     }
     let vote_state = rewards_bank
-        .submit_vote(&vote_keypair, vote_program::MAX_VOTE_HISTORY as u64)
+        .submit_vote(&vote_keypair, vote_program::MAX_LOCKOUT_HISTORY as u64 + 1)
         .unwrap();
     assert_eq!(vote_state.credits(), 1);
 
