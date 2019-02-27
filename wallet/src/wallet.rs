@@ -2,6 +2,7 @@ use bincode::serialize;
 use bs58;
 use chrono::prelude::*;
 use clap::ArgMatches;
+use log::*;
 use serde_json;
 use serde_json::json;
 #[cfg(test)]
@@ -423,26 +424,29 @@ fn process_deploy(
         bpf_loader::id(),
         0,
     );
+    trace!("Creating program account");
     send_and_confirm_tx(&rpc_client, &mut tx, &config.id).map_err(|_| {
         WalletError::DynamicProgramError("Program allocate space failed".to_string())
     })?;
 
-    let mut offset = 0;
-    for chunk in program_userdata.chunks(USERDATA_CHUNK_SIZE) {
-        let mut tx = LoaderTransaction::new_write(
-            &program_id,
-            bpf_loader::id(),
-            offset,
-            chunk.to_vec(),
-            last_id,
-            0,
-        );
-        send_and_confirm_tx(&rpc_client, &mut tx, &program_id).map_err(|_| {
-            WalletError::DynamicProgramError(format!("Program write failed at offset {:?}", offset))
-        })?;
-        offset += USERDATA_CHUNK_SIZE as u32;
-    }
+    trace!("Writing program data");
+    let write_transactions: Vec<_> = program_userdata
+        .chunks(USERDATA_CHUNK_SIZE)
+        .zip(0..)
+        .map(|(chunk, i)| {
+            LoaderTransaction::new_write(
+                &program_id,
+                bpf_loader::id(),
+                (i * USERDATA_CHUNK_SIZE) as u32,
+                chunk.to_vec(),
+                last_id,
+                0,
+            )
+        })
+        .collect();
+    send_and_confirm_transactions(&rpc_client, write_transactions, &program_id)?;
 
+    trace!("Finalizing program account");
     let last_id = get_last_id(&rpc_client)?;
     let mut tx = LoaderTransaction::new_finalize(&program_id, bpf_loader::id(), last_id, 0);
     send_and_confirm_tx(&rpc_client, &mut tx, &program_id).map_err(|_| {
@@ -724,6 +728,38 @@ fn get_last_id(rpc_client: &RpcClient) -> Result<Hash, Box<dyn error::Error>> {
     Ok(Hash::new(&last_id_vec))
 }
 
+fn get_next_last_id(
+    rpc_client: &RpcClient,
+    previous_last_id: &Hash,
+) -> Result<Hash, Box<dyn error::Error>> {
+    let mut next_last_id_retries = 3;
+    loop {
+        let next_last_id = get_last_id(rpc_client)?;
+        if cfg!(not(test)) {
+            if next_last_id != *previous_last_id {
+                return Ok(next_last_id);
+            }
+        } else {
+            // When using MockRpcClient, get_last_id() returns a constant value
+            return Ok(next_last_id);
+        }
+        if next_last_id_retries == 0 {
+            Err(WalletError::RpcRequestError(
+                format!(
+                    "Unable to fetch new last_id, last_id stuck at {:?}",
+                    next_last_id
+                )
+                .to_string(),
+            ))?;
+        }
+        next_last_id_retries -= 1;
+        // Retry ~twice during a slot
+        sleep(Duration::from_millis(
+            500 * DEFAULT_TICKS_PER_SLOT / NUM_TICKS_PER_SECOND as u64,
+        ));
+    }
+}
+
 fn send_tx(rpc_client: &RpcClient, tx: &Transaction) -> Result<String, Box<dyn error::Error>> {
     let serialized = serialize(tx).unwrap();
     let params = json!([serialized]);
@@ -804,35 +840,81 @@ fn send_and_confirm_tx(
     }
 }
 
+fn send_and_confirm_transactions(
+    rpc_client: &RpcClient,
+    mut transactions: Vec<Transaction>,
+    signer: &Keypair,
+) -> Result<(), Box<dyn error::Error>> {
+    let mut send_retries = 5;
+    loop {
+        let mut status_retries = 4;
+
+        // Send all transactions
+        let mut transactions_signatures = vec![];
+        for transaction in transactions {
+            if cfg!(not(test)) {
+                // Delay ~1 tick between write transactions in an attempt to reduce AccountInUse errors
+                // since all the write transactions modify the same program account
+                sleep(Duration::from_millis(1000 / NUM_TICKS_PER_SECOND as u64));
+            }
+
+            let signature = send_tx(&rpc_client, &transaction).ok();
+            transactions_signatures.push((transaction, signature))
+        }
+
+        // Collect statuses for all the transactions, drop those that are confirmed
+        while status_retries > 0 {
+            status_retries -= 1;
+
+            if cfg!(not(test)) {
+                // Retry ~twice during a slot
+                sleep(Duration::from_millis(
+                    500 * DEFAULT_TICKS_PER_SLOT / NUM_TICKS_PER_SECOND as u64,
+                ));
+            }
+
+            transactions_signatures = transactions_signatures
+                .into_iter()
+                .filter(|(_transaction, signature)| {
+                    if let Some(signature) = signature {
+                        if let Ok(status) = confirm_transaction(rpc_client, &signature) {
+                            return status != RpcSignatureStatus::Confirmed;
+                        }
+                    }
+                    true
+                })
+                .collect();
+
+            if transactions_signatures.is_empty() {
+                return Ok(());
+            }
+        }
+
+        if send_retries == 0 {
+            Err(WalletError::RpcRequestError(
+                "Transactions failed".to_string(),
+            ))?;
+        }
+        send_retries -= 1;
+
+        // Re-sign any failed transactions with a new last_id and retry
+        let last_id = get_next_last_id(rpc_client, &transactions_signatures[0].0.last_id)?;
+        transactions = transactions_signatures
+            .into_iter()
+            .map(|(mut transaction, _)| {
+                transaction.sign(&[signer], last_id);
+                transaction
+            })
+            .collect();
+    }
+}
+
 fn resign_tx(
     rpc_client: &RpcClient,
     tx: &mut Transaction,
     signer_key: &Keypair,
 ) -> Result<(), Box<dyn error::Error>> {
-    // Fetch a new last_id to prevent the retry from getting rejected as a
-    // DuplicateSignature
-    let mut next_last_id_retries = 3;
-    let last_id = loop {
-        let next_last_id = get_last_id(rpc_client)?;
-        if next_last_id != tx.last_id {
-            break next_last_id;
-        }
-        if next_last_id_retries == 0 {
-            Err(WalletError::RpcRequestError(
-                format!(
-                    "Unable to fetch new last_id, last_id stuck at {:?}",
-                    next_last_id
-                )
-                .to_string(),
-            ))?;
-        }
-        next_last_id_retries -= 1;
-        // Retry ~twice during a slot
-        sleep(Duration::from_millis(
-            500 * DEFAULT_TICKS_PER_SLOT / NUM_TICKS_PER_SECOND as u64,
-        ));
-    };
-
+    let last_id = get_next_last_id(rpc_client, &tx.last_id)?;
     tx.sign(&[signer_key], last_id);
     Ok(())
 }
@@ -1364,6 +1446,7 @@ mod tests {
 
     #[test]
     fn test_wallet_deploy() {
+        solana_logger::setup();
         let mut pathbuf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         pathbuf.push("tests");
         pathbuf.push("fixtures");
