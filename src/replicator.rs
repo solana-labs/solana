@@ -138,7 +138,7 @@ impl Replicator {
         let genesis_block =
             GenesisBlock::load(ledger_path).expect("Expected to successfully open genesis block");
 
-        let (bank_forks, _bank_forks_info) =
+        let (_bank_forks, _bank_forks_info) =
             blocktree_processor::process_blocktree(&genesis_block, &blocktree, None)
                 .expect("process_blocktree failed");
 
@@ -183,7 +183,6 @@ impl Replicator {
             blob_fetch_receiver,
             retransmit_sender,
             repair_socket,
-            Arc::new(RwLock::new(bank_forks)),
             exit.clone(),
         );
 

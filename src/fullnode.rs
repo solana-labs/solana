@@ -726,11 +726,16 @@ mod tests {
 
             let tvu_address = &validator_info.tvu;
 
-            let msgs =
-                make_consecutive_blobs(blobs_to_send, ledger_initial_len, last_id, &tvu_address)
-                    .into_iter()
-                    .rev()
-                    .collect();
+            let msgs = make_consecutive_blobs(
+                &leader_id,
+                blobs_to_send,
+                ledger_initial_len,
+                last_id,
+                &tvu_address,
+            )
+            .into_iter()
+            .rev()
+            .collect();
             s_responder.send(msgs).expect("send");
             t_responder
         };

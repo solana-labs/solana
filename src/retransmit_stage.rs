@@ -128,7 +128,6 @@ impl RetransmitStage {
             fetch_stage_receiver,
             retransmit_sender,
             repair_socket,
-            bank_forks.clone(),
             exit,
         );
 

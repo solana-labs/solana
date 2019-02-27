@@ -6,6 +6,7 @@ use byteorder::{ByteOrder, LittleEndian};
 use serde::Serialize;
 use solana_metrics::counter::Counter;
 pub use solana_sdk::packet::PACKET_DATA_SIZE;
+use solana_sdk::pubkey::Pubkey;
 use std::cmp;
 use std::fmt;
 use std::io;
@@ -278,7 +279,8 @@ macro_rules! range {
 const PARENT_RANGE: std::ops::Range<usize> = range!(0, u64);
 const SLOT_RANGE: std::ops::Range<usize> = range!(PARENT_RANGE.end, u64);
 const INDEX_RANGE: std::ops::Range<usize> = range!(SLOT_RANGE.end, u64);
-const FORWARD_RANGE: std::ops::Range<usize> = range!(INDEX_RANGE.end, bool);
+const ID_RANGE: std::ops::Range<usize> = range!(INDEX_RANGE.end, Pubkey);
+const FORWARD_RANGE: std::ops::Range<usize> = range!(ID_RANGE.end, bool);
 const FLAGS_RANGE: std::ops::Range<usize> = range!(FORWARD_RANGE.end, u32);
 const SIZE_RANGE: std::ops::Range<usize> = range!(FLAGS_RANGE.end, u64);
 
@@ -321,6 +323,16 @@ impl Blob {
     }
     pub fn set_index(&mut self, ix: u64) {
         LittleEndian::write_u64(&mut self.data[INDEX_RANGE], ix);
+    }
+
+    /// sender id, we use this for identifying if its a blob from the leader that we should
+    /// retransmit.  eventually blobs should have a signature that we can use for spam filtering
+    pub fn id(&self) -> Pubkey {
+        Pubkey::new(&self.data[ID_RANGE])
+    }
+
+    pub fn set_id(&mut self, id: &Pubkey) {
+        self.data[ID_RANGE].copy_from_slice(id.as_ref())
     }
 
     /// Used to determine whether or not this blob should be forwarded in retransmit
@@ -451,13 +463,14 @@ impl Blob {
     }
 }
 
-pub fn index_blobs(blobs: &[SharedBlob], blob_index: &mut u64, slot: u64) {
+pub fn index_blobs(blobs: &[SharedBlob], id: &Pubkey, blob_index: &mut u64, slot: u64) {
     // enumerate all the blobs, those are the indices
     for blob in blobs.iter() {
         let mut blob = blob.write().unwrap();
 
         blob.set_index(*blob_index);
         blob.set_slot(slot);
+        blob.set_id(id);
         blob.forward(true);
         *blob_index += 1;
     }

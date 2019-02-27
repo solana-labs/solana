@@ -74,7 +74,7 @@ impl Broadcast {
             .collect();
 
         // TODO: blob_index should be slot-relative...
-        index_blobs(&blobs, &mut self.blob_index, slot_height);
+        index_blobs(&blobs, &self.id, &mut self.blob_index, slot_height);
         let parent = {
             if slot_height == 0 {
                 0

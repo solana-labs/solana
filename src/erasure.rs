@@ -329,6 +329,7 @@ impl CodingGenerator {
             for data_blob in &data_locks[NUM_DATA - NUM_CODING..NUM_DATA] {
                 let index = data_blob.index();
                 let slot = data_blob.slot();
+                let id = data_blob.id();
                 let should_forward = data_blob.should_forward();
 
                 let coding_blob = SharedBlob::default();
@@ -336,6 +337,7 @@ impl CodingGenerator {
                     let mut coding_blob = coding_blob.write().unwrap();
                     coding_blob.set_index(index);
                     coding_blob.set_slot(slot);
+                    coding_blob.set_id(&id);
                     coding_blob.forward(should_forward);
                     coding_blob.set_size(max_data_size);
                     coding_blob.set_coding();
@@ -761,6 +763,7 @@ pub mod test {
 
                     let index = data_rl.index();
                     let slot = data_rl.slot();
+                    let id = data_rl.id();
                     let should_forward = data_rl.should_forward();
 
                     trace!(
@@ -771,6 +774,7 @@ pub mod test {
                     );
                     coding_wl.set_index(index);
                     coding_wl.set_slot(slot);
+                    coding_wl.set_id(&id);
                     coding_wl.forward(should_forward);
                 }
                 coding_wl.set_size(max_data_size);
