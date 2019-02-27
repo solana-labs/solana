@@ -112,7 +112,7 @@ impl Fullnode {
         mut node: Node,
         keypair: &Arc<Keypair>,
         ledger_path: &str,
-        voting_keypair: T,
+        voting_keypair: &Arc<T>,
         entrypoint_info_option: Option<&NodeInfo>,
         config: &FullnodeConfig,
     ) -> Self
@@ -232,7 +232,7 @@ impl Fullnode {
         let voting_keypair_option = if config.voting_disabled {
             None
         } else {
-            Some(Arc::new(voting_keypair))
+            Some(voting_keypair.clone())
         };
 
         // Setup channel for rotation indications

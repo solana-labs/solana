@@ -468,7 +468,7 @@ pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, 
     let node = Node::new_localhost_with_pubkey(node_keypair.pubkey());
     let node_info = node.info.clone();
     let vote_account_keypair = Arc::new(Keypair::new());
-    let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
+    let voting_keypair = Arc::new(VotingKeypair::new_local(&vote_account_keypair));
 
     let (genesis_block, mint_keypair) =
         GenesisBlock::new_with_leader(10_000, node_info.id, 42, voting_keypair.pubkey());
@@ -480,7 +480,7 @@ pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, 
         node,
         &node_keypair,
         &ledger_path,
-        voting_keypair,
+        &voting_keypair,
         None,
         &FullnodeConfig::default(),
     );

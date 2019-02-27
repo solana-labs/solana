@@ -49,7 +49,7 @@ fn parse_identity(matches: &ArgMatches<'_>) -> (Keypair, SocketAddr) {
 
 fn create_and_fund_vote_account<T: KeypairUtil>(
     client: &mut ThinClient,
-    vote_keypair: &T,
+    vote_keypair: &Arc<T>,
     node_keypair: &Arc<Keypair>,
 ) -> Result<()> {
     let pubkey = node_keypair.pubkey();
@@ -83,7 +83,7 @@ fn create_and_fund_vote_account<T: KeypairUtil>(
                 1,
             );
             let register_tx = VoteTransaction::register_vote_account(
-                vote_keypair,
+                vote_keypair.as_ref(),
                 last_id,
                 node_keypair.pubkey(),
                 0,
@@ -262,19 +262,30 @@ fn main() {
         fullnode_config.voting_disabled = true;
     }
 
-    let vote_signer: Box<dyn VoteSigner + Sync + Send> = if !no_signer {
+    let signer: Box<dyn VoteSigner + Sync + Send> = if !no_signer {
         info!("Vote signer service address: {:?}", signer_addr);
         Box::new(RemoteVoteSigner::new(signer_addr))
     } else {
         info!("Node will not vote");
         Box::new(LocalVoteSigner::default())
     };
-    let vote_signer = VotingKeypair::new_with_signer(&keypair, vote_signer);
+    let vote_signer = Arc::new(VotingKeypair::new_with_signer(&keypair, signer));
     info!("New vote account ID is {:?}", vote_signer.pubkey());
 
     let gossip_addr = node.info.gossip;
+    let fullnode = Fullnode::new(
+        node,
+        &keypair,
+        ledger_path,
+        &vote_signer,
+        cluster_entrypoint
+            .map(|i| NodeInfo::new_entry_point(&i))
+            .as_ref(),
+        &fullnode_config,
+    );
 
     let (rotation_sender, rotation_receiver) = channel();
+    fullnode.run(Some(rotation_sender));
 
     if !fullnode_config.voting_disabled {
         let leader_node_info = loop {
@@ -289,23 +300,11 @@ fn main() {
                 }
             };
         };
-
         let mut client = mk_client(&leader_node_info);
         if let Err(err) = create_and_fund_vote_account(&mut client, &vote_signer, &keypair) {
             panic!("Failed to create_and_fund_vote_account: {:?}", err);
         }
     }
-    let fullnode = Fullnode::new(
-        node,
-        &keypair,
-        ledger_path,
-        vote_signer,
-        cluster_entrypoint
-            .map(|i| NodeInfo::new_entry_point(&i))
-            .as_ref(),
-        &fullnode_config,
-    );
-    fullnode.run(Some(rotation_sender));
 
     if let Some(filename) = init_complete_file {
         File::create(filename).unwrap_or_else(|_| panic!("Unable to create: {}", filename));
