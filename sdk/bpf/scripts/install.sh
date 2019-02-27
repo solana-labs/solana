@@ -88,7 +88,7 @@ if [[ ! -f rust-bpf-$machine-$version.md ]]; then
 fi
 
 # Install Rust-BPF Sysroot
-version=v0.0.1
+version=v0.0.2
 if [[ ! -f rust-bpf-sysroot-$version.md ]]; then
   (
     filename=solana-rust-bpf-sysroot.tar.bz2
