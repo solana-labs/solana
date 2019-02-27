@@ -82,7 +82,7 @@ impl BlockstreamService {
                 .unwrap_or_else(|e| {
                     debug!("Blockstream error: {:?}, {:?}", e, blockstream.output);
                 });
-            if 0 == entry_meta.num_ticks_left_in_slot {
+            if entry_meta.is_end_of_slot {
                 blockstream.queued_block = Some(BlockData {
                     slot: entry_meta.slot,
                     tick_height: entry_meta.tick_height,
@@ -144,7 +144,7 @@ mod test {
                 tick_height: x,
                 slot: slot_height,
                 slot_leader: leader_id,
-                num_ticks_left_in_slot: ticks_per_slot - ((x + 1) % ticks_per_slot),
+                is_end_of_slot: x == ticks_per_slot - 1,
                 parent_slot,
                 entry,
             };
@@ -159,7 +159,7 @@ mod test {
             tick_height: ticks_per_slot - 1,
             slot: 0,
             slot_leader: leader_id,
-            num_ticks_left_in_slot: 0,
+            is_end_of_slot: true,
             parent_slot: None,
             entry,
         };

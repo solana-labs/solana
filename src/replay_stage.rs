@@ -301,10 +301,11 @@ impl ReplayStage {
 
                     if !entries.is_empty() {
                         if let Err(e) = Self::forward_entries(
-                            &entries,
+                            entries.clone(),
                             slot,
                             current_leader_id,
-                            &bank,
+                            bank.ticks_per_slot(),
+                            bank.tick_height(),
                             &blocktree,
                             &forward_entry_sender,
                         ) {
@@ -437,34 +438,36 @@ impl ReplayStage {
     }
 
     fn forward_entries(
-        entries: &[Entry],
+        entries: Vec<Entry>,
         slot: u64,
         slot_leader: Pubkey,
-        bank: &Arc<Bank>,
+        ticks_per_slot: u64,
+        bank_tick_height: u64,
         blocktree: &Arc<Blocktree>,
         forward_entry_sender: &EntrySender,
     ) -> Result<()> {
-        let parent_slot = blocktree.meta(slot).unwrap().map(|meta| meta.parent_slot);
-        let mut entry_tick_height = bank.tick_height();
-        let mut num_ticks_left_in_slot =
-            bank.ticks_per_slot() - entry_tick_height % bank.ticks_per_slot() - 1;
+        let blocktree_meta = blocktree.meta(slot).unwrap().unwrap();
+        let parent_slot = if slot == 0 {
+            None
+        } else {
+            Some(blocktree_meta.parent_slot)
+        };
+        let mut tick_height = bank_tick_height;
         let mut entries_with_meta = Vec::new();
-        for entry in entries.iter() {
+        for entry in entries.into_iter() {
             if entry.is_tick() {
-                entry_tick_height += 1;
-                if num_ticks_left_in_slot == 0 {
-                    num_ticks_left_in_slot = bank.ticks_per_slot();
-                }
-                num_ticks_left_in_slot -= 1;
+                tick_height += 1;
             }
-            entries_with_meta.push(EntryMeta {
-                tick_height: entry_tick_height,
+            let is_end_of_slot = (tick_height + 1 % ticks_per_slot) == 0;
+            let entry_meta = EntryMeta {
+                tick_height,
                 slot,
                 slot_leader,
-                num_ticks_left_in_slot,
+                is_end_of_slot,
                 parent_slot,
-                entry: entry.clone(),
-            });
+                entry,
+            };
+            entries_with_meta.push(entry_meta);
         }
         forward_entry_sender.send(entries_with_meta)?;
         Ok(())
@@ -566,7 +569,6 @@ mod test {
         let my_node = Node::new_localhost_with_pubkey(my_id);
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
-        let (ledger_entry_sender, _ledger_entry_receiver) = channel();
         let mut last_entry_id = Hash::default();
         let mut current_blob_index = 0;
         let mut last_id = Hash::default();
@@ -584,12 +586,9 @@ mod test {
             &bank,
             &cluster_info_me,
             &voting_keypair,
-            &ledger_entry_sender,
             &mut current_blob_index,
             &mut last_entry_id,
             &Arc::new(RpcSubscriptions::default()),
-            0,
-            None,
         );
 
         match res {
@@ -609,12 +608,9 @@ mod test {
             &bank,
             &cluster_info_me,
             &voting_keypair,
-            &ledger_entry_sender,
             &mut current_blob_index,
             &mut last_entry_id,
             &Arc::new(RpcSubscriptions::default()),
-            0,
-            None,
         );
 
         match res {

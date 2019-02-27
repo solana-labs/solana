@@ -29,7 +29,7 @@ pub struct EntryMeta {
     pub tick_height: u64,
     pub slot: u64,
     pub slot_leader: Pubkey,
-    pub num_ticks_left_in_slot: u64,
+    pub is_end_of_slot: bool,
     pub parent_slot: Option<u64>,
     pub entry: Entry,
 }
@@ -40,7 +40,7 @@ impl EntryMeta {
             tick_height: 0,
             slot: 0,
             slot_leader: Pubkey::default(),
-            num_ticks_left_in_slot: 0,
+            is_end_of_slot: false,
             parent_slot: None,
             entry,
         }
