@@ -302,7 +302,6 @@ impl LeaderScheduler {
             let (mut validator_rankings, total_stake) = ranked_active_set.iter().fold(
                 (Vec::with_capacity(ranked_active_set.len()), 0),
                 |(mut ids, total_stake), (pubkey, stake)| {
-                    println!("pushing {:?}", pubkey);
                     ids.push(*pubkey);
                     (ids, total_stake + stake)
                 },
