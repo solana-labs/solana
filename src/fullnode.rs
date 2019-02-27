@@ -63,6 +63,7 @@ pub enum FullnodeReturnType {
     LeaderToValidatorRotation,
     ValidatorToLeaderRotation,
     LeaderToLeaderRotation,
+    ValidatorToValidatorRotation,
 }
 
 pub struct FullnodeConfig {
@@ -278,6 +279,7 @@ impl Fullnode {
             rotation_info.leader_id,
             rotation_info.last_entry_id,
         );
+        let was_leader = LeaderScheduler::default().slot_leader(&rotation_info.bank) == self.id;
 
         if let Some(ref mut rpc_service) = self.rpc_service {
             // TODO: This is not the correct bank.  Instead TVU should pass along the
@@ -287,24 +289,12 @@ impl Fullnode {
         }
 
         if rotation_info.leader_id == self.id {
-            let transition = match self.node_services.tpu.is_leader() {
-                Some(was_leader) => {
-                    if was_leader {
-                        debug!("{:?} remaining in leader role", self.id);
-                        FullnodeReturnType::LeaderToLeaderRotation
-                    } else {
-                        debug!("{:?} rotating to leader role", self.id);
-                        FullnodeReturnType::ValidatorToLeaderRotation
-                    }
-                }
-                None => {
-                    let bank = self.bank_forks.read().unwrap().working_bank();
-                    if LeaderScheduler::default().prev_slot_leader(&bank) == self.id {
-                        FullnodeReturnType::LeaderToLeaderRotation
-                    } else {
-                        FullnodeReturnType::ValidatorToLeaderRotation
-                    }
-                }
+            let transition = if was_leader {
+                debug!("{:?} remaining in leader role", self.id);
+                FullnodeReturnType::LeaderToLeaderRotation
+            } else {
+                debug!("{:?} rotating to leader role", self.id);
+                FullnodeReturnType::ValidatorToLeaderRotation
             };
             self.node_services.tpu.switch_to_leader(
                 &self.bank_forks.read().unwrap().working_bank(),
@@ -322,7 +312,13 @@ impl Fullnode {
             );
             transition
         } else {
-            debug!("{:?} rotating to validator role", self.id);
+            let transition = if was_leader {
+                debug!("{:?} rotating to validator role", self.id);
+                FullnodeReturnType::LeaderToValidatorRotation
+            } else {
+                debug!("{:?} remaining in validator role", self.id);
+                FullnodeReturnType::ValidatorToValidatorRotation
+            };
             self.node_services.tpu.switch_to_forwarder(
                 rotation_info.leader_id,
                 self.tpu_sockets
@@ -330,7 +326,7 @@ impl Fullnode {
                     .map(|s| s.try_clone().expect("Failed to clone TPU sockets"))
                     .collect(),
             );
-            FullnodeReturnType::LeaderToValidatorRotation
+            transition
         }
     }
 

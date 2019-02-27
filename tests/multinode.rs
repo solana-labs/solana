@@ -479,8 +479,9 @@ fn test_boot_validator_from_file() {
     // TODO: it would be nice to determine the slot that the leader processed the transactions
     // in, and only wait for that slot here
     let expected_rotations = vec![
-        (FullnodeReturnType::LeaderToValidatorRotation, 1),
-        (FullnodeReturnType::LeaderToValidatorRotation, 2),
+        (FullnodeReturnType::ValidatorToValidatorRotation, 1),
+        (FullnodeReturnType::ValidatorToValidatorRotation, 2),
+        (FullnodeReturnType::ValidatorToValidatorRotation, 3),
     ];
 
     for expected_rotation in expected_rotations {
