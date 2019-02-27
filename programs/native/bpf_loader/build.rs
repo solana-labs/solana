@@ -60,11 +60,14 @@ fn main() {
 
     let bpf_rust = !env::var("CARGO_FEATURE_BPF_RUST").is_err();
     if bpf_rust {
-        let install_dir = "../../../../target/".to_string()
-            + &env::var("PROFILE").unwrap()
-            + &"/bpf".to_string();
+        let install_dir =
+            "../../../../target/".to_string() + &env::var("PROFILE").unwrap() + &"/bpf".to_string();
 
-        if !Path::new("../../bpf/rust/noop/target/bpfel_unknown_unknown/release/solana_bpf_rust_noop.so").is_file() {
+        if !Path::new(
+            "../../bpf/rust/noop/target/bpfel_unknown_unknown/release/solana_bpf_rust_noop.so",
+        )
+        .is_file()
+        {
             // Cannot build Rust BPF programs as part of main build because
             // to build it requires calling Cargo with different parameters which
             // would deadlock due to recursive cargo calls
@@ -81,9 +84,7 @@ fn main() {
                 "../../bpf/rust/noop/build.sh",
                 "../../bpf/rust/noop/target/bpfel_unknown_unknown/release/solana_bpf_rust_noop.so",
             ],
-            &[
-                "../../bpf/rust/noop/src",
-            ],
+            &["../../bpf/rust/noop/src"],
         );
 
         println!(
@@ -94,9 +95,7 @@ fn main() {
             .arg("-p")
             .arg(&install_dir)
             .status()
-            .expect(
-                "Unable to create BPF install directory",
-            );
+            .expect("Unable to create BPF install directory");
         assert!(status.success());
 
         let status = Command::new("cp")
