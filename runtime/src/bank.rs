@@ -316,7 +316,7 @@ impl Bank {
     /// bank will reject transactions using that `last_id`.
     pub fn register_tick(&self, last_id: &Hash) {
         if self.is_frozen() {
-            warn!("=========== FIXME: working on a frozen bank! ================");
+            warn!("=========== FIXME: register_tick() working on a frozen bank! ================");
         }
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
@@ -346,7 +346,7 @@ impl Bank {
 
     pub fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         if self.is_frozen() {
-            warn!("=========== FIXME: working on a frozen bank! ================");
+            warn!("=========== FIXME: lock_accounts() working on a frozen bank! ================");
         }
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
@@ -542,7 +542,7 @@ impl Bank {
         executed: &[Result<()>],
     ) -> Vec<Result<()>> {
         if self.is_frozen() {
-            warn!("=========== FIXME: working on a frozen bank! ================");
+            warn!("=========== FIXME: commit_transactions() working on a frozen bank! ================");
         }
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
