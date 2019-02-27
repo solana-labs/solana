@@ -20,7 +20,7 @@ fn check_balance(expected_balance: u64, client: &RpcClient, pubkey: Pubkey) {
 
 #[test]
 fn test_wallet_timestamp_tx() {
-    let (server, leader_data, alice, ledger_path) = new_fullnode("test_wallet_timestamp_tx");
+    let (server, leader_data, alice, ledger_path) = new_fullnode();
     let server_exit = server.run(None);
     let bob_pubkey = Keypair::new().pubkey();
 
@@ -81,7 +81,7 @@ fn test_wallet_timestamp_tx() {
 
 #[test]
 fn test_wallet_witness_tx() {
-    let (server, leader_data, alice, ledger_path) = new_fullnode("test_wallet_witness_tx");
+    let (server, leader_data, alice, ledger_path) = new_fullnode();
     let server_exit = server.run(None);
     let bob_pubkey = Keypair::new().pubkey();
 
@@ -139,7 +139,7 @@ fn test_wallet_witness_tx() {
 
 #[test]
 fn test_wallet_cancel_tx() {
-    let (server, leader_data, alice, ledger_path) = new_fullnode("test_wallet_cancel_tx");
+    let (server, leader_data, alice, ledger_path) = new_fullnode();
     let server_exit = server.run(None);
     let bob_pubkey = Keypair::new().pubkey();
 

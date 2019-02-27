@@ -16,7 +16,7 @@ use std::time::Duration;
 fn test_rpc_send_tx() {
     solana_logger::setup();
 
-    let (server, leader_data, alice, ledger_path) = new_fullnode("test_rpc_send_tx");
+    let (server, leader_data, alice, ledger_path) = new_fullnode();
     let server_exit = server.run(None);
     let bob_pubkey = Keypair::new().pubkey();
 

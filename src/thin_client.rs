@@ -456,7 +456,7 @@ pub fn retry_get_balance(
     None
 }
 
-pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, String) {
+pub fn new_fullnode() -> (Fullnode, NodeInfo, Keypair, String) {
     use crate::blocktree::create_new_tmp_ledger;
     use crate::cluster_info::Node;
     use crate::fullnode::Fullnode;
@@ -469,7 +469,7 @@ pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, 
     let node_info = node.info.clone();
 
     let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10_000, node_info.id, 42);
-    let (ledger_path, _last_id) = create_new_tmp_ledger(ledger_name, &genesis_block).unwrap();
+    let (ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
 
     let vote_account_keypair = Arc::new(Keypair::new());
     let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
@@ -498,7 +498,7 @@ mod tests {
     #[test]
     fn test_thin_client_basic() {
         solana_logger::setup();
-        let (server, leader_data, alice, ledger_path) = new_fullnode("test_thin_client_basic");
+        let (server, leader_data, alice, ledger_path) = new_fullnode();
         let server_exit = server.run(None);
         let bob_pubkey = Keypair::new().pubkey();
 
@@ -532,7 +532,7 @@ mod tests {
     #[ignore]
     fn test_bad_sig() {
         solana_logger::setup();
-        let (server, leader_data, alice, ledger_path) = new_fullnode("bad_sig");
+        let (server, leader_data, alice, ledger_path) = new_fullnode();
         let server_exit = server.run(None);
         let bob_pubkey = Keypair::new().pubkey();
         info!(
@@ -568,7 +568,7 @@ mod tests {
     #[test]
     fn test_register_vote_account() {
         solana_logger::setup();
-        let (server, leader_data, alice, ledger_path) = new_fullnode("test_register_vote_account");
+        let (server, leader_data, alice, ledger_path) = new_fullnode();
         let server_exit = server.run(None);
         info!(
             "found leader: {:?}",
@@ -637,8 +637,7 @@ mod tests {
     #[test]
     fn test_zero_balance_after_nonzero() {
         solana_logger::setup();
-        let (server, leader_data, alice, ledger_path) =
-            new_fullnode("test_zero_balance_after_nonzero");
+        let (server, leader_data, alice, ledger_path) = new_fullnode();
         let server_exit = server.run(None);
         let bob_keypair = Keypair::new();
 
