@@ -39,12 +39,12 @@ impl Vote {
 }
 
 #[derive(Serialize, Default, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Lockout {
+pub struct Commitment {
     pub slot_height: u64,
     pub confirmation_count: u32,
 }
 
-impl Lockout {
+impl Commitment {
     pub fn new(vote: &Vote) -> Self {
         Self {
             slot_height: vote.slot_height,
@@ -59,7 +59,7 @@ impl Lockout {
 
     // The slot height at which this vote expires (cannot vote for any slot
     // less than this)
-    pub fn lock_height(&self) -> u64 {
+    pub fn expiration_slot_height(&self) -> u64 {
         self.slot_height + self.lockout()
     }
 }
@@ -80,7 +80,7 @@ pub enum VoteInstruction {
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VoteState {
-    pub votes: VecDeque<Lockout>,
+    pub votes: VecDeque<Commitment>,
     pub node_id: Pubkey,
     pub staker_id: Pubkey,
     pub root_block: Option<u64>,
@@ -91,7 +91,7 @@ pub fn get_max_size() -> usize {
     // Upper limit on the size of the Vote State. Equal to
     // sizeof(VoteState) when votes.len() is MAX_VOTE_HISTORY
     let mut vote_state = VoteState::default();
-    vote_state.votes = VecDeque::from(vec![Lockout::default(); MAX_VOTE_HISTORY]);
+    vote_state.votes = VecDeque::from(vec![Commitment::default(); MAX_VOTE_HISTORY]);
     serialized_size(&vote_state).unwrap() as usize
 }
 
@@ -130,7 +130,7 @@ impl VoteState {
             return;
         }
 
-        let vote = Lockout::new(&vote);
+        let vote = Commitment::new(&vote);
 
         // TODO: Integrity checks
         // Verify the vote's bank hash matches what is expected
@@ -163,7 +163,7 @@ impl VoteState {
             if self
                 .votes
                 .back()
-                .map_or(false, |v| v.lock_height() < slot_height)
+                .map_or(false, |v| v.expiration_slot_height() < slot_height)
             {
                 self.votes.pop_back();
             } else {
@@ -275,7 +275,7 @@ mod tests {
         let mut vote_state = VoteState::default();
         vote_state
             .votes
-            .resize(MAX_VOTE_HISTORY, Lockout::default());
+            .resize(MAX_VOTE_HISTORY, Commitment::default());
         vote_state.serialize(&mut buffer).unwrap();
         assert_eq!(VoteState::deserialize(&buffer).unwrap(), vote_state);
     }
@@ -306,7 +306,7 @@ mod tests {
 
         let vote = Vote::new(1);
         let vote_state = vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();
-        assert_eq!(vote_state.votes, vec![Lockout::new(&vote)]);
+        assert_eq!(vote_state.votes, vec![Commitment::new(&vote)]);
         assert_eq!(vote_state.credits(), 0);
     }
 
@@ -318,7 +318,7 @@ mod tests {
         let vote = Vote::new(1);
         let vote_state = vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();
         assert_eq!(vote_state.node_id, Pubkey::default());
-        assert_eq!(vote_state.votes, vec![Lockout::new(&vote)]);
+        assert_eq!(vote_state.votes, vec![Commitment::new(&vote)]);
     }
 
     #[test]
@@ -334,23 +334,19 @@ mod tests {
         // The last vote should have been popped b/c it reached a depth of MAX_VOTE_HISTORY
         assert_eq!(vote_state.votes.len(), MAX_VOTE_HISTORY - 1);
         assert_eq!(vote_state.root_block, Some(0));
-        for (i, vote) in vote_state.votes.iter().enumerate() {
-            let num_lockouts = MAX_VOTE_HISTORY - 1 - i;
-            assert_eq!(
-                vote.lockout(),
-                INITIAL_LOCKOUT.pow(num_lockouts as u32) as u64
-            );
-        }
+        check_lockouts(&vote_state);
 
         // One more vote that confirms the entire stack,
         // the root_block should change to the
         // second vote
         let top_vote = vote_state.votes.front().unwrap().slot_height;
-        vote_state.process_vote(Vote::new(vote_state.votes.back().unwrap().lock_height()));
+        vote_state.process_vote(Vote::new(
+            vote_state.votes.back().unwrap().expiration_slot_height(),
+        ));
         assert_eq!(Some(top_vote), vote_state.root_block);
 
         // Expire everything except the first vote
-        let vote = Vote::new(vote_state.votes.front().unwrap().lock_height());
+        let vote = Vote::new(vote_state.votes.front().unwrap().expiration_slot_height());
         vote_state.process_vote(vote);
         // First vote and new vote are both stored for a total of 2 votes
         assert_eq!(vote_state.votes.len(), 2);
@@ -369,25 +365,18 @@ mod tests {
 
         // Check the lockouts for first and second votes. Lockouts should be
         // INITIAL_LOCKOUT^3 and INITIAL_LOCKOUT^2 respectively
-        assert_eq!(vote_state.votes[0].lockout(), INITIAL_LOCKOUT.pow(3) as u64);
-        assert_eq!(vote_state.votes[1].lockout(), INITIAL_LOCKOUT.pow(2) as u64);
+        check_lockouts(&vote_state);
 
         // Expire the third vote (which was a vote for slot 2). The height of the
         // vote stack is unchanged, so none of the previous votes should have
         // doubled in lockout
         vote_state.process_vote(Vote::new((2 + INITIAL_LOCKOUT + 1) as u64));
-
-        assert_eq!(vote_state.votes[0].lockout(), INITIAL_LOCKOUT.pow(3) as u64);
-        assert_eq!(vote_state.votes[1].lockout(), INITIAL_LOCKOUT.pow(2) as u64);
-        assert_eq!(vote_state.votes[2].lockout(), INITIAL_LOCKOUT as u64);
+        check_lockouts(&vote_state);
 
         // Vote again, this time the vote stack depth increases, so the lockouts should
         // double for everybody
         vote_state.process_vote(Vote::new((2 + INITIAL_LOCKOUT + 2) as u64));
-        assert_eq!(vote_state.votes[0].lockout(), INITIAL_LOCKOUT.pow(4) as u64);
-        assert_eq!(vote_state.votes[1].lockout(), INITIAL_LOCKOUT.pow(3) as u64);
-        assert_eq!(vote_state.votes[2].lockout(), INITIAL_LOCKOUT.pow(2) as u64);
-        assert_eq!(vote_state.votes[3].lockout(), INITIAL_LOCKOUT as u64);
+        check_lockouts(&vote_state);
     }
 
     #[test]
@@ -410,5 +399,15 @@ mod tests {
         assert_eq!(vote_state.credits(), 3);
         vote_state.clear_credits();
         assert_eq!(vote_state.credits(), 0);
+    }
+
+    fn check_lockouts(vote_state: &VoteState) {
+        for (i, vote) in vote_state.votes.iter().enumerate() {
+            let num_lockouts = vote_state.votes.len() - i;
+            assert_eq!(
+                vote.lockout(),
+                INITIAL_LOCKOUT.pow(num_lockouts as u32) as u64
+            );
+        }
     }
 }
