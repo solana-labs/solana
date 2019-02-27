@@ -105,7 +105,8 @@ impl LeaderConfirmationService {
     }
 
     /// Create a new LeaderConfirmationService for computing confirmation.
-    pub fn new(bank: Arc<Bank>, leader_id: Pubkey, exit: Arc<AtomicBool>) -> Self {
+    pub fn new(bank: &Arc<Bank>, leader_id: Pubkey, exit: Arc<AtomicBool>) -> Self {
+        let bank = bank.clone();
         let thread_hdl = Builder::new()
             .name("solana-leader-confirmation-service".to_string())
             .spawn(move || {

@@ -71,7 +71,7 @@ impl BankingStage {
 
         // Single thread to compute confirmation
         let leader_confirmation_service =
-            LeaderConfirmationService::new(bank.clone(), leader_id, exit.clone());
+            LeaderConfirmationService::new(&bank, leader_id, exit.clone());
 
         // Many banks that process transactions in parallel.
         let bank_thread_hdls: Vec<JoinHandle<UnprocessedPackets>> = (0..Self::num_threads())

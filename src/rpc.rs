@@ -35,8 +35,8 @@ impl JsonRpcRequestProcessor {
         })
     }
 
-    pub fn set_bank(&mut self, bank: Arc<Bank>) {
-        self.bank = Some(bank);
+    pub fn set_bank(&mut self, bank: &Arc<Bank>) {
+        self.bank = Some(bank.clone());
     }
 
     pub fn new(storage_state: StorageState) -> Self {
@@ -377,7 +377,7 @@ mod tests {
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
             StorageState::default(),
         )));
-        request_processor.write().unwrap().set_bank(bank);
+        request_processor.write().unwrap().set_bank(&bank);
         let cluster_info = Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default())));
         let leader = NodeInfo::new_with_socketaddr(&socketaddr!("127.0.0.1:1234"));
 
@@ -404,7 +404,7 @@ mod tests {
         let bob_pubkey = Keypair::new().pubkey();
         let bank = Arc::new(Bank::new(&genesis_block));
         let mut request_processor = JsonRpcRequestProcessor::new(StorageState::default());
-        request_processor.set_bank(bank.clone());
+        request_processor.set_bank(&bank);
         thread::spawn(move || {
             let last_id = bank.last_id();
             let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
@@ -573,7 +573,7 @@ mod tests {
         let meta = Meta {
             request_processor: {
                 let mut request_processor = JsonRpcRequestProcessor::new(StorageState::default());
-                request_processor.set_bank(bank);
+                request_processor.set_bank(&bank);
                 Arc::new(RwLock::new(request_processor))
             },
             cluster_info: Arc::new(RwLock::new(ClusterInfo::new(NodeInfo::default()))),
