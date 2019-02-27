@@ -445,28 +445,20 @@ impl Service for Fullnode {
     }
 }
 
-// Create entries such the node identified by active_keypair
-// will be added to the active set for leader selection:
-// 1) Give the node a nonzero number of tokens,
-// 2) A vote from the validator
+// Create entries such the node identified by active_keypair will be added to the active set for
+// leader selection, and append `num_ending_ticks` empty tick entries.
 pub fn make_active_set_entries(
     active_keypair: &Arc<Keypair>,
     token_source: &Keypair,
     stake: u64,
     slot_height_to_vote_on: u64,
-    last_entry_id: &Hash,
-    last_tick_id: &Hash,
+    last_id: &Hash,
     num_ending_ticks: u64,
 ) -> (Vec<Entry>, VotingKeypair) {
     // 1) Assume the active_keypair node has no tokens staked
-    let transfer_tx = SystemTransaction::new_account(
-        &token_source,
-        active_keypair.pubkey(),
-        stake,
-        *last_tick_id,
-        0,
-    );
-    let mut last_entry_id = *last_entry_id;
+    let transfer_tx =
+        SystemTransaction::new_account(&token_source, active_keypair.pubkey(), stake, *last_id, 0);
+    let mut last_entry_id = *last_id;
     let transfer_entry = next_entry_mut(&mut last_entry_id, 1, vec![transfer_tx]);
 
     // 2) Create and register a vote account for active_keypair
@@ -474,25 +466,25 @@ pub fn make_active_set_entries(
     let vote_account_id = voting_keypair.pubkey();
 
     let new_vote_account_tx =
-        VoteTransaction::new_account(active_keypair, vote_account_id, *last_tick_id, 1, 1);
+        VoteTransaction::new_account(active_keypair, vote_account_id, *last_id, 1, 1);
     let new_vote_account_entry = next_entry_mut(&mut last_entry_id, 1, vec![new_vote_account_tx]);
 
     // 3) Create vote entry
-    let vote_tx =
-        VoteTransaction::new_vote(&voting_keypair, slot_height_to_vote_on, *last_tick_id, 0);
+    let vote_tx = VoteTransaction::new_vote(&voting_keypair, slot_height_to_vote_on, *last_id, 0);
     let vote_entry = next_entry_mut(&mut last_entry_id, 1, vec![vote_tx]);
 
-    // 4) Create the ending empty ticks
-    let mut txs = vec![transfer_entry, new_vote_account_entry, vote_entry];
+    // 4) Create `num_ending_ticks` empty ticks
+    let mut entries = vec![transfer_entry, new_vote_account_entry, vote_entry];
     let empty_ticks = create_ticks(num_ending_ticks, last_entry_id);
-    txs.extend(empty_ticks);
-    (txs, voting_keypair)
+    entries.extend(empty_ticks);
+
+    (entries, voting_keypair)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::blocktree::{create_tmp_sample_blocktree, tmp_copy_blocktree};
+    use crate::blocktree::{create_new_tmp_ledger, tmp_copy_blocktree};
     use crate::entry::make_consecutive_blobs;
     use crate::streamer::responder;
     use solana_sdk::hash::Hash;
@@ -509,8 +501,8 @@ mod tests {
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
         let (genesis_block, _mint_keypair) =
             GenesisBlock::new_with_leader(10_000, leader_keypair.pubkey(), 1000);
-        let (validator_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
-            create_tmp_sample_blocktree("validator_exit", &genesis_block, 0);
+        let (validator_ledger_path, _last_id) =
+            create_new_tmp_ledger("validator_exit", &genesis_block).unwrap();
 
         let validator = Fullnode::new(
             validator_node,
@@ -536,17 +528,11 @@ mod tests {
                 let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
                 let (genesis_block, _mint_keypair) =
                     GenesisBlock::new_with_leader(10_000, leader_keypair.pubkey(), 1000);
-                let (
-                    validator_ledger_path,
-                    _tick_height,
-                    _last_entry_height,
-                    _last_id,
-                    _last_entry_id,
-                ) = create_tmp_sample_blocktree(
+                let (validator_ledger_path, _last_id) = create_new_tmp_ledger(
                     &format!("validator_parallel_exit_{}", i),
                     &genesis_block,
-                    0,
-                );
+                )
+                .unwrap();
                 ledger_paths.push(validator_ledger_path.clone());
                 Fullnode::new(
                     validator_node,
@@ -594,13 +580,8 @@ mod tests {
         genesis_block.ticks_per_slot = ticks_per_slot;
         genesis_block.slots_per_epoch = slots_per_epoch;
 
-        let (
-            bootstrap_leader_ledger_path,
-            _tick_height,
-            _genesis_entry_height,
-            _last_id,
-            _last_entry_id,
-        ) = create_tmp_sample_blocktree("test_leader_to_leader_transition", &genesis_block, 1);
+        let (bootstrap_leader_ledger_path, _last_id) =
+            create_new_tmp_ledger("test_leader_to_leader_transition", &genesis_block).unwrap();
 
         // Start the bootstrap leader
         let bootstrap_leader = Fullnode::new(
@@ -619,10 +600,6 @@ mod tests {
         // cluster it will continue to be the leader
         assert_eq!(
             rotation_receiver.recv().unwrap(),
-            (FullnodeReturnType::LeaderToLeaderRotation, 0)
-        );
-        assert_eq!(
-            rotation_receiver.recv().unwrap(),
             (FullnodeReturnType::LeaderToLeaderRotation, 1)
         );
         bootstrap_leader_exit();
@@ -630,7 +607,7 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn test_wrong_role_transition() {
+    fn test_ledger_role_transition() {
         solana_logger::setup();
 
         let fullnode_config = FullnodeConfig::default();
@@ -642,14 +619,11 @@ mod tests {
         let validator_keypair = Arc::new(Keypair::new());
         let (bootstrap_leader_node, validator_node, bootstrap_leader_ledger_path, _, _) =
             setup_leader_validator(
+                "test_wrong_role_transition",
                 &bootstrap_leader_keypair,
                 &validator_keypair,
-                0,
-                // Generate enough ticks for an epochs to flush the bootstrap_leader's vote at
-                // tick_height = 0 from the leader scheduler's active window
-                ticks_per_slot * slots_per_epoch,
-                "test_wrong_role_transition",
                 ticks_per_slot,
+                0,
             );
         let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
@@ -723,12 +697,11 @@ mod tests {
         let fullnode_config = FullnodeConfig::default();
         let (leader_node, validator_node, validator_ledger_path, ledger_initial_len, last_id) =
             setup_leader_validator(
+                "test_validator_to_leader_transition",
                 &leader_keypair,
                 &validator_keypair,
-                0,
-                0,
-                "test_validator_to_leader_transition",
                 ticks_per_slot,
+                0,
             );
 
         let leader_id = leader_keypair.pubkey();
@@ -800,50 +773,39 @@ mod tests {
     }
 
     fn setup_leader_validator(
+        test_name: &str,
         leader_keypair: &Arc<Keypair>,
         validator_keypair: &Arc<Keypair>,
-        num_genesis_ticks: u64,
-        num_ending_ticks: u64,
-        test_name: &str,
         ticks_per_slot: u64,
+        num_ending_slots: u64,
     ) -> (Node, Node, String, u64, Hash) {
         info!("validator: {}", validator_keypair.pubkey());
         info!("leader: {}", leader_keypair.pubkey());
-        // Make a leader identity
-        let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
 
-        // Create validator identity
-        assert!(num_genesis_ticks <= ticks_per_slot);
+        let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+        let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
         let (mut genesis_block, mint_keypair) =
             GenesisBlock::new_with_leader(10_000, leader_node.info.id, 500);
         genesis_block.ticks_per_slot = ticks_per_slot;
 
-        let (ledger_path, tick_height, mut entry_height, last_id, last_entry_id) =
-            create_tmp_sample_blocktree(test_name, &genesis_block, num_genesis_ticks);
+        let (ledger_path, last_id) = create_new_tmp_ledger(test_name, &genesis_block).unwrap();
 
-        let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
-
-        // Write two entries so that the validator is in the active set:
-        let (active_set_entries, _) = make_active_set_entries(
+        // Add entries so that the validator is in the active set, then finish up the slot with
+        // ticks (and maybe add extra slots full of empty ticks)
+        let (entries, _) = make_active_set_entries(
             validator_keypair,
             &mint_keypair,
             10,
             0,
-            &last_entry_id,
             &last_id,
-            num_ending_ticks,
+            ticks_per_slot * (num_ending_slots + 1),
         );
 
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
-        let active_set_entries_len = active_set_entries.len() as u64;
-        let last_id = active_set_entries.last().unwrap().id;
-
-        blocktree
-            .write_entries(0, tick_height, entry_height, active_set_entries)
-            .unwrap();
-
-        entry_height += active_set_entries_len;
+        let last_id = entries.last().unwrap().id;
+        let entry_height = ticks_per_slot + entries.len() as u64;
+        blocktree.write_entries(1, 0, 0, entries).unwrap();
 
         (
             leader_node,

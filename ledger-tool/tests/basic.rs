@@ -1,5 +1,5 @@
 use assert_cmd::prelude::*;
-use solana::blocktree::create_tmp_sample_blocktree;
+use solana::blocktree::create_new_tmp_ledger;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::process::Command;
@@ -34,12 +34,10 @@ fn nominal() {
     let keypair = Arc::new(Keypair::new());
     let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(100, keypair.pubkey(), 50);
     let ticks_per_slot = genesis_block.ticks_per_slot;
-    let (ledger_path, tick_height, _last_entry_height, _last_id, _last_entry_id) =
-        create_tmp_sample_blocktree(
-            "test_ledger_tool_nominal",
-            &genesis_block,
-            ticks_per_slot - 2,
-        );
+
+    let (ledger_path, _last_id) =
+        create_new_tmp_ledger("test_ledger_tool_nominal", &genesis_block).unwrap();
+    let ticks = ticks_per_slot as usize;
 
     // Basic validation
     let output = run_ledger_tool(&["-l", &ledger_path, "verify"]);
@@ -48,7 +46,7 @@ fn nominal() {
     // Print everything
     let output = run_ledger_tool(&["-l", &ledger_path, "print"]);
     assert!(output.status.success());
-    assert_eq!(count_newlines(&output.stdout), tick_height as usize);
+    assert_eq!(count_newlines(&output.stdout), ticks);
 
     // Only print the first 5 items
     let output = run_ledger_tool(&["-l", &ledger_path, "-n", "5", "print"]);
@@ -58,7 +56,7 @@ fn nominal() {
     // Skip entries with no hashes
     let output = run_ledger_tool(&["-l", &ledger_path, "-h", "1", "print"]);
     assert!(output.status.success());
-    assert_eq!(count_newlines(&output.stdout), tick_height as usize);
+    assert_eq!(count_newlines(&output.stdout), ticks);
 
     // Skip entries with fewer than 2 hashes (skip everything)
     let output = run_ledger_tool(&["-l", &ledger_path, "-h", "2", "print"]);

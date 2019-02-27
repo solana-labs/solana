@@ -448,7 +448,7 @@ impl Service for StorageStage {
 
 #[cfg(test)]
 mod tests {
-    use crate::blocktree::{create_tmp_sample_blocktree, Blocktree};
+    use crate::blocktree::{create_new_tmp_ledger, Blocktree};
     use crate::cluster_info::{ClusterInfo, NodeInfo};
     use crate::entry::{make_tiny_test_entries, Entry, EntryMeta};
     use crate::service::Service;
@@ -509,14 +509,12 @@ mod tests {
 
         let (genesis_block, _mint_keypair) = GenesisBlock::new(1000);
         let ticks_per_slot = genesis_block.ticks_per_slot;
-        let (ledger_path, tick_height, genesis_entry_height, _last_id, _last_entry_id) =
-            create_tmp_sample_blocktree("storage_stage_process_entries", &genesis_block, 1);
+        let (ledger_path, _last_id) =
+            create_new_tmp_ledger("storage_stage_process_entries", &genesis_block).unwrap();
 
         let entries = make_tiny_test_entries(64);
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
-        blocktree
-            .write_entries(0, tick_height, genesis_entry_height, &entries)
-            .unwrap();
+        blocktree.write_entries(1, 0, 0, &entries).unwrap();
 
         let cluster_info = test_cluster_info(keypair.pubkey());
 
@@ -575,14 +573,12 @@ mod tests {
 
         let (genesis_block, _mint_keypair) = GenesisBlock::new(1000);
         let ticks_per_slot = genesis_block.ticks_per_slot;;
-        let (ledger_path, tick_height, genesis_entry_height, _last_id, _last_entry_id) =
-            create_tmp_sample_blocktree("storage_stage_process_entries", &genesis_block, 1);
+        let (ledger_path, _last_id) =
+            create_new_tmp_ledger("storage_stage_process_entries", &genesis_block).unwrap();
 
         let entries = make_tiny_test_entries(128);
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
-        blocktree
-            .write_entries(0, tick_height, genesis_entry_height, &entries)
-            .unwrap();
+        blocktree.write_entries(1, 0, 0, &entries).unwrap();
 
         let cluster_info = test_cluster_info(keypair.pubkey());
 
