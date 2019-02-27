@@ -234,7 +234,7 @@ impl BroadcastService {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         slot_height: u64,
-        bank: Arc<Bank>,
+        bank: &Arc<Bank>,
         sock: UdpSocket,
         cluster_info: Arc<RwLock<ClusterInfo>>,
         blob_index: u64,
@@ -244,6 +244,7 @@ impl BroadcastService {
     ) -> Self {
         let exit_signal = Arc::new(AtomicBool::new(false));
         let blocktree = blocktree.clone();
+        let bank = bank.clone();
         let thread_hdl = Builder::new()
             .name("solana-broadcaster".to_string())
             .spawn(move || {
@@ -322,7 +323,7 @@ mod test {
         // Start up the broadcast stage
         let broadcast_service = BroadcastService::new(
             slot_height,
-            bank.clone(),
+            &bank,
             leader_info.sockets.broadcast,
             cluster_info,
             blob_index,

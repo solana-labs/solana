@@ -189,7 +189,7 @@ impl Tpu {
     #[allow(clippy::too_many_arguments)]
     pub fn switch_to_leader(
         &mut self,
-        bank: Arc<Bank>,
+        bank: &Arc<Bank>,
         poh_recorder: &Arc<Mutex<PohRecorder>>,
         transactions_sockets: Vec<UdpSocket>,
         broadcast_socket: UdpSocket,

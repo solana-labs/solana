@@ -283,7 +283,7 @@ impl Fullnode {
             // TODO: This is not the correct bank.  Instead TVU should pass along the
             // frozen Bank for each completed block for RPC to use from it's notion of the "best"
             // available fork (until we want to surface multiple forks to RPC)
-            rpc_service.set_bank(self.bank_forks.read().unwrap().working_bank());
+            rpc_service.set_bank(&self.bank_forks.read().unwrap().working_bank());
         }
 
         if rotation_info.leader_id == self.id {
@@ -307,7 +307,7 @@ impl Fullnode {
                 }
             };
             self.node_services.tpu.switch_to_leader(
-                self.bank_forks.read().unwrap().working_bank(),
+                &self.bank_forks.read().unwrap().working_bank(),
                 &self.poh_recorder,
                 self.tpu_sockets
                     .iter()

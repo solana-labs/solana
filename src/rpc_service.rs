@@ -71,7 +71,7 @@ impl JsonRpcService {
         }
     }
 
-    pub fn set_bank(&mut self, bank: Arc<Bank>) {
+    pub fn set_bank(&mut self, bank: &Arc<Bank>) {
         self.request_processor.write().unwrap().set_bank(bank);
     }
 
@@ -117,7 +117,7 @@ mod tests {
         );
         let mut rpc_service =
             JsonRpcService::new(&cluster_info, rpc_addr, drone_addr, StorageState::default());
-        rpc_service.set_bank(Arc::new(bank));
+        rpc_service.set_bank(&Arc::new(bank));
         let thread = rpc_service.thread_hdl.thread();
         assert_eq!(thread.name().unwrap(), "solana-jsonrpc");
 
