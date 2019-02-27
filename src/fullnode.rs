@@ -8,7 +8,7 @@ use crate::entry::create_ticks;
 use crate::entry::next_entry_mut;
 use crate::entry::Entry;
 use crate::gossip_service::GossipService;
-use crate::leader_scheduler1::LeaderScheduler1;
+use crate::leader_scheduler::LeaderScheduler;
 use crate::poh_recorder::PohRecorder;
 use crate::poh_service::{PohService, PohServiceConfig};
 use crate::rpc_pubsub_service::PubSubService;
@@ -297,7 +297,7 @@ impl Fullnode {
                 }
                 None => {
                     let bank = self.bank_forks.read().unwrap().working_bank();
-                    if LeaderScheduler1::default().prev_slot_leader(&bank) == self.id {
+                    if LeaderScheduler::default().prev_slot_leader(&bank) == self.id {
                         FullnodeReturnType::LeaderToLeaderRotation
                     } else {
                         FullnodeReturnType::ValidatorToLeaderRotation

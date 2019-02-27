@@ -5,7 +5,7 @@ use crate::blocktree::Blocktree;
 use crate::blocktree_processor::{self, BankForksInfo};
 use crate::cluster_info::ClusterInfo;
 use crate::entry::{Entry, EntryMeta, EntryReceiver, EntrySender, EntrySlice};
-use crate::leader_scheduler1::LeaderScheduler1;
+use crate::leader_scheduler::LeaderScheduler;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
 use crate::rpc_subscriptions::RpcSubscriptions;
@@ -89,8 +89,8 @@ impl ReplayStage {
 
         let num_ticks = bank.tick_height();
         let slot_height = bank.slot_height();
-        let leader_id = LeaderScheduler1::default().slot_leader(bank);
-        let mut num_ticks_to_next_vote = LeaderScheduler1::num_ticks_left_in_slot(bank, num_ticks);
+        let leader_id = LeaderScheduler::default().slot_leader(bank);
+        let mut num_ticks_to_next_vote = LeaderScheduler::num_ticks_left_in_slot(bank, num_ticks);
 
         let mut entry_tick_height = num_ticks;
         let mut entries_with_meta = Vec::new();
@@ -216,7 +216,7 @@ impl ReplayStage {
             let slot = (tick_height + 1) / bank.ticks_per_slot();
             let first_tick_in_slot = slot * bank.ticks_per_slot();
 
-            let leader_id = LeaderScheduler1::default().slot_leader_at(slot, &bank);
+            let leader_id = LeaderScheduler::default().slot_leader_at(slot, &bank);
             trace!("node {:?} scheduled as leader for slot {}", leader_id, slot,);
 
             let old_bank = bank.clone();
@@ -242,7 +242,7 @@ impl ReplayStage {
                 .unwrap();
 
             let max_tick_height_for_slot = first_tick_in_slot
-                + LeaderScheduler1::num_ticks_left_in_slot(&bank, first_tick_in_slot);
+                + LeaderScheduler::num_ticks_left_in_slot(&bank, first_tick_in_slot);
 
             (Some(slot), leader_id, max_tick_height_for_slot)
         };
@@ -346,10 +346,7 @@ impl ReplayStage {
                         let (leader_id, next_slot) = {
                             let slot = (current_tick_height + 1) / bank.ticks_per_slot();
 
-                            (
-                                LeaderScheduler1::default().slot_leader_at(slot, &bank),
-                                slot,
-                            )
+                            (LeaderScheduler::default().slot_leader_at(slot, &bank), slot)
                         };
 
                         // If we were the leader for the last slot update the last id b/c we

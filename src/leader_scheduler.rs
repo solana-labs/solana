@@ -8,9 +8,9 @@ use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 
 #[derive(Default)]
-pub struct LeaderScheduler1 {}
+pub struct LeaderScheduler {}
 
-impl LeaderScheduler1 {
+impl LeaderScheduler {
     /// Return the leader schedule for the given epoch.
     fn leader_schedule(&self, epoch_height: u64, bank: &Bank) -> LeaderSchedule {
         let stakes = bank.staked_nodes_at_epoch(epoch_height);
@@ -122,20 +122,20 @@ mod tests {
         let pubkey = Keypair::new().pubkey();
         let genesis_block = GenesisBlock::new_with_leader(2, pubkey, 2).0;
         let bank = Bank::new(&genesis_block);
-        let leader_scheduler = LeaderScheduler1::default();
+        let leader_scheduler = LeaderScheduler::default();
         assert_eq!(leader_scheduler.slot_leader(&bank), pubkey);
     }
 
     #[test]
     fn test_leader_scheduler1_prev_slot_leader_index() {
-        assert_eq!(LeaderScheduler1::prev_slot_leader_index(0, 0, 2), (0, 0));
-        assert_eq!(LeaderScheduler1::prev_slot_leader_index(1, 0, 2), (0, 0));
-        assert_eq!(LeaderScheduler1::prev_slot_leader_index(0, 1, 2), (1, 0));
+        assert_eq!(LeaderScheduler::prev_slot_leader_index(0, 0, 2), (0, 0));
+        assert_eq!(LeaderScheduler::prev_slot_leader_index(1, 0, 2), (0, 0));
+        assert_eq!(LeaderScheduler::prev_slot_leader_index(0, 1, 2), (1, 0));
     }
 
     #[test]
     fn test_leader_scheduler1_next_slot_leader_index() {
-        assert_eq!(LeaderScheduler1::next_slot_leader_index(0, 0, 2), (1, 0));
-        assert_eq!(LeaderScheduler1::next_slot_leader_index(1, 0, 2), (0, 1));
+        assert_eq!(LeaderScheduler::next_slot_leader_index(0, 0, 2), (1, 0));
+        assert_eq!(LeaderScheduler::next_slot_leader_index(1, 0, 2), (0, 1));
     }
 }
