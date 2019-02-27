@@ -8,7 +8,7 @@ use crate::entry::create_ticks;
 use crate::entry::next_entry_mut;
 use crate::entry::Entry;
 use crate::gossip_service::GossipService;
-use crate::leader_scheduler::LeaderScheduler;
+use crate::leader_schedule_utils;
 use crate::poh_recorder::PohRecorder;
 use crate::poh_service::{PohService, PohServiceConfig};
 use crate::rpc_pubsub_service::PubSubService;
@@ -279,7 +279,7 @@ impl Fullnode {
             rotation_info.leader_id,
             rotation_info.last_entry_id,
         );
-        let was_leader = LeaderScheduler::default().slot_leader(&rotation_info.bank) == self.id;
+        let was_leader = leader_schedule_utils::slot_leader(&rotation_info.bank) == self.id;
 
         if let Some(ref mut rpc_service) = self.rpc_service {
             // TODO: This is not the correct bank.  Instead TVU should pass along the

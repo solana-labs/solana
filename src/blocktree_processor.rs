@@ -1,7 +1,7 @@
 use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
 use crate::entry::{Entry, EntrySlice};
-use crate::leader_scheduler::LeaderScheduler;
+use crate::leader_schedule_utils;
 use rayon::prelude::*;
 use solana_metrics::counter::Counter;
 use solana_runtime::bank::{Bank, BankError, Result};
@@ -180,7 +180,8 @@ pub fn process_blocktree(
             entry_height += entries.len() as u64;
         }
 
-        let slot_complete = LeaderScheduler::num_ticks_left_in_slot(&bank, bank.tick_height()) == 0;
+        let slot_complete =
+            leader_schedule_utils::num_ticks_left_in_slot(&bank, bank.tick_height()) == 0;
 
         if !slot_complete || meta.next_slots.is_empty() {
             // Reached the end of this fork.  Record the final entry height and last entry id
@@ -202,7 +203,7 @@ pub fn process_blocktree(
 
         // This is a fork point, create a new child bank for each fork
         pending_slots.extend(meta.next_slots.iter().map(|next_slot| {
-            let leader = LeaderScheduler::default().slot_leader_at(*next_slot, &bank);
+            let leader = leader_schedule_utils::slot_leader_at(*next_slot, &bank);
             let child_bank = Bank::new_from_parent_and_id(&bank, leader, *next_slot);
             trace!("Add child bank for slot={}", next_slot);
             bank_forks.insert(*next_slot, child_bank);
