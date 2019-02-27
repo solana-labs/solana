@@ -100,6 +100,7 @@ members = [
     "programs/native/bpf_loader",
     "programs/native/budget",
     "programs/native/erc20",
+    "programs/native/failure",
     "programs/native/native_loader",
     "programs/native/noop",
     "programs/native/rewards",

@@ -27,3 +27,4 @@ solana-sdk = { path = "../sdk", version = "0.12.0" }
 
 [dev-dependencies]
 solana-noop = { path = "native/noop", version = "0.12.0" }
+solana-failure = { path = "native/failure", version = "0.12.0" }

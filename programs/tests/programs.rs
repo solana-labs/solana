@@ -1,7 +1,9 @@
 use solana_runtime::bank::Bank;
+use solana_runtime::bank::BankError;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::loader_transaction::LoaderTransaction;
 use solana_sdk::native_loader;
+use solana_sdk::native_program::ProgramError;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
@@ -20,6 +22,7 @@ fn load_program(bank: &Bank, from: &Keypair, loader_id: Pubkey, program: Vec<u8>
         0,
     );
     bank.process_transaction(&tx).unwrap();
+    assert_eq!(bank.get_signature_status(&tx.signatures[0]), Some(Ok(())));
 
     let chunk_size = 256; // Size of chunk just needs to fit into tx
     let mut offset = 0;
@@ -38,6 +41,7 @@ fn load_program(bank: &Bank, from: &Keypair, loader_id: Pubkey, program: Vec<u8>
 
     let tx = LoaderTransaction::new_finalize(&program_account, loader_id, bank.last_id(), 0);
     bank.process_transaction(&tx).unwrap();
+    assert_eq!(bank.get_signature_status(&tx.signatures[0]), Some(Ok(())));
 
     program_account.pubkey()
 }
@@ -55,6 +59,26 @@ fn test_program_native_noop() {
     // Call user program
     let tx = Transaction::new(&mint_keypair, &[], program_id, &1u8, bank.last_id(), 0);
     bank.process_transaction(&tx).unwrap();
+    assert_eq!(bank.get_signature_status(&tx.signatures[0]), Some(Ok(())));
+}
+
+#[test]
+fn test_program_native_failure() {
+    solana_logger::setup();
+
+    let (genesis_block, mint_keypair) = GenesisBlock::new(50);
+    let bank = Bank::new(&genesis_block);
+
+    let program = "failure".as_bytes().to_vec();
+    let program_id = load_program(&bank, &mint_keypair, native_loader::id(), program);
+
+    // Call user program
+    let tx = Transaction::new(&mint_keypair, &[], program_id, &1u8, bank.last_id(), 0);
+    bank.process_transaction(&tx).unwrap();
+    assert_eq!(
+        bank.get_signature_status(&tx.signatures[0]),
+        Some(Err(BankError::ProgramError(0, ProgramError::GenericError)))
+    );
 }
 
 #[cfg(feature = "bpf_c")]
@@ -107,6 +131,7 @@ fn test_program_bpf_c_noop() {
         0,
     );
     bank.process_transaction(&tx).unwrap();
+    assert_eq!(bank.get_signature_status(&tx.signatures[0]), Some(Ok(())));
 }
 
 #[cfg(feature = "bpf_c")]
@@ -150,6 +175,7 @@ fn test_program_bpf_c() {
             0,
         );
         bank.process_transaction(&tx).unwrap();
+        assert_eq!(bank.get_signature_status(&tx.signatures[0]), Some(Ok(())));
     }
 }
 
@@ -189,5 +215,6 @@ fn test_program_bpf_rust() {
             0,
         );
         bank.process_transaction(&tx).unwrap();
+        assert_eq!(bank.get_signature_status(&tx.signatures[0]), Some(Ok(())));
     }
 }
