@@ -23,7 +23,7 @@ use crate::retransmit_stage::RetransmitStage;
 use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::storage_stage::{StorageStage, StorageState};
-use solana_runtime::bank::Bank;
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
@@ -33,7 +33,8 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 
 pub struct TvuRotationInfo {
-    pub bank: Arc<Bank>,   // Bank to use
+    pub tick_height: u64,  // tick height, bank might not exist yet
+    pub last_id: Hash,     // last_id that was voted on
     pub slot: u64,         // slot height to initiate a rotation
     pub leader_id: Pubkey, // leader upon rotation
 }

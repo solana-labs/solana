@@ -63,6 +63,7 @@ impl PohRecorder {
     }
 
     pub fn set_working_bank(&mut self, working_bank: WorkingBank) {
+        trace!("new working bank");
         self.working_bank = Some(working_bank);
     }
 
@@ -94,8 +95,9 @@ impl PohRecorder {
             .take_while(|x| x.1 <= working_bank.max_tick_height)
             .count();
         let e = if cnt > 0 {
-            trace!(
-                "flush_cache: {} {} sending: {}",
+            debug!(
+                "flush_cache: bank_id: {} tick_height: {} max: {} sending: {}",
+                working_bank.bank.slot(),
                 working_bank.bank.tick_height(),
                 working_bank.max_tick_height,
                 cnt,

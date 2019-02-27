@@ -8,7 +8,6 @@ use crate::entry::create_ticks;
 use crate::entry::next_entry_mut;
 use crate::entry::Entry;
 use crate::gossip_service::GossipService;
-use crate::leader_schedule_utils;
 use crate::poh_recorder::PohRecorder;
 use crate::poh_service::{PohService, PohServiceConfig};
 use crate::rpc_pubsub_service::PubSubService;
@@ -59,14 +58,6 @@ impl NodeServices {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum FullnodeReturnType {
-    LeaderToValidatorRotation,
-    ValidatorToLeaderRotation,
-    LeaderToLeaderRotation,
-    ValidatorToValidatorRotation,
-}
-
 pub struct FullnodeConfig {
     pub sigverify_disabled: bool,
     pub voting_disabled: bool,
@@ -106,6 +97,7 @@ pub struct Fullnode {
     blocktree: Arc<Blocktree>,
     poh_service: PohService,
     poh_recorder: Arc<Mutex<PohRecorder>>,
+    bank_forks: Arc<RwLock<BankForks>>,
 }
 
 impl Fullnode {
@@ -262,35 +254,36 @@ impl Fullnode {
             blocktree,
             poh_service,
             poh_recorder,
+            bank_forks,
         }
     }
 
-    fn rotate(&mut self, rotation_info: TvuRotationInfo) -> FullnodeReturnType {
+    fn rotate(&mut self, rotation_info: TvuRotationInfo) {
         trace!(
             "{:?}: rotate for slot={} to leader={:?}",
             self.id,
             rotation_info.slot,
             rotation_info.leader_id,
         );
-        let was_leader = leader_schedule_utils::slot_leader(&rotation_info.bank) == self.id;
 
         if let Some(ref mut rpc_service) = self.rpc_service {
             // TODO: This is not the correct bank.  Instead TVU should pass along the
             // frozen Bank for each completed block for RPC to use from it's notion of the "best"
             // available fork (until we want to surface multiple forks to RPC)
-            rpc_service.set_bank(&rotation_info.bank);
+            rpc_service.set_bank(&self.bank_forks.read().unwrap().working_bank());
         }
 
         if rotation_info.leader_id == self.id {
-            let transition = if was_leader {
-                debug!("{:?} remaining in leader role", self.id);
-                FullnodeReturnType::LeaderToLeaderRotation
-            } else {
-                debug!("{:?} rotating to leader role", self.id);
-                FullnodeReturnType::ValidatorToLeaderRotation
-            };
+            debug!("{:?} rotating to leader role", self.id);
+            let tpu_bank = self
+                .bank_forks
+                .read()
+                .unwrap()
+                .get(rotation_info.slot)
+                .unwrap()
+                .clone();
             self.node_services.tpu.switch_to_leader(
-                &rotation_info.bank,
+                &tpu_bank,
                 &self.poh_recorder,
                 self.tpu_sockets
                     .iter()
@@ -303,15 +296,7 @@ impl Fullnode {
                 rotation_info.slot,
                 &self.blocktree,
             );
-            transition
         } else {
-            let transition = if was_leader {
-                debug!("{:?} rotating to validator role", self.id);
-                FullnodeReturnType::LeaderToValidatorRotation
-            } else {
-                debug!("{:?} remaining in validator role", self.id);
-                FullnodeReturnType::ValidatorToValidatorRotation
-            };
             self.node_services.tpu.switch_to_forwarder(
                 rotation_info.leader_id,
                 self.tpu_sockets
@@ -319,7 +304,6 @@ impl Fullnode {
                     .map(|s| s.try_clone().expect("Failed to clone TPU sockets"))
                     .collect(),
             );
-            transition
         }
     }
 
@@ -327,7 +311,7 @@ impl Fullnode {
     // node to exit.
     pub fn start(
         mut self,
-        rotation_notifier: Option<Sender<(FullnodeReturnType, u64)>>,
+        rotation_notifier: Option<Sender<u64>>,
     ) -> (JoinHandle<()>, Arc<AtomicBool>, Receiver<bool>) {
         let (sender, receiver) = channel();
         let exit = self.exit.clone();
@@ -345,15 +329,19 @@ impl Fullnode {
                     trace!("{:?}: rotate at slot={}", self.id, rotation_info.slot);
                     //TODO: this will be called by the TVU every time it votes
                     //instead of here
-                    self.poh_recorder.lock().unwrap().reset(
-                        rotation_info.bank.tick_height(),
-                        rotation_info.bank.last_id(),
+                    info!(
+                        "reset PoH... {} {}",
+                        rotation_info.tick_height, rotation_info.last_id
                     );
+                    self.poh_recorder
+                        .lock()
+                        .unwrap()
+                        .reset(rotation_info.tick_height, rotation_info.last_id);
                     let slot = rotation_info.slot;
-                    let transition = self.rotate(rotation_info);
-                    debug!("role transition complete: {:?}", transition);
+                    self.rotate(rotation_info);
+                    debug!("role transition complete");
                     if let Some(ref rotation_notifier) = rotation_notifier {
-                        rotation_notifier.send((transition, slot)).unwrap();
+                        rotation_notifier.send(slot).unwrap();
                     }
                 }
                 Err(RecvTimeoutError::Timeout) => continue,
@@ -363,10 +351,7 @@ impl Fullnode {
         (handle, exit, receiver)
     }
 
-    pub fn run(
-        self,
-        rotation_notifier: Option<Sender<(FullnodeReturnType, u64)>>,
-    ) -> impl FnOnce() {
+    pub fn run(self, rotation_notifier: Option<Sender<u64>>) -> impl FnOnce() {
         let (_, exit, receiver) = self.start(rotation_notifier);
         move || {
             exit.store(true, Ordering::Relaxed);
@@ -592,10 +577,7 @@ mod tests {
 
         // Wait for the bootstrap leader to transition.  Since there are no other nodes in the
         // cluster it will continue to be the leader
-        assert_eq!(
-            rotation_receiver.recv().unwrap(),
-            (FullnodeReturnType::LeaderToLeaderRotation, 1)
-        );
+        assert_eq!(rotation_receiver.recv().unwrap(), 1);
         bootstrap_leader_exit();
     }
 
@@ -638,13 +620,7 @@ mod tests {
             );
             let (rotation_sender, rotation_receiver) = channel();
             let bootstrap_leader_exit = bootstrap_leader.run(Some(rotation_sender));
-            assert_eq!(
-                rotation_receiver.recv().unwrap(),
-                (
-                    FullnodeReturnType::LeaderToValidatorRotation,
-                    DEFAULT_SLOTS_PER_EPOCH
-                )
-            );
+            assert_eq!(rotation_receiver.recv().unwrap(), (DEFAULT_SLOTS_PER_EPOCH));
 
             // Test that a node knows to transition to a leader based on parsing the ledger
             let validator = Fullnode::new(
@@ -658,13 +634,7 @@ mod tests {
 
             let (rotation_sender, rotation_receiver) = channel();
             let validator_exit = validator.run(Some(rotation_sender));
-            assert_eq!(
-                rotation_receiver.recv().unwrap(),
-                (
-                    FullnodeReturnType::ValidatorToLeaderRotation,
-                    DEFAULT_SLOTS_PER_EPOCH
-                )
-            );
+            assert_eq!(rotation_receiver.recv().unwrap(), (DEFAULT_SLOTS_PER_EPOCH));
 
             validator_exit();
             bootstrap_leader_exit();
@@ -741,10 +711,7 @@ mod tests {
         let (rotation_sender, rotation_receiver) = channel();
         let validator_exit = validator.run(Some(rotation_sender));
         let rotation = rotation_receiver.recv().unwrap();
-        assert_eq!(
-            rotation,
-            (FullnodeReturnType::ValidatorToLeaderRotation, blobs_to_send)
-        );
+        assert_eq!(rotation, blobs_to_send);
 
         // Close the validator so that rocksdb has locks available
         validator_exit();

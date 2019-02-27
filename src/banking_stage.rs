@@ -474,6 +474,7 @@ mod tests {
         poh_service.close().unwrap();
     }
     #[test]
+    #[ignore] //flaky
     fn test_banking_stage_entryfication() {
         // In this attack we'll demonstrate that a verifier can interpret the ledger
         // differently if either the server doesn't signal the ledger to add an
