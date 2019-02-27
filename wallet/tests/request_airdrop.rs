@@ -8,7 +8,7 @@ use std::sync::mpsc::channel;
 
 #[test]
 fn test_wallet_request_airdrop() {
-    let (server, leader_data, alice, ledger_path) = new_fullnode("test_wallet_request_airdrop");
+    let (server, leader_data, alice, ledger_path) = new_fullnode();
     let server_exit = server.run(None);
     let (sender, receiver) = channel();
     run_local_drone(alice, sender);
