@@ -27,6 +27,23 @@ impl BankForks {
             working_bank,
         }
     }
+    pub fn frozen_banks(&self) -> HashMap<u64, Arc<Bank>> {
+        let mut frozen_banks: Vec<Arc<Bank>> = vec![];
+        frozen_banks.extend(self.banks.values().filter(|v| v.is_frozen()).cloned());
+        frozen_banks.extend(
+            self.banks
+                .iter()
+                .flat_map(|(_, v)| v.parents())
+                .filter(|v| v.is_frozen()),
+        );
+        frozen_banks.into_iter().map(|b| (b.slot(), b)).collect()
+    }
+    pub fn active_banks(&self) -> Vec<u64> {
+        self.banks.iter().map(|(k, _v)| *k).collect()
+    }
+    pub fn get(&self, bank_id: u64) -> Option<&Arc<Bank>> {
+        self.banks.get(&bank_id)
+    }
 
     pub fn new_from_banks(initial_banks: &[Arc<Bank>]) -> Self {
         let mut banks = HashMap::new();
@@ -82,4 +99,26 @@ mod tests {
         assert_eq!(bank_forks[1u64].tick_height(), 1);
         assert_eq!(bank_forks.working_bank().tick_height(), 1);
     }
+
+    #[test]
+    fn test_bank_forks_frozen_banks() {
+        let (genesis_block, _) = GenesisBlock::new(10_000);
+        let bank = Bank::new(&genesis_block);
+        let mut bank_forks = BankForks::new(0, bank);
+        let child_bank = Bank::new_from_parent(&bank_forks[0u64], Pubkey::default(), 1);
+        bank_forks.insert(1, child_bank);
+        assert!(bank_forks.frozen_banks().get(&0).is_some());
+        assert!(bank_forks.frozen_banks().get(&1).is_none());
+    }
+
+    #[test]
+    fn test_bank_forks_active_banks() {
+        let (genesis_block, _) = GenesisBlock::new(10_000);
+        let bank = Bank::new(&genesis_block);
+        let mut bank_forks = BankForks::new(0, bank);
+        let child_bank = Bank::new_from_parent(&bank_forks[0u64], Pubkey::default(), 1);
+        bank_forks.insert(1, child_bank);
+        assert_eq!(bank_forks.active_banks(), vec![1]);
+    }
+
 }

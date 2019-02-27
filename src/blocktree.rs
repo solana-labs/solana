@@ -850,6 +850,7 @@ impl Blocktree {
             max_missing,
         )
     }
+
     /// Returns the entry vector for the slot starting with `blob_start_index`
     pub fn get_slot_entries(
         &self,
@@ -857,17 +858,10 @@ impl Blocktree {
         blob_start_index: u64,
         max_entries: Option<u64>,
     ) -> Result<Vec<Entry>> {
-        // Find the next consecutive block of blobs.
-        let consecutive_blobs = self.get_slot_consecutive_blobs(
-            slot_height,
-            &HashMap::new(),
-            blob_start_index,
-            max_entries,
-        )?;
-        Ok(Self::deserialize_blobs(&consecutive_blobs))
+        self.get_slot_entries_with_blob_count(slot_height, blob_start_index, max_entries)
+            .map(|x| x.0)
     }
 
-    /// Returns the entry vector for the slot starting with `blob_start_index`
     pub fn get_slot_entries_with_blob_count(
         &self,
         slot_height: u64,
