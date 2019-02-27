@@ -425,7 +425,7 @@ fn process_deploy(
         0,
     );
     trace!("Creating program account");
-    send_and_confirm_tx(&rpc_client, &mut tx, &config.id).map_err(|_| {
+    send_and_confirm_transaction(&rpc_client, &mut tx, &config.id).map_err(|_| {
         WalletError::DynamicProgramError("Program allocate space failed".to_string())
     })?;
 
@@ -449,7 +449,7 @@ fn process_deploy(
     trace!("Finalizing program account");
     let last_id = get_last_id(&rpc_client)?;
     let mut tx = LoaderTransaction::new_finalize(&program_id, bpf_loader::id(), last_id, 0);
-    send_and_confirm_tx(&rpc_client, &mut tx, &program_id).map_err(|_| {
+    send_and_confirm_transaction(&rpc_client, &mut tx, &program_id).map_err(|_| {
         WalletError::DynamicProgramError("Program finalize transaction failed".to_string())
     })?;
 
@@ -473,7 +473,7 @@ fn process_pay(
 
     if timestamp == None && *witnesses == None {
         let mut tx = SystemTransaction::new_account(&config.id, to, tokens, last_id, 0);
-        let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
+        let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
         Ok(signature_str.to_string())
     } else if *witnesses == None {
         let dt = timestamp.unwrap();
@@ -496,7 +496,7 @@ fn process_pay(
             budget_program_id,
             0,
         );
-        send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
+        send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
 
         // Create account for contract state
         let mut tx = SystemTransaction::new_program_account(
@@ -508,7 +508,7 @@ fn process_pay(
             budget_program_id,
             0,
         );
-        send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
+        send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
 
         // Initializing contract
         let mut tx = BudgetTransaction::new_on_date(
@@ -521,7 +521,7 @@ fn process_pay(
             tokens,
             last_id,
         );
-        let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
+        let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
 
         Ok(json!({
             "signature": signature_str,
@@ -553,7 +553,7 @@ fn process_pay(
             budget_program_id,
             0,
         );
-        send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
+        send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
 
         // Create account for contract state
         let mut tx = SystemTransaction::new_program_account(
@@ -565,7 +565,7 @@ fn process_pay(
             budget_program_id,
             0,
         );
-        send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
+        send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
 
         // Initializing contract
         let mut tx = BudgetTransaction::new_when_signed(
@@ -577,7 +577,7 @@ fn process_pay(
             tokens,
             last_id,
         );
-        let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
+        let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
 
         Ok(json!({
             "signature": signature_str,
@@ -592,7 +592,7 @@ fn process_pay(
 fn process_cancel(rpc_client: &RpcClient, config: &WalletConfig, pubkey: Pubkey) -> ProcessResult {
     let last_id = get_last_id(&rpc_client)?;
     let mut tx = BudgetTransaction::new_signature(&config.id, pubkey, config.id.pubkey(), last_id);
-    let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
+    let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
     Ok(signature_str.to_string())
 }
 
@@ -625,7 +625,7 @@ fn process_time_elapsed(
     let last_id = get_last_id(&rpc_client)?;
 
     let mut tx = BudgetTransaction::new_timestamp(&config.id, pubkey, to, dt, last_id);
-    let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
+    let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
 
     Ok(signature_str.to_string())
 }
@@ -645,7 +645,7 @@ fn process_witness(
 
     let last_id = get_last_id(&rpc_client)?;
     let mut tx = BudgetTransaction::new_signature(&config.id, pubkey, to, last_id);
-    let signature_str = send_and_confirm_tx(&rpc_client, &mut tx, &config.id)?;
+    let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
 
     Ok(signature_str.to_string())
 }
@@ -760,8 +760,11 @@ fn get_next_last_id(
     }
 }
 
-fn send_tx(rpc_client: &RpcClient, tx: &Transaction) -> Result<String, Box<dyn error::Error>> {
-    let serialized = serialize(tx).unwrap();
+fn send_transaction(
+    rpc_client: &RpcClient,
+    transaction: &Transaction,
+) -> Result<String, Box<dyn error::Error>> {
+    let serialized = serialize(transaction).unwrap();
     let params = json!([serialized]);
     let signature =
         rpc_client.retry_make_rpc_request(2, &RpcRequest::SendTransaction, Some(params), 5)?;
@@ -773,7 +776,7 @@ fn send_tx(rpc_client: &RpcClient, tx: &Transaction) -> Result<String, Box<dyn e
     Ok(signature.as_str().unwrap().to_string())
 }
 
-fn confirm_tx(
+fn confirm_transaction(
     rpc_client: &RpcClient,
     signature: &str,
 ) -> Result<RpcSignatureStatus, Box<dyn error::Error>> {
@@ -792,17 +795,17 @@ fn confirm_tx(
     }
 }
 
-fn send_and_confirm_tx(
+fn send_and_confirm_transaction(
     rpc_client: &RpcClient,
-    tx: &mut Transaction,
+    transaction: &mut Transaction,
     signer: &Keypair,
 ) -> Result<String, Box<dyn error::Error>> {
     let mut send_retries = 5;
     loop {
         let mut status_retries = 4;
-        let signature_str = send_tx(rpc_client, tx)?;
+        let signature_str = send_transaction(rpc_client, transaction)?;
         let status = loop {
-            let status = confirm_tx(rpc_client, &signature_str)?;
+            let status = confirm_transaction(rpc_client, &signature_str)?;
             if status == RpcSignatureStatus::SignatureNotFound {
                 status_retries -= 1;
                 if status_retries == 0 {
@@ -821,7 +824,7 @@ fn send_and_confirm_tx(
         match status {
             RpcSignatureStatus::AccountInUse | RpcSignatureStatus::SignatureNotFound => {
                 // Fetch a new last_id and re-sign the transaction before sending it again
-                resign_tx(rpc_client, tx, signer)?;
+                resign_transaction(rpc_client, transaction, signer)?;
                 send_retries -= 1;
             }
             RpcSignatureStatus::Confirmed => {
@@ -858,7 +861,7 @@ fn send_and_confirm_transactions(
                 sleep(Duration::from_millis(1000 / NUM_TICKS_PER_SECOND as u64));
             }
 
-            let signature = send_tx(&rpc_client, &transaction).ok();
+            let signature = send_transaction(&rpc_client, &transaction).ok();
             transactions_signatures.push((transaction, signature))
         }
 
@@ -909,7 +912,7 @@ fn send_and_confirm_transactions(
     }
 }
 
-fn resign_tx(
+fn resign_transaction(
     rpc_client: &RpcClient,
     tx: &mut Transaction,
     signer_key: &Keypair,
@@ -927,7 +930,7 @@ pub fn request_and_confirm_airdrop(
 ) -> Result<(), Box<dyn error::Error>> {
     let last_id = get_last_id(rpc_client)?;
     let mut tx = request_airdrop_transaction(drone_addr, &signer.pubkey(), tokens, last_id)?;
-    send_and_confirm_tx(rpc_client, &mut tx, signer)?;
+    send_and_confirm_transaction(rpc_client, &mut tx, signer)?;
     Ok(())
 }
 
@@ -1519,7 +1522,7 @@ mod tests {
     }
 
     #[test]
-    fn test_wallet_send_tx() {
+    fn test_wallet_send_transaction() {
         let rpc_client = RpcClient::new("succeeds".to_string());
 
         let key = Keypair::new();
@@ -1527,35 +1530,35 @@ mod tests {
         let last_id = Hash::default();
         let tx = SystemTransaction::new_account(&key, to, 50, last_id, 0);
 
-        let signature = send_tx(&rpc_client, &tx);
+        let signature = send_transaction(&rpc_client, &tx);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
 
         let rpc_client = RpcClient::new("fails".to_string());
 
-        let signature = send_tx(&rpc_client, &tx);
+        let signature = send_transaction(&rpc_client, &tx);
         assert!(signature.is_err());
     }
 
     #[test]
-    fn test_wallet_confirm_tx() {
+    fn test_wallet_confirm_transaction() {
         let rpc_client = RpcClient::new("succeeds".to_string());
         let signature = "good_signature";
-        let status = confirm_tx(&rpc_client, &signature);
+        let status = confirm_transaction(&rpc_client, &signature);
         assert_eq!(status.unwrap(), RpcSignatureStatus::Confirmed);
 
         let rpc_client = RpcClient::new("bad_sig_status".to_string());
         let signature = "bad_status";
-        let status = confirm_tx(&rpc_client, &signature);
+        let status = confirm_transaction(&rpc_client, &signature);
         assert!(status.is_err());
 
         let rpc_client = RpcClient::new("fails".to_string());
         let signature = "bad_status_fmt";
-        let status = confirm_tx(&rpc_client, &signature);
+        let status = confirm_transaction(&rpc_client, &signature);
         assert!(status.is_err());
     }
 
     #[test]
-    fn test_wallet_send_and_confirm_tx() {
+    fn test_wallet_send_and_confirm_transaction() {
         let rpc_client = RpcClient::new("succeeds".to_string());
 
         let key = Keypair::new();
@@ -1565,20 +1568,20 @@ mod tests {
 
         let signer = Keypair::new();
 
-        let result = send_and_confirm_tx(&rpc_client, &mut tx, &signer);
+        let result = send_and_confirm_transaction(&rpc_client, &mut tx, &signer);
         result.unwrap();
 
         let rpc_client = RpcClient::new("account_in_use".to_string());
-        let result = send_and_confirm_tx(&rpc_client, &mut tx, &signer);
+        let result = send_and_confirm_transaction(&rpc_client, &mut tx, &signer);
         assert!(result.is_err());
 
         let rpc_client = RpcClient::new("fails".to_string());
-        let result = send_and_confirm_tx(&rpc_client, &mut tx, &signer);
+        let result = send_and_confirm_transaction(&rpc_client, &mut tx, &signer);
         assert!(result.is_err());
     }
 
     #[test]
-    fn test_wallet_resign_tx() {
+    fn test_wallet_resign_transaction() {
         let rpc_client = RpcClient::new("succeeds".to_string());
 
         let key = Keypair::new();
@@ -1590,7 +1593,7 @@ mod tests {
         let prev_tx = SystemTransaction::new_account(&key, to, 50, last_id, 0);
         let mut tx = SystemTransaction::new_account(&key, to, 50, last_id, 0);
 
-        resign_tx(&rpc_client, &mut tx, &key).unwrap();
+        resign_transaction(&rpc_client, &mut tx, &key).unwrap();
 
         assert_ne!(prev_tx, tx);
         assert_ne!(prev_tx.signatures, tx.signatures);
