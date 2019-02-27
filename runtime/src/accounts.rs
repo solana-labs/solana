@@ -429,11 +429,9 @@ impl AccountsDB {
         }
     }
 
-    /// Store the account update.  If the update is to delete the account because
-    /// the token balance is 0, purge needs to be set to true for the delete
-    /// to occur in place.
-    fn store_account(&self, fork: Fork, purge: bool, pubkey: &Pubkey, account: &Account) {
-        if account.tokens == 0 && purge {
+    /// Store the account update.
+    fn store_account(&self, fork: Fork, pubkey: &Pubkey, account: &Account) {
+        if account.tokens == 0 && self.is_squashed(fork) {
             // purge if balance is 0 and no checkpoints
             let index = self.index_info.index.read().unwrap();
             let map = index.get(&pubkey).unwrap();
@@ -459,20 +457,19 @@ impl AccountsDB {
         }
     }
 
-    pub fn store(&self, fork: Fork, purge: bool, pubkey: &Pubkey, account: &Account) {
+    pub fn store(&self, fork: Fork, pubkey: &Pubkey, account: &Account) {
         {
             if !self.index_info.index.read().unwrap().contains_key(&pubkey) {
                 let mut windex = self.index_info.index.write().unwrap();
                 windex.insert(*pubkey, AccountMap(RwLock::new(HashMap::new())));
             }
         }
-        self.store_account(fork, purge, pubkey, account);
+        self.store_account(fork, pubkey, account);
     }
 
     pub fn store_accounts(
         &self,
         fork: Fork,
-        purge: bool,
         txs: &[Transaction],
         res: &[Result<()>],
         loaded: &[Result<(InstructionAccounts, InstructionLoaders)>],
@@ -506,7 +503,7 @@ impl AccountsDB {
             let tx = &txs[i];
             let acc = raccs.as_ref().unwrap();
             for (key, account) in tx.account_keys.iter().zip(acc.0.iter()) {
-                self.store(fork, purge, key, account);
+                self.store(fork, key, account);
             }
         }
     }
@@ -649,6 +646,16 @@ impl AccountsDB {
         parents
     }
 
+    fn is_squashed(&self, fork: Fork) -> bool {
+        self.fork_info
+            .read()
+            .unwrap()
+            .get(&fork)
+            .unwrap()
+            .parents
+            .is_empty()
+    }
+
     fn get_merged_index(
         &self,
         fork: Fork,
@@ -668,7 +675,7 @@ impl AccountsDB {
         None
     }
 
-    /// become the root accountsDB
+    /// make fork a root, i.e. forget its heritage
     fn squash(&self, fork: Fork) {
         let parents = self.remove_parents(fork);
         let tx_count = parents
@@ -769,10 +776,8 @@ impl Accounts {
     }
 
     /// Slow because lock is held for 1 operation insted of many
-    /// * purge - if the account token value is 0 and purge is true then delete the account.
-    /// purge should be set to false for overlays, and true for the root checkpoint.
-    pub fn store_slow(&self, fork: Fork, purge: bool, pubkey: &Pubkey, account: &Account) {
-        self.accounts_db.store(fork, purge, pubkey, account);
+    pub fn store_slow(&self, fork: Fork, pubkey: &Pubkey, account: &Account) {
+        self.accounts_db.store(fork, pubkey, account);
     }
 
     fn lock_account(
@@ -871,18 +876,14 @@ impl Accounts {
     }
 
     /// Store the accounts into the DB
-    /// * purge - if the account token value is 0 and purge is true then delete the account.
-    /// purge should be set to false for overlays, and true for the root checkpoint.
     pub fn store_accounts(
         &self,
         fork: Fork,
-        purge: bool,
         txs: &[Transaction],
         res: &[Result<()>],
         loaded: &[Result<(InstructionAccounts, InstructionLoaders)>],
     ) {
-        self.accounts_db
-            .store_accounts(fork, purge, txs, res, loaded)
+        self.accounts_db.store_accounts(fork, txs, res, loaded)
     }
 
     pub fn increment_transaction_count(&self, fork: Fork, tx_count: usize) {
@@ -914,21 +915,6 @@ mod tests {
     use solana_sdk::transaction::Instruction;
     use solana_sdk::transaction::Transaction;
 
-    #[test]
-    fn test_purge() {
-        let paths = "purge".to_string();
-        let db = AccountsDB::new(0, &paths);
-        let key = Pubkey::default();
-        let account = Account::new(0, 0, Pubkey::default());
-        // accounts are deleted when their token value is 0 and purge is true
-        db.store(0, false, &key, &account);
-        assert_eq!(db.load(0, &key, true), Some(account.clone()));
-        // purge should be set to true for the root checkpoint
-        db.store(0, true, &key, &account);
-        assert_eq!(db.load(0, &key, true), None);
-        cleanup_dirs(&paths);
-    }
-
     fn load_accounts(
         tx: Transaction,
         ka: &Vec<(Pubkey, Account)>,
@@ -936,7 +922,7 @@ mod tests {
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
         let accounts = Accounts::new(0, None);
         for ka in ka.iter() {
-            accounts.store_slow(0, true, &ka.0, &ka.1);
+            accounts.store_slow(0, &ka.0, &ka.1);
         }
 
         let res = accounts.load_accounts(0, &[tx], vec![Ok(())], error_counters);
@@ -1321,7 +1307,7 @@ mod tests {
         let account0 = Account::new(1, 0, key);
 
         // store value 1 in the "root", i.e. db zero
-        db.store(0, true, &key, &account0);
+        db.store(0, &key, &account0);
 
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&db, &mut pubkeys, 100, 0);
@@ -1333,9 +1319,9 @@ mod tests {
             assert_eq!(compare_account(&default_account, &account), true);
         }
         db.add_fork(1, Some(0));
-        // store value 0 in the child, but don't purge (see purge test above)
+        // store value 0 in the child
         let account1 = Account::new(0, 0, key);
-        db.store(1, false, &key, &account1);
+        db.store(1, &key, &account1);
 
         // masking accounts is done at the Accounts level, at accountsDB we see
         // original account
@@ -1365,12 +1351,12 @@ mod tests {
         let paths = "unsquash".to_string();
         let db0 = AccountsDB::new(0, &paths);
         let account0 = Account::new(1, 0, key);
-        db0.store(0, true, &key, &account0);
+        db0.store(0, &key, &account0);
 
         db0.add_fork(1, Some(0));
         // 0 tokens in the child
         let account1 = Account::new(0, 0, key);
-        db0.store(1, false, &key, &account1);
+        db0.store(1, &key, &account1);
 
         // masking accounts is done at the Accounts level, at accountsDB we see
         // original account
@@ -1400,7 +1386,7 @@ mod tests {
                 nvote -= 1;
             }
             assert!(accounts.load(0, &pubkey, true).is_none());
-            accounts.store(0, true, &pubkey, &default_account);
+            accounts.store(0, &pubkey, &default_account);
         }
     }
 
@@ -1409,7 +1395,7 @@ mod tests {
             let idx = thread_rng().gen_range(0, range);
             if let Some(mut account) = accounts.load(0, &pubkeys[idx], true) {
                 account.tokens = account.tokens + 1;
-                accounts.store(0, true, &pubkeys[idx], &account);
+                accounts.store(0, &pubkeys[idx], &account);
                 if account.tokens == 0 {
                     assert!(accounts.load(0, &pubkeys[idx], true).is_none());
                 } else {
@@ -1491,7 +1477,7 @@ mod tests {
         ];
         let pubkey1 = Keypair::new().pubkey();
         let account1 = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 2, pubkey1);
-        accounts.store(0, true, &pubkey1, &account1);
+        accounts.store(0, &pubkey1, &account1);
         {
             let stores = accounts.storage.read().unwrap();
             assert_eq!(stores.len(), 1);
@@ -1501,7 +1487,7 @@ mod tests {
 
         let pubkey2 = Keypair::new().pubkey();
         let account2 = Account::new(1, ACCOUNT_DATA_FILE_SIZE as usize / 2, pubkey2);
-        accounts.store(0, true, &pubkey2, &account2);
+        accounts.store(0, &pubkey2, &account2);
         {
             let stores = accounts.storage.read().unwrap();
             assert_eq!(stores.len(), 2);
@@ -1515,7 +1501,7 @@ mod tests {
 
         for i in 0..25 {
             let index = i % 2;
-            accounts.store(0, true, &pubkey1, &account1);
+            accounts.store(0, &pubkey1, &account1);
             {
                 let stores = accounts.storage.read().unwrap();
                 assert_eq!(stores.len(), 3);

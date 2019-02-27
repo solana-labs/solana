@@ -243,7 +243,6 @@ impl Bank {
 
         self.accounts().store_slow(
             self.id,
-            self.is_root(),
             &genesis_block.bootstrap_leader_vote_account_id,
             &bootstrap_leader_vote_account,
         );
@@ -260,8 +259,7 @@ impl Bank {
 
     pub fn add_native_program(&self, name: &str, program_id: &Pubkey) {
         let account = native_loader::create_program_account(name);
-        self.accounts()
-            .store_slow(self.id, self.is_root(), program_id, &account);
+        self.accounts().store_slow(self.id, program_id, &account);
     }
 
     fn add_builtin_programs(&self) {
@@ -548,7 +546,7 @@ impl Bank {
         // assert!(!self.is_frozen());
         let now = Instant::now();
         self.accounts()
-            .store_accounts(self.id, self.is_root(), txs, executed, loaded_accounts);
+            .store_accounts(self.id, txs, executed, loaded_accounts);
 
         // once committed there is no way to unroll
         let write_elapsed = now.elapsed();
@@ -633,7 +631,7 @@ impl Bank {
                 }
 
                 account.tokens -= tokens;
-                self.accounts().store_slow(self.id, true, pubkey, &account);
+                self.accounts().store_slow(self.id, pubkey, &account);
                 Ok(())
             }
             None => Err(BankError::AccountNotFound),
@@ -643,8 +641,7 @@ impl Bank {
     pub fn deposit(&self, pubkey: &Pubkey, tokens: u64) {
         let mut account = self.get_account(pubkey).unwrap_or_default();
         account.tokens += tokens;
-        self.accounts()
-            .store_slow(self.id, self.is_root(), pubkey, &account);
+        self.accounts().store_slow(self.id, pubkey, &account);
     }
 
     fn accounts(&self) -> Arc<Accounts> {
