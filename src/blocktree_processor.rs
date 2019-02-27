@@ -195,25 +195,23 @@ pub fn process_blocktree(
             continue;
         }
 
-        if slot_complete && !meta.next_slots.is_empty() {
-            // reached end of slot, look for next slots
+        // reached end of slot, look for next slots
 
-            // TODO merge with locktower, voting
-            bank.squash();
+        // TODO merge with locktower, voting
+        bank.squash();
 
-            // This is a fork point, create a new child bank for each fork
-            pending_slots.extend(meta.next_slots.iter().map(|next_slot| {
-                let leader = LeaderScheduler::default().slot_leader_at(*next_slot, &bank);
-                let child_bank = Bank::new_from_parent_and_id(&bank, leader, *next_slot);
-                trace!("Add child bank for slot={}", next_slot);
-                bank_forks.insert(*next_slot, child_bank);
-                (*next_slot, entry_height, last_entry_id)
-            }));
+        // This is a fork point, create a new child bank for each fork
+        pending_slots.extend(meta.next_slots.iter().map(|next_slot| {
+            let leader = LeaderScheduler::default().slot_leader_at(*next_slot, &bank);
+            let child_bank = Bank::new_from_parent_and_id(&bank, leader, *next_slot);
+            trace!("Add child bank for slot={}", next_slot);
+            bank_forks.insert(*next_slot, child_bank);
+            (*next_slot, entry_height, last_entry_id)
+        }));
 
-            // reverse sort by slot, so the next slot to be processed can be pop()ed
-            // TODO: remove me once leader_scheduler can hang with out-of-order slots?
-            pending_slots.sort_by(|a, b| b.0.cmp(&a.0));
-        }
+        // reverse sort by slot, so the next slot to be processed can be pop()ed
+        // TODO: remove me once leader_scheduler can hang with out-of-order slots?
+        pending_slots.sort_by(|a, b| b.0.cmp(&a.0));
     }
 
     info!(
