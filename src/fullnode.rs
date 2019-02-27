@@ -282,10 +282,7 @@ impl Fullnode {
         let was_leader = leader_schedule_utils::slot_leader(&rotation_info.bank) == self.id;
 
         if let Some(ref mut rpc_service) = self.rpc_service {
-            // TODO: This is not the correct bank.  Instead TVU should pass along the
-            // frozen Bank for each completed block for RPC to use from it's notion of the "best"
-            // available fork (until we want to surface multiple forks to RPC)
-            rpc_service.set_bank(&self.bank_forks.read().unwrap().working_bank());
+            rpc_service.set_bank(&rotation_info.bank);
         }
 
         if rotation_info.leader_id == self.id {
