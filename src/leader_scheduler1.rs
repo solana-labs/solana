@@ -22,7 +22,7 @@ impl LeaderScheduler1 {
 
     /// Return the leader for the slot at the slot_index and epoch_height returned
     /// by the given function.
-    pub fn slot_leader_by<F>(&self, bank: &Bank, get_slot_index: F) -> Pubkey
+    fn slot_leader_by<F>(&self, bank: &Bank, get_slot_index: F) -> Pubkey
     where
         F: Fn(u64, u64, u64) -> (u64, u64),
     {
@@ -40,6 +40,12 @@ impl LeaderScheduler1 {
         self.slot_leader_by(bank, |slot_index, epoch_height, _| {
             (slot_index, epoch_height)
         })
+    }
+
+    /// Return the leader for the given slot.
+    pub fn slot_leader_at(&self, slot: u64, bank: &Bank) -> Pubkey {
+        let epoch = slot / bank.slots_per_epoch();
+        self.slot_leader_by(bank, |_, _, _| (slot, epoch))
     }
 
     /// Return the epoch height and slot index of the slot before the current slot.

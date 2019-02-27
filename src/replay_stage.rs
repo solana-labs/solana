@@ -214,11 +214,9 @@ impl ReplayStage {
         // Update Tpu and other fullnode components with the current bank
         let (mut current_slot, mut current_leader_id, mut max_tick_height_for_slot) = {
             let slot = (tick_height + 1) / bank.ticks_per_slot();
-            let epoch = slot / bank.slots_per_epoch();
             let first_tick_in_slot = slot * bank.ticks_per_slot();
 
-            let leader_id =
-                LeaderScheduler1::default().slot_leader_by(&bank, |_, _, _| (slot, epoch));
+            let leader_id = LeaderScheduler1::default().slot_leader_at(slot, &bank);
             trace!("node {:?} scheduled as leader for slot {}", leader_id, slot,);
 
             let old_bank = bank.clone();
@@ -347,11 +345,9 @@ impl ReplayStage {
                         // Check for leader rotation
                         let (leader_id, next_slot) = {
                             let slot = (current_tick_height + 1) / bank.ticks_per_slot();
-                            let epoch = slot / bank.slots_per_epoch();
 
                             (
-                                LeaderScheduler1::default()
-                                    .slot_leader_by(&bank, |_, _, _| (slot, epoch)),
+                                LeaderScheduler1::default().slot_leader_at(slot, &bank),
                                 slot,
                             )
                         };

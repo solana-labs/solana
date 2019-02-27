@@ -156,14 +156,15 @@ impl Service for WindowService {
 
 #[cfg(test)]
 mod test {
+    use crate::bank_forks::BankForks;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::blocktree::Blocktree;
-    use crate::blocktree_processor;
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::make_consecutive_blobs;
     use crate::service::Service;
     use crate::streamer::{blob_receiver, responder};
     use crate::window_service::WindowService;
+    use solana_runtime::bank::Bank;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use std::fs::remove_dir_all;
@@ -194,11 +195,10 @@ mod test {
         let blocktree = Arc::new(
             Blocktree::open(&blocktree_path).expect("Expected to be able to open database ledger"),
         );
-        let genesis_block = GenesisBlock::load(&blocktree_path)
-            .expect("Expected to successfully open genesis block");
-        let (bank_forks, _bank_forks_info) =
-            blocktree_processor::process_blocktree(&genesis_block, &blocktree)
-                .expect("process_blocktree failed");
+        let (genesis_block, _) = GenesisBlock::new(100);
+        let bank0 = Bank::new(&genesis_block);
+        let bank_id = 0;
+        let bank_forks = BankForks::new(bank_id, bank0);
         let t_window = WindowService::new(
             blocktree,
             subs,
@@ -267,11 +267,10 @@ mod test {
         let blocktree = Arc::new(
             Blocktree::open(&blocktree_path).expect("Expected to be able to open database ledger"),
         );
-        let genesis_block = GenesisBlock::load(&blocktree_path)
-            .expect("Expected to successfully open genesis block");
-        let (bank_forks, _bank_forks_info) =
-            blocktree_processor::process_blocktree(&genesis_block, &blocktree)
-                .expect("process_blocktree failed");
+        let (genesis_block, _) = GenesisBlock::new(100);
+        let bank0 = Bank::new(&genesis_block);
+        let bank_id = 0;
+        let bank_forks = BankForks::new(bank_id, bank0);
         let t_window = WindowService::new(
             blocktree,
             subs.clone(),

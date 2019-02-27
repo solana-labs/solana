@@ -496,6 +496,8 @@ mod tests {
     use crate::entry::make_consecutive_blobs;
     use crate::streamer::responder;
     use solana_sdk::hash::Hash;
+    use solana_sdk::timing::DEFAULT_SLOTS_PER_EPOCH;
+    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use std::fs::remove_dir_all;
 
     #[test]
@@ -627,12 +629,13 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn test_wrong_role_transition() {
         solana_logger::setup();
 
         let fullnode_config = FullnodeConfig::default();
-        let ticks_per_slot = 16;
-        let slots_per_epoch = 2;
+        let ticks_per_slot = DEFAULT_TICKS_PER_SLOT;
+        let slots_per_epoch = DEFAULT_SLOTS_PER_EPOCH;
 
         // Create the leader and validator nodes
         let bootstrap_leader_keypair = Arc::new(Keypair::new());
@@ -671,7 +674,10 @@ mod tests {
             let bootstrap_leader_exit = bootstrap_leader.run(Some(rotation_sender));
             assert_eq!(
                 rotation_receiver.recv().unwrap(),
-                (FullnodeReturnType::LeaderToValidatorRotation, 2)
+                (
+                    FullnodeReturnType::LeaderToValidatorRotation,
+                    DEFAULT_SLOTS_PER_EPOCH
+                )
             );
 
             // Test that a node knows to transition to a leader based on parsing the ledger
@@ -688,7 +694,10 @@ mod tests {
             let validator_exit = validator.run(Some(rotation_sender));
             assert_eq!(
                 rotation_receiver.recv().unwrap(),
-                (FullnodeReturnType::ValidatorToLeaderRotation, 2)
+                (
+                    FullnodeReturnType::ValidatorToLeaderRotation,
+                    DEFAULT_SLOTS_PER_EPOCH
+                )
             );
 
             validator_exit();
