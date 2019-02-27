@@ -238,8 +238,7 @@ fn test_replicator_startup_leader_hang() {
 
     let leader_ledger_path = "replicator_test_leader_ledger";
     let (genesis_block, _mint_keypair) = GenesisBlock::new(10_000);
-    let (replicator_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
-        create_tmp_sample_blocktree("replicator_test_replicator_ledger", &genesis_block, 0);
+    let (replicator_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
 
     {
         let replicator_keypair = Keypair::new();
@@ -275,7 +274,7 @@ fn test_replicator_startup_ledger_hang() {
 
     let (genesis_block, _mint_keypair) =
         GenesisBlock::new_with_leader(100, leader_keypair.pubkey(), 42);
-    let (replicator_test_replicator_ledger, _last_id) = create_new_tmp_ledger!(&genesis_block);
+    let (replicator_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
 
     info!("starting leader node");
     let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());

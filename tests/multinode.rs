@@ -1617,7 +1617,7 @@ fn test_fullnode_rotate(
 
     let mut leader_slot_height_of_next_rotation = 1;
 
-    if fullnode_config.leader_scheduler_config.ticks_per_slot == 1 {
+    if ticks_per_slot == 1 {
         // Add another tick to the ledger if the cluster has been configured for 1 ticks_per_slot.
         // The "pseudo-tick" entry0 currently added by bank::process_ledger cannot be rotated on
         // since it has no last id (so at 1 ticks_per_slot rotation must start at a tick_height of
