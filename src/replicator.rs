@@ -1,11 +1,11 @@
 use crate::blob_fetch_stage::BlobFetchStage;
 use crate::blocktree::Blocktree;
+use crate::blocktree_processor;
 #[cfg(feature = "chacha")]
 use crate::chacha::{chacha_cbc_encrypt_ledger, CHACHA_BLOCK_SIZE};
 use crate::client::mk_client;
 use crate::cluster_info::{ClusterInfo, Node, NodeInfo};
 use crate::gossip_service::GossipService;
-use crate::leader_scheduler::LeaderScheduler;
 use crate::result::{self, Result};
 use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
 use crate::service::Service;
@@ -16,6 +16,7 @@ use crate::window_service::WindowService;
 use rand::thread_rng;
 use rand::Rng;
 use solana_drone::drone::{request_airdrop_transaction, DRONE_PORT};
+use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::{Hash, Hasher};
 use solana_sdk::signature::{Keypair, KeypairUtil, Signature};
 use solana_sdk::storage_program::StorageTransaction;
@@ -134,6 +135,13 @@ impl Replicator {
         let blocktree =
             Blocktree::open(ledger_path).expect("Expected to be able to open database ledger");
 
+        let genesis_block =
+            GenesisBlock::load(ledger_path).expect("Expected to successfully open genesis block");
+
+        let (bank_forks, _bank_forks_info) =
+            blocktree_processor::process_blocktree(&genesis_block, &blocktree)
+                .expect("process_blocktree failed");
+
         let blocktree = Arc::new(blocktree);
 
         //TODO(sagar) Does replicator need a bank also ?
@@ -175,7 +183,7 @@ impl Replicator {
             blob_fetch_receiver,
             retransmit_sender,
             repair_socket,
-            Arc::new(RwLock::new(LeaderScheduler::default())),
+            Arc::new(RwLock::new(bank_forks)),
             exit.clone(),
         );
 

@@ -63,7 +63,6 @@ impl ReplayStage {
         ledger_entry_sender: &EntrySender,
         current_blob_index: &mut u64,
         last_entry_id: &mut Hash,
-        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
         subscriptions: &Arc<RpcSubscriptions>,
         slot: u64,
         parent_slot: Option<u64>,
@@ -89,14 +88,9 @@ impl ReplayStage {
         );
 
         let num_ticks = bank.tick_height();
-        let (mut num_ticks_to_next_vote, slot_height, leader_id) = {
-            let rl = leader_scheduler.read().unwrap();
-            (
-                rl.num_ticks_left_in_slot(num_ticks),
-                rl.tick_height_to_slot(num_ticks),
-                rl.get_leader_for_slot(slot).expect("Leader not known"),
-            )
-        };
+        let slot_height = bank.slot_height();
+        let leader_id = LeaderScheduler::default().slot_leader(bank);
+        let mut num_ticks_to_next_vote = LeaderScheduler::num_ticks_left_in_slot(bank, num_ticks);
 
         let mut entry_tick_height = num_ticks;
         let mut entries_with_meta = Vec::new();
@@ -125,7 +119,7 @@ impl ReplayStage {
             // If we don't process the entry now, the for loop will exit and the entry
             // will be dropped.
             if 0 == num_ticks_to_next_vote || (i + 1) == entries.len() {
-                res = blocktree_processor::process_entries(bank, &entries[0..=i], leader_scheduler);
+                res = blocktree_processor::process_entries(bank, &entries[0..=i]);
 
                 if res.is_err() {
                     // TODO: This will return early from the first entry that has an erroneous
@@ -193,7 +187,6 @@ impl ReplayStage {
         exit: Arc<AtomicBool>,
         to_leader_sender: &TvuRotationSender,
         ledger_signal_receiver: Receiver<bool>,
-        leader_scheduler: &Arc<RwLock<LeaderScheduler>>,
         subscriptions: &Arc<RpcSubscriptions>,
     ) -> (Self, EntryReceiver)
     where
@@ -201,7 +194,6 @@ impl ReplayStage {
     {
         let (ledger_entry_sender, ledger_entry_receiver) = channel();
         let exit_ = exit.clone();
-        let leader_scheduler_ = leader_scheduler.clone();
         let to_leader_sender = to_leader_sender.clone();
         let subscriptions_ = subscriptions.clone();
 
@@ -221,13 +213,10 @@ impl ReplayStage {
 
         // Update Tpu and other fullnode components with the current bank
         let (mut current_slot, mut current_leader_id, mut max_tick_height_for_slot) = {
-            let leader_scheduler = leader_scheduler.read().unwrap();
-            let slot = leader_scheduler.tick_height_to_slot(tick_height + 1);
+            let slot = (tick_height + 1) / bank.ticks_per_slot();
             let first_tick_in_slot = slot * bank.ticks_per_slot();
 
-            let leader_id = leader_scheduler
-                .get_leader_for_slot(slot)
-                .expect("Leader not known after processing bank");
+            let leader_id = LeaderScheduler::default().slot_leader_at(slot, &bank);
             trace!("node {:?} scheduled as leader for slot {}", leader_id, slot,);
 
             let old_bank = bank.clone();
@@ -252,8 +241,8 @@ impl ReplayStage {
                 })
                 .unwrap();
 
-            let max_tick_height_for_slot =
-                first_tick_in_slot + leader_scheduler.num_ticks_left_in_slot(first_tick_in_slot);
+            let max_tick_height_for_slot = first_tick_in_slot
+                + LeaderScheduler::num_ticks_left_in_slot(&bank, first_tick_in_slot);
 
             (Some(slot), leader_id, max_tick_height_for_slot)
         };
@@ -340,7 +329,6 @@ impl ReplayStage {
                             &ledger_entry_sender,
                             &mut current_blob_index,
                             &mut last_entry_id,
-                            &leader_scheduler_,
                             &subscriptions_,
                             slot,
                             parent_slot,
@@ -354,21 +342,11 @@ impl ReplayStage {
                     // We've reached the end of a slot, reset our state and check
                     // for leader rotation
                     if max_tick_height_for_slot == current_tick_height {
-                        // TODO: replace this with generating an actual leader schedule
-                        // from the bank
-                        leader_scheduler_
-                            .write()
-                            .unwrap()
-                            .update_tick_height(current_tick_height, &bank);
                         // Check for leader rotation
                         let (leader_id, next_slot) = {
-                            let leader_scheduler = leader_scheduler_.read().unwrap();
-                            (
-                                leader_scheduler
-                                    .get_leader_for_tick(current_tick_height + 1)
-                                    .unwrap(),
-                                leader_scheduler.tick_height_to_slot(current_tick_height + 1),
-                            )
+                            let slot = (current_tick_height + 1) / bank.ticks_per_slot();
+
+                            (LeaderScheduler::default().slot_leader_at(slot, &bank), slot)
                         };
 
                         // If we were the leader for the last slot update the last id b/c we
@@ -488,15 +466,12 @@ mod test {
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::create_ticks;
     use crate::entry::{next_entry_mut, Entry};
+    use crate::fullnode::make_active_set_entries;
     use crate::fullnode::new_banks_from_blocktree;
-    use crate::leader_scheduler::{
-        make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
-    };
     use crate::replay_stage::ReplayStage;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
-    use solana_sdk::timing::DEFAULT_TICKS_PER_SLOT;
     use std::fs::remove_dir_all;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::mpsc::channel;
@@ -518,13 +493,10 @@ mod test {
 
         // Set up the LeaderScheduler so that my_id becomes the leader for epoch 1
         let ticks_per_slot = 16;
-        let leader_scheduler_config = LeaderSchedulerConfig::new(ticks_per_slot, 1, ticks_per_slot);
-        let leader_scheduler =
-            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
-
         let (mut genesis_block, mint_keypair) =
             GenesisBlock::new_with_leader(10_000, old_leader_id, 500);
         genesis_block.ticks_per_slot = ticks_per_slot;
+        genesis_block.slots_per_epoch = 1;
 
         // Create a ledger
         let (my_ledger_path, mut tick_height, entry_height, mut last_id, last_entry_id) =
@@ -561,7 +533,7 @@ mod test {
         {
             // Set up the bank
             let (bank_forks, bank_forks_info, blocktree, ledger_signal_receiver) =
-                new_banks_from_blocktree(&my_ledger_path, ticks_per_slot, &leader_scheduler);
+                new_banks_from_blocktree(&my_ledger_path);
 
             // Set up the replay stage
             let (rotation_sender, rotation_receiver) = channel();
@@ -577,7 +549,6 @@ mod test {
                 exit.clone(),
                 &rotation_sender,
                 ledger_signal_receiver,
-                &leader_scheduler,
                 &Arc::new(RpcSubscriptions::default()),
             );
 
@@ -657,12 +628,8 @@ mod test {
         let voting_keypair = Arc::new(Keypair::new());
         let (to_leader_sender, _to_leader_receiver) = channel();
         {
-            let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
-            let (bank_forks, bank_forks_info, blocktree, l_receiver) = new_banks_from_blocktree(
-                &my_ledger_path,
-                DEFAULT_TICKS_PER_SLOT,
-                &leader_scheduler,
-            );
+            let (bank_forks, bank_forks_info, blocktree, l_receiver) =
+                new_banks_from_blocktree(&my_ledger_path);
             let bank = bank_forks.working_bank();
             let entry_height = bank_forks_info[0].entry_height;
             let last_entry_id = bank_forks_info[0].last_entry_id;
@@ -678,7 +645,6 @@ mod test {
                 exit.clone(),
                 &to_leader_sender,
                 l_receiver,
-                &leader_scheduler,
                 &Arc::new(RpcSubscriptions::default()),
             );
 
@@ -755,11 +721,6 @@ mod test {
                 .unwrap();
         }
 
-        let leader_scheduler_config =
-            LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, active_window_tick_length);
-        let leader_scheduler =
-            Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
-
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
 
@@ -768,7 +729,7 @@ mod test {
         let exit = Arc::new(AtomicBool::new(false));
         {
             let (bank_forks, bank_forks_info, blocktree, l_receiver) =
-                new_banks_from_blocktree(&my_ledger_path, ticks_per_slot, &leader_scheduler);
+                new_banks_from_blocktree(&my_ledger_path);
             let bank = bank_forks.working_bank();
             let meta = blocktree
                 .meta(0)
@@ -787,7 +748,6 @@ mod test {
                 exit.clone(),
                 &rotation_sender,
                 l_receiver,
-                &leader_scheduler,
                 &Arc::new(RpcSubscriptions::default()),
             );
 
@@ -862,8 +822,6 @@ mod test {
 
         let genesis_block = GenesisBlock::new(10_000).0;
         let bank = Arc::new(Bank::new(&genesis_block));
-        let leader_scheduler = LeaderScheduler::new_with_bank(&bank);
-        let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
         let voting_keypair = Some(Arc::new(Keypair::new()));
         let res = ReplayStage::process_entries(
             entries.clone(),
@@ -873,7 +831,6 @@ mod test {
             &ledger_entry_sender,
             &mut current_blob_index,
             &mut last_entry_id,
-            &leader_scheduler,
             &Arc::new(RpcSubscriptions::default()),
             0,
             None,
@@ -891,8 +848,6 @@ mod test {
         }
 
         let bank = Arc::new(Bank::new(&genesis_block));
-        let leader_scheduler = LeaderScheduler::new_with_bank(&bank);
-        let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
         let res = ReplayStage::process_entries(
             entries.clone(),
             &bank,
@@ -901,7 +856,6 @@ mod test {
             &ledger_entry_sender,
             &mut current_blob_index,
             &mut last_entry_id,
-            &leader_scheduler,
             &Arc::new(RpcSubscriptions::default()),
             0,
             None,

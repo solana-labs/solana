@@ -42,7 +42,6 @@ pub mod gossip_service;
 pub mod leader_confirmation_service;
 pub mod leader_schedule;
 pub mod leader_scheduler;
-pub mod leader_scheduler1;
 pub mod local_vote_signer_service;
 pub mod packet;
 pub mod poh;

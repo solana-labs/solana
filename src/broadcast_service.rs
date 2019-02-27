@@ -279,7 +279,6 @@ mod test {
     use crate::blocktree::{get_tmp_ledger_path, Blocktree};
     use crate::cluster_info::{ClusterInfo, Node};
     use crate::entry::create_ticks;
-    use crate::leader_scheduler::LeaderScheduler;
     use crate::service::Service;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -346,10 +345,6 @@ mod test {
         {
             // Create the leader scheduler
             let leader_keypair = Keypair::new();
-            let mut leader_scheduler = LeaderScheduler::default();
-
-            // Mock the tick height to look like the tick height right after a leader transition
-            leader_scheduler.set_leader_schedule(vec![leader_keypair.pubkey()]);
             let start_tick_height = 0;
             let max_tick_height = start_tick_height + DEFAULT_TICKS_PER_SLOT;
 
@@ -373,7 +368,7 @@ mod test {
             let blocktree = broadcast_service.blocktree;
             let mut blob_index = 0;
             for i in 0..max_tick_height - start_tick_height {
-                let slot = leader_scheduler.tick_height_to_slot(start_tick_height + i + 1);
+                let slot = (start_tick_height + i + 1) / DEFAULT_TICKS_PER_SLOT;
 
                 let result = blocktree.get_data_blob(slot, blob_index).unwrap();
 
