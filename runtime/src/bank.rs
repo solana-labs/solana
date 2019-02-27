@@ -230,13 +230,11 @@ impl Bank {
             executable: false,
         };
 
-        let mut vote_state = VoteState::new(
+        let vote_state = VoteState::new(
             genesis_block.bootstrap_leader_id,
-            genesis_block.bootstrap_leader_id,
+            genesis_block.bootstrap_leader_vote_account_id,
         );
-        vote_state
-            .votes
-            .push_back(vote_program::Lockout::new(&vote_program::Vote::new(0)));
+
         vote_state
             .serialize(&mut bootstrap_leader_vote_account.userdata)
             .unwrap();
