@@ -9,9 +9,8 @@ export RUSTFLAGS="$RUSTFLAGS \
     -C link-arg=--Bdynamic \
     -C link-arg=-shared \
     -C link-arg=--entry=entrypoint \
+    -C linker=../../../../sdk/bpf/llvm-native/bin/ld.lld \
      --sysroot ../../../../sdk/bpf/rust-bpf-sysroot"
-
-export CARGO_TARGET_BPFEL_UNKNOWN_UNKNOWN_LINKER="../../../../sdk/bpf/llvm-native/bin/ld.lld"
 
 # Ensure the sdk is installed
 ../../../../sdk/bpf/scripts/install.sh
