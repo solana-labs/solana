@@ -509,7 +509,7 @@ mod tests {
 
         let (genesis_block, _mint_keypair) = GenesisBlock::new(1000);
         let ticks_per_slot = genesis_block.ticks_per_slot;
-        let (ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
+        let (ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
 
         let entries = make_tiny_test_entries(64);
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
@@ -572,7 +572,7 @@ mod tests {
 
         let (genesis_block, _mint_keypair) = GenesisBlock::new(1000);
         let ticks_per_slot = genesis_block.ticks_per_slot;;
-        let (ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
+        let (ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
 
         let entries = make_tiny_test_entries(128);
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();

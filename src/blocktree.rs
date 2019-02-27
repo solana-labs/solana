@@ -1314,9 +1314,10 @@ macro_rules! create_new_tmp_ledger {
 //
 // Note: like `create_new_ledger` the returned ledger will have slot 0 full of ticks (and only
 // ticks)
-pub fn create_new_tmp_ledger(name: &str, genesis_block: &GenesisBlock) -> Result<(String, Hash)> {
+pub fn create_new_tmp_ledger(name: &str, genesis_block: &GenesisBlock) -> (String, Hash) {
     let ledger_path = get_tmp_ledger_path(name);
-    create_new_ledger(&ledger_path, genesis_block).and_then(|last_id| Ok((ledger_path, last_id)))
+    let last_id = create_new_ledger(&ledger_path, genesis_block).unwrap();
+    (ledger_path, last_id)
 }
 
 #[macro_export]

@@ -469,7 +469,7 @@ pub fn new_fullnode() -> (Fullnode, NodeInfo, Keypair, String) {
     let node_info = node.info.clone();
 
     let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10_000, node_info.id, 42);
-    let (ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
+    let (ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
 
     let vote_account_keypair = Arc::new(Keypair::new());
     let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);

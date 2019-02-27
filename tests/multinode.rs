@@ -52,7 +52,7 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     let ticks_per_slot = genesis_block.ticks_per_slot;
     info!("ticks_per_slot: {}", ticks_per_slot);
 
-    let (leader_ledger_path, last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
+    let (leader_ledger_path, last_id) = create_new_tmp_ledger!(&genesis_block);
     ledger_paths.push(leader_ledger_path.clone());
 
     // make a copy at zero
@@ -152,7 +152,7 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     let mut ledger_paths = Vec::new();
 
     let (genesis_block, alice) = GenesisBlock::new_with_leader(10_000, leader_data.id, 500);
-    let (genesis_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
+    let (genesis_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
     ledger_paths.push(genesis_ledger_path.clone());
 
     let zero_ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
@@ -328,7 +328,7 @@ fn test_multi_node_basic() {
 
     let (genesis_block, alice) = GenesisBlock::new_with_leader(10_000, leader_data.id, 500);
 
-    let (genesis_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
+    let (genesis_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
     ledger_paths.push(genesis_ledger_path.clone());
 
     let leader_ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
@@ -429,7 +429,7 @@ fn test_boot_validator_from_file() {
     let mut ledger_paths = Vec::new();
 
     let (genesis_block, alice) = GenesisBlock::new_with_leader(100_000, leader_pubkey, 1000);
-    let (genesis_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
+    let (genesis_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
     ledger_paths.push(genesis_ledger_path.clone());
 
     let leader_ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
@@ -541,11 +541,7 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
         leader_keypair.pubkey(),
         initial_leader_balance,
     );
-    let (ledger_path, _last_id) = create_new_tmp_ledger(
-        "leader_restart_validator_start_from_old_ledger",
-        &genesis_block,
-    )
-    .unwrap();
+    let (ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
 
     let bob_pubkey = Keypair::new().pubkey();
 
@@ -653,7 +649,7 @@ fn test_multi_node_dynamic_network() {
     let bob_pubkey = Keypair::new().pubkey();
 
     let (genesis_block, alice) = GenesisBlock::new_with_leader(10_000_000, leader_pubkey, 500);
-    let (genesis_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
+    let (genesis_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
 
     let mut ledger_paths = Vec::new();
     ledger_paths.push(genesis_ledger_path.clone());
@@ -866,7 +862,7 @@ fn test_leader_to_validator_transition() {
 
     // Initialize the leader ledger. Make a mint and a genesis entry
     // in the leader ledger
-    let (leader_ledger_path, last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
+    let (leader_ledger_path, last_id) = create_new_tmp_ledger!(&genesis_block);
 
     // Write the votes entries to the ledger that will cause leader rotation
     // to validator_keypair at slot 2
@@ -946,7 +942,7 @@ fn test_leader_validator_basic() {
     genesis_block.ticks_per_slot = ticks_per_slot;
 
     // Make a common mint and a genesis entry for both leader + validator ledgers
-    let (leader_ledger_path, last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
+    let (leader_ledger_path, last_id) = create_new_tmp_ledger!(&genesis_block);
 
     // Add validator vote on tick height 1
     {
@@ -1078,7 +1074,7 @@ fn test_dropped_handoff_recovery() {
     genesis_block.ticks_per_slot = ticks_per_slot;
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
-    let (genesis_ledger_path, last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
+    let (genesis_ledger_path, last_id) = create_new_tmp_ledger!(&genesis_block);
 
     // Create the validator keypair that will be the next leader in line
     let next_leader_keypair = Arc::new(Keypair::new());
@@ -1227,8 +1223,7 @@ fn test_full_leader_validator_network() {
     genesis_block.ticks_per_slot = ticks_per_slot;
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
-    let (bootstrap_leader_ledger_path, mut last_id) =
-        create_new_tmp_ledger!(&genesis_block).unwrap();
+    let (bootstrap_leader_ledger_path, mut last_id) = create_new_tmp_ledger!(&genesis_block);
 
     // Create a common ledger with entries in the beginnging that will add all the validators
     // to the active set for leader election.
@@ -1416,7 +1411,7 @@ fn test_broadcast_last_tick() {
     genesis_block.ticks_per_slot = ticks_per_slot;
 
     // Create leader ledger
-    let (bootstrap_leader_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
+    let (bootstrap_leader_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
 
     let blob_receiver_exit = Arc::new(AtomicBool::new(false));
 
@@ -1608,7 +1603,7 @@ fn test_fullnode_rotate(
     genesis_block.slots_per_epoch = slots_per_epoch;
 
     // Make a common mint and a genesis entry for both leader + validator ledgers
-    let (leader_ledger_path, mut last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
+    let (leader_ledger_path, mut last_id) = create_new_tmp_ledger!(&genesis_block);
 
     let mut ledger_paths = Vec::new();
     ledger_paths.push(leader_ledger_path.clone());
