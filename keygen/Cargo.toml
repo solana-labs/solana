@@ -12,7 +12,7 @@ edition = "2018"
 cuda = []
 
 [dependencies]
-dirs = "1.0.2"
+dirs = "1.0.5"
 clap = "2.31"
 solana-sdk = { path = "../sdk", version = "0.12.0" }
 
