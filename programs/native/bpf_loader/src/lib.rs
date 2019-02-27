@@ -196,7 +196,7 @@ fn entrypoint(
         let mut vm = match create_vm(prog) {
             Ok(vm) => vm,
             Err(e) => {
-                warn!("create_vm failed: {}", e);
+                warn!("Failed to create BPF VM: {}", e);
                 return Err(ProgramError::GenericError);
             }
         };
@@ -204,11 +204,12 @@ fn entrypoint(
         match vm.execute_program(v.as_mut_slice()) {
             Ok(status) => {
                 if 0 == status {
+                    warn!("BPF program failed: {}", status);
                     return Err(ProgramError::GenericError);
                 }
             }
             Err(e) => {
-                warn!("execute_program failed: {}", e);
+                warn!("BPF VM failed to run program: {}", e);
                 return Err(ProgramError::GenericError);
             }
         }

@@ -2076,6 +2076,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "solana-failure"
+version = "0.12.0"
+dependencies = [
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-sdk 0.12.0",
+]
+
+[[package]]
 name = "solana-fullnode"
 version = "0.12.0"
 dependencies = [
@@ -2200,6 +2208,7 @@ version = "0.12.0"
 dependencies = [
  "solana 0.12.0",
  "solana-bpfloader 0.12.0",
+ "solana-failure 0.12.0",
  "solana-logger 0.12.0",
  "solana-native-loader 0.12.0",
  "solana-noop 0.12.0",
