@@ -34,18 +34,17 @@ impl RewardsTransaction {
     pub fn new_redeem_credits(
         vote_keypair: &Keypair,
         rewards_id: Pubkey,
-        to_id: Pubkey,
         last_id: Hash,
         fee: u64,
     ) -> Transaction {
         Transaction::new_with_instructions(
             &[vote_keypair],
-            &[rewards_id, to_id],
+            &[rewards_id],
             last_id,
             fee,
             vec![rewards_program::id(), vote_program::id()],
             vec![
-                Instruction::new(0, &RewardsInstruction::RedeemVoteCredits, vec![0, 1, 2]),
+                Instruction::new(0, &RewardsInstruction::RedeemVoteCredits, vec![0, 1]),
                 Instruction::new(1, &VoteInstruction::ClearCredits, vec![0]),
             ],
         )

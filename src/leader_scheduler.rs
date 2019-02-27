@@ -2,7 +2,6 @@
 //! managing the schedule for leader rotation
 
 use crate::entry::{create_ticks, next_entry_mut, Entry};
-use crate::voting_keypair::VotingKeypair;
 use bincode::serialize;
 use byteorder::{LittleEndian, ReadBytesExt};
 use solana_runtime::bank::Bank;
@@ -85,7 +84,7 @@ fn get_active_stakes(
         .vote_states(|vote_state| is_active_staker(vote_state, lower_bound, upper_bound))
         .iter()
         .filter_map(|vote_state| {
-            let stake = bank.get_balance(&vote_state.staker_id);
+            let stake = bank.get_balance(&vote_state.voter_id);
             if stake > 0 {
                 Some((vote_state.node_id, stake))
             } else {
@@ -303,6 +302,7 @@ impl LeaderScheduler {
             let (mut validator_rankings, total_stake) = ranked_active_set.iter().fold(
                 (Vec::with_capacity(ranked_active_set.len()), 0),
                 |(mut ids, total_stake), (pubkey, stake)| {
+                    println!("pushing {:?}", pubkey);
                     ids.push(*pubkey);
                     (ids, total_stake + stake)
                 },
@@ -404,15 +404,16 @@ impl Default for LeaderScheduler {
 // will be added to the active set for leader selection:
 // 1) Give the node a nonzero number of tokens,
 // 2) A vote from the validator
-pub fn make_active_set_entries(
+pub fn make_active_set_entries<T: KeypairUtil>(
     active_keypair: &Arc<Keypair>,
+    voting_keypair: &T,
     token_source: &Keypair,
     stake: u64,
     slot_height_to_vote_on: u64,
     last_entry_id: &Hash,
     last_tick_id: &Hash,
     num_ending_ticks: u64,
-) -> (Vec<Entry>, VotingKeypair) {
+) -> Vec<Entry> {
     // 1) Assume the active_keypair node has no tokens staked
     let transfer_tx = SystemTransaction::new_account(
         &token_source,
@@ -425,23 +426,36 @@ pub fn make_active_set_entries(
     let transfer_entry = next_entry_mut(&mut last_entry_id, 1, vec![transfer_tx]);
 
     // 2) Create and register a vote account for active_keypair
-    let voting_keypair = VotingKeypair::new_local(active_keypair);
+
     let vote_account_id = voting_keypair.pubkey();
 
     let new_vote_account_tx =
-        VoteTransaction::new_account(active_keypair, vote_account_id, *last_tick_id, 1, 1);
+        VoteTransaction::fund_vote_account(active_keypair, vote_account_id, *last_tick_id, 1, 1);
+    let register_vote_account_tx = VoteTransaction::register_vote_account(
+        voting_keypair,
+        *last_tick_id,
+        active_keypair.pubkey(),
+        0,
+    );
     let new_vote_account_entry = next_entry_mut(&mut last_entry_id, 1, vec![new_vote_account_tx]);
+    let register_vote_account_entry =
+        next_entry_mut(&mut last_entry_id, 1, vec![register_vote_account_tx]);
 
     // 3) Create vote entry
     let vote_tx =
-        VoteTransaction::new_vote(&voting_keypair, slot_height_to_vote_on, *last_tick_id, 0);
+        VoteTransaction::new_vote(voting_keypair, slot_height_to_vote_on, *last_tick_id, 0);
     let vote_entry = next_entry_mut(&mut last_entry_id, 1, vec![vote_tx]);
 
     // 4) Create the ending empty ticks
-    let mut txs = vec![transfer_entry, new_vote_account_entry, vote_entry];
+    let mut txs = vec![
+        transfer_entry,
+        new_vote_account_entry,
+        register_vote_account_entry,
+        vote_entry,
+    ];
     let empty_ticks = create_ticks(num_ending_ticks, last_entry_id);
     txs.extend(empty_ticks);
-    (txs, voting_keypair)
+    txs
 }
 
 #[cfg(test)]
@@ -469,8 +483,10 @@ pub mod tests {
         solana_logger::setup();
 
         let leader_id = Keypair::new().pubkey();
+        let leader_vote_account = Keypair::new().pubkey();
         let active_window_tick_length = 1000;
-        let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10000, leader_id, 500);
+        let (genesis_block, mint_keypair) =
+            GenesisBlock::new_with_leader(10000, leader_id, 500, leader_vote_account);
         let bank = Bank::new(&genesis_block);
 
         let bootstrap_ids = vec![genesis_block.bootstrap_leader_id];
@@ -564,8 +580,11 @@ pub mod tests {
     fn test_multiple_vote() {
         let leader_keypair = Keypair::new();
         let leader_id = leader_keypair.pubkey();
+        let leader_vote_keypair = Keypair::new();
+        let leader_vote_account = leader_vote_keypair.pubkey();
         let active_window_tick_length = 1000;
-        let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10000, leader_id, 500);
+        let (genesis_block, _mint_keypair) =
+            GenesisBlock::new_with_leader(10000, leader_id, 500, leader_vote_account);
         let bank = Bank::new(&genesis_block);
 
         // Bootstrap leader should be in the active set even without explicit votes
@@ -589,8 +608,7 @@ pub mod tests {
         // window
 
         // Create a vote account
-        let voting_keypair = Keypair::new();
-        new_vote_account_with_vote(&leader_keypair, &voting_keypair, &bank, 1, 1);
+        new_vote_account_with_vote(&leader_keypair, &leader_vote_keypair, &bank, 1, 1);
 
         {
             let result = get_active_pubkeys(
@@ -609,7 +627,7 @@ pub mod tests {
         }
 
         // Vote at slot_height 2
-        push_vote(&voting_keypair, &bank, 2);
+        push_vote(&leader_vote_keypair, &bank, 2);
 
         {
             let result = get_active_pubkeys(
@@ -637,7 +655,6 @@ pub mod tests {
         let active_window_num_slots = slots_per_epoch;
 
         // Create the bank and validators, which are inserted in order of account balance
-        let num_vote_account_tokens = 1;
         let (mut genesis_block, mint_keypair) = GenesisBlock::new(10_000);
         genesis_block.ticks_per_slot = ticks_per_slot;
         genesis_block.slots_per_epoch = slots_per_epoch;
@@ -665,7 +682,7 @@ pub mod tests {
                 &new_validator,
                 &voting_keypair,
                 &bank,
-                num_vote_account_tokens as u64,
+                stake,
                 slots_per_epoch,
             );
         }
@@ -743,8 +760,10 @@ pub mod tests {
     fn test_leader_after_genesis() {
         solana_logger::setup();
         let leader_id = Keypair::new().pubkey();
+        let leader_vote_account = Keypair::new().pubkey();
         let leader_tokens = 2;
-        let (genesis_block, _) = GenesisBlock::new_with_leader(5, leader_id, leader_tokens);
+        let (genesis_block, _) =
+            GenesisBlock::new_with_leader(5, leader_id, leader_tokens, leader_vote_account);
         let bank = Bank::new(&genesis_block);
         let leader_scheduler = LeaderScheduler::new_with_bank(&bank);
         let slot = leader_scheduler.tick_height_to_slot(bank.tick_height());
@@ -1083,12 +1102,17 @@ pub mod tests {
     fn run_consecutive_leader_test(slots_per_epoch: u64, add_validator: bool) {
         let bootstrap_leader_keypair = Arc::new(Keypair::new());
         let bootstrap_leader_id = bootstrap_leader_keypair.pubkey();
+        let bootstrap_leader_voting_keypair = Keypair::new();
         let ticks_per_slot = 100;
         let active_window_num_slots = slots_per_epoch;
 
         // Create mint and bank
-        let (genesis_block, mint_keypair) =
-            GenesisBlock::new_with_leader(10_000, bootstrap_leader_id, BOOTSTRAP_LEADER_TOKENS);
+        let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(
+            10_000,
+            bootstrap_leader_id,
+            BOOTSTRAP_LEADER_TOKENS,
+            bootstrap_leader_voting_keypair.pubkey(),
+        );
         let bank = Bank::new(&genesis_block);
         let last_id = genesis_block.last_id();
         let initial_vote_height = 1;
@@ -1105,7 +1129,7 @@ pub mod tests {
                 &validator_keypair,
                 &Keypair::new(),
                 &bank,
-                1,
+                5,
                 initial_vote_height,
             );
         }
@@ -1118,22 +1142,15 @@ pub mod tests {
         let seed = LeaderScheduler::calculate_seed(0);
         let leader_stake = if seed % 3 == 0 { 3 } else { 2 };
 
-        let vote_account_tokens = 1;
-        bank.transfer(
-            leader_stake + vote_account_tokens,
-            &mint_keypair,
-            bootstrap_leader_id,
-            last_id,
-        )
-        .unwrap();
+        bank.transfer(leader_stake, &mint_keypair, bootstrap_leader_id, last_id)
+            .unwrap();
 
         // Create a vote account and push a vote to add the leader to the active set
-        let voting_keypair = Keypair::new();
         new_vote_account_with_vote(
             &bootstrap_leader_keypair,
-            &voting_keypair,
+            &bootstrap_leader_voting_keypair,
             &bank,
-            vote_account_tokens as u64,
+            leader_stake,
             0,
         );
 

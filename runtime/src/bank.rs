@@ -715,9 +715,9 @@ impl Bank {
     /// Collect the node Pubkey and staker account balance for nodes
     /// that have non-zero balance in their corresponding staker accounts
     pub fn staked_nodes(&self) -> HashMap<Pubkey, u64> {
-        self.vote_states(|state| self.get_balance(&state.staker_id) > 0)
+        self.vote_states(|state| self.get_balance(&state.voter_id) > 0)
             .iter()
-            .map(|state| (state.node_id, self.get_balance(&state.staker_id)))
+            .map(|state| (state.node_id, self.get_balance(&state.voter_id)))
             .collect()
     }
 
@@ -805,9 +805,14 @@ mod tests {
     #[test]
     fn test_bank_new_with_leader() {
         let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_vote_account = Keypair::new().pubkey();
         let dummy_leader_tokens = BOOTSTRAP_LEADER_TOKENS;
-        let (genesis_block, _) =
-            GenesisBlock::new_with_leader(10_000, dummy_leader_id, dummy_leader_tokens);
+        let (genesis_block, _) = GenesisBlock::new_with_leader(
+            10_000,
+            dummy_leader_id,
+            dummy_leader_tokens,
+            dummy_vote_account,
+        );
         assert_eq!(genesis_block.bootstrap_leader_tokens, dummy_leader_tokens);
         let bank = Bank::new(&genesis_block);
         assert_eq!(
@@ -1055,7 +1060,9 @@ mod tests {
     #[test]
     fn test_bank_tx_fee() {
         let leader = Keypair::new().pubkey();
-        let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, leader, 2);
+        let leader_vote_account = Keypair::new().pubkey();
+        let (genesis_block, mint_keypair) =
+            GenesisBlock::new_with_leader(100, leader, 2, leader_vote_account);
         let bank = Bank::new(&genesis_block);
 
         let key1 = Keypair::new();
@@ -1085,7 +1092,9 @@ mod tests {
     #[test]
     fn test_filter_program_errors_and_collect_fee() {
         let leader = Keypair::new().pubkey();
-        let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, leader, 2);
+        let leader_vote_account = Keypair::new().pubkey();
+        let (genesis_block, mint_keypair) =
+            GenesisBlock::new_with_leader(100, leader, 2, leader_vote_account);
         let bank = Bank::new(&genesis_block);
 
         let key = Keypair::new();
@@ -1139,9 +1148,14 @@ mod tests {
     #[test]
     fn test_process_genesis() {
         let dummy_leader_id = Keypair::new().pubkey();
+        let dummy_leader_vote_account = Keypair::new().pubkey();
         let dummy_leader_tokens = 2;
-        let (genesis_block, _) =
-            GenesisBlock::new_with_leader(5, dummy_leader_id, dummy_leader_tokens);
+        let (genesis_block, _) = GenesisBlock::new_with_leader(
+            5,
+            dummy_leader_id,
+            dummy_leader_tokens,
+            dummy_leader_vote_account,
+        );
         let bank = Bank::new(&genesis_block);
         assert_eq!(bank.get_balance(&genesis_block.mint_id), 3);
         assert_eq!(bank.get_balance(&dummy_leader_id), 1);
@@ -1182,8 +1196,10 @@ mod tests {
     #[test]
     fn test_bank_staked_nodes_at_epoch() {
         let pubkey = Keypair::new().pubkey();
+        let vote_account_id = Keypair::new().pubkey();
         let bootstrap_tokens = 2;
-        let (genesis_block, _) = GenesisBlock::new_with_leader(2, pubkey, bootstrap_tokens);
+        let (genesis_block, _) =
+            GenesisBlock::new_with_leader(2, pubkey, bootstrap_tokens, vote_account_id);
         let bank = Bank::new(&genesis_block);
         let bank = Bank::new_from_parent(&Arc::new(bank));
         let ticks_per_offset = bank.stakers_slot_offset * bank.ticks_per_slot();

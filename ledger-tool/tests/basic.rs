@@ -32,7 +32,9 @@ fn bad_arguments() {
 #[test]
 fn nominal() {
     let keypair = Arc::new(Keypair::new());
-    let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(100, keypair.pubkey(), 50);
+    let vote_account_id = Keypair::new().pubkey();
+    let (genesis_block, _mint_keypair) =
+        GenesisBlock::new_with_leader(100, keypair.pubkey(), 50, vote_account_id);
     let ticks_per_slot = genesis_block.ticks_per_slot;
     let (ledger_path, tick_height, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_blocktree(

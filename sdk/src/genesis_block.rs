@@ -31,21 +31,26 @@ impl GenesisBlock {
         let tokens = tokens
             .checked_add(BOOTSTRAP_LEADER_TOKENS)
             .unwrap_or(tokens);
-        Self::new_with_leader(tokens, Keypair::new().pubkey(), BOOTSTRAP_LEADER_TOKENS)
+        Self::new_with_leader(
+            tokens,
+            Keypair::new().pubkey(),
+            BOOTSTRAP_LEADER_TOKENS,
+            Keypair::new().pubkey(),
+        )
     }
 
     pub fn new_with_leader(
         tokens: u64,
         bootstrap_leader_id: Pubkey,
         bootstrap_leader_tokens: u64,
+        bootstrap_leader_vote_account_id: Pubkey,
     ) -> (Self, Keypair) {
         let mint_keypair = Keypair::new();
-        let bootstrap_leader_vote_account_keypair = Keypair::new();
         (
             Self {
                 bootstrap_leader_id,
                 bootstrap_leader_tokens,
-                bootstrap_leader_vote_account_id: bootstrap_leader_vote_account_keypair.pubkey(),
+                bootstrap_leader_vote_account_id,
                 mint_id: mint_keypair.pubkey(),
                 tokens,
                 ticks_per_slot: DEFAULT_TICKS_PER_SLOT,
@@ -94,8 +99,13 @@ mod tests {
     #[test]
     fn test_genesis_block_new_with_leader() {
         let leader_keypair = Keypair::new();
-        let (genesis_block, mint) =
-            GenesisBlock::new_with_leader(20_000, leader_keypair.pubkey(), 123);
+        let leader_vote_account = Keypair::new().pubkey();
+        let (genesis_block, mint) = GenesisBlock::new_with_leader(
+            20_000,
+            leader_keypair.pubkey(),
+            123,
+            leader_vote_account,
+        );
 
         assert_eq!(genesis_block.tokens, 20_000);
         assert_eq!(genesis_block.mint_id, mint.pubkey());

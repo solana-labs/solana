@@ -92,7 +92,9 @@ mod tests {
     #[test]
     fn test_leader_schedule_via_bank() {
         let pubkey = Keypair::new().pubkey();
-        let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(2, pubkey, 2);
+        let voting_account_id = Keypair::new().pubkey();
+        let (genesis_block, _mint_keypair) =
+            GenesisBlock::new_with_leader(2, pubkey, 2, voting_account_id);
         let bank = Bank::new(&genesis_block);
 
         let ids_and_stakes: Vec<_> = bank.staked_nodes().into_iter().collect();
@@ -108,7 +110,8 @@ mod tests {
     #[test]
     fn test_leader_scheduler1_basic() {
         let pubkey = Keypair::new().pubkey();
-        let genesis_block = GenesisBlock::new_with_leader(2, pubkey, 2).0;
+        let voting_account_id = Keypair::new().pubkey();
+        let genesis_block = GenesisBlock::new_with_leader(2, pubkey, 2, voting_account_id).0;
         let bank = Bank::new(&genesis_block);
         let leader_scheduler = LeaderScheduler1::default();
         assert_eq!(leader_scheduler.slot_leader(&bank), pubkey);

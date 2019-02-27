@@ -493,6 +493,7 @@ mod test {
         make_active_set_entries, LeaderScheduler, LeaderSchedulerConfig,
     };
     use crate::replay_stage::ReplayStage;
+    use crate::voting_keypair::VotingKeypair;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
@@ -508,13 +509,16 @@ mod test {
         solana_logger::setup();
 
         // Set up dummy node to host a ReplayStage
-        let my_keypair = Keypair::new();
+        let my_keypair = Arc::new(Keypair::new());
         let my_id = my_keypair.pubkey();
         let my_node = Node::new_localhost_with_pubkey(my_id);
+        let my_voting_keypair = VotingKeypair::new_local(&my_keypair);
         let cluster_info_me = ClusterInfo::new(my_node.info.clone());
 
         // Create keypair for the old leader
-        let old_leader_id = Keypair::new().pubkey();
+        let old_leader_keypair = Arc::new(Keypair::new());
+        let old_leader_id = old_leader_keypair.pubkey();
+        let old_leader_voting_keypair = VotingKeypair::new_local(&old_leader_keypair);
 
         // Set up the LeaderScheduler so that my_id becomes the leader for epoch 1
         let ticks_per_slot = 16;
@@ -522,8 +526,12 @@ mod test {
         let leader_scheduler =
             Arc::new(RwLock::new(LeaderScheduler::new(&leader_scheduler_config)));
 
-        let (mut genesis_block, mint_keypair) =
-            GenesisBlock::new_with_leader(10_000, old_leader_id, 500);
+        let (mut genesis_block, mint_keypair) = GenesisBlock::new_with_leader(
+            10_000,
+            old_leader_id,
+            500,
+            old_leader_voting_keypair.pubkey(),
+        );
         genesis_block.ticks_per_slot = ticks_per_slot;
 
         // Create a ledger
@@ -537,10 +545,10 @@ mod test {
         info!("my_id: {:?}", my_id);
         info!("old_leader_id: {:?}", old_leader_id);
 
-        let my_keypair = Arc::new(my_keypair);
         let num_ending_ticks = 0;
-        let (active_set_entries, voting_keypair) = make_active_set_entries(
+        let active_set_entries = make_active_set_entries(
             &my_keypair,
+            &my_voting_keypair,
             &mint_keypair,
             100,
             1, // add a vote for tick_height = ticks_per_slot
@@ -569,7 +577,7 @@ mod test {
             let blocktree = Arc::new(blocktree);
             let (replay_stage, ledger_writer_recv) = ReplayStage::new(
                 my_id,
-                Some(Arc::new(voting_keypair)),
+                Some(Arc::new(my_voting_keypair)),
                 blocktree.clone(),
                 &Arc::new(RwLock::new(bank_forks)),
                 &bank_forks_info,
@@ -635,12 +643,14 @@ mod test {
         // Set up dummy node to host a ReplayStage
         let my_keypair = Keypair::new();
         let my_id = my_keypair.pubkey();
+        let my_voting_keypair = Arc::new(Keypair::new());
         let my_node = Node::new_localhost_with_pubkey(my_id);
 
         // Create keypair for the leader
         let leader_id = Keypair::new().pubkey();
-
-        let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10_000, leader_id, 500);
+        let leader_voting_keypair = Arc::new(Keypair::new());
+        let (genesis_block, _mint_keypair) =
+            GenesisBlock::new_with_leader(10_000, leader_id, 500, leader_voting_keypair.pubkey());
 
         let (my_ledger_path, tick_height, _last_entry_height, _last_id, _last_entry_id) =
             create_tmp_sample_blocktree(
@@ -654,7 +664,6 @@ mod test {
 
         // Set up the replay stage
         let exit = Arc::new(AtomicBool::new(false));
-        let voting_keypair = Arc::new(Keypair::new());
         let (to_leader_sender, _to_leader_receiver) = channel();
         {
             let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
@@ -670,7 +679,7 @@ mod test {
             let blocktree = Arc::new(blocktree);
             let (replay_stage, ledger_writer_recv) = ReplayStage::new(
                 my_keypair.pubkey(),
-                Some(voting_keypair.clone()),
+                Some(my_voting_keypair.clone()),
                 blocktree.clone(),
                 &Arc::new(RwLock::new(bank_forks)),
                 &bank_forks_info,
@@ -682,7 +691,7 @@ mod test {
                 &Arc::new(RpcSubscriptions::default()),
             );
 
-            let keypair = voting_keypair.as_ref();
+            let keypair = my_voting_keypair.as_ref();
             let vote = VoteTransaction::new_vote(keypair, 0, bank.last_id(), 0);
             cluster_info_me.write().unwrap().push_vote(vote);
 
@@ -715,15 +724,18 @@ mod test {
         let active_window_tick_length = ticks_per_slot * slots_per_epoch;
 
         // Set up dummy node to host a ReplayStage
-        let my_keypair = Keypair::new();
+        let my_keypair = Arc::new(Keypair::new());
         let my_id = my_keypair.pubkey();
         let my_node = Node::new_localhost_with_pubkey(my_id);
+        let my_voting_keypair = VotingKeypair::new_local(&my_keypair);
 
         // Create keypair for the leader
-        let leader_id = Keypair::new().pubkey();
+        let leader_keypair = Arc::new(Keypair::new());
+        let leader_id = leader_keypair.pubkey();
+        let leader_voting_keypair = VotingKeypair::new_local(&leader_keypair);
 
         let (mut genesis_block, mint_keypair) =
-            GenesisBlock::new_with_leader(10_000, leader_id, 500);
+            GenesisBlock::new_with_leader(10_000, leader_id, 500, leader_voting_keypair.pubkey());
         genesis_block.ticks_per_slot = ticks_per_slot;
 
         // Create the ledger
@@ -738,8 +750,9 @@ mod test {
         // Write two entries to the ledger so that the validator is in the active set:
         // 1) Give the validator a nonzero number of tokens 2) A vote from the validator.
         // This will cause leader rotation after the bootstrap height
-        let (active_set_entries, voting_keypair) = make_active_set_entries(
+        let active_set_entries = make_active_set_entries(
             &my_keypair,
+            &my_voting_keypair,
             &mint_keypair,
             100,
             1,
@@ -775,7 +788,7 @@ mod test {
                 .unwrap()
                 .expect("First slot metadata must exist");
 
-            let voting_keypair = Arc::new(voting_keypair);
+            let voting_keypair = Arc::new(my_voting_keypair);
             let blocktree = Arc::new(blocktree);
             let (replay_stage, ledger_writer_recv) = ReplayStage::new(
                 my_keypair.pubkey(),

@@ -476,7 +476,8 @@ mod tests {
     fn test_process_ledger_simple() {
         let leader_scheduler = Arc::new(RwLock::new(LeaderScheduler::default()));
         let leader_pubkey = Keypair::new().pubkey();
-        let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, leader_pubkey, 50);
+        let (genesis_block, mint_keypair) =
+            GenesisBlock::new_with_leader(100, leader_pubkey, 50, Keypair::new().pubkey());
         let (ledger_path, tick_height, mut entry_height, mut last_id, mut last_entry_id) =
             create_tmp_sample_blocktree("process_ledger_simple", &genesis_block, 0);
         debug!("ledger_path: {:?}", ledger_path);

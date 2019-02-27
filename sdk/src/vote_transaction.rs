@@ -5,7 +5,7 @@ use crate::pubkey::Pubkey;
 use crate::signature::{Keypair, KeypairUtil};
 use crate::system_instruction::SystemInstruction;
 use crate::system_program;
-use crate::transaction::{Instruction, Transaction};
+use crate::transaction::Transaction;
 use crate::vote_program::{self, Vote, VoteInstruction};
 use bincode::deserialize;
 
@@ -30,7 +30,7 @@ impl VoteTransaction {
         )
     }
 
-    pub fn new_account(
+    pub fn fund_vote_account(
         from_keypair: &Keypair,
         vote_account_id: Pubkey,
         last_id: Hash,
@@ -42,16 +42,30 @@ impl VoteTransaction {
             space: vote_program::get_max_size() as u64,
             program_id: vote_program::id(),
         };
-        Transaction::new_with_instructions(
-            &[from_keypair],
+        Transaction::new(
+            from_keypair,
             &[vote_account_id],
+            system_program::id(),
+            &create_tx,
             last_id,
             fee,
-            vec![system_program::id(), vote_program::id()],
-            vec![
-                Instruction::new(0, &create_tx, vec![0, 1]),
-                Instruction::new(1, &VoteInstruction::RegisterAccount, vec![0, 1]),
-            ],
+        )
+    }
+
+    pub fn register_vote_account<T: KeypairUtil>(
+        vote_keypair: &T,
+        last_id: Hash,
+        node_id: Pubkey,
+        fee: u64,
+    ) -> Transaction {
+        let instruction = VoteInstruction::RegisterAccount(node_id);
+        Transaction::new(
+            vote_keypair,
+            &[],
+            vote_program::id(),
+            &instruction,
+            last_id,
+            fee,
         )
     }
 

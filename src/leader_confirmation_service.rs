@@ -171,12 +171,11 @@ mod tests {
                 let validator_keypair = Arc::new(Keypair::new());
                 let last_id = ids[i];
                 let voting_keypair = VotingKeypair::new_local(&validator_keypair);
-                let voting_pubkey = voting_keypair.pubkey();
 
                 // Give the validator some tokens
                 bank.transfer(2, &mint_keypair, validator_keypair.pubkey(), last_id)
                     .unwrap();
-                new_vote_account(&validator_keypair, &voting_pubkey, &bank, 1);
+                new_vote_account(&validator_keypair, &voting_keypair, &bank, 1);
 
                 if i < 6 {
                     push_vote(&voting_keypair, &bank, (i + 1) as u64);

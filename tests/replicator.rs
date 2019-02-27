@@ -39,13 +39,14 @@ fn test_replicator_startup_basic() {
 
     info!("starting leader node");
     let leader_keypair = Arc::new(Keypair::new());
+    let voting_keypair = VotingKeypair::new_local(&leader_keypair);
     let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_info = leader_node.info.clone();
 
     let leader_ledger_path = "replicator_test_leader_ledger";
 
     let (genesis_block, mint_keypair) =
-        GenesisBlock::new_with_leader(1_000_000_000, leader_info.id, 42);
+        GenesisBlock::new_with_leader(1_000_000_000, leader_info.id, 42, voting_keypair.pubkey());
 
     let (leader_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_blocktree(leader_ledger_path, &genesis_block, 0);
@@ -53,8 +54,6 @@ fn test_replicator_startup_basic() {
     let validator_ledger_path = tmp_copy_blocktree!(&leader_ledger_path);
 
     {
-        let voting_keypair = VotingKeypair::new_local(&leader_keypair);
-
         let mut fullnode_config = FullnodeConfig::default();
         fullnode_config.storage_rotate_count = STORAGE_ROTATE_TEST_COUNT;
         let leader = Fullnode::new(
@@ -279,19 +278,19 @@ fn test_replicator_startup_ledger_hang() {
 
     info!("starting leader node");
     let leader_keypair = Arc::new(Keypair::new());
+    let voting_keypair = VotingKeypair::new_local(&leader_keypair);
     let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_info = leader_node.info.clone();
 
     let leader_ledger_path = "replicator_test_leader_ledger";
-    let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(100, leader_info.id, 42);
+    let (genesis_block, _mint_keypair) =
+        GenesisBlock::new_with_leader(100, leader_info.id, 42, voting_keypair.pubkey());
     let (leader_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_blocktree(leader_ledger_path, &genesis_block, 0);
 
     let validator_ledger_path = tmp_copy_blocktree!(&leader_ledger_path);
 
     {
-        let voting_keypair = VotingKeypair::new_local(&leader_keypair);
-
         let fullnode_config = FullnodeConfig::default();
         let _ = Fullnode::new(
             leader_node,

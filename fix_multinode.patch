@@ -1,0 +1,46 @@
+diff --git a/src/poh_recorder.rs b/src/poh_recorder.rs
+index 9a08137e..5e4346b8 100644
+--- a/src/poh_recorder.rs
++++ b/src/poh_recorder.rs
+@@ -59,8 +59,8 @@ impl PohRecorder {
+         // check_tick_height is called before flush cache, so it cannot overrun the bank
+         // so a bank that is so late that it's slot fully generated before it starts recording
+         // will fail instead of broadcasting any ticks
+-        let mut cache = vec![];
+-        std::mem::swap(&mut cache, &mut self.tick_cache.lock().unwrap());
++        //        std::mem::swap(&mut cache, &mut self.tick_cache.lock().unwrap());
++        let cache = &mut self.tick_cache.lock().unwrap();
+         if !cache.is_empty() {
+             trace!(
+                 "flush_cache: {} {} {}",
+@@ -68,6 +68,13 @@ impl PohRecorder {
+                 cache.len(),
+                 working_bank.max_tick_height
+             );
++            let len = cache.len()
++                - (working_bank
++                    .bank
++                    .tick_height()
++                    .saturating_sub(working_bank.max_tick_height)) as usize;
++            let cache: Vec<_> = cache.drain(..len).collect();
++
+             for t in &cache {
+                 working_bank.bank.register_tick(&t.id);
+             }
+@@ -77,8 +84,15 @@ impl PohRecorder {
+     }
+ 
+     fn tick_working_bank(&self, poh: &mut Poh, working_bank: &WorkingBank) -> Result<()> {
+-        Self::check_tick_height(&poh, working_bank)?;
+         self.flush_cache(working_bank)?;
++        //        match Self::check_tick_height(&poh, working_bank) {
++        //            Err(Error::PohRecorderError(PohRecorderError::MinHeightNotReached)) => Err(
++        //                Error::PohRecorderError(PohRecorderError::MinHeightNotReached),
++        //            )?,
++        //            Ok(()) => Self::register_and_send_tick(&mut *poh, working_bank),
++        //            _ => Ok(()),
++        //        }
++        Self::check_tick_height(&poh, working_bank)?;
+         Self::register_and_send_tick(&mut *poh, working_bank)
+     }
+ 

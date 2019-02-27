@@ -44,7 +44,7 @@ pub enum VoteInstruction {
     /// * Transaction::keys[0] - the validator id
     /// * Transaction::keys[1] - the new "vote account" to be associated with the validator
     /// identified by keys[0] for voting
-    RegisterAccount,
+    RegisterAccount(Pubkey),
     Vote(Vote),
     /// Clear the credits in the vote account
     /// * Transaction::keys[0] - the "vote account"
@@ -55,7 +55,7 @@ pub enum VoteInstruction {
 pub struct VoteState {
     pub votes: VecDeque<Vote>,
     pub node_id: Pubkey,
-    pub staker_id: Pubkey,
+    pub voter_id: Pubkey,
     credits: u64,
 }
 
@@ -68,13 +68,13 @@ pub fn get_max_size() -> usize {
 }
 
 impl VoteState {
-    pub fn new(node_id: Pubkey, staker_id: Pubkey) -> Self {
+    pub fn new(node_id: Pubkey, voter_id: Pubkey) -> Self {
         let votes = VecDeque::new();
         let credits = 0;
         Self {
             votes,
             node_id,
-            staker_id,
+            voter_id,
             credits,
         }
     }
@@ -118,23 +118,14 @@ impl VoteState {
 
 // TODO: Deprecate the RegisterAccount instruction and its awkward delegation
 // semantics.
-pub fn register(keyed_accounts: &mut [KeyedAccount]) -> Result<(), ProgramError> {
-    if !check_id(&keyed_accounts[1].account.owner) {
-        error!("account[1] is not assigned to the VOTE_PROGRAM");
+pub fn register(keyed_accounts: &mut [KeyedAccount], node_id: Pubkey) -> Result<(), ProgramError> {
+    if !check_id(&keyed_accounts[0].account.owner) {
+        error!("account[0] is not assigned to the VOTE_PROGRAM");
         Err(ProgramError::InvalidArgument)?;
     }
-
-    // TODO: This assumes keyed_accounts[0] is the SystemInstruction::CreateAccount
-    // that created keyed_accounts[1]. Putting any other signed instruction in
-    // keyed_accounts[0] would allow the owner to highjack the vote account and
-    // insert itself into the leader rotation.
-    let from_id = keyed_accounts[0].signer_key().unwrap();
-
-    // Awkwardly configure the voting account to claim that the account that
-    // initially funded it is both the identity of the staker and the fullnode
-    // that should sign blocks on behalf of the staker.
-    let vote_state = VoteState::new(*from_id, *from_id);
-    vote_state.serialize(&mut keyed_accounts[1].account.userdata)?;
+    let vote_account_id = keyed_accounts[0].signer_key().unwrap();
+    let vote_state = VoteState::new(node_id, *vote_account_id);
+    vote_state.serialize(&mut keyed_accounts[0].account.userdata)?;
 
     Ok(())
 }
@@ -170,15 +161,11 @@ pub fn create_vote_account(tokens: u64) -> Account {
 
 pub fn register_and_deserialize(
     from_id: &Pubkey,
-    from_account: &mut Account,
     vote_id: &Pubkey,
     vote_account: &mut Account,
 ) -> Result<VoteState, ProgramError> {
-    let mut keyed_accounts = [
-        KeyedAccount::new(from_id, true, from_account),
-        KeyedAccount::new(vote_id, false, vote_account),
-    ];
-    register(&mut keyed_accounts)?;
+    let mut keyed_accounts = [KeyedAccount::new(vote_id, true, vote_account)];
+    register(&mut keyed_accounts, *from_id)?;
     let vote_state = VoteState::deserialize(&vote_account.userdata).unwrap();
     Ok(vote_state)
 }
@@ -224,14 +211,11 @@ mod tests {
     #[test]
     fn test_voter_registration() {
         let from_id = Keypair::new().pubkey();
-        let mut from_account = Account::new(100, 0, Pubkey::default());
 
         let vote_id = Keypair::new().pubkey();
         let mut vote_account = create_vote_account(100);
 
-        let vote_state =
-            register_and_deserialize(&from_id, &mut from_account, &vote_id, &mut vote_account)
-                .unwrap();
+        let vote_state = register_and_deserialize(&from_id, &vote_id, &mut vote_account).unwrap();
         assert_eq!(vote_state.node_id, from_id);
         assert!(vote_state.votes.is_empty());
     }
@@ -239,11 +223,9 @@ mod tests {
     #[test]
     fn test_vote() {
         let from_id = Keypair::new().pubkey();
-        let mut from_account = Account::new(100, 0, Pubkey::default());
-
         let vote_id = Keypair::new().pubkey();
         let mut vote_account = create_vote_account(100);
-        register_and_deserialize(&from_id, &mut from_account, &vote_id, &mut vote_account).unwrap();
+        register_and_deserialize(&from_id, &vote_id, &mut vote_account).unwrap();
 
         let vote = Vote::new(1);
         let vote_state = vote_and_deserialize(&vote_id, &mut vote_account, vote.clone()).unwrap();

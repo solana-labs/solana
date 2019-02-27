@@ -71,9 +71,9 @@ fn main() -> Result<(), Box<dyn error::Error>> {
         num_tokens,
         bootstrap_leader_keypair.pubkey(),
         BOOTSTRAP_LEADER_TOKENS,
+        bootstrap_leader_vote_account_keypair.pubkey(),
     );
     genesis_block.mint_id = mint_keypair.pubkey();
-    genesis_block.bootstrap_leader_vote_account_id = bootstrap_leader_vote_account_keypair.pubkey();
 
     create_new_ledger(ledger_path, &genesis_block)?;
     Ok(())

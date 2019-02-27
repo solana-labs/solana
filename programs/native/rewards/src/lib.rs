@@ -48,14 +48,14 @@ fn redeem_vote_credits(keyed_accounts: &mut [KeyedAccount]) -> Result<(), Progra
 
     //// TODO: This assumes the staker_id is static. If not, it should use the staker_id
     //// at the time of voting, not at credit redemption.
-    if vote_state.staker_id != *keyed_accounts[2].unsigned_key() {
-        error!("account[2] was not the VOTE_PROGRAM's staking account");
+    if vote_state.voter_id != *keyed_accounts[0].signer_key().unwrap() {
+        error!("account[0] was not the VOTE_PROGRAM's staking account");
         Err(ProgramError::InvalidArgument)?;
     }
 
     // TODO: This assumes the stake is static. If not, it should use the account value
     // at the time of voting, not at credit redemption.
-    let stake = keyed_accounts[2].account.tokens;
+    let stake = keyed_accounts[0].account.tokens;
     if stake == 0 {
         error!("staking account has no stake");
         Err(ProgramError::InvalidArgument)?;
@@ -65,7 +65,7 @@ fn redeem_vote_credits(keyed_accounts: &mut [KeyedAccount]) -> Result<(), Progra
 
     // Transfer rewards from the rewards pool to the staking account.
     keyed_accounts[1].account.tokens -= lamports;
-    keyed_accounts[2].account.tokens += lamports;
+    keyed_accounts[0].account.tokens += lamports;
 
     Ok(())
 }
@@ -105,13 +105,10 @@ mod tests {
         rewards_account: &mut Account,
         vote_id: &Pubkey,
         vote_account: &mut Account,
-        to_id: &Pubkey,
-        to_account: &mut Account,
     ) -> Result<(), ProgramError> {
         let mut keyed_accounts = [
             KeyedAccount::new(vote_id, true, vote_account),
             KeyedAccount::new(rewards_id, false, rewards_account),
-            KeyedAccount::new(to_id, false, to_account),
         ];
         redeem_vote_credits(&mut keyed_accounts)
     }
@@ -119,17 +116,10 @@ mod tests {
     #[test]
     fn test_redeem_vote_credits_via_program() {
         let from_id = Keypair::new().pubkey();
-        let mut from_account = Account::new(100, 0, Pubkey::default());
 
         let vote_id = Keypair::new().pubkey();
         let mut vote_account = vote_program::create_vote_account(100);
-        vote_program::register_and_deserialize(
-            &from_id,
-            &mut from_account,
-            &vote_id,
-            &mut vote_account,
-        )
-        .unwrap();
+        vote_program::register_and_deserialize(&from_id, &vote_id, &mut vote_account).unwrap();
 
         for _ in 0..vote_program::MAX_VOTE_HISTORY {
             let vote = Vote::new(1);
@@ -149,19 +139,15 @@ mod tests {
 
         // TODO: Add VoteInstruction::RegisterStakerId so that we don't need to point the "to"
         // account to the "from" account.
-        let to_id = from_id;
-        let mut to_account = from_account;
-        let to_tokens = to_account.tokens;
+        let prev_balance = vote_account.tokens;
 
         redeem_vote_credits_(
             &rewards_id,
             &mut rewards_account,
             &vote_id,
             &mut vote_account,
-            &to_id,
-            &mut to_account,
         )
         .unwrap();
-        assert!(to_account.tokens > to_tokens);
+        assert!(vote_account.tokens > prev_balance);
     }
 }

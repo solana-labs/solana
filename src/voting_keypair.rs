@@ -99,19 +99,31 @@ impl VotingKeypair {
 #[cfg(test)]
 pub mod tests {
     use solana_runtime::bank::Bank;
-    use solana_sdk::pubkey::Pubkey;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::vote_transaction::VoteTransaction;
 
-    pub fn new_vote_account(
+    pub fn new_vote_account<T: KeypairUtil>(
         from_keypair: &Keypair,
-        voting_pubkey: &Pubkey,
+        voting_keypair: &T,
         bank: &Bank,
         num_tokens: u64,
     ) {
         let last_id = bank.last_id();
-        let tx = VoteTransaction::new_account(from_keypair, *voting_pubkey, last_id, num_tokens, 0);
-        bank.process_transaction(&tx).unwrap();
+        let create_tx = VoteTransaction::fund_vote_account(
+            from_keypair,
+            voting_keypair.pubkey(),
+            last_id,
+            num_tokens,
+            0,
+        );
+        let register_tx = VoteTransaction::register_vote_account(
+            voting_keypair,
+            last_id,
+            from_keypair.pubkey(),
+            0,
+        );
+        bank.process_transaction(&create_tx).unwrap();
+        bank.process_transaction(&register_tx).unwrap();
     }
 
     pub fn push_vote<T: KeypairUtil>(voting_keypair: &T, bank: &Bank, slot_height: u64) {
@@ -127,7 +139,7 @@ pub mod tests {
         num_tokens: u64,
         slot_height: u64,
     ) {
-        new_vote_account(from_keypair, &voting_keypair.pubkey(), bank, num_tokens);
+        new_vote_account(from_keypair, voting_keypair, bank, num_tokens);
         push_vote(voting_keypair, bank, slot_height);
     }
 }

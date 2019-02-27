@@ -8,7 +8,6 @@ use solana::socketaddr;
 use solana::thin_client::{poll_gossip_for_leader, ThinClient};
 use solana::voting_keypair::{RemoteVoteSigner, VotingKeypair};
 use solana_sdk::genesis_block::GenesisBlock;
-use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::vote_program::VoteState;
 use solana_sdk::vote_transaction::VoteTransaction;
@@ -48,9 +47,9 @@ fn parse_identity(matches: &ArgMatches<'_>) -> (Keypair, SocketAddr) {
     }
 }
 
-fn create_and_fund_vote_account(
+fn create_and_fund_vote_account<T: KeypairUtil>(
     client: &mut ThinClient,
-    vote_account: Pubkey,
+    vote_keypair: &T,
     node_keypair: &Arc<Keypair>,
 ) -> Result<()> {
     let pubkey = node_keypair.pubkey();
@@ -64,7 +63,7 @@ fn create_and_fund_vote_account(
     }
 
     // Create the vote account if necessary
-    if client.poll_get_balance(&vote_account).unwrap_or(0) == 0 {
+    if client.poll_get_balance(&vote_keypair.pubkey()).unwrap_or(0) == 0 {
         // Need at least two tokens as one token will be spent on a vote_account_new() transaction
         if node_balance < 2 {
             error!("insufficient tokens, two tokens required");
@@ -76,38 +75,51 @@ fn create_and_fund_vote_account(
         loop {
             let last_id = client.get_last_id();
             info!("create_and_fund_vote_account last_id={:?}", last_id);
-            let transaction =
-                VoteTransaction::new_account(node_keypair, vote_account, last_id, 1, 1);
+            let create_tx = VoteTransaction::fund_vote_account(
+                node_keypair,
+                vote_keypair.pubkey(),
+                last_id,
+                1,
+                1,
+            );
+            let register_tx = VoteTransaction::register_vote_account(
+                vote_keypair,
+                last_id,
+                node_keypair.pubkey(),
+                0,
+            );
 
-            match client.transfer_signed(&transaction) {
-                Ok(signature) => {
-                    match client.poll_for_signature(&signature) {
-                        Ok(_) => match client.poll_get_balance(&vote_account) {
-                            Ok(balance) => {
-                                info!("vote account balance: {}", balance);
-                                break;
-                            }
+            for tx in vec![create_tx, register_tx] {
+                match client.transfer_signed(&tx) {
+                    Ok(signature) => {
+                        match client.poll_for_signature(&signature) {
+                            Ok(_) => match client.poll_get_balance(&vote_keypair.pubkey()) {
+                                Ok(balance) => {
+                                    info!("vote account balance: {}", balance);
+                                    break;
+                                }
+                                Err(e) => {
+                                    info!("Failed to get vote account balance: {:?}", e);
+                                }
+                            },
                             Err(e) => {
-                                info!("Failed to get vote account balance: {:?}", e);
+                                info!(
+                                    "vote_account_new signature not found: {:?}: {:?}",
+                                    signature, e
+                                );
                             }
-                        },
-                        Err(e) => {
-                            info!(
-                                "vote_account_new signature not found: {:?}: {:?}",
-                                signature, e
-                            );
-                        }
-                    };
-                }
-                Err(e) => {
-                    info!("Failed to send vote_account_new transaction: {:?}", e);
-                }
-            };
+                        };
+                    }
+                    Err(e) => {
+                        info!("Failed to send vote_account_new transaction: {:?}", e);
+                    }
+                };
+            }
         }
     }
 
     info!("Checking for vote account registration");
-    let vote_account_user_data = client.get_account_userdata(&vote_account);
+    let vote_account_user_data = client.get_account_userdata(&vote_keypair.pubkey());
     if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
         if let Ok(vote_state) = VoteState::deserialize(&vote_account_user_data) {
             if vote_state.node_id == pubkey {
@@ -258,23 +270,11 @@ fn main() {
         Box::new(LocalVoteSigner::default())
     };
     let vote_signer = VotingKeypair::new_with_signer(&keypair, vote_signer);
-    let vote_account_id = vote_signer.pubkey();
-    info!("New vote account ID is {:?}", vote_account_id);
+    info!("New vote account ID is {:?}", vote_signer.pubkey());
 
     let gossip_addr = node.info.gossip;
-    let fullnode = Fullnode::new(
-        node,
-        &keypair,
-        ledger_path,
-        vote_signer,
-        cluster_entrypoint
-            .map(|i| NodeInfo::new_entry_point(&i))
-            .as_ref(),
-        &fullnode_config,
-    );
 
     let (rotation_sender, rotation_receiver) = channel();
-    fullnode.run(Some(rotation_sender));
 
     if !fullnode_config.voting_disabled {
         let leader_node_info = loop {
@@ -291,10 +291,21 @@ fn main() {
         };
 
         let mut client = mk_client(&leader_node_info);
-        if let Err(err) = create_and_fund_vote_account(&mut client, vote_account_id, &keypair) {
+        if let Err(err) = create_and_fund_vote_account(&mut client, &vote_signer, &keypair) {
             panic!("Failed to create_and_fund_vote_account: {:?}", err);
         }
     }
+    let fullnode = Fullnode::new(
+        node,
+        &keypair,
+        ledger_path,
+        vote_signer,
+        cluster_entrypoint
+            .map(|i| NodeInfo::new_entry_point(&i))
+            .as_ref(),
+        &fullnode_config,
+    );
+    fullnode.run(Some(rotation_sender));
 
     if let Some(filename) = init_complete_file {
         File::create(filename).unwrap_or_else(|_| panic!("Unable to create: {}", filename));

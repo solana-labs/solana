@@ -43,12 +43,14 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     solana_logger::setup();
 
     let leader_keypair = Arc::new(Keypair::new());
+    let voting_keypair = VotingKeypair::new_local(&leader_keypair);
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_data = leader.info.clone();
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (genesis_block, alice) = GenesisBlock::new_with_leader(10_000, leader_data.id, 500);
+    let (genesis_block, alice) =
+        GenesisBlock::new_with_leader(10_000, leader_data.id, 500, voting_keypair.pubkey());
     let ticks_per_slot = genesis_block.ticks_per_slot;
     info!("ticks_per_slot: {}", ticks_per_slot);
 
@@ -84,7 +86,6 @@ fn test_multi_node_ledger_window() -> result::Result<()> {
     }
 
     let fullnode_config = FullnodeConfig::default();
-    let voting_keypair = VotingKeypair::new_local(&leader_keypair);
     let leader = Fullnode::new(
         leader,
         &leader_keypair,
@@ -162,12 +163,14 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     const N: usize = 2;
     trace!("test_multi_node_validator_catchup_from_zero");
     let leader_keypair = Arc::new(Keypair::new());
+    let voting_keypair = VotingKeypair::new_local(&leader_keypair);
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_data = leader.info.clone();
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (genesis_block, alice) = GenesisBlock::new_with_leader(10_000, leader_data.id, 500);
+    let (genesis_block, alice) =
+        GenesisBlock::new_with_leader(10_000, leader_data.id, 500, voting_keypair.pubkey());
 
     let (genesis_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_blocktree("multi_node_validator_catchup_from_zero", &genesis_block, 0);
@@ -179,7 +182,6 @@ fn test_multi_node_validator_catchup_from_zero() -> result::Result<()> {
     let leader_ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
     ledger_paths.push(leader_ledger_path.clone());
     let fullnode_config = FullnodeConfig::default();
-    let voting_keypair = VotingKeypair::new_local(&leader_keypair);
     let server = Fullnode::new(
         leader,
         &leader_keypair,
@@ -340,11 +342,13 @@ fn test_multi_node_basic() {
 
     let leader_keypair = Arc::new(Keypair::new());
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
+    let voting_keypair = VotingKeypair::new_local(&leader_keypair);
     let leader_data = leader.info.clone();
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (genesis_block, alice) = GenesisBlock::new_with_leader(10_000, leader_data.id, 500);
+    let (genesis_block, alice) =
+        GenesisBlock::new_with_leader(10_000, leader_data.id, 500, voting_keypair.pubkey());
 
     let (genesis_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_blocktree("multi_node_basic", &genesis_block, 0);
@@ -354,7 +358,6 @@ fn test_multi_node_basic() {
     ledger_paths.push(leader_ledger_path.clone());
 
     let fullnode_config = FullnodeConfig::default();
-    let voting_keypair = VotingKeypair::new_local(&leader_keypair);
     let server = Fullnode::new(
         leader,
         &leader_keypair,
@@ -442,12 +445,14 @@ fn test_multi_node_basic() {
 fn test_boot_validator_from_file() {
     solana_logger::setup();
     let leader_keypair = Arc::new(Keypair::new());
+    let voting_keypair = VotingKeypair::new_local(&leader_keypair);
     let leader_pubkey = leader_keypair.pubkey();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let bob_pubkey = Keypair::new().pubkey();
     let mut ledger_paths = Vec::new();
 
-    let (genesis_block, alice) = GenesisBlock::new_with_leader(100_000, leader_pubkey, 1000);
+    let (genesis_block, alice) =
+        GenesisBlock::new_with_leader(100_000, leader_pubkey, 1000, voting_keypair.pubkey());
 
     let (genesis_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_blocktree("boot_validator_from_file", &genesis_block, 0);
@@ -458,7 +463,6 @@ fn test_boot_validator_from_file() {
 
     let leader_data = leader.info.clone();
     let fullnode_config = FullnodeConfig::default();
-    let voting_keypair = VotingKeypair::new_local(&leader_keypair);
     let leader_fullnode = Fullnode::new(
         leader,
         &leader_keypair,
@@ -555,12 +559,14 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
     solana_logger::setup();
 
     let leader_keypair = Arc::new(Keypair::new());
+    let voting_keypair = VotingKeypair::new_local(&leader_keypair);
     let initial_leader_balance = 500;
 
     let (genesis_block, alice) = GenesisBlock::new_with_leader(
         100_000 + 500 * solana::window_service::MAX_REPAIR_BACKOFF as u64,
         leader_keypair.pubkey(),
         initial_leader_balance,
+        voting_keypair.pubkey(),
     );
 
     let (ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
@@ -573,7 +579,6 @@ fn test_leader_restart_validator_start_from_old_ledger() -> result::Result<()> {
     let bob_pubkey = Keypair::new().pubkey();
 
     {
-        let voting_keypair = VotingKeypair::new_local(&leader_keypair);
         let (leader_data, leader_fullnode) =
             create_leader(&ledger_path, leader_keypair.clone(), voting_keypair);
         let leader_fullnode_exit = leader_fullnode.run(None);
@@ -671,11 +676,13 @@ fn test_multi_node_dynamic_network() {
     };
 
     let leader_keypair = Arc::new(Keypair::new());
+    let voting_keypair = VotingKeypair::new_local(&leader_keypair);
     let leader_pubkey = leader_keypair.pubkey().clone();
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let bob_pubkey = Keypair::new().pubkey();
 
-    let (genesis_block, alice) = GenesisBlock::new_with_leader(10_000_000, leader_pubkey, 500);
+    let (genesis_block, alice) =
+        GenesisBlock::new_with_leader(10_000_000, leader_pubkey, 500, voting_keypair.pubkey());
 
     let (genesis_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_blocktree("multi_node_dynamic_network", &genesis_block, 0);
@@ -690,7 +697,6 @@ fn test_multi_node_dynamic_network() {
 
     ledger_paths.push(leader_ledger_path.clone());
     let fullnode_config = FullnodeConfig::default();
-    let voting_keypair = VotingKeypair::new_local(&leader_keypair);
     let server = Fullnode::new(
         leader,
         &leader_keypair,
@@ -875,9 +881,11 @@ fn test_leader_to_validator_transition() {
 
     // Make a dummy validator id to be the next leader
     let validator_keypair = Arc::new(Keypair::new());
+    let validator_voting_keypair = VotingKeypair::new_local(&validator_keypair);
 
     // Create the leader node information
     let leader_keypair = Arc::new(Keypair::new());
+    let voting_keypair = VotingKeypair::new_local(&leader_keypair);
     let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_info = leader_node.info.clone();
 
@@ -893,7 +901,7 @@ fn test_leader_to_validator_transition() {
     );
 
     let (mut genesis_block, mint_keypair) =
-        GenesisBlock::new_with_leader(10_000, leader_info.id, 500);
+        GenesisBlock::new_with_leader(10_000, leader_info.id, 500, voting_keypair.pubkey());
     genesis_block.ticks_per_slot = ticks_per_slot;
 
     // Initialize the leader ledger. Make a mint and a genesis entry
@@ -903,8 +911,9 @@ fn test_leader_to_validator_transition() {
 
     // Write the votes entries to the ledger that will cause leader rotation
     // to validator_keypair at slot 2
-    let (active_set_entries, _) = make_active_set_entries(
+    let active_set_entries = make_active_set_entries(
         &validator_keypair,
+        &validator_voting_keypair,
         &mint_keypair,
         100,
         1,
@@ -922,7 +931,6 @@ fn test_leader_to_validator_transition() {
     info!("validator id: {}", validator_keypair.pubkey());
 
     // Start the leader node
-    let voting_keypair = VotingKeypair::new_local(&leader_keypair);
     let leader = Fullnode::new(
         leader_node,
         &leader_keypair,
@@ -973,11 +981,13 @@ fn test_leader_validator_basic() {
 
     // Create the leader node information
     let leader_keypair = Arc::new(Keypair::new());
+    let leader_voting_keypair = VotingKeypair::new_local(&leader_keypair);
     let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_info = leader_node.info.clone();
 
     // Create the validator node information
     let validator_keypair = Arc::new(Keypair::new());
+    let validator_voting_keypair = VotingKeypair::new_local(&validator_keypair);
     let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
     info!("leader id: {}", leader_keypair.pubkey());
@@ -993,7 +1003,7 @@ fn test_leader_validator_basic() {
     );
 
     let (mut genesis_block, mint_keypair) =
-        GenesisBlock::new_with_leader(10_000, leader_info.id, 500);
+        GenesisBlock::new_with_leader(10_000, leader_info.id, 500, leader_voting_keypair.pubkey());
     genesis_block.ticks_per_slot = ticks_per_slot;
 
     // Make a common mint and a genesis entry for both leader + validator ledgers
@@ -1001,8 +1011,9 @@ fn test_leader_validator_basic() {
         create_tmp_sample_blocktree("test_leader_validator_basic", &genesis_block, 0);
 
     // Add validator vote on tick height 1
-    let (active_set_entries, _) = make_active_set_entries(
+    let active_set_entries = make_active_set_entries(
         &validator_keypair,
+        &validator_voting_keypair,
         &mint_keypair,
         100,
         0,
@@ -1024,12 +1035,11 @@ fn test_leader_validator_basic() {
     ledger_paths.push(validator_ledger_path.clone());
 
     // Start the validator node
-    let voting_keypair = VotingKeypair::new_local(&validator_keypair);
     let validator = Fullnode::new(
         validator_node,
         &validator_keypair,
         &validator_ledger_path,
-        voting_keypair,
+        validator_voting_keypair,
         Some(&leader_info),
         &fullnode_config,
     );
@@ -1037,12 +1047,11 @@ fn test_leader_validator_basic() {
     let validator_exit = validator.run(Some(validator_rotation_sender));
 
     // Start the leader fullnode
-    let voting_keypair = VotingKeypair::new_local(&leader_keypair);
     let leader = Fullnode::new(
         leader_node,
         &leader_keypair,
         &leader_ledger_path,
-        voting_keypair,
+        leader_voting_keypair,
         Some(&leader_info),
         &fullnode_config,
     );
@@ -1114,6 +1123,7 @@ fn test_dropped_handoff_recovery() {
 
     // Create the bootstrap leader node information
     let bootstrap_leader_keypair = Arc::new(Keypair::new());
+    let bootstrap_voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
     let bootstrap_leader_node = Node::new_localhost_with_pubkey(bootstrap_leader_keypair.pubkey());
     let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
@@ -1124,8 +1134,12 @@ fn test_dropped_handoff_recovery() {
     fullnode_config.leader_scheduler_config =
         LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, slots_per_epoch);
 
-    let (mut genesis_block, mint_keypair) =
-        GenesisBlock::new_with_leader(10_000, bootstrap_leader_info.id, 500);
+    let (mut genesis_block, mint_keypair) = GenesisBlock::new_with_leader(
+        10_000,
+        bootstrap_leader_info.id,
+        500,
+        bootstrap_voting_keypair.pubkey(),
+    );
     genesis_block.ticks_per_slot = ticks_per_slot;
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
@@ -1139,6 +1153,7 @@ fn test_dropped_handoff_recovery() {
 
     // Create the validator keypair that will be the next leader in line
     let next_leader_keypair = Arc::new(Keypair::new());
+    let next_leader_vote_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
 
     // Create a common ledger with entries in the beginning that will add only
     // the "next_leader" validator to the active set for leader election, guaranteeing
@@ -1148,8 +1163,9 @@ fn test_dropped_handoff_recovery() {
 
     // Make the entries to give the next_leader validator some stake so that they will be in
     // leader election active set
-    let (active_set_entries, _) = make_active_set_entries(
+    let active_set_entries = make_active_set_entries(
         &next_leader_keypair,
+        &next_leader_vote_keypair,
         &mint_keypair,
         100,
         1,
@@ -1172,7 +1188,6 @@ fn test_dropped_handoff_recovery() {
     info!("bootstrap_leader: {}", bootstrap_leader_keypair.pubkey());
     info!("'next leader': {}", next_leader_keypair.pubkey());
 
-    let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
     // Start up the bootstrap leader fullnode
     let bootstrap_leader_ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
     ledger_paths.push(bootstrap_leader_ledger_path.clone());
@@ -1181,7 +1196,7 @@ fn test_dropped_handoff_recovery() {
         bootstrap_leader_node,
         &bootstrap_leader_keypair,
         &bootstrap_leader_ledger_path,
-        voting_keypair,
+        bootstrap_voting_keypair,
         Some(&bootstrap_leader_info),
         &fullnode_config,
     );
@@ -1273,6 +1288,7 @@ fn test_full_leader_validator_network() {
 
     // Create the bootstrap leader node information
     let bootstrap_leader_keypair = Arc::new(Keypair::new());
+    let bootstrap_leader_vote_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
     info!("bootstrap leader: {:?}", bootstrap_leader_keypair.pubkey());
     let bootstrap_leader_node = Node::new_localhost_with_pubkey(bootstrap_leader_keypair.pubkey());
     let bootstrap_leader_info = bootstrap_leader_node.info.clone();
@@ -1282,11 +1298,16 @@ fn test_full_leader_validator_network() {
     // Create the validator keypairs
     for _ in 0..N {
         let validator_keypair = Arc::new(Keypair::new());
-        node_keypairs.push_back(validator_keypair);
+        let validator_vote_keypair = Keypair::new();
+        node_keypairs.push_back((validator_keypair, validator_vote_keypair));
     }
 
-    let (mut genesis_block, mint_keypair) =
-        GenesisBlock::new_with_leader(10_000, bootstrap_leader_info.id, 500);
+    let (mut genesis_block, mint_keypair) = GenesisBlock::new_with_leader(
+        10_000,
+        bootstrap_leader_info.id,
+        500,
+        bootstrap_leader_vote_keypair.pubkey(),
+    );
     genesis_block.ticks_per_slot = ticks_per_slot;
 
     // Make a common mint and a genesis entry for both leader + validator's ledgers
@@ -1303,11 +1324,12 @@ fn test_full_leader_validator_network() {
     let mut ledger_paths = Vec::new();
     ledger_paths.push(bootstrap_leader_ledger_path.clone());
 
-    for node_keypair in node_keypairs.iter() {
+    for node_keypairs in node_keypairs.iter() {
         // Make entries to give each validator node some stake so that they will be in the
         // leader election active set
-        let (active_set_entries, _) = make_active_set_entries(
-            node_keypair,
+        let active_set_entries = make_active_set_entries(
+            &node_keypairs.0,
+            &node_keypairs.1,
             &mint_keypair,
             100,
             0,
@@ -1335,20 +1357,19 @@ fn test_full_leader_validator_network() {
 
     info!("Start up the validators");
     // Start up the validators
-    for kp in node_keypairs.into_iter() {
+    for kps in node_keypairs.into_iter() {
         let validator_ledger_path = tmp_copy_blocktree!(&bootstrap_leader_ledger_path);
 
         ledger_paths.push(validator_ledger_path.clone());
 
-        let validator_id = kp.pubkey();
+        let validator_id = kps.0.pubkey();
         let validator_node = Node::new_localhost_with_pubkey(validator_id);
-        let voting_keypair = VotingKeypair::new_local(&kp);
         info!("validator: {:?}", validator_id);
         let validator = Fullnode::new(
             validator_node,
-            &kp,
+            &kps.0,
             &validator_ledger_path,
-            voting_keypair,
+            kps.1,
             Some(&bootstrap_leader_info),
             &fullnode_config,
         );
@@ -1362,12 +1383,11 @@ fn test_full_leader_validator_network() {
     }
 
     info!("Start up the bootstrap leader");
-    let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
     let bootstrap_leader = Fullnode::new(
         bootstrap_leader_node,
         &bootstrap_leader_keypair,
         &bootstrap_leader_ledger_path,
-        voting_keypair,
+        bootstrap_leader_vote_keypair,
         Some(&bootstrap_leader_info),
         &fullnode_config,
     );
@@ -1475,7 +1495,8 @@ fn test_broadcast_last_tick() {
     solana_logger::setup();
 
     // Create the bootstrap leader node information
-    let bootstrap_leader_keypair = Keypair::new();
+    let bootstrap_leader_keypair = Arc::new(Keypair::new());
+    let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
     let bootstrap_leader_node = Node::new_localhost_with_pubkey(bootstrap_leader_keypair.pubkey());
     let bootstrap_leader_info = bootstrap_leader_node.info.clone();
 
@@ -1488,8 +1509,12 @@ fn test_broadcast_last_tick() {
     fullnode_config.leader_scheduler_config =
         LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, ticks_per_epoch);
 
-    let (mut genesis_block, _mint_keypair) =
-        GenesisBlock::new_with_leader(10_000, bootstrap_leader_info.id, 500);
+    let (mut genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(
+        10_000,
+        bootstrap_leader_info.id,
+        500,
+        voting_keypair.pubkey(),
+    );
     genesis_block.ticks_per_slot = ticks_per_slot;
 
     // Create leader ledger
@@ -1527,7 +1552,6 @@ fn test_broadcast_last_tick() {
 
     // Start up the bootstrap leader fullnode
     let bootstrap_leader_keypair = Arc::new(bootstrap_leader_keypair);
-    let voting_keypair = VotingKeypair::new_local(&bootstrap_leader_keypair);
 
     let bootstrap_leader = Fullnode::new(
         bootstrap_leader_node,
@@ -1692,13 +1716,18 @@ fn test_fullnode_rotate(
 
     // Create the leader node information
     let leader_keypair = Arc::new(Keypair::new());
+    let leader_vote_keypair = VotingKeypair::new_local(&leader_keypair);
     let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_info = leader.info.clone();
     let mut leader_should_be_leader = true;
 
     // Create the Genesis block using leader's keypair
-    let (mut genesis_block, mint_keypair) =
-        GenesisBlock::new_with_leader(1_000_000_000_000_000_000, leader_keypair.pubkey(), 123);
+    let (mut genesis_block, mint_keypair) = GenesisBlock::new_with_leader(
+        1_000_000_000_000_000_000,
+        leader_keypair.pubkey(),
+        123,
+        leader_vote_keypair.pubkey(),
+    );
     genesis_block.ticks_per_slot = ticks_per_slot;
 
     // Make a common mint and a genesis entry for both leader + validator ledgers
@@ -1714,13 +1743,15 @@ fn test_fullnode_rotate(
 
     // Create the validator node information
     let validator_keypair = Arc::new(Keypair::new());
+    let validator_vote_keypair = VotingKeypair::new_local(&leader_keypair);
     let validator = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
     // Setup the cluster with a single node
     if include_validator {
         // Add validator vote on tick height 1
-        let (active_set_entries, _) = make_active_set_entries(
+        let active_set_entries = make_active_set_entries(
             &validator_keypair,
+            &validator_vote_keypair,
             &mint_keypair,
             100,
             0,
@@ -1770,7 +1801,7 @@ fn test_fullnode_rotate(
             validator,
             &validator_keypair,
             &validator_ledger_path,
-            VotingKeypair::new_local(&validator_keypair),
+            validator_vote_keypair,
             Some(&leader_info),
             &fullnode_config,
         );
@@ -1783,7 +1814,7 @@ fn test_fullnode_rotate(
         leader,
         &leader_keypair,
         &leader_ledger_path,
-        VotingKeypair::new_local(&leader_keypair),
+        leader_vote_keypair,
         None,
         &fullnode_config,
     );

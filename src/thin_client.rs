@@ -467,14 +467,15 @@ pub fn new_fullnode(ledger_name: &'static str) -> (Fullnode, NodeInfo, Keypair, 
     let node_keypair = Arc::new(Keypair::new());
     let node = Node::new_localhost_with_pubkey(node_keypair.pubkey());
     let node_info = node.info.clone();
+    let vote_account_keypair = Arc::new(Keypair::new());
+    let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
 
-    let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(10_000, node_info.id, 42);
+    let (genesis_block, mint_keypair) =
+        GenesisBlock::new_with_leader(10_000, node_info.id, 42, voting_keypair.pubkey());
 
     let (ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_blocktree(ledger_name, &genesis_block, genesis_block.ticks_per_slot);
 
-    let vote_account_keypair = Arc::new(Keypair::new());
-    let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
     let node = Fullnode::new(
         node,
         &node_keypair,
@@ -594,7 +595,14 @@ mod tests {
         let last_id = client.get_last_id();
 
         let transaction =
-            VoteTransaction::new_account(&validator_keypair, vote_account_id, last_id, 1, 1);
+            VoteTransaction::fund_vote_account(&validator_keypair, vote_account_id, last_id, 1, 1);
+        client.transfer_signed(&transaction).unwrap();
+        let transaction = VoteTransaction::register_vote_account(
+            &validator_vote_account_keypair,
+            last_id,
+            validator_keypair.pubkey(),
+            0,
+        );
         let signature = client.transfer_signed(&transaction).unwrap();
         client.poll_for_signature(&signature).unwrap();
 

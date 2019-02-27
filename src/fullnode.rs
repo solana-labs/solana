@@ -477,8 +477,12 @@ mod tests {
 
         let validator_keypair = Keypair::new();
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
-        let (genesis_block, _mint_keypair) =
-            GenesisBlock::new_with_leader(10_000, leader_keypair.pubkey(), 1000);
+        let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(
+            10_000,
+            leader_keypair.pubkey(),
+            1000,
+            Keypair::new().pubkey(),
+        );
         let (validator_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
             create_tmp_sample_blocktree("validator_exit", &genesis_block, 0);
 
@@ -504,8 +508,12 @@ mod tests {
             .map(|i| {
                 let validator_keypair = Keypair::new();
                 let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
-                let (genesis_block, _mint_keypair) =
-                    GenesisBlock::new_with_leader(10_000, leader_keypair.pubkey(), 1000);
+                let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(
+                    10_000,
+                    leader_keypair.pubkey(),
+                    1000,
+                    Keypair::new().pubkey(),
+                );
                 let (
                     validator_ledger_path,
                     _tick_height,
@@ -563,8 +571,12 @@ mod tests {
         let mut fullnode_config = FullnodeConfig::default();
         fullnode_config.leader_scheduler_config = leader_scheduler_config;
 
-        let (mut genesis_block, _mint_keypair) =
-            GenesisBlock::new_with_leader(10_000, bootstrap_leader_keypair.pubkey(), 500);
+        let (mut genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(
+            10_000,
+            bootstrap_leader_keypair.pubkey(),
+            500,
+            voting_keypair.pubkey(),
+        );
         genesis_block.ticks_per_slot = fullnode_config.ticks_per_slot();
 
         let (
@@ -613,11 +625,15 @@ mod tests {
 
         // Create the leader and validator nodes
         let bootstrap_leader_keypair = Arc::new(Keypair::new());
+        let bootstrap_leader_vote_keypair = Keypair::new();
         let validator_keypair = Arc::new(Keypair::new());
+        let validator_vote_keypair = Keypair::new();
         let (bootstrap_leader_node, validator_node, bootstrap_leader_ledger_path, _, _) =
             setup_leader_validator(
                 &bootstrap_leader_keypair,
+                &bootstrap_leader_vote_keypair,
                 &validator_keypair,
+                &validator_vote_keypair,
                 0,
                 // Generate enough ticks for an epochs to flush the bootstrap_leader's vote at
                 // tick_height = 0 from the leader scheduler's active window
@@ -687,14 +703,18 @@ mod tests {
         let ticks_per_slot = 10;
         let slots_per_epoch = 4;
         let leader_keypair = Arc::new(Keypair::new());
+        let leader_vote_keypair = Keypair::new();
         let validator_keypair = Arc::new(Keypair::new());
+        let validator_vote_keypair = Keypair::new();
         let mut fullnode_config = FullnodeConfig::default();
         fullnode_config.leader_scheduler_config =
             LeaderSchedulerConfig::new(ticks_per_slot, slots_per_epoch, slots_per_epoch);
         let (leader_node, validator_node, validator_ledger_path, ledger_initial_len, last_id) =
             setup_leader_validator(
                 &leader_keypair,
+                &leader_vote_keypair,
                 &validator_keypair,
+                &validator_vote_keypair,
                 0,
                 0,
                 "test_validator_to_leader_transition",
@@ -707,14 +727,12 @@ mod tests {
         info!("leader: {:?}", leader_id);
         info!("validator: {:?}", validator_info.id);
 
-        let voting_keypair = Keypair::new();
-
         // Start the validator
         let validator = Fullnode::new(
             validator_node,
             &validator_keypair,
             &validator_ledger_path,
-            voting_keypair,
+            validator_vote_keypair,
             Some(&leader_node.info),
             &fullnode_config,
         );
@@ -776,7 +794,9 @@ mod tests {
 
     fn setup_leader_validator(
         leader_keypair: &Arc<Keypair>,
+        leader_vote_keypair: &Keypair,
         validator_keypair: &Arc<Keypair>,
+        validator_vote_keypair: &Keypair,
         num_genesis_ticks: u64,
         num_ending_ticks: u64,
         test_name: &str,
@@ -790,8 +810,12 @@ mod tests {
         // Create validator identity
         assert!(num_genesis_ticks <= ticks_per_slot);
 
-        let (mut genesis_block, mint_keypair) =
-            GenesisBlock::new_with_leader(10_000, leader_node.info.id, 500);
+        let (mut genesis_block, mint_keypair) = GenesisBlock::new_with_leader(
+            10_000,
+            leader_node.info.id,
+            500,
+            leader_vote_keypair.pubkey(),
+        );
         genesis_block.ticks_per_slot = ticks_per_slot;
 
         let (ledger_path, tick_height, mut entry_height, last_id, last_entry_id) =
@@ -800,8 +824,9 @@ mod tests {
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
 
         // Write two entries so that the validator is in the active set:
-        let (active_set_entries, _) = make_active_set_entries(
+        let active_set_entries = make_active_set_entries(
             validator_keypair,
+            validator_vote_keypair,
             &mint_keypair,
             10,
             0,
