@@ -501,7 +501,7 @@ mod tests {
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
         let (genesis_block, _mint_keypair) =
             GenesisBlock::new_with_leader(10_000, leader_keypair.pubkey(), 1000);
-        let (validator_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
+        let (validator_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
 
         let validator = Fullnode::new(
             validator_node,
@@ -522,16 +522,12 @@ mod tests {
 
         let mut ledger_paths = vec![];
         let validators: Vec<Fullnode> = (0..2)
-            .map(|i| {
+            .map(|_| {
                 let validator_keypair = Keypair::new();
                 let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
                 let (genesis_block, _mint_keypair) =
                     GenesisBlock::new_with_leader(10_000, leader_keypair.pubkey(), 1000);
-                let (validator_ledger_path, _last_id) = create_new_tmp_ledger(
-                    &format!("validator_parallel_exit_{}", i),
-                    &genesis_block,
-                )
-                .unwrap();
+                let (validator_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
                 ledger_paths.push(validator_ledger_path.clone());
                 Fullnode::new(
                     validator_node,
@@ -579,8 +575,7 @@ mod tests {
         genesis_block.ticks_per_slot = ticks_per_slot;
         genesis_block.slots_per_epoch = slots_per_epoch;
 
-        let (bootstrap_leader_ledger_path, _last_id) =
-            create_new_tmp_ledger!(&genesis_block).unwrap();
+        let (bootstrap_leader_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
 
         // Start the bootstrap leader
         let bootstrap_leader = Fullnode::new(
@@ -788,7 +783,7 @@ mod tests {
             GenesisBlock::new_with_leader(10_000, leader_node.info.id, 500);
         genesis_block.ticks_per_slot = ticks_per_slot;
 
-        let (ledger_path, last_id) = create_new_tmp_ledger(test_name, &genesis_block).unwrap();
+        let (ledger_path, last_id) = create_new_tmp_ledger!(&genesis_block);
 
         // Add entries so that the validator is in the active set, then finish up the slot with
         // ticks (and maybe add extra slots full of empty ticks)

@@ -270,7 +270,7 @@ mod tests {
         */
 
         // Create a new ledger with slot 0 full of ticks
-        let (ledger_path, mut last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
+        let (ledger_path, mut last_id) = create_new_tmp_ledger!(&genesis_block);
         debug!("ledger_path: {:?}", ledger_path);
 
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot)
@@ -319,7 +319,7 @@ mod tests {
         let ticks_per_slot = genesis_block.ticks_per_slot;
 
         // Create a new ledger with slot 0 full of ticks
-        let (ledger_path, last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
+        let (ledger_path, last_id) = create_new_tmp_ledger!(&genesis_block);
         debug!("ledger_path: {:?}", ledger_path);
         let mut last_entry_id = last_id;
 
@@ -445,7 +445,7 @@ mod tests {
     fn test_process_ledger_simple() {
         let leader_pubkey = Keypair::new().pubkey();
         let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, leader_pubkey, 50);
-        let (ledger_path, last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
+        let (ledger_path, last_id) = create_new_tmp_ledger!(&genesis_block);
         debug!("ledger_path: {:?}", ledger_path);
 
         let mut entries = vec![];

@@ -42,13 +42,9 @@ fn test_replicator_startup_basic() {
     let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_info = leader_node.info.clone();
 
-    let leader_ledger_path = "replicator_test_leader_ledger";
-
     let (genesis_block, mint_keypair) =
         GenesisBlock::new_with_leader(1_000_000_000, leader_info.id, 42);
-
-    let (leader_ledger_path, _last_id) =
-        create_new_tmp_ledger(leader_ledger_path, &genesis_block).unwrap();
+    let (leader_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
 
     let validator_ledger_path = tmp_copy_blocktree!(&leader_ledger_path);
 
@@ -279,17 +275,13 @@ fn test_replicator_startup_ledger_hang() {
 
     let (genesis_block, _mint_keypair) =
         GenesisBlock::new_with_leader(100, leader_keypair.pubkey(), 42);
-    let (replicator_test_replicator_ledger, _last_id) =
-        create_new_tmp_ledger("replicator_test_replicator_ledger", &genesis_block).unwrap();
+    let (replicator_test_replicator_ledger, _last_id) = create_new_tmp_ledger!(&genesis_block);
 
     info!("starting leader node");
     let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
     let leader_info = leader_node.info.clone();
 
-    let leader_ledger_path = "replicator_test_leader_ledger";
-    let (leader_ledger_path, _last_id) =
-        create_new_tmp_ledger(leader_ledger_path, &genesis_block).unwrap();
-
+    let (leader_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
     let validator_ledger_path = tmp_copy_blocktree!(&leader_ledger_path);
 
     {

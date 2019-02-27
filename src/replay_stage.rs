@@ -489,7 +489,7 @@ mod test {
 
         let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(10_000, leader_id, 500);
 
-        let (my_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block).unwrap();
+        let (my_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
 
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
