@@ -1,6 +1,5 @@
 //! The `window_service` provides a thread for maintaining a window (tail of the ledger).
 //!
-use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
 use crate::cluster_info::ClusterInfo;
 use crate::db_window::*;
@@ -30,7 +29,6 @@ pub enum WindowServiceReturnType {
 fn recv_window(
     blocktree: &Arc<Blocktree>,
     id: &Pubkey,
-    bank_forks: &Arc<RwLock<BankForks>>,
     r: &BlobReceiver,
     retransmit: &BlobSender,
 ) -> Result<()> {
@@ -49,7 +47,7 @@ fn recv_window(
             .to_owned(),
     );
 
-    retransmit_blobs(&dq, bank_forks, retransmit, id)?;
+    retransmit_blobs(&dq, retransmit, id)?;
 
     //send a contiguous set of blocks
     trace!("{} num blobs received: {}", id, dq.len());
@@ -62,7 +60,7 @@ fn recv_window(
 
         trace!("{} window pix: {} size: {}", id, pix, meta_size);
 
-        let _ = process_blob(bank_forks, blocktree, &b);
+        let _ = process_blob(blocktree, &b);
     }
 
     trace!(
@@ -104,7 +102,6 @@ impl WindowService {
         r: BlobReceiver,
         retransmit: BlobSender,
         repair_socket: Arc<UdpSocket>,
-        bank_forks: Arc<RwLock<BankForks>>,
         exit: Arc<AtomicBool>,
     ) -> WindowService {
         let exit_ = exit.clone();
@@ -124,7 +121,7 @@ impl WindowService {
                     if exit.load(Ordering::Relaxed) {
                         break;
                     }
-                    if let Err(e) = recv_window(&blocktree, &id, &bank_forks, &r, &retransmit) {
+                    if let Err(e) = recv_window(&blocktree, &id, &r, &retransmit) {
                         match e {
                             Error::RecvTimeoutError(RecvTimeoutError::Disconnected) => break,
                             Error::RecvTimeoutError(RecvTimeoutError::Timeout) => (),
@@ -156,7 +153,6 @@ impl Service for WindowService {
 
 #[cfg(test)]
 mod test {
-    use crate::bank_forks::BankForks;
     use crate::blocktree::get_tmp_ledger_path;
     use crate::blocktree::Blocktree;
     use crate::cluster_info::{ClusterInfo, Node};
@@ -164,8 +160,6 @@ mod test {
     use crate::service::Service;
     use crate::streamer::{blob_receiver, responder};
     use crate::window_service::WindowService;
-    use solana_runtime::bank::Bank;
-    use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::hash::Hash;
     use std::fs::remove_dir_all;
     use std::net::UdpSocket;
@@ -195,17 +189,12 @@ mod test {
         let blocktree = Arc::new(
             Blocktree::open(&blocktree_path).expect("Expected to be able to open database ledger"),
         );
-        let (genesis_block, _) = GenesisBlock::new(100);
-        let bank0 = Bank::new(&genesis_block);
-        let bank_id = 0;
-        let bank_forks = BankForks::new(bank_id, bank0);
         let t_window = WindowService::new(
             blocktree,
             subs,
             r_reader,
             s_retransmit,
             Arc::new(leader_node.sockets.repair),
-            Arc::new(RwLock::new(bank_forks)),
             exit.clone(),
         );
         let t_responder = {
@@ -216,11 +205,16 @@ mod test {
             let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
             let num_blobs_to_make = 10;
             let gossip_address = &leader_node.info.gossip;
-            let msgs =
-                make_consecutive_blobs(num_blobs_to_make, 0, Hash::default(), &gossip_address)
-                    .into_iter()
-                    .rev()
-                    .collect();;
+            let msgs = make_consecutive_blobs(
+                &me_id,
+                num_blobs_to_make,
+                0,
+                Hash::default(),
+                &gossip_address,
+            )
+            .into_iter()
+            .rev()
+            .collect();;
             s_responder.send(msgs).expect("send");
             t_responder
         };
@@ -267,17 +261,12 @@ mod test {
         let blocktree = Arc::new(
             Blocktree::open(&blocktree_path).expect("Expected to be able to open database ledger"),
         );
-        let (genesis_block, _) = GenesisBlock::new(100);
-        let bank0 = Bank::new(&genesis_block);
-        let bank_id = 0;
-        let bank_forks = BankForks::new(bank_id, bank0);
         let t_window = WindowService::new(
             blocktree,
             subs.clone(),
             r_reader,
             s_retransmit,
             Arc::new(leader_node.sockets.repair),
-            Arc::new(RwLock::new(bank_forks)),
             exit.clone(),
         );
         let t_responder = {
@@ -286,7 +275,8 @@ mod test {
                 leader_node.sockets.tvu.into_iter().map(Arc::new).collect();
             let t_responder = responder("window_send_test", blob_sockets[0].clone(), r_responder);
             let mut msgs = Vec::new();
-            let blobs = make_consecutive_blobs(14u64, 0, Hash::default(), &leader_node.info.gossip);
+            let blobs =
+                make_consecutive_blobs(&me_id, 14u64, 0, Hash::default(), &leader_node.info.gossip);
 
             for v in 0..10 {
                 let i = 9 - v;

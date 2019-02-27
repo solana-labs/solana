@@ -329,6 +329,7 @@ impl CodingGenerator {
             for data_blob in &data_locks[NUM_DATA - NUM_CODING..NUM_DATA] {
                 let index = data_blob.index();
                 let slot = data_blob.slot();
+                let id = data_blob.id();
                 let should_forward = data_blob.should_forward();
 
                 let coding_blob = SharedBlob::default();
@@ -336,6 +337,7 @@ impl CodingGenerator {
                     let mut coding_blob = coding_blob.write().unwrap();
                     coding_blob.set_index(index);
                     coding_blob.set_slot(slot);
+                    coding_blob.set_id(&id);
                     coding_blob.forward(should_forward);
                     coding_blob.set_size(max_data_size);
                     coding_blob.set_coding();
@@ -509,6 +511,7 @@ pub mod test {
     use crate::window::WindowSlot;
     use rand::{thread_rng, Rng};
     use solana_sdk::pubkey::Pubkey;
+    use solana_sdk::signature::{Keypair, KeypairUtil};
     use std::sync::Arc;
 
     #[test]
@@ -761,6 +764,7 @@ pub mod test {
 
                     let index = data_rl.index();
                     let slot = data_rl.slot();
+                    let id = data_rl.id();
                     let should_forward = data_rl.should_forward();
 
                     trace!(
@@ -771,6 +775,7 @@ pub mod test {
                     );
                     coding_wl.set_index(index);
                     coding_wl.set_slot(slot);
+                    coding_wl.set_id(&id);
                     coding_wl.forward(should_forward);
                 }
                 coding_wl.set_size(max_data_size);
@@ -889,7 +894,7 @@ pub mod test {
         }
 
         // Make some dummy slots
-        index_blobs(&blobs, &mut (offset as u64), slot);
+        index_blobs(&blobs, &Keypair::new().pubkey(), &mut (offset as u64), slot);
 
         for b in blobs {
             let idx = b.read().unwrap().index() as usize % WINDOW_SIZE;
@@ -902,7 +907,7 @@ pub mod test {
     fn generate_test_blobs(offset: usize, num_blobs: usize) -> Vec<SharedBlob> {
         let blobs = make_tiny_test_entries(num_blobs).to_shared_blobs();
 
-        index_blobs(&blobs, &mut (offset as u64), 0);
+        index_blobs(&blobs, &Keypair::new().pubkey(), &mut (offset as u64), 0);
         blobs
     }
 
