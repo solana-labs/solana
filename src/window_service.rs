@@ -190,7 +190,7 @@ mod test {
         let t_receiver =
             blob_receiver(Arc::new(leader_node.sockets.gossip), exit.clone(), s_reader);
         let (s_retransmit, r_retransmit) = channel();
-        let blocktree_path = get_tmp_ledger_path("window_send_test");
+        let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Arc::new(
             Blocktree::open(&blocktree_path).expect("Expected to be able to open database ledger"),
         );
@@ -260,7 +260,7 @@ mod test {
         let t_receiver =
             blob_receiver(Arc::new(leader_node.sockets.gossip), exit.clone(), s_reader);
         let (s_retransmit, r_retransmit) = channel();
-        let blocktree_path = get_tmp_ledger_path("window_send_late_leader_test");
+        let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Arc::new(
             Blocktree::open(&blocktree_path).expect("Expected to be able to open database ledger"),
         );

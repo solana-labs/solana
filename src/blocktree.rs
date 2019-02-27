@@ -1279,12 +1279,26 @@ where
     Ok(())
 }
 
+#[macro_export]
+macro_rules! tmp_ledger_name {
+    () => {
+        &format!("{}-{}", file!(), line!())
+    };
+}
+
+#[macro_export]
+macro_rules! get_tmp_ledger_path {
+    () => {
+        get_tmp_ledger_path(tmp_ledger_name!())
+    };
+}
+
 pub fn get_tmp_ledger_path(name: &str) -> String {
     use std::env;
     let out_dir = env::var("OUT_DIR").unwrap_or_else(|_| "target".to_string());
     let keypair = Keypair::new();
 
-    let path = format!("{}/tmp/ledger-{}-{}", out_dir, name, keypair.pubkey());
+    let path = format!("{}/tmp/ledger/{}-{}", out_dir, name, keypair.pubkey());
 
     // whack any possible collision
     let _ignored = fs::remove_dir_all(&path);
@@ -1325,6 +1339,13 @@ pub fn create_tmp_sample_blocktree(
     )
 }
 
+#[macro_export]
+macro_rules! tmp_copy_blocktree {
+    ($from:expr) => {
+        tmp_copy_blocktree($from, tmp_ledger_name!())
+    };
+}
+
 pub fn tmp_copy_blocktree(from: &str, name: &str) -> String {
     let path = get_tmp_ledger_path(name);
 
@@ -1357,7 +1378,8 @@ pub mod tests {
 
     #[test]
     fn test_write_entries() {
-        let ledger_path = get_tmp_ledger_path("test_write_entries");
+        solana_logger::setup();
+        let ledger_path = get_tmp_ledger_path!();
         {
             let ticks_per_slot = 10;
             let num_slots = 10;

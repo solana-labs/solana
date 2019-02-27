@@ -1562,7 +1562,7 @@ mod tests {
     #[test]
     fn run_window_request() {
         solana_logger::setup();
-        let ledger_path = get_tmp_ledger_path("run_window_request");
+        let ledger_path = get_tmp_ledger_path!();
         {
             let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
             let me = NodeInfo::new(
@@ -1620,7 +1620,7 @@ mod tests {
     #[test]
     fn run_highest_window_request() {
         solana_logger::setup();
-        let ledger_path = get_tmp_ledger_path("run_highest_window_request");
+        let ledger_path = get_tmp_ledger_path!();
         {
             let blocktree = Arc::new(Blocktree::open(&ledger_path).unwrap());
             let rv =

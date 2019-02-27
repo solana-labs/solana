@@ -235,7 +235,7 @@ pub mod tests {
         cluster_info1.set_leader(leader.info.id);
         let cref1 = Arc::new(RwLock::new(cluster_info1));
 
-        let blocktree_path = get_tmp_ledger_path("test_tvu_exit");
+        let blocktree_path = get_tmp_ledger_path!();
         let (blocktree, l_receiver) = Blocktree::open_with_signal(&blocktree_path)
             .expect("Expected to successfully open ledger");
         let (sender, _receiver) = channel();

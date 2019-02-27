@@ -5,6 +5,9 @@ extern crate log;
 #[macro_use]
 extern crate serde_json;
 
+#[macro_use]
+extern crate solana;
+
 use bincode::deserialize;
 use solana::blocktree::{
     create_tmp_sample_blocktree, get_tmp_ledger_path, tmp_copy_blocktree, Blocktree,
@@ -32,7 +35,7 @@ use std::time::Duration;
 fn test_replicator_startup_basic() {
     solana_logger::setup();
     info!("starting replicator test");
-    let replicator_ledger_path = &get_tmp_ledger_path("replicator_test_replicator_ledger");
+    let replicator_ledger_path = &get_tmp_ledger_path!();
 
     info!("starting leader node");
     let leader_keypair = Arc::new(Keypair::new());
@@ -47,8 +50,7 @@ fn test_replicator_startup_basic() {
     let (leader_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_blocktree(leader_ledger_path, &genesis_block, 0);
 
-    let validator_ledger_path =
-        tmp_copy_blocktree(&leader_ledger_path, "replicator_test_validator_ledger");
+    let validator_ledger_path = tmp_copy_blocktree!(&leader_ledger_path);
 
     {
         let voting_keypair = VotingKeypair::new_local(&leader_keypair);
@@ -238,7 +240,7 @@ fn test_replicator_startup_leader_hang() {
     solana_logger::setup();
     info!("starting replicator test");
 
-    let replicator_ledger_path = &get_tmp_ledger_path("replicator_test_replicator_ledger");
+    let replicator_ledger_path = &get_tmp_ledger_path!();
     let leader_ledger_path = "replicator_test_leader_ledger";
 
     {
@@ -273,7 +275,7 @@ fn test_replicator_startup_ledger_hang() {
 
     solana_logger::setup();
     info!("starting replicator test");
-    let replicator_ledger_path = &get_tmp_ledger_path("replicator_test_replicator_ledger");
+    let replicator_ledger_path = &get_tmp_ledger_path!();
 
     info!("starting leader node");
     let leader_keypair = Arc::new(Keypair::new());
@@ -285,8 +287,7 @@ fn test_replicator_startup_ledger_hang() {
     let (leader_ledger_path, _tick_height, _last_entry_height, _last_id, _last_entry_id) =
         create_tmp_sample_blocktree(leader_ledger_path, &genesis_block, 0);
 
-    let validator_ledger_path =
-        tmp_copy_blocktree(&leader_ledger_path, "replicator_test_validator_ledger");
+    let validator_ledger_path = tmp_copy_blocktree!(&leader_ledger_path);
 
     {
         let voting_keypair = VotingKeypair::new_local(&leader_keypair);

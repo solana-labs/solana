@@ -246,7 +246,7 @@ mod test {
     pub fn test_find_missing_data_indexes_sanity() {
         let slot = 0;
 
-        let blocktree_path = get_tmp_ledger_path("test_find_missing_data_indexes_sanity");
+        let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
         // Early exit conditions
@@ -290,7 +290,7 @@ mod test {
     #[test]
     pub fn test_find_missing_data_indexes() {
         let slot = 0;
-        let blocktree_path = get_tmp_ledger_path("test_find_missing_data_indexes");
+        let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
         // Write entries
@@ -373,7 +373,7 @@ mod test {
 
     #[test]
     pub fn test_find_missing_data_indexes_slots() {
-        let blocktree_path = get_tmp_ledger_path("test_find_missing_data_indexes_slots");
+        let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
         let num_entries_per_slot = 10;
@@ -442,7 +442,7 @@ mod test {
     #[test]
     pub fn test_no_missing_blob_indexes() {
         let slot = 0;
-        let blocktree_path = get_tmp_ledger_path("test_find_missing_data_indexes");
+        let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Blocktree::open(&blocktree_path).unwrap();
 
         // Write entries
@@ -491,7 +491,7 @@ mod test {
         window[erased_index].coding = None;
 
         // Generate the blocktree from the window
-        let ledger_path = get_tmp_ledger_path("test_try_erasure");
+        let ledger_path = get_tmp_ledger_path!();
         let blocktree = Arc::new(generate_blocktree_from_window(&ledger_path, &window, false));
 
         try_erasure(&blocktree, 0).expect("Expected successful erasure attempt");
@@ -536,7 +536,7 @@ mod test {
         let mut leader_scheduler = LeaderScheduler::default();
         leader_scheduler.set_leader_schedule(vec![Keypair::new().pubkey()]);
 
-        let blocktree_path = get_tmp_ledger_path("test_process_blob");
+        let blocktree_path = get_tmp_ledger_path!();
         let blocktree = Arc::new(Blocktree::open(&blocktree_path).unwrap());
 
         let leader_scheduler = Arc::new(RwLock::new(leader_scheduler));
