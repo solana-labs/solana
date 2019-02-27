@@ -2,9 +2,15 @@
 extern crate rand;
 extern crate test;
 
+use bincode::{deserialize, serialize_into, serialized_size};
 use rand::{thread_rng, Rng};
-use solana_runtime::appendvec::AppendVec;
+use solana_runtime::appendvec::{
+    deserialize_account, get_serialized_size, serialize_account, AppendVec,
+};
+use solana_sdk::account::Account;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::env;
+use std::io::Cursor;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
@@ -177,4 +183,53 @@ fn appendvec_concurrent_get_append(bencher: &mut Bencher) {
         }
     });
     std::fs::remove_file(path).unwrap();
+}
+
+#[bench]
+fn bench_account_serialize(bencher: &mut Bencher) {
+    let num: usize = 1000;
+    let account = Account::new(2, 100, Keypair::new().pubkey());
+    let len = get_serialized_size(&account);
+    let memory = vec![0; num * len];
+    bencher.iter(|| {
+        for i in 0..num {
+            let start = i * len;
+            serialize_account(&memory[start..start + len], &account, len);
+        }
+    });
+
+    // make sure compiler doesn't delete the code.
+    let index = thread_rng().gen_range(0, num);
+    if memory[index] != 0 {
+        println!("memory: {}", memory[index]);
+    }
+
+    let start = index * len;
+    let new_account = deserialize_account(&memory[start..start + len], 0, len + 8).unwrap();
+    assert_eq!(new_account, account);
+}
+
+#[bench]
+fn bench_account_serialize_bincode(bencher: &mut Bencher) {
+    let num: usize = 1000;
+    let account = Account::new(2, 100, Keypair::new().pubkey());
+    let len = serialized_size(&account).unwrap() as usize;
+    let mut memory = vec![0u8; num * len];
+    bencher.iter(|| {
+        for i in 0..num {
+            let start = i * len;
+            let cursor = Cursor::new(&mut memory[start..start + len]);
+            serialize_into(cursor, &account).unwrap();
+        }
+    });
+
+    // make sure compiler doesn't delete the code.
+    let index = thread_rng().gen_range(0, len);
+    if memory[index] != 0 {
+        println!("memory: {}", memory[index]);
+    }
+
+    let start = index * len;
+    let new_account: Account = deserialize(&memory[start..start + len]).unwrap();
+    assert_eq!(new_account, account);
 }

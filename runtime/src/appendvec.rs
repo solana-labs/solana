@@ -21,6 +21,95 @@ pub struct AppendVec<T> {
     phantom: PhantomData<T>,
 }
 
+fn get_account_size_static() -> usize {
+    mem::size_of::<u64>()
+        + mem::size_of::<Pubkey>()
+        + mem::size_of::<bool>()
+        + mem::size_of::<Pubkey>()
+}
+
+pub fn get_serialized_size(account: &Account) -> usize {
+    get_account_size_static() + account.userdata.len()
+}
+
+pub fn serialize_account(dst_slice: &[u8], account: &Account, len: usize) {
+    let mut at = 0;
+
+    write_object_unaligned(&mut at, dst_slice, len);
+    write_object_unaligned(&mut at, dst_slice, account.tokens);
+
+    let data = &dst_slice[at..at + account.userdata.len()];
+    let dst = data.as_ptr() as *mut u8;
+    let data = &account.userdata[0..account.userdata.len()];
+    let src = data.as_ptr();
+    unsafe {
+        std::ptr::copy_nonoverlapping(src, dst, account.userdata.len());
+    }
+    at += account.userdata.len();
+
+    write_object(&mut at, dst_slice, account.owner);
+    write_object(&mut at, dst_slice, account.executable);
+}
+
+fn write_object_unaligned<X: Sized>(at: &mut usize, dst_slice: &[u8], value: X) {
+    let data = &dst_slice[*at..*at + mem::size_of::<X>()];
+    #[allow(clippy::cast_ptr_alignment)]
+    let ptr = data.as_ptr() as *mut X;
+    unsafe {
+        std::ptr::write_unaligned(ptr, value);
+    }
+    *at += mem::size_of::<X>();
+}
+
+fn write_object<X: Sized>(at: &mut usize, dst_slice: &[u8], value: X) {
+    let data = &dst_slice[*at..*at + mem::size_of::<X>()];
+    #[allow(clippy::cast_ptr_alignment)]
+    let ptr = data.as_ptr() as *mut X;
+    unsafe {
+        std::ptr::write(ptr, value);
+    }
+    *at += mem::size_of::<X>();
+}
+
+pub fn deserialize_account(
+    src_slice: &[u8],
+    index: usize,
+    current_offset: usize,
+) -> Result<Account> {
+    let mut at = index;
+    let data = &src_slice[at..(at + mem::size_of::<u64>())];
+    #[allow(clippy::cast_ptr_alignment)]
+    let size: u64 = unsafe { std::ptr::read_unaligned(data.as_ptr() as *const _) };
+    let len = size as usize;
+    at += SIZEOF_U64 as usize;
+
+    assert!(current_offset >= at + len);
+
+    let data = &src_slice[at..(at + mem::size_of::<u64>())];
+    #[allow(clippy::cast_ptr_alignment)]
+    let tokens: u64 = unsafe { std::ptr::read_unaligned(data.as_ptr() as *const _) };
+    at += mem::size_of::<u64>();
+
+    let userdata_len = len - get_account_size_static();
+    let mut userdata = vec![];
+    userdata.extend_from_slice(&src_slice[at..at + userdata_len]);
+    at += userdata_len;
+
+    let data = &src_slice[at..(at + mem::size_of::<Pubkey>())];
+    let owner: Pubkey = unsafe { std::ptr::read(data.as_ptr() as *const _) };
+    at += mem::size_of::<Pubkey>();
+
+    let data = &src_slice[at..(at + mem::size_of::<bool>())];
+    let executable: bool = unsafe { std::ptr::read(data.as_ptr() as *const _) };
+
+    Ok(Account {
+        tokens,
+        userdata,
+        owner,
+        executable,
+    })
+}
+
 impl<T> AppendVec<T>
 where
     T: Default,
@@ -107,96 +196,25 @@ where
         Some(index as u64)
     }
 
-    fn get_account_size_static() -> usize {
-        mem::size_of::<u64>()
-            + mem::size_of::<Pubkey>()
-            + mem::size_of::<bool>()
-            + mem::size_of::<Pubkey>()
-    }
-
     pub fn get_account(&self, index: u64) -> Result<Account> {
-        let mut at = index as usize;
-        let data = &self.map[at..(at + mem::size_of::<u64>())];
-        #[allow(clippy::cast_ptr_alignment)]
-        let size: u64 = unsafe { std::ptr::read_unaligned(data.as_ptr() as *const _) };
-        let len = size as usize;
-        at += SIZEOF_U64 as usize;
-
-        let offset = self.current_offset.load(Ordering::Relaxed);
-        assert!(offset >= at + len);
-
-        let data = &self.map[at..(at + mem::size_of::<u64>())];
-        #[allow(clippy::cast_ptr_alignment)]
-        let tokens: u64 = unsafe { std::ptr::read_unaligned(data.as_ptr() as *const _) };
-        at += mem::size_of::<u64>();
-
-        let userdata_len = len - Self::get_account_size_static();
-        let mut userdata = vec![];
-        userdata.extend_from_slice(&self.map[at..at + userdata_len]);
-        at += userdata_len;
-
-        let data = &self.map[at..(at + mem::size_of::<Pubkey>())];
-        let owner: Pubkey = unsafe { std::ptr::read(data.as_ptr() as *const _) };
-        at += mem::size_of::<Pubkey>();
-
-        let data = &self.map[at..(at + mem::size_of::<bool>())];
-        let executable: bool = unsafe { std::ptr::read(data.as_ptr() as *const _) };
-
-        Ok(Account {
-            tokens,
-            userdata,
-            owner,
-            executable,
-        })
+        let index = index as usize;
+        deserialize_account(
+            &self.map[..],
+            index,
+            self.current_offset.load(Ordering::Relaxed),
+        )
     }
 
     pub fn append_account(&self, account: &Account) -> Option<u64> {
         let _append_lock = self.append_lock.lock().unwrap();
         let data_at = self.current_offset.load(Ordering::Relaxed);
-        let len = Self::get_account_size_static() + account.userdata.len();
+        let len = get_serialized_size(account);
 
         if (self.file_size as usize) < data_at + len + SIZEOF_U64 {
             return None;
         }
 
-        let mut at = data_at as usize;
-        let data = &self.map[at..at + mem::size_of::<u64>()];
-        #[allow(clippy::cast_ptr_alignment)]
-        let ptr = data.as_ptr() as *mut u64;
-        unsafe {
-            std::ptr::write_unaligned(ptr, len as u64);
-        }
-        at += mem::size_of::<u64>();
-
-        let data = &self.map[at..at + mem::size_of::<u64>()];
-        #[allow(clippy::cast_ptr_alignment)]
-        let ptr = data.as_ptr() as *mut u64;
-        unsafe {
-            std::ptr::write_unaligned(ptr, account.tokens);
-        }
-        at += mem::size_of::<u64>();
-
-        let data = &self.map[at..at + account.userdata.len()];
-        let dst = data.as_ptr() as *mut u8;
-        let data = &account.userdata[0..account.userdata.len()];
-        let src = data.as_ptr();
-        unsafe {
-            std::ptr::copy_nonoverlapping(src, dst, account.userdata.len());
-        }
-        at += account.userdata.len();
-
-        let data = &self.map[at..at + mem::size_of::<Pubkey>()];
-        let ptr = data.as_ptr() as *mut Pubkey;
-        unsafe {
-            std::ptr::write(ptr, account.owner);
-        }
-        at += mem::size_of::<Pubkey>();
-
-        let data = &self.map[at..at + mem::size_of::<bool>()];
-        let ptr = data.as_ptr() as *mut bool;
-        unsafe {
-            std::ptr::write(ptr, account.executable);
-        }
+        serialize_account(&self.map[data_at..data_at + len], account, len);
 
         self.current_offset
             .fetch_add(len + SIZEOF_U64, Ordering::Relaxed);
@@ -253,26 +271,20 @@ pub mod tests {
             executable: false,
         };
         let index2 = av.append_account(&account2).unwrap();
-        let mut len = AppendVec::<Account>::get_account_size_static()
-            + account1.userdata.len()
-            + SIZEOF_U64 as usize;
+        let mut len = get_serialized_size(&account1) + SIZEOF_U64 as usize;
         assert_eq!(index2, len as u64);
         assert_eq!(av.get_account(index2).unwrap(), account2);
         assert_eq!(av.get_account(index1).unwrap(), account1);
 
         account2.userdata.iter_mut().for_each(|e| *e *= 2);
         let index3 = av.append_account(&account2).unwrap();
-        len += AppendVec::<Account>::get_account_size_static()
-            + account2.userdata.len()
-            + SIZEOF_U64 as usize;
+        len += get_serialized_size(&account2) + SIZEOF_U64 as usize;
         assert_eq!(index3, len as u64);
         assert_eq!(av.get_account(index3).unwrap(), account2);
 
         account1.userdata.extend([1, 2, 3, 4, 5, 6].iter().cloned());
         let index4 = av.append_account(&account1).unwrap();
-        len += AppendVec::<Account>::get_account_size_static()
-            + account2.userdata.len()
-            + SIZEOF_U64 as usize;
+        len += get_serialized_size(&account2) + SIZEOF_U64 as usize;
         assert_eq!(index4, len as u64);
         assert_eq!(av.get_account(index4).unwrap(), account1);
         std::fs::remove_file(path).unwrap();
