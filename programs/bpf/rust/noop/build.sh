@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 
+cargo install xargo
+
 set -e
+
+# Ensure the sdk is installed
+../../../../sdk/bpf/scripts/install.sh
+rustup override set bpf
 
 export RUSTFLAGS="$RUSTFLAGS \
     -C lto=no -C opt-level=2 \
@@ -10,14 +16,6 @@ export RUSTFLAGS="$RUSTFLAGS \
     -C link-arg=-shared \
     -C link-arg=--entry=entrypoint \
     -C linker=../../../../sdk/bpf/llvm-native/bin/ld.lld"
-
-# Ensure the sdk is installed
-../../../../sdk/bpf/scripts/install.sh
-rustup override set bpf
-
-set +e
-cargo install xargo
-set -e
 export XARGO_HOME="$PWD/target/xargo"
 export XARGO_RUST_SRC="../../../../sdk/bpf/rust-bpf-sysroot/src"
 # export XARGO_RUST_SRC="../../../../../rust-bpf-sysroot/src"

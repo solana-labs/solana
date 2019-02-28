@@ -11,7 +11,7 @@ license = "Apache-2.0"
 homepage = "https://solana.com/"
 
 [dependencies]
-b# yteorder = { version = "1.3.1", default-features = false }
+# byteorder = { version = "1.3.1", default-features = false }
 # heapless = { version = "0.4.0", default-features = false }
 # byte = { version = "0.2", default-features = false }
 
