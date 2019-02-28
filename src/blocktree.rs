@@ -130,8 +130,8 @@ pub struct SlotMeta {
     // we have received for this slot.
     pub consumed: u64,
     // The index *plus one* of the highest blob received for this slot.
-    // Useful for checking if the slot has received any blobs yet.
-    // TODO: change this to `has_any: bool`, where `has_any == received > 0`
+    // Useful for checking if the slot has received any blobs yet, and
+    // to calculate the length of a hole: `received - consumed`.
     pub received: u64,
     // The index of the blob that is flagged as the last blob for this slot.
     pub last_index: u64,
