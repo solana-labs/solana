@@ -1,4 +1,6 @@
 use crate::pubkey::Pubkey;
+use crate::system_program;
+use crate::transaction_builder::BuilderInstruction;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub enum SystemInstruction {
@@ -20,4 +22,14 @@ pub enum SystemInstruction {
     /// * Transaction::keys[0] - source
     /// * Transaction::keys[1] - destination
     Move { tokens: u64 },
+}
+
+impl SystemInstruction {
+    pub fn new_move(from_id: Pubkey, to_id: Pubkey, tokens: u64) -> BuilderInstruction {
+        BuilderInstruction::new(
+            system_program::id(),
+            &SystemInstruction::Move { tokens },
+            vec![(from_id, true), (to_id, false)],
+        )
+    }
 }

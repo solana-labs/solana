@@ -4,12 +4,11 @@ use crate::budget_expr::{BudgetExpr, Condition};
 use crate::budget_instruction::Instruction;
 use crate::budget_program;
 use crate::hash::Hash;
-use crate::payment_plan::Payment;
 use crate::pubkey::Pubkey;
 use crate::signature::{Keypair, KeypairUtil};
 use crate::system_instruction::SystemInstruction;
-use crate::system_program;
-use crate::transaction::{self, Transaction};
+use crate::transaction::Transaction;
+use crate::transaction_builder::TransactionBuilder;
 use bincode::deserialize;
 use chrono::prelude::*;
 
@@ -25,31 +24,12 @@ impl BudgetTransaction {
         fee: u64,
     ) -> Transaction {
         let contract = Keypair::new().pubkey();
-        let keys = vec![from_keypair.pubkey(), contract];
-
-        let system_instruction = SystemInstruction::Move { tokens };
-
-        let payment = Payment {
-            tokens: tokens - fee,
-            to,
-        };
-        let budget_instruction = Instruction::NewBudget(BudgetExpr::Pay(payment));
-
-        let program_ids = vec![system_program::id(), budget_program::id()];
-
-        let instructions = vec![
-            transaction::Instruction::new(0, &system_instruction, vec![0, 1]),
-            transaction::Instruction::new(1, &budget_instruction, vec![1]),
-        ];
-
-        Transaction::new_with_instructions(
-            &[from_keypair],
-            &keys,
-            last_id,
-            fee,
-            program_ids,
-            instructions,
-        )
+        let from = from_keypair.pubkey();
+        let payment = BudgetExpr::new_payment(tokens - fee, to);
+        TransactionBuilder::new(fee)
+            .push(SystemInstruction::new_move(from, contract, tokens))
+            .push(Instruction::new_budget(contract, payment))
+            .sign(&[from_keypair], last_id)
     }
 
     /// Create and sign a new Transaction. Used for unit-testing.
@@ -230,23 +210,13 @@ mod tests {
 
     #[test]
     fn test_serialize_claim() {
-        let expr = BudgetExpr::Pay(Payment {
-            tokens: 0,
-            to: Pubkey::default(),
-        });
-        let instruction = Instruction::NewBudget(expr);
-        let instructions = vec![transaction::Instruction::new(0, &instruction, vec![])];
-        let claim0 = Transaction {
-            account_keys: vec![],
-            last_id: Hash::default(),
-            signatures: vec![],
-            program_ids: vec![],
-            instructions,
-            fee: 0,
-        };
-        let buf = serialize(&claim0).unwrap();
-        let claim1: Transaction = deserialize(&buf).unwrap();
-        assert_eq!(claim1, claim0);
+        let zero = Hash::default();
+        let keypair0 = Keypair::new();
+        let pubkey1 = Keypair::new().pubkey();
+        let tx0 = BudgetTransaction::new_payment(&keypair0, pubkey1, 1, zero, 1);
+        let buf = serialize(&tx0).unwrap();
+        let tx1: Transaction = deserialize(&buf).unwrap();
+        assert_eq!(tx1, tx0);
     }
 
     #[test]

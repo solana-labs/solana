@@ -1,4 +1,7 @@
 use crate::budget_expr::BudgetExpr;
+use crate::budget_program;
+use crate::pubkey::Pubkey;
+use crate::transaction_builder::BuilderInstruction;
 use chrono::prelude::{DateTime, Utc};
 
 /// A smart contract.
@@ -21,4 +24,14 @@ pub enum Instruction {
     /// Tell the budget that the `NewBudget` with `Signature` has been
     /// signed by the containing transaction's `Pubkey`.
     ApplySignature,
+}
+
+impl Instruction {
+    pub fn new_budget(contract: Pubkey, expr: BudgetExpr) -> BuilderInstruction {
+        BuilderInstruction::new(
+            budget_program::id(),
+            &Instruction::NewBudget(expr),
+            vec![(contract, false)],
+        )
+    }
 }
