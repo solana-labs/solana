@@ -200,10 +200,6 @@ impl Bank {
     pub fn parent(&self) -> Option<Arc<Bank>> {
         self.parent.read().unwrap().clone()
     }
-    /// Returns whether this bank is the root
-    pub fn is_root(&self) -> bool {
-        self.parent.read().unwrap().is_none()
-    }
 
     fn process_genesis_block(&mut self, genesis_block: &GenesisBlock) {
         assert!(genesis_block.mint_id != Pubkey::default());

@@ -247,30 +247,13 @@ impl AccountsDB {
     }
 
     pub fn get_vote_accounts(&self, fork: Fork) -> Vec<Account> {
-        let mut accounts: Vec<Account> = vec![];
         self.index_info
             .vote_index
             .read()
             .unwrap()
             .iter()
-            .for_each(|p| {
-                if let Some(map) = self.index_info.index.read().unwrap().get(p) {
-                    let forks = map.0.read().unwrap();
-                    if let Some((id, offset)) = forks.get(&fork) {
-                        accounts.push(self.get_account(*id, *offset));
-                    } else {
-                        let fork_info = self.fork_info.read().unwrap();
-                        if let Some(info) = fork_info.get(&fork) {
-                            for parent_fork in info.parents.iter() {
-                                if let Some((id, offset)) = forks.get(&parent_fork) {
-                                    accounts.push(self.get_account(*id, *offset));
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        accounts
+            .filter_map(|pubkey| self.load(fork, pubkey, true))
+            .collect()
     }
 
     pub fn has_accounts(&self, fork: Fork) -> bool {
@@ -1300,14 +1283,60 @@ mod tests {
     }
 
     #[test]
-    fn test_accountsdb_squash() {
-        let paths = "squash".to_string();
+    fn test_accountsdb_squash_one_fork() {
+        let paths = "squash_one_fork".to_string();
         let db = AccountsDB::new(0, &paths);
         let key = Pubkey::default();
         let account0 = Account::new(1, 0, key);
 
         // store value 1 in the "root", i.e. db zero
         db.store(0, &key, &account0);
+
+        db.add_fork(1, Some(0));
+        db.add_fork(2, Some(0));
+
+        // now we have:
+        //
+        //                       root0 -> key.tokens==1
+        //                        / \
+        //                       /   \
+        //  key.tokens==0 <- fork1    \
+        //                             fork2 -> key.tokens==1
+        //                                       (via root0)
+
+        // store value 0 in one child
+        let account1 = Account::new(0, 0, key);
+        db.store(1, &key, &account1);
+
+        // masking accounts is done at the Accounts level, at accountsDB we see
+        // original account (but could also accept "None", which is implemented
+        // at the Accounts level)
+        assert_eq!(&db.load(1, &key, true).unwrap(), &account1);
+
+        // we should see 1 token in fork 2
+        assert_eq!(&db.load(2, &key, true).unwrap(), &account0);
+
+        // squash, which should whack key's account
+        db.squash(1);
+
+        // now we should have:
+        //
+        //                          root0 -> key.tokens==1
+        //                             \
+        //                              \
+        //  key.tokens==ANF <- root1     \
+        //                              fork2 -> key.tokens==1 (from root0)
+        //
+        assert_eq!(db.load(1, &key, true), None); // purged
+        assert_eq!(&db.load(2, &key, true).unwrap(), &account0); // original value
+
+        cleanup_dirs(&paths);
+    }
+
+    #[test]
+    fn test_accountsdb_squash() {
+        let paths = "squash".to_string();
+        let db = AccountsDB::new(0, &paths);
 
         let mut pubkeys: Vec<Pubkey> = vec![];
         create_account(&db, &mut pubkeys, 100, 0);
@@ -1319,26 +1348,35 @@ mod tests {
             assert_eq!(compare_account(&default_account, &account), true);
         }
         db.add_fork(1, Some(0));
-        // store value 0 in the child
-        let account1 = Account::new(0, 0, key);
-        db.store(1, &key, &account1);
 
-        // masking accounts is done at the Accounts level, at accountsDB we see
-        // original account
-        assert_eq!(db.load(1, &key, true), Some(account1));
+        // now we have:
+        //
+        //                        root0 -> key[X].tokens==X
+        //                         /
+        //                        /
+        //  key[X].tokens==X <- fork1
+        //    (via root0)
+        //
 
         // merge, which should whack key's account
         db.squash(1);
 
-        assert_eq!(db.load(1, &key, true), None);
+        // now we should have:
+        //                root0 -> purged ??
+        //
+        //
+        //  key[X].tokens==X <- root1
+        //
+
+        // check that all the accounts appear in parent after a squash ???
         for _ in 1..100 {
             let idx = thread_rng().gen_range(0, 99);
             let account0 = db.load(0, &pubkeys[idx], true).unwrap();
             let account1 = db.load(1, &pubkeys[idx], true).unwrap();
             let mut default_account = Account::default();
             default_account.tokens = (idx + 1) as u64;
-            assert_eq!(compare_account(&default_account, &account0), true);
-            assert_eq!(compare_account(&default_account, &account1), true);
+            assert_eq!(&default_account, &account0);
+            assert_eq!(&default_account, &account1);
         }
         cleanup_dirs(&paths);
     }
@@ -1531,4 +1569,13 @@ mod tests {
         });
         cleanup_dirs(&paths);
     }
+
+    #[test]
+    fn test_accounts_empty_hash_internal_state() {
+        let paths = "empty_hash".to_string();
+        let accounts = AccountsDB::new(0, &paths);
+        assert_eq!(accounts.hash_internal_state(0), None);
+        cleanup_dirs(&paths);
+    }
+
 }
