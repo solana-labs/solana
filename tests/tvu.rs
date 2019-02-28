@@ -1,7 +1,7 @@
 #[macro_use]
 extern crate solana;
 
-use log::trace;
+use log::*;
 use solana::bank_forks::BankForks;
 use solana::blocktree::{get_tmp_ledger_path, Blocktree};
 use solana::blocktree_processor::BankForksInfo;

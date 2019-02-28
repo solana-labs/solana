@@ -3,7 +3,7 @@ use crate::bank::{BankError, Result};
 use crate::runtime::has_duplicates;
 use bincode::serialize;
 use hashbrown::{HashMap, HashSet};
-use log::debug;
+use log::*;
 use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
 use solana_sdk::hash::{hash, Hash};

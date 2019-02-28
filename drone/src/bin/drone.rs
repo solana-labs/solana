@@ -1,5 +1,5 @@
 use clap::{crate_version, App, Arg};
-use log::info;
+use log::*;
 use solana_drone::drone::{Drone, DRONE_PORT};
 use solana_drone::socketaddr;
 use solana_sdk::signature::read_keypair;

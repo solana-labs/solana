@@ -7,7 +7,7 @@
 use bincode::{deserialize, serialize};
 use byteorder::{ByteOrder, LittleEndian};
 use bytes::{Bytes, BytesMut};
-use log::{debug, info, trace, warn};
+use log::*;
 use serde_derive::{Deserialize, Serialize};
 use solana_metrics;
 use solana_metrics::influxdb;

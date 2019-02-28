@@ -26,7 +26,6 @@ use crate::streamer::{BlobReceiver, BlobSender};
 use bincode::{deserialize, serialize};
 use core::cmp;
 use hashbrown::HashMap;
-use log::Level;
 use rand::{thread_rng, Rng};
 use rayon::prelude::*;
 use solana_metrics::counter::Counter;
@@ -642,7 +641,7 @@ impl ClusterInfo {
             .flat_map(|(b, vs)| {
                 let blob = b.read().unwrap();
 
-                let ids_and_tvus = if log_enabled!(Level::Trace) {
+                let ids_and_tvus = if log_enabled!(log::Level::Trace) {
                     let v_ids = vs.iter().map(|v| v.id);
                     let tvus = vs.iter().map(|v| v.tvu);
                     let ids_and_tvus = v_ids.zip(tvus).collect();

@@ -1,5 +1,5 @@
 use crate::{influxdb, submit};
-use log::{info, log_enabled};
+use log::*;
 use solana_sdk::timing;
 use std::env;
 use std::sync::atomic::{AtomicUsize, Ordering};
