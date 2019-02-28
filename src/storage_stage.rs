@@ -362,11 +362,7 @@ impl StorageStage {
         tx_sender: &TransactionSender,
     ) -> Result<()> {
         let timeout = Duration::new(1, 0);
-        let entries: Vec<Entry> = entry_receiver
-            .recv_timeout(timeout)?
-            .iter()
-            .map(|entry_meta| entry_meta.entry.clone())
-            .collect();
+        let entries: Vec<Entry> = entry_receiver.recv_timeout(timeout)?;
         for entry in entries {
             // Go through the transactions, find votes, and use them to update
             // the storage_keys with their signatures.
@@ -450,7 +446,7 @@ impl Service for StorageStage {
 mod tests {
     use crate::blocktree::{create_new_tmp_ledger, Blocktree};
     use crate::cluster_info::{ClusterInfo, NodeInfo};
-    use crate::entry::{make_tiny_test_entries, Entry, EntryMeta};
+    use crate::entry::{make_tiny_test_entries, Entry};
     use crate::service::Service;
     use crate::storage_stage::StorageState;
     use crate::storage_stage::NUM_IDENTITIES;
@@ -529,8 +525,7 @@ mod tests {
             STORAGE_ROTATE_TEST_COUNT,
             &cluster_info,
         );
-        let entries_meta: Vec<EntryMeta> = entries.into_iter().map(EntryMeta::new).collect();
-        storage_entry_sender.send(entries_meta.clone()).unwrap();
+        storage_entry_sender.send(entries.clone()).unwrap();
 
         let keypair = Keypair::new();
         let hash = Hash::default();
@@ -539,7 +534,7 @@ mod tests {
         assert_eq!(result, Hash::default());
 
         for _ in 0..9 {
-            storage_entry_sender.send(entries_meta.clone()).unwrap();
+            storage_entry_sender.send(entries.clone()).unwrap();
         }
         for _ in 0..5 {
             result = storage_state.get_mining_result(&signature);
@@ -592,8 +587,7 @@ mod tests {
             STORAGE_ROTATE_TEST_COUNT,
             &cluster_info,
         );
-        let entries_meta: Vec<EntryMeta> = entries.into_iter().map(EntryMeta::new).collect();
-        storage_entry_sender.send(entries_meta.clone()).unwrap();
+        storage_entry_sender.send(entries.clone()).unwrap();
 
         let mut reference_keys;
         {
@@ -605,7 +599,7 @@ mod tests {
         let keypair = Keypair::new();
         let vote_tx = VoteTransaction::new_vote(&keypair, 123456, Hash::default(), 1);
         vote_txs.push(vote_tx);
-        let vote_entries = vec![EntryMeta::new(Entry::new(&Hash::default(), 1, vote_txs))];
+        let vote_entries = vec![Entry::new(&Hash::default(), 1, vote_txs)];
         storage_entry_sender.send(vote_entries).unwrap();
 
         for _ in 0..5 {
