@@ -4,6 +4,7 @@
 use crate::account::{Account, KeyedAccount};
 use crate::native_program::ProgramError;
 use crate::pubkey::Pubkey;
+use crate::transaction_builder::BuilderInstruction;
 use bincode::{deserialize, serialize_into, serialized_size, ErrorKind};
 use log::*;
 use std::collections::VecDeque;
@@ -76,6 +77,12 @@ pub enum VoteInstruction {
     /// Clear the credits in the vote account
     /// * Transaction::keys[0] - the "vote account"
     ClearCredits,
+}
+
+impl VoteInstruction {
+    pub fn new_clear_credits(vote_id: Pubkey) -> BuilderInstruction {
+        BuilderInstruction::new(id(), &VoteInstruction::ClearCredits, vec![(vote_id, true)])
+    }
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
