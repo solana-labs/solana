@@ -1,8 +1,3 @@
-//! The `bank` module tracks client accounts and the progress of on-chain
-//! programs. It offers a high-level API that signs transactions
-//! on behalf of the caller, and a low-level API for when they have
-//! already been signed and verified.
-
 use crate::leader_schedule::LeaderSchedule;
 use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
