@@ -142,7 +142,15 @@ pub struct SlotMeta {
 
 impl SlotMeta {
     pub fn is_full(&self) -> bool {
-        self.consumed > self.last_index
+        // last_index is std::u64::MAX when it has no information about how
+        // many blobs will fill this slot.
+        // Note: A full slot with zero blobs is not possible.
+        if self.last_index == std::u64::MAX {
+            return false;
+        }
+        assert!(self.consumed <= self.last_index + 1);
+
+        self.consumed == self.last_index + 1
     }
 
     fn new(slot_height: u64, parent_slot: u64) -> Self {
