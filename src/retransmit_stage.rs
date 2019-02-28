@@ -9,6 +9,7 @@ use crate::cluster_info::{
 use crate::packet::SharedBlob;
 use crate::result::{Error, Result};
 use crate::service::Service;
+use crate::staking_utils;
 use crate::streamer::BlobReceiver;
 use crate::window_service::WindowService;
 use solana_metrics::counter::Counter;
@@ -39,7 +40,7 @@ fn retransmit(
             .to_owned(),
     );
     let (neighbors, children) = compute_retransmit_peers(
-        &bank_forks.read().unwrap().working_bank().staked_nodes(),
+        &staking_utils::staked_nodes(&bank_forks.read().unwrap().working_bank()),
         cluster_info,
         DATA_PLANE_FANOUT,
         NEIGHBORHOOD_SIZE,

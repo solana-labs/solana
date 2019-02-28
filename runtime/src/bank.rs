@@ -8,7 +8,6 @@ use crate::last_id_queue::LastIdQueue;
 use crate::runtime::{self, RuntimeError};
 use crate::status_cache::StatusCache;
 use bincode::serialize;
-use hashbrown::HashMap;
 use log::*;
 use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
@@ -609,7 +608,7 @@ impl Bank {
     }
 
     /// Compute all the parents of the bank in order
-    fn parents(&self) -> Vec<Arc<Bank>> {
+    pub fn parents(&self) -> Vec<Arc<Bank>> {
         let mut parents = vec![];
         let mut bank = self.parent();
         while let Some(parent) = bank {
@@ -687,48 +686,10 @@ impl Bank {
         extend_and_hash(&self.parent_hash, &serialize(&accounts_delta_hash).unwrap())
     }
 
-    pub fn vote_states<F>(&self, cond: F) -> Vec<VoteState>
-    where
-        F: Fn(&VoteState) -> bool,
-    {
-        self.accounts()
-            .accounts_db
-            .get_vote_accounts(self.id)
-            .iter()
-            .filter_map(|account| {
-                if let Ok(vote_state) = VoteState::deserialize(&account.userdata) {
-                    if cond(&vote_state) {
-                        return Some(vote_state);
-                    }
-                }
-                None
-            })
-            .collect()
-    }
-
-    /// Collect the node Pubkey and staker account balance for nodes
-    /// that have non-zero balance in their corresponding staker accounts
-    pub fn staked_nodes(&self) -> HashMap<Pubkey, u64> {
-        self.vote_states(|state| self.get_balance(&state.staker_id) > 0)
-            .iter()
-            .map(|state| (state.node_id, self.get_balance(&state.staker_id)))
-            .collect()
-    }
-
-    /// Return the checkpointed stakes that should be used to generate a leader schedule.
-    fn staked_nodes_at_slot(&self, current_slot_height: u64) -> HashMap<Pubkey, u64> {
-        let slot_height = current_slot_height.saturating_sub(self.stakers_slot_offset);
-
-        let parents = self.parents();
-        let mut banks = vec![self];
-        banks.extend(parents.iter().map(|x| x.as_ref()));
-
-        let bank = banks
-            .iter()
-            .find(|bank| bank.slot_height() <= slot_height)
-            .unwrap_or_else(|| banks.last().unwrap());
-
-        bank.staked_nodes()
+    /// Return the number of slots in advance of an epoch that a leader scheduler
+    /// should be generated.
+    pub fn stakers_slot_offset(&self) -> u64 {
+        self.stakers_slot_offset
     }
 
     /// Return the number of ticks per slot that should be used calls to slot_height().
@@ -756,10 +717,23 @@ impl Bank {
         self.slots_per_epoch
     }
 
-    /// Return the checkpointed stakes that should be used to generate a leader schedule.
-    pub fn staked_nodes_at_epoch(&self, epoch_height: u64) -> HashMap<Pubkey, u64> {
-        let epoch_slot_height = epoch_height * self.slots_per_epoch();
-        self.staked_nodes_at_slot(epoch_slot_height)
+    pub fn vote_states<F>(&self, cond: F) -> Vec<VoteState>
+    where
+        F: Fn(&VoteState) -> bool,
+    {
+        self.accounts()
+            .accounts_db
+            .get_vote_accounts(self.id)
+            .iter()
+            .filter_map(|account| {
+                if let Ok(vote_state) = VoteState::deserialize(&account.userdata) {
+                    if cond(&vote_state) {
+                        return Some(vote_state);
+                    }
+                }
+                None
+            })
+            .collect()
     }
 
     /// Return the number of slots since the last epoch boundary.
@@ -1171,23 +1145,6 @@ mod tests {
 
         // Cross an epoch boundary.
         assert_eq!(register_ticks(&bank, ticks_per_epoch), (0, 1, 1));
-    }
-
-    #[test]
-    fn test_bank_staked_nodes_at_epoch() {
-        let pubkey = Keypair::new().pubkey();
-        let bootstrap_tokens = 2;
-        let (genesis_block, _) = GenesisBlock::new_with_leader(2, pubkey, bootstrap_tokens);
-        let bank = Bank::new(&genesis_block);
-        let bank = Bank::new_from_parent(&Arc::new(bank));
-        let ticks_per_offset = bank.stakers_slot_offset * bank.ticks_per_slot();
-        register_ticks(&bank, ticks_per_offset);
-        assert_eq!(bank.slot_height(), bank.stakers_slot_offset);
-
-        let mut expected = HashMap::new();
-        expected.insert(pubkey, bootstrap_tokens - 1);
-        let bank = Bank::new_from_parent(&Arc::new(bank));
-        assert_eq!(bank.staked_nodes_at_slot(bank.slot_height()), expected);
     }
 
     #[test]
