@@ -2273,6 +2273,7 @@ dependencies = [
  "serde 1.0.88 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.88 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.38 (registry+https://github.com/rust-lang/crates.io-index)",
+ "solana-logger 0.12.0",
  "solana-metrics 0.12.0",
  "solana-native-loader 0.12.0",
  "solana-sdk 0.12.0",
