@@ -1422,10 +1422,14 @@ mod tests {
             0,
         );
         assert_eq!(parent.process_transaction(&tx_move_mint_to_1), Ok(()));
+        assert_eq!(parent.transaction_count(), 1);
+
         let bank = Bank::new_from_parent(&parent);
+        assert_eq!(bank.transaction_count(), 0);
         let tx_move_1_to_2 =
             SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.last_id(), 0);
         assert_eq!(bank.process_transaction(&tx_move_1_to_2), Ok(()));
+        assert_eq!(bank.transaction_count(), 1);
         assert_eq!(
             parent.get_signature_status(&tx_move_1_to_2.signatures[0]),
             None
@@ -1447,6 +1451,9 @@ mod tests {
 
             // works iteration 0, no-ops on iteration 1 and 2
             bank.squash();
+
+            assert_eq!(parent.transaction_count(), 1);
+            assert_eq!(bank.transaction_count(), 2);
         }
     }
 
