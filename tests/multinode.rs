@@ -6,6 +6,8 @@ use solana::blob_fetch_stage::BlobFetchStage;
 use solana::blocktree::{create_new_tmp_ledger, tmp_copy_blocktree, Blocktree};
 use solana::client::mk_client;
 use solana::cluster_info::{Node, NodeInfo};
+use solana::contact_info::ContactInfo;
+use solana::entry::next_entry_mut;
 use solana::entry::{reconstruct_entries_from_blobs, Entry};
 use solana::fullnode::make_active_set_entries;
 use solana::fullnode::{new_banks_from_blocktree, Fullnode, FullnodeConfig, FullnodeReturnType};
@@ -16,14 +18,17 @@ use solana::service::Service;
 use solana::thin_client::{poll_gossip_for_leader, retry_get_balance};
 use solana::voting_keypair::VotingKeypair;
 use solana_sdk::genesis_block::GenesisBlock;
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use solana_sdk::timing::duration_as_s;
+use solana_sdk::vote_transaction::VoteTransaction;
 use std::collections::{HashSet, VecDeque};
 use std::env;
 use std::fs::remove_dir_all;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Receiver;
 use std::sync::mpsc::{channel, sync_channel, TryRecvError};
 use std::sync::{Arc, RwLock};
 use std::thread::{sleep, Builder};
@@ -1572,6 +1577,280 @@ fn retry_send_tx_and_retry_get_balance(
     None
 }
 
+fn new_fullnode() -> (Arc<Keypair>, Node, ContactInfo) {
+    let keypair = Arc::new(Keypair::new());
+    let node = Node::new_localhost_with_pubkey(keypair.pubkey());
+    let node_info = node.info.clone();
+    (keypair, node, node_info)
+}
+
+fn new_genesis_block(
+    leader: Pubkey,
+    ticks_per_slot: u64,
+    slots_per_epoch: u64,
+) -> (GenesisBlock, Keypair) {
+    let (mut genesis_block, mint_keypair) =
+        GenesisBlock::new_with_leader(1_000_000_000_000_000_000, leader, 100);
+    genesis_block.ticks_per_slot = ticks_per_slot;
+    genesis_block.slots_per_epoch = slots_per_epoch;
+
+    (genesis_block, mint_keypair)
+}
+
+fn fund_fullnode(
+    from: &Arc<Keypair>,
+    to: Pubkey,
+    tokens: u64,
+    last_tick: &Hash,
+    last_hash: &mut Hash,
+    entries: &mut Vec<Entry>,
+) {
+    let transfer_tx = SystemTransaction::new_account(from, to, tokens, *last_tick, 0);
+    let transfer_entry = next_entry_mut(last_hash, 1, vec![transfer_tx]);
+
+    entries.extend(vec![transfer_entry]);
+}
+
+fn stake_fullnode(
+    node: &Arc<Keypair>,
+    stake: u64,
+    last_tick: &Hash,
+    last_hash: &mut Hash,
+    entries: &mut Vec<Entry>,
+) -> VotingKeypair {
+    // Create and register a vote account for active_keypair
+    let voting_keypair = VotingKeypair::new_local(node);
+    let vote_account_id = voting_keypair.pubkey();
+
+    let new_vote_account_tx =
+        VoteTransaction::new_account(node, vote_account_id, *last_tick, stake, 0);
+    let new_vote_account_entry = next_entry_mut(last_hash, 1, vec![new_vote_account_tx]);
+    /*
+    let vote_tx = VoteTransaction::new_vote(&voting_keypair, 1, *last_tick, 0);
+    let vote_entry = next_entry_mut(last_hash, 1, vec![vote_tx]);
+
+    entries.extend(vec![new_vote_account_entry, vote_entry]);
+    */
+    entries.extend(vec![new_vote_account_entry]);
+    voting_keypair
+}
+
+fn add_tick(last_id: &mut Hash, entries: &mut Vec<Entry>) -> Hash {
+    let tick = solana::entry::create_ticks(1, *last_id);
+    *last_id = tick[0].id;
+    entries.extend(tick);
+    *last_id
+}
+
+fn start_fullnode(
+    node: Node,
+    kp: Arc<Keypair>,
+    v_kp: VotingKeypair,
+    ledger: &str,
+    leader: Option<&NodeInfo>,
+    config: &FullnodeConfig,
+) -> (impl FnOnce(), Receiver<(FullnodeReturnType, u64)>) {
+    let (rotation_sender, rotation_receiver) = channel();
+    let fullnode = Fullnode::new(node, &kp, ledger, v_kp, leader, &config);
+    (fullnode.run(Some(rotation_sender)), rotation_receiver)
+}
+
+//fn stop_fullnode() {}
+
+fn new_non_bs_leader_fullnode(
+    mint: &Arc<Keypair>,
+    last_tick: &mut Hash,
+    mut last_id: &mut Hash,
+    entries: &mut Vec<Entry>,
+) -> (Node, Arc<Keypair>, VotingKeypair) {
+    // Create the node information
+    let (node_keypair, node, _) = new_fullnode();
+
+    let voting = {
+        fund_fullnode(
+            mint,
+            node_keypair.pubkey(),
+            50,
+            &last_tick,
+            &mut last_id,
+            entries,
+        );
+        let voting = stake_fullnode(&node_keypair, 10, &last_tick, &mut last_id, entries);
+
+        *last_tick = add_tick(last_id, entries);
+        voting
+    };
+
+    (node, node_keypair, voting)
+}
+
+fn new_bs_leader_fullnode(
+    ticks_per_slot: u64,
+    slots_per_epoch: u64,
+    entries: &mut Vec<Entry>,
+) -> (
+    Arc<Keypair>,
+    String,
+    Hash,
+    Hash,
+    (Node, Arc<Keypair>, VotingKeypair),
+) {
+    // Create the node information
+    let (node_keypair, node, _) = new_fullnode();
+
+    let (genesis_block, mint_keypair) =
+        new_genesis_block(node_keypair.pubkey(), ticks_per_slot, slots_per_epoch);
+
+    let (ledger_path, mut last_id) = create_new_tmp_ledger!(&genesis_block);
+
+    let mut last_tick = add_tick(&mut last_id, entries);
+
+    let voting = stake_fullnode(&node_keypair, 20, &mut last_tick, &mut last_id, entries);
+
+    (
+        Arc::new(mint_keypair),
+        ledger_path,
+        last_tick,
+        last_id,
+        (node, node_keypair, voting),
+    )
+}
+
+#[test]
+#[ignore]
+fn test_fullnodes_bootup() {
+    let ticks_per_slot = 1;
+    let slots_per_epoch = 1;
+    solana_logger::setup();
+
+    // Create fullnode config, and set node scheduler policies
+    let fullnode_config = FullnodeConfig::default();
+    // let (tick_step_sender, tick_step_receiver) = sync_channel(1);
+    // fullnode_config.tick_config = PohServiceConfig::Step(tick_step_sender);
+
+    let mut entries = vec![];
+
+    let (mint, ledger, mut last_tick, mut last_id, leader) =
+        new_bs_leader_fullnode(ticks_per_slot, slots_per_epoch, &mut entries);
+
+    let leader_info = leader.0.info.clone();
+
+    let validator = new_non_bs_leader_fullnode(&mint, &mut last_tick, &mut last_id, &mut entries);
+
+    {
+        info!("Number of entries {}", entries.len());
+        trace!("last_id: {:?}", last_id);
+        trace!("last_tick: {:?}", last_tick);
+        trace!("entries: {:?}", entries);
+
+        let blocktree = Blocktree::open_config(&ledger, ticks_per_slot).unwrap();
+        blocktree.write_entries(1, 0, 0, &entries).unwrap();
+    }
+
+    //    let validator_info = validator.0.info.clone();
+    let v_ledger = tmp_copy_blocktree!(&ledger);
+
+    let mut exits = vec![];
+    let (v_e, v_r_r) = start_fullnode(
+        validator.0,
+        validator.1,
+        validator.2,
+        &v_ledger,
+        Some(&leader_info),
+        &fullnode_config,
+    );
+    exits.push(v_e);
+
+    let (l_e, l_r_r) = start_fullnode(
+        leader.0,
+        leader.1,
+        leader.2,
+        &ledger,
+        None,
+        &fullnode_config,
+    );
+    exits.push(l_e);
+
+    converge(&leader_info, exits.len());
+    info!(
+        "found leader: {:?}",
+        poll_gossip_for_leader(leader_info.gossip, Some(5)).unwrap()
+    );
+
+    let mut leader_should_be_leader = true;
+    let mut validator_should_be_leader = false;
+
+    let mut leader_slot_height_of_next_rotation = 4;
+    let mut validator_slot_height_of_next_rotation = 4;
+
+    let max_slot_height = 8;
+    /*
+        let bob = Keypair::new().pubkey();
+        let mut client_last_id = solana_sdk::hash::Hash::default();
+    */
+    while leader_slot_height_of_next_rotation < max_slot_height
+        && validator_slot_height_of_next_rotation < max_slot_height
+    {
+        // Check for leader rotation
+        {
+            match l_r_r.try_recv() {
+                Ok((rotation_type, slot)) => {
+                    if slot == 0 {
+                        // Skip slot 0, as the nodes are not fully initialized in terms of leader scheduler
+                        continue;
+                    }
+                    info!(
+                        "leader rotation event {:?} at slot={} {}",
+                        rotation_type, slot, leader_slot_height_of_next_rotation
+                    );
+                    info!("leader should be leader? {}", leader_should_be_leader);
+                    assert_eq!(slot, leader_slot_height_of_next_rotation);
+                    assert_eq!(
+                        rotation_type,
+                        if leader_should_be_leader {
+                            FullnodeReturnType::LeaderToValidatorRotation
+                        } else {
+                            FullnodeReturnType::ValidatorToLeaderRotation
+                        }
+                    );
+                    leader_should_be_leader = !leader_should_be_leader;
+                    leader_slot_height_of_next_rotation += 1;
+                }
+                Err(TryRecvError::Empty) => {}
+                err => panic!(err),
+            }
+        }
+
+        // Check for validator rotation
+        match v_r_r.try_recv() {
+            Ok((rotation_type, slot)) => {
+                if slot == 0 {
+                    // Skip slot 0, as the nodes are not fully initialized in terms of leader scheduler
+                    continue;
+                }
+                info!(
+                    "validator rotation event {:?} at slot={} {}",
+                    rotation_type, slot, validator_slot_height_of_next_rotation
+                );
+                info!("validator should be leader? {}", validator_should_be_leader);
+                assert_eq!(slot, validator_slot_height_of_next_rotation);
+                assert_eq!(
+                    rotation_type,
+                    if validator_should_be_leader {
+                        FullnodeReturnType::LeaderToValidatorRotation
+                    } else {
+                        FullnodeReturnType::ValidatorToLeaderRotation
+                    }
+                );
+                validator_slot_height_of_next_rotation += 1;
+                validator_should_be_leader = !validator_should_be_leader;
+            }
+            Err(TryRecvError::Empty) => {}
+            err => panic!(err),
+        }
+    }
+}
+
 fn test_fullnode_rotate(
     ticks_per_slot: u64,
     slots_per_epoch: u64,
@@ -1580,110 +1859,75 @@ fn test_fullnode_rotate(
 ) {
     solana_logger::setup();
 
-    // Create the leader node information
-    let leader_keypair = Arc::new(Keypair::new());
-    let leader = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-    let leader_info = leader.info.clone();
     let mut leader_should_be_leader = true;
+    let mut leader_slot_height_of_next_rotation = 2;
 
-    // Create fullnode config, and set leader scheduler policies
+    // Create fullnode config, and set node scheduler policies
     let mut fullnode_config = FullnodeConfig::default();
     let (tick_step_sender, tick_step_receiver) = sync_channel(1);
     fullnode_config.tick_config = PohServiceConfig::Step(tick_step_sender);
 
-    // Note: when debugging failures in this test, disabling voting can help keep the log noise
-    // down by removing the extra vote transactions
-    /*
-    fullnode_config.voting_disabled = true;
-    */
-
-    // Create the Genesis block using leader's keypair
-    let (mut genesis_block, mint_keypair) =
-        GenesisBlock::new_with_leader(1_000_000_000_000_000_000, leader_keypair.pubkey(), 123);
-    genesis_block.ticks_per_slot = ticks_per_slot;
-    genesis_block.slots_per_epoch = slots_per_epoch;
-
-    // Make a common mint and a genesis entry for both leader + validator ledgers
-    let (leader_ledger_path, mut last_id) = create_new_tmp_ledger!(&genesis_block);
-
-    let mut ledger_paths = Vec::new();
-    ledger_paths.push(leader_ledger_path.clone());
-    info!("ledger is {}", leader_ledger_path);
-
     let mut entries = vec![];
 
-    // Create the validator node information
-    let validator_keypair = Arc::new(Keypair::new());
-    let validator = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
+    let (mint, ledger, mut last_tick, mut last_id, leader) =
+        new_bs_leader_fullnode(ticks_per_slot, slots_per_epoch, &mut entries);
 
-    let mut leader_slot_height_of_next_rotation = 1;
+    let leader_info = leader.0.info.clone();
 
-    if ticks_per_slot == 1 {
-        // Add another tick to the ledger if the cluster has been configured for 1 ticks_per_slot.
-        // The "pseudo-tick" entry0 currently added by bank::process_ledger cannot be rotated on
-        // since it has no last id (so at 1 ticks_per_slot rotation must start at a tick_height of
-        // 2)
-        let tick = solana::entry::create_ticks(1, last_id);
-        last_id = tick[0].id;
-        entries.extend(tick);
+    let validator = if include_validator {
         leader_slot_height_of_next_rotation += 1;
-    }
+        Some(new_non_bs_leader_fullnode(
+            &mint,
+            &mut last_tick,
+            &mut last_id,
+            &mut entries,
+        ))
+    } else {
+        None
+    };
 
-    // Setup the cluster with a single node
-    if include_validator {
-        // Add validator vote on tick height 1
-        let (active_set_entries, _) = make_active_set_entries(
-            &validator_keypair,
-            &mint_keypair,
-            100,
-            1,
-            &last_id,
-            ticks_per_slot,
-        );
-        last_id = active_set_entries.last().unwrap().id;
-        entries.extend(active_set_entries);
-        leader_slot_height_of_next_rotation += 1;
-    }
-
-    // Write additional ledger entries
     {
         trace!("last_id: {:?}", last_id);
+        trace!("last_tick: {:?}", last_tick);
         trace!("entries: {:?}", entries);
 
-        let blocktree = Blocktree::open_config(&leader_ledger_path, ticks_per_slot).unwrap();
+        let blocktree = Blocktree::open_config(&ledger, ticks_per_slot).unwrap();
         blocktree.write_entries(1, 0, 0, &entries).unwrap();
     }
 
-    // Start up the node(s)
+    let mut ledger_paths = Vec::new();
+    ledger_paths.push(ledger.clone());
+    info!("ledger is {}", ledger);
+
+    let v_ledger = tmp_copy_blocktree!(&ledger);
+    ledger_paths.push(v_ledger.clone());
+
     let mut node_exits = vec![];
 
-    let (validator_rotation_sender, validator_rotation_receiver) = channel();
-    if include_validator {
-        let validator_ledger_path = tmp_copy_blocktree!(&leader_ledger_path);
-        ledger_paths.push(validator_ledger_path.clone());
-        let validator_fullnode = Fullnode::new(
-            validator,
-            &validator_keypair,
-            &validator_ledger_path,
-            VotingKeypair::new_local(&validator_keypair),
+    let validator_rotation_receiver = if let Some(node) = validator {
+        let (v_e, v_r_r) = start_fullnode(
+            node.0,
+            node.1,
+            node.2,
+            &v_ledger,
             Some(&leader_info),
             &fullnode_config,
         );
+        node_exits.push(v_e);
+        v_r_r
+    } else {
+        channel().1
+    };
 
-        node_exits.push(validator_fullnode.run(Some(validator_rotation_sender)));
-    }
-
-    let (leader_rotation_sender, leader_rotation_receiver) = channel();
-    let leader_fullnode = Fullnode::new(
-        leader,
-        &leader_keypair,
-        &leader_ledger_path,
-        VotingKeypair::new_local(&leader_keypair),
+    let (l_e, leader_rotation_receiver) = start_fullnode(
+        leader.0,
+        leader.1,
+        leader.2,
+        &ledger,
         None,
         &fullnode_config,
     );
-
-    node_exits.push(leader_fullnode.run(Some(leader_rotation_sender)));
+    node_exits.push(l_e);
 
     converge(&leader_info, node_exits.len());
     info!(
@@ -1708,11 +1952,14 @@ fn test_fullnode_rotate(
         {
             match leader_rotation_receiver.try_recv() {
                 Ok((rotation_type, slot)) => {
-                    if slot == 0 {
+                    if slot < leader_slot_height_of_next_rotation {
                         // Skip slot 0, as the nodes are not fully initialized in terms of leader scheduler
                         continue;
                     }
-                    info!("leader rotation event {:?} at slot={}", rotation_type, slot);
+                    info!(
+                        "leader rotation event {:?} at slot={} {}",
+                        rotation_type, slot, leader_slot_height_of_next_rotation
+                    );
                     info!("leader should be leader? {}", leader_should_be_leader);
                     assert_eq!(slot, leader_slot_height_of_next_rotation);
                     if include_validator {
@@ -1739,7 +1986,7 @@ fn test_fullnode_rotate(
         if include_validator {
             match validator_rotation_receiver.try_recv() {
                 Ok((rotation_type, slot)) => {
-                    if slot == 0 {
+                    if slot < validator_slot_height_of_next_rotation {
                         // Skip slot 0, as the nodes are not fully initialized in terms of leader scheduler
                         continue;
                     }
@@ -1774,9 +2021,7 @@ fn test_fullnode_rotate(
             info!("Transferring 500 tokens, last_id={:?}", client_last_id);
             expected_bob_balance += 500;
 
-            let signature = client
-                .transfer(500, &mint_keypair, bob, &client_last_id)
-                .unwrap();
+            let signature = client.transfer(500, &mint, bob, &client_last_id).unwrap();
             debug!("transfer send, signature is {:?}", signature);
             for _ in 0..30 {
                 if client.poll_for_signature(&signature).is_err() {
