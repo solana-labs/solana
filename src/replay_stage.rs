@@ -185,20 +185,11 @@ impl ReplayStage {
         let subscriptions_ = subscriptions.clone();
 
         // Gather up all the metadata about the current state of the ledger
-        let (mut bank, tick_height, mut last_entry_id, mut current_blob_index) = {
-            let bank = bank_forks.read().unwrap()[bank_forks_info[0].bank_id].clone();
-            let tick_height = bank.tick_height();
-            (
-                bank,
-                tick_height,
-                bank_forks_info[0].last_entry_id,
-                bank_forks_info[0].next_blob_index,
-            )
-        };
-        assert_eq!(bank.last_id(), last_entry_id); // TODO: remove last_entry_id, this assert proves it's unnecessary
+        let mut bank = bank_forks.read().unwrap()[bank_forks_info[0].bank_id].clone();
 
         // Update Tpu and other fullnode components with the current bank
         let (mut current_slot, mut current_leader_id, mut max_tick_height_for_slot) = {
+            let tick_height = bank.tick_height();
             let slot = (tick_height + 1) / bank.ticks_per_slot();
             let first_tick_in_slot = slot * bank.ticks_per_slot();
 
@@ -208,13 +199,9 @@ impl ReplayStage {
             let old_bank = bank.clone();
             // If the next slot is going to be a new slot and we're the leader for that slot,
             // make a new working bank, set it as the working bank.
-            if tick_height + 1 == first_tick_in_slot {
-                if leader_id == my_id {
-                    bank = Self::create_and_set_working_bank(slot, &bank_forks, &old_bank);
-                }
-                current_blob_index = 0;
+            if tick_height + 1 == first_tick_in_slot && leader_id == my_id {
+                bank = Self::create_and_set_working_bank(slot, &bank_forks, &old_bank);
             }
-            assert_eq!(current_blob_index, 0); // TODO: remove next_blob_index, this assert proves it's unnecessary
 
             // Send a rotation notification back to Fullnode to initialize the TPU to the right
             // state. After this point, the bank.tick_height() is live, which it means it can
@@ -222,7 +209,6 @@ impl ReplayStage {
             to_leader_sender
                 .send(TvuRotationInfo {
                     bank: bank.clone(),
-                    last_entry_id,
                     slot,
                     leader_id,
                 })
@@ -233,6 +219,8 @@ impl ReplayStage {
 
             (Some(slot), leader_id, max_tick_height_for_slot)
         };
+        let mut last_entry_id = bank.last_id();
+        let mut current_blob_index = 0;
 
         // Start the replay stage loop
         let bank_forks = bank_forks.clone();
@@ -388,7 +376,6 @@ impl ReplayStage {
                         to_leader_sender
                             .send(TvuRotationInfo {
                                 bank: bank.clone(),
-                                last_entry_id,
                                 slot: next_slot,
                                 leader_id,
                             })
@@ -508,7 +495,7 @@ mod test {
             let (bank_forks, bank_forks_info, blocktree, l_receiver) =
                 new_banks_from_blocktree(&my_ledger_path, None);
             let bank = bank_forks.working_bank();
-            let last_entry_id = bank_forks_info[0].last_entry_id;
+            let last_entry_id = bank.last_id();
 
             let blocktree = Arc::new(blocktree);
             let (replay_stage, _slot_full_receiver, ledger_writer_recv) = ReplayStage::new(

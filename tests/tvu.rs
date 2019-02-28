@@ -91,8 +91,6 @@ fn test_replay() {
     let bank_forks_info = vec![BankForksInfo {
         bank_id: 0,
         entry_height: 0,
-        last_entry_id: cur_hash,
-        next_blob_index: 0,
     }];
 
     let bank = bank_forks.working_bank();

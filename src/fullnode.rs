@@ -131,14 +131,10 @@ impl Fullnode {
         let bank_info = &bank_forks_info[0];
         let bank = bank_forks[bank_info.bank_id].clone();
 
-        info!(
-            "starting PoH... {} {}",
-            bank.tick_height(),
-            bank_info.last_entry_id
-        );
+        info!("starting PoH... {} {}", bank.tick_height(), bank.last_id(),);
         let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
             bank.tick_height(),
-            bank_info.last_entry_id,
+            bank.last_id(),
         )));
         let poh_service = PohService::new(poh_recorder.clone(), &config.tick_config, exit.clone());
 
@@ -270,11 +266,10 @@ impl Fullnode {
 
     fn rotate(&mut self, rotation_info: TvuRotationInfo) -> FullnodeReturnType {
         trace!(
-            "{:?}: rotate for slot={} to leader={:?} using last_entry_id={:?}",
+            "{:?}: rotate for slot={} to leader={:?}",
             self.id,
             rotation_info.slot,
             rotation_info.leader_id,
-            rotation_info.last_entry_id,
         );
         let was_leader = leader_schedule_utils::slot_leader(&rotation_info.bank) == self.id;
 
@@ -351,7 +346,7 @@ impl Fullnode {
                     //instead of here
                     self.poh_recorder.lock().unwrap().reset(
                         rotation_info.bank.tick_height(),
-                        rotation_info.last_entry_id,
+                        rotation_info.bank.last_id(),
                     );
                     let slot = rotation_info.slot;
                     let transition = self.rotate(rotation_info);
