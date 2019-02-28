@@ -195,6 +195,7 @@ impl ReplayStage {
                 bank_forks_info[0].next_blob_index,
             )
         };
+        assert_eq!(bank.last_id(), last_entry_id); // TODO: remove last_entry_id, this assert proves it's unnecessary
 
         // Update Tpu and other fullnode components with the current bank
         let (mut current_slot, mut current_leader_id, mut max_tick_height_for_slot) = {
@@ -213,6 +214,7 @@ impl ReplayStage {
                 }
                 current_blob_index = 0;
             }
+            assert_eq!(current_blob_index, 0); // TODO: remove next_blob_index, this assert proves it's unnecessary
 
             // Send a rotation notification back to Fullnode to initialize the TPU to the right
             // state. After this point, the bank.tick_height() is live, which it means it can

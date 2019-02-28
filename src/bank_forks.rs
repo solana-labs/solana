@@ -28,6 +28,18 @@ impl BankForks {
         }
     }
 
+    pub fn new_from_banks(initial_banks: &[Arc<Bank>]) -> Self {
+        let mut banks = HashMap::new();
+        let working_bank = initial_banks[0].clone();
+        for bank in initial_banks {
+            banks.insert(bank.slot(), bank.clone());
+        }
+        Self {
+            banks,
+            working_bank,
+        }
+    }
+
     // TODO: use the bank's own ID instead of receiving a parameter?
     pub fn insert(&mut self, bank_id: u64, bank: Bank) {
         let mut bank = Arc::new(bank);

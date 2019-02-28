@@ -19,7 +19,6 @@ use solana::tvu::{Sockets, Tvu};
 use solana::voting_keypair::VotingKeypair;
 use solana_runtime::bank::Bank;
 use solana_sdk::genesis_block::GenesisBlock;
-use solana_sdk::hash::Hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
 use std::fs::remove_dir_all;
@@ -86,8 +85,9 @@ fn test_replay() {
     let ticks_per_slot = genesis_block.ticks_per_slot;
     let tvu_addr = target1.info.tvu;
 
-    let mut cur_hash = Hash::default();
-    let bank_forks = BankForks::new(0, Bank::new(&genesis_block));
+    let bank = Bank::new(&genesis_block);
+    let mut cur_hash = bank.last_id();
+    let bank_forks = BankForks::new(0, bank);
     let bank_forks_info = vec![BankForksInfo {
         bank_id: 0,
         entry_height: 0,

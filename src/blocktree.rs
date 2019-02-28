@@ -1290,7 +1290,7 @@ impl Iterator for EntryIterator {
 
 // Creates a new ledger with slot 0 full of ticks (and only ticks).
 //
-// Returns the last_id that can be used to start slot 1 entries with.
+// Returns the last_id that can be used to append entries with.
 pub fn create_new_ledger(ledger_path: &str, genesis_block: &GenesisBlock) -> Result<Hash> {
     let ticks_per_slot = genesis_block.ticks_per_slot;
     Blocktree::destroy(ledger_path)?;
@@ -1298,7 +1298,7 @@ pub fn create_new_ledger(ledger_path: &str, genesis_block: &GenesisBlock) -> Res
 
     // Fill slot 0 with ticks that link back to the genesis_block to bootstrap the ledger.
     let blocktree = Blocktree::open_config(ledger_path, ticks_per_slot)?;
-    let entries = crate::entry::create_ticks(genesis_block.ticks_per_slot, genesis_block.last_id());
+    let entries = crate::entry::create_ticks(ticks_per_slot, genesis_block.last_id());
     blocktree.write_entries(0, 0, 0, &entries)?;
 
     Ok(entries.last().unwrap().id)

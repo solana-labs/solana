@@ -4,6 +4,7 @@ extern crate solana;
 use log::*;
 use solana::blob_fetch_stage::BlobFetchStage;
 use solana::blocktree::{create_new_tmp_ledger, tmp_copy_blocktree, Blocktree};
+use solana::blocktree_processor;
 use solana::client::mk_client;
 use solana::cluster_info::{Node, NodeInfo};
 use solana::contact_info::ContactInfo;
@@ -41,6 +42,68 @@ fn read_ledger(ledger_path: &str, ticks_per_slot: u64) -> Vec<Entry> {
         .read_ledger()
         .expect("Unable to read ledger")
         .collect()
+}
+
+#[test]
+fn test_start_with_partial_slot_in_ledger() {
+    solana_logger::setup();
+
+    let leader_keypair = Arc::new(Keypair::new());
+
+    let ticks_per_slot = 4;
+    let (mut genesis_block, _mint_keypair) =
+        GenesisBlock::new_with_leader(10_000, leader_keypair.pubkey(), 500);
+    genesis_block.ticks_per_slot = ticks_per_slot;
+
+    for i in 0..ticks_per_slot {
+        info!("Ledger will contain {} ticks in slot 1...", i);
+
+        let (ledger_path, last_id) = create_new_tmp_ledger!(&genesis_block);
+        // Write `i` extra ticks into ledger to create a partially filled slot
+        {
+            let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
+            let entries = solana::entry::create_ticks(i, last_id);
+            blocktree.write_entries(1, 0, 0, &entries).unwrap();
+        }
+
+        let leader = Fullnode::new(
+            Node::new_localhost_with_pubkey(leader_keypair.pubkey()),
+            &leader_keypair,
+            &ledger_path,
+            VotingKeypair::new_local(&leader_keypair),
+            None,
+            &FullnodeConfig::default(),
+        );
+        let (rotation_sender, rotation_receiver) = channel();
+        let leader_exit = leader.run(Some(rotation_sender));
+
+        // Wait for the fullnode to rotate twice, indicating that it was able to ingest the ledger
+        // and work with it
+        assert_eq!(
+            (FullnodeReturnType::LeaderToLeaderRotation, 1),
+            rotation_receiver.recv().unwrap()
+        );
+        assert_eq!(
+            (FullnodeReturnType::LeaderToLeaderRotation, 2),
+            rotation_receiver.recv().unwrap()
+        );
+
+        info!("Pass");
+        leader_exit();
+
+        // Ensure the ledger is still valid
+        {
+            let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
+            let (_bank_forks, bank_forks_info) =
+                blocktree_processor::process_blocktree(&genesis_block, &blocktree, None).unwrap();
+            assert_eq!(bank_forks_info.len(), 1);
+
+            // The node processed two slots, ensure entry_height reflects that
+            assert!(bank_forks_info[0].entry_height >= ticks_per_slot * 2);
+        }
+
+        remove_dir_all(ledger_path).unwrap();
+    }
 }
 
 #[test]
