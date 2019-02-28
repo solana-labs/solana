@@ -78,7 +78,6 @@ pub trait BlockstreamEvents {
 #[derive(Debug)]
 pub struct Blockstream<T: EntryWriter> {
     pub output: T,
-    pub queued_block: Option<BlockData>,
 }
 
 impl<T> BlockstreamEvents for Blockstream<T>
@@ -131,7 +130,6 @@ impl SocketBlockstream {
     pub fn new(socket: String) -> Self {
         Blockstream {
             output: EntrySocket { socket },
-            queued_block: None,
         }
     }
 }
@@ -142,21 +140,12 @@ impl MockBlockstream {
     pub fn new(_: String) -> Self {
         Blockstream {
             output: EntryVec::new(),
-            queued_block: None,
         }
     }
 
     pub fn entries(&self) -> Vec<String> {
         self.output.entries()
     }
-}
-
-#[derive(Debug)]
-pub struct BlockData {
-    pub slot: u64,
-    pub tick_height: u64,
-    pub id: Hash,
-    pub leader_id: Pubkey,
 }
 
 #[cfg(test)]

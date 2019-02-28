@@ -117,7 +117,7 @@ impl Tvu {
             exit.clone(),
         );
 
-        let (replay_stage, mut previous_receiver) = ReplayStage::new(
+        let (replay_stage, slot_full_receiver, forward_entry_receiver) = ReplayStage::new(
             keypair.pubkey(),
             voting_keypair,
             blocktree.clone(),
@@ -131,12 +131,12 @@ impl Tvu {
         );
 
         let blockstream_service = if blockstream.is_some() {
-            let (blockstream_service, blockstream_receiver) = BlockstreamService::new(
-                previous_receiver,
+            let blockstream_service = BlockstreamService::new(
+                slot_full_receiver,
+                blocktree.clone(),
                 blockstream.unwrap().to_string(),
                 exit.clone(),
             );
-            previous_receiver = blockstream_receiver;
             Some(blockstream_service)
         } else {
             None
@@ -144,7 +144,7 @@ impl Tvu {
 
         let storage_stage = StorageStage::new(
             storage_state,
-            previous_receiver,
+            forward_entry_receiver,
             Some(blocktree),
             &keypair,
             &exit.clone(),

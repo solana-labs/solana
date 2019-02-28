@@ -4,7 +4,7 @@ use crate::bank_forks::BankForks;
 use crate::blocktree::Blocktree;
 use crate::blocktree_processor::{self, BankForksInfo};
 use crate::cluster_info::ClusterInfo;
-use crate::entry::{Entry, EntryMeta, EntryReceiver, EntrySender, EntrySlice};
+use crate::entry::{Entry, EntryReceiver, EntrySender, EntrySlice};
 use crate::leader_schedule_utils;
 use crate::packet::BlobError;
 use crate::result::{Error, Result};
@@ -60,6 +60,7 @@ impl ReplayStage {
         bank: &Arc<Bank>,
         cluster_info: &Arc<RwLock<ClusterInfo>>,
         voting_keypair: &Option<Arc<T>>,
+        forward_entry_sender: &EntrySender,
         current_blob_index: &mut u64,
         last_entry_id: &mut Hash,
         subscriptions: &Arc<RpcSubscriptions>,
@@ -146,6 +147,12 @@ impl ReplayStage {
         );
 
         let entries_len = entries.len() as u64;
+        // TODO: In line with previous behavior, this will write all the entries even if
+        // an error occurred processing one of the entries (causing the rest of the entries to
+        // not be processed).
+        if entries_len != 0 {
+            forward_entry_sender.send(entries)?;
+        }
 
         *current_blob_index += entries_len;
         res?;
@@ -168,12 +175,12 @@ impl ReplayStage {
         to_leader_sender: &TvuRotationSender,
         ledger_signal_receiver: Receiver<bool>,
         subscriptions: &Arc<RpcSubscriptions>,
-    ) -> (Self, EntryReceiver)
+    ) -> (Self, Receiver<(u64, Pubkey)>, EntryReceiver)
     where
         T: 'static + KeypairUtil + Send + Sync,
     {
         let (forward_entry_sender, forward_entry_receiver) = channel();
-        // let (_slot_full_sender, _slot_full_receiver) = channel();
+        let (slot_full_sender, slot_full_receiver) = channel();
         let exit_ = exit.clone();
         let to_leader_sender = to_leader_sender.clone();
         let subscriptions_ = subscriptions.clone();
@@ -301,22 +308,12 @@ impl ReplayStage {
                     };
 
                     if !entries.is_empty() {
-                        // if let Err(e) = Self::forward_entries(
-                        //     entries.clone(),
-                        //     slot,
-                        //     current_leader_id,
-                        //     bank.ticks_per_slot(),
-                        //     bank.tick_height(),
-                        //     &blocktree,
-                        //     &forward_entry_sender,
-                        // ) {
-                        //     error!("{} forward_entries failed: {:?}", my_id, e);
-                        // }
                         if let Err(e) = Self::process_entries(
                             entries,
                             &bank,
                             &cluster_info,
                             &voting_keypair,
+                            &forward_entry_sender,
                             &mut current_blob_index,
                             &mut last_entry_id,
                             &subscriptions_,
@@ -330,15 +327,8 @@ impl ReplayStage {
                     // We've reached the end of a slot, reset our state and check
                     // for leader rotation
                     if max_tick_height_for_slot == current_tick_height {
-                        let entries_to_stream = blocktree.get_slot_entries(slot, 0, None).unwrap();
-                        if let Err(e) = Self::forward_entries(
-                            entries_to_stream,
-                            slot,
-                            current_leader_id,
-                            &blocktree,
-                            &forward_entry_sender,
-                        ) {
-                            error!("{} forward_entries failed: {:?}", my_id, e);
+                        if let Err(e) = slot_full_sender.send((slot, current_leader_id)) {
+                            error!("{} slot_full alert failed: {:?}", my_id, e);
                         }
 
                         // Check for leader rotation
@@ -408,7 +398,11 @@ impl ReplayStage {
             })
             .unwrap();
 
-        (Self { t_replay, exit }, forward_entry_receiver)
+        (
+            Self { t_replay, exit },
+            slot_full_receiver,
+            forward_entry_receiver,
+        )
     }
 
     pub fn close(self) -> thread::Result<()> {
@@ -447,44 +441,6 @@ impl ReplayStage {
         // Find the next slot that chains to the old slot
         let next_slots = blocktree.get_slots_since(&[slot_index]).expect("Db error");
         next_slots.first().cloned()
-    }
-
-    fn forward_entries(
-        entries: Vec<Entry>,
-        slot: u64,
-        slot_leader: Pubkey,
-        blocktree: &Arc<Blocktree>,
-        forward_entry_sender: &EntrySender,
-    ) -> Result<()> {
-        let blocktree_meta = blocktree.meta(slot).unwrap().unwrap();
-        let parent_slot = if slot == 0 {
-            None
-        } else {
-            Some(blocktree_meta.parent_slot)
-        };
-        let ticks_per_slot = entries
-            .iter()
-            .filter(|entry| entry.is_tick())
-            .fold(0, |acc, _| acc + 1);
-        let mut tick_height = ticks_per_slot * slot - 1;
-        let mut entries_with_meta = Vec::new();
-        for entry in entries.into_iter() {
-            if entry.is_tick() {
-                tick_height += 1;
-            }
-            let is_end_of_slot = (tick_height + 1) % ticks_per_slot == 0;
-            let entry_meta = EntryMeta {
-                tick_height,
-                slot,
-                slot_leader,
-                is_end_of_slot,
-                parent_slot,
-                entry,
-            };
-            entries_with_meta.push(entry_meta);
-        }
-        forward_entry_sender.send(entries_with_meta)?;
-        Ok(())
     }
 }
 
@@ -541,7 +497,7 @@ mod test {
             let last_entry_id = bank_forks_info[0].last_entry_id;
 
             let blocktree = Arc::new(blocktree);
-            let (replay_stage, ledger_writer_recv) = ReplayStage::new(
+            let (replay_stage, _slot_full_receiver, ledger_writer_recv) = ReplayStage::new(
                 my_keypair.pubkey(),
                 Some(voting_keypair.clone()),
                 blocktree.clone(),
@@ -566,7 +522,7 @@ mod test {
                 .recv()
                 .expect("Expected to receive an entry on the ledger writer receiver");
 
-            assert_eq!(next_tick[0], received_tick[0].entry);
+            assert_eq!(next_tick[0], received_tick[0]);
 
             replay_stage
                 .close()
@@ -583,6 +539,7 @@ mod test {
         let my_node = Node::new_localhost_with_pubkey(my_id);
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
+        let (forward_entry_sender, _forward_entry_receiver) = channel();
         let mut last_entry_id = Hash::default();
         let mut current_blob_index = 0;
         let mut last_id = Hash::default();
@@ -600,6 +557,7 @@ mod test {
             &bank,
             &cluster_info_me,
             &voting_keypair,
+            &forward_entry_sender,
             &mut current_blob_index,
             &mut last_entry_id,
             &Arc::new(RpcSubscriptions::default()),
@@ -622,6 +580,7 @@ mod test {
             &bank,
             &cluster_info_me,
             &voting_keypair,
+            &forward_entry_sender,
             &mut current_blob_index,
             &mut last_entry_id,
             &Arc::new(RpcSubscriptions::default()),
