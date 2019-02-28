@@ -36,8 +36,9 @@ pub fn slot_leader(bank: &Bank) -> Pubkey {
 
 /// Return the leader for the given slot.
 pub fn slot_leader_at(slot: u64, bank: &Bank) -> Pubkey {
-    let epoch = slot / bank.slots_per_epoch();
-    slot_leader_by(bank, |_, _, _| (slot, epoch))
+    slot_leader_by(bank, |_, _, _| {
+        (slot % bank.slots_per_epoch(), slot / bank.slots_per_epoch())
+    })
 }
 
 /// Return the epoch height and slot index of the slot before the current slot.
