@@ -1521,14 +1521,39 @@ mod tests {
     #[test]
     fn test_account_vote() {
         let paths = "vote0".to_string();
-        let accounts = AccountsDB::new(0, &paths);
+        let accounts_db = AccountsDB::new(0, &paths);
         let mut pubkeys: Vec<Pubkey> = vec![];
-        create_account(&accounts, &mut pubkeys, 100, 6);
-        let accounts = accounts.get_vote_accounts(0);
+        create_account(&accounts_db, &mut pubkeys, 100, 6);
+        let accounts = accounts_db.get_vote_accounts(0);
         assert_eq!(accounts.len(), 6);
         accounts.iter().for_each(|account| {
             assert_eq!(account.owner, vote_program::id());
         });
+        let lastkey = Keypair::new().pubkey();
+        let mut lastaccount = Account::new(1, 0, vote_program::id());
+        accounts_db.store(0, &lastkey, &lastaccount);
+        assert_eq!(accounts_db.get_vote_accounts(0).len(), 7);
+
+        accounts_db.add_fork(1, Some(0));
+
+        assert_eq!(
+            accounts_db.get_vote_accounts(1),
+            accounts_db.get_vote_accounts(0)
+        );
+
+        // should delete it from 1
+        lastaccount.tokens = 0;
+        accounts_db.store(1, &lastkey, &lastaccount);
+        assert_eq!(accounts_db.get_vote_accounts(1).len(), 6);
+
+        // should still be in 0
+        //  TODO: uncomment me,  issue #2994
+        //        assert_eq!(accounts_db.get_vote_accounts(0).len(), 7);
+
+        // delete it from 0
+        accounts_db.store(0, &lastkey, &lastaccount);
+        assert_eq!(accounts_db.get_vote_accounts(0).len(), 6);
+
         cleanup_dirs(&paths);
     }
 }
