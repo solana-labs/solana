@@ -50,7 +50,7 @@ fn par_execute_entries(bank: &Bank, entries: &[(&Entry, Vec<Result<()>>)]) -> Re
 /// 2. Process the locked group in parallel
 /// 3. Register the `Tick` if it's available
 /// 4. Update the leader scheduler, goto 1
-fn par_process_entries_with_scheduler(bank: &Bank, entries: &[Entry]) -> Result<()> {
+fn par_process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
     // accumulator for entries that can be processed in parallel
     let mut mt_group = vec![];
     for entry in entries {
@@ -83,7 +83,7 @@ fn par_process_entries_with_scheduler(bank: &Bank, entries: &[Entry]) -> Result<
 
 /// Process an ordered list of entries.
 pub fn process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
-    par_process_entries_with_scheduler(bank, entries)
+    par_process_entries(bank, entries)
 }
 
 /// Process an ordered list of entries, populating a circular buffer "tail"
@@ -416,10 +416,6 @@ mod tests {
             ]),
             Err(BankError::AccountInUse)
         );
-    }
-
-    fn par_process_entries(bank: &Bank, entries: &[Entry]) -> Result<()> {
-        par_process_entries_with_scheduler(bank, entries)
     }
 
     #[test]
