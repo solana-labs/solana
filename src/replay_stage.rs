@@ -377,6 +377,11 @@ impl ReplayStage {
                             cluster_info.write().unwrap().set_leader(leader_id);
                         }
 
+                        trace!(
+                            "node {:?} scheduled as leader for slot {}",
+                            leader_id,
+                            next_slot
+                        );
                         // Always send rotation signal so that other services like
                         // RPC can be made aware of last slot's bank
                         to_leader_sender
