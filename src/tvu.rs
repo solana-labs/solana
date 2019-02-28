@@ -24,7 +24,6 @@ use crate::rpc_subscriptions::RpcSubscriptions;
 use crate::service::Service;
 use crate::storage_stage::{StorageStage, StorageState};
 use solana_runtime::bank::Bank;
-use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use std::net::UdpSocket;
@@ -34,10 +33,9 @@ use std::sync::{Arc, RwLock};
 use std::thread;
 
 pub struct TvuRotationInfo {
-    pub bank: Arc<Bank>,     // Bank to use
-    pub last_entry_id: Hash, // last_entry_id of that bank
-    pub slot: u64,           // slot height to initiate a rotation
-    pub leader_id: Pubkey,   // leader upon rotation
+    pub bank: Arc<Bank>,   // Bank to use
+    pub slot: u64,         // slot height to initiate a rotation
+    pub leader_id: Pubkey, // leader upon rotation
 }
 pub type TvuRotationSender = Sender<TvuRotationInfo>;
 pub type TvuRotationReceiver = Receiver<TvuRotationInfo>;
@@ -218,8 +216,6 @@ pub mod tests {
         let bank_forks_info = vec![BankForksInfo {
             bank_id: 0,
             entry_height: 0,
-            last_entry_id: bank_forks.working_bank().last_id(),
-            next_blob_index: 0,
         }];
 
         //start cluster_info1

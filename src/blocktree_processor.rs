@@ -6,7 +6,6 @@ use rayon::prelude::*;
 use solana_metrics::counter::Counter;
 use solana_runtime::bank::{Bank, BankError, Result};
 use solana_sdk::genesis_block::GenesisBlock;
-use solana_sdk::hash::Hash;
 use solana_sdk::timing::duration_as_ms;
 use solana_sdk::timing::MAX_ENTRY_IDS;
 use std::sync::Arc;
@@ -101,8 +100,6 @@ fn process_block(bank: &Bank, entries: &[Entry]) -> Result<()> {
 pub struct BankForksInfo {
     pub bank_id: u64,
     pub entry_height: u64,
-    pub last_entry_id: Hash,
-    pub next_blob_index: u64,
 }
 
 pub fn process_blocktree(
@@ -195,8 +192,6 @@ pub fn process_blocktree(
             let bfi = BankForksInfo {
                 bank_id: slot,
                 entry_height: starting_entry_height,
-                last_entry_id: starting_bank.last_id(),
-                next_blob_index: 0,
             };
             fork_info.push((starting_bank, bfi));
             continue;
@@ -211,8 +206,6 @@ pub fn process_blocktree(
             let bfi = BankForksInfo {
                 bank_id: slot,
                 entry_height,
-                last_entry_id: bank.last_id(),
-                next_blob_index: meta.consumed,
             };
             fork_info.push((bank, bfi));
             continue;
@@ -253,6 +246,7 @@ mod tests {
     use crate::blocktree::tests::entries_to_blobs;
     use crate::entry::{create_ticks, next_entry, Entry};
     use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::hash::Hash;
     use solana_sdk::signature::{Keypair, KeypairUtil};
     use solana_sdk::system_transaction::SystemTransaction;
 
@@ -298,8 +292,6 @@ mod tests {
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot)
             .expect("Expected to successfully open database ledger");
 
-        let expected_last_entry_id = last_id;
-
         // Write slot 1
         // slot 1, points at slot 0.  Missing one tick
         {
@@ -326,8 +318,6 @@ mod tests {
             BankForksInfo {
                 bank_id: 1, // never finished first slot
                 entry_height: ticks_per_slot,
-                last_entry_id: expected_last_entry_id,
-                next_blob_index: 0,
             }
         );
     }
@@ -385,8 +375,6 @@ mod tests {
             BankForksInfo {
                 bank_id: 3, // Fork 1's head is slot 3
                 entry_height: ticks_per_slot * 4,
-                last_entry_id: last_fork1_entry_id,
-                next_blob_index: ticks_per_slot, // this fork is done, but we need to look for children in replay
             }
         );
         assert_eq!(
@@ -394,8 +382,6 @@ mod tests {
             BankForksInfo {
                 bank_id: 4, // Fork 2's head is slot 4
                 entry_height: ticks_per_slot * 3,
-                last_entry_id: last_fork2_entry_id,
-                next_blob_index: ticks_per_slot, // this fork is done, but we need to look for children in replay
             }
         );
 
@@ -499,8 +485,6 @@ mod tests {
             BankForksInfo {
                 bank_id: 1,
                 entry_height,
-                last_entry_id: entries.last().unwrap().id,
-                next_blob_index: entries.len() as u64,
             }
         );
 
