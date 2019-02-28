@@ -624,9 +624,7 @@ impl AccountsDB {
     fn remove_parents(&self, fork: Fork) -> Vec<Fork> {
         let mut info = self.fork_info.write().unwrap();
         let fork_info = info.get_mut(&fork).unwrap();
-        let parents = fork_info.parents.split_off(0);
-        info.retain(|&f, _| !parents.contains(&f));
-        parents
+        fork_info.parents.split_off(0)
     }
 
     fn is_squashed(&self, fork: Fork) -> bool {
