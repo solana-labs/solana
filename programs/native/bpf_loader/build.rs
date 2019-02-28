@@ -64,7 +64,7 @@ fn main() {
             "../../../../target/".to_string() + &env::var("PROFILE").unwrap() + &"/bpf".to_string();
 
         if !Path::new(
-            "../../bpf/rust/noop/target/bpfel_unknown_unknown/release/solana_bpf_rust_noop.so",
+            "../../bpf/rust/noop/target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so",
         )
         .is_file()
         {
@@ -80,9 +80,9 @@ fn main() {
         rerun_if_changed(
             &[
                 "../../bpf/rust/noop/bpf.ld",
-                "../../bpf/rust/noop/bpfel_unknown_unknown.json",
                 "../../bpf/rust/noop/build.sh",
-                "../../bpf/rust/noop/target/bpfel_unknown_unknown/release/solana_bpf_rust_noop.so",
+                "../../bpf/rust/noop/Cargo.toml",
+                "../../bpf/rust/noop/target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so",
             ],
             &["../../bpf/rust/noop/src"],
         );
@@ -100,7 +100,7 @@ fn main() {
 
         let status = Command::new("cp")
             .current_dir("../../bpf/rust/noop")
-            .arg("target/bpfel_unknown_unknown/release/solana_bpf_rust_noop.so")
+            .arg("target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so")
             .arg(&install_dir)
             .status()
             .expect("Failed to copy solana_rust_bpf_noop.so to install directory");

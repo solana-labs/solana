@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -ex
+set -e
 
 export RUSTFLAGS="$RUSTFLAGS \
     -C lto=no -C opt-level=2 \
@@ -9,12 +9,18 @@ export RUSTFLAGS="$RUSTFLAGS \
     -C link-arg=--Bdynamic \
     -C link-arg=-shared \
     -C link-arg=--entry=entrypoint \
-    -C linker=../../../../sdk/bpf/llvm-native/bin/ld.lld \
-     --sysroot ../../../../sdk/bpf/rust-bpf-sysroot"
+    -C linker=../../../../sdk/bpf/llvm-native/bin/ld.lld"
 
 # Ensure the sdk is installed
 ../../../../sdk/bpf/scripts/install.sh
+rustup override set bpf
 
-cargo +bpf build --release --target=bpfel_unknown_unknown -v
+set +e
+cargo install xargo
+set -e
+export XARGO_HOME="$PWD/target/xargo"
+export XARGO_RUST_SRC="../../../../sdk/bpf/rust-bpf-sysroot/src"
+# export XARGO_RUST_SRC="../../../../../rust-bpf-sysroot/src"
+xargo build --target bpfel-unknown-unknown --release -v
 
 { { set +x; } 2>/dev/null; echo Success; }
