@@ -5,10 +5,11 @@ use crate::rewards_instruction::RewardsInstruction;
 use crate::rewards_program;
 use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::signature::Keypair;
+use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::transaction::{Instruction, Transaction};
-use solana_sdk::vote_program::{self, VoteInstruction};
+use solana_sdk::transaction::Transaction;
+use solana_sdk::transaction_builder::TransactionBuilder;
+use solana_sdk::vote_program::VoteInstruction;
 
 pub struct RewardsTransaction {}
 
@@ -38,16 +39,12 @@ impl RewardsTransaction {
         last_id: Hash,
         fee: u64,
     ) -> Transaction {
-        Transaction::new_with_instructions(
-            &[vote_keypair],
-            &[rewards_id, to_id],
-            last_id,
-            fee,
-            vec![rewards_program::id(), vote_program::id()],
-            vec![
-                Instruction::new(0, &RewardsInstruction::RedeemVoteCredits, vec![0, 1, 2]),
-                Instruction::new(1, &VoteInstruction::ClearCredits, vec![0]),
-            ],
-        )
+        let vote_id = vote_keypair.pubkey();
+        TransactionBuilder::new(fee)
+            .push(RewardsInstruction::new_redeem_vote_credits(
+                vote_id, rewards_id, to_id,
+            ))
+            .push(VoteInstruction::new_clear_credits(vote_id))
+            .sign(&[vote_keypair], last_id)
     }
 }
