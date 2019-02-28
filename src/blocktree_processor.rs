@@ -9,6 +9,7 @@ use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::Hash;
 use solana_sdk::timing::duration_as_ms;
 use solana_sdk::timing::MAX_ENTRY_IDS;
+use std::sync::Arc;
 use std::time::Instant;
 
 pub fn process_entry(bank: &Bank, entry: &Entry) -> Result<()> {
@@ -113,23 +114,25 @@ pub fn process_blocktree(
     info!("processing ledger...");
 
     // Setup bank for slot 0
-    let (mut bank_forks, mut pending_slots) = {
-        let bank = Bank::new_with_paths(&genesis_block, account_paths);
+    let mut pending_slots = {
         let slot = 0;
+        let bank = Arc::new(Bank::new_with_paths(&genesis_block, account_paths));
         let entry_height = 0;
         let last_entry_id = bank.last_id();
-
-        (
-            BankForks::new(slot, bank),
-            vec![(slot, entry_height, last_entry_id)],
-        )
+        vec![(slot, bank, entry_height, last_entry_id)]
     };
 
-    let mut bank_forks_info = vec![];
+    let mut fork_info = vec![];
     while !pending_slots.is_empty() {
-        let (slot, mut entry_height, mut last_entry_id) = pending_slots.pop().unwrap();
+        let (slot, starting_bank, starting_entry_height, mut last_entry_id) =
+            pending_slots.pop().unwrap();
 
-        let bank = bank_forks[slot].clone();
+        let bank = Arc::new(Bank::new_from_parent_and_id(
+            &starting_bank,
+            leader_schedule_utils::slot_leader_at(slot, &starting_bank),
+            starting_bank.slot(),
+        ));
+        let mut entry_height = starting_entry_height;
 
         // Load the metadata for this slot
         let meta = blocktree
@@ -181,32 +184,50 @@ pub fn process_blocktree(
 
         let slot_complete =
             leader_schedule_utils::num_ticks_left_in_slot(&bank, bank.tick_height()) == 0;
+        if !slot_complete {
+            // Slot was not complete, clear out any partial entries
+            // TODO: Walk |meta.next_slots| and clear all child slots too?
+            blocktree.reset_slot_consumed(slot).map_err(|err| {
+                warn!("Failed to reset partial slot {}: {:?}", slot, err);
+                BankError::LedgerVerificationFailed
+            })?;
 
-        if !slot_complete || meta.next_slots.is_empty() {
-            // Reached the end of this fork.  Record the final entry height and last entry id
-
-            bank_forks_info.push(BankForksInfo {
+            let bfi = BankForksInfo {
                 bank_id: slot,
-                entry_height,
-                last_entry_id,
-                next_blob_index: meta.consumed,
-            });
-
+                entry_height: starting_entry_height,
+                last_entry_id: starting_bank.last_id(),
+                next_blob_index: 0,
+            };
+            fork_info.push((starting_bank, bfi));
             continue;
         }
-
-        // reached end of slot, look for next slots
 
         // TODO merge with locktower, voting
         bank.squash();
 
+        if meta.next_slots.is_empty() {
+            // Reached the end of this fork.  Record the final entry height and last entry id
+
+            let bfi = BankForksInfo {
+                bank_id: slot,
+                entry_height,
+                last_entry_id: bank.last_id(),
+                next_blob_index: meta.consumed,
+            };
+            fork_info.push((bank, bfi));
+            continue;
+        }
+
         // This is a fork point, create a new child bank for each fork
         pending_slots.extend(meta.next_slots.iter().map(|next_slot| {
-            let leader = leader_schedule_utils::slot_leader_at(*next_slot, &bank);
-            let child_bank = Bank::new_from_parent_and_id(&bank, leader, *next_slot);
+            let child_bank = Arc::new(Bank::new_from_parent_and_id(
+                &bank,
+                leader_schedule_utils::slot_leader_at(*next_slot, &bank),
+                *next_slot,
+            ));
             trace!("Add child bank for slot={}", next_slot);
-            bank_forks.insert(*next_slot, child_bank);
-            (*next_slot, entry_height, last_entry_id)
+            // bank_forks.insert(*next_slot, child_bank);
+            (*next_slot, child_bank, entry_height, last_entry_id)
         }));
 
         // reverse sort by slot, so the next slot to be processed can be pop()ed
@@ -214,6 +235,8 @@ pub fn process_blocktree(
         pending_slots.sort_by(|a, b| b.0.cmp(&a.0));
     }
 
+    let (banks, bank_forks_info): (Vec<_>, Vec<_>) = fork_info.into_iter().unzip();
+    let bank_forks = BankForks::new_from_banks(&banks);
     info!(
         "processed ledger in {}ms, forks={}...",
         duration_as_ms(&now.elapsed()),
@@ -275,7 +298,7 @@ mod tests {
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot)
             .expect("Expected to successfully open database ledger");
 
-        let expected_last_entry_id;
+        let expected_last_entry_id = last_id;
 
         // Write slot 1
         // slot 1, points at slot 0.  Missing one tick
@@ -286,7 +309,6 @@ mod tests {
             last_id = entries.last().unwrap().id;
 
             entries.pop();
-            expected_last_entry_id = entries.last().unwrap().id;
 
             let blobs = entries_to_blobs(&entries, slot, parent_slot);
             blocktree.insert_data_blobs(blobs.iter()).unwrap();
@@ -303,9 +325,9 @@ mod tests {
             bank_forks_info[0],
             BankForksInfo {
                 bank_id: 1, // never finished first slot
-                entry_height: 2 * ticks_per_slot - 1,
+                entry_height: ticks_per_slot,
                 last_entry_id: expected_last_entry_id,
-                next_blob_index: ticks_per_slot - 1,
+                next_blob_index: 0,
             }
         );
     }
@@ -379,7 +401,7 @@ mod tests {
 
         // Ensure bank_forks holds the right banks
         for info in bank_forks_info {
-            assert_eq!(bank_forks[info.bank_id].last_id(), info.last_entry_id)
+            assert_eq!(bank_forks[info.bank_id].slot(), info.bank_id);
         }
     }
 
@@ -486,6 +508,28 @@ mod tests {
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 50 - 3);
         assert_eq!(bank.tick_height(), 2 * genesis_block.ticks_per_slot - 1);
         assert_eq!(bank.last_id(), entries.last().unwrap().id);
+    }
+
+    #[test]
+    fn test_process_ledger_with_one_tick_per_slot() {
+        let (mut genesis_block, _mint_keypair) = GenesisBlock::new(123);
+        genesis_block.ticks_per_slot = 1;
+        let (ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
+
+        let blocktree = Blocktree::open(&ledger_path).unwrap();
+        let (bank_forks, bank_forks_info) =
+            process_blocktree(&genesis_block, &blocktree, None).unwrap();
+
+        assert_eq!(bank_forks_info.len(), 1);
+        assert_eq!(
+            bank_forks_info[0],
+            BankForksInfo {
+                bank_id: 0,
+                entry_height: 1,
+            }
+        );
+        let bank = bank_forks[0].clone();
+        assert_eq!(bank.tick_height(), 0);
     }
 
     #[test]

@@ -203,7 +203,6 @@ pub mod tests {
     use crate::storage_stage::STORAGE_ROTATE_TEST_COUNT;
     use solana_runtime::bank::Bank;
     use solana_sdk::genesis_block::GenesisBlock;
-    use solana_sdk::hash::Hash;
 
     #[test]
     fn test_tvu_exit() {
@@ -219,7 +218,7 @@ pub mod tests {
         let bank_forks_info = vec![BankForksInfo {
             bank_id: 0,
             entry_height: 0,
-            last_entry_id: Hash::default(),
+            last_entry_id: bank_forks.working_bank().last_id(),
             next_blob_index: 0,
         }];
 
