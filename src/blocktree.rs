@@ -129,9 +129,9 @@ pub struct SlotMeta {
     // The total number of consecutive blobs starting from index 0
     // we have received for this slot.
     pub consumed: u64,
-    // The index *plus one* of the highest blob received for this slot.
-    // Useful for checking if the slot has received any blobs yet, and
-    // to calculate the length of a hole: `received - consumed`.
+    // The index *plus one* of the highest blob received for this slot.  Useful
+    // for checking if the slot has received any blobs yet, and to calculate the
+    // range where there is one or more holes: `(consumed..received)`.
     pub received: u64,
     // The index of the blob that is flagged as the last blob for this slot.
     pub last_index: u64,
