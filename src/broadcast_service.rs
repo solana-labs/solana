@@ -9,6 +9,7 @@ use crate::erasure::CodingGenerator;
 use crate::packet::index_blobs;
 use crate::result::{Error, Result};
 use crate::service::Service;
+use crate::staking_utils;
 use rayon::prelude::*;
 use solana_metrics::counter::Counter;
 use solana_metrics::{influxdb, submit};
@@ -189,7 +190,7 @@ impl BroadcastService {
             let mut broadcast_table = cluster_info
                 .read()
                 .unwrap()
-                .sorted_tvu_peers(&bank.staked_nodes());
+                .sorted_tvu_peers(&staking_utils::staked_nodes(&bank));
             // Layer 1, leader nodes are limited to the fanout size.
             broadcast_table.truncate(DATA_PLANE_FANOUT);
             inc_new_counter_info!("broadcast_service-num_peers", broadcast_table.len() + 1);

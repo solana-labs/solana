@@ -22,6 +22,7 @@ use crate::crds_value::{CrdsValue, CrdsValueLabel, LeaderId, Vote};
 use crate::packet::{to_shared_blob, Blob, SharedBlob, BLOB_SIZE};
 use crate::result::Result;
 use crate::rpc_service::RPC_PORT;
+use crate::staking_utils;
 use crate::streamer::{BlobReceiver, BlobSender};
 use bincode::{deserialize, serialize};
 use core::cmp;
@@ -877,7 +878,7 @@ impl ClusterInfo {
                     let start = timestamp();
                     let stakes: HashMap<_, _> = match bank_forks {
                         Some(ref bank_forks) => {
-                            bank_forks.read().unwrap().working_bank().staked_nodes()
+                            staking_utils::staked_nodes(&bank_forks.read().unwrap().working_bank())
                         }
                         None => HashMap::new(),
                     };

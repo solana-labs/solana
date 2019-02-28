@@ -1,10 +1,11 @@
 use crate::leader_schedule::LeaderSchedule;
+use crate::staking_utils;
 use solana_runtime::bank::Bank;
 use solana_sdk::pubkey::Pubkey;
 
 /// Return the leader schedule for the given epoch.
 fn leader_schedule(epoch_height: u64, bank: &Bank) -> LeaderSchedule {
-    let stakes = bank.staked_nodes_at_epoch(epoch_height);
+    let stakes = staking_utils::staked_nodes_at_epoch(bank, epoch_height);
     let mut seed = [0u8; 32];
     seed[0..8].copy_from_slice(&epoch_height.to_le_bytes());
     let stakes: Vec<_> = stakes.into_iter().collect();
@@ -80,6 +81,7 @@ pub fn num_ticks_left_in_slot(bank: &Bank, tick_height: u64) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::staking_utils;
     use solana_sdk::genesis_block::GenesisBlock;
     use solana_sdk::signature::{Keypair, KeypairUtil};
 
@@ -89,7 +91,7 @@ mod tests {
         let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(2, pubkey, 2);
         let bank = Bank::new(&genesis_block);
 
-        let ids_and_stakes: Vec<_> = bank.staked_nodes().into_iter().collect();
+        let ids_and_stakes: Vec<_> = staking_utils::staked_nodes(&bank).into_iter().collect();
         let seed = [0u8; 32];
         let leader_schedule =
             LeaderSchedule::new(&ids_and_stakes, seed, genesis_block.slots_per_epoch);
