@@ -17,29 +17,28 @@ use std::mem::size_of;
 
 /// An instruction to execute a program
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
-pub struct Instruction {
+pub struct Instruction<P, Q> {
     /// Index into the transaction program ids array indicating the program account that executes this instruction
-    pub program_ids_index: u8,
+    pub program_ids_index: P,
     /// Ordered indices into the transaction keys array indicating which accounts to pass to the program
-    pub accounts: Vec<u8>,
+    pub accounts: Vec<Q>,
     /// The program input data
     pub userdata: Vec<u8>,
 }
 
-impl Instruction {
-    pub fn new<T: Serialize>(program_ids_index: u8, userdata: &T, accounts: Vec<u8>) -> Self {
+impl<P, Q> Instruction<P, Q> {
+    pub fn new<T: Serialize>(program_ids_index: P, userdata: &T, accounts: Vec<Q>) -> Self {
         let userdata = serialize(userdata).unwrap();
-        Instruction {
+        Self {
             program_ids_index,
             userdata,
             accounts,
         }
     }
+}
 
-    pub fn serialize_with(
-        mut writer: &mut Cursor<&mut [u8]>,
-        ix: &Instruction,
-    ) -> Result<(), Error> {
+impl Instruction<u8, u8> {
+    pub fn serialize_with(mut writer: &mut Cursor<&mut [u8]>, ix: &Self) -> Result<(), Error> {
         writer.write_all(&[ix.program_ids_index])?;
         serialize_vec_bytes(&mut writer, &ix.accounts[..])?;
         serialize_vec_bytes(&mut writer, &ix.userdata[..])?;
@@ -93,7 +92,7 @@ pub struct Transaction {
     pub program_ids: Vec<Pubkey>,
     /// Programs that will be executed in sequence and committed in one atomic transaction if all
     /// succeed.
-    pub instructions: Vec<Instruction>,
+    pub instructions: Vec<Instruction<u8, u8>>,
 }
 
 impl Transaction {
@@ -153,7 +152,7 @@ impl Transaction {
         last_id: Hash,
         fee: u64,
         program_ids: Vec<Pubkey>,
-        instructions: Vec<Instruction>,
+        instructions: Vec<Instruction<u8, u8>>,
     ) -> Self {
         let mut account_keys: Vec<_> = from_keypairs
             .iter()
@@ -371,7 +370,7 @@ impl<'a> serde::de::Visitor<'a> for TransactionVisitor {
         let program_ids: Vec<Pubkey> =
             deserialize_vec_with(&mut rd, Transaction::deserialize_pubkey)
                 .map_err(Error::custom)?;
-        let instructions: Vec<Instruction> =
+        let instructions: Vec<Instruction<u8, u8>> =
             deserialize_vec_with(&mut rd, Instruction::deserialize_from).map_err(Error::custom)?;
         Ok(Transaction {
             signatures,
