@@ -228,6 +228,12 @@ mod tests {
     }
 
     #[test]
+    fn test_transaction_builder_fee() {
+        let tx = TransactionBuilder::new(42).sign(&Vec::<&Keypair>::new(), Hash::default());
+        assert_eq!(tx.fee, 42);
+    }
+
+    #[test]
     fn test_transaction_builder_kitchen_sink() {
         let program_id0 = Pubkey::default();
         let program_id1 = Keypair::new().pubkey();
