@@ -77,7 +77,7 @@ fn create_and_fund_vote_account(
             let last_id = client.get_last_id();
             info!("create_and_fund_vote_account last_id={:?}", last_id);
             let transaction =
-                VoteTransaction::new_account(node_keypair, vote_account, last_id, 1, 1);
+                VoteTransaction::fund_staking_account(node_keypair, vote_account, last_id, 1, 1);
 
             match client.transfer_signed(&transaction) {
                 Ok(signature) => {
@@ -110,7 +110,7 @@ fn create_and_fund_vote_account(
     let vote_account_user_data = client.get_account_userdata(&vote_account);
     if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
         if let Ok(vote_state) = VoteState::deserialize(&vote_account_user_data) {
-            if vote_state.node_id == pubkey {
+            if vote_state.delegate_id == pubkey {
                 return Ok(());
             }
         }

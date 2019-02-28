@@ -9,15 +9,11 @@ pub enum RewardsInstruction {
 }
 
 impl RewardsInstruction {
-    pub fn new_redeem_vote_credits(
-        vote_id: Pubkey,
-        rewards_id: Pubkey,
-        to_id: Pubkey,
-    ) -> BuilderInstruction {
+    pub fn new_redeem_vote_credits(vote_id: Pubkey, rewards_id: Pubkey) -> BuilderInstruction {
         BuilderInstruction::new(
             rewards_program::id(),
             &RewardsInstruction::RedeemVoteCredits,
-            vec![(vote_id, true), (rewards_id, false), (to_id, false)],
+            vec![(vote_id, true), (rewards_id, false)],
         )
     }
 }

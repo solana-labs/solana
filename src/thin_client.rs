@@ -590,8 +590,13 @@ mod tests {
         let vote_account_id = validator_vote_account_keypair.pubkey();
         let last_id = client.get_last_id();
 
-        let transaction =
-            VoteTransaction::new_account(&validator_keypair, vote_account_id, last_id, 1, 1);
+        let transaction = VoteTransaction::fund_staking_account(
+            &validator_keypair,
+            vote_account_id,
+            last_id,
+            1,
+            1,
+        );
         let signature = client.transfer_signed(&transaction).unwrap();
         client.poll_for_signature(&signature).unwrap();
 
@@ -608,7 +613,8 @@ mod tests {
 
             let vote_state = VoteState::deserialize(&account_user_data);
 
-            if vote_state.map(|vote_state| vote_state.node_id) == Ok(validator_keypair.pubkey()) {
+            if vote_state.map(|vote_state| vote_state.delegate_id) == Ok(validator_keypair.pubkey())
+            {
                 break;
             }
 

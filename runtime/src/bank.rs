@@ -8,6 +8,7 @@ use crate::last_id_queue::LastIdQueue;
 use crate::runtime::{self, RuntimeError};
 use crate::status_cache::StatusCache;
 use bincode::serialize;
+use hashbrown::HashMap;
 use log::*;
 use solana_metrics::counter::Counter;
 use solana_sdk::account::Account;
@@ -225,10 +226,7 @@ impl Bank {
             executable: false,
         };
 
-        let mut vote_state = VoteState::new(
-            genesis_block.bootstrap_leader_id,
-            genesis_block.bootstrap_leader_id,
-        );
+        let mut vote_state = VoteState::new(genesis_block.bootstrap_leader_id);
         vote_state
             .votes
             .push_back(vote_program::Lockout::new(&vote_program::Vote::new(0)));
@@ -717,17 +715,17 @@ impl Bank {
         self.slots_per_epoch
     }
 
-    pub fn vote_states<F>(&self, cond: F) -> Vec<VoteState>
+    pub fn vote_states<F>(&self, cond: F) -> HashMap<Pubkey, VoteState>
     where
-        F: Fn(&VoteState) -> bool,
+        F: Fn(&Pubkey, &VoteState) -> bool,
     {
         self.accounts()
             .get_vote_accounts(self.id)
             .iter()
-            .filter_map(|account| {
+            .filter_map(|(p, account)| {
                 if let Ok(vote_state) = VoteState::deserialize(&account.userdata) {
-                    if cond(&vote_state) {
-                        return Some(vote_state);
+                    if cond(&p, &vote_state) {
+                        return Some((*p, vote_state));
                     }
                 }
                 None
