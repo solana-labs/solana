@@ -51,16 +51,16 @@ slot index and blob index for an entry, and the value is the entry data. Note bl
       * `next_slots` - A list of future slots this slot could chain to. Used when rebuilding
       the ledger to find possible fork points.
       * `last_index` - The index of the blob that is flagged as the last blob for this slot. This flag on a blob will be set by the leader for a slot when they are transmitting the last blob for a slot.
-      * `is_trunk` - True iff every block from 0...slot forms a full sequence without any holes. We can derive is_trunk for each slot with the following rules. Let slot(n) be the slot with index `n`, and slot(n).is_full() is true if the slot with index `n` has all the ticks expected for that slot. Let is_trunk(n) be the statement that "the slot(n).is_trunk is true". Then:
+      * `is_rooted` - True iff every block from 0...slot forms a full sequence without any holes. We can derive is_rooted for each slot with the following rules. Let slot(n) be the slot with index `n`, and slot(n).is_full() is true if the slot with index `n` has all the ticks expected for that slot. Let is_rooted(n) be the statement that "the slot(n).is_rooted is true". Then:
       
-      is_trunk(0)
-      is_trunk(n+1) iff (is_trunk(n) and slot(n).is_full()
+      is_rooted(0)
+      is_rooted(n+1) iff (is_rooted(n) and slot(n).is_full()
 
 3. Chaining - When a blob for a new slot `x` arrives, we check the number of blocks (`num_blocks`) for that new slot (this information is encoded in the blob). We then know that this new slot chains to slot `x - num_blocks`.
 
 4. Subscriptions - The Blocktree records a set of slots that have been "subscribed" to. This means entries that chain to these slots will be sent on the Blocktree channel for consumption by the ReplayStage. See the `Blocktree APIs` for details.
 
-5. Update notifications - The Blocktree notifies listeners when slot(n).is_trunk is flipped from false to true for any `n`. 
+5. Update notifications - The Blocktree notifies listeners when slot(n).is_rooted is flipped from false to true for any `n`. 
 
 ### Blocktree APIs
 

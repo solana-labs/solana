@@ -137,7 +137,7 @@ pub struct SlotMeta {
     pub next_slots: Vec<u64>,
     // True if every block from 0..slot, where slot is the slot index of this slot
     // is full
-    pub is_trunk: bool,
+    pub is_rooted: bool,
 }
 
 impl SlotMeta {
@@ -152,7 +152,7 @@ impl SlotMeta {
             received: 0,
             parent_slot,
             next_slots: vec![],
-            is_trunk: slot_height == 0,
+            is_rooted: slot_height == 0,
             last_index: std::u64::MAX,
         }
     }
@@ -894,7 +894,7 @@ impl Blocktree {
         // from block 0, which is true iff:
         // 1) The block with index prev_block_index is itself part of the trunk of consecutive blocks
         // starting from block 0,
-        slot_meta.is_trunk &&
+        slot_meta.is_rooted &&
         // AND either:
         // 1) The slot didn't exist in the database before, and now we have a consecutive
         // block for that slot
@@ -957,7 +957,7 @@ impl Blocktree {
 
                     // This is a newly inserted slot so:
                     // 1) Chain to the previous slot, and also
-                    // 2) Determine whether to set the is_trunk flag
+                    // 2) Determine whether to set the is_rooted flag
                     self.chain_new_slot_to_prev_slot(
                         &mut prev_slot.borrow_mut(),
                         slot_height,
@@ -968,15 +968,15 @@ impl Blocktree {
         }
 
         if self.is_newly_completed_slot(&RefCell::borrow(&*meta_copy), meta_backup)
-            && RefCell::borrow(&*meta_copy).is_trunk
+            && RefCell::borrow(&*meta_copy).is_rooted
         {
-            // This is a newly inserted slot and slot.is_trunk is true, so go through
-            // and update all child slots with is_trunk if applicable
+            // This is a newly inserted slot and slot.is_rooted is true, so go through
+            // and update all child slots with is_rooted if applicable
             let mut next_slots: Vec<(u64, Rc<RefCell<(SlotMeta)>>)> =
                 vec![(slot_height, meta_copy.clone())];
             while !next_slots.is_empty() {
                 let (_, current_slot) = next_slots.pop().unwrap();
-                current_slot.borrow_mut().is_trunk = true;
+                current_slot.borrow_mut().is_rooted = true;
 
                 let current_slot = &RefCell::borrow(&*current_slot);
                 if current_slot.is_full() {
@@ -1002,7 +1002,7 @@ impl Blocktree {
         current_slot: &mut SlotMeta,
     ) {
         prev_slot.next_slots.push(current_slot_height);
-        current_slot.is_trunk = prev_slot.is_trunk && prev_slot.is_full();
+        current_slot.is_rooted = prev_slot.is_rooted && prev_slot.is_full();
     }
 
     fn is_newly_completed_slot(
@@ -1180,7 +1180,7 @@ impl Blocktree {
 
         bootstrap_meta.consumed = last.index() + 1;
         bootstrap_meta.received = last.index() + 1;
-        bootstrap_meta.is_trunk = true;
+        bootstrap_meta.is_rooted = true;
 
         let mut batch = WriteBatch::default();
         batch.put_cf(
@@ -1590,7 +1590,7 @@ pub mod tests {
         assert_eq!(meta.parent_slot, 0);
         assert_eq!(meta.last_index, num_entries - 1);
         assert!(meta.next_slots.is_empty());
-        assert!(meta.is_trunk);
+        assert!(meta.is_rooted);
 
         // Destroying database without closing it first is undefined behavior
         drop(ledger);
@@ -1996,7 +1996,7 @@ pub mod tests {
             let s1 = blocktree.meta(1).unwrap().unwrap();
             assert!(s1.next_slots.is_empty());
             // Slot 1 is not trunk because slot 0 hasn't been inserted yet
-            assert!(!s1.is_trunk);
+            assert!(!s1.is_rooted);
             assert_eq!(s1.parent_slot, 0);
             assert_eq!(s1.last_index, entries_per_slot - 1);
 
@@ -2007,7 +2007,7 @@ pub mod tests {
             let s2 = blocktree.meta(2).unwrap().unwrap();
             assert!(s2.next_slots.is_empty());
             // Slot 2 is not trunk because slot 0 hasn't been inserted yet
-            assert!(!s2.is_trunk);
+            assert!(!s2.is_rooted);
             assert_eq!(s2.parent_slot, 1);
             assert_eq!(s2.last_index, entries_per_slot - 1);
 
@@ -2015,7 +2015,7 @@ pub mod tests {
             // but still isn't part of the trunk
             let s1 = blocktree.meta(1).unwrap().unwrap();
             assert_eq!(s1.next_slots, vec![2]);
-            assert!(!s1.is_trunk);
+            assert!(!s1.is_rooted);
             assert_eq!(s1.parent_slot, 0);
             assert_eq!(s1.last_index, entries_per_slot - 1);
 
@@ -2036,7 +2036,7 @@ pub mod tests {
                     assert_eq!(s.parent_slot, i - 1);
                 }
                 assert_eq!(s.last_index, entries_per_slot - 1);
-                assert!(s.is_trunk);
+                assert!(s.is_rooted);
             }
         }
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
@@ -2090,9 +2090,9 @@ pub mod tests {
                 }
 
                 if i == 0 {
-                    assert!(s.is_trunk);
+                    assert!(s.is_rooted);
                 } else {
-                    assert!(!s.is_trunk);
+                    assert!(!s.is_rooted);
                 }
             }
 
@@ -2115,7 +2115,7 @@ pub mod tests {
                     assert_eq!(s.parent_slot, i - 1);
                 }
                 assert_eq!(s.last_index, entries_per_slot - 1);
-                assert!(s.is_trunk);
+                assert!(s.is_rooted);
             }
         }
 
@@ -2123,8 +2123,8 @@ pub mod tests {
     }
 
     #[test]
-    pub fn test_forward_chaining_is_trunk() {
-        let blocktree_path = get_tmp_ledger_path("test_forward_chaining_is_trunk");
+    pub fn test_forward_chaining_is_rooted() {
+        let blocktree_path = get_tmp_ledger_path("test_forward_chaining_is_rooted");
         {
             let blocktree = Blocktree::open(&blocktree_path).unwrap();
             let num_slots = 15;
@@ -2166,9 +2166,9 @@ pub mod tests {
 
                 // Other than slot 0, no slots should be part of the trunk
                 if i != 0 {
-                    assert!(!s.is_trunk);
+                    assert!(!s.is_rooted);
                 } else {
-                    assert!(s.is_trunk);
+                    assert!(s.is_rooted);
                 }
             }
 
@@ -2186,9 +2186,9 @@ pub mod tests {
                             assert!(s.next_slots.is_empty());
                         }
                         if i <= slot_index as u64 + 3 {
-                            assert!(s.is_trunk);
+                            assert!(s.is_rooted);
                         } else {
-                            assert!(!s.is_trunk);
+                            assert!(!s.is_rooted);
                         }
 
                         if i == 0 {
