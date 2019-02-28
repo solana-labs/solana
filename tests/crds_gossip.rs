@@ -1,6 +1,6 @@
 use bincode::serialized_size;
 use hashbrown::HashMap;
-use log::trace;
+use log::*;
 use rayon::prelude::*;
 use solana::cluster_info::NodeInfo;
 use solana::contact_info::ContactInfo;

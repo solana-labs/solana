@@ -11,7 +11,6 @@ use crate::result::{Error, Result};
 use crate::rpc_request::{RpcClient, RpcRequest, RpcRequestHandler};
 use bincode::serialize_into;
 use bs58;
-use log::Level;
 use serde_json;
 use solana_metrics;
 use solana_metrics::influxdb;
@@ -410,7 +409,7 @@ pub fn poll_gossip_for_leader(leader_gossip: SocketAddr, timeout: Option<u64>) -
             break;
         }
 
-        if log_enabled!(Level::Trace) {
+        if log_enabled!(log::Level::Trace) {
             trace!("{}", cluster_info.read().unwrap().node_info_trace());
         }
 
@@ -423,7 +422,7 @@ pub fn poll_gossip_for_leader(leader_gossip: SocketAddr, timeout: Option<u64>) -
 
     gossip_service.close()?;
 
-    if log_enabled!(Level::Trace) {
+    if log_enabled!(log::Level::Trace) {
         trace!("{}", cluster_info.read().unwrap().node_info_trace());
     }
 

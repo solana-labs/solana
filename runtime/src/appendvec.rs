@@ -225,7 +225,7 @@ where
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use log::info;
+    use log::*;
     use rand::{thread_rng, Rng};
     use solana_sdk::timing::{duration_as_ms, duration_as_s};
     use std::sync::atomic::{AtomicUsize, Ordering};
