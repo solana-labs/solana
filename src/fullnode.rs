@@ -103,7 +103,6 @@ pub struct Fullnode {
     node_services: NodeServices,
     rotation_receiver: TvuRotationReceiver,
     blocktree: Arc<Blocktree>,
-    bank_forks: Arc<RwLock<BankForks>>,
     poh_service: PohService,
     poh_recorder: Arc<Mutex<PohRecorder>>,
 }
@@ -125,13 +124,12 @@ impl Fullnode {
         let id = keypair.pubkey();
         assert_eq!(id, node.info.id);
 
-        let (mut bank_forks, bank_forks_info, blocktree, ledger_signal_receiver) =
+        let (bank_forks, bank_forks_info, blocktree, ledger_signal_receiver) =
             new_banks_from_blocktree(ledger_path, config.account_paths.clone());
 
         let exit = Arc::new(AtomicBool::new(false));
         let bank_info = &bank_forks_info[0];
-        bank_forks.set_working_bank_id(bank_info.bank_id);
-        let bank = bank_forks.working_bank();
+        let bank = bank_forks[bank_info.bank_id].clone();
 
         info!(
             "starting PoH... {} {}",
@@ -265,7 +263,6 @@ impl Fullnode {
             broadcast_socket: node.sockets.broadcast,
             rotation_receiver,
             blocktree,
-            bank_forks,
             poh_service,
             poh_recorder,
         }
@@ -285,7 +282,7 @@ impl Fullnode {
             // TODO: This is not the correct bank.  Instead TVU should pass along the
             // frozen Bank for each completed block for RPC to use from it's notion of the "best"
             // available fork (until we want to surface multiple forks to RPC)
-            rpc_service.set_bank(&self.bank_forks.read().unwrap().working_bank());
+            rpc_service.set_bank(&rotation_info.bank);
         }
 
         if rotation_info.leader_id == self.id {
@@ -297,7 +294,7 @@ impl Fullnode {
                 FullnodeReturnType::ValidatorToLeaderRotation
             };
             self.node_services.tpu.switch_to_leader(
-                &self.bank_forks.read().unwrap().working_bank(),
+                &rotation_info.bank,
                 &self.poh_recorder,
                 self.tpu_sockets
                     .iter()
