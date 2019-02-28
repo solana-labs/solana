@@ -269,7 +269,7 @@ start() {
       set -ex
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
-      ci/testnet-deploy.sh perf-testnet-solana-com gce us-west1-b \
+      ci/testnet-deploy.sh perf-testnet-solana-com gce us-west1-a \
         -G "n1-standard-16 --accelerator count=2,type=nvidia-tesla-v100" \
         -t "$CHANNEL_OR_TAG" -c 2 \
         -b \
