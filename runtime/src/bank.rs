@@ -722,7 +722,6 @@ impl Bank {
         F: Fn(&VoteState) -> bool,
     {
         self.accounts()
-            .accounts_db
             .get_vote_accounts(self.id)
             .iter()
             .filter_map(|account| {
