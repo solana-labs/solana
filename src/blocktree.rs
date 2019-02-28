@@ -230,6 +230,11 @@ impl DataCf {
         self.get(&key)
     }
 
+    pub fn delete_by_slot_index(&self, slot_height: u64, index: u64) -> Result<()> {
+        let key = Self::key(slot_height, index);
+        self.delete(&key)
+    }
+
     pub fn put_by_slot_index(
         &self,
         slot_height: u64,
@@ -410,6 +415,21 @@ impl Blocktree {
 
     pub fn meta(&self, slot_height: u64) -> Result<Option<SlotMeta>> {
         self.meta_cf.get(&MetaCf::key(slot_height))
+    }
+
+    pub fn reset_slot_consumed(&self, slot_height: u64) -> Result<()> {
+        let meta_key = MetaCf::key(slot_height);
+        if let Some(mut meta) = self.meta_cf.get(&meta_key)? {
+            for index in 0..meta.received {
+                self.data_cf.delete_by_slot_index(slot_height, index)?;
+            }
+            meta.consumed = 0;
+            meta.received = 0;
+            meta.last_index = std::u64::MAX;
+            meta.next_slots = vec![];
+            self.meta_cf.put(&meta_key, &meta)?;
+        }
+        Ok(())
     }
 
     pub fn destroy(ledger_path: &str) -> Result<()> {
@@ -1465,6 +1485,31 @@ pub mod tests {
             );
         }
         Blocktree::destroy(&ledger_path).expect("Expected successful database destruction");
+    }
+
+    #[test]
+    fn test_overwrite_entries() {
+        solana_logger::setup();
+        let ledger_path = get_tmp_ledger_path!();
+
+        let ticks_per_slot = 10;
+        let num_ticks = 2;
+        let mut ticks = create_ticks(num_ticks * 2, Hash::default());
+        let ticks2 = ticks.split_off(num_ticks as usize);
+        assert_eq!(ticks.len(), ticks2.len());
+        {
+            let ledger = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
+
+            ledger.write_entries(0, 0, 0, &ticks).unwrap();
+            ledger.reset_slot_consumed(0).unwrap();
+            ledger.write_entries(0, 0, 0, &ticks2).unwrap();
+
+            let ledger_ticks = ledger.get_slot_entries(0, 0, None).unwrap();
+
+            assert_eq!(ledger_ticks.len(), ticks2.len());
+            assert_eq!(ledger_ticks, ticks2);
+        }
+        Blocktree::destroy(&ledger_path).unwrap();
     }
 
     #[test]
