@@ -203,7 +203,7 @@ pub fn process_blocktree(
 
         // This is a fork point, create a new child bank for each fork
         pending_slots.extend(meta.next_slots.iter().map(|next_slot| {
-            let leader = leader_schedule_utils::slot_leader_at(*next_slot, &bank);
+            let leader = leader_schedule_utils::next_slot_leader(&bank);
             let child_bank = Bank::new_from_parent_and_id(&bank, leader, *next_slot);
             trace!("Add child bank for slot={}", next_slot);
             bank_forks.insert(*next_slot, child_bank);
