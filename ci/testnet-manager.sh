@@ -175,7 +175,7 @@ sanity() {
       export NO_LEDGER_VERIFY=1
       export NO_VALIDATOR_SANITY=1
       #ci/testnet-sanity.sh perf-testnet-solana-com ec2 us-east-1a
-      ci/testnet-sanity.sh perf-testnet-solana-com gce us-west1-b
+      ci/testnet-sanity.sh perf-testnet-solana-com gce us-west1-a
     )
     ;;
   *)
