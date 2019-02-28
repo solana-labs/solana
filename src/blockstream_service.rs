@@ -106,7 +106,7 @@ impl Service for BlockstreamService {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::blocktree::{create_new_ledger, get_tmp_ledger_path};
+    use crate::blocktree::create_new_tmp_ledger;
     use crate::entry::{create_ticks, Entry};
     use chrono::{DateTime, FixedOffset};
     use serde_json::Value;
@@ -124,11 +124,8 @@ mod test {
         // Set up genesis block and blocktree
         let (mut genesis_block, _mint_keypair) = GenesisBlock::new(1000);
         genesis_block.ticks_per_slot = ticks_per_slot;
-        let (ledger_path, _last_id) = {
-            let ledger_path = get_tmp_ledger_path(&format!("{}-{}", file!(), line!()));
-            let last_id = create_new_ledger(&ledger_path, &genesis_block).unwrap();
-            (ledger_path, last_id)
-        };
+
+        let (ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
 
         // Set up blockstream

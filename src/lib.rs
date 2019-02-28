@@ -25,10 +25,10 @@ pub mod crds_gossip_push;
 pub mod crds_value;
 #[macro_use]
 pub mod contact_info;
-pub mod blockstream;
-pub mod blockstream_service;
 #[macro_use]
 pub mod blocktree;
+pub mod blockstream;
+pub mod blockstream_service;
 pub mod blocktree_processor;
 pub mod cluster_info;
 pub mod db_window;
