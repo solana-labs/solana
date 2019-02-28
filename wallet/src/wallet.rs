@@ -447,7 +447,6 @@ fn process_deploy(
     send_and_confirm_transactions(&rpc_client, write_transactions, &program_id)?;
 
     trace!("Finalizing program account");
-    let last_id = get_last_id(&rpc_client)?;
     let mut tx = LoaderTransaction::new_finalize(&program_id, bpf_loader::id(), last_id, 0);
     send_and_confirm_transaction(&rpc_client, &mut tx, &program_id).map_err(|_| {
         WalletError::DynamicProgramError("Program finalize transaction failed".to_string())
