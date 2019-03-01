@@ -2,14 +2,13 @@ use crate::bloom::{Bloom, BloomHashIndex};
 use hashbrown::HashMap;
 use solana_sdk::hash::Hash;
 use solana_sdk::signature::Signature;
-use solana_sdk::timing::{MAX_ENTRY_IDS, NUM_TICKS_PER_SECOND};
 use std::collections::VecDeque;
 use std::ops::Deref;
 #[cfg(test)]
 use std::ops::DerefMut;
 
-/// This cache is designed to last 1 second
-const MAX_CACHE_ENTRIES: usize = MAX_ENTRY_IDS / NUM_TICKS_PER_SECOND;
+/// Each cache entry is designed to span ~1 second of signatures
+const MAX_CACHE_ENTRIES: usize = solana_sdk::timing::MAX_HASH_AGE_IN_SECONDS;
 
 type FailureMap<T> = HashMap<Signature, T>;
 

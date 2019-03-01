@@ -14,7 +14,7 @@ use bincode::deserialize;
 use solana_metrics::counter::Counter;
 use solana_runtime::bank::{self, Bank, BankError};
 use solana_sdk::pubkey::Pubkey;
-use solana_sdk::timing::{self, duration_as_us, MAX_ENTRY_IDS};
+use solana_sdk::timing::{self, duration_as_us, MAX_RECENT_TICK_HASHES};
 use solana_sdk::transaction::Transaction;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
@@ -173,7 +173,7 @@ impl BankingStage {
         // TODO: Banking stage threads should be prioritized to complete faster then this queue
         // expires.
         let (loaded_accounts, results) =
-            bank.load_and_execute_transactions(txs, lock_results, MAX_ENTRY_IDS as usize / 2);
+            bank.load_and_execute_transactions(txs, lock_results, MAX_RECENT_TICK_HASHES as usize / 2);
         let load_execute_time = now.elapsed();
 
         let record_time = {
