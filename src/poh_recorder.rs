@@ -197,8 +197,8 @@ mod tests {
 
     #[test]
     fn test_poh_recorder_no_zero_tick() {
-        let prev_id = Hash::default();
-        let mut poh_recorder = PohRecorder::new(0, prev_id);
+        let prev_hash = Hash::default();
+        let mut poh_recorder = PohRecorder::new(0, prev_hash);
         poh_recorder.tick();
         assert_eq!(poh_recorder.tick_cache.len(), 1);
         assert_eq!(poh_recorder.tick_cache[0].1, 1);
@@ -207,8 +207,8 @@ mod tests {
 
     #[test]
     fn test_poh_recorder_tick_height_is_last_tick() {
-        let prev_id = Hash::default();
-        let mut poh_recorder = PohRecorder::new(0, prev_id);
+        let prev_hash = Hash::default();
+        let mut poh_recorder = PohRecorder::new(0, prev_hash);
         poh_recorder.tick();
         poh_recorder.tick();
         assert_eq!(poh_recorder.tick_cache.len(), 2);
@@ -229,9 +229,9 @@ mod tests {
     fn test_poh_recorder_clear() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_id = bank.last_id();
+        let prev_hash = bank.last_id();
         let (entry_sender, _) = channel();
-        let mut poh_recorder = PohRecorder::new(0, prev_id);
+        let mut poh_recorder = PohRecorder::new(0, prev_hash);
 
         let working_bank = WorkingBank {
             bank,
@@ -249,9 +249,9 @@ mod tests {
     fn test_poh_recorder_tick_sent_after_min() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_id = bank.last_id();
+        let prev_hash = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
-        let mut poh_recorder = PohRecorder::new(0, prev_id);
+        let mut poh_recorder = PohRecorder::new(0, prev_hash);
 
         let working_bank = WorkingBank {
             bank,
@@ -280,9 +280,9 @@ mod tests {
     fn test_poh_recorder_tick_sent_upto_and_including_max() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_id = bank.last_id();
+        let prev_hash = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
-        let mut poh_recorder = PohRecorder::new(0, prev_id);
+        let mut poh_recorder = PohRecorder::new(0, prev_hash);
 
         poh_recorder.tick();
         poh_recorder.tick();
@@ -310,9 +310,9 @@ mod tests {
     fn test_poh_recorder_record_to_early() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_id = bank.last_id();
+        let prev_hash = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
-        let mut poh_recorder = PohRecorder::new(0, prev_id);
+        let mut poh_recorder = PohRecorder::new(0, prev_hash);
 
         let working_bank = WorkingBank {
             bank,
@@ -332,9 +332,9 @@ mod tests {
     fn test_poh_recorder_record_at_min_passes() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_id = bank.last_id();
+        let prev_hash = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
-        let mut poh_recorder = PohRecorder::new(0, prev_id);
+        let mut poh_recorder = PohRecorder::new(0, prev_hash);
 
         let working_bank = WorkingBank {
             bank,
@@ -363,9 +363,9 @@ mod tests {
     fn test_poh_recorder_record_at_max_fails() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_id = bank.last_id();
+        let prev_hash = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
-        let mut poh_recorder = PohRecorder::new(0, prev_id);
+        let mut poh_recorder = PohRecorder::new(0, prev_hash);
 
         let working_bank = WorkingBank {
             bank,
@@ -391,9 +391,9 @@ mod tests {
     fn test_poh_cache_on_disconnect() {
         let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
         let bank = Arc::new(Bank::new(&genesis_block));
-        let prev_id = bank.last_id();
+        let prev_hash = bank.last_id();
         let (entry_sender, entry_receiver) = channel();
-        let mut poh_recorder = PohRecorder::new(0, prev_id);
+        let mut poh_recorder = PohRecorder::new(0, prev_hash);
 
         let working_bank = WorkingBank {
             bank,

@@ -55,18 +55,18 @@ pub struct Entry {
 
 impl Entry {
     /// Creates the next Entry `num_hashes` after `start_hash`.
-    pub fn new(prev_id: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Self {
+    pub fn new(prev_hash: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Self {
         let entry = {
             if num_hashes == 0 && transactions.is_empty() {
                 Entry {
                     num_hashes: 0,
-                    id: *prev_id,
+                    id: *prev_hash,
                     transactions,
                 }
             } else if num_hashes == 0 {
                 // If you passed in transactions, but passed in num_hashes == 0, then
                 // next_hash will generate the next hash and set num_hashes == 1
-                let id = next_hash(prev_id, 1, &transactions);
+                let id = next_hash(prev_hash, 1, &transactions);
                 Entry {
                     num_hashes: 1,
                     id,
@@ -76,7 +76,7 @@ impl Entry {
                 // Otherwise, the next Entry `num_hashes` after `start_hash`.
                 // If you wanted a tick for instance, then pass in num_hashes = 1
                 // and transactions = empty
-                let id = next_hash(prev_id, num_hashes, &transactions);
+                let id = next_hash(prev_hash, num_hashes, &transactions);
                 Entry {
                     num_hashes,
                     id,
@@ -461,11 +461,11 @@ pub fn make_consecutive_blobs(
 
 #[cfg(test)]
 /// Creates the next Tick or Transaction Entry `num_hashes` after `start_hash`.
-pub fn next_entry(prev_id: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Entry {
+pub fn next_entry(prev_hash: &Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Entry {
     assert!(num_hashes > 0 || transactions.is_empty());
     Entry {
         num_hashes,
-        id: next_hash(prev_id, num_hashes, &transactions),
+        id: next_hash(prev_hash, num_hashes, &transactions),
         transactions,
     }
 }
@@ -641,11 +641,11 @@ mod tests {
     fn test_next_entries() {
         solana_logger::setup();
         let id = Hash::default();
-        let next_id = hash(&id.as_ref());
+        let next_hash = hash(&id.as_ref());
         let keypair = Keypair::new();
         let vote_account = Keypair::new();
-        let tx_small = VoteTransaction::new_vote(&vote_account, 1, next_id, 2);
-        let tx_large = BudgetTransaction::new(&keypair, keypair.pubkey(), 1, next_id);
+        let tx_small = VoteTransaction::new_vote(&vote_account, 1, next_hash, 2);
+        let tx_large = BudgetTransaction::new(&keypair, keypair.pubkey(), 1, next_hash);
 
         let tx_small_size = tx_small.serialized_size().unwrap() as usize;
         let tx_large_size = tx_large.serialized_size().unwrap() as usize;
