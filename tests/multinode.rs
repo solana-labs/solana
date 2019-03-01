@@ -1623,7 +1623,7 @@ fn stake_fullnode(
     let vote_account_id = voting_keypair.pubkey();
 
     let new_vote_account_tx =
-        VoteTransaction::new_account(node, vote_account_id, *last_tick, stake, 0);
+        VoteTransaction::fund_staking_account(node, vote_account_id, *last_tick, stake, 0);
     let new_vote_account_entry = next_entry_mut(last_hash, 1, vec![new_vote_account_tx]);
     /*
     let vote_tx = VoteTransaction::new_vote(&voting_keypair, 1, *last_tick, 0);
