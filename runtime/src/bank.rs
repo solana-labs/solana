@@ -322,8 +322,8 @@ impl Bank {
         ticks_and_stakes: &mut [(u64, u64)],
         supermajority_stake: u64,
     ) -> Option<u64> {
-        let last_ids = self.tick_hash_queue.read().unwrap();
-        last_ids.get_confirmation_timestamp(ticks_and_stakes, supermajority_stake)
+        let hash_queue = self.tick_hash_queue.read().unwrap();
+        hash_queue.get_confirmation_timestamp(ticks_and_stakes, supermajority_stake)
     }
 
     /// Tell the bank which Entry IDs exist on the ledger. This function
@@ -389,11 +389,11 @@ impl Bank {
         max_age: usize,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
-        let last_ids = self.tick_hash_queue.read().unwrap();
+        let hash_queue = self.tick_hash_queue.read().unwrap();
         txs.iter()
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
-                if lock_res.is_ok() && !last_ids.check_entry_id_age(tx.last_id, max_age) {
+                if lock_res.is_ok() && !hash_queue.check_entry_id_age(tx.last_id, max_age) {
                     error_counters.reserve_last_id += 1;
                     Err(BankError::LastIdNotFound)
                 } else {
@@ -790,11 +790,6 @@ impl Bank {
     /// Return the epoch height of the last registered tick.
     pub fn epoch_height(&self) -> u64 {
         self.slot_height() / self.slots_per_epoch()
-    }
-
-    #[cfg(test)]
-    pub fn last_ids(&self) -> &RwLock<HashQueue> {
-        &self.tick_hash_queue
     }
 }
 
