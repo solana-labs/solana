@@ -496,7 +496,7 @@ mod tests {
             &mint_keypair,
             alice.pubkey(),
             2,
-            genesis_block.last_id(),
+            genesis_block.hash(),
             0,
         );
 
@@ -510,7 +510,7 @@ mod tests {
             &alice,
             mint_keypair.pubkey(),
             1,
-            genesis_block.last_id(),
+            genesis_block.hash(),
             0,
         );
         let packets = to_packets(&[tx]);
@@ -601,7 +601,7 @@ mod tests {
             &mint_keypair,
             Keypair::new().pubkey(),
             2,
-            genesis_block.last_id(),
+            genesis_block.hash(),
             0,
         );
 
@@ -640,8 +640,8 @@ mod tests {
         let pubkey = Keypair::new().pubkey();
 
         let transactions = vec![
-            SystemTransaction::new_move(&mint_keypair, pubkey, 1, genesis_block.last_id(), 0),
-            SystemTransaction::new_move(&mint_keypair, pubkey, 1, genesis_block.last_id(), 0),
+            SystemTransaction::new_move(&mint_keypair, pubkey, 1, genesis_block.hash(), 0),
+            SystemTransaction::new_move(&mint_keypair, pubkey, 1, genesis_block.hash(), 0),
         ];
 
         let mut results = vec![Ok(()), Ok(())];
@@ -676,7 +676,7 @@ mod tests {
             &mint_keypair,
             pubkey,
             1,
-            genesis_block.last_id(),
+            genesis_block.hash(),
             0,
         )];
 
@@ -717,7 +717,7 @@ mod tests {
             &mint_keypair,
             pubkey,
             2,
-            genesis_block.last_id(),
+            genesis_block.hash(),
             0,
         )];
 

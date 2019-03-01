@@ -70,7 +70,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         &mint_keypair,
         mint_keypair.pubkey(),
         1,
-        genesis_block.last_id(),
+        genesis_block.hash(),
         0,
     );
     let transactions: Vec<_> = (0..txes)
@@ -92,7 +92,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
             &mint_keypair,
             tx.account_keys[0],
             mint_total / txes as u64,
-            genesis_block.last_id(),
+            genesis_block.hash(),
             0,
         );
         let x = bank.process_transaction(&fund);
@@ -126,7 +126,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
         genesis_block.bootstrap_leader_id,
     );
 
-    let mut id = genesis_block.last_id();
+    let mut id = genesis_block.hash();
     for _ in 0..MAX_ENTRY_IDS {
         id = hash(&id.as_ref());
         bank.register_tick(&id);
@@ -136,7 +136,7 @@ fn bench_banking_stage_multi_accounts(bencher: &mut Bencher) {
     let mut start = 0;
     bencher.iter(move || {
         // make sure the transactions are still valid
-        bank.register_tick(&genesis_block.last_id());
+        bank.register_tick(&genesis_block.hash());
         for v in verified[start..start + half_len].chunks(verified.len() / num_threads) {
             verified_sender.send(v.to_vec()).unwrap();
         }
@@ -164,7 +164,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         &mint_keypair,
         mint_keypair.pubkey(),
         1,
-        genesis_block.last_id(),
+        genesis_block.hash(),
         0,
     );
     let transactions: Vec<_> = (0..txes)
@@ -202,7 +202,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
             &mint_keypair,
             tx.account_keys[0],
             mint_total / txes as u64,
-            genesis_block.last_id(),
+            genesis_block.hash(),
             0,
         );
         bank.process_transaction(&fund).unwrap();
@@ -235,7 +235,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
         genesis_block.bootstrap_leader_id,
     );
 
-    let mut id = genesis_block.last_id();
+    let mut id = genesis_block.hash();
     for _ in 0..MAX_ENTRY_IDS {
         id = hash(&id.as_ref());
         bank.register_tick(&id);
@@ -245,7 +245,7 @@ fn bench_banking_stage_multi_programs(bencher: &mut Bencher) {
     let mut start = 0;
     bencher.iter(move || {
         // make sure the transactions are still valid
-        bank.register_tick(&genesis_block.last_id());
+        bank.register_tick(&genesis_block.hash());
         for v in verified[start..start + half_len].chunks(verified.len() / num_threads) {
             verified_sender.send(v.to_vec()).unwrap();
         }
