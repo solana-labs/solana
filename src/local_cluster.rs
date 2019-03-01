@@ -2,8 +2,9 @@ use crate::blocktree::{create_new_tmp_ledger, tmp_copy_blocktree};
 use crate::client::mk_client;
 use crate::cluster_info::{Node, NodeInfo};
 use crate::fullnode::{Fullnode, FullnodeConfig};
-use crate::gossip_service::converge;
+use crate::gossip_service::discover;
 use crate::thin_client::retry_get_balance;
+use crate::thin_client::ThinClient;
 use crate::voting_keypair::VotingKeypair;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::pubkey::Pubkey;
@@ -15,19 +16,21 @@ use std::sync::Arc;
 use std::thread::JoinHandle;
 
 pub struct LocalCluster {
-    pub mint: Keypair,
-    pub contact_info: NodeInfo,
-    network_nodes: Vec<(JoinHandle<()>, Arc<AtomicBool>)>,
+    /// Keypair with funding to particpiate in the network
+    pub funding_keypair: Keypair,
+    /// Entry point from which the rest of the network can be discovered
+    pub entry_point_info: NodeInfo,
+    fullnode_hdls: Vec<(JoinHandle<()>, Arc<AtomicBool>)>,
     ledger_paths: Vec<String>,
 }
 
 impl LocalCluster {
-    pub fn create_network(num_nodes: usize, network_tokens: u64, node_tokens: u64) -> Self {
+    pub fn new(num_nodes: usize, cluster_lamports: u64, lamports_per_node: u64) -> Self {
         let leader_keypair = Arc::new(Keypair::new());
         let leader_pubkey = leader_keypair.pubkey();
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
-        let (genesis_block, mint) =
-            GenesisBlock::new_with_leader(network_tokens, leader_pubkey, node_tokens);
+        let (genesis_block, mint_keypair) =
+            GenesisBlock::new_with_leader(cluster_lamports, leader_pubkey, lamports_per_node);
         let (genesis_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
         let leader_ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
         let mut ledger_paths = vec![];
@@ -45,57 +48,55 @@ impl LocalCluster {
             &fullnode_config,
         );
         let (thread, exit, _) = leader_server.start(None);
-        let mut network_nodes = vec![(thread, exit)];
+        let mut fullnode_hdls = vec![(thread, exit)];
+        let mut client = mk_client(&leader_node_info);
         for _ in 0..(num_nodes - 1) {
-            let keypair = Arc::new(Keypair::new());
-            let validator_pubkey = keypair.pubkey();
-            let validator_node = Node::new_localhost_with_pubkey(keypair.pubkey());
+            let validator_keypair = Arc::new(Keypair::new());
+            let voting_keypair = VotingKeypair::new_local(&validator_keypair);
+            let validator_pubkey = validator_keypair.pubkey();
+            let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
             let ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
             ledger_paths.push(ledger_path.clone());
 
             // Send each validator some tokens to vote
-            let validator_balance = Self::send_tx_and_retry_get_balance(
-                &leader_node_info,
-                &mint,
+            let validator_balance = Self::transfer(
+                &mut client,
+                &mint_keypair,
                 &validator_pubkey,
-                node_tokens,
-                None,
-            )
-            .unwrap();
+                lamports_per_node,
+            );
             info!(
                 "validator {} balance {}",
                 validator_pubkey, validator_balance
             );
-
-            let voting_keypair = VotingKeypair::new_local(&keypair);
             let validator_server = Fullnode::new(
                 validator_node,
-                &keypair,
+                &validator_keypair,
                 &ledger_path,
                 voting_keypair,
                 Some(&leader_node_info),
                 &FullnodeConfig::default(),
             );
             let (thread, exit, _) = validator_server.start(None);
-            network_nodes.push((thread, exit));
+            fullnode_hdls.push((thread, exit));
         }
-        converge(&leader_node_info, num_nodes);
+        discover(&leader_node_info, num_nodes);
         Self {
-            mint,
-            contact_info: leader_node_info,
-            network_nodes,
+            funding_keypair: mint_keypair,
+            entry_point_info: leader_node_info,
+            fullnode_hdls,
             ledger_paths,
         }
     }
 
     pub fn exit(&self) {
-        for node in &self.network_nodes {
+        for node in &self.fullnode_hdls {
             node.1.store(true, Ordering::Relaxed);
         }
     }
     pub fn close(&mut self) {
         self.exit();
-        while let Some(node) = self.network_nodes.pop() {
+        while let Some(node) = self.fullnode_hdls.pop() {
             node.0.join().expect("join");
         }
         for path in &self.ledger_paths {
@@ -103,14 +104,12 @@ impl LocalCluster {
         }
     }
 
-    fn send_tx_and_retry_get_balance(
-        leader: &NodeInfo,
+    fn transfer(
+        client: &mut ThinClient,
         alice: &Keypair,
         bob_pubkey: &Pubkey,
         transfer_amount: u64,
-        expected: Option<u64>,
-    ) -> Option<u64> {
-        let mut client = mk_client(leader);
+    ) -> u64 {
         trace!("getting leader last_id");
         let last_id = client.get_last_id();
         let mut tx =
@@ -121,11 +120,10 @@ impl LocalCluster {
             alice.pubkey(),
             *bob_pubkey
         );
-        if client.retry_transfer(&alice, &mut tx, 5).is_err() {
-            None
-        } else {
-            retry_get_balance(&mut client, bob_pubkey, expected)
-        }
+        client
+            .retry_transfer(&alice, &mut tx, 5)
+            .expect("client transfer");
+        retry_get_balance(client, bob_pubkey, Some(transfer_amount)).expect("get balance")
     }
 }
 
@@ -142,7 +140,7 @@ mod test {
     #[test]
     fn test_local_cluster_start_and_exit() {
         solana_logger::setup();
-        let network = LocalCluster::create_network(1, 100, 2);
+        let network = LocalCluster::new(1, 100, 2);
         drop(network)
     }
 }

@@ -89,6 +89,11 @@ pub fn make_listening_node(
     (gossip_service, new_node_cluster_info_ref, new_node, id)
 }
 
+pub fn discover(entry_point_info: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
+    converge(entry_point_info, num_nodes)
+}
+
+//TODO: deprecate this in favor of discover
 pub fn converge(node: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     info!("Wait for convergence with {} nodes", num_nodes);
     // Let's spy on the network
