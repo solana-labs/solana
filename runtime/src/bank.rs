@@ -114,7 +114,7 @@ pub struct Bank {
 
     /// staked nodes on epoch boundaries, saved off when a bank.slot() is at
     ///   a leader schedule boundary
-    epoch_vote_states: HashMap<u64, Vec<VoteState>>,
+    epoch_vote_states: HashMap<u64, HashMap<Pubkey, VoteState>>,
 }
 
 impl Bank {
@@ -127,26 +127,15 @@ impl Bank {
         bank.accounts = Some(Arc::new(Accounts::new(bank.slot, paths)));
         bank.process_genesis_block(genesis_block);
         bank.add_builtin_programs();
-        bank.epoch_vote_states
-            .extend(bank.epoch_vote_states_for_slot(bank.id));
+
+        // genesis needs stakes for all epochs up to the epoch implied by
+        //  slot = 0 and genesis configuration
+        let vote_states = bank.vote_states(|_, _| true);
+        for i in 0..=bank.epoch_from_stakers_slot_offset() {
+            bank.epoch_vote_states.insert(i, vote_states.clone());
+        }
+
         bank
-    }
-
-    /// If this Bank is constructed at a slot where a stakes should be
-    /// considered, save off the vote_states, keyed by epoch
-    fn epoch_vote_states_for_slot(&self, slot: u64) -> HashMap<u64, Vec<VoteState>> {
-        let epoch = (slot + self.stakers_slot_offset) / self.slots_per_epoch;
-        let backlog = self.stakers_slot_offset / self.slots_per_epoch;
-
-        let mut vote_states = HashMap::new();
-        (0..=backlog).for_each(|i| {
-            let target_epoch = epoch.saturating_sub(i);
-            if !self.epoch_vote_states.contains_key(&target_epoch) {
-                vote_states.insert(target_epoch, self.vote_states(|_| true));
-            }
-        });
-
-        vote_states
     }
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
@@ -166,9 +155,19 @@ impl Bank {
         bank.accounts = Some(parent.accounts());
         bank.accounts().new_from_parent(bank.slot, parent.slot);
 
-        bank.epoch_vote_states = parent.epoch_vote_states.clone();
-        bank.epoch_vote_states
-            .extend(bank.epoch_vote_states_for_slot(bank.id));
+        bank.epoch_vote_states = {
+            let mut epoch_vote_states = parent.epoch_vote_states.clone();
+            let epoch = bank.epoch_from_stakers_slot_offset();
+
+            // update epoch_vote_states cache
+            //  if my parent didn't populate for this epoch, we've
+            //  crossed a boundary
+            if epoch_vote_states.get(&epoch).is_none() {
+                epoch_vote_states.insert(epoch, bank.vote_states(|_, _| true));
+            }
+            epoch_vote_states
+        };
+
         bank
     }
 
@@ -741,15 +740,26 @@ impl Bank {
         self.slots_per_epoch
     }
 
-    pub fn epoch_vote_states<F>(&self, epoch: u64, cond: F) -> Option<Vec<VoteState>>
+    /// returns the epoch for which this bank's stakers_slot_offset and slot would
+    ///  need to cache stakers
+    fn epoch_from_stakers_slot_offset(&self) -> u64 {
+        (self.slot + self.stakers_slot_offset) / self.slots_per_epoch
+    }
+
+    pub fn epoch_vote_states<F>(&self, epoch: u64, cond: F) -> Option<HashMap<Pubkey, VoteState>>
     where
-        F: Fn(&VoteState) -> bool,
+        F: Fn(&Pubkey, &VoteState) -> bool,
     {
         self.epoch_vote_states.get(&epoch).map(|vote_states| {
             vote_states
                 .iter()
-                .cloned()
-                .filter(|vote_state| cond(&vote_state))
+                .filter_map(|(p, vote_state)| {
+                    if cond(p, vote_state) {
+                        Some((*p, vote_state.clone()))
+                    } else {
+                        None
+                    }
+                })
                 .collect()
         })
     }
@@ -1461,21 +1471,47 @@ mod tests {
         bank.squash();
         assert_eq!(parent.get_balance(&key1.pubkey()), 1);
     }
-    /*
-        #[test]
-        fn test_bank_setup_epoch_vote_states() {
 
-            /// If this Bank is constructed at a slot where a stakes should be
-            /// considered, save off the vote_states, keyed by epoch
-            fn epoch_vote_states_for_slot(&self, slot: u64) -> Option<(epoch, Vec<VoteState>)> {
-                if (slot + self.stakers_slot_offset) % self.slots_per_epoch != 0 {
-                    None
-                } else {
-                    let epoch = (slot + self.stakers_slot_offset) / self.slots_per_epoch;
+    #[test]
+    fn test_bank_epoch_vote_states() {
+        let leader_id = Keypair::new().pubkey();
+        let leader_tokens = 2;
+        let (mut genesis_block, _) = GenesisBlock::new_with_leader(5, leader_id, leader_tokens);
 
-                    Some((epoch, self.vote_states(|_| true)))
-                }
-            }
-        }
-    */
+        // set this up weird, forces:
+        //  1. genesis bank to cover epochs 0, 1, *and* 2
+        //  2. child banks to cover epochs in their future
+        //
+        const SLOTS_PER_EPOCH: u64 = 8;
+        const STAKERS_SLOT_OFFSET: u64 = 21;
+        genesis_block.slots_per_epoch = SLOTS_PER_EPOCH;
+        genesis_block.stakers_slot_offset = STAKERS_SLOT_OFFSET;
+
+        let parent = Arc::new(Bank::new(&genesis_block));
+
+        let vote_states0 =
+            parent.epoch_vote_states(0, |_, vote_state| vote_state.delegate_id == leader_id);
+        assert!(vote_states0.is_some());
+        assert!(vote_states0.iter().len() != 0);
+
+        assert!(parent.epoch_vote_states(1, |_, _| true).is_some());
+        assert!(parent.epoch_vote_states(2, |_, _| true).is_some());
+
+        // child crosses epoch boundary and is the first slot in the epoch
+        let child = Bank::new_from_parent_and_id(
+            &parent,
+            leader_id,
+            SLOTS_PER_EPOCH - (STAKERS_SLOT_OFFSET % SLOTS_PER_EPOCH),
+        );
+        assert!(child.epoch_vote_states(3, |_, _| true).is_some());
+
+        // child crosses epoch boundary but isn't the first slot in the epoch
+        let child = Bank::new_from_parent_and_id(
+            &parent,
+            leader_id,
+            SLOTS_PER_EPOCH - (STAKERS_SLOT_OFFSET % SLOTS_PER_EPOCH) + 1,
+        );
+        assert!(child.epoch_vote_states(3, |_, _| true).is_some());
+    }
+
 }
