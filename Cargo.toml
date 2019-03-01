@@ -44,7 +44,7 @@ reqwest = "0.9.10"
 ring = "0.13.2"
 rocksdb = "0.11.0"
 serde = "1.0.89"
-serde_derive = "1.0.88"
+serde_derive = "1.0.89"
 serde_json = "1.0.39"
 solana-drone = { path = "drone", version = "0.12.0" }
 solana-logger = { path = "logger", version = "0.12.0" }
