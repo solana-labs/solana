@@ -337,11 +337,11 @@ impl Bank {
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
         let current_tick_height = {
-            //atomic register and read the tick
+            // Atomic register and read the tick
             let mut tick_hash_queue = self.tick_hash_queue.write().unwrap();
             inc_new_counter_info!("bank-register_tick-registered", 1);
             tick_hash_queue.register_hash(hash);
-            tick_hash_queue.tick_height()
+            tick_hash_queue.hash_height()
         };
         if current_tick_height % NUM_TICKS_PER_SECOND as u64 == 0 {
             self.status_cache.write().unwrap().new_cache(hash);
@@ -722,7 +722,7 @@ impl Bank {
 
     /// Return the number of ticks since genesis.
     pub fn tick_height(&self) -> u64 {
-        self.tick_hash_queue.read().unwrap().tick_height()
+        self.tick_hash_queue.read().unwrap().hash_height()
     }
 
     /// Return the number of ticks since the last slot boundary.

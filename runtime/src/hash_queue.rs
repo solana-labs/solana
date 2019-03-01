@@ -5,14 +5,14 @@ use solana_sdk::timing::{timestamp, MAX_ENTRY_IDS};
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct HashQueueEntry {
     timestamp: u64,
-    tick_height: u64,
+    hash_height: u64,
 }
 
 /// Low memory overhead, so can be cloned for every checkpoint
 #[derive(Clone)]
 pub struct HashQueue {
-    /// updated whenever an id is registered, at each tick ;)
-    tick_height: u64,
+    /// updated whenever an hash is registered
+    hash_height: u64,
 
     /// last hash to be registered
     last_hash: Option<Hash>,
@@ -23,15 +23,15 @@ impl Default for HashQueue {
     fn default() -> Self {
         Self {
             entries: HashMap::new(),
-            tick_height: 0,
+            hash_height: 0,
             last_hash: None,
         }
     }
 }
 
 impl HashQueue {
-    pub fn tick_height(&self) -> u64 {
-        self.tick_height
+    pub fn hash_height(&self) -> u64 {
+        self.hash_height
     }
 
     pub fn last_hash(&self) -> Hash {
@@ -43,7 +43,7 @@ impl HashQueue {
     pub fn check_entry_id_age(&self, entry_id: Hash, max_age: usize) -> bool {
         let entry = self.entries.get(&entry_id);
         match entry {
-            Some(entry) => self.tick_height - entry.tick_height < max_age as u64,
+            Some(entry) => self.hash_height - entry.hash_height < max_age as u64,
             _ => false,
         }
     }
@@ -57,7 +57,7 @@ impl HashQueue {
         self.entries.insert(
             *hash,
             HashQueueEntry {
-                tick_height: 0,
+                hash_height: 0,
                 timestamp: timestamp(),
             },
         );
@@ -66,20 +66,20 @@ impl HashQueue {
     }
 
     pub fn register_hash(&mut self, hash: &Hash) {
-        self.tick_height += 1;
-        let tick_height = self.tick_height;
+        self.hash_height += 1;
+        let hash_height = self.hash_height;
 
         // this clean up can be deferred until sigs gets larger
         //  because we verify entry.nth every place we check for validity
         if self.entries.len() >= MAX_ENTRY_IDS as usize {
             self.entries
-                .retain(|_, entry| tick_height - entry.tick_height <= MAX_ENTRY_IDS as u64);
+                .retain(|_, entry| hash_height - entry.hash_height <= MAX_ENTRY_IDS as u64);
         }
 
         self.entries.insert(
             *hash,
             HashQueueEntry {
-                tick_height,
+                hash_height,
                 timestamp: timestamp(),
             },
         );
@@ -87,34 +87,34 @@ impl HashQueue {
         self.last_hash = Some(*hash);
     }
 
-    /// Looks through a list of tick heights and stakes, and finds the latest
-    /// tick that has achieved confirmation
+    /// Looks through a list of hash heights and stakes, and finds the latest
+    /// hash that has achieved confirmation
     pub fn get_confirmation_timestamp(
         &self,
-        ticks_and_stakes: &mut [(u64, u64)],
+        hashes_and_stakes: &mut [(u64, u64)],
         supermajority_stake: u64,
     ) -> Option<u64> {
-        // Sort by tick height
-        ticks_and_stakes.sort_by(|a, b| a.0.cmp(&b.0));
-        let current_tick_height = self.tick_height;
+        // Sort by hash height
+        hashes_and_stakes.sort_by(|a, b| a.0.cmp(&b.0));
+        let current_hash_height = self.hash_height;
         let mut total = 0;
-        for (tick_height, stake) in ticks_and_stakes.iter() {
-            if current_tick_height >= *tick_height
-                && ((current_tick_height - tick_height) as usize) < MAX_ENTRY_IDS
+        for (hash_height, stake) in hashes_and_stakes.iter() {
+            if current_hash_height >= *hash_height
+                && ((current_hash_height - hash_height) as usize) < MAX_ENTRY_IDS
             {
                 total += stake;
                 if total > supermajority_stake {
-                    return self.tick_height_to_timestamp(*tick_height);
+                    return self.hash_height_to_timestamp(*hash_height);
                 }
             }
         }
         None
     }
 
-    /// Maps a tick height to a timestamp
-    fn tick_height_to_timestamp(&self, tick_height: u64) -> Option<u64> {
+    /// Maps a hash height to a timestamp
+    fn hash_height_to_timestamp(&self, hash_height: u64) -> Option<u64> {
         for entry in self.entries.values() {
-            if entry.tick_height == tick_height {
+            if entry.hash_height == hash_height {
                 return Some(entry.timestamp);
             }
         }
