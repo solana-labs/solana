@@ -96,4 +96,5 @@ that header information becomes the primary consumer of network bandwidth. At
 the time of this writing, the approach is scaling well up to about 150
 validators. To scale up to hundreds of thousands of validators, each node can
 apply the same technique as the leader node to another set of nodes of equal
-size. We call the technique *data plane fanout*, but it is not yet implemented.
+size. We call the technique *data plane fanout*; learn more in the [data plan
+fanout](data-plane-fanout.md) section.
