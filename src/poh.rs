@@ -1,9 +1,9 @@
-//! The `Poh` module provides an object for generating a Proof of History.
+//! The `Poh` module provhashes an object for generating a Proof of History.
 //! It records Hashes items on behalf of its users.
 use solana_sdk::hash::{hash, hashv, Hash};
 
 pub struct Poh {
-    pub id: Hash,
+    pub hash: Hash,
     num_hashes: u64,
     pub tick_height: u64,
 }
@@ -12,26 +12,26 @@ pub struct Poh {
 pub struct PohEntry {
     pub tick_height: u64,
     pub num_hashes: u64,
-    pub id: Hash,
+    pub hash: Hash,
     pub mixin: Option<Hash>,
 }
 
 impl Poh {
-    pub fn new(id: Hash, tick_height: u64) -> Self {
+    pub fn new(hash: Hash, tick_height: u64) -> Self {
         Poh {
             num_hashes: 0,
-            id,
+            hash,
             tick_height,
         }
     }
 
     pub fn hash(&mut self) {
-        self.id = hash(&self.id.as_ref());
+        self.hash = hash(&self.hash.as_ref());
         self.num_hashes += 1;
     }
 
     pub fn record(&mut self, mixin: Hash) -> PohEntry {
-        self.id = hashv(&[&self.id.as_ref(), &mixin.as_ref()]);
+        self.hash = hashv(&[&self.hash.as_ref(), &mixin.as_ref()]);
 
         let num_hashes = self.num_hashes + 1;
         self.num_hashes = 0;
@@ -39,13 +39,13 @@ impl Poh {
         PohEntry {
             tick_height: self.tick_height,
             num_hashes,
-            id: self.id,
+            hash: self.hash,
             mixin: Some(mixin),
         }
     }
 
     // emissions of Ticks (i.e. PohEntries without a mixin) allows
-    //  validators to parallelize the work of catching up
+    //  valhashators to parallelize the work of catching up
     pub fn tick(&mut self) -> PohEntry {
         self.hash();
 
@@ -56,27 +56,27 @@ impl Poh {
         PohEntry {
             tick_height: self.tick_height,
             num_hashes,
-            id: self.id,
+            hash: self.hash,
             mixin: None,
         }
     }
 }
 
 #[cfg(test)]
-pub fn verify(initial: Hash, entries: &[PohEntry]) -> bool {
-    let mut id = initial;
+pub fn verify(initial_hash: Hash, entries: &[PohEntry]) -> bool {
+    let mut current_hash = initial_hash;
 
     for entry in entries {
         assert!(entry.num_hashes != 0);
 
         for _ in 1..entry.num_hashes {
-            id = hash(&id.as_ref());
+            current_hash = hash(&current_hash.as_ref());
         }
-        id = match entry.mixin {
-            Some(mixin) => hashv(&[&id.as_ref(), &mixin.as_ref()]),
-            None => hash(&id.as_ref()),
+        current_hash = match entry.mixin {
+            Some(mixin) => hashv(&[&current_hash.as_ref(), &mixin.as_ref()]),
+            None => hash(&current_hash.as_ref()),
         };
-        if id != entry.id {
+        if current_hash != entry.hash {
             return false;
         }
     }
@@ -111,7 +111,7 @@ mod tests {
                 &[PohEntry {
                     tick_height: 0,
                     num_hashes: 1,
-                    id: one,
+                    hash: one,
                     mixin: None,
                 }],
             ),
@@ -123,7 +123,7 @@ mod tests {
                 &[PohEntry {
                     tick_height: 0,
                     num_hashes: 2,
-                    id: two,
+                    hash: two,
                     mixin: None,
                 }]
             ),
@@ -136,7 +136,7 @@ mod tests {
                 &[PohEntry {
                     tick_height: 0,
                     num_hashes: 1,
-                    id: one_with_zero,
+                    hash: one_with_zero,
                     mixin: Some(zero),
                 }]
             ),
@@ -148,7 +148,7 @@ mod tests {
                 &[PohEntry {
                     tick_height: 0,
                     num_hashes: 1,
-                    id: zero,
+                    hash: zero,
                     mixin: None
                 }]
             ),
@@ -162,13 +162,13 @@ mod tests {
                     PohEntry {
                         tick_height: 0,
                         num_hashes: 1,
-                        id: one_with_zero,
+                        hash: one_with_zero,
                         mixin: Some(zero),
                     },
                     PohEntry {
                         tick_height: 0,
                         num_hashes: 1,
-                        id: hash(&one_with_zero.as_ref()),
+                        hash: hash(&one_with_zero.as_ref()),
                         mixin: None
                     },
                 ]
@@ -185,7 +185,7 @@ mod tests {
             &[PohEntry {
                 tick_height: 0,
                 num_hashes: 0,
-                id: Hash::default(),
+                hash: Hash::default(),
                 mixin: None,
             }],
         );
