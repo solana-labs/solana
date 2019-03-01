@@ -767,20 +767,14 @@ impl Bank {
         (self.slot + self.stakers_slot_offset) / self.slots_per_epoch
     }
 
-    pub fn epoch_vote_states<F>(&self, epoch: u64, cond: F) -> Option<HashMap<Pubkey, VoteState>>
+    pub fn epoch_vote_states<F, T>(&self, epoch: u64, check: F) -> Option<HashMap<Pubkey, T>>
     where
-        F: Fn(&Pubkey, &VoteState) -> bool,
+        F: Fn(&Pubkey, &VoteState) -> Option<(Pubkey, T)>,
     {
         self.epoch_vote_states.get(&epoch).map(|vote_states| {
             vote_states
                 .iter()
-                .filter_map(|(p, vote_state)| {
-                    if cond(p, vote_state) {
-                        Some((*p, vote_state.clone()))
-                    } else {
-                        None
-                    }
-                })
+                .filter_map(|(p, vote_state)| check(p, vote_state))
                 .collect()
         })
     }
@@ -1488,13 +1482,22 @@ mod tests {
 
         let parent = Arc::new(Bank::new(&genesis_block));
 
-        let vote_states0 =
-            parent.epoch_vote_states(0, |_, vote_state| vote_state.delegate_id == leader_id);
+        let vote_states0 = parent.epoch_vote_states(0, |pubkey, vote_state| {
+            if vote_state.delegate_id == leader_id {
+                Some((*pubkey, true))
+            } else {
+                None
+            }
+        });
         assert!(vote_states0.is_some());
         assert!(vote_states0.iter().len() != 0);
 
-        assert!(parent.epoch_vote_states(1, |_, _| true).is_some());
-        assert!(parent.epoch_vote_states(2, |_, _| true).is_some());
+        fn all(key: &Pubkey, _vote_state: &VoteState) -> Option<(Pubkey, Option<()>)> {
+            Some((*key, None))
+        }
+
+        assert!(parent.epoch_vote_states(1, all).is_some());
+        assert!(parent.epoch_vote_states(2, all).is_some());
 
         // child crosses epoch boundary and is the first slot in the epoch
         let child = Bank::new_from_parent_and_id(
@@ -1502,7 +1505,7 @@ mod tests {
             leader_id,
             SLOTS_PER_EPOCH - (STAKERS_SLOT_OFFSET % SLOTS_PER_EPOCH),
         );
-        assert!(child.epoch_vote_states(3, |_, _| true).is_some());
+        assert!(child.epoch_vote_states(3, all).is_some());
 
         // child crosses epoch boundary but isn't the first slot in the epoch
         let child = Bank::new_from_parent_and_id(
@@ -1510,7 +1513,7 @@ mod tests {
             leader_id,
             SLOTS_PER_EPOCH - (STAKERS_SLOT_OFFSET % SLOTS_PER_EPOCH) + 1,
         );
-        assert!(child.epoch_vote_states(3, |_, _| true).is_some());
+        assert!(child.epoch_vote_states(3, all).is_some());
     }
 
 }
