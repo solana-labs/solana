@@ -38,10 +38,10 @@ impl HashQueue {
         self.last_hash.expect("no hash has been set")
     }
 
-    /// Check if the age of the entry_id is within the max_age
+    /// Check if the age of the entry is within the max_age
     /// return false for any entries with an age equal to or above max_age
-    pub fn check_entry_id_age(&self, entry_id: Hash, max_age: usize) -> bool {
-        let entry = self.entries.get(&entry_id);
+    pub fn check_entry_age(&self, entry: Hash, max_age: usize) -> bool {
+        let entry = self.entries.get(&entry);
         match entry {
             Some(entry) => self.hash_height - entry.hash_height < max_age as u64,
             _ => false,
@@ -49,8 +49,8 @@ impl HashQueue {
     }
     /// check if entry is valid
     #[cfg(test)]
-    pub fn check_entry(&self, entry_id: Hash) -> bool {
-        self.entries.get(&entry_id).is_some()
+    pub fn check_entry(&self, entry: Hash) -> bool {
+        self.entries.get(&entry).is_some()
     }
 
     pub fn genesis_hash(&mut self, hash: &Hash) {
@@ -72,8 +72,9 @@ impl HashQueue {
         // this clean up can be deferred until sigs gets larger
         //  because we verify entry.nth every place we check for validity
         if self.entries.len() >= MAX_RECENT_TICK_HASHES as usize {
-            self.entries
-                .retain(|_, entry| hash_height - entry.hash_height <= MAX_RECENT_TICK_HASHES as u64);
+            self.entries.retain(|_, entry| {
+                hash_height - entry.hash_height <= MAX_RECENT_TICK_HASHES as u64
+            });
         }
 
         self.entries.insert(
