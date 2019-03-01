@@ -25,7 +25,7 @@ pub enum PohServiceConfig {
 impl Default for PohServiceConfig {
     fn default() -> PohServiceConfig {
         // TODO: Change this to Tick to enable PoH
-        PohServiceConfig::Sleep(Duration::from_millis(1000 / NUM_TICKS_PER_SECOND as u64))
+        PohServiceConfig::Sleep(Duration::from_millis(1000 / NUM_TICKS_PER_SECOND))
     }
 }
 

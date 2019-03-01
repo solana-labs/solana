@@ -754,7 +754,7 @@ fn get_next_last_id(
         next_last_id_retries -= 1;
         // Retry ~twice during a slot
         sleep(Duration::from_millis(
-            500 * DEFAULT_TICKS_PER_SLOT / NUM_TICKS_PER_SECOND as u64,
+            500 * DEFAULT_TICKS_PER_SLOT / NUM_TICKS_PER_SECOND,
         ));
     }
 }
@@ -816,7 +816,7 @@ fn send_and_confirm_transaction(
             if cfg!(not(test)) {
                 // Retry ~twice during a slot
                 sleep(Duration::from_millis(
-                    500 * DEFAULT_TICKS_PER_SLOT / NUM_TICKS_PER_SECOND as u64,
+                    500 * DEFAULT_TICKS_PER_SLOT / NUM_TICKS_PER_SECOND,
                 ));
             }
         };
@@ -857,7 +857,7 @@ fn send_and_confirm_transactions(
             if cfg!(not(test)) {
                 // Delay ~1 tick between write transactions in an attempt to reduce AccountInUse errors
                 // since all the write transactions modify the same program account
-                sleep(Duration::from_millis(1000 / NUM_TICKS_PER_SECOND as u64));
+                sleep(Duration::from_millis(1000 / NUM_TICKS_PER_SECOND));
             }
 
             let signature = send_transaction(&rpc_client, &transaction).ok();
@@ -871,7 +871,7 @@ fn send_and_confirm_transactions(
             if cfg!(not(test)) {
                 // Retry ~twice during a slot
                 sleep(Duration::from_millis(
-                    500 * DEFAULT_TICKS_PER_SLOT / NUM_TICKS_PER_SECOND as u64,
+                    500 * DEFAULT_TICKS_PER_SLOT / NUM_TICKS_PER_SECOND,
                 ));
             }
 
