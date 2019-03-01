@@ -8,31 +8,43 @@ use solana_sdk::vote_program::VoteState;
 pub fn get_supermajority_slot(bank: &Bank, epoch_height: u64) -> Option<u64> {
     // Find the amount of stake needed for supermajority
     let stakes_and_lockouts = epoch_stakes_and_lockouts(bank, epoch_height);
-    let total_stake: u64 = stakes_and_lockouts.values().map(|s| s.0).sum();
+    let total_stake: u64 = stakes_and_lockouts.iter().map(|s| s.0).sum();
     let supermajority_stake = total_stake * 2 / 3;
 
     // Filter out the states that don't have a max lockout
-    find_supermajority_slot(supermajority_stake, stakes_and_lockouts.values())
+    find_supermajority_slot(supermajority_stake, stakes_and_lockouts.iter())
 }
 
 /// Collect the node Pubkey and staker account balance for nodes
 /// that have non-zero balance in their corresponding staking accounts
 pub fn node_stakes(bank: &Bank) -> HashMap<Pubkey, u64> {
-    node_stakes_extractor(bank, |stake, _| stake)
+    sum_node_stakes(&node_stakes_extractor(bank, |stake, _| stake))
 }
 
 /// Return the checkpointed stakes that should be used to generate a leader schedule.
 pub fn node_stakes_at_epoch(bank: &Bank, epoch_height: u64) -> HashMap<Pubkey, u64> {
-    node_stakes_at_epoch_extractor(bank, epoch_height, |stake, _| stake)
+    sum_node_stakes(&node_stakes_at_epoch_extractor(
+        bank,
+        epoch_height,
+        |stake, _| stake,
+    ))
+}
+
+/// Sum up all the staking accounts for each delegate
+fn sum_node_stakes(stakes: &HashMap<Pubkey, Vec<u64>>) -> HashMap<Pubkey, u64> {
+    stakes
+        .iter()
+        .map(|(delegate, stakes)| (*delegate, stakes.iter().sum()))
+        .collect()
 }
 
 /// Return the checkpointed stakes that should be used to generate a leader schedule.
 /// state_extractor takes (stake, vote_state) and maps to an output.
-fn node_stakes_at_epoch_extractor<F, T>(
+fn node_stakes_at_epoch_extractor<F, T: Clone>(
     bank: &Bank,
     epoch_height: u64,
     state_extractor: F,
-) -> HashMap<Pubkey, T>
+) -> HashMap<Pubkey, Vec<T>>
 where
     F: Fn(u64, &VoteState) -> T,
 {
@@ -42,11 +54,11 @@ where
 
 /// Return the checkpointed stakes that should be used to generate a leader schedule.
 /// state_extractor takes (stake, vote_state) and maps to an output
-fn node_stakes_at_slot_extractor<F, T>(
+fn node_stakes_at_slot_extractor<F, T: Clone>(
     bank: &Bank,
     current_slot_height: u64,
     state_extractor: F,
-) -> HashMap<Pubkey, T>
+) -> HashMap<Pubkey, Vec<T>>
 where
     F: Fn(u64, &VoteState) -> T,
 {
@@ -67,26 +79,33 @@ where
 /// Collect the node Pubkey and staker account balance for nodes
 /// that have non-zero balance in their corresponding staker accounts.
 /// state_extractor takes (stake, vote_state) and maps to an output
-fn node_stakes_extractor<F, T>(bank: &Bank, state_extractor: F) -> HashMap<Pubkey, T>
+fn node_stakes_extractor<F, T: Clone>(bank: &Bank, state_extractor: F) -> HashMap<Pubkey, Vec<T>>
 where
     F: Fn(u64, &VoteState) -> T,
 {
-    bank.vote_states(|account_id, _| bank.get_balance(&account_id) > 0)
-        .iter()
-        .map(|(account_id, state)| {
-            (
+    let mut map: HashMap<Pubkey, Vec<T>> = HashMap::new();
+    let vote_states = bank.vote_states(|account_id, _| bank.get_balance(&account_id) > 0);
+    vote_states.into_iter().for_each(|(account_id, state)| {
+        if map.contains_key(&state.delegate_id) {
+            let entry = map.get_mut(&state.delegate_id).unwrap();
+            entry.push(state_extractor(bank.get_balance(&account_id), &state));
+        } else {
+            map.insert(
                 state.delegate_id,
-                state_extractor(bank.get_balance(&account_id), &state),
-            )
-        })
-        .collect()
+                vec![state_extractor(bank.get_balance(&account_id), &state)],
+            );
+        }
+    });
+    map
 }
 
-fn epoch_stakes_and_lockouts(
-    bank: &Bank,
-    epoch_height: u64,
-) -> HashMap<Pubkey, (u64, Option<u64>)> {
-    node_stakes_at_epoch_extractor(bank, epoch_height, |stake, state| (stake, state.root_slot))
+fn epoch_stakes_and_lockouts(bank: &Bank, epoch_height: u64) -> Vec<(u64, Option<u64>)> {
+    node_stakes_at_epoch_extractor(bank, epoch_height, |stake, states| {
+        (stake, states.root_slot)
+    })
+    .into_iter()
+    .flat_map(|(_, stake_and_states)| stake_and_states)
+    .collect()
 }
 
 fn find_supermajority_slot<'a, I>(supermajority_stake: u64, stakes_and_lockouts: I) -> Option<u64>
@@ -148,7 +167,7 @@ mod tests {
         assert_eq!(bank.slot_height(), bank.stakers_slot_offset());
 
         let mut expected = HashMap::new();
-        expected.insert(pubkey, bootstrap_tokens - 1);
+        expected.insert(pubkey, vec![bootstrap_tokens - 1]);
         let bank = new_from_parent(&Arc::new(bank));
         assert_eq!(
             node_stakes_at_slot_extractor(&bank, bank.slot_height(), |s, _| s),
@@ -170,16 +189,12 @@ mod tests {
 
         // Validator has no token staked, so they get filtered out. Only the bootstrap leader
         // created by the genesis block will get included
-        let expected: Vec<_> = epoch_stakes_and_lockouts(&bank, 0)
-            .values()
-            .cloned()
-            .collect();
+        let expected: Vec<_> = epoch_stakes_and_lockouts(&bank, 0);
         assert_eq!(expected, vec![(1, None)]);
 
         voting_keypair_tests::new_vote_account_with_vote(&mint_keypair, &bank_voter, &bank, 499, 0);
 
-        let result: HashSet<_> =
-            HashSet::from_iter(epoch_stakes_and_lockouts(&bank, 0).values().cloned());
+        let result: HashSet<_> = HashSet::from_iter(epoch_stakes_and_lockouts(&bank, 0));
         let expected: HashSet<_> = HashSet::from_iter(vec![(1, None), (499, None)]);
         assert_eq!(result, expected);
     }
@@ -228,6 +243,17 @@ mod tests {
         assert_eq!(
             find_supermajority_slot(supermajority, stakes_and_slots.iter()),
             Some(3)
+        );
+    }
+
+    #[test]
+    fn test_sum_node_stakes() {
+        let mut stakes = HashMap::new();
+        stakes.insert(Pubkey::default(), vec![1, 2, 3, 4, 5]);
+        assert_eq!(sum_node_stakes(&stakes).len(), 1);
+        assert_eq!(
+            sum_node_stakes(&stakes).get(&Pubkey::default()),
+            Some(&15_u64)
         );
     }
 }
