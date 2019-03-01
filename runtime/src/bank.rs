@@ -4,7 +4,7 @@
 //! already been signed and verified.
 
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
-use crate::last_id_queue::HashQueue;
+use crate::hash_queue::HashQueue;
 use crate::runtime::{self, RuntimeError};
 use crate::status_cache::StatusCache;
 use bincode::serialize;
@@ -86,7 +86,7 @@ pub struct Bank {
     status_cache: RwLock<BankStatusCache>,
 
     /// FIFO queue of `last_id` items
-    last_id_queue: RwLock<HashQueue>,
+    tick_hash_queue: RwLock<HashQueue>,
 
     /// Previous checkpoint of this bank
     parent: RwLock<Option<Arc<Bank>>>,
@@ -131,7 +131,7 @@ impl Bank {
         parent.freeze();
 
         let mut bank = Self::default();
-        bank.last_id_queue = RwLock::new(parent.last_id_queue.read().unwrap().clone());
+        bank.tick_hash_queue = RwLock::new(parent.tick_hash_queue.read().unwrap().clone());
         bank.ticks_per_slot = parent.ticks_per_slot;
         bank.slots_per_epoch = parent.slots_per_epoch;
         bank.stakers_slot_offset = parent.stakers_slot_offset;
@@ -240,7 +240,7 @@ impl Bank {
             &bootstrap_leader_vote_account,
         );
 
-        self.last_id_queue
+        self.tick_hash_queue
             .write()
             .unwrap()
             .genesis_last_id(&genesis_block.last_id());
@@ -266,7 +266,7 @@ impl Bank {
 
     /// Return the last entry ID registered.
     pub fn last_id(&self) -> Hash {
-        self.last_id_queue.read().unwrap().last_id()
+        self.tick_hash_queue.read().unwrap().last_id()
     }
 
     /// Forget all signatures. Useful for benchmarking.
@@ -297,7 +297,7 @@ impl Bank {
         ticks_and_stakes: &mut [(u64, u64)],
         supermajority_stake: u64,
     ) -> Option<u64> {
-        let last_ids = self.last_id_queue.read().unwrap();
+        let last_ids = self.tick_hash_queue.read().unwrap();
         last_ids.get_confirmation_timestamp(ticks_and_stakes, supermajority_stake)
     }
 
@@ -313,10 +313,10 @@ impl Bank {
         // assert!(!self.is_frozen());
         let current_tick_height = {
             //atomic register and read the tick
-            let mut last_id_queue = self.last_id_queue.write().unwrap();
+            let mut tick_hash_queue = self.tick_hash_queue.write().unwrap();
             inc_new_counter_info!("bank-register_tick-registered", 1);
-            last_id_queue.register_tick(last_id);
-            last_id_queue.tick_height()
+            tick_hash_queue.register_tick(last_id);
+            tick_hash_queue.tick_height()
         };
         if current_tick_height % NUM_TICKS_PER_SECOND as u64 == 0 {
             self.status_cache.write().unwrap().new_cache(last_id);
@@ -364,7 +364,7 @@ impl Bank {
         max_age: usize,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
-        let last_ids = self.last_id_queue.read().unwrap();
+        let last_ids = self.tick_hash_queue.read().unwrap();
         txs.iter()
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
@@ -697,7 +697,7 @@ impl Bank {
 
     /// Return the number of ticks since genesis.
     pub fn tick_height(&self) -> u64 {
-        self.last_id_queue.read().unwrap().tick_height()
+        self.tick_hash_queue.read().unwrap().tick_height()
     }
 
     /// Return the number of ticks since the last slot boundary.
@@ -745,7 +745,7 @@ impl Bank {
 
     #[cfg(test)]
     pub fn last_ids(&self) -> &RwLock<HashQueue> {
-        &self.last_id_queue
+        &self.tick_hash_queue
     }
 }
 

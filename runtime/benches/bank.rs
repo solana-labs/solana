@@ -3,11 +3,11 @@
 extern crate test;
 
 use solana_runtime::bank::*;
-use solana_runtime::last_id_queue::MAX_ENTRY_IDS;
 use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::hash::hash;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
+use solana_sdk::timing::MAX_ENTRY_IDS;
 use test::Bencher;
 
 #[bench]
