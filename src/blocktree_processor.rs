@@ -115,13 +115,13 @@ pub fn process_blocktree(
         let slot = 0;
         let bank = Arc::new(Bank::new_with_paths(&genesis_block, account_paths));
         let entry_height = 0;
-        let last_entry_id = bank.last_id();
-        vec![(slot, bank, entry_height, last_entry_id)]
+        let last_entry_hash = bank.last_id();
+        vec![(slot, bank, entry_height, last_entry_hash)]
     };
 
     let mut fork_info = vec![];
     while !pending_slots.is_empty() {
-        let (slot, starting_bank, starting_entry_height, mut last_entry_id) =
+        let (slot, starting_bank, starting_entry_height, mut last_entry_hash) =
             pending_slots.pop().unwrap();
 
         let bank = Arc::new(Bank::new_from_parent_and_id(
@@ -155,17 +155,17 @@ pub fn process_blocktree(
                 return Err(BankError::LedgerVerificationFailed);
             }
             let entry0 = &entries[0];
-            if !(entry0.is_tick() && entry0.verify(&last_entry_id)) {
+            if !(entry0.is_tick() && entry0.verify(&last_entry_hash)) {
                 warn!("Ledger proof of history failed at entry0");
                 return Err(BankError::LedgerVerificationFailed);
             }
-            last_entry_id = entry0.id;
+            last_entry_hash = entry0.id;
             entry_height += 1;
             entries = entries.drain(1..).collect();
         }
 
         if !entries.is_empty() {
-            if !entries.verify(&last_entry_id) {
+            if !entries.verify(&last_entry_hash) {
                 warn!("Ledger proof of history failed at entry: {}", entry_height);
                 return Err(BankError::LedgerVerificationFailed);
             }
@@ -175,7 +175,7 @@ pub fn process_blocktree(
                 BankError::LedgerVerificationFailed
             })?;
 
-            last_entry_id = entries.last().unwrap().id;
+            last_entry_hash = entries.last().unwrap().id;
             entry_height += entries.len() as u64;
         }
 
@@ -220,7 +220,7 @@ pub fn process_blocktree(
             ));
             trace!("Add child bank for slot={}", next_slot);
             // bank_forks.insert(*next_slot, child_bank);
-            (*next_slot, child_bank, entry_height, last_entry_id)
+            (*next_slot, child_bank, entry_height, last_entry_hash)
         }));
 
         // reverse sort by slot, so the next slot to be processed can be pop()ed
@@ -255,15 +255,15 @@ mod tests {
         ticks_per_slot: u64,
         slot: u64,
         parent_slot: u64,
-        last_entry_id: Hash,
+        last_entry_hash: Hash,
     ) -> Hash {
-        let entries = create_ticks(ticks_per_slot, last_entry_id);
-        let last_entry_id = entries.last().unwrap().id;
+        let entries = create_ticks(ticks_per_slot, last_entry_hash);
+        let last_entry_hash = entries.last().unwrap().id;
 
         let blobs = entries_to_blobs(&entries, slot, parent_slot);
         blocktree.insert_data_blobs(blobs.iter()).unwrap();
 
-        last_entry_id
+        last_entry_hash
     }
 
     #[test]
@@ -332,7 +332,7 @@ mod tests {
         // Create a new ledger with slot 0 full of ticks
         let (ledger_path, last_id) = create_new_tmp_ledger!(&genesis_block);
         debug!("ledger_path: {:?}", ledger_path);
-        let mut last_entry_id = last_id;
+        let mut last_entry_hash = last_id;
 
         /*
             Build a blocktree in the ledger with the following fork structure:
@@ -353,11 +353,11 @@ mod tests {
 
         // Fork 1, ending at slot 3
         let last_slot1_entry_id =
-            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 1, 0, last_entry_id);
-        last_entry_id =
+            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 1, 0, last_entry_hash);
+        last_entry_hash =
             fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 2, 1, last_slot1_entry_id);
         let last_fork1_entry_id =
-            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 3, 2, last_entry_id);
+            fill_blocktree_slot_with_ticks(&blocktree, ticks_per_slot, 3, 2, last_entry_hash);
 
         // Fork 2, ending at slot 4
         let last_fork2_entry_id =
@@ -451,26 +451,26 @@ mod tests {
         debug!("ledger_path: {:?}", ledger_path);
 
         let mut entries = vec![];
-        let mut last_entry_id = last_id;
+        let mut last_entry_hash = last_id;
         for _ in 0..3 {
             // Transfer one token from the mint to a random account
             let keypair = Keypair::new();
             let tx = SystemTransaction::new_account(&mint_keypair, keypair.pubkey(), 1, last_id, 0);
-            let entry = Entry::new(&last_entry_id, 1, vec![tx]);
-            last_entry_id = entry.id;
+            let entry = Entry::new(&last_entry_hash, 1, vec![tx]);
+            last_entry_hash = entry.id;
             entries.push(entry);
 
             // Add a second Transaction that will produce a
             // ProgramError<0, ResultWithNegativeTokens> error when processed
             let keypair2 = Keypair::new();
             let tx = SystemTransaction::new_account(&keypair, keypair2.pubkey(), 42, last_id, 0);
-            let entry = Entry::new(&last_entry_id, 1, vec![tx]);
-            last_entry_id = entry.id;
+            let entry = Entry::new(&last_entry_hash, 1, vec![tx]);
+            last_entry_hash = entry.id;
             entries.push(entry);
         }
 
         // Fill up the rest of slot 1 with ticks
-        entries.extend(create_ticks(genesis_block.ticks_per_slot, last_entry_id));
+        entries.extend(create_ticks(genesis_block.ticks_per_slot, last_entry_hash));
 
         let blocktree =
             Blocktree::open(&ledger_path).expect("Expected to successfully open database ledger");
