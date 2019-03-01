@@ -1201,6 +1201,7 @@ fn test_dropped_handoff_recovery() {
 }
 
 #[test]
+#[ignore]
 fn test_full_leader_validator_network() {
     solana_logger::setup();
     // The number of validators
