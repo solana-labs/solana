@@ -9,7 +9,8 @@ set -e
 rustup override set bpf
 
 export RUSTFLAGS="$RUSTFLAGS \
-    -C lto=no -C opt-level=2 \
+    -C lto=no \
+    -C opt-level=2 \
     -C link-arg=-Tbpf.ld \
     -C link-arg=-z -C link-arg=notext \
     -C link-arg=--Bdynamic \
