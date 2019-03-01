@@ -218,9 +218,9 @@ fn next_hash(start_hash: &Hash, num_hashes: u64, transactions: &[Transaction]) -
     }
 
     if transactions.is_empty() {
-        poh.tick().id
+        poh.tick().hash
     } else {
-        poh.record(Transaction::hash(transactions)).id
+        poh.record(Transaction::hash(transactions)).hash
     }
 }
 

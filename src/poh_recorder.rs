@@ -56,7 +56,7 @@ impl PohRecorder {
         let mut cache = vec![];
         info!(
             "reset poh from: {},{} to: {},{}",
-            self.poh.id, self.poh.tick_height, last_id, tick_height,
+            self.poh.hash, self.poh.tick_height, last_id, tick_height,
         );
         std::mem::swap(&mut cache, &mut self.tick_cache);
         self.poh = Poh::new(last_id, tick_height);
@@ -158,17 +158,17 @@ impl PohRecorder {
             .working_bank
             .as_ref()
             .ok_or(Error::PohRecorderError(PohRecorderError::MaxHeightReached))?;
-        let entry = self.poh.record(mixin);
+        let poh_entry = self.poh.record(mixin);
         assert!(!txs.is_empty(), "Entries without transactions are used to track real-time passing in the ledger and can only be generated with PohRecorder::tick function");
         let recorded_entry = Entry {
-            num_hashes: entry.num_hashes,
-            hash: entry.id,
+            num_hashes: poh_entry.num_hashes,
+            hash: poh_entry.hash,
             transactions: txs,
         };
         trace!("sending entry {}", recorded_entry.is_tick());
         working_bank
             .sender
-            .send(vec![(recorded_entry, entry.tick_height)])?;
+            .send(vec![(recorded_entry, poh_entry.tick_height)])?;
         Ok(())
     }
 
@@ -178,7 +178,7 @@ impl PohRecorder {
         (
             Entry {
                 num_hashes: tick.num_hashes,
-                hash: tick.id,
+                hash: tick.hash,
                 transactions: vec![],
             },
             tick.tick_height,
