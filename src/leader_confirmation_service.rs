@@ -147,14 +147,14 @@ mod tests {
 
         let (genesis_block, mint_keypair) = GenesisBlock::new(1234);
         let bank = Arc::new(Bank::new(&genesis_block));
-        // generate 10 validators, but only vote for the first 6 validators
-        let ids: Vec<_> = (0..10 * bank.ticks_per_slot())
-            .map(|i| {
-                let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-                bank.register_tick(&last_id);
-                last_id
-            })
-            .collect();
+
+        // Move the bank up 10 slots
+        let mut tick_hash = genesis_block.hash();
+        while bank.slot_height() < 10 {
+            tick_hash = hash(&serialize(&tick_hash).unwrap());
+            bank.register_tick(&tick_hash);
+        }
+        let last_id = bank.last_id();
 
         // Create a total of 10 vote accounts, each will have a balance of 1 (after giving 1 to
         // their vote account), for a total staking pool of 10 tokens.
@@ -162,7 +162,6 @@ mod tests {
             .map(|i| {
                 // Create new validator to vote
                 let validator_keypair = Arc::new(Keypair::new());
-                let last_id = ids[i];
                 let voting_keypair = VotingKeypair::new_local(&validator_keypair);
                 let voting_pubkey = voting_keypair.pubkey();
 
@@ -185,10 +184,11 @@ mod tests {
             genesis_block.bootstrap_leader_id,
             &mut last_confirmation_time,
         );
+        assert_eq!(last_confirmation_time, 0);
 
         // Get another validator to vote, so we now have 2/3 consensus
         let voting_keypair = &vote_accounts[7].0;
-        let vote_tx = VoteTransaction::new_vote(voting_keypair, 7, ids[6], 0);
+        let vote_tx = VoteTransaction::new_vote(voting_keypair, 7, last_id, 0);
         bank.process_transaction(&vote_tx).unwrap();
 
         LeaderConfirmationService::compute_confirmation(

@@ -426,11 +426,19 @@ mod tests {
 
     #[test]
     fn test_process_empty_entry_is_registered() {
+        solana_logger::setup();
+
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let bank = Bank::new(&genesis_block);
         let keypair = Keypair::new();
-        let entry = next_entry(&genesis_block.hash(), 1, vec![]);
-        let tx = SystemTransaction::new_account(&mint_keypair, keypair.pubkey(), 1, entry.hash, 0);
+        let slot_entries = create_ticks(genesis_block.ticks_per_slot - 1, genesis_block.hash());
+        let tx = SystemTransaction::new_account(
+            &mint_keypair,
+            keypair.pubkey(),
+            1,
+            slot_entries.last().unwrap().hash,
+            0,
+        );
 
         // First, ensure the TX is rejected because of the unregistered last ID
         assert_eq!(
@@ -439,19 +447,20 @@ mod tests {
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
-        par_process_entries(&bank, &[entry]).unwrap();
+        par_process_entries(&bank, &slot_entries).unwrap();
         assert_eq!(bank.process_transaction(&tx), Ok(()));
     }
 
     #[test]
     fn test_process_ledger_simple() {
+        solana_logger::setup();
         let leader_pubkey = Keypair::new().pubkey();
         let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, leader_pubkey, 50);
-        let (ledger_path, last_id) = create_new_tmp_ledger!(&genesis_block);
+        let (ledger_path, mut last_entry_hash) = create_new_tmp_ledger!(&genesis_block);
         debug!("ledger_path: {:?}", ledger_path);
 
         let mut entries = vec![];
-        let mut last_entry_hash = last_id;
+        let last_id = genesis_block.hash();
         for _ in 0..3 {
             // Transfer one token from the mint to a random account
             let keypair = Keypair::new();
@@ -522,9 +531,10 @@ mod tests {
         let bank = Bank::new(&genesis_block);
 
         // ensure bank can process a tick
+        assert_eq!(bank.tick_height(), 0);
         let tick = next_entry(&genesis_block.hash(), 1, vec![]);
         assert_eq!(par_process_entries(&bank, &[tick.clone()]), Ok(()));
-        assert_eq!(bank.last_id(), tick.hash);
+        assert_eq!(bank.tick_height(), 1);
     }
 
     #[test]
@@ -652,12 +662,15 @@ mod tests {
         assert_eq!(bank.process_transaction(&tx), Ok(()));
 
         let last_id = bank.last_id();
+        while last_id == bank.last_id() {
+            bank.register_tick(&Hash::default());
+        }
 
         // ensure bank can process 2 entries that do not have a common account and tick is registered
-        let tx = SystemTransaction::new_account(&keypair2, keypair3.pubkey(), 1, bank.last_id(), 0);
+        let tx = SystemTransaction::new_account(&keypair2, keypair3.pubkey(), 1, last_id, 0);
         let entry_1 = next_entry(&last_id, 1, vec![tx]);
         let tick = next_entry(&entry_1.hash, 1, vec![]);
-        let tx = SystemTransaction::new_account(&keypair1, keypair4.pubkey(), 1, tick.hash, 0);
+        let tx = SystemTransaction::new_account(&keypair1, keypair4.pubkey(), 1, bank.last_id(), 0);
         let entry_2 = next_entry(&tick.hash, 1, vec![tx]);
         assert_eq!(
             par_process_entries(&bank, &[entry_1.clone(), tick.clone(), entry_2.clone()]),
@@ -665,9 +678,9 @@ mod tests {
         );
         assert_eq!(bank.get_balance(&keypair3.pubkey()), 1);
         assert_eq!(bank.get_balance(&keypair4.pubkey()), 1);
-        assert_eq!(bank.last_id(), tick.hash);
+
         // ensure that an error is returned for an empty account (keypair2)
-        let tx = SystemTransaction::new_account(&keypair2, keypair3.pubkey(), 1, tick.hash, 0);
+        let tx = SystemTransaction::new_account(&keypair2, keypair3.pubkey(), 1, bank.last_id(), 0);
         let entry_3 = next_entry(&entry_2.hash, 1, vec![tx]);
         assert_eq!(
             par_process_entries(&bank, &[entry_3]),

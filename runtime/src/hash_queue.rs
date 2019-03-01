@@ -32,6 +32,7 @@ impl HashQueue {
         }
     }
 
+    #[allow(dead_code)]
     pub fn hash_height(&self) -> u64 {
         self.hash_height
     }
@@ -78,7 +79,6 @@ impl HashQueue {
             self.entries
                 .retain(|_, entry| hash_height - entry.hash_height <= max_entries as u64);
         }
-
         self.entries.insert(
             *hash,
             HashQueueEntry {
