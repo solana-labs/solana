@@ -33,7 +33,7 @@ impl BankForks {
         let mut bank = Arc::new(bank);
         self.banks.insert(bank_id, bank.clone());
 
-        if bank_id > self.working_bank.id() {
+        if bank_id > self.working_bank.slot() {
             self.working_bank = bank.clone()
         }
 
@@ -41,7 +41,7 @@ impl BankForks {
         //  parent if we're always calling insert()
         //  when we construct a child bank
         while let Some(parent) = bank.parent() {
-            self.banks.remove(&parent.id());
+            self.banks.remove(&parent.slot());
             bank = parent;
         }
     }
