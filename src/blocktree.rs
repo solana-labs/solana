@@ -847,23 +847,41 @@ impl Blocktree {
         Ok(Self::deserialize_blobs(&consecutive_blobs))
     }
 
+    /// Returns the entry vector for the slot starting with `blob_start_index`
+    pub fn get_slot_entries_with_blob_count(
+        &self,
+        slot_height: u64,
+        blob_start_index: u64,
+        max_entries: Option<u64>,
+    ) -> Result<(Vec<Entry>, usize)> {
+        // Find the next consecutive block of blobs.
+        let consecutive_blobs = self.get_slot_consecutive_blobs(
+            slot_height,
+            &HashMap::new(),
+            blob_start_index,
+            max_entries,
+        )?;
+        let num = consecutive_blobs.len();
+        Ok((Self::deserialize_blobs(&consecutive_blobs), num))
+    }
+
     // Returns slots connecting to any element of the list `slot_heights`.
-    pub fn get_slots_since(&self, slot_heights: &[u64]) -> Result<Vec<u64>> {
+    pub fn get_slots_since(&self, slot_heights: &[u64]) -> Result<HashMap<u64, Vec<u64>>> {
         // Return error if there was a database error during lookup of any of the
         // slot indexes
-        let slots: Result<Vec<Option<SlotMeta>>> = slot_heights
+        let slot_metas: Result<Vec<Option<SlotMeta>>> = slot_heights
             .iter()
             .map(|slot_height| self.meta(*slot_height))
             .collect();
 
-        let slots = slots?;
-        let slots: Vec<_> = slots
-            .into_iter()
-            .filter_map(|x| x)
-            .flat_map(|x| x.next_slots)
+        let slot_metas = slot_metas?;
+        let result: HashMap<u64, Vec<u64>> = slot_heights
+            .iter()
+            .zip(slot_metas)
+            .filter_map(|(height, meta)| meta.map(|meta| (*height, meta.next_slots)))
             .collect();
 
-        Ok(slots)
+        Ok(result)
     }
 
     fn deserialize_blobs<I>(blob_datas: &[I]) -> Vec<Entry>
@@ -1369,6 +1387,7 @@ pub mod tests {
     use std::cmp::min;
     use std::collections::HashSet;
     use std::iter::once;
+    use std::iter::FromIterator;
     use std::time::Duration;
 
     #[test]
@@ -2308,25 +2327,28 @@ pub mod tests {
             // Slot doesn't exist
             assert!(blocktree.get_slots_since(&vec![0]).unwrap().is_empty());
 
-            let mut meta0 = SlotMeta::new(0, 1);
+            let mut meta0 = SlotMeta::new(0, 0);
             blocktree.meta_cf.put_slot_meta(0, &meta0).unwrap();
 
             // Slot exists, chains to nothing
-            assert!(blocktree.get_slots_since(&vec![0]).unwrap().is_empty());
+            let expected: HashMap<u64, Vec<u64>> =
+                HashMap::from_iter(vec![(0, vec![])].into_iter());
+            assert_eq!(blocktree.get_slots_since(&vec![0]).unwrap(), expected);
             meta0.next_slots = vec![1, 2];
             blocktree.meta_cf.put_slot_meta(0, &meta0).unwrap();
 
             // Slot exists, chains to some other slots
-            assert_eq!(blocktree.get_slots_since(&vec![0]).unwrap(), vec![1, 2]);
-            assert_eq!(blocktree.get_slots_since(&vec![0, 1]).unwrap(), vec![1, 2]);
+            let expected: HashMap<u64, Vec<u64>> =
+                HashMap::from_iter(vec![(0, vec![1, 2])].into_iter());
+            assert_eq!(blocktree.get_slots_since(&vec![0]).unwrap(), expected);
+            assert_eq!(blocktree.get_slots_since(&vec![0, 1]).unwrap(), expected);
 
             let mut meta3 = SlotMeta::new(3, 1);
             meta3.next_slots = vec![10, 5];
             blocktree.meta_cf.put_slot_meta(3, &meta3).unwrap();
-            assert_eq!(
-                blocktree.get_slots_since(&vec![0, 1, 3]).unwrap(),
-                vec![1, 2, 10, 5]
-            );
+            let expected: HashMap<u64, Vec<u64>> =
+                HashMap::from_iter(vec![(0, vec![1, 2]), (3, vec![10, 5])].into_iter());
+            assert_eq!(blocktree.get_slots_since(&vec![0, 1, 3]).unwrap(), expected);
         }
 
         Blocktree::destroy(&blocktree_path).expect("Expected successful database destruction");
