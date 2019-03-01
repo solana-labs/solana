@@ -88,32 +88,8 @@ impl HashQueue {
         self.last_hash = Some(*hash);
     }
 
-    /// Looks through a list of hash heights and stakes, and finds the latest
-    /// hash that has achieved confirmation
-    pub fn get_confirmation_timestamp(
-        &self,
-        hashes_and_stakes: &mut [(u64, u64)],
-        supermajority_stake: u64,
-    ) -> Option<u64> {
-        // Sort by hash height
-        hashes_and_stakes.sort_by(|a, b| a.0.cmp(&b.0));
-        let current_hash_height = self.hash_height;
-        let mut total = 0;
-        for (hash_height, stake) in hashes_and_stakes.iter() {
-            if current_hash_height >= *hash_height
-                && ((current_hash_height - hash_height) as usize) < MAX_RECENT_TICK_HASHES
-            {
-                total += stake;
-                if total > supermajority_stake {
-                    return self.hash_height_to_timestamp(*hash_height);
-                }
-            }
-        }
-        None
-    }
-
     /// Maps a hash height to a timestamp
-    fn hash_height_to_timestamp(&self, hash_height: u64) -> Option<u64> {
+    pub fn hash_height_to_timestamp(&self, hash_height: u64) -> Option<u64> {
         for entry in self.entries.values() {
             if entry.hash_height == hash_height {
                 return Some(entry.timestamp);
