@@ -14,8 +14,8 @@ pub struct HashQueue {
     /// updated whenever an id is registered, at each tick ;)
     tick_height: u64,
 
-    /// last tick to be registered
-    last_id: Option<Hash>,
+    /// last hash to be registered
+    last_hash: Option<Hash>,
 
     entries: HashMap<Hash, HashQueueEntry>,
 }
@@ -24,7 +24,7 @@ impl Default for HashQueue {
         Self {
             entries: HashMap::new(),
             tick_height: 0,
-            last_id: None,
+            last_hash: None,
         }
     }
 }
@@ -34,8 +34,8 @@ impl HashQueue {
         self.tick_height
     }
 
-    pub fn last_id(&self) -> Hash {
-        self.last_id.expect("no last_id has been set")
+    pub fn last_hash(&self) -> Hash {
+        self.last_hash.expect("no hash has been set")
     }
 
     /// Check if the age of the entry_id is within the max_age
@@ -53,23 +53,19 @@ impl HashQueue {
         self.entries.get(&entry_id).is_some()
     }
 
-    pub fn genesis_last_id(&mut self, last_id: &Hash) {
+    pub fn genesis_hash(&mut self, hash: &Hash) {
         self.entries.insert(
-            *last_id,
+            *hash,
             HashQueueEntry {
                 tick_height: 0,
                 timestamp: timestamp(),
             },
         );
 
-        self.last_id = Some(*last_id);
+        self.last_hash = Some(*hash);
     }
 
-    /// Tell the bank which Entry IDs exist on the ledger. This function
-    /// assumes subsequent calls correspond to later entries, and will boot
-    /// the oldest ones once its internal cache is full. Once boot, the
-    /// bank will reject transactions using that `last_id`.
-    pub fn register_tick(&mut self, last_id: &Hash) {
+    pub fn register_hash(&mut self, hash: &Hash) {
         self.tick_height += 1;
         let tick_height = self.tick_height;
 
@@ -81,14 +77,14 @@ impl HashQueue {
         }
 
         self.entries.insert(
-            *last_id,
+            *hash,
             HashQueueEntry {
                 tick_height,
                 timestamp: timestamp(),
             },
         );
 
-        self.last_id = Some(*last_id);
+        self.last_hash = Some(*hash);
     }
 
     /// Looks through a list of tick heights and stakes, and finds the latest
@@ -129,7 +125,7 @@ impl HashQueue {
     pub fn clear(&mut self) {
         self.entries = HashMap::new();
         self.tick_height = 0;
-        self.last_id = None;
+        self.last_hash = None;
     }
 }
 #[cfg(test)]
@@ -139,22 +135,22 @@ mod tests {
     use solana_sdk::hash::hash;
 
     #[test]
-    fn test_register_tick() {
-        let last_id = Hash::default();
+    fn test_register_hash() {
+        let last_hash = Hash::default();
         let mut entry_queue = HashQueue::default();
-        assert!(!entry_queue.check_entry(last_id));
-        entry_queue.register_tick(&last_id);
-        assert!(entry_queue.check_entry(last_id));
+        assert!(!entry_queue.check_entry(last_hash));
+        entry_queue.register_hash(&last_hash);
+        assert!(entry_queue.check_entry(last_hash));
     }
     #[test]
-    fn test_reject_old_last_id() {
-        let last_id = Hash::default();
+    fn test_reject_old_last_hash() {
+        let last_hash = Hash::default();
         let mut entry_queue = HashQueue::default();
         for i in 0..MAX_ENTRY_IDS {
-            let last_id = hash(&serialize(&i).unwrap()); // Unique hash
-            entry_queue.register_tick(&last_id);
+            let last_hash = hash(&serialize(&i).unwrap()); // Unique hash
+            entry_queue.register_hash(&last_hash);
         }
         // Assert we're no longer able to use the oldest entry ID.
-        assert!(!entry_queue.check_entry(last_id));
+        assert!(!entry_queue.check_entry(last_hash));
     }
 }
