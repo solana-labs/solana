@@ -23,7 +23,7 @@ use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::storage_program;
 use solana_sdk::system_program;
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::timing::{duration_as_us, MAX_ENTRY_IDS, NUM_TICKS_PER_SECOND};
+use solana_sdk::timing::{duration_as_us, MAX_RECENT_TICK_HASHES, NUM_TICKS_PER_SECOND};
 use solana_sdk::token_program;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, VoteState};
@@ -594,7 +594,7 @@ impl Bank {
     #[must_use]
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let lock_results = self.lock_accounts(txs);
-        let results = self.load_execute_and_commit_transactions(txs, lock_results, MAX_ENTRY_IDS);
+        let results = self.load_execute_and_commit_transactions(txs, lock_results, MAX_RECENT_TICK_HASHES);
         self.unlock_accounts(txs, &results);
         results
     }
@@ -1201,7 +1201,7 @@ mod tests {
 
         let lock_result = bank.lock_accounts(&pay_alice);
         let results_alice =
-            bank.load_execute_and_commit_transactions(&pay_alice, lock_result, MAX_ENTRY_IDS);
+            bank.load_execute_and_commit_transactions(&pay_alice, lock_result, MAX_RECENT_TICK_HASHES);
         assert_eq!(results_alice[0], Ok(()));
 
         // try executing an interleaved transfer twice

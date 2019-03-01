@@ -9,13 +9,15 @@ pub const NUM_TICKS_PER_SECOND: usize = 10;
 pub const DEFAULT_TICKS_PER_SLOT: u64 = 80;
 pub const DEFAULT_SLOTS_PER_EPOCH: u64 = 64;
 
-/// The number of most recent `last_id` values that the bank will track the signatures
-/// of. Once the bank discards a `last_id`, it will reject any transactions that use
+/// The time window of recent `last_id` values that the bank will track the signatures
+/// of over. Once the bank discards a `last_id`, it will reject any transactions that use
 /// that `last_id` in a transaction. Lowering this value reduces memory consumption,
 /// but requires clients to update its `last_id` more frequently. Raising the value
 /// lengthens the time a client must wait to be certain a missing transaction will
 /// not be processed by the network.
-pub const MAX_ENTRY_IDS: usize = NUM_TICKS_PER_SECOND * 120;
+pub const MAX_HASH_AGE_IN_SECONDS: usize = 120;
+
+pub const MAX_RECENT_TICK_HASHES: usize = NUM_TICKS_PER_SECOND * MAX_HASH_AGE_IN_SECONDS;
 
 pub fn duration_as_us(d: &Duration) -> u64 {
     (d.as_secs() * 1000 * 1000) + (u64::from(d.subsec_nanos()) / 1_000)

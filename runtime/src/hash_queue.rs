@@ -1,6 +1,6 @@
 use hashbrown::HashMap;
 use solana_sdk::hash::Hash;
-use solana_sdk::timing::{timestamp, MAX_ENTRY_IDS};
+use solana_sdk::timing::{timestamp, MAX_RECENT_TICK_HASHES};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct HashQueueEntry {
@@ -71,9 +71,9 @@ impl HashQueue {
 
         // this clean up can be deferred until sigs gets larger
         //  because we verify entry.nth every place we check for validity
-        if self.entries.len() >= MAX_ENTRY_IDS as usize {
+        if self.entries.len() >= MAX_RECENT_TICK_HASHES as usize {
             self.entries
-                .retain(|_, entry| hash_height - entry.hash_height <= MAX_ENTRY_IDS as u64);
+                .retain(|_, entry| hash_height - entry.hash_height <= MAX_RECENT_TICK_HASHES as u64);
         }
 
         self.entries.insert(
@@ -100,7 +100,7 @@ impl HashQueue {
         let mut total = 0;
         for (hash_height, stake) in hashes_and_stakes.iter() {
             if current_hash_height >= *hash_height
-                && ((current_hash_height - hash_height) as usize) < MAX_ENTRY_IDS
+                && ((current_hash_height - hash_height) as usize) < MAX_RECENT_TICK_HASHES
             {
                 total += stake;
                 if total > supermajority_stake {
@@ -139,7 +139,7 @@ mod tests {
     fn test_reject_old_last_hash() {
         let last_hash = Hash::default();
         let mut entry_queue = HashQueue::default();
-        for i in 0..MAX_ENTRY_IDS {
+        for i in 0..MAX_RECENT_TICK_HASHES {
             let last_hash = hash(&serialize(&i).unwrap()); // Unique hash
             entry_queue.register_hash(&last_hash);
         }
