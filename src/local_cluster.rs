@@ -48,7 +48,7 @@ impl LocalCluster {
         let mut network_nodes = vec![(thread, exit)];
         for _ in 0..(num_nodes - 1) {
             let keypair = Arc::new(Keypair::new());
-            let validator_pubkey = keypair.pubkey().clone();
+            let validator_pubkey = keypair.pubkey();
             let validator_node = Node::new_localhost_with_pubkey(keypair.pubkey());
             let ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
             ledger_paths.push(ledger_path.clone());
