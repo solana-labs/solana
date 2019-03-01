@@ -177,7 +177,7 @@ fn test_replicator_startup_basic() {
                     assert!(br.index() == repair_index);
                     let entry: Entry = deserialize(&br.data()[..br.meta.size]).unwrap();
                     info!("entry: {:?}", entry);
-                    assert_ne!(entry.id, Hash::default());
+                    assert_ne!(entry.hash, Hash::default());
                     received_blob = true;
                 }
                 break;

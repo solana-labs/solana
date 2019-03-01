@@ -138,7 +138,7 @@ impl ReplayStage {
         *last_entry_hash = entries
             .last()
             .expect("Entries cannot be empty at this point")
-            .id;
+            .hash;
 
         inc_new_counter_info!(
             "replicate-transactions",
@@ -338,7 +338,7 @@ impl ReplayStage {
                             let last_entry = blocktree
                                 .get_slot_entries(slot, meta.last_index, Some(1))
                                 .unwrap();
-                            last_entry_hash = last_entry[0].id;
+                            last_entry_hash = last_entry[0].hash;
                         }
 
                         let old_bank = bank.clone();

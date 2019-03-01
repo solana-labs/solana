@@ -1279,7 +1279,7 @@ impl Iterator for EntryIterator {
                         }
                     }
                     self.db_iterator.next();
-                    self.last_id = Some(entry.id);
+                    self.last_id = Some(entry.hash);
                     return Some(entry);
                 }
             }
@@ -1301,7 +1301,7 @@ pub fn create_new_ledger(ledger_path: &str, genesis_block: &GenesisBlock) -> Res
     let entries = crate::entry::create_ticks(ticks_per_slot, genesis_block.last_id());
     blocktree.write_entries(0, 0, 0, &entries)?;
 
-    Ok(entries.last().unwrap().id)
+    Ok(entries.last().unwrap().hash)
 }
 
 pub fn genesis<'a, I>(ledger_path: &str, keypair: &Keypair, entries: I) -> Result<()>
@@ -1398,7 +1398,7 @@ pub fn tmp_copy_blocktree(from: &str, name: &str) -> String {
 pub mod tests {
     use super::*;
     use crate::entry::{
-        create_ticks, make_tiny_test_entries, make_tiny_test_entries_from_id, Entry, EntrySlice,
+        create_ticks, make_tiny_test_entries, make_tiny_test_entries_from_hash, Entry, EntrySlice,
     };
     use crate::packet::index_blobs;
     use rand::seq::SliceRandom;
@@ -1924,7 +1924,7 @@ pub mod tests {
 
     #[test]
     pub fn test_genesis_and_entry_iterator() {
-        let entries = make_tiny_test_entries_from_id(&Hash::default(), 10);
+        let entries = make_tiny_test_entries_from_hash(&Hash::default(), 10);
 
         let ledger_path = get_tmp_ledger_path("test_genesis_and_entry_iterator");
         {
@@ -1942,7 +1942,7 @@ pub mod tests {
     }
     #[test]
     pub fn test_entry_iterator_up_to_consumed() {
-        let entries = make_tiny_test_entries_from_id(&Hash::default(), 3);
+        let entries = make_tiny_test_entries_from_hash(&Hash::default(), 3);
         let ledger_path = get_tmp_ledger_path("test_genesis_and_entry_iterator");
         {
             // put entries except last 2 into ledger

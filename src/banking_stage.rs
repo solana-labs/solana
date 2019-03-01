@@ -412,7 +412,7 @@ mod tests {
             .collect();
         assert!(entries.len() != 0);
         assert!(entries.verify(&start_hash));
-        assert_eq!(entries[entries.len() - 1].id, bank.last_id());
+        assert_eq!(entries[entries.len() - 1].hash, bank.last_id());
         banking_stage.join().unwrap();
         poh_service.close().unwrap();
     }
@@ -467,7 +467,7 @@ mod tests {
         entries.iter().for_each(|entries| {
             assert_eq!(entries.len(), 1);
             assert!(entries.verify(&last_id));
-            last_id = entries.last().unwrap().id;
+            last_id = entries.last().unwrap().hash;
         });
         drop(entry_receiver);
         banking_stage.join().unwrap();

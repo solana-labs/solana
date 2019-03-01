@@ -85,7 +85,7 @@ impl BlockstreamService {
                 });
             if i == entries.len() - 1 {
                 blockstream
-                    .emit_block_event(slot, tick_height, slot_leader, entry.id)
+                    .emit_block_event(slot, tick_height, slot_leader, entry.hash)
                     .unwrap_or_else(|e| {
                         debug!("Blockstream error: {:?}, {:?}", e, blockstream.output);
                     });
@@ -138,10 +138,10 @@ mod test {
         let mut entries = create_ticks(4, Hash::default());
 
         let keypair = Keypair::new();
-        let mut last_id = entries[3].id;
+        let mut last_id = entries[3].hash;
         let tx = SystemTransaction::new_account(&keypair, keypair.pubkey(), 1, Hash::default(), 0);
         let entry = Entry::new(&mut last_id, 1, vec![tx]);
-        last_id = entry.id;
+        last_id = entry.hash;
         entries.push(entry);
         let final_tick = create_ticks(1, last_id);
         entries.extend_from_slice(&final_tick);

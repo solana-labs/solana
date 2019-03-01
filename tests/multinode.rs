@@ -1313,7 +1313,7 @@ fn test_full_leader_validator_network() {
             &last_id,
             ticks_per_slot,
         );
-        last_id = node_active_set_entries.last().unwrap().id;
+        last_id = node_active_set_entries.last().unwrap().hash;
         active_set_entries.extend(node_active_set_entries);
     }
 
@@ -1702,7 +1702,7 @@ fn stake_fullnode(
 
 fn add_tick(last_id: &mut Hash, entries: &mut Vec<Entry>) -> Hash {
     let tick = solana::entry::create_ticks(1, *last_id);
-    *last_id = tick[0].id;
+    *last_id = tick[0].hash;
     entries.extend(tick);
     *last_id
 }

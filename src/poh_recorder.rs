@@ -102,7 +102,7 @@ impl PohRecorder {
             );
             let cache = &self.tick_cache[..cnt];
             for t in cache {
-                working_bank.bank.register_tick(&t.0.id);
+                working_bank.bank.register_tick(&t.0.hash);
             }
             working_bank.sender.send(cache.to_vec())
         } else {
@@ -162,7 +162,7 @@ impl PohRecorder {
         assert!(!txs.is_empty(), "Entries without transactions are used to track real-time passing in the ledger and can only be generated with PohRecorder::tick function");
         let recorded_entry = Entry {
             num_hashes: entry.num_hashes,
-            id: entry.id,
+            hash: entry.id,
             transactions: txs,
         };
         trace!("sending entry {}", recorded_entry.is_tick());
@@ -178,7 +178,7 @@ impl PohRecorder {
         (
             Entry {
                 num_hashes: tick.num_hashes,
-                id: tick.id,
+                hash: tick.id,
                 transactions: vec![],
             },
             tick.tick_height,
