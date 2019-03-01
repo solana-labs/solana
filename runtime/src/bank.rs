@@ -261,7 +261,7 @@ impl Bank {
         self.add_native_program("solana_storage_program", &storage_program::id());
         self.add_native_program("solana_bpf_loader", &bpf_loader::id());
         self.add_native_program("solana_budget_program", &budget_program::id());
-        self.add_native_program("solana_erc20", &token_program::id());
+        self.add_native_program("solana_token_program", &token_program::id());
     }
 
     /// Return the last entry ID registered.
