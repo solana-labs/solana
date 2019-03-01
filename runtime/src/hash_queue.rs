@@ -1,6 +1,6 @@
 use hashbrown::HashMap;
 use solana_sdk::hash::Hash;
-use solana_sdk::timing::{timestamp, MAX_RECENT_TICK_HASHES};
+use solana_sdk::timing::timestamp;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 struct HashQueueEntry {
@@ -18,18 +18,20 @@ pub struct HashQueue {
     last_hash: Option<Hash>,
 
     entries: HashMap<Hash, HashQueueEntry>,
+
+    max_entries: usize,
 }
-impl Default for HashQueue {
-    fn default() -> Self {
+
+impl HashQueue {
+    pub fn new(max_entries: usize) -> Self {
         Self {
             entries: HashMap::new(),
             hash_height: 0,
             last_hash: None,
+            max_entries,
         }
     }
-}
 
-impl HashQueue {
     pub fn hash_height(&self) -> u64 {
         self.hash_height
     }
@@ -71,10 +73,10 @@ impl HashQueue {
 
         // this clean up can be deferred until sigs gets larger
         //  because we verify entry.nth every place we check for validity
-        if self.entries.len() >= MAX_RECENT_TICK_HASHES {
-            self.entries.retain(|_, entry| {
-                hash_height - entry.hash_height <= MAX_RECENT_TICK_HASHES as u64
-            });
+        let max_entries = self.max_entries;
+        if self.entries.len() >= max_entries {
+            self.entries
+                .retain(|_, entry| hash_height - entry.hash_height <= max_entries as u64);
         }
 
         self.entries.insert(
@@ -103,19 +105,21 @@ mod tests {
     use super::*;
     use bincode::serialize;
     use solana_sdk::hash::hash;
+    use solana_sdk::timing::MAX_RECENT_TICK_HASHES;
 
     #[test]
     fn test_register_hash() {
         let last_hash = Hash::default();
-        let mut entry_queue = HashQueue::default();
+        let mut entry_queue = HashQueue::new(MAX_RECENT_TICK_HASHES);
         assert!(!entry_queue.check_entry(last_hash));
         entry_queue.register_hash(&last_hash);
         assert!(entry_queue.check_entry(last_hash));
+        assert_eq!(entry_queue.hash_height(), 1);
     }
     #[test]
     fn test_reject_old_last_hash() {
         let last_hash = Hash::default();
-        let mut entry_queue = HashQueue::default();
+        let mut entry_queue = HashQueue::new(MAX_RECENT_TICK_HASHES);
         for i in 0..MAX_RECENT_TICK_HASHES {
             let last_hash = hash(&serialize(&i).unwrap()); // Unique hash
             entry_queue.register_hash(&last_hash);
