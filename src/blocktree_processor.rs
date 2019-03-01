@@ -124,7 +124,7 @@ pub fn process_blocktree(
         let (slot, starting_bank, starting_entry_height, mut last_entry_hash) =
             pending_slots.pop().unwrap();
 
-        let bank = Arc::new(Bank::new_from_parent_and_id(
+        let bank = Arc::new(Bank::new_from_parent(
             &starting_bank,
             leader_schedule_utils::slot_leader_at(slot, &starting_bank),
             starting_bank.slot(),
@@ -213,7 +213,7 @@ pub fn process_blocktree(
 
         // This is a fork point, create a new child bank for each fork
         pending_slots.extend(meta.next_slots.iter().map(|next_slot| {
-            let child_bank = Arc::new(Bank::new_from_parent_and_id(
+            let child_bank = Arc::new(Bank::new_from_parent(
                 &bank,
                 leader_schedule_utils::slot_leader_at(*next_slot, &bank),
                 *next_slot,
