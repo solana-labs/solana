@@ -391,7 +391,8 @@ mod tests {
 
     #[test]
     fn test_banking_stage_tick() {
-        let (genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        let (mut genesis_block, _mint_keypair) = GenesisBlock::new(2);
+        genesis_block.ticks_per_slot = 4;
         let bank = Arc::new(Bank::new(&genesis_block));
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
@@ -400,17 +401,17 @@ mod tests {
             &bank,
             &poh_recorder,
             verified_receiver,
-            DEFAULT_TICKS_PER_SLOT,
+            genesis_block.ticks_per_slot - 1,
             genesis_block.bootstrap_leader_id,
         );
-        sleep(Duration::from_millis(500));
+        sleep(Duration::from_millis(600));
         drop(verified_sender);
 
         let entries: Vec<_> = entry_receiver
             .iter()
             .flat_map(|x| x.into_iter().map(|e| e.0))
             .collect();
-        assert!(entries.len() != 0);
+        assert_eq!(entries.len(), genesis_block.ticks_per_slot as usize - 1);
         assert!(entries.verify(&start_hash));
         assert_eq!(entries[entries.len() - 1].hash, bank.last_id());
         banking_stage.join().unwrap();

@@ -23,11 +23,12 @@ use solana_sdk::signature::{Keypair, Signature};
 use solana_sdk::storage_program;
 use solana_sdk::system_program;
 use solana_sdk::system_transaction::SystemTransaction;
-use solana_sdk::timing::{duration_as_us, MAX_RECENT_TICK_HASHES, NUM_TICKS_PER_SECOND};
+use solana_sdk::timing::{duration_as_us, MAX_RECENT_BLOCK_HASHES, NUM_TICKS_PER_SECOND};
 use solana_sdk::token_program;
 use solana_sdk::transaction::Transaction;
 use solana_sdk::vote_program::{self, VoteState};
 use std::result;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Instant;
 
@@ -85,7 +86,7 @@ pub struct Bank {
     status_cache: RwLock<BankStatusCache>,
 
     /// FIFO queue of `last_id` items
-    tick_hash_queue: RwLock<HashQueue>,
+    block_hash_queue: RwLock<HashQueue>,
 
     /// Previous checkpoint of this bank
     parent: RwLock<Option<Arc<Bank>>>,
@@ -121,7 +122,7 @@ pub struct Bank {
 
 impl Default for HashQueue {
     fn default() -> Self {
-        Self::new(MAX_RECENT_TICK_HASHES)
+        Self::new(MAX_RECENT_BLOCK_HASHES)
     }
 }
 
@@ -151,7 +152,7 @@ impl Bank {
         parent.freeze();
 
         let mut bank = Self::default();
-        bank.tick_hash_queue = RwLock::new(parent.tick_hash_queue.read().unwrap().clone());
+        bank.block_hash_queue = RwLock::new(parent.block_hash_queue.read().unwrap().clone());
         bank.tick_height
             .store(parent.tick_height.load(Ordering::SeqCst), Ordering::SeqCst);
         bank.ticks_per_slot = parent.ticks_per_slot;
@@ -263,7 +264,7 @@ impl Bank {
             &bootstrap_leader_vote_account,
         );
 
-        self.tick_hash_queue
+        self.block_hash_queue
             .write()
             .unwrap()
             .genesis_hash(&genesis_block.hash());
@@ -289,7 +290,7 @@ impl Bank {
 
     /// Return the last entry ID registered.
     pub fn last_id(&self) -> Hash {
-        self.tick_hash_queue.read().unwrap().last_hash()
+        self.block_hash_queue.read().unwrap().last_hash()
     }
 
     /// Forget all signatures. Useful for benchmarking.
@@ -324,8 +325,7 @@ impl Bank {
         slots_and_stakes.sort_by(|a, b| a.0.cmp(&b.0));
 
         let max_slot = self.slot_height();
-        let min_slot =
-            max_slot.saturating_sub(MAX_RECENT_TICK_HASHES as u64 / self.ticks_per_slot());
+        let min_slot = max_slot.saturating_sub(MAX_RECENT_BLOCK_HASHES as u64);
 
         let mut total_stake = 0;
         for (slot, stake) in slots_and_stakes.iter() {
@@ -333,10 +333,10 @@ impl Bank {
                 total_stake += stake;
                 if total_stake > supermajority_stake {
                     return self
-                        .tick_hash_queue
+                        .block_hash_queue
                         .read()
                         .unwrap()
-                        .hash_height_to_timestamp(slot * self.ticks_per_slot());
+                        .hash_height_to_timestamp(*slot);
                 }
             }
         }
@@ -360,12 +360,12 @@ impl Bank {
             self.tick_height.fetch_add(1, Ordering::SeqCst);
             self.tick_height.load(Ordering::SeqCst) as u64
         };
+        inc_new_counter_info!("bank-register_tick-registered", 1);
 
-        {
-            let mut tick_hash_queue = self.tick_hash_queue.write().unwrap();
-            inc_new_counter_info!("bank-register_tick-registered", 1);
-            tick_hash_queue.register_hash(hash);
-            assert_eq!(current_tick_height, tick_hash_queue.hash_height())
+        // Register a new block hash if at the last tick in the slot
+        if current_tick_height % self.ticks_per_slot == self.ticks_per_slot - 1 {
+            let mut block_hash_queue = self.block_hash_queue.write().unwrap();
+            block_hash_queue.register_hash(hash);
         }
 
         if current_tick_height % NUM_TICKS_PER_SECOND == 0 {
@@ -414,7 +414,7 @@ impl Bank {
         max_age: usize,
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<()>> {
-        let hash_queue = self.tick_hash_queue.read().unwrap();
+        let hash_queue = self.block_hash_queue.read().unwrap();
         txs.iter()
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
@@ -620,7 +620,7 @@ impl Bank {
     pub fn process_transactions(&self, txs: &[Transaction]) -> Vec<Result<()>> {
         let lock_results = self.lock_accounts(txs);
         let results =
-            self.load_execute_and_commit_transactions(txs, lock_results, MAX_RECENT_TICK_HASHES);
+            self.load_execute_and_commit_transactions(txs, lock_results, MAX_RECENT_BLOCK_HASHES);
         self.unlock_accounts(txs, &results);
         results
     }
@@ -750,7 +750,7 @@ impl Bank {
     pub fn tick_height(&self) -> u64 {
         // tick_height is using an AtomicUSize because AtomicU64 is not yet a stable API.
         // Until we can switch to AtomicU64, fail if usize is not the same as u64
-        assert_eq!(std::usize::MAX, 0xFFFFFFFFFFFFFFFF);
+        assert_eq!(std::usize::MAX, 0xFFFF_FFFF_FFFF_FFFF);
 
         self.tick_height.load(Ordering::SeqCst) as u64
     }
@@ -1240,7 +1240,7 @@ mod tests {
         let results_alice = bank.load_execute_and_commit_transactions(
             &pay_alice,
             lock_result,
-            MAX_RECENT_TICK_HASHES,
+            MAX_RECENT_BLOCK_HASHES,
         );
         assert_eq!(results_alice[0], Ok(()));
 
