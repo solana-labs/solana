@@ -71,7 +71,7 @@ impl HashQueue {
 
         // this clean up can be deferred until sigs gets larger
         //  because we verify entry.nth every place we check for validity
-        if self.entries.len() >= MAX_RECENT_TICK_HASHES as usize {
+        if self.entries.len() >= MAX_RECENT_TICK_HASHES {
             self.entries.retain(|_, entry| {
                 hash_height - entry.hash_height <= MAX_RECENT_TICK_HASHES as u64
             });

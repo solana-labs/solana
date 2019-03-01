@@ -88,7 +88,7 @@ impl RpcClient {
 
                     // Sleep for approximately half a slot
                     sleep(Duration::from_millis(
-                        500 * DEFAULT_TICKS_PER_SLOT / NUM_TICKS_PER_SECOND as u64,
+                        500 * DEFAULT_TICKS_PER_SLOT / NUM_TICKS_PER_SECOND,
                     ));
                 }
             }

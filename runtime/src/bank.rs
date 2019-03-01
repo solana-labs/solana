@@ -343,7 +343,7 @@ impl Bank {
             tick_hash_queue.register_hash(hash);
             tick_hash_queue.hash_height()
         };
-        if current_tick_height % NUM_TICKS_PER_SECOND as u64 == 0 {
+        if current_tick_height % NUM_TICKS_PER_SECOND == 0 {
             self.status_cache.write().unwrap().new_cache(hash);
         }
     }
