@@ -238,7 +238,7 @@ impl Bank {
         assert!(genesis_block.bootstrap_leader_id != Pubkey::default());
         assert!(genesis_block.bootstrap_leader_vote_account_id != Pubkey::default());
         assert!(genesis_block.tokens >= genesis_block.bootstrap_leader_tokens);
-        assert!(genesis_block.bootstrap_leader_tokens >= 2);
+        assert!(genesis_block.bootstrap_leader_tokens >= 3);
 
         // Bootstrap leader collects fees until `new_from_parent` is called.
         self.collector_id = genesis_block.bootstrap_leader_id;
@@ -246,13 +246,15 @@ impl Bank {
         let mint_tokens = genesis_block.tokens - genesis_block.bootstrap_leader_tokens;
         self.deposit(&genesis_block.mint_id, mint_tokens);
 
-        let bootstrap_leader_tokens = genesis_block.bootstrap_leader_tokens - 1;
+        let bootstrap_leader_tokens = 2;
+        let bootstrap_leader_stake =
+            genesis_block.bootstrap_leader_tokens - bootstrap_leader_tokens;
         self.deposit(&genesis_block.bootstrap_leader_id, bootstrap_leader_tokens);
 
         // Construct a vote account for the bootstrap_leader such that the leader_scheduler
         // will be forced to select it as the leader for height 0
-        let mut bootstrap_leader_vote_account = Account {
-            tokens: 1,
+        let mut bootstrap_leader_staking_account = Account {
+            tokens: bootstrap_leader_stake,
             userdata: vec![0; vote_program::get_max_size() as usize],
             owner: vote_program::id(),
             executable: false,
@@ -263,13 +265,13 @@ impl Bank {
             .votes
             .push_back(vote_program::Lockout::new(&vote_program::Vote::new(0)));
         vote_state
-            .serialize(&mut bootstrap_leader_vote_account.userdata)
+            .serialize(&mut bootstrap_leader_staking_account.userdata)
             .unwrap();
 
         self.accounts().store_slow(
             self.accounts_id,
             &genesis_block.bootstrap_leader_vote_account_id,
-            &bootstrap_leader_vote_account,
+            &bootstrap_leader_staking_account,
         );
 
         self.blockhash_queue
@@ -1089,9 +1091,8 @@ mod tests {
     #[test]
     fn test_bank_tx_fee() {
         let leader = Keypair::new().pubkey();
-        let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, leader, 2);
+        let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, leader, 3);
         let bank = Bank::new(&genesis_block);
-
         let key1 = Keypair::new();
         let key2 = Keypair::new();
 
@@ -1101,20 +1102,20 @@ mod tests {
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         assert_eq!(bank.get_balance(&leader), initial_balance + 3);
         assert_eq!(bank.get_balance(&key1.pubkey()), 2);
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 4 - 3);
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 5 - 3);
 
         let tx = SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.hash(), 1);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         assert_eq!(bank.get_balance(&leader), initial_balance + 4);
         assert_eq!(bank.get_balance(&key1.pubkey()), 0);
         assert_eq!(bank.get_balance(&key2.pubkey()), 1);
-        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 4 - 3);
+        assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 5 - 3);
     }
 
     #[test]
     fn test_filter_program_errors_and_collect_fee() {
         let leader = Keypair::new().pubkey();
-        let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, leader, 2);
+        let (genesis_block, mint_keypair) = GenesisBlock::new_with_leader(100, leader, 3);
         let bank = Bank::new(&genesis_block);
 
         let key = Keypair::new();
@@ -1168,12 +1169,12 @@ mod tests {
     #[test]
     fn test_process_genesis() {
         let dummy_leader_id = Keypair::new().pubkey();
-        let dummy_leader_tokens = 2;
+        let dummy_leader_tokens = 3;
         let (genesis_block, _) =
             GenesisBlock::new_with_leader(5, dummy_leader_id, dummy_leader_tokens);
         let bank = Bank::new(&genesis_block);
-        assert_eq!(bank.get_balance(&genesis_block.mint_id), 3);
-        assert_eq!(bank.get_balance(&dummy_leader_id), 1);
+        assert_eq!(bank.get_balance(&genesis_block.mint_id), 2);
+        assert_eq!(bank.get_balance(&dummy_leader_id), 2);
     }
 
     // Register n ticks and return the tick, slot and epoch indexes.
@@ -1482,7 +1483,7 @@ mod tests {
     #[test]
     fn test_bank_epoch_vote_accounts() {
         let leader_id = Keypair::new().pubkey();
-        let leader_tokens = 2;
+        let leader_tokens = 3;
         let (mut genesis_block, _) = GenesisBlock::new_with_leader(5, leader_id, leader_tokens);
 
         // set this up weird, forces:

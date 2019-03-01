@@ -158,8 +158,9 @@ mod tests {
     #[test]
     fn test_bank_staked_nodes_at_epoch() {
         let pubkey = Keypair::new().pubkey();
-        let bootstrap_tokens = 2;
-        let (genesis_block, _) = GenesisBlock::new_with_leader(2, pubkey, bootstrap_tokens);
+        let bootstrap_tokens = 3;
+        let (genesis_block, _) =
+            GenesisBlock::new_with_leader(bootstrap_tokens, pubkey, bootstrap_tokens);
         let bank = Bank::new(&genesis_block);
         let bank = new_from_parent(&Arc::new(bank));
         let ticks_per_offset = bank.stakers_slot_offset() * bank.ticks_per_slot();
@@ -167,7 +168,7 @@ mod tests {
         assert_eq!(bank.slot_height(), bank.stakers_slot_offset());
 
         let mut expected = HashMap::new();
-        expected.insert(pubkey, vec![bootstrap_tokens - 1]);
+        expected.insert(pubkey, vec![bootstrap_tokens - 2]);
         let bank = new_from_parent(&Arc::new(bank));
         assert_eq!(
             node_stakes_at_slot_extractor(&bank, bank.slot_height(), |s, _| s),
