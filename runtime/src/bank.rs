@@ -97,7 +97,7 @@ pub struct Bank {
     /// Hash of this Bank's parent's state
     parent_hash: Hash,
 
-    /// Bank fork id
+    /// Bank fork (i.e. slot, i.e. block)
     slot: u64,
 
     /// The number of ticks in each slot.
@@ -111,6 +111,10 @@ pub struct Bank {
 
     /// The pubkey to send transactions fees to.
     collector_id: Pubkey,
+
+    /// staked nodes on epoch boundaries, saved off when a bank.slot() is at
+    ///   a leader schedule boundary
+    epoch_vote_states: HashMap<u64, Vec<VoteState>>,
 }
 
 impl Bank {
@@ -123,7 +127,27 @@ impl Bank {
         bank.accounts = Some(Arc::new(Accounts::new(bank.slot, paths)));
         bank.process_genesis_block(genesis_block);
         bank.add_builtin_programs();
+
+        self.epoch_vote_states_for_slot(self.id)
+            .map(|(mut epoch, vote_states)| {
+                for i in 0..epoch {
+                    self.epoch_vote_states.insert(i, vote_states.clone());
+                }
+            });
+
         bank
+    }
+
+    /// If this Bank is constructed at a slot where a stakes should be
+    /// considered, save off the vote_states, keyed by epoch
+    fn epoch_vote_states_for_slot(&self, slot: u64) -> Option<(epoch, Vec<VoteState>)> {
+        if (slot + self.stakers_slot_offset) % self.slots_per_epoch != 0 {
+            None
+        } else {
+            let epoch = (slot + self.stakers_slot_offset) / self.slots_per_epoch;
+
+            Some((epoch, self.vote_states(|_| true)))
+        }
     }
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
@@ -142,6 +166,10 @@ impl Bank {
         bank.collector_id = collector_id;
         bank.accounts = Some(parent.accounts());
         bank.accounts().new_from_parent(bank.slot, parent.slot);
+
+        bank.epoch_vote_states = parent.epoch_vote_states.clone();
+        bank.epoch_vote_states_for_slot(bank.id)
+            .map(|(epoch, vote_states)| epoch_vote_states.insert(epoch, vote_states));
 
         bank
     }
@@ -713,6 +741,25 @@ impl Bank {
     /// Return the number of slots per tick.
     pub fn slots_per_epoch(&self) -> u64 {
         self.slots_per_epoch
+    }
+
+    pub fn epoch_vote_states<F>(&self, epoch: u64, cond: F) -> Option<Vec<VoteState>>
+    where
+        F: Fn(&VoteState) -> bool,
+    {
+        self.epoch_vote_states.get(&epoch).map(|vote_states| {
+            vote_states
+                .iter()
+                .cloned()
+                .filter_map(|vote_state| {
+                    if cond(&vote_state) {
+                        return Some(vote_state);
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
     }
 
     pub fn vote_states<F>(&self, cond: F) -> HashMap<Pubkey, VoteState>
@@ -1422,4 +1469,21 @@ mod tests {
         bank.squash();
         assert_eq!(parent.get_balance(&key1.pubkey()), 1);
     }
+
+    #[test]
+    fn test_bank_setup_epoch_vote_states() {
+
+        /// If this Bank is constructed at a slot where a stakes should be
+        /// considered, save off the vote_states, keyed by epoch
+        fn epoch_vote_states_for_slot(&self, slot: u64) -> Option<(epoch, Vec<VoteState>)> {
+            if (slot + self.stakers_slot_offset) % self.slots_per_epoch != 0 {
+                None
+            } else {
+                let epoch = (slot + self.stakers_slot_offset) / self.slots_per_epoch;
+                
+                Some((epoch, self.vote_states(|_| true)))
+            }
+        }
+    }
+
 }
