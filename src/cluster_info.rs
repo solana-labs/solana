@@ -1023,7 +1023,7 @@ impl ClusterInfo {
         let len = data.len();
         let now = Instant::now();
         let self_id = me.read().unwrap().gossip.id;
-        trace!("PullResponse me: {} len={}", self_id, len);
+        trace!("PullResponse me: {} from: {} len={}", self_id, from, len);
         me.write()
             .unwrap()
             .gossip

@@ -89,6 +89,11 @@ pub fn make_listening_node(
     (gossip_service, new_node_cluster_info_ref, new_node, id)
 }
 
+pub fn discover(entry_point_info: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
+    converge(entry_point_info, num_nodes)
+}
+
+//TODO: deprecate this in favor of discover
 pub fn converge(node: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     info!("Wait for convergence with {} nodes", num_nodes);
     // Let's spy on the network
@@ -102,14 +107,21 @@ pub fn converge(node: &NodeInfo, num_nodes: usize) -> Vec<NodeInfo> {
     // Wait for the cluster to converge
     for _ in 0..15 {
         let rpc_peers = spy_ref.read().unwrap().rpc_peers();
-        if rpc_peers.len() == num_nodes {
-            debug!("converge found {} nodes: {:?}", rpc_peers.len(), rpc_peers);
+        if rpc_peers.len() >= num_nodes {
+            debug!(
+                "converge found {}/{} nodes: {:?}",
+                rpc_peers.len(),
+                num_nodes,
+                rpc_peers
+            );
             gossip_service.close().unwrap();
             return rpc_peers;
         }
         debug!(
-            "converge found {} nodes, need {} more",
+            "spy_node: {} converge found {}/{} nodes, need {} more",
+            id,
             rpc_peers.len(),
+            num_nodes,
             num_nodes - rpc_peers.len()
         );
         sleep(Duration::new(1, 0));

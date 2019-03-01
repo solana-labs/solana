@@ -32,6 +32,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, RwLock};
+use std::thread::JoinHandle;
 use std::thread::{spawn, Result};
 use std::time::Duration;
 
@@ -324,18 +325,18 @@ impl Fullnode {
 
     // Runs a thread to manage node role transitions.  The returned closure can be used to signal the
     // node to exit.
-    pub fn run(
+    pub fn start(
         mut self,
         rotation_notifier: Option<Sender<(FullnodeReturnType, u64)>>,
-    ) -> impl FnOnce() {
+    ) -> (JoinHandle<()>, Arc<AtomicBool>, Receiver<bool>) {
         let (sender, receiver) = channel();
         let exit = self.exit.clone();
         let timeout = Duration::from_secs(1);
-        spawn(move || loop {
+        let handle = spawn(move || loop {
             if self.exit.load(Ordering::Relaxed) {
                 debug!("node shutdown requested");
                 self.close().expect("Unable to close node");
-                sender.send(true).expect("Unable to signal exit");
+                let _ = sender.send(true);
                 break;
             }
 
@@ -359,6 +360,14 @@ impl Fullnode {
                 _ => (),
             }
         });
+        (handle, exit, receiver)
+    }
+
+    pub fn run(
+        self,
+        rotation_notifier: Option<Sender<(FullnodeReturnType, u64)>>,
+    ) -> impl FnOnce() {
+        let (_, exit, receiver) = self.start(rotation_notifier);
         move || {
             exit.store(true, Ordering::Relaxed);
             receiver.recv().unwrap();
