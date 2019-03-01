@@ -123,7 +123,8 @@ impl ReplayStage {
                     subscriptions.notify_subscribers(&bank);
                     if let Some(voting_keypair) = voting_keypair {
                         let keypair = voting_keypair.as_ref();
-                        let vote = VoteTransaction::new_vote(keypair, bank.id(), bank.last_id(), 0);
+                        let vote =
+                            VoteTransaction::new_vote(keypair, bank.slot(), bank.last_id(), 0);
                         cluster_info.write().unwrap().push_vote(vote);
                     }
                 }
