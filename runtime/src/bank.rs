@@ -96,6 +96,9 @@ pub struct Bank {
     /// Hash of this Bank's parent's state
     parent_hash: Hash,
 
+    /// Bank tick height
+    tick_height: AtomicUsize, // TODO: Use AtomicU64 if/when available
+
     /// Bank fork (i.e. slot, i.e. block)
     slot: u64,
 
@@ -149,6 +152,8 @@ impl Bank {
 
         let mut bank = Self::default();
         bank.tick_hash_queue = RwLock::new(parent.tick_hash_queue.read().unwrap().clone());
+        bank.tick_height
+            .store(parent.tick_height.load(Ordering::SeqCst), Ordering::SeqCst);
         bank.ticks_per_slot = parent.ticks_per_slot;
         bank.slots_per_epoch = parent.slots_per_epoch;
         bank.stakers_slot_offset = parent.stakers_slot_offset;
@@ -347,15 +352,22 @@ impl Bank {
         if self.is_frozen() {
             warn!("=========== FIXME: register_tick() working on a frozen bank! ================");
         }
+
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
+
         let current_tick_height = {
-            // Atomic register and read the tick
+            self.tick_height.fetch_add(1, Ordering::SeqCst);
+            self.tick_height.load(Ordering::SeqCst) as u64
+        };
+
+        {
             let mut tick_hash_queue = self.tick_hash_queue.write().unwrap();
             inc_new_counter_info!("bank-register_tick-registered", 1);
             tick_hash_queue.register_hash(hash);
-            tick_hash_queue.hash_height()
-        };
+            assert_eq!(current_tick_height, tick_hash_queue.hash_height())
+        }
+
         if current_tick_height % NUM_TICKS_PER_SECOND == 0 {
             self.status_cache.write().unwrap().new_cache(hash);
         }
@@ -733,7 +745,11 @@ impl Bank {
 
     /// Return the number of ticks since genesis.
     pub fn tick_height(&self) -> u64 {
-        self.tick_hash_queue.read().unwrap().hash_height()
+        // tick_height is using an AtomicUSize because AtomicU64 is not yet a stable API.
+        // Until we can switch to AtomicU64, fail if usize is not the same as u64
+        assert_eq!(std::usize::MAX, 0xFFFFFFFFFFFFFFFF);
+
+        self.tick_height.load(Ordering::SeqCst) as u64
     }
 
     /// Return the number of ticks since the last slot boundary.
