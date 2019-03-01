@@ -440,7 +440,18 @@ impl ReplayStage {
     fn get_next_slot(blocktree: &Blocktree, slot_index: u64) -> Option<u64> {
         // Find the next slot that chains to the old slot
         let next_slots = blocktree.get_slots_since(&[slot_index]).expect("Db error");
-        next_slots.first().cloned()
+
+        next_slots
+            .values()
+            .next()
+            .map(|slots| {
+                if slots.is_empty() {
+                    None
+                } else {
+                    Some(slots[0])
+                }
+            })
+            .unwrap_or(None)
     }
 }
 
