@@ -1655,9 +1655,7 @@ fn start_fullnode(
     (fullnode.run(Some(rotation_sender)), rotation_receiver)
 }
 
-//fn stop_fullnode() {}
-
-fn new_non_bs_leader_fullnode(
+fn new_non_bootstrap_leader_fullnode(
     mint: &Arc<Keypair>,
     last_tick: &mut Hash,
     mut last_id: &mut Hash,
@@ -1684,7 +1682,7 @@ fn new_non_bs_leader_fullnode(
     (node, node_keypair, voting)
 }
 
-fn new_bs_leader_fullnode(
+fn new_bootstrap_leader_fullnode(
     ticks_per_slot: u64,
     slots_per_epoch: u64,
     entries: &mut Vec<Entry>,
@@ -1731,11 +1729,12 @@ fn test_fullnodes_bootup() {
     let mut entries = vec![];
 
     let (mint, ledger, mut last_tick, mut last_id, leader) =
-        new_bs_leader_fullnode(ticks_per_slot, slots_per_epoch, &mut entries);
+        new_bootstrap_leader_fullnode(ticks_per_slot, slots_per_epoch, &mut entries);
 
     let leader_info = leader.0.info.clone();
 
-    let validator = new_non_bs_leader_fullnode(&mint, &mut last_tick, &mut last_id, &mut entries);
+    let validator =
+        new_non_bootstrap_leader_fullnode(&mint, &mut last_tick, &mut last_id, &mut entries);
 
     {
         info!("Number of entries {}", entries.len());
@@ -1748,20 +1747,20 @@ fn test_fullnodes_bootup() {
     }
 
     //    let validator_info = validator.0.info.clone();
-    let v_ledger = tmp_copy_blocktree!(&ledger);
+    let validator_ledger = tmp_copy_blocktree!(&ledger);
 
     let mut exits = vec![];
-    let (v_e, v_r_r) = start_fullnode(
+    let (validator_exit, validator_rotation_receiver) = start_fullnode(
         validator.0,
         validator.1,
         validator.2,
-        &v_ledger,
+        &validator_ledger,
         Some(&leader_info),
         &fullnode_config,
     );
-    exits.push(v_e);
+    exits.push(validator_exit);
 
-    let (l_e, l_r_r) = start_fullnode(
+    let (leader_exit, leader_rotation_receiver) = start_fullnode(
         leader.0,
         leader.1,
         leader.2,
@@ -1769,7 +1768,7 @@ fn test_fullnodes_bootup() {
         None,
         &fullnode_config,
     );
-    exits.push(l_e);
+    exits.push(leader_exit);
 
     converge(&leader_info, exits.len());
     info!(
@@ -1793,7 +1792,7 @@ fn test_fullnodes_bootup() {
     {
         // Check for leader rotation
         {
-            match l_r_r.try_recv() {
+            match leader_rotation_receiver.try_recv() {
                 Ok((rotation_type, slot)) => {
                     if slot == 0 {
                         // Skip slot 0, as the nodes are not fully initialized in terms of leader scheduler
@@ -1822,7 +1821,7 @@ fn test_fullnodes_bootup() {
         }
 
         // Check for validator rotation
-        match v_r_r.try_recv() {
+        match validator_rotation_receiver.try_recv() {
             Ok((rotation_type, slot)) => {
                 if slot == 0 {
                     // Skip slot 0, as the nodes are not fully initialized in terms of leader scheduler
@@ -1870,13 +1869,13 @@ fn test_fullnode_rotate(
     let mut entries = vec![];
 
     let (mint, ledger, mut last_tick, mut last_id, leader) =
-        new_bs_leader_fullnode(ticks_per_slot, slots_per_epoch, &mut entries);
+        new_bootstrap_leader_fullnode(ticks_per_slot, slots_per_epoch, &mut entries);
 
     let leader_info = leader.0.info.clone();
 
     let validator = if include_validator {
         leader_slot_height_of_next_rotation += 1;
-        Some(new_non_bs_leader_fullnode(
+        Some(new_non_bootstrap_leader_fullnode(
             &mint,
             &mut last_tick,
             &mut last_id,
@@ -1899,27 +1898,27 @@ fn test_fullnode_rotate(
     ledger_paths.push(ledger.clone());
     info!("ledger is {}", ledger);
 
-    let v_ledger = tmp_copy_blocktree!(&ledger);
-    ledger_paths.push(v_ledger.clone());
+    let validator_ledger = tmp_copy_blocktree!(&ledger);
+    ledger_paths.push(validator_ledger.clone());
 
     let mut node_exits = vec![];
 
     let validator_rotation_receiver = if let Some(node) = validator {
-        let (v_e, v_r_r) = start_fullnode(
+        let (validator_exit, validator_rotation_receiver) = start_fullnode(
             node.0,
             node.1,
             node.2,
-            &v_ledger,
+            &validator_ledger,
             Some(&leader_info),
             &fullnode_config,
         );
-        node_exits.push(v_e);
-        v_r_r
+        node_exits.push(validator_exit);
+        validator_rotation_receiver
     } else {
         channel().1
     };
 
-    let (l_e, leader_rotation_receiver) = start_fullnode(
+    let (leader_exit, leader_rotation_receiver) = start_fullnode(
         leader.0,
         leader.1,
         leader.2,
@@ -1927,7 +1926,7 @@ fn test_fullnode_rotate(
         None,
         &fullnode_config,
     );
-    node_exits.push(l_e);
+    node_exits.push(leader_exit);
 
     converge(&leader_info, node_exits.len());
     info!(
