@@ -51,7 +51,9 @@ test-stable-perf)
   _ make -C programs/bpf/c tests
 
   # Must be built out of band
-  _ make -C programs/bpf/rust/noop/ all
+  _ pushd programs/bpf/rust/noop
+  ./build.sh
+  popd
 
   _ cargo test --manifest-path programs/Cargo.toml --no-default-features --features="$PROGRAM_FEATURES"
   _ cargo test --manifest-path programs/native/bpf_loader/Cargo.toml --no-default-features --features="$PROGRAM_FEATURES"

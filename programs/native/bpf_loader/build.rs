@@ -60,43 +60,50 @@ fn main() {
 
     let bpf_rust = !env::var("CARGO_FEATURE_BPF_RUST").is_err();
     if bpf_rust {
-        let install_dir = "INSTALL_DIR=../../../../target/".to_string()
-            + &env::var("PROFILE").unwrap()
-            + &"/bpf".to_string();
+        let install_dir =
+            "../../../../target/".to_string() + &env::var("PROFILE").unwrap() + &"/bpf".to_string();
 
-        if !Path::new("../../bpf/rust/noop/out/solana_bpf_rust_noop.so").is_file() {
+        if !Path::new(
+            "../../bpf/rust/noop/target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so",
+        )
+        .is_file()
+        {
             // Cannot build Rust BPF programs as part of main build because
             // to build it requires calling Cargo with different parameters which
             // would deadlock due to recursive cargo calls
             panic!(
                 "solana_bpf_rust_noop.so not found, you must manually run \
-                 `make all` in programs/bpf/rust/noop to build it"
+                 `build.sh` in programs/bpf/rust/noop to build it"
             );
         }
 
         rerun_if_changed(
             &[
                 "../../bpf/rust/noop/bpf.ld",
-                "../../bpf/rust/noop/makefile",
-                "../../bpf/rust/noop/out/solana_bpf_rust_noop.so",
+                "../../bpf/rust/noop/build.sh",
+                "../../bpf/rust/noop/Cargo.toml",
+                "../../bpf/rust/noop/target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so",
             ],
-            &[],
+            &["../../bpf/rust/noop/src"],
         );
 
         println!(
             "cargo:warning=(not a warning) Installing Rust-based BPF program: solana_bpf_rust_noop"
         );
-        let status = Command::new("make")
+        let status = Command::new("mkdir")
             .current_dir("../../bpf/rust/noop")
-            .arg("install")
-            .arg("V=1")
-            .arg("OUT_DIR=out")
+            .arg("-p")
             .arg(&install_dir)
             .status()
-            .expect(
-                "solana_bpf_rust_noop.so not found, you must manually run \
-                 `make all` in its program directory",
-            );
+            .expect("Unable to create BPF install directory");
+        assert!(status.success());
+
+        let status = Command::new("cp")
+            .current_dir("../../bpf/rust/noop")
+            .arg("target/bpfel-unknown-unknown/release/solana_bpf_rust_noop.so")
+            .arg(&install_dir)
+            .status()
+            .expect("Failed to copy solana_rust_bpf_noop.so to install directory");
         assert!(status.success());
     }
 }
