@@ -9,9 +9,9 @@ use std::io::Write;
 use std::path::Path;
 
 // The default (and minimal) amount of tokens given to the bootstrap leader:
-// * 1 token for the bootstrap leader ID account
+// * 2 tokens for the bootstrap leader ID account to later setup another vote account
 // * 1 token for the bootstrap leader vote account
-pub const BOOTSTRAP_LEADER_TOKENS: u64 = 2;
+pub const BOOTSTRAP_LEADER_TOKENS: u64 = 3;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GenesisBlock {
