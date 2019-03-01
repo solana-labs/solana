@@ -1298,7 +1298,7 @@ pub fn create_new_ledger(ledger_path: &str, genesis_block: &GenesisBlock) -> Res
 
     // Fill slot 0 with ticks that link back to the genesis_block to bootstrap the ledger.
     let blocktree = Blocktree::open_config(ledger_path, ticks_per_slot)?;
-    let entries = crate::entry::create_ticks(ticks_per_slot, genesis_block.last_id());
+    let entries = crate::entry::create_ticks(ticks_per_slot, genesis_block.hash());
     blocktree.write_entries(0, 0, 0, &entries)?;
 
     Ok(entries.last().unwrap().hash)

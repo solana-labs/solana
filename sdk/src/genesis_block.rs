@@ -56,7 +56,7 @@ impl GenesisBlock {
         )
     }
 
-    pub fn last_id(&self) -> Hash {
+    pub fn hash(&self) -> Hash {
         let serialized = serde_json::to_string(self).unwrap();
         hash(&serialized.into_bytes())
     }

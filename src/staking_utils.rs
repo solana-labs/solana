@@ -164,7 +164,7 @@ mod tests {
             1,
             &mint_keypair,
             validator.pubkey(),
-            genesis_block.last_id(),
+            genesis_block.hash(),
         )
         .unwrap();
 

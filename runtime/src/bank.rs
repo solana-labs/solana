@@ -243,7 +243,7 @@ impl Bank {
         self.tick_hash_queue
             .write()
             .unwrap()
-            .genesis_last_id(&genesis_block.last_id());
+            .genesis_last_id(&genesis_block.hash());
 
         self.ticks_per_slot = genesis_block.ticks_per_slot;
         self.slots_per_epoch = genesis_block.slots_per_epoch;
@@ -790,13 +790,13 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
         let pubkey = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
-        assert_eq!(bank.last_id(), genesis_block.last_id());
+        assert_eq!(bank.last_id(), genesis_block.hash());
 
-        bank.transfer(1_000, &mint_keypair, pubkey, genesis_block.last_id())
+        bank.transfer(1_000, &mint_keypair, pubkey, genesis_block.hash())
             .unwrap();
         assert_eq!(bank.get_balance(&pubkey), 1_000);
 
-        bank.transfer(500, &mint_keypair, pubkey, genesis_block.last_id())
+        bank.transfer(500, &mint_keypair, pubkey, genesis_block.hash())
             .unwrap();
         assert_eq!(bank.get_balance(&pubkey), 1_500);
         assert_eq!(bank.transaction_count(), 2);
@@ -808,10 +808,10 @@ mod tests {
         let key1 = Keypair::new().pubkey();
         let key2 = Keypair::new().pubkey();
         let bank = Bank::new(&genesis_block);
-        assert_eq!(bank.last_id(), genesis_block.last_id());
+        assert_eq!(bank.last_id(), genesis_block.hash());
 
-        let t1 = SystemTransaction::new_move(&mint_keypair, key1, 1, genesis_block.last_id(), 0);
-        let t2 = SystemTransaction::new_move(&mint_keypair, key2, 1, genesis_block.last_id(), 0);
+        let t1 = SystemTransaction::new_move(&mint_keypair, key1, 1, genesis_block.hash(), 0);
+        let t2 = SystemTransaction::new_move(&mint_keypair, key2, 1, genesis_block.hash(), 0);
         let res = bank.process_transactions(&vec![t1.clone(), t2.clone()]);
         assert_eq!(res.len(), 2);
         assert_eq!(res[0], Ok(()));
@@ -850,7 +850,7 @@ mod tests {
         let t1 = Transaction::new_with_instructions(
             &[&mint_keypair],
             &[key1, key2],
-            genesis_block.last_id(),
+            genesis_block.hash(),
             0,
             vec![system_program::id()],
             instructions,
@@ -878,7 +878,7 @@ mod tests {
         let t1 = SystemTransaction::new_move_many(
             &mint_keypair,
             &[(key1, 1), (key2, 1)],
-            genesis_block.last_id(),
+            genesis_block.hash(),
             0,
         );
         let res = bank.process_transactions(&vec![t1.clone()]);
@@ -902,7 +902,7 @@ mod tests {
             &mint_keypair,
             dest.pubkey(),
             2,
-            genesis_block.last_id(),
+            genesis_block.hash(),
             1,
         );
         let signature = tx.signatures[0];
@@ -933,7 +933,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
         let keypair = Keypair::new();
         assert_eq!(
-            bank.transfer(1, &keypair, mint_keypair.pubkey(), genesis_block.last_id()),
+            bank.transfer(1, &keypair, mint_keypair.pubkey(), genesis_block.hash()),
             Err(BankError::AccountNotFound)
         );
         assert_eq!(bank.transaction_count(), 0);
@@ -944,12 +944,12 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(11_000);
         let bank = Bank::new(&genesis_block);
         let pubkey = Keypair::new().pubkey();
-        bank.transfer(1_000, &mint_keypair, pubkey, genesis_block.last_id())
+        bank.transfer(1_000, &mint_keypair, pubkey, genesis_block.hash())
             .unwrap();
         assert_eq!(bank.transaction_count(), 1);
         assert_eq!(bank.get_balance(&pubkey), 1_000);
         let signature = bank
-            .transfer(10_001, &mint_keypair, pubkey, genesis_block.last_id())
+            .transfer(10_001, &mint_keypair, pubkey, genesis_block.hash())
             .unwrap();
         assert_eq!(bank.transaction_count(), 1);
         assert!(bank.has_signature(&signature));
@@ -971,7 +971,7 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(10_000);
         let bank = Bank::new(&genesis_block);
         let pubkey = Keypair::new().pubkey();
-        bank.transfer(500, &mint_keypair, pubkey, genesis_block.last_id())
+        bank.transfer(500, &mint_keypair, pubkey, genesis_block.hash())
             .unwrap();
         assert_eq!(bank.get_balance(&pubkey), 500);
     }
@@ -1030,7 +1030,7 @@ mod tests {
             &mint_keypair,
             key1.pubkey(),
             2,
-            genesis_block.last_id(),
+            genesis_block.hash(),
             3,
         );
         let initial_balance = bank.get_balance(&leader);
@@ -1039,7 +1039,7 @@ mod tests {
         assert_eq!(bank.get_balance(&key1.pubkey()), 2);
         assert_eq!(bank.get_balance(&mint_keypair.pubkey()), 100 - 4 - 3);
 
-        let tx = SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.last_id(), 1);
+        let tx = SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.hash(), 1);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         assert_eq!(bank.get_balance(&leader), initial_balance + 4);
         assert_eq!(bank.get_balance(&key1.pubkey()), 0);
@@ -1055,9 +1055,9 @@ mod tests {
 
         let key = Keypair::new();
         let tx1 =
-            SystemTransaction::new_move(&mint_keypair, key.pubkey(), 2, genesis_block.last_id(), 3);
+            SystemTransaction::new_move(&mint_keypair, key.pubkey(), 2, genesis_block.hash(), 3);
         let tx2 =
-            SystemTransaction::new_move(&mint_keypair, key.pubkey(), 5, genesis_block.last_id(), 1);
+            SystemTransaction::new_move(&mint_keypair, key.pubkey(), 5, genesis_block.hash(), 1);
 
         let results = vec![
             Ok(()),
@@ -1083,14 +1083,14 @@ mod tests {
             &mint_keypair,
             keypair.pubkey(),
             2,
-            genesis_block.last_id(),
+            genesis_block.hash(),
             0,
         );
         let tx1 = SystemTransaction::new_account(
             &keypair,
             mint_keypair.pubkey(),
             1,
-            genesis_block.last_id(),
+            genesis_block.hash(),
             0,
         );
         let txs = vec![tx0, tx1];
@@ -1155,7 +1155,7 @@ mod tests {
             &mint_keypair,
             alice.pubkey(),
             1,
-            genesis_block.last_id(),
+            genesis_block.hash(),
             0,
         );
         let pay_alice = vec![tx1];
@@ -1167,20 +1167,20 @@ mod tests {
 
         // try executing an interleaved transfer twice
         assert_eq!(
-            bank.transfer(1, &mint_keypair, bob.pubkey(), genesis_block.last_id()),
+            bank.transfer(1, &mint_keypair, bob.pubkey(), genesis_block.hash()),
             Err(BankError::AccountInUse)
         );
         // the second time should fail as well
         // this verifies that `unlock_accounts` doesn't unlock `AccountInUse` accounts
         assert_eq!(
-            bank.transfer(1, &mint_keypair, bob.pubkey(), genesis_block.last_id()),
+            bank.transfer(1, &mint_keypair, bob.pubkey(), genesis_block.hash()),
             Err(BankError::AccountInUse)
         );
 
         bank.unlock_accounts(&pay_alice, &results_alice);
 
         assert!(bank
-            .transfer(2, &mint_keypair, bob.pubkey(), genesis_block.last_id())
+            .transfer(2, &mint_keypair, bob.pubkey(), genesis_block.hash())
             .is_ok());
     }
 
@@ -1245,10 +1245,10 @@ mod tests {
         let key1 = Keypair::new();
         let bank = Bank::new(&genesis_block);
 
-        bank.transfer(1, &mint_keypair, key1.pubkey(), genesis_block.last_id())
+        bank.transfer(1, &mint_keypair, key1.pubkey(), genesis_block.hash())
             .unwrap();
         assert_eq!(bank.get_balance(&key1.pubkey()), 1);
-        let tx = SystemTransaction::new_move(&key1, key1.pubkey(), 1, genesis_block.last_id(), 0);
+        let tx = SystemTransaction::new_move(&key1, key1.pubkey(), 1, genesis_block.hash(), 0);
         let res = bank.process_transactions(&vec![tx.clone()]);
         assert_eq!(res.len(), 1);
         assert_eq!(bank.get_balance(&key1.pubkey()), 1);
@@ -1276,7 +1276,7 @@ mod tests {
             &mint_keypair,
             key1.pubkey(),
             1,
-            genesis_block.last_id(),
+            genesis_block.hash(),
             0,
         );
         assert_eq!(parent.process_transaction(&tx), Ok(()));
@@ -1299,12 +1299,12 @@ mod tests {
             &mint_keypair,
             key1.pubkey(),
             1,
-            genesis_block.last_id(),
+            genesis_block.hash(),
             0,
         );
         assert_eq!(parent.process_transaction(&tx), Ok(()));
         let bank = Bank::new_from_parent(&parent);
-        let tx = SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.last_id(), 0);
+        let tx = SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.hash(), 0);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         assert_eq!(parent.get_signature_status(&tx.signatures[0]), None);
     }
@@ -1368,7 +1368,7 @@ mod tests {
             &mint_keypair,
             key1.pubkey(),
             1,
-            genesis_block.last_id(),
+            genesis_block.hash(),
             0,
         );
         assert_eq!(parent.process_transaction(&tx_move_mint_to_1), Ok(()));
@@ -1377,7 +1377,7 @@ mod tests {
         let bank = Bank::new_from_parent(&parent);
         assert_eq!(bank.transaction_count(), 0);
         let tx_move_1_to_2 =
-            SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.last_id(), 0);
+            SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.hash(), 0);
         assert_eq!(bank.process_transaction(&tx_move_1_to_2), Ok(()));
         assert_eq!(bank.transaction_count(), 1);
         assert_eq!(
@@ -1415,7 +1415,7 @@ mod tests {
         let key1 = Keypair::new();
 
         parent
-            .transfer(1, &mint_keypair, key1.pubkey(), genesis_block.last_id())
+            .transfer(1, &mint_keypair, key1.pubkey(), genesis_block.hash())
             .unwrap();
         assert_eq!(parent.get_balance(&key1.pubkey()), 1);
         let bank = Bank::new_from_parent(&parent);

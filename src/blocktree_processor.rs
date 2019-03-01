@@ -429,7 +429,7 @@ mod tests {
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let bank = Bank::new(&genesis_block);
         let keypair = Keypair::new();
-        let entry = next_entry(&genesis_block.last_id(), 1, vec![]);
+        let entry = next_entry(&genesis_block.hash(), 1, vec![]);
         let tx = SystemTransaction::new_account(&mint_keypair, keypair.pubkey(), 1, entry.hash, 0);
 
         // First, ensure the TX is rejected because of the unregistered last ID
@@ -522,7 +522,7 @@ mod tests {
         let bank = Bank::new(&genesis_block);
 
         // ensure bank can process a tick
-        let tick = next_entry(&genesis_block.last_id(), 1, vec![]);
+        let tick = next_entry(&genesis_block.hash(), 1, vec![]);
         assert_eq!(par_process_entries(&bank, &[tick.clone()]), Ok(()));
         assert_eq!(bank.last_id(), tick.hash);
     }
