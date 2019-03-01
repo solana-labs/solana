@@ -97,7 +97,7 @@ pub struct Bank {
     parent_hash: Hash,
 
     /// Bank fork id
-    id: u64,
+    slot: u64,
 
     /// The number of ticks in each slot.
     ticks_per_slot: u64,
@@ -119,7 +119,7 @@ impl Bank {
 
     pub fn new_with_paths(genesis_block: &GenesisBlock, paths: Option<String>) -> Self {
         let mut bank = Self::default();
-        bank.accounts = Some(Arc::new(Accounts::new(bank.id, paths)));
+        bank.accounts = Some(Arc::new(Accounts::new(bank.slot, paths)));
         bank.process_genesis_block(genesis_block);
         bank.add_builtin_programs();
         bank
@@ -135,12 +135,12 @@ impl Bank {
         bank.slots_per_epoch = parent.slots_per_epoch;
         bank.stakers_slot_offset = parent.stakers_slot_offset;
 
-        bank.id = id;
+        bank.slot = id;
         bank.parent = RwLock::new(Some(parent.clone()));
         bank.parent_hash = parent.hash();
         bank.collector_id = collector_id;
         bank.accounts = Some(parent.accounts());
-        bank.accounts().new_from_parent(bank.id, parent.id);
+        bank.accounts().new_from_parent(bank.slot, parent.slot);
 
         bank
     }
@@ -157,8 +157,8 @@ impl Bank {
         )
     }
 
-    pub fn id(&self) -> u64 {
-        self.id
+    pub fn slot(&self) -> u64 {
+        self.slot
     }
 
     pub fn hash(&self) -> Hash {
@@ -186,7 +186,7 @@ impl Bank {
         let parents = self.parents();
         *self.parent.write().unwrap() = None;
 
-        self.accounts().squash(self.id);
+        self.accounts().squash(self.slot);
 
         let parent_caches: Vec<_> = parents
             .iter()
@@ -237,7 +237,7 @@ impl Bank {
             .unwrap();
 
         self.accounts().store_slow(
-            self.id,
+            self.slot,
             &genesis_block.bootstrap_leader_vote_account_id,
             &bootstrap_leader_vote_account,
         );
@@ -254,7 +254,7 @@ impl Bank {
 
     pub fn add_native_program(&self, name: &str, program_id: &Pubkey) {
         let account = native_loader::create_program_account(name);
-        self.accounts().store_slow(self.id, program_id, &account);
+        self.accounts().store_slow(self.slot, program_id, &account);
     }
 
     fn add_builtin_programs(&self) {
@@ -343,11 +343,11 @@ impl Bank {
         }
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
-        self.accounts().lock_accounts(self.id, txs)
+        self.accounts().lock_accounts(self.slot, txs)
     }
 
     pub fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
-        self.accounts().unlock_accounts(self.id, txs, results)
+        self.accounts().unlock_accounts(self.slot, txs, results)
     }
 
     fn load_accounts(
@@ -357,7 +357,7 @@ impl Bank {
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
         self.accounts()
-            .load_accounts(self.id, txs, results, error_counters)
+            .load_accounts(self.slot, txs, results, error_counters)
     }
     fn check_age(
         &self,
@@ -465,7 +465,7 @@ impl Bank {
         }
 
         self.accounts()
-            .increment_transaction_count(self.id, tx_count);
+            .increment_transaction_count(self.slot, tx_count);
 
         inc_new_counter_info!("bank-process_transactions-txs", tx_count);
         if 0 != error_counters.last_id_not_found {
@@ -541,7 +541,7 @@ impl Bank {
         // assert!(!self.is_frozen());
         let now = Instant::now();
         self.accounts()
-            .store_accounts(self.id, txs, executed, loaded_accounts);
+            .store_accounts(self.slot, txs, executed, loaded_accounts);
 
         // once committed there is no way to unroll
         let write_elapsed = now.elapsed();
@@ -626,7 +626,7 @@ impl Bank {
                 }
 
                 account.tokens -= tokens;
-                self.accounts().store_slow(self.id, pubkey, &account);
+                self.accounts().store_slow(self.slot, pubkey, &account);
                 Ok(())
             }
             None => Err(BankError::AccountNotFound),
@@ -636,7 +636,7 @@ impl Bank {
     pub fn deposit(&self, pubkey: &Pubkey, tokens: u64) {
         let mut account = self.get_account(pubkey).unwrap_or_default();
         account.tokens += tokens;
-        self.accounts().store_slow(self.id, pubkey, &account);
+        self.accounts().store_slow(self.slot, pubkey, &account);
     }
 
     fn accounts(&self) -> Arc<Accounts> {
@@ -648,15 +648,15 @@ impl Bank {
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
-        self.accounts().load_slow(self.id, pubkey)
+        self.accounts().load_slow(self.slot, pubkey)
     }
 
     pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<Account> {
-        self.accounts().load_slow_no_parent(self.id, pubkey)
+        self.accounts().load_slow_no_parent(self.slot, pubkey)
     }
 
     pub fn transaction_count(&self) -> u64 {
-        self.accounts().transaction_count(self.id)
+        self.accounts().transaction_count(self.slot)
     }
 
     pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
@@ -678,11 +678,11 @@ impl Bank {
     fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the same hash as we did before
         // checkpointing.
-        if !self.accounts().has_accounts(self.id) {
+        if !self.accounts().has_accounts(self.slot) {
             return self.parent_hash;
         }
 
-        let accounts_delta_hash = self.accounts().hash_internal_state(self.id);
+        let accounts_delta_hash = self.accounts().hash_internal_state(self.slot);
         extend_and_hash(&self.parent_hash, &serialize(&accounts_delta_hash).unwrap())
     }
 
@@ -722,7 +722,7 @@ impl Bank {
         F: Fn(&VoteState) -> bool,
     {
         self.accounts()
-            .get_vote_accounts(self.id)
+            .get_vote_accounts(self.slot)
             .iter()
             .filter_map(|account| {
                 if let Ok(vote_state) = VoteState::deserialize(&account.userdata) {

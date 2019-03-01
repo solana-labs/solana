@@ -56,7 +56,7 @@ where
 
     let bank = banks
         .iter()
-        .find(|bank| bank.id() <= slot_height)
+        .find(|bank| bank.slot() <= slot_height)
         .unwrap_or_else(|| banks.last().unwrap());
 
     staked_nodes_extractor(bank, state_extractor)
