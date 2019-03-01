@@ -892,11 +892,11 @@ impl Accounts {
         self.accounts_db.squash(fork);
     }
 
-    pub fn get_vote_accounts(&self, fork: Fork) -> Vec<Account> {
+    pub fn get_vote_accounts(&self, fork: Fork) -> HashMap<Pubkey, Account> {
         self.accounts_db
             .get_vote_accounts(fork)
             .into_iter()
-            .filter(|acc| acc.tokens != 0)
+            .filter(|(_, acc)| acc.tokens != 0)
             .collect()
     }
 }
