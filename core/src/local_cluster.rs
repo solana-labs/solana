@@ -189,7 +189,7 @@ mod test {
     #[test]
     fn test_local_cluster_start_and_exit() {
         solana_logger::setup();
-        let network = LocalCluster::new(1, 100, 2);
+        let network = LocalCluster::new(1, 100, 3);
         drop(network)
     }
 }

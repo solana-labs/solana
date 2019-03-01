@@ -100,13 +100,14 @@ pub fn num_ticks_left_in_slot(bank: &Bank, tick_height: u64) -> u64 {
 mod tests {
     use super::*;
     use crate::staking_utils;
-    use solana_sdk::genesis_block::GenesisBlock;
+    use solana_sdk::genesis_block::{GenesisBlock, BOOTSTRAP_LEADER_TOKENS};
     use solana_sdk::signature::{Keypair, KeypairUtil};
 
     #[test]
     fn test_leader_schedule_via_bank() {
         let pubkey = Keypair::new().pubkey();
-        let (genesis_block, _mint_keypair) = GenesisBlock::new_with_leader(2, pubkey, 2);
+        let (genesis_block, _mint_keypair) =
+            GenesisBlock::new_with_leader(BOOTSTRAP_LEADER_TOKENS, pubkey, BOOTSTRAP_LEADER_TOKENS);
         let bank = Bank::new(&genesis_block);
 
         let ids_and_stakes: Vec<_> = staking_utils::node_stakes(&bank).into_iter().collect();
@@ -122,7 +123,9 @@ mod tests {
     #[test]
     fn test_leader_scheduler1_basic() {
         let pubkey = Keypair::new().pubkey();
-        let genesis_block = GenesisBlock::new_with_leader(2, pubkey, 2).0;
+        let genesis_block =
+            GenesisBlock::new_with_leader(BOOTSTRAP_LEADER_TOKENS, pubkey, BOOTSTRAP_LEADER_TOKENS)
+                .0;
         let bank = Bank::new(&genesis_block);
         assert_eq!(slot_leader(&bank), pubkey);
     }
