@@ -118,6 +118,9 @@ pub struct Bank {
     /// staked nodes on epoch boundaries, saved off when a bank.slot() is at
     ///   a leader schedule boundary
     epoch_vote_accounts: HashMap<u64, HashMap<Pubkey, Account>>,
+
+    /// Bank accounts fork id
+    accounts_id: u64,
 }
 
 impl Default for HashQueue {
@@ -163,8 +166,13 @@ impl Bank {
         bank.parent = RwLock::new(Some(parent.clone()));
         bank.parent_hash = parent.hash();
         bank.collector_id = collector_id;
+
+        // Accounts needs a unique id
+        static BANK_ACCOUNTS_ID: AtomicUsize = AtomicUsize::new(1);
+        bank.accounts_id = BANK_ACCOUNTS_ID.fetch_add(1, Ordering::Relaxed) as u64;
         bank.accounts = Some(parent.accounts());
-        bank.accounts().new_from_parent(bank.slot, parent.slot);
+        bank.accounts()
+            .new_from_parent(bank.accounts_id, parent.accounts_id);
 
         bank.epoch_vote_accounts = {
             let mut epoch_vote_accounts = parent.epoch_vote_accounts.clone();
@@ -211,7 +219,7 @@ impl Bank {
         let parents = self.parents();
         *self.parent.write().unwrap() = None;
 
-        self.accounts().squash(self.slot);
+        self.accounts().squash(self.accounts_id);
 
         let parent_caches: Vec<_> = parents
             .iter()
@@ -259,7 +267,7 @@ impl Bank {
             .unwrap();
 
         self.accounts().store_slow(
-            self.slot,
+            self.accounts_id,
             &genesis_block.bootstrap_leader_vote_account_id,
             &bootstrap_leader_vote_account,
         );
@@ -276,7 +284,8 @@ impl Bank {
 
     pub fn add_native_program(&self, name: &str, program_id: &Pubkey) {
         let account = native_loader::create_program_account(name);
-        self.accounts().store_slow(self.slot, program_id, &account);
+        self.accounts()
+            .store_slow(self.accounts_id, program_id, &account);
     }
 
     fn add_builtin_programs(&self) {
@@ -388,11 +397,12 @@ impl Bank {
         }
         // TODO: put this assert back in
         // assert!(!self.is_frozen());
-        self.accounts().lock_accounts(self.slot, txs)
+        self.accounts().lock_accounts(self.accounts_id, txs)
     }
 
     pub fn unlock_accounts(&self, txs: &[Transaction], results: &[Result<()>]) {
-        self.accounts().unlock_accounts(self.slot, txs, results)
+        self.accounts()
+            .unlock_accounts(self.accounts_id, txs, results)
     }
 
     fn load_accounts(
@@ -402,7 +412,7 @@ impl Bank {
         error_counters: &mut ErrorCounters,
     ) -> Vec<Result<(InstructionAccounts, InstructionLoaders)>> {
         self.accounts()
-            .load_accounts(self.slot, txs, results, error_counters)
+            .load_accounts(self.accounts_id, txs, results, error_counters)
     }
     fn check_age(
         &self,
@@ -510,7 +520,7 @@ impl Bank {
         }
 
         self.accounts()
-            .increment_transaction_count(self.slot, tx_count);
+            .increment_transaction_count(self.accounts_id, tx_count);
 
         inc_new_counter_info!("bank-process_transactions-txs", tx_count);
         if 0 != error_counters.last_id_not_found {
@@ -586,7 +596,7 @@ impl Bank {
         // assert!(!self.is_frozen());
         let now = Instant::now();
         self.accounts()
-            .store_accounts(self.slot, txs, executed, loaded_accounts);
+            .store_accounts(self.accounts_id, txs, executed, loaded_accounts);
 
         // once committed there is no way to unroll
         let write_elapsed = now.elapsed();
@@ -672,7 +682,8 @@ impl Bank {
                 }
 
                 account.tokens -= tokens;
-                self.accounts().store_slow(self.slot, pubkey, &account);
+                self.accounts()
+                    .store_slow(self.accounts_id, pubkey, &account);
                 Ok(())
             }
             None => Err(BankError::AccountNotFound),
@@ -682,7 +693,8 @@ impl Bank {
     pub fn deposit(&self, pubkey: &Pubkey, tokens: u64) {
         let mut account = self.get_account(pubkey).unwrap_or_default();
         account.tokens += tokens;
-        self.accounts().store_slow(self.slot, pubkey, &account);
+        self.accounts()
+            .store_slow(self.accounts_id, pubkey, &account);
     }
 
     fn accounts(&self) -> Arc<Accounts> {
@@ -694,15 +706,16 @@ impl Bank {
     }
 
     pub fn get_account(&self, pubkey: &Pubkey) -> Option<Account> {
-        self.accounts().load_slow(self.slot, pubkey)
+        self.accounts().load_slow(self.accounts_id, pubkey)
     }
 
     pub fn get_account_modified_since_parent(&self, pubkey: &Pubkey) -> Option<Account> {
-        self.accounts().load_slow_no_parent(self.slot, pubkey)
+        self.accounts()
+            .load_slow_no_parent(self.accounts_id, pubkey)
     }
 
     pub fn transaction_count(&self) -> u64 {
-        self.accounts().transaction_count(self.slot)
+        self.accounts().transaction_count(self.accounts_id)
     }
 
     pub fn get_signature_status(&self, signature: &Signature) -> Option<Result<()>> {
@@ -724,11 +737,11 @@ impl Bank {
     fn hash_internal_state(&self) -> Hash {
         // If there are no accounts, return the same hash as we did before
         // checkpointing.
-        if !self.accounts().has_accounts(self.slot) {
+        if !self.accounts().has_accounts(self.accounts_id) {
             return self.parent_hash;
         }
 
-        let accounts_delta_hash = self.accounts().hash_internal_state(self.slot);
+        let accounts_delta_hash = self.accounts().hash_internal_state(self.accounts_id);
         extend_and_hash(&self.parent_hash, &serialize(&accounts_delta_hash).unwrap())
     }
 
@@ -779,7 +792,7 @@ impl Bank {
         F: Fn(&Pubkey, &Account) -> Option<(Pubkey, T)>,
     {
         self.accounts()
-            .get_vote_accounts(self.slot)
+            .get_vote_accounts(self.accounts_id)
             .iter()
             .filter_map(|(pubkey, account)| filter(pubkey, account))
             .collect()
@@ -803,7 +816,7 @@ impl Bank {
         F: Fn(&Pubkey, &VoteState) -> bool,
     {
         self.accounts()
-            .get_vote_accounts(self.slot)
+            .get_vote_accounts(self.accounts_id)
             .iter()
             .filter_map(|(p, account)| {
                 if let Ok(vote_state) = VoteState::deserialize(&account.userdata) {

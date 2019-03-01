@@ -133,7 +133,7 @@ impl AccountStorage {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct AccountsForkInfo {
     /// The number of transactions the bank has processed without error since the
     /// start of the ledger.
@@ -208,13 +208,15 @@ impl AccountsDB {
     pub fn add_fork(&self, fork: Fork, parent: Option<Fork>) {
         let mut info = self.fork_info.write().unwrap();
         let mut fork_info = AccountsForkInfo::default();
-        if parent.is_some() {
-            fork_info.parents.push(parent.unwrap());
-            if let Some(list) = info.get(&parent.unwrap()) {
+        if let Some(parent) = parent {
+            fork_info.parents.push(parent);
+            if let Some(list) = info.get(&parent) {
                 fork_info.parents.extend_from_slice(&list.parents);
             }
         }
-        info.insert(fork, fork_info);
+        if let Some(old_fork_info) = info.insert(fork, fork_info) {
+            panic!("duplicate forks! {} {:?}", fork, old_fork_info);
+        }
     }
 
     fn add_storage(&self, paths: &str) {
@@ -755,7 +757,6 @@ impl Accounts {
             in_paths.unwrap()
         };
         let accounts_db = AccountsDB::new(fork, &paths);
-        accounts_db.add_fork(fork, None);
         Accounts {
             accounts_db,
             account_locks: Mutex::new(HashMap::new()),
@@ -1686,4 +1687,24 @@ mod tests {
         cleanup_dirs(&paths);
     }
 
+    #[test]
+    #[should_panic]
+    fn test_accountsdb_duplicate_fork_should_panic() {
+        let paths = "duplicate_fork".to_string();
+        let accounts = AccountsDB::new(0, &paths);
+        cleanup_dirs(&paths);
+        accounts.add_fork(0, None);
+    }
+
+    #[test]
+    fn test_accountsdb_account_not_found() {
+        let paths = "account_not_found".to_string();
+        let accounts = AccountsDB::new(0, &paths);
+        let mut error_counters = ErrorCounters::default();
+        assert_eq!(
+            accounts.load_executable_accounts(0, Keypair::new().pubkey(), &mut error_counters),
+            Err(BankError::AccountNotFound)
+        );
+        assert_eq!(error_counters.account_not_found, 1);
+    }
 }
