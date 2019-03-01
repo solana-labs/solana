@@ -10,7 +10,10 @@ use solana_sdk::genesis_block::GenesisBlock;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::system_transaction::SystemTransaction;
+use solana_sdk::vote_program::VoteState;
+use solana_sdk::vote_transaction::VoteTransaction;
 use std::fs::remove_dir_all;
+use std::io::{Error, ErrorKind, Result};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
@@ -69,6 +72,14 @@ impl LocalCluster {
                 "validator {} balance {}",
                 validator_pubkey, validator_balance
             );
+
+            Self::create_and_fund_vote_account(
+                &mut client,
+                voting_keypair.pubkey(),
+                &validator_keypair,
+                1,
+            )
+            .unwrap();
             let validator_server = Fullnode::new(
                 validator_node,
                 &validator_keypair,
@@ -124,6 +135,86 @@ impl LocalCluster {
             .retry_transfer(&source_keypair, &mut tx, 5)
             .expect("client transfer");
         retry_get_balance(client, dest_pubkey, Some(lamports)).expect("get balance")
+    }
+
+    fn create_and_fund_vote_account(
+        client: &mut ThinClient,
+        vote_account: Pubkey,
+        from_account: &Arc<Keypair>,
+        amount: u64,
+    ) -> Result<()> {
+        let pubkey = from_account.pubkey();
+        let node_balance = client.poll_get_balance(&pubkey)?;
+        info!("node balance is {}", node_balance);
+        if node_balance < 1 {
+            return Err(Error::new(
+                ErrorKind::Other,
+                "insufficient tokens, one token required",
+            ));
+        }
+
+        // Create the vote account if necessary
+        if client.poll_get_balance(&vote_account).unwrap_or(0) == 0 {
+            // Need at least two tokens as one token will be spent on a vote_account_new() transaction
+            if node_balance < 2 {
+                error!("insufficient tokens, two tokens required");
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    "insufficient tokens, two tokens required",
+                ));
+            }
+            loop {
+                let last_id = client.get_last_id();
+                info!("create_and_fund_vote_account last_id={:?}", last_id);
+                let transaction = VoteTransaction::fund_staking_account(
+                    from_account,
+                    vote_account,
+                    last_id,
+                    amount,
+                    1,
+                );
+
+                match client.transfer_signed(&transaction) {
+                    Ok(signature) => {
+                        match client.poll_for_signature(&signature) {
+                            Ok(_) => match client.poll_get_balance(&vote_account) {
+                                Ok(balance) => {
+                                    info!("vote account balance: {}", balance);
+                                    break;
+                                }
+                                Err(e) => {
+                                    info!("Failed to get vote account balance: {:?}", e);
+                                }
+                            },
+                            Err(e) => {
+                                info!(
+                                    "vote_account_new signature not found: {:?}: {:?}",
+                                    signature, e
+                                );
+                            }
+                        };
+                    }
+                    Err(e) => {
+                        info!("Failed to send vote_account_new transaction: {:?}", e);
+                    }
+                };
+            }
+        }
+
+        info!("Checking for vote account registration");
+        let vote_account_user_data = client.get_account_userdata(&vote_account);
+        if let Ok(Some(vote_account_user_data)) = vote_account_user_data {
+            if let Ok(vote_state) = VoteState::deserialize(&vote_account_user_data) {
+                if vote_state.delegate_id == pubkey {
+                    return Ok(());
+                }
+            }
+        }
+
+        Err(Error::new(
+            ErrorKind::Other,
+            "expected successful vote account registration",
+        ))
     }
 }
 
