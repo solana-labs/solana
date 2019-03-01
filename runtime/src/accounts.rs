@@ -76,6 +76,7 @@ type AppendVecId = usize;
 
 type Fork = u64;
 
+#[derive(Debug)]
 struct AccountMap(RwLock<HashMap<Fork, (AppendVecId, u64)>>);
 
 #[derive(Debug, PartialEq)]
@@ -372,15 +373,20 @@ impl AccountsDB {
         let offset: u64;
         let start = self.next_id.fetch_add(1, Ordering::Relaxed);
         let mut id = self.get_storage_id(start, std::usize::MAX);
-        let mut acc = &Account::default();
+
+        // Even if no tokens, need to preserve the account owner so
+        // we can update the vote_index correctly if this account is purged
+        // when squashing.
+        let acc = &mut account.clone();
+        if account.tokens == 0 {
+            acc.userdata.resize(0, 0);
+        }
+
         loop {
             let result: Option<u64>;
             {
-                if account.tokens != 0 {
-                    acc = account;
-                }
                 let av = &self.storage.read().unwrap()[id].appendvec;
-                result = av.read().unwrap().append_account(&acc);
+                result = av.read().unwrap().append_account(acc);
             }
             if let Some(val) = result {
                 offset = val;
@@ -406,6 +412,15 @@ impl AccountsDB {
         forks.is_empty()
     }
 
+    fn account_map_is_empty(pubkey: &Pubkey, index: &HashMap<Pubkey, AccountMap>) -> bool {
+        if let Some(account_map) = index.get(pubkey) {
+            if account_map.0.read().unwrap().len() == 0 {
+                return true;
+            }
+        }
+        false
+    }
+
     fn update_vote_cache(
         &self,
         account: &Account,
@@ -413,7 +428,7 @@ impl AccountsDB {
         pubkey: &Pubkey,
     ) {
         if vote_program::check_id(&account.owner) {
-            if index.get(pubkey).is_none() {
+            if Self::account_map_is_empty(pubkey, index) {
                 self.index_info.vote_index.write().unwrap().remove(pubkey);
             } else {
                 self.index_info.vote_index.write().unwrap().insert(*pubkey);
@@ -442,13 +457,13 @@ impl AccountsDB {
             self.remove_account_entries(&[fork], &map);
             self.update_vote_cache(account, &index, pubkey);
         } else {
-            let (id, offset) = self.append_account(&account);
+            let (id, offset) = self.append_account(account);
 
             let index = self.index_info.index.read().unwrap();
-            self.update_vote_cache(account, &index, pubkey);
 
             let map = index.get(&pubkey).unwrap();
             self.insert_account_entry(fork, id, offset, &map);
+            self.update_vote_cache(account, &index, pubkey);
         }
     }
 
@@ -1429,16 +1444,20 @@ mod tests {
         num: usize,
         num_vote: usize,
     ) {
-        let mut nvote = num_vote;
         for t in 0..num {
             let pubkey = Keypair::new().pubkey();
             let mut default_account = Account::default();
             pubkeys.push(pubkey.clone());
             default_account.tokens = (t + 1) as u64;
-            if nvote > 0 && (t + 1) % nvote == 0 {
-                default_account.owner = vote_program::id();
-                nvote -= 1;
-            }
+            assert!(accounts.load(0, &pubkey, true).is_none());
+            accounts.store(0, &pubkey, &default_account);
+        }
+        for t in 0..num_vote {
+            let pubkey = Keypair::new().pubkey();
+            let mut default_account = Account::default();
+            pubkeys.push(pubkey.clone());
+            default_account.owner = vote_program::id();
+            default_account.tokens = (num + t + 1) as u64;
             assert!(accounts.load(0, &pubkey, true).is_none());
             accounts.store(0, &pubkey, &default_account);
         }
@@ -1599,25 +1618,27 @@ mod tests {
 
         vote_account1.tokens = 0;
         accounts.store_slow(1, &key1, &vote_account1);
+        accounts.store_slow(0, &key, &vote_account);
 
         assert_eq!(accounts.get_vote_accounts(1).len(), 0);
     }
 
     #[test]
     fn test_account_vote() {
+        solana_logger::setup();
         let paths = "vote0".to_string();
         let accounts_db = AccountsDB::new(0, &paths);
         let mut pubkeys: Vec<Pubkey> = vec![];
-        create_account(&accounts_db, &mut pubkeys, 100, 6);
+        create_account(&accounts_db, &mut pubkeys, 0, 1);
         let accounts = accounts_db.get_vote_accounts(0);
-        assert_eq!(accounts.len(), 6);
+        assert_eq!(accounts.len(), 1);
         accounts.iter().for_each(|(_, account)| {
             assert_eq!(account.owner, vote_program::id());
         });
         let lastkey = Keypair::new().pubkey();
         let mut lastaccount = Account::new(1, 0, vote_program::id());
         accounts_db.store(0, &lastkey, &lastaccount);
-        assert_eq!(accounts_db.get_vote_accounts(0).len(), 7);
+        assert_eq!(accounts_db.get_vote_accounts(0).len(), 2);
 
         accounts_db.add_fork(1, Some(0));
 
@@ -1626,18 +1647,33 @@ mod tests {
             accounts_db.get_vote_accounts(0)
         );
 
+        info!("storing tokens=0 to fork 1");
         // should store a tokens=0 account in 1
         lastaccount.tokens = 0;
         accounts_db.store(1, &lastkey, &lastaccount);
-        // len == 7 because tokens=0 accounts are filtered at the Accounts interface.
-        assert_eq!(accounts_db.get_vote_accounts(1).len(), 7);
+        // len == 2 because tokens=0 accounts are filtered at the Accounts interface.
+        assert_eq!(accounts_db.get_vote_accounts(1).len(), 2);
+
+        accounts_db.squash(1);
 
         // should still be in 0
-        assert_eq!(accounts_db.get_vote_accounts(0).len(), 7);
+        assert_eq!(accounts_db.get_vote_accounts(0).len(), 2);
 
         // delete it from 0
         accounts_db.store(0, &lastkey, &lastaccount);
-        assert_eq!(accounts_db.get_vote_accounts(0).len(), 6);
+        assert_eq!(accounts_db.get_vote_accounts(0).len(), 1);
+        assert_eq!(accounts_db.get_vote_accounts(1).len(), 1);
+
+        // Add fork 2 and squash
+        accounts_db.add_fork(2, Some(1));
+        accounts_db.store(2, &lastkey, &lastaccount);
+
+        accounts_db.squash(1);
+        accounts_db.squash(2);
+
+        assert_eq!(accounts_db.index_info.vote_index.read().unwrap().len(), 1);
+        assert_eq!(accounts_db.get_vote_accounts(1).len(), 1);
+        assert_eq!(accounts_db.get_vote_accounts(2).len(), 1);
 
         cleanup_dirs(&paths);
     }
