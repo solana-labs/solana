@@ -106,24 +106,24 @@ impl LocalCluster {
 
     fn transfer(
         client: &mut ThinClient,
-        alice: &Keypair,
-        bob_pubkey: &Pubkey,
-        transfer_amount: u64,
+        source_keypair: &Keypair,
+        dest_pubkey: &Pubkey,
+        lamports: u64,
     ) -> u64 {
         trace!("getting leader last_id");
         let last_id = client.get_last_id();
         let mut tx =
-            SystemTransaction::new_account(&alice, *bob_pubkey, transfer_amount, last_id, 0);
+            SystemTransaction::new_account(&source_keypair, *dest_pubkey, lamports, last_id, 0);
         info!(
             "executing transfer of {} from {} to {}",
-            transfer_amount,
-            alice.pubkey(),
-            *bob_pubkey
+            lamports,
+            source_keypair.pubkey(),
+            *dest_pubkey
         );
         client
-            .retry_transfer(&alice, &mut tx, 5)
+            .retry_transfer(&source_keypair, &mut tx, 5)
             .expect("client transfer");
-        retry_get_balance(client, bob_pubkey, Some(transfer_amount)).expect("get balance")
+        retry_get_balance(client, dest_pubkey, Some(lamports)).expect("get balance")
     }
 }
 
