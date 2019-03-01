@@ -120,13 +120,6 @@ impl HashQueue {
         }
         None
     }
-
-    #[cfg(test)]
-    pub fn clear(&mut self) {
-        self.entries = HashMap::new();
-        self.tick_height = 0;
-        self.last_hash = None;
-    }
 }
 #[cfg(test)]
 mod tests {
