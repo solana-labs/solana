@@ -116,6 +116,12 @@ pub struct Bank {
     epoch_vote_accounts: HashMap<u64, HashMap<Pubkey, Account>>,
 }
 
+impl Default for HashQueue {
+    fn default() -> Self {
+        Self::new(MAX_RECENT_TICK_HASHES)
+    }
+}
+
 impl Bank {
     pub fn new(genesis_block: &GenesisBlock) -> Self {
         Self::new_with_paths(&genesis_block, None)
