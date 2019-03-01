@@ -3,23 +3,23 @@ use solana_sdk::hash::Hash;
 use solana_sdk::timing::{timestamp, MAX_ENTRY_IDS};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-struct LastIdEntry {
+struct HashQueueEntry {
     timestamp: u64,
     tick_height: u64,
 }
 
 /// Low memory overhead, so can be cloned for every checkpoint
 #[derive(Clone)]
-pub struct LastIdQueue {
+pub struct HashQueue {
     /// updated whenever an id is registered, at each tick ;)
     tick_height: u64,
 
     /// last tick to be registered
     last_id: Option<Hash>,
 
-    entries: HashMap<Hash, LastIdEntry>,
+    entries: HashMap<Hash, HashQueueEntry>,
 }
-impl Default for LastIdQueue {
+impl Default for HashQueue {
     fn default() -> Self {
         Self {
             entries: HashMap::new(),
@@ -29,7 +29,7 @@ impl Default for LastIdQueue {
     }
 }
 
-impl LastIdQueue {
+impl HashQueue {
     pub fn tick_height(&self) -> u64 {
         self.tick_height
     }
@@ -56,7 +56,7 @@ impl LastIdQueue {
     pub fn genesis_last_id(&mut self, last_id: &Hash) {
         self.entries.insert(
             *last_id,
-            LastIdEntry {
+            HashQueueEntry {
                 tick_height: 0,
                 timestamp: timestamp(),
             },
@@ -82,7 +82,7 @@ impl LastIdQueue {
 
         self.entries.insert(
             *last_id,
-            LastIdEntry {
+            HashQueueEntry {
                 tick_height,
                 timestamp: timestamp(),
             },
@@ -141,7 +141,7 @@ mod tests {
     #[test]
     fn test_register_tick() {
         let last_id = Hash::default();
-        let mut entry_queue = LastIdQueue::default();
+        let mut entry_queue = HashQueue::default();
         assert!(!entry_queue.check_entry(last_id));
         entry_queue.register_tick(&last_id);
         assert!(entry_queue.check_entry(last_id));
@@ -149,7 +149,7 @@ mod tests {
     #[test]
     fn test_reject_old_last_id() {
         let last_id = Hash::default();
-        let mut entry_queue = LastIdQueue::default();
+        let mut entry_queue = HashQueue::default();
         for i in 0..MAX_ENTRY_IDS {
             let last_id = hash(&serialize(&i).unwrap()); // Unique hash
             entry_queue.register_tick(&last_id);

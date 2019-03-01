@@ -4,7 +4,7 @@
 //! already been signed and verified.
 
 use crate::accounts::{Accounts, ErrorCounters, InstructionAccounts, InstructionLoaders};
-use crate::last_id_queue::LastIdQueue;
+use crate::last_id_queue::HashQueue;
 use crate::runtime::{self, RuntimeError};
 use crate::status_cache::StatusCache;
 use bincode::serialize;
@@ -86,7 +86,7 @@ pub struct Bank {
     status_cache: RwLock<BankStatusCache>,
 
     /// FIFO queue of `last_id` items
-    last_id_queue: RwLock<LastIdQueue>,
+    last_id_queue: RwLock<HashQueue>,
 
     /// Previous checkpoint of this bank
     parent: RwLock<Option<Arc<Bank>>>,
@@ -744,7 +744,7 @@ impl Bank {
     }
 
     #[cfg(test)]
-    pub fn last_ids(&self) -> &RwLock<LastIdQueue> {
+    pub fn last_ids(&self) -> &RwLock<HashQueue> {
         &self.last_id_queue
     }
 }
