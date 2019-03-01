@@ -43,6 +43,7 @@ extern "C" {
     fn sol_log_(message: *const u8);
 }
 /// Helper function that prints a string to stdout
+#[inline(never)] // stack intensive, block inline so everyone does not incur
 pub fn sol_log(message: &str) {
     // TODO This is extremely slow, do something better
     let mut buf: [u8; 128] = [0; 128];
