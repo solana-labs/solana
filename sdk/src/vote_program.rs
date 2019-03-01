@@ -102,7 +102,7 @@ impl VoteInstruction {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Default, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct VoteState {
     pub votes: VecDeque<Lockout>,
     pub delegate_id: Pubkey,
