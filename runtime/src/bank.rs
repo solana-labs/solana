@@ -749,13 +749,7 @@ impl Bank {
             vote_states
                 .iter()
                 .cloned()
-                .filter_map(|vote_state| {
-                    if cond(&vote_state) {
-                        return Some(vote_state);
-                    } else {
-                        None
-                    }
-                })
+                .filter(|vote_state| cond(&vote_state))
                 .collect()
         })
     }
