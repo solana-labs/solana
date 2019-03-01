@@ -319,11 +319,31 @@ impl Bank {
     /// tick that has achieved confirmation
     pub fn get_confirmation_timestamp(
         &self,
-        ticks_and_stakes: &mut [(u64, u64)],
+        mut slots_and_stakes: Vec<(u64, u64)>,
         supermajority_stake: u64,
     ) -> Option<u64> {
-        let hash_queue = self.tick_hash_queue.read().unwrap();
-        hash_queue.get_confirmation_timestamp(ticks_and_stakes, supermajority_stake)
+        // Sort by slot height
+        slots_and_stakes.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let max_slot = self.slot_height();
+        let min_slot =
+            max_slot.saturating_sub(MAX_RECENT_TICK_HASHES as u64 / self.ticks_per_slot());
+
+        let mut total_stake = 0;
+        for (slot, stake) in slots_and_stakes.iter() {
+            if *slot >= min_slot && *slot <= max_slot {
+                total_stake += stake;
+                if total_stake > supermajority_stake {
+                    return self
+                        .tick_hash_queue
+                        .read()
+                        .unwrap()
+                        .hash_height_to_timestamp(slot * self.ticks_per_slot());
+                }
+            }
+        }
+
+        None
     }
 
     /// Tell the bank which Entry IDs exist on the ledger. This function
