@@ -31,6 +31,7 @@ pub mod blockstream;
 pub mod blockstream_service;
 pub mod blocktree_processor;
 pub mod cluster_info;
+#[cfg(test)]
 pub mod cluster_tests;
 pub mod db_window;
 pub mod entry;
@@ -43,6 +44,7 @@ pub mod gossip_service;
 pub mod leader_confirmation_service;
 pub mod leader_schedule;
 pub mod leader_schedule_utils;
+#[cfg(test)]
 pub mod local_cluster;
 pub mod local_vote_signer_service;
 pub mod packet;
