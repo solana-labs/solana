@@ -86,7 +86,6 @@ impl ReplayStage {
         );
 
         let num_ticks = bank.tick_height();
-        let slot_height = bank.slot_height();
 
         let mut num_ticks_to_next_vote =
             leader_schedule_utils::num_ticks_left_in_slot(bank, num_ticks);
@@ -124,8 +123,7 @@ impl ReplayStage {
                     subscriptions.notify_subscribers(&bank);
                     if let Some(voting_keypair) = voting_keypair {
                         let keypair = voting_keypair.as_ref();
-                        let vote =
-                            VoteTransaction::new_vote(keypair, slot_height, bank.last_id(), 0);
+                        let vote = VoteTransaction::new_vote(keypair, bank.id(), bank.last_id(), 0);
                         cluster_info.write().unwrap().push_vote(vote);
                     }
                 }
