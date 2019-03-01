@@ -127,27 +127,26 @@ impl Bank {
         bank.accounts = Some(Arc::new(Accounts::new(bank.slot, paths)));
         bank.process_genesis_block(genesis_block);
         bank.add_builtin_programs();
-
-        self.epoch_vote_states_for_slot(self.id)
-            .map(|(mut epoch, vote_states)| {
-                for i in 0..epoch {
-                    self.epoch_vote_states.insert(i, vote_states.clone());
-                }
-            });
-
+        bank.epoch_vote_states
+            .extend(bank.epoch_vote_states_for_slot(bank.id));
         bank
     }
 
     /// If this Bank is constructed at a slot where a stakes should be
     /// considered, save off the vote_states, keyed by epoch
-    fn epoch_vote_states_for_slot(&self, slot: u64) -> Option<(epoch, Vec<VoteState>)> {
-        if (slot + self.stakers_slot_offset) % self.slots_per_epoch != 0 {
-            None
-        } else {
-            let epoch = (slot + self.stakers_slot_offset) / self.slots_per_epoch;
+    fn epoch_vote_states_for_slot(&self, slot: u64) -> HashMap<u64, Vec<VoteState>> {
+        let epoch = (slot + self.stakers_slot_offset) / self.slots_per_epoch;
+        let backlog = self.stakers_slot_offset / self.slots_per_epoch;
 
-            Some((epoch, self.vote_states(|_| true)))
-        }
+        let mut vote_states = HashMap::new();
+        (0..=backlog).for_each(|i| {
+            let target_epoch = epoch.saturating_sub(i);
+            if !self.epoch_vote_states.contains_key(&target_epoch) {
+                vote_states.insert(target_epoch, self.vote_states(|_| true));
+            }
+        });
+
+        vote_states
     }
 
     /// Create a new bank that points to an immutable checkpoint of another bank.
@@ -168,9 +167,8 @@ impl Bank {
         bank.accounts().new_from_parent(bank.slot, parent.slot);
 
         bank.epoch_vote_states = parent.epoch_vote_states.clone();
-        bank.epoch_vote_states_for_slot(bank.id)
-            .map(|(epoch, vote_states)| epoch_vote_states.insert(epoch, vote_states));
-
+        bank.epoch_vote_states
+            .extend(bank.epoch_vote_states_for_slot(bank.id));
         bank
     }
 
@@ -1469,21 +1467,21 @@ mod tests {
         bank.squash();
         assert_eq!(parent.get_balance(&key1.pubkey()), 1);
     }
+    /*
+        #[test]
+        fn test_bank_setup_epoch_vote_states() {
 
-    #[test]
-    fn test_bank_setup_epoch_vote_states() {
+            /// If this Bank is constructed at a slot where a stakes should be
+            /// considered, save off the vote_states, keyed by epoch
+            fn epoch_vote_states_for_slot(&self, slot: u64) -> Option<(epoch, Vec<VoteState>)> {
+                if (slot + self.stakers_slot_offset) % self.slots_per_epoch != 0 {
+                    None
+                } else {
+                    let epoch = (slot + self.stakers_slot_offset) / self.slots_per_epoch;
 
-        /// If this Bank is constructed at a slot where a stakes should be
-        /// considered, save off the vote_states, keyed by epoch
-        fn epoch_vote_states_for_slot(&self, slot: u64) -> Option<(epoch, Vec<VoteState>)> {
-            if (slot + self.stakers_slot_offset) % self.slots_per_epoch != 0 {
-                None
-            } else {
-                let epoch = (slot + self.stakers_slot_offset) / self.slots_per_epoch;
-                
-                Some((epoch, self.vote_states(|_| true)))
+                    Some((epoch, self.vote_states(|_| true)))
+                }
             }
         }
-    }
-
+    */
 }
