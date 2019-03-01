@@ -160,13 +160,8 @@ mod tests {
         let bank_voter = Keypair::new();
 
         // Give the validator some stake but don't setup a staking account
-        bank.transfer(
-            1,
-            &mint_keypair,
-            validator.pubkey(),
-            genesis_block.hash(),
-        )
-        .unwrap();
+        bank.transfer(1, &mint_keypair, validator.pubkey(), genesis_block.hash())
+            .unwrap();
 
         // Validator has no token staked, so they get filtered out. Only the bootstrap leader
         // created by the genesis block will get included

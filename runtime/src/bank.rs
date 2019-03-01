@@ -243,7 +243,7 @@ impl Bank {
         self.tick_hash_queue
             .write()
             .unwrap()
-            .genesis_last_id(&genesis_block.hash());
+            .genesis_hash(&genesis_block.hash());
 
         self.ticks_per_slot = genesis_block.ticks_per_slot;
         self.slots_per_epoch = genesis_block.slots_per_epoch;
@@ -266,7 +266,7 @@ impl Bank {
 
     /// Return the last entry ID registered.
     pub fn last_id(&self) -> Hash {
-        self.tick_hash_queue.read().unwrap().last_id()
+        self.tick_hash_queue.read().unwrap().last_hash()
     }
 
     /// Forget all signatures. Useful for benchmarking.
@@ -304,8 +304,8 @@ impl Bank {
     /// Tell the bank which Entry IDs exist on the ledger. This function
     /// assumes subsequent calls correspond to later entries, and will boot
     /// the oldest ones once its internal cache is full. Once boot, the
-    /// bank will reject transactions using that `last_id`.
-    pub fn register_tick(&self, last_id: &Hash) {
+    /// bank will reject transactions using that `hash`.
+    pub fn register_tick(&self, hash: &Hash) {
         if self.is_frozen() {
             warn!("=========== FIXME: register_tick() working on a frozen bank! ================");
         }
@@ -315,11 +315,11 @@ impl Bank {
             //atomic register and read the tick
             let mut tick_hash_queue = self.tick_hash_queue.write().unwrap();
             inc_new_counter_info!("bank-register_tick-registered", 1);
-            tick_hash_queue.register_tick(last_id);
+            tick_hash_queue.register_hash(hash);
             tick_hash_queue.tick_height()
         };
         if current_tick_height % NUM_TICKS_PER_SECOND as u64 == 0 {
-            self.status_cache.write().unwrap().new_cache(last_id);
+            self.status_cache.write().unwrap().new_cache(hash);
         }
     }
 
@@ -1026,13 +1026,8 @@ mod tests {
         let key1 = Keypair::new();
         let key2 = Keypair::new();
 
-        let tx = SystemTransaction::new_move(
-            &mint_keypair,
-            key1.pubkey(),
-            2,
-            genesis_block.hash(),
-            3,
-        );
+        let tx =
+            SystemTransaction::new_move(&mint_keypair, key1.pubkey(), 2, genesis_block.hash(), 3);
         let initial_balance = bank.get_balance(&leader);
         assert_eq!(bank.process_transaction(&tx), Ok(()));
         assert_eq!(bank.get_balance(&leader), initial_balance + 3);
@@ -1272,13 +1267,8 @@ mod tests {
         let key1 = Keypair::new();
         let parent = Arc::new(Bank::new(&genesis_block));
 
-        let tx = SystemTransaction::new_move(
-            &mint_keypair,
-            key1.pubkey(),
-            1,
-            genesis_block.hash(),
-            0,
-        );
+        let tx =
+            SystemTransaction::new_move(&mint_keypair, key1.pubkey(), 1, genesis_block.hash(), 0);
         assert_eq!(parent.process_transaction(&tx), Ok(()));
         let bank = Bank::new_from_parent(&parent);
         assert_eq!(
@@ -1295,13 +1285,8 @@ mod tests {
         let key2 = Keypair::new();
         let parent = Arc::new(Bank::new(&genesis_block));
 
-        let tx = SystemTransaction::new_move(
-            &mint_keypair,
-            key1.pubkey(),
-            1,
-            genesis_block.hash(),
-            0,
-        );
+        let tx =
+            SystemTransaction::new_move(&mint_keypair, key1.pubkey(), 1, genesis_block.hash(), 0);
         assert_eq!(parent.process_transaction(&tx), Ok(()));
         let bank = Bank::new_from_parent(&parent);
         let tx = SystemTransaction::new_move(&key1, key2.pubkey(), 1, genesis_block.hash(), 0);
@@ -1364,13 +1349,8 @@ mod tests {
         let key2 = Keypair::new();
         let parent = Arc::new(Bank::new(&genesis_block));
 
-        let tx_move_mint_to_1 = SystemTransaction::new_move(
-            &mint_keypair,
-            key1.pubkey(),
-            1,
-            genesis_block.hash(),
-            0,
-        );
+        let tx_move_mint_to_1 =
+            SystemTransaction::new_move(&mint_keypair, key1.pubkey(), 1, genesis_block.hash(), 0);
         assert_eq!(parent.process_transaction(&tx_move_mint_to_1), Ok(()));
         assert_eq!(parent.transaction_count(), 1);
 
