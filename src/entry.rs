@@ -9,7 +9,7 @@ use bincode::{deserialize, serialize_into, serialized_size};
 use chrono::prelude::Utc;
 use rayon::prelude::*;
 use solana_sdk::budget_transaction::BudgetTransaction;
-use solana_sdk::hash::{hash, Hash};
+use solana_sdk::hash::Hash;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::signature::{Keypair, KeypairUtil};
 use solana_sdk::transaction::Transaction;
@@ -25,9 +25,9 @@ pub type EntrySender = Sender<Vec<Entry>>;
 pub type EntryReceiver = Receiver<Vec<Entry>>;
 
 /// Each Entry contains three pieces of data. The `num_hashes` field is the number
-/// of hashes performed since the previous entry.  The `id` field is the result
-/// of hashing `id` from the previous entry `num_hashes` times.  The `transactions`
-/// field points to Transactions that took place shortly before `id` was generated.
+/// of hashes performed since the previous entry.  The `hash` field is the result
+/// of hashing `hash` from the previous entry `num_hashes` times.  The `transactions`
+/// field points to Transactions that took place shortly before `hash` was generated.
 ///
 /// If you divide `num_hashes` by the amount of time it takes to generate a new hash, you
 /// get a duration estimate since the last Entry. Since processing power increases
@@ -45,7 +45,7 @@ pub struct Entry {
     pub num_hashes: u64,
 
     /// The SHA-256 hash `num_hashes` after the previous Entry ID.
-    pub id: Hash,
+    pub hash: Hash,
 
     /// An unordered list of transactions that were observed before the Entry ID was
     /// generated. They may have been observed before a previous Entry ID but were
@@ -60,26 +60,26 @@ impl Entry {
             if num_hashes == 0 && transactions.is_empty() {
                 Entry {
                     num_hashes: 0,
-                    id: *prev_hash,
+                    hash: *prev_hash,
                     transactions,
                 }
             } else if num_hashes == 0 {
                 // If you passed in transactions, but passed in num_hashes == 0, then
                 // next_hash will generate the next hash and set num_hashes == 1
-                let id = next_hash(prev_hash, 1, &transactions);
+                let hash = next_hash(prev_hash, 1, &transactions);
                 Entry {
                     num_hashes: 1,
-                    id,
+                    hash,
                     transactions,
                 }
             } else {
                 // Otherwise, the next Entry `num_hashes` after `start_hash`.
                 // If you wanted a tick for instance, then pass in num_hashes = 1
                 // and transactions = empty
-                let id = next_hash(prev_hash, num_hashes, &transactions);
+                let hash = next_hash(prev_hash, num_hashes, &transactions);
                 Entry {
                     num_hashes,
-                    id,
+                    hash,
                     transactions,
                 }
             }
@@ -118,7 +118,7 @@ impl Entry {
             .iter()
             .map(|tx| tx.serialized_size().unwrap())
             .sum();
-        // num_hashes   +    id  +              txs
+        // num_hashes   +    hash  +              txs
         (2 * size_of::<u64>() + size_of::<Hash>()) as u64 + txs_size
     }
 
@@ -165,32 +165,32 @@ impl Entry {
         transactions: Vec<Transaction>,
     ) -> Self {
         let entry = Self::new(start_hash, *num_hashes, transactions);
-        *start_hash = entry.id;
+        *start_hash = entry.hash;
         *num_hashes = 0;
         assert!(serialized_size(&entry).unwrap() <= BLOB_DATA_SIZE as u64);
         entry
     }
 
     /// Creates a Entry from the number of hashes `num_hashes`
-    /// since the previous transaction and that resulting `id`.
+    /// since the previous transaction and that resulting `hash`.
 
     #[cfg(test)]
-    pub fn new_tick(num_hashes: u64, id: &Hash) -> Self {
+    pub fn new_tick(num_hashes: u64, hash: &Hash) -> Self {
         Entry {
             num_hashes,
-            id: *id,
+            hash: *hash,
             transactions: vec![],
         }
     }
 
-    /// Verifies self.id is the result of hashing a `start_hash` `self.num_hashes` times.
+    /// Verifies self.hash is the result of hashing a `start_hash` `self.num_hashes` times.
     /// If the transaction is not a Tick, then hash that as well.
     pub fn verify(&self, start_hash: &Hash) -> bool {
         let ref_hash = next_hash(start_hash, self.num_hashes, &self.transactions);
-        if self.id != ref_hash {
+        if self.hash != ref_hash {
             warn!(
                 "next_hash is invalid expected: {:?} actual: {:?}",
-                self.id, ref_hash
+                self.hash, ref_hash
             );
             return false;
         }
@@ -259,17 +259,17 @@ impl EntrySlice for [Entry] {
     fn verify(&self, start_hash: &Hash) -> bool {
         let genesis = [Entry {
             num_hashes: 0,
-            id: *start_hash,
+            hash: *start_hash,
             transactions: vec![],
         }];
         let entry_pairs = genesis.par_iter().chain(self).zip(self);
         entry_pairs.all(|(x0, x1)| {
-            let r = x1.verify(&x0.id);
+            let r = x1.verify(&x0.hash);
             if !r {
                 warn!(
                     "entry invalid!: x0: {:?}, x1: {:?} num txs: {}",
-                    x0.id,
-                    x1.id,
+                    x0.hash,
+                    x1.hash,
                     x1.transactions.len()
                 );
             }
@@ -299,12 +299,12 @@ impl EntrySlice for [Entry] {
 
 pub fn next_entry_mut(start: &mut Hash, num_hashes: u64, transactions: Vec<Transaction>) -> Entry {
     let entry = Entry::new(&start, num_hashes, transactions);
-    *start = entry.id;
+    *start = entry.hash;
     entry
 }
 
 /// Creates the next entries for given transactions, outputs
-/// updates start_hash to id of last Entry, sets num_hashes to 0
+/// updates start_hash to hash of last Entry, sets num_hashes to 0
 pub fn next_entries_mut(
     start_hash: &mut Hash,
     num_hashes: &mut u64,
@@ -373,9 +373,9 @@ pub fn next_entries(
     num_hashes: u64,
     transactions: Vec<Transaction>,
 ) -> Vec<Entry> {
-    let mut id = *start_hash;
+    let mut hash = *start_hash;
     let mut num_hashes = num_hashes;
-    next_entries_mut(&mut id, &mut num_hashes, transactions)
+    next_entries_mut(&mut hash, &mut num_hashes, transactions)
 }
 
 pub fn create_ticks(num_ticks: u64, mut hash: Hash) -> Vec<Entry> {
@@ -388,15 +388,15 @@ pub fn create_ticks(num_ticks: u64, mut hash: Hash) -> Vec<Entry> {
     ticks
 }
 
-pub fn make_tiny_test_entries_from_id(start: &Hash, num: usize) -> Vec<Entry> {
+pub fn make_tiny_test_entries_from_hash(start: &Hash, num: usize) -> Vec<Entry> {
     let keypair = Keypair::new();
 
-    let mut id = *start;
+    let mut hash = *start;
     let mut num_hashes = 0;
     (0..num)
         .map(|_| {
             Entry::new_mut(
-                &mut id,
+                &mut hash,
                 &mut num_hashes,
                 vec![BudgetTransaction::new_timestamp(
                     &keypair,
@@ -412,13 +412,13 @@ pub fn make_tiny_test_entries_from_id(start: &Hash, num: usize) -> Vec<Entry> {
 
 pub fn make_tiny_test_entries(num: usize) -> Vec<Entry> {
     let zero = Hash::default();
-    let one = hash(&zero.as_ref());
-    make_tiny_test_entries_from_id(&one, num)
+    let one = solana_sdk::hash::hash(&zero.as_ref());
+    make_tiny_test_entries_from_hash(&one, num)
 }
 
 pub fn make_large_test_entries(num_entries: usize) -> Vec<Entry> {
     let zero = Hash::default();
-    let one = hash(&zero.as_ref());
+    let one = solana_sdk::hash::hash(&zero.as_ref());
     let keypair = Keypair::new();
 
     let tx = BudgetTransaction::new_timestamp(
@@ -465,7 +465,7 @@ pub fn next_entry(prev_hash: &Hash, num_hashes: u64, transactions: Vec<Transacti
     assert!(num_hashes > 0 || transactions.is_empty());
     Entry {
         num_hashes,
-        id: next_hash(prev_hash, num_hashes, &transactions),
+        hash: next_hash(prev_hash, num_hashes, &transactions),
         transactions,
     }
 }
@@ -536,11 +536,11 @@ mod tests {
         let zero = Hash::default();
         let tick = next_entry(&zero, 1, vec![]);
         assert_eq!(tick.num_hashes, 1);
-        assert_ne!(tick.id, zero);
+        assert_ne!(tick.hash, zero);
 
         let tick = next_entry(&zero, 0, vec![]);
         assert_eq!(tick.num_hashes, 0);
-        assert_eq!(tick.id, zero);
+        assert_eq!(tick.hash, zero);
 
         let keypair = Keypair::new();
         let tx0 = BudgetTransaction::new_timestamp(
@@ -552,7 +552,7 @@ mod tests {
         );
         let entry0 = next_entry(&zero, 1, vec![tx0.clone()]);
         assert_eq!(entry0.num_hashes, 1);
-        assert_eq!(entry0.id, next_hash(&zero, 1, &vec![tx0]));
+        assert_eq!(entry0.hash, next_hash(&zero, 1, &vec![tx0]));
     }
 
     #[test]
@@ -587,7 +587,7 @@ mod tests {
         assert!(vec![next_entry(&zero, 0, vec![]); 2][..].verify(&zero)); // inductive step
 
         let mut bad_ticks = vec![next_entry(&zero, 0, vec![]); 2];
-        bad_ticks[1].id = one;
+        bad_ticks[1].hash = one;
         assert!(!bad_ticks.verify(&zero)); // inductive step, bad
     }
 
@@ -640,8 +640,8 @@ mod tests {
     #[test]
     fn test_next_entries() {
         solana_logger::setup();
-        let id = Hash::default();
-        let next_hash = hash(&id.as_ref());
+        let hash = Hash::default();
+        let next_hash = solana_sdk::hash::hash(&hash.as_ref());
         let keypair = Keypair::new();
         let vote_account = Keypair::new();
         let tx_small = VoteTransaction::new_vote(&vote_account, 1, next_hash, 2);
@@ -651,7 +651,7 @@ mod tests {
         let tx_large_size = tx_large.serialized_size().unwrap() as usize;
         let entry_size = serialized_size(&Entry {
             num_hashes: 0,
-            id: Hash::default(),
+            hash: Hash::default(),
             transactions: vec![],
         })
         .unwrap() as usize;
@@ -662,15 +662,15 @@ mod tests {
 
         // verify no split
         let transactions = vec![tx_small.clone(); threshold];
-        let entries0 = next_entries(&id, 0, transactions.clone());
+        let entries0 = next_entries(&hash, 0, transactions.clone());
         assert_eq!(entries0.len(), 1);
-        assert!(entries0.verify(&id));
+        assert!(entries0.verify(&hash));
 
         // verify the split with uniform transactions
         let transactions = vec![tx_small.clone(); threshold * 2];
-        let entries0 = next_entries(&id, 0, transactions.clone());
+        let entries0 = next_entries(&hash, 0, transactions.clone());
         assert_eq!(entries0.len(), 2);
-        assert!(entries0.verify(&id));
+        assert!(entries0.verify(&hash));
 
         // verify the split with small transactions followed by large
         // transactions
@@ -679,9 +679,9 @@ mod tests {
 
         transactions.extend(large_transactions);
 
-        let entries0 = next_entries(&id, 0, transactions.clone());
+        let entries0 = next_entries(&hash, 0, transactions.clone());
         assert!(entries0.len() >= 2);
-        assert!(entries0.verify(&id));
+        assert!(entries0.verify(&hash));
     }
 
 }

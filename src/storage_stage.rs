@@ -421,7 +421,7 @@ impl StorageStage {
                     &storage_state,
                     &keypair,
                     &blocktree,
-                    entry.id,
+                    entry.hash,
                     *entry_height,
                     tx_sender,
                 )?;

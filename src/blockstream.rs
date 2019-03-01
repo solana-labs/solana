@@ -180,7 +180,7 @@ mod test {
                 curr_slot += 1;
             }
             let entry = Entry::new(&mut last_id, 1, vec![]); // just ticks
-            last_id = entry.id;
+            last_id = entry.hash;
             blockstream
                 .emit_entry_event(curr_slot, tick_height, leader_id, &entry)
                 .unwrap();

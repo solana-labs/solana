@@ -785,7 +785,7 @@ mod tests {
         );
 
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
-        let last_id = entries.last().unwrap().id;
+        let last_id = entries.last().unwrap().hash;
         let entry_height = ticks_per_slot + entries.len() as u64;
         blocktree.write_entries(1, 0, 0, entries).unwrap();
 

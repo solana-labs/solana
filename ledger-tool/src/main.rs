@@ -127,7 +127,7 @@ fn main() {
                         exit(1);
                     }
                 }
-                last_id = entry.id;
+                last_id = entry.hash;
                 num_entries += 1;
 
                 if let Err(e) = blocktree_processor::process_entry(&bank, &entry) {
