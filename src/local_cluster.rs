@@ -24,7 +24,7 @@ pub struct LocalCluster {
 impl LocalCluster {
     pub fn create_network(num_nodes: usize, network_tokens: u64, node_tokens: u64) -> Self {
         let leader_keypair = Arc::new(Keypair::new());
-        let leader_pubkey = leader_keypair.pubkey().clone();
+        let leader_pubkey = leader_keypair.pubkey();
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let (genesis_block, mint) =
             GenesisBlock::new_with_leader(network_tokens, leader_pubkey, node_tokens);
