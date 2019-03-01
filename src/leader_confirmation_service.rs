@@ -35,12 +35,12 @@ impl LeaderConfirmationService {
 
         // Hold an accounts_db read lock as briefly as possible, just long enough to collect all
         // the vote states
-        let vote_states = bank.vote_states(|vote_state| leader_id != vote_state.node_id);
+        let vote_states = bank.vote_states(|_, vote_state| leader_id != vote_state.delegate_id);
 
         let mut ticks_and_stakes: Vec<(u64, u64)> = vote_states
             .iter()
-            .filter_map(|vote_state| {
-                let validator_stake = bank.get_balance(&vote_state.node_id);
+            .filter_map(|(_, vote_state)| {
+                let validator_stake = bank.get_balance(&vote_state.delegate_id);
                 total_stake += validator_stake;
                 // Filter out any validators that don't have at least one vote
                 // by returning None

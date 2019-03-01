@@ -15,18 +15,20 @@ pub fn get_supermajority_slot(bank: &Bank, epoch_height: u64) -> Option<u64> {
     find_supermajority_slot(supermajority_stake, stakes_and_lockouts.values())
 }
 
-pub fn staked_nodes(bank: &Bank) -> HashMap<Pubkey, u64> {
-    staked_nodes_extractor(bank, |stake, _| stake)
+/// Collect the node Pubkey and staker account balance for nodes
+/// that have non-zero balance in their corresponding staking accounts
+pub fn node_stakes(bank: &Bank) -> HashMap<Pubkey, u64> {
+    node_stakes_extractor(bank, |stake, _| stake)
 }
 
 /// Return the checkpointed stakes that should be used to generate a leader schedule.
-pub fn staked_nodes_at_epoch(bank: &Bank, epoch_height: u64) -> HashMap<Pubkey, u64> {
-    staked_nodes_at_epoch_extractor(bank, epoch_height, |stake, _| stake)
+pub fn node_stakes_at_epoch(bank: &Bank, epoch_height: u64) -> HashMap<Pubkey, u64> {
+    node_stakes_at_epoch_extractor(bank, epoch_height, |stake, _| stake)
 }
 
 /// Return the checkpointed stakes that should be used to generate a leader schedule.
 /// state_extractor takes (stake, vote_state) and maps to an output.
-fn staked_nodes_at_epoch_extractor<F, T>(
+fn node_stakes_at_epoch_extractor<F, T>(
     bank: &Bank,
     epoch_height: u64,
     state_extractor: F,
@@ -35,12 +37,12 @@ where
     F: Fn(u64, &VoteState) -> T,
 {
     let epoch_slot_height = epoch_height * bank.slots_per_epoch();
-    staked_nodes_at_slot_extractor(bank, epoch_slot_height, state_extractor)
+    node_stakes_at_slot_extractor(bank, epoch_slot_height, state_extractor)
 }
 
 /// Return the checkpointed stakes that should be used to generate a leader schedule.
 /// state_extractor takes (stake, vote_state) and maps to an output
-fn staked_nodes_at_slot_extractor<F, T>(
+fn node_stakes_at_slot_extractor<F, T>(
     bank: &Bank,
     current_slot_height: u64,
     state_extractor: F,
@@ -59,25 +61,23 @@ where
         .find(|bank| bank.id() <= slot_height)
         .unwrap_or_else(|| banks.last().unwrap());
 
-    staked_nodes_extractor(bank, state_extractor)
+    node_stakes_extractor(bank, state_extractor)
 }
 
 /// Collect the node Pubkey and staker account balance for nodes
 /// that have non-zero balance in their corresponding staker accounts.
 /// state_extractor takes (stake, vote_state) and maps to an output
-fn staked_nodes_extractor<F, T>(bank: &Bank, state_extractor: F) -> HashMap<Pubkey, T>
+fn node_stakes_extractor<F, T>(bank: &Bank, state_extractor: F) -> HashMap<Pubkey, T>
 where
     F: Fn(u64, &VoteState) -> T,
 {
-    bank.vote_states(|_| true)
+    bank.vote_states(|account_id, _| bank.get_balance(&account_id) > 0)
         .iter()
-        .filter_map(|state| {
-            let balance = bank.get_balance(&state.staker_id);
-            if balance > 0 {
-                Some((state.node_id, state_extractor(balance, &state)))
-            } else {
-                None
-            }
+        .map(|(account_id, state)| {
+            (
+                state.delegate_id,
+                state_extractor(bank.get_balance(&account_id), &state),
+            )
         })
         .collect()
 }
@@ -86,7 +86,7 @@ fn epoch_stakes_and_lockouts(
     bank: &Bank,
     epoch_height: u64,
 ) -> HashMap<Pubkey, (u64, Option<u64>)> {
-    staked_nodes_at_epoch_extractor(bank, epoch_height, |stake, state| (stake, state.root_slot))
+    node_stakes_at_epoch_extractor(bank, epoch_height, |stake, state| (stake, state.root_slot))
 }
 
 fn find_supermajority_slot<'a, I>(supermajority_stake: u64, stakes_and_lockouts: I) -> Option<u64>
@@ -146,7 +146,7 @@ mod tests {
         expected.insert(pubkey, bootstrap_tokens - 1);
         let bank = Bank::new_from_parent(&Arc::new(bank));
         assert_eq!(
-            staked_nodes_at_slot_extractor(&bank, bank.slot_height(), |s, _| s),
+            node_stakes_at_slot_extractor(&bank, bank.slot_height(), |s, _| s),
             expected
         );
     }
@@ -154,13 +154,12 @@ mod tests {
     #[test]
     fn test_epoch_stakes_and_lockouts() {
         let validator = Keypair::new();
-        let voter = Keypair::new();
 
         let (genesis_block, mint_keypair) = GenesisBlock::new(500);
         let bank = Bank::new(&genesis_block);
         let bank_voter = Keypair::new();
 
-        // Give the validator some stake
+        // Give the validator some stake but don't setup a staking account
         bank.transfer(
             1,
             &mint_keypair,
@@ -169,9 +168,7 @@ mod tests {
         )
         .unwrap();
 
-        voting_keypair_tests::new_vote_account_with_vote(&validator, &voter, &bank, 1, 0);
-        assert_eq!(bank.get_balance(&validator.pubkey()), 0);
-        // Validator has zero balance, so they get filtered out. Only the bootstrap leader
+        // Validator has no token staked, so they get filtered out. Only the bootstrap leader
         // created by the genesis block will get included
         let expected: Vec<_> = epoch_stakes_and_lockouts(&bank, 0)
             .values()
@@ -179,11 +176,11 @@ mod tests {
             .collect();
         assert_eq!(expected, vec![(1, None)]);
 
-        voting_keypair_tests::new_vote_account_with_vote(&mint_keypair, &bank_voter, &bank, 1, 0);
+        voting_keypair_tests::new_vote_account_with_vote(&mint_keypair, &bank_voter, &bank, 499, 0);
 
         let result: HashSet<_> =
             HashSet::from_iter(epoch_stakes_and_lockouts(&bank, 0).values().cloned());
-        let expected: HashSet<_> = HashSet::from_iter(vec![(1, None), (498, None)]);
+        let expected: HashSet<_> = HashSet::from_iter(vec![(1, None), (499, None)]);
         assert_eq!(result, expected);
     }
 

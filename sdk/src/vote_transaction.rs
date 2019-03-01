@@ -6,6 +6,7 @@ use crate::signature::{Keypair, KeypairUtil};
 use crate::system_instruction::SystemInstruction;
 use crate::system_program;
 use crate::transaction::{Instruction, Transaction};
+use crate::transaction_builder::TransactionBuilder;
 use crate::vote_program::{self, Vote, VoteInstruction};
 use bincode::deserialize;
 
@@ -19,18 +20,13 @@ impl VoteTransaction {
         fee: u64,
     ) -> Transaction {
         let vote = Vote { slot_height };
-        let instruction = VoteInstruction::Vote(vote);
-        Transaction::new(
-            voting_keypair,
-            &[],
-            vote_program::id(),
-            &instruction,
-            last_id,
-            fee,
-        )
+        TransactionBuilder::new(fee)
+            .push(VoteInstruction::new_vote(voting_keypair.pubkey(), vote))
+            .sign(&[voting_keypair], last_id)
     }
 
-    pub fn new_account(
+    /// Fund or create the staking account with tokens
+    pub fn fund_staking_account(
         from_keypair: &Keypair,
         vote_account_id: Pubkey,
         last_id: Hash,
@@ -50,9 +46,24 @@ impl VoteTransaction {
             vec![system_program::id(), vote_program::id()],
             vec![
                 Instruction::new(0, &create_tx, vec![0, 1]),
-                Instruction::new(1, &VoteInstruction::RegisterAccount, vec![0, 1]),
+                Instruction::new(1, &VoteInstruction::InitializeAccount, vec![0, 1]),
             ],
         )
+    }
+
+    /// Choose a node id to `delegate` or `assign` this vote account to
+    pub fn delegate_vote_account<T: KeypairUtil>(
+        vote_keypair: &T,
+        last_id: Hash,
+        node_id: Pubkey,
+        fee: u64,
+    ) -> Transaction {
+        TransactionBuilder::new(fee)
+            .push(VoteInstruction::new_delegate_stake(
+                vote_keypair.pubkey(),
+                node_id,
+            ))
+            .sign(&[vote_keypair], last_id)
     }
 
     fn get_vote(tx: &Transaction, ix_index: usize) -> Option<(Pubkey, Vote, Hash)> {

@@ -246,13 +246,19 @@ impl AccountsDB {
         )))
     }
 
-    fn get_vote_accounts(&self, fork: Fork) -> Vec<Account> {
+    fn get_vote_accounts(&self, fork: Fork) -> HashMap<Pubkey, Account> {
         self.index_info
             .vote_index
             .read()
             .unwrap()
             .iter()
-            .filter_map(|pubkey| self.load(fork, pubkey, true))
+            .filter_map(|pubkey| {
+                if let Some(account) = self.load(fork, pubkey, true) {
+                    Some((*pubkey, account))
+                } else {
+                    None
+                }
+            })
             .collect()
     }
 
@@ -886,11 +892,11 @@ impl Accounts {
         self.accounts_db.squash(fork);
     }
 
-    pub fn get_vote_accounts(&self, fork: Fork) -> Vec<Account> {
+    pub fn get_vote_accounts(&self, fork: Fork) -> HashMap<Pubkey, Account> {
         self.accounts_db
             .get_vote_accounts(fork)
             .into_iter()
-            .filter(|acc| acc.tokens != 0)
+            .filter(|(_, acc)| acc.tokens != 0)
             .collect()
     }
 }
@@ -1605,7 +1611,7 @@ mod tests {
         create_account(&accounts_db, &mut pubkeys, 100, 6);
         let accounts = accounts_db.get_vote_accounts(0);
         assert_eq!(accounts.len(), 6);
-        accounts.iter().for_each(|account| {
+        accounts.iter().for_each(|(_, account)| {
             assert_eq!(account.owner, vote_program::id());
         });
         let lastkey = Keypair::new().pubkey();
