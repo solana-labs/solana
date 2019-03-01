@@ -144,8 +144,8 @@ impl PohRecorder {
     /// A recorder to synchronize PoH with the following data structures
     /// * bank - the LastId's queue is updated on `tick` and `record` events
     /// * sender - the Entry channel that outputs to the ledger
-    pub fn new(tick_height: u64, last_entry_id: Hash) -> Self {
-        let poh = Poh::new(last_entry_id, tick_height);
+    pub fn new(tick_height: u64, last_entry_hash: Hash) -> Self {
+        let poh = Poh::new(last_entry_hash, tick_height);
         PohRecorder {
             poh,
             tick_cache: vec![],

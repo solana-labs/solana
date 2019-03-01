@@ -62,7 +62,7 @@ impl ReplayStage {
         voting_keypair: &Option<Arc<T>>,
         forward_entry_sender: &EntrySender,
         current_blob_index: &mut u64,
-        last_entry_id: &mut Hash,
+        last_entry_hash: &mut Hash,
         subscriptions: &Arc<RpcSubscriptions>,
     ) -> Result<()> {
         // Coalesce all the available entries into a single vote
@@ -76,7 +76,7 @@ impl ReplayStage {
         let mut num_entries_to_write = entries.len();
         let now = Instant::now();
 
-        if !entries.as_slice().verify(last_entry_id) {
+        if !entries.as_slice().verify(last_entry_hash) {
             inc_new_counter_info!("replicate_stage-verify-fail", entries.len());
             return Err(Error::BlobError(BlobError::VerificationFailed));
         }
@@ -135,7 +135,7 @@ impl ReplayStage {
 
         // If leader rotation happened, only write the entries up to leader rotation.
         entries.truncate(num_entries_to_write);
-        *last_entry_id = entries
+        *last_entry_hash = entries
             .last()
             .expect("Entries cannot be empty at this point")
             .id;
@@ -219,7 +219,7 @@ impl ReplayStage {
 
             (Some(slot), leader_id, max_tick_height_for_slot)
         };
-        let mut last_entry_id = bank.last_id();
+        let mut last_entry_hash = bank.last_id();
         let mut current_blob_index = 0;
 
         // Start the replay stage loop
@@ -302,7 +302,7 @@ impl ReplayStage {
                             &voting_keypair,
                             &forward_entry_sender,
                             &mut current_blob_index,
-                            &mut last_entry_id,
+                            &mut last_entry_hash,
                             &subscriptions_,
                         ) {
                             error!("{} process_entries failed: {:?}", my_id, e);
@@ -338,7 +338,7 @@ impl ReplayStage {
                             let last_entry = blocktree
                                 .get_slot_entries(slot, meta.last_index, Some(1))
                                 .unwrap();
-                            last_entry_id = last_entry[0].id;
+                            last_entry_hash = last_entry[0].id;
                         }
 
                         let old_bank = bank.clone();
@@ -495,7 +495,7 @@ mod test {
             let (bank_forks, bank_forks_info, blocktree, l_receiver) =
                 new_banks_from_blocktree(&my_ledger_path, None);
             let bank = bank_forks.working_bank();
-            let last_entry_id = bank.last_id();
+            let last_entry_hash = bank.last_id();
 
             let blocktree = Arc::new(blocktree);
             let (replay_stage, _slot_full_receiver, ledger_writer_recv) = ReplayStage::new(
@@ -516,7 +516,7 @@ mod test {
             cluster_info_me.write().unwrap().push_vote(vote);
 
             info!("Send ReplayStage an entry, should see it on the ledger writer receiver");
-            let next_tick = create_ticks(1, last_entry_id);
+            let next_tick = create_ticks(1, last_entry_hash);
             blocktree.write_entries(1, 0, 0, next_tick.clone()).unwrap();
 
             let received_tick = ledger_writer_recv
@@ -541,7 +541,7 @@ mod test {
         // Set up the cluster info
         let cluster_info_me = Arc::new(RwLock::new(ClusterInfo::new(my_node.info.clone())));
         let (forward_entry_sender, _forward_entry_receiver) = channel();
-        let mut last_entry_id = Hash::default();
+        let mut last_entry_hash = Hash::default();
         let mut current_blob_index = 0;
         let mut last_id = Hash::default();
         let mut entries = Vec::new();
@@ -560,7 +560,7 @@ mod test {
             &voting_keypair,
             &forward_entry_sender,
             &mut current_blob_index,
-            &mut last_entry_id,
+            &mut last_entry_hash,
             &Arc::new(RpcSubscriptions::default()),
         );
 
@@ -583,7 +583,7 @@ mod test {
             &voting_keypair,
             &forward_entry_sender,
             &mut current_blob_index,
-            &mut last_entry_id,
+            &mut last_entry_hash,
             &Arc::new(RpcSubscriptions::default()),
         );
 

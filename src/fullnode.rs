@@ -449,8 +449,8 @@ pub fn make_active_set_entries(
     // 1) Assume the active_keypair node has no tokens staked
     let transfer_tx =
         SystemTransaction::new_account(&token_source, active_keypair.pubkey(), stake, *last_id, 0);
-    let mut last_entry_id = *last_id;
-    let transfer_entry = next_entry_mut(&mut last_entry_id, 1, vec![transfer_tx]);
+    let mut last_entry_hash = *last_id;
+    let transfer_entry = next_entry_mut(&mut last_entry_hash, 1, vec![transfer_tx]);
 
     // 2) Create and register a vote account for active_keypair
     let voting_keypair = VotingKeypair::new_local(active_keypair);
@@ -458,15 +458,15 @@ pub fn make_active_set_entries(
 
     let new_vote_account_tx =
         VoteTransaction::fund_staking_account(active_keypair, vote_account_id, *last_id, 1, 1);
-    let new_vote_account_entry = next_entry_mut(&mut last_entry_id, 1, vec![new_vote_account_tx]);
+    let new_vote_account_entry = next_entry_mut(&mut last_entry_hash, 1, vec![new_vote_account_tx]);
 
     // 3) Create vote entry
     let vote_tx = VoteTransaction::new_vote(&voting_keypair, slot_height_to_vote_on, *last_id, 0);
-    let vote_entry = next_entry_mut(&mut last_entry_id, 1, vec![vote_tx]);
+    let vote_entry = next_entry_mut(&mut last_entry_hash, 1, vec![vote_tx]);
 
     // 4) Create `num_ending_ticks` empty ticks
     let mut entries = vec![transfer_entry, new_vote_account_entry, vote_entry];
-    let empty_ticks = create_ticks(num_ending_ticks, last_entry_id);
+    let empty_ticks = create_ticks(num_ending_ticks, last_entry_hash);
     entries.extend(empty_ticks);
 
     (entries, voting_keypair)
