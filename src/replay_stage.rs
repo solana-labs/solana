@@ -158,7 +158,7 @@ impl ReplayStage {
                             if let Some(tpu_bank) =
                                 bank_forks.read().unwrap().get(next_slot).cloned()
                             {
-                                banking_stage_sender.send(tpu_bank);
+                                banking_stage_sender.send(tpu_bank)?;
                             }
                         }
                     }

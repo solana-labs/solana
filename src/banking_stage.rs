@@ -76,7 +76,7 @@ impl BankingStage {
                             let packets =
                                 Self::process_loop(&bank, &verified_receiver, &poh_recorder);
                             let tpu = cluster_info.read().unwrap().leader_data().unwrap().tpu;
-                            Self::forward_unprocessed_packets(&tpu, packets);
+                            Self::forward_unprocessed_packets(&tpu, packets)?;
                         }
                     })
                     .unwrap()

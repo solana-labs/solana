@@ -105,7 +105,7 @@ impl LocalCluster {
     pub fn close(&mut self) {
         self.exit();
         while let Some(node) = self.fullnodes.pop() {
-            node.join();
+            node.join().unwrap();
         }
         for path in &self.ledger_paths {
             remove_dir_all(path).unwrap();

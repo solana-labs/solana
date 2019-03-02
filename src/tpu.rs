@@ -43,7 +43,7 @@ impl LeaderServices {
         }
     }
 
-    fn exit(&self) {
+    pub fn exit(&self) {
         self.fetch_stage.close();
     }
 
@@ -61,7 +61,7 @@ impl LeaderServices {
         Ok(())
     }
 
-    fn close(self) -> thread::Result<()> {
+    pub fn close(self) -> thread::Result<()> {
         self.exit();
         self.join()
     }
@@ -70,7 +70,7 @@ impl LeaderServices {
 pub struct Tpu {
     leader_services: LeaderServices,
     exit: Arc<AtomicBool>,
-    id: Pubkey,
+    pub id: Pubkey,
 }
 
 impl Tpu {
