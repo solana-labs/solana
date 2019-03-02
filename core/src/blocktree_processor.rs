@@ -443,7 +443,7 @@ mod tests {
         // First, ensure the TX is rejected because of the unregistered last ID
         assert_eq!(
             bank.process_transaction(&tx),
-            Err(BankError::LastIdNotFound)
+            Err(BankError::BlockHashNotFound)
         );
 
         // Now ensure the TX is accepted despite pointing to the ID of an empty entry.
