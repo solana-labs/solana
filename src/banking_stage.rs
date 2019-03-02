@@ -514,8 +514,8 @@ mod tests {
         let bank = Arc::new(Bank::new(&genesis_block));
         let start_hash = bank.last_id();
         let (verified_sender, verified_receiver) = channel();
-        let (bank_sender, bank_receiver) = channel();
         let (poh_recorder, poh_service) = create_test_recorder(&bank);
+        let (bank_sender, bank_receiver) = channel();
         let cluster_info = ClusterInfo::new(Node::new_localhost().info);
         let cluster_info = Arc::new(RwLock::new(cluster_info));
         let (banking_stage, entry_receiver) = BankingStage::new(
@@ -568,75 +568,79 @@ mod tests {
         banking_stage.join().unwrap();
         poh_service.close().unwrap();
     }
-    //     #[test]
-    //     #[ignore] //flaky
-    //     fn test_banking_stage_entryfication() {
-    //         // In this attack we'll demonstrate that a verifier can interpret the ledger
-    //         // differently if either the server doesn't signal the ledger to add an
-    //         // Entry OR if the verifier tries to parallelize across multiple Entries.
-    //         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
-    //         let bank = Arc::new(Bank::new(&genesis_block));
-    //         let (verified_sender, verified_receiver) = channel();
-    //         let (poh_recorder, poh_service) = create_test_recorder(&bank);
-    //         let (banking_stage, entry_receiver) = BankingStage::new(
-    //             &bank,
-    //             &poh_recorder,
-    //             verified_receiver,
-    //             DEFAULT_TICKS_PER_SLOT,
-    //             genesis_block.bootstrap_leader_id,
-    //         );
-    //
-    //         // Process a batch that includes a transaction that receives two tokens.
-    //         let alice = Keypair::new();
-    //         let tx = SystemTransaction::new_account(
-    //             &mint_keypair,
-    //             alice.pubkey(),
-    //             2,
-    //             genesis_block.hash(),
-    //             0,
-    //         );
-    //
-    //         let packets = to_packets(&[tx]);
-    //         verified_sender
-    //             .send(vec![(packets[0].clone(), vec![1u8])])
-    //             .unwrap();
-    //
-    //         // Process a second batch that spends one of those tokens.
-    //         let tx = SystemTransaction::new_account(
-    //             &alice,
-    //             mint_keypair.pubkey(),
-    //             1,
-    //             genesis_block.hash(),
-    //             0,
-    //         );
-    //         let packets = to_packets(&[tx]);
-    //         verified_sender
-    //             .send(vec![(packets[0].clone(), vec![1u8])])
-    //             .unwrap();
-    //         drop(verified_sender);
-    //         banking_stage.join().unwrap();
-    //
-    //         // Collect the ledger and feed it to a new bank.
-    //         let entries: Vec<_> = entry_receiver
-    //             .iter()
-    //             .flat_map(|x| x.into_iter().map(|e| e.0))
-    //             .collect();
-    //         // same assertion as running through the bank, really...
-    //         assert!(entries.len() >= 2);
-    //
-    //         // Assert the user holds one token, not two. If the stage only outputs one
-    //         // entry, then the second transaction will be rejected, because it drives
-    //         // the account balance below zero before the credit is added.
-    //         let bank = Bank::new(&genesis_block);
-    //         for entry in entries {
-    //             bank.process_transactions(&entry.transactions)
-    //                 .iter()
-    //                 .for_each(|x| assert_eq!(*x, Ok(())));
-    //         }
-    //         assert_eq!(bank.get_balance(&alice.pubkey()), 1);
-    //         poh_service.close().unwrap();
-    //     }
-    //
+
+    #[test]
+    fn test_banking_stage_entryfication() {
+        // In this attack we'll demonstrate that a verifier can interpret the ledger
+        // differently if either the server doesn't signal the ledger to add an
+        // Entry OR if the verifier tries to parallelize across multiple Entries.
+        let (genesis_block, mint_keypair) = GenesisBlock::new(2);
+        let bank = Arc::new(Bank::new(&genesis_block));
+        let (verified_sender, verified_receiver) = channel();
+        let (poh_recorder, poh_service) = create_test_recorder(&bank);
+        let (bank_sender, bank_receiver) = channel();
+        let cluster_info = ClusterInfo::new(Node::new_localhost().info);
+        let cluster_info = Arc::new(RwLock::new(cluster_info));
+        let (banking_stage, entry_receiver) = BankingStage::new(
+            &cluster_info,
+            bank_receiver,
+            &poh_recorder,
+            verified_receiver,
+        );
+        bank_sender.send(bank).expect("sending bank");
+
+        // Process a batch that includes a transaction that receives two tokens.
+        let alice = Keypair::new();
+        let tx = SystemTransaction::new_account(
+            &mint_keypair,
+            alice.pubkey(),
+            2,
+            genesis_block.hash(),
+            0,
+        );
+
+        let packets = to_packets(&[tx]);
+        verified_sender
+            .send(vec![(packets[0].clone(), vec![1u8])])
+            .unwrap();
+
+        // Process a second batch that spends one of those tokens.
+        let tx = SystemTransaction::new_account(
+            &alice,
+            mint_keypair.pubkey(),
+            1,
+            genesis_block.hash(),
+            0,
+        );
+        let packets = to_packets(&[tx]);
+        verified_sender
+            .send(vec![(packets[0].clone(), vec![1u8])])
+            .unwrap();
+        drop(verified_sender);
+        drop(bank_sender);
+        banking_stage.join().unwrap();
+
+        // Collect the ledger and feed it to a new bank.
+        let entries: Vec<_> = entry_receiver
+            .iter()
+            .flat_map(|x| x.1.into_iter().map(|e| e.0))
+            .collect();
+        // same assertion as running through the bank, really...
+        assert!(entries.len() >= 2);
+
+        // Assert the user holds one token, not two. If the stage only outputs one
+        // entry, then the second transaction will be rejected, because it drives
+        // the account balance below zero before the credit is added.
+        let bank = Bank::new(&genesis_block);
+        for entry in entries {
+            bank.process_transactions(&entry.transactions)
+                .iter()
+                .for_each(|x| assert_eq!(*x, Ok(())));
+        }
+        assert_eq!(bank.get_balance(&alice.pubkey()), 1);
+        poh_service.close().unwrap();
+    }
+
     //     // Test that when the max_tick_height is reached, the banking stage exits
     //     #[test]
     //     fn test_max_tick_height_shutdown() {
