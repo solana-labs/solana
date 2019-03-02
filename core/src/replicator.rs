@@ -80,7 +80,7 @@ pub fn sample_file(in_path: &Path, sample_offsets: &[u64]) -> io::Result<Hash> {
     Ok(hasher.result())
 }
 
-fn get_entry_heights_from_last_id(
+fn get_entry_heights_from_block_hash(
     signature: &ring::signature::Signature,
     storage_entry_height: u64,
 ) -> u64 {
@@ -159,10 +159,10 @@ impl Replicator {
         info!("Got leader: {:?}", leader);
 
         let (storage_block_hash, storage_entry_height) =
-            Self::poll_for_last_id_and_entry_height(&cluster_info)?;
+            Self::poll_for_block_hash_and_entry_height(&cluster_info)?;
 
         let signature = keypair.sign(storage_block_hash.as_ref());
-        let entry_height = get_entry_heights_from_last_id(&signature, storage_entry_height);
+        let entry_height = get_entry_heights_from_block_hash(&signature, storage_entry_height);
 
         info!("replicating entry_height: {}", entry_height);
 
@@ -254,12 +254,12 @@ impl Replicator {
 
         match sample_file(&ledger_data_file_encrypted, &sampling_offsets) {
             Ok(hash) => {
-                let last_id = client.get_recent_block_hash();
+                let block_hash = client.get_recent_block_hash();
                 info!("sampled hash: {}", hash);
                 let mut tx = StorageTransaction::new_mining_proof(
                     &keypair,
                     hash,
-                    last_id,
+                    block_hash,
                     entry_height,
                     Signature::new(signature.as_ref()),
                 );
@@ -326,7 +326,7 @@ impl Replicator {
         }
     }
 
-    fn poll_for_last_id_and_entry_height(
+    fn poll_for_block_hash_and_entry_height(
         cluster_info: &Arc<RwLock<ClusterInfo>>,
     ) -> Result<(String, u64)> {
         for _ in 0..10 {
@@ -355,7 +355,7 @@ impl Replicator {
         }
         Err(Error::new(
             ErrorKind::Other,
-            "Couldn't get last_id or entry_height",
+            "Couldn't get block_hash or entry_height",
         ))?
     }
 
@@ -366,12 +366,12 @@ impl Replicator {
 
             let airdrop_amount = 1;
 
-            let last_id = client.get_recent_block_hash();
+            let block_hash = client.get_recent_block_hash();
             match request_airdrop_transaction(
                 &drone_addr,
                 &keypair.pubkey(),
                 airdrop_amount,
-                last_id,
+                block_hash,
             ) {
                 Ok(transaction) => {
                     let signature = client.transfer_signed(&transaction).unwrap();

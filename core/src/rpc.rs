@@ -255,8 +255,8 @@ impl RpcSol for RpcSolImpl {
         trace!("request_airdrop id={} tokens={}", id, tokens);
         let pubkey = verify_pubkey(id)?;
 
-        let last_id = meta.request_processor.read().unwrap().bank()?.last_block_hash();
-        let transaction = request_airdrop_transaction(&meta.drone_addr, &pubkey, tokens, last_id)
+        let block_hash = meta.request_processor.read().unwrap().bank()?.last_block_hash();
+        let transaction = request_airdrop_transaction(&meta.drone_addr, &pubkey, tokens, block_hash)
             .map_err(|err| {
             info!("request_airdrop_transaction failed: {:?}", err);
             Error::internal_error()
@@ -370,8 +370,8 @@ mod tests {
         let (genesis_block, alice) = GenesisBlock::new(10_000);
         let bank = Arc::new(Bank::new(&genesis_block));
 
-        let last_id = bank.last_block_hash();
-        let tx = SystemTransaction::new_move(&alice, pubkey, 20, last_id, 0);
+        let block_hash = bank.last_block_hash();
+        let tx = SystemTransaction::new_move(&alice, pubkey, 20, block_hash, 0);
         bank.process_transaction(&tx).expect("process transaction");
 
         let request_processor = Arc::new(RwLock::new(JsonRpcRequestProcessor::new(
@@ -395,7 +395,7 @@ mod tests {
             drone_addr,
             rpc_addr,
         };
-        (io, meta, last_id, alice)
+        (io, meta, block_hash, alice)
     }
 
     #[test]
@@ -406,8 +406,8 @@ mod tests {
         let mut request_processor = JsonRpcRequestProcessor::new(StorageState::default());
         request_processor.set_bank(&bank);
         thread::spawn(move || {
-            let last_id = bank.last_block_hash();
-            let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
+            let block_hash = bank.last_block_hash();
+            let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, block_hash, 0);
             bank.process_transaction(&tx).expect("process transaction");
         })
         .join()
@@ -418,7 +418,7 @@ mod tests {
     #[test]
     fn test_rpc_get_balance() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, _last_id, _alice) = start_rpc_handler_with_tx(bob_pubkey);
+        let (io, meta, _block_hash, _alice) = start_rpc_handler_with_tx(bob_pubkey);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getBalance","params":["{}"]}}"#,
@@ -436,7 +436,7 @@ mod tests {
     #[test]
     fn test_rpc_get_tx_count() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, _last_id, _alice) = start_rpc_handler_with_tx(bob_pubkey);
+        let (io, meta, _block_hash, _alice) = start_rpc_handler_with_tx(bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getTransactionCount"}}"#);
         let res = io.handle_request_sync(&req, meta);
@@ -451,7 +451,7 @@ mod tests {
     #[test]
     fn test_rpc_get_account_info() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, _last_id, _alice) = start_rpc_handler_with_tx(bob_pubkey);
+        let (io, meta, _block_hash, _alice) = start_rpc_handler_with_tx(bob_pubkey);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getAccountInfo","params":["{}"]}}"#,
@@ -478,8 +478,8 @@ mod tests {
     #[test]
     fn test_rpc_confirm_tx() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, last_id, alice) = start_rpc_handler_with_tx(bob_pubkey);
-        let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
+        let (io, meta, block_hash, alice) = start_rpc_handler_with_tx(bob_pubkey);
+        let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, block_hash, 0);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"confirmTransaction","params":["{}"]}}"#,
@@ -497,8 +497,8 @@ mod tests {
     #[test]
     fn test_rpc_get_signature_status() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, last_id, alice) = start_rpc_handler_with_tx(bob_pubkey);
-        let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, last_id, 0);
+        let (io, meta, block_hash, alice) = start_rpc_handler_with_tx(bob_pubkey);
+        let tx = SystemTransaction::new_move(&alice, bob_pubkey, 20, block_hash, 0);
 
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
@@ -513,7 +513,7 @@ mod tests {
         assert_eq!(expected, result);
 
         // Test getSignatureStatus request on unprocessed tx
-        let tx = SystemTransaction::new_move(&alice, bob_pubkey, 10, last_id, 0);
+        let tx = SystemTransaction::new_move(&alice, bob_pubkey, 10, block_hash, 0);
         let req = format!(
             r#"{{"jsonrpc":"2.0","id":1,"method":"getSignatureStatus","params":["{}"]}}"#,
             tx.signatures[0]
@@ -530,11 +530,11 @@ mod tests {
     #[test]
     fn test_rpc_get_recent_block_hash() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, last_id, _alice) = start_rpc_handler_with_tx(bob_pubkey);
+        let (io, meta, block_hash, _alice) = start_rpc_handler_with_tx(bob_pubkey);
 
         let req = format!(r#"{{"jsonrpc":"2.0","id":1,"method":"getLastId"}}"#);
         let res = io.handle_request_sync(&req, meta);
-        let expected = format!(r#"{{"jsonrpc":"2.0","result":"{}","id":1}}"#, last_id);
+        let expected = format!(r#"{{"jsonrpc":"2.0","result":"{}","id":1}}"#, block_hash);
         let expected: Response =
             serde_json::from_str(&expected).expect("expected response deserialization");
         let result: Response = serde_json::from_str(&res.expect("actual response"))
@@ -545,7 +545,7 @@ mod tests {
     #[test]
     fn test_rpc_fail_request_airdrop() {
         let bob_pubkey = Keypair::new().pubkey();
-        let (io, meta, _last_id, _alice) = start_rpc_handler_with_tx(bob_pubkey);
+        let (io, meta, _block_hash, _alice) = start_rpc_handler_with_tx(bob_pubkey);
 
         // Expect internal error because no leader is running
         let req = format!(

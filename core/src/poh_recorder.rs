@@ -52,14 +52,14 @@ impl PohRecorder {
     }
 
     // synchronize PoH with a bank
-    pub fn reset(&mut self, tick_height: u64, last_id: Hash) {
+    pub fn reset(&mut self, tick_height: u64, block_hash: Hash) {
         let mut cache = vec![];
         info!(
             "reset poh from: {},{} to: {},{}",
-            self.poh.hash, self.poh.tick_height, last_id, tick_height,
+            self.poh.hash, self.poh.tick_height, block_hash, tick_height,
         );
         std::mem::swap(&mut cache, &mut self.tick_cache);
-        self.poh = Poh::new(last_id, tick_height);
+        self.poh = Poh::new(block_hash, tick_height);
     }
 
     pub fn set_working_bank(&mut self, working_bank: WorkingBank) {

@@ -401,7 +401,7 @@ fn process_deploy(
         }
     }
 
-    let last_id = get_recent_block_hash(&rpc_client)?;
+    let block_hash = get_recent_block_hash(&rpc_client)?;
     let program_id = Keypair::new();
     let mut file = File::open(program_location).map_err(|err| {
         WalletError::DynamicProgramError(
@@ -418,7 +418,7 @@ fn process_deploy(
     let mut tx = SystemTransaction::new_program_account(
         &config.id,
         program_id.pubkey(),
-        last_id,
+        block_hash,
         1,
         program_userdata.len() as u64,
         bpf_loader::id(),
@@ -439,7 +439,7 @@ fn process_deploy(
                 bpf_loader::id(),
                 (i * USERDATA_CHUNK_SIZE) as u32,
                 chunk.to_vec(),
-                last_id,
+                block_hash,
                 0,
             )
         })
@@ -447,7 +447,7 @@ fn process_deploy(
     send_and_confirm_transactions(&rpc_client, write_transactions, &program_id)?;
 
     trace!("Finalizing program account");
-    let mut tx = LoaderTransaction::new_finalize(&program_id, bpf_loader::id(), last_id, 0);
+    let mut tx = LoaderTransaction::new_finalize(&program_id, bpf_loader::id(), block_hash, 0);
     send_and_confirm_transaction(&rpc_client, &mut tx, &program_id).map_err(|_| {
         WalletError::DynamicProgramError("Program finalize transaction failed".to_string())
     })?;
@@ -468,10 +468,10 @@ fn process_pay(
     witnesses: &Option<Vec<Pubkey>>,
     cancelable: Option<Pubkey>,
 ) -> ProcessResult {
-    let last_id = get_recent_block_hash(&rpc_client)?;
+    let block_hash = get_recent_block_hash(&rpc_client)?;
 
     if timestamp == None && *witnesses == None {
-        let mut tx = SystemTransaction::new_account(&config.id, to, tokens, last_id, 0);
+        let mut tx = SystemTransaction::new_account(&config.id, to, tokens, block_hash, 0);
         let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
         Ok(signature_str.to_string())
     } else if *witnesses == None {
@@ -489,7 +489,7 @@ fn process_pay(
         let mut tx = SystemTransaction::new_program_account(
             &config.id,
             contract_funds.pubkey(),
-            last_id,
+            block_hash,
             tokens,
             0,
             budget_program_id,
@@ -501,7 +501,7 @@ fn process_pay(
         let mut tx = SystemTransaction::new_program_account(
             &config.id,
             contract_state.pubkey(),
-            last_id,
+            block_hash,
             1,
             196,
             budget_program_id,
@@ -518,7 +518,7 @@ fn process_pay(
             dt_pubkey,
             cancelable,
             tokens,
-            last_id,
+            block_hash,
         );
         let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
 
@@ -528,7 +528,7 @@ fn process_pay(
         })
         .to_string())
     } else if timestamp == None {
-        let last_id = get_recent_block_hash(&rpc_client)?;
+        let block_hash = get_recent_block_hash(&rpc_client)?;
 
         let witness = if let Some(ref witness_vec) = *witnesses {
             witness_vec[0]
@@ -546,7 +546,7 @@ fn process_pay(
         let mut tx = SystemTransaction::new_program_account(
             &config.id,
             contract_funds.pubkey(),
-            last_id,
+            block_hash,
             tokens,
             0,
             budget_program_id,
@@ -558,7 +558,7 @@ fn process_pay(
         let mut tx = SystemTransaction::new_program_account(
             &config.id,
             contract_state.pubkey(),
-            last_id,
+            block_hash,
             1,
             196,
             budget_program_id,
@@ -574,7 +574,7 @@ fn process_pay(
             witness,
             cancelable,
             tokens,
-            last_id,
+            block_hash,
         );
         let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
 
@@ -589,8 +589,8 @@ fn process_pay(
 }
 
 fn process_cancel(rpc_client: &RpcClient, config: &WalletConfig, pubkey: Pubkey) -> ProcessResult {
-    let last_id = get_recent_block_hash(&rpc_client)?;
-    let mut tx = BudgetTransaction::new_signature(&config.id, pubkey, config.id.pubkey(), last_id);
+    let block_hash = get_recent_block_hash(&rpc_client)?;
+    let mut tx = BudgetTransaction::new_signature(&config.id, pubkey, config.id.pubkey(), block_hash);
     let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
     Ok(signature_str.to_string())
 }
@@ -621,9 +621,9 @@ fn process_time_elapsed(
         request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id, 1)?;
     }
 
-    let last_id = get_recent_block_hash(&rpc_client)?;
+    let block_hash = get_recent_block_hash(&rpc_client)?;
 
-    let mut tx = BudgetTransaction::new_timestamp(&config.id, pubkey, to, dt, last_id);
+    let mut tx = BudgetTransaction::new_timestamp(&config.id, pubkey, to, dt, block_hash);
     let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
 
     Ok(signature_str.to_string())
@@ -642,8 +642,8 @@ fn process_witness(
         request_and_confirm_airdrop(&rpc_client, &drone_addr, &config.id, 1)?;
     }
 
-    let last_id = get_recent_block_hash(&rpc_client)?;
-    let mut tx = BudgetTransaction::new_signature(&config.id, pubkey, to, last_id);
+    let block_hash = get_recent_block_hash(&rpc_client)?;
+    let mut tx = BudgetTransaction::new_signature(&config.id, pubkey, to, block_hash);
     let signature_str = send_and_confirm_transaction(&rpc_client, &mut tx, &config.id)?;
 
     Ok(signature_str.to_string())
@@ -717,41 +717,41 @@ fn get_recent_block_hash(rpc_client: &RpcClient) -> Result<Hash, Box<dyn error::
     let result = rpc_client.retry_make_rpc_request(1, &RpcRequest::GetLastId, None, 5)?;
     if result.as_str().is_none() {
         Err(WalletError::RpcRequestError(
-            "Received bad last_id".to_string(),
+            "Received bad block_hash".to_string(),
         ))?
     }
-    let last_id_str = result.as_str().unwrap();
-    let last_id_vec = bs58::decode(last_id_str)
+    let block_hash_str = result.as_str().unwrap();
+    let block_hash_vec = bs58::decode(block_hash_str)
         .into_vec()
-        .map_err(|_| WalletError::RpcRequestError("Received bad last_id".to_string()))?;
-    Ok(Hash::new(&last_id_vec))
+        .map_err(|_| WalletError::RpcRequestError("Received bad block_hash".to_string()))?;
+    Ok(Hash::new(&block_hash_vec))
 }
 
-fn get_next_last_id(
+fn get_next_block_hash(
     rpc_client: &RpcClient,
-    previous_last_id: &Hash,
+    previous_block_hash: &Hash,
 ) -> Result<Hash, Box<dyn error::Error>> {
-    let mut next_last_id_retries = 3;
+    let mut next_block_hash_retries = 3;
     loop {
-        let next_last_id = get_recent_block_hash(rpc_client)?;
+        let next_block_hash = get_recent_block_hash(rpc_client)?;
         if cfg!(not(test)) {
-            if next_last_id != *previous_last_id {
-                return Ok(next_last_id);
+            if next_block_hash != *previous_block_hash {
+                return Ok(next_block_hash);
             }
         } else {
             // When using MockRpcClient, get_recent_block_hash() returns a constant value
-            return Ok(next_last_id);
+            return Ok(next_block_hash);
         }
-        if next_last_id_retries == 0 {
+        if next_block_hash_retries == 0 {
             Err(WalletError::RpcRequestError(
                 format!(
-                    "Unable to fetch new last_id, last_id stuck at {:?}",
-                    next_last_id
+                    "Unable to fetch new block_hash, block_hash stuck at {:?}",
+                    next_block_hash
                 )
                 .to_string(),
             ))?;
         }
-        next_last_id_retries -= 1;
+        next_block_hash_retries -= 1;
         // Retry ~twice during a slot
         sleep(Duration::from_millis(
             500 * DEFAULT_TICKS_PER_SLOT / NUM_TICKS_PER_SECOND,
@@ -822,7 +822,7 @@ fn send_and_confirm_transaction(
         };
         match status {
             RpcSignatureStatus::AccountInUse | RpcSignatureStatus::SignatureNotFound => {
-                // Fetch a new last_id and re-sign the transaction before sending it again
+                // Fetch a new block_hash and re-sign the transaction before sending it again
                 resign_transaction(rpc_client, transaction, signer)?;
                 send_retries -= 1;
             }
@@ -899,13 +899,13 @@ fn send_and_confirm_transactions(
         }
         send_retries -= 1;
 
-        // Re-sign any failed transactions with a new last_id and retry
-        let last_id =
-            get_next_last_id(rpc_client, &transactions_signatures[0].0.recent_block_hash)?;
+        // Re-sign any failed transactions with a new block_hash and retry
+        let block_hash =
+            get_next_block_hash(rpc_client, &transactions_signatures[0].0.recent_block_hash)?;
         transactions = transactions_signatures
             .into_iter()
             .map(|(mut transaction, _)| {
-                transaction.sign(&[signer], last_id);
+                transaction.sign(&[signer], block_hash);
                 transaction
             })
             .collect();
@@ -917,8 +917,8 @@ fn resign_transaction(
     tx: &mut Transaction,
     signer_key: &Keypair,
 ) -> Result<(), Box<dyn error::Error>> {
-    let last_id = get_next_last_id(rpc_client, &tx.recent_block_hash)?;
-    tx.sign(&[signer_key], last_id);
+    let block_hash = get_next_block_hash(rpc_client, &tx.recent_block_hash)?;
+    tx.sign(&[signer_key], block_hash);
     Ok(())
 }
 
@@ -928,8 +928,8 @@ pub fn request_and_confirm_airdrop(
     signer: &Keypair,
     tokens: u64,
 ) -> Result<(), Box<dyn error::Error>> {
-    let last_id = get_recent_block_hash(rpc_client)?;
-    let mut tx = request_airdrop_transaction(drone_addr, &signer.pubkey(), tokens, last_id)?;
+    let block_hash = get_recent_block_hash(rpc_client)?;
+    let mut tx = request_airdrop_transaction(drone_addr, &signer.pubkey(), tokens, block_hash)?;
     send_and_confirm_transaction(rpc_client, &mut tx, signer)?;
     Ok(())
 }
@@ -1510,15 +1510,15 @@ mod tests {
         let rpc_client = RpcClient::new("succeeds".to_string());
 
         let vec = bs58::decode(PUBKEY).into_vec().unwrap();
-        let expected_last_id = Hash::new(&vec);
+        let expected_block_hash = Hash::new(&vec);
 
-        let last_id = get_recent_block_hash(&rpc_client);
-        assert_eq!(last_id.unwrap(), expected_last_id);
+        let block_hash = get_recent_block_hash(&rpc_client);
+        assert_eq!(block_hash.unwrap(), expected_block_hash);
 
         let rpc_client = RpcClient::new("fails".to_string());
 
-        let last_id = get_recent_block_hash(&rpc_client);
-        assert!(last_id.is_err());
+        let block_hash = get_recent_block_hash(&rpc_client);
+        assert!(block_hash.is_err());
     }
 
     #[test]
@@ -1527,8 +1527,8 @@ mod tests {
 
         let key = Keypair::new();
         let to = Keypair::new().pubkey();
-        let last_id = Hash::default();
-        let tx = SystemTransaction::new_account(&key, to, 50, last_id, 0);
+        let block_hash = Hash::default();
+        let tx = SystemTransaction::new_account(&key, to, 50, block_hash, 0);
 
         let signature = send_transaction(&rpc_client, &tx);
         assert_eq!(signature.unwrap(), SIGNATURE.to_string());
@@ -1563,8 +1563,8 @@ mod tests {
 
         let key = Keypair::new();
         let to = Keypair::new().pubkey();
-        let last_id = Hash::default();
-        let mut tx = SystemTransaction::new_account(&key, to, 50, last_id, 0);
+        let block_hash = Hash::default();
+        let mut tx = SystemTransaction::new_account(&key, to, 50, block_hash, 0);
 
         let signer = Keypair::new();
 
@@ -1589,9 +1589,9 @@ mod tests {
         let vec = bs58::decode("HUu3LwEzGRsUkuJS121jzkPJW39Kq62pXCTmTa1F9jDL")
             .into_vec()
             .unwrap();
-        let last_id = Hash::new(&vec);
-        let prev_tx = SystemTransaction::new_account(&key, to, 50, last_id, 0);
-        let mut tx = SystemTransaction::new_account(&key, to, 50, last_id, 0);
+        let block_hash = Hash::new(&vec);
+        let prev_tx = SystemTransaction::new_account(&key, to, 50, block_hash, 0);
+        let mut tx = SystemTransaction::new_account(&key, to, 50, block_hash, 0);
 
         resign_transaction(&rpc_client, &mut tx, &key).unwrap();
 

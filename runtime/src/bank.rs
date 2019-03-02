@@ -426,7 +426,7 @@ impl Bank {
             .zip(lock_results.into_iter())
             .map(|(tx, lock_res)| {
                 if lock_res.is_ok() && !hash_queue.check_entry_age(tx.recent_block_hash, max_age) {
-                    error_counters.reserve_last_id += 1;
+                    error_counters.reserve_block_hash += 1;
                     Err(BankError::BlockHashNotFound)
                 } else {
                     lock_res
@@ -523,16 +523,16 @@ impl Bank {
             .increment_transaction_count(self.accounts_id, tx_count);
 
         inc_new_counter_info!("bank-process_transactions-txs", tx_count);
-        if 0 != error_counters.last_id_not_found {
+        if 0 != error_counters.block_hash_not_found {
             inc_new_counter_info!(
-                "bank-process_transactions-error-last_id_not_found",
-                error_counters.last_id_not_found
+                "bank-process_transactions-error-block_hash_not_found",
+                error_counters.block_hash_not_found
             );
         }
-        if 0 != error_counters.reserve_last_id {
+        if 0 != error_counters.reserve_block_hash {
             inc_new_counter_info!(
-                "bank-process_transactions-error-reserve_last_id",
-                error_counters.reserve_last_id
+                "bank-process_transactions-error-reserve_block_hash",
+                error_counters.reserve_block_hash
             );
         }
         if 0 != error_counters.duplicate_signature {
@@ -633,15 +633,15 @@ impl Bank {
     }
 
     /// Create, sign, and process a Transaction from `keypair` to `to` of
-    /// `n` tokens where `last_id` is the last Entry ID observed by the client.
+    /// `n` tokens where `block_hash` is the last Entry ID observed by the client.
     pub fn transfer(
         &self,
         n: u64,
         keypair: &Keypair,
         to: Pubkey,
-        last_id: Hash,
+        block_hash: Hash,
     ) -> Result<Signature> {
-        let tx = SystemTransaction::new_account(keypair, to, n, last_id, 0);
+        let tx = SystemTransaction::new_account(keypair, to, n, block_hash, 0);
         let signature = tx.signatures[0];
         self.process_transaction(&tx).map(|_| signature)
     }

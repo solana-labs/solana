@@ -34,7 +34,7 @@ impl LocalCluster {
         let leader_node = Node::new_localhost_with_pubkey(leader_keypair.pubkey());
         let (genesis_block, mint_keypair) =
             GenesisBlock::new_with_leader(cluster_lamports, leader_pubkey, lamports_per_node);
-        let (genesis_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
+        let (genesis_ledger_path, _block_hash) = create_new_tmp_ledger!(&genesis_block);
         let leader_ledger_path = tmp_copy_blocktree!(&genesis_ledger_path);
         let mut ledger_paths = vec![];
         ledger_paths.push(genesis_ledger_path.clone());
@@ -121,10 +121,10 @@ impl LocalCluster {
         dest_pubkey: &Pubkey,
         lamports: u64,
     ) -> u64 {
-        trace!("getting leader last_id");
-        let last_id = client.get_recent_block_hash();
+        trace!("getting leader block_hash");
+        let block_hash = client.get_recent_block_hash();
         let mut tx =
-            SystemTransaction::new_account(&source_keypair, *dest_pubkey, lamports, last_id, 0);
+            SystemTransaction::new_account(&source_keypair, *dest_pubkey, lamports, block_hash, 0);
         info!(
             "executing transfer of {} from {} to {}",
             lamports,

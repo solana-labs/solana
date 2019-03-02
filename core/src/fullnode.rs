@@ -331,12 +331,12 @@ impl Fullnode {
                     //instead of here
                     info!(
                         "reset PoH... {} {}",
-                        rotation_info.tick_height, rotation_info.last_id
+                        rotation_info.tick_height, rotation_info.block_hash
                     );
                     self.poh_recorder
                         .lock()
                         .unwrap()
-                        .reset(rotation_info.tick_height, rotation_info.last_id);
+                        .reset(rotation_info.tick_height, rotation_info.block_hash);
                     let slot = rotation_info.slot;
                     self.rotate(rotation_info);
                     debug!("role transition complete");
@@ -437,13 +437,13 @@ pub fn make_active_set_entries(
     token_source: &Keypair,
     stake: u64,
     slot_height_to_vote_on: u64,
-    last_id: &Hash,
+    block_hash: &Hash,
     num_ending_ticks: u64,
 ) -> (Vec<Entry>, VotingKeypair) {
     // 1) Assume the active_keypair node has no tokens staked
     let transfer_tx =
-        SystemTransaction::new_account(&token_source, active_keypair.pubkey(), stake, *last_id, 0);
-    let mut last_entry_hash = *last_id;
+        SystemTransaction::new_account(&token_source, active_keypair.pubkey(), stake, *block_hash, 0);
+    let mut last_entry_hash = *block_hash;
     let transfer_entry = next_entry_mut(&mut last_entry_hash, 1, vec![transfer_tx]);
 
     // 2) Create and register a vote account for active_keypair
@@ -451,11 +451,11 @@ pub fn make_active_set_entries(
     let vote_account_id = voting_keypair.pubkey();
 
     let new_vote_account_tx =
-        VoteTransaction::fund_staking_account(active_keypair, vote_account_id, *last_id, 1, 1);
+        VoteTransaction::fund_staking_account(active_keypair, vote_account_id, *block_hash, 1, 1);
     let new_vote_account_entry = next_entry_mut(&mut last_entry_hash, 1, vec![new_vote_account_tx]);
 
     // 3) Create vote entry
-    let vote_tx = VoteTransaction::new_vote(&voting_keypair, slot_height_to_vote_on, *last_id, 0);
+    let vote_tx = VoteTransaction::new_vote(&voting_keypair, slot_height_to_vote_on, *block_hash, 0);
     let vote_entry = next_entry_mut(&mut last_entry_hash, 1, vec![vote_tx]);
 
     // 4) Create `num_ending_ticks` empty ticks
@@ -486,7 +486,7 @@ mod tests {
         let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
         let (genesis_block, _mint_keypair) =
             GenesisBlock::new_with_leader(10_000, leader_keypair.pubkey(), 1000);
-        let (validator_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
+        let (validator_ledger_path, _block_hash) = create_new_tmp_ledger!(&genesis_block);
 
         let validator = Fullnode::new(
             validator_node,
@@ -512,7 +512,7 @@ mod tests {
                 let validator_node = Node::new_localhost_with_pubkey(validator_keypair.pubkey());
                 let (genesis_block, _mint_keypair) =
                     GenesisBlock::new_with_leader(10_000, leader_keypair.pubkey(), 1000);
-                let (validator_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
+                let (validator_ledger_path, _block_hash) = create_new_tmp_ledger!(&genesis_block);
                 ledger_paths.push(validator_ledger_path.clone());
                 Fullnode::new(
                     validator_node,
@@ -560,7 +560,7 @@ mod tests {
         genesis_block.ticks_per_slot = ticks_per_slot;
         genesis_block.slots_per_epoch = slots_per_epoch;
 
-        let (bootstrap_leader_ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
+        let (bootstrap_leader_ledger_path, _block_hash) = create_new_tmp_ledger!(&genesis_block);
 
         // Start the bootstrap leader
         let bootstrap_leader = Fullnode::new(
@@ -657,7 +657,7 @@ mod tests {
         let leader_keypair = Arc::new(Keypair::new());
         let validator_keypair = Arc::new(Keypair::new());
         let fullnode_config = FullnodeConfig::default();
-        let (leader_node, validator_node, validator_ledger_path, ledger_initial_len, last_id) =
+        let (leader_node, validator_node, validator_ledger_path, ledger_initial_len, block_hash) =
             setup_leader_validator(&leader_keypair, &validator_keypair, ticks_per_slot, 0);
 
         let leader_id = leader_keypair.pubkey();
@@ -697,7 +697,7 @@ mod tests {
                 &leader_id,
                 blobs_to_send,
                 ledger_initial_len,
-                last_id,
+                block_hash,
                 &tvu_address,
             )
             .into_iter()
@@ -747,7 +747,7 @@ mod tests {
             GenesisBlock::new_with_leader(10_000, leader_node.info.id, 500);
         genesis_block.ticks_per_slot = ticks_per_slot;
 
-        let (ledger_path, last_id) = create_new_tmp_ledger!(&genesis_block);
+        let (ledger_path, block_hash) = create_new_tmp_ledger!(&genesis_block);
 
         // Add entries so that the validator is in the active set, then finish up the slot with
         // ticks (and maybe add extra slots full of empty ticks)
@@ -756,12 +756,12 @@ mod tests {
             &mint_keypair,
             10,
             0,
-            &last_id,
+            &block_hash,
             ticks_per_slot * (num_ending_slots + 1),
         );
 
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
-        let last_id = entries.last().unwrap().hash;
+        let block_hash = entries.last().unwrap().hash;
         let entry_height = ticks_per_slot + entries.len() as u64;
         blocktree.write_entries(1, 0, 0, entries).unwrap();
 
@@ -770,7 +770,7 @@ mod tests {
             validator_node,
             ledger_path,
             entry_height,
-            last_id,
+            block_hash,
         )
     }
 }

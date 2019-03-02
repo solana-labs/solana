@@ -275,16 +275,16 @@ mod tests {
         );
         assert_eq!(balance.unwrap().as_u64().unwrap(), 50);
 
-        let last_id = rpc_client.make_rpc_request(2, RpcRequest::GetLastId, None);
+        let block_hash = rpc_client.make_rpc_request(2, RpcRequest::GetLastId, None);
         assert_eq!(
-            last_id.unwrap().as_str().unwrap(),
+            block_hash.unwrap().as_str().unwrap(),
             "deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHhx"
         );
 
         // Send erroneous parameter
-        let last_id =
+        let block_hash =
             rpc_client.make_rpc_request(3, RpcRequest::GetLastId, Some(json!("paramter")));
-        assert_eq!(last_id.is_err(), true);
+        assert_eq!(block_hash.is_err(), true);
     }
 
     #[test]

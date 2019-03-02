@@ -235,10 +235,10 @@ impl StorageStage {
                 }
             }
 
-            let mut last_id = None;
+            let mut block_hash = None;
             for _ in 0..10 {
-                if let Some(new_last_id) = client.try_get_recent_block_hash(1) {
-                    last_id = Some(new_last_id);
+                if let Some(new_block_hash) = client.try_get_recent_block_hash(1) {
+                    block_hash = Some(new_block_hash);
                     break;
                 }
 
@@ -247,8 +247,8 @@ impl StorageStage {
                 }
             }
 
-            if let Some(last_id) = last_id {
-                tx.sign(&[keypair.as_ref()], last_id);
+            if let Some(block_hash) = block_hash {
+                tx.sign(&[keypair.as_ref()], block_hash);
 
                 if exit.load(Ordering::Relaxed) {
                     Err(io::Error::new(io::ErrorKind::Other, "exit signaled"))?;
@@ -505,7 +505,7 @@ mod tests {
 
         let (genesis_block, _mint_keypair) = GenesisBlock::new(1000);
         let ticks_per_slot = genesis_block.ticks_per_slot;
-        let (ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
+        let (ledger_path, _block_hash) = create_new_tmp_ledger!(&genesis_block);
 
         let entries = make_tiny_test_entries(64);
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();
@@ -567,7 +567,7 @@ mod tests {
 
         let (genesis_block, _mint_keypair) = GenesisBlock::new(1000);
         let ticks_per_slot = genesis_block.ticks_per_slot;;
-        let (ledger_path, _last_id) = create_new_tmp_ledger!(&genesis_block);
+        let (ledger_path, _block_hash) = create_new_tmp_ledger!(&genesis_block);
 
         let entries = make_tiny_test_entries(128);
         let blocktree = Blocktree::open_config(&ledger_path, ticks_per_slot).unwrap();

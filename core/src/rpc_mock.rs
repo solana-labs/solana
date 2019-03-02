@@ -98,14 +98,14 @@ pub fn request_airdrop_transaction(
     _drone_addr: &SocketAddr,
     _id: &Pubkey,
     tokens: u64,
-    _last_id: Hash,
+    _block_hash: Hash,
 ) -> Result<Transaction, Error> {
     if tokens == 0 {
         Err(Error::new(ErrorKind::Other, "Airdrop failed"))?
     }
     let key = Keypair::new();
     let to = Keypair::new().pubkey();
-    let last_id = Hash::default();
-    let tx = SystemTransaction::new_account(&key, to, 50, last_id, 0);
+    let block_hash = Hash::default();
+    let tx = SystemTransaction::new_account(&key, to, 50, block_hash, 0);
     Ok(tx)
 }
