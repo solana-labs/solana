@@ -522,7 +522,7 @@ mod tests {
 
         let transaction_count = client.transaction_count();
         assert_eq!(transaction_count, 1);
-        server.close();
+        server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
     }
 
@@ -558,7 +558,7 @@ mod tests {
 
         let balance = client.get_balance(&bob_pubkey);
         assert_eq!(balance.unwrap(), 1001);
-        server.close();
+        server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
     }
 
@@ -621,7 +621,7 @@ mod tests {
             sleep(Duration::from_millis(900));
         }
 
-        server.close();
+        server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
     }
 
@@ -676,7 +676,7 @@ mod tests {
         info!("Bob's balance is {:?}", bob_balance);
         assert!(bob_balance.is_err(),);
 
-        server.close();
+        server.close().unwrap();
         remove_dir_all(ledger_path).unwrap();
     }
 }

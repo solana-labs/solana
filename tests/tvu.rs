@@ -10,6 +10,8 @@ use solana::entry::next_entry_mut;
 use solana::entry::EntrySlice;
 use solana::gossip_service::GossipService;
 use solana::packet::index_blobs;
+use solana::poh_recorder::PohRecorder;
+use solana::poh_service::{PohService, PohServiceConfig};
 use solana::rpc_subscriptions::RpcSubscriptions;
 use solana::service::Service;
 use solana::storage_stage::StorageState;
@@ -25,6 +27,7 @@ use std::fs::remove_dir_all;
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
+use std::sync::Mutex;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
@@ -34,6 +37,20 @@ fn new_gossip(
     exit: Arc<AtomicBool>,
 ) -> GossipService {
     GossipService::new(&cluster_info, None, None, gossip, exit)
+}
+
+fn create_test_recorder(bank: &Arc<Bank>) -> (Arc<Mutex<PohRecorder>>, PohService) {
+    let exit = Arc::new(AtomicBool::new(false));
+    let poh_recorder = Arc::new(Mutex::new(PohRecorder::new(
+        bank.tick_height(),
+        bank.last_id(),
+    )));
+    let poh_service = PohService::new(
+        poh_recorder.clone(),
+        &PohServiceConfig::default(),
+        exit.clone(),
+    );
+    (poh_recorder, poh_service)
 }
 
 /// Test that message sent from leader to target1 and replayed to target2
@@ -111,6 +128,7 @@ fn test_replay() {
     let vote_account_keypair = Arc::new(Keypair::new());
     let voting_keypair = VotingKeypair::new_local(&vote_account_keypair);
     let (to_leader_sender, _to_leader_receiver) = channel();
+    let (poh_recorder, poh_service) = create_test_recorder(&bank);
     let tvu = Tvu::new(
         Some(Arc::new(voting_keypair)),
         &Arc::new(RwLock::new(bank_forks)),
@@ -125,11 +143,12 @@ fn test_replay() {
         },
         Arc::new(blocktree),
         STORAGE_ROTATE_TEST_COUNT,
-        &to_leader_sender,
         &StorageState::default(),
+        to_leader_sender,
         None,
         ledger_signal_receiver,
         &Arc::new(RpcSubscriptions::default()),
+        &poh_recorder,
     );
 
     let mut alice_ref_balance = starting_balance;
@@ -180,6 +199,7 @@ fn test_replay() {
     let bob_balance = bank.get_balance(&bob_keypair.pubkey());
     assert_eq!(bob_balance, starting_balance - alice_ref_balance);
 
+    poh_service.close().expect("close");
     tvu.close().expect("close");
     exit.store(true, Ordering::Relaxed);
     dr_l.join().expect("join");
