@@ -42,7 +42,7 @@ leader schedule.
 
 * No threads are shut down to switch out of leader mode. Instead, FetchStage
   should forward transactions to the next leader.
-* FetchStage and BroadcastStage boot from TPU
+* FetchStage from TPU and BroadcastStage boot entirely
 * Blocktree renamed to Blockstore
 * TPU moves to new socket-free crate called solana-tpu.
 * TPU's BankingStage absorbs ReplayStage
@@ -50,6 +50,6 @@ leader schedule.
 * New RepairStage absorbs Blob Fetch Stage and repair requests
 * JSON RPC Service is optional - used for debugging. It should instead
 be part of a separate `solana-blockstreamer` executable. 
-* BroadcastStage moved to downstream of Blockstore
-* BroadcastStage absorbs retransmit part of RetransmitStage
+* New MulticastStage absorbs retransmit part of RetransmitStage
+* MulticastStage downstream of Blockstore
 
