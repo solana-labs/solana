@@ -74,10 +74,9 @@ fn test_program_native_failure() {
 
     // Call user program
     let tx = Transaction::new(&mint_keypair, &[], program_id, &1u8, bank.last_id(), 0);
-    bank.process_transaction(&tx).unwrap();
     assert_eq!(
-        bank.get_signature_status(&tx.signatures[0]),
-        Some(Err(BankError::ProgramError(0, ProgramError::GenericError)))
+        bank.process_transaction(&tx),
+        Err(BankError::ProgramError(0, ProgramError::GenericError))
     );
 }
 

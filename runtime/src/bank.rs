@@ -358,13 +358,10 @@ impl Bank {
     /// Process a Transaction. This is used for unit tests and simply calls the vector Bank::process_transactions method.
     pub fn process_transaction(&self, tx: &Transaction) -> Result<()> {
         let txs = vec![tx.clone()];
-        match self.process_transactions(&txs)[0] {
-            Err(ref e) => {
-                info!("process_transaction error: {:?}", e);
-                Err((*e).clone())
-            }
-            Ok(_) => Ok(()),
-        }
+        self.process_transactions(&txs)[0].clone()?;
+        tx.signatures
+            .get(0)
+            .map_or(Ok(()), |sig| self.get_signature_status(sig).unwrap())
     }
 
     pub fn lock_accounts(&self, txs: &[Transaction]) -> Vec<Result<()>> {
@@ -951,7 +948,7 @@ mod tests {
 
     // This test demonstrates that fees are paid even when a program fails.
     #[test]
-    fn test_detect_failed_duplicate_transactions_issue_1157() {
+    fn test_detect_failed_duplicate_transactions() {
         let (genesis_block, mint_keypair) = GenesisBlock::new(2);
         let bank = Bank::new(&genesis_block);
         let dest = Keypair::new();
@@ -967,16 +964,12 @@ mod tests {
         let signature = tx.signatures[0];
         assert!(!bank.has_signature(&signature));
 
-        // Assert that process_transaction has filtered out Program Errors
-        assert_eq!(bank.process_transaction(&tx), Ok(()));
-
-        assert!(bank.has_signature(&signature));
         assert_eq!(
-            bank.get_signature_status(&signature),
-            Some(Err(BankError::ProgramError(
+            bank.process_transaction(&tx),
+            Err(BankError::ProgramError(
                 0,
                 ProgramError::ResultWithNegativeTokens
-            )))
+            ))
         );
 
         // The tokens didn't move, but the from address paid the transaction fee.
@@ -1007,18 +1000,14 @@ mod tests {
             .unwrap();
         assert_eq!(bank.transaction_count(), 1);
         assert_eq!(bank.get_balance(&pubkey), 1_000);
-        let signature = bank
-            .transfer(10_001, &mint_keypair, pubkey, genesis_block.hash())
-            .unwrap();
-        assert_eq!(bank.transaction_count(), 1);
-        assert!(bank.has_signature(&signature));
         assert_eq!(
-            bank.get_signature_status(&signature),
-            Some(Err(BankError::ProgramError(
+            bank.transfer(10_001, &mint_keypair, pubkey, genesis_block.hash()),
+            Err(BankError::ProgramError(
                 0,
                 ProgramError::ResultWithNegativeTokens
-            )))
+            ))
         );
+        assert_eq!(bank.transaction_count(), 1);
 
         let mint_pubkey = mint_keypair.pubkey();
         assert_eq!(bank.get_balance(&mint_pubkey), 10_000);
